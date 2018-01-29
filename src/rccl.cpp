@@ -95,6 +95,9 @@ rcclResult_t rcclCommDestroy(rcclComm_t comm) {
 }
 
 rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root, rcclComm_t comm, hipStream_t stream) {
+    #if RCCL_DEBUG == 1
+    std::cerr<<"rcclBcast Count: "<<count<<" DataType: "<<datatype<<std::endl;
+    #endif
     RcclComm_t *Comm = comm;
     DeviceControl_t *currTrack = Comm->Track;
     std::atomic_store_explicit(&(currTrack->srcBuffer), buff, std::memory_order_seq_cst);
@@ -170,6 +173,10 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
 
 
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+    #if RCCL_DEBUG == 1
+    std::cerr<<"rcclAllReduce Count: "<<count<<" DataType: "<<datatype<<std::endl;
+    #endif
+
     RcclComm_t *Comm = comm;
 
     DeviceControl_t *currTrack = Comm->Track;

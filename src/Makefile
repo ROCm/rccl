@@ -6,6 +6,10 @@ all: lib install
 lib:
 	/opt/rocm/bin/hcc -I../inc -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device rccl.cpp -o librccl.so
 
+
+lib-debug:
+	/opt/rocm/bin/hcc -I../inc -DRCCL_DEBUG=1 -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device rccl.cpp -o librccl.so
+
 install:
 	mkdir -p $(RCCL_INSTALL_DIR)
 	mkdir -p $(RCCL_INSTALL_DIR)/include
