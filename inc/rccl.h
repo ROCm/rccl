@@ -49,7 +49,7 @@ typedef enum {
     rcclNumOps
 } rcclRedOp_t; 
 
-const char* rcclGetErrorString(rcclResult_t result) {
+inline const char* rcclGetErrorString(rcclResult_t result) {
     switch(result) {
         case rcclSuccess : return "rcclSuccess";
         case rcclUnhandledHipError : return "rcclUnhandledHipError";
