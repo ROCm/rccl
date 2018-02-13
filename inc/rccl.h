@@ -49,30 +49,11 @@ typedef enum {
     rcclNumOps
 } rcclRedOp_t; 
 
-inline const char* rcclGetErrorString(rcclResult_t result) {
-    switch(result) {
-        case rcclSuccess : return "rcclSuccess";
-        case rcclUnhandledHipError : return "rcclUnhandledHipError";
-        case rcclSystemError: return "rcclSystemError";
-        case rcclInternalError: return "rcclInternalError";
-        case rcclInvalidDevicePointer: return "rcclInvalidDevicePointer";
-        case rcclInvalidRank: return "rcclInvalidRank";
-        case rcclUnsupportedDeviceCount: return "rcclUnsupportedDeviceCount";
-        case rcclDeviceNotFound: return "rcclDeviceNotFound";
-        case rcclInvalidDeviceIndex: return "rcclInvalidDeviceIndex";
-        case rcclLibWrapperNotSet: return "rcclLibWrapperNotSet";
-        case rcclHipMallocFailed: return "rcclHipMallocFailed";
-        case rcclRankMismatch: return "rcclRankMismatch";
-        case rcclInvalidArguments: return "rcclInvalidArguments";
-        case rcclInvalidType: return "rcclInvalidType";
-        case rcclInvalidOperation: return "rcclInvalidOperation";
-        default: return "rcclErrorNotFound";
-    }
-}
-
 typedef struct RcclComm_t* rcclComm_t;
 
 typedef struct RcclUniqueId* rcclUniqueId;
+
+const char* rcclGetErrorString(rcclResult_t result);
 
 rcclResult_t rcclGetUniqueId(rcclUniqueId *uniqueId);
 
