@@ -70,3 +70,21 @@ inline bool validate(T* got, T* expected, size_t len, size_t tail, size_t offset
     }
     return true;
 }
+
+template<>
+inline bool validate(__fp16* got, __fp16* expected, size_t len, size_t tail, size_t offset) {
+    size_t i = offset;
+    size_t tailIter = 0;
+    while(i<len) {
+        if(!cmp(float(got[i]), float(expected[i]))) {
+            if(tailIter < tail) {
+                CHECKVAL(float(got[i]), float(expected[i]), i);
+                tailIter++;
+            }else {
+                return false;
+            }
+        }
+        i++;
+    }
+    return true;
+}

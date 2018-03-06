@@ -6,8 +6,8 @@ All rights reserved.
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
 #include "rcclKernels.h"
-#include "performance.h"
 #include "common.h"
+#include "validate.h"
 
 constexpr size_t iter = 128;
 
@@ -36,16 +36,12 @@ inline void launchCopy(size_t length, int dstDevice, int srcDevice) {
 
     hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, length/numElements, length%numElements);
 
-    perf_marker mark;
-
-    for(size_t i=0;i<iter;i++) {
-        hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, length/numElements, length%numElements);
-    }
-
     HIPCHECK(hipDeviceSynchronize());
 
-    mark.done();
-    mark.bw(size*iter);
+    HIPCHECK(hipSetDevice(dstDevice));
+    HIPCHECK(hipMemcpy(hDst.data(), dDst, size, hipMemcpyDeviceToHost));
+
+    validate(hDst.data(), hSrc.data(), length, 1, 0);
 
     HIPCHECK(hipFree(dSrc));
     HIPCHECK(hipFree(dDst));
@@ -110,3 +106,4 @@ of rcclChar/rcclInt8 from GPU 2 to GPU 1"<<std::endl;
             return 0;
     }
 }
+

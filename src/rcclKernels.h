@@ -373,6 +373,88 @@ __global__ void rcclKernelReduceMin(rccl_ushort8_t *vDst, rccl_ushort8_t *vSrc1,
 }
 
 
+__global__ void rcclKernelReduceSum(rccl_half8_t *vDst, rccl_half8_t *vSrc1, rccl_half8_t *vSrc2, size_t lenVec, size_t off) {
+    size_t tx = hipThreadIdx_x;
+    for(size_t i=tx; i<lenVec;i+=WI) {
+        rccl_half8_t src1 = vSrc1[i];
+        rccl_half8_t src2 = vSrc2[i];
+        for(int j=0;j<(sizeof(rccl_half8_t)/sizeof(rccl_half_t));j++) {
+            vDst[i][j] = src1[j] + src2[j];
+        }
+    }
+
+    rccl_half_t *sDst = reinterpret_cast<rccl_half_t*>(vDst + lenVec);
+    rccl_half_t *sSrc1 = reinterpret_cast<rccl_half_t*>(vSrc1 + lenVec);
+    rccl_half_t *sSrc2 = reinterpret_cast<rccl_half_t*>(vSrc2 + lenVec);
+
+    if(tx < off) {
+        sDst[tx] = sSrc1[tx] + sSrc2[tx];
+    }
+    __syncthreads();
+}
+
+__global__ void rcclKernelReduceProd(rccl_half8_t *vDst, rccl_half8_t *vSrc1, rccl_half8_t *vSrc2, size_t lenVec, size_t off) {
+    size_t tx = hipThreadIdx_x;
+    for(size_t i=tx; i<lenVec;i+=WI) {
+        rccl_half8_t src1 = vSrc1[i];
+        rccl_half8_t src2 = vSrc2[i];
+        for(int j=0;j<(sizeof(rccl_half8_t)/sizeof(rccl_half_t));j++) {
+            vDst[i][j] = src1[j] * src2[j];
+        }
+    }
+
+    rccl_half_t *sDst = reinterpret_cast<rccl_half_t*>(vDst + lenVec);
+    rccl_half_t *sSrc1 = reinterpret_cast<rccl_half_t*>(vSrc1 + lenVec);
+    rccl_half_t *sSrc2 = reinterpret_cast<rccl_half_t*>(vSrc2 + lenVec);
+
+    if(tx < off) {
+        sDst[tx] = sSrc1[tx] * sSrc2[tx];
+    }
+    __syncthreads();
+}
+
+__global__ void rcclKernelReduceMax(rccl_half8_t *vDst, rccl_half8_t *vSrc1, rccl_half8_t *vSrc2, size_t lenVec, size_t off) {
+    size_t tx = hipThreadIdx_x;
+    for(size_t i=tx; i<lenVec;i+=WI) {
+        rccl_half8_t src1 = vSrc1[i];
+        rccl_half8_t src2 = vSrc2[i];
+        for(int j=0;j<(sizeof(rccl_half8_t)/sizeof(rccl_half_t));j++) {
+            vDst[i][j] = src1[j] > src2[j] ? src1[j] : src2[j];
+        }
+    }
+
+    rccl_half_t *sDst = reinterpret_cast<rccl_half_t*>(vDst + lenVec);
+    rccl_half_t *sSrc1 = reinterpret_cast<rccl_half_t*>(vSrc1 + lenVec);
+    rccl_half_t *sSrc2 = reinterpret_cast<rccl_half_t*>(vSrc2 + lenVec);
+
+    if(tx < off) {
+        sDst[tx] = sSrc1[tx] > sSrc2[tx] ? sSrc1[tx] : sSrc2[tx];
+    }
+    __syncthreads();
+}
+
+__global__ void rcclKernelReduceMin(rccl_half8_t *vDst, rccl_half8_t *vSrc1, rccl_half8_t *vSrc2, size_t lenVec, size_t off) {
+    size_t tx = hipThreadIdx_x;
+    for(size_t i=tx; i<lenVec;i+=WI) {
+        rccl_half8_t src1 = vSrc1[i];
+        rccl_half8_t src2 = vSrc2[i];
+        for(int j=0;j<(sizeof(rccl_half8_t)/sizeof(rccl_half_t));j++) {
+            vDst[i][j] = src1[j] < src2[j] ? src1[j] : src2[j];
+        }
+    }
+
+    rccl_half_t *sDst = reinterpret_cast<rccl_half_t*>(vDst + lenVec);
+    rccl_half_t *sSrc1 = reinterpret_cast<rccl_half_t*>(vSrc1 + lenVec);
+    rccl_half_t *sSrc2 = reinterpret_cast<rccl_half_t*>(vSrc2 + lenVec);
+
+    if(tx < off) {
+        sDst[tx] = sSrc1[tx] < sSrc2[tx] ? sSrc1[tx] : sSrc2[tx];
+    }
+    __syncthreads();
+}
+
+
+
 __global__ void rcclKernelReduceSum(rccl_int4_t *vDst, rccl_int4_t *vSrc1, rccl_int4_t *vSrc2, size_t lenVec, size_t off) {
     size_t tx = hipThreadIdx_x;
     for(size_t i=tx; i<lenVec;i+=WI) {

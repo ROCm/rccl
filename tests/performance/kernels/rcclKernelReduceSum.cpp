@@ -12,12 +12,13 @@ All rights reserved.
 constexpr size_t iter = 128;
 
 template<typename VectorType, typename DataType>
-inline void launchCopy(size_t length, int dstDevice, int srcDevice) {
+inline void launchReduceSum(size_t length, int dstDevice, int srcDevice) {
 
     constexpr unsigned numElements = sizeof(VectorType) / sizeof(DataType);
 
-    VectorType *dSrc, *dDst;
-    std::vector<DataType> hSrc(length);
+    VectorType *dSrc1, *dSrc2, *dDst;
+    std::vector<DataType> hSrc1(length);
+    std::vector<DataType> hSrc2(length);
     std::vector<DataType> hDst(length);
 
     size_t size = sizeof(DataType) * length;
@@ -29,17 +30,19 @@ inline void launchCopy(size_t length, int dstDevice, int srcDevice) {
 
     HIPCHECK(hipSetDevice(srcDevice));
     HIPCHECK(hipDeviceEnablePeerAccess(dstDevice, 0));
-    HIPCHECK(hipMalloc(&dSrc, size));
-    HIPCHECK(hipMemcpy(dSrc, hSrc.data(), size, hipMemcpyHostToDevice));
+    HIPCHECK(hipMalloc(&dSrc1, size));
+    HIPCHECK(hipMalloc(&dSrc2, size));
+    HIPCHECK(hipMemcpy(dSrc1, hSrc1.data(), size, hipMemcpyHostToDevice));
+    HIPCHECK(hipMemcpy(dSrc2, hSrc2.data(), size, hipMemcpyHostToDevice));
 
     HIPCHECK(hipSetDevice(srcDevice));
 
-    hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, length/numElements, length%numElements);
+    hipLaunchKernelGGL((rcclKernelReduceSum), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc1, dSrc2, length/numElements, length%numElements);
 
     perf_marker mark;
 
     for(size_t i=0;i<iter;i++) {
-        hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, length/numElements, length%numElements);
+        hipLaunchKernelGGL((rcclKernelReduceSum), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc1, dSrc2, length/numElements, length%numElements);
     }
 
     HIPCHECK(hipDeviceSynchronize());
@@ -47,7 +50,8 @@ inline void launchCopy(size_t length, int dstDevice, int srcDevice) {
     mark.done();
     mark.bw(size*iter);
 
-    HIPCHECK(hipFree(dSrc));
+    HIPCHECK(hipFree(dSrc1));
+    HIPCHECK(hipFree(dSrc2));
     HIPCHECK(hipFree(dDst));
 }
 
@@ -73,37 +77,37 @@ of rcclChar/rcclInt8 from GPU 2 to GPU 1"<<std::endl;
 
     switch(dataType) {
         case 0:
-            launchCopy<rccl_char16_t, signed char>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_char16_t, signed char>(count, dstDevice, srcDevice);
             return 0;
         case 1:
-            launchCopy<rccl_uchar16_t, unsigned char>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_uchar16_t, unsigned char>(count, dstDevice, srcDevice);
             return 0;
         case 2:
-            launchCopy<rccl_short8_t, signed short>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_short8_t, signed short>(count, dstDevice, srcDevice);
             return 0;
         case 3:
-            launchCopy<rccl_ushort8_t, unsigned short>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_ushort8_t, unsigned short>(count, dstDevice, srcDevice);
             return 0;
         case 4:
-            launchCopy<rccl_int4_t, signed int>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_int4_t, signed int>(count, dstDevice, srcDevice);
             return 0;
         case 5:
-            launchCopy<rccl_uint4_t, unsigned int>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_uint4_t, unsigned int>(count, dstDevice, srcDevice);
             return 0;
         case 6:
-            launchCopy<rccl_long2_t, signed long>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_long2_t, unsigned long>(count, dstDevice, srcDevice);
             return 0;
         case 7:
-            launchCopy<rccl_ulong2_t, unsigned long>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_ulong2_t, signed long>(count, dstDevice, srcDevice);
             return 0;
         case 8:
-            launchCopy<rccl_half8_t, rccl_half_t>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_half8_t, rccl_half_t>(count, dstDevice, srcDevice);
             return 0;
         case 9:
-            launchCopy<rccl_float4_t, float>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_float4_t, float>(count, dstDevice, srcDevice);
             return 0;
         case 10:
-            launchCopy<rccl_double2_t, double>(count, dstDevice, srcDevice);
+            launchReduceSum<rccl_double2_t, double>(count, dstDevice, srcDevice);
             return 0;
 
         default:
