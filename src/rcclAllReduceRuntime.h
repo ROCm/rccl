@@ -62,10 +62,13 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                 }
             }
         }
+        hipEventRecord(event, stream);
 
         if(offSet != 0) {
-            hipLaunchKernelGGL((rcclAllReduceOpCopyTail<DataType, VectorType, rcclSum>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, numGpus, numIter*numGpus*CHUNK_DWORDx4*sizeof(VectorType)/sizeof(DataType), offSet);
+            size_t count = numIter * numGpus * CHUNK_DWORDx4*sizeof(VectorType)/sizeof(DataType);
+            hipLaunchKernelGGL((rcclAllReduceOpCopyTail<DataType, VectorType, rcclSum>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, numGpus, count, offSet);
         }
+
     }
 
     if(Op == rcclProd) {

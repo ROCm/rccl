@@ -93,7 +93,7 @@ __global__ void rcclAllReduceCopynextPeerDst(DeviceControl_t *currTrack, size_t 
 }
 
 template<typename DataType, typename VectorType, rcclRedOp_t Op>
-__global__ void rcclAllReduceOpCopyTail(DeviceControl_t *track, int numGpus, int offset, int count) {
+__global__ void rcclAllReduceOpCopyTail(DeviceControl_t *track, int numGpus, size_t offset, size_t count) {
     int tx = hipThreadIdx_x;
     DataType *dst = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->dstBuffer), std::memory_order_seq_cst)) + offset;
     DataType *src = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->srcBuffer), std::memory_order_seq_cst)) + offset;
@@ -116,6 +116,8 @@ __global__ void rcclAllReduceOpCopyTail(DeviceControl_t *track, int numGpus, int
             reduceChunkSumCnt<DataType, VectorType>(dst, srcRemote, dst, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
             track = track->nextPeer;
         }
+        __syncthreads();
+        __threadfence_system();
     }
 
     if(Op == rcclProd) {
@@ -156,4 +158,5 @@ __global__ void rcclAllReduceOpCopyTail(DeviceControl_t *track, int numGpus, int
             track = track->nextPeer;
         }
     }
+    __syncthreads();
 }
