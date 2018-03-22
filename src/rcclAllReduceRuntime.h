@@ -228,6 +228,5 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
         }
     }
 
-
     return rcclSuccess;
 }

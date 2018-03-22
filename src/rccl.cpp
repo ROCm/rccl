@@ -73,6 +73,14 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId, i
 }
 
 rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
+    if(comm == nullptr || devlist == nullptr || ndev < 1) {
+        return rcclInvalidArguments;
+    }
+    int deviceCount;
+    HIPCHECK(hipGetDeviceCount(&deviceCount));
+    if(ndev > deviceCount) {
+        return rcclUnsupportedDeviceCount;
+    }
     RcclComm_t *rcomm;
     DevTrackerPool_t *pool = new DevTrackerPool_t(devlist, ndev);
 
@@ -111,6 +119,10 @@ rcclResult_t rcclCommCount(rcclComm_t comm, int *count) {
 
 rcclResult_t rcclCommDestroy(rcclComm_t comm) {
     RcclComm_t *rcomm = comm;
+    rcomm->pool->activeDevices--;
+    if(rcomm->pool->activeDevices == 0) {
+        delete rcomm->pool;
+    }
     delete rcomm;
     return rcclSuccess;
 }
@@ -263,4 +275,5 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
 
     return rcclSuccess;
 }
+
 
