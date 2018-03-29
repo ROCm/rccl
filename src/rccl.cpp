@@ -76,11 +76,27 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
     if(comm == nullptr || devlist == nullptr || ndev < 1) {
         return rcclInvalidArguments;
     }
+
+    int userDevice;
+    HIPCHECK(hipGetDevice(&userDevice));
     int deviceCount;
     HIPCHECK(hipGetDeviceCount(&deviceCount));
     if(ndev > deviceCount) {
         return rcclUnsupportedDeviceCount;
     }
+
+    for(int i=0;i<ndev;i++) {
+        HIPCHECK(hipSetDevice(devlist[i]));
+        for(int j=0;j<ndev;j++) {
+            if(devlist[i] != devlist[j]) {
+                if(hipDeviceEnablePeerAccess(devlist[j], 0) != hipErrorPeerAccessAlreadyEnabled) {
+                    HIPCHECK(hipSetDevice(userDevice));
+                    return rcclDeviceNotFound;
+                }
+            }
+        }
+    }
+
     RcclComm_t *rcomm;
     DevTrackerPool_t *pool = new DevTrackerPool_t(devlist, ndev);
 
@@ -96,6 +112,9 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
         rcomm->numDevices = ndev;
         comm[i] = rcomm;
     }
+
+    HIPCHECK(hipSetDevice(userDevice));
+
     return rcclSuccess;
 }
 
