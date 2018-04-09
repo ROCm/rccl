@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
     }
 
     size_t LEN = atoi(argv[2]);
-    size_t SIZE = LEN * sizeof(T)*numGpus;
+    size_t SIZE = LEN * sizeof(T);
 
     T** hSrc = new T*[numGpus];
     for(int j=0;j<numGpus;j++) {
@@ -44,28 +44,27 @@ int main(int argc, char* argv[]) {
     dDst = new T*[numGpus];
     dSrc = new T*[numGpus];
 
-    std::vector<rcclComm_t> comms(numGpus);
-    RCCLCHECK(rcclCommInitAll(comms.data(), numGpus, devs.data()));
-
     std::vector<hipStream_t> streams(numGpus);
 
     int root = 0;
 
     for(int i=0;i<numGpus;i++) {
         HIPCHECK(hipSetDevice(i));
-        HIPCHECK(hipStreamCreate(&streams[i]));
-        HIPCHECK(hipMalloc(&dDst[i], SIZE));
-        HIPCHECK(hipMemcpy(dDst[i], hSrc[i], SIZE, hipMemcpyHostToDevice));
-        HIPCHECK(hipMalloc(&dDst[i], SIZE));
-        HIPCHECK(hipMemcpy(dDst[i], hDst[i], SIZE, hipMemcpyHostToDevice));
-
         for(int j=0;j<numGpus;j++) {
             if(i!=j) {
                 HIPCHECK(hipDeviceEnablePeerAccess(j, 0));
             }
         }
+
+        HIPCHECK(hipStreamCreate(&streams[i]));
+        HIPCHECK(hipMalloc(&dSrc[i], SIZE));
+        HIPCHECK(hipMemcpy(dSrc[i], hSrc[i], SIZE, hipMemcpyHostToDevice));
+        HIPCHECK(hipMalloc(&dDst[i], SIZE));
+        HIPCHECK(hipMemcpy(dDst[i], hDst[i], SIZE, hipMemcpyHostToDevice));
     }
 
+    std::vector<rcclComm_t> comms(numGpus);
+    RCCLCHECK(rcclCommInitAll(comms.data(), numGpus, devs.data()));
 
     perf_marker mark;
 
@@ -81,4 +80,11 @@ int main(int argc, char* argv[]) {
     mark.done();
     mark.bw(SIZE);
 
+
+    for(int i=0;i<numGpus;i++) {
+        HIPCHECK(hipFree(dDst[i]));
+        HIPCHECK(hipFree(dSrc[i]));
+        delete hDst[i];
+        delete hSrc[i];
+    }
 }

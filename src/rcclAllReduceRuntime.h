@@ -8,15 +8,13 @@ All rights reserved.
 #include "rcclAllReduceKernels.h"
 
 template<typename DataType, typename VectorType, rcclRedOp_t Op>
-rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int numGpus, size_t count, hipStream_t stream) {
+rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int numGpus, size_t count, hipStream_t stream, hipEvent_t event) {
     size_t numIter = count / ((CHUNK_DWORDx4 * (sizeof(VectorType) / sizeof(DataType))) * numGpus);
     size_t offSet = count % ((CHUNK_DWORDx4 * (sizeof(VectorType) / sizeof(DataType))) * numGpus);
     VectorType *tmpSrc = reinterpret_cast<VectorType*>(currTrack->controlBuffer);
     VectorType *tmpDst = reinterpret_cast<VectorType*>(currTrack->nextPeer->controlBuffer);
     VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst));
 
-    hipEvent_t event;
-    hipEventCreateWithFlags(&event, hipEventReleaseToSystem);
     if(Op == rcclSum) {
         int currChunkId = 0;
         int loop = 0;

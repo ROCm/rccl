@@ -1,7 +1,7 @@
 RCCL_INSTALL_DIR=/opt/rocm/rccl
 HIP_DIR=/opt/rocm/hip
 TARGETS=--amdgpu-target=gfx803 --amdgpu-target=gfx900
-all: lib install
+all: lib
 
 
 lib:

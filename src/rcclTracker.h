@@ -9,7 +9,7 @@ All rights reserved.
 #include <map>
 #include "rcclCheck.h"
 
-#define CHUNK_DWORD     (1048576)
+#define CHUNK_DWORD     (1048572)
 #define CHUNK_DWORDx4   CHUNK_DWORD/4
 #define CHUNK_SIZE      CHUNK_DWORD*sizeof(int)
 
@@ -53,6 +53,7 @@ public:
     int rank;
     ~RcclComm_t() {
         HIPCHECK(hipFree(Track->controlBuffer));
+        HIPCHECK(hipEventDestroy(event));
     }
 };
 

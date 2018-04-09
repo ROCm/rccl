@@ -33,12 +33,12 @@ inline double launchCopy(size_t length, int dstDevice, int srcDevice) {
 
     HIPCHECK(hipSetDevice(srcDevice));
 
-    hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, length/numElements, length%numElements);
+    hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, size_t(length/numElements), size_t(length%numElements));
 
     perf_marker mark;
 
     for(size_t i=0;i<iter;i++) {
-        hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, length/numElements, length%numElements);
+        hipLaunchKernelGGL((rcclKernelCopy<VectorType, DataType>), dim3(1,1,1), dim3(WI,1,1), 0, 0, dDst, dSrc, size_t(length/numElements), size_t(length%numElements));
     }
 
     HIPCHECK(hipDeviceSynchronize());
