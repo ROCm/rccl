@@ -1,0 +1,11 @@
+PROJECT_NAME = rccl
+
+INPUT = ../inc
+
+OUTPUT_DIRECTORY = .
+
+GENERATE_HTML = YES
+
+HTML_OUTPUT = html/
+
+HTML_FILE_EXTENSION = .html
