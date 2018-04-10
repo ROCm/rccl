@@ -15,6 +15,8 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
     VectorType *tmpDst = reinterpret_cast<VectorType*>(currTrack->nextPeer->controlBuffer);
     VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst));
 
+    hipLaunchKernelGGL(rcclResetChunkId, dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, 0);
+
     if(Op == rcclSum) {
         int currChunkId = 0;
         int loop = 0;

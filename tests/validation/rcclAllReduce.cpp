@@ -104,9 +104,11 @@ void RunTest(size_t LEN, int numGpus, std::vector<int>& devs) {
         HIPCHECK(hipMemcpy(dDst[i], hDst[i], SIZE, hipMemcpyHostToDevice));
     }
 
+    for(int j=0;j<1024;j++) {
     for(int i=0;i<numGpus;i++) {
         HIPCHECK(hipSetDevice(i));
         doAllReduce<T>(dSrc[i], dDst[i], LEN, rcclSum, comms[i], streams[i]);
+    }
     }
 
     for(int i=0;i<numGpus;i++) {
