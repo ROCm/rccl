@@ -10,6 +10,20 @@ All rights reserved.
 
 #include <vector>
 
+const std::vector<size_t> sizeVec = {
+sizeof(signed char),
+sizeof(unsigned char),
+sizeof(signed short),
+sizeof(unsigned short),
+sizeof(signed int),
+sizeof(unsigned int),
+sizeof(signed long),
+sizeof(unsigned long),
+sizeof(__fp16),
+sizeof(float),
+sizeof(double)
+};
+
 std::vector<DevTrackerPool_t*> Pools;
 
 struct RcclUniqueId {
@@ -233,16 +247,20 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
 
     RcclComm_t *Comm = comm;
 
+    int numGpus = Comm->numDevices;
+    int rank = Comm->rank;
+
+    if(numGpus == 1) {
+        hipMemcpyAsync(recvbuff, sendbuff, count * sizeVec[int(datatype)], hipMemcpyDeviceToDevice);
+        return rcclSuccess;
+   }
+
     DeviceControl_t *currTrack = Comm->Track;
 
     std::atomic_store_explicit(&(currTrack->srcBuffer), (void*)sendbuff, std::memory_order_seq_cst);
     std::atomic_store_explicit(&(currTrack->dstBuffer), recvbuff, std::memory_order_seq_cst);
 
-    size_t numIter, offsetCnt;
-
-    int rank = Comm->rank;
-    int numGpus = Comm->numDevices;
-
+    if(op == rcclSum) {
     switch(datatype) {
         case rcclChar: {
             rcclInternalAllReduce<signed char, rccl_char16_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
@@ -293,8 +311,191 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
             return rcclInvalidType;
         }
     }
+    }
+    if(op == rcclProd) {
+    switch(datatype) {
+        case rcclChar: {
+            rcclInternalAllReduce<signed char, rccl_char16_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUchar: {
+            rcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclShort: {
+            rcclInternalAllReduce<signed short, rccl_short8_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUshort: {
+            rcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclInt: {
+            rcclInternalAllReduce<signed int, rccl_int4_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUint: {
+            rcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclLong: {
+            rcclInternalAllReduce<signed long, rccl_long2_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUlong: {
+            rcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclHalf: {
+            rcclInternalAllReduce<__fp16, rccl_half8_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclFloat: {
+            rcclInternalAllReduce<float, rccl_float4_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclDouble: {
+            rcclInternalAllReduce<double, rccl_double2_t, rcclProd>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+
+        default: {
+            return rcclInvalidType;
+        }
+    }
+    }
+
+    if(op == rcclMax) {
+    switch(datatype) {
+        case rcclChar: {
+            rcclInternalAllReduce<signed char, rccl_char16_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUchar: {
+            rcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclShort: {
+            rcclInternalAllReduce<signed short, rccl_short8_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUshort: {
+            rcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclInt: {
+            rcclInternalAllReduce<signed int, rccl_int4_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUint: {
+            rcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclLong: {
+            rcclInternalAllReduce<signed long, rccl_long2_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUlong: {
+            rcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclHalf: {
+            rcclInternalAllReduce<__fp16, rccl_half8_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclFloat: {
+            rcclInternalAllReduce<float, rccl_float4_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclDouble: {
+            rcclInternalAllReduce<double, rccl_double2_t, rcclMax>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+
+        default: {
+            return rcclInvalidType;
+        }
+    }
+    }
+
+    if(op == rcclMin) {
+    switch(datatype) {
+        case rcclChar: {
+            rcclInternalAllReduce<signed char, rccl_char16_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUchar: {
+            rcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclShort: {
+            rcclInternalAllReduce<signed short, rccl_short8_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUshort: {
+            rcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclInt: {
+            rcclInternalAllReduce<signed int, rccl_int4_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUint: {
+            rcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclLong: {
+            rcclInternalAllReduce<signed long, rccl_long2_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUlong: {
+            rcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclHalf: {
+            rcclInternalAllReduce<__fp16, rccl_half8_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclFloat: {
+            rcclInternalAllReduce<float, rccl_float4_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        case rcclDouble: {
+            rcclInternalAllReduce<double, rccl_double2_t, rcclMin>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+
+        default: {
+            return rcclInvalidType;
+        }
+    }
+
+    }
 
     return rcclSuccess;
 }
 
 
+rcclResult_t rcclAllGather(const void *sendbuff, int count, rcclDataType_t datatype, void *recvbuff, rcclComm_t comm, hipStream_t stream) {
+    RcclComm_t *Comm = comm;
+
+    DeviceControl_t *currTrack = Comm->Track;
+
+    std::atomic_store_explicit(&(currTrack->srcBuffer), (void*)sendbuff, std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(currTrack->dstBuffer), recvbuff, std::memory_order_seq_cst);
+
+    int numGpus = Comm->numDevices;
+    int rank = Comm->rank;
+
+    switch(datatype) {
+        case rcclInt: {
+//            rcclInternalAllGather<signed int, rccl_int4_t>(currTrack, rank, numGpus, count, stream, Comm->event);
+            return rcclSuccess;
+        }
+        default: {
+            return rcclInvalidType;
+        }
+    }
+
+    return rcclSuccess;
+}

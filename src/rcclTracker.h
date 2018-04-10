@@ -84,7 +84,11 @@ public:
         HIPCHECK(hipHostGetDevicePointer((void**)&dptr, Pool[0], 0));
         HIPCHECK(hipMalloc(&controlBuffer, numDevices*CHUNK_SIZE));
         Pool[0]->controlBuffer = controlBuffer;
-        Pool[1]->prevPeer = dptr;
+        if(numDevices != 1) {
+            Pool[1]->prevPeer = dptr;
+        } else {
+            Pool[0]->prevPeer = dptr;
+        }
         Pool[numDevices-1]->nextPeer = dptr;
 
         for(unsigned i=1;i<numDevices;i++) {

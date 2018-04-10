@@ -14,7 +14,6 @@ __global__ void rcclAllReduceFirstCopy(DeviceControl_t *currTrack, VectorType *d
     __syncthreads();
 }
 
-
 template<typename DataType, typename VectorType>
 __global__ void rcclAllReduceFirstCopyCnt(DeviceControl_t *currTrack, VectorType *dst, VectorType *src, size_t count) {
     int tx = hipThreadIdx_x;

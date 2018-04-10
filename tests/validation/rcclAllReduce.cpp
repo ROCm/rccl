@@ -90,7 +90,6 @@ void RunTest(size_t LEN, int numGpus, std::vector<int>& devs) {
 
     std::vector<rcclComm_t> comms(numGpus);
     RCCLCHECK(rcclCommInitAll(comms.data(), numGpus, devs.data()));
-
     std::vector<hipStream_t> streams(numGpus);
 
     int root = 0;
@@ -126,7 +125,7 @@ void RunTest(size_t LEN, int numGpus, std::vector<int>& devs) {
 
     for(int i=0;i<numGpus;i++) {
         std::cout<<"Validating on GPU: "<<devs[i]<<std::endl;
-        validate(hDst[i], T(numGpus), LEN, 1, 0);
+        validate(hDst[i], T(numGpus), LEN, 1, 5);
     }
 
 }
