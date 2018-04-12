@@ -9,7 +9,7 @@ All rights reserved.
 #include <map>
 #include "rcclCheck.h"
 
-#define CHUNK_DWORD     (1048572)
+#define CHUNK_DWORD     (1048572/2)
 #define CHUNK_DWORDx4   CHUNK_DWORD/4
 #define CHUNK_SIZE      CHUNK_DWORD*sizeof(int)
 
