@@ -7,8 +7,6 @@ All rights reserved.
 
 #include <hip/hip_runtime_api.h>
 
-/** @brief Data type of elements in the buffers given to rccl apis
-*/
 typedef enum {
     rcclChar    = 0, rcclInt8           = 0,
     rcclUchar   = 1, rcclUint8          = 1,
@@ -24,9 +22,6 @@ typedef enum {
     rcclNumTypes= 11,
 } rcclDataType_t ;
 
-
-/** @brief Type of error returned by rccl apis
-*/
 typedef enum {
     rcclSuccess = 0,
     rcclUnhandledHipError = 1,
@@ -46,9 +41,6 @@ typedef enum {
     rccl_NUM_RESULTS
 } rcclResult_t;
 
-
-/** @brief Type of ops used for reduction
-*/
 typedef enum {
     rcclSum = 0,
     rcclProd,
