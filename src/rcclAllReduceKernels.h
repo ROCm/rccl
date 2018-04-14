@@ -7,9 +7,22 @@ All rights reserved.
 
 #include "rcclKernelHelper.h"
 
+__global__ void rcclAllReduceSetBuffers(DeviceControl_t *currTrack, const void *src, void *dst) {
+    if(hipThreadIdx_x == 0) {
+        std::atomic_store_explicit(&(currTrack->srcBuffer), (void*)src, std::memory_order_seq_cst);
+        std::atomic_store_explicit(&(currTrack->dstBuffer), dst, std::memory_order_seq_cst);
+    }
+    __syncthreads();
+    __threadfence_system();
+}
+
+/**
+Copy data from src + index to dst
+*/
 template<typename VectorType>
-__global__ void rcclAllReduceFirstCopy(DeviceControl_t *currTrack, VectorType *dst, VectorType *src) {
+__global__ void rcclAllReduceFirstCopy(DeviceControl_t *currTrack, VectorType *dst, size_t srcOffset) {
     int tx = hipThreadIdx_x;
+    VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
     copyChunk(dst, src, tx);
     __syncthreads();
 }
@@ -23,8 +36,10 @@ __global__ void rcclAllReduceFirstCopyCnt(DeviceControl_t *currTrack, VectorType
 
 
 template<typename DataType, typename VectorType, rcclRedOp_t Op>
-__global__ void rcclAllReduceOpCopy(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, VectorType *src2) {
+__global__ void rcclAllReduceOpCopy(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, size_t srcOffset) {
     int tx = hipThreadIdx_x;
+
+    VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
 
     if(Op == rcclSum) {
         reduceChunkSum(dst, src1, src2, tx);
@@ -42,8 +57,10 @@ __global__ void rcclAllReduceOpCopy(DeviceControl_t *currTrack, VectorType *dst,
 }
 
 template<typename DataType, typename VectorType, rcclRedOp_t Op>
-__global__ void rcclAllReduceOpCopyCnt(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, VectorType *src2, int count) {
+__global__ void rcclAllReduceOpCopyCnt(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, size_t srcOffset, int count) {
     int tx = hipThreadIdx_x;
+
+    VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
 
     if(Op == rcclSum) {
         reduceChunkSumCnt<DataType, VectorType>(dst, src1, src2, tx, count, count % (sizeof(VectorType)/sizeof(DataType)));
@@ -52,8 +69,10 @@ __global__ void rcclAllReduceOpCopyCnt(DeviceControl_t *currTrack, VectorType *d
 
 
 template<typename DataType, typename VectorType, rcclRedOp_t Op, bool WaitFornextPeerDst>
-__global__ void rcclAllReduceOpCopynextPeerDst(DeviceControl_t *currTrack, size_t offset, VectorType *src1, VectorType *src2) {
+__global__ void rcclAllReduceOpCopynextPeerDst(DeviceControl_t *currTrack, size_t offset, VectorType *src1, size_t srcOffset) {
     int tx = hipThreadIdx_x;
+
+    VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
 
     if(WaitFornextPeerDst) {
         if(tx == 0) {

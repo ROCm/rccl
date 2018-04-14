@@ -256,9 +256,12 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
    }
 
     DeviceControl_t *currTrack = Comm->Track;
-
+/*
     std::atomic_store_explicit(&(currTrack->srcBuffer), (void*)sendbuff, std::memory_order_seq_cst);
     std::atomic_store_explicit(&(currTrack->dstBuffer), recvbuff, std::memory_order_seq_cst);
+*/
+
+    hipLaunchKernelGGL(rcclAllReduceSetBuffers, dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, sendbuff, recvbuff);
 
     if(op == rcclSum) {
     switch(datatype) {

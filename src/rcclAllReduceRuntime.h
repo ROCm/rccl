@@ -13,7 +13,6 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
     size_t offSet = count % ((CHUNK_DWORDx4 * (sizeof(VectorType) / sizeof(DataType))) * numGpus);
     VectorType *tmpSrc = reinterpret_cast<VectorType*>(currTrack->controlBuffer);
     VectorType *tmpDst = reinterpret_cast<VectorType*>(currTrack->nextPeer->controlBuffer);
-    VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst));
 
     if(Op == rcclSum) {
         int currChunkId = 0;
@@ -24,7 +23,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                 int tmpId = rank%numGpus;
                 int Id = tmpId + numGpus*loop;
                 currChunkId++;
-                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
 
                 hipEventRecord(event, stream);
                 hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -34,7 +33,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         tmpId = (tmpId + numGpus - 1)%numGpus;
                         Id = tmpId + numGpus*loop;
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
-                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclSum>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclSum>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -44,7 +43,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                     Id = tmpId + numGpus*loop;
                     hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     currChunkId++;
-                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclSum, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclSum, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, Id * CHUNK_DWORDx4);
                     hipEventRecord(event, stream);
                     hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     i++;
@@ -61,7 +60,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                         tmpId = (rank+1)%numGpus;
                         Id = tmpId + numGpus * loop;
-                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclSum, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclSum, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -95,7 +94,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                 int tmpId = rank%numGpus;
                 int Id = tmpId + numGpus*loop;
                 currChunkId++;
-                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
 
                 hipEventRecord(event, stream);
                 hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -105,7 +104,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         tmpId = (tmpId + numGpus - 1)%numGpus;
                         Id = tmpId + numGpus*loop;
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
-                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclProd>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclProd>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -115,7 +114,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                     Id = tmpId + numGpus*loop;
                     hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     currChunkId++;
-                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclProd, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclProd, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                     hipEventRecord(event, stream);
                     hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     i++;
@@ -133,7 +132,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                         tmpId = (rank+1)%numGpus;
                         Id = tmpId + numGpus * loop;
-                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclProd, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclProd, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -164,7 +163,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                 int tmpId = rank%numGpus;
                 int Id = tmpId + numGpus*loop;
                 currChunkId++;
-                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
 
                 hipEventRecord(event, stream);
                 hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -174,7 +173,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         tmpId = (tmpId + numGpus - 1)%numGpus;
                         Id = tmpId + numGpus*loop;
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
-                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclMax>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclMax>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -184,7 +183,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                     Id = tmpId + numGpus*loop;
                     hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     currChunkId++;
-                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclMax, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclMax, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                     hipEventRecord(event, stream);
                     hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     i++;
@@ -201,7 +200,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                         tmpId = (rank+1)%numGpus;
                         Id = tmpId + numGpus * loop;
-                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclProd, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclProd, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -232,7 +231,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                 int tmpId = rank%numGpus;
                 int Id = tmpId + numGpus*loop;
                 currChunkId++;
-                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                hipLaunchKernelGGL((rcclAllReduceFirstCopy), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
 
                 hipEventRecord(event, stream);
                 hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -242,7 +241,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         tmpId = (tmpId + numGpus - 1)%numGpus;
                         Id = tmpId + numGpus*loop;
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
-                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclMin>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopy<DataType, VectorType, rcclMin>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, tmpDst + tmpId * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
@@ -252,7 +251,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                     Id = tmpId + numGpus*loop;
                     hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     currChunkId++;
-                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclMin, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                    hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclMin, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                     hipEventRecord(event, stream);
                     hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                     i++;
@@ -269,7 +268,7 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
                         hipLaunchKernelGGL((rcclWaitForChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
                         tmpId = (rank+1)%numGpus;
                         Id = tmpId + numGpus * loop;
-                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclMin, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, src + Id * CHUNK_DWORDx4);
+                        hipLaunchKernelGGL((rcclAllReduceOpCopynextPeerDst<DataType, VectorType, rcclMin, true>), dim3(1,1,1), dim3(WI,1,1), 0, stream, currTrack, Id * CHUNK_DWORDx4, tmpSrc + tmpId * CHUNK_DWORDx4, size_t(Id * CHUNK_DWORDx4));
                         hipEventRecord(event, stream);
                         currChunkId++;
                         hipLaunchKernelGGL((rcclDoPeerChunk), dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, currChunkId);
