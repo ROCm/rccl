@@ -13,14 +13,6 @@ All rights reserved.
 
 #define WI 1024
 
-__global__ void rcclResetChunkId(DeviceControl_t *currTrack, uint32_t nextChunkId) {
-    int tx = hipThreadIdx_x;
-    if(tx == 0) {
-        std::atomic_store_explicit(&(currTrack->chunkId), nextChunkId, std::memory_order_seq_cst);
-    }
-    __syncthreads();
-}
-
 __global__ void rcclWaitForPeerDst(DeviceControl_t *currTrack) {
     int tx = hipThreadIdx_x;
     if(tx == 0) {
