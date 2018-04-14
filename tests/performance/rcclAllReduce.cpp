@@ -80,6 +80,7 @@ int main(int argc, char* argv[]) {
     mark.done();
     mark.bw(SIZE);
 
+
     for(int i=0;i<numGpus;i++) {
         HIPCHECK(hipFree(dDst[i]));
         HIPCHECK(hipFree(dSrc[i]));

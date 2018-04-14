@@ -23,9 +23,6 @@ public:
         double algbw = (double)(bytes) / 1.0E9 / elapsedSec;
         std::cout<<"BW: "<<algbw<<" GB/s"<<std::endl;
     }
-    void get_time() {
-        std::cout<<"Time Taken: "<<elapsedSec<<std::endl;
-    }
     double get_bw(double bytes) {
         return (double)(bytes) / 1.0E9 / elapsedSec;
     }
