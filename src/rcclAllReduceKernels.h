@@ -20,10 +20,10 @@ __global__ void rcclAllReduceSetBuffers(DeviceControl_t *currTrack, const void *
 Copy data from src + index to dst
 */
 template<typename VectorType>
-__global__ void rcclAllReduceFirstCopy(DeviceControl_t *currTrack, VectorType *dst, size_t srcOffset) {
+__global__ void rcclAllReduceFirstCopy(DeviceControl_t *currTrack, VectorType *dst, size_t srcOffset, size_t chunkDwordx4) {
     int tx = hipThreadIdx_x;
     VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
-    copyChunk(dst, src, tx);
+    copyChunk(dst, src, tx, chunkDwordx4);
     __syncthreads();
 }
 
@@ -36,22 +36,22 @@ __global__ void rcclAllReduceFirstCopyCnt(DeviceControl_t *currTrack, VectorType
 
 
 template<typename DataType, typename VectorType, rcclRedOp_t Op>
-__global__ void rcclAllReduceOpCopy(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, size_t srcOffset) {
+__global__ void rcclAllReduceOpCopy(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, size_t srcOffset, size_t chunkDwordx4) {
     int tx = hipThreadIdx_x;
 
     VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
 
     if(Op == rcclSum) {
-        reduceChunkSum(dst, src1, src2, tx);
+        reduceChunkSum(dst, src1, src2, tx, chunkDwordx4);
     }
     if(Op == rcclProd) {
-        reduceChunkProd(dst, src1, src2, tx);
+        reduceChunkProd(dst, src1, src2, tx, chunkDwordx4);
     }
     if(Op == rcclMax) {
-        reduceChunkMax<DataType, VectorType>(dst, src1, src2, tx);
+        reduceChunkMax<DataType, VectorType>(dst, src1, src2, tx, chunkDwordx4);
     }
     if(Op == rcclMin) {
-        reduceChunkMin<DataType, VectorType>(dst, src1, src2, tx);
+        reduceChunkMin<DataType, VectorType>(dst, src1, src2, tx, chunkDwordx4);
     }
     __syncthreads();
 }
@@ -69,7 +69,7 @@ __global__ void rcclAllReduceOpCopyCnt(DeviceControl_t *currTrack, VectorType *d
 
 
 template<typename DataType, typename VectorType, rcclRedOp_t Op, bool WaitFornextPeerDst>
-__global__ void rcclAllReduceOpCopynextPeerDst(DeviceControl_t *currTrack, size_t offset, VectorType *src1, size_t srcOffset) {
+__global__ void rcclAllReduceOpCopynextPeerDst(DeviceControl_t *currTrack, size_t offset, VectorType *src1, size_t srcOffset, size_t chunkDwordx4) {
     int tx = hipThreadIdx_x;
 
     VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
@@ -84,29 +84,29 @@ __global__ void rcclAllReduceOpCopynextPeerDst(DeviceControl_t *currTrack, size_
     VectorType *dst = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->nextPeer->dstBuffer), std::memory_order_seq_cst)) + offset;
 
     if(Op == rcclSum) {
-        reduceChunkSum(dst, src1, src2, tx);
+        reduceChunkSum(dst, src1, src2, tx, chunkDwordx4);
     }
     if(Op == rcclProd) {
-        reduceChunkProd(dst, src1, src2, tx);
+        reduceChunkProd(dst, src1, src2, tx, chunkDwordx4);
     }
     if(Op == rcclMax) {
-        reduceChunkMax<DataType, VectorType>(dst, src1, src2, tx);
+        reduceChunkMax<DataType, VectorType>(dst, src1, src2, tx, chunkDwordx4);
     }
     if(Op == rcclMin) {
-        reduceChunkMin<DataType, VectorType>(dst, src1, src2, tx);
+        reduceChunkMin<DataType, VectorType>(dst, src1, src2, tx, chunkDwordx4);
     }
 
     __syncthreads();
 }
 
 template<typename VectorType>
-__global__ void rcclAllReduceCopynextPeerDst(DeviceControl_t *currTrack, size_t offset) {
+__global__ void rcclAllReduceCopynextPeerDst(DeviceControl_t *currTrack, size_t offset, size_t chunkDwordx4) {
     int tx = hipThreadIdx_x;
 
     VectorType *dst = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->nextPeer->dstBuffer), std::memory_order_seq_cst)) + offset;
     VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->dstBuffer), std::memory_order_seq_cst)) + offset;
 
-    copyChunk(dst, src, tx);
+    copyChunk(dst, src, tx, chunkDwordx4);
     __syncthreads();
 }
 

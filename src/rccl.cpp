@@ -26,10 +26,14 @@ sizeof(double)
 
 std::vector<DevTrackerPool_t*> Pools;
 
+size_t findOptimalChunkDwordx4() {
+    return 131072;
+}
+
 struct RcclUniqueId {
     DevTrackerPool_t *pool;
-    RcclUniqueId() {
-        pool = new DevTrackerPool_t;
+    RcclUniqueId(size_t chunkDwordx4) {
+        pool = new DevTrackerPool_t(chunkDwordx4);
     }
     ~RcclUniqueId() {
         delete pool;
@@ -58,10 +62,11 @@ const char* rcclGetErrorString(rcclResult_t result) {
 }
 
 rcclResult_t rcclGetUniqueId(rcclUniqueId *uniqueId) {
+    size_t chunkDwordx4 = findOptimalChunkDwordx4();
     if(uniqueId == nullptr) {
         return rcclInvalidArguments;
     }
-    auto tmpId = new RcclUniqueId;
+    auto tmpId = new RcclUniqueId(chunkDwordx4);
     *uniqueId = tmpId;
     return rcclSuccess;
 }
@@ -111,8 +116,10 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
         }
     }
 
+    size_t chunkDwordx4 = findOptimalChunkDwordx4();
+
     RcclComm_t *rcomm;
-    DevTrackerPool_t *pool = new DevTrackerPool_t(devlist, ndev);
+    DevTrackerPool_t *pool = new DevTrackerPool_t(devlist, ndev, chunkDwordx4);
 
     DeviceControl_t *track;
 
@@ -177,16 +184,18 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
     if(Comm->Track->hipCurrentDeviceId != Comm->pool->getPoolByDevID(root)->prevPeer->hipCurrentDeviceId) {
     hipLaunchKernelGGL(CheckPtrs, dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack);
 
+    size_t chunkDwordx4 = Comm->pool->getChunkDwordx4();
+
     switch(datatype) {
         case rcclChar:
         case rcclUchar:
         {
-            numIter = (count/CHUNK_DWORD)/4;
-            offsetCnt = count - CHUNK_DWORD*4*numIter;
+            numIter = count/chunkDwordx4;
+            offsetCnt = count%chunkDwordx4;
             if (isRoot) {
-                rcclInternalBcastRoot<char, rccl_char16_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcastRoot<char, rccl_char16_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<char, rccl_char16_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcast<char, rccl_char16_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             }
             break;
         }
@@ -194,12 +203,12 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclUshort:
         case rcclHalf:
         {
-            numIter = (count/CHUNK_DWORD)/2;
-            offsetCnt = count - CHUNK_DWORD*2*numIter;
+            numIter = count/(chunkDwordx4/2);
+            offsetCnt = count%(chunkDwordx4/2);
             if (isRoot) {
-                rcclInternalBcastRoot<short, rccl_short8_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcastRoot<short, rccl_short8_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<short, rccl_short8_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcast<short, rccl_short8_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             }
             break;
         }
@@ -207,12 +216,12 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclUint:
         case rcclFloat:
         {
-            numIter = (count/CHUNK_DWORD);
-            offsetCnt = count - CHUNK_DWORD*numIter;
+            numIter = count/(chunkDwordx4/4);
+            offsetCnt = count%(chunkDwordx4/4);
             if (isRoot) {
-                rcclInternalBcastRoot<int, rccl_int4_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcastRoot<int, rccl_int4_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<int, rccl_int4_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcast<int, rccl_int4_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             }
 
             break;
@@ -221,12 +230,12 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclUlong:
         case rcclDouble:
         {
-            numIter = (count/CHUNK_DWORD)*2;
-            offsetCnt = count - (CHUNK_DWORD/2)*numIter;
+            numIter = count/(chunkDwordx4/8);
+            offsetCnt = count%(chunkDwordx4/8);
             if (isRoot) {
-                rcclInternalBcastRoot<long, rccl_long2_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcastRoot<long, rccl_long2_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<long, rccl_long2_t>(currTrack, numIter, offsetCnt, stream);
+                rcclInternalBcast<long, rccl_long2_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
             }
 
             break;
@@ -238,7 +247,6 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
     }
     return rcclSuccess;
 }
-
 
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     #if RCCL_DEBUG == 1
@@ -256,57 +264,53 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
    }
 
     DeviceControl_t *currTrack = Comm->Track;
-/*
-    std::atomic_store_explicit(&(currTrack->srcBuffer), (void*)sendbuff, std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(currTrack->dstBuffer), recvbuff, std::memory_order_seq_cst);
-*/
 
     hipLaunchKernelGGL(rcclAllReduceSetBuffers, dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, sendbuff, recvbuff);
 
     if(op == rcclSum) {
     switch(datatype) {
         case rcclChar: {
-            rcclInternalAllReduce<signed char, rccl_char16_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<signed char, rccl_char16_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclUchar: {
-            rcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclShort: {
-            rcclInternalAllReduce<signed short, rccl_short8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<signed short, rccl_short8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclUshort: {
-            rcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclInt: {
-            rcclInternalAllReduce<signed int, rccl_int4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<signed int, rccl_int4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclUint: {
-            rcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclLong: {
-            rcclInternalAllReduce<signed long, rccl_long2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<signed long, rccl_long2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclUlong: {
-            rcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclHalf: {
-            rcclInternalAllReduce<__fp16, rccl_half8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<__fp16, rccl_half8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclFloat: {
-            rcclInternalAllReduce<float, rccl_float4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<float, rccl_float4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
         case rcclDouble: {
-            rcclInternalAllReduce<double, rccl_double2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->event);
+            rcclInternalAllReduce<double, rccl_double2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
             return rcclSuccess;
         }
 
@@ -315,6 +319,7 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
         }
     }
     }
+/*
     if(op == rcclProd) {
     switch(datatype) {
         case rcclChar: {
@@ -472,33 +477,9 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
             return rcclInvalidType;
         }
     }
-
     }
-
+*/
     return rcclSuccess;
 }
 
 
-rcclResult_t rcclAllGather(const void *sendbuff, int count, rcclDataType_t datatype, void *recvbuff, rcclComm_t comm, hipStream_t stream) {
-    RcclComm_t *Comm = comm;
-
-    DeviceControl_t *currTrack = Comm->Track;
-
-    std::atomic_store_explicit(&(currTrack->srcBuffer), (void*)sendbuff, std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(currTrack->dstBuffer), recvbuff, std::memory_order_seq_cst);
-
-    int numGpus = Comm->numDevices;
-    int rank = Comm->rank;
-
-    switch(datatype) {
-        case rcclInt: {
-//            rcclInternalAllGather<signed int, rccl_int4_t>(currTrack, rank, numGpus, count, stream, Comm->event);
-            return rcclSuccess;
-        }
-        default: {
-            return rcclInvalidType;
-        }
-    }
-
-    return rcclSuccess;
-}

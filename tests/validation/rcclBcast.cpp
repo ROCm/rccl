@@ -40,6 +40,15 @@ int main(int argc, char* argv[]) {
     T *dSrc, **dDst;
     dDst = new T*[numGpus];
 
+    for(int i=0;i<numGpus;i++) {
+        HIPCHECK(hipSetDevice(i));
+        for(int j=0;j<numGpus;j++) {
+            if(i!=j) {
+                HIPCHECK(hipDeviceEnablePeerAccess(j, 0));
+            }
+        }
+    }
+
     std::vector<rcclComm_t> comms(numGpus);
     RCCLCHECK(rcclCommInitAll(comms.data(), numGpus, devs.data()));
 
@@ -57,13 +66,6 @@ int main(int argc, char* argv[]) {
             HIPCHECK(hipMalloc(&dDst[i], SIZE));
             HIPCHECK(hipMemcpy(dDst[i], hDst[i], SIZE, hipMemcpyHostToDevice));
         }
-
-        for(int j=0;j<numGpus;j++) {
-            if(i!=j) {
-                HIPCHECK(hipDeviceEnablePeerAccess(j, 0));
-            }
-        }
-
     }
 
     for(int i=0;i<numGpus;i++) {

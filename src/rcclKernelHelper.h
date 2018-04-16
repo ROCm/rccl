@@ -44,8 +44,8 @@ __global__ void rcclDoPeerChunk(DeviceControl_t *currTrack, uint32_t nextChunkId
 }
 
 template<typename T>
-static inline __device__ void copyChunk(T *dst, T *src, int tx) {
-    for(int i=tx; i<CHUNK_SIZE/sizeof(T);i=i+WI) {
+static inline __device__ void copyChunk(T *dst, T *src, int tx, size_t chunkDwordx4) {
+    for(int i=tx;i<chunkDwordx4;i++) {
         dst[i] = src[i];
     }
 }
@@ -120,8 +120,8 @@ static inline __device__ void reduceSumCnt(DataType *dst, DataType *src1, DataTy
 /* Sum kernel */
 
 template<typename T>
-static inline __device__ void reduceChunkSum(T *dst, T *src1, T *src2, int tx) {
-    for(int i=tx; i<CHUNK_SIZE/sizeof(T); i=i+WI) {
+static inline __device__ void reduceChunkSum(T *dst, T *src1, T *src2, int tx, size_t chunkDwordx4) {
+    for(int i=tx;i<chunkDwordx4;i=i+WI) {
         dst[i] = src1[i] + src2[i];
     }
 }
@@ -153,11 +153,12 @@ static inline __device__ void reduceChunkSumCnt(DataType *dst, DataType *src1, D
 /* Prod kernel */
 
 template<typename T>
-static inline __device__ void reduceChunkProd(T *dst, T *src1, T *src2, int tx) {
-    for(int i=tx; i<CHUNK_SIZE/sizeof(T); i=i+WI) {
+static inline __device__ void reduceChunkProd(T *dst, T *src1, T *src2, int tx, size_t chunkDwordx4) {
+    for(int i=tx; i<chunkDwordx4; i=i+WI) {
         dst[i] = src1[i] * src2[i];
     }
 }
+
 
 template<typename DataType, typename VectorType>
 static inline __device__ void reduceChunkProdCnt(DataType *dst, DataType *src1, DataType *src2, int tx, size_t count, size_t offset) {
@@ -182,8 +183,8 @@ static inline __device__ void reduceChunkProdCnt(DataType *dst, DataType *src1, 
 /* Max kernel */
 
 template<typename DataType, typename VectorType>
-inline __device__ void reduceChunkMax(VectorType *dst, VectorType *src1, VectorType *src2, int tx) {
-    for(int i=tx; i<CHUNK_SIZE/sizeof(VectorType); i=i+WI) {
+inline __device__ void reduceChunkMax(VectorType *dst, VectorType *src1, VectorType *src2, int tx, size_t chunkDwordx4) {
+    for(int i=tx; i<chunkDwordx4; i=i+WI) {
         VectorType d;
         VectorType s1 = src1[i];
         VectorType s2 = src2[i];
@@ -227,8 +228,8 @@ static inline __device__ void reduceChunkMaxCnt(DataType *dst, DataType *src1, D
 /* Min kernel */
 
 template<typename DataType, typename VectorType>
-inline __device__ void reduceChunkMin(VectorType *dst, VectorType *src1, VectorType *src2, int tx) {
-    for(int i=tx; i<CHUNK_SIZE/sizeof(VectorType); i=i+WI) {
+inline __device__ void reduceChunkMin(VectorType *dst, VectorType *src1, VectorType *src2, int tx, size_t chunkDwordx4) {
+    for(int i=tx; i<chunkDwordx4; i=i+WI) {
         VectorType d;
         VectorType s1 = src1[i];
         VectorType s2 = src2[i];

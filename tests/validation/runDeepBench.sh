@@ -1,5 +1,5 @@
 #!/bin/bash
-
+:'
 ./bin/allreduce 1 100000
 ./bin/allreduce 1 3097600
 ./bin/allreduce 1 4194304
@@ -7,7 +7,7 @@
 ./bin/allreduce 1 16777217
 ./bin/allreduce 1 38360000
 ./bin/allreduce 1 64500000
-
+'
 ./bin/allreduce 2 100000
 ./bin/allreduce 2 3097600
 ./bin/allreduce 2 4194304
