@@ -13,7 +13,6 @@ rcclResult_t rcclInternalAllReduce(DeviceControl_t *currTrack, int rank, int num
     size_t offSet = count % ((chunkDwordx4 * (sizeof(VectorType) / sizeof(DataType))) * numGpus);
     VectorType *tmpSrc = reinterpret_cast<VectorType*>(currTrack->controlBuffer);
     VectorType *tmpDst = reinterpret_cast<VectorType*>(currTrack->nextPeer->controlBuffer);
-    std::cout<<chunkDwordx4<<std::endl;
     if(Op == rcclSum) {
         int currChunkId = 0;
         int loop = 0;
