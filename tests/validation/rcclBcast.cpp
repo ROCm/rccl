@@ -11,7 +11,7 @@ All rights reserved.
 
 typedef int T;
 
-#define LEN  (1<<21)
+#define LEN  ((1<<21) + 1)
 #define SIZE LEN * sizeof(T)
 
 int main(int argc, char* argv[]) {

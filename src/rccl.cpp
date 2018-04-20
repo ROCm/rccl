@@ -178,8 +178,6 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
     std::atomic_store_explicit(&(currTrack->srcBuffer), buff, std::memory_order_seq_cst);
     std::atomic_store_explicit(&(currTrack->prevPeer->dstBuffer), buff, std::memory_order_seq_cst);
 
-    size_t numIter, offsetCnt;
-
     bool isRoot = Comm->Track->hipCurrentDeviceId == root;
     if(Comm->Track->hipCurrentDeviceId != Comm->pool->getPoolByDevID(root)->prevPeer->hipCurrentDeviceId) {
     hipLaunchKernelGGL(CheckPtrs, dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack);
@@ -190,12 +188,10 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclChar:
         case rcclUchar:
         {
-            numIter = count/chunkDwordx4;
-            offsetCnt = count%chunkDwordx4;
             if (isRoot) {
-                rcclInternalBcastRoot<char, rccl_char16_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcastRoot<char, rccl_char16_t>(currTrack, count, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<char, rccl_char16_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcast<char, rccl_char16_t>(currTrack, count, stream, chunkDwordx4);
             }
             break;
         }
@@ -203,12 +199,10 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclUshort:
         case rcclHalf:
         {
-            numIter = count/(chunkDwordx4/2);
-            offsetCnt = count%(chunkDwordx4/2);
             if (isRoot) {
-                rcclInternalBcastRoot<short, rccl_short8_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcastRoot<short, rccl_short8_t>(currTrack, count, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<short, rccl_short8_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcast<short, rccl_short8_t>(currTrack, count, stream, chunkDwordx4);
             }
             break;
         }
@@ -216,12 +210,10 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclUint:
         case rcclFloat:
         {
-            numIter = count/(chunkDwordx4/4);
-            offsetCnt = count%(chunkDwordx4/4);
             if (isRoot) {
-                rcclInternalBcastRoot<int, rccl_int4_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcastRoot<int, rccl_int4_t>(currTrack, count, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<int, rccl_int4_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcast<int, rccl_int4_t>(currTrack, count, stream, chunkDwordx4);
             }
 
             break;
@@ -230,12 +222,10 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclUlong:
         case rcclDouble:
         {
-            numIter = count/(chunkDwordx4/8);
-            offsetCnt = count%(chunkDwordx4/8);
             if (isRoot) {
-                rcclInternalBcastRoot<long, rccl_long2_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcastRoot<long, rccl_long2_t>(currTrack, count, stream, chunkDwordx4);
             } else {
-                rcclInternalBcast<long, rccl_long2_t>(currTrack, numIter, offsetCnt, stream, chunkDwordx4);
+                rcclInternalBcast<long, rccl_long2_t>(currTrack, count, stream, chunkDwordx4);
             }
 
             break;

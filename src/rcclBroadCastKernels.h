@@ -29,12 +29,13 @@ __global__ void CopyRoot(DeviceControl_t *currTrack, uint32_t chunkId, size_t ch
 template<typename DataType, typename VectorType>
 __global__ void CopyRootCnt(DeviceControl_t *currTrack, uint32_t chunkId, size_t count, size_t chunkDwordx4) {
     int tx = hipThreadIdx_x;
-    DataType* dst = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(currTrack->dstBuffer), std::memory_order_seq_cst));
-    DataType* src = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst));
-    size_t offset = (chunkId-1)*chunkDwordx4*4;
+    size_t offset = (chunkId-1)*chunkDwordx4;
+    DataType* dst = reinterpret_cast<DataType*>(reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->dstBuffer), std::memory_order_seq_cst)) + offset);
+    DataType* src = reinterpret_cast<DataType*>(reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + offset);
 
-    static const int factor = sizeof(VectorType)/sizeof(DataType);
-    copyChunkCnt<DataType, VectorType>((dst + offset), (src + offset), tx, count/factor, count%factor);
+    for(int i=tx;i<count;i+=WI) {
+        dst[i] = src[i];
+    }
     __syncthreads();
     __threadfence_system();
 }
@@ -57,13 +58,14 @@ template<typename DataType, typename VectorType>
 __global__ void CopyCnt(DeviceControl_t *currTrack, uint32_t chunkId, size_t count, size_t chunkDwordx4) {
     int tx = hipThreadIdx_x;
 
-    DataType *dst = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(currTrack->dstBuffer), std::memory_order_seq_cst));
-    DataType *src = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst));
+    size_t offset = (chunkId-1)*chunkDwordx4;
 
-    size_t offset = (chunkId-1)*chunkDwordx4*4;
+    DataType *dst = reinterpret_cast<DataType*>(reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->dstBuffer), std::memory_order_seq_cst)) + offset);
+    DataType *src = reinterpret_cast<DataType*>(reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + offset);
 
-    static const int factor = sizeof(VectorType)/sizeof(DataType);
-    copyChunkCnt<DataType, VectorType>((dst + offset), (src + offset), tx, count/factor, count%factor);
+    for(int i=tx;i<count;i+=WI) {
+        dst[i] = src[i];
+    }
 
     __syncthreads();
     __threadfence_system();
