@@ -6,6 +6,7 @@ All rights reserved.
 #pragma once
 
 #include "rccl.h"
+#include <iostream>
 
 #define HIPCHECK(status) \
     if(status != hipSuccess) { \
