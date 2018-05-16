@@ -170,6 +170,7 @@ rcclResult_t rcclCommDestroy(rcclComm_t comm) {
 }
 
 rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root, rcclComm_t comm, hipStream_t stream) {
+/*
     #if RCCL_DEBUG == 1
     std::cerr<<"rcclBcast Count: "<<count<<" DataType: "<<datatype<<std::endl;
     #endif
@@ -235,10 +236,12 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         }
     }
     }
+*/
     return rcclSuccess;
 }
 
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+/*
     #if RCCL_DEBUG == 1
     std::cerr<<"rcclAllReduce Count: "<<count<<" DataType: "<<datatype<<std::endl;
     #endif
@@ -309,7 +312,7 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, r
         }
     }
     }
-/*
+
     if(op == rcclProd) {
     switch(datatype) {
         case rcclChar: {
