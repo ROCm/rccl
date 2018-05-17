@@ -7,6 +7,10 @@ All rights reserved.
 
 #include <hip/hip_runtime_api.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     rcclChar    = 0, rcclInt8           = 0,
     rcclUchar   = 1, rcclUint8          = 1,
@@ -73,3 +77,6 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
 
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream);
 
+#ifdef __cplusplus
+}
+#endif
