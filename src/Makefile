@@ -5,7 +5,7 @@ all: lib
 
 
 lib:
-	/opt/rocm/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device rccl.cpp -o librccl.so
+	/opt/rocm/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device -lhip_hcc rccl.cpp -o librccl.so
 
 
 lib-debug:
