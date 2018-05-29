@@ -172,6 +172,76 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
 }
 
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+        #if RCCL_DEBUG == 1
+    std::cerr<<"rcclAllReduce Count: "<<count<<" DataType: "<<datatype<<std::endl;
+    #endif
+
+    RcclComm_t *Comm = comm;
+
+    int numGpus = Comm->numDevices;
+    int rank = Comm->rank;
+
+    if(numGpus == 1) {
+        hipMemcpyAsync(recvbuff, sendbuff, count * sizeVec[int(datatype)], hipMemcpyDeviceToDevice);
+        return rcclSuccess;
+   }
+
+    DeviceControl_t *currTrack = Comm->Track;
+
+    hipLaunchKernelGGL(rcclAllReduceSetBuffers, dim3(1,1,1), dim3(1,1,1), 0, stream, currTrack, sendbuff, recvbuff);
+
+    if(op == rcclSum) {
+    switch(datatype) {
+        case rcclChar: {
+            rcclInternalAllReduce<signed char, rccl_char16_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUchar: {
+            rcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclShort: {
+            rcclInternalAllReduce<signed short, rccl_short8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUshort: {
+            rcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclInt: {
+            rcclInternalAllReduce<signed int, rccl_int4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUint: {
+            rcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclLong: {
+            rcclInternalAllReduce<signed long, rccl_long2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclUlong: {
+            rcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclHalf: {
+            rcclInternalAllReduce<__fp16, rccl_half8_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclFloat: {
+            rcclInternalAllReduce<float, rccl_float4_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+        case rcclDouble: {
+            rcclInternalAllReduce<double, rccl_double2_t, rcclSum>(currTrack, rank, numGpus, count, stream, Comm->pool->getChunkDwordx4(), Comm->event);
+            return rcclSuccess;
+        }
+
+        default: {
+            return rcclInvalidType;
+        }
+    }
+    }
     return rcclSuccess;
 }
 
