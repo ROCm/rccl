@@ -95,12 +95,13 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
 
     int userDevice;
     HIPCHECK(hipGetDevice(&userDevice));
+    /** Disable for a tf debug test
     int deviceCount;
     HIPCHECK(hipGetDeviceCount(&deviceCount));
     if(ndev > deviceCount) {
         return rcclUnsupportedDeviceCount;
     }
-
+    */
     for(int i=0;i<ndev;i++) {
         HIPCHECK(hipSetDevice(devlist[i]));
         for(int j=0;j<ndev;j++) {
