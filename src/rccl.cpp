@@ -4,6 +4,7 @@ All rights reserved.
 */
 
 #include "rcclTracker.h"
+#include "rcclAllReduceRuntime.h"
 
 #include <vector>
 
