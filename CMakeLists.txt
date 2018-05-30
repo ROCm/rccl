@@ -24,13 +24,28 @@ if(NOT DEFINED HIP_PATH)
     endif()
 endif()
 
+if(NOT DEFINED ROCR_PATH)
+    if(NOT DEFINED ENV{ROCR_PATH})
+        set(ROCR_PATH "/opt/rocm/hsa" CACHE PATH "Path to which ROCR has been installed")
+    else()
+        set(ROCR_PATH $ENV{ROCR_PATH} CACHE PATH "Path to which ROCR has been installed")
+    endif()
+endif()
+
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND CMAKE_INSTALL_PREFIX MATCHES "/usr/local")
+    set(CMAKE_INSTALL_PREFIX "/opt/rocm/rccl" CACHE PATH "RCCL will be installed at: " FORCE)
+endif()
+
+message(STATUS "RCCL will be installed at: " ${CMAKE_INSTALL_PREFIX})
+
 set (CMAKE_CXX_COMPILER "${HCC_HOME}/bin/hcc")
 set (CMAKE_C_COMPILER "${HCC_HOME}/bin/hcc")
 
 include_directories(${PROJECT_SOURCE_DIR}/inc)
 include_directories(${HIP_PATH}/include)
 
-set (RCCL_BUILD_TARGETS "--amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906")
+set(RCCL_COMPILE_FLAGS "-hc -I${ROCR_PATH}/include")
+set (RCCL_BUILD_TARGETS "--amdgpu-target=gfx803 --amdgpu-target=gfx900")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RCCL_COMPILE_FLAGS}")
 
 execute_process(COMMAND ${HCC_HOME}/bin/hcc-config --shared --cxxflags --ldflags OUTPUT_VARIABLE RCCL_SHARED_FLAGS)
@@ -41,6 +56,13 @@ message(STATUS "HCC Version: ${HCC_VERSION}")
 
 set (RCCL_SRC src/rccl.cpp)
 
-set(RCCL_LINK_LIBRARIES "-L${HIP_PATH}/lib -lhip_device -lhip_hcc ${RCCL_BUILD_TARGETS}")
+set(RCCL_LINK_LIBRARIES "-L${HIP_PATH}/lib -lhip_device -lhip_hcc ${RCCL_BUILD_TARGETS} ${RCCL_SHARED_FLAGS}")
+
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${RCCL_LINK_LIBRARIES}")
 
 add_library(${RCCL} SHARED ${RCCL_SRC})
+
+install(TARGETS ${RCCL} DESTINATION lib)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/inc/rccl.h DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/rcclCheck.h DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+
