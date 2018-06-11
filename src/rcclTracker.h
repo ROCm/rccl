@@ -30,17 +30,15 @@ class DevTrackerPool_t{
 private:
     int *deviceIds;
     int numDevices;
-    size_t chunkDwordx4;
 public:
     int activeDevices;
     std::map<size_t, DeviceControl_t*> Pool;
-    DevTrackerPool_t(size_t chunkDwordx4) : deviceIds(nullptr), numDevices(0), chunkDwordx4(chunkDwordx4) {}
+    DevTrackerPool_t() : deviceIds(nullptr), numDevices(0) {}
     ~DevTrackerPool_t() {
         delete deviceIds;
     }
 
-    DevTrackerPool_t(const int *devIds, int numDevices, size_t chunkDwordx4);
-    size_t getChunkDwordx4() const;
+    DevTrackerPool_t(const int *devIds, int numDevices);
     RcclComm_t *AddDevice(int device, int rank, int ndev);
     void PrintAll();
     DeviceControl_t *getPoolByDevID(int devId);
@@ -60,7 +58,7 @@ public:
     }
 };
 
-    DevTrackerPool_t::DevTrackerPool_t(const int* devIds, int numDevices, size_t chunkDwordx4) : numDevices(numDevices), activeDevices(numDevices), chunkDwordx4(chunkDwordx4) {
+    DevTrackerPool_t::DevTrackerPool_t(const int* devIds, int numDevices) : numDevices(numDevices), activeDevices(numDevices) {
         int userDevId;
         HIPCHECK(hipGetDevice(&userDevId));
 
@@ -85,7 +83,7 @@ public:
         void *controlBuffer;
         HIPCHECK(hipSetDevice(deviceIds[0]));
         HIPCHECK(hipHostGetDevicePointer((void**)&dptr, Pool[0], 0));
-        HIPCHECK(hipMalloc(&controlBuffer, numDevices*chunkDwordx4*16));
+        HIPCHECK(hipMalloc(&controlBuffer, numDevices*CHUNK_SIZE));
         Pool[0]->controlBuffer = controlBuffer;
         if(numDevices != 1) {
             Pool[1]->prevPeer = dptr;
@@ -97,7 +95,7 @@ public:
         for(unsigned i=1;i<numDevices;i++) {
             HIPCHECK(hipSetDevice(deviceIds[i]));
             HIPCHECK(hipHostGetDevicePointer((void**)&dptr, Pool[i], 0));
-            HIPCHECK(hipMalloc(&controlBuffer, numDevices*chunkDwordx4*16));
+            HIPCHECK(hipMalloc(&controlBuffer, numDevices*CHUNK_SIZE));
             Pool[i]->controlBuffer = controlBuffer;
             Pool[(i+1)%numDevices]->prevPeer = dptr;
             Pool[(i-1)%numDevices]->nextPeer = dptr;
@@ -106,9 +104,6 @@ public:
         HIPCHECK(hipSetDevice(userDevId));
     }
 
-    size_t DevTrackerPool_t::getChunkDwordx4() const {
-        return chunkDwordx4;
-    }
 
     RcclComm_t* DevTrackerPool_t::AddDevice(int device, int rank, int ndev) {
         RcclComm_t* retComm = new RcclComm_t;
@@ -119,7 +114,7 @@ public:
         struct DeviceControl_t *dctrl;
         HIPCHECK(hipHostMalloc(&dctrl, sizeof(DeviceControl_t), hipHostMallocCoherent));
         void *controlBuffer;
-        HIPCHECK(hipMalloc(&controlBuffer, ndev*chunkDwordx4*16));
+        HIPCHECK(hipMalloc(&controlBuffer, ndev*CHUNK_SIZE));
         dctrl->controlBuffer = controlBuffer;
         dctrl->srcBuffer = 0;
         dctrl->dstBuffer = 0;

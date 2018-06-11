@@ -21,7 +21,7 @@ void doAllReduce(char *src, char *dst, size_t LEN, rcclRedOp_t op, rcclComm_t co
 
 template<>
 void doAllReduce(unsigned char *src, unsigned char *dst, size_t LEN, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclAllReduce(src, dst, LEN, rcclUchar, rcclSum, comm, stream));
+    RCCLCHECK(rcclAllReduce(src, dst, LEN, rcclUchar, op, comm, stream));
 }
 
 template<>
@@ -66,7 +66,7 @@ void doAllReduce(double *src, double *dst, size_t LEN, rcclRedOp_t op, rcclComm_
 
 
 template<typename T>
-void RunTest(size_t LEN, int numGpus, std::vector<int>& devs) {
+void RunTest(size_t LEN, int numGpus, std::vector<int>& devs, rcclRedOp_t op) {
     size_t SIZE = LEN * sizeof(T);
     std::cout<<"Total Size on each GPU: "<<((double)2*SIZE)/(1024*1024)<<" MB"<<std::endl;
 
@@ -74,7 +74,7 @@ void RunTest(size_t LEN, int numGpus, std::vector<int>& devs) {
     for(int i=0;i<numGpus;i++) {
         hSrc[i] = new T[LEN];
         for(int j=0;j<LEN;j++) {
-            hSrc[i][j] = T(1);
+            hSrc[i][j] = T(2);
         }
     }
 
@@ -106,7 +106,7 @@ void RunTest(size_t LEN, int numGpus, std::vector<int>& devs) {
 
     for(int i=0;i<numGpus;i++) {
         HIPCHECK(hipSetDevice(i));
-        doAllReduce<T>(dSrc[i], dDst[i], LEN, rcclSum, comms[i], streams[i]);
+        doAllReduce<T>(dSrc[i], dDst[i], LEN, op, comms[i], streams[i]);
     }
 
     for(int i=0;i<numGpus;i++) {
@@ -114,18 +114,49 @@ void RunTest(size_t LEN, int numGpus, std::vector<int>& devs) {
         HIPCHECK(hipDeviceSynchronize());
     }
 
+
     for(int i=0;i<numGpus;i++) {
         HIPCHECK(hipSetDevice(i));
         HIPCHECK(hipMemcpy(hDst[i], dDst[i], SIZE, hipMemcpyDeviceToHost));
-        HIPCHECK(hipFree(dDst[i]));
-        HIPCHECK(hipFree(dSrc[i]));
     }
 
     std::cout<<"Validating..."<<std::endl;
 
+    if(op == rcclSum) {
     for(int i=0;i<numGpus;i++) {
         std::cout<<"Validating on GPU: "<<devs[i]<<std::endl;
-        validate(hDst[i], T(numGpus), LEN, 1, 5);
+        validate(hDst[i], T(numGpus*2), LEN, 1, 5);
+    }
+    }
+    if(op == rcclProd) {
+    T val = T(1);
+    for(int i=0;i<numGpus;i++) {
+        val = val * T(2);
+    }
+    for(int i=0;i<numGpus;i++) {
+        std::cout<<"Validating on GPU: "<<devs[i]<<std::endl;
+        validate(hDst[i], val, LEN, 1, 5);
+    }
+    }
+
+    if(op == rcclMax) {
+    for(int i=0;i<numGpus;i++) {
+        std::cout<<"Validating on GPU: "<<devs[i]<<std::endl;
+        validate(hDst[i], T(2), LEN, 1, 5);
+    }
+    }
+
+    if(op == rcclMin) {
+    for(int i=0;i<numGpus;i++) {
+        std::cout<<"Validating on GPU: "<<devs[i]<<std::endl;
+        validate(hDst[i], T(2), LEN, 1, 5);
+    }
+    }
+
+
+    for(int i=0;i<numGpus;i++) {
+        HIPCHECK(hipFree(dDst[i]));
+        HIPCHECK(hipFree(dSrc[i]));
     }
 
 }
@@ -152,25 +183,98 @@ int main(int argc, char* argv[]) {
     }
 
     size_t LEN = atoi(argv[2]);
+
     std::cout<<"Testing: "<<"char"<<std::endl;
-    RunTest<char>(LEN, numGpus, devs);
+    RunTest<char>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"unsigned char"<<std::endl;
-    RunTest<unsigned char>(LEN, numGpus, devs);
+    RunTest<unsigned char>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"short"<<std::endl;
-    RunTest<short>(LEN, numGpus, devs);
+    RunTest<short>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"unsigned short"<<std::endl;
-    RunTest<unsigned short>(LEN, numGpus, devs);
+    RunTest<unsigned short>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"int"<<std::endl;
-    RunTest<int>(LEN, numGpus, devs);
+    RunTest<int>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"unsigned int"<<std::endl;
-    RunTest<unsigned int>(LEN, numGpus, devs);
+    RunTest<unsigned int>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"long"<<std::endl;
-    RunTest<signed long>(LEN, numGpus, devs);
+    RunTest<signed long>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"unsigned long"<<std::endl;
-    RunTest<unsigned long>(LEN, numGpus, devs);
+    RunTest<unsigned long>(LEN, numGpus, devs, rcclSum);
 
     std::cout<<"Testing: "<<"float"<<std::endl;
-    RunTest<float>(LEN, numGpus, devs);
+    RunTest<float>(LEN, numGpus, devs, rcclSum);
     std::cout<<"Testing: "<<"double"<<std::endl;
-    RunTest<double>(LEN, numGpus, devs);
+    RunTest<double>(LEN, numGpus, devs, rcclSum);
+
+
+    std::cout<<"Testing: "<<"char"<<std::endl;
+    RunTest<char>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"unsigned char"<<std::endl;
+    RunTest<unsigned char>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"short"<<std::endl;
+    RunTest<short>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"unsigned short"<<std::endl;
+    RunTest<unsigned short>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"int"<<std::endl;
+    RunTest<int>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"unsigned int"<<std::endl;
+    RunTest<unsigned int>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"long"<<std::endl;
+    RunTest<signed long>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"unsigned long"<<std::endl;
+    RunTest<unsigned long>(LEN, numGpus, devs, rcclProd);
+
+    std::cout<<"Testing: "<<"float"<<std::endl;
+    RunTest<float>(LEN, numGpus, devs, rcclProd);
+    std::cout<<"Testing: "<<"double"<<std::endl;
+    RunTest<double>(LEN, numGpus, devs, rcclProd);
+
+
+    std::cout<<"Testing: "<<"char"<<std::endl;
+    RunTest<char>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"unsigned char"<<std::endl;
+    RunTest<unsigned char>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"short"<<std::endl;
+    RunTest<short>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"unsigned short"<<std::endl;
+    RunTest<unsigned short>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"int"<<std::endl;
+    RunTest<int>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"unsigned int"<<std::endl;
+    RunTest<unsigned int>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"long"<<std::endl;
+    RunTest<signed long>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"unsigned long"<<std::endl;
+    RunTest<unsigned long>(LEN, numGpus, devs, rcclMax);
+
+    std::cout<<"Testing: "<<"float"<<std::endl;
+    RunTest<float>(LEN, numGpus, devs, rcclMax);
+    std::cout<<"Testing: "<<"double"<<std::endl;
+    RunTest<double>(LEN, numGpus, devs, rcclMax);
+
+
+
+    std::cout<<"Testing: "<<"char"<<std::endl;
+    RunTest<char>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"unsigned char"<<std::endl;
+    RunTest<unsigned char>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"short"<<std::endl;
+    RunTest<short>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"unsigned short"<<std::endl;
+    RunTest<unsigned short>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"int"<<std::endl;
+    RunTest<int>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"unsigned int"<<std::endl;
+    RunTest<unsigned int>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"long"<<std::endl;
+    RunTest<signed long>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"unsigned long"<<std::endl;
+    RunTest<unsigned long>(LEN, numGpus, devs, rcclMin);
+
+    std::cout<<"Testing: "<<"float"<<std::endl;
+    RunTest<float>(LEN, numGpus, devs, rcclMin);
+    std::cout<<"Testing: "<<"double"<<std::endl;
+    RunTest<double>(LEN, numGpus, devs, rcclMin);
+
+
 }

@@ -44,8 +44,8 @@ __global__ void rcclDoPeerChunk(DeviceControl_t *currTrack, uint32_t nextChunkId
 }
 
 template<typename T>
-static inline __device__ void copyChunk(T *dst, T *src, int tx, size_t chunkDwordx4) {
-    for(int i=tx;i<chunkDwordx4;i++) {
+static inline __device__ void copyChunk(T *dst, T *src, int tx) {
+    for(int i=tx;i<CHUNK_DWORDx4;i++) {
         dst[i] = src[i];
     }
 }
@@ -120,8 +120,8 @@ static inline __device__ void reduceSumCnt(DataType *dst, DataType *src1, DataTy
 /* Sum kernel */
 
 template<typename T>
-static inline __device__ void reduceChunkSum(T *dst, T *src1, T *src2, int tx, size_t chunkDwordx4) {
-    for(int i=tx;i<chunkDwordx4;i=i+WI) {
+static inline __device__ void reduceChunkSum(T *dst, T *src1, T *src2, int tx) {
+    for(int i=tx;i<CHUNK_DWORDx4;i=i+WI) {
         dst[i] = src1[i] + src2[i];
     }
 }
@@ -135,11 +135,6 @@ static inline __device__ void reduceChunkSumCnt(DataType *dst, DataType *src1, D
     for(int j=tx;j<count;j = j+WI) {
         vDst[j] = vSrc1[j] + vSrc2[j];
     }
-/*
-    if(tx < count) {
-        vDst[tx] = vSrc1[tx] + vSrc2[tx];
-    }
-*/
     if(tx == 0) {
         static const int factor = sizeof(VectorType)/sizeof(DataType);
         int i = 0;
@@ -153,8 +148,8 @@ static inline __device__ void reduceChunkSumCnt(DataType *dst, DataType *src1, D
 /* Prod kernel */
 
 template<typename T>
-static inline __device__ void reduceChunkProd(T *dst, T *src1, T *src2, int tx, size_t chunkDwordx4) {
-    for(int i=tx; i<chunkDwordx4; i=i+WI) {
+static inline __device__ void reduceChunkProd(T *dst, T *src1, T *src2, int tx) {
+    for(int i=tx; i<CHUNK_DWORDx4; i=i+WI) {
         dst[i] = src1[i] * src2[i];
     }
 }
@@ -166,8 +161,8 @@ static inline __device__ void reduceChunkProdCnt(DataType *dst, DataType *src1, 
     VectorType *vSrc1 = reinterpret_cast<VectorType*>(src1);
     VectorType *vSrc2 = reinterpret_cast<VectorType*>(src2);
 
-    if(tx < count) {
-        vDst[tx] = vSrc1[tx] * vSrc2[tx];
+    for(int j=tx;j < count;j=j+WI) {
+        vDst[j] = vSrc1[j] * vSrc2[j];
     }
     if(tx == 0) {
         static const int factor = sizeof(VectorType)/sizeof(DataType);
@@ -183,8 +178,8 @@ static inline __device__ void reduceChunkProdCnt(DataType *dst, DataType *src1, 
 /* Max kernel */
 
 template<typename DataType, typename VectorType>
-inline __device__ void reduceChunkMax(VectorType *dst, VectorType *src1, VectorType *src2, int tx, size_t chunkDwordx4) {
-    for(int i=tx; i<chunkDwordx4; i=i+WI) {
+inline __device__ void reduceChunkMax(VectorType *dst, VectorType *src1, VectorType *src2, int tx) {
+    for(int i=tx; i<CHUNK_DWORDx4; i=i+WI) {
         VectorType d;
         VectorType s1 = src1[i];
         VectorType s2 = src2[i];
@@ -201,14 +196,14 @@ static inline __device__ void reduceChunkMaxCnt(DataType *dst, DataType *src1, D
     VectorType *vSrc1 = reinterpret_cast<VectorType*>(src1);
     VectorType *vSrc2 = reinterpret_cast<VectorType*>(src2);
 
-    if(tx < count) {
+    for(int j=tx; j < count; j=j+WI) {
         VectorType d;
-        VectorType s1 = vSrc1[tx];
-        VectorType s2 = vSrc2[tx];
+        VectorType s1 = vSrc1[j];
+        VectorType s2 = vSrc2[j];
         for(int i=0;i<sizeof(VectorType)/sizeof(DataType);i++) {
             d[i] = s1[i] > s2[i] ? s1[i] : s2[i];
         }
-        vDst[tx] = d;
+        vDst[j] = d;
     }
     if(tx == 0) {
         static const int factor = sizeof(VectorType)/sizeof(DataType);
@@ -228,8 +223,8 @@ static inline __device__ void reduceChunkMaxCnt(DataType *dst, DataType *src1, D
 /* Min kernel */
 
 template<typename DataType, typename VectorType>
-inline __device__ void reduceChunkMin(VectorType *dst, VectorType *src1, VectorType *src2, int tx, size_t chunkDwordx4) {
-    for(int i=tx; i<chunkDwordx4; i=i+WI) {
+inline __device__ void reduceChunkMin(VectorType *dst, VectorType *src1, VectorType *src2, int tx) {
+    for(int i=tx; i<CHUNK_DWORDx4; i=i+WI) {
         VectorType d;
         VectorType s1 = src1[i];
         VectorType s2 = src2[i];
@@ -248,14 +243,14 @@ __device__ void reduceChunkMinCnt(DataType *dst, DataType *src1, DataType *src2,
     VectorType *vSrc1 = reinterpret_cast<VectorType*>(src1);
     VectorType *vSrc2 = reinterpret_cast<VectorType*>(src2);
 
-    if(tx < count) {
+    for(int j = tx;j < count; j=j+WI) {
         VectorType d;
-        VectorType s1 = vSrc1[tx];
-        VectorType s2 = vSrc2[tx];
+        VectorType s1 = vSrc1[j];
+        VectorType s2 = vSrc2[j];
         for(int i=0;i<sizeof(VectorType)/sizeof(DataType);i++) {
             d[i] = s1[i] < s2[i] ? s1[i] : s2[i];
         }
-        vDst[tx] = d;
+        vDst[j] = d;
     }
     if(tx == 0) {
         static const int factor = sizeof(VectorType)/sizeof(DataType);
