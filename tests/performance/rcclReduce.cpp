@@ -5,7 +5,7 @@ All rights reserved.
 
 #include "rccl.h"
 #include "rcclCheck.h"
-#include "validation/validate.h"
+#include "performance/performance.h"
 #include <iostream>
 #include <vector>
 #include "common.h"
@@ -76,46 +76,19 @@ void DoReduce(std::vector<int>& device_list, std::vector<hipStream_t>& device_st
         HIPCHECK(hipMemcpy(device_buffers[i], host_buffers[i], buff_size, hipMemcpyHostToDevice));
     }
     for(auto p_ops = umap_rccl_op.begin(); p_ops != umap_rccl_op.end(); p_ops++) {
+        perf_marker mark;
+        for(size_t iter_id = 0; iter_id < knum_iter; iter_id++) {
         for(size_t i = 0; i < num_gpus; i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
             CallReduce(reinterpret_cast<T*>(device_buffers[i]), reinterpret_cast<T*>(dst_device_buffer), buff_len, p_ops->second, root, rccl_comms[i], device_streams[i]);
+        }
         }
         for(size_t i = 0; i < num_gpus; i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
             HIPCHECK(hipStreamSynchronize(device_streams[i]));
         }
-        HIPCHECK(hipSetDevice(root));
-        HIPCHECK(hipMemcpy(dst_host_buffer, dst_device_buffer, buff_size, hipMemcpyDeviceToHost));
-        if(p_ops->second == rcclSum) {
-            T sum_val = static_cast<T>(0);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                sum_val += static_cast<T>(kbuffer_values[*pdevice_index]);
-            }
-            validate(reinterpret_cast<T*>(dst_host_buffer), sum_val, buff_len, 1, 0);
-        }
-        if(p_ops->second == rcclProd) {
-            T prod_val = static_cast<T>(1);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                prod_val *= static_cast<T>(kbuffer_values[*pdevice_index]);
-            }
-            validate(reinterpret_cast<T*>(dst_host_buffer), prod_val, buff_len, 1, 0);
-        }
-        if(p_ops->second == rcclMax) {
-            T max_val = static_cast<T>(0);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                T tmp_val = static_cast<T>(kbuffer_values[*pdevice_index]);
-                max_val = max_val > tmp_val ? max_val : tmp_val;
-            }
-            validate(reinterpret_cast<T*>(dst_host_buffer), max_val, buff_len, 1, 0);
-        }
-        if(p_ops->second == rcclMin) {
-            T min_val = static_cast<T>(100);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                T tmp_val = static_cast<T>(kbuffer_values[*pdevice_index]);
-                min_val = min_val < tmp_val ? min_val : tmp_val;
-            }
-            validate(reinterpret_cast<T*>(dst_host_buffer), min_val, buff_len, 1, 0);
-        }
+        mark.done();
+        mark.bw(buff_size*knum_iter*num_gpus);
     }
 }
 

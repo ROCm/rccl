@@ -7,6 +7,8 @@ All rights reserved.
 
 #include <chrono>
 
+constexpr size_t knum_iter = 1 << 4;
+
 class perf_marker {
     std::chrono::high_resolution_clock::time_point start, stop;
     double elapsedSec;

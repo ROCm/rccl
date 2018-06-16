@@ -5,6 +5,10 @@ All rights reserved.
 
 #pragma once
 
+// Used in tests and rccl source to print
+// proper error description rather than
+// printing just error code.
+
 #include "rccl.h"
 #include <iostream>
 

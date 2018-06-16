@@ -69,10 +69,13 @@ void DoAllReduce(std::vector<int>& device_list, std::vector<hipStream_t>& device
     for(int i = 0; i < device_list.size(); i++) {
         for(size_t j = 0; j < buff_len; j++) {
             reinterpret_cast<T*>(src_host_buffers[i])[j] = static_cast<T>(kbuffer_values[device_list[i]]);
+        }
+        for(size_t j = 0; j < buff_len * num_gpus; j++) {
             reinterpret_cast<T*>(dst_host_buffers[i])[j] = static_cast<T>(kbuffer_values[device_list[i]]);
         }
         HIPCHECK(hipSetDevice(device_list[i]));
-        HIPCHECK(hipMemcpy(src_device_buffers[i], src_host_buffers[i], buff_size, hipMemcpyHostToDevice));
+        HIPCHECK(hipMemcpy(src_device_buffers[i], src_host_buffers[i], buff_size * num_gpus, hipMemcpyHostToDevice));
+        HIPCHECK(hipMemcpy(dst_device_buffers[i], dst_host_buffers[i], buff_size, hipMemcpyHostToDevice));
     }
     for(auto p_ops = umap_rccl_op.begin(); p_ops != umap_rccl_op.end(); p_ops++) {
         for(size_t i = 0; i < num_gpus; i++) {
@@ -141,7 +144,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     size_t max_allocated_memory = 0;
     RandomSizeGen_t rsg(num_tests, 0, kmax_buffer_size);
     for(int i = 0; i < num_tests; i++) {
-        size_t val = rsg.GetSize();
+        size_t val = rsg.GetSize() / num_gpus;
         max_allocated_memory = std::max(max_allocated_memory, val);
         buffer_lengths.push_back(val);
     }
@@ -154,7 +157,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     std::vector<hipStream_t> device_streams(num_gpus);
 
     for(int i = 0; i < device_list.size(); i++) {
-        src_host_buffers[i] = reinterpret_cast<void*>(new signed char[max_allocated_memory]);
+        src_host_buffers[i] = reinterpret_cast<void*>(new signed char[max_allocated_memory * num_gpus]);
         dst_host_buffers[i] = reinterpret_cast<void*>(new signed char[max_allocated_memory]);
     }
 
@@ -163,18 +166,18 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
         for(int i = 0; i < device_list.size(); i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
             HIPCHECK(hipStreamCreate(&device_streams[i]));
-            HIPCHECK(hipMalloc(&(src_device_buffers[i]), max_allocated_memory));
+            HIPCHECK(hipMalloc(&(src_device_buffers[i]), max_allocated_memory * num_gpus));
             HIPCHECK(hipMalloc(&(dst_device_buffers[i]), max_allocated_memory));
         }
     }
 
      for(auto pbuff_len = buffer_lengths.begin(); pbuff_len != buffer_lengths.end(); pbuff_len++) {
-//        DoAllReduce<signed char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoAllReduce<signed char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 //        DoAllReduce<unsigned char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 //        DoAllReduce<signed short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 //        DoAllReduce<unsigned short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 //        DoAllReduce<signed int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-        DoAllReduce<unsigned int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+//        DoAllReduce<unsigned int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 //        DoAllReduce<signed long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 //        DoAllReduce<unsigned long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 //        DoAllReduce<float>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
@@ -186,6 +189,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
 
 // free allocted buffers on both host and device
 
+/*
     for(auto iter = src_device_buffers.begin(); iter != src_device_buffers.end(); iter++) {
         HIPCHECK(hipFree(*iter));
     }
@@ -199,7 +203,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     for(auto iter = dst_host_buffers.begin(); iter != dst_host_buffers.end(); iter++) {
         delete reinterpret_cast<signed char*>(*iter);
     }
-
+*/
 }
 
 int main(int argc, char* argv[]) {
