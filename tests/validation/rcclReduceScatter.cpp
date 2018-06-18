@@ -6,59 +6,59 @@ All rights reserved.
 #include "rccl.h"
 #include "rcclCheck.h"
 #include "validation/validate.h"
-#include <iostream>
-#include <vector>
 #include "common.h"
 #include <typeinfo>
 #include <list>
 #include <algorithm>
+#include <iostream>
+#include <vector>
 
-void CallAllReduce(signed char* psrc_buff, signed char* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(signed char* psrc_buff, signed char* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclChar, op, comm, stream));
 }
 
-void CallAllReduce(unsigned char* psrc_buff, unsigned char* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(unsigned char* psrc_buff, unsigned char* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUchar, op, comm, stream));
 }
 
-void CallAllReduce(signed short* psrc_buff, signed short* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(signed short* psrc_buff, signed short* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclShort, op, comm, stream));
 }
 
-void CallAllReduce(unsigned short* psrc_buff, unsigned short* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(unsigned short* psrc_buff, unsigned short* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUshort, op, comm, stream));
 }
 
-void CallAllReduce(signed int* psrc_buff, signed int* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(signed int* psrc_buff, signed int* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclInt, op, comm, stream));
 }
 
-void CallAllReduce(unsigned int* psrc_buff, unsigned int* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(unsigned int* psrc_buff, unsigned int* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUint, op, comm, stream));
 }
 
-void CallAllReduce(signed long* psrc_buff, signed long* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(signed long* psrc_buff, signed long* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclLong, op, comm, stream));
 }
 
-void CallAllReduce(unsigned long* psrc_buff, unsigned long* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(unsigned long* psrc_buff, unsigned long* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUlong, op, comm, stream));
 }
 
-void CallAllReduce(__fp16* psrc_buff, __fp16* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(__fp16* psrc_buff, __fp16* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclHalf, op, comm, stream));
 }
 
-void CallAllReduce(float* psrc_buff, float* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(float* psrc_buff, float* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclFloat, op, comm, stream));
 }
 
-void CallAllReduce(double* psrc_buff, double* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+void CallReduceScatter(double* psrc_buff, double* pdst_buff, size_t buff_len, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclDouble, op, comm, stream));
 }
 
 template<typename T>
-void DoAllReduce(std::vector<int>& device_list, std::vector<hipStream_t>& device_streams,
+void DoReduceScatter(std::vector<int>& device_list, std::vector<hipStream_t>& device_streams,
     std::vector<rcclComm_t>& rccl_comms, std::vector<void*>& src_host_buffers,
     std::vector<void*>& src_device_buffers, std::vector<void*>& dst_host_buffers,
     std::vector<void*>& dst_device_buffers, size_t buff_size) {
@@ -67,10 +67,10 @@ void DoAllReduce(std::vector<int>& device_list, std::vector<hipStream_t>& device
     size_t num_gpus = device_list.size();
 
     for(int i = 0; i < device_list.size(); i++) {
-        for(size_t j = 0; j < buff_len; j++) {
+        for(size_t j = 0; j < buff_len * num_gpus; j++) {
             reinterpret_cast<T*>(src_host_buffers[i])[j] = static_cast<T>(kbuffer_values[device_list[i]]);
         }
-        for(size_t j = 0; j < buff_len * num_gpus; j++) {
+        for(size_t j = 0; j < buff_len; j++) {
             reinterpret_cast<T*>(dst_host_buffers[i])[j] = static_cast<T>(kbuffer_values[device_list[i]]);
         }
         HIPCHECK(hipSetDevice(device_list[i]));
@@ -80,7 +80,7 @@ void DoAllReduce(std::vector<int>& device_list, std::vector<hipStream_t>& device
     for(auto p_ops = umap_rccl_op.begin(); p_ops != umap_rccl_op.end(); p_ops++) {
         for(size_t i = 0; i < num_gpus; i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
-            CallAllReduce(reinterpret_cast<T*>(src_device_buffers[i]), reinterpret_cast<T*>(dst_device_buffers[i]), buff_len, p_ops->second, rccl_comms[i], device_streams[i]);
+            CallReduceScatter(reinterpret_cast<T*>(src_device_buffers[i]), reinterpret_cast<T*>(dst_device_buffers[i]), buff_len, p_ops->second, rccl_comms[i], device_streams[i]);
         }
         for(size_t i = 0; i < num_gpus; i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
@@ -172,24 +172,23 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     }
 
      for(auto pbuff_len = buffer_lengths.begin(); pbuff_len != buffer_lengths.end(); pbuff_len++) {
-        DoAllReduce<signed char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<unsigned char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<signed short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<unsigned short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<signed int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<unsigned int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<signed long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<unsigned long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<float>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
-//        DoAllReduce<double>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<signed char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<unsigned char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<signed short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<unsigned short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<signed int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<unsigned int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<signed long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<unsigned long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<float>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
+        DoReduceScatter<double>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, *pbuff_len);
 
-//        DoAllReduce<__fp16>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len);
+//        DoReduceScatter<__fp16>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len);
 
     }
 
 // free allocted buffers on both host and device
 
-/*
     for(auto iter = src_device_buffers.begin(); iter != src_device_buffers.end(); iter++) {
         HIPCHECK(hipFree(*iter));
     }
@@ -203,7 +202,6 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     for(auto iter = dst_host_buffers.begin(); iter != dst_host_buffers.end(); iter++) {
         delete reinterpret_cast<signed char*>(*iter);
     }
-*/
 }
 
 int main(int argc, char* argv[]) {
@@ -227,7 +225,7 @@ int main(int argc, char* argv[]) {
     }
     if(argc != 3 || argc != 6) {
         std::cout<<"Usage: ./a.out -r <num tests> <root gpu> <num gpus> <list of gpus>"<<std::endl;
-        std::cout<<"./a.out -r 99 1 3 1 2 3"<<std::endl;
+        std::cout<<"./a.out -r 99 3 1 2 3"<<std::endl;
         std::cout<<"[-b] enables validation across random generated data sizes, uses <num tests> as seed"<<std::endl;
         std::cout<<"./a.out -r <num gpus> <number of elements> <op> <datatype>"<<std::endl;
         std::cout<<"Example: ./a.out -s 4 1024 rcclSum rcclInt"<<std::endl;

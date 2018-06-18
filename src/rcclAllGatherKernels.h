@@ -13,10 +13,14 @@ All rights reserved.
 // This kernel does data copy from all peer gpu buffers to current gpu buffer
 //
 template<typename DataType_t, typename VectorType_t>
-__global__ void RcclKernelAllGather(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, int rank, int count) {
+__global__ void RcclKernelAllGather(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, int rank, int count, unsigned num_vector_workgroups, unsigned num_scalars) {
     unsigned tx = threadIdx.x;
     unsigned bx = blockIdx.x;
     unsigned tid = tx + bx * knum_vectors_per_workgroup;
+
+    const int knum_elements_per_vector = sizeof(VectorType_t) / sizeof(DataType_t);
+    const int knum_elements_per_workgroup = knum_elements_per_vector * knum_workitems;
+    int total_elements = knum_elements_per_workgroup * num_vector_workgroups;
 
     // add recv_buff to tracker on current gpu
     if(tid == 0) {
@@ -24,33 +28,61 @@ __global__ void RcclKernelAllGather(DeviceControl_t* pcurr_track, const void* se
     }
     __syncthreads();
 
-    // typecast source buffer
-    VectorType_t* curr_buff = reinterpret_cast<VectorType_t*>((void*)send_buff);
-    // get destination buffer with offset at rank * count
-    VectorType_t* dest_buff = reinterpret_cast<VectorType_t*>(reinterpret_cast<DataType_t*>(recv_buff) + rank * count);
+    if(bx < num_vector_workgroups) {
 
-    dest_buff[tid] = curr_buff[tid];
+        // typecast source buffer
+        VectorType_t* curr_buff = reinterpret_cast<VectorType_t*>((void*)send_buff);
+        // get destination buffer with offset at rank * count
+        VectorType_t* dest_buff = reinterpret_cast<VectorType_t*>(reinterpret_cast<DataType_t*>(recv_buff) + rank * count);
 
-    // get peer gpu tracker
-    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+        dest_buff[tid] = curr_buff[tid];
 
-    // start traveling along the ring (clique) until current track is reached
-    // 1. Get destination buffer from next gpu
-    // 2. Copy data to peer gpus destination buffer
-    while(pnext_track != pcurr_track) {
+        // get peer gpu tracker
+        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
 
-        // wait until peer gpus destination buffer is set
-        while(std::atomic_load_explicit(&(pnext_track->dst_buffer), std::memory_order_seq_cst) == 0) {}
-        __syncthreads();
+        // start traveling along the ring (clique) until current track is reached
+        // 1. Get destination buffer from next gpu
+        // 2. Copy data to peer gpus destination buffer
+        while(pnext_track != pcurr_track) {
 
-        // get destination buffer from peer gpu
-        VectorType_t* next_buff = reinterpret_cast<VectorType_t*>(reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->dst_buffer), std::memory_order_seq_cst)) + rank * count);
+            // wait until peer gpus destination buffer is set
+            while(std::atomic_load_explicit(&(pnext_track->dst_buffer), std::memory_order_seq_cst) == 0) {}
+            __syncthreads();
 
-        next_buff[tid] = curr_buff[tid];
-        __syncthreads();
+            // get destination buffer from peer gpu
+            VectorType_t* next_buff = reinterpret_cast<VectorType_t*>(reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->dst_buffer), std::memory_order_seq_cst)) + rank * count);
 
-        // move on to next gpu
-        pnext_track = pnext_track->next_gpu;
+            next_buff[tid] = curr_buff[tid];
+            __syncthreads();
+
+            // move on to next gpu
+            pnext_track = pnext_track->next_gpu;
+        }
+
+    // operate on scalar data. Algorithm is same as VectorType_t
+    } else {
+
+        DataType_t* curr_buff = reinterpret_cast<DataType_t*>((void*)send_buff) + total_elements;
+        DataType_t* dest_buff = reinterpret_cast<DataType_t*>(recv_buff) + total_elements;
+
+        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+        while(pnext_track != pcurr_track) {
+
+            // wait until peer gpus destination buffer is set
+            while(std::atomic_load_explicit(&(pnext_track->dst_buffer), std::memory_order_seq_cst) == 0) {}
+            __syncthreads();
+
+            // get destination buffer from peer gpu
+            DataType_t* next_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->dst_buffer), std::memory_order_seq_cst)) + rank * count + total_elements;
+
+            for(unsigned id = tx; id < num_scalars; id = id + knum_workitems) {
+                next_buff[id] = curr_buff[id];
+            }
+            __syncthreads();
+
+            // move on to next gpu
+            pnext_track = pnext_track->next_gpu;
+        }
     }
 }
 
