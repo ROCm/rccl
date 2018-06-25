@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
+# Copyright (c) 2017 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,66 +23,10 @@
 # SOFTWARE.
 #
 ################################################################################
-
 cmake_minimum_required( VERSION 2.8.12 )
 
-set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
-
-project ( rccl C CXX)
-
-find_package(ROCM REQUIRED PATHS /opt/rocm)
-
-include(ROCMInstallTargets)
-include(ROCMPackageConfigHelpers)
-include(ROCMSetupVersion)
-include(ROCMInstallSymlinks)
-include(ROCMCreatePackage)
-
-rocm_setup_version(
-    VERSION 0.3-beta-2
-)
-
-list(APPEND CMAKE_PREFIX_PATH /opt/rocm /opt/rocm/hip /opt/rocm/hcc)
-
-find_package(hip REQUIRED)
-
-link_libraries(-amdgpu-target=gfx803 -amdgpu-target=gfx900)
-
-option( BUILD_SHARED_LIBS "Build as a shared library" ON )
-
 add_library( rccl
-    src/rccl.cpp
+    rccl.cpp
     )
 
-if( TARGET hip::device )
-target_link_libraries( rccl PRIVATE hip::device )
-target_link_libraries( rccl INTERFACE hip::host )
-else()
-target_link_libraries( rccl PUBLIC hip::hip_hcc ${hcc_LIBRARIES} )
-endif()
-
-rocm_install_targets(
-  TARGETS rccl
-  PREFIX rccl
-  INCLUDE
-    ${PROJECT_SOURCE_DIR}/inc
-)
-
-rocm_export_targets(
-  NAMESPACE roc::
-  PREFIX rccl
-  TARGETS rccl
-  DEPENDS hip
-)
-
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip_hcc")
-set(CPACK_RPM_PACKAGE_REQUIRES "hip_hcc")
-
-rocm_create_package(
-    NAME rccl
-    DESCRIPTION "AMD's multi-gpu MPI impelemtation"
-    MAINTAINER "Aditya Aturi <Aditya.Atluri@amd.com>"
-    LDCONFIG
-)
-
-rocm_install_symlink_subdir(rccl)
+target_link_libraries( rccl PRIVATE hip::hip_hcc ${hcc_LIBRARIES} )
