@@ -5,7 +5,7 @@ All rights reserved.
 
 #include "rccl.h"
 #include "rcclCheck.h"
-#include "validation/validate.h"
+#include "performance/performance.h"
 #include <iostream>
 #include <vector>
 #include "common.h"
@@ -69,64 +69,28 @@ void DoAllReduce(std::vector<int>& device_list, std::vector<hipStream_t>& device
     for(int i = 0; i < device_list.size(); i++) {
         for(size_t j = 0; j < buff_len; j++) {
             reinterpret_cast<T*>(src_host_buffers[i])[j] = static_cast<T>(kbuffer_values[device_list[i]]);
+        }
+        for(size_t j = 0; j < buff_len * num_gpus; j++) {
             reinterpret_cast<T*>(dst_host_buffers[i])[j] = static_cast<T>(kbuffer_values[device_list[i]]);
         }
         HIPCHECK(hipSetDevice(device_list[i]));
-        HIPCHECK(hipMemcpy(src_device_buffers[i], src_host_buffers[i], buff_size, hipMemcpyHostToDevice));
+        HIPCHECK(hipMemcpy(src_device_buffers[i], src_host_buffers[i], buff_size * num_gpus, hipMemcpyHostToDevice));
+        HIPCHECK(hipMemcpy(dst_device_buffers[i], dst_host_buffers[i], buff_size, hipMemcpyHostToDevice));
     }
     for(auto p_ops = umap_rccl_op.begin(); p_ops != umap_rccl_op.end(); p_ops++) {
+        perf_marker mark;
+        for(size_t iter_id = 0; iter_id < knum_iter; iter_id++) {
         for(size_t i = 0; i < num_gpus; i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
             CallAllReduce(reinterpret_cast<T*>(src_device_buffers[i]), reinterpret_cast<T*>(dst_device_buffers[i]), buff_len, p_ops->second, rccl_comms[i], device_streams[i]);
+        }
         }
         for(size_t i = 0; i < num_gpus; i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
             HIPCHECK(hipStreamSynchronize(device_streams[i]));
         }
-
-        for(size_t i = 0; i < num_gpus; i++) {
-            HIPCHECK(hipSetDevice(device_list[i]));
-            HIPCHECK(hipMemcpy(dst_host_buffers[i], dst_device_buffers[i], buff_size, hipMemcpyDeviceToHost));
-        }
-
-        if(p_ops->second == rcclSum) {
-            T sum_val = static_cast<T>(0);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                sum_val += static_cast<T>(kbuffer_values[*pdevice_index]);
-            }
-            for(size_t i = 0; i < num_gpus; i++) {
-                validate(reinterpret_cast<T*>(dst_host_buffers[i]), sum_val, buff_len, 1, 0);
-            }
-        }
-        if(p_ops->second == rcclProd) {
-            T prod_val = static_cast<T>(1);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                prod_val *= static_cast<T>(kbuffer_values[*pdevice_index]);
-            }
-            for(size_t i = 0; i < num_gpus; i++) {
-                validate(reinterpret_cast<T*>(dst_host_buffers[i]), prod_val, buff_len, 1, 0);
-            }
-        }
-        if(p_ops->second == rcclMax) {
-            T max_val = static_cast<T>(0);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                T tmp_val = static_cast<T>(kbuffer_values[*pdevice_index]);
-                max_val = max_val > tmp_val ? max_val : tmp_val;
-            }
-            for(size_t i = 0; i < num_gpus; i++) {
-                validate(reinterpret_cast<T*>(dst_host_buffers[i]), max_val, buff_len, 1, 0);
-            }
-        }
-        if(p_ops->second == rcclMin) {
-            T min_val = static_cast<T>(100);
-            for(auto pdevice_index = device_list.begin(); pdevice_index != device_list.end(); pdevice_index++) {
-                T tmp_val = static_cast<T>(kbuffer_values[*pdevice_index]);
-                min_val = min_val < tmp_val ? min_val : tmp_val;
-            }
-            for(size_t i = 0; i < num_gpus; i++) {
-                validate(reinterpret_cast<T*>(dst_host_buffers[i]), min_val, buff_len, 1, 0);
-            }
-        }
+        mark.done();
+        mark.bw(buff_size * knum_iter * num_gpus);
     }
 }
 
@@ -141,7 +105,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     size_t max_allocated_memory = 0;
     RandomSizeGen_t rsg(num_tests, 0, kmax_buffer_size);
     for(int i = 0; i < num_tests; i++) {
-        size_t val = rsg.GetSize();
+        size_t val = rsg.GetSize() / num_gpus;
         max_allocated_memory = std::max(max_allocated_memory, val);
         buffer_lengths.push_back(val);
     }
@@ -154,7 +118,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     std::vector<hipStream_t> device_streams(num_gpus);
 
     for(int i = 0; i < device_list.size(); i++) {
-        src_host_buffers[i] = reinterpret_cast<void*>(new signed char[max_allocated_memory]);
+        src_host_buffers[i] = reinterpret_cast<void*>(new signed char[max_allocated_memory * num_gpus]);
         dst_host_buffers[i] = reinterpret_cast<void*>(new signed char[max_allocated_memory]);
     }
 
@@ -163,7 +127,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
         for(int i = 0; i < device_list.size(); i++) {
             HIPCHECK(hipSetDevice(device_list[i]));
             HIPCHECK(hipStreamCreate(&device_streams[i]));
-            HIPCHECK(hipMalloc(&(src_device_buffers[i]), max_allocated_memory));
+            HIPCHECK(hipMalloc(&(src_device_buffers[i]), max_allocated_memory * num_gpus));
             HIPCHECK(hipMalloc(&(dst_device_buffers[i]), max_allocated_memory));
         }
     }
@@ -186,6 +150,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
 
 // free allocted buffers on both host and device
 
+/*
     for(auto iter = src_device_buffers.begin(); iter != src_device_buffers.end(); iter++) {
         HIPCHECK(hipFree(*iter));
     }
@@ -199,69 +164,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
     for(auto iter = dst_host_buffers.begin(); iter != dst_host_buffers.end(); iter++) {
         delete reinterpret_cast<signed char*>(*iter);
     }
-
-}
-
-void ReduceTestSize(std::vector<int>& device_list, size_t size_in_bytes) {
-    size_t num_gpus = device_list.size();
-    EnableDevicePeerAccess(device_list);
-
-    std::vector<rcclComm_t> rccl_comms(num_gpus);
-    RCCLCHECK(rcclCommInitAll(rccl_comms.data(), num_gpus, device_list.data()));
-
-    std::vector<void*> src_device_buffers(num_gpus);
-    std::vector<void*> src_host_buffers(num_gpus);
-    std::vector<void*> dst_device_buffers(num_gpus);
-    std::vector<void*> dst_host_buffers(num_gpus);
-
-    std::vector<hipStream_t> device_streams(num_gpus);
-
-    for(int i = 0; i < device_list.size(); i++) {
-        src_host_buffers[i] = reinterpret_cast<void*>(new signed char[size_in_bytes]);
-        dst_host_buffers[i] = reinterpret_cast<void*>(new signed char[size_in_bytes]);
-    }
-
-    { // used new scope to force current-device guard to destruct after changing active device
-        CurrDeviceGuard_t g;
-        for(int i = 0; i < device_list.size(); i++) {
-            HIPCHECK(hipSetDevice(device_list[i]));
-            HIPCHECK(hipStreamCreate(&device_streams[i]));
-            HIPCHECK(hipMalloc(&(src_device_buffers[i]), size_in_bytes));
-            HIPCHECK(hipMalloc(&(dst_device_buffers[i]), size_in_bytes));
-        }
-    }
-
-        DoAllReduce<signed char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<unsigned char>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<signed short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<unsigned short>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<signed int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<unsigned int>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<signed long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<unsigned long>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<float>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-        DoAllReduce<double>(device_list, device_streams, rccl_comms, src_host_buffers, src_device_buffers, dst_host_buffers, dst_device_buffers, size_in_bytes);
-
-//        DoAllReduce<__fp16>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len);
-
-
-// free allocted buffers on both host and device
-
-    for(auto iter = src_device_buffers.begin(); iter != src_device_buffers.end(); iter++) {
-        HIPCHECK(hipFree(*iter));
-    }
-    for(auto iter = src_host_buffers.begin(); iter != src_host_buffers.end(); iter++) {
-        delete reinterpret_cast<signed char*>(*iter);
-    }
-
-    for(auto iter = dst_device_buffers.begin(); iter != dst_device_buffers.end(); iter++) {
-        HIPCHECK(hipFree(*iter));
-    }
-    for(auto iter = dst_host_buffers.begin(); iter != dst_host_buffers.end(); iter++) {
-        delete reinterpret_cast<signed char*>(*iter);
-    }
-
-
+*/
 }
 
 int main(int argc, char* argv[]) {
@@ -283,20 +186,9 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     }
-    if(argc == 3) {
-        int num_gpus = atoi(argv[1]);
-        size_t size_in_bytes = atoi(argv[2]);
-        std::vector<int> device_list(num_gpus);
-        for(int i = 0; i < num_gpus; i++) {
-            device_list[i] = i;
-        }
-        std::cout<<num_gpus<<" "<<size_in_bytes<<std::endl;
-        ReduceTestSize(device_list, size_in_bytes);
-        return 0;
-    }
-    if(argc != 3 || argc != 5) {
-        std::cout<<"Usage: ./a.out -r <num tests> <num gpus> <list of gpus>"<<std::endl;
-        std::cout<<"./a.out -r 99 3 1 2 3"<<std::endl;
+    if(argc != 3 || argc != 6) {
+        std::cout<<"Usage: ./a.out -r <num tests> <root gpu> <num gpus> <list of gpus>"<<std::endl;
+        std::cout<<"./a.out -r 99 1 3 1 2 3"<<std::endl;
         std::cout<<"[-b] enables validation across random generated data sizes, uses <num tests> as seed"<<std::endl;
         std::cout<<"./a.out -r <num gpus> <number of elements> <op> <datatype>"<<std::endl;
         std::cout<<"Example: ./a.out -s 4 1024 rcclSum rcclInt"<<std::endl;

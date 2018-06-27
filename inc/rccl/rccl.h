@@ -23,7 +23,7 @@ typedef enum {
     rcclHalf    = 8, rcclFloat16        = 8,
     rcclFloat   = 9, rcclFloat32        = 9,
     rcclDouble  = 10, rcclFloat64        = 10,
-    rcclNumTypes= 11,
+    rccl_NUM_TYPES= 11,
 } rcclDataType_t ;
 
 typedef enum {
@@ -39,7 +39,7 @@ typedef enum {
     rcclLibWrapperNotSet,
     rcclHipMallocFailed,
     rcclRankMismatch,
-    rcclInvalidArguments,
+    rcclInvalidArgument,
     rcclInvalidType,
     rcclInvalidOperation,
     rccl_NUM_RESULTS
@@ -50,8 +50,8 @@ typedef enum {
     rcclProd,
     rcclMax,
     rcclMin,
-    rcclNumOps
-} rcclRedOp_t; 
+    rccl_NUM_OPS
+} rcclRedOp_t;
 
 typedef struct RcclComm_t* rcclComm_t;
 
@@ -59,24 +59,30 @@ typedef struct RcclUniqueId* rcclUniqueId;
 
 const char* rcclGetErrorString(rcclResult_t result);
 
-rcclResult_t rcclGetUniqueId(rcclUniqueId *uniqueId);
+rcclResult_t rcclGetUniqueId(rcclUniqueId* uniqueId);
 
-rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId, int rank);
+rcclResult_t rcclCommInitRank(rcclComm_t* comm, int ndev, rcclUniqueId commId, int rank);
 
-rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist);
+rcclResult_t rcclCommInitAll(rcclComm_t* comm, int ndev, int* devlist);
 
-rcclResult_t rcclCommCuDevice(rcclComm_t comm, int *dev);
+rcclResult_t rcclCommCuDevice(rcclComm_t comm, int* dev);
 
-rcclResult_t rcclCommUserRank(rcclComm_t comm, int *rank);
+rcclResult_t rcclCommUserRank(rcclComm_t comm, int* rank);
 
-rcclResult_t rcclCommCount(rcclComm_t comm, int *count);
+rcclResult_t rcclCommCount(rcclComm_t comm, int* count);
 
 rcclResult_t rcclCommDestroy(rcclComm_t comm);
 
-rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root, rcclComm_t comm, hipStream_t stream);
+rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDataType_t datatype, rcclRedOp_t op, int root, rcclComm_t comm, hipStream_t stream);
 
-rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, size_t count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream);
+rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream);
+
+rcclResult_t rcclReduceScatter(const void* sendbuff, void* recvbuff, int recvcount, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream);
+
+rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root, rcclComm_t comm, hipStream_t stream);
+
+rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datatype, void* recvbuff, rcclComm_t comm, hipStream_t stream);
 
 #ifdef __cplusplus
-}
+} // end extern "C"
 #endif

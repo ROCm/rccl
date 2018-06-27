@@ -5,187 +5,170 @@ All rights reserved.
 
 #pragma once
 
-#include "rcclKernelHelper.h"
+//
+// This file declares kernels for allreduce op
+//
 
-__global__ void rcclAllReduceSetBuffers(DeviceControl_t *currTrack, const void *src, void *dst) {
-    if(hipThreadIdx_x == 0) {
-        std::atomic_store_explicit(&(currTrack->srcBuffer), (void*)src, std::memory_order_seq_cst);
-        std::atomic_store_explicit(&(currTrack->dstBuffer), dst, std::memory_order_seq_cst);
+//
+// This kernel is launched on all gpus.
+// Data is read from all peer gpus and current gpu, do reduction ops
+// and store it in current gpu buffer
+//
+template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
+__global__ void RcclKernelAllReduce(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned num_vector_workgroups, unsigned num_scalars) {
+    unsigned tx = threadIdx.x;
+    unsigned bx = blockIdx.x;
+    unsigned tid = tx + bx * knum_vectors_per_workgroup;
+
+    const int knum_elements_per_vector = sizeof(VectorType_t) / sizeof(DataType_t);
+    const int knum_elements_per_workgroup = knum_elements_per_vector * knum_workitems;
+    int total_elements = knum_elements_per_workgroup * num_vector_workgroups;
+
+    // add send_buff, recv_buff to tracker on current gpu
+    if(tid == 0) {
+        std::atomic_store_explicit(&(pcurr_track->src_buffer), (void*)send_buff, std::memory_order_seq_cst);
+        std::atomic_store_explicit(&(pcurr_track->dst_buffer), recv_buff, std::memory_order_seq_cst);
     }
     __syncthreads();
-    __threadfence_system();
-}
-
-/**
-Copy data from src + index to dst
-*/
-template<typename VectorType>
-__global__ void rcclAllReduceFirstCopy(DeviceControl_t *currTrack, VectorType *dst, size_t srcOffset) {
-    int tx = hipThreadIdx_x;
-    VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
-    copyChunk(dst, src, tx);
-    __syncthreads();
-}
-
-template<typename DataType, typename VectorType>
-__global__ void rcclAllReduceFirstCopyCnt(DeviceControl_t *currTrack, VectorType *dst, VectorType *src, size_t count) {
-    int tx = hipThreadIdx_x;
-    copyCnt<DataType, VectorType>(dst, src, tx, count);
-    __syncthreads();
-}
 
 
-template<typename DataType, typename VectorType, rcclRedOp_t Op>
-__global__ void rcclAllReduceOpCopy(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, size_t srcOffset) {
-    int tx = hipThreadIdx_x;
+    if(bx < num_vector_workgroups) {
 
-    VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
+        // destination buffer for op
+        VectorType_t* dest_buff = reinterpret_cast<VectorType_t*>(recv_buff);
+        // one operand for op
+        VectorType_t* curr_buff = reinterpret_cast<VectorType_t*>((void*)send_buff);
 
-    if(Op == rcclSum) {
-        reduceChunkSum(dst, src1, src2, tx);
-    }
-    if(Op == rcclProd) {
-        reduceChunkProd(dst, src1, src2, tx);
-    }
-    if(Op == rcclMax) {
-        reduceChunkMax<DataType, VectorType>(dst, src1, src2, tx);
-    }
-    if(Op == rcclMin) {
-        reduceChunkMin<DataType, VectorType>(dst, src1, src2, tx);
-    }
-    __syncthreads();
-}
-
-template<typename DataType, typename VectorType, rcclRedOp_t Op>
-__global__ void rcclAllReduceOpCopyCnt(DeviceControl_t *currTrack, VectorType *dst, VectorType *src1, size_t srcOffset, int count) {
-    int tx = hipThreadIdx_x;
-
-    VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
-
-    if(Op == rcclSum) {
-        reduceChunkSumCnt<DataType, VectorType>(dst, src1, src2, tx, count, count % (sizeof(VectorType)/sizeof(DataType)));
-    }
-    if(Op == rcclProd) {
-        reduceChunkProdCnt<DataType, VectorType>(dst, src1, src2, tx, count, count % (sizeof(VectorType)/sizeof(DataType)));
-    }
-    if(Op == rcclMax) {
-        reduceChunkMaxCnt<DataType, VectorType>(dst, src1, src2, tx, count, count % (sizeof(VectorType)/sizeof(DataType)));
-    }
-    if(Op == rcclMin) {
-        reduceChunkMinCnt<DataType, VectorType>(dst, src1, src2, tx, count, count % (sizeof(VectorType)/sizeof(DataType)));
-    }
-
-}
+        // get peer gpu tracker
+        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
 
 
-template<typename DataType, typename VectorType, rcclRedOp_t Op, bool WaitFornextPeerDst>
-__global__ void rcclAllReduceOpCopynextPeerDst(DeviceControl_t *currTrack, size_t offset, VectorType *src1, size_t srcOffset, size_t chunkDwordx4) {
-    int tx = hipThreadIdx_x;
+        // 1. Get data from current gpu
+        // 2. Get data from peer gpu
+        // 3. Do op on data
+        // 4. Store data on current gpu
+        if(pnext_track != pcurr_track) {
 
-    VectorType *src2 = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->srcBuffer), std::memory_order_seq_cst)) + srcOffset;
+            // wait until peer gpus set their source buffers
+            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
 
-    if(WaitFornextPeerDst) {
-        if(tx == 0) {
-            while(std::atomic_load_explicit(&(currTrack->nextPeer->dstBuffer), std::memory_order_seq_cst) == 0);
+            // get peers source buffer
+            VectorType_t* next_buff = reinterpret_cast<VectorType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst));
+
+            if(Op == rcclSum) {
+                dest_buff[tid] = curr_buff[tid] + next_buff[tid];
+            }
+            if(Op == rcclProd) {
+                dest_buff[tid] = curr_buff[tid] * next_buff[tid];
+            }
+            if(Op == rcclMax) {
+                OpMax<DataType_t, VectorType_t>(dest_buff[tid], curr_buff[tid], next_buff[tid]);
+            }
+            if(Op == rcclMin) {
+                OpMin<DataType_t, VectorType_t>(dest_buff[tid], curr_buff[tid], next_buff[tid]);
+            }
+
+            // move on to next gpu
+            pnext_track = pnext_track->next_gpu;
+        }
+
+        // start traveling along the ring (clique) until current track is reached
+        // 1. Get destination buffer from current gpu (as it stores intermediate values)
+        // 2. Get data from peer gpu
+        // 3. Do op
+        // 4. Store data to destination buffer
+        while(pnext_track != pcurr_track) {
+
+            // wait until the peer gpus source buffer is set
+            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
+
+            // get source buffer from peer gpu
+            VectorType_t* next_buff = reinterpret_cast<VectorType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst));
+
+            if(Op == rcclSum) {
+                dest_buff[tid] = dest_buff[tid] + next_buff[tid];
+            }
+            if(Op == rcclProd) {
+                dest_buff[tid] = dest_buff[tid] * next_buff[tid];
+            }
+            if(Op == rcclMax) {
+                OpMax<DataType_t, VectorType_t>(dest_buff[tid], dest_buff[tid], next_buff[tid]);
+            }
+            if(Op == rcclMin) {
+                OpMin<DataType_t, VectorType_t>(dest_buff[tid], dest_buff[tid], next_buff[tid]);
+            }
+
+            // move on to next gpu
+                pnext_track = pnext_track->next_gpu;
         }
         __syncthreads();
     }
 
-    VectorType *dst = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->nextPeer->dstBuffer), std::memory_order_seq_cst)) + offset;
+    // operate on scalars, algorithm used for VectorType_t is used
+    else {
+        // destination buffer for op
+        DataType_t* dest_buff = reinterpret_cast<DataType_t*>(recv_buff) + total_elements;
+        // one operand for op
+        DataType_t* curr_buff = reinterpret_cast<DataType_t*>((void*)send_buff) + total_elements;
 
-    if(Op == rcclSum) {
-        reduceChunkSum(dst, src1, src2, tx);
-    }
-    if(Op == rcclProd) {
-        reduceChunkProd(dst, src1, src2, tx);
-    }
-    if(Op == rcclMax) {
-        reduceChunkMax<DataType, VectorType>(dst, src1, src2, tx);
-    }
-    if(Op == rcclMin) {
-        reduceChunkMin<DataType, VectorType>(dst, src1, src2, tx);
-    }
+        // get peer gpu tracker
+        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
 
-    __syncthreads();
-}
+        if(pnext_track != pcurr_track) {
 
-template<typename VectorType>
-__global__ void rcclAllReduceCopynextPeerDst(DeviceControl_t *currTrack, size_t offset) {
-    int tx = hipThreadIdx_x;
+            // wait until peer gpus set their source buffers
+            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
 
-    VectorType *dst = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->nextPeer->dstBuffer), std::memory_order_seq_cst)) + offset;
-    VectorType *src = reinterpret_cast<VectorType*>(std::atomic_load_explicit(&(currTrack->dstBuffer), std::memory_order_seq_cst)) + offset;
+            // get peers source buffer
+            DataType_t* next_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst)) + total_elements;
 
-    copyChunk(dst, src, tx);
-    __syncthreads();
-}
+            for(unsigned id = tx; id < num_scalars; id = id + knum_workitems) {
 
-template<typename DataType, typename VectorType, rcclRedOp_t Op>
-__global__ void rcclAllReduceOpCopyTail(DeviceControl_t *track, int numGpus, size_t offset, size_t count) {
-    int tx = hipThreadIdx_x;
-    DataType *dst = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->dstBuffer), std::memory_order_seq_cst)) + offset;
-    DataType *src = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->srcBuffer), std::memory_order_seq_cst)) + offset;
-    if(tx == 0) {
-        while(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst) == nullptr) {}
-    }
-    __syncthreads();
-
-    DataType *srcRemote = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst)) + offset;
-    track = track->nextPeer;
-
-    if(Op == rcclSum) {
-        reduceChunkSumCnt<DataType, VectorType>(dst, src, srcRemote, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-        for(int i=1;i<numGpus-1;i++) {
-            if(tx == 0) {
-                while(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst) == nullptr) {}
+                if(Op == rcclSum) {
+                    dest_buff[id] = curr_buff[id] + next_buff[id];
+                }
+                if(Op == rcclProd) {
+                    dest_buff[id] = curr_buff[id] * next_buff[id];
+                }
+                if(Op == rcclMax) {
+                    dest_buff[id] = curr_buff[id] > next_buff[id] ? curr_buff[id] : next_buff[id];
+                }
+                if(Op == rcclMin) {
+                    dest_buff[id] = curr_buff[id] < next_buff[id] ? curr_buff[id] : next_buff[id];
+                }
             }
-            __syncthreads();
-            srcRemote = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst)) + offset;
-            reduceChunkSumCnt<DataType, VectorType>(dst, srcRemote, dst, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-            track = track->nextPeer;
+
         }
-        __threadfence_system();
+        // move on to next gpu
+        pnext_track = pnext_track->next_gpu;
+
+        while(pnext_track != pcurr_track) {
+
+            // wait until the peer gpus source buffer is set
+            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
+
+            // get source buffer from peer gpu
+            DataType_t* next_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst)) + total_elements;
+
+            for(unsigned id = tx; id < num_scalars; id = id + knum_workitems) {
+
+                if(Op == rcclSum) {
+                    dest_buff[id] = dest_buff[id] + next_buff[id];
+                }
+                if(Op == rcclProd) {
+                    dest_buff[id] = dest_buff[id] * next_buff[id];
+                }
+                if(Op == rcclMax) {
+                    dest_buff[id] = dest_buff[id] > next_buff[id] ? dest_buff[id] : next_buff[id];
+                }
+                if(Op == rcclMin) {
+                    dest_buff[id] = dest_buff[id] < next_buff[id] ? dest_buff[id] : next_buff[id];
+                }
+            }
+            // move on to next gpu
+            pnext_track = pnext_track->next_gpu;
+        }
+        __syncthreads();
     }
 
-    if(Op == rcclProd) {
-        reduceChunkProdCnt<DataType, VectorType>(dst, src, srcRemote, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-        for(int i=1;i<numGpus-1;i++) {
-            if(tx == 0) {
-                while(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst) == nullptr) {}
-            }
-            __syncthreads();
-            srcRemote = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst)) + offset;
-            reduceChunkProdCnt<DataType, VectorType>(dst, srcRemote, dst, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-            track = track->nextPeer;
-        }
-        __threadfence_system();
-    }
-
-    if(Op == rcclMax) {
-        reduceChunkMaxCnt<DataType, VectorType>(dst, src, srcRemote, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-        for(int i=1;i<numGpus-1;i++) {
-            if(tx == 0) {
-                while(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst) == nullptr) {}
-            }
-            __syncthreads();
-            srcRemote = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst)) + offset;
-            reduceChunkMaxCnt<DataType, VectorType>(dst, srcRemote, dst, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-            track = track->nextPeer;
-        }
-        __threadfence_system();
-    }
-
-    if(Op == rcclMin) {
-        reduceChunkMinCnt<DataType, VectorType>(dst, src, srcRemote, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-        for(int i=1;i<numGpus-1;i++) {
-            if(tx == 0) {
-                while(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst) == nullptr) {}
-            }
-            __syncthreads();
-            srcRemote = reinterpret_cast<DataType*>(std::atomic_load_explicit(&(track->nextPeer->srcBuffer), std::memory_order_seq_cst)) + offset;
-            reduceChunkMinCnt<DataType, VectorType>(dst, srcRemote, dst, tx, count / (sizeof(VectorType)/sizeof(DataType)), count % (sizeof(VectorType)/sizeof(DataType)));
-            track = track->nextPeer;
-        }
-    }
-    __syncthreads();
 }
