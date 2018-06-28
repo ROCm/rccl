@@ -5,17 +5,32 @@ All rights reserved.
 
 #pragma once
 
-#include <ctime>
+#include <unordered_map>
+#include <string>
+#include "rccl.h"
 
-inline void rcclLogger(const char* file, int line, const char* str) {
-    time_t now = time(0);
-    char *dt = ctime(&now);
-    std::cout << "[" << dt <<"]" << file << ": " << line << ": " << str<<std::endl;
-}
+#define MAKE_STR_PAIR(val) \
+    { int(val), #val}
 
-#define LOG(str) \
-        rcclLogger(__FILE__, __LINE__, str);
+std::unordered_map<int, std::string> umap_red_op = \
+{
+    MAKE_STR_PAIR(rcclSum),
+    MAKE_STR_PAIR(rcclProd),
+    MAKE_STR_PAIR(rcclMax),
+    MAKE_STR_PAIR(rcclMin)
+};
 
-#define RCCLDEBUG4(one, two, three, four) \
-    std::cout<<__FILE__<<" Line:"<<__LINE__<<" func: "<<__func__<<" "<<one<<" "<<two<<" "<<three<<" "<<four<<std::endl;
-
+std::unordered_map<int, std::string> umap_datatype = \
+{
+    MAKE_STR_PAIR(rcclUchar),
+    MAKE_STR_PAIR(rcclChar),
+    MAKE_STR_PAIR(rcclUshort),
+    MAKE_STR_PAIR(rcclShort),
+    MAKE_STR_PAIR(rcclUint),
+    MAKE_STR_PAIR(rcclInt),
+    MAKE_STR_PAIR(rcclUlong),
+    MAKE_STR_PAIR(rcclLong),
+    MAKE_STR_PAIR(rcclFloat),
+    MAKE_STR_PAIR(rcclHalf),
+    MAKE_STR_PAIR(rcclDouble)
+};

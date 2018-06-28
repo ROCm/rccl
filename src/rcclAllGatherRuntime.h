@@ -21,5 +21,12 @@ void RcclInternalAllGather(DeviceControl_t *pcurr_track, int count, int rank, hi
 
     unsigned total_workgroups = num_vector_workgroups + (num_scalars > 0 ? 1 : 0);
 
+    if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
+        int dev;
+        hipGetDevice(&dev);
+        fprintf(stderr, "%s<<rccl-kernel: RcclKernelAllGather rccl-device:%d total_workgroups:%u knum_workitems:%u stream:%p pcurr_track:%p send_buff:%p recv_buff:%p num_vector_workgroups:%u num_scalars:%u%s\n", KBLU, dev, total_workgroups, knum_workitems, stream, pcurr_track, send_buff, recv_buff, num_vector_workgroups, num_scalars, KNRM);
+    }
+
+
     hipLaunchKernelGGL((RcclKernelAllGather<DataType_t, VectorType_t>), dim3(total_workgroups, 1, 1), dim3(knum_workitems, 1, 1), 0, stream, pcurr_track, send_buff, recv_buff, rank, count, num_vector_workgroups, num_scalars);
 }

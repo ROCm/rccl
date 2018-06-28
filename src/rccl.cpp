@@ -10,6 +10,7 @@ All rights reserved.
 #include "rcclReduceScatterRuntime.h"
 #include "rcclBroadcastRuntime.h"
 #include "rcclAllGatherRuntime.h"
+#include "rcclLog.h"
 
 #include <vector>
 
@@ -31,6 +32,8 @@ struct RcclUniqueId {
         delete pool;
     }
 };
+
+int RCCL_TRACE_RT = atoi(getenv("RCCL_TRACE_RT"));
 
 // implementation of rcclGetErrorString api
 const char* rcclGetErrorString(rcclResult_t result) {
@@ -83,6 +86,9 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId, i
 }
 
 rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
+    if((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
+        fprintf(stderr, "%s<<rccl-api: %s comm:%p ndev:%d devlist:%p%s\n", API_COLOR, __func__, comm, ndev, devlist, API_COLOR_END);
+    }
     if(comm == nullptr || devlist == nullptr || ndev < 1) {
         return rcclInvalidArgument;
     }
@@ -169,6 +175,11 @@ rcclResult_t rcclCommDestroy(rcclComm_t comm) {
 // This way, there will be no race conditions on src_buffer and dst_buffer
 //
 rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDataType_t datatype, rcclRedOp_t op, int root, rcclComm_t comm, hipStream_t stream) {
+    if((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
+        int dev;
+        hipGetDevice(&dev);
+        fprintf(stderr, "%s<<rccl-api:%s rccl-device:%d sendbuff:%p recvbuff:%p count:%d datatype:%s op:%s root:%d comm:%p stream:%p%s\n", API_COLOR, __func__,dev, sendbuff, recvbuff, count, umap_datatype[datatype].c_str(), umap_red_op[op].c_str(), root, comm, stream, API_COLOR_END);
+    }
     if(sendbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
@@ -403,6 +414,11 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
 
 
     } else {
+        if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
+            int dev;
+            hipGetDevice(&dev);
+            fprintf(stderr, "%s<<rccl-kernel: RcclKernelSetSrcPtr rccl-device:%d stream:%p pcurr_track:%p sendbuff:%p%s\n", KBLU, dev, stream, pcurr_track, sendbuff, API_COLOR_END);
+        }
         hipLaunchKernelGGL(RcclKernelSetSrcPtr, dim3(1, 1, 1), dim3(1, 1, 1), 0, 0, pcurr_track, sendbuff);
     }
     return rcclSuccess;
@@ -410,6 +426,11 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
 
 
 rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+    if((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
+        int dev;
+        hipGetDevice(&dev);
+        fprintf(stderr, "%s<<rccl-api:%s rccl-device:%d sendbuff:%p recvbuff:%p count:%d datatype:%s op:%s comm:%p stream:%p%s\n", API_COLOR, __func__, dev, sendbuff, recvbuff, count, umap_datatype[datatype].c_str(), umap_red_op[op].c_str(), comm, stream, API_COLOR_END);
+    }
     if(sendbuff == nullptr || recvbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
@@ -640,6 +661,11 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
 }
 
 rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root, rcclComm_t comm, hipStream_t stream) {
+    if((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
+        int dev;
+        hipGetDevice(&dev);
+        fprintf(stderr, "%s<<rccl-api:%s rccl-device:%d buff:%p count:%d datatype:%s root:%d comm:%p stream:%p%s\n", API_COLOR, __func__, dev, buff, count, umap_datatype[datatype].c_str(), root, comm, stream, API_COLOR_END);
+    }
     if(datatype >= rccl_NUM_TYPES) {
         return rcclInvalidType;
     }
@@ -705,6 +731,11 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
             }
         }
     } else {
+        if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
+            int dev;
+            hipGetDevice(&dev);
+            fprintf(stderr, "%s<<rccl-kernel: RcclKernelSetDstPtr rccl-device:%d stream:%p pcurr_track:%p buff:%p%s\n", KBLU, dev, stream, pcurr_track, buff, API_COLOR_END);
+        }
         hipLaunchKernelGGL(RcclKernelSetDstPtr, dim3(1, 1, 1), dim3(1, 1, 1), 0, stream, pcurr_track, buff);
     }
     return rcclSuccess;
@@ -712,6 +743,11 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
 
 
 rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datatype, void* recvbuff, rcclComm_t comm, hipStream_t stream) {
+    if((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
+        int dev;
+        hipGetDevice(&dev);
+        fprintf(stderr, "%s<<rccl-api:%s rccl-device:%d sendbuff:%p count:%d datatype:%s recvbuff:%p comm:%p stream:%p%s\n", API_COLOR, __func__, dev, sendbuff, count, umap_datatype[datatype].c_str(), recvbuff, comm, stream, API_COLOR_END);
+    }
     if(sendbuff == nullptr || recvbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
@@ -782,6 +818,11 @@ rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datat
 }
 
 rcclResult_t rcclReduceScatter(const void* sendbuff, void* recvbuff, int count, rcclDataType_t datatype, rcclRedOp_t op, rcclComm_t comm, hipStream_t stream) {
+    if((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
+        int dev;
+        hipGetDevice(&dev);
+        fprintf(stderr, "%s<<rccl-api:%s rccl-device:%d sendbuff:%p recvbuff:%p count:%d datatype:%s op:%s comm:%p stream:%p%s\n", API_COLOR, __func__, dev, sendbuff, recvbuff, count, umap_datatype[datatype].c_str(), umap_red_op[op].c_str(), comm, stream, API_COLOR_END);
+    }
     if(sendbuff == nullptr || recvbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
@@ -1010,4 +1051,3 @@ rcclResult_t rcclReduceScatter(const void* sendbuff, void* recvbuff, int count, 
     }
     return rcclSuccess;
 }
-
