@@ -169,7 +169,7 @@ rcclResult_t rcclCommDestroy(rcclComm_t comm) {
 // This way, there will be no race conditions on src_buffer and dst_buffer
 //
 rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDataType_t datatype, rcclRedOp_t op, int root, rcclComm_t comm, hipStream_t stream) {
-    if(sendbuff == nullptr || recvbuff == nullptr) {
+    if(sendbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
 
@@ -193,6 +193,7 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
     bool is_root = pcomm->track_->hip_current_device_index == root;
 
     if(is_root) {
+        if(recvbuff == nullptr) return rcclInvalidDevicePointer;
         if(op == rcclSum) {
         switch(datatype) {
             case rcclChar: {
@@ -639,9 +640,6 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
 }
 
 rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root, rcclComm_t comm, hipStream_t stream) {
-    if(buff == nullptr) {
-        return rcclInvalidDevicePointer;
-    }
     if(datatype >= rccl_NUM_TYPES) {
         return rcclInvalidType;
     }
@@ -656,6 +654,7 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
     bool is_root = pcomm->track_->hip_current_device_index == root;
 
     if(is_root) {
+        if(buff == nullptr) return rcclInvalidDevicePointer;
         switch(datatype) {
             case rcclChar: {
                 RcclInternalBroadcast<signed char, rccl_char16_t>(pcurr_track, count, stream, buff);
