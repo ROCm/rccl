@@ -62,7 +62,6 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
         pnext_track = pnext_track->next_gpu;
     }
 
-
     // start traveling along the ring (clique), get source buffer from gpu
     // and accumulate it to destination buffer
     while(pnext_track != pcurr_track) {

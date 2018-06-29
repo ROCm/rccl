@@ -33,7 +33,8 @@ struct RcclUniqueId {
     }
 };
 
-int RCCL_TRACE_RT = atoi(getenv("RCCL_TRACE_RT"));
+const char* get_env_val = getenv("RCCL_TRACE_RT");
+int RCCL_TRACE_RT = get_env_val != nullptr ? atoi(get_env_val) : 0;
 
 // implementation of rcclGetErrorString api
 const char* rcclGetErrorString(rcclResult_t result) {
