@@ -29,7 +29,9 @@ void RcclInternalReduce(DeviceControl_t *pcurr_track, int count, hipStream_t str
         fprintf(stderr, "%s<<rccl-kernel: RcclKernelReduce rccl-device:%d total_workgroups:%u knum_workitems:%u stream:%p pcurr_track:%p send_buff:%p recv_buff:%p num_vector_workgroups:%u num_scalars:%u%s\n", KBLU, dev, total_workgroups, knum_workitems, stream, pcurr_track, send_buff, recv_buff, num_vector_workgroups, num_scalars, KNRM);
     }
 
-    hipLaunchKernelGGL((RcclKernelReduce<DataType_t, VectorType_t, Op>), dim3(total_workgroups, 1, 1), dim3(knum_workitems, 1, 1), 0, stream, pcurr_track, send_buff, recv_buff, num_vector_workgroups, num_scalars);
+//    hipLaunchKernelGGL((RcclKernelReduce<DataType_t, VectorType_t, Op>), dim3(total_workgroups, 1, 1), dim3(knum_workitems, 1, 1), 0, stream, pcurr_track, send_buff, recv_buff, num_vector_workgroups, num_scalars);
+
+    hipLaunchKernelGGL((RcclKernelReduce<DataType_t, VectorType_t, Op>), dim3(total_workgroups, 1, 1), dim3(knum_workitems, 1, 1), 0, stream, pcurr_track, send_buff, recv_buff, num_vector_workgroups);
 
     if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
         fprintf(stderr, "%s<<rccl-kernel-launched: RcclKernelReduce %s\n", KBLU, KNRM);

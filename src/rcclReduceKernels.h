@@ -17,7 +17,7 @@ All rights reserved.
 // Launched on only root gpu
 //
 template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
-__global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned num_vector_workgroups, unsigned num_scalars) {
+__global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned num_vector_workgroups) {
     unsigned tx = threadIdx.x;
     unsigned bx = blockIdx.x;
     unsigned tid = tx + bx * knum_vectors_per_workgroup;
@@ -25,8 +25,6 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
     const int knum_elements_per_vector = sizeof(VectorType_t) / sizeof(DataType_t);
     const int knum_elements_per_workgroup = knum_elements_per_vector * knum_workitems;
     int total_elements = knum_elements_per_workgroup * num_vector_workgroups;
-
-    if(bx < num_vector_workgroups) {
 
     // get source and destination buffers for current gpu
     VectorType_t* curr_buff = reinterpret_cast<VectorType_t*>((void*)send_buff);
@@ -42,7 +40,7 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
         // wait until the peer gpus source buffer is set
         while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
 
-        // get source buffer from peer gpu
+            // get source buffer from peer gpu
         VectorType_t* next_buff = reinterpret_cast<VectorType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst));
 
         if(Op == rcclSum) {
@@ -61,6 +59,7 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
         // move on to next gpu
         pnext_track = pnext_track->next_gpu;
     }
+
 
     // start traveling along the ring (clique), get source buffer from gpu
     // and accumulate it to destination buffer
@@ -89,30 +88,34 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
         pnext_track = pnext_track->next_gpu;
     }
     __syncthreads();
-    }
+}
 
-    // operate on scalars, algorithms used is same as VectorType_t
-    else {
 
-        DataType_t* curr_buff = reinterpret_cast<DataType_t*>((void*)send_buff) + total_elements;
-        DataType_t* dest_buff = reinterpret_cast<DataType_t*>(recv_buff);
+// Disabled operating on last elements on a different kernel
+#if 0
 
-        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+// operate on scalars, algorithms used is same as VectorType_t
+template<typename DataType_t, rcclRedOp_t Op>
+__global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned offset, unsigned num_scalars) {
+    unsigned tx = threadIdx.x;
+    DataType_t* curr_buff = reinterpret_cast<DataType_t*>((void*)send_buff) + offset;
+    DataType_t* dest_buff = reinterpret_cast<DataType_t*>(recv_buff);
 
-        if(pnext_track != pcurr_track) {
+    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+
+    if(pnext_track != pcurr_track) {
          // wait until the peer gpus source buffer is set
         while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
 
         // get source buffer from peer gpu
-        DataType_t* next_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst)) + total_elements;
+        DataType_t* next_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst)) + offset;
 
         for(unsigned id = tx; id < num_scalars; id = id + knum_workitems) {
-
             if(Op == rcclSum) {
                 dest_buff[id] = curr_buff[id] + next_buff[id];
             }
             if(Op == rcclProd) {
-                dest_buff[id] = curr_buff[tid] * next_buff[id];
+                dest_buff[id] = curr_buff[id] * next_buff[id];
             }
             if(Op == rcclMax) {
                 dest_buff[id] = curr_buff[id] > next_buff[id] ? curr_buff[id] : next_buff[id];
@@ -123,39 +126,40 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
         }
         // move on to next gpu
         pnext_track = pnext_track->next_gpu;
-        }
-
-        // start traveling along the ring (clique), get source buffer from gpu
-        // and accumulate it to destination buffer
-        while(pnext_track != pcurr_track) {
-
-            // wait until the peer gpus source buffer is set
-            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
-
-            // get source buffer from peer gpu
-            DataType_t* next_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst)) + total_elements;
-
-            for(unsigned id = tx; id < num_scalars; id = id + knum_workitems) {
-                if(Op == rcclSum) {
-                    dest_buff[id] = dest_buff[id] + next_buff[id];
-                }
-                if(Op == rcclProd) {
-                    dest_buff[id] = dest_buff[id] * next_buff[id];
-                }
-                if(Op == rcclMax) {
-                    dest_buff[id] = dest_buff[id] > next_buff[id] ? dest_buff[id] : next_buff[id];
-                }
-                if(Op == rcclMin) {
-                    dest_buff[id] = dest_buff[id] > next_buff[id] ? dest_buff[id] : next_buff[id];
-                }
-            }
-
-            // move on to next gpu
-            pnext_track = pnext_track->next_gpu;
-        }
-        __syncthreads();
     }
+
+    // start traveling along the ring (clique), get source buffer from gpu
+    // and accumulate it to destination buffer
+    while(pnext_track != pcurr_track) {
+
+        // wait until the peer gpus source buffer is set
+        while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
+
+        // get source buffer from peer gpu
+        DataType_t* next_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst)) + offset;
+
+        for(unsigned id = tx; id < num_scalars; id = id + knum_workitems) {
+            if(Op == rcclSum) {
+                dest_buff[id] = dest_buff[id] + next_buff[id];
+            }
+            if(Op == rcclProd) {
+                dest_buff[id] = dest_buff[id] * next_buff[id];
+            }
+            if(Op == rcclMax) {
+                dest_buff[id] = dest_buff[id] > next_buff[id] ? dest_buff[id] : next_buff[id];
+            }
+            if(Op == rcclMin) {
+                dest_buff[id] = dest_buff[id] > next_buff[id] ? dest_buff[id] : next_buff[id];
+            }
+        }
+
+        // move on to next gpu
+        pnext_track = pnext_track->next_gpu;
+    }
+    __syncthreads();
 }
+
+#endif
 
 // Disabled as its hard to do reduction on trail data
 #if 0
