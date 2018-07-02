@@ -14,10 +14,10 @@ lib-debug:
 install:
 	mkdir -p $(RCCL_INSTALL_DIR)
 	mkdir -p $(RCCL_INSTALL_DIR)/include
+	mkdir -p $(RCCL_INSTALL_DIR)/include/rccl
 	mkdir -p $(RCCL_INSTALL_DIR)/lib
 	cp librccl.so $(RCCL_INSTALL_DIR)/lib
-	cp ../inc/rccl.h $(RCCL_INSTALL_DIR)/include
-	cp rcclCheck.h $(RCCL_INSTALL_DIR)/include
+	cp ../inc/rccl/rccl.h $(RCCL_INSTALL_DIR)/include/rccl
 
 clean:
 	rm -rf librccl.so

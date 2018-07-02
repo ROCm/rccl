@@ -1,4 +1,4 @@
-all: bcast allreduce
+all: comm bcast allreduce allgather reduce reducescatter
 
 ROCM_PATH=/opt/rocm
 TEST_INC=../
@@ -13,7 +13,7 @@ bcast:
 
 comm:
 	mkdir -p bin
-	/opt/rocm/bin/hipcc -I/opt/rocm/rccl/include --amdgpu-target=gfx900 --amdgpu-target=gfx803 rcclCommBcast.cpp -L/opt/rocm/rccl/lib -lrccl -o ./bin/commBcast
+	/opt/rocm/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclCommBcast.cpp -L$(RCCL_LIB) -lrccl -o ./bin/commBcast
 
 allgather:
 	mkdir -p bin

@@ -9,7 +9,7 @@ All rights reserved.
 // proper error description rather than
 // printing just error code.
 
-#include "rccl.h"
+#include "rccl/rccl.h"
 #include <iostream>
 
 #define HIPCHECK(status) \

@@ -7,7 +7,7 @@ All rights reserved.
 
 #include <unordered_map>
 #include <string>
-#include "rccl.h"
+#include "rccl/rccl.h"
 
 #define MAKE_STR_PAIR(val) \
     { int(val), #val}

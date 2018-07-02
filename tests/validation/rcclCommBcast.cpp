@@ -3,11 +3,12 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-#include "rccl.h"
+#include "rccl/rccl.h"
 #include <iostream>
 #include <vector>
-#include "rcclCheck.h"
+//#include "rcclCheck.h"
 #include "validate.h"
+#include "common.h"
 
 typedef int T;
 

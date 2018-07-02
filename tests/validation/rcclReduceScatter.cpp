@@ -3,8 +3,8 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-#include "rccl.h"
-#include "rcclCheck.h"
+#include "rccl/rccl.h"
+//#include "rcclCheck.h"
 #include "validation/validate.h"
 #include "common.h"
 #include <typeinfo>
