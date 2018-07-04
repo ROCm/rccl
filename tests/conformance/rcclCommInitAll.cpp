@@ -5,7 +5,7 @@ All rights reserved.
 
 #include <hip/hip_runtime_api.h>
 #include <hip/hip_runtime.h>
-#include "rccl.h"
+#include "rccl/rccl.h"
 #include "rcclCheck.h"
 
 int main() {
