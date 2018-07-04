@@ -9,27 +9,27 @@ ARCHS=--amdgpu-target=gfx900 --amdgpu-target=gfx803
 
 bcast:
 	mkdir -p bin
-	/opt/rocm/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclBcast.cpp -L$(RCCL_LIB) -lrccl -o ./bin/bcast
+	/opt/rocm/hip/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclBcast.cpp -L$(RCCL_LIB) -lrccl -o ./bin/bcast
 
 comm:
 	mkdir -p bin
-	/opt/rocm/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclCommBcast.cpp -L$(RCCL_LIB) -lrccl -o ./bin/commBcast
+	/opt/rocm/hip/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclCommBcast.cpp -L$(RCCL_LIB) -lrccl -o ./bin/commBcast
 
 allgather:
 	mkdir -p bin
-	/opt/rocm/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclAllGather.cpp -L$(RCCL_LIB) -lrccl -o ./bin/allgather
+	/opt/rocm/hip/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclAllGather.cpp -L$(RCCL_LIB) -lrccl -o ./bin/allgather
 
 allreduce:
 	mkdir -p bin
-	/opt/rocm/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclAllReduce.cpp -L$(RCCL_LIB) -lrccl -o ./bin/allreduce
+	/opt/rocm/hip/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclAllReduce.cpp -L$(RCCL_LIB) -lrccl -o ./bin/allreduce
 
 reduce:
 	mkdir -p bin
-	/opt/rocm/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclReduce.cpp -L$(RCCL_LIB) -lrccl -o ./bin/reduce
+	/opt/rocm/hip/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclReduce.cpp -L$(RCCL_LIB) -lrccl -o ./bin/reduce
 
 reducescatter:
 	mkdir -p bin
-	/opt/rocm/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclReduceScatter.cpp -L$(RCCL_LIB) -lrccl -o ./bin/reducescatter
+	/opt/rocm/hip/bin/hipcc -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclReduceScatter.cpp -L$(RCCL_LIB) -lrccl -o ./bin/reducescatter
 
 
 clean:

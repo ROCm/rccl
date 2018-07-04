@@ -5,11 +5,11 @@ all: lib
 
 
 lib:
-	/opt/rocm/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device -lhip_hcc rccl.cpp -o librccl.so
+	/opt/rocm/hcc/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device -lhip_hcc rccl.cpp -o librccl.so
 
 
 lib-debug:
-	/opt/rocm/bin/hcc -I../inc ${TARGETS} -DRCCL_DEBUG=1 -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device rccl.cpp -o librccl.so
+	/opt/rocm/hcc/bin/hcc -I../inc ${TARGETS} -DRCCL_DEBUG=1 -I${HIP_DIR}/include `/opt/rocm/bin/hcc-config --shared --cxxflags --ldflags` -L/opt/rocm/hip/lib -lhip_device rccl.cpp -o librccl.so
 
 install:
 	mkdir -p $(RCCL_INSTALL_DIR)
