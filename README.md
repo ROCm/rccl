@@ -7,6 +7,9 @@ RCCL (rickle) is implementation of MPI communication apis on ROCm enabled GPUs. 
 ## Supported APIs
 1. AllReduce
 2. Broadcast
+3. Reduce
+4. ReduceScatter
+5. AllGather
 
 ## Requirements
 1. ROCm supported GPUs
@@ -16,10 +19,13 @@ RCCL (rickle) is implementation of MPI communication apis on ROCm enabled GPUs. 
 RCCL directly depends on HIP runtime & HCC C++ compiler which are part of the ROCm SW stack.
 ```bash
 git clone https://github.com/ROCmSoftwarePlatform/rccl.git
-cd rccl/src
-make lib
-sudo make install
+mkdir rccl_build
+cd rccl_build
+CXX=/opt/rocm/bin/hcc cmake ../rccl
+make package
+sudo dpkg -i *.deb
 ```
+
 RCCL install requires sudo/root access because it creates a directory called "rccl" under /opt/rocm/. This is an optional step and RCCL can be used directly by including the path containing librccl.so.
 
 ## Run
@@ -30,7 +36,7 @@ export LD_LIBRARY_PATH=/opt/rocm/rccl/lib:$LD_LIBRARY_PATH
 
 ## Usage
 ```cpp
-#include <rccl.h>
+#include <rccl/rccl.h>
 #include <vector>
 
 int main() {
@@ -76,7 +82,6 @@ The RCCL library consists of two primary layers:
 * rccl{Primitive}Kernels.h
 * rcclKernelHelper.h
 
-This communication primitive layer contains implementations the broadcast and all-reduce distributed designs. It takes into account of the number of GPUs in the system, the data size and divide the work into smaller chunks. The compute kernels are launched to implement a distributed pipelined operation that achieves overall maximum throughput when compared to a single root processing and sharing the data serially.
 
 ## Caveats
 The initial implementation of the distributed broadcast and all-reduce designs are focused on the functionality and correctness and not tuned yet to obtain optimal performance for a specific input size and GPU count. Better strategies to determine optimal chunk sizes to allow overlapping of transfers for better pipelining are being explored.
