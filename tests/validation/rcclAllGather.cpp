@@ -62,7 +62,6 @@ void DoAllGather(std::vector<int>& device_list, std::vector<hipStream_t>& device
     std::vector<rcclComm_t>& rccl_comms, std::vector<void*>& src_device_buffers,
     std::vector<void*>& src_host_buffers, std::vector<void*>& dst_device_buffers,
     std::vector<void*>& dst_host_buffers, size_t buff_size) {
-    std::cout << buff_size << std::endl;
 
     size_t buff_len = buff_size / sizeof(T);
     size_t num_gpus = device_list.size();
@@ -94,7 +93,6 @@ void DoAllGather(std::vector<int>& device_list, std::vector<hipStream_t>& device
         for(size_t j = 0; j < num_gpus; j++) {
         validate(reinterpret_cast<T*>(dst_host_buffers[i]), static_cast<T>(10), buff_len * num_gpus, 1, j*buff_len);
         }
-        std::cout << std::endl;
     }
 }
 

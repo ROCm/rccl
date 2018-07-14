@@ -36,4 +36,8 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, int count, hipStream_t 
 
     // Number of workitems = 1024, number of workgroups = total_workgroups
     hipLaunchKernelGGL((RcclKernelAllReduce<DataType_t, VectorType_t, Op>), dim3(total_workgroups, 1, 1), dim3(knum_workitems, 1, 1), 0, stream, pcurr_track, send_buff, recv_buff, num_vector_workgroups, num_scalars);
+
+    if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
+        fprintf(stderr, "%s<<<rccl-kernel-launched: RcclKernelAllReduce %s\n", KBLU, KNRM);
+    }
 }

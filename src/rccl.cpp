@@ -5,12 +5,20 @@ All rights reserved.
 
 #include "rcclTracker.h"
 #include "rcclSetKernels.h"
-#include "rcclReduceRuntime.h"
-#include "rcclAllReduceRuntime.h"
-#include "rcclReduceScatterRuntime.h"
-#include "rcclBroadcastRuntime.h"
-#include "rcclAllGatherRuntime.h"
+
+// Using kernels operating on scalar values
+//#include "rcclReduceRuntime.h"
+//#include "rcclAllReduceRuntime.h"
+//#include "rcclReduceScatterRuntime.h"
+//#include "rcclBroadcastRuntime.h"
+//#include "rcclAllGatherRuntime.h"
 #include "rcclLog.h"
+
+#include "rcclScalarReduceRuntime.h"
+#include "rcclScalarAllReduceRuntime.h"
+#include "rcclScalarAllGatherRuntime.h"
+#include "rcclScalarBroadcastRuntime.h"
+#include "rcclScalarReduceScatterRuntime.h"
 
 #include <vector>
 

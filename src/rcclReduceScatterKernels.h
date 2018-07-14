@@ -5,6 +5,8 @@ All rights reserved.
 
 #pragma once
 
+#include "rcclReduceDeviceOps.h"
+
 //
 // This file declares kernels for reduce-scatter op
 //

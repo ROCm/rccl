@@ -7,6 +7,8 @@ All rights reserved.
 
 #include "rcclReduceScatterKernels.h"
 
+extern int RCCL_TRACE_RT;
+
 //
 // The code here figures out the launch parameters for reduce-scatter op
 //
