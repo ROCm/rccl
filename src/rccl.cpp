@@ -117,7 +117,8 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
         HIPCHECK(hipSetDevice(devlist[i]));
         for(int j = 0; j < ndev; j++) {
             if(devlist[i] != devlist[j]) {
-                if(hipDeviceEnablePeerAccess(devlist[j], 0) != hipErrorPeerAccessAlreadyEnabled) {
+                hipError_t err = hipDeviceEnablePeerAccess(devlist[j], 0);
+                if(err != hipErrorPeerAccessAlreadyEnabled && err != hipSuccess) {
                     HIPCHECK(hipSetDevice(user_device));
                     return rcclDeviceNotFound;
                 }
