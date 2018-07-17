@@ -3,8 +3,7 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-#include "rccl.h"
-#include "rcclCheck.h"
+#include "rccl/rccl.h"
 #include "performance/performance.h"
 #include <iostream>
 #include <vector>
