@@ -5,6 +5,7 @@ All rights reserved.
 
 #pragma once
 #include <cmath>
+#include <iostream>
 
 #define CHECKVAL(got, expected, index) \
     std::cerr<<"[L: "<<__LINE__<<"] Bad Data at: "<<index<<" Expected: "<<expected<<" but Got: "<<got<<std::endl;

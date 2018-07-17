@@ -1,4 +1,4 @@
-all: comm bcast allreduce allgather reduce reducescatter
+all: allreduce
 
 ROCM_PATH=/opt/rocm
 TEST_INC=../
