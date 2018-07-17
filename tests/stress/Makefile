@@ -1,4 +1,4 @@
-all: allreducer
+all: allreduce
 
 ROCM_PATH=/opt/rocm
 TEST_INC=../
