@@ -10,6 +10,6 @@
 ### Debugging
 
 Use different environment variables to emit information about different function calls happening in the library.
-```RCCL_TRACE_RT=2 # prints out what rccl apis gets called and their arguments```
+```RCCL_TRACE_RT=1 # prints out what rccl apis gets called and their arguments```
 
 ```RCCL_TRACE_RT=4 # prints out different arguments passed to kernels in rccl```
