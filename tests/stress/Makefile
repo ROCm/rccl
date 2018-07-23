@@ -1,4 +1,4 @@
-all: allreduce
+all: reduce
 
 ROCM_PATH=/opt/rocm
 TEST_INC=../

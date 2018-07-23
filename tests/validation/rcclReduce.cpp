@@ -212,9 +212,11 @@ int main(int argc, char* argv[]) {
         std::cout<<"Usage: ./a.out -r <num tests> <root gpu> <num gpus> <list of gpus>"<<std::endl;
         std::cout<<"./a.out -r 99 1 3 1 2 3"<<std::endl;
         std::cout<<"[-b] enables validation across random generated data sizes, uses <num tests> as seed"<<std::endl;
+/* disabled as the functionality is not implemented
         std::cout<<"./a.out -r <num gpus> <number of elements> <op> <datatype>"<<std::endl;
         std::cout<<"Example: ./a.out -s 4 1024 rcclSum rcclInt"<<std::endl;
         std::cout<<"[-r] enabled validation for certain number of gpus, elements, ops and datatypes"<<std::endl;
+*/
         return 0;
     }
 }

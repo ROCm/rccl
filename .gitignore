@@ -1,0 +1,5 @@
+tests/validation/bin
+tests/stress/bin
+tests/performance/bin
+tests/conformance/bin
+tests/coverage/bin
