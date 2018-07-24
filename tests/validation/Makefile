@@ -1,4 +1,4 @@
-all: comm bcast allreduce allgather reduce reducescatter
+all: comm bcast allreduce allgather reduce reducescatter multistream
 
 ROCM_PATH=/opt/rocm
 TEST_INC=../
@@ -31,6 +31,9 @@ reducescatter:
 	mkdir -p bin
 	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclReduceScatter.cpp -L$(RCCL_LIB) -lrccl -o ./bin/reducescatter
 
+multistream:
+	mkdir -p bin
+	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclMultiStream.cpp -L$(RCCL_LIB) -lrccl -o ./bin/multistream
 
 clean:
 	rm -rf ./bin
