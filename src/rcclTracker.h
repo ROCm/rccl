@@ -54,6 +54,8 @@ struct DeviceControl_t {
     std::atomic<void*> dst_buffer;
     // stores device index according to hip programming model
     uint32_t hip_current_device_index;
+
+    std::atomic<int> wait_signal;
 };
 
 struct RcclComm_t;
@@ -136,6 +138,7 @@ DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
         pool_[i]->hip_current_device_index = device_indices_[i];
         pool_[i]->src_buffer = nullptr;
         pool_[i]->dst_buffer = nullptr;
+        pool_[i]->wait_signal = 0;
     }
 
     // create a ring of trackers
