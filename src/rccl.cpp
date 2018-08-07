@@ -748,6 +748,7 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
             fprintf(stderr, "%s<<rccl-kernel: RcclKernelSetDstPtr rccl-device:%d stream:%p pcurr_track:%p buff:%p%s\n", KBLU, dev, stream, pcurr_track, buff, API_COLOR_END);
         }
         hipLaunchKernelGGL(RcclKernelSetDstPtr, dim3(1, 1, 1), dim3(1, 1, 1), 0, stream, pcurr_track, buff);
+        hipLaunchKernelGGL(RcclKernelWait, dim3(1, 1, 1), dim3(1, 1, 1), 0, stream, pcurr_track);
     }
     return rcclSuccess;
 }

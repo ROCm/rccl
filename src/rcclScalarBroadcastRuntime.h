@@ -35,4 +35,6 @@ void RcclInternalBroadcast(DeviceControl_t* pcurr_track, int count, hipStream_t 
     if((RCCL_TRACE_RT * krccl_print_kernel) == krccl_print_kernel) {
         fprintf(stderr, "%s<<<rccl-kernel: RcclKernelScalarBroadcast %s\n", KBLU, KNRM);
     }
+
+    hipLaunchKernelGGL((RcclKernelSet), dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track);
 }

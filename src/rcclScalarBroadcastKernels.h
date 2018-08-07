@@ -38,3 +38,17 @@ __global__ void RcclKernelScalarBroadcast(DeviceControl_t* pcurr_track, void* se
         }
     }
 }
+
+__global__ void RcclKernelWait(DeviceControl_t* pcurr_track) {
+    int tx = threadIdx.x;
+    while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) != 1) {}
+    std::atomic_store_explicit(&(pcurr_track->wait_signal), int(0), std::memory_order_seq_cst);
+}
+
+__global__ void RcclKernelSet(DeviceControl_t* pcurr_track) {
+    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+    while(pnext_track != pcurr_track) {
+        std::atomic_store_explicit(&(pnext_track->wait_signal), int(1), std::memory_order_seq_cst);
+        pnext_track = pnext_track->next_gpu;
+    }
+}
