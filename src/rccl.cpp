@@ -688,67 +688,65 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
     }
 
     DeviceControl_t* pcurr_track = pcomm->track_;
-    bool is_root = pcomm->track_->hip_current_device_index == root;
+    bool is_root = pcomm->track_->rank == root;
 
     if(is_root) {
+        RcclInternalBroadcastRoot(pcurr_track, stream, buff);
+    } else {
         if(buff == nullptr) return rcclInvalidDevicePointer;
+        DeviceControl_t* proot_track = pcurr_track->next_gpu;
+        while(proot_track->rank != root) {
+            proot_track = proot_track->next_gpu;
+        }
         switch(datatype) {
             case rcclChar: {
-                RcclInternalBroadcast<signed char, rccl_char16_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<signed char>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclUchar: {
-                RcclInternalBroadcast<unsigned char, rccl_uchar16_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<unsigned char>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclShort: {
-                RcclInternalBroadcast<signed short, rccl_short8_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<signed short>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclUshort: {
-                RcclInternalBroadcast<unsigned short, rccl_ushort8_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<unsigned short>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclHalf: {
-                RcclInternalBroadcast<__fp16, rccl_half8_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<__fp16>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclInt: {
-                RcclInternalBroadcast<signed int, rccl_int4_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<signed int>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclUint: {
-                RcclInternalBroadcast<unsigned int, rccl_uint4_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<unsigned int>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclFloat: {
-                RcclInternalBroadcast<float, rccl_float4_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<float>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclLong: {
-                RcclInternalBroadcast<signed long, rccl_long2_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<signed long>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclUlong: {
-                RcclInternalBroadcast<unsigned long, rccl_ulong2_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<unsigned long>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             case rcclDouble: {
-                RcclInternalBroadcast<double, rccl_double2_t>(pcurr_track, count, stream, buff);
+                RcclInternalBroadcast<double>(pcurr_track, proot_track, count, stream, buff);
                 break;
             }
             default: {
                 return rcclInvalidType;
             }
         }
-    } else {
-        if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
-            int dev;
-            hipGetDevice(&dev);
-            fprintf(stderr, "%s<<rccl-kernel: RcclKernelSetDstPtr rccl-device:%d stream:%p pcurr_track:%p buff:%p%s\n", KBLU, dev, stream, pcurr_track, buff, API_COLOR_END);
-        }
-        hipLaunchKernelGGL(RcclKernelSetDstPtr, dim3(1, 1, 1), dim3(1, 1, 1), 0, stream, pcurr_track, buff);
-        hipLaunchKernelGGL(RcclKernelWait, dim3(1, 1, 1), dim3(1, 1, 1), 0, stream, pcurr_track);
     }
     return rcclSuccess;
 }

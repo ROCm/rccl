@@ -56,6 +56,8 @@ struct DeviceControl_t {
     uint32_t hip_current_device_index;
 
     std::atomic<int> wait_signal;
+
+    int rank;
 };
 
 struct RcclComm_t;
@@ -139,6 +141,7 @@ DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
         pool_[i]->src_buffer = nullptr;
         pool_[i]->dst_buffer = nullptr;
         pool_[i]->wait_signal = 0;
+        pool_[i]->rank = i;
     }
 
     // create a ring of trackers

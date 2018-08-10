@@ -39,10 +39,9 @@ __global__ void RcclKernelScalarBroadcast(DeviceControl_t* pcurr_track, void* se
     }
 }
 
-__global__ void RcclKernelWait(DeviceControl_t* pcurr_track) {
+__global__ void RcclKernelWaitSignal(DeviceControl_t* pcurr_track, int wait_signal) {
     int tx = threadIdx.x;
-    while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) != 1) {}
-    std::atomic_store_explicit(&(pcurr_track->wait_signal), int(0), std::memory_order_seq_cst);
+    while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
 }
 
 __global__ void RcclKernelSet(DeviceControl_t* pcurr_track) {
@@ -51,4 +50,34 @@ __global__ void RcclKernelSet(DeviceControl_t* pcurr_track) {
         std::atomic_store_explicit(&(pnext_track->wait_signal), int(1), std::memory_order_seq_cst);
         pnext_track = pnext_track->next_gpu;
     }
+}
+
+template<typename DataType_t>
+__global__ void RcclKernelScalarCopyFromRoot(DeviceControl_t* proot_track, void* recv_buff, int count) {
+    int tx = threadIdx.x;
+    int bx = blockIdx.x;
+    int tid = tx + bx * knum_vectors_per_workgroup;
+
+    if(tid < count) {
+        reinterpret_cast<DataType_t*>(recv_buff)[tid] = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(proot_track->src_buffer), std::memory_order_seq_cst))[tid];
+    }
+    __syncthreads();
+}
+
+__global__ void RcclKernelSetWaitSignal(DeviceControl_t* pcurr_track, int wait_signal) {
+    std::atomic_store_explicit(&(pcurr_track->wait_signal), wait_signal, std::memory_order_seq_cst);
+}
+
+__global__ void RcclKernelWaitForAllSignals(DeviceControl_t* pcurr_track, int wait_signal) {
+    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+    while(pnext_track != pcurr_track) {
+        while(std::atomic_load_explicit(&(pnext_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
+        pnext_track = pnext_track->next_gpu;
+    }
+}
+
+__global__ void RcclKernelResetAll(DeviceControl_t* pcurr_track) {
+    std::atomic_store_explicit(&(pcurr_track->src_buffer), (void*)(0), std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(pcurr_track->dst_buffer), (void*)(0), std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(pcurr_track->wait_signal), (int)(0), std::memory_order_seq_cst);
 }

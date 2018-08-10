@@ -9,10 +9,7 @@ All rights reserved.
 // DeviceControl_t::src_buffer is set to buffer pointers for a gpu
 //
 __global__ void RcclKernelSetSrcPtr(DeviceControl_t* pcurr_track, const void* send_buff) {
-    unsigned tx = threadIdx.x;
-    if(tx == 0) {
-        std::atomic_store_explicit(&(pcurr_track->src_buffer), (void*)send_buff, std::memory_order_seq_cst);
-    }
+    std::atomic_store_explicit(&(pcurr_track->src_buffer), (void*)send_buff, std::memory_order_seq_cst);
 }
 
 //
