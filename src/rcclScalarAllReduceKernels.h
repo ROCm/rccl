@@ -101,7 +101,7 @@ __global__ void RcclKernelScalarAllReduce(DeviceControl_t* pcurr_track, void* se
 
         if(pnext_track != pcurr_track) {
 
-            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
+//            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
 
             DataType_t* next_src_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst));
 
@@ -110,14 +110,14 @@ __global__ void RcclKernelScalarAllReduce(DeviceControl_t* pcurr_track, void* se
             if(Op == rcclMax)   curr_dst_buff[index] = curr_src_buff[index] > next_src_buff[index] ? curr_src_buff[index] : next_src_buff[index];
             if(Op == rcclMin)   curr_dst_buff[index] = curr_src_buff[index] < next_src_buff[index] ? curr_src_buff[index] : next_src_buff[index];
 
-            while(std::atomic_load_explicit(&(pcurr_track->next_gpu->dst_buffer), std::memory_order_seq_cst) == 0) {}
+//            while(std::atomic_load_explicit(&(pcurr_track->next_gpu->dst_buffer), std::memory_order_seq_cst) == 0) {}
 
             pnext_track = pnext_track->next_gpu;
         }
 
         while(pnext_track != pcurr_track) {
 
-            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
+//            while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}
 
             DataType_t* next_src_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst));
 
@@ -130,7 +130,7 @@ __global__ void RcclKernelScalarAllReduce(DeviceControl_t* pcurr_track, void* se
             pnext_track = pnext_track->next_gpu;
         }
 
-
+/*
         pnext_track = pcurr_track->next_gpu;
 
         while(pnext_track != pcurr_track) {
@@ -143,7 +143,7 @@ __global__ void RcclKernelScalarAllReduce(DeviceControl_t* pcurr_track, void* se
 
             pnext_track = pnext_track->next_gpu;
         }
-
+*/
     }
     __syncthreads();
 }
@@ -165,4 +165,50 @@ __global__ void RcclKernelSetWaitReset(DeviceControl_t* pcurr_track, int num_gpu
     std::atomic_store_explicit(&(pcurr_track->wait_signal), int(0), std::memory_order_seq_cst);
     std::atomic_store_explicit(&(pcurr_track->dst_buffer), (void*)(0), std::memory_order_seq_cst);
     std::atomic_store_explicit(&(pcurr_track->src_buffer), (void*)(0), std::memory_order_seq_cst);
+}
+
+
+//
+// New code for inplace fix
+//
+
+__global__ void RcclKernelWaitSignal(DeviceControl_t*, int);
+__global__ void RcclKernelSetWaitSignal(DeviceControl_t*, int);
+__global__ void RcclKernelResetAll(DeviceControl_t*);
+__global__ void RcclKernelWaitForAllSignals(DeviceControl_t*, int);
+
+__global__ void RcclKernelSetSrcDstBuffer(DeviceControl_t* pcurr_track, void* src_buffer, void* dst_buffer) {
+    std::atomic_store_explicit(&(pcurr_track->src_buffer), src_buffer, std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(pcurr_track->dst_buffer), dst_buffer, std::memory_order_seq_cst);
+}
+
+template<typename DataType_t>
+__global__ void RcclKernelCopyRest(DeviceControl_t* pcurr_track, int num_gpus, int rank, int count_per_gpu, int max_count_per_gpu) {
+    int tx = threadIdx.x;
+    int bx = blockIdx.x;
+    int tid = tx + bx * knum_workitems;
+
+    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+
+    DataType_t* curr_dst_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pcurr_track->dst_buffer), std::memory_order_seq_cst));
+
+    while(pnext_track->rank != rank) {
+        DataType_t* next_src_buff = reinterpret_cast<DataType_t*>(std::atomic_load_explicit(&(pnext_track->dst_buffer), std::memory_order_seq_cst));
+
+        int curr_rank = pnext_track->rank;
+
+        int count = count_per_gpu;
+
+        if(curr_rank == num_gpus - 1) {
+            count = max_count_per_gpu;
+        }
+
+        if(tid < count) {
+
+            curr_dst_buff[tid + curr_rank * count_per_gpu] = next_src_buff[tid + curr_rank * count_per_gpu];
+
+        }
+
+        pnext_track = pnext_track->next_gpu;
+    }
 }
