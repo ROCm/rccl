@@ -30,6 +30,10 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
         num_workgroups = 1;
     }
 
+
+    hipEvent_t event;
+    hipEventCreateWithFlags(&event, hipEventReleaseToSystem);
+
     hipLaunchKernelGGL(RcclKernelResetAll, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track);
 
     hipLaunchKernelGGL(RcclKernelSetSrcDstBuffer, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, (void*)send_buff, recv_buff);
@@ -39,12 +43,14 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
     hipLaunchKernelGGL(RcclKernelWaitForAllSignals, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(1));
 
     hipLaunchKernelGGL((RcclKernelScalarAllReduce<DataType_t, Op>), dim3(num_workgroups,1,1), dim3(num_workitems,1,1), 0, stream, pcurr_track, (void*)send_buff, recv_buff, count_per_gpu, offset);
+    hipEventRecord(event, stream);
 
     hipLaunchKernelGGL(RcclKernelSetWaitSignal, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(2));
 
     hipLaunchKernelGGL(RcclKernelWaitForAllSignals, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(2));
 
     hipLaunchKernelGGL((RcclKernelCopyRest<DataType_t>), dim3(num_workgroups,1,1), dim3(num_workitems,1,1), 0, stream, pcurr_track, num_gpus, rank, count_per_gpu, max_count_per_gpu);
+    hipEventRecord(event, stream);
 
     hipLaunchKernelGGL(RcclKernelSetWaitSignal, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(3));
 
