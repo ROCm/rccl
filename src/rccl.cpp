@@ -461,6 +461,38 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
     int rank = pcomm->rank_;
     int num_gpus = pcomm->num_devices_;
 
+    if(num_gpus == 1) {
+        switch(datatype) {
+            case rcclChar:
+            case rcclUchar: {
+                hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(char), hipMemcpyDeviceToDevice, stream);
+                break;
+            }
+            case rcclShort:
+            case rcclUshort:
+            case rcclHalf: {
+                hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(short), hipMemcpyDeviceToDevice, stream);
+                break;
+            }
+            case rcclInt:
+            case rcclUint:
+            case rcclFloat: {
+                hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(int), hipMemcpyDeviceToDevice, stream);
+                break;
+            }
+            case rcclLong:
+            case rcclUlong:
+            case rcclDouble: {
+                hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(double), hipMemcpyDeviceToDevice, stream);
+                break;
+            }
+            default: {
+                return rcclInvalidType;
+            }
+            }
+            return rcclSuccess;
+    }
+
     if(op == rcclSum) {
         switch(datatype) {
             case rcclChar: {
