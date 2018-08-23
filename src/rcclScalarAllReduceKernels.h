@@ -180,6 +180,7 @@ __global__ void RcclKernelWaitForAllSignals(DeviceControl_t*, int);
 __global__ void RcclKernelSetSrcDstBuffer(DeviceControl_t* pcurr_track, void* src_buffer, void* dst_buffer) {
     std::atomic_store_explicit(&(pcurr_track->src_buffer), src_buffer, std::memory_order_seq_cst);
     std::atomic_store_explicit(&(pcurr_track->dst_buffer), dst_buffer, std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(pcurr_track->wait_signal), 0, std::memory_order_seq_cst);
 }
 
 template<typename DataType_t>

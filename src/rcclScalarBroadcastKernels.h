@@ -41,7 +41,7 @@ __global__ void RcclKernelScalarBroadcast(DeviceControl_t* pcurr_track, void* se
 
 __global__ void RcclKernelWaitSignal(DeviceControl_t* pcurr_track, int wait_signal) {
     int tx = threadIdx.x;
-    while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) < wait_signal) {}
+    while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
 }
 
 __global__ void RcclKernelSet(DeviceControl_t* pcurr_track) {
@@ -70,9 +70,9 @@ __global__ void RcclKernelSetWaitSignal(DeviceControl_t* pcurr_track, int wait_s
 
 __global__ void RcclKernelWaitForAllSignals(DeviceControl_t* pcurr_track, int wait_signal) {
     DeviceControl_t* pnext_track = pcurr_track->next_gpu;
-    while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) < wait_signal) {}
+    while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
     while(pnext_track != pcurr_track) {
-        while(std::atomic_load_explicit(&(pnext_track->wait_signal), std::memory_order_seq_cst) < wait_signal) {}
+        while(std::atomic_load_explicit(&(pnext_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
         pnext_track = pnext_track->next_gpu;
     }
 }

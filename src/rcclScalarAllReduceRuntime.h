@@ -34,11 +34,12 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
     hipEvent_t event;
     hipEventCreateWithFlags(&event, hipEventReleaseToSystem);
 
-    hipLaunchKernelGGL(RcclKernelResetAll, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track);
+//    hipLaunchKernelGGL(RcclKernelResetAll, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track);
 
     hipLaunchKernelGGL(RcclKernelSetSrcDstBuffer, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, (void*)send_buff, recv_buff);
 
     hipLaunchKernelGGL(RcclKernelSetWaitSignal, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(1));
+    hipEventRecord(event, stream);
 
     hipLaunchKernelGGL(RcclKernelWaitForAllSignals, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(1));
 
@@ -46,6 +47,7 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
     hipEventRecord(event, stream);
 
     hipLaunchKernelGGL(RcclKernelSetWaitSignal, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(2));
+    hipEventRecord(event, stream);
 
     hipLaunchKernelGGL(RcclKernelWaitForAllSignals, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(2));
 
@@ -53,9 +55,12 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
     hipEventRecord(event, stream);
 
     hipLaunchKernelGGL(RcclKernelSetWaitSignal, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(3));
+    hipEventRecord(event, stream);
 
     hipLaunchKernelGGL(RcclKernelWaitForAllSignals, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(3));
 
-    hipLaunchKernelGGL(RcclKernelResetAll, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track);
+//    hipLaunchKernelGGL(RcclKernelResetAll, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track);
+//    hipEventRecord(event, stream);
 
+//    hipLaunchKernelGGL(RcclKernelWaitForAllSignals, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, int(0));
 }
