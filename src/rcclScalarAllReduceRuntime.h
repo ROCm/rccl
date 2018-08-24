@@ -14,7 +14,7 @@ All rights reserved.
 extern int RCCL_TRACE_RT;
 
 template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
-void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, void* recv_buff, hipStream_t stream, int count, int num_gpus, int rank) {
+void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, void* recv_buff, hipStream_t stream, int count, int num_gpus, int rank, hipEvent_t event) {
 
     int num_workitems = 0, num_workgroups = 0;
 
@@ -30,9 +30,6 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
         num_workgroups = 1;
     }
 
-
-    hipEvent_t event;
-    hipEventCreateWithFlags(&event, hipEventReleaseToSystem);
 
 //    hipLaunchKernelGGL(RcclKernelResetAll, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track);
 
