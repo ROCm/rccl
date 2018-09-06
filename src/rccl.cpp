@@ -88,9 +88,9 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId, i
     auto pool = commId->pool;
     int dev;
     HIPCHECK(hipGetDevice(&dev));
-    RcclComm_t *prcomm = pool->AddDevice(dev, rank, ndev);
-    prcomm->pool_ = pool;
-    *comm = prcomm;
+    RcclComm_t *pcomm = pool->AddDevice(dev, rank, ndev);
+    pcomm->pool_ = pool;
+    *comm = pcomm;
     return rcclSuccess;
 }
 
@@ -126,7 +126,7 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
         }
     }
 
-    RcclComm_t *prcomm;
+    RcclComm_t *pcomm;
     // a pool of device trackers are created
     DevTrackerPool_t *ppool = new DevTrackerPool_t(devlist, ndev);
 
@@ -134,16 +134,17 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
 
     // populate rcclComm_t using DevTrackerPool
     for(int i=0;i<ndev;i++) {
-        prcomm = new RcclComm_t;
+        pcomm = new RcclComm_t;
         ptrack = ppool->GetPoolByDeviceIndex(devlist[i]);
-        prcomm->pool_ = ppool;
-        prcomm->track_ = ptrack;
-        prcomm->device_ = devlist[i];
-        prcomm->rank_ = i;
-        prcomm->num_devices_ = ndev;
-        comm[i] = prcomm;
+        pcomm->pool_ = ppool;
+        pcomm->track_ = ptrack;
+        pcomm->device_ = devlist[i];
+        pcomm->rank_ = i;
+        pcomm->num_devices_ = ndev;
+        pcomm->stream_ = NULL;
+        comm[i] = pcomm;
         HIPCHECK(hipSetDevice(devlist[i]));
-        HIPCHECK(hipEventCreateWithFlags(&prcomm->event_, hipEventReleaseToSystem));
+        HIPCHECK(hipEventCreateWithFlags(&pcomm->event_, hipEventReleaseToSystem));
     }
 
     // restore saved device user
@@ -153,31 +154,35 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
 }
 
 rcclResult_t rcclCommCuDevice(rcclComm_t comm, int *dev) {
-    RcclComm_t *prcomm = comm;
-    *dev = prcomm->device_;
+    RcclComm_t *pcomm = comm;
+    *dev = pcomm->device_;
     return rcclSuccess;
 }
 
 rcclResult_t rcclCommUserRank(rcclComm_t comm, int *rank) {
-    RcclComm_t *prcomm = comm;
-    *rank = prcomm->rank_;
+    RcclComm_t *pcomm = comm;
+    *rank = pcomm->rank_;
     return rcclSuccess;
 }
 
 rcclResult_t rcclCommCount(rcclComm_t comm, int *count) {
-    RcclComm_t *prcomm = comm;
-    *count = prcomm->num_devices_;
+    RcclComm_t *pcomm = comm;
+    *count = pcomm->num_devices_;
     return rcclSuccess;
 }
 
 rcclResult_t rcclCommDestroy(rcclComm_t comm) {
-    RcclComm_t *prcomm = comm;
-    prcomm->pool_->active_devices_--;
-    if(prcomm->pool_->active_devices_ == 0) {
-        delete prcomm->pool_;
+    RcclComm_t *pcomm = comm;
+    pcomm->pool_->active_devices_--;
+    if(pcomm->pool_->active_devices_ == 0) {
+        delete pcomm->pool_;
     }
-    delete prcomm;
+    delete pcomm;
     return rcclSuccess;
+}
+
+void EnqueueEventRecord(RcclComm_t* pcomm, hipStream_t stream) {
+    hipEventRecord(pcomm->event_, stream);
 }
 
 //
@@ -206,6 +211,11 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
 
     if(pcomm == nullptr || count <= 0 || root < 0) {
         return rcclInvalidArgument;
+    }
+
+    if(stream != pcomm->stream_) {
+        hipStreamWaitEvent(stream, pcomm->event_, 0);
+        pcomm->stream_ = stream;
     }
 
     DeviceControl_t *pcurr_track = pcomm->track_;
@@ -262,6 +272,7 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
@@ -313,6 +324,7 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
@@ -365,6 +377,7 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
@@ -417,6 +430,7 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
@@ -431,6 +445,7 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
         }
         hipLaunchKernelGGL(RcclKernelSetSrcPtr, dim3(1, 1, 1), dim3(1, 1, 1), 0, 0, pcurr_track, sendbuff);
     }
+    EnqueueEventRecord(pcomm, stream);
     return rcclSuccess;
 }
 
@@ -453,14 +468,20 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
 
     RcclComm_t* pcomm = comm;
 
+    hipEvent_t event = pcomm->event_;
+
     if(pcomm == nullptr || count <= 0) {
         return rcclInvalidArgument;
+    }
+
+    if(stream != pcomm->stream_) {
+        hipStreamWaitEvent(stream, pcomm->event_, 0);
+        pcomm->stream_ = stream;
     }
 
     DeviceControl_t* pcurr_track = pcomm->track_;
     int rank = pcomm->rank_;
     int num_gpus = pcomm->num_devices_;
-    hipEvent_t event = pcomm->event_;
 
     if(num_gpus == 1) {
         switch(datatype) {
@@ -488,9 +509,11 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
             }
+            EnqueueEventRecord(pcomm, stream);
             return rcclSuccess;
     }
 
@@ -541,6 +564,7 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
@@ -592,6 +616,7 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
@@ -644,6 +669,7 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
@@ -696,10 +722,13 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
     }
+
+    EnqueueEventRecord(pcomm, stream);
 
     return rcclSuccess;
 }
@@ -722,6 +751,11 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
 
     DeviceControl_t* pcurr_track = pcomm->track_;
     bool is_root = pcomm->track_->rank == root;
+
+    if(stream != pcomm->stream_) {
+        hipStreamWaitEvent(stream, pcomm->event_, 0);
+        pcomm->stream_ = stream;
+    }
 
     if(is_root) {
         RcclInternalBroadcastRoot(pcurr_track, stream, buff);
@@ -777,10 +811,12 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
                 break;
             }
             default: {
+                EnqueueEventRecord(pcomm, stream);
                 return rcclInvalidType;
             }
         }
     }
+    EnqueueEventRecord(pcomm, stream);
     return rcclSuccess;
 }
 

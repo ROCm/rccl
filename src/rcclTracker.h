@@ -107,6 +107,7 @@ struct RcclComm_t {
 public:
     DevTrackerPool_t *pool_;
     DeviceControl_t *track_;
+    hipStream_t stream_;
     hipEvent_t event_;
     int num_devices_;
     int device_;
@@ -173,6 +174,7 @@ RcclComm_t* DevTrackerPool_t::AddDevice(int device, int rank, int ndev) {
     ret_comm->num_devices_ = ndev;
     ret_comm->device_ = device;
     ret_comm->rank_ = rank;
+    ret_comm->stream_ = NULL;
     struct DeviceControl_t *pdctl;
     HIPCHECK(hipHostMalloc(&pdctl, sizeof(DeviceControl_t), hipHostMallocCoherent));
     pdctl->src_buffer = 0;
