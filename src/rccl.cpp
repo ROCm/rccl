@@ -141,6 +141,7 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
         pcomm->device_ = devlist[i];
         pcomm->rank_ = i;
         pcomm->num_devices_ = ndev;
+        pcomm->this_time_ = 0;
         pcomm->stream_ = NULL;
         comm[i] = pcomm;
         HIPCHECK(hipSetDevice(devlist[i]));
@@ -483,6 +484,7 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
     int rank = pcomm->rank_;
     int num_gpus = pcomm->num_devices_;
 
+    int* this_time = &(pcomm->this_time_);
     if(num_gpus == 1) {
         switch(datatype) {
             case rcclChar:
@@ -520,47 +522,47 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
     if(op == rcclSum) {
         switch(datatype) {
             case rcclChar: {
-                RcclInternalAllReduce<signed char, rccl_char16_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed char, rccl_char16_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUchar: {
-                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclShort: {
-                RcclInternalAllReduce<signed short, rccl_short8_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed short, rccl_short8_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUshort: {
-                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclHalf: {
-                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclInt: {
-                RcclInternalAllReduce<signed int, rccl_int4_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed int, rccl_int4_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUint: {
-                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclFloat: {
-                RcclInternalAllReduce<float, rccl_float4_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<float, rccl_float4_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclLong: {
-                RcclInternalAllReduce<signed long, rccl_long2_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed long, rccl_long2_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUlong: {
-                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclDouble: {
-                RcclInternalAllReduce<double, rccl_double2_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<double, rccl_double2_t, rcclSum>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             default: {
@@ -572,47 +574,47 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
     if(op == rcclProd) {
         switch(datatype) {
             case rcclChar: {
-                RcclInternalAllReduce<signed char, rccl_char16_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed char, rccl_char16_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUchar: {
-                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclShort: {
-                RcclInternalAllReduce<signed short, rccl_short8_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed short, rccl_short8_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUshort: {
-                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclHalf: {
-                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclInt: {
-                RcclInternalAllReduce<signed int, rccl_int4_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed int, rccl_int4_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUint: {
-                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclFloat: {
-                RcclInternalAllReduce<float, rccl_float4_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<float, rccl_float4_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclLong: {
-                RcclInternalAllReduce<signed long, rccl_long2_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed long, rccl_long2_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUlong: {
-                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclDouble: {
-                RcclInternalAllReduce<double, rccl_double2_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<double, rccl_double2_t, rcclProd>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             default: {
@@ -625,47 +627,47 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
     if(op == rcclMax) {
         switch(datatype) {
             case rcclChar: {
-                RcclInternalAllReduce<signed char, rccl_char16_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed char, rccl_char16_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUchar: {
-                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclShort: {
-                RcclInternalAllReduce<signed short, rccl_short8_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed short, rccl_short8_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUshort: {
-                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclHalf: {
-                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclInt: {
-                RcclInternalAllReduce<signed int, rccl_int4_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed int, rccl_int4_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUint: {
-                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclFloat: {
-                RcclInternalAllReduce<float, rccl_float4_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<float, rccl_float4_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclLong: {
-                RcclInternalAllReduce<signed long, rccl_long2_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed long, rccl_long2_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUlong: {
-                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclDouble: {
-                RcclInternalAllReduce<double, rccl_double2_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<double, rccl_double2_t, rcclMax>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             default: {
@@ -678,47 +680,47 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
     if(op == rcclMin) {
         switch(datatype) {
             case rcclChar: {
-                RcclInternalAllReduce<signed char, rccl_char16_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed char, rccl_char16_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUchar: {
-                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned char, rccl_uchar16_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclShort: {
-                RcclInternalAllReduce<signed short, rccl_short8_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed short, rccl_short8_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUshort: {
-                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned short, rccl_ushort8_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclHalf: {
-                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<__fp16, rccl_half8_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclInt: {
-                RcclInternalAllReduce<signed int, rccl_int4_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed int, rccl_int4_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUint: {
-                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned int, rccl_uint4_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclFloat: {
-                RcclInternalAllReduce<float, rccl_float4_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<float, rccl_float4_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclLong: {
-                RcclInternalAllReduce<signed long, rccl_long2_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<signed long, rccl_long2_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclUlong: {
-                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<unsigned long, rccl_ulong2_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             case rcclDouble: {
-                RcclInternalAllReduce<double, rccl_double2_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event);
+                RcclInternalAllReduce<double, rccl_double2_t, rcclMin>(pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank, event, this_time);
                 break;
             }
             default: {

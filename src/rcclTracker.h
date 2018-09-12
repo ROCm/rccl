@@ -57,6 +57,8 @@ struct DeviceControl_t {
 
     std::atomic<int> wait_signal;
 
+    std::atomic<int>* bar_in, *bar_out, *times_done;
+
     int rank;
 };
 
@@ -109,6 +111,7 @@ public:
     DeviceControl_t *track_;
     hipStream_t stream_;
     hipEvent_t event_;
+    int this_time_;
     int num_devices_;
     int device_;
     int rank_;
@@ -131,6 +134,16 @@ DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
 
     struct DeviceControl_t *pdctl;
 
+    std::atomic<int>* bar_in, *bar_out, *times_done;
+
+    HIPCHECK(hipHostMalloc(&bar_in, sizeof(std::atomic<int>), hipHostMallocCoherent));
+    HIPCHECK(hipHostMalloc(&bar_out, sizeof(std::atomic<int>), hipHostMallocCoherent));
+    HIPCHECK(hipHostMalloc(&times_done, sizeof(std::atomic<int>), hipHostMallocCoherent));
+
+    std::atomic_store_explicit(bar_in, 0, std::memory_order_seq_cst);
+    std::atomic_store_explicit(bar_out, 0, std::memory_order_seq_cst);
+    std::atomic_store_explicit(times_done, 0, std::memory_order_seq_cst);
+
     // allocate DeviceControl_t as system pinned memory for gpu
     // and add its hip device index
     for(int i = 0; i < num_devices_;i ++){
@@ -142,6 +155,9 @@ DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
         pool_[i]->src_buffer = nullptr;
         pool_[i]->dst_buffer = nullptr;
         pool_[i]->wait_signal = 0;
+        pool_[i]->bar_in = bar_in;
+        pool_[i]->bar_out = bar_out;
+        pool_[i]->times_done = times_done;
         pool_[i]->rank = i;
     }
 
