@@ -213,3 +213,12 @@ __global__ void RcclKernelCopyRest(DeviceControl_t* pcurr_track, int num_gpus, i
         pnext_track = pnext_track->next_gpu;
     }
 }
+
+__global__ void RcclKernelSetAndWait(DeviceControl_t* pcurr_track, int wait_signal) {
+    std::atomic_store_explicit(&(pcurr_track->wait_signal), wait_signal, std::memory_order_seq_cst);
+    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+    while(pnext_track != pcurr_track) {
+        while(std::atomic_load_explicit(&(pnext_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
+        pnext_track = pnext_track->next_gpu;
+    }
+}
