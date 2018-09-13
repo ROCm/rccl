@@ -49,7 +49,7 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
 */
 template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
 void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, void* recv_buff, hipStream_t stream, int count, int num_gpus, int rank, hipEvent_t event, int* this_time) {
-
+/*
     int num_workitems = 0, num_workgroups = 0;
 
     int offset = (count / num_gpus) * rank;
@@ -77,6 +77,41 @@ void RcclInternalAllReduce(DeviceControl_t *pcurr_track, const void* send_buff, 
     hipLaunchKernelGGL(RcclKernelBarrierWait, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, val++, num_gpus);
 
     hipLaunchKernelGGL((RcclKernelCopyRest<DataType_t>), dim3(num_workgroups,1,1), dim3(num_workitems,1,1), 0, stream, pcurr_track, num_gpus, rank, count_per_gpu, max_count_per_gpu);
+    hipEventRecord(event, stream);
+    hipLaunchKernelGGL(RcclKernelBarrierWait, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, val++, num_gpus);
+    *this_time = val;
+*/
+
+       int num_workitems = 0, num_workgroups = 0;
+
+       int offset = (count / num_gpus) * rank;
+       int regular_gpu_count = count / num_gpus;
+       int last_gpu_count = ((count / num_gpus) + (count % num_gpus));
+
+       int op_gpu_count = (rank == num_gpus - 1) ? last_gpu_count : regular_gpu_count;
+
+       if(last_gpu_count < knum_workitems) {
+               num_workitems = last_gpu_count;
+               num_workgroups = 1;
+       } else {
+               num_workitems = knum_workitems;
+               num_workgroups = (last_gpu_count / knum_workitems) + 1;
+       }
+
+    hipLaunchKernelGGL(RcclKernelSetSrcDstBuffer, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, (void*)send_buff, recv_buff);
+
+    int val = *this_time;
+
+    hipLaunchKernelGGL(RcclKernelBarrierWait, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, val++, num_gpus);
+
+
+       hipLaunchKernelGGL((RcclKernelScalarAllReduce<DataType_t, Op>), dim3(num_workgroups, 1, 1), dim3(num_workitems, 1, 1), 0, stream, pcurr_track, (void*)send_buff, recv_buff, op_gpu_count, offset);
+    hipEventRecord(event, stream);
+
+    hipLaunchKernelGGL(RcclKernelBarrierWait, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, val++, num_gpus);
+
+    hipLaunchKernelGGL((RcclKernelCopyRest<DataType_t>), dim3(num_workgroups,1,1), dim3(num_workitems,1,1), 0, stream, pcurr_track, num_gpus, rank, regular_gpu_count, last_gpu_count);
+
     hipEventRecord(event, stream);
     hipLaunchKernelGGL(RcclKernelBarrierWait, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, val++, num_gpus);
     *this_time = val;
