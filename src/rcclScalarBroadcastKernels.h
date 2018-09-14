@@ -15,14 +15,14 @@ All rights reserved.
 // buffer in all gpus.
 //
 template<typename DataType_t, typename VectorType_t>
-__global__ void RcclKernelScalarBroadcast(DeviceControl_t* pcurr_track, void* send_buff, int count) {
+__global__ void RcclKernelScalarBroadcast(RingNode_t* pcurr_track, void* send_buff, int count) {
     unsigned tx = threadIdx.x;
     unsigned bx = blockIdx.x;
     unsigned tid = tx + bx * knum_workitems;
 
     if(tid < count) {
 
-        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+        RingNode_t* pnext_track = pcurr_track->next_gpu;
 
         DataType_t* curr_buff = reinterpret_cast<DataType_t*>(send_buff);
 
@@ -39,13 +39,13 @@ __global__ void RcclKernelScalarBroadcast(DeviceControl_t* pcurr_track, void* se
     }
 }
 
-__global__ void RcclKernelWaitSignal(DeviceControl_t* pcurr_track, int wait_signal) {
+__global__ void RcclKernelWaitSignal(RingNode_t* pcurr_track, int wait_signal) {
     int tx = threadIdx.x;
     while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
 }
 
-__global__ void RcclKernelSet(DeviceControl_t* pcurr_track) {
-    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+__global__ void RcclKernelSet(RingNode_t* pcurr_track) {
+    RingNode_t* pnext_track = pcurr_track->next_gpu;
     while(pnext_track != pcurr_track) {
         std::atomic_store_explicit(&(pnext_track->wait_signal), int(1), std::memory_order_seq_cst);
         pnext_track = pnext_track->next_gpu;
@@ -53,7 +53,7 @@ __global__ void RcclKernelSet(DeviceControl_t* pcurr_track) {
 }
 
 template<typename DataType_t>
-__global__ void RcclKernelScalarCopyFromRoot(DeviceControl_t* proot_track, void* recv_buff, int count) {
+__global__ void RcclKernelScalarCopyFromRoot(RingNode_t* proot_track, void* recv_buff, int count) {
     int tx = threadIdx.x;
     int bx = blockIdx.x;
     int tid = tx + bx * knum_vectors_per_workgroup;
@@ -64,12 +64,12 @@ __global__ void RcclKernelScalarCopyFromRoot(DeviceControl_t* proot_track, void*
     __syncthreads();
 }
 
-__global__ void RcclKernelSetWaitSignal(DeviceControl_t* pcurr_track, int wait_signal) {
+__global__ void RcclKernelSetWaitSignal(RingNode_t* pcurr_track, int wait_signal) {
     std::atomic_store_explicit(&(pcurr_track->wait_signal), wait_signal, std::memory_order_seq_cst);
 }
 
-__global__ void RcclKernelWaitForAllSignals(DeviceControl_t* pcurr_track, int wait_signal) {
-    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+__global__ void RcclKernelWaitForAllSignals(RingNode_t* pcurr_track, int wait_signal) {
+    RingNode_t* pnext_track = pcurr_track->next_gpu;
     while(std::atomic_load_explicit(&(pcurr_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
     while(pnext_track != pcurr_track) {
         while(std::atomic_load_explicit(&(pnext_track->wait_signal), std::memory_order_seq_cst) != wait_signal) {}
@@ -77,7 +77,7 @@ __global__ void RcclKernelWaitForAllSignals(DeviceControl_t* pcurr_track, int wa
     }
 }
 
-__global__ void RcclKernelResetAll(DeviceControl_t* pcurr_track) {
+__global__ void RcclKernelResetAll(RingNode_t* pcurr_track) {
     std::atomic_store_explicit(&(pcurr_track->src_buffer), (void*)(0), std::memory_order_seq_cst);
     std::atomic_store_explicit(&(pcurr_track->dst_buffer), (void*)(0), std::memory_order_seq_cst);
     std::atomic_store_explicit(&(pcurr_track->wait_signal), (int)(0), std::memory_order_seq_cst);

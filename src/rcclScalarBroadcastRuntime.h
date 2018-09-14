@@ -12,7 +12,7 @@ All rights reserved.
 //
 
 template<typename DataType_t, typename VectorType_t>
-void RcclInternalBroadcast(DeviceControl_t* pcurr_track, int count, hipStream_t stream, void* send_buff) {
+void RcclInternalBroadcast(RingNode_t* pcurr_track, int count, hipStream_t stream, void* send_buff) {
 
     int num_workitems = 0, num_workgroups = 0;
 
@@ -43,7 +43,7 @@ void RcclInternalBroadcast(DeviceControl_t* pcurr_track, int count, hipStream_t 
 //
 // The root does not do the copy
 //
-void RcclInternalBroadcastRoot(DeviceControl_t* pcurr_track, hipStream_t stream, void* send_buff) {
+void RcclInternalBroadcastRoot(RingNode_t* pcurr_track, hipStream_t stream, void* send_buff) {
 
 // Reset all the fields in pcurr_track before using it (all other gpus should set it to zeros too)
     hipLaunchKernelGGL((RcclKernelResetAll), dim3(1, 1, 1), dim3(1, 1, 1), 0, stream, pcurr_track);
@@ -59,7 +59,7 @@ void RcclInternalBroadcastRoot(DeviceControl_t* pcurr_track, hipStream_t stream,
 }
 
 template<typename DataType_t>
-void RcclInternalBroadcast(DeviceControl_t* pcurr_track, DeviceControl_t* proot_track, int count, hipStream_t stream, void* recv_buff) {
+void RcclInternalBroadcast(RingNode_t* pcurr_track, RingNode_t* proot_track, int count, hipStream_t stream, void* recv_buff) {
 
     int num_workitems = 0, num_workgroups = 0;
 

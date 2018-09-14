@@ -14,7 +14,7 @@ All rights reserved.
 extern int RCCL_TRACE_RT;
 
 template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
-void RcclInternalReduce(DeviceControl_t *pcurr_track, int count, hipStream_t stream, const void* send_buff, void* recv_buff) {
+void RcclInternalReduce(RingNode_t *pcurr_track, int count, hipStream_t stream, const void* send_buff, void* recv_buff) {
     if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
         int dev;
         hipGetDevice(&dev);

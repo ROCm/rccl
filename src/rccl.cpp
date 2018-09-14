@@ -5,13 +5,6 @@ All rights reserved.
 
 #include "rcclTracker.h"
 #include "rcclSetKernels.h"
-
-// Using kernels operating on scalar values
-//#include "rcclReduceRuntime.h"
-//#include "rcclAllReduceRuntime.h"
-//#include "rcclReduceScatterRuntime.h"
-//#include "rcclBroadcastRuntime.h"
-//#include "rcclAllGatherRuntime.h"
 #include "rcclLog.h"
 
 #include "rcclScalarReduceRuntime.h"
@@ -28,13 +21,13 @@ All rights reserved.
 // one header file for each op
 //
 
-std::vector<DevTrackerPool_t*> pools;
+std::vector<RingNodePool_t*> pools;
 
 // used as rcclUniqueId
 struct RcclUniqueId {
-    DevTrackerPool_t *pool;
+    RingNodePool_t *pool;
     RcclUniqueId() {
-        pool = new DevTrackerPool_t;
+        pool = new RingNodePool_t;
     }
     ~RcclUniqueId() {
         delete pool;
@@ -128,9 +121,9 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
 
     RcclComm_t *pcomm;
     // a pool of device trackers are created
-    DevTrackerPool_t *ppool = new DevTrackerPool_t(devlist, ndev);
+    RingNodePool_t *ppool = new RingNodePool_t(devlist, ndev);
 
-    DeviceControl_t *ptrack;
+    RingNode_t *ptrack;
 
     // populate rcclComm_t using DevTrackerPool
     for(int i=0;i<ndev;i++) {
@@ -219,7 +212,7 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDat
         pcomm->stream_ = stream;
     }
 
-    DeviceControl_t *pcurr_track = pcomm->track_;
+    RingNode_t *pcurr_track = pcomm->track_;
 
     // dispatch kernel only on root
     bool is_root = pcomm->track_->hip_current_device_index == root;
@@ -480,7 +473,7 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
         pcomm->stream_ = stream;
     }
 
-    DeviceControl_t* pcurr_track = pcomm->track_;
+    RingNode_t* pcurr_track = pcomm->track_;
     int rank = pcomm->rank_;
     int num_gpus = pcomm->num_devices_;
 
@@ -751,7 +744,7 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
         return rcclInvalidArgument;
     }
 
-    DeviceControl_t* pcurr_track = pcomm->track_;
+    RingNode_t* pcurr_track = pcomm->track_;
     bool is_root = pcomm->track_->rank == root;
 
     if(stream != pcomm->stream_) {
@@ -763,7 +756,7 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
         RcclInternalBroadcastRoot(pcurr_track, stream, buff);
     } else {
         if(buff == nullptr) return rcclInvalidDevicePointer;
-        DeviceControl_t* proot_track = pcurr_track->next_gpu;
+        RingNode_t* proot_track = pcurr_track->next_gpu;
         while(proot_track->rank != root) {
             proot_track = proot_track->next_gpu;
         }
@@ -843,7 +836,7 @@ rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datat
         return rcclInvalidArgument;
     }
 
-    DeviceControl_t *pcurr_track = pcomm->track_;
+    RingNode_t *pcurr_track = pcomm->track_;
     int rank = pcomm->rank_;
 
     switch(datatype) {
@@ -920,7 +913,7 @@ rcclResult_t rcclReduceScatter(const void* sendbuff, void* recvbuff, int count, 
         return rcclInvalidArgument;
     }
 
-    DeviceControl_t* pcurr_track = pcomm->track_;
+    RingNode_t* pcurr_track = pcomm->track_;
     int rank = pcomm->rank_;
 
 

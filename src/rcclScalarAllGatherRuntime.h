@@ -12,7 +12,7 @@ All rights reserved.
 //
 
 template<typename DataType_t, typename VectorType_t>
-void RcclInternalAllGather(DeviceControl_t *pcurr_track, int count, int rank, hipStream_t stream, const void *send_buff, void *recv_buff) {
+void RcclInternalAllGather(RingNode_t *pcurr_track, int count, int rank, hipStream_t stream, const void *send_buff, void *recv_buff) {
 
     int num_workitems = 0, num_workgroups = 0;
 

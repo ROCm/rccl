@@ -5,8 +5,6 @@ All rights reserved.
 
 #pragma once
 
-#include "rcclReduceDeviceOps.h"
-
 //
 // This file declares kernels for reduce-scatter op
 //
@@ -17,7 +15,7 @@ All rights reserved.
 // and store it in current gpu buffer
 //
 template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
-__global__ void RcclKernelScalarReduceScatter(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, int rank, int count) {
+__global__ void RcclKernelScalarReduceScatter(RingNode_t* pcurr_track, const void* send_buff, void* recv_buff, int rank, int count) {
     unsigned tx = threadIdx.x;
     unsigned bx = blockIdx.x;
     unsigned tid = tx + bx * knum_workitems;
@@ -34,7 +32,7 @@ __global__ void RcclKernelScalarReduceScatter(DeviceControl_t* pcurr_track, cons
         DataType_t* curr_buff = reinterpret_cast<DataType_t*>((void*)send_buff) + rank * count;
         DataType_t* dest_buff = reinterpret_cast<DataType_t*>(recv_buff);
 
-        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+        RingNode_t* pnext_track = pcurr_track->next_gpu;
 
         if(pnext_track != pcurr_track) {
 

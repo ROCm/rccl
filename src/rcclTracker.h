@@ -39,11 +39,11 @@ constexpr unsigned knum_vectors_per_workgroup = 1024;
 // data structure used to track details about peer gpus.
 // It is allocated as pinned host memory visible to all the gpus
 //
-struct DeviceControl_t {
-    // point to DeviceControl_t owned by previous gpu in clique
-    struct DeviceControl_t *prev_gpu;
-    // point to DeviceControl_t owned by next gpu in clique
-    struct DeviceControl_t *next_gpu;
+struct RingNode_t {
+    // point to RingNode_t owned by previous gpu in clique
+    struct RingNode_t *prev_gpu;
+    // point to RingNode_t owned by next gpu in clique
+    struct RingNode_t *next_gpu;
     // we use atomic data type to store pointer to buffers
     // on a gpu, as there are multiple readers (all peer gpus)
     // and single writer (current gpu)
@@ -65,10 +65,10 @@ struct DeviceControl_t {
 struct RcclComm_t;
 
 //
-// pool data structure used to store all DeviceControl_t
+// pool data structure used to store all RingNode_t
 // data structures and track rcclComm_t accordingly
 //
-class DevTrackerPool_t{
+class RingNodePool_t {
 private:
     // stores an array of device indices user provided
     // we allocate memory, do memcpy from user buffer
@@ -81,34 +81,34 @@ public:
     // active in pool. Used to know when we can
     // destroy the pool and all data structures
     int active_devices_;
-    // used to track DeviceControl_t structures for each gpu
-    std::map<size_t, DeviceControl_t*> pool_;
-    DevTrackerPool_t() : device_indices_(nullptr), num_devices_(0) {}
-    ~DevTrackerPool_t() {
+    // used to track RingNode_t structures for each gpu
+    std::map<size_t, RingNode_t*> pool_;
+    RingNodePool_t() : device_indices_(nullptr), num_devices_(0) {}
+    ~RingNodePool_t() {
         delete device_indices_;
     }
     // construction is initialization
-    DevTrackerPool_t(const int *device_indices_, int num_devices_);
+    RingNodePool_t(const int *device_indices_, int num_devices_);
     // when a new device is added to clique,
     // return corresponding RcclComm_t structure
     RcclComm_t *AddDevice(int device, int rank, int ndev);
     void PrintAll();
-    // given a device index, get DeviceControl_t structure
-    DeviceControl_t *GetPoolByDeviceIndex(int device_index);
+    // given a device index, get RingNode_t structure
+    RingNode_t *GetPoolByDeviceIndex(int device_index);
 };
 
 // internal representation of rcclComm_t
 // for structure is allocated for each gpu,
 // tracks,
-// 1. the DeviceControl_t pool where it belongs to
+// 1. the RingNode_t pool where it belongs to
 // 2. tracker corresponding to gpu
 // 3. number of devices in the pool
 // 4. device index it is associated to
 // 5. rank of gpu in clique
 struct RcclComm_t {
 public:
-    DevTrackerPool_t *pool_;
-    DeviceControl_t *track_;
+    RingNodePool_t *pool_;
+    RingNode_t *track_;
     hipStream_t stream_;
     hipEvent_t event_;
     int this_time_;
@@ -120,7 +120,7 @@ public:
     }
 };
 
-DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
+RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices) :
         num_devices_(num_devices), active_devices_(num_devices) {
 
     // store users device index
@@ -132,7 +132,7 @@ DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
     device_indices_ = new int[num_devices_];
     memcpy(device_indices_, device_indices, num_devices_*sizeof(int));
 
-    struct DeviceControl_t *pdctl;
+    struct RingNode_t *pdctl;
 
     std::atomic<int>* bar_in, *bar_out, *times_done;
 
@@ -144,10 +144,10 @@ DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
     std::atomic_store_explicit(bar_out, 0, std::memory_order_seq_cst);
     std::atomic_store_explicit(times_done, 0, std::memory_order_seq_cst);
 
-    // allocate DeviceControl_t as system pinned memory for gpu
+    // allocate RingNode_t as system pinned memory for gpu
     // and add its hip device index
     for(int i = 0; i < num_devices_;i ++){
-        HIPCHECK(hipHostMalloc(&pdctl, sizeof(DeviceControl_t), hipHostMallocCoherent));
+        HIPCHECK(hipHostMalloc(&pdctl, sizeof(RingNode_t), hipHostMallocCoherent));
         pool_[i] = pdctl;
         pool_[i]->prev_gpu = nullptr;
         pool_[i]->next_gpu = nullptr;
@@ -184,15 +184,15 @@ DevTrackerPool_t::DevTrackerPool_t(const int* device_indices, int num_devices) :
 }
 
 
-RcclComm_t* DevTrackerPool_t::AddDevice(int device, int rank, int ndev) {
+RcclComm_t* RingNodePool_t::AddDevice(int device, int rank, int ndev) {
     RcclComm_t* ret_comm = new RcclComm_t;
     num_devices_ = ndev;
     ret_comm->num_devices_ = ndev;
     ret_comm->device_ = device;
     ret_comm->rank_ = rank;
     ret_comm->stream_ = NULL;
-    struct DeviceControl_t *pdctl;
-    HIPCHECK(hipHostMalloc(&pdctl, sizeof(DeviceControl_t), hipHostMallocCoherent));
+    struct RingNode_t *pdctl;
+    HIPCHECK(hipHostMalloc(&pdctl, sizeof(RingNode_t), hipHostMallocCoherent));
     pdctl->src_buffer = 0;
     pdctl->dst_buffer = 0;
     pdctl->prev_gpu = nullptr;
@@ -217,7 +217,7 @@ RcclComm_t* DevTrackerPool_t::AddDevice(int device, int rank, int ndev) {
     return ret_comm;
 }
 
-void DevTrackerPool_t::PrintAll() {
+void RingNodePool_t::PrintAll() {
     for(int i = 0; i < num_devices_; i++) {
         std::cout<<"On Device: "<<device_indices_[i]<<std::endl;
         std::cout<<pool_[i]->prev_gpu<<std::endl;
@@ -227,7 +227,7 @@ void DevTrackerPool_t::PrintAll() {
     }
 }
 
-struct DeviceControl_t* DevTrackerPool_t::GetPoolByDeviceIndex(int device_index) {
+struct RingNode_t* RingNodePool_t::GetPoolByDeviceIndex(int device_index) {
     for(int i = 0; i < num_devices_; i++) {
         if(device_index == device_indices_[i]) {
             return pool_[i];

@@ -14,7 +14,7 @@ extern int RCCL_TRACE_RT;
 //
 
 template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
-void RcclInternalReduceScatter(DeviceControl_t* pcurr_track, int rank, int count, hipStream_t stream, const void* send_buff, void* recv_buff) {
+void RcclInternalReduceScatter(RingNode_t* pcurr_track, int rank, int count, hipStream_t stream, const void* send_buff, void* recv_buff) {
 
     int num_workitems = 0, num_workgroups = 0;
 

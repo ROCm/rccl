@@ -10,14 +10,13 @@ All rights reserved.
 //
 
 #include "rcclDataTypes.h"
-#include "rcclReduceDeviceOps.h"
 
 //
 // This kernel does reduce on all source pointers from devices in clique and store in local buffer.
 // Launched on only root gpu
 //
 template<typename DataType_t, rcclRedOp_t Op>
-__global__ void RcclKernelScalarReduce(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned count) {
+__global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned count) {
     unsigned tx = threadIdx.x;
     unsigned bx = blockIdx.x;
     unsigned tid = tx + bx * 1024;
@@ -30,7 +29,7 @@ __global__ void RcclKernelScalarReduce(DeviceControl_t* pcurr_track, const void*
     DataType_t* dest_buff = reinterpret_cast<DataType_t*>(recv_buff);
 
     // get next gpus tracker
-    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+    RingNode_t* pnext_track = pcurr_track->next_gpu;
 
     // get data from buffers in present gpu and immediate peer
     // do reduce op and store in destination buffer on present gpu
@@ -95,12 +94,12 @@ __global__ void RcclKernelScalarReduce(DeviceControl_t* pcurr_track, const void*
 
 // operate on scalars, algorithms used is same as VectorType_t
 template<typename DataType_t, rcclRedOp_t Op>
-__global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned offset, unsigned num_scalars) {
+__global__ void RcclKernelReduce(RingNode_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned offset, unsigned num_scalars) {
     unsigned tx = threadIdx.x;
     DataType_t* curr_buff = reinterpret_cast<DataType_t*>((void*)send_buff) + offset;
     DataType_t* dest_buff = reinterpret_cast<DataType_t*>(recv_buff);
 
-    DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+    RingNode_t* pnext_track = pcurr_track->next_gpu;
 
     if(pnext_track != pcurr_track) {
          // wait until the peer gpus source buffer is set
@@ -163,7 +162,7 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
 // Disabled as its hard to do reduction on trail data
 #if 0
 template<typename DataType_t, typename VectorType_t, rcclRedOp_t Op>
-__global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned trail, unsigned num_blocks) {
+__global__ void RcclKernelReduce(RingNode_t* pcurr_track, const void* send_buff, void* recv_buff, unsigned trail, unsigned num_blocks) {
     unsigned tx = threadIdx.x;
     unsigned bx = blockIdx.x;
 
@@ -172,7 +171,7 @@ __global__ void RcclKernelReduce(DeviceControl_t* pcurr_track, const void* send_
     VectorType_t *curr_buff = reinterpret_cast<VectorType_t*>((void*)send_buff);
     VectorType_t *dest_buff = reinterpret_cast<VectorType_t*>(recv_buff);
 
-    DeviceControl_t *pnext_track = pcurr_track->next_gpu;
+    RingNode_t *pnext_track = pcurr_track->next_gpu;
 
     if(pnext_track != pcurr_track) {
         while(std::atomic_load_explicit(&(pnext_track->src_buffer), std::memory_order_seq_cst) == 0) {}

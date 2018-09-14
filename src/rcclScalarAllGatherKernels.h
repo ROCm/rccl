@@ -13,7 +13,7 @@ All rights reserved.
 // This kernel does data copy from all peer gpu buffers to current gpu buffer
 //
 template<typename DataType_t, typename VectorType_t>
-__global__ void RcclKernelScalarAllGather(DeviceControl_t* pcurr_track, const void* send_buff, void* recv_buff, int rank, int count) {
+__global__ void RcclKernelScalarAllGather(RingNode_t* pcurr_track, const void* send_buff, void* recv_buff, int rank, int count) {
     unsigned tx = threadIdx.x;
     unsigned bx = blockIdx.x;
     unsigned tid = tx + bx * knum_workitems;
@@ -33,7 +33,7 @@ __global__ void RcclKernelScalarAllGather(DeviceControl_t* pcurr_track, const vo
 
         dest_buff[tid] = curr_buff[tid];
 
-        DeviceControl_t* pnext_track = pcurr_track->next_gpu;
+        RingNode_t* pnext_track = pcurr_track->next_gpu;
 
         while(pnext_track != pcurr_track) {
 
