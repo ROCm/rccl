@@ -13,7 +13,7 @@ All rights reserved.
 template<typename T>
 inline bool cmp(T left, T right);
 
-#define EPSF    1e-5
+#define EPSF    1e-5f
 #define EPS     1e-5
 template<>
 inline bool cmp(float left, float right) {

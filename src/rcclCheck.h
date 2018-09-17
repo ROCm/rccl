@@ -9,18 +9,19 @@ All rights reserved.
 // proper error description rather than
 // printing just error code.
 
-#include "rccl/rccl.h"
 #include <iostream>
+#include "rccl/rccl.h"
 
-#define HIPCHECK(status) \
-    if(status != hipSuccess) { \
-        std::cout<<"Got: "<<hipGetErrorString(status)<<" at: "<<__LINE__<<" in file: "<<__FILE__<<std::endl; \
+#define HIPCHECK(status)                                             \
+    if (status != hipSuccess) {                                      \
+        std::cout << "Got: " << hipGetErrorString(status)            \
+                  << " at: " << __LINE__ << " in file: " << __FILE__ \
+                  << std::endl;                                      \
     }
 
-
-
-#define RCCLCHECK(status) \
-    if(status != rcclSuccess) { \
-        std::cout<<"Got: "<<rcclGetErrorString(status)<<" at: "<<__LINE__<<" in file: "<<__FILE__<<std::endl; \
+#define RCCLCHECK(status)                                            \
+    if (status != rcclSuccess) {                                     \
+        std::cout << "Got: " << rcclGetErrorString(status)           \
+                  << " at: " << __LINE__ << " in file: " << __FILE__ \
+                  << std::endl;                                      \
     }
-

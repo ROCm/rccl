@@ -1,22 +1,41 @@
 /*
-Copyright (c) 2017-Present Advanced Micro Devices, Inc. 
+Copyright (c) 2017-Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
 #pragma once
 
+#include "rcclBarrierKernels.h"
 #include "rcclScalarBroadcastKernels.h"
 
 //
 // The code here figures out the launch parameters for broadcast op
 //
 
-template<typename DataType_t, typename VectorType_t>
-void RcclInternalBroadcast(DeviceControl_t* pcurr_track, int count, hipStream_t stream, void* send_buff) {
+//
+// The root does not do the copy
+//
+void RcclInternalBroadcastRoot(RingNode_t* pcurr_track, hipStream_t stream,
+                               void* send_buff, int* this_time, int num_gpus) {
+    hipLaunchKernelGGL((RcclKernelSetSrcPtr), dim3(1, 1, 1), dim3(1, 1, 1), 0,
+                       stream, pcurr_track, send_buff);
+    int barrier_value = *this_time;
+    // wait until root gpu sets its source pointer
+    hipLaunchKernelGGL((RcclKernelBarrierWait), dim3(1, 1, 1), dim3(1, 1, 1), 0,
+                       stream, pcurr_track, barrier_value++, num_gpus);
+    // wait until everyone is finish reading
+    hipLaunchKernelGGL((RcclKernelBarrierWait), dim3(1, 1, 1), dim3(1, 1, 1), 0,
+                       stream, pcurr_track, barrier_value++, num_gpus);
+    *this_time = barrier_value;
+}
 
+template <typename DataType_t>
+void RcclInternalBroadcast(RingNode_t* pcurr_track, RingNode_t* proot_track,
+                           int count, hipStream_t stream, void* recv_buff,
+                           int* this_time, int num_gpus) {
     int num_workitems = 0, num_workgroups = 0;
 
-    if(count > knum_workitems) { // knum_workitems = 1024
+    if (count > knum_workitems) {  // knum_workitems = 1024
         num_workitems = knum_workitems;
         num_workgroups = count / knum_workitems + 1;
     } else {
@@ -24,15 +43,20 @@ void RcclInternalBroadcast(DeviceControl_t* pcurr_track, int count, hipStream_t 
         num_workgroups = 1;
     }
 
-    if((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
-        int dev;
-        hipGetDevice(&dev);
-        fprintf(stderr, "%s<<<rccl-kernel: RcclKernelScalarBroadcast rccl-device:%d num_workgroups:%d num_workitems:%d stream:%p pcurr_track:%p send_buff:%p count:%d%s\n", KBLU, dev, num_workgroups, num_workitems, stream, pcurr_track, send_buff, count, KNRM);
-    }
+    int barrier_value = *this_time;
 
-    hipLaunchKernelGGL((RcclKernelScalarBroadcast<DataType_t, VectorType_t>), dim3(num_workgroups, 1, 1), dim3(num_workitems, 1, 1), 0, stream, pcurr_track, send_buff, count);
+    // wait until root gpu sets its source pointer
+    hipLaunchKernelGGL((RcclKernelBarrierWait), dim3(1, 1, 1), dim3(1, 1, 1), 0,
+                       stream, pcurr_track, barrier_value++, num_gpus);
 
-    if((RCCL_TRACE_RT * krccl_print_kernel) == krccl_print_kernel) {
-        fprintf(stderr, "%s<<<rccl-kernel: RcclKernelScalarBroadcast %s\n", KBLU, KNRM);
-    }
+    // read data from root gpu
+    hipLaunchKernelGGL((RcclKernelScalarCopyFromRoot<DataType_t>),
+                       dim3(num_workgroups, 1, 1), dim3(num_workitems, 1, 1), 0,
+                       stream, proot_track, recv_buff, count);
+
+    // wait until everyone finishes reading
+    hipLaunchKernelGGL((RcclKernelBarrierWait), dim3(1, 1, 1), dim3(1, 1, 1), 0,
+                       stream, pcurr_track, barrier_value++, num_gpus);
+
+    *this_time = barrier_value;
 }
