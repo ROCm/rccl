@@ -6,6 +6,7 @@ All rights reserved.
 #pragma once
 
 #include "rcclScalarBroadcastKernels.h"
+#include "rcclBarrierKernels.h"
 
 //
 // The code here figures out the launch parameters for broadcast op

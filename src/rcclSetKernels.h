@@ -16,8 +16,10 @@ __global__ void RcclKernelSetSrcPtr(RingNode_t* pcurr_track, void* send_buff) {
 // RingNode_t::dst_buffer is set to buffer pointer for a gpu
 //
 __global__ void RcclKernelSetDstPtr(RingNode_t* pcurr_track, void* recv_buff) {
-    unsigned tx = threadIdx.x;
-    if(tx == 0) {
-        std::atomic_store_explicit(&(pcurr_track->dst_buffer), recv_buff, std::memory_order_seq_cst);
-    }
+    std::atomic_store_explicit(&(pcurr_track->dst_buffer), recv_buff, std::memory_order_seq_cst);
+}
+
+__global__ void RcclKernelSetSrcDstPtr(RingNode_t* pcurr_track, void* send_buff, void* recv_buff) {
+    std::atomic_store_explicit(&(pcurr_track->src_buffer), send_buff, std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(pcurr_track->dst_buffer), recv_buff, std::memory_order_seq_cst);
 }

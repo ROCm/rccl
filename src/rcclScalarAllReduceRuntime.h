@@ -6,6 +6,7 @@ All rights reserved.
 #pragma once
 
 #include "rcclScalarAllReduceKernels.h"
+#include "rcclBarrierKernels.h"
 
 //
 // The code here launches multiple kernels to make allreduce op done
@@ -53,7 +54,7 @@ void RcclInternalAllReduce(RingNode_t *pcurr_track, const void* send_buff, void*
     int barrier_value = *this_time;
 
     // Set source and destination buffers for current gpu
-    hipLaunchKernelGGL(RcclKernelSetSrcDstBuffer, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, (void*)send_buff, recv_buff);
+    hipLaunchKernelGGL(RcclKernelSetSrcDstPtr, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, (void*)send_buff, recv_buff);
 
     // Wait using multi-gpu barrier until all the gpus set their source and destination buffers
     hipLaunchKernelGGL(RcclKernelBarrierWait, dim3(1,1,1), dim3(1,1,1), 0, stream, pcurr_track, barrier_value++, num_gpus);
