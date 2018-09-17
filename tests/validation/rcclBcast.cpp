@@ -87,6 +87,7 @@ void DoBcast(std::vector<int>& device_list, std::vector<hipStream_t>& device_str
         HIPCHECK(hipSetDevice(device_list[i]));
         HIPCHECK(hipStreamSynchronize(device_streams[i]));
     }
+
     for(size_t i = 0; i < num_gpus; i++) {
         HIPCHECK(hipSetDevice(root));
         HIPCHECK(hipMemcpy(dst_host_buffers[i], src_device_buffers[i], buff_size, hipMemcpyDeviceToHost));

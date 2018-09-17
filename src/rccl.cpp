@@ -566,3 +566,4 @@ rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root,
     PostEnqueueEventRecord(pcomm, stream);
     return rcclSuccess;
 }
+
