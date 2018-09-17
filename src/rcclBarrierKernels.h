@@ -5,6 +5,8 @@ All rights reserved.
 
 #pragma once
 
+#include "rcclTracker.h"
+
 //
 // This file declares kernels for barriers
 //

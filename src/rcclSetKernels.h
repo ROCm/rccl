@@ -5,6 +5,8 @@ All rights reserved.
 
 #pragma once
 
+#include "rcclTracker.h"
+
 //
 // RingNode_t::src_buffer is set to buffer pointers for a gpu
 //
