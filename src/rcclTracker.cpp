@@ -5,6 +5,30 @@ All rights reserved.
 
 #include "rcclTracker.h"
 
+RingNodePool_t::RingNodePool_t() {
+    num_devices_ = 0;
+    active_devices_ = 0;
+    device_indices_ = nullptr;
+
+    HIPCHECK(
+        hipHostMalloc(&barrier_, sizeof(Barrier_t), hipHostMallocCoherent));
+
+    std::atomic_store_explicit(&(barrier_->bar_in), 0,
+                               std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(barrier_->bar_out), 0,
+                               std::memory_order_seq_cst);
+    std::atomic_store_explicit(&(barrier_->times_done), 0,
+                               std::memory_order_seq_cst);
+}
+
+RingNodePool_t::~RingNodePool_t() {
+    if (device_indices_ != nullptr) {
+        delete device_indices_;
+        device_indices_ = nullptr;
+    }
+    HIPCHECK(hipHostFree(barrier_));
+}
+
 RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
     : num_devices_(num_devices), active_devices_(num_devices) {
     // store users device index
@@ -18,15 +42,14 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
 
     struct RingNode_t* pdctl;
 
-    struct Barrier_t* barrier;
+    HIPCHECK(
+        hipHostMalloc(&barrier_, sizeof(Barrier_t), hipHostMallocCoherent));
 
-    HIPCHECK(hipHostMalloc(&barrier, sizeof(Barrier_t), hipHostMallocCoherent));
-
-    std::atomic_store_explicit(&(barrier->bar_in), 0,
+    std::atomic_store_explicit(&(barrier_->bar_in), 0,
                                std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(barrier->bar_out), 0,
+    std::atomic_store_explicit(&(barrier_->bar_out), 0,
                                std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(barrier->times_done), 0,
+    std::atomic_store_explicit(&(barrier_->times_done), 0,
                                std::memory_order_seq_cst);
 
     // allocate RingNode_t as system pinned memory for gpu
@@ -40,27 +63,11 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
         pool_[i]->hip_current_device_index = device_indices_[i];
         pool_[i]->src_buffer = nullptr;
         pool_[i]->dst_buffer = nullptr;
-        pool_[i]->barrier = barrier;
+        pool_[i]->barrier = barrier_;
         pool_[i]->rank = i;
     }
 
-    // create a ring of trackers
-    pdctl = nullptr;  // reuse later.
-    HIPCHECK(hipHostGetDevicePointer((void**)&pdctl, pool_[0], 0));
-    if (num_devices_ != 1) {
-        pool_[1]->prev_gpu = pdctl;
-    } else {
-        pool_[0]->prev_gpu = pdctl;
-    }
-
-    pool_[num_devices_ - 1]->next_gpu = pdctl;
-
-    for (unsigned i = 1; i < num_devices_; i++) {
-        HIPCHECK(hipSetDevice(device_indices_[i]));
-        HIPCHECK(hipHostGetDevicePointer((void**)&pdctl, pool_[i], 0));
-        pool_[(i + 1) % num_devices_]->prev_gpu = pdctl;
-        pool_[(i - 1) % num_devices_]->next_gpu = pdctl;
-    }
+    ResetGpuRing();
 
     // restore users hip device index
     HIPCHECK(hipSetDevice(user_device_index));
@@ -68,18 +75,29 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
 
 RcclComm_t* RingNodePool_t::AddDevice(int device, int rank, int ndev) {
     RcclComm_t* ret_comm = new RcclComm_t;
+    active_devices_++;
     num_devices_ = ndev;
     ret_comm->num_devices_ = ndev;
     ret_comm->device_ = device;
     ret_comm->rank_ = rank;
     ret_comm->stream_ = NULL;
+    ret_comm->this_time_ = 0;
     struct RingNode_t* pdctl;
     HIPCHECK(hipHostMalloc(&pdctl, sizeof(RingNode_t), hipHostMallocCoherent));
-    pdctl->src_buffer = 0;
-    pdctl->dst_buffer = 0;
+    HIPCHECK(
+        hipEventCreateWithFlags(&ret_comm->event_, hipEventReleaseToSystem));
+
     pdctl->prev_gpu = nullptr;
     pdctl->next_gpu = nullptr;
+
+    pdctl->src_buffer = nullptr;
+    pdctl->dst_buffer = nullptr;
+
     pdctl->hip_current_device_index = device;
+
+    pdctl->barrier = barrier_;
+
+    pdctl->rank = rank;
 
     if (pool_.find(rank) != pool_.end()) {
         // clean existing entry
@@ -87,16 +105,31 @@ RcclComm_t* RingNodePool_t::AddDevice(int device, int rank, int ndev) {
         pool_[rank] = pdctl;
     }
 
-    if (pool_.size() == ndev) {
-        pool_[1]->prev_gpu = pool_[0];
-        pool_[ndev - 1]->next_gpu = pool_[0];
-        for (int i = 1; i < ndev; i++) {
-            pool_[(i + 1) % ndev]->prev_gpu = pool_[i];
-            pool_[(i - 1) % ndev]->next_gpu = pool_[i];
-        }
-    }
+    ResetGpuRing();
+
     ret_comm->track_ = pdctl;
     return ret_comm;
+}
+
+void RingNodePool_t::ResetGpuRing() {
+    auto iter_before = pool_.begin();
+    auto iter_after = iter_before;
+    for (iter_after++; iter_after != pool_.end(); iter_before++, iter_after++) {
+        iter_before->second->next_gpu = iter_after->second;
+        iter_after->second->prev_gpu = iter_before->second;
+    }
+
+    pool_.rbegin()->second->next_gpu = pool_.begin()->second;
+    pool_.begin()->second->prev_gpu = pool_.rbegin()->second;
+}
+
+void RingNodePool_t::RemoveDevice(RcclComm_t* pcomm) {
+    for (auto iter = pool_.begin(); iter != pool_.end(); iter++) {
+        std::cout << iter->first << std::endl;
+    }
+    int rank = pcomm->rank_;
+    pool_.erase(rank);
+    ResetGpuRing();
 }
 
 void RingNodePool_t::PrintAll() {
