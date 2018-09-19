@@ -20,65 +20,40 @@ __global__ void RcclKernelScalarAllReduce(RingNode_t* pcurr_track,
     int bx = blockIdx.x;
     int tid = tx + bx * knum_vectors_per_workgroup;
 
+    // get pointers to current gpu source and destination buffers
     DataType_t* curr_dst_buff = reinterpret_cast<DataType_t*>(recv_buff);
     DataType_t* curr_src_buff = reinterpret_cast<DataType_t*>((void*)send_buff);
 
+    // use only count number of workitems to do the reduction operation
     if (tid < count) {
         // get peer gpu tracker
         RingNode_t* pnext_track = pcurr_track->next_gpu;
 
+        // find absolute index the gpu operates on
         int index = tid + offset;
 
-        if (pnext_track != pcurr_track) {
-            DataType_t* next_src_buff =
-                reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
-                    &(pnext_track->src_buffer), std::memory_order_seq_cst));
-
-            if (Op == rcclSum)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] + next_src_buff[index];
-            if (Op == rcclProd)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] * next_src_buff[index];
-            if (Op == rcclMax)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] > next_src_buff[index]
-                        ? curr_src_buff[index]
-                        : next_src_buff[index];
-            if (Op == rcclMin)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] < next_src_buff[index]
-                        ? curr_src_buff[index]
-                        : next_src_buff[index];
-
-            pnext_track = pnext_track->next_gpu;
-        }
+        DataType_t result = curr_src_buff[index];
 
         while (pnext_track != pcurr_track) {
             DataType_t* next_src_buff =
                 reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
                     &(pnext_track->src_buffer), std::memory_order_seq_cst));
 
-            if (Op == rcclSum)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] + next_src_buff[index];
-            if (Op == rcclProd)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] * next_src_buff[index];
+            if (Op == rcclSum) result = result + next_src_buff[index];
+            if (Op == rcclProd) result = result * next_src_buff[index];
             if (Op == rcclMax)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] > next_src_buff[index]
-                        ? curr_dst_buff[index]
-                        : next_src_buff[index];
+                result = result > next_src_buff[index] ? result
+                                                       : next_src_buff[index];
             if (Op == rcclMin)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] < next_src_buff[index]
-                        ? curr_dst_buff[index]
-                        : next_src_buff[index];
+                result = result < next_src_buff[index] ? result
+                                                       : next_src_buff[index];
 
             pnext_track = pnext_track->next_gpu;
         }
+
+        curr_dst_buff[index] = result;
     }
+
     __syncthreads();
 }
 

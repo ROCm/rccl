@@ -27,6 +27,9 @@ cmake_minimum_required( VERSION 2.8.12 )
 
 add_library( rccl
     rccl.cpp
+    rcclAllReduce.cpp
+    rcclBcast.cpp
+    rcclReduce.cpp
     )
 
 target_link_libraries( rccl PRIVATE hip::hip_hcc ${hcc_LIBRARIES} )
