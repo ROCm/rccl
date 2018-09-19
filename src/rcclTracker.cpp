@@ -67,23 +67,7 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
         pool_[i]->rank = i;
     }
 
-    // create a ring of trackers
-    pdctl = nullptr;  // reuse later.
-    HIPCHECK(hipHostGetDevicePointer((void**)&pdctl, pool_[0], 0));
-    if (num_devices_ != 1) {
-        pool_[1]->prev_gpu = pdctl;
-    } else {
-        pool_[0]->prev_gpu = pdctl;
-    }
-
-    pool_[num_devices_ - 1]->next_gpu = pdctl;
-
-    for (unsigned i = 1; i < num_devices_; i++) {
-        HIPCHECK(hipSetDevice(device_indices_[i]));
-        HIPCHECK(hipHostGetDevicePointer((void**)&pdctl, pool_[i], 0));
-        pool_[(i + 1) % num_devices_]->prev_gpu = pdctl;
-        pool_[(i - 1) % num_devices_]->next_gpu = pdctl;
-    }
+    ResetGpuRing();
 
     // restore users hip device index
     HIPCHECK(hipSetDevice(user_device_index));
@@ -121,17 +105,31 @@ RcclComm_t* RingNodePool_t::AddDevice(int device, int rank, int ndev) {
         pool_[rank] = pdctl;
     }
 
-    if (pool_.size() == ndev) {
-        pool_[1]->prev_gpu = pool_[0];
-        pool_[ndev - 1]->next_gpu = pool_[0];
-        for (int i = 1; i < ndev; i++) {
-            pool_[(i + 1) % ndev]->prev_gpu = pool_[i];
-            pool_[(i - 1) % ndev]->next_gpu = pool_[i];
-        }
-    }
+    ResetGpuRing();
 
     ret_comm->track_ = pdctl;
     return ret_comm;
+}
+
+void RingNodePool_t::ResetGpuRing() {
+    auto iter_before = pool_.begin();
+    auto iter_after = iter_before;
+    for (iter_after++; iter_after != pool_.end(); iter_before++, iter_after++) {
+        iter_before->second->next_gpu = iter_after->second;
+        iter_after->second->prev_gpu = iter_before->second;
+    }
+
+    pool_.rbegin()->second->next_gpu = pool_.begin()->second;
+    pool_.begin()->second->prev_gpu = pool_.rbegin()->second;
+}
+
+void RingNodePool_t::RemoveDevice(RcclComm_t* pcomm) {
+    for (auto iter = pool_.begin(); iter != pool_.end(); iter++) {
+        std::cout << iter->first << std::endl;
+    }
+    int rank = pcomm->rank_;
+    pool_.erase(rank);
+    ResetGpuRing();
 }
 
 void RingNodePool_t::PrintAll() {

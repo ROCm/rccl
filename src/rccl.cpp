@@ -211,11 +211,7 @@ rcclResult_t rcclCommDestroy(rcclComm_t comm) {
                 comm, API_COLOR_END);
     }
     RcclComm_t *pcomm = comm;
-    pcomm->pool_->active_devices_--;
-    if (pcomm->pool_->active_devices_ == 0) {
-        delete pcomm->pool_;
-    }
-    HIPCHECK(hipEventDestroy(pcomm->event_));
+    pcomm->pool_->RemoveDevice(pcomm);
     delete pcomm;
     return rcclSuccess;
 }

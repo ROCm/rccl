@@ -43,6 +43,9 @@ int main(int argc, char* argv[]) {
         RCCLCHECK(rcclCommInitRank(&comms2[i], numGpus, id2, i));
     }
 
+    RCCLCHECK(rcclCommDestroy(comms2[0]));
+    RCCLCHECK(rcclCommInitRank(&comms2[0], numGpus, id2, 0));
+
     HIPCHECK(hipSetDevice(devs[0]));
 
     T* hSrc = new T[LEN];
