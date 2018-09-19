@@ -15,9 +15,6 @@ comm:
 	mkdir -p bin
 	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclCommBcast.cpp -L$(RCCL_LIB) -lrccl -o ./bin/commBcast
 
-allgather:
-	mkdir -p bin
-	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclAllGather.cpp -L$(RCCL_LIB) -lrccl -o ./bin/allgather
 
 allreduce:
 	mkdir -p bin
@@ -26,10 +23,6 @@ allreduce:
 reduce:
 	mkdir -p bin
 	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclReduce.cpp -L$(RCCL_LIB) -lrccl -o ./bin/reduce
-
-reducescatter:
-	mkdir -p bin
-	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclReduceScatter.cpp -L$(RCCL_LIB) -lrccl -o ./bin/reducescatter
 
 multistream:
 	mkdir -p bin

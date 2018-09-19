@@ -215,12 +215,15 @@ rcclResult_t rcclCommDestroy(rcclComm_t comm) {
     if (pcomm->pool_->active_devices_ == 0) {
         delete pcomm->pool_;
     }
+    HIPCHECK(hipEventDestroy(pcomm->event_));
     delete pcomm;
     return rcclSuccess;
 }
 
 void PostEnqueueEventRecord(RcclComm_t *pcomm, hipStream_t stream) {
-    hipEventRecord(pcomm->event_, stream);
+    if (stream != pcomm->stream_) {
+        hipEventRecord(pcomm->event_, stream);
+    }
 }
 
 void PreEnqueueEventRecord(RcclComm_t *pcomm, hipStream_t stream) {

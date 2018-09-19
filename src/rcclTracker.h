@@ -78,6 +78,8 @@ class RingNodePool_t {
     // number of devices a pool is created for
     int num_devices_;
 
+    Barrier_t* barrier_;
+
   public:
     // counter to track how many devices are
     // active in pool. Used to know when we can
@@ -85,10 +87,13 @@ class RingNodePool_t {
     int active_devices_;
     // used to track RingNode_t structures for each gpu
     std::map<size_t, RingNode_t*> pool_;
-    RingNodePool_t() : device_indices_(nullptr), num_devices_(0) {}
-    ~RingNodePool_t() { delete device_indices_; }
+
+    ~RingNodePool_t();
     // construction is initialization
     RingNodePool_t(const int* device_indices_, int num_devices_);
+
+    RingNodePool_t();
+
     // when a new device is added to clique,
     // return corresponding RcclComm_t structure
     RcclComm_t* AddDevice(int device, int rank, int ndev);

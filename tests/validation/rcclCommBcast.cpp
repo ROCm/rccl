@@ -27,14 +27,15 @@ int main(int argc, char* argv[]) {
         devs[i] = i;
     }
 
-    rcclUniqueId id1, id2;
+    rcclUniqueId id2;
+/*
     RCCLCHECK(rcclGetUniqueId(&id1));
     std::vector<rcclComm_t> comms1(numGpus);
     for(int i=0;i<numGpus;i++) {
         HIPCHECK(hipSetDevice(i));
         RCCLCHECK(rcclCommInitRank(&comms1[i], numGpus, id1, i));
     }
-
+*/
     RCCLCHECK(rcclGetUniqueId(&id2));
     std::vector<rcclComm_t> comms2(numGpus);
     for(int i=0;i<numGpus;i++) {
