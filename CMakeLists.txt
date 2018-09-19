@@ -46,7 +46,7 @@ list(APPEND CMAKE_PREFIX_PATH /opt/rocm /opt/rocm/hip /opt/rocm/hcc)
 
 find_package(hip REQUIRED)
 
-link_libraries(-amdgpu-target=gfx803 -amdgpu-target=gfx900)
+link_libraries(-amdgpu-target=gfx803 -amdgpu-target=gfx900 -amdgpu-target=gfx906)
 
 option( BUILD_SHARED_LIBS "Build as a shared library" ON )
 

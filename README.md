@@ -8,8 +8,6 @@ RCCL (rickle) is implementation of MPI communication apis on ROCm enabled GPUs. 
 1. AllReduce
 2. Broadcast
 3. Reduce
-4. ReduceScatter
-5. AllGather
 
 ## Requirements
 1. ROCm supported GPUs
