@@ -77,6 +77,8 @@ rcclResult_t rcclAllReduce(const void* sendbuff, void* recvbuff, int count, rccl
 
 rcclResult_t rcclBcast(void* buff, int count, rcclDataType_t datatype, int root, rcclComm_t comm, hipStream_t stream);
 
+rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count, rcclDataType_t datatype, rcclRedOp_t op, int root, rcclComm_t comm, hipStream_t stream);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

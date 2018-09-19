@@ -52,6 +52,10 @@ option( BUILD_SHARED_LIBS "Build as a shared library" ON )
 
 add_library( rccl
     src/rccl.cpp
+    src/rcclAllReduce.cpp
+    src/rcclBcast.cpp
+    src/rcclReduce.cpp
+    src/rcclTracker.cpp
     )
 
 if( TARGET hip::device )

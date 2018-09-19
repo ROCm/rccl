@@ -2,15 +2,12 @@ RCCL_INSTALL_DIR=/opt/rocm/rccl
 HIP_DIR=/opt/rocm/hip
 HCC_DIR=/opt/rocm/hcc
 TARGETS=--amdgpu-target=gfx803 --amdgpu-target=gfx900
+SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp
+
 all: lib
 
-
 lib:
-	${HCC_DIR}/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `${HCC_DIR}/bin/hcc-config --shared --cxxflags --ldflags` -L${HIP_DIR}/lib -lhip_device -lhip_hcc rccl.cpp -o librccl.so
-
-
-lib-debug:
-	${HCC_DIR}/bin/hcc -I../inc ${TARGETS} -DRCCL_DEBUG=1 -I${HIP_DIR}/include `${HCC_DIR}/bin/hcc-config --shared --cxxflags --ldflags` -L${HIP_DIR}/lib -lhip_device rccl.cpp -o librccl.so
+	${HCC_DIR}/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `${HCC_DIR}/bin/hcc-config --shared --cxxflags --ldflags` -L${HIP_DIR}/lib -lhip_device -lhip_hcc $(SRC) -o librccl.so
 
 install:
 	mkdir -p $(RCCL_INSTALL_DIR)
