@@ -19,12 +19,12 @@ __global__ void RcclKernelBarrierWait(RingNode_t* pcurr_track, int this_time,
     }
 
     int old_val =
-        pcurr_track->barrier->bar_in.fetch_add(1, std::memory_order_seq_cst);
+        pcurr_track->barrier->bar_in.fetch_add(val, std::memory_order_seq_cst);
 
     while (std::atomic_load_explicit(&(pcurr_track->barrier->bar_in),
                                      std::memory_order_seq_cst) != get_here) {
     }
-    pcurr_track->barrier->bar_out.fetch_add(1, std::memory_order_seq_cst);
+    pcurr_track->barrier->bar_out.fetch_add(val, std::memory_order_seq_cst);
 
     if (old_val + val == get_here) {
         while (std::atomic_load_explicit(&(pcurr_track->barrier->bar_out),
@@ -37,7 +37,7 @@ __global__ void RcclKernelBarrierWait(RingNode_t* pcurr_track, int this_time,
         std::atomic_store_explicit(&(pcurr_track->barrier->bar_out), 0,
                                    std::memory_order_seq_cst);
 
-        pcurr_track->barrier->times_done.fetch_add(1,
+        pcurr_track->barrier->times_done.fetch_add(val,
                                                    std::memory_order_seq_cst);
     }
 }

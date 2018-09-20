@@ -3,6 +3,10 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
+//
+// This file contains implementation of rcclBcast.
+//
+
 #include "rcclDataTypes.h"
 #include "rcclHelper.h"
 #include "rcclSetKernels.h"
@@ -31,6 +35,13 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
                 API_COLOR_END);
     }
 
+    //
+    // Check if arguments are correct or not.
+    //
+    if (buff == nullptr) {
+        return rcclInvalidDevicePointer;
+    }
+
     if (datatype >= rccl_NUM_TYPES) {
         return rcclInvalidType;
     }
@@ -43,22 +54,47 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
 
     int num_gpus = pcomm->num_devices_;
 
-    RingNode_t *pcurr_track = pcomm->track_;
-    bool is_root = pcomm->track_->rank == root;
+    if (root >= num_gpus) {
+        return rcclInvalidArgument;
+    }
 
+    //
+    // Get current value of barrier
+    //
     int *this_time = &(pcomm->this_time_);
 
+    //
+    // If same comm is used on a different stream,
+    // synchronize it with current stream before launching op.
+    //
     PreEnqueueEventRecord(pcomm, stream);
 
+    RingNode_t *pcurr_track = pcomm->track_;
+
+    //
+    // Check if current gpu is root or not
+    //
+    bool is_root = pcomm->track_->rank == root;
+
+    //
+    // If current gpu is root, call internal implementation for root
+    //
     if (is_root) {
         RcclInternalBroadcastRoot(pcurr_track, stream, buff, this_time,
                                   num_gpus);
-    } else {
-        if (buff == nullptr) return rcclInvalidDevicePointer;
+    }
+    //
+    // If current gpu is not root, call internal implementation
+    //
+    else {
+        //
+        // Get RingNode for current gpu
+        //
         RingNode_t *proot_track = pcurr_track->next_gpu;
         while (proot_track->rank != root) {
             proot_track = proot_track->next_gpu;
         }
+
         switch (datatype) {
         case rcclChar: {
             RcclInternalBroadcast<signed char>(pcurr_track, proot_track, count,
@@ -123,13 +159,14 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
                                           stream, buff, this_time, num_gpus);
             break;
         }
-        default: {
-            PostEnqueueEventRecord(pcomm, stream);
-            return rcclInvalidType;
-        }
+        default: { return rcclInvalidType; }
         }
     }
 
+    //
+    // Track current stream so that op launched on different stream can be
+    // synchronized with current stream
+    //
     PostEnqueueEventRecord(pcomm, stream);
     return rcclSuccess;
 }

@@ -3,6 +3,10 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
+//
+// This file contains implementation of rcclReduce.
+//
+
 #include "rcclDataTypes.h"
 #include "rcclHelper.h"
 #include "rcclSetKernels.h"
@@ -32,6 +36,10 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                 umap_datatype[datatype].c_str(), umap_red_op[op].c_str(), root,
                 comm, stream, API_COLOR_END);
     }
+
+    //
+    // Check if arguments are correct or not.
+    //
     if (sendbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
@@ -51,14 +59,28 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
     }
 
     int num_gpus = pcomm->num_devices_;
+
+    if (root >= num_gpus) {
+        return rcclInvalidArgument;
+    }
+
+    //
+    // Get current value of barrier
+    //
     int *this_time = &(pcomm->this_time_);
 
+    //
+    // If same comm is used on a different stream,
+    // synchronize it with current stream before launching op.
+    //
     PreEnqueueEventRecord(pcomm, stream);
 
     RingNode_t *pcurr_track = pcomm->track_;
 
-    // dispatch kernel only on root
-    bool is_root = pcomm->track_->hip_current_device_index == root;
+    //
+    // Check if current gpu is root or not
+    //
+    bool is_root = pcomm->track_->rank == root;
 
     if (is_root) {
         if (recvbuff == nullptr) return rcclInvalidDevicePointer;
@@ -130,10 +152,7 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                PostEnqueueEventRecord(pcomm, stream);
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
         if (op == rcclProd) {
@@ -204,10 +223,7 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                PostEnqueueEventRecord(pcomm, stream);
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
 
@@ -279,10 +295,7 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                PostEnqueueEventRecord(pcomm, stream);
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
 
@@ -354,26 +367,19 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                PostEnqueueEventRecord(pcomm, stream);
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
 
     } else {
-        if ((RCCL_TRACE_RT & krccl_print_kernel) == krccl_print_kernel) {
-            int dev;
-            hipGetDevice(&dev);
-            fprintf(stderr,
-                    "%s<<rccl-kernel: RcclKernelSetSrcPtr rccl-device:%d "
-                    "stream:%p pcurr_track:%p sendbuff:%p%s\n",
-                    KBLU, dev, stream, pcurr_track, sendbuff, API_COLOR_END);
-        }
         RcclInternalReduceNotRoot(pcurr_track, stream, sendbuff, this_time,
                                   num_gpus);
     }
 
+    //
+    // Track current stream so that op launched on different stream can be
+    // synchronized with current stream
+    //
     PostEnqueueEventRecord(pcomm, stream);
     return rcclSuccess;
 }
