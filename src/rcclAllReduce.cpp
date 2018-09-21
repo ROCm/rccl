@@ -106,7 +106,9 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                            hipMemcpyDeviceToDevice, stream);
             break;
         }
-        default: { return rcclInvalidType; }
+        default: {
+            return rcclInvalidType;
+        }
         }
 
         //
@@ -188,7 +190,9 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: { return rcclInvalidType; }
+        default: {
+            return rcclInvalidType;
+        }
         }
     }
     if (op == rcclProd) {
@@ -259,7 +263,9 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: { return rcclInvalidType; }
+        default: {
+            return rcclInvalidType;
+        }
         }
     }
 
@@ -331,7 +337,9 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: { return rcclInvalidType; }
+        default: {
+            return rcclInvalidType;
+        }
         }
     }
 
@@ -403,7 +411,9 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: { return rcclInvalidType; }
+        default: {
+            return rcclInvalidType;
+        }
         }
     }
 

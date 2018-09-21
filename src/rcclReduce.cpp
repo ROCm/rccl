@@ -152,7 +152,9 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: { return rcclInvalidType; }
+            default: {
+                return rcclInvalidType;
+            }
             }
         }
         if (op == rcclProd) {
@@ -223,7 +225,9 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: { return rcclInvalidType; }
+            default: {
+                return rcclInvalidType;
+            }
             }
         }
 
@@ -295,7 +299,9 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: { return rcclInvalidType; }
+            default: {
+                return rcclInvalidType;
+            }
             }
         }
 
@@ -367,7 +373,9 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: { return rcclInvalidType; }
+            default: {
+                return rcclInvalidType;
+            }
             }
         }
 

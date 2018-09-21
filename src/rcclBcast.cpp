@@ -159,7 +159,9 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
                                           stream, buff, this_time, num_gpus);
             break;
         }
-        default: { return rcclInvalidType; }
+        default: {
+            return rcclInvalidType;
+        }
         }
     }
 
