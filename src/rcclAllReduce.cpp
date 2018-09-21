@@ -21,6 +21,9 @@ extern std::unordered_map<int, std::string> umap_datatype;
 
 extern int RCCL_TRACE_RT;
 
+//
+//
+//
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                            rcclDataType_t datatype, rcclRedOp_t op,
                            rcclComm_t comm, hipStream_t stream) {
