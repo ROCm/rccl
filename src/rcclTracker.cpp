@@ -3,8 +3,16 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
+//
+// This file contains implementation of data structures and classes declared in
+// rcclTracker.h
+//
+
 #include "rcclTracker.h"
 
+//
+// Allocate new barrier at initialization
+//
 RingNodePool_t::RingNodePool_t() {
     num_devices_ = 0;
     active_devices_ = 0;
@@ -21,6 +29,9 @@ RingNodePool_t::RingNodePool_t() {
                                std::memory_order_seq_cst);
 }
 
+//
+// Free barrier and device indices
+//
 RingNodePool_t::~RingNodePool_t() {
     if (device_indices_ != nullptr) {
         delete device_indices_;
@@ -74,6 +85,10 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
 }
 
 RcclComm_t* RingNodePool_t::AddDevice(int device, int rank, int ndev) {
+    if (device_indices_ == nullptr) {
+        device_indices_ = new int[ndev];
+    }
+    device_indices_[rank] = device;
     RcclComm_t* ret_comm = new RcclComm_t;
     active_devices_++;
     num_devices_ = ndev;
