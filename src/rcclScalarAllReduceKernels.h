@@ -57,6 +57,9 @@ __global__ void RcclKernelScalarAllReduce(RingNode_t* pcurr_track,
     __syncthreads();
 }
 
+//
+// Gather data from all the other gpus
+//
 template <typename DataType_t>
 __global__ void RcclKernelCopyRest(RingNode_t* pcurr_track, int num_gpus,
                                    int rank, int count_per_gpu,
