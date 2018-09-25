@@ -35,9 +35,7 @@ __global__ void RcclKernelScalarAllReduce(RingNode_t* pcurr_track,
         DataType_t result = curr_src_buff[index];
 
         while (pnext_track != pcurr_track) {
-            DataType_t* next_src_buff =
-                reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
-                    &(pnext_track->src_buffer), std::memory_order_seq_cst));
+            DataType_t* next_src_buff = reinterpret_cast<DataType_t*>(pnext_track->src_buffer);
 
             if (Op == rcclSum) result = result + next_src_buff[index];
             if (Op == rcclProd) result = result * next_src_buff[index];
@@ -70,14 +68,10 @@ __global__ void RcclKernelCopyRest(RingNode_t* pcurr_track, int num_gpus,
 
     RingNode_t* pnext_track = pcurr_track->next_gpu;
 
-    DataType_t* curr_dst_buff =
-        reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
-            &(pcurr_track->dst_buffer), std::memory_order_seq_cst));
+    DataType_t* curr_dst_buff = reinterpret_cast<DataType_t*>(pcurr_track->dst_buffer);
 
     while (pnext_track->rank != rank) {
-        DataType_t* next_src_buff =
-            reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
-                &(pnext_track->dst_buffer), std::memory_order_seq_cst));
+        DataType_t* next_src_buff = reinterpret_cast<DataType_t*>(pnext_track->dst_buffer);
 
         int curr_rank = pnext_track->rank;
 

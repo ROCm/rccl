@@ -75,15 +75,14 @@ struct RingNode_t {
     // We use atomic data type to store pointer to buffers on a gpu, because
     // there are multiple readers (all peer gpus) and single writer (current
     // gpu)
-
     //
     // Stores source buffer on current gpu
     //
-    std::atomic<void*> src_buffer;
+    void* src_buffer;
     //
     // Stores destination buffer on current gpu
     //
-    std::atomic<void*> dst_buffer;
+    void* dst_buffer;
     //
     // Stores device index according to hip programming model
     //

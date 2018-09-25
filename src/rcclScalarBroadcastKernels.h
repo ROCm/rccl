@@ -18,8 +18,7 @@ __global__ void RcclKernelScalarCopyFromRoot(RingNode_t* proot_track,
 
     if (tid < count) {
         reinterpret_cast<DataType_t*>(recv_buff)[tid] =
-            reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
-                &(proot_track->src_buffer), std::memory_order_seq_cst))[tid];
+            reinterpret_cast<DataType_t*>(proot_track->src_buffer)[tid];
     }
     __syncthreads();
 }
