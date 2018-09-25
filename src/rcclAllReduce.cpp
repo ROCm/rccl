@@ -3,9 +3,15 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-//
-// This file contains implementation of rcclAllReduce.
-//
+/**
+ * @file rcclAllReduce.cpp
+ * @brief rccl library implementation of rcclAllReduce API
+ *
+ * This file contains implementation of rcclAllReduce API.
+ *
+ * @author Aditya Atluri
+ */
+
 #include "rcclDataTypes.h"
 #include "rcclHelper.h"
 #include "rcclSetKernels.h"
@@ -21,9 +27,7 @@ extern std::unordered_map<int, std::string> umap_datatype;
 
 extern int RCCL_TRACE_RT;
 
-//
-//
-//
+//! Definition of rcclAllReduce
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                            rcclDataType_t datatype, rcclRedOp_t op,
                            rcclComm_t comm, hipStream_t stream) {
@@ -38,21 +42,25 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 stream, API_COLOR_END);
     }
 
-    //
-    // Check if arguments are correct or not.
-    //
+    //! Check if buffer pointers are not null
     if (sendbuff == nullptr || recvbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
+
+    //! Check if data type of buffers is valid or not
     if (datatype >= rccl_NUM_TYPES) {
         return rcclInvalidType;
     }
+
+    //! Check if op is valid or not
     if (op >= rccl_NUM_OPS) {
         return rcclInvalidOperation;
     }
 
+    //! Get internal communicator from rcclComm_t
     RcclComm_t *pcomm = comm;
 
+    //! Check if communicator is valid or number of elements is > 0
     if (pcomm == nullptr || count <= 0) {
         return rcclInvalidArgument;
     }
@@ -61,22 +69,17 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
     int num_gpus = pcomm->num_devices_;
     hipEvent_t event = pcomm->event_;
 
-    //
-    // Get current value of barrier
-    //
+    //! Get pointer to current barrier
     int *this_time = &(pcomm->this_time_);
 
-    //
-    // If same comm is used on a different stream,
-    // synchronize it with current stream before launching op.
-    //
+    //! If same comm is used on a different stream, synchronize it with current
+    //! stream before launching op.
     PreEnqueueEventRecord(pcomm, stream);
 
+    //! Get tracker to current gpu
     RingNode_t *pcurr_track = pcomm->track_;
 
-    //
-    // If the number of gpus equal to 1, do a simple memory copy
-    //
+    //! If the number of gpus equal to 1, do a simple memory copy
     if (num_gpus == 1) {
         switch (datatype) {
         case rcclChar:
@@ -109,17 +112,13 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
         default: { return rcclInvalidType; }
         }
 
-        //
-        // Track current stream so that op launched on different stream can be
-        // synchronized with current stream
-        //
+        //! Track current stream so that op launched on different stream can be
+        //! synchronized with current stream
         PostEnqueueEventRecord(pcomm, stream);
         return rcclSuccess;
     }
 
-    //
-    // Check which op to launch
-    //
+    //! Check which op to launch
     if (op == rcclSum) {
         switch (datatype) {
         case rcclChar: {
@@ -407,10 +406,8 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
         }
     }
 
-    //
-    // Track current stream so that op launched on different stream can be
-    // synchronized with current stream
-    //
+    //! Track current stream so that op launched on different stream can be
+    //! synchronized with current stream
     PostEnqueueEventRecord(pcomm, stream);
     return rcclSuccess;
 }

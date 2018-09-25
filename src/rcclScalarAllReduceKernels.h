@@ -5,13 +5,16 @@ All rights reserved.
 
 #pragma once
 
-//
-// This file declares kernels for allreduce op
-//
+/**
+ * @file rcclScalarAllReduceKernels.h
+ * @brief Kernels to implement allreduce operation
+ *
+ * This file contains implementation of kernels used by rcclAllReduce
+ *
+ * @author Aditya Atluri
+ */
 
-//
-// This kernel works on a portion of buffer
-//
+//! Definition of RcclKernelScalarAllReduce
 template <typename DataType_t, rcclRedOp_t Op>
 __global__ void RcclKernelScalarAllReduce(RingNode_t* pcurr_track,
                                           void* send_buff, void* recv_buff,
