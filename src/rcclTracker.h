@@ -70,11 +70,12 @@ struct RingNode_t {
     //! gpu)
 
     //! Stores source buffer on current gpu
-    std::atomic<void*> src_buffer;
+    void* src_buffer;
     //! Stores destination buffer on current gpu
-    std::atomic<void*> dst_buffer;
+    void* dst_buffer;
 
     //! Stores device index according to hip programming model
+
     uint32_t hip_current_device_index;
 
     //! Barrier is allocated once per rcclUniqueId, owned by Rccl

@@ -29,8 +29,7 @@ __global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, void* send_buff,
 
         if (pnext_track != pcurr_track) {
             DataType_t* next_src_buff =
-                reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
-                    &(pnext_track->src_buffer), std::memory_order_seq_cst));
+                reinterpret_cast<DataType_t*>(pnext_track->src_buffer);
 
             if (Op == rcclSum)
                 curr_dst_buff[index] =
@@ -54,8 +53,7 @@ __global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, void* send_buff,
 
         while (pnext_track != pcurr_track) {
             DataType_t* next_src_buff =
-                reinterpret_cast<DataType_t*>(std::atomic_load_explicit(
-                    &(pnext_track->src_buffer), std::memory_order_seq_cst));
+                reinterpret_cast<DataType_t*>(pnext_track->src_buffer);
 
             if (Op == rcclSum)
                 curr_dst_buff[index] =

@@ -17,16 +17,14 @@ All rights reserved.
 // RingNode_t::src_buffer is set
 //
 __global__ void RcclKernelSetSrcPtr(RingNode_t* pcurr_track, void* send_buff) {
-    std::atomic_store_explicit(&(pcurr_track->src_buffer), send_buff,
-                               std::memory_order_seq_cst);
+    pcurr_track->src_buffer = send_buff;
 }
 
 //
 // RingNode_t::dst_buffer is set
 //
 __global__ void RcclKernelSetDstPtr(RingNode_t* pcurr_track, void* recv_buff) {
-    std::atomic_store_explicit(&(pcurr_track->dst_buffer), recv_buff,
-                               std::memory_order_seq_cst);
+    pcurr_track->dst_buffer = recv_buff;
 }
 
 //
@@ -34,8 +32,6 @@ __global__ void RcclKernelSetDstPtr(RingNode_t* pcurr_track, void* recv_buff) {
 //
 __global__ void RcclKernelSetSrcDstPtr(RingNode_t* pcurr_track, void* send_buff,
                                        void* recv_buff) {
-    std::atomic_store_explicit(&(pcurr_track->src_buffer), send_buff,
-                               std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(pcurr_track->dst_buffer), recv_buff,
-                               std::memory_order_seq_cst);
+    pcurr_track->src_buffer = send_buff;
+    pcurr_track->dst_buffer = recv_buff;
 }
