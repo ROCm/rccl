@@ -33,32 +33,7 @@ export LD_LIBRARY_PATH=/opt/rocm/rccl/lib:$LD_LIBRARY_PATH
 ```
 
 ## Usage
-```cpp
-#include <rccl/rccl.h>
-#include <vector>
-
-int main() {
-  int numGpus;
-  hipGetDeviceCount(&numGpus);
-  std::vector<rcclComm_t> comms(numGpus);
-  rcclCommInitAll(comms, numGpus);
-
-  std::vector<float*> sendBuff(numGpus);
-  std::vector<float*> recvBuff(numGpus);
-
-  std::vector<hipStream_t> streams(numGpus);
-
-  // Set up sendBuff and recvBuff on each GPU
-  // Create stream on each GPU
-
-  for(int i=0;i<numGpus;i++) {
-    hipSetDevice(i);
-    rcclAllReduce(sendBuff[i], recvBuff[i], size, rcclFloat,
-      rcclSum, comms[i], streams[i]);
-  }
-
-}
-```
+Please consider rccl/samples/allreduce.cpp
 
 ## Source Layout
 * `inc` - contains the public RCCL header exposing the RCCL interfaces
