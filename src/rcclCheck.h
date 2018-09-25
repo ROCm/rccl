@@ -3,11 +3,16 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-#pragma once
+/**
+ * @file rcclCheck.h
+ * @brief This file contains macros for checking rcclResult_t and hipError_t
+ *
+ * Used in tests and rccl source to print proper error description
+ *
+ * @author Aditya Atluri
+ */
 
-// Used in tests and rccl source to print
-// proper error description rather than
-// printing just error code.
+#pragma once
 
 #include <iostream>
 #include "rccl/rccl.h"

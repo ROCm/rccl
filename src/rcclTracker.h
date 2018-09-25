@@ -75,7 +75,6 @@ struct RingNode_t {
     void* dst_buffer;
 
     //! Stores device index according to hip programming model
-
     uint32_t hip_current_device_index;
 
     //! Barrier is allocated once per rcclUniqueId, owned by Rccl

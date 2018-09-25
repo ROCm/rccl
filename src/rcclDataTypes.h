@@ -3,12 +3,17 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
+/**
+ * @file rcclDataTypes.h
+ * @brief This file contains data types required for rccl operations
+ *
+ * Clang based vector types are defined here
+ *
+ * @author Aditya Atluri
+ */
+
 #pragma once
 
-//
-// We define our own datatypes for better
-// vectorization of code
-//
 typedef signed char rccl_char16_t __attribute__((ext_vector_type(16)));
 typedef unsigned char rccl_uchar16_t __attribute__((ext_vector_type(16)));
 typedef signed short rccl_short8_t __attribute__((ext_vector_type(8)));
