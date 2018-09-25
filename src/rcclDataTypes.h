@@ -5,9 +5,10 @@ All rights reserved.
 
 #pragma once
 
+//
 // We define our own datatypes for better
 // vectorization of code
-
+//
 typedef signed char rccl_char16_t __attribute__((ext_vector_type(16)));
 typedef unsigned char rccl_uchar16_t __attribute__((ext_vector_type(16)));
 typedef signed short rccl_short8_t __attribute__((ext_vector_type(8)));

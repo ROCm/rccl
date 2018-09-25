@@ -3,6 +3,9 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
+//
+// This file contains implementation of rcclAllReduce.
+//
 #include "rcclDataTypes.h"
 #include "rcclHelper.h"
 #include "rcclSetKernels.h"
@@ -18,6 +21,9 @@ extern std::unordered_map<int, std::string> umap_datatype;
 
 extern int RCCL_TRACE_RT;
 
+//
+//
+//
 rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                            rcclDataType_t datatype, rcclRedOp_t op,
                            rcclComm_t comm, hipStream_t stream) {
@@ -31,6 +37,10 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 umap_datatype[datatype].c_str(), umap_red_op[op].c_str(), comm,
                 stream, API_COLOR_END);
     }
+
+    //
+    // Check if arguments are correct or not.
+    //
     if (sendbuff == nullptr || recvbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
@@ -43,19 +53,30 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
 
     RcclComm_t *pcomm = comm;
 
-    hipEvent_t event = pcomm->event_;
-
     if (pcomm == nullptr || count <= 0) {
         return rcclInvalidArgument;
     }
 
+    int rank = pcomm->rank_;
+    int num_gpus = pcomm->num_devices_;
+    hipEvent_t event = pcomm->event_;
+
+    //
+    // Get current value of barrier
+    //
+    int *this_time = &(pcomm->this_time_);
+
+    //
+    // If same comm is used on a different stream,
+    // synchronize it with current stream before launching op.
+    //
     PreEnqueueEventRecord(pcomm, stream);
 
     RingNode_t *pcurr_track = pcomm->track_;
-    int rank = pcomm->rank_;
-    int num_gpus = pcomm->num_devices_;
 
-    int *this_time = &(pcomm->this_time_);
+    //
+    // If the number of gpus equal to 1, do a simple memory copy
+    //
     if (num_gpus == 1) {
         switch (datatype) {
         case rcclChar:
@@ -85,15 +106,20 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                            hipMemcpyDeviceToDevice, stream);
             break;
         }
-        default: {
-            PostEnqueueEventRecord(pcomm, stream);
-            return rcclInvalidType;
+        default: { return rcclInvalidType; }
         }
-        }
+
+        //
+        // Track current stream so that op launched on different stream can be
+        // synchronized with current stream
+        //
         PostEnqueueEventRecord(pcomm, stream);
         return rcclSuccess;
     }
 
+    //
+    // Check which op to launch
+    //
     if (op == rcclSum) {
         switch (datatype) {
         case rcclChar: {
@@ -162,10 +188,7 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: {
-            PostEnqueueEventRecord(pcomm, stream);
-            return rcclInvalidType;
-        }
+        default: { return rcclInvalidType; }
         }
     }
     if (op == rcclProd) {
@@ -236,10 +259,7 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: {
-            PostEnqueueEventRecord(pcomm, stream);
-            return rcclInvalidType;
-        }
+        default: { return rcclInvalidType; }
         }
     }
 
@@ -311,10 +331,7 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: {
-            PostEnqueueEventRecord(pcomm, stream);
-            return rcclInvalidType;
-        }
+        default: { return rcclInvalidType; }
         }
     }
 
@@ -386,14 +403,14 @@ rcclResult_t rcclAllReduce(const void *sendbuff, void *recvbuff, int count,
                 event, this_time);
             break;
         }
-        default: {
-            PostEnqueueEventRecord(pcomm, stream);
-            return rcclInvalidType;
-        }
+        default: { return rcclInvalidType; }
         }
     }
 
+    //
+    // Track current stream so that op launched on different stream can be
+    // synchronized with current stream
+    //
     PostEnqueueEventRecord(pcomm, stream);
-
     return rcclSuccess;
 }

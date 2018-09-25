@@ -3,6 +3,10 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
+//
+// This file contains implementation of different kernels used for rcclReduce
+//
+
 #pragma once
 
 template <typename DataType_t, rcclRedOp_t Op>
@@ -15,6 +19,9 @@ __global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, void* send_buff,
     DataType_t* curr_dst_buff = reinterpret_cast<DataType_t*>(recv_buff);
     DataType_t* curr_src_buff = reinterpret_cast<DataType_t*>(send_buff);
 
+    //
+    // Use count number of workitems
+    //
     if (tid < count) {
         int index = tid;
 

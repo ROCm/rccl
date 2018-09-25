@@ -23,107 +23,185 @@ const char* API_COLOR = KGRN;
 const char* API_COLOR_END = KNRM;
 
 //
+// Flags to print different debug levels
+//
+//
+// Enable debug log for rccl api calls
+//
 constexpr int krccl_print_api = 1 << 0;
+//
+// Enable debug log for internal function calls
+//
 constexpr int krccl_print_internal = 1 << 1;
+//
+// Enable debug log for printing kernel launches
+//
 constexpr int krccl_print_kernel = 1 << 2;
 
-// we always launch 1024 workitems per workgroup
-// in our kernels
+//
+// Limit the total number of workitems launched to 1024
+//
 constexpr unsigned knum_workitems = 1024;
-// we use 1024 vectors per workgroup
-// where single workitem does op on single vector
+//
+// Limit the number of elements operated on per workgroup
+//
 constexpr unsigned knum_vectors_per_workgroup = 1024;
 
+//
+// Barrier structure is used to sync kernels from same rccl call across multiple
+// gpus. times_done is used to track how many times a gpu used the barrier.
+// bar_in tracks how many gpus have entered the barrier. bar_out tracks how many
+// gpus have exited.
+//
+// Owned by rcclUniqueId or RingNodePool_t
+//
 struct Barrier_t {
     std::atomic<int> bar_in, bar_out, times_done;
 };
 
 //
-// data structure used to track details about peer gpus.
-// It is allocated as pinned host memory visible to all the gpus
+// Data structure used to track details about current gpu. It is allocated as
+// pinned host memory visible to all the gpus. The memory is uncached on gpus.
 //
 struct RingNode_t {
-    // point to RingNode_t owned by previous gpu in clique
+    //
+    // Point to RingNode_t owned by previous gpu in clique
+    //
     struct RingNode_t* prev_gpu;
-    // point to RingNode_t owned by next gpu in clique
+    //
+    // Point to RingNode_t owned by next gpu in clique
+    //
     struct RingNode_t* next_gpu;
-    // we use atomic data type to store pointer to buffers
-    // on a gpu, as there are multiple readers (all peer gpus)
-    // and single writer (current gpu)
-
-    // stores source buffer on current gpu
+    // We use atomic data type to store pointer to buffers on a gpu, because
+    // there are multiple readers (all peer gpus) and single writer (current
+    // gpu)
+    //
+    // Stores source buffer on current gpu
+    //
     void* src_buffer;
-    // stores destination buffer on current gpu
+    //
+    // Stores destination buffer on current gpu
+    //
     void* dst_buffer;
-    // stores device index according to hip programming model
+    //
+    // Stores device index according to hip programming model
+    //
     uint32_t hip_current_device_index;
-
+    //
+    // Barrier is allocated once per rcclUniqueId, owned by Rccl
+    //
     Barrier_t* barrier;
-
+    //
+    // Holds rank of each gpu
+    //
     int rank;
 };
 
 struct RcclComm_t;
 
 //
-// pool data structure used to store all RingNode_t
-// data structures and track rcclComm_t accordingly
+// Pool data structure used to store all RingNode_t data structures and track
+// rcclComm_t accordingly
 //
 class RingNodePool_t {
   private:
-    // stores an array of device indices user provided
-    // we allocate memory, do memcpy from user buffer
-    // deleted at destruction
+    //
+    // Stores an array of device indices user provided we allocate memory, do
+    // memcpy from user buffer deleted at destruction
+    //
     int* device_indices_;
-    // number of devices a pool is created for
+    //
+    // Number of devices in current pool
+    //
     int num_devices_;
-
+    //
+    // Barrier used by all devices in pool
+    //
     Barrier_t* barrier_;
-
+    //
+    // Reset the ring from the trackers in the pool
+    //
     void ResetGpuRing();
 
   public:
-    // counter to track how many devices are
-    // active in pool. Used to know when we can
-    // destroy the pool and all data structures
+    //
+    // Counter to track how many devices are active in pool. Used to know when
+    // we can destroy the pool and all data structures
+    //
     int active_devices_;
-    // used to track RingNode_t structures for each gpu
+    //
+    // Used to track RingNode_t structures for each gpu
+    // key -> rank of the gpu
+    // value -> RingNode_t* of respective gpu
+    //
     std::map<int, RingNode_t*> pool_;
-
+    //
+    // Destroy all the elements in pool_, barrier_ and device_indices_
+    //
     ~RingNodePool_t();
-    // construction is initialization
-    RingNodePool_t(const int* device_indices_, int num_devices_);
-
+    //
+    // Construction is initialization
+    //
     RingNodePool_t();
-
-    // when a new device is added to clique,
-    // return corresponding RcclComm_t structure
+    RingNodePool_t(const int* device_indices_, int num_devices_);
+    //
+    // Adds new gpu to clique, return corresponding RcclComm_t structure
+    //
     RcclComm_t* AddDevice(int device, int rank, int ndev);
-
+    //
+    // Remove device from pool_ based on RcclComm_t data
+    //
     void RemoveDevice(RcclComm_t* pcomm);
 
     void PrintAll();
-    // given a device index, get RingNode_t structure
+    //
+    // Given a device index, get RingNode_t structure
+    //
     RingNode_t* GetPoolByDeviceIndex(int device_index);
 };
 
-// internal representation of rcclComm_t
-// for structure is allocated for each gpu,
-// tracks,
-// 1. the RingNode_t pool where it belongs to
-// 2. tracker corresponding to gpu
-// 3. number of devices in the pool
-// 4. device index it is associated to
-// 5. rank of gpu in clique
+//
+// Internal representation of rcclComm_t structure, which is allocated for each
+// gpu.
+//
 struct RcclComm_t {
   public:
+    //
+    // Pool of gpus rcclComm_t is created with
+    //
     RingNodePool_t* pool_;
+    //
+    // RingNode_t* corresponding to current gpu
+    //
     RingNode_t* track_;
+    //
+    // The stream on which the last rccl call is made using same rcclComm_t
+    //
     hipStream_t stream_;
+    //
+    // Event with which inter-stream synchronization is done. Also, used to
+    // flush L2 caches after copy and reduction operation. Event is created by
+    // AddDevice method in RingNodePool_t and destroyed by destructor
+    //
     hipEvent_t event_;
+    //
+    // Variable to track how many times barrier is used by the gpu
+    //
     int this_time_;
+    //
+    // Number of devices the communicator is created with
+    //
     int num_devices_;
+    //
+    // Device index of a gpu
+    //
     int device_;
+    //
+    // Rank of current gpu
+    //
     int rank_;
+    //
+    // Destroy hipEvent_t at deletion of current object
+    //
     ~RcclComm_t() { HIPCHECK(hipEventDestroy(event_)); }
 };

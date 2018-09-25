@@ -3,4 +3,5 @@ tests/stress/bin
 tests/performance/bin
 tests/conformance/bin
 tests/coverage/bin
+tests/lib
 *.swp

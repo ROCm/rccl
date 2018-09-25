@@ -3,9 +3,7 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-#include "rcclDataTypes.h"
 #include "rcclHelper.h"
-#include "rcclSetKernels.h"
 #include "rcclTracker.h"
 
 #include <string>
