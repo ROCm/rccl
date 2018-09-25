@@ -52,9 +52,9 @@ struct RingNode_t {
     // and single writer (current gpu)
 
     // stores source buffer on current gpu
-    std::atomic<void*> src_buffer;
+    void* src_buffer;
     // stores destination buffer on current gpu
-    std::atomic<void*> dst_buffer;
+    void* dst_buffer;
     // stores device index according to hip programming model
     uint32_t hip_current_device_index;
 
