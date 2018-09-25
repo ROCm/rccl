@@ -42,29 +42,41 @@ All rights reserved.
 __global__ void RcclKernelBarrierWait(RingNode_t* pcurr_track, int this_time,
                                       int get_here) {
     int val = 1;
+
+    //! Wait until all gpus exited barrier and entered new barrier instance
     while (std::atomic_load_explicit(&(pcurr_track->barrier->times_done),
                                      std::memory_order_seq_cst) != this_time) {
     }
 
+    //! Enter barrier and signal all gpus that it entered the barrier (by
+    //! incrementing bar_in)
     int old_val =
         pcurr_track->barrier->bar_in.fetch_add(val, std::memory_order_seq_cst);
 
+    //! Wait until all gpus entered barrier
     while (std::atomic_load_explicit(&(pcurr_track->barrier->bar_in),
                                      std::memory_order_seq_cst) != get_here) {
     }
+
+    //! Exit barrier and signal all gpus that it exited the barrier (by
+    //! incrementing bar_ou)
     pcurr_track->barrier->bar_out.fetch_add(val, std::memory_order_seq_cst);
 
+    //! For last gpu exiting the barrier, clean up barrier variables
     if (old_val + val == get_here) {
+        //! Wait until all gpus exited barrier
         while (std::atomic_load_explicit(&(pcurr_track->barrier->bar_out),
                                          std::memory_order_seq_cst) !=
                get_here) {
         }
 
+        //! Reset all bar_in and bar_out
         std::atomic_store_explicit(&(pcurr_track->barrier->bar_in), 0,
                                    std::memory_order_seq_cst);
         std::atomic_store_explicit(&(pcurr_track->barrier->bar_out), 0,
                                    std::memory_order_seq_cst);
 
+        //! Increment number of times a barrier is used by one
         pcurr_track->barrier->times_done.fetch_add(val,
                                                    std::memory_order_seq_cst);
     }

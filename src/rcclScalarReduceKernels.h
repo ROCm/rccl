@@ -3,12 +3,19 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-//
-// This file contains implementation of different kernels used for rcclReduce
-//
-
 #pragma once
 
+/**
+ * @file rcclScalarReduceKernels.h
+ * @brief Kernels to implement reduce operation
+ *
+ * This file contains implementation of kernels used by rcclReduce
+ *
+ * @author Aditya Atluri
+ */
+
+//! @brief Definition of RcclKernelScalarReduce
+//!
 template <typename DataType_t, rcclRedOp_t Op>
 __global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, void* send_buff,
                                        void* recv_buff, int count) {
@@ -16,64 +23,38 @@ __global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, void* send_buff,
     int bx = blockIdx.x;
     int tid = tx + bx * knum_vectors_per_workgroup;
 
+    //! Get pointers to current gpu source and destination buffers
     DataType_t* curr_dst_buff = reinterpret_cast<DataType_t*>(recv_buff);
     DataType_t* curr_src_buff = reinterpret_cast<DataType_t*>(send_buff);
 
-    //
-    // Use count number of workitems
-    //
+    //! Use only count number of workitems to do the reduction operation
     if (tid < count) {
         int index = tid;
 
         RingNode_t* pnext_track = pcurr_track->next_gpu;
 
-        if (pnext_track != pcurr_track) {
-            DataType_t* next_src_buff =
-                reinterpret_cast<DataType_t*>(pnext_track->src_buffer);
+        DataType_t result = curr_src_buff[index];
 
-            if (Op == rcclSum)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] + next_src_buff[index];
-            if (Op == rcclProd)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] * next_src_buff[index];
-            if (Op == rcclMax)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] > next_src_buff[index]
-                        ? curr_src_buff[index]
-                        : next_src_buff[index];
-            if (Op == rcclMin)
-                curr_dst_buff[index] =
-                    curr_src_buff[index] < next_src_buff[index]
-                        ? curr_src_buff[index]
-                        : next_src_buff[index];
-
-            pnext_track = pnext_track->next_gpu;
-        }
-
+        //! Iterate over all the gpus, gather data from them and do reduction
+        //! operation on them
         while (pnext_track != pcurr_track) {
             DataType_t* next_src_buff =
                 reinterpret_cast<DataType_t*>(pnext_track->src_buffer);
 
-            if (Op == rcclSum)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] + next_src_buff[index];
-            if (Op == rcclProd)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] * next_src_buff[index];
+            if (Op == rcclSum) result = result + next_src_buff[index];
+            if (Op == rcclProd) result = result + next_src_buff[index];
             if (Op == rcclMax)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] > next_src_buff[index]
-                        ? curr_dst_buff[index]
-                        : next_src_buff[index];
+                result = result > next_src_buff[index] ? result
+                                                       : next_src_buff[index];
             if (Op == rcclMin)
-                curr_dst_buff[index] =
-                    curr_dst_buff[index] < next_src_buff[index]
-                        ? curr_dst_buff[index]
-                        : next_src_buff[index];
+                result = result < next_src_buff[index] ? result
+                                                       : next_src_buff[index];
 
+            //! Get next gpu tracker
             pnext_track = pnext_track->next_gpu;
         }
+
+        curr_dst_buff[index] = result;
     }
 
     __syncthreads();

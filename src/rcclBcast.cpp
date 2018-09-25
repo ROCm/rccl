@@ -53,7 +53,8 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
 
     RcclComm_t *pcomm = comm;
 
-    //! Check if communicator is valid, root is positive and number of elements > 0
+    //! Check if communicator is valid, root is positive and number of elements
+    //! > 0
     if (pcomm == nullptr || root < 0 || count <= 0) {
         return rcclInvalidArgument;
     }

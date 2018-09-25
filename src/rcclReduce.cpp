@@ -28,7 +28,8 @@ extern std::unordered_map<int, std::string> umap_datatype;
 
 extern int RCCL_TRACE_RT;
 
-//! Definition of rcclReduce
+//! @brief Define rcclReduce
+//! Implementation of rcclReduce
 rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                         rcclDataType_t datatype, rcclRedOp_t op, int root,
                         rcclComm_t comm, hipStream_t stream) {
@@ -61,7 +62,8 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
     //! Get internal communicator from rcclComm_t
     RcclComm_t *pcomm = comm;
 
-    //! Check if communicator is valid or number of elements is > 0 or root is >= 0
+    //! Check if communicator is valid or number of elements is > 0 or root is
+    //! >= 0
     if (pcomm == nullptr || count <= 0 || root < 0) {
         return rcclInvalidArgument;
     }
@@ -76,8 +78,8 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
     //! Get current value of barrier
     int *this_time = &(pcomm->this_time_);
 
-    //! If same comm is used on a different stream,
-    //! synchronize it with current stream before launching op.
+    //! If same comm is used on a different stream, synchronize it with current
+    //! stream before launching op.
     PreEnqueueEventRecord(pcomm, stream);
 
     //! Get current gpu tracker
