@@ -23,12 +23,12 @@ All rights reserved.
 #define MAKE_STR_PAIR(val) \
     { int(val), #val }
 
-//! Holds redOp_t to string hash table
+//! @brief Holds redOp_t to string hash table
 std::unordered_map<int, std::string> umap_red_op = {
     MAKE_STR_PAIR(rcclSum), MAKE_STR_PAIR(rcclProd), MAKE_STR_PAIR(rcclMax),
     MAKE_STR_PAIR(rcclMin)};
 
-//! Holds rcclDataType_t to string hash table
+//! @brief Holds rcclDataType_t to string hash table
 std::unordered_map<int, std::string> umap_datatype = {
     MAKE_STR_PAIR(rcclUchar),  MAKE_STR_PAIR(rcclChar),
     MAKE_STR_PAIR(rcclUshort), MAKE_STR_PAIR(rcclShort),
@@ -40,7 +40,7 @@ std::unordered_map<int, std::string> umap_datatype = {
 // TODO: @adityaatluri, delete this variable
 std::vector<RingNodePool_t *> pools;
 
-//! Internal representation of rcclUniqueId
+//! @brief Internal representation of rcclUniqueId
 struct RcclUniqueId {
     RingNodePool_t *pool;
     RcclUniqueId() { pool = new RingNodePool_t; }
@@ -94,7 +94,7 @@ const char *rcclGetErrorString(rcclResult_t result) {
 rcclResult_t rcclGetUniqueId(rcclUniqueId *uniqueId) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s uniqueId:%p%s\n", API_COLOR, __func__,
-                unqiueId, API_COLOR_END);
+                uniqueId, API_COLOR_END);
     }
 
     //! Check if pointer to rcclUniqueId is valid or not
@@ -131,13 +131,13 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
         return rcclInvalidArgument;
     }
 
-    //! Check if the number of devices unique id is created is same as ndev
-    if (ndev != commId->GetNumDevices()) {
-        return rcclUnsupportedDeviceCount;
-    }
-
     auto pool = commId->pool;
     int dev;
+
+    //! Check if the number of devices unique id is created is same as ndev
+    if (ndev != pool->GetNumDevices()) {
+        return rcclUnsupportedDeviceCount;
+    }
 
     //! Get current hip device index
     HIPCHECK(hipGetDevice(&dev));

@@ -3,9 +3,14 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-//
-// This file contains implementation of rcclReduce.
-//
+/**
+ * @file rcclReduce.cpp
+ * @brief rccl library implementation of rcclReduce API
+ *
+ * This file contains impelementation of rcclReduce API
+ *
+ * @author Aditya Atluri
+ */
 
 #include "rcclDataTypes.h"
 #include "rcclHelper.h"
@@ -23,6 +28,7 @@ extern std::unordered_map<int, std::string> umap_datatype;
 
 extern int RCCL_TRACE_RT;
 
+//! Definition of rcclReduce
 rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                         rcclDataType_t datatype, rcclRedOp_t op, int root,
                         rcclComm_t comm, hipStream_t stream) {
@@ -37,52 +43,51 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                 comm, stream, API_COLOR_END);
     }
 
-    //
-    // Check if arguments are correct or not.
-    //
+    //! Check if source buffer is not nullptr
     if (sendbuff == nullptr) {
         return rcclInvalidDevicePointer;
     }
 
+    //! Check if data type of buffers is valid or not
     if (datatype >= rccl_NUM_TYPES) {
         return rcclInvalidType;
     }
 
+    //! Check if op is valid or not
     if (op >= rccl_NUM_OPS) {
         return rcclInvalidOperation;
     }
 
+    //! Get internal communicator from rcclComm_t
     RcclComm_t *pcomm = comm;
 
+    //! Check if communicator is valid or number of elements is > 0 or root is >= 0
     if (pcomm == nullptr || count <= 0 || root < 0) {
         return rcclInvalidArgument;
     }
 
     int num_gpus = pcomm->num_devices_;
 
+    //! Check if root is < number of gpus
     if (root >= num_gpus) {
         return rcclInvalidArgument;
     }
 
-    //
-    // Get current value of barrier
-    //
+    //! Get current value of barrier
     int *this_time = &(pcomm->this_time_);
 
-    //
-    // If same comm is used on a different stream,
-    // synchronize it with current stream before launching op.
-    //
+    //! If same comm is used on a different stream,
+    //! synchronize it with current stream before launching op.
     PreEnqueueEventRecord(pcomm, stream);
 
+    //! Get current gpu tracker
     RingNode_t *pcurr_track = pcomm->track_;
 
-    //
-    // Check if current gpu is root or not
-    //
+    //! Check if current gpu is root or not
     bool is_root = pcomm->track_->rank == root;
 
     if (is_root) {
+        //! On root gpu, destination buffer should not be nullptr
         if (recvbuff == nullptr) return rcclInvalidDevicePointer;
         if (op == rcclSum) {
             switch (datatype) {
@@ -152,9 +157,7 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
         if (op == rcclProd) {
@@ -225,9 +228,7 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
 
@@ -299,9 +300,7 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
 
@@ -373,21 +372,18 @@ rcclResult_t rcclReduce(const void *sendbuff, void *recvbuff, int count,
                     num_gpus);
                 break;
             }
-            default: {
-                return rcclInvalidType;
-            }
+            default: { return rcclInvalidType; }
             }
         }
 
     } else {
+        //! Call for non-root gpu
         RcclInternalReduceNotRoot(pcurr_track, stream, sendbuff, this_time,
                                   num_gpus);
     }
 
-    //
-    // Track current stream so that op launched on different stream can be
-    // synchronized with current stream
-    //
+    //! Track current stream so that op launched on different stream can be
+    //! synchronized with current stream
     PostEnqueueEventRecord(pcomm, stream);
     return rcclSuccess;
 }
