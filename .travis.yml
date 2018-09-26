@@ -1,5 +1,10 @@
 script:
-    wget -qO - http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key | sudo apt-key add -;
-    echo 'deb [arch=amd64] http://repo.radeon.com/rocm/apt/debian/ xenial main' | sudo tee /etc/apt/sources.list.d/rocm.list;
-    sudo apt update;
-    sudo apt install rocm-dkms;
+    - wget -qO - http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key | sudo apt-key add -
+    - echo 'deb [arch=amd64] http://repo.radeon.com/rocm/apt/debian/ xenial main' | sudo tee /etc/apt/sources.list.d/rocm.list;
+    - sudo apt update;
+    - sudo apt install rocm-dkms;
+    - mkdir -p ../rccl_build
+    - cd ../rccl_build
+    - CXX=/opt/rocm/bin/hcc cmake ../rccl
+    - make package -j
+    - sudo dpkg -i *.deb
