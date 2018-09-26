@@ -39,7 +39,7 @@ include(ROCMInstallSymlinks)
 include(ROCMCreatePackage)
 
 rocm_setup_version(
-    VERSION 0.3-beta-2
+    VERSION 0.6.0-rc1
 )
 
 list(APPEND CMAKE_PREFIX_PATH /opt/rocm /opt/rocm/hip /opt/rocm/hcc)
