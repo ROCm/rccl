@@ -1,4 +1,4 @@
-# RCCL
+# RCCL [![Build Status](https://travis-ci.org/ROCmSoftwarePlatform/rccl.svg?branch=master)](https://travis-ci.org/ROCmSoftwarePlatform/rccl)
 ROCm Communication Collectives Library
 
 ## Introduction
