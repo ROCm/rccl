@@ -4,7 +4,7 @@ All rights reserved.
 */
 
 /**
- * @file rcclScalarBcastRuntime.h
+ * @file rcclScalarBroadcastRuntime.h
  * @brief Implemenation of rcclBcast internally
  *
  * This file contains internal implementation of rcclBcast

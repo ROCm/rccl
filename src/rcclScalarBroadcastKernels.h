@@ -4,7 +4,7 @@ All rights reserved.
 */
 
 /**
- * @file rcclScalarBcastKernels.h
+ * @file rcclScalarBroadcastKernels.h
  * @brief Implementation of root copy kernel
  *
  * This file contains a kernel which reads data from root gpu
@@ -13,7 +13,7 @@ All rights reserved.
  */
 #pragma once
 
-//! Definition of RcclKernelScalarCopyFromRoot
+//! @brief Definition of RcclKernelScalarCopyFromRoot
 template <typename DataType_t>
 __global__ void RcclKernelScalarCopyFromRoot(RingNode_t* proot_track,
                                              void* recv_buff, int count) {

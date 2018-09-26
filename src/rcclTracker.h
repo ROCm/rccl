@@ -86,7 +86,7 @@ struct RingNode_t {
 
 struct RcclComm_t;
 
-//! @brief
+//! @brief Definition of RingNodePool_t
 //! Pool data structure used to store all RingNode_t data structures and track
 //! rcclComm_t accordingly
 class RingNodePool_t {
@@ -126,8 +126,8 @@ class RingNodePool_t {
     RingNode_t* GetPoolByDeviceIndex(int device_index);
 };
 
-//! Internal representation of rcclComm_t structure, which is allocated for each
-//! gpu.
+//! @brief Internal representation of rcclComm_t structure, which is allocated
+//! for each gpu.
 struct RcclComm_t {
   public:
     //! Pool of gpus rcclComm_t is created with

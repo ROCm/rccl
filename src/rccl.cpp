@@ -47,12 +47,12 @@ struct RcclUniqueId {
     ~RcclUniqueId() { delete pool; }
 };
 
-//! Get value of environment variable RCCL_TRACE_RT
+//! @brief Get value of environment variable RCCL_TRACE_RT
 const char *get_env_val = getenv("RCCL_TRACE_RT");
-//! Get debug trace level from environment variable
+//! @brief Get debug trace level from environment variable
 int RCCL_TRACE_RT = get_env_val != nullptr ? atoi(get_env_val) : 0;
 
-//! Implementation of rcclGetErrorString
+//! @brief Implementation of rcclGetErrorString
 const char *rcclGetErrorString(rcclResult_t result) {
     switch (result) {
     case rcclSuccess:
@@ -90,7 +90,7 @@ const char *rcclGetErrorString(rcclResult_t result) {
     }
 }
 
-//! Definition of rcclGetUniqueId
+//! @brief Definition of rcclGetUniqueId
 rcclResult_t rcclGetUniqueId(rcclUniqueId *uniqueId) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s uniqueId:%p%s\n", API_COLOR, __func__,
@@ -107,7 +107,7 @@ rcclResult_t rcclGetUniqueId(rcclUniqueId *uniqueId) {
     return rcclSuccess;
 }
 
-//! Definition of rcclCommInitRank
+//! @brief Definition of rcclCommInitRank
 rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
                               int rank) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
@@ -151,7 +151,7 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
     return rcclSuccess;
 }
 
-//! Definition of rcclCommInitAll
+//! @brief Definition of rcclCommInitAll
 rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s comm:%p ndev:%d devlist:%p%s\n",
@@ -225,7 +225,7 @@ rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
     return rcclSuccess;
 }
 
-//! Declaration of rcclCommCuDevice
+//! @brief Declaration of rcclCommCuDevice
 rcclResult_t rcclCommCuDevice(rcclComm_t comm, int *dev) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s comm:%p *dev:%d dev:%p%s\n",
@@ -238,7 +238,7 @@ rcclResult_t rcclCommCuDevice(rcclComm_t comm, int *dev) {
     return rcclSuccess;
 }
 
-//! Declaration of rcclCommUserRank
+//! @brief Declaration of rcclCommUserRank
 rcclResult_t rcclCommUserRank(rcclComm_t comm, int *rank) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s comm:%p *rank:%d rank:%p%s\n",
@@ -251,7 +251,7 @@ rcclResult_t rcclCommUserRank(rcclComm_t comm, int *rank) {
     return rcclSuccess;
 }
 
-//! Declaration of rcclCommCount
+//! @brief Declaration of rcclCommCount
 rcclResult_t rcclCommCount(rcclComm_t comm, int *count) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s comm:%p *count:%d count:%p%s\n",
@@ -264,7 +264,7 @@ rcclResult_t rcclCommCount(rcclComm_t comm, int *count) {
     return rcclSuccess;
 }
 
-//! Declaration of rcclCommDestroy
+//! @brief Declaration of rcclCommDestroy
 rcclResult_t rcclCommDestroy(rcclComm_t comm) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s comm:%p%s\n", API_COLOR, __func__,
@@ -279,14 +279,14 @@ rcclResult_t rcclCommDestroy(rcclComm_t comm) {
     return rcclSuccess;
 }
 
-//! Declaration of PostEnqueueEventRecord
+//! @brief Declaration of PostEnqueueEventRecord
 void PostEnqueueEventRecord(RcclComm_t *pcomm, hipStream_t stream) {
     if (stream != pcomm->stream_) {
         hipEventRecord(pcomm->event_, stream);
     }
 }
 
-//! Declaration of PreEnqueueEventRecord
+//! @brief Declaration of PreEnqueueEventRecord
 void PreEnqueueEventRecord(RcclComm_t *pcomm, hipStream_t stream) {
     if (stream != pcomm->stream_) {
         hipStreamWaitEvent(stream, pcomm->event_, 0);
