@@ -144,9 +144,7 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests, int root) {
         DoReduce<unsigned long>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len, root);
         DoReduce<float>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len, root);
         DoReduce<double>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len, root);
-
-//        DoReduce<__fp16>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len, root);
-
+        DoReduce<__fp16>(device_list, device_streams, rccl_comms, host_buffers, device_buffers, dst_host_buffer, dst_device_buffer, *pbuff_len, root);
     }
 
 // free allocted buffers on both host and device
