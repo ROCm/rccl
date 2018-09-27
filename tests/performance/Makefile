@@ -1,27 +1,19 @@
 HIP_DIR=/opt/rocm/hip
 RCCL_DIR=/opt/rocm/rccl
+ARCHS=--amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906
+all: allreduce reduce
 
-all: allreduce reducescatter reduce
-
-bcast:
+bcast: rcclBcast.cpp
 	mkdir -p bin
-	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include --amdgpu-target=gfx900 rcclBcast.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/bcast
+	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ ${ARCHS} rcclBcast.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/bcast
 
-allreduce:
+allreduce: rcclAllReduce.cpp
 	mkdir -p bin
-	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ --amdgpu-target=gfx900 rcclAllReduce.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/allreduce
+	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ ${ARCHS} rcclAllReduce.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/allreduce
 
-allgather:
+reduce: rcclReduce.cpp
 	mkdir -p bin
-	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ --amdgpu-target=gfx900 rcclAllGather.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/allgather
-
-reduce:
-	mkdir -p bin
-	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ --amdgpu-target=gfx900 rcclReduce.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/reduce
-
-reducescatter:
-	mkdir -p bin
-	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ --amdgpu-target=gfx900 rcclReduceScatter.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/reducescatter
+	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ ${ARCHS} rcclReduce.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/reduce
 
 clean:
 	rm -rf ./bin
