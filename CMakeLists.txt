@@ -58,6 +58,8 @@ add_library( rccl
     src/rcclTracker.cpp
     )
 
+add_subdirectory(tests)
+
 if( TARGET hip::device )
 target_link_libraries( rccl PRIVATE hip::device )
 target_link_libraries( rccl INTERFACE hip::host )

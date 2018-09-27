@@ -10,5 +10,4 @@ if(NOT EXISTS ${GOOGLETEST_DIR})
 endif()
 
 add_subdirectory(lib/googletest)
-add_subdirectory(validation)
-add_subdirectory(performance)
+add_subdirectory(unit)
