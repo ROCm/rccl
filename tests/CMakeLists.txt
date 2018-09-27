@@ -11,3 +11,4 @@ endif()
 
 add_subdirectory(lib/googletest)
 add_subdirectory(validation)
+add_subdirectory(performance)

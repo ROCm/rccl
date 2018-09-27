@@ -84,7 +84,7 @@ set(CPACK_RPM_PACKAGE_REQUIRES "hip_hcc")
 
 rocm_create_package(
     NAME rccl
-    DESCRIPTION "AMD's multi-gpu MPI impelemtation"
+    DESCRIPTION "AMD's multi-gpu MPI implementation"
     MAINTAINER "Aditya Aturi <Aditya.Atluri@amd.com>"
     LDCONFIG
 )

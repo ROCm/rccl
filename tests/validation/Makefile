@@ -1,4 +1,4 @@
-all: comm bcast allreduce allgather reduce reducescatter multistream
+all: comm bcast allreduce reduce multistream
 
 ROCM_PATH=/opt/rocm
 TEST_INC=../
