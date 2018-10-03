@@ -5,6 +5,7 @@ All rights reserved.
 
 #pragma once
 
+#include <iostream>
 #include <chrono>
 
 constexpr size_t knum_iter = 1 << 4;
