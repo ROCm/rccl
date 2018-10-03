@@ -191,6 +191,19 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count,
                         rcclDataType_t datatype, rcclRedOp_t op, int root,
                         rcclComm_t comm, hipStream_t stream);
 
+//! Each gpu gathers values from other gpus' sendbuff into its recvbuff.
+//! Size of recvbuff needs to be count*num_of_gpus.
+//! The data is ordered by comm's device ranking.
+
+//! \param [in] sendbuff Source buffer
+//! \param [in] recvbuff Destination buffer
+//! \param [in] count Number of elements in buffer
+//! \param [in] datatype Data type of buffers
+//! \param [in] comm Communicator for current gpu
+//! \param [in] stream HIP stream the op launches on
+rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datatype,
+                            void* recvbuff, rcclComm_t comm, hipStream_t stream);
+
 #ifdef __cplusplus
 }  // end extern "C"
 #endif

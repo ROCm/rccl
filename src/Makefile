@@ -2,7 +2,7 @@ RCCL_INSTALL_DIR=/opt/rocm/rccl
 HIP_DIR=/opt/rocm/hip
 HCC_DIR=/opt/rocm/hcc
 TARGETS=--amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906
-SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp
+SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp rcclAllGather.cpp
 
 all: lib
 
