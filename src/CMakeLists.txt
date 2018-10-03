@@ -30,6 +30,7 @@ add_library( rccl
     rcclAllReduce.cpp
     rcclBcast.cpp
     rcclReduce.cpp
+    rcclAllGather.cpp
     )
 
 target_link_libraries( rccl PRIVATE hip::hip_hcc ${hcc_LIBRARIES} )
