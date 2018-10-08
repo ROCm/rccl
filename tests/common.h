@@ -8,6 +8,8 @@ All rights reserved.
 #include <unordered_map>
 #include <vector>
 
+#include "rccl/rccl.h"
+
 #define HIPCHECK(status)                                             \
     if (status != hipSuccess) {                                      \
         std::cout << "Got: " << hipGetErrorString(status)            \
