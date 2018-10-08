@@ -122,8 +122,12 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
     }
 
     //! Check if rank of gpu is less than number of gpus in clique
-    if (rank > ndev) {
+    if (rank >= ndev) {
         return rcclInvalidRank;
+    }
+
+    if (ndev < 1) {
+        return rcclUnsupportedDeviceCount;
     }
 
     //! Check if rcclUniqueId is valid or not
@@ -135,8 +139,10 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
     int dev;
 
     //! Check if the number of devices unique id is created is same as ndev
-    if (ndev != pool->GetNumDevices()) {
-        return rcclUnsupportedDeviceCount;
+    if (pool->GetNumDevices() != 0) {
+        if (ndev != pool->GetNumDevices()) {
+            return rcclUnsupportedDeviceCount;
+        }
     }
 
     //! Get current hip device index

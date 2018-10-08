@@ -58,6 +58,8 @@ add_library( rccl
     src/rcclTracker.cpp
     )
 
+add_subdirectory(tests)
+
 if( TARGET hip::device )
 target_link_libraries( rccl PRIVATE hip::device )
 target_link_libraries( rccl INTERFACE hip::host )
@@ -84,7 +86,7 @@ set(CPACK_RPM_PACKAGE_REQUIRES "hip_hcc")
 
 rocm_create_package(
     NAME rccl
-    DESCRIPTION "AMD's multi-gpu MPI impelemtation"
+    DESCRIPTION "AMD's multi-gpu MPI implementation"
     MAINTAINER "Aditya Aturi <Aditya.Atluri@amd.com>"
     LDCONFIG
 )
