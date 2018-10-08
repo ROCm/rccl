@@ -115,7 +115,7 @@ void DoAllGather(std::vector<int>& device_list,
             HIPCHECK(hipStreamSynchronize(device_streams[i]));
         }
         mark.done();
-        mark.bw(buff_size * knum_iter * num_gpus);
+        mark.bw(buff_size * knum_iter);
     }
 }
 
