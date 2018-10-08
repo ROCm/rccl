@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017-Present Advanced Micro Devices, Inc. 
+Copyright (c) 2017-Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
@@ -8,84 +8,70 @@ All rights reserved.
 #include <unordered_map>
 #include <vector>
 
-#define HIPCHECK(status) \
-    if(status != hipSuccess) { \
-        std::cout<<"Got: "<<hipGetErrorString(status)<<" at: "<<__LINE__<<" in file: "<<__FILE__<<std::endl; \
+#define HIPCHECK(status)                                             \
+    if (status != hipSuccess) {                                      \
+        std::cout << "Got: " << hipGetErrorString(status)            \
+                  << " at: " << __LINE__ << " in file: " << __FILE__ \
+                  << std::endl;                                      \
     }
 
-
-
-#define RCCLCHECK(status) \
-    if(status != rcclSuccess) { \
-        std::cout<<"Got: "<<rcclGetErrorString(status)<<" at: "<<__LINE__<<" in file: "<<__FILE__<<std::endl; \
+#define RCCLCHECK(status)                                            \
+    if (status != rcclSuccess) {                                     \
+        std::cout << "Got: " << rcclGetErrorString(status)           \
+                  << " at: " << __LINE__ << " in file: " << __FILE__ \
+                  << std::endl;                                      \
     }
-
 
 #define MAKE_UMAP_VALS(val) \
-    { #val, val}
+    { #val, val }
 
 //
 // Buffers allocated in tests shouldn't exceed
 // the following limit: 256MB (irrespective of data type)
 //
-constexpr size_t kmax_buffer_size = 1024*1024*256; // 256MB
+constexpr size_t kmax_buffer_size = 1024 * 1024 * 256;  // 256MB
 
 //
 // The values are accessed using device-id as index
 // Limiting to 16 gpus
 //
-const std::vector<unsigned> kbuffer_values = \
-{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+const std::vector<unsigned> kbuffer_values = {1, 2,  3,  4,  5,  6,  7,  8,
+                                              9, 10, 11, 12, 13, 14, 15, 16};
 
 //
 // Create a hash map to get rcclOp from string provided by user
 //
 std::unordered_map<std::string, rcclRedOp_t> umap_rccl_op = {
-    MAKE_UMAP_VALS(rcclSum),
-    MAKE_UMAP_VALS(rcclProd),
-    MAKE_UMAP_VALS(rcclMax),
-    MAKE_UMAP_VALS(rcclMin)
-};
+    MAKE_UMAP_VALS(rcclSum), MAKE_UMAP_VALS(rcclProd), MAKE_UMAP_VALS(rcclMax),
+    MAKE_UMAP_VALS(rcclMin)};
 
 //
 // Create a hash map to get rcclDataType from string provided by user
 //
 std::unordered_map<std::string, rcclDataType_t> umap_rccl_dtype = {
-    MAKE_UMAP_VALS(rcclChar),
-    MAKE_UMAP_VALS(rcclUchar),
-    MAKE_UMAP_VALS(rcclInt8),
-    MAKE_UMAP_VALS(rcclUint8),
-    MAKE_UMAP_VALS(rcclShort),
-    MAKE_UMAP_VALS(rcclUshort),
-    MAKE_UMAP_VALS(rcclInt16),
-    MAKE_UMAP_VALS(rcclUint16),
-    MAKE_UMAP_VALS(rcclInt),
-    MAKE_UMAP_VALS(rcclUint),
-    MAKE_UMAP_VALS(rcclInt32),
-    MAKE_UMAP_VALS(rcclUint32),
-    MAKE_UMAP_VALS(rcclLong),
-    MAKE_UMAP_VALS(rcclUlong),
-    MAKE_UMAP_VALS(rcclInt64),
-    MAKE_UMAP_VALS(rcclUint64),
-    MAKE_UMAP_VALS(rcclHalf),
-    MAKE_UMAP_VALS(rcclFloat16),
-    MAKE_UMAP_VALS(rcclFloat),
-    MAKE_UMAP_VALS(rcclFloat32),
-    MAKE_UMAP_VALS(rcclDouble),
-    MAKE_UMAP_VALS(rcclFloat64)
-};
+    MAKE_UMAP_VALS(rcclChar),   MAKE_UMAP_VALS(rcclUchar),
+    MAKE_UMAP_VALS(rcclInt8),   MAKE_UMAP_VALS(rcclUint8),
+    MAKE_UMAP_VALS(rcclShort),  MAKE_UMAP_VALS(rcclUshort),
+    MAKE_UMAP_VALS(rcclInt16),  MAKE_UMAP_VALS(rcclUint16),
+    MAKE_UMAP_VALS(rcclInt),    MAKE_UMAP_VALS(rcclUint),
+    MAKE_UMAP_VALS(rcclInt32),  MAKE_UMAP_VALS(rcclUint32),
+    MAKE_UMAP_VALS(rcclLong),   MAKE_UMAP_VALS(rcclUlong),
+    MAKE_UMAP_VALS(rcclInt64),  MAKE_UMAP_VALS(rcclUint64),
+    MAKE_UMAP_VALS(rcclHalf),   MAKE_UMAP_VALS(rcclFloat16),
+    MAKE_UMAP_VALS(rcclFloat),  MAKE_UMAP_VALS(rcclFloat32),
+    MAKE_UMAP_VALS(rcclDouble), MAKE_UMAP_VALS(rcclFloat64)};
 
 //
 // Used to print multi-argument values
 //
-template<typename T>
+template <typename T>
 void print_out(T val) {
-    std::cout<<val<<std::endl;
+    std::cout << val << std::endl;
 }
 
-template<typename T, typename... Args>
+template <typename T, typename... Args>
 void print_out(T val, Args... args) {
-    std::cout<<val<<" ";
+    std::cout << val << " ";
     print_out(args...);
 }
 
@@ -96,15 +82,12 @@ void print_out(T val, Args... args) {
 // goes out of scope
 //
 class CurrDeviceGuard_t {
-private:
+  private:
     int curr_device_index_;
-public:
-    CurrDeviceGuard_t() {
-        HIPCHECK(hipGetDevice(&curr_device_index_));
-    }
-    ~CurrDeviceGuard_t() {
-        HIPCHECK(hipSetDevice(curr_device_index_));
-    }
+
+  public:
+    CurrDeviceGuard_t() { HIPCHECK(hipGetDevice(&curr_device_index_)); }
+    ~CurrDeviceGuard_t() { HIPCHECK(hipSetDevice(curr_device_index_)); }
 };
 
 //
@@ -113,20 +96,20 @@ public:
 // do rccl ops
 //
 class RandomSizeGen_t {
-private:
+  private:
     int seed_;
     int min_limit_;
     int max_limit_;
-public:
+
+  public:
     RandomSizeGen_t(int seed, int min_limit, int max_limit)
         : seed_(seed), min_limit_(min_limit), max_limit_(max_limit) {
         std::srand(seed_);
     }
-    size_t GetSize() const { // never return 0
+    size_t GetSize() const {  // never return 0
         return ((std::rand() - min_limit_) % max_limit_) + 1;
     }
 };
-
 
 //
 // Given a list of gpu devices, this function
@@ -135,13 +118,14 @@ public:
 //
 void EnableDevicePeerAccess(std::vector<int>& device_list) {
     CurrDeviceGuard_t g;
-    for(auto iter1 = device_list.begin(); iter1 != device_list.end(); iter1++) {
+    for (auto iter1 = device_list.begin(); iter1 != device_list.end();
+         iter1++) {
         HIPCHECK(hipSetDevice(*iter1));
-        for(auto iter2 = device_list.begin(); iter2 != device_list.end(); iter2++) {
-            if(*iter1 != *iter2) {
+        for (auto iter2 = device_list.begin(); iter2 != device_list.end();
+             iter2++) {
+            if (*iter1 != *iter2) {
                 HIPCHECK(hipDeviceEnablePeerAccess(*iter2, 0));
             }
         }
     }
 }
-
