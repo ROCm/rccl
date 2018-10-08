@@ -1,7 +1,7 @@
 HIP_DIR=/opt/rocm/hip
 RCCL_DIR=/opt/rocm/rccl
 ARCHS=--amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906
-all: allreduce reduce
+all: allreduce reduce allgather
 
 bcast: rcclBcast.cpp
 	mkdir -p bin
@@ -14,6 +14,10 @@ allreduce: rcclAllReduce.cpp
 reduce: rcclReduce.cpp
 	mkdir -p bin
 	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ ${ARCHS} rcclReduce.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/reduce
+
+allgather: rcclAllGather.cpp
+	mkdir -p bin
+	${HIP_DIR}/bin/hipcc -I${RCCL_DIR}/include -I../ ${ARCHS} rcclAllGather.cpp -L${RCCL_DIR}/lib -lrccl -o ./bin/allgather
 
 clean:
 	rm -rf ./bin
