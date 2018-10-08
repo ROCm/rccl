@@ -58,6 +58,24 @@ inline bool validate(T* ptr, T val, size_t len, size_t tail, size_t offset) {
     return true;
 }
 
+template <>
+inline bool validate(__fp16* ptr, __fp16 val, size_t len, size_t tail, size_t offset) {
+    size_t i = offset;
+    size_t tailIter = 0;
+    while (i < len) {
+        if (!cmp(ptr[i], val)) {
+            if (tailIter < tail) {
+                CHECKVAL(float(ptr[i]), float(val), i);
+                tailIter++;
+            } else {
+                return false;
+            }
+        }
+        i++;
+    }
+    return true;
+}
+
 template <typename T>
 inline bool validate(T* got, T* expected, size_t len, size_t tail,
                      size_t offset) {
