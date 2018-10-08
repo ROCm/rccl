@@ -63,7 +63,7 @@ inline bool validate(__fp16* ptr, __fp16 val, size_t len, size_t tail, size_t of
     size_t i = offset;
     size_t tailIter = 0;
     while (i < len) {
-        if (!cmp(ptr[i], val)) {
+        if (!cmp(float(ptr[i]), float(val))) {
             if (tailIter < tail) {
                 CHECKVAL(float(ptr[i]), float(val), i);
                 tailIter++;
