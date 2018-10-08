@@ -92,7 +92,7 @@ void DoAllGather(std::vector<int>& device_list, std::vector<hipStream_t>& device
 
         {
             for(size_t i = 0; i < num_gpus; i++) {
-                for(size_t j = 0; j < num_gpus; i++) {
+                for(size_t j = 0; j < num_gpus; j++) {
                     validate(reinterpret_cast<T*>(src_host_buffers[i]),
                              &reinterpret_cast<T*>(dst_host_buffers[j])[buff_len*i],
                              buff_len, 1, 0);
