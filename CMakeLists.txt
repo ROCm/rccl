@@ -56,6 +56,7 @@ add_library( rccl
     src/rcclBcast.cpp
     src/rcclReduce.cpp
     src/rcclTracker.cpp
+    src/rcclAllGather.cpp
     )
 
 add_subdirectory(tests)

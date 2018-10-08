@@ -15,10 +15,13 @@ comm:
 	mkdir -p bin
 	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclCommBcast.cpp -L$(RCCL_LIB) -lrccl -o ./bin/commBcast
 
-
 allreduce:
 	mkdir -p bin
 	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclAllReduce.cpp -L$(RCCL_LIB) -lrccl -o ./bin/allreduce
+
+allgather:
+	mkdir -p bin
+	$(HIPCC) -I$(RCCL_INC) -I$(TEST_INC) $(ARCHS) rcclAllGather.cpp -L$(RCCL_LIB) -lrccl -o ./bin/allgather
 
 reduce:
 	mkdir -p bin
