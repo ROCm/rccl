@@ -222,9 +222,9 @@ void RandomGatherTest(std::vector<int>& device_list, int num_tests) {
                             src_host_buffers, src_device_buffers,
                             dst_host_buffers, dst_device_buffers, *pbuff_len);
 
-        //        DoAllGather<__fp16>(device_list, device_streams, rccl_comms,
-        //        host_buffers, device_buffers, dst_host_buffer,
-        //        dst_device_buffer, *pbuff_len);
+        DoAllGather<__fp16>(device_list, device_streams, rccl_comms,
+                            host_buffers, device_buffers, dst_host_buffer,
+                            dst_device_buffer, *pbuff_len);
     }
 
     // free allocted buffers on both host and device
@@ -235,7 +235,6 @@ void RandomGatherTest(std::vector<int>& device_list, int num_tests) {
     }
     for (auto iter = src_host_buffers.begin(); iter != src_host_buffers.end();
          iter++) {
-        //        delete reinterpret_cast<signed char*>(*iter);
         HIPCHECK(hipHostFree(*iter));
     }
 
@@ -245,7 +244,6 @@ void RandomGatherTest(std::vector<int>& device_list, int num_tests) {
     }
     for (auto iter = dst_host_buffers.begin(); iter != dst_host_buffers.end();
          iter++) {
-        //        delete reinterpret_cast<signed char*>(*iter);
         HIPCHECK(hipHostFree(*iter));
     }
 }
@@ -322,9 +320,9 @@ void GatherTestSize(std::vector<int>& device_list, size_t size_in_bytes) {
                         src_host_buffers, src_device_buffers, dst_host_buffers,
                         dst_device_buffers, size_in_bytes);
 
-    //        DoAllGather<__fp16>(device_list, device_streams, rccl_comms,
-    //        host_buffers, device_buffers, dst_host_buffer, dst_device_buffer,
-    //        *pbuff_len);
+    DoAllGather<__fp16>(device_list, device_streams, rccl_comms, host_buffers,
+                        device_buffers, dst_host_buffer, dst_device_buffer,
+                        *pbuff_len);
 
     // free allocted buffers on both host and device
 
