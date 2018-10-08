@@ -26,8 +26,9 @@ extern std::unordered_map<int, std::string> umap_datatype;
 extern int RCCL_TRACE_RT;
 
 //! @brief Definition of rcclAllGather
-rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datatype,
-                            void* recvbuff, rcclComm_t comm, hipStream_t stream) {
+rcclResult_t rcclAllGather(const void *sendbuff, int count,
+                           rcclDataType_t datatype, void *recvbuff,
+                           rcclComm_t comm, hipStream_t stream) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         int dev;
         hipGetDevice(&dev);
@@ -35,8 +36,7 @@ rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datat
                 "%s<<rccl-api:%s rccl-device:%d sendbuff:%p recvbuff:%p "
                 "count:%d datatype:%s comm:%p stream:%p%s\n",
                 API_COLOR, __func__, dev, sendbuff, recvbuff, count,
-                umap_datatype[datatype].c_str(), comm,
-                stream, API_COLOR_END);
+                umap_datatype[datatype].c_str(), comm, stream, API_COLOR_END);
     }
 
     //! Check if buffer pointers are not null
@@ -111,73 +111,73 @@ rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datat
     }
 
     switch (datatype) {
-        case rcclChar: {
-            RcclInternalAllGather<signed char, rccl_char16_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclUchar: {
-            RcclInternalAllGather<unsigned char, rccl_uchar16_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclShort: {
-            RcclInternalAllGather<signed short, rccl_short8_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclUshort: {
-            RcclInternalAllGather<unsigned short, rccl_ushort8_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclHalf: {
-            RcclInternalAllGather<__fp16, rccl_half8_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclInt: {
-            RcclInternalAllGather<signed int, rccl_int4_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclUint: {
-            RcclInternalAllGather<unsigned int, rccl_uint4_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclFloat: {
-            RcclInternalAllGather<float, rccl_float4_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclLong: {
-            RcclInternalAllGather<signed long, rccl_long2_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclUlong: {
-            RcclInternalAllGather<unsigned long, rccl_ulong2_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        case rcclDouble: {
-            RcclInternalAllGather<double, rccl_double2_t>(
-                pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-                event, this_time);
-            break;
-        }
-        default: { return rcclInvalidType; }
+    case rcclChar: {
+        RcclInternalAllGather<signed char, rccl_char16_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclUchar: {
+        RcclInternalAllGather<unsigned char, rccl_uchar16_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclShort: {
+        RcclInternalAllGather<signed short, rccl_short8_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclUshort: {
+        RcclInternalAllGather<unsigned short, rccl_ushort8_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclHalf: {
+        RcclInternalAllGather<__fp16, rccl_half8_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclInt: {
+        RcclInternalAllGather<signed int, rccl_int4_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclUint: {
+        RcclInternalAllGather<unsigned int, rccl_uint4_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclFloat: {
+        RcclInternalAllGather<float, rccl_float4_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclLong: {
+        RcclInternalAllGather<signed long, rccl_long2_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclUlong: {
+        RcclInternalAllGather<unsigned long, rccl_ulong2_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    case rcclDouble: {
+        RcclInternalAllGather<double, rccl_double2_t>(
+            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
+            event, this_time);
+        break;
+    }
+    default: { return rcclInvalidType; }
     }
 
     //! Track current stream so that op launched on different stream can be

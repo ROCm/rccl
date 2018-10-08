@@ -30,7 +30,7 @@ void RcclInternalAllGather(RingNode_t* pcurr_track, const void* send_buff,
     int num_workitems = 0, num_workgroups = 0;
 
     num_workitems = knum_workitems;
-    num_workgroups = (count + knum_workitems - 1 ) / knum_workitems;
+    num_workgroups = (count + knum_workitems - 1) / knum_workitems;
 
     int barrier_value = *this_time;
 
