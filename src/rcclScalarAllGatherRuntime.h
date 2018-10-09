@@ -27,11 +27,6 @@ void RcclInternalAllGather(RingNode_t* pcurr_track, const void* send_buff,
                            void* recv_buff, hipStream_t stream, int count,
                            int num_gpus, int rank, hipEvent_t event,
                            int* this_time) {
-    int num_workitems = 0, num_workgroups = 0;
-
-    num_workitems = knum_workitems;
-    num_workgroups = (count + knum_workitems - 1) / knum_workitems;
-
     int barrier_value = *this_time;
 
     //! Set source and destination buffers for current gpu
@@ -46,15 +41,10 @@ void RcclInternalAllGather(RingNode_t* pcurr_track, const void* send_buff,
     //! Once all gpus have done buffer setup, gather result from all gpus to
     //! current gpu destination buffer
     hipLaunchKernelGGL((RcclKernelScalarAllGather<DataType_t>),
-                       dim3(num_workgroups, 1, 1), dim3(num_workitems, 1, 1), 0,
+                       dim3(1, 1, 1), dim3(knum_workitems, 1, 1), 0,
                        stream, pcurr_track, rank, count);
     //! Flush gpu l2 cache
     hipEventRecord(event, stream);
-
-    //! Wait until all gpus have finished copied data from other gpus, don't
-    //! exit from stream
-    hipLaunchKernelGGL(RcclKernelBarrierWait, dim3(1, 1, 1), dim3(1, 1, 1), 0,
-                       stream, pcurr_track, barrier_value++, num_gpus);
 
     //! Update communicator with update barrier count
     *this_time = barrier_value;

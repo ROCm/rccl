@@ -10,7 +10,6 @@ All rights reserved.
  * This file contains implementation of rcclAllGather API.
  *
  */
-
 #include "rcclDataTypes.h"
 #include "rcclHelper.h"
 #include "rcclSetKernels.h"
