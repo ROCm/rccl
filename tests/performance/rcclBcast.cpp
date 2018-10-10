@@ -108,7 +108,7 @@ void DoBcast(std::vector<int>& device_list,
     }
 
     mark.done();
-    mark.bw(buff_size * knum_iter * num_gpus);
+    mark.bw(buff_size * knum_iter);
 }
 
 void RandomReduceTest(std::vector<int>& device_list, int num_tests, int root) {
