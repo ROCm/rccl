@@ -17,8 +17,9 @@ All rights reserved.
 //! @brief Definition of RcclKernelScalarReduce
 //! Gather data from non-root gpus and do reduction op on it
 template <typename DataType_t, rcclRedOp_t Op>
-__global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, void* send_buff,
-                                       void* recv_buff, int count) {
+__global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track,
+                                       const void* send_buff, void* recv_buff,
+                                       int count) {
     int tx = threadIdx.x;
     int bx = blockIdx.x;
     int tid = tx + bx * knum_vectors_per_workgroup;
