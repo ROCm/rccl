@@ -169,12 +169,9 @@ void RingNodePool_t::ResetGpuRing() {
 //! This method removes RingNode_t, rcclComm_t from pool and reset gpu tracker
 //! ring
 void RingNodePool_t::RemoveDevice(RcclComm_t* pcomm) {
-    for (auto iter = pool_.begin(); iter != pool_.end(); iter++) {
-        std::cout << iter->first << std::endl;
-    }
     int rank = pcomm->rank_;
     pool_.erase(rank);
-    ResetGpuRing();
+    if (pool_.size() != 0) ResetGpuRing();
 }
 
 //! @brief Print elements of all nodes in ring

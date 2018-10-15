@@ -19,7 +19,7 @@ All rights reserved.
 //! destination buffer
 template <typename DataType_t, rcclRedOp_t Op>
 __global__ void RcclKernelScalarAllReduce(RingNode_t* pcurr_track,
-                                          void* send_buff, void* recv_buff,
+                                          const void* send_buff, void* recv_buff,
                                           int count, int offset) {
     int tx = threadIdx.x;
     int bx = blockIdx.x;
@@ -27,7 +27,7 @@ __global__ void RcclKernelScalarAllReduce(RingNode_t* pcurr_track,
 
     //! Get pointers to current gpu source and destination buffers
     DataType_t* curr_dst_buff = reinterpret_cast<DataType_t*>(recv_buff);
-    DataType_t* curr_src_buff = reinterpret_cast<DataType_t*>((void*)send_buff);
+    const DataType_t* curr_src_buff = reinterpret_cast<const DataType_t*>(send_buff);
 
     //! Use only count number of workitems to do the reduction operation
     if (tid < count) {

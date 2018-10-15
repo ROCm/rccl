@@ -3,15 +3,14 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-#include "rccl/rccl.h"
-//#include "rcclCheck.h"
 #include <algorithm>
 #include <iostream>
 #include <list>
 #include <typeinfo>
 #include <vector>
 #include "common.h"
-#include "validation/validate.h"
+#include "performance/performance.h"
+#include "rccl/rccl.h"
 
 void CallBcast(signed char* psrc_buff, size_t buff_len, int root,
                rcclComm_t comm, hipStream_t stream) {
@@ -94,25 +93,22 @@ void DoBcast(std::vector<int>& device_list,
         HIPCHECK(hipMemcpy(src_device_buffers[i], src_host_buffers[i],
                            buff_size, hipMemcpyHostToDevice));
     }
-    for (size_t i = 0; i < num_gpus; i++) {
-        HIPCHECK(hipSetDevice(device_list[i]));
-        CallBcast(reinterpret_cast<T*>(src_device_buffers[i]), buff_len, root,
-                  rccl_comms[i], device_streams[i]);
+
+    perf_marker mark;
+    for (size_t iter_id = 0; iter_id < knum_iter; iter_id++) {
+        for (size_t i = 0; i < num_gpus; i++) {
+            HIPCHECK(hipSetDevice(device_list[i]));
+            CallBcast(reinterpret_cast<T*>(src_device_buffers[i]), buff_len,
+                      root, rccl_comms[i], device_streams[i]);
+        }
     }
     for (size_t i = 0; i < num_gpus; i++) {
         HIPCHECK(hipSetDevice(device_list[i]));
         HIPCHECK(hipStreamSynchronize(device_streams[i]));
     }
 
-    for (size_t i = 0; i < num_gpus; i++) {
-        HIPCHECK(hipSetDevice(root));
-        HIPCHECK(hipMemcpy(dst_host_buffers[i], src_device_buffers[i],
-                           buff_size, hipMemcpyDeviceToHost));
-    }
-    for (size_t i = 0; i < num_gpus; i++) {
-        validate(reinterpret_cast<T*>(dst_host_buffers[i]),
-                 static_cast<T>(kbuffer_values[root]), buff_len, 1, 0);
-    }
+    mark.done();
+    mark.bw(buff_size * knum_iter);
 }
 
 void RandomReduceTest(std::vector<int>& device_list, int num_tests, int root) {

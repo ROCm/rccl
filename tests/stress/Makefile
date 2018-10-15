@@ -5,7 +5,7 @@ TEST_INC=../
 RCCL_INC=$(ROCM_PATH)/rccl/include
 RCCL_LIB=$(ROCM_PATH)/rccl/lib
 HIPCC=$(ROCM_PATH)/bin/hipcc
-ARCHS=--amdgpu-target=gfx900 --amdgpu-target=gfx803
+ARCHS=--amdgpu-target=gfx900 --amdgpu-target=gfx803 --amdgpu-target=gfx906
 
 bcast:
 	mkdir -p bin

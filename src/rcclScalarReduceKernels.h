@@ -26,7 +26,7 @@ __global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track,
 
     //! Get pointers to current gpu source and destination buffers
     DataType_t* curr_dst_buff = reinterpret_cast<DataType_t*>(recv_buff);
-    DataType_t* curr_src_buff = reinterpret_cast<DataType_t*>(send_buff);
+    const DataType_t* curr_src_buff = reinterpret_cast<const DataType_t*>(send_buff);
 
     //! Use only count number of workitems to do the reduction operation
     if (tid < count) {
