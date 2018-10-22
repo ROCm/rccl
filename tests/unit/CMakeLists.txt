@@ -1,4 +1,3 @@
-enable_testing()
 include_directories(${GOOGLETEST_DIR}/include ${GOOGLETEST_DIR} ${CMAKE_SOURCE_DIR}/inc)
 
 if(NOT DEFINED RCCL_DIR)
