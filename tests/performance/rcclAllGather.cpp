@@ -18,46 +18,22 @@ void CallAllGather(signed char* psrc_buff, signed char* pdst_buff,
         rcclAllGather(psrc_buff, buff_len, rcclChar, pdst_buff, comm, stream));
 }
 
-void CallAllGather(unsigned char* psrc_buff, unsigned char* pdst_buff,
-                   size_t buff_len, rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(
-        rcclAllGather(psrc_buff, buff_len, rcclUchar, pdst_buff, comm, stream));
-}
-
-void CallAllGather(signed short* psrc_buff, signed short* pdst_buff,
-                   size_t buff_len, rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(
-        rcclAllGather(psrc_buff, buff_len, rcclShort, pdst_buff, comm, stream));
-}
-
-void CallAllGather(unsigned short* psrc_buff, unsigned short* pdst_buff,
-                   size_t buff_len, rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclAllGather(psrc_buff, buff_len, rcclUshort, pdst_buff, comm,
-                            stream));
-}
-
 void CallAllGather(signed int* psrc_buff, signed int* pdst_buff,
                    size_t buff_len, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(
         rcclAllGather(psrc_buff, buff_len, rcclInt, pdst_buff, comm, stream));
 }
 
-void CallAllGather(unsigned int* psrc_buff, unsigned int* pdst_buff,
-                   size_t buff_len, rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(
-        rcclAllGather(psrc_buff, buff_len, rcclUint, pdst_buff, comm, stream));
-}
-
 void CallAllGather(signed long* psrc_buff, signed long* pdst_buff,
                    size_t buff_len, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(
-        rcclAllGather(psrc_buff, buff_len, rcclLong, pdst_buff, comm, stream));
+        rcclAllGather(psrc_buff, buff_len, rcclInt64, pdst_buff, comm, stream));
 }
 
 void CallAllGather(unsigned long* psrc_buff, unsigned long* pdst_buff,
                    size_t buff_len, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(
-        rcclAllGather(psrc_buff, buff_len, rcclUlong, pdst_buff, comm, stream));
+        rcclAllGather(psrc_buff, buff_len, rcclUint64, pdst_buff, comm, stream));
 }
 
 void CallAllGather(__fp16* psrc_buff, __fp16* pdst_buff, size_t buff_len,
@@ -167,26 +143,10 @@ void RandomGatherTest(std::vector<int>& device_list, int num_tests) {
                                  src_host_buffers, src_device_buffers,
                                  dst_host_buffers, dst_device_buffers,
                                  *pbuff_len);
-        DoAllGather<unsigned char>(device_list, device_streams, rccl_comms,
-                                   src_host_buffers, src_device_buffers,
-                                   dst_host_buffers, dst_device_buffers,
-                                   *pbuff_len);
-        DoAllGather<signed short>(device_list, device_streams, rccl_comms,
-                                  src_host_buffers, src_device_buffers,
-                                  dst_host_buffers, dst_device_buffers,
-                                  *pbuff_len);
-        DoAllGather<unsigned short>(device_list, device_streams, rccl_comms,
-                                    src_host_buffers, src_device_buffers,
-                                    dst_host_buffers, dst_device_buffers,
-                                    *pbuff_len);
         DoAllGather<signed int>(device_list, device_streams, rccl_comms,
                                 src_host_buffers, src_device_buffers,
                                 dst_host_buffers, dst_device_buffers,
                                 *pbuff_len);
-        DoAllGather<unsigned int>(device_list, device_streams, rccl_comms,
-                                  src_host_buffers, src_device_buffers,
-                                  dst_host_buffers, dst_device_buffers,
-                                  *pbuff_len);
         DoAllGather<signed long>(device_list, device_streams, rccl_comms,
                                  src_host_buffers, src_device_buffers,
                                  dst_host_buffers, dst_device_buffers,

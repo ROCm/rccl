@@ -51,17 +51,10 @@ std::unordered_map<std::string, rcclRedOp_t> umap_rccl_op = {
 // Create a hash map to get rcclDataType from string provided by user
 //
 std::unordered_map<std::string, rcclDataType_t> umap_rccl_dtype = {
-    MAKE_UMAP_VALS(rcclChar),   MAKE_UMAP_VALS(rcclUchar),
-    MAKE_UMAP_VALS(rcclInt8),   MAKE_UMAP_VALS(rcclUint8),
-    MAKE_UMAP_VALS(rcclShort),  MAKE_UMAP_VALS(rcclUshort),
-    MAKE_UMAP_VALS(rcclInt16),  MAKE_UMAP_VALS(rcclUint16),
-    MAKE_UMAP_VALS(rcclInt),    MAKE_UMAP_VALS(rcclUint),
-    MAKE_UMAP_VALS(rcclInt32),  MAKE_UMAP_VALS(rcclUint32),
-    MAKE_UMAP_VALS(rcclLong),   MAKE_UMAP_VALS(rcclUlong),
-    MAKE_UMAP_VALS(rcclInt64),  MAKE_UMAP_VALS(rcclUint64),
-    MAKE_UMAP_VALS(rcclHalf),   MAKE_UMAP_VALS(rcclFloat16),
-    MAKE_UMAP_VALS(rcclFloat),  MAKE_UMAP_VALS(rcclFloat32),
-    MAKE_UMAP_VALS(rcclDouble), MAKE_UMAP_VALS(rcclFloat64)};
+    MAKE_UMAP_VALS(rcclChar),   MAKE_UMAP_VALS(rcclInt),
+    MAKE_UMAP_VALS(rcclHalf),   MAKE_UMAP_VALS(rcclFloat),
+    MAKE_UMAP_VALS(rcclDouble), MAKE_UMAP_VALS(rcclInt64),
+    MAKE_UMAP_VALS(rcclUint64)};
 
 //
 // Used to print multi-argument values

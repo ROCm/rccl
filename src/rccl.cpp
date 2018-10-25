@@ -30,12 +30,10 @@ std::unordered_map<int, std::string> umap_red_op = {
 
 //! @brief Holds rcclDataType_t to string hash table
 std::unordered_map<int, std::string> umap_datatype = {
-    MAKE_STR_PAIR(rcclUchar),  MAKE_STR_PAIR(rcclChar),
-    MAKE_STR_PAIR(rcclUshort), MAKE_STR_PAIR(rcclShort),
-    MAKE_STR_PAIR(rcclUint),   MAKE_STR_PAIR(rcclInt),
-    MAKE_STR_PAIR(rcclUlong),  MAKE_STR_PAIR(rcclLong),
-    MAKE_STR_PAIR(rcclFloat),  MAKE_STR_PAIR(rcclHalf),
-    MAKE_STR_PAIR(rcclDouble)};
+    MAKE_STR_PAIR(rcclChar),   MAKE_STR_PAIR(rcclInt),
+    MAKE_STR_PAIR(rcclHalf),   MAKE_STR_PAIR(rcclFloat),
+    MAKE_STR_PAIR(rcclDouble), MAKE_STR_PAIR(rcclInt64),
+    MAKE_STR_PAIR(rcclUint64)};
 
 // TODO: @adityaatluri, delete this variable
 std::vector<RingNodePool_t *> pools;

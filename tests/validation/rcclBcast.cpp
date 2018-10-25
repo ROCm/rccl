@@ -18,39 +18,19 @@ void CallBcast(signed char* psrc_buff, size_t buff_len, int root,
     RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclChar, root, comm, stream));
 }
 
-void CallBcast(unsigned char* psrc_buff, size_t buff_len, int root,
-               rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclUchar, root, comm, stream));
-}
-
-void CallBcast(signed short* psrc_buff, size_t buff_len, int root,
-               rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclShort, root, comm, stream));
-}
-
-void CallBcast(unsigned short* psrc_buff, size_t buff_len, int root,
-               rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclUshort, root, comm, stream));
-}
-
 void CallBcast(signed int* psrc_buff, size_t buff_len, int root,
                rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclInt, root, comm, stream));
 }
 
-void CallBcast(unsigned int* psrc_buff, size_t buff_len, int root,
-               rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclUint, root, comm, stream));
-}
-
 void CallBcast(signed long* psrc_buff, size_t buff_len, int root,
                rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclLong, root, comm, stream));
+    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclInt64, root, comm, stream));
 }
 
 void CallBcast(unsigned long* psrc_buff, size_t buff_len, int root,
                rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclUlong, root, comm, stream));
+    RCCLCHECK(rcclBcast(psrc_buff, buff_len, rcclUint64, root, comm, stream));
 }
 
 void CallBcast(__fp16* psrc_buff, size_t buff_len, int root, rcclComm_t comm,
@@ -159,21 +139,9 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests, int root) {
         DoBcast<signed char>(device_list, device_streams, rccl_comms,
                              src_device_buffers, src_host_buffers,
                              dst_host_buffers, *pbuff_len, root);
-        DoBcast<unsigned char>(device_list, device_streams, rccl_comms,
-                               src_device_buffers, src_host_buffers,
-                               dst_host_buffers, *pbuff_len, root);
-        DoBcast<signed short>(device_list, device_streams, rccl_comms,
-                              src_device_buffers, src_host_buffers,
-                              dst_host_buffers, *pbuff_len, root);
-        DoBcast<unsigned short>(device_list, device_streams, rccl_comms,
-                                src_device_buffers, src_host_buffers,
-                                dst_host_buffers, *pbuff_len, root);
         DoBcast<signed int>(device_list, device_streams, rccl_comms,
                             src_device_buffers, src_host_buffers,
                             dst_host_buffers, *pbuff_len, root);
-        DoBcast<unsigned int>(device_list, device_streams, rccl_comms,
-                              src_device_buffers, src_host_buffers,
-                              dst_host_buffers, *pbuff_len, root);
         DoBcast<signed long>(device_list, device_streams, rccl_comms,
                              src_device_buffers, src_host_buffers,
                              dst_host_buffers, *pbuff_len, root);
