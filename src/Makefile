@@ -7,7 +7,7 @@ SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp rccl
 all: lib
 
 lib:
-	${HCC_DIR}/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `${HCC_DIR}/bin/hcc-config --shared --cxxflags --ldflags` -L${HIP_DIR}/lib -lhip_device -lhip_hcc $(SRC) -o librccl.so
+	${HCC_DIR}/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include `${HCC_DIR}/bin/hcc-config --shared --cxxflags --ldflags` -L${HIP_DIR}/lib -lhip_hcc $(SRC) -o librccl.so
 
 install:
 	mkdir -p $(RCCL_INSTALL_DIR)
