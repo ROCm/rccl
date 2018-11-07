@@ -39,7 +39,7 @@ include(ROCMInstallSymlinks)
 include(ROCMCreatePackage)
 
 rocm_setup_version(
-    VERSION 0.6.0
+    VERSION 0.7.0
 )
 
 list(APPEND CMAKE_PREFIX_PATH /opt/rocm /opt/rocm/hip /opt/rocm/hcc)
@@ -49,6 +49,9 @@ find_package(hip REQUIRED)
 link_libraries(-amdgpu-target=gfx803 -amdgpu-target=gfx900 -amdgpu-target=gfx906)
 
 option( BUILD_SHARED_LIBS "Build as a shared library" ON )
+
+# configure a header file to pass the CMake version settings to the source, and package the header files in the output archive
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/inc/rccl/rccl-version.h.in" "${PROJECT_BINARY_DIR}/inc/rccl/rccl-version.h" )
 
 add_library( rccl
     src/rccl.cpp
@@ -71,6 +74,7 @@ rocm_install_targets(
   PREFIX rccl
   INCLUDE
     ${PROJECT_SOURCE_DIR}/inc
+    ${PROJECT_BINARY_DIR}/inc
 )
 
 rocm_export_targets(
