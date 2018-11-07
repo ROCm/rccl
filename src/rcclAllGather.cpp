@@ -74,28 +74,24 @@ rcclResult_t rcclAllGather(const void *sendbuff, int count,
     //! If the number of gpus equal to 1, do a simple memory copy
     if (num_gpus == 1) {
         switch (datatype) {
-        case rcclChar:
-        case rcclUchar: {
+        case rcclChar: {
             hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(char),
                            hipMemcpyDeviceToDevice, stream);
             break;
         }
-        case rcclShort:
-        case rcclUshort:
         case rcclHalf: {
             hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(short),
                            hipMemcpyDeviceToDevice, stream);
             break;
         }
         case rcclInt:
-        case rcclUint:
         case rcclFloat: {
             hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(int),
                            hipMemcpyDeviceToDevice, stream);
             break;
         }
-        case rcclLong:
-        case rcclUlong:
+        case rcclInt64:
+        case rcclUint64:
         case rcclDouble: {
             hipMemcpyAsync(recvbuff, sendbuff, count * sizeof(double),
                            hipMemcpyDeviceToDevice, stream);
@@ -117,24 +113,6 @@ rcclResult_t rcclAllGather(const void *sendbuff, int count,
             event, this_time);
         break;
     }
-    case rcclUchar: {
-        RcclInternalAllGather<unsigned char, rccl_uchar16_t>(
-            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-            event, this_time);
-        break;
-    }
-    case rcclShort: {
-        RcclInternalAllGather<signed short, rccl_short8_t>(
-            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-            event, this_time);
-        break;
-    }
-    case rcclUshort: {
-        RcclInternalAllGather<unsigned short, rccl_ushort8_t>(
-            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-            event, this_time);
-        break;
-    }
     case rcclHalf: {
         RcclInternalAllGather<__fp16, rccl_half8_t>(
             pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
@@ -147,25 +125,19 @@ rcclResult_t rcclAllGather(const void *sendbuff, int count,
             event, this_time);
         break;
     }
-    case rcclUint: {
-        RcclInternalAllGather<unsigned int, rccl_uint4_t>(
-            pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
-            event, this_time);
-        break;
-    }
     case rcclFloat: {
         RcclInternalAllGather<float, rccl_float4_t>(
             pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
             event, this_time);
         break;
     }
-    case rcclLong: {
+    case rcclInt64: {
         RcclInternalAllGather<signed long, rccl_long2_t>(
             pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
             event, this_time);
         break;
     }
-    case rcclUlong: {
+    case rcclUint64: {
         RcclInternalAllGather<unsigned long, rccl_ulong2_t>(
             pcurr_track, sendbuff, recvbuff, stream, count, num_gpus, rank,
             event, this_time);

@@ -19,27 +19,6 @@ void CallAllReduce(signed char* psrc_buff, signed char* pdst_buff,
                             stream));
 }
 
-void CallAllReduce(unsigned char* psrc_buff, unsigned char* pdst_buff,
-                   size_t buff_len, rcclRedOp_t op, rcclComm_t comm,
-                   hipStream_t stream) {
-    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUchar, op, comm,
-                            stream));
-}
-
-void CallAllReduce(signed short* psrc_buff, signed short* pdst_buff,
-                   size_t buff_len, rcclRedOp_t op, rcclComm_t comm,
-                   hipStream_t stream) {
-    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclShort, op, comm,
-                            stream));
-}
-
-void CallAllReduce(unsigned short* psrc_buff, unsigned short* pdst_buff,
-                   size_t buff_len, rcclRedOp_t op, rcclComm_t comm,
-                   hipStream_t stream) {
-    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUshort, op,
-                            comm, stream));
-}
-
 void CallAllReduce(signed int* psrc_buff, signed int* pdst_buff,
                    size_t buff_len, rcclRedOp_t op, rcclComm_t comm,
                    hipStream_t stream) {
@@ -47,24 +26,17 @@ void CallAllReduce(signed int* psrc_buff, signed int* pdst_buff,
                             stream));
 }
 
-void CallAllReduce(unsigned int* psrc_buff, unsigned int* pdst_buff,
-                   size_t buff_len, rcclRedOp_t op, rcclComm_t comm,
-                   hipStream_t stream) {
-    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUint, op, comm,
-                            stream));
-}
-
 void CallAllReduce(signed long* psrc_buff, signed long* pdst_buff,
                    size_t buff_len, rcclRedOp_t op, rcclComm_t comm,
                    hipStream_t stream) {
-    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclLong, op, comm,
+    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclInt64, op, comm,
                             stream));
 }
 
 void CallAllReduce(unsigned long* psrc_buff, unsigned long* pdst_buff,
                    size_t buff_len, rcclRedOp_t op, rcclComm_t comm,
                    hipStream_t stream) {
-    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUlong, op, comm,
+    RCCLCHECK(rcclAllReduce(psrc_buff, pdst_buff, buff_len, rcclUint64, op, comm,
                             stream));
 }
 
@@ -239,26 +211,10 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
                                        src_host_buffers, src_device_buffers,
                                        dst_host_buffers, dst_device_buffers,
                                        *pbuff_len);
-        DoAllReduce<unsigned char, true>(device_list, device_streams,
-                                         rccl_comms, src_host_buffers,
-                                         src_device_buffers, dst_host_buffers,
-                                         dst_device_buffers, *pbuff_len);
-        DoAllReduce<signed short, true>(device_list, device_streams, rccl_comms,
-                                        src_host_buffers, src_device_buffers,
-                                        dst_host_buffers, dst_device_buffers,
-                                        *pbuff_len);
-        DoAllReduce<unsigned short, true>(device_list, device_streams,
-                                          rccl_comms, src_host_buffers,
-                                          src_device_buffers, dst_host_buffers,
-                                          dst_device_buffers, *pbuff_len);
         DoAllReduce<signed int, true>(device_list, device_streams, rccl_comms,
                                       src_host_buffers, src_device_buffers,
                                       dst_host_buffers, dst_device_buffers,
                                       *pbuff_len);
-        DoAllReduce<unsigned int, true>(device_list, device_streams, rccl_comms,
-                                        src_host_buffers, src_device_buffers,
-                                        dst_host_buffers, dst_device_buffers,
-                                        *pbuff_len);
         DoAllReduce<signed long, true>(device_list, device_streams, rccl_comms,
                                        src_host_buffers, src_device_buffers,
                                        dst_host_buffers, dst_device_buffers,
@@ -287,26 +243,10 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests) {
                                         src_host_buffers, src_device_buffers,
                                         dst_host_buffers, dst_device_buffers,
                                         *pbuff_len);
-        DoAllReduce<unsigned char, false>(device_list, device_streams,
-                                          rccl_comms, src_host_buffers,
-                                          src_device_buffers, dst_host_buffers,
-                                          dst_device_buffers, *pbuff_len);
-        DoAllReduce<signed short, false>(device_list, device_streams,
-                                         rccl_comms, src_host_buffers,
-                                         src_device_buffers, dst_host_buffers,
-                                         dst_device_buffers, *pbuff_len);
-        DoAllReduce<unsigned short, false>(device_list, device_streams,
-                                           rccl_comms, src_host_buffers,
-                                           src_device_buffers, dst_host_buffers,
-                                           dst_device_buffers, *pbuff_len);
         DoAllReduce<signed int, false>(device_list, device_streams, rccl_comms,
                                        src_host_buffers, src_device_buffers,
                                        dst_host_buffers, dst_device_buffers,
                                        *pbuff_len);
-        DoAllReduce<unsigned int, false>(device_list, device_streams,
-                                         rccl_comms, src_host_buffers,
-                                         src_device_buffers, dst_host_buffers,
-                                         dst_device_buffers, *pbuff_len);
         DoAllReduce<signed long, false>(device_list, device_streams, rccl_comms,
                                         src_host_buffers, src_device_buffers,
                                         dst_host_buffers, dst_device_buffers,
@@ -388,26 +328,10 @@ void ReduceTestSize(std::vector<int>& device_list, size_t size_in_bytes) {
                                     src_host_buffers, src_device_buffers,
                                     dst_host_buffers, dst_device_buffers,
                                     size_in_bytes);
-    DoAllReduce<unsigned char, false>(device_list, device_streams, rccl_comms,
-                                      src_host_buffers, src_device_buffers,
-                                      dst_host_buffers, dst_device_buffers,
-                                      size_in_bytes);
-    DoAllReduce<signed short, false>(device_list, device_streams, rccl_comms,
-                                     src_host_buffers, src_device_buffers,
-                                     dst_host_buffers, dst_device_buffers,
-                                     size_in_bytes);
-    DoAllReduce<unsigned short, false>(device_list, device_streams, rccl_comms,
-                                       src_host_buffers, src_device_buffers,
-                                       dst_host_buffers, dst_device_buffers,
-                                       size_in_bytes);
     DoAllReduce<signed int, false>(device_list, device_streams, rccl_comms,
                                    src_host_buffers, src_device_buffers,
                                    dst_host_buffers, dst_device_buffers,
                                    size_in_bytes);
-    DoAllReduce<unsigned int, false>(device_list, device_streams, rccl_comms,
-                                     src_host_buffers, src_device_buffers,
-                                     dst_host_buffers, dst_device_buffers,
-                                     size_in_bytes);
     DoAllReduce<signed long, false>(device_list, device_streams, rccl_comms,
                                     src_host_buffers, src_device_buffers,
                                     dst_host_buffers, dst_device_buffers,

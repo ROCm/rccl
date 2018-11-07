@@ -23,30 +23,16 @@ extern "C" {
 //! Data type RCCL operation is done on
 //! rcclDataType_t is passed to a rccl operation such as rcclAllReduce, where
 //! reduction happens on following data types described
+/* Data types */
 typedef enum {
-    rcclChar = 0,         //!< signed char
-    rcclInt8 = 0,         //!< signed 8-bit byte
-    rcclUchar = 1,        //!< unsigned char
-    rcclUint8 = 1,        //!< unsigned 8-bit byte
-    rcclShort = 2,        //!< signed short
-    rcclInt16 = 2,        //!< signed 16-bit integer
-    rcclUshort = 3,       //!< unsigned short
-    rcclUint16 = 3,       //!< unsigned 16-bit integer
-    rcclInt = 4,          //!< signed integer
-    rcclInt32 = 4,        //!< signed 32-bit integer
-    rcclUint = 5,         //!< unsigned integer
-    rcclUint32 = 5,       //!< unsigned 32-bit integer
-    rcclLong = 6,         //!< signed long
-    rcclInt64 = 6,        //!< signed 64-bit integer
-    rcclUlong = 7,        //!< unsigned long
-    rcclUint64 = 7,       //!< unsigned 64-bit integer
-    rcclHalf = 8,         //!< half-precision floating point
-    rcclFloat16 = 8,      //!< 16-bit floating point
-    rcclFloat = 9,        //!< single-precision floating point
-    rcclFloat32 = 9,      //!< 32-bit floating point
-    rcclDouble = 10,      //!< double-precision floating point
-    rcclFloat64 = 10,     //!< 64-bit floating point
-    rccl_NUM_TYPES = 11,  //!< total number of data types supported by rccl
+    rcclChar       = 0,   //!< signed char
+    rcclInt        = 1,   //!< signed integer
+    rcclHalf       = 2,   //!< half-precision floating point
+    rcclFloat      = 3,   //!< single-precision floating point
+    rcclDouble     = 4,   //!< double-precision floating point
+    rcclInt64      = 5,   //!< signed 64-bit integer
+    rcclUint64     = 6,   //!< unsigned 64-bit integer
+    rccl_NUM_TYPES = 7    //!< total number of data types supported by rccl
 } rcclDataType_t;
 
 //! Return status from RCCL calls

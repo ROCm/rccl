@@ -100,24 +100,6 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
                                                num_gpus);
             break;
         }
-        case rcclUchar: {
-            RcclInternalBroadcast<unsigned char>(pcurr_track, proot_track,
-                                                 count, stream, buff, this_time,
-                                                 num_gpus);
-            break;
-        }
-        case rcclShort: {
-            RcclInternalBroadcast<signed short>(pcurr_track, proot_track, count,
-                                                stream, buff, this_time,
-                                                num_gpus);
-            break;
-        }
-        case rcclUshort: {
-            RcclInternalBroadcast<unsigned short>(pcurr_track, proot_track,
-                                                  count, stream, buff,
-                                                  this_time, num_gpus);
-            break;
-        }
         case rcclHalf: {
             RcclInternalBroadcast<__fp16>(pcurr_track, proot_track, count,
                                           stream, buff, this_time, num_gpus);
@@ -129,24 +111,18 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
                                               num_gpus);
             break;
         }
-        case rcclUint: {
-            RcclInternalBroadcast<unsigned int>(pcurr_track, proot_track, count,
-                                                stream, buff, this_time,
-                                                num_gpus);
-            break;
-        }
         case rcclFloat: {
             RcclInternalBroadcast<float>(pcurr_track, proot_track, count,
                                          stream, buff, this_time, num_gpus);
             break;
         }
-        case rcclLong: {
+        case rcclInt64: {
             RcclInternalBroadcast<signed long>(pcurr_track, proot_track, count,
                                                stream, buff, this_time,
                                                num_gpus);
             break;
         }
-        case rcclUlong: {
+        case rcclUint64: {
             RcclInternalBroadcast<unsigned long>(pcurr_track, proot_track,
                                                  count, stream, buff, this_time,
                                                  num_gpus);

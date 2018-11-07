@@ -18,50 +18,22 @@ void CallReduce(signed char* psrc_buff, signed char* pdst_buff, size_t buff_len,
                          comm, stream));
 }
 
-void CallReduce(unsigned char* psrc_buff, unsigned char* pdst_buff,
-                size_t buff_len, rcclRedOp_t op, int root, rcclComm_t comm,
-                hipStream_t stream) {
-    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclUchar, op, root,
-                         comm, stream));
-}
-
-void CallReduce(signed short* psrc_buff, signed short* pdst_buff,
-                size_t buff_len, rcclRedOp_t op, int root, rcclComm_t comm,
-                hipStream_t stream) {
-    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclShort, op, root,
-                         comm, stream));
-}
-
-void CallReduce(unsigned short* psrc_buff, unsigned short* pdst_buff,
-                size_t buff_len, rcclRedOp_t op, int root, rcclComm_t comm,
-                hipStream_t stream) {
-    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclUshort, op, root,
-                         comm, stream));
-}
-
 void CallReduce(signed int* psrc_buff, signed int* pdst_buff, size_t buff_len,
                 rcclRedOp_t op, int root, rcclComm_t comm, hipStream_t stream) {
     RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclInt, op, root,
                          comm, stream));
 }
 
-void CallReduce(unsigned int* psrc_buff, unsigned int* pdst_buff,
-                size_t buff_len, rcclRedOp_t op, int root, rcclComm_t comm,
-                hipStream_t stream) {
-    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclUint, op, root,
-                         comm, stream));
-}
-
 void CallReduce(signed long* psrc_buff, signed long* pdst_buff, size_t buff_len,
                 rcclRedOp_t op, int root, rcclComm_t comm, hipStream_t stream) {
-    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclLong, op, root,
+    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclInt64, op, root,
                          comm, stream));
 }
 
 void CallReduce(unsigned long* psrc_buff, unsigned long* pdst_buff,
                 size_t buff_len, rcclRedOp_t op, int root, rcclComm_t comm,
                 hipStream_t stream) {
-    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclUlong, op, root,
+    RCCLCHECK(rcclReduce(psrc_buff, pdst_buff, buff_len, rcclUint64, op, root,
                          comm, stream));
 }
 
@@ -175,21 +147,9 @@ void RandomReduceTest(std::vector<int>& device_list, int num_tests, int root) {
         DoReduce<signed char>(device_list, device_streams, rccl_comms,
                               host_buffers, device_buffers, dst_host_buffer,
                               dst_device_buffer, *pbuff_len, root);
-        DoReduce<unsigned char>(device_list, device_streams, rccl_comms,
-                                host_buffers, device_buffers, dst_host_buffer,
-                                dst_device_buffer, *pbuff_len, root);
-        DoReduce<signed short>(device_list, device_streams, rccl_comms,
-                               host_buffers, device_buffers, dst_host_buffer,
-                               dst_device_buffer, *pbuff_len, root);
-        DoReduce<unsigned short>(device_list, device_streams, rccl_comms,
-                                 host_buffers, device_buffers, dst_host_buffer,
-                                 dst_device_buffer, *pbuff_len, root);
         DoReduce<signed int>(device_list, device_streams, rccl_comms,
                              host_buffers, device_buffers, dst_host_buffer,
                              dst_device_buffer, *pbuff_len, root);
-        DoReduce<unsigned int>(device_list, device_streams, rccl_comms,
-                               host_buffers, device_buffers, dst_host_buffer,
-                               dst_device_buffer, *pbuff_len, root);
         DoReduce<signed long>(device_list, device_streams, rccl_comms,
                               host_buffers, device_buffers, dst_host_buffer,
                               dst_device_buffer, *pbuff_len, root);
