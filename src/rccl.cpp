@@ -15,6 +15,7 @@ All rights reserved.
 
 #include "rcclHelper.h"
 #include "rcclTracker.h"
+#include "rccl/rccl-version.h"
 
 #include <string>
 #include <unordered_map>
@@ -110,8 +111,9 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
                               int rank) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr,
-                "%s<<rccl-api: %s comm:%p ndev:%d, commId:%p rank:%d%s\n",
-                API_COLOR, __func__, comm, ndev, commId, rank, API_COLOR_END);
+                "%s<<rccl-api: %s RCCL version %d.%d.%d comm:%p ndev:%d, commId:%p rank:%d%s\n",
+                API_COLOR, __func__, RCCL_VERSION_MAJOR, RCCL_VERSION_MINOR, RCCL_VERSION_PATCH,
+                comm, ndev, commId, rank, API_COLOR_END);
     }
 
     //! Check if pointer to communicator is valid or not
@@ -158,8 +160,9 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
 //! @brief Definition of rcclCommInitAll
 rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
-        fprintf(stderr, "%s<<rccl-api: %s comm:%p ndev:%d devlist:%p%s\n",
-                API_COLOR, __func__, comm, ndev, devlist, API_COLOR_END);
+        fprintf(stderr, "%s<<rccl-api: %s RCCL version %d.%d.%d comm:%p ndev:%d devlist:%p%s\n",
+                API_COLOR, __func__, RCCL_VERSION_MAJOR, RCCL_VERSION_MINOR, RCCL_VERSION_PATCH,
+                comm, ndev, devlist, API_COLOR_END);
     }
 
     //! Check if pointers and number of devices are valid
