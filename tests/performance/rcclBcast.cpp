@@ -10,7 +10,7 @@ All rights reserved.
 #include <vector>
 #include "common.h"
 #include "performance/performance.h"
-#include "rccl/rccl.h"
+#include "rccl.h"
 
 void CallBcast(signed char* psrc_buff, size_t buff_len, int root,
                rcclComm_t comm, hipStream_t stream) {

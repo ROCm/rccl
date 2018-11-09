@@ -8,7 +8,7 @@ SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp rccl
 
 all: lib
 
-../inc/rccl/rccl-version.h: ../inc/rccl/rccl-version.h.in
+../inc/rccl-version.h: ../inc/rccl-version.h.in
 	gitver=`git log -1 --pretty='%h'`; \
 	string=`cat ../CMakeLists.txt`; \
 	re='    VERSION.([0-9]*)\.([0-9]*)\.([0-9]*).'; \
@@ -20,21 +20,20 @@ all: lib
             $< > $@; \
 	fi
 
-lib: ../inc/rccl/rccl-version.h
+lib: ../inc/rccl-version.h
 	${HCC_DIR}/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include -I${HSA_DIR}/include/ `${HCC_DIR}/bin/hcc-config --shared --cxxflags --ldflags` -L${HIP_DIR}/lib -lhip_hcc $(SRC) -o librccl.so
 
 install:
 	mkdir -p $(RCCL_INSTALL_DIR)
 	mkdir -p $(RCCL_INSTALL_DIR)/include
-	mkdir -p $(RCCL_INSTALL_DIR)/include/rccl
 	mkdir -p $(RCCL_INSTALL_DIR)/lib
 	cp librccl.so $(RCCL_INSTALL_DIR)/lib
-	cp ../inc/rccl/rccl.h $(RCCL_INSTALL_DIR)/include/rccl
-	cp ../inc/rccl/rccl-version.h $(RCCL_INSTALL_DIR)/include/rccl
+	cp ../inc/rccl.h $(RCCL_INSTALL_DIR)/include
+	cp ../inc/rccl-version.h $(RCCL_INSTALL_DIR)/include
 
 clean:
 	rm -rf librccl.so
-	rm ../inc/rccl/rccl-version.h
+	rm ../inc/rccl-version.h
 
 uninstall:
 	rm -rf $(RCCL_INSTALL_DIR)

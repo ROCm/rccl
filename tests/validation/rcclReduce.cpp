@@ -9,7 +9,7 @@ All rights reserved.
 #include <typeinfo>
 #include <vector>
 #include "common.h"
-#include "rccl/rccl.h"
+#include "rccl.h"
 #include "validation/validate.h"
 
 void CallReduce(signed char* psrc_buff, signed char* pdst_buff, size_t buff_len,

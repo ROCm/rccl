@@ -3,7 +3,7 @@ Copyright (c) 2017 - Present Advanced Micro Devices, Inc.
 All rights reserved.
 */
 
-#include "rccl/rccl.h"
+#include "rccl.h"
 #include "validation/validate.h"
 #include <iostream>
 #include <vector>
