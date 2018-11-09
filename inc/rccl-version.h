@@ -8,10 +8,10 @@
 #define RCCL_VERSION_H_
 
 // clang-format off
-#define RCCL_VERSION_MAJOR @rccl_VERSION_MAJOR@
-#define RCCL_VERSION_MINOR @rccl_VERSION_MINOR@
-#define RCCL_VERSION_PATCH @rccl_VERSION_PATCH@
-#define RCCL_VERSION_TWEAK @rccl_VERSION_TWEAK@
+#define RCCL_VERSION_MAJOR 0
+#define RCCL_VERSION_MINOR 7
+#define RCCL_VERSION_PATCH 2
+#define RCCL_VERSION_TWEAK
 // clang-format on
 
 #endif

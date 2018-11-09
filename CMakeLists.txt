@@ -38,9 +38,24 @@ include(ROCMSetupVersion)
 include(ROCMInstallSymlinks)
 include(ROCMCreatePackage)
 
-rocm_setup_version(
-    VERSION 0.7.1
-)
+file( STRINGS inc/rccl-version.h MAJOR REGEX "^#define +RCCL_VERSION_MAJOR +[0-9]+$" )
+file( STRINGS inc/rccl-version.h MINOR REGEX "^#define +RCCL_VERSION_MINOR +[0-9]+$" )
+file( STRINGS inc/rccl-version.h PATCH REGEX "^#define +RCCL_VERSION_PATCH +[0-9]+$" )
+file( STRINGS inc/rccl-version.h TWEAK REGEX "^#define +RCCL_VERSION_TWEAK +[0-9a-zA-Z]+$" )
+string( REPLACE "#define RCCL_VERSION_MAJOR " "" MAJOR ${MAJOR} )
+string( REPLACE "#define RCCL_VERSION_MINOR " "" MINOR ${MINOR} )
+string( REPLACE "#define RCCL_VERSION_PATCH " "" PATCH ${PATCH} )
+
+if( TWEAK STREQUAL "" )
+    rocm_setup_version(
+        VERSION ${MAJOR}.${MINOR}.${PATCH}
+    )
+else( )
+    string( REPLACE "#define RCCL_VERSION_TWEAK " "" TWEAK ${TWEAK} )
+    rocm_setup_version(
+        VERSION ${MAJOR}.${MINOR}.${PATCH}-${TWEAK}
+    )
+endif( )
 
 list(APPEND CMAKE_PREFIX_PATH /opt/rocm /opt/rocm/hip /opt/rocm/hcc)
 
@@ -49,9 +64,6 @@ find_package(hip REQUIRED)
 link_libraries(-amdgpu-target=gfx803 -amdgpu-target=gfx900 -amdgpu-target=gfx906)
 
 option( BUILD_SHARED_LIBS "Build as a shared library" ON )
-
-# configure a header file to pass the CMake version settings to the source, and package the header files in the output archive
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/inc/rccl-version.h.in" "${PROJECT_BINARY_DIR}/inc/rccl-version.h" )
 
 add_library( rccl
     src/rccl.cpp

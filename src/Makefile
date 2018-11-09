@@ -8,19 +8,7 @@ SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp rccl
 
 all: lib
 
-../inc/rccl-version.h: ../inc/rccl-version.h.in
-	gitver=`git log -1 --pretty='%h'`; \
-	string=`cat ../CMakeLists.txt`; \
-	re='    VERSION.([0-9]*)\.([0-9]*)\.([0-9]*).'; \
-	if [[ $${string} =~ $${re} ]]; then \
-	sed -e "s/@rccl_VERSION_MAJOR@/$${BASH_REMATCH[1]}/g" \
-	    -e "s/@rccl_VERSION_MINOR@/$${BASH_REMATCH[2]}/g" \
-	    -e "s/@rccl_VERSION_PATCH@/$${BASH_REMATCH[3]}/g" \
-	    -e "s/@rccl_VERSION_TWEAK@/$${gitver}/g" \
-            $< > $@; \
-	fi
-
-lib: ../inc/rccl-version.h
+lib:
 	${HCC_DIR}/bin/hcc -I../inc ${TARGETS} -I${HIP_DIR}/include -I${HSA_DIR}/include/ `${HCC_DIR}/bin/hcc-config --shared --cxxflags --ldflags` -L${HIP_DIR}/lib -lhip_hcc $(SRC) -o librccl.so
 
 install:
