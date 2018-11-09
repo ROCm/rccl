@@ -78,7 +78,7 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
 
     //! Check if current gpu is root or not
     bool is_root = pcomm->track_->rank == root;
-
+    hipEvent_t event = pcomm->event_;
     //! If current gpu is root, call internal implementation for root
     if (is_root) {
         RcclInternalBroadcastRoot(pcurr_track, stream, buff, this_time,
@@ -97,40 +97,40 @@ rcclResult_t rcclBcast(void *buff, int count, rcclDataType_t datatype, int root,
         case rcclChar: {
             RcclInternalBroadcast<signed char>(pcurr_track, proot_track, count,
                                                stream, buff, this_time,
-                                               num_gpus);
+                                               num_gpus, event);
             break;
         }
         case rcclHalf: {
             RcclInternalBroadcast<__fp16>(pcurr_track, proot_track, count,
-                                          stream, buff, this_time, num_gpus);
+                                          stream, buff, this_time, num_gpus, event);
             break;
         }
         case rcclInt: {
             RcclInternalBroadcast<signed int>(pcurr_track, proot_track, count,
                                               stream, buff, this_time,
-                                              num_gpus);
+                                              num_gpus, event);
             break;
         }
         case rcclFloat: {
             RcclInternalBroadcast<float>(pcurr_track, proot_track, count,
-                                         stream, buff, this_time, num_gpus);
+                                         stream, buff, this_time, num_gpus, event);
             break;
         }
         case rcclInt64: {
             RcclInternalBroadcast<signed long>(pcurr_track, proot_track, count,
                                                stream, buff, this_time,
-                                               num_gpus);
+                                               num_gpus, event);
             break;
         }
         case rcclUint64: {
             RcclInternalBroadcast<unsigned long>(pcurr_track, proot_track,
                                                  count, stream, buff, this_time,
-                                                 num_gpus);
+                                                 num_gpus, event);
             break;
         }
         case rcclDouble: {
             RcclInternalBroadcast<double>(pcurr_track, proot_track, count,
-                                          stream, buff, this_time, num_gpus);
+                                          stream, buff, this_time, num_gpus, event);
             break;
         }
         default: { return rcclInvalidType; }
