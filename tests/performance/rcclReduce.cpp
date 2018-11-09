@@ -10,7 +10,7 @@ All rights reserved.
 #include <vector>
 #include "common.h"
 #include "performance/performance.h"
-#include "rccl/rccl.h"
+#include "rccl.h"
 
 void CallReduce(signed char* psrc_buff, signed char* pdst_buff, size_t buff_len,
                 rcclRedOp_t op, int root, rcclComm_t comm, hipStream_t stream) {

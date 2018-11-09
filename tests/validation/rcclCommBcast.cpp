@@ -5,7 +5,7 @@ All rights reserved.
 
 #include <iostream>
 #include <vector>
-#include "rccl/rccl.h"
+#include "rccl.h"
 #include "common.h"
 #include "validate.h"
 

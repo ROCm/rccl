@@ -35,7 +35,7 @@ export LD_LIBRARY_PATH=/opt/rocm/rccl/lib:$LD_LIBRARY_PATH
 
 ## Usage
 ```cpp
-#include <rccl/rccl.h>
+#include <rccl.h>
 #include <vector>
 
 int main() {

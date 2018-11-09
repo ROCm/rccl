@@ -1,4 +1,4 @@
-#include <rccl/rccl.h>
+#include <rccl.h>
 #include "gtest/gtest.h"
 
 TEST(CommInitRankTest, T01) {

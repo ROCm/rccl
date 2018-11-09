@@ -15,7 +15,7 @@ All rights reserved.
 
 #include "rcclHelper.h"
 #include "rcclTracker.h"
-#include "rccl/rccl-version.h"
+#include "rccl-version.h"
 
 #include <string>
 #include <unordered_map>
