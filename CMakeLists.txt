@@ -60,6 +60,7 @@ add_library( rccl
     src/rcclReduce.cpp
     src/rcclTracker.cpp
     src/rcclAllGather.cpp
+    src/rcclReduceScatter.cpp
     )
 
 if( TARGET hip::device )
