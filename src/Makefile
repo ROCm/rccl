@@ -4,7 +4,7 @@ HIP_DIR=/opt/rocm/hip
 HCC_DIR=/opt/rocm/hcc
 HSA_DIR=/opt/rocm/hsa
 TARGETS=--amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906
-SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp rcclAllGather.cpp
+SRC=rccl.cpp rcclAllReduce.cpp rcclBcast.cpp rcclReduce.cpp rcclTracker.cpp rcclAllGather.cpp rcclReduceScatter.cpp
 
 all: lib
 
