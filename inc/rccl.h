@@ -77,7 +77,8 @@ typedef struct RcclComm_t* rcclComm_t;
 
 //! rcclUniqueId is initialized per clique and is used to create communicators
 //! for each gpu
-typedef struct RcclUniqueId* rcclUniqueId;
+#define RCCL_UNIQUE_ID_BYTES 128
+typedef struct { char internal[RCCL_UNIQUE_ID_BYTES]; } rcclUniqueId;
 
 //! Returns RCCL API status as string
 
@@ -89,14 +90,14 @@ const char* rcclGetErrorString(rcclResult_t result);
 //! \param [in] uniqueId Memory location to rcclUniqueId created by application
 rcclResult_t rcclGetUniqueId(rcclUniqueId* uniqueId);
 
-//! Create RCCL communicator for a GPU based on rank, commId and number of
+//! Create RCCL communicator for a GPU based on rank, uniqueId and number of
 //! devices in the clique
 
 //! \param [out] comm Memory location to rcclComm_t created by application
 //! \param [in] ndev Number of devices in the clique
-//! \param [in] commId rcclUniqueId with which the communicator is created with
+//! \param [in] uniqueId rcclUniqueId with which the communicator is created with
 //! \param [in] rank Rank of the gpu the communicator will be created with
-rcclResult_t rcclCommInitRank(rcclComm_t* comm, int ndev, rcclUniqueId commId,
+rcclResult_t rcclCommInitRank(rcclComm_t* comm, int ndev, rcclUniqueId uniqueId,
                               int rank);
 
 //! Create an array of communicators from device list of length ndev

@@ -91,29 +91,31 @@ const char *rcclGetErrorString(rcclResult_t result) {
 
 //! @brief Definition of rcclGetUniqueId
 rcclResult_t rcclGetUniqueId(rcclUniqueId *uniqueId) {
-    if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
-        fprintf(stderr, "%s<<rccl-api: %s uniqueId:%p%s\n", API_COLOR, __func__,
-                uniqueId, API_COLOR_END);
-    }
-
     //! Check if pointer to rcclUniqueId is valid or not
     if (uniqueId == nullptr) {
         return rcclInvalidArgument;
     }
 
-    //! Allocate RcclUniqueId and return success
-    *uniqueId = new RcclUniqueId;
+    //! Allocate RcclUniqueId
+    struct RcclUniqueId *s_uniqueId = new RcclUniqueId;
+    //! Create ID as string representation of unsigned long value of the address
+    snprintf(uniqueId->internal, RCCL_UNIQUE_ID_BYTES, "%lu", (unsigned long)s_uniqueId);
+    if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
+        fprintf(stderr, "%s<<rccl-api: %s uniqueId:%s%s\n", API_COLOR, __func__,
+                uniqueId->internal, API_COLOR_END);
+    }
+
     return rcclSuccess;
 }
 
 //! @brief Definition of rcclCommInitRank
-rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
+rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId uniqueId,
                               int rank) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr,
-                "%s<<rccl-api: %s RCCL version %d.%d.%d comm:%p ndev:%d, commId:%p rank:%d%s\n",
+                "%s<<rccl-api: %s RCCL version %d.%d.%d comm:%p ndev:%d, commId:%s rank:%d%s\n",
                 API_COLOR, __func__, RCCL_VERSION_MAJOR, RCCL_VERSION_MINOR, RCCL_VERSION_PATCH,
-                comm, ndev, commId, rank, API_COLOR_END);
+                comm, ndev, uniqueId.internal, rank, API_COLOR_END);
     }
 
     //! Check if pointer to communicator is valid or not
@@ -129,6 +131,8 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId commId,
     if (ndev < 1) {
         return rcclUnsupportedDeviceCount;
     }
+
+    struct RcclUniqueId *commId = (struct RcclUniqueId *)std::stoll(uniqueId.internal);
 
     //! Check if rcclUniqueId is valid or not
     if (commId == nullptr) {
