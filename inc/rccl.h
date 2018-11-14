@@ -190,16 +190,16 @@ rcclResult_t rcclReduce(const void* sendbuff, void* recvbuff, int count,
 rcclResult_t rcclAllGather(const void* sendbuff, int count, rcclDataType_t datatype,
                             void* recvbuff, rcclComm_t comm, hipStream_t stream);
 
-//! Does reduction op on sendbuff on all gpus and scatter the result to all gpus
-//! on recvbuff Reduction op (rcclRedOp_t) is done on data (of data type
-//! rcclDataType_t) in sendbuff of length = count on all gpus and stored in
-//! recvbuff on all gpus. The operation is launched on the stream provided. To
-//! do in-place reduce scatter, pass in same pointers to recvbuff and sendbuff (
-//! in-place all-reduce, sendbuff = recvbuff)
+//! Does reduction op on sendbuff on all gpus and scatter the result to all gpus'
+//! recvbuff. Reduction op (rcclRedOp_t) is done on data (of data type
+//! rcclDataType_t) in sendbuff of length = recvcount*num_gpus on all gpus and
+//! stored in recvbuff with length = recvcount on all gpus. The operation is
+//! launched on the stream provided. To do in-place reduce scatter, pass in
+//! same pointers to recvbuff and sendbuff (sendbuff = recvbuff)
 
 //! \param [in] sendbuff Source buffer
 //! \param [in] recvbuff Destination buffer
-//! \param [in] count Number of elements in buffer
+//! \param [in] recvcount Number of elements in receive buffer
 //! \param [in] datatype Data type of buffers
 //! \param [in] op Reduction operation on buffers
 //! \param [in] comm Communicator for current gpu
