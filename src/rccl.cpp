@@ -162,7 +162,7 @@ rcclResult_t rcclCommInitRank(rcclComm_t *comm, int ndev, rcclUniqueId uniqueId,
 }
 
 //! @brief Definition of rcclCommInitAll
-rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, int *devlist) {
+rcclResult_t rcclCommInitAll(rcclComm_t *comm, int ndev, const int *devlist) {
     if ((RCCL_TRACE_RT & krccl_print_api) == krccl_print_api) {
         fprintf(stderr, "%s<<rccl-api: %s RCCL version %d.%d.%d comm:%p ndev:%d devlist:%p%s\n",
                 API_COLOR, __func__, RCCL_VERSION_MAJOR, RCCL_VERSION_MINOR, RCCL_VERSION_PATCH,

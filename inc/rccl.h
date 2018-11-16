@@ -105,7 +105,7 @@ rcclResult_t rcclCommInitRank(rcclComm_t* comm, int ndev, rcclUniqueId uniqueId,
 //! \param [out] comm Memory location to ndev number of communicators
 //! \param [in] ndev Number of devices forming clique
 //! \param [in] devlist List of HIP device indices
-rcclResult_t rcclCommInitAll(rcclComm_t* comm, int ndev, int* devlist);
+rcclResult_t rcclCommInitAll(rcclComm_t* comm, int ndev, const int* devlist);
 
 //! Get HIP device index from communicator
 
