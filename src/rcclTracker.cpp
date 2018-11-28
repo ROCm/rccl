@@ -25,12 +25,9 @@ RingNodePool_t::RingNodePool_t() {
     HIPCHECK(
         hipHostMalloc(&barrier_, sizeof(Barrier_t), hipHostMallocCoherent));
 
-    std::atomic_store_explicit(&(barrier_->bar_in), 0,
-                               std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(barrier_->bar_out), 0,
-                               std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(barrier_->times_done), 0,
-                               std::memory_order_seq_cst);
+    barrier_->bar_in = 0;
+    barrier_->bar_out = 0;
+    barrier_->times_done = 0;
 }
 
 //! @brief Default destructor
@@ -62,12 +59,9 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
         hipHostMalloc(&barrier_, sizeof(Barrier_t), hipHostMallocCoherent));
 
     //! Reset fields in Barrier_t
-    std::atomic_store_explicit(&(barrier_->bar_in), 0,
-                               std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(barrier_->bar_out), 0,
-                               std::memory_order_seq_cst);
-    std::atomic_store_explicit(&(barrier_->times_done), 0,
-                               std::memory_order_seq_cst);
+    barrier_->bar_in = 0;
+    barrier_->bar_out = 0;
+    barrier_->times_done = 0;
 
     //! Allocate RingNode_t as system pinned memory for gpu and add its hip
     //! device index

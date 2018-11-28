@@ -16,7 +16,6 @@ All rights reserved.
 #pragma once
 
 #include <hip/hip_runtime.h>
-#include <atomic>
 #include <map>
 #include "rcclCheck.h"
 
@@ -51,7 +50,7 @@ constexpr unsigned knum_vectors_per_workgroup = 1024;
 //! barrier. bar_in tracks how many gpus have entered the barrier. bar_out
 //! tracks how many gpus have exited. Owned by rcclUniqueId or RingNodePool_t
 struct Barrier_t {
-    std::atomic<int> bar_in, bar_out, times_done;
+    int bar_in, bar_out, times_done;
 };
 
 //! @brief Node for each gpu
@@ -64,10 +63,6 @@ struct RingNode_t {
     struct RingNode_t* prev_gpu;
     //! Point to RingNode_t owned by next gpu in clique
     struct RingNode_t* next_gpu;
-
-    //! We use atomic data type to store pointer to buffers on a gpu, because
-    //! there are multiple readers (all peer gpus) and single writer (current
-    //! gpu)
 
     //! Stores source buffer on current gpu
     void* src_buffer;
