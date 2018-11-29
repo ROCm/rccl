@@ -42,7 +42,7 @@ __global__ void RcclKernelScalarReduce(RingNode_t* pcurr_track, const void* send
                 reinterpret_cast<DataType_t*>(pnext_track->src_buffer);
 
             if (Op == rcclSum) result = result + next_src_buff[index];
-            if (Op == rcclProd) result = result + next_src_buff[index];
+            if (Op == rcclProd) result = result * next_src_buff[index];
             if (Op == rcclMax)
                 result = result > next_src_buff[index] ? result
                                                        : next_src_buff[index];
