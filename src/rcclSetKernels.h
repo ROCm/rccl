@@ -18,6 +18,8 @@ All rights reserved.
 
 #include "rcclTracker.h"
 
+namespace {
+
 //! @brief Definition of RcclKernelSetSrcPtr
 //! RingNode_t::src_buffer is set
 __global__ void RcclKernelSetSrcPtr(RingNode_t* pcurr_track, void* send_buff) {
@@ -36,4 +38,6 @@ __global__ void RcclKernelSetSrcDstPtr(RingNode_t* pcurr_track, void* send_buff,
                                        void* recv_buff) {
     pcurr_track->src_buffer = send_buff;
     pcurr_track->dst_buffer = recv_buff;
+}
+
 }

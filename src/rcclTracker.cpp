@@ -15,6 +15,9 @@ All rights reserved.
 
 #include "rcclTracker.h"
 
+const char* API_COLOR = KGRN;
+const char* API_COLOR_END = KNRM;
+
 //! @brief Default constructor
 //! Allocate new barrier_t at initialization
 RingNodePool_t::RingNodePool_t() {
