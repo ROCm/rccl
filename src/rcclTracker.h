@@ -28,8 +28,8 @@ All rights reserved.
 #define KCYN "\x1B[36m"
 #define CWHT "\x1B[37m"
 
-const char* API_COLOR = KGRN;
-const char* API_COLOR_END = KNRM;
+extern const char* API_COLOR;
+extern const char* API_COLOR_END;
 
 //! @brief Flags to print different debug levels
 //! Enable debug log for rccl api calls

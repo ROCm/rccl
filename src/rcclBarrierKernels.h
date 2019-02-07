@@ -16,6 +16,8 @@ All rights reserved.
 
 #include "rcclTracker.h"
 
+namespace {
+
 //! @brief Definition of RcclKernelBarrierWait
 //! This kernel acts a barrier between stream on multiple gpus. In rccl, this
 //! kernel is used to make sure all the gpus done executing the previous
@@ -72,4 +74,6 @@ __global__ void RcclKernelBarrierWait(RingNode_t* pcurr_track, int this_time,
         //! Increment number of times a barrier is used by one
         atomicAdd(&pcurr_track->barrier->times_done, val);
     }
+}
+
 }
