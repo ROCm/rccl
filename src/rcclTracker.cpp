@@ -25,8 +25,8 @@ RingNodePool_t::RingNodePool_t() {
     active_devices_ = 0;
     device_indices_ = nullptr;
 
-    HIPCHECK(
-        hipHostMalloc(&barrier_, sizeof(Barrier_t), hipHostMallocCoherent));
+    HIPCHECK(hipHostMalloc(reinterpret_cast<void**>(&barrier_),
+                           sizeof(Barrier_t), hipHostMallocCoherent));
 
     barrier_->bar_in = 0;
     barrier_->bar_out = 0;
@@ -58,8 +58,8 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
     struct RingNode_t* pdctl;
 
     //! Allocate Barrier_t
-    HIPCHECK(
-        hipHostMalloc(&barrier_, sizeof(Barrier_t), hipHostMallocCoherent));
+    HIPCHECK(hipHostMalloc(reinterpret_cast<void**>(&barrier_),
+                           sizeof(Barrier_t), hipHostMallocCoherent));
 
     //! Reset fields in Barrier_t
     barrier_->bar_in = 0;
@@ -69,8 +69,8 @@ RingNodePool_t::RingNodePool_t(const int* device_indices, int num_devices)
     //! Allocate RingNode_t as system pinned memory for gpu and add its hip
     //! device index
     for (int i = 0; i < num_devices_; i++) {
-        HIPCHECK(
-            hipHostMalloc(&pdctl, sizeof(RingNode_t), hipHostMallocCoherent));
+        HIPCHECK(hipHostMalloc(reinterpret_cast<void**>(&pdctl),
+                               sizeof(RingNode_t), hipHostMallocCoherent));
         pool_[i] = pdctl;
         pool_[i]->prev_gpu = nullptr;
         pool_[i]->next_gpu = nullptr;
@@ -114,7 +114,8 @@ RcclComm_t* RingNodePool_t::AddDevice(int device, int rank, int ndev) {
 
     //! Create new RingNode_t
     struct RingNode_t* pdctl;
-    HIPCHECK(hipHostMalloc(&pdctl, sizeof(RingNode_t), hipHostMallocCoherent));
+    HIPCHECK(hipHostMalloc(reinterpret_cast<void**>(&pdctl), sizeof(RingNode_t),
+                           hipHostMallocCoherent));
 
     //! Create hipEvent_t for each gpu in the clique
     HIPCHECK(
