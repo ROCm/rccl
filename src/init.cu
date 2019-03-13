@@ -292,9 +292,9 @@ static void showVersion() {
   }
 }
 
-static ncclResult_t fillInfo(struct ncclInfo* info, int rank) {
+static ncclResult_t fillInfo(struct ncclInfo* info, int rank, uint64_t commHash) {
   for (int t=0; t<NTRANSPORTS; t++) {
-    NCCLCHECK(ncclTransports[t].fillInfo(info->tinfo+t, rank));
+    NCCLCHECK(ncclTransports[t].fillInfo(info->tinfo+t, rank, commHash));
   }
   return ncclSuccess;
 }
@@ -517,11 +517,13 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int rank = comm->rank;
   int nranks = comm->nRanks;
   void* commState;
+  uint64_t commHash = getnHash(commId->internal, NCCL_UNIQUE_ID_BYTES);
+  TRACE(NCCL_INIT, "comm %p, commHash %lu, rank %d nranks %d - BEGIN", comm, commHash, rank, nranks);
   NCCLCHECK(bootstrapInit(commId, rank, nranks, &commState));
 
   struct ncclInfo* allInfo;
   NCCLCHECK(ncclCalloc(&allInfo, nranks));
-  NCCLCHECK(fillInfo(allInfo+rank, rank));
+  NCCLCHECK(fillInfo(allInfo+rank, rank, commHash));
   NCCLCHECK(bootstrapAllGather(commState, allInfo, sizeof(struct ncclInfo)));
 
   int* connectTransport;
@@ -741,7 +743,7 @@ static ncclResult_t initTransportsAll(struct ncclComm** comms, const int* devs, 
   NCCLCHECK(ncclCalloc(&allInfo, nranks));
   for (int rank=0; rank<nranks; rank++) {
     CUDACHECK(hipSetDevice(devs[rank]));
-    NCCLCHECK(fillInfo(allInfo+rank, rank));
+    NCCLCHECK(fillInfo(allInfo+rank, rank, 0));
   }
 
   int* connectTransport;

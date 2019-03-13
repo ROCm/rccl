@@ -54,13 +54,13 @@ struct shmRecvResources {
 
 /* Fill information necessary to exchange between ranks to choose whether or not
  * to use this transport */
-ncclResult_t shmFillInfo(ncclTinfo_t* opaqueInfo, int rank) {
+ncclResult_t shmFillInfo(ncclTinfo_t* opaqueInfo, int rank, uint64_t commHash) {
   struct shmInfo* info = (struct shmInfo*)opaqueInfo;
   static_assert(sizeof(struct shmInfo) <= sizeof(ncclTinfo_t), "shm Info too large");
   info->rank = rank;
   CUDACHECK(hipGetDevice(&info->cudaDev));
-  info->hostHash=getHostHash();
-  info->pidHash=getPidHash();
+  info->hostHash=getHostHash()+commHash;
+  info->pidHash=getPidHash()+commHash;
   return ncclSuccess;
 }
 
