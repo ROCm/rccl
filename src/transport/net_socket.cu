@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -50,7 +51,12 @@ ncclResult_t ncclSocketDevices(int* ndev) {
 
 ncclResult_t ncclSocketPciPath(int dev, char** path) {
   char devicepath[PATH_MAX];
-  snprintf(devicepath, PATH_MAX, "/sys/class/net/%s/device", ncclNetIfNames+dev*MAX_IF_NAME_SIZE);
+  snprintf(devicepath, PATH_MAX, "/sys/class/net/%s", ncclNetIfNames+dev*MAX_IF_NAME_SIZE);
+  *path = realpath(devicepath, NULL);
+  const char* string_virual_network_device_path="/sys/devices/virtual/net/";
+  if (*path && !strncmp(*path, string_virual_network_device_path, strlen(string_virual_network_device_path)))
+    return ncclSuccess;
+  free(*path);
   *path = realpath(devicepath, NULL);
   if (*path == NULL) {
     INFO(NCCL_NET|NCCL_INIT, "Could not find real path of %s", devicepath);

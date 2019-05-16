@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -55,7 +56,15 @@
   NCCL_FUNCS2A(ncclAllReduce) }
 
 // Must be consistent with the ncclFuncSet enum
-__device__ ncclKern_t ncclFuncs[ncclCollCount*ncclNumOps*ncclNumTypes*2] = {
+using ncclKern_t = void (*)(struct CollectiveArgs*);
+__device__ constexpr ncclKern_t ncclFuncs[]{
+#if defined(__HIP_DEVICE_COMPILE__)
+  NCCL_FUNCS2B(ncclBroadcast),
+  NCCL_FUNCS2A(ncclReduce),
+  NCCL_FUNCS2B(ncclAllGather),
+  NCCL_FUNCS2A(ncclReduceScatter),
+  NCCL_FUNCS2A(ncclAllReduce)
+#endif
 // Don't try to initialize the host shadow copy of this device-side global
 // variable. There is no host pointer to a device-side function, which
 // confuses clang. This will be fixed in the next clang release.

@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -17,6 +18,123 @@ struct FuncNull {
     return 0;
   }
 };
+
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
+//we really don't need any specializations and we don't need
+//to break things into uint32_t
+template<typename T>
+__device__ inline T ncclMinFunc(T x, T y) { return y < x ? y : x; }
+
+template<typename T>
+__device__ inline T ncclMaxFunc(T x, T y) { return y < x ? x : y; }
+
+template<typename T>
+class FuncBase {
+protected:
+  static constexpr auto n = sizeof(PackType) / sizeof(T);
+
+  union Cvt {
+    using Vec = T __attribute__((ext_vector_type(n)));
+
+    PackType data;
+    Vec vec;
+
+    static_assert(sizeof(Vec) == sizeof(data), "Vec must be the same size of data.");
+  };
+};
+
+template<>
+class FuncBase<half> {
+protected:
+  static constexpr auto n = sizeof(PackType) / sizeof(_Float16);
+  union Cvt {
+    using Vec = _Float16 __attribute__((ext_vector_type(n)));
+
+    PackType data;
+    Vec vec;
+
+    static_assert(sizeof(Vec) == sizeof(data), "Vec must be the same size of data.");
+  };
+};
+
+template<typename T>
+struct FuncSum : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    tmp_x.vec += Cvt{y}.vec;
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return x + y;
+  }
+};
+
+template<typename T>
+struct FuncProd : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    tmp_x.vec *= Cvt{y}.vec;
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return x * y;
+  }
+};
+
+template<typename T>
+struct FuncMax : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    Cvt tmp_y{y};
+
+    for (auto i = 0u; i != FuncBase<T>::n; ++i) {
+        tmp_x.vec[i] = ncclMaxFunc(tmp_x.vec[i], tmp_y.vec[i]);
+    }
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return (x < y) ? y : x;
+  }
+};
+
+template<typename T>
+struct FuncMin : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    Cvt tmp_y{y};
+
+    for (auto i = 0u; i != FuncBase<T>::n; ++i) {
+        tmp_x.vec[i] = ncclMinFunc(tmp_x.vec[i], tmp_y.vec[i]);
+    }
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return (x < y) ? x : y;
+  }
+};
+
+#else
 
 template<typename T>
 struct FuncSum {
@@ -361,4 +479,7 @@ struct FuncMin<half> {
     return __float2half(fm);
   }
 };
+
+#endif // defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
 #endif // REDUCE_KERNEL_H_

@@ -1,11 +1,14 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved. 
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
 #include "ring.h"
 #include "param.h"
+
+extern bool useFineGrainVramPcie;
 
 NCCL_PARAM(Buffsize, "BUFFSIZE", DEFAULT_BUFFER_SIZE_BYTES);
 
@@ -18,12 +21,12 @@ ncclResult_t initRing(struct ncclComm* comm, int ringid) {
 
   const int sendSize = ring->devMemSendSize = sizeof(struct ncclSendMem);
   struct ncclSendMem* sendMem;
-  NCCLCHECK(ncclCudaCalloc((char**)&sendMem, sendSize));
+  NCCLCHECK(ncclCudaCalloc((char**)&sendMem, sendSize, useFineGrainVramPcie));
   ring->devMemSend = sendMem;
 
   const int recvSize = ring->devMemRecvSize = offsetof(struct ncclRecvMem, buff)+ring->buffSize;
   struct ncclRecvMem* recvMem;
-  NCCLCHECK(ncclCudaCalloc((char**)&recvMem, recvSize));
+  NCCLCHECK(ncclCudaCalloc((char**)&recvMem, recvSize, useFineGrainVramPcie));
   ring->devMemRecv = recvMem;
 
   TRACE(NCCL_INIT,"sendMem %p size %d recvMem %p size %d", sendMem, sendSize, recvMem, recvSize);
@@ -51,12 +54,12 @@ ncclResult_t initRing(struct ncclComm* comm, int ringid) {
 
 ncclResult_t freeRing(struct ncclRing* ring) {
   // Intermediate buffering
-  CUDACHECK(cudaFree(ring->devMemSend));
-  CUDACHECK(cudaFree(ring->devMemRecv));
+  CUDACHECK(hipFree(ring->devMemSend));
+  CUDACHECK(hipFree(ring->devMemRecv));
 
   // Index to rank table
   free(ring->userRanks);
-  CUDACHECK(cudaFree(ring->devUserRanks));
+  CUDACHECK(hipFree(ring->devUserRanks));
 
   // Operation list
   NCCLCHECK(ncclCudaHostFree(ring->collectives));

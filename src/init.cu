@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -16,6 +17,8 @@
 #include "group.h"
 #include "utils.h"
 #include "net.h"
+#include "topo.h"
+#include <numa.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -24,7 +27,7 @@
 #include <sched.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime_api.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
@@ -58,17 +61,17 @@ ncclNet_t* ncclNet = NULL;
 #pragma weak ncclCudaCompCap
 int ncclCudaCompCap() {
   int cudaDev;
-  if (cudaGetDevice(&cudaDev) != cudaSuccess) return 0;
+  if (hipGetDevice(&cudaDev) != hipSuccess) return 0;
   int ccMajor;
-  if (cudaDeviceGetAttribute(&ccMajor, cudaDevAttrComputeCapabilityMajor, cudaDev) != cudaSuccess) return 0;
+  if (hipDeviceGetAttribute(&ccMajor, hipDeviceAttributeComputeCapabilityMajor, cudaDev) != hipSuccess) return 0;
   return ccMajor;
 }
 int ncclCudaFullCompCap() {
   int cudaDev;
-  if (cudaGetDevice(&cudaDev) != cudaSuccess) return 0;
+  if (hipGetDevice(&cudaDev) != hipSuccess) return 0;
   int ccMajor, ccMinor;
-  if (cudaDeviceGetAttribute(&ccMajor, cudaDevAttrComputeCapabilityMajor, cudaDev) != cudaSuccess) return 0;
-  if (cudaDeviceGetAttribute(&ccMinor, cudaDevAttrComputeCapabilityMinor, cudaDev) != cudaSuccess) return 0;
+  if (hipDeviceGetAttribute(&ccMajor, hipDeviceAttributeComputeCapabilityMajor, cudaDev) != hipSuccess) return 0;
+  if (hipDeviceGetAttribute(&ccMinor, hipDeviceAttributeComputeCapabilityMinor, cudaDev) != hipSuccess) return 0;
   return ccMajor*10+ccMinor;
 }
 
@@ -144,6 +147,22 @@ int ncclThreadThreshold(int minCompCap, int multiNode) {
   return threshold;
 }
 
+bool useFineGrainVramPcie = false;
+
+void parseHsaForceFineGrainVramPcie() {
+  char* str = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
+  if (str && strlen(str) > 0) {
+    errno = 0;
+    int64_t v = strtoll(str, NULL, 0);
+    if (errno || (v != 0 && v != 1)) {
+      INFO(NCCL_ALL,"Invalid value %s for %s, using default %u.", str, "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie); \
+    } else {
+      useFineGrainVramPcie = v;
+      INFO(NCCL_ALL,"%s set by environment to %u.", "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie);  \
+    }
+  }
+}
+
 pthread_mutex_t initLock = PTHREAD_MUTEX_INITIALIZER;
 static bool initialized = false;
 static ncclResult_t ncclInit() {
@@ -153,6 +172,8 @@ static ncclResult_t ncclInit() {
     initEnv();
     initDebug();
     initNet();
+    // Check if HSA_FORCE_FINE_GRAIN_PCIE is set in env
+    parseHsaForceFineGrainVramPcie();
     initialized = true;
   }
   pthread_mutex_unlock(&initLock);
@@ -177,16 +198,16 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm == NULL)
     return ncclSuccess;
 
-  CUDACHECK(cudaFree(comm->devComm));
+  CUDACHECK(hipFree(comm->devComm));
 
   for (int ring=0; ring<comm->nRings; ring++)
     NCCLCHECK(freeRing(comm->rings+ring));
 
   if (comm->doneEvent != NULL)
-    CUDACHECK(cudaEventDestroy(comm->doneEvent));
+    CUDACHECK(hipEventDestroy(comm->doneEvent));
 
   if (comm->launchMode == ncclComm::GROUP) {
-    CUDACHECK(cudaStreamDestroy(comm->groupStream));
+    CUDACHECK(hipStreamDestroy(comm->groupStream));
   }
 
   // Last rank frees shared resources between threads
@@ -216,8 +237,8 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
   // Try to create a CUDA object right away. If there is something wrong with
   // the device we're on (failure cause #1) , better know it early.
-  cudaEvent_t doneEvent;
-  CUDACHECK(cudaEventCreateWithFlags(&doneEvent, cudaEventDisableTiming));
+  hipEvent_t doneEvent;
+  CUDACHECK(hipEventCreateWithFlags(&doneEvent, hipEventDisableTiming));
 
   struct ncclComm* comm;
   NCCLCHECK(ncclCalloc(&comm, 1));
@@ -225,7 +246,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   INFO(NCCL_INIT,"comm %p rank %d nranks %d", comm, rank, ndev);
   comm->rank = rank;
   comm->nRanks = ndev;
-  cudaGetDevice(&comm->cudaDev);
+  hipGetDevice(&comm->cudaDev);
   comm->doneEvent = doneEvent;
   comm->llThreshold = ncclParamLlThreshold();
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
@@ -255,7 +276,11 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 }
 
 // Pre-process the string so that running "strings" on the lib can quickly reveal the version.
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+hip"
+#else
 #define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+cuda" STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
+#endif
 static void showVersion() {
   static int shown = 0;
   if (shown == 0 && ncclDebugLevel >= NCCL_LOG_VERSION) {
@@ -416,8 +441,8 @@ static ncclResult_t buildRings(int nrings, int* rings, int rank, int nranks, int
 
 void* waitForNonNullPtr(void* p) {
   volatile void** ptr = (volatile void**) p;
-  while (*ptr == NULL) sched_yield();
-  return (void*)*ptr;
+  while (LOAD(ptr) == NULL) sched_yield();
+  return (void*)LOAD(ptr);
 }
 
 ncclResult_t initParams(struct ncclComm* comm) {
@@ -472,11 +497,11 @@ ncclResult_t ncclCommSetIntra(struct ncclComm* comm, int rank, int ranks, struct
     comm->launchMode = ncclComm::PARALLEL;
   }
   if (comm->launchMode == ncclComm::GROUP) {
-    CUDACHECK(cudaStreamCreateWithFlags(&comm->groupStream, cudaStreamNonBlocking));
+    CUDACHECK(hipStreamCreateWithFlags(&comm->groupStream, hipStreamNonBlocking));
 #if CUDART_VERSION >= 9000
     if (*comm->intraCC && (ncclCudaFullCompCap() == *comm->intraCC)) {
       // Check whether the GPU supports Cooperative Group Multi Device Launch
-      (void) cudaDeviceGetAttribute(&cgMdLaunch, cudaDevAttrCooperativeMultiDeviceLaunch, comm->cudaDev);
+      (void) hipDeviceGetAttribute(&cgMdLaunch, cudaDevAttrCooperativeMultiDeviceLaunch, comm->cudaDev);
     }
 #endif
   }
@@ -614,14 +639,41 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 }
 
 bool SetCpuAffinity(int cudaDev, nvmlDevice_t* nvmlDevice) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  if (numa_available() < 0) {
+    WARN("System does not support NUMA API!");
+    return false;
+  }
+  char* cudaPath;
+  NCCLCHECK(getCudaPath(cudaDev, &cudaPath));
+  strcat(cudaPath, "/numa_node");
+  int fd;
+  SYSCHECKVAL(open(cudaPath, O_RDONLY), "open", fd);
+  char numa_node[5];
+  int len;
+  SYSCHECKVAL(read(fd, numa_node, 4), "read", len);
+  SYSCHECK(close(fd), "close");
+  errno = 0;
+  long node = strtol(numa_node, NULL, 10);
+  if (errno == ERANGE || errno == EINVAL) {
+    INFO(NCCL_ALL,"%s: Call to strtol returned %s", __func__, strerror(errno));
+    free(cudaPath);
+    return false;
+  }
+  numa_run_on_node(node);
+  numa_set_preferred(node);
+  free(cudaPath);
+  return true;
+#else
   char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
-  if (cudaDeviceGetPCIBusId(busId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, cudaDev) != cudaSuccess) return false;
+  if (hipDeviceGetPCIBusId(busId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, cudaDev) != hipSuccess) return false;
   if (wrapNvmlDeviceGetHandleByPciBusId(busId, nvmlDevice) != ncclSuccess) return false;
   if (wrapNvmlDeviceSetCpuAffinity(*nvmlDevice) != ncclSuccess) {
     WARN("Failed to set CPU affinity");
     return false;
   }
   return true;
+#endif
 }
 
 ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank) {
@@ -634,7 +686,7 @@ ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId 
   // Make sure all host memory allocation are close to the GPU
   int cudaDev;
   nvmlDevice_t nvmlDevice;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   SetCpuAffinity(cudaDev, &nvmlDevice);
   ncclResult_t res;
 
@@ -667,7 +719,7 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
   INFO(NCCL_INIT,"rank %d nranks %d", myrank, nranks);
 
   // Make sure the CUDA runtime is initialized.
-  CUDACHECK(cudaFree(NULL));
+  CUDACHECK(hipFree(NULL));
 
   NCCLCHECK(PtrCheck(newcomm, "CommInitRank", "newcomm"));
   if (nranks < 1 || myrank < 0 || myrank >= nranks) {
@@ -677,7 +729,7 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
 
   if (ncclAsyncMode()) {
     int cudaDev;
-    CUDACHECK(cudaGetDevice(&cudaDev));
+    CUDACHECK(hipGetDevice(&cudaDev));
     return ncclAsyncInit(ncclCommInitRankSync, cudaDev, newcomm, nranks, commId, myrank);
   } else {
     return ncclCommInitRankSync(newcomm, nranks, commId, myrank);
@@ -688,7 +740,7 @@ static ncclResult_t initTransportsAll(struct ncclComm** comms, const int* devs, 
   struct ncclInfo* allInfo;
   NCCLCHECK(ncclCalloc(&allInfo, nranks));
   for (int rank=0; rank<nranks; rank++) {
-    CUDACHECK(cudaSetDevice(devs[rank]));
+    CUDACHECK(hipSetDevice(devs[rank]));
     NCCLCHECK(fillInfo(allInfo+rank, rank));
   }
 
@@ -709,7 +761,7 @@ static ncclResult_t initTransportsAll(struct ncclComm** comms, const int* devs, 
   int myCompCap = ncclCudaCompCap();
   int minCompCap = myCompCap;
   for (int rank=0; rank<nranks; rank++) {
-    CUDACHECK(cudaSetDevice(devs[rank]));
+    CUDACHECK(hipSetDevice(devs[rank]));
     int nringsRank;
     int nthreadsRank = getDefaultThreads();
     myCompCap = ncclCudaCompCap();
@@ -750,7 +802,7 @@ static ncclResult_t initTransportsAll(struct ncclComm** comms, const int* devs, 
     struct ncclConnect connect[2*nranks];
     int* ringRanks = rings+r*nranks;
     for (int rank=0; rank<nranks; rank++) {
-      CUDACHECK(cudaSetDevice(devs[rank]));
+      CUDACHECK(hipSetDevice(devs[rank]));
       NCCLCHECK(setupRing(comms[rank], r, rank, nranks, ringRanks, allInfo, connect+2*rank));
     }
     // RingExchange connect information
@@ -763,7 +815,7 @@ static ncclResult_t initTransportsAll(struct ncclComm** comms, const int* devs, 
       swap(prevRankNextConnect, rankPrevConnect, sizeof(struct ncclConnect));
     }
     for (int rank=0; rank<nranks; rank++) {
-      CUDACHECK(cudaSetDevice(devs[rank]));
+      CUDACHECK(hipSetDevice(devs[rank]));
       struct ncclRing *ring = comms[rank]->rings+r;
       NCCLCHECK(ring->send.transport->send.connect(connect+2*rank+1, &ring->send));
       NCCLCHECK(ring->recv.transport->recv.connect(connect+2*rank+0, &ring->recv));
@@ -800,7 +852,7 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
     ncclDevList[i] = devlist ? devlist[i] : i;
   }
 
-  cudaGetDevice(&savedDevice);
+  hipGetDevice(&savedDevice);
 
   for(rank=0; rank<ndev; ++rank)
     comms[rank] = NULL;
@@ -810,7 +862,7 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
 
   for (rank=0; rank<ndev; ++rank) {
     cudaDev = ncclDevList[rank];
-    CUDACHECKGOTO(cudaSetDevice(cudaDev), res, cleanup);
+    CUDACHECKGOTO(hipSetDevice(cudaDev), res, cleanup);
 
     SetCpuAffinity(cudaDev, &nvmlDevice);
 
@@ -826,7 +878,7 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
 
   for(rank=0; rank<ndev; ++rank) {
     cudaDev = ncclDevList[rank];
-    CUDACHECKGOTO(cudaSetDevice(cudaDev), res, cleanup);
+    CUDACHECKGOTO(hipSetDevice(cudaDev), res, cleanup);
     NCCLCHECKGOTO(devCommSetup(comms[rank]), res, cleanup);
   }
 
@@ -843,7 +895,7 @@ cleanup:
 final:
   if(wrapNvmlShutdown() != ncclSuccess)
     INFO(NCCL_INIT,"NCCL did not shutdown nvml properly");
-  cudaSetDevice(savedDevice);
+  hipSetDevice(savedDevice);
   sched_setaffinity(0, sizeof(cpu_set_t), &affinitySave);
   return res;
 }
@@ -854,17 +906,17 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
   if (comm == NULL)
     return ncclSuccess;
   int savedDevice;
-  CUDACHECK(cudaGetDevice(&savedDevice));
+  CUDACHECK(hipGetDevice(&savedDevice));
   int commDevice = comm->cudaDev;
 
   if (savedDevice != commDevice) {
-    CUDACHECK(cudaSetDevice(commDevice));
+    CUDACHECK(hipSetDevice(commDevice));
   }
 
   NCCLCHECK(commFree(comm));
 
   if (savedDevice != commDevice)
-    CUDACHECK(cudaSetDevice(savedDevice));
+    CUDACHECK(hipSetDevice(savedDevice));
 
   return ncclSuccess;
 }

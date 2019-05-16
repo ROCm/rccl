@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -16,9 +17,10 @@
   if (noffset == buffSize) noffset = 0;
 
 template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclReduceScatterKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
-  const int nthreads = blockDim.x - 1;
+  const int nthreads = blockDim.x;
   const int bid = args->bid;
   struct ncclComm* comm = args->comm;
   struct ncclRing* ring = comm->rings+blockIdx.x;
@@ -38,7 +40,7 @@ __device__ void ncclReduceScatterKernel(struct CollectiveArgs* args) {
 
   if (tid == 0) {
     // Update in case we skipped some collectives
-    *ring->recv.conn.opCount = args->opCount;
+    STORE(ring->recv.conn.opCount, args->opCount);
     // Wait for next to be ready
     WaitFlag waitOpCountNext(ring->send.conn.opCount, 0);
     waitOpCountNext.wait(args->opCount);
@@ -112,10 +114,10 @@ __device__ void ncclReduceScatterKernel(struct CollectiveArgs* args) {
 
   if (tid == 0) {
     waitDoneFromNext.wait(REDUCESCATTER_SUBSTEPS*(step + REDUCESCATTER_BUFCHUNKS));
-    *ring->send.conn.head = 0ULL;
-    *ring->recv.conn.tail = 0ULL;
+    STORE(ring->send.conn.head, 0ULL);
+    STORE(ring->recv.conn.tail, 0ULL);
     __threadfence_system();
-    *ring->recv.conn.opCount = args->opCount+1;
+    STORE(ring->recv.conn.opCount, args->opCount+1);
   }
 }
 
@@ -130,6 +132,7 @@ __device__ void ncclReduceScatterKernel(struct CollectiveArgs* args) {
   step++;
 
 template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclReduceScatterLLKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
   const int bid = args->bid;

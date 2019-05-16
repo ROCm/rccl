@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -19,7 +20,7 @@ typedef enum { ncclCollBroadcast, ncclCollReduce, ncclCollAllGather, ncclCollRed
 
 /* Declare all collective operations */
 #define DECL_COLL4(coll, op, dtype) \
-  extern __device__ void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args); \
+  extern __device__ __attribute__((noinline)) void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args); \
   extern __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl coll); \
 
 #define DECL_COLL3(coll, op, dtype) \

@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2017, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -18,7 +19,7 @@ typedef ncclResult_t(*ncclInitFunc_t)(ncclComm_t* newcomm, int ndev, ncclUniqueI
 ncclResult_t ncclAsyncInit(ncclInitFunc_t func, int cudaDev, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank);
 
 typedef ncclResult_t(*ncclCollFunc_t)(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t type, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t type, ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream);
 
 ncclResult_t ncclAsyncColl(ncclComm_t comm);
 #endif

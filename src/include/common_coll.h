@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,16 +13,16 @@
 #include "collectives/collectives.h"
 
 static ncclResult_t PointerCheck(const void* pointer, struct ncclComm* comm, const char* ptrname, const char* opname) {
-  cudaPointerAttributes attr;
-  cudaError_t err = cudaPointerGetAttributes(&attr, pointer);
-  if (err != cudaSuccess || attr.devicePointer == NULL) {
+  hipPointerAttribute_t attr;
+  hipError_t err = hipPointerGetAttributes(&attr, pointer);
+  if (err != hipSuccess || attr.devicePointer == NULL) {
     WARN("%s : %s is not a valid pointer", opname, ptrname);
     return ncclInvalidArgument;
   }
 #if CUDART_VERSION >= 10000
-  if (attr.type == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
+  if (attr.type == hipMemoryTypeDevice && attr.device != comm->cudaDev) {
 #else
-  if (attr.memoryType == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
+  if (attr.memoryType == hipMemoryTypeDevice && attr.device != comm->cudaDev) {
 #endif
     WARN("%s : %s allocated on device %d mismatchs with NCCL device %d", opname, ptrname, attr.device, comm->cudaDev);
     return ncclInvalidArgument;
@@ -99,7 +100,7 @@ static inline void ncclGetCollResource(ncclComm_t comm, size_t nbytes, int* nrin
   int llEnforced = 0; /* see if the size falls in the NCCL_LL_THRESHOLD range set by user */
   if (comm->llThreshold >= 0) { /* user sets total LL threshold */
     if (nbytes > comm->llThreshold) { /* non-LL */
-      *nthreads = comm->nThreads+1;
+      *nthreads = comm->nThreads;
       *nrings = comm->nRings;
       return;
     } else {
@@ -129,12 +130,12 @@ static inline void ncclGetCollResource(ncclComm_t comm, size_t nbytes, int* nrin
   nr = DIVUP(nbytes, (NCCL_LL_RING_THRESHOLD*ll_max_nthreads*comm->nRanks)); /* else we try the max number of LL threads */
   nr = nr == 0 ? 1 : nr > comm->nRings ? comm->nRings : nr;
   *ll = nbytes > comm->nRanks*nr*ll_max_nthreads*comm->threadThreshold ? llEnforced : 1;
-  *nthreads = *ll ? ll_max_nthreads : comm->nThreads+1;
+  *nthreads = *ll ? ll_max_nthreads : comm->nThreads;
   *nrings = *ll ? (int)nr : comm->nRings;
 }
 
 static ncclResult_t saveKernel(int coll, const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t dtype, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream, size_t nbytes, int loopFactor) {
+    ncclDataType_t dtype, ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream, size_t nbytes, int loopFactor) {
   int llMode, nBlocks, nThreads;
   ncclGetCollResource(comm, nbytes, &nBlocks, &nThreads, &llMode);
   comm->myParams->blockDim.x = std::max((int)comm->myParams->blockDim.x, nThreads);
@@ -164,7 +165,7 @@ static ncclResult_t saveKernel(int coll, const void* sendbuff, void* recvbuff, s
     int opIndex = ring->collFifoTail;
     struct ncclColl* c = ring->collectives+opIndex;
     volatile uint8_t* activePtr = (volatile uint8_t*)&c->active;
-    while (activePtr[0] != 0) sched_yield();
+    while (LOAD(activePtr) != 0) sched_yield();
 
     struct CollectiveArgs* args = &c->args;
     args->root = root;
@@ -180,7 +181,7 @@ static ncclResult_t saveKernel(int coll, const void* sendbuff, void* recvbuff, s
 
     c->nThreads = nThreads;
     c->funcIndex = FUNC_INDEX(coll, op, dtype, llMode);
-    c->active = 1;
+    STORE(&c->active, 1);
     opIndex = (opIndex+1)%NCCL_MAX_OPS;
     c->nextIndex = opIndex;
     ring->collFifoTail = opIndex;

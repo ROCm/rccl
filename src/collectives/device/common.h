@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -7,12 +8,49 @@
 #ifndef NCCL_DEVICE_COMMON_H_
 #define NCCL_DEVICE_COMMON_H_
 
+#include <hip/hip_runtime.h>
+
 #include "../collectives.h"
 #include "core.h"
 #include "nccl.h"
 
+#include <type_traits>
+
 typedef void(*ncclKern_t)(struct CollectiveArgs* args);
-extern __device__ ncclKern_t ncclFuncs[];
+extern __device__ const ncclKern_t ncclFuncs[];
+
+template<unsigned short f, unsigned short l>
+struct Caller {
+  static
+  void call(ncclColl* const c) noexcept
+  {
+    constexpr unsigned short m = f + (l - f) / 2;
+
+    return (c->funcIndex < m) ? Caller<f, m>::call(c) : Caller<m, l>::call(c);
+  }
+};
+
+template<unsigned short f>
+struct Caller<f, f + 1>{
+  static
+  void call(struct ncclColl* const c) noexcept { ncclFuncs[f](&c->args); }
+};
+
+inline
+__device__
+void NCCL_CALL_FUNCTIONS(struct ncclColl* const c) noexcept
+{
+  if (c->funcIndex < 72) {
+    if (c->funcIndex % 2) ncclBroadcastLL_copy_i8(&c->args);
+    else ncclBroadcast_copy_i8(&c->args);
+  }
+  else if (c->funcIndex < 144) Caller<72, 144>::call(c);
+  else if (c->funcIndex < 216) {
+    if (c->funcIndex % 2) ncclAllGatherLL_copy_i8(&c->args);
+    else ncclAllGather_copy_i8(&c->args);
+  }
+  else Caller<216, 360>::call(c);
+}
 
 static __device__ void load_parallel(void* dst, void* src, size_t size, int tid) {
   int* d = (int*)dst;
@@ -54,7 +92,7 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
       if (c->funcIndex == fIndex) { \
         coll##Kernel<UNROLL, ncclFunc<ctype>, ctype>(&c->args); \
       } else { \
-        ncclFuncs[c->funcIndex](&c->args); \
+        NCCL_CALL_FUNCTIONS(c); \
       } \
     } \
     int nextIndex = c->nextIndex; \

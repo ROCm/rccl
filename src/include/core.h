@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -16,16 +17,17 @@
 #include <algorithm> // std::min/std::max
 #include <unistd.h>
 #include <stdlib.h>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime_api.h>
+#include <hip/hip_runtime.h>
 
 #if CUDART_VERSION < 9000
 struct cudaLaunchParams {
-  void *func;
+  void (*func)(struct ncclColl);
   dim3 gridDim;
   dim3 blockDim;
-  void **args;
+  struct ncclColl **args;
   size_t sharedMem;
-  cudaStream_t stream;
+  hipStream_t stream;
 };
 #endif
 
@@ -35,10 +37,10 @@ struct cudaLaunchParams {
 
 // Rings / LL tuning
 #define NCCL_LL_RING_THRESHOLD 8 // Per thread size before we start increasing nrings
-#define NCCL_THREAD_THRESHOLD 64 // Per thread size before we switch to non-LL for Volta and above
+#define NCCL_THREAD_THRESHOLD 256 // Per thread size before we switch to non-LL for Volta and above
 #define NCCL_THREAD_THRESHOLD_PREVOLTA 32 // Per thread size before we switch to non-LL for pre-Volta archs
 #define NCCL_LL_MAX_NTHREADS 256
-#define NCCL_LL_MIN_NTHREADS 64
+#define NCCL_LL_MIN_NTHREADS 256
 
 #define DIVUP(x, y) \
     (((x)+(y)-1)/(y))
@@ -90,9 +92,9 @@ struct ncclConnector {
   struct ncclConnInfo conn;
 };
 
-#define CACHE_LINE_SIZE 128
+#define CACHE_LINE_SIZE 64
 #define MEM_ALIGN 4096
-#define SIZES_FIFO_SIZE 32
+#define SIZES_FIFO_SIZE 16
 #define CUDA_IPC_MIN 2097152UL /* 2MiB - not currently used */
 
 #define NCCL_LL_CHUNKS 8
@@ -164,6 +166,8 @@ struct ncclRing {
 };
 static_assert(sizeof(struct ncclRing) == 0x80*sizeof(int), "ncclRing must have a pow2 size");
 
+#pragma pack(push)  /* push current alignment to stack */
+#pragma pack(4)     /* set alignment to 4 bytes boundary */
 /* CollectiveArgs + ncclColl are to be a power of two, currently 64 bytes, */
 /* to make sure reads to host from the CUDA kernel are aligned. */
 /* Make sure to adjust padding at the end of ncclColl. */
@@ -197,6 +201,7 @@ struct ncclColl {
   };
 };
 static_assert(sizeof(struct ncclColl) == (0x10*sizeof(int)), "ncclColl must have a pow2 size");
+#pragma pack(pop)   /* restore original alignment from stack */
 
 struct ncclComm {
   struct ncclRing rings[MAXRINGS];
@@ -206,9 +211,9 @@ struct ncclComm {
   int cudaDev; // my cuda device index
 
   enum { GROUP, PARALLEL } launchMode;
-  cudaStream_t userStream;
+  hipStream_t userStream;
   bool userStreamSet;
-  cudaEvent_t doneEvent;
+  hipEvent_t doneEvent;
   bool checkPointers;
 
   // Counter to make sure collectives match (needed for bcast/reduce
@@ -225,7 +230,7 @@ struct ncclComm {
 
   // An internal CUDA stream for NCCL kernel CGMD launches
   int groupCudaStream;
-  cudaStream_t groupStream;
+  hipStream_t groupStream;
 
   // Device copy of the communicator
   struct ncclComm *devComm;
@@ -243,22 +248,31 @@ struct ncclComm {
   int* intraCGMode; // Whether we can use CUDA9 CGMD or not
   int* intraCC; // Only to check all have the same ComputeCap and disable CGMode if not
   struct ncclColl args;
-  void* argsptr;
+  struct ncclColl* argsptr;
 };
+
+// Convert volatile access to atomic
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#define LOAD(VAR) __atomic_load_n((VAR), __ATOMIC_SEQ_CST)
+#define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+#else
+#define LOAD(VAR) *(VAR)
+#define STORE(DST, SRC) *(DST) = (SRC)
+#endif
 
 // Check CUDA calls
 #define CUDACHECK(cmd) do {                                 \
-    cudaError_t e = cmd;                                    \
-    if( e != cudaSuccess ) {                                \
-        WARN("Cuda failure '%s'", cudaGetErrorString(e));   \
+    hipError_t e = cmd;                                    \
+    if( e != hipSuccess ) {                                \
+        WARN("Cuda failure '%s'", hipGetErrorString(e));   \
         return ncclUnhandledCudaError;                      \
     }                                                       \
 } while(false)
 
 #define CUDACHECKGOTO(cmd, res, label) do {                 \
-    cudaError_t e = cmd;                                    \
-    if( e != cudaSuccess ) {                                \
-        WARN("Cuda failure '%s'", cudaGetErrorString(e));   \
+    hipError_t e = cmd;                                    \
+    if( e != hipSuccess ) {                                \
+        WARN("Cuda failure '%s'", hipGetErrorString(e));   \
         res = ncclUnhandledCudaError;                       \
         goto label;                                         \
     }                                                       \
@@ -327,14 +341,14 @@ int ncclCudaCompCap();
 
 #include <sys/mman.h>
 static inline ncclResult_t ncclCudaHostAlloc(void** ptr, void** devPtr, size_t size) {
-  CUDACHECK(cudaHostAlloc(ptr, size, cudaHostAllocMapped));
+  CUDACHECK(hipHostMalloc(ptr, size, hipHostMallocMapped));
   memset(*ptr, 0, size);
   *devPtr = *ptr;
   return ncclSuccess;
 }
 
 static inline ncclResult_t ncclCudaHostFree(void* ptr) {
-  CUDACHECK(cudaFreeHost(ptr));
+  CUDACHECK(hipHostFree(ptr));
   return ncclSuccess;
 }
 
@@ -351,15 +365,18 @@ static ncclResult_t ncclCalloc(T** ptr, size_t nelem) {
 }
 
 template <typename T>
-static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem) {
-  CUDACHECK(cudaMalloc(ptr, nelem*sizeof(T)));
-  CUDACHECK(cudaMemset(*ptr, 0, nelem*sizeof(T)));
+static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem, bool isFineGrain = false) {
+  if (isFineGrain)
+    CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
+  else
+    CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
+  CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
   return ncclSuccess;
 }
 
 template <typename T>
 static ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
-  CUDACHECK(cudaMemcpy(dst, src, nelem*sizeof(T), cudaMemcpyDefault));
+  CUDACHECK(hipMemcpy(dst, src, nelem*sizeof(T), hipMemcpyDefault));
   return ncclSuccess;
 }
 

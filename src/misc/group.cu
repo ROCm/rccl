@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -52,7 +53,7 @@ struct ncclAsyncArgs {
 thread_local struct ncclAsyncArgs ncclGroupArgs[MAX_ASYNC_OPS];
 
 ncclResult_t ncclSetDevice(int cudaDev) {
-  CUDACHECK(cudaSetDevice(cudaDev));
+  CUDACHECK(hipSetDevice(cudaDev));
   return ncclSuccess;
 }
 
@@ -116,7 +117,7 @@ ncclResult_t ncclGroupEnd() {
   ncclGroupMode--;
   if (ncclGroupMode > 0) return ncclSuccess;
   int savedDev;
-  CUDACHECK(cudaGetDevice(&savedDev));
+  CUDACHECK(hipGetDevice(&savedDev));
   int done = ncclGroupIndex;
   int doneArray[ncclGroupIndex];
   for (int i=0; i<ncclGroupIndex; i++) doneArray[i] = 0;
@@ -129,22 +130,22 @@ ncclResult_t ncclGroupEnd() {
    * 2. Barrier Wait. No CUDA call is permitted
    * 3. Enqueue Events. CUDA event wait/enqueue.
    * This is needed because step 2 cannot call any CUDA primitive, otherwise if
-   * cudaFree happens between 1 and 3, it could block that CUDA call and
+   * hipFree happens between 1 and 3, it could block that CUDA call and
    * prevent some ranks from launching their network threads, which would
-   * prevent the NCCL call from completing, blocking the cudaFree call.
+   * prevent the NCCL call from completing, blocking the hipFree call.
    */
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
       if (args->coll.comm->userStream == NULL)
-        CUDACHECKGOTO(cudaSetDevice(args->coll.comm->cudaDev), ret, end);
+        CUDACHECKGOTO(hipSetDevice(args->coll.comm->cudaDev), ret, end);
       NCCLCHECKGOTO(ncclBarrierEnqueue(args->coll.comm), ret, end);
     }
   }
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
-      CUDACHECKGOTO(cudaSetDevice(args->coll.comm->cudaDev), ret, end);
+      CUDACHECKGOTO(hipSetDevice(args->coll.comm->cudaDev), ret, end);
       NCCLCHECKGOTO(ncclBarrierEnqueueWait(args->coll.comm), ret, end);
     }
   }
@@ -152,7 +153,7 @@ ncclResult_t ncclGroupEnd() {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
       if (args->coll.comm->userStream == NULL)
-        CUDACHECKGOTO(cudaSetDevice(args->coll.comm->cudaDev), ret, end);
+        CUDACHECKGOTO(hipSetDevice(args->coll.comm->cudaDev), ret, end);
       NCCLCHECKGOTO(ncclEnqueueEvents(args->coll.comm), ret, end);
       doneArray[i] = 1;
       done--;
@@ -182,7 +183,7 @@ group_cleanup:
     for (int r=0; r<comm->nRings; r++) {
       struct ncclRing* ring = comm->rings+r;
       for (int i=0; i<ring->collCount; i++) {
-        ring->collectives[(ring->collStart + i)%NCCL_MAX_OPS].active = 0;
+        STORE(&ring->collectives[(ring->collStart + i)%NCCL_MAX_OPS].active, 0);
       }
       ring->collFifoTail = ring->collStart;
       ring->collCount = 0;
@@ -193,6 +194,6 @@ group_cleanup:
 end:
   ncclGroupError = ncclSuccess;
   ncclGroupIndex = 0;
-  CUDACHECK(cudaSetDevice(savedDev)); // do other clean-ups first before calling cudaSetDevice, because this call can fail too
+  CUDACHECK(hipSetDevice(savedDev)); // do other clean-ups first before calling hipSetDevice, because this call can fail too
   return ret;
 }

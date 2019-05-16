@@ -32,7 +32,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
   char hostname[1024];
   getHostName(hostname, 1024);
   int cudaDev;
-  cudaGetDevice(&cudaDev);
+  hipGetDevice(&cudaDev);
 
   char buffer[1024];
   size_t len = 0;

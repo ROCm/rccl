@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -10,7 +11,7 @@
 #include "param.h"
 #include "shm.h"
 #include <unistd.h>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime_api.h>
 
 struct shmInfo {
   int rank;
@@ -57,7 +58,7 @@ ncclResult_t shmFillInfo(ncclTinfo_t* opaqueInfo, int rank) {
   struct shmInfo* info = (struct shmInfo*)opaqueInfo;
   static_assert(sizeof(struct shmInfo) <= sizeof(ncclTinfo_t), "shm Info too large");
   info->rank = rank;
-  CUDACHECK(cudaGetDevice(&info->cudaDev));
+  CUDACHECK(hipGetDevice(&info->cudaDev));
   info->hostHash=getHostHash();
   info->pidHash=getPidHash();
   return ncclSuccess;

@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -18,35 +19,35 @@ struct ncclTransport ncclTransports[NTRANSPORTS] = {
 };
 
 static void FifoPullArgs(struct transportProxyInfo* info, struct ncclProxyArgs *args) {
-  struct ncclProxyArgs *fifoArgs = info->argsFifo + (info->argsFifoHead % TRANSPORT_PROXY_FIFO_SIZE);
+  struct ncclProxyArgs *fifoArgs = info->argsFifo + (LOAD(&info->argsFifoHead) % TRANSPORT_PROXY_FIFO_SIZE);
   pthread_mutex_lock(&info->mutex);
-  while (fifoArgs->active == 0)
+  while (LOAD(&fifoArgs->active) == 0)
     pthread_cond_wait(&info->cond, &info->mutex);
   __sync_synchronize();
   memcpy(args, fifoArgs, sizeof(struct ncclProxyArgs));
   __sync_synchronize();
-  fifoArgs->active = 0;
+  STORE(&fifoArgs->active, 0);
   pthread_cond_signal(&info->cond);
   pthread_mutex_unlock(&info->mutex);
-  info->argsFifoHead++;
+  __atomic_fetch_add(&info->argsFifoHead, 1, __ATOMIC_SEQ_CST);
 }
 
 static struct ncclProxyArgs* FifoGetNextArgs(struct transportProxyInfo* info) {
   if (info == NULL) return NULL;
-  struct ncclProxyArgs* fifoArgs = info->argsFifo + (info->argsFifoTail % TRANSPORT_PROXY_FIFO_SIZE);
+  struct ncclProxyArgs* fifoArgs = info->argsFifo + (LOAD(&info->argsFifoTail) % TRANSPORT_PROXY_FIFO_SIZE);
   pthread_mutex_lock(&info->mutex);
-  while (fifoArgs->active == 1)
+  while (LOAD(&fifoArgs->active) == 1)
     pthread_cond_wait(&info->cond, &info->mutex);
   pthread_mutex_unlock(&info->mutex);
-  info->argsFifoTail++;
+  __atomic_fetch_add(&info->argsFifoTail, 1, __ATOMIC_SEQ_CST);
   return fifoArgs;
 }
 
 static void FifoPushArgs(struct transportProxyInfo* info) {
   if (info == NULL) return;
 
-  struct ncclProxyArgs* fifoArgs = info->argsFifo + ((info->argsFifoTail-1) % TRANSPORT_PROXY_FIFO_SIZE);
-  if (fifoArgs->active == 0) return;
+  struct ncclProxyArgs* fifoArgs = info->argsFifo + ((LOAD(&info->argsFifoTail)-1) % TRANSPORT_PROXY_FIFO_SIZE);
+  if (LOAD(&fifoArgs->active) == 0) return;
 
   pthread_mutex_lock(&info->mutex);
   pthread_cond_signal(&info->cond);
@@ -55,21 +56,21 @@ static void FifoPushArgs(struct transportProxyInfo* info) {
 
 static void WaitProxyReady(struct transportProxyInfo* info) {
   pthread_mutex_lock(&info->mutex);
-  while (info->proxyReady == 0)
+  while (LOAD(&info->proxyReady) == 0)
     pthread_cond_wait(&info->cond, &info->mutex);
   pthread_mutex_unlock(&info->mutex);
 }
 
 static void SetProxyReady(struct transportProxyInfo* info) {
   pthread_mutex_lock(&info->mutex);
-  info->proxyReady = 1;
+  STORE(&info->proxyReady, 1);
   pthread_cond_signal(&info->cond);
   pthread_mutex_unlock(&info->mutex);
 }
 
 static void StopProxy(struct transportProxyInfo* info) {
   struct ncclProxyArgs* fifoArgs = FifoGetNextArgs(info);
-  fifoArgs->active = -1;
+  STORE(&fifoArgs->active, -1);
   FifoPushArgs(info);
 }
 
@@ -100,7 +101,7 @@ static void SaveProxy(struct ncclConnector* connector, struct ncclProxyArgs* arg
   __sync_synchronize();
   memcpy(fifoArgs, args, sizeof(struct ncclProxyArgs));
   __sync_synchronize();
-  fifoArgs->active = 1;
+  STORE(&fifoArgs->active, 1);
 }
 
 ncclResult_t transportSaveProxies(int substeps, int subchunks, int nstepsPerRound, int nblocksPerRound, size_t nbytes, int pattern, struct ncclComm* comm) {
@@ -136,9 +137,9 @@ ncclResult_t transportStartProxies(ncclComm* comm) {
 void* persistentThread(void *opaqueInfo) {
   struct transportProxyInfo* info = (struct transportProxyInfo*)opaqueInfo;
   // We need to initialize the context before launching any NCCL cuda kernel,
-  // otherwise we would create it during the first cudaMemcpyAsync inside the
+  // otherwise we would create it during the first hipMemcpyAsync inside the
   // proxy function and that would cause a deadlock
-  cudaSetDevice(info->comm->cudaDev);
+  hipSetDevice(info->comm->cudaDev);
   // Signal the main thread the context is created and it can proceed.
   SetProxyReady(info);
   while (1) {
@@ -167,8 +168,8 @@ ncclResult_t transportCreateProxy(int type, struct ncclRing* ring, struct ncclCo
     info->cond = PTHREAD_COND_INITIALIZER;
     info->mutex = PTHREAD_MUTEX_INITIALIZER;
     info->func = proxyfunc;
-    info->argsFifoHead = info->argsFifoTail = 0;
-    info->proxyReady = 0;
+    STORE(&info->argsFifoHead, 0); STORE(&info->argsFifoTail, 0);
+    STORE(&info->proxyReady, 0);
     pthread_create(&connector->proxyInfo->thread, NULL, persistentThread, info);
     // Wait for thread to initialize its CUDA context.
     WaitProxyReady(info);

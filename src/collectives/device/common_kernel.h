@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -11,12 +12,24 @@
 #include <cstdio>
 #include <cstdint>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime_api.h>
 
 // Define min for ssize_t
 static __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 
 typedef uint64_t PackType;
+
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
+template<class FUNC, typename T>
+struct MULTI {
+    __device__ PackType operator()(const PackType x, const PackType y) const
+    {
+        return FUNC()(x, y);
+    }
+};
+
+#else
 
 // unpack x and y to elements of type T and apply FUNC to each element
 template<class FUNC, typename T>
@@ -192,6 +205,8 @@ struct MULTI<FUNC, int64_t> {
   }
 };
 
+#endif //defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
 #define ALIGNUP(x, a)   ((((x)-1) & ~((a)-1)) + (a))
 
 template<typename T>
@@ -210,7 +225,7 @@ void vStore(volatile T* ptr, const T val) {
   *ptr = val;
 }
 
-#if CUDART_VERSION < 9000
+#if CUDART_VERSION < 9000 && !(defined(__HIP_PLATFORM_HCC__) || defined(__HCC__))
 template<> inline __device__
 half vFetch<half>(const volatile half* ptr) {
   half r;
@@ -237,6 +252,7 @@ void vStore<half>(volatile half* ptr, const half val) {
 #endif
 
 template<class FUNC, typename T, bool TWO_INPUTS, bool TWO_OUTPUTS>
+__attribute__((noinline))
 __device__ inline void ReduceCopy(
     const int tid, const int nthreads,
     const volatile T * __restrict__ const src0,
@@ -266,14 +282,25 @@ struct MULTI128 {
 };
 
 inline __device__ void Fetch128(Pack128& v, Pack128* p) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  v.x = p->x;
+  v.y = p->y;
+#else
   asm volatile("ld.volatile.global.v2.u64 {%0,%1}, [%2];" : "=l"(v.x), "=l"(v.y) : "l"(p) : "memory");
+#endif
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  p->x = v.x;
+  p->y = v.y;
+#else
   asm volatile("st.volatile.global.v2.u64 [%0], {%1,%2};" :: "l"(p), "l"(v.x), "l"(v.y) : "memory");
+#endif
 }
 
 #define WARP_SIZE 32
 template<class FUNC, typename T, bool TWO_INPUTS, bool TWO_OUTPUTS, int UNROLL>
+__attribute__((noinline))
 __device__ inline void ReduceCopy128b( const int w, const int nw, const int t,
     Pack128 * src0, Pack128 * src1, Pack128 * dest0, Pack128 * dest1,
     const int N) {
@@ -303,6 +330,7 @@ __device__ inline void ReduceCopy128b( const int w, const int nw, const int t,
 }
 
 template<int UNROLL, class FUNC, typename T, bool HAS_DEST1, bool HAS_SRC1>
+__attribute__((noinline))
 __device__ inline void ReduceOrCopy(const int tid, const int nthreads,
     volatile T * __restrict__ dest0, volatile T * __restrict__ dest1,
     const volatile T * __restrict__ src0, const volatile T * __restrict__ src1,
