@@ -35,33 +35,32 @@ namespace CorrectnessTests
             }
 
             // Wait for reduction to complete
-            for (int i = 0; i < numDevices; i++)
-                hipStreamSynchronize(streams[i]);
+            Synchronize();
 
             // Check results
             ValidateResults(dataset);
         }
     }
 
-    INSTANTIATE_TEST_SUITE_P(ReduceCorrectnessSweep,
-                             ReduceCorrectnessTest,
-                             testing::Combine(
-                                 // Reduction operator
-                                 testing::Values(ncclSum, ncclProd, ncclMax, ncclMin),
-                                 // Data types
-                                 testing::Values(ncclInt8,
-                                                 ncclUint8,
-                                                 ncclInt32,
-                                                 ncclUint32,
-                                                 ncclInt64,
-                                                 ncclUint64,
-                                                 //ncclFloat16,
-                                                 ncclFloat32,
-                                                 ncclFloat64),
-                                 // Number of elements
-                                 testing::Values(1024, 1048576),
-                                 // Number of devices
-                                 testing::Values(2,3,4),
-                                 // In-place or not
-                                 testing::Values(false, true)));
+    INSTANTIATE_TEST_CASE_P(ReduceCorrectnessSweep,
+                            ReduceCorrectnessTest,
+                            testing::Combine(
+                                // Reduction operator
+                                testing::Values(ncclSum, ncclProd, ncclMax, ncclMin),
+                                // Data types
+                                testing::Values(ncclInt8,
+                                                ncclUint8,
+                                                ncclInt32,
+                                                ncclUint32,
+                                                ncclInt64,
+                                                ncclUint64,
+                                                //ncclFloat16,
+                                                ncclFloat32,
+                                                ncclFloat64),
+                                // Number of elements
+                                testing::Values(1024, 1048576),
+                                // Number of devices
+                                testing::Values(2,3,4),
+                                // In-place or not
+                                testing::Values(false, true)));
 } // namespace

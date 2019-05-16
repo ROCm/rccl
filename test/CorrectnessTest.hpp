@@ -154,7 +154,10 @@ namespace CorrectnessTests
             // Create streams
             streams.resize(numDevices);
             for (int i = 0; i < numDevices; i++)
+            {
+                HIP_CALL(hipSetDevice(i));
                 HIP_CALL(hipStreamCreate(&streams[i]));
+            }
         }
 
         // Clean up per TestTuple
@@ -217,6 +220,16 @@ namespace CorrectnessTests
             }
 
             free(arrayI1);
+        }
+
+        void Synchronize() const
+        {
+            // Wait for reduction to complete
+            for (int i = 0; i < numDevices; i++)
+            {
+                HIP_CALL(hipSetDevice(i));
+                HIP_CALL(hipStreamSynchronize(streams[i]));
+            }
         }
 
         void ValidateResults(Dataset const& dataset) const
