@@ -22,6 +22,7 @@ These operations are implemented using ring algorithms and have been optimized f
 
 1. ROCm supported GPUs
 2. ROCm stack installed on the system (HIP runtime & HCC)
+3. For building and running the unit tests, chrpath will need to be installed on your machine first. (sudo apt-get install chrpath)
 
 ## Quickstart RCCL Build
 
