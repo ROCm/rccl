@@ -36,7 +36,56 @@ namespace CorrectnessTests
 
         // Check results
         ValidateResults(dataset);
+        dataset.Release();
     }
+
+    TEST_P(AllGatherCorrectnessTest, Alignment)
+    {
+        if (numDevices > numDevicesAvailable) return;
+        if (numElements % numDevices != 0) return;
+
+        // Allocate dataset
+        Dataset dataset;
+        dataset.Initialize(numDevices, numElements, dataType, inPlace);
+
+        // Loop over several offsets (so that device pointers are not aligned)
+        for (int firstElement = 1; firstElement <= 11; firstElement += 2)
+        {
+            if (firstElement < numElements)
+            {
+                // Select last element so that total number of elements is multiple of numDevices
+                int const lastElement = firstElement + ((numElements - firstElement) / numDevices) * numDevices - 1;
+                if (lastElement >= numElements) break;
+
+                Dataset subDataset;
+                dataset.ExtractSubDataset(firstElement, lastElement, subDataset);
+
+                // Compute reference results for sub-dataset
+                FillDatasetWithPattern(subDataset);
+                ComputeExpectedResults(subDataset);
+
+                size_t const byteCount = subDataset.NumBytes() / subDataset.numDevices;
+                size_t const sendCount = subDataset.numElements / subDataset.numDevices;
+
+                // Launch the reduction (1 thread per GPU)
+                #pragma omp parallel for num_threads(numDevices)
+                for (int i = 0; i < numDevices; i++)
+                {
+                    ncclAllGather((int8_t *)subDataset.inputs[i] + (i * byteCount),
+                                  subDataset.outputs[i], sendCount,
+                                  dataType, comms[i], streams[i]);
+                }
+
+                // Wait for reduction to complete
+                Synchronize();
+
+                // Check results
+                ValidateResults(subDataset);
+            }
+        }
+        dataset.Release();
+    }
+
 
     INSTANTIATE_TEST_CASE_P(AllGatherCorrectnessSweep,
                             AllGatherCorrectnessTest,
