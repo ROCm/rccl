@@ -68,11 +68,6 @@ list(APPEND CMAKE_PREFIX_PATH
 
 find_package(hip REQUIRED)
 
-link_libraries(-amdgpu-target=gfx803
-               -amdgpu-target=gfx900
-               -amdgpu-target=gfx906
-               -hc-function-calls)
-
 option(BUILD_SHARED_LIBS "Build as a shared library" ON)
 
 configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/rccl.h)
@@ -137,6 +132,12 @@ add_library(rccl ${CPP_SOURCES})
 if(TRACE)
   add_definitions(-DENABLE_TRACE)
 endif()
+
+target_link_libraries(rccl
+  PRIVATE -amdgpu-target=gfx803
+  PRIVATE -amdgpu-target=gfx900
+  PRIVATE -amdgpu-target=gfx906
+  PRIVATE -hc-function-calls)
 
 if(TARGET hip::device)
   target_link_libraries(rccl PRIVATE hip::device)

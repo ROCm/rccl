@@ -4,6 +4,12 @@ if(BUILD_TESTS)
 
   message("Going to build unit tests (Installed in /test/UnitTests)")
 
+  # chrpath is required to properly set rpath for the UnitTests executable
+  find_program(CHRPATH chrpath)
+  if(NOT CHRPATH)
+      message(FATAL_ERROR "chrpath is required for UnitTests. Please install (e.g. sudo apt-get install chrpath)")
+  endif()
+
   # OpenMP is used to drive GPUs (one per thread)
   find_package(OpenMP REQUIRED)
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
