@@ -60,6 +60,7 @@ namespace CorrectnessTests
         size_t              numElements; // Number of elements per array
         ncclDataType_t      dataType;    // Data type of each input/output pointer
         bool                inPlace;     // Whether or not output pointers are same as input pointers
+
         std::vector<void *> inputs;      // Input pointers (1 per device)
         std::vector<void *> outputs;     // Output pointers (1 per device)
                                          // May be identical to input pointers for in-place tests
@@ -100,13 +101,43 @@ namespace CorrectnessTests
             }
         }
 
-        ~Dataset()
+        // Explicit memory release to avoid double-free from subDatasets
+        void Release()
         {
             for (int i = 0; i < outputs.size(); i++)
             {
                 if (!inPlace) hipFree(outputs[i]);
                 hipFree(inputs[i]);
                 free(expected[i]);
+            }
+
+            outputs.clear();
+        }
+
+        // Creates a dataset by pointing to an existing dataset
+        // Primarily to allow for testing with different starting byte-alignments
+        void ExtractSubDataset(size_t const startElement,
+                               size_t const lastElement,
+                               Dataset& subDataset)
+        {
+            ASSERT_LE(startElement, lastElement);
+            ASSERT_LT(lastElement, numElements);
+
+            subDataset.numDevices  = numDevices;
+            subDataset.numElements = lastElement - startElement + 1;
+            subDataset.dataType    = dataType;
+            subDataset.inPlace     = inPlace;
+
+            subDataset.inputs.resize(numDevices);
+            subDataset.outputs.resize(numDevices);
+            subDataset.expected.resize(numDevices);
+
+            size_t const byteOffset = (startElement * DataTypeToBytes(dataType));
+            for (int i = 0; i < numDevices; i++)
+            {
+                subDataset.inputs[i]   = (int8_t *)inputs[i] + byteOffset;
+                subDataset.outputs[i]  = (int8_t *)outputs[i] + byteOffset;
+                subDataset.expected[i] = (int8_t *)expected[i] + byteOffset;
             }
         }
     };

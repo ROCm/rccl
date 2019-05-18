@@ -39,6 +39,8 @@ namespace CorrectnessTests
 
         // Check results
         ValidateResults(dataset);
+
+        dataset.Release();
     }
 
     INSTANTIATE_TEST_CASE_P(ReduceScatterCorrectnessSweep,

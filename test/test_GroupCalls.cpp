@@ -92,6 +92,7 @@ namespace CorrectnessTests
         for (int i = 0; i < 5; i++)
         {
             ValidateResults(datasets[i]);
+            datasets[i].Release();
         }
     }
 
