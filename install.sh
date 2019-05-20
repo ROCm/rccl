@@ -60,7 +60,11 @@ while true; do
 rm -rf build
 mkdir build
 cd build
+if ($run_tests); then
+CXX=$ROCM_PATH/hcc cmake -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$RCCL_INSTALL ..
+else
 CXX=$ROCM_PATH/hcc cmake -DCMAKE_INSTALL_PREFIX=$RCCL_INSTALL ..
+fi
 make -j 8 install
 
 if ($run_tests); then
