@@ -63,6 +63,8 @@ list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm/hcc)
 
 find_package(hip REQUIRED)
+message(STATUS "HIP compiler: ${HIP_COMPILER}")
+message(STATUS "HIP runtime: ${HIP_RUNTIME}")
 
 option(BUILD_SHARED_LIBS "Build as a shared library" ON)
 
@@ -130,10 +132,22 @@ if(TRACE)
 endif()
 
 target_link_libraries(rccl
-  PRIVATE -amdgpu-target=gfx803
-  PRIVATE -amdgpu-target=gfx900
-  PRIVATE -amdgpu-target=gfx906
-  PRIVATE -hc-function-calls)
+  PRIVATE --amdgpu-target=gfx803
+  PRIVATE --amdgpu-target=gfx900
+  PRIVATE --amdgpu-target=gfx906)
+
+if("${HIP_COMPILER}" MATCHES "clang")
+  target_compile_options(rccl
+    PRIVATE --amdgpu-target=gfx803
+    PRIVATE --amdgpu-target=gfx900
+    PRIVATE --amdgpu-target=gfx906
+    PRIVATE -fgpu-rdc)
+  target_link_libraries(rccl PRIVATE -fgpu-rdc)
+endif()
+
+if("${HIP_COMPILER}" MATCHES "hcc")
+  target_link_libraries(rccl PRIVATE -hc-function-calls)
+endif()
 
 if(TARGET hip::device)
   target_link_libraries(rccl PRIVATE hip::device)

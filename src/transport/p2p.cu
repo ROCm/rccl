@@ -12,6 +12,7 @@
 #include "param.h"
 #include <unistd.h>
 #include <hip/hip_runtime_api.h>
+#include <hsa/hsa_ext_amd.h>
 #include "nvmlwrap.h"
 #include <ctype.h>
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
