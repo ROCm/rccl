@@ -1,7 +1,7 @@
 #!/usr/bin/env groovy
 // Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
 // This shared library is available at https://github.com/ROCmSoftwarePlatform/rccl
-@Library('rocJenkins') _
+@Library('rocJenkins@noDocker') _
 
 // This is file for internal AMD use.
 // If you are interested in running your own Jenkins, please raise a github issue for assistance.
@@ -84,6 +84,6 @@ rcclCI:
         platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
     }
 
-    buildProject(rccl, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
+    buildProjectNoDocker(rccl, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
 
 }
