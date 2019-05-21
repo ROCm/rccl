@@ -173,8 +173,13 @@ namespace CorrectnessTests
             // Only proceed with testing if there are enough GPUs
             if (numDevices > numDevicesAvailable)
             {
-                fprintf(stdout, "Skipping test requring %d devices (only %d available)\n",
+                fprintf(stdout, "[  SKIPPED ] Test requires %d devices (only %d available)\n",
                         numDevices, numDevicesAvailable);
+
+                // Modify the number of devices so that tear-down doesn't occur
+                // This is temporary until GTEST_SKIP() becomes available
+                numDevices = 0;
+                numDevicesAvailable = -1;
                 return;
             }
 
