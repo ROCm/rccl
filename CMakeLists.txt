@@ -19,10 +19,6 @@ include(ROCMCreatePackage)
 
 option(BUILD_TESTS "Build test programs" OFF)
 
-# In order to support function calls within the kernel, we must use hcc as the
-# compiler
-set(CMAKE_CXX_COMPILER "/opt/rocm/bin/hcc")
-
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
 # (Z)) so we must first detect one or two digits first
