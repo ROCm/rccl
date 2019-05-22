@@ -46,7 +46,7 @@ $ cd build
 $ CXX=/opt/rocm/bin/hcc cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
 $ make -j 8 install
 ```
-You may substitute a path of your own choosing for CMAKE_INSTALL_PREFIX.
+You may substitute a path of your own choosing for CMAKE_INSTALL_PREFIX. Note: ensure rocm-cmake is installed, `apt install rocm-cmake`.
 
 #### To build the RCCL package and install package :
 
