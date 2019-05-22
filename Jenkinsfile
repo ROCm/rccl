@@ -50,7 +50,7 @@ rcclCI:
                   LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX=${project.compiler.compiler_path} ${project.paths.build_command}
                 """
 
-        platform.runCommand(this, command)
+	  sh command
     }
 
     def testCommand =
@@ -63,8 +63,8 @@ rcclCI:
                 ./UnitTest --gtest_output=xml --gtest_color=yes
             """
 
-        platform.runCommand(this, command)
-        junit "${project.paths.project_build_prefix}/rccl-install/*.xml"
+        sh command
+        junit "${project.paths.project_build_prefix}/build/release/*.xml"
     }
 
     def packageCommand =
@@ -80,8 +80,8 @@ rcclCI:
                       sudo dpkg -i package/*.deb
                       """
 
-        platform.runCommand(this, command)
-        platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
+        
+        //platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
     }
 
     buildProjectNoDocker(rccl, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
