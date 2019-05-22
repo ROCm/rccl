@@ -30,58 +30,7 @@ import java.nio.file.Path;
 rcclCI:
 {
 
-    def rccl = new rocProject('rccl')
-    // customize for project
-    rccl.paths.build_command = './install.sh -t'
-
-    // Define test architectures, optional rocm version argument is available
-    def nodes = new dockerNodes(['RCCL'], rccl)
-
-    boolean formatCheck = false
-
-    def compileCommand =
-    {
-        platform, project->
-
-        project.paths.construct_build_prefix()
-        def command = """#!/usr/bin/env bash
-                  set -x
-                  cd ${project.paths.project_build_prefix}
-                  LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX=${project.compiler.compiler_path} ${project.paths.build_command}
-                """
-
-        platform.runCommand(this, command)
-    }
-
-    def testCommand =
-    {
-        platform, project->
-
-        def command = """#!/usr/bin/env bash
-                set -x
-                cd ${project.paths.project_build_prefix}/build/release/test
-                ./UnitTest --gtest_output=xml --gtest_color=yes
-            """
-
-        platform.runCommand(this, command)
-        junit "${project.paths.project_build_prefix}/rccl-install/*.xml"
-    }
-
-    def packageCommand =
-    {
-        platform, project->
-
-        def command = """
-                      set -x
-                      cd ${project.paths.project_build_prefix}/build
-                      make package
-                      rm -rf package && mkdir -p package
-                      mv *.deb package/
-                      sudo dpkg -i package/*.deb
-                      """
-
-        platform.runCommand(this, command)
-        platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
+    def r//platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
     }
 
     buildProjectNoDocker(rccl, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
