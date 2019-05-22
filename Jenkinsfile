@@ -32,10 +32,10 @@ rcclCI:
 
     def rccl = new rocProject('rccl')
     // customize for project
-    rccl.paths.build_command = './install.sh'
+    rccl.paths.build_command = './install.sh -t'
 
     // Define test architectures, optional rocm version argument is available
-    def nodes = new dockerNodes(['gfx906'], rccl)
+    def nodes = new dockerNodes(['RCCL'], rccl)
 
     boolean formatCheck = false
 
@@ -59,7 +59,7 @@ rcclCI:
 
         def command = """#!/usr/bin/env bash
                 set -x
-                cd ${project.paths.project_build_prefix}/rccl-install/test
+                cd ${project.paths.project_build_prefix}/build/release/test
                 ./UnitTest --gtest_output=xml --gtest_color=yes
             """
 
