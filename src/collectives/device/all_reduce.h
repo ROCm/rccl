@@ -16,6 +16,12 @@
   noffset += sliceSize; \
   if (noffset == buffSize) noffset = 0;
 
+#define INIT_COUNTER \
+  if (tid==0) {t0 = clock(); w = LOAD(&(devProf->wait_cycle[bid]));}
+
+#define ACCUMULATE_COUNTER(counter) \
+  if (tid==0) __atomic_fetch_add(&(devProf->counter), clock() - t0 + w - LOAD(&(devProf->wait_cycle[bid])), __ATOMIC_SEQ_CST)
+
 template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
@@ -28,8 +34,10 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
   int prevdirect = 0;
   int nextdirect = 0;
 
-  WaitFlag waitDoneFromNext(ring->send.conn.head, ALLREDUCE_BUFCHUNKS*ALLREDUCE_SUBSTEPS);
-  WaitFlag waitReadyFromPrev(ring->recv.conn.tail, ALLREDUCE_SUBSTEPS);
+  auto devProf = comm->devProf;
+
+  WaitFlag waitDoneFromNext(ring->send.conn.head, ALLREDUCE_BUFCHUNKS*ALLREDUCE_SUBSTEPS, &(devProf->wait_cycle[bid]));
+  WaitFlag waitReadyFromPrev(ring->recv.conn.tail, ALLREDUCE_SUBSTEPS, &(devProf->wait_cycle[bid]));
   PostFlag postDoneToPrev(ring->recv.conn.head, ALLREDUCE_SUBSTEPS, NULL, 0);
   PostFlag postReadyToNext(ring->send.conn.tail, 0, ring->send.conn.fifo, ALLREDUCE_BUFCHUNKS*ALLREDUCE_SUBSTEPS);
 
@@ -41,12 +49,14 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
   const int buffSize = ring->buffSize / sizeof(T);
   const int sliceSize = buffSize / ALLREDUCE_BUFCHUNKS;
   const ssize_t loopSize = args->nRings*(ssize_t)sliceSize;
+  uint64_t clk, t0 = 0ULL, w;
 
   if (tid == 0) {
+    clk = clock();
     // Update in case we skipped some collectives
     STORE(ring->recv.conn.opCount, args->opCount);
     // Wait for next to be ready
-    WaitFlag waitOpCountNext(ring->send.conn.opCount, 0);
+    WaitFlag waitOpCountNext(ring->send.conn.opCount, 0, &(devProf->collective_init));
     waitOpCountNext.wait(args->opCount);
     if (prevdirect) {
       *ring->recv.conn.ptrExchange = args->ThisOutput;
@@ -84,6 +94,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
     offset = chunkOffset + slice * chunkSize;
     maxOffset = min(chunkSize, size-offset);
 
+    INIT_COUNTER;
     Prims::Copy(tid, nthreads,
         thisInput  + offset,
         nextOutput + noffset,
@@ -91,6 +102,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
         step,
         waitDoneFromNext,
         postReadyToNext);
+    ACCUMULATE_COUNTER(copy_cycle);
 
     NEXT_STEP; // Increases step, poffset, noffset
 
@@ -100,6 +112,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
       offset = chunkOffset + slice * chunkSize;
       maxOffset = min(chunkSize, size-offset);
 
+      INIT_COUNTER;
       Prims::Reduce(tid, nthreads,
           prevInput  + poffset,
           thisInput  + offset,
@@ -108,6 +121,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
           step,
           waitDoneFromNext, waitReadyFromPrev,
           postReadyToNext, postDoneToPrev);
+      ACCUMULATE_COUNTER(reduce_cycle);
 
       NEXT_STEP;
     }
@@ -118,6 +132,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
     offset = chunkOffset + slice * chunkSize;
     maxOffset = min(chunkSize, size-offset);
 
+    INIT_COUNTER;
     Prims::ReduceCopy(tid, nthreads,
         prevInput  + poffset,
         thisInput  + offset,
@@ -127,6 +142,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
         step,
         waitDoneFromNext, waitReadyFromPrev,
         postReadyToNext, postDoneToPrev);
+    ACCUMULATE_COUNTER(reducecopy_cycle);
 
     NEXT_STEP;
 
@@ -137,6 +153,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
         offset = chunkOffset + slice * chunkSize;
         maxOffset = min(chunkSize, size-offset);
 
+        INIT_COUNTER;
         Prims::Copy(tid, nthreads,
             thisOutput + offset,
             nextdirect ? (sharedNextOutput + offset) : (nextOutput + noffset),
@@ -144,7 +161,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext, waitReadyFromPrev,
             postReadyToNext, postDoneToPrev);
-
+        ACCUMULATE_COUNTER(copy_cycle);
         NEXT_STEP;
       }
       Prims::Copy(tid, nthreads,
@@ -160,6 +177,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
         offset = chunkOffset + slice * chunkSize;
         maxOffset = min(chunkSize, size-offset);
 
+        INIT_COUNTER;
         Prims::DoubleCopy(tid, nthreads,
             prevInput + poffset,
             thisOutput + offset,
@@ -168,6 +186,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext, waitReadyFromPrev,
             postReadyToNext, postDoneToPrev);
+        ACCUMULATE_COUNTER(doublecopy_cycle);
 
         NEXT_STEP;
       }
@@ -178,6 +197,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
       maxOffset = min(chunkSize, size-offset);
 
       // Here we need to copy from buffer to this output.
+      INIT_COUNTER;
       Prims::Copy(tid, nthreads,
           prevInput + poffset,
           thisOutput + offset,
@@ -185,6 +205,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
           step,
           waitReadyFromPrev,
           postDoneToPrev);
+      ACCUMULATE_COUNTER(localcopy_cycle);
     }
   }
 
@@ -195,6 +216,8 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
     STORE(ring->recv.conn.tail, 0ULL);
     __threadfence_system();
     STORE(ring->recv.conn.opCount, args->opCount+1);
+    __atomic_fetch_add(&(devProf->total_cycle), clock() - clk, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&(devProf->data_transferred), args->N * sizeof(T), __ATOMIC_SEQ_CST);
   }
 }
 

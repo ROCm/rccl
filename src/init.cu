@@ -198,6 +198,24 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm == NULL)
     return ncclSuccess;
 
+  struct ncclProf* prof = (struct ncclProf*)malloc(sizeof(struct ncclProf));
+  CUDACHECK(hipMemcpy(prof, comm->devProf, sizeof(struct ncclProf), hipMemcpyDeviceToHost));
+  uint64_t wait_cycle = 0;
+  for (int ring=0; ring<comm->nRings; ring++)
+    wait_cycle += prof->wait_cycle[ring];
+#define VEGA_GPU_RTC_FREQUENCY 27000000
+  //INFO(NCCL_INIT, "Rank %d  cycles: total %lu init %lu wait %lu copy %lu localcopy %lu reduce %lu reducecopy %lu doublecopy %lu bytes %lu",
+  //  comm->rank, prof->total_cycle, prof->collective_init,
+  //  wait_cycle, prof->copy_cycle, prof->localcopy_cycle, prof->reduce_cycle, prof->reducecopy_cycle, prof->doublecopy_cycle,
+  //  prof->data_transferred);
+  INFO(NCCL_INIT, "Rank %d time(s): total %f init %f wait %f copy %f localcopy %f reduce %f reducecopy %f doublecopy %f bytes %lu",
+    comm->rank, (double)prof->total_cycle/VEGA_GPU_RTC_FREQUENCY, (double)prof->collective_init/VEGA_GPU_RTC_FREQUENCY,
+    (double)wait_cycle/VEGA_GPU_RTC_FREQUENCY, (double)prof->copy_cycle/VEGA_GPU_RTC_FREQUENCY,
+    (double)prof->localcopy_cycle/VEGA_GPU_RTC_FREQUENCY, (double)prof->reduce_cycle/VEGA_GPU_RTC_FREQUENCY,
+    (double)prof->reducecopy_cycle/VEGA_GPU_RTC_FREQUENCY, (double)prof->doublecopy_cycle/VEGA_GPU_RTC_FREQUENCY,
+    prof->data_transferred);
+  free(prof);
+  CUDACHECK(hipFree(comm->devProf));
   CUDACHECK(hipFree(comm->devComm));
 
   for (int ring=0; ring<comm->nRings; ring++)
@@ -258,6 +276,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 #endif
 
   comm->argsptr = &comm->args;
+  NCCLCHECK(ncclCudaCalloc(&comm->devProf, 1));
 
   *comret = comm;
   return ncclSuccess;

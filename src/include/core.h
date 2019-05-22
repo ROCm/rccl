@@ -167,7 +167,7 @@ struct ncclRing {
 static_assert(sizeof(struct ncclRing) == 0x80*sizeof(int), "ncclRing must have a pow2 size");
 
 #pragma pack(push)  /* push current alignment to stack */
-#pragma pack(4)     /* set alignment to 4 bytes boundary */
+#pragma pack(8)     /* set alignment to 8 bytes boundary */
 /* CollectiveArgs + ncclColl are to be a power of two, currently 64 bytes, */
 /* to make sure reads to host from the CUDA kernel are aligned. */
 /* Make sure to adjust padding at the end of ncclColl. */
@@ -200,6 +200,25 @@ struct ncclColl {
     int data[0x10];
   };
 };
+
+struct ncclProf {
+  union {
+    struct {
+      uint64_t wait_cycle[MAXRINGS];
+      uint64_t total_cycle;
+      uint64_t data_transferred;
+      uint64_t copy_cycle;
+      uint64_t localcopy_cycle;
+      uint64_t reduce_cycle;
+      uint64_t reducecopy_cycle;
+      uint64_t doublecopy_cycle;
+      uint64_t collective_init;
+      char msg[1];
+    };
+    char pad1[MEM_ALIGN];
+  };
+};
+
 static_assert(sizeof(struct ncclColl) == (0x10*sizeof(int)), "ncclColl must have a pow2 size");
 #pragma pack(pop)   /* restore original alignment from stack */
 
@@ -249,6 +268,8 @@ struct ncclComm {
   int* intraCC; // Only to check all have the same ComputeCap and disable CGMode if not
   struct ncclColl args;
   struct ncclColl* argsptr;
+
+  struct ncclProf* devProf;
 };
 
 // Convert volatile access to atomic

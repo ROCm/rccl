@@ -31,11 +31,19 @@
 class WaitFlag {
   volatile uint64_t * const flag;
   const int shift;
+  volatile uint64_t * const wait_cycle;
  public:
   __device__
-  WaitFlag(volatile uint64_t * const flag, const int shift) : flag(flag), shift(shift) { }
+  WaitFlag(volatile uint64_t * const flag, const int shift, volatile uint64_t * const wait_cycle = 0) : flag(flag), shift(shift), wait_cycle(wait_cycle) { }
   __device__
-  void wait(uint64_t val) { while ((LOAD(flag) + shift) < val) /*SPIN*/; }
+  void wait(uint64_t val) {
+    uint64_t curr = clock();
+    while ((LOAD(flag) + shift) < val) /*SPIN*/;
+    auto delta = clock() - curr;
+    if (wait_cycle) {
+      __atomic_fetch_add(wait_cycle, delta, __ATOMIC_SEQ_CST);
+    }
+  }
 };
 
 

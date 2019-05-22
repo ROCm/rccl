@@ -15,6 +15,12 @@
   boffset += sliceSize; \
   if (boffset == buffSize) boffset = 0;
 
+#define INIT_COUNTER \
+  if (tid==0) {t0 = clock(); w = LOAD(&(devProf->wait_cycle[bid]));}
+
+#define ACCUMULATE_COUNTER(counter) \
+  if (tid==0) __atomic_fetch_add(&(devProf->counter), clock() - t0 + w - LOAD(&(devProf->wait_cycle[bid])), __ATOMIC_SEQ_CST)
+
 template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
@@ -26,9 +32,10 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
   struct ncclRing* ring = comm->rings+blockIdx.x;
   int prevdirect = 0;
   int nextdirect = 0;
+  auto devProf = comm->devProf;
 
-  WaitFlag waitDoneFromNext(ring->send.conn.head, (BROADCAST_BUFCHUNKS-1)*BROADCAST_SUBSTEPS);
-  WaitFlag waitReadyFromPrev(ring->recv.conn.tail, 0);
+  WaitFlag waitDoneFromNext(ring->send.conn.head, (BROADCAST_BUFCHUNKS-1)*BROADCAST_SUBSTEPS, &(devProf->wait_cycle[bid]));
+  WaitFlag waitReadyFromPrev(ring->recv.conn.tail, 0, &(devProf->wait_cycle[bid]));
   PostFlag postDoneToPrev(ring->recv.conn.head, 0, NULL, 0);
   PostFlag postReadyToNext(ring->send.conn.tail, 0, ring->send.conn.fifo, BROADCAST_BUFCHUNKS*BROADCAST_SUBSTEPS);
 
@@ -41,13 +48,16 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
   const int rank = ring->devUserRanks[0];
   const int nextRank = ring->devUserRanks[1];
   const int root = args->root;
+  uint64_t clk, t0 = 0ULL, w;
 
   if (tid == 0) {
+    clk = clock();
+
     // Update in case we skipped some collectives
     STORE(ring->recv.conn.opCount, args->opCount);
     if (nextRank != root) {
       // Wait for next to be ready
-      WaitFlag waitOpCountNext(ring->send.conn.opCount, 0);
+      WaitFlag waitOpCountNext(ring->send.conn.opCount, 0, &(devProf->collective_init));
       waitOpCountNext.wait(args->opCount);
     }
     if (rank != root && prevdirect) {
@@ -79,6 +89,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
 
     if (rank == root) {
       if (thisInput == thisOutput) {
+        INIT_COUNTER;
         Prims::Copy(tid, nthreads,
             thisInput  + offset,
             nextdirect ? (sharedNextOutput + offset) : (nextOutput + boffset),
@@ -86,7 +97,9 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext,
             postReadyToNext);
+        ACCUMULATE_COUNTER(copy_cycle);
       } else {
+        INIT_COUNTER;
         Prims::DoubleCopy(tid, nthreads,
             thisInput  + offset,
             thisOutput + offset,
@@ -95,9 +108,11 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext,
             postReadyToNext);
+        ACCUMULATE_COUNTER(doublecopy_cycle);
       }
     } else if (nextRank == root) {
       if (prevdirect) maxOffset = 0; // Only wait for signals
+      INIT_COUNTER;
       Prims::Copy(tid, nthreads,
           prevInput  + boffset,
           thisOutput + offset,
@@ -105,8 +120,10 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
           step,
           waitReadyFromPrev,
           postDoneToPrev);
+      ACCUMULATE_COUNTER(localcopy_cycle);
     } else {
       if (prevdirect) {
+        INIT_COUNTER;
         Prims::Copy(tid, nthreads,
             thisOutput + offset,
             nextdirect ? (sharedNextOutput + offset) : (nextOutput + boffset),
@@ -114,7 +131,9 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext, waitReadyFromPrev,
             postReadyToNext, postDoneToPrev);
+        ACCUMULATE_COUNTER(copy_cycle);
       } else {
+        INIT_COUNTER;
         Prims::DoubleCopy(tid, nthreads,
             prevInput + boffset,
             thisOutput + offset,
@@ -123,6 +142,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext, waitReadyFromPrev,
             postReadyToNext, postDoneToPrev);
+        ACCUMULATE_COUNTER(doublecopy_cycle);
       }
     }
     NEXT_STEP; // Increases step, boffset
@@ -137,6 +157,8 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
     STORE(ring->recv.conn.tail, 0ULL);
     __threadfence_system();
     STORE(ring->recv.conn.opCount, args->opCount+1);
+    __atomic_fetch_add(&(devProf->total_cycle), clock() - clk, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&(devProf->data_transferred), args->N * sizeof(T), __ATOMIC_SEQ_CST);
   }
 }
 
