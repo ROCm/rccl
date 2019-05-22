@@ -4,19 +4,9 @@ ROCm Communication Collectives Library
 
 ## Introduction
 
-RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, and reduce-scatter. It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node or across multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
+RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, and reduce-scatter. It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node, and can be used in either single- or multi-process (e.g., MPI) applications. Multi node support is planned for a future release.
 
-## What's inside
-
-At present, the library implements the following collectives operations:
-
-- all-reduce
-- all-gather
-- reduce-scatter
-- reduce
-- broadcast
-
-These operations are implemented using ring algorithms and have been optimized for throughput and latency. For best performance, small operations can be either batched into larger operations or aggregated through the API.
+The collective operations are implemented using ring algorithms and have been optimized for throughput and latency. For best performance, small operations can be either batched into larger operations or aggregated through the API.
 
 ## Requirements
 
@@ -32,8 +22,9 @@ In addition, HC Direct Function call support needs to be present on your machine
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
 
 *  `./install.sh` -- builds library including unit tests
+*  `./install.sh -i` -- builds and installs the library to /opt/rocm/rccl
 *  `./install.sh -h` -- shows help
-*  `./install.sh -t` -- builds library including unit tests, and also runs unit tests
+*  `./install.sh -t` -- builds library including unit tests
 
 ## Manual build
 #### To build the library :
@@ -44,7 +35,7 @@ $ cd rccl
 $ mkdir build
 $ cd build
 $ CXX=/opt/rocm/bin/hcc cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
-$ make -j 8 install
+$ make -j 8
 ```
 You may substitute a path of your own choosing for CMAKE_INSTALL_PREFIX.
 
