@@ -64,7 +64,7 @@ rcclCI:
             """
 
         sh command
-        junit "${project.paths.project_build_prefix}/build/release/*.xml"
+        //junit "${project.paths.project_build_prefix}/build/release/*.xml"
     }
 
     def packageCommand =
