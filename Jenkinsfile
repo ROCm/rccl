@@ -60,7 +60,7 @@ rcclCI:
         def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
-                ./UnitTest --gtest_output=xml --gtest_color=yes
+                HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
             """
 
         sh command
