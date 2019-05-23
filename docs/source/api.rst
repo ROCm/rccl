@@ -11,26 +11,26 @@ This section provides details of the library API
 Communicator Functions
 ----------------------
 
-.. doxygenfunction: ncclGetUniqueId
+.. doxygenfunction:: ncclGetUniqueId
 
-.. doxygenfunction: ncclCommInitRank
+.. doxygenfunction:: ncclCommInitRank
 
-.. doxygenfunction: ncclCommInitAll
+.. doxygenfunction:: ncclCommInitAll
 
-.. doxygenfunction: ncclCommDestroy
+.. doxygenfunction:: ncclCommDestroy
 
-.. doxygenfunction: ncclCommCount
+.. doxygenfunction:: ncclCommCount
 
-.. doxygenfunction: ncclCommCuDevice
+.. doxygenfunction:: ncclCommCuDevice
 
-.. doxygenfunction: ncclCommUserRank
+.. doxygenfunction:: ncclCommUserRank
 
 Library Functions
 -----------------
 
-.. doxygenfunction: ncclGetVersion
+.. doxygenfunction:: ncclGetVersion
 
-.. doxygenfunction: ncclGetErrorString
+.. doxygenfunction:: ncclGetErrorString
 
 Types
 -----
