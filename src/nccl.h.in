@@ -31,7 +31,7 @@ typedef struct ncclComm* ncclComm_t;
 /*! @brief struct to store ncclUniqueId */
 typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } ncclUniqueId;
 
-/*! \brief Error type */
+/*! @brief Error type */
   typedef enum { ncclSuccess                 =  0, /**< Successfuly ran */
                ncclUnhandledCudaError      =  1,
                ncclSystemError             =  2,
@@ -80,7 +80,7 @@ ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
 ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 
-/* @brief Creates a clique of communicators (single process version).
+/*! @brief Creates a clique of communicators (single process version).
  * @detail This is a convenience function to create a single-process communicator clique.
  * Returns an array of ndev newly initialized communicators in comm.
  * comm should be pre-allocated with size at least ndev*sizeof(ncclComm_t).
@@ -90,19 +90,19 @@ ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
 ncclResult_t  ncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 ncclResult_t pncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 
-/* @brief Frees resources associated with communicator object. */
+/*! @brief Frees resources associated with communicator object. */
 ncclResult_t  ncclCommDestroy(ncclComm_t comm);
 ncclResult_t pncclCommDestroy(ncclComm_t comm);
 
-/* @brief Returns a human-readable error message. */
+/*! @brief Returns a human-readable error message. */
 const char*  ncclGetErrorString(ncclResult_t result);
 const char* pncclGetErrorString(ncclResult_t result);
 
-/* @brief Gets the number of ranks in the communicator clique. */
+/*! @brief Gets the number of ranks in the communicator clique. */
 ncclResult_t  ncclCommCount(const ncclComm_t comm, int* count);
 ncclResult_t pncclCommCount(const ncclComm_t comm, int* count);
 
-/* @brief Returns the rocm device number associated with the communicator. */
+/*! @brief Returns the rocm device number associated with the communicator. */
 ncclResult_t  ncclCommCuDevice(const ncclComm_t comm, int* device);
 ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
 
@@ -142,10 +142,10 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
  * below).
  */
 
-/*
+/*!
  * @brief Reduce collective communication
  *
- * Reduces data arrays of length count in sendbuff into recvbuff using op
+ * @detail Reduces data arrays of length count in sendbuff into recvbuff using op
  * operation.
  * recvbuff may be NULL on all calls except for root device.
  * root is the rank (not the CUDA device) where data will reside after the
