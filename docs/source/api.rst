@@ -10,12 +10,18 @@ This section provides details of the library API
 
 Communicator Functions
 ----------------------
-sfasdf
+
+.. doxygenfunction: ncclGetUniqueId
 
 .. doxygenfunction: ncclCommInitRank
 
-.. doxygenfunction: ncclGetVersion
+.. doxygenfunction: ncclCommInitAll
 
+
+Library Functions
+-----------------
+
+.. doxygenfunction: ncclGetVersion
 
 Types
 -----
@@ -24,9 +30,9 @@ There are few data structures that are internal to the library. The pointer type
 structures are given below. The user would need to use these types to create handles and pass them
 between different library functions.
 
-.. doxygenstruct:: ncclUniqueId
+.. doxygenstruct:: ncclComm_t
 
-.. doxygentypedef:: rocfft_plan_description
+.. doxygenstruct:: ncclUniqueId
 
 .. doxygentypedef:: rocfft_execution_info
 

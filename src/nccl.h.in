@@ -79,8 +79,8 @@ ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
 ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 
-/* Creates a clique of communicators (single process version).
- * This is a convenience function to create a single-process communicator clique.
+/* /brief Creates a clique of communicators (single process version).
+ * /detail This is a convenience function to create a single-process communicator clique.
  * Returns an array of ndev newly initialized communicators in comm.
  * comm should be pre-allocated with size at least ndev*sizeof(ncclComm_t).
  * If devlist is NULL, the first ndev CUDA devices are used.
