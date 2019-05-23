@@ -90,27 +90,27 @@ ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
 ncclResult_t  ncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 ncclResult_t pncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 
-/* /brief Frees resources associated with communicator object. */
+/* @brief Frees resources associated with communicator object. */
 ncclResult_t  ncclCommDestroy(ncclComm_t comm);
 ncclResult_t pncclCommDestroy(ncclComm_t comm);
 
-/* Returns a human-readable error message. */
+/* @brief Returns a human-readable error message. */
 const char*  ncclGetErrorString(ncclResult_t result);
 const char* pncclGetErrorString(ncclResult_t result);
 
-/* Gets the number of ranks in the communicator clique. */
+/* @brief Gets the number of ranks in the communicator clique. */
 ncclResult_t  ncclCommCount(const ncclComm_t comm, int* count);
 ncclResult_t pncclCommCount(const ncclComm_t comm, int* count);
 
-/* Returns the cuda device number associated with the communicator. */
+/* @brief Returns the rocm device number associated with the communicator. */
 ncclResult_t  ncclCommCuDevice(const ncclComm_t comm, int* device);
 ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
 
-/* Returns the user-ordered "rank" associated with the communicator. */
+/* @brief Returns the user-ordered "rank" associated with the communicator. */
 ncclResult_t  ncclCommUserRank(const ncclComm_t comm, int* rank);
 ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
 
-/* Reduction operation selector */
+/* @brief Reduction operation selector */
 typedef enum { ncclSum        = 0,
                ncclProd       = 1,
                ncclMax        = 2,
@@ -143,7 +143,7 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
  */
 
 /*
- * Reduce
+ * @brief Reduce collective communication
  *
  * Reduces data arrays of length count in sendbuff into recvbuff using op
  * operation.
