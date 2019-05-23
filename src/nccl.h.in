@@ -27,10 +27,11 @@ extern "C" {
 typedef struct ncclComm* ncclComm_t;
 
 #define NCCL_UNIQUE_ID_BYTES 128
+/*! \brief struct to store ncclUniqueId */
 typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } ncclUniqueId;
 
-/* Error type */
-typedef enum { ncclSuccess                 =  0,
+/*! \brief Error type */
+  typedef enum { ncclSuccess                 =  0, /**< Successfuly ran */
                ncclUnhandledCudaError      =  1,
                ncclSystemError             =  2,
                ncclInternalError           =  3,
@@ -38,25 +39,43 @@ typedef enum { ncclSuccess                 =  0,
                ncclInvalidUsage            =  5,
                ncclNumResults              =  6 } ncclResult_t;
 
-/* Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
+
+  
+/*! \brief Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
  * This integer is coded with the MAJOR, MINOR and PATCH level of the
  * NCCL library
  */
 ncclResult_t ncclGetVersion(int *version);
 ncclResult_t pncclGetVersion(int *version);
 
-/* Generates an Id to be used in ncclCommInitRank. ncclGetUniqueId should be
- * called once and the Id should be distributed to all ranks in the
- * communicator before calling ncclCommInitRank. */
+/*! \brief Generates an ID for ncclCommInitRank
+
+    \details
+    Generates an ID to be used in ncclCommInitRank. ncclGetUniqueId should be
+    called once and the Id should be distributed to all ranks in the
+    communicator before calling ncclCommInitRank. 
+    
+    @param[in]
+    uniqueId     ncclUniqueId*
+                 pointer to uniqueId
+
+*/
 ncclResult_t  ncclGetUniqueId(ncclUniqueId* uniqueId);
 ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
 
-/* Creates a new communicator (multi thread/process version).
- * rank must be between 0 and nranks-1 and unique within a communicator clique.
- * Each rank is associated to a CUDA device, which has to be set before calling
- * ncclCommInitRank.
- * ncclCommInitRank implicitly syncronizes with other ranks, so it must be
- * called by different threads/processes or use ncclGroupStart/ncclGroupEnd. */
+/*! \brief Creates a new communicator (multi thread/process version).
+    
+    \detail
+    rank must be between 0 and nranks-1 and unique within a communicator clique.
+    Each rank is associated to a CUDA device, which has to be set before calling
+    ncclCommInitRank.
+    ncclCommInitRank implicitly syncronizes with other ranks, so it must be
+    called by different threads/processes or use ncclGroupStart/ncclGroupEnd. 
+    
+    @param[in]
+    comm        ncclComm_t*
+                communicator struct pointer
+    */
 ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 
