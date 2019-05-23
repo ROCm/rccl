@@ -39,8 +39,8 @@ if read_the_docs_build:
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.mathjax', 'breathe']
-breathe_projects = { "rocFFT": "../docBin/xml" }
-breathe_default_project = "rocFFT"
+breathe_projects = { "RCCL": "../docBin/xml" }
+breathe_default_project = "RCCL"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -55,7 +55,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'rocFFT'
+project = u'RCCL'
 copyright = u'2016, Advanced Mirco Devices'
 author = u'Advanced Mirco Devices'
 
@@ -128,7 +128,7 @@ else:
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'rocFFTdoc'
+htmlhelp_basename = 'RCCLdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -155,7 +155,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'rocFFT.tex', u'rocFFT Documentation',
+    (master_doc, 'RCCL.tex', u'RCCL Documentation',
      u'Advanced Mirco Devices', 'manual'),
 ]
 
@@ -165,7 +165,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'rocfft', u'rocFFT Documentation',
+    (master_doc, 'RCCL', u'RCCL Documentation',
      [author], 1)
 ]
 
@@ -176,8 +176,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'rocFFT', u'rocFFT Documentation',
-     author, 'rocFFT', 'One line description of project.',
+    (master_doc, 'RCCL', u'RCCL Documentation',
+     author, 'RCCL', 'One line description of project.',
      'Miscellaneous'),
 ]
 
