@@ -13,6 +13,8 @@ Communicator Functions
 
 .. doxygenfunction: ncclCommInitRank
 
+.. doxygenfunction: ncclGetVersion
+
 
 Types
 -----
