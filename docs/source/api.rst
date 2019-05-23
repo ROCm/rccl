@@ -10,6 +10,7 @@ This section provides details of the library API
 
 Communicator Functions
 ----------------------
+sfasdf
 
 .. doxygenfunction: ncclCommInitRank
 
@@ -112,16 +113,6 @@ Enumerations
 This section provides all the enumerations used.
 
 .. doxygenenum:: ncclResult_t
-
-.. doxygenenum:: rocfft_transform_type
-
-.. doxygenenum:: rocfft_precision
-
-.. doxygenenum:: rocfft_result_placement
-
-.. doxygenenum:: rocfft_array_type
-
-.. doxygenenum:: rocfft_execution_mode
 
 
 
