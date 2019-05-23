@@ -1,0 +1,16 @@
+HIP_PATH?= $(wildcard /opt/rocm/hip)
+ifeq (,$(HIP_PATH))
+	HIP_PATH=../../..
+endif
+HIPCC=$(HIP_PATH)/bin/hipcc
+
+EXE=rccl_prim_test
+CXXFLAGS = -O3 -g -I/opt/rocm/rocrand/include
+
+all: $(EXE)
+
+$(EXE): rccl_prim_test.cpp
+	$(HIPCC) $(CXXFLAGS) $^ -o $@
+
+clean:
+	rm -f *.o $(EXE)
