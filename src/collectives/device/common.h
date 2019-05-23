@@ -22,7 +22,7 @@ extern __device__ const ncclKern_t ncclFuncs[];
 template<unsigned short f, unsigned short l>
 struct Caller {
   static
-  void call(ncclColl* const c) noexcept
+  __device__ void call(ncclColl* const c) noexcept
   {
     constexpr unsigned short m = f + (l - f) / 2;
 
@@ -33,7 +33,7 @@ struct Caller {
 template<unsigned short f>
 struct Caller<f, f + 1>{
   static
-  void call(struct ncclColl* const c) noexcept { ncclFuncs[f](&c->args); }
+  __device__ void call(struct ncclColl* const c) noexcept { ncclFuncs[f](&c->args); }
 };
 
 inline
