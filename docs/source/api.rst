@@ -15,7 +15,7 @@ There are few data structures that are internal to the library. The pointer type
 structures are given below. The user would need to use these types to create handles and pass them
 between different library functions.
 
-.. doxygentypedef:: rocfft_plan
+.. doxygentypedef:: ncclResult_t
 
 .. doxygentypedef:: rocfft_plan_description
 
