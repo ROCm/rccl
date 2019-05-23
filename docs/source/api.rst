@@ -17,11 +17,20 @@ Communicator Functions
 
 .. doxygenfunction: ncclCommInitAll
 
+.. doxygenfunction: ncclCommDestroy
+
+.. doxygenfunction: 
+
+.. doxygenfunction: 
+
+.. doxygenfunction: 
 
 Library Functions
 -----------------
 
 .. doxygenfunction: ncclGetVersion
+
+.. doxygenfunction: ncclGetErrorString
 
 Types
 -----
