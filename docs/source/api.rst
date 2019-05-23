@@ -8,6 +8,11 @@ API
 
 This section provides details of the library API
 
+Communicator Functions
+----------------------
+.. doxygenfunction: ncclCommInitRank
+
+
 Types
 -----
 

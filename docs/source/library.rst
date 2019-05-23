@@ -11,12 +11,3 @@ Introduction
 ------------
 
 The RCCL is an AMD port of the NCCL. 
-
-
-
-Real FFTs
----------
-
-.. toctree::
-   :maxdepth: 2
-
