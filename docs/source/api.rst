@@ -111,7 +111,7 @@ Enumerations
 
 This section provides all the enumerations used.
 
-.. doxygenenum:: rocfft_status
+.. doxygenenum:: ncclResult_t
 
 .. doxygenenum:: rocfft_transform_type
 
