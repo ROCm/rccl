@@ -153,6 +153,9 @@ struct ncclRing {
       int* userRanks;
       int* devUserRanks;
 
+      // Next GPU's HDP register address
+      uint32_t* hdp_reg;
+
       // Operation list for aggregation
       struct ncclColl* collectives;
       struct ncclColl* devCollectives;

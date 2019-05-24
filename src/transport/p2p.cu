@@ -118,11 +118,6 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, ncclTinfo_t* myOpaqueInfo, ncclTin
       link_type_name[link_type], hops);
     link_status_print_once_mask |= (1 << (myInfo->cudaDev*8 + peerInfo->cudaDev));
   }
-  if (link_type != HSA_AMD_LINK_INFO_TYPE_XGMI) {
-    // disable PCIe P2P until HDP flush is implemented.
-    p2p = 0;
-    return ncclSuccess;
-  }
   int nvlinkp2p = 0;
   if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1)
     nvlinkp2p = CONNECT_NVLINK;
@@ -487,10 +482,62 @@ end:
   } while (0)
 
 /* Send: Create and return connect structures for this peer to connect to me */
+static ncclResult_t getGpuHdpReg(int cudaDev, uint32_t** hdp) {
+  auto convert_bdf = [](const char *busId) {
+    char bdf[9];
+    strncpy(bdf, busId, 4);
+    strncpy(bdf+4, busId+5, 2);
+    strncpy(bdf+6, busId+8, 2);
+    bdf[8] = '\0';
+    uint16_t id = (uint16_t)strtol(bdf, NULL, 16);
+    return id;
+  };
+
+  const auto& find_agent = [](hsa_agent_t agent, void* out) {
+    hsa_agent_t* found_agent = (hsa_agent_t*)out;
+    uint16_t id = (uint16_t)found_agent->handle;
+    hsa_device_type_t type;
+    hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, (void*)&type);
+    if(type == HSA_DEVICE_TYPE_GPU) {
+      uint16_t bdf_id = 1;
+      hsa_agent_get_info(agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &bdf_id);
+      if(bdf_id == id) {
+        *found_agent=agent;
+        return HSA_STATUS_ERROR;
+      }
+    }
+    return HSA_STATUS_SUCCESS;
+  };
+
+  char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
+  *hdp = NULL;
+  CUDACHECK(hipDeviceGetPCIBusId(busId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, cudaDev));
+  hsa_agent_t agent;
+  agent.handle = convert_bdf(busId);
+  hsa_iterate_agents(find_agent, (void*)&agent);
+  hsa_amd_hdp_flush_t hdpinfo;
+  hsa_status_t err = hsa_agent_get_info(agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_HDP_FLUSH, &hdpinfo);
+  if ((err != HSA_STATUS_SUCCESS) && (err != HSA_STATUS_INFO_BREAK)) {
+    WARN("failed to get HSA_AMD_AGENT_INFO_HDP_FLUSH for GPU %d", cudaDev);
+    return ncclSystemError;
+  }
+  *hdp = hdpinfo.HDP_MEM_FLUSH_CNTL;
+  return ncclSuccess;
+}
+
 ncclResult_t p2pSendSetup(ncclTinfo_t* myOpaqueInfo, ncclTinfo_t* peerOpaqueInfo, struct ncclConnect* connectInfo, struct ncclRing* ring) {
   struct p2pInfo* myInfo = (struct p2pInfo*)myOpaqueInfo;
   struct p2pInfo* peerInfo = (struct p2pInfo*)peerOpaqueInfo;
   struct p2pConnectInfo info;
+  uint32_t linktype, hops;
+  if (hipExtGetLinkTypeAndHopCount(myInfo->cudaDev, peerInfo->cudaDev, &linktype, &hops) != hipSuccess) {
+    INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", ring->id, myInfo->rank, peerInfo->rank);
+    return ncclInternalError;
+  }
+  if (linktype != HSA_AMD_LINK_INFO_TYPE_XGMI) {
+    NCCLCHECK(getGpuHdpReg(peerInfo->cudaDev, &ring->hdp_reg));
+    TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", ring->id, myInfo->rank, peerInfo->rank, ring->hdp_reg);
+  }
   if (myInfo->pidHash == peerInfo->pidHash) {
     info.direct = 1;
     info.directPtr = ring->devMemSend;

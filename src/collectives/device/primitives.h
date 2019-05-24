@@ -44,11 +44,13 @@ class PostFlag {
   const int shift;
   volatile int * const fifo;
   const int fifo_size;
+  uint32_t * hdp_reg;
  public:
   __device__
-  PostFlag(volatile uint64_t* const flag, const int shift, volatile int* const fifo, const int fifo_size) : flag(flag), shift(shift), fifo(fifo), fifo_size(fifo_size) { }
+  PostFlag(volatile uint64_t* const flag, const int shift, volatile int* const fifo, const int fifo_size, uint32_t* hdp_reg = NULL)
+    : flag(flag), shift(shift), fifo(fifo), fifo_size(fifo_size), hdp_reg(hdp_reg) { }
   __device__
-  void post(uint64_t val) { STORE(flag, (val - shift)); }
+  void post(uint64_t val) { if (hdp_reg != NULL) STORE(hdp_reg, 0x1); STORE(flag, (val - shift)); }
   __device__
   void postSize(uint64_t step, int size) { if (fifo != NULL) STORE(fifo + step%fifo_size, size); };
 };
