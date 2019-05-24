@@ -27,6 +27,7 @@ Communicator Functions
 
 Collection Communication Operations
 -----------------------------------
+
 Collective communication operations must be called separately for each communicator in a communicator clique.
 
 They return when operations have been enqueued on the hipstream.
@@ -50,7 +51,7 @@ There are few data structures that are internal to the library. The pointer type
 structures are given below. The user would need to use these types to create handles and pass them
 between different library functions.
 
-.. doxygentypedef :: ncclComm_t
+.. doxygentypedef:: ncclComm_t
 
 .. doxygenstruct:: ncclUniqueId
 
