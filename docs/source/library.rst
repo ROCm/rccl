@@ -10,4 +10,4 @@ RCCL
 Introduction
 ------------
 
-The RCCL is an AMD port of the NCCL. 
+The RCCL is an AMD port of NCCL. 
