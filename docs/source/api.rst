@@ -27,12 +27,13 @@ Communicator Functions
 
 Collection Communication Operations
 -----------------------------------
- * Collective communication operations must be called separately for each
- * communicator in a communicator clique.
- *
- * They return when operations have been enqueued on the hip stream.
- *
+Collective communication operations must be called separately for each communicator in a communicator clique.
+
+They return when operations have been enqueued on the hipstream.
+
 Since they may perform inter-CPU synchronization, each call has to be done from a different thread or process, or need to use Group Semantics (see below).
+
+.. doxygenfunction:: ncclReduce
 
 
 Library Functions
