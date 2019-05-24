@@ -70,7 +70,6 @@ See the rccl-tests README for more information on how to build and run those tes
 
 Please refer to the [Library documentation](http://rccl.readthedocs.io/) for current documentation.
 
-
 ## Copyright
 
 All source code and accompanying documentation is copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
