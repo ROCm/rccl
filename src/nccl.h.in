@@ -158,10 +158,9 @@ ncclResult_t  ncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncc
 ncclResult_t pncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
     ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream);
 
-/*
- * (deprecated) Broadcast (in-place)
+/*! @brief (deprecated) Broadcast (in-place)
  *
- * Copies count values from root to all other devices.
+ * @details Copies count values from root to all other devices.
  * root is the rank (not the CUDA device) where data resides before the
  * operation is started.
  *
@@ -172,7 +171,7 @@ ncclResult_t  ncclBcast(void* buff, size_t count, ncclDataType_t datatype, int r
 ncclResult_t pncclBcast(void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
 
-/*
+/*! 
  * Broadcast
  *
  * Copies count values from root to all other devices.
