@@ -36,6 +36,36 @@ Since they may perform inter-CPU synchronization, each call has to be done from 
 
 .. doxygenfunction:: ncclReduce
 
+.. doxygenfunction:: ncclBcast
+
+.. doxygenfunction:: ncclBroadcast
+
+.. doxygenfunction:: ncclAllReduce
+
+.. doxygenfunction:: ncclReduceScatter
+
+.. doxygenfunction:: ncclAllGather
+
+
+Group Semantics
+---------------
+When managing multiple GPUs from a single thread, and since NCCL collective
+calls may perform inter-CPU synchronization, we need to "group" calls for
+different ranks/devices into a single call.
+
+Grouping NCCL calls as being part of the same collective operation is done
+using ncclGroupStart and ncclGroupEnd. ncclGroupStart will enqueue all
+collective calls until the ncclGroupEnd call, which will wait for all calls
+to be complete. Note that for collective communication, ncclGroupEnd only
+guarantees that the operations are enqueued on the streams, not that
+the operation is effectively done.
+
+Both collective communication and ncclCommInitRank can be used in conjunction
+of ncclGroupStart/ncclGroupEnd.
+
+.. doxygenfunction:: ncclGroupStart
+
+.. doxygenfunction:: ncclGroupEnd
 
 Library Functions
 -----------------
