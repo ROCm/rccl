@@ -106,18 +106,18 @@ ncclResult_t pncclCommCount(const ncclComm_t comm, int* count);
 ncclResult_t  ncclCommCuDevice(const ncclComm_t comm, int* device);
 ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
 
-/* @brief Returns the user-ordered "rank" associated with the communicator. */
+/*! @brief Returns the user-ordered "rank" associated with the communicator. */
 ncclResult_t  ncclCommUserRank(const ncclComm_t comm, int* rank);
 ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
 
-/* @brief Reduction operation selector */
+/*! @brief Reduction operation selector */
 typedef enum { ncclSum        = 0,
                ncclProd       = 1,
                ncclMax        = 2,
                ncclMin        = 3,
                ncclNumOps     = 4 } ncclRedOp_t;
 
-/* @brief Data types */
+/*! @brief Data types */
 typedef enum { ncclInt8       = 0, ncclChar       = 0,
                ncclUint8      = 1,
                ncclInt32      = 2, ncclInt        = 2,
@@ -135,7 +135,7 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
  * Collective communication operations must be called separately for each
  * communicator in a communicator clique.
  *
- * They return when operations have been enqueued on the CUDA stream.
+ * They return when operations have been enqueued on the hipstream.
  *
  * Since they may perform inter-CPU synchronization, each call has to be done
  * from a different thread or process, or need to use Group Semantics (see

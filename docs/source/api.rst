@@ -25,6 +25,16 @@ Communicator Functions
 
 .. doxygenfunction:: ncclCommUserRank
 
+Collection Communication Operations
+-----------------------------------
+ * Collective communication operations must be called separately for each
+ * communicator in a communicator clique.
+ *
+ * They return when operations have been enqueued on the hip stream.
+ *
+Since they may perform inter-CPU synchronization, each call has to be done from a different thread or process, or need to use Group Semantics (see below).
+
+
 Library Functions
 -----------------
 
@@ -51,6 +61,10 @@ Enumerations
 This section provides all the enumerations used.
 
 .. doxygenenum:: ncclResult_t
+
+.. doxygenenum:: ncclRedOp_t
+
+.. doxygenenum:: ncclDataType_t
 
 
 
