@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# rocFFT documentation build configuration file, created by
+# RCCL documentation build configuration file, created by
 # sphinx-quickstart on Mon Jan  8 16:34:42 2018.
 #
 # This file is execfile()d with the current directory set to its
@@ -56,7 +56,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'RCCL'
-copyright = u'2016, Advanced Mirco Devices'
+copyright = u'2019, Advanced Mirco Devices'
 author = u'Advanced Mirco Devices'
 
 # The version info for the project you're documenting, acts as replacement for
