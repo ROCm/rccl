@@ -49,6 +49,19 @@ class PostFlag {
   __device__
   PostFlag(volatile uint64_t* const flag, const int shift, volatile int* const fifo, const int fifo_size, uint32_t* hdp_reg = NULL)
     : flag(flag), shift(shift), fifo(fifo), fifo_size(fifo_size), hdp_reg(hdp_reg) { }
+  // Data transfers through PCIe are not guaranteed to occur in order to due to how writes
+  // may be combined when received by the remote GPU. This can cause an issue if the write
+  // to the flag signaling transfer completion gets reordered and occurs prior to the actual
+  // data transfer.
+  // HDP register is used to suppress PCIe re-ordering. The reordering we need to suppress is
+  // between the HDP write combiner (where PCIe writes are acked) and local memory (where it
+  // becomes visible to the GPU). Any PCIe reordering is handled by the s_waitcnt preceding
+  // the status flag write.
+  // So the 3-4 sequence would look like:
+  // 1.  Write data
+  // 2.  Wait for write ack over PCIe with s_waitcnt 0.
+  // 3.  Flush HDP write combiner on receiving GPU.
+  // 4.  Write status flag.
   __device__
   void post(uint64_t val) { if (hdp_reg != NULL) STORE(hdp_reg, 0x1); STORE(flag, (val - shift)); }
   __device__

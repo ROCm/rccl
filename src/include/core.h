@@ -153,7 +153,9 @@ struct ncclRing {
       int* userRanks;
       int* devUserRanks;
 
-      // Next GPU's HDP register address
+      // Next GPU's HDP_MEM_FLUSH_ADDR: HDP Memory Coherency Flush Control. This register
+      // allows software to explicitly initiate a flush read to HDP memory. See more
+      // descriptions in primitives.h.
       uint32_t* hdp_reg;
 
       // Operation list for aggregation
