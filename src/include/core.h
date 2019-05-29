@@ -212,6 +212,11 @@ struct ncclProf {
       uint64_t reduce_cycle;
       uint64_t reducecopy_cycle;
       uint64_t doublecopy_cycle;
+      uint64_t copy_bytes;
+      uint64_t localcopy_bytes;
+      uint64_t reduce_bytes;
+      uint64_t reducecopy_bytes;
+      uint64_t doublecopy_bytes;
       uint64_t collective_init;
       char msg[1];
     };

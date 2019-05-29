@@ -18,8 +18,9 @@
 #define INIT_COUNTER \
   if (tid==0) {t0 = clock(); w = LOAD(&(devProf->wait_cycle[bid]));}
 
-#define ACCUMULATE_COUNTER(counter) \
-  if (tid==0) __atomic_fetch_add(&(devProf->counter), clock() - t0 + w - LOAD(&(devProf->wait_cycle[bid])), __ATOMIC_SEQ_CST)
+#define ACCUMULATE_COUNTER(prim) \
+  if (tid==0) { __atomic_fetch_add(&(devProf->prim##_cycle), clock() - t0 + w - LOAD(&(devProf->wait_cycle[bid])), __ATOMIC_SEQ_CST); \
+    __atomic_fetch_add(&(devProf->prim##_bytes), max(0, min(sliceSize, maxOffset)) * sizeof(T), __ATOMIC_SEQ_CST); }
 
 template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
@@ -97,7 +98,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext,
             postReadyToNext);
-        ACCUMULATE_COUNTER(copy_cycle);
+        ACCUMULATE_COUNTER(copy);
       } else {
         INIT_COUNTER;
         Prims::DoubleCopy(tid, nthreads,
@@ -108,7 +109,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext,
             postReadyToNext);
-        ACCUMULATE_COUNTER(doublecopy_cycle);
+        ACCUMULATE_COUNTER(doublecopy);
       }
     } else if (nextRank == root) {
       if (prevdirect) maxOffset = 0; // Only wait for signals
@@ -120,7 +121,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
           step,
           waitReadyFromPrev,
           postDoneToPrev);
-      ACCUMULATE_COUNTER(localcopy_cycle);
+      ACCUMULATE_COUNTER(localcopy);
     } else {
       if (prevdirect) {
         INIT_COUNTER;
@@ -131,7 +132,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext, waitReadyFromPrev,
             postReadyToNext, postDoneToPrev);
-        ACCUMULATE_COUNTER(copy_cycle);
+        ACCUMULATE_COUNTER(copy);
       } else {
         INIT_COUNTER;
         Prims::DoubleCopy(tid, nthreads,
@@ -142,7 +143,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
             step,
             waitDoneFromNext, waitReadyFromPrev,
             postReadyToNext, postDoneToPrev);
-        ACCUMULATE_COUNTER(doublecopy_cycle);
+        ACCUMULATE_COUNTER(doublecopy);
       }
     }
     NEXT_STEP; // Increases step, boffset
