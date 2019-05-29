@@ -57,7 +57,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
     // Update in case we skipped some collectives
     STORE(ring->recv.conn.opCount, args->opCount);
     // Wait for next to be ready
-    WaitFlag waitOpCountNext(ring->send.conn.opCount, 0, &(devProf->collective_init));
+    WaitFlag waitOpCountNext(ring->send.conn.opCount, 0, &(devProf->init_cycle));
     waitOpCountNext.wait(args->opCount);
     if (prevdirect) {
       *ring->recv.conn.ptrExchange = args->ThisOutput;
@@ -218,7 +218,6 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
     __threadfence_system();
     STORE(ring->recv.conn.opCount, args->opCount+1);
     __atomic_fetch_add(&(devProf->total_cycle), clock() - clk, __ATOMIC_SEQ_CST);
-    __atomic_fetch_add(&(devProf->data_transferred), args->N * sizeof(T), __ATOMIC_SEQ_CST);
   }
 }
 

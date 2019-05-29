@@ -204,9 +204,9 @@ struct ncclColl {
 struct ncclProf {
   union {
     struct {
-      uint64_t wait_cycle[MAXRINGS];
       uint64_t total_cycle;
-      uint64_t data_transferred;
+      uint64_t init_cycle;
+      uint64_t wait_cycle[MAXRINGS];
       uint64_t copy_cycle;
       uint64_t localcopy_cycle;
       uint64_t reduce_cycle;
@@ -217,7 +217,6 @@ struct ncclProf {
       uint64_t reduce_bytes;
       uint64_t reducecopy_bytes;
       uint64_t doublecopy_bytes;
-      uint64_t collective_init;
       char msg[1];
     };
     char pad1[MEM_ALIGN];

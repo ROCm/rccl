@@ -58,7 +58,7 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
     STORE(ring->recv.conn.opCount, args->opCount);
     if (nextRank != root) {
       // Wait for next to be ready
-      WaitFlag waitOpCountNext(ring->send.conn.opCount, 0, &(devProf->collective_init));
+      WaitFlag waitOpCountNext(ring->send.conn.opCount, 0, &(devProf->init_cycle));
       waitOpCountNext.wait(args->opCount);
     }
     if (rank != root && prevdirect) {
@@ -159,7 +159,6 @@ __device__ void ncclBroadcastKernel(struct CollectiveArgs* args) {
     __threadfence_system();
     STORE(ring->recv.conn.opCount, args->opCount+1);
     __atomic_fetch_add(&(devProf->total_cycle), clock() - clk, __ATOMIC_SEQ_CST);
-    __atomic_fetch_add(&(devProf->data_transferred), args->N * sizeof(T), __ATOMIC_SEQ_CST);
   }
 }
 
