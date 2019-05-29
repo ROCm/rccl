@@ -119,9 +119,9 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, ncclTinfo_t* myOpaqueInfo, ncclTin
     link_status_print_once_mask |= (1 << (myInfo->cudaDev*8 + peerInfo->cudaDev));
   }
   if (link_type != HSA_AMD_LINK_INFO_TYPE_XGMI) {
-  // enable below lines on release only: disable PCIe P2P until HDP flush is implemented.
-  //  p2p = 0;
-  //  return ncclSuccess;
+    // disable PCIe P2P until HDP flush is implemented.
+    p2p = 0;
+    return ncclSuccess;
   }
   int nvlinkp2p = 0;
   if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1)
@@ -290,7 +290,11 @@ int p2pComputeRingsNvLink(ncclTvalue_t* values, int nranks, int* rings, int nrin
   }
 
   // Duplicate the rings for direct NVLink
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  compNrings = copyRings(nranks, rings, compNrings, compNrings*3);
+#else
   compNrings = copyRings(nranks, rings, compNrings, compNrings*2);
+#endif
 
   if (ncclCudaCompCap() == 6) *nthreads /= 2;
   return compNrings;
