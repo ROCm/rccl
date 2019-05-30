@@ -215,8 +215,9 @@ static ncclResult_t commFree(ncclComm_t comm) {
   //INFO(NCCL_INIT, "Rank %d bytes: copy %lu localcopy %lu reduce %lu reducecopy %lu doublecopy %lu",
   //  comm->rank, prof->copy_bytes, prof->localcopy_bytes, prof->reduce_bytes, prof->reducecopy_bytes, prof->doublecopy_bytes);
   INFO(NCCL_INIT, "Rank %d: total %.4fs init %.4fs wait %.4fs copy %.2f localcopy %.2f reduce %.2f reducecopy %.2f doublecopy %.2f",
-    comm->rank, (double)prof->total_cycle/VEGA_GPU_RTC_FREQUENCY, (double)prof->init_cycle/VEGA_GPU_RTC_FREQUENCY,
-    (double)wait_cycle/VEGA_GPU_RTC_FREQUENCY,
+    comm->rank, (double)prof->total_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nRings,
+    (double)prof->init_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nRings,
+    (double)wait_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nRings,
     (prof->copy_cycle) ? (double)prof->copy_bytes/((double)prof->copy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
     (prof->localcopy_cycle) ? (double)prof->localcopy_bytes/((double)prof->localcopy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
     (prof->reduce_cycle) ? (double)prof->reduce_bytes/((double)prof->reduce_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
