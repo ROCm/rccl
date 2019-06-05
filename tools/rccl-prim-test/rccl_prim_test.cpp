@@ -37,8 +37,6 @@ THE SOFTWARE.
 #define THREADS 256
 #define UNROLL 8
 
-#define NUM_ITERS 10
-
 struct transfer_data_t {
   float *dest0; //remote fine grain
   float *src0;  //local fine grain
@@ -154,7 +152,7 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 int main(int argc,char* argv[])
 {
   if (cmdOptionExists(argv, argv + argc, "-h")) {
-    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all\n");
+    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all -n iterations\n");
     exit(0);
   }
 
@@ -163,6 +161,12 @@ int main(int argc,char* argv[])
   if (wg)
     workgroups = atol(wg);
   printf("Benchmarking using %d workgroups\n", workgroups);
+
+  int iters = 10;
+  char *it = getCmdOption(argv, argv + argc, "-n");
+  if (it)
+    iters = atol(it);
+  printf("Benchmarking using %d iterations\n", iters);
 
   const char *ops[] = {"copy", "localcopy", "doublecopy", "reduce", "reducecopy", "all"};
   char *prim = getCmdOption(argv, argv + argc, "-p");
@@ -190,7 +194,12 @@ int main(int argc,char* argv[])
   struct profiling_data_t *profiling_data_0, *profiling_data_1, *d_profiling_data_0, *d_profiling_data_1;
   uint64_t N = 2097152*4*MAX_WORKGROUPS;
 
-  HIPCHECK(hipSetDevice(0));
+  int hipDev = 0;
+  HIPCHECK(hipSetDevice(hipDev));
+  hipDeviceProp_t prop;
+  HIPCHECK(hipGetDeviceProperties(&prop, hipDev));
+  printf("#   device %d [0x%02x] %s\n",
+                  hipDev, prop.pciBusID, prop.name);
   HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data_0, sizeof(struct transfer_data_t), hipDeviceMallocFinegrained));
   //printf("GPU 0: allocated fine grain VRAM at %llx\n", (unsigned long long)transfer_data_0);
   HIPCHECK(hipExtMallocWithFlags((void**) &buff_0, 2*N*sizeof(float), hipDeviceMallocFinegrained));
@@ -216,7 +225,11 @@ int main(int argc,char* argv[])
       /*stream*/                stream_0,
       /*kernel args*/           buff_coarse_0, 2*N, 0);
 
-  HIPCHECK(hipSetDevice(1));
+  hipDev = 1;
+  HIPCHECK(hipSetDevice(hipDev));
+  HIPCHECK(hipGetDeviceProperties(&prop, hipDev));
+  printf("#   device %d [0x%02x] %s\n",
+                  hipDev, prop.pciBusID, prop.name);
   HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data_1, sizeof(struct transfer_data_t), hipDeviceMallocFinegrained));
   //printf("GPU 1: allocated fine grain VRAM at %llx\n", (unsigned long long)transfer_data_1);
   HIPCHECK(hipExtMallocWithFlags((void**) &buff_1, 2*N*sizeof(float), hipDeviceMallocFinegrained));
@@ -300,7 +313,7 @@ int main(int argc,char* argv[])
     HIPCHECK(hipMemset(d_profiling_data_1, 0, sizeof(struct profiling_data_t)));
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < NUM_ITERS; i ++) {
+    for (int i = 0; i < iters; i ++) {
       HIPCHECK(hipSetDevice(0));
       //launch the kernel
       hipLaunchKernelGGL(flagSyncKerns[op],
