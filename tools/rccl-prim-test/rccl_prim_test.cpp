@@ -70,9 +70,8 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   uint64_t curr_time, next_time;
 
   if (idx == 0) {
-    curr_time = clock();
+    curr_time = clock64();
   }
-  __syncthreads();
 
   int offset = transfer_data->N * blockIdx.x / gridDim.x;
   int n = transfer_data->N / gridDim.x;
@@ -82,10 +81,10 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   if (op == OP_REDUCE) Reduce<UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->src0 + offset, transfer_data->src1 + offset, n);
   if (op == OP_REDUCECOPY) ReduceCopy<UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->dest1 + offset, transfer_data->src0 + offset, transfer_data->src1 + offset, n);
 
+  __syncthreads();
   if (idx == 0) {
-    next_time = clock();
+    next_time = clock64();
     __atomic_fetch_add(&(profiling_data->write_cycles), next_time - curr_time, __ATOMIC_SEQ_CST);
-    curr_time = next_time;
     __atomic_fetch_add(&(profiling_data->bytes_transferred), n * sizeof(float), __ATOMIC_SEQ_CST);
   }
 }
@@ -353,11 +352,14 @@ int main(int argc,char* argv[])
     double speed = (double)(profiling_data_0->bytes_transferred) / (deltaSec*1.0E9);
     printf("Transfered %lu bytes in %f s. Throughput %f GB/s\n", profiling_data_0->bytes_transferred, deltaSec, speed);
 
-    fprintf(stderr, "GPU 0: write_cycles %ld bytes_transferred %ld\n",
-      profiling_data_0->write_cycles, profiling_data_0->bytes_transferred);
+#define RTC_CLOCK_FREQ 2.7E07
+    double t0 = (double)profiling_data_0->write_cycles/((double)RTC_CLOCK_FREQ)/(double)workgroups;
+    fprintf(stderr, "GPU 0: time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
+      t0, profiling_data_0->bytes_transferred, (double)profiling_data_0->bytes_transferred/(t0*1.0E9));
 
-    fprintf(stderr, "GPU 1: write_cycles %ld bytes_transferred %ld\n",
-      profiling_data_1->write_cycles, profiling_data_1->bytes_transferred);
+    double t1 = (double)profiling_data_1->write_cycles/((double)RTC_CLOCK_FREQ)/(double)workgroups;
+    fprintf(stderr, "GPU 1: time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
+      t1, profiling_data_1->bytes_transferred, (double)profiling_data_0->bytes_transferred/(t1*1.0E9));
   }
 
   HIPCHECK(hipStreamDestroy(stream_0));
