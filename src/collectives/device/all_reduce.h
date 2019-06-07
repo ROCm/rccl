@@ -40,7 +40,7 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
   WaitFlag waitDoneFromNext(ring->send.conn.head, ALLREDUCE_BUFCHUNKS*ALLREDUCE_SUBSTEPS, &(devProf->wait_cycle[bid]));
   WaitFlag waitReadyFromPrev(ring->recv.conn.tail, ALLREDUCE_SUBSTEPS, &(devProf->wait_cycle[bid]));
   PostFlag postDoneToPrev(ring->recv.conn.head, ALLREDUCE_SUBSTEPS, NULL, 0);
-  PostFlag postReadyToNext(ring->send.conn.tail, 0, ring->send.conn.fifo, ALLREDUCE_BUFCHUNKS*ALLREDUCE_SUBSTEPS);
+  PostFlag postReadyToNext(ring->send.conn.tail, 0, ring->send.conn.fifo, ALLREDUCE_BUFCHUNKS*ALLREDUCE_SUBSTEPS, ring->hdp_reg);
 
   typedef Primitives<UNROLL, ALLREDUCE_SUBSTEPS, T, FUNC> Prims;
 
