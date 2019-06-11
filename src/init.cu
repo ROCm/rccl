@@ -45,7 +45,7 @@ FILE *ncclDebugFile = stdout;
 std::chrono::high_resolution_clock::time_point ncclEpoch;
 #endif
 
-#if CUDART_VERSION >= 9200
+#if CUDART_VERSION >= 9200 || defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
 #define NCCL_GROUP_CUDA_STREAM 0 // CGMD: CUDA 9.2,10.X Don't need to use an internal CUDA stream
 #else
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
@@ -250,7 +250,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   comm->doneEvent = doneEvent;
   comm->llThreshold = ncclParamLlThreshold();
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
-#if CUDART_VERSION >= 9200
+#if CUDART_VERSION >= 9200 || defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
   comm->groupCudaStream = ncclParamGroupCudaStream();
 #else
   // Don't allow the user to overload the default setting in older CUDA builds
