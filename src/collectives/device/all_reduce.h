@@ -218,6 +218,8 @@ __device__ void ncclAllReduceKernel(struct CollectiveArgs* args) {
     __threadfence_system();
     STORE(ring->recv.conn.opCount, args->opCount+1);
     __atomic_fetch_add(&(devProf->total_cycle), clock() - clk, __ATOMIC_SEQ_CST);
+    if(bid == 0)
+      __atomic_fetch_add(&(devProf->alg_bytes), args->N*sizeof(T), __ATOMIC_SEQ_CST);
   }
 }
 

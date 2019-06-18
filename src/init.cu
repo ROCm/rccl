@@ -214,15 +214,18 @@ static ncclResult_t commFree(ncclComm_t comm) {
   //  (double)prof->reducecopy_cycle/VEGA_GPU_RTC_FREQUENCY, (double)prof->doublecopy_cycle/VEGA_GPU_RTC_FREQUENCY);
   //INFO(NCCL_INIT, "Rank %d bytes: copy %lu localcopy %lu reduce %lu reducecopy %lu doublecopy %lu",
   //  comm->rank, prof->copy_bytes, prof->localcopy_bytes, prof->reduce_bytes, prof->reducecopy_bytes, prof->doublecopy_bytes);
-  INFO(NCCL_INIT, "Rank %d: total %.4fs init %.4fs wait %.4fs copy %.2f localcopy %.2f reduce %.2f reducecopy %.2f doublecopy %.2f",
+  INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %6s %9s %6s %10s %10s", "Rank", "total", "init", "wait", "algbw", "copy", "localcopy", "reduce", "reducecopy", "doublecopy");
+  INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %6s %9s %6s %10s %10s", "", "(s)", "(s)", "(s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)");
+  INFO(NCCL_INIT, "# %4d %6.4f %6.4f %6.4f %6.2f %6.2f %9.2f %6.2f %10.2f %10.2f",
     comm->rank, (double)prof->total_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nRings,
     (double)prof->init_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nRings,
     (double)wait_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nRings,
-    (prof->copy_cycle) ? (double)prof->copy_bytes/((double)prof->copy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->localcopy_cycle) ? (double)prof->localcopy_bytes/((double)prof->localcopy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->reduce_cycle) ? (double)prof->reduce_bytes/((double)prof->reduce_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->reducecopy_cycle) ? (double)prof->reducecopy_bytes/((double)prof->reducecopy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->doublecopy_cycle) ? (double)prof->doublecopy_bytes/((double)prof->doublecopy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0);
+    (prof->total_cycle) ? (double)prof->alg_bytes*comm->nRings/((double)prof->total_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (prof->copy_cycle) ? (double)prof->copy_bytes*comm->nRings/((double)prof->copy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (prof->localcopy_cycle) ? (double)prof->localcopy_bytes*comm->nRings/((double)prof->localcopy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (prof->reduce_cycle) ? (double)prof->reduce_bytes*comm->nRings/((double)prof->reduce_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (prof->reducecopy_cycle) ? (double)prof->reducecopy_bytes*comm->nRings/((double)prof->reducecopy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (prof->doublecopy_cycle) ? (double)prof->doublecopy_bytes*comm->nRings/((double)prof->doublecopy_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0);
   free(prof);
   CUDACHECK(hipFree(comm->devProf));
   CUDACHECK(hipFree(comm->devComm));

@@ -222,6 +222,7 @@ struct ncclProf {
       uint64_t reduce_bytes;
       uint64_t reducecopy_bytes;
       uint64_t doublecopy_bytes;
+      uint64_t alg_bytes;
       char msg[1];
     };
     char pad1[MEM_ALIGN];
