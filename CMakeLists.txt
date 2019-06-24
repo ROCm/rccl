@@ -155,8 +155,13 @@ if("${HIP_COMPILER}" MATCHES "clang")
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
 endif()
 
-if("${HIP_COMPILER}" MATCHES "hcc")
-  target_link_libraries(rccl PRIVATE -hc-function-calls)
+if("${HIP_COMPILER}" MATCHES "clang")
+  target_compile_options(rccl
+    PRIVATE --amdgpu-target=gfx803
+    PRIVATE --amdgpu-target=gfx900
+    PRIVATE --amdgpu-target=gfx906
+    PRIVATE -fgpu-rdc)
+  target_link_libraries(rccl PRIVATE -fgpu-rdc)
 endif()
 
 if(TARGET hip::device)
