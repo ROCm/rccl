@@ -54,8 +54,17 @@ else()
   set(NCCL_VERSION "${NCCL_MAJOR}${NCCL_MINOR}0${NCCL_PATCH}")
 endif()
 
-rocm_setup_version(VERSION
-                   "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}-${PKG_REVISION}")
+# Setup VERSION
+set(VERSION_STRING "2.6.0.")
+
+# Check if BUILD_NUMBER is defined in a Jenkins environment
+if($ENV{BUILD_NUMBER})
+  string(CONCAT BUILD_VERSION ${VERSION_STRING} $ENV{BUILD_NUMBER})
+else()
+  string(CONCAT BUILD_VERSION ${VERSION_STRING} "0")
+endif()
+
+rocm_setup_version(VERSION ${BUILD_VERSION} NO_GIT_TAG_VERSION)
 
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
@@ -63,6 +72,8 @@ list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm/hcc)
 
 find_package(hip REQUIRED)
+message(STATUS "HIP compiler: ${HIP_COMPILER}")
+message(STATUS "HIP runtime: ${HIP_RUNTIME}")
 
 option(BUILD_SHARED_LIBS "Build as a shared library" ON)
 
@@ -130,10 +141,23 @@ if(TRACE)
 endif()
 
 target_link_libraries(rccl
-  PRIVATE -amdgpu-target=gfx803
-  PRIVATE -amdgpu-target=gfx900
-  PRIVATE -amdgpu-target=gfx906
+  PRIVATE --amdgpu-target=gfx803
+  PRIVATE --amdgpu-target=gfx900
+  PRIVATE --amdgpu-target=gfx906
   PRIVATE -hc-function-calls)
+
+if("${HIP_COMPILER}" MATCHES "clang")
+  target_compile_options(rccl
+    PRIVATE --amdgpu-target=gfx803
+    PRIVATE --amdgpu-target=gfx900
+    PRIVATE --amdgpu-target=gfx906
+    PRIVATE -fgpu-rdc)
+  target_link_libraries(rccl PRIVATE -fgpu-rdc)
+endif()
+
+if("${HIP_COMPILER}" MATCHES "hcc")
+  target_link_libraries(rccl PRIVATE -hc-function-calls)
+endif()
 
 if(TARGET hip::device)
   target_link_libraries(rccl PRIVATE hip::device)
@@ -161,13 +185,13 @@ rocm_export_targets(NAMESPACE
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip_hcc")
 set(CPACK_RPM_PACKAGE_REQUIRES "hip_hcc")
 
+set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
+
 rocm_create_package(
   NAME
   rccl
   DESCRIPTION
   "Optimized primitives for collective multi-GPU communication"
-  MAINTAINER
-  "Jeff Daily <jeff.daily@amd.com>"
   LDCONFIG)
 
 rocm_install_symlink_subdir(rccl)
