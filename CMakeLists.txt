@@ -141,9 +141,9 @@ if(TRACE)
 endif()
 
 target_link_libraries(rccl
-  PRIVATE --amdgpu-target=gfx803
-  PRIVATE --amdgpu-target=gfx900
-  PRIVATE --amdgpu-target=gfx906
+  PRIVATE -amdgpu-target=gfx803
+  PRIVATE -amdgpu-target=gfx900
+  PRIVATE -amdgpu-target=gfx906
   PRIVATE -hc-function-calls)
 
 if(TARGET hip::device)
