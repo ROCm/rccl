@@ -191,6 +191,8 @@ rocm_create_package(
   rccl
   DESCRIPTION
   "Optimized primitives for collective multi-GPU communication"
+  MAINTAINER
+  "<no-reply@amd.com>"
   LDCONFIG)
 
 rocm_install_symlink_subdir(rccl)
