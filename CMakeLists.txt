@@ -146,24 +146,6 @@ target_link_libraries(rccl
   PRIVATE --amdgpu-target=gfx906
   PRIVATE -hc-function-calls)
 
-if("${HIP_COMPILER}" MATCHES "clang")
-  target_compile_options(rccl
-    PRIVATE --amdgpu-target=gfx803
-    PRIVATE --amdgpu-target=gfx900
-    PRIVATE --amdgpu-target=gfx906
-    PRIVATE -fgpu-rdc)
-  target_link_libraries(rccl PRIVATE -fgpu-rdc)
-endif()
-
-if("${HIP_COMPILER}" MATCHES "clang")
-  target_compile_options(rccl
-    PRIVATE --amdgpu-target=gfx803
-    PRIVATE --amdgpu-target=gfx900
-    PRIVATE --amdgpu-target=gfx906
-    PRIVATE -fgpu-rdc)
-  target_link_libraries(rccl PRIVATE -fgpu-rdc)
-endif()
-
 if(TARGET hip::device)
   target_link_libraries(rccl PRIVATE hip::device)
   target_link_libraries(rccl INTERFACE hip::host)
