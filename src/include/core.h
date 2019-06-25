@@ -20,17 +20,6 @@
 #include <hip/hip_runtime_api.h>
 #include <hip/hip_runtime.h>
 
-#if CUDART_VERSION < 9000
-struct cudaLaunchParams {
-  void (*func)(struct ncclColl);
-  dim3 gridDim;
-  dim3 blockDim;
-  struct ncclColl **args;
-  size_t sharedMem;
-  hipStream_t stream;
-};
-#endif
-
 #define MAXRINGS 16
 #define MAXTHREADS 256
 #define DEFAULT_BUFFER_SIZE_BYTES (1LL << 22) /* 4MiB */
@@ -248,8 +237,8 @@ struct ncclComm {
   int intraPhase;
 
   // Storage for deferred intra-process launch
-  struct cudaLaunchParams * intraParams;
-  struct cudaLaunchParams *myParams;
+  hipLaunchParams* intraParams;
+  hipLaunchParams* myParams;
   int* intraCudaDevs;
   int* intraCGMode; // Whether we can use CUDA9 CGMD or not
   int* intraCC; // Only to check all have the same ComputeCap and disable CGMode if not

@@ -455,8 +455,8 @@ void* waitForNonNullPtr(void* p) {
 }
 
 ncclResult_t initParams(struct ncclComm* comm) {
-  struct cudaLaunchParams* params = comm->myParams = comm->intraParams+comm->intraRank;
-  params->args = &comm->argsptr;
+  hipLaunchParams* params = comm->myParams = comm->intraParams+comm->intraRank;
+  params->args = (void **)&comm->argsptr;
   params->stream = NULL;
   params->sharedMem = 0;
   params->blockDim.x = 0; params->blockDim.y = params->blockDim.z = 1;
@@ -489,7 +489,7 @@ ncclResult_t ncclCommSetIntra(struct ncclComm* comm, int rank, int ranks, struct
     comm->intraCC = CC;
   } else {
     comm->intraBarrier = (int*)waitForNonNullPtr(&comm0->intraBarrier);
-    comm->intraParams = (struct cudaLaunchParams*)waitForNonNullPtr(&comm0->intraParams);
+    comm->intraParams = (hipLaunchParams*)waitForNonNullPtr(&comm0->intraParams);
     comm->intraCudaDevs = (int*)waitForNonNullPtr(&comm0->intraCudaDevs);
     comm->intraCGMode = (int*)waitForNonNullPtr(&comm0->intraCGMode);
     comm->intraCC = (int*)waitForNonNullPtr(&comm0->intraCC);
@@ -497,7 +497,7 @@ ncclResult_t ncclCommSetIntra(struct ncclComm* comm, int rank, int ranks, struct
   comm->intraCudaDevs[comm->intraRank] = comm->cudaDev;
   NCCLCHECK(initParams(comm));
 
-  int cgMdLaunch = 0;
+  int cgMdLaunch = 1;
 
   // Set CG Mode
   comm->launchMode = ncclComm::GROUP;
