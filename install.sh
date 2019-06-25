@@ -13,7 +13,7 @@ function display_help()
     echo "    [-p|--package_build] Build RCCL package."
     echo "    [-t|--tests_build] Build unit tests, but do not run."
     echo "    [-r|--run_tests] Run unit tests (must be built already.)"
-    echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm/rccl)."
+    echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
 }
 
 # #################################################
