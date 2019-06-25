@@ -19,8 +19,9 @@ function display_help()
 # #################################################
 # global variables
 # #################################################
+default_path=/opt/rocm
 build_package=false
-install_prefix=/opt/rocm/rccl
+install_prefix=$default_path
 build_tests=false
 run_tests=false
 build_release=true
@@ -81,9 +82,9 @@ rocm_path=/opt/rocm/bin
 # #################################################
 # ensure a clean build environment
 if [[ "${build_release}" == true ]]; then
-    rm -rf ${build_dir}/release
+    rm -rf build/release
 else
-    rm -rf ${build_dir}/debug
+    rm -rf build/debug
 fi
 
 
