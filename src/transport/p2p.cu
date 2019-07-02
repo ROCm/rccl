@@ -43,13 +43,13 @@ struct p2pConnectInfo {
 
 /* Fill information necessary to exchange between ranks to choose whether or not
  * to use this transport */
-ncclResult_t p2pFillInfo(ncclTinfo_t* opaqueInfo, int rank) {
+ncclResult_t p2pFillInfo(ncclTinfo_t* opaqueInfo, int rank, uint64_t commHash) {
   struct p2pInfo* info = (struct p2pInfo*)opaqueInfo;
   static_assert(sizeof(struct p2pInfo) <= sizeof(ncclTinfo_t), "p2p Info too large");
   info->rank = rank;
   CUDACHECK(hipGetDevice(&info->cudaDev));
-  info->hostHash=getHostHash();
-  info->pidHash=getPidHash();
+  info->hostHash=getHostHash()+commHash;
+  info->pidHash=getPidHash()+commHash;
 
   // Get PCI Bus Id. We need to get the bus ID through CUDA first, since the
   // cudaDev is a CUDA runtime dev number which could be different from the
