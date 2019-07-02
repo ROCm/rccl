@@ -22,9 +22,12 @@ In addition, HC Direct Function call support needs to be present on your machine
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
 
 *  `./install.sh` -- builds library including unit tests
-*  `./install.sh -i` -- builds and installs the library to /opt/rocm/rccl
+*  `./install.sh -i` -- builds and installs the library to /opt/rocm/rccl; installation path can be changed with --prefix argument (see below.)
 *  `./install.sh -h` -- shows help
 *  `./install.sh -t` -- builds library including unit tests
+*  `./install.sh -r` -- runs unit tests (must be already built)
+*  `./install.sh -p` -- builds RCCL package
+*  `./install.sh --prefix` -- specify custom path to install RCCL to (default:/opt/rocm)
 
 ## Manual build
 #### To build the library :
@@ -65,6 +68,10 @@ $ LD_LIBRARY_PATH=rccl-install/lib/ HSA_FORCE_FINE_GRAIN_PCIE=1 rccl-install/tes
 
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCmSoftwarePlatform/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
+
+## Library and API Documentation
+
+Please refer to the [Library documentation](http://rccl.readthedocs.io/) for current documentation.
 
 ## Copyright
 

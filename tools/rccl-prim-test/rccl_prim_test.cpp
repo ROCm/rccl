@@ -35,7 +35,11 @@ THE SOFTWARE.
 
 #define MAX_WORKGROUPS 8
 #define THREADS 256
-#define UNROLL 8
+
+#define COPY_UNROLL       4
+#define REDUCE_UNROLL     2
+#define DOUBLECOPY_UNROLL 2
+#define REDUCECOPY_UNROLL 2
 
 struct transfer_data_t {
   float *dest0; //remote fine grain
@@ -75,11 +79,11 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
 
   int offset = transfer_data->N * blockIdx.x / gridDim.x;
   int n = transfer_data->N / gridDim.x;
-  if (op == OP_COPY) Copy<UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->src0 + offset, n);
-  if (op == OP_LOCALCOPY) Copy<UNROLL, THREADS, float>(transfer_data->dest1 + offset, transfer_data->src0 + offset, n);
-  if (op == OP_DOUBLECOPY) DoubleCopy<UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->dest1 + offset, transfer_data->src0 + offset, n);
-  if (op == OP_REDUCE) Reduce<UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->src0 + offset, transfer_data->src1 + offset, n);
-  if (op == OP_REDUCECOPY) ReduceCopy<UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->dest1 + offset, transfer_data->src0 + offset, transfer_data->src1 + offset, n);
+  if (op == OP_COPY) Copy<COPY_UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->src0 + offset, n);
+  if (op == OP_LOCALCOPY) Copy<COPY_UNROLL, THREADS, float>(transfer_data->dest1 + offset, transfer_data->src0 + offset, n);
+  if (op == OP_DOUBLECOPY) DoubleCopy<DOUBLECOPY_UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->dest1 + offset, transfer_data->src0 + offset, n);
+  if (op == OP_REDUCE) Reduce<REDUCE_UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->src0 + offset, transfer_data->src1 + offset, n);
+  if (op == OP_REDUCECOPY) ReduceCopy<REDUCECOPY_UNROLL, THREADS, float>(transfer_data->dest0 + offset, transfer_data->dest1 + offset, transfer_data->src0 + offset, transfer_data->src1 + offset, n);
 
   __syncthreads();
   if (idx == 0) {

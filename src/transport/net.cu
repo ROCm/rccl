@@ -75,7 +75,7 @@ struct netRecvResources {
 
 /* Fill information necessary to exchange between ranks to choose whether or not
  * to use this transport */
-ncclResult_t netFillInfo(ncclTinfo_t* opaqueInfo, int rank) {
+ncclResult_t netFillInfo(ncclTinfo_t* opaqueInfo, int rank, uint64_t commHash) {
   struct netInfo* info = (struct netInfo*)opaqueInfo;
   static_assert(sizeof(struct netInfo) <= sizeof(ncclTinfo_t), "NET Info too large");
   info->rank = rank;
