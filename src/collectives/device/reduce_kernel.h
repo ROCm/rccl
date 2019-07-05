@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -17,6 +18,123 @@ struct FuncNull {
     return 0;
   }
 };
+
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
+//we really don't need any specializations and we don't need
+//to break things into uint32_t
+template<typename T>
+__device__ inline T ncclMinFunc(T x, T y) { return y < x ? y : x; }
+
+template<typename T>
+__device__ inline T ncclMaxFunc(T x, T y) { return y < x ? x : y; }
+
+template<typename T>
+class FuncBase {
+protected:
+  static constexpr auto n = sizeof(PackType) / sizeof(T);
+
+  union Cvt {
+    using Vec = T __attribute__((ext_vector_type(n)));
+
+    PackType data;
+    Vec vec;
+
+    static_assert(sizeof(Vec) == sizeof(data), "Vec must be the same size of data.");
+  };
+};
+
+template<>
+class FuncBase<half> {
+protected:
+  static constexpr auto n = sizeof(PackType) / sizeof(_Float16);
+  union Cvt {
+    using Vec = _Float16 __attribute__((ext_vector_type(n)));
+
+    PackType data;
+    Vec vec;
+
+    static_assert(sizeof(Vec) == sizeof(data), "Vec must be the same size of data.");
+  };
+};
+
+template<typename T>
+struct FuncSum : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    tmp_x.vec += Cvt{y}.vec;
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return x + y;
+  }
+};
+
+template<typename T>
+struct FuncProd : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    tmp_x.vec *= Cvt{y}.vec;
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return x * y;
+  }
+};
+
+template<typename T>
+struct FuncMax : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    Cvt tmp_y{y};
+
+    for (auto i = 0u; i != FuncBase<T>::n; ++i) {
+        tmp_x.vec[i] = ncclMaxFunc(tmp_x.vec[i], tmp_y.vec[i]);
+    }
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return (x < y) ? y : x;
+  }
+};
+
+template<typename T>
+struct FuncMin : private FuncBase<T> {
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    using Cvt = typename FuncBase<T>::Cvt;
+
+    Cvt tmp_x{x};
+    Cvt tmp_y{y};
+
+    for (auto i = 0u; i != FuncBase<T>::n; ++i) {
+        tmp_x.vec[i] = ncclMinFunc(tmp_x.vec[i], tmp_y.vec[i]);
+    }
+
+    return tmp_x.data;
+  }
+  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
+  __device__ T operator()(const T x, const T y) const {
+    return (x < y) ? x : y;
+  }
+};
+
+#else
 
 template<typename T>
 struct FuncSum {
@@ -62,12 +180,15 @@ static __device__ uint32_t addChar4(const uint32_t x, const uint32_t y) {
 template<>
 struct FuncSum<int8_t> {
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vadd4.s32.s32.s32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
     return rv;
 #else
     return addChar4(x, y);
+#endif
 #endif
   }
   __device__ int8_t operator()(const int8_t x, const int8_t y) const {
@@ -77,12 +198,15 @@ struct FuncSum<int8_t> {
 template<>
 struct FuncSum<uint8_t> {
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vadd4.u32.u32.u32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
     return rv;
 #else
     return addChar4(x, y);
+#endif
 #endif
   }
   __device__ uint8_t operator()(const uint8_t x, const uint8_t y) const {
@@ -126,6 +250,8 @@ template<>
 struct FuncMax<int8_t> {
   union converter { uint32_t storage; char4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmax4.s32.s32.s32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -140,6 +266,7 @@ struct FuncMax<int8_t> {
     cr.a.w = max(cx.a.w, cy.a.w);
     return cr.storage;
 #endif
+#endif
   }
   __device__ int8_t operator()(const int8_t x, const int8_t y) const {
     return (x>y) ? x : y;
@@ -149,6 +276,8 @@ template<>
 struct FuncMax<uint8_t> {
   union converter { uint32_t storage; uchar4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmax4.u32.u32.u32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -163,6 +292,7 @@ struct FuncMax<uint8_t> {
     cr.a.w = max(cx.a.w, cy.a.w);
     return cr.storage;
 #endif
+#endif
   }
   __device__ uint8_t operator()(const uint8_t x, const uint8_t y) const {
     return (x>y) ? x : y;
@@ -173,6 +303,8 @@ template<>
 struct FuncMin<int8_t> {
   union converter { uint32_t storage; char4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmin4.s32.s32.s32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -187,6 +319,7 @@ struct FuncMin<int8_t> {
     cr.a.w = min(cx.a.w, cy.a.w);
     return cr.storage;
 #endif
+#endif
   }
   __device__ int8_t operator()(const int8_t x, const int8_t y) const {
     return (x<y) ? x : y;
@@ -196,6 +329,8 @@ template<>
 struct FuncMin<uint8_t> {
   union converter { uint32_t storage; uchar4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmin4.u32.u32.u32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -209,6 +344,7 @@ struct FuncMin<uint8_t> {
     cr.a.z = min(cx.a.z, cy.a.z);
     cr.a.w = min(cx.a.w, cy.a.w);
     return cr.storage;
+#endif
 #endif
   }
   __device__ uint8_t operator()(const uint8_t x, const uint8_t y) const {
@@ -299,4 +435,7 @@ struct FuncMin<half> {
     return __float2half(fm);
   }
 };
+
+#endif // defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
 #endif // REDUCE_KERNEL_H_

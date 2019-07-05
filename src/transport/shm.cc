@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -10,7 +11,7 @@
 #include "param.h"
 #include "shm.h"
 #include <unistd.h>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 struct shmConnectInfo {
   uint64_t pidHash;

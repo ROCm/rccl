@@ -1,92 +1,80 @@
-# NCCL
+# RCCL
 
-Optimized primitives for collective multi-GPU communication.
+ROCm Communication Collectives Library
 
 ## Introduction
 
-NCCL (pronounced "Nickel") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, and reduce-scatter. It has been optimized to achieve high bandwidth on platforms using PCIe, NVLink, NVswitch, as well as networking using InfiniBand Verbs or TCP/IP sockets. NCCL supports an arbitrary number of GPUs installed in a single node or across multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
+RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, and reduce-scatter. It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node, and can be used in either single- or multi-process (e.g., MPI) applications. Multi node support is planned for a future release.
 
-For more information on NCCL usage, please refer to the [NCCL documentation](https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/index.html).
-
-## What's inside
-
-At present, the library implements the following collectives operations:
-
-- all-reduce
-- all-gather
-- reduce-scatter
-- reduce
-- broadcast
-
-These operations are implemented using ring algorithms and have been optimized for throughput and latency. For best performance, small operations can be either batched into larger operations or aggregated through the API.
+The collective operations are implemented using ring algorithms and have been optimized for throughput and latency. For best performance, small operations can be either batched into larger operations or aggregated through the API.
 
 ## Requirements
 
-NCCL requires at least CUDA 7.0 and Kepler or newer GPUs. For PCIe based platforms, best performance is achieved when all GPUs are located on a common PCIe root complex, but multi-socket configurations are also supported.
+1. ROCm supported GPUs
+2. ROCm stack installed on the system (HIP runtime & HCC)
+3. For building and running the unit tests, chrpath will need to be installed on your machine first. (sudo apt-get install chrpath)
 
-## Build
+## Quickstart RCCL Build
 
-Note: the official and tested builds of NCCL can be downloaded from: https://developer.nvidia.com/nccl. You can skip the following build steps if you choose to use the official builds.
+RCCL directly depends on HIP runtime & HCC C++ compiler which are part of the ROCm software stack.
+In addition, HC Direct Function call support needs to be present on your machine.  There are binaries for hcc and HIP that need to be installed to get HC Direct Function call support.  These binaries are currently packaged with roc-master, and will be included in ROCm 2.4.
 
-To build the library :
+The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
+
+*  `./install.sh` -- builds library including unit tests
+*  `./install.sh -i` -- builds and installs the library to /opt/rocm/rccl; installation path can be changed with --prefix argument (see below.)
+*  `./install.sh -h` -- shows help
+*  `./install.sh -t` -- builds library including unit tests
+*  `./install.sh -r` -- runs unit tests (must be already built)
+*  `./install.sh -p` -- builds RCCL package
+*  `./install.sh --prefix` -- specify custom path to install RCCL to (default:/opt/rocm)
+
+## Manual build
+#### To build the library :
 
 ```shell
-$ cd nccl
-$ make -j src.build
+$ git clone https://github.com/ROCmSoftwarePlatform/rccl.git
+$ cd rccl
+$ mkdir build
+$ cd build
+$ CXX=/opt/rocm/bin/hcc cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+$ make -j 8
 ```
+You may substitute a path of your own choosing for CMAKE_INSTALL_PREFIX. Note: ensure rocm-cmake is installed, `apt install rocm-cmake`.
 
-If CUDA is not installed in the default /usr/local/cuda path, you can define the CUDA path with :
+#### To build the RCCL package and install package :
+
+Assuming you have already cloned this repository and built the library as shown in the previous section:
 
 ```shell
-$ make src.build CUDA_HOME=<path to cuda install>
+$ cd rccl/build
+$ make package
+$ sudo dpkg -i *.deb
 ```
 
-NCCL will be compiled and installed in `build/` unless `BUILDDIR` is set.
-
-By default, NCCL is compiled for all supported architectures. To accelerate the compilation and reduce the binary size, consider redefining `NVCC_GENCODE` (defined in `makefiles/common.mk`) to only include the architecture of the target platform :
-```shell
-$ make -j src.build NVCC_GENCODE="-gencode=arch=compute_70,code=sm_70"
-```
-
-## Install
-
-To install NCCL on the system, create a package then install it as root.
-
-Debian/Ubuntu :
-```shell
-$ # Install tools to create debian packages
-$ sudo apt install build-essential devscripts debhelper fakeroot
-$ # Build NCCL deb package
-$ make pkg.debian.build
-$ ls build/pkg/deb/
-```
-
-RedHat/CentOS :
-```shell
-$ # Install tools to create rpm packages
-$ sudo yum install rpm-build rpmdevtools
-$ # Build NCCL rpm package
-$ make pkg.redhat.build
-$ ls build/pkg/rpm/
-```
-
-OS-agnostic tarball :
-```shell
-$ make pkg.txz.build
-$ ls build/pkg/txz/
-```
+RCCL package install requires sudo/root access because it creates a directory called "rccl" under /opt/rocm/. This is an optional step and RCCL can be used directly by including the path containing librccl.so.
 
 ## Tests
 
-Tests for NCCL are maintained separately at https://github.com/nvidia/nccl-tests.
+There are unit tests implemented with the Googletest framework in RCCL, which are currently a work-in-progress.  To invoke the unit tests, go to the rccl-install folder, then the test/ subfolder, and execute the appropriate unit test executable(s). Several notes for running the unit tests:
 
+1. The LD_LIBRARY_PATH environment variable will need to be set to include /path/to/rccl-install/lib/ in order to run the unit tests.
+2. The HSA_FORCE_FINE_GRAIN_PCIE environment variable will need to be set to 1 in order to run the unit tests.
+
+An example call to the unit tests:
 ```shell
-$ git clone https://github.com/NVIDIA/nccl-tests.git
-$ cd nccl-tests
-$ make
-$ ./build/all_reduce_perf -b 8 -e 256M -f 2 -g <ngpus>
+$ LD_LIBRARY_PATH=rccl-install/lib/ HSA_FORCE_FINE_GRAIN_PCIE=1 rccl-install/test/UnitTests
 ```
+
+There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCmSoftwarePlatform/rccl-tests.
+See the rccl-tests README for more information on how to build and run those tests.
+
+## Library and API Documentation
+
+Please refer to the [Library documentation](http://rccl.readthedocs.io/) for current documentation.
 
 ## Copyright
 
-All source code and accompanying documentation is copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+All source code and accompanying documentation is copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+
+All modifications are copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.

@@ -1,5 +1,7 @@
+#include "hip/hip_runtime.h"
 /*************************************************************************
  * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -10,11 +12,18 @@
 #include "../collectives.h"
 #include "devcomm.h"
 #include "nccl.h"
+#include <type_traits>
 
 // Exit If Abort Barrier across CTA: make sure all threads exit consistently
 // Each thread sets a predicate to true if abort == 1
 // all CTA's threads enter the barrier and do a popc on their predicates being True
 // If any of the thread's predicate was True, all the threads call exit()
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#define exitIfAbortBarrier(abort, abortCount) \
+  if (abort) __atomic_fetch_add(abortCount, 1, __ATOMIC_SEQ_CST); \
+  __syncthreads(); \
+  if (LOAD(abortCount)) { asm volatile ("s_endpgm"); return; }
+#else
 static inline __device__ void exitIfAbortBarrier(int abort) {
   uint32_t popc;
   asm ("{");
@@ -24,21 +33,116 @@ static inline __device__ void exitIfAbortBarrier(int abort) {
   asm ("}");
   if (popc) { asm volatile ("exit;"); }
 }
+#endif
 
-typedef void(*ncclKern_t)(struct CollectiveArgs* args);
-extern __device__ ncclKern_t ncclFuncs[];
+#define NCCL_FUNC5(coll, op, dtype) \
+  NCCL_COLL_NAME(coll, op, dtype), \
+  NCCL_COLL_NAME(coll##LL, op, dtype)
 
-static __device__ void load_parallel(void* dst, void* src, size_t size, int tid) {
+#define NCCL_FUNC4(coll, op, dtype) \
+  NCCL_FUNC5(coll##Ring, op, dtype)
+
+// Must be consistent with ncclDataType_t
+#define NCCL_FUNCS3A(coll, op) \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  u8), \
+  NCCL_FUNC4(coll, op, i32), \
+  NCCL_FUNC4(coll, op, u32), \
+  NCCL_FUNC4(coll, op, i64), \
+  NCCL_FUNC4(coll, op, u64), \
+  NCCL_FUNC4(coll, op, f16), \
+  NCCL_FUNC4(coll, op, f32), \
+  NCCL_FUNC4(coll, op, f64)
+#define NCCL_FUNCS3B(coll, op) \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8), \
+  NCCL_FUNC4(coll, op,  i8)
+
+// Must be consistent with ncclRedOp_t
+#define NCCL_FUNCS2A(coll) \
+  NCCL_FUNCS3A(coll, sum ), \
+  NCCL_FUNCS3A(coll, prod), \
+  NCCL_FUNCS3A(coll, max ), \
+  NCCL_FUNCS3A(coll, min )
+#define NCCL_FUNCS2B(coll) \
+  NCCL_FUNCS3B(coll, copy), \
+  NCCL_FUNCS3B(coll, copy), \
+  NCCL_FUNCS3B(coll, copy), \
+  NCCL_FUNCS3B(coll, copy)
+
+// Must be consistent with ncclColl_t
+#define NCCL_FUNCS() { \
+  NCCL_FUNCS2B(ncclBroadcast), \
+  NCCL_FUNCS2A(ncclReduce), \
+  NCCL_FUNCS2B(ncclAllGather), \
+  NCCL_FUNCS2A(ncclReduceScatter), \
+  NCCL_FUNCS2A(ncclAllReduce) }
+
+// Must be consistent with the ncclFuncSet enum
+using ncclFunc_t = void (*)(struct CollectiveArgs*);
+
+static const __device__ constexpr ncclFunc_t ncclFuncs[]{
+// Don't try to initialize the host shadow copy of this device-side global
+// variable. There is no host pointer to a device-side function, which
+// confuses clang. This will be fixed in the next clang release.
+#if defined(__HIP_DEVICE_COMPILE__)
+  NCCL_FUNCS2B(ncclBroadcast),
+  NCCL_FUNCS2A(ncclReduce),
+  NCCL_FUNCS2B(ncclAllGather),
+  NCCL_FUNCS2A(ncclReduceScatter),
+  NCCL_FUNCS2A(ncclAllReduce)
+#endif
+};
+
+template<unsigned short f, unsigned short l>
+struct Caller {
+  static
+  void call(ncclColl* const c) noexcept
+  {
+    constexpr unsigned short m = f + (l - f) / 2;
+
+     return (c->funcIndex < m) ? Caller<f, m>::call(c) : Caller<m, l>::call(c);
+  }
+};
+
+template<unsigned short f>
+struct Caller<f, f + 1>{
+  static
+  void call(struct ncclColl* const c) noexcept { ncclFuncs[f](&c->args); }
+};
+
+inline
+__device__
+void NCCL_CALL_FUNCTIONS(struct ncclColl* const c) noexcept {
+  if (c->funcIndex < 72) {
+    if (c->funcIndex % 2) ncclBroadcastRingLL_copy_i8(&c->args);
+    else ncclBroadcastRing_copy_i8(&c->args);
+  }
+  else if (c->funcIndex < 144) Caller<72, 144>::call(c);
+  else if (c->funcIndex < 216) {
+    if (c->funcIndex % 2) ncclAllGatherRingLL_copy_i8(&c->args);
+    else ncclAllGatherRing_copy_i8(&c->args);
+  }
+  else Caller<216, 360>::call(c);
+}
+
+static __device__ void load_parallel(void* dst, void* src, size_t size, int tid, uint32_t* abortCount) {
   int* d = (int*)dst;
   int* s = (int*)src;
   // When aggregation is effective, if some threads have aborted inside the LL kernel,
   // make sure the rest of the threads abort as well
-  exitIfAbortBarrier(0);
+  exitIfAbortBarrier(0, abortCount);
   for (int o = tid; o < (size/sizeof(int)); o += blockDim.x) d[o] = s[o];
   __syncthreads();
 }
-static __device__ void load_coll(struct ncclColl* localColl, struct ncclColl* hostColl, int tid) {
-  load_parallel(localColl, hostColl, sizeof(struct ncclColl), tid);
+static __device__ void load_coll(struct ncclColl* localColl, struct ncclColl* hostColl, int tid, uint32_t* abortCount) {
+  load_parallel(localColl, hostColl, sizeof(struct ncclColl), tid, abortCount);
   if (tid == 0) hostColl->active = 0;
 }
 
@@ -56,23 +160,27 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
   int tid = threadIdx.x; \
   int bid = blockIdx.x; \
   __shared__ struct ncclColl localColl; \
+  __shared__ uint32_t abortCount; \
+  if (tid == 0) abortCount = 0; \
+  __syncthreads(); \
  \
   struct ncclDevComm* comm = firstColl.args.comm; \
   struct ncclChannel* channel = comm->channels+bid; \
   struct ncclColl* c; \
+  channel->abortCount = &abortCount; \
   if (bid == 0) { \
     /* To optimize for latency, (only) the first operation is passed as argument.*/ \
     c = &firstColl; \
   } else { \
     c = &localColl; \
-    load_coll(c, channel->devCollectives+channel->collFifoHead, tid); \
+    load_coll(c, channel->devCollectives+channel->collFifoHead, tid, &abortCount); \
   } \
   while (1) { \
     if (tid < c->args.nThreads) { \
       if (c->funcIndex == fIndex) { \
         coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(&c->args); \
       } else { \
-        ncclFuncs[c->funcIndex](&c->args); \
+        NCCL_CALL_FUNCTIONS(c); \
       } \
     } \
     int nextIndex = c->nextIndex; \
@@ -84,7 +192,7 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
  \
     /* Load next collective operation*/ \
     c = &localColl; /* for bid 0 */ \
-    load_coll(c, channel->devCollectives+nextIndex, tid); \
+    load_coll(c, channel->devCollectives+nextIndex, tid, &abortCount); \
   } \
 }
 #else
@@ -98,61 +206,19 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
   IMPL_COLL_KERN(coll##LL, op, ncclFunc, dtype, ctype, FUNC_INDEX(ncclColl, ncclOp, ncclType, 1, al)) \
 
 #define IMPL_COLL3(coll, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType) \
-  IMPL_COLL4(coll##Ring, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, 0) \
-  IMPL_COLL4(coll##Tree, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, 1)
+  IMPL_COLL4(coll##Ring, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, 0)
 
-#if NCCL_TYPE == 0
 #define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, i8,  int8_t,   ncclColl, ncclOp, ncclInt8)
-#elif NCCL_TYPE == 1
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, u8,  uint8_t,  ncclColl, ncclOp, ncclUint8)
-#elif NCCL_TYPE == 2
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, i32, int32_t,  ncclColl, ncclOp, ncclInt32)
-#elif NCCL_TYPE == 3
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, u32, uint32_t, ncclColl, ncclOp, ncclUint32)
-#elif NCCL_TYPE == 4
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, i64, int64_t,  ncclColl, ncclOp, ncclInt64)
-#elif NCCL_TYPE == 5
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, u64, uint64_t, ncclColl, ncclOp, ncclUint64)
-#elif NCCL_TYPE == 6
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, f16, half,     ncclColl, ncclOp, ncclFloat16)
-#elif NCCL_TYPE == 7
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, f32, float,    ncclColl, ncclOp, ncclFloat32)
-#elif NCCL_TYPE == 8
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
+  IMPL_COLL3(coll, op, ncclFunc, i8,  int8_t,   ncclColl, ncclOp, ncclInt8) \
+  IMPL_COLL3(coll, op, ncclFunc, u8,  uint8_t,  ncclColl, ncclOp, ncclUint8) \
+  IMPL_COLL3(coll, op, ncclFunc, i32, int32_t,  ncclColl, ncclOp, ncclInt32) \
+  IMPL_COLL3(coll, op, ncclFunc, u32, uint32_t, ncclColl, ncclOp, ncclUint32) \
+  IMPL_COLL3(coll, op, ncclFunc, i64, int64_t,  ncclColl, ncclOp, ncclInt64) \
+  IMPL_COLL3(coll, op, ncclFunc, u64, uint64_t, ncclColl, ncclOp, ncclUint64) \
+  IMPL_COLL3(coll, op, ncclFunc, f16, half,     ncclColl, ncclOp, ncclFloat16) \
+  IMPL_COLL3(coll, op, ncclFunc, f32, float,    ncclColl, ncclOp, ncclFloat32) \
   IMPL_COLL3(coll, op, ncclFunc, f64, double,   ncclColl, ncclOp, ncclFloat64)
-#endif
 
-// Reduction define all functions
-#if NCCL_OP == 0
-#define IMPL_COLL_R(collf, colln) \
-  IMPL_COLL2(collf, sum,  FuncSum,  colln, ncclSum);
-#elif NCCL_OP == 1
-#define IMPL_COLL_R(collf, colln) \
-  IMPL_COLL2(collf, prod, FuncProd, colln, ncclProd);
-#elif NCCL_OP == 2
-#define IMPL_COLL_R(collf, colln) \
-  IMPL_COLL2(collf, min,  FuncMin,  colln, ncclMin);
-#elif NCCL_OP == 3
-#define IMPL_COLL_R(collf, colln) \
-  IMPL_COLL2(collf, max,  FuncMax,  colln, ncclMax);
-#endif
-
-// Copy primitives only define one
-#if NCCL_OP == 0 && NCCL_TYPE == 0
-#define IMPL_COLL_C(collf, colln) \
-  IMPL_COLL3(collf, copy, FuncSum, i8, int8_t, colln, ncclSum, ncclInt8);
-#else
-#define IMPL_COLL_C(collf, colln)
-#endif
-
-#define COLL_UNROLL 4
+#define COLL_UNROLL 2
 
 #endif

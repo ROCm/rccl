@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -11,12 +12,24 @@
 #include <cstdio>
 #include <cstdint>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 // Define min for ssize_t
 static __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 
 typedef uint64_t PackType;
+
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
+template<class FUNC, typename T>
+struct MULTI {
+  __device__ PackType operator()(const PackType x, const PackType y) const
+  {
+    return FUNC()(x, y);
+  }
+};
+
+#else
 
 // unpack x and y to elements of type T and apply FUNC to each element
 template<class FUNC, typename T>
@@ -192,6 +205,8 @@ struct MULTI<FUNC, int64_t> {
   }
 };
 
+#endif //defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+
 template<typename T> inline __device__
 T vFetch(const volatile T* ptr) {
   return *ptr;
@@ -202,7 +217,7 @@ void vStore(volatile T* ptr, const T val) {
   *ptr = val;
 }
 
-#if CUDART_VERSION < 9000
+#if CUDART_VERSION < 9000 && !(defined(__HIP_PLATFORM_HCC__) || defined(__HCC__))
 template<> inline __device__
 half vFetch<half>(const volatile half* ptr) {
   half r;
@@ -239,14 +254,24 @@ struct MULTI128 {
 };
 
 inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  v.x = p->x;
+  v.y = p->y;
+#else
   asm volatile("ld.volatile.global.v2.u64 {%0,%1}, [%2];" : "=l"(v.x), "=l"(v.y) : "l"(p) : "memory");
+#endif
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  p->x = v.x;
+  p->y = v.y;
+#else
   asm volatile("st.volatile.global.v2.u64 [%0], {%1,%2};" :: "l"(p), "l"(v.x), "l"(v.y) : "memory");
+#endif
 }
 
 template<class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS>
-__device__ __forceinline__ void ReduceCopyMulti(const int tid, const int nthreads,
+__device__ void ReduceCopyMulti(const int tid, const int nthreads,
     int nsrcs, const T* srcs[MAXSRCS], int ndsts, T* dsts[MAXDSTS],
     const int offset, const int N) {
   for (int idx = offset+tid; idx < offset+N; idx += nthreads) {
@@ -263,10 +288,10 @@ __device__ __forceinline__ void ReduceCopyMulti(const int tid, const int nthread
   }
 }
 
-#define WARP_SIZE 32
+#define WARP_SIZE 64
 
 template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS>
-__device__ __forceinline__ void ReduceCopy128bMulti( const int w, const int nw, const int t,
+__device__ void ReduceCopy128bMulti( const int w, const int nw, const int t,
     int nsrcs, const T* s[MAXSRCS], int ndsts, T* d[MAXDSTS],
     const int elemOffset, const int Npack) {
   const int inc = nw * UNROLL * WARP_SIZE;
@@ -316,7 +341,7 @@ __device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(Pack128); }
 #define AUTOUNROLL (UNROLL*(4/(MINDSTS+MINSRCS)))
 
 template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS>
-__device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthreads,
+__device__ void ReduceOrCopyMulti(const int tid, const int nthreads,
     int nsrcs, const T* srcs[MAXSRCS], int ndsts, T* dsts[MAXDSTS],
     int N) {
   int Nrem = N;

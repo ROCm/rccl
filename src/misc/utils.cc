@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -20,7 +21,7 @@ ncclResult_t getNvmlDevice(int cudaDev, int *nvmlDev) {
   nvmlDevice_t nvmlDevice;
   unsigned int dev;
   *nvmlDev = -1;
-  CUDACHECK(cudaDeviceGetPCIBusId(busId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, cudaDev));
+  CUDACHECK(hipDeviceGetPCIBusId(busId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, cudaDev));
   NCCLCHECK(wrapNvmlDeviceGetHandleByPciBusId(busId, &nvmlDevice));
   NCCLCHECK(wrapNvmlDeviceGetMinorNumber(nvmlDevice, &dev));
 
@@ -50,7 +51,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
   char hostname[1024];
   getHostName(hostname, 1024, '.');
   int cudaDev;
-  cudaGetDevice(&cudaDev);
+  hipGetDevice(&cudaDev);
 
   char buffer[1024];
   size_t len = 0;
@@ -91,6 +92,15 @@ uint64_t getHash(const char* string) {
   // Based on DJB2, result = result * 33 + char
   uint64_t result = 5381;
   for (int c = 0; string[c] != '\0'; c++) {
+    result = ((result << 5) + result) + string[c];
+  }
+  return result;
+}
+
+uint64_t getnHash(const char* string, int n) {
+  // Based on DJB2, result = result * 33 + char
+  uint64_t result = 9527;
+  for (int c = 0; c < n; c++) {
     result = ((result << 5) + result) + string[c];
   }
   return result;

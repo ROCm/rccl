@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -10,7 +11,7 @@
 #include "net.h"
 #include "param.h"
 #include "topo.h"
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <assert.h>
 
 #define NET_MAX_IFS 16
@@ -73,6 +74,7 @@ struct netRecvResources {
   struct ncclRecvMem* devRecvMem;
   uint64_t step;
   uint64_t llLastCleaning;
+  uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
 };
 
 static ncclResult_t netDistance(int cudaDev, int dev, short* distance) {
@@ -100,7 +102,7 @@ static ncclResult_t netDevices(int* ndev, short** distances) {
 
   // Find distance with current GPU
   int cudaDev, nvmlDev;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   NCCLCHECK(getNvmlDevice(cudaDev, &nvmlDev))
   char line[1024];
   sprintf(line, "CUDA Dev %d[%d], %s NIC distance : ", cudaDev, nvmlDev, ncclNetName());
@@ -115,7 +117,7 @@ static ncclResult_t netDevices(int* ndev, short** distances) {
 /* Determine if we can communicate with the peer */
 ncclResult_t netCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo) {
   int cudaDev;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   ret[0] = ncclNetTvalues[cudaDev];
   if (ret[0] == NET_TVALUE_UNKNOWN) {
     if (cudaDev >= NET_MAX_GPUS) {
@@ -243,6 +245,8 @@ end:
   return dev;
 }
 
+extern bool useFineGrainVramPcie;
+
 NCCL_PARAM(NetGdrRead, "NET_GDR_READ", -2);
 NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
 
@@ -250,8 +254,13 @@ static ncclResult_t netGetGdrSupport(int dev, int read, int* useGdr) {
   *useGdr = 0;
 
   int cudaDev, nvmlDev;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   NCCLCHECK(getNvmlDevice(cudaDev, &nvmlDev))
+
+  if (!useFineGrainVramPcie) {
+    INFO(NCCL_INIT|NCCL_NET,"NET/%s : GPU Direct RDMA Disabled for GPU %d / Need Fine Grain VRAM over PCIe", ncclNetName(), cudaDev);
+    return ncclSuccess;
+  }
 
   if (read) { // For reads (sends) only enable under certain conditions
     int gdrReadParam = ncclParamNetGdrRead();
@@ -289,7 +298,7 @@ ncclResult_t netSendSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
   send->transportResources = resources;
 
   int cudaDev;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   resources->netDev = getDev(cudaDev, channelId);
   NCCLCHECK(netGetGdrSupport(resources->netDev, 1, &resources->useGdr));
 
@@ -298,7 +307,7 @@ ncclResult_t netSendSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
 
   int recvSize = offsetof(struct ncclRecvMem, buff)+buffSize;
   if (resources->useGdr) {
-    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize));
+    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize, true));
   }
   NCCLCHECK(ncclCudaHostAlloc((void**)&resources->hostRecvMem, (void**)&resources->devHostRecvMem, recvSize));
   resources->buffSize = buffSize;
@@ -314,7 +323,7 @@ ncclResult_t netRecvSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
   recv->transportResources = resources;
 
   int cudaDev;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   resources->netDev = getDev(cudaDev, channelId);
   NCCLCHECK(netGetGdrSupport(resources->netDev, 0, &resources->useGdr));
 
@@ -323,7 +332,8 @@ ncclResult_t netRecvSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
 
   int recvSize = offsetof(struct ncclRecvMem, buff)+buffSize;
   if (resources->useGdr) {
-    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize));
+    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize, true));
+    CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
   }
   NCCLCHECK(ncclCudaHostAlloc((void**)&resources->hostRecvMem, (void**)&resources->devHostRecvMem, recvSize));
   resources->buffSize = buffSize;
@@ -399,7 +409,7 @@ ncclResult_t netSendFree(void* transportResources) {
   NCCLCHECK(ncclNetDeregMr(resources->netSendComm, resources->llMhandle));
   NCCLCHECK(ncclCudaHostFree(resources->hostRecvMem));
   if (resources->useGdr)
-    CUDACHECK(cudaFree(resources->devRecvMem));
+    CUDACHECK(hipFree(resources->devRecvMem));
   NCCLCHECK(ncclNetCloseSend(resources->netSendComm));
   free(resources);
   return ncclSuccess;
@@ -412,7 +422,7 @@ ncclResult_t netRecvFree(void* transportResources) {
   NCCLCHECK(ncclNetDeregMr(resources->netRecvComm, resources->llMhandle));
   NCCLCHECK(ncclCudaHostFree(resources->hostRecvMem));
   if (resources->useGdr)
-    CUDACHECK(cudaFree(resources->devRecvMem));
+    CUDACHECK(hipFree(resources->devRecvMem));
   NCCLCHECK(ncclNetCloseRecv(resources->netRecvComm));
   free(resources);
   return ncclSuccess;
@@ -439,7 +449,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
         volatile uint64_t* recvTail = &resources->hostRecvMem->tail;
         if (args->llMode) {
           int buffSlot = args->tail%NCCL_STEPS;
-          int size = sizesFifo[buffSlot];
+          int size = LOAD(sizesFifo+buffSlot);
           if (size != -1) {
             uint32_t flag = NCCL_LL_FLAG(args->tail + 1);
             int nFifoLines = DIVUP(size, sizeof(union ncclLLFifoLine));
@@ -449,12 +459,12 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
             for (int i=0; i<nFifoLines; i++) {
               volatile uint32_t *f1 = &lines[i].flag1;
               volatile uint32_t *f2 = &lines[i].flag2;
-              if (f1[0] != flag || f2[0] != flag) { ready = 0; break; }
+              if (LOAD(f1) != flag || LOAD(f2) != flag) { ready = 0; break; }
             }
             if (ready) {
               NCCLCHECK(ncclNetIsend(resources->netSendComm, lines, size, resources->llMhandle, args->requests+buffSlot));
               if (args->requests[buffSlot] != NULL) {
-                sizesFifo[buffSlot] = -1;
+                STORE(sizesFifo+buffSlot, -1);
                 // Make sure size is reset to zero before we update the head.
                 __sync_synchronize();
                 args->tail += args->sliceSteps;
@@ -462,14 +472,14 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
               }
             }
           }
-        } else if (args->tail < *recvTail) {
+        } else if (args->tail < LOAD(recvTail)) {
           struct ncclRecvMem* localMem = resources->useGdr ? resources->devRecvMem : resources->hostRecvMem;
           int stepSize = args->channel->buffSize/NCCL_STEPS;
           // Send through network
           int buffSlot = args->tail%NCCL_STEPS;
-          NCCLCHECK(ncclNetIsend(resources->netSendComm, localMem->buff+buffSlot*stepSize, sizesFifo[buffSlot], resources->mhandle, args->requests+buffSlot));
+          NCCLCHECK(ncclNetIsend(resources->netSendComm, localMem->buff+buffSlot*stepSize, LOAD(sizesFifo+buffSlot), resources->mhandle, args->requests+buffSlot));
           if (args->requests[buffSlot] != NULL) {
-            sizesFifo[buffSlot] = -1;
+            STORE(sizesFifo+buffSlot, -1);
             // Make sure size is reset to zero before we update the head.
             __sync_synchronize();
             args->tail += args->sliceSteps;
@@ -483,7 +493,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
         NCCLCHECK(ncclNetTest(args->requests[buffSlot], &done, NULL));
         if (done) {
           args->head += args->sliceSteps;
-          resources->hostSendMem->head = args->head;
+          STORE(&resources->hostSendMem->head, args->head);
           args->idle = 0;
         }
       }
@@ -518,7 +528,7 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
       char* localBuff = args->llMode ? (char*)localMem->llBuff : localMem->buff;
       void* mhandle = args->llMode ? resources->llMhandle : resources->mhandle;
       volatile uint64_t* sendHead = &resources->hostSendMem->head;
-      if ((args->tail < args->head + NCCL_STEPS) && (args->tail < *sendHead + NCCL_STEPS) && (args->tail < args->end)) {
+      if ((args->tail < args->head + NCCL_STEPS) && (args->tail < LOAD(sendHead) + NCCL_STEPS) && (args->tail < args->end)) {
         int buffSlot = args->tail%NCCL_STEPS;
         int sliceSize = stepSize * args->sliceSteps;
         NCCLCHECK(ncclNetIrecv(resources->netRecvComm, localBuff+buffSlot*stepSize, sliceSize, mhandle, args->requests+buffSlot));
@@ -534,8 +544,13 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
         if (done) {
           args->head += args->sliceSteps;
           if (args->llMode == 0) {
-            if (resources->useGdr) ncclNetFlush(resources->netRecvComm, localBuff+buffSlot*stepSize, size, mhandle);
-            resources->hostRecvMem->tail = args->head;
+            if (resources->useGdr) {
+              ncclNetFlush(resources->netRecvComm, localBuff+buffSlot*stepSize, size, mhandle);
+              // Flush local HDP register after local read-back finishes
+              STORE(resources->curr_hdp_reg, 0x1);
+              TRACE(NCCL_NET, "Flushing GPU memory via HDP %p", resources->curr_hdp_reg);
+            }
+            STORE(&resources->hostRecvMem->tail, args->head);
           }
           args->idle = 0;
         }

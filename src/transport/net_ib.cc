@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -196,12 +197,16 @@ ncclResult_t ncclIbPciPath(int dev, char** path) {
 ncclResult_t ncclIbGdrSupport(int ibDev) {
   static int moduleLoaded = -1;
   if (moduleLoaded == -1) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+    moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
+#else
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/nv_mem/version", F_OK) == -1) ? 0 : 1;
+#endif
   }
   if (moduleLoaded == 0) return ncclSystemError;
   ncclResult_t ret = ncclSystemError;
   void* ptr;
-  if (cudaMalloc(&ptr, sizeof(int)) == cudaSuccess) {
+  if (hipMalloc(&ptr, sizeof(int)) == hipSuccess) {
     struct ibv_mr* mr;
     struct ibv_pd* pd;
     if (wrap_ibv_alloc_pd(&pd, ncclIbDevs[ibDev].context) == ncclSuccess) {
@@ -211,7 +216,7 @@ ncclResult_t ncclIbGdrSupport(int ibDev) {
       }
       wrap_ibv_dealloc_pd(pd);
     }
-    cudaFree(ptr);
+    hipFree(ptr);
   }
   return ret;
 }
@@ -220,7 +225,7 @@ ncclResult_t ncclIbPtrSupport(int dev, int* supportedTypes) {
   *supportedTypes = NCCL_PTR_HOST;
 
   int cudaDev, nvmlDev;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   NCCLCHECK(getNvmlDevice(cudaDev, &nvmlDev))
 
   if (ncclIbGdrSupport(dev) != ncclSuccess) {
@@ -620,7 +625,7 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, int size, void* mhandle, vo
   // Wait for the receiver to have posted the corresponding receive
   volatile struct ncclIbSendFifo* slot = comm->fifo + (comm->fifoHead%MAX_REQUESTS);
   volatile uint32_t * readyPtr = &slot->ready;
-  if (*readyPtr == 0) { *request = NULL; return ncclSuccess; }
+  if (LOAD(readyPtr) == 0) { *request = NULL; return ncclSuccess; }
 
   struct ncclIbRequest* req;
   NCCLCHECK(ncclIbGetRequest(comm->reqs, &req));
@@ -647,22 +652,22 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, int size, void* mhandle, vo
   __sync_synchronize(); // order the readyPtr load against rkey load below
   // Sanity checks to catch user collective call count/size mismatches
   // plus any potential programming errors
-  if (size > slot->size || slot->size <= 0 || slot->addr == 0 || slot->rkey == 0 || slot->seq != comm->fifoHead) {
+  if (size > LOAD(&slot->size) || LOAD(&slot->size) <= 0 || LOAD(&slot->addr) == 0 || LOAD(&slot->rkey) == 0 || LOAD(&slot->seq) != comm->fifoHead) {
     WARN("NET/IB : collective mismatch error local size %d remote %d addr %lx rkey %x seq %x/%x",
-        size, slot->size, slot->addr, slot->rkey, slot->seq, comm->fifoHead);
+        size, LOAD(&slot->size), LOAD(&slot->addr), LOAD(&slot->rkey), LOAD(&slot->seq), comm->fifoHead);
     return ncclInternalError;
   }
   wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
-  wr.wr.rdma.remote_addr = slot->addr;
-  wr.wr.rdma.rkey = slot->rkey;
+  wr.wr.rdma.remote_addr = LOAD(&slot->addr);
+  wr.wr.rdma.rkey = LOAD(&slot->rkey);
   wr.imm_data = size; // Send the message size via imm_data
   __sync_synchronize();
 #endif
   // We must clear slot->ready, but reset other fields to aid
   // debugging and sanity checks
-  slot->ready = 0;
-  slot->addr = 0ULL;
-  slot->rkey = slot->size = slot->seq = 0;
+  STORE(&slot->ready, 0);
+  STORE(&slot->addr, 0);
+  STORE(&slot->rkey, 0); STORE(&slot->size, 0); STORE(&slot->seq, 0);
   comm->fifoHead++;
 
   struct ibv_send_wr* bad_wr;

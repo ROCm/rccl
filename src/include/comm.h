@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -7,21 +8,10 @@
 #ifndef NCCL_COMM_H_
 #define NCCL_COMM_H_
 
-#if CUDART_VERSION < 9000
-struct cudaLaunchParams {
-  void *func;
-  dim3 gridDim;
-  dim3 blockDim;
-  void **args;
-  size_t sharedMem;
-  cudaStream_t stream;
-};
-#endif
-
 #define MAXCHANNELS 16
 #define DEFAULT_BUFFER_SIZE_BYTES (1LL << 22) /* 4MiB */
 
-#define CACHE_LINE_SIZE 128
+#define CACHE_LINE_SIZE 64
 #define MEM_ALIGN 4096
 #define CUDA_IPC_MIN 2097152UL
 
@@ -66,9 +56,9 @@ struct ncclComm {
   int nvmlDev; // my NVML device number
 
   enum { GROUP, PARALLEL } launchMode;
-  cudaStream_t userStream;
+  hipStream_t userStream;
   bool userStreamSet;
-  cudaEvent_t doneEvent;
+  hipEvent_t doneEvent;
   bool checkPointers;
 
   // Counter to make sure collectives match (needed for bcast/reduce
@@ -88,7 +78,7 @@ struct ncclComm {
 
   // An internal CUDA stream for NCCL kernel CGMD launches
   int groupCudaStream;
-  cudaStream_t groupStream;
+  hipStream_t groupStream;
 
   // Whether there has been a fatal error in this communicator.
   ncclResult_t fatalError;
@@ -111,13 +101,13 @@ struct ncclComm {
   int intraPhase;
 
   // Storage for deferred intra-process launch
-  struct cudaLaunchParams * intraParams;
-  struct cudaLaunchParams *myParams;
+  hipLaunchParams * intraParams;
+  hipLaunchParams *myParams;
   int* intraCudaDevs;
   int* intraCGMode; // Whether we can use CUDA9 CGMD or not
   int* intraCC; // Only to check all have the same ComputeCap and disable CGMode if not
   struct ncclColl args;
-  void* argsptr;
+  struct ncclColl* argsptr;
 
   // Global proxy thread
   pthread_t proxyThread;

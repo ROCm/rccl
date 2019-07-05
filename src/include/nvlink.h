@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -58,9 +59,9 @@ static ncclResult_t ncclDeviceType(const char* busId, enum ncclNvLinkDeviceType*
 /* Get the maximum number of NVLinks based on the GPU generation */
 static ncclResult_t getMaxNvlinks(int* maxLinks) {
   int cudaDev;
-  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipGetDevice(&cudaDev));
   int ccMajor;
-  CUDACHECK(cudaDeviceGetAttribute(&ccMajor, cudaDevAttrComputeCapabilityMajor, cudaDev));
+  CUDACHECK(hipDeviceGetAttribute(&ccMajor, hipDeviceAttributeComputeCapabilityMajor, cudaDev));
   // 6 for Volta, 4 for Pascal
   *maxLinks = (ccMajor > 6) ? 6 : 4;
   // INFO("Device %d detected %d NVLinks", cudaDev, *maxLinks);

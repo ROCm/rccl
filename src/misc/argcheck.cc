@@ -7,16 +7,16 @@
 #include "argcheck.h"
 
 static ncclResult_t CudaPtrCheck(const void* pointer, struct ncclComm* comm, const char* ptrname, const char* opname) {
-  cudaPointerAttributes attr;
-  cudaError_t err = cudaPointerGetAttributes(&attr, pointer);
-  if (err != cudaSuccess || attr.devicePointer == NULL) {
+  hipPointerAttribute_t attr;
+  hipError_t err = hipPointerGetAttributes(&attr, pointer);
+  if (err != hipSuccess || attr.devicePointer == NULL) {
     WARN("%s : %s is not a valid pointer", opname, ptrname);
     return ncclInvalidArgument;
   }
 #if CUDART_VERSION >= 10000
-  if (attr.type == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
+  if (attr.type == hipMemoryTypeDevice && attr.device != comm->cudaDev) {
 #else
-  if (attr.memoryType == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
+  if (attr.memoryType == hipMemoryTypeDevice && attr.device != comm->cudaDev) {
 #endif
     WARN("%s : %s allocated on device %d mismatchs with NCCL device %d", opname, ptrname, attr.device, comm->cudaDev);
     return ncclInvalidArgument;

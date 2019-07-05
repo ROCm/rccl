@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,7 +13,7 @@
 
 ncclResult_t getCudaPath(int cudaDev, char** path) {
   char busId[BUSID_SIZE];
-  CUDACHECK(cudaDeviceGetPCIBusId(busId, BUSID_SIZE, cudaDev));
+  CUDACHECK(hipDeviceGetPCIBusId(busId, BUSID_SIZE, cudaDev));
   for (int i=0; i<BUSID_SIZE; i++) busId[i] = tolower(busId[i]);
   char busPath[] = "/sys/class/pci_bus/0000:00/../../0000:00:00.0";
   memcpy(busPath+sizeof("/sys/class/pci_bus/")-1, busId, BUSID_REDUCED_SIZE-1);

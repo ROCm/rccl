@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -39,14 +40,14 @@ static ncclResult_t shmOpen(const char* shmname, const int shmsize, void** shmPt
   ncclResult_t res = ncclSuccess;
 
   NCCLCHECKGOTO(shmSetup(shmname, shmsize, &fd, &ptr, create), res, sysError);
-  CUDACHECKGOTO(cudaHostRegister(ptr, shmsize, cudaHostRegisterMapped), res, cudaError);
-  CUDACHECKGOTO(cudaHostGetDevicePointer(devShmPtr, ptr, 0), res, cudaError);
+  CUDACHECKGOTO(hipHostRegister(ptr, shmsize, hipHostRegisterMapped), res, hipError_t);
+  CUDACHECKGOTO(hipHostGetDevicePointer(devShmPtr, ptr, 0), res, hipError_t);
 
   *shmPtr = ptr;
   return ncclSuccess;
 sysError:
   WARN("Error while %s shared memory segment %s (size %d)\n", create ? "creating" : "attaching to", shmname, shmsize);
-cudaError:
+hipError_t:
   if (fd != -1) close(fd);
   if (create) shm_unlink(shmname);
   if (ptr != MAP_FAILED) munmap(ptr, shmsize);
@@ -60,7 +61,7 @@ static ncclResult_t shmUnlink(const char* shmname) {
 }
 
 static ncclResult_t shmClose(void* shmPtr, void* devShmPtr, const int shmsize) {
-  CUDACHECK(cudaHostUnregister(shmPtr));
+  CUDACHECK(hipHostUnregister(shmPtr));
   if (munmap(shmPtr, shmsize) != 0) {
     WARN("munmap of shared memory failed");
     return ncclSystemError;

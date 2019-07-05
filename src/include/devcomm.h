@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,6 +10,15 @@
 
 #include "nccl.h"
 #include <stdint.h>
+
+// Convert volatile access to atomic
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#define LOAD(VAR) __atomic_load_n((VAR), __ATOMIC_SEQ_CST)
+#define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+#else
+#define LOAD(VAR) *(VAR)
+#define STORE(DST, SRC) *(DST) = (SRC)
+#endif
 
 #define NCCL_MAX_OPS 2048
 #define NCCL_STEPS 8
@@ -73,6 +83,12 @@ struct ncclConnInfo {
   // Low latency mechanism
   union ncclLLFifoLine *llBuff; // Local for recv, remote for send
   uint64_t llLastCleaning;
+
+  // GPU's HDP_MEM_FLUSH_ADDR: HDP Memory Coherency Flush Control. This register
+  // allows software to explicitly initiate a flush read to HDP memory. See more
+  // descriptions in primitives.h.
+  uint32_t* next_hdp_reg;  // Next GPU in ring (for p2p transport use only)
+  uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
 };
 
 struct ncclConnector {
@@ -111,6 +127,8 @@ struct ncclPeer {
 
 struct ncclDevComm;
 
+#pragma pack(push)  /* push current alignment to stack */
+#pragma pack(4)     /* set alignment to 4 bytes boundary */
 /* CollectiveArgs + ncclColl are to be a power of two, currently 64 bytes, */
 /* to make sure reads to host from the CUDA kernel are aligned. */
 /* Make sure to adjust padding at the end of ncclColl. */
@@ -165,13 +183,55 @@ struct ncclChannel {
       int collCount;
       int collFifoHead; // Only used by GPU
       int collFifoTail; // Only used by CPU
+
+      uint32_t* abortCount;
     };
     int data[0x80];
   };
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
+#pragma pack(pop)   /* restore original alignment from stack */
 
 #define MAXCHANNELS 16
+
+#ifdef ENABLE_PROFILING
+struct ncclProf {
+  union {
+    struct {
+      uint64_t total_cycle;
+      uint64_t wait_send_cycle[MAXCHANNELS];
+      uint64_t wait_recv_cycle[MAXCHANNELS];
+      // primtive cycles
+      uint64_t send_cycle;
+      uint64_t directSend_cycle;
+      uint64_t recv_cycle;
+      uint64_t directRecv_cycle;
+      uint64_t copySend_cycle;
+      uint64_t directCopySend_cycle;
+      uint64_t recvCopySend_cycle;
+      uint64_t directRecvCopySend_cycle;
+      uint64_t recvReduceCopy_cycle;
+      uint64_t recvReduceSend_cycle;
+      uint64_t recvReduceCopySend_cycle;
+      uint64_t directRecvReduceCopySend_cycle;
+      // primitive bytes
+      uint64_t send_byte;
+      uint64_t directSend_byte;
+      uint64_t recv_byte;
+      uint64_t directRecv_byte;
+      uint64_t copySend_byte;
+      uint64_t directCopySend_byte;
+      uint64_t recvCopySend_byte;
+      uint64_t directRecvCopySend_byte;
+      uint64_t recvReduceCopy_byte;
+      uint64_t recvReduceSend_byte;
+      uint64_t recvReduceCopySend_byte;
+      uint64_t directRecvReduceCopySend_byte;
+    };
+    int data[0x80];
+  };
+};
+#endif
 
 typedef enum {
   ncclDevSuccess,
@@ -189,6 +249,11 @@ struct ncclDevComm {
 
   // Channels, device side
   struct ncclChannel* channels;
+
+#ifdef ENABLE_PROFILING
+  // Profiling counters
+  struct ncclProf* devProf;
+#endif
 };
 
 #endif

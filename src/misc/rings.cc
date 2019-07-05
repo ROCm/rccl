@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -378,7 +379,11 @@ ncclResult_t ncclGetRings(int* nrings, int* nthreads, int rank, int nranks, int*
     if (rank == 0) INFO(NCCL_INIT,"Limiting to %d rings per user request.", maxNrings);
     *nrings = maxNrings;
   } else {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+    int defaultMinNrings = 1;
+#else
     int defaultMinNrings = ncclCudaCompCap() == 3 ? 2 : 1;
+#endif
     if (minNrings < defaultMinNrings) minNrings = defaultMinNrings;
     if (minNrings > 0 && minNrings > *nrings) {
       if (rank == 0 && minNrings > defaultMinNrings) INFO(NCCL_INIT,"Duplicating rings to %d per user request.", minNrings);

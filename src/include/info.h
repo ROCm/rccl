@@ -31,7 +31,7 @@ struct ncclInfo {
   ncclRedOp_t op;
   int root;
   ncclComm_t comm;
-  cudaStream_t stream;
+  hipStream_t stream;
   // Algorithm details
   int chunkSteps;
   int sliceSteps;

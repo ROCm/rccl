@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,9 +10,10 @@
 #include "collectives.h"
 
 template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclBroadcastRingKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
-  const int nthreads = blockDim.x - 1;
+  const int nthreads = blockDim.x;
   const int bid = args->bid;
   struct ncclDevComm* comm = args->comm;
   struct ncclChannel* channel = comm->channels+blockIdx.x;
@@ -23,6 +25,11 @@ __device__ void ncclBroadcastRingKernel(struct CollectiveArgs* args) {
   const int rank = ring->devUserRanks[0];
   const int nextRank = ring->devUserRanks[1];
   const int root = args->root;
+#ifdef ENABLE_PROFILING
+  auto devProf = comm->devProf;
+  uint64_t clk, t0 = 0ULL, ws, wr;
+  if (tid == 0) clk = clock64();
+#endif
 
   // Compute pointers
   const T * __restrict__ thisInput = (const T*)args->ThisInput;
@@ -39,22 +46,35 @@ __device__ void ncclBroadcastRingKernel(struct CollectiveArgs* args) {
 
     if (rank == root) {
       if (thisInput == thisOutput) {
+        INIT_COUNTER;
         prims.send(thisInput+offset, nelem);
+        ACCUMULATE_COUNTER(send);
       } else {
+        INIT_COUNTER;
         prims.copySend(thisInput+offset, thisOutput+offset, nelem);
+        ACCUMULATE_COUNTER(copySend);
       }
     } else if (nextRank == root) {
+      INIT_COUNTER;
       prims.recv(thisOutput+offset, nelem);
+      ACCUMULATE_COUNTER(recv);
     } else {
+      INIT_COUNTER;
       prims.recvCopySend(thisOutput+offset, nelem);
+      ACCUMULATE_COUNTER(recvCopySend);
     }
   }
+#ifdef ENABLE_PROFILING
+  if (tid == 0) __atomic_fetch_add(&(devProf->total_cycle), clock64() - clk, __ATOMIC_SEQ_CST);
+#endif
 }
 
 template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclBroadcastTreeKernel(struct CollectiveArgs* args) { }
 
 template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclBroadcastRingLLKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
   const int bid = args->bid;
@@ -99,4 +119,5 @@ __device__ void ncclBroadcastRingLLKernel(struct CollectiveArgs* args) {
 }
 
 template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclBroadcastTreeLLKernel(struct CollectiveArgs* args) { }

@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,9 +10,10 @@
 #include "collectives.h"
 
 template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllGatherRingKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
-  const int nthreads = blockDim.x - 1;
+  const int nthreads = blockDim.x;
   const int bid = args->bid;
   struct ncclDevComm* comm = args->comm;
   struct ncclChannel* channel = comm->channels+blockIdx.x;
@@ -67,9 +69,11 @@ __device__ void ncclAllGatherRingKernel(struct CollectiveArgs* args) {
 }
 
 template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllGatherTreeKernel(struct CollectiveArgs* args) { }
 
 template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllGatherRingLLKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
   const int bid = args->bid;
@@ -128,4 +132,5 @@ __device__ void ncclAllGatherRingLLKernel(struct CollectiveArgs* args) {
 }
 
 template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllGatherTreeLLKernel(struct CollectiveArgs* args) { }

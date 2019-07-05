@@ -1,5 +1,7 @@
+#include "hip/hip_runtime.h"
 /*************************************************************************
  * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -7,7 +9,7 @@
 #ifndef NCCL_COLLECTIVES_H_
 #define NCCL_COLLECTIVES_H_
 
-#define FUNC_INDEX(coll, redop, dtype, ll, al) ((((((coll)*ncclNumOps + (redop))*ncclNumTypes) + (dtype))*2+(al))*2+(ll))
+#define FUNC_INDEX(coll, redop, dtype, ll, al) ((((coll*ncclNumOps + redop)*ncclNumTypes) + dtype)*2+ll)
 
 #define NCCL_COLL_NAME(coll, op, dtype) \
   coll##_##op##_##dtype
@@ -17,7 +19,7 @@
 
 /* Declare all collective operations */
 #define DECL_COLL5(coll, op, dtype) \
-  extern __device__ void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args); \
+  extern __device__ __attribute__((noinline)) void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args); \
   extern __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl c); \
 
 #define DECL_COLL4(coll, op, dtype) \
@@ -25,8 +27,7 @@
   DECL_COLL5(coll##LL, op, dtype)
 
 #define DECL_COLL3(coll, op, dtype) \
-  DECL_COLL4(coll##Ring, op, dtype) \
-  DECL_COLL4(coll##Tree, op, dtype)
+  DECL_COLL4(coll##Ring, op, dtype)
 
 #define DECL_COLL2(coll, op) \
   DECL_COLL3(coll, op, i8) \
@@ -55,12 +56,18 @@
 DECL_ALL_COLLS
 
 // CHUNKSIZE must be a multiple of SLICESIZE
-#define ALLREDUCE_SLICESTEPS (NCCL_STEPS/4)
-#define ALLREDUCE_CHUNKSTEPS (NCCL_STEPS/2)
-#define ALLGATHER_SLICESTEPS (NCCL_STEPS/4)
-#define ALLGATHER_CHUNKSTEPS (NCCL_STEPS/2)
-#define REDUCESCATTER_SLICESTEPS (NCCL_STEPS/4)
-#define REDUCESCATTER_CHUNKSTEPS (NCCL_STEPS/2)
+//#define ALLREDUCE_SLICESTEPS (NCCL_STEPS/4)
+//#define ALLREDUCE_CHUNKSTEPS (NCCL_STEPS/2)
+//#define ALLGATHER_SLICESTEPS (NCCL_STEPS/4)
+//#define ALLGATHER_CHUNKSTEPS (NCCL_STEPS/2)
+//#define REDUCESCATTER_SLICESTEPS (NCCL_STEPS/4)
+//#define REDUCESCATTER_CHUNKSTEPS (NCCL_STEPS/2)
+#define ALLREDUCE_SLICESTEPS 4
+#define ALLREDUCE_CHUNKSTEPS 4
+#define ALLGATHER_SLICESTEPS 4
+#define ALLGATHER_CHUNKSTEPS 4
+#define REDUCESCATTER_SLICESTEPS 4
+#define REDUCESCATTER_CHUNKSTEPS 4
 #define BROADCAST_SLICESTEPS 1
 #define BROADCAST_CHUNKSTEPS 1
 #define REDUCE_SLICESTEPS 1

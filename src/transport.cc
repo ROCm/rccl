@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -141,7 +142,7 @@ void* persistentThread(void *comm_) {
   int idleSpin = 0;
   while (1) {
     do {
-      if (*comm->abortFlag) return NULL;
+      if (LOAD(comm->abortFlag)) return NULL;
       if (op == NULL) {
         pthread_mutex_lock(&state->mutex);
         op = state->ops;

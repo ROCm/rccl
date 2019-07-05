@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -10,21 +11,26 @@
 #include "transport.h"
 #include "param.h"
 #include <unistd.h>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <ctype.h>
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#include "nvlink_stub.h"
+#else
 #include "nvlink.h"
+#endif
 
 struct p2pConnectInfo {
   int direct;
   union {
     void* directPtr;
-    cudaIpcMemHandle_t devIpc;
+    hipIpcMemHandle_t devIpc;
   };
 };
 
 struct p2pSendResources {
   struct ncclSendMem* devMem;
   void* ipcPtr;
+  uint32_t* next_hdp_reg;  // Next GPU in ring (for p2p transport use only)
 };
 
 struct p2pRecvResources {
@@ -37,14 +43,16 @@ struct p2pRecvResources {
 NCCL_PARAM(P2pLevel, "P2P_LEVEL", -2);
 NCCL_PARAM(P2pDisable, "P2P_DISABLE", -2);
 
+extern bool useFineGrainVramPcie;
+
 /* Convert a PCI busId string into a local cudaDev device index (cf. CUDA_VISIBLE_DEVICES) */
 static int busIdToCudaDev(const char* busId) {
   int ndev;
-  if (cudaGetDeviceCount(&ndev) != cudaSuccess)
+  if (hipGetDeviceCount(&ndev) != hipSuccess)
     return -1;
   for (int i = 0; i < ndev; i++) {
     char devBusId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
-    if (cudaDeviceGetPCIBusId(devBusId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, i) != cudaSuccess)
+    if (hipDeviceGetPCIBusId(devBusId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, i) != hipSuccess)
       return -1;
     if (strcmp(busId, devBusId) == 0) {
       return i;
@@ -95,15 +103,38 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struc
 
   // See if CUDA can do P2P
   int p2p;
-  if (cudaDeviceCanAccessPeer(&p2p, myInfo->cudaDev, peerCudaDev) != cudaSuccess) {
+  if (hipDeviceCanAccessPeer(&p2p, myInfo->cudaDev, peerCudaDev) != hipSuccess) {
     INFO(NCCL_INIT|NCCL_P2P,"peer query failed between dev %d(=%d) and dev %d(=%d)",
          myInfo->cudaDev, myInfo->nvmlDev, peerCudaDev, peerInfo->nvmlDev);
     return ncclSuccess;
   }
   if (p2p == 0) return ncclSuccess;
 
-  // Check for NVLink/NVswitch
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  uint32_t link_type, hops;
+  if (hipExtGetLinkTypeAndHopCount(myInfo->cudaDev, peerInfo->cudaDev, &link_type, &hops) != hipSuccess) {
+    p2p = 0;
+    return ncclSuccess;
+  }
+  static const char* link_type_name[] = {"HT", "QPI", "PCIE", "IB", "XGMI"};
+  static unsigned long long link_status_print_once_mask = 0;
+  if (!(link_status_print_once_mask & (1 << (myInfo->cudaDev*8 + peerInfo->cudaDev)))) {
+    INFO(NCCL_INIT, "%d -> %d: link type %s hops %d", myInfo->cudaDev, peerInfo->cudaDev,
+      link_type_name[link_type], hops);
+    link_status_print_once_mask |= (1 << (myInfo->cudaDev*8 + peerInfo->cudaDev));
+  }
+  int nvlinkp2p = 0;
+  if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI) {
+    if (hops == 1)
+      nvlinkp2p = CONNECT_NVLINK;
+  } else {
+    if (!useFineGrainVramPcie)
+      return ncclSuccess;
+  }
+#else
+// Check for NVLink/NVswitch
   int nvlinkp2p = getNvlinkGpu(myInfo->busId, peerInfo->busId);
+#endif
   if (nvlinkp2p > 0) {
     *ret = nvlinkp2p;
     return ncclSuccess;
@@ -266,7 +297,11 @@ int p2pComputeRingsNvLink(ncclTvalue_t* values, int nranks, int* rings, int nrin
   }
 
   // Duplicate the rings for direct NVLink
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  compNrings = copyRings(nranks, rings, compNrings, compNrings*3);
+#else
   compNrings = copyRings(nranks, rings, compNrings, compNrings*2);
+#endif
 
   return compNrings;
 }
@@ -464,13 +499,24 @@ end:
 /* Send: Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pSendSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
     struct ncclConnect* connectInfo, struct ncclConnector* send, int buffSize, int channelId) {
-
   struct p2pSendResources* resources;
   NCCLCHECK(ncclCalloc(&resources, 1));
   send->transportResources = resources;
   int sendSize = sizeof(struct ncclSendMem);
   ALIGN_SIZE(sendSize, CUDA_IPC_MIN);
-  NCCLCHECK(ncclCudaCalloc((char**)&resources->devMem, sendSize));
+  NCCLCHECK(ncclCudaCalloc((char**)&resources->devMem, sendSize, true));
+
+  uint32_t linktype, hops;
+  if (hipExtGetLinkTypeAndHopCount(myInfo->cudaDev, peerInfo->cudaDev, &linktype, &hops) != hipSuccess) {
+    INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", channelId, myInfo->rank, peerInfo->rank);
+    return ncclInternalError;
+  }
+  if (linktype != HSA_AMD_LINK_INFO_TYPE_XGMI) {
+    CUDACHECK(hipDeviceGetAttribute((int*)&resources->next_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
+    TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", channelId, myInfo->rank, peerInfo->rank, resources->next_hdp_reg);
+  }
+  else
+    resources->next_hdp_reg = 0;
 
   struct p2pConnectInfo info;
   if (myInfo->pidHash == peerInfo->pidHash) {
@@ -480,12 +526,12 @@ ncclResult_t p2pSendSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
       INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d via P2P/common device", channelId, myInfo->rank, peerInfo->rank);
     } else {
       // Enable P2P access
-      cudaError_t err = cudaDeviceEnablePeerAccess(peerInfo->cudaDev, 0);
-      if (err == cudaErrorPeerAccessAlreadyEnabled) {
-        cudaGetLastError();
-      } else if (err != cudaSuccess) {
+      hipError_t err = hipDeviceEnablePeerAccess(peerInfo->cudaDev, 0);
+      if (err == hipErrorPeerAccessAlreadyEnabled) {
+        hipGetLastError();
+      } else if (err != hipSuccess) {
         WARN("failed to peer with device %d(=%d): %d %s",
-             peerInfo->cudaDev, peerInfo->nvmlDev, err, cudaGetErrorString(err));
+             peerInfo->cudaDev, peerInfo->nvmlDev, err, hipGetErrorString(err));
         return ncclInternalError;
       }
       INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d[%d] -> %d[%d] via P2P/direct pointer",
@@ -496,10 +542,10 @@ ncclResult_t p2pSendSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
     int peerCudaDev = busIdToCudaDev(peerInfo->busId);
     info.direct = 0;
     // Map IPC and enable P2P access
-    cudaError_t err = cudaIpcGetMemHandle(&info.devIpc, (void*)resources->devMem);
-    if (err != cudaSuccess) {
+    hipError_t err = hipIpcGetMemHandle(&info.devIpc, (void*)resources->devMem);
+    if (err != hipSuccess) {
       WARN("rank %d failed to get CUDA IPC handle to device %d(=%d) : %d %s",
-           myInfo->rank, peerCudaDev, peerInfo->nvmlDev, err, cudaGetErrorString(err));
+           myInfo->rank, peerCudaDev, peerInfo->nvmlDev, err, hipGetErrorString(err));
       return ncclInternalError;
     }
     INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d[%d] -> %d[%d] via P2P/IPC",
@@ -520,7 +566,7 @@ ncclResult_t p2pRecvSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
   recv->transportResources = resources;
   int recvSize = offsetof(struct ncclRecvMem, buff)+buffSize;
   ALIGN_SIZE(recvSize, CUDA_IPC_MIN);
-  NCCLCHECK(ncclCudaCalloc((char**)&resources->devMem, recvSize));
+  NCCLCHECK(ncclCudaCalloc((char**)&resources->devMem, recvSize, true));
 
   struct p2pConnectInfo info;
   if (myInfo->pidHash == peerInfo->pidHash) {
@@ -530,12 +576,12 @@ ncclResult_t p2pRecvSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
       TRACE(NCCL_INIT|NCCL_P2P,"%d <- %d via P2P/common device", myInfo->rank, peerInfo->rank);
     } else {
       // Enable P2P access
-      cudaError_t err = cudaDeviceEnablePeerAccess(peerInfo->cudaDev, 0);
-      if (err == cudaErrorPeerAccessAlreadyEnabled) {
-        cudaGetLastError();
-      } else if (err != cudaSuccess) {
+      hipError_t err = hipDeviceEnablePeerAccess(peerInfo->cudaDev, 0);
+      if (err == hipErrorPeerAccessAlreadyEnabled) {
+        hipGetLastError();
+      } else if (err != hipSuccess) {
         WARN("failed to peer with device %d(=%d): %d %s",
-             peerInfo->cudaDev, peerInfo->nvmlDev, err, cudaGetErrorString(err));
+             peerInfo->cudaDev, peerInfo->nvmlDev, err, hipGetErrorString(err));
         return ncclInternalError;
       }
       TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d[%d] <- %d[%d] via P2P/direct pointer", channelId, myInfo->rank, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev);
@@ -545,10 +591,10 @@ ncclResult_t p2pRecvSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
     int peerCudaDev = busIdToCudaDev(peerInfo->busId);
     info.direct = 0;
     // Map IPC and enable P2P access
-    cudaError_t err = cudaIpcGetMemHandle(&info.devIpc, (void*)resources->devMem);
-    if (err != cudaSuccess) {
+    hipError_t err = hipIpcGetMemHandle(&info.devIpc, (void*)resources->devMem);
+    if (err != hipSuccess) {
       WARN("rank %d failed to get CUDA IPC handle to device %d(=%d) : %d %s",
-           myInfo->rank, peerCudaDev, peerInfo->nvmlDev, err, cudaGetErrorString(err));
+           myInfo->rank, peerCudaDev, peerInfo->nvmlDev, err, hipGetErrorString(err));
       return ncclInternalError;
     }
     TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d[%d] <- %d[%d] via P2P/IPC", channelId, myInfo->rank, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev);
@@ -569,11 +615,11 @@ static ncclResult_t p2pSendConnect(struct ncclConnect* connectInfo, struct ncclC
     send->conn.direct = 1;
   } else {
     //TRACE_DUMP_IPC(&info->devIpc);
-    cudaError_t err = cudaIpcOpenMemHandle(&resources->ipcPtr, info->devIpc, cudaIpcMemLazyEnablePeerAccess);
+    hipError_t err = hipIpcOpenMemHandle(&resources->ipcPtr, info->devIpc, hipIpcMemLazyEnablePeerAccess);
     remDevMem = (struct ncclRecvMem*)resources->ipcPtr;
-    if (err != cudaSuccess) {
+    if (err != hipSuccess) {
       WARN("failed to open CUDA IPC handle : %d %s",
-          err, cudaGetErrorString(err));
+          err, hipGetErrorString(err));
       return ncclUnhandledCudaError;
     }
   }
@@ -585,6 +631,7 @@ static ncclResult_t p2pSendConnect(struct ncclConnect* connectInfo, struct ncclC
   send->conn.head = &resources->devMem->head;
   send->conn.ptrExchange = &resources->devMem->ptrExchange;
   send->conn.opCountLoc = &resources->devMem->opCount;
+  send->conn.next_hdp_reg = resources->next_hdp_reg;
   return ncclSuccess;
 }
 
@@ -599,11 +646,11 @@ ncclResult_t p2pRecvConnect(struct ncclConnect* connectInfo, struct ncclConnecto
     recv->conn.ptrExchange = &remDevMem->ptrExchange;
   } else {
     //TRACE_DUMP_IPC(&info->devIpc);
-    cudaError_t err = cudaIpcOpenMemHandle(&resources->ipcPtr, info->devIpc, cudaIpcMemLazyEnablePeerAccess);
+    hipError_t err = hipIpcOpenMemHandle(&resources->ipcPtr, info->devIpc, hipIpcMemLazyEnablePeerAccess);
     remDevMem = (struct ncclSendMem*)resources->ipcPtr;
-    if (err != cudaSuccess) {
+    if (err != hipSuccess) {
       WARN("failed to open CUDA IPC handle : %d %s",
-          err, cudaGetErrorString(err));
+          err, hipGetErrorString(err));
       return ncclUnhandledCudaError;
     }
   }
@@ -620,8 +667,8 @@ ncclResult_t p2pRecvConnect(struct ncclConnect* connectInfo, struct ncclConnecto
 ncclResult_t p2pSendFree(void* resources) {
   struct p2pSendResources* sendRes = (struct p2pSendResources*)resources;
   if (sendRes->ipcPtr)
-    CUDACHECK(cudaIpcCloseMemHandle(sendRes->ipcPtr));
-  CUDACHECK(cudaFree(sendRes->devMem));
+    CUDACHECK(hipIpcCloseMemHandle(sendRes->ipcPtr));
+  CUDACHECK(hipFree(sendRes->devMem));
   free(sendRes);
   return ncclSuccess;
 }
@@ -629,8 +676,8 @@ ncclResult_t p2pSendFree(void* resources) {
 ncclResult_t p2pRecvFree(void* resources) {
   struct p2pRecvResources* recvRes = (struct p2pRecvResources*)resources;
   if (recvRes->ipcPtr)
-    CUDACHECK(cudaIpcCloseMemHandle(recvRes->ipcPtr));
-  CUDACHECK(cudaFree(recvRes->devMem));
+    CUDACHECK(hipIpcCloseMemHandle(recvRes->ipcPtr));
+  CUDACHECK(hipFree(recvRes->devMem));
   free(recvRes);
   return ncclSuccess;
 }

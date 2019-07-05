@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -39,7 +40,7 @@ ncclResult_t freeChannel(struct ncclChannel* channel, int nRanks) {
 
   // Free Ring index to rank tables
   free(channel->ring.userRanks);
-  CUDACHECK(cudaFree(channel->ring.devUserRanks));
+  CUDACHECK(hipFree(channel->ring.devUserRanks));
 
   // Free transport proxy resources
   for (int r=0; r<nRanks; r++) {
@@ -49,7 +50,7 @@ ncclResult_t freeChannel(struct ncclChannel* channel, int nRanks) {
   }
 
   // Free the peer structures.
-  CUDACHECK(cudaFree(channel->devPeers));
+  CUDACHECK(hipFree(channel->devPeers));
   free(channel->peers);
 
   return ncclSuccess;

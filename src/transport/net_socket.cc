@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -175,12 +176,12 @@ void* persistentSocketThread(void *args_) {
     }
     if (idle) {
       pthread_mutex_lock(&resource->threadLock);
-      while (mark == myQueue->next && *state != stop) { // no new tasks, wait
+      while (mark == myQueue->next && LOAD(state) != stop) { // no new tasks, wait
         pthread_cond_wait(&resource->threadCond, &resource->threadLock);
       }
       pthread_mutex_unlock(&resource->threadLock);
     }
-    if (*state == stop) return NULL;
+    if (LOAD(state) == stop) return NULL;
   }
 }
 

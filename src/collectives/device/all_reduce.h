@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,9 +10,10 @@
 #include "collectives.h"
 
 template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
-  const int nthreads = blockDim.x - 1;
+  const int nthreads = blockDim.x;
   const int bid = args->bid;
   struct ncclDevComm* comm = args->comm;
   struct ncclChannel* channel = comm->channels+blockIdx.x;
@@ -21,6 +23,11 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
   const int stepSize = channel->buffSize / (sizeof(T)*NCCL_STEPS);
   const int chunkSize = stepSize * ALLREDUCE_CHUNKSTEPS;
   const ssize_t loopSize = args->nChannels*(ssize_t)chunkSize;
+#ifdef ENABLE_PROFILING
+  auto devProf = comm->devProf;
+  uint64_t clk, t0 = 0ULL, ws, wr;
+  if (tid == 0) clk = clock64();
+#endif
 
   // Compute pointers
   const T * __restrict__ thisInput = (const T*)args->ThisInput;
@@ -44,7 +51,9 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
     offset = chunkOffset + slice * realChunkSize;
     nelem = min(realChunkSize, size-offset);
 
+    INIT_COUNTER;
     prims.send(thisInput+offset, nelem);
+    ACCUMULATE_COUNTER(send);
 
     // k-2 steps: reduce and copy to next GPU
     for (int j=2; j<nranks; ++j) {
@@ -52,7 +61,9 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
       offset = chunkOffset + slice * realChunkSize;
       nelem = min(realChunkSize, size-offset);
 
+      INIT_COUNTER;
       prims.recvReduceSend(thisInput+offset, nelem);
+      ACCUMULATE_COUNTER(recvReduceSend);
     }
 
     // step k-1: reduce this buffer and data, which will produce the final
@@ -61,7 +72,9 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
     offset = chunkOffset + slice * realChunkSize;
     nelem = min(realChunkSize, size-offset);
 
+    INIT_COUNTER;
     prims.directRecvReduceCopySend(thisInput+offset, thisOutput+offset, offset, nelem);
+    ACCUMULATE_COUNTER(directRecvReduceCopySend);
 
     // k-2 steps: copy to next GPU
     for (int j=1; j<nranks-1; ++j) {
@@ -69,7 +82,9 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
       offset = chunkOffset + slice * realChunkSize;
       nelem = min(realChunkSize, size-offset);
 
+      INIT_COUNTER;
       prims.directRecvCopySend(thisOutput+offset, offset, nelem);
+      ACCUMULATE_COUNTER(directRecvCopySend);
     }
 
     // Make final copy from buffer to dest.
@@ -78,14 +93,20 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
     nelem = min(realChunkSize, size-offset);
 
     // Final wait/copy.
+    INIT_COUNTER;
     prims.directRecv(thisOutput+offset, offset, nelem);
+    ACCUMULATE_COUNTER(directRecv);
   }
+#ifdef ENABLE_PROFILING
+  if (tid == 0) __atomic_fetch_add(&(devProf->total_cycle), clock64() - clk, __ATOMIC_SEQ_CST);
+#endif
 }
 
 template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllReduceTreeKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
-  const int nthreads = blockDim.x - 1;
+  const int nthreads = blockDim.x;
   const int bid = args->bid;
   struct ncclDevComm* comm = args->comm;
   struct ncclChannel* channel = comm->channels+blockIdx.x;
@@ -135,6 +156,7 @@ __device__ void ncclAllReduceTreeKernel(struct CollectiveArgs* args) {
 }
 
 template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllReduceRingLLKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
   const int bid = args->bid;
@@ -210,6 +232,7 @@ __device__ void ncclAllReduceRingLLKernel(struct CollectiveArgs* args) {
 }
 
 template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
 __device__ void ncclAllReduceTreeLLKernel(struct CollectiveArgs* args) {
   const int tid = threadIdx.x;
   const int nthreads = args->nThreads;

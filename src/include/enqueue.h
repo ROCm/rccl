@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,9 +13,9 @@
 
 // Channels / LL tuning
 #define NCCL_LL_CHANNEL_THRESHOLD 8 // Per thread size before we start increasing nrings
-#define NCCL_THREAD_THRESHOLD 64  // Per thread size before we switch to non-LL
+#define NCCL_THREAD_THRESHOLD 256  // Per thread size before we switch to non-LL
 #define NCCL_THREAD_THRESHOLD_PREVOLTA 32 // Per thread size before we switch to non-LL for pre-Volta archs
-#define NCCL_LL_MIN_NTHREADS 64
+#define NCCL_LL_MIN_NTHREADS 256
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info);
 ncclResult_t ncclCpuBarrierIn(ncclComm_t comm, int* isLast);
