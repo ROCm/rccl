@@ -237,7 +237,7 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 int main(int argc,char* argv[])
 {
   if (cmdOptionExists(argv, argv + argc, "-h")) {
-    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all -n iterations -s 0|1\n");
+    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all -i iterations -n bytes -s 0|1\n");
     exit(0);
   }
 
@@ -248,10 +248,17 @@ int main(int argc,char* argv[])
   printf("Benchmarking using %d workgroups\n", workgroups);
 
   int iters = 10;
-  char *it = getCmdOption(argv, argv + argc, "-n");
+  char *it = getCmdOption(argv, argv + argc, "-i");
   if (it)
     iters = atol(it);
   printf("Benchmarking using %d iterations\n", iters);
+
+  uint64_t nBytes = 2097152;
+  char *nb = getCmdOption(argv, argv + argc, "-n");
+  if (nb)
+    nBytes = atol(nb);
+  printf("Benchmarking using %ld bytes\n", nBytes);
+  uint64_t N = nBytes/sizeof(float);
 
   int sync = 0;
   char *s = getCmdOption(argv, argv + argc, "-s");
@@ -289,8 +296,6 @@ int main(int argc,char* argv[])
   struct transfer_data_t h_transfer_data[MAX_GPU], *transfer_data[MAX_GPU];
   struct profiling_data_t *profiling_data[MAX_GPU], *d_profiling_data[MAX_GPU];
   hipStream_t stream[MAX_GPU];
-
-  uint64_t N = 2097152;
 
   int nGpu = 1;
   HIPCHECK(hipGetDeviceCount(&nGpu));
