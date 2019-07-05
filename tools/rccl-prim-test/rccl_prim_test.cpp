@@ -33,7 +33,7 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include "copy_kernel.h"
 
-#define MAX_GPU 4
+#define MAX_GPU 8
 #define MAX_WORKGROUPS 8
 #define THREADS 256
 
@@ -150,6 +150,13 @@ static void setupPeers(uint32_t *info) {
     HIPCHECK(hipSetDevice(i));
     for (int j = 0; j < deviceCnt; j++) {
       if (i != j) {
+	int p2p;
+        HIPCHECK(hipDeviceCanAccessPeer(&p2p, i, j));
+        if (!p2p) {
+          printf("Cannot enable peer access between device %d and %d. You may use HIP_VISIBLE_DEVICES to limit GPUs.\n",
+           i, j);
+          exit(-1);
+        }
         HIPCHECK(hipDeviceEnablePeerAccess(j, 0));
         uint32_t linktype;
         HIPCHECK(hipExtGetLinkTypeAndHopCount(i, j, &linktype, &info[i*deviceCnt+j]));
