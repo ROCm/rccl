@@ -168,21 +168,31 @@ static void printRing(int id, int *ring, int deviceCnt) {
   printf("\n");
 }
 
-static void findConnect(int start, uint32_t *info, int *ring, int deviceCnt) {
-  int n = 0;
-  for (int i = 0; i < deviceCnt; i++)
-    if (ring[i] == -1) n++;
-  if (n == 0) return;
-  int hops = 99, best;
-  for (int j = 0; j < deviceCnt; j++) {
-    if (start == j || (ring[j] == start && n > 1)) continue;
-    if (info[start*deviceCnt+j] < hops) {
-      best = j;
-      hops = info[start*deviceCnt+j];
+static void findConnect(uint32_t *info, int *ring, int deviceCnt) {
+  int n = 0, curr = 0, best;
+  uint32_t temp[MAX_GPU*MAX_GPU];
+  for (int i = 0; i < deviceCnt*deviceCnt; i++) temp[i] = 0;
+  for (int i = 0; i < deviceCnt; i++) {
+    for (int j = 0; j < deviceCnt; j++) temp[j*deviceCnt+curr] = 1;
+    ring[n] = curr;
+    n++;
+    int hops = 99;
+    for (int j = 0; j < deviceCnt; j++) {
+      if (temp[curr*deviceCnt+j]) continue;
+      if (info[curr*deviceCnt+j] < hops) {
+        best = j;
+        hops = info[curr*deviceCnt+j];
+      }
     }
+    curr = best;
   }
-  ring[start] = best;
-  findConnect(best, info, ring, deviceCnt);
+}
+
+static int findNextGpu(int *ring, int gpu, int deviceCnt) {
+  int i;
+  for (i = 0; i < deviceCnt; i ++)
+    if (ring[i] == gpu) break;
+  return ring[(i+1)%deviceCnt];
 }
 
 static void setupRings(uint32_t *info, int *ring_0, int *ring_1) {
@@ -194,10 +204,11 @@ static void setupRings(uint32_t *info, int *ring_0, int *ring_1) {
       printf("%2d ", info[i*deviceCnt+j]);
     printf("\n");
   }
-  findConnect(0, info, ring_0, deviceCnt);
+  findConnect(info, ring_0, deviceCnt);
   printRing(0, ring_0, deviceCnt);
-  for (int i = 0; i < deviceCnt; i++)
-    ring_1[i] = ring_0[deviceCnt-i-1];
+  ring_1[0] =0;
+  for (int i = 1; i < deviceCnt; i++)
+    ring_1[i] = ring_0[deviceCnt-i];
   printRing(1, ring_1, deviceCnt);
 }
 
@@ -308,9 +319,9 @@ int main(int argc,char* argv[])
     for (int j = 0; j < workgroups; j++) {
       int next_gpu;
       if (j%2)
-        next_gpu = ring_1[i];
+        next_gpu = findNextGpu(ring_1, i, nGpu);
       else
-        next_gpu = ring_0[i];
+        next_gpu = findNextGpu(ring_0, i, nGpu);
       //printf("GPU %d Ring %d -> Next GPU %d\n", i, j, next_gpu);
       h_transfer_data[i].dest0[j] = buff[next_gpu*MAX_WORKGROUPS+j] + N;
       h_transfer_data[i].dest1[j] = buff_coarse[i*MAX_WORKGROUPS+j] + N;
