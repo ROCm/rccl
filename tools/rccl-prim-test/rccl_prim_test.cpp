@@ -71,10 +71,7 @@ enum Ops {
   NUM_OPS,
 };
 
-// optionally sync all GPUs before operations
-#undef SYNC_RANKS
-
-template<int op>
+template<int op, int sync>
 __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct profiling_data_t* profiling_data, uint64_t opCount) {
   size_t idx = threadIdx.x;
   uint64_t curr_time, next_time;
@@ -85,11 +82,11 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   if (idx == 0) {
     if (bid == 0)
       STORE(&transfer_data->remOpCount[transfer_data->gpu], opCount);
-#ifdef SYNC_RANKS
-    for (int i = 0; i < transfer_data->ngpu; i++) {
-      while (LOAD(&transfer_data->remOpCount[i]) < opCount) {};
+    if (sync) {
+      for (int i = 0; i < transfer_data->ngpu; i++) {
+        while (LOAD(&transfer_data->remOpCount[i]) < opCount) {};
+      }
     }
-#endif
   }
   __syncthreads();
 
@@ -113,12 +110,17 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
 
 typedef void(*flag_sync_kernel_t)(struct transfer_data_t* transfer_data, struct profiling_data_t* profiling_data, uint64_t opCount);
 
-static flag_sync_kernel_t const flagSyncKerns[NUM_OPS] = {
-  flag_sync_kernel<OP_COPY>,
-  flag_sync_kernel<OP_LOCALCOPY>,
-  flag_sync_kernel<OP_DOUBLECOPY>,
-  flag_sync_kernel<OP_REDUCE>,
-  flag_sync_kernel<OP_REDUCECOPY>,
+static flag_sync_kernel_t const flagSyncKerns[NUM_OPS*2] = {
+  flag_sync_kernel<OP_COPY, 0>,
+  flag_sync_kernel<OP_COPY, 1>,
+  flag_sync_kernel<OP_LOCALCOPY, 0>,
+  flag_sync_kernel<OP_LOCALCOPY, 1>,
+  flag_sync_kernel<OP_DOUBLECOPY, 0>,
+  flag_sync_kernel<OP_DOUBLECOPY, 1>,
+  flag_sync_kernel<OP_REDUCE, 0>,
+  flag_sync_kernel<OP_REDUCE, 1>,
+  flag_sync_kernel<OP_REDUCECOPY, 0>,
+  flag_sync_kernel<OP_REDUCECOPY, 1>,
 };
 
 __global__ void initTestDataKernel(float* data, const size_t N, const int gpu) {
@@ -235,7 +237,7 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 int main(int argc,char* argv[])
 {
   if (cmdOptionExists(argv, argv + argc, "-h")) {
-    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all -n iterations\n");
+    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all -n iterations -s 0|1\n");
     exit(0);
   }
 
@@ -250,6 +252,12 @@ int main(int argc,char* argv[])
   if (it)
     iters = atol(it);
   printf("Benchmarking using %d iterations\n", iters);
+
+  int sync = 0;
+  char *s = getCmdOption(argv, argv + argc, "-s");
+  if (s)
+    sync = atol(s);
+  if (sync) printf("Sync all GPUs before operation\n");
 
   const char *ops[] = {"copy", "localcopy", "doublecopy", "reduce", "reducecopy", "all"};
   char *prim = getCmdOption(argv, argv + argc, "-p");
@@ -358,7 +366,7 @@ int main(int argc,char* argv[])
       for (int i = 0; i < nGpu; i ++) {
         HIPCHECK(hipSetDevice(i));
         //launch the kernel
-        hipLaunchKernelGGL(flagSyncKerns[op],
+        hipLaunchKernelGGL(flagSyncKerns[op*2 + sync],
             /*grid dim x,y,z*/        dim3(workgroups, 1, 1),
             /*block dim x,y,z*/       dim3(THREADS, 1, 1),
             /*dynamic shared mem*/    0,
@@ -379,7 +387,7 @@ int main(int argc,char* argv[])
       for (int i = 0; i < nGpu; i ++) {
         HIPCHECK(hipSetDevice(i));
         //launch the kernel
-        hipLaunchKernelGGL(flagSyncKerns[op],
+        hipLaunchKernelGGL(flagSyncKerns[op*2 + sync],
             /*grid dim x,y,z*/        dim3(workgroups, 1, 1),
             /*block dim x,y,z*/       dim3(THREADS, 1, 1),
             /*dynamic shared mem*/    0,
