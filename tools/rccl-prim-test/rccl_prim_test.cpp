@@ -71,6 +71,9 @@ enum Ops {
   NUM_OPS,
 };
 
+// optionally sync all GPUs before operations
+#undef SYNC_RANKS
+
 template<int op>
 __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct profiling_data_t* profiling_data, uint64_t opCount) {
   size_t idx = threadIdx.x;
@@ -82,9 +85,11 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   if (idx == 0) {
     if (bid == 0)
       STORE(&transfer_data->remOpCount[transfer_data->gpu], opCount);
+#ifdef SYNC_RANKS
     for (int i = 0; i < transfer_data->ngpu; i++) {
       while (LOAD(&transfer_data->remOpCount[i]) < opCount) {};
     }
+#endif
   }
   __syncthreads();
 
