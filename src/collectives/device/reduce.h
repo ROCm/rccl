@@ -27,7 +27,7 @@ __device__ void ncclReduceKernel(struct CollectiveArgs* args) {
   WaitFlag waitDoneFromNext(ring->send.conn.head, (REDUCE_BUFCHUNKS-1)*REDUCE_SUBSTEPS);
   WaitFlag waitReadyFromPrev(ring->recv.conn.tail, 0);
   PostFlag postDoneToPrev(ring->recv.conn.head, 0, NULL, 0);
-  PostFlag postReadyToNext(ring->send.conn.tail, 0, ring->send.conn.fifo, REDUCE_BUFCHUNKS*REDUCE_SUBSTEPS, ring->hdp_reg);
+  PostFlag postReadyToNext(ring->send.conn.tail, 0, ring->send.conn.fifo, REDUCE_BUFCHUNKS*REDUCE_SUBSTEPS, ring->next_hdp_reg);
 
   typedef Primitives<UNROLL, REDUCE_SUBSTEPS, T, FUNC> Prims;
 
