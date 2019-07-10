@@ -290,6 +290,13 @@ ncclResult_t netRecvSetup(ncclTinfo_t* myOpaqueInfo, ncclTinfo_t* peerOpaqueInfo
   resources->netDev = getDev(ring->id, myInfo->ndev, myInfo->distances);
   NCCLCHECK(netGetGdrSupport(resources->netDev, myInfo->distances[resources->netDev], 0, &resources->useGdr));
 
+  if (resources->useGdr) {
+    // Collect HDR register for local GPU to initiate flush after receive
+    int cudaDev;
+    hipGetDevice(&cudaDev);
+    NCCLCHECK(getGpuHdpReg(cudaDev, &ring->curr_hdp_reg));
+  }
+
   int sendSize = sizeof(struct ncclSendMem);
   NCCLCHECK(ncclCudaHostAlloc((void**)&resources->hostSendMem, (void**)&resources->devHostSendMem, sendSize));
 
@@ -533,7 +540,13 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
         if (nextBuff) memcpy(nextBuff+slot*sliceSize, localBuff+slot*sliceSize, size);
         head++;
         if (llMode == 0) {
-          if (ptrType == NCCL_PTR_CUDA) ncclNetFlush(resources->netRecvComm, localBuff+slot*sliceSize, size);
+          if (ptrType == NCCL_PTR_CUDA) {
+              ncclNetFlush(resources->netRecvComm, localBuff+slot*sliceSize, size);
+
+              // Flush local HDP register after local read-back finishes
+              STORE(ring->curr_hdp_reg, 0x1);
+              TRACE(NCCL_NET, "Flushing GPU memory via HDP %p", ring->curr_hdp_reg);
+          }
           //TRACE(NCCL_NET,"head %d tail %d slot %d size %d ptrType %d", head, tail, slot, size, ptrType);
           STORE(nextTail, head);
         }
