@@ -299,6 +299,8 @@ static ncclResult_t fillInfo(struct ncclInfo* info, int rank, uint64_t commHash)
   return ncclSuccess;
 }
 
+bool SetCpuAffinity(int cudaDev, nvmlDevice_t* nvmlDevice);
+
 template <int type>
 static ncclResult_t selectTransport(struct ncclInfo* myInfo, struct ncclInfo* peerInfo, struct ncclConnect* connect, struct ncclTransport** transportRet, struct ncclRing* ring) {
   for (int t=0; t<NTRANSPORTS; t++) {
@@ -307,8 +309,15 @@ static ncclResult_t selectTransport(struct ncclInfo* myInfo, struct ncclInfo* pe
     ncclTvalue_t ret = 0;
     NCCLCHECK(transport->canConnect(&ret, myInfo->tinfo+t, peerInfo->tinfo+t));
     if (ret > 0) {
+      cpu_set_t affinitySave;
+      nvmlDevice_t nvmlDevice;
+      int cudaDev;
+      CUDACHECK(hipGetDevice(&cudaDev));
+      sched_getaffinity(0, sizeof(cpu_set_t), &affinitySave);
+      SetCpuAffinity(cudaDev, &nvmlDevice);
       NCCLCHECK(transportComm->setup(myInfo->tinfo+t, peerInfo->tinfo+t, connect, ring));
       *transportRet = transport;
+      sched_setaffinity(0, sizeof(cpu_set_t), &affinitySave);
       return ncclSuccess;
     }
   }
