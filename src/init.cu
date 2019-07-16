@@ -369,7 +369,7 @@ static void swap(void* mem1, void* mem2, int size) {
   memcpy(tmp, mem1, size); memcpy(mem1, mem2, size); memcpy(mem2, tmp, size);
 }
 
-#define MAXWIDTH 20
+#define MAXWIDTH 64
 #define PREFIXLEN 15
 #define STRLENGTH (PREFIXLEN+5*MAXWIDTH)
 void dumpMatrix(int* connectMatrix, int nranks) {
