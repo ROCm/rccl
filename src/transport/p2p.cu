@@ -12,6 +12,7 @@
 #include "param.h"
 #include <unistd.h>
 #include <hip/hip_runtime_api.h>
+#include <hsa/hsa_ext_amd.h>
 #include "nvmlwrap.h"
 #include <ctype.h>
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
@@ -42,13 +43,13 @@ struct p2pConnectInfo {
 
 /* Fill information necessary to exchange between ranks to choose whether or not
  * to use this transport */
-ncclResult_t p2pFillInfo(ncclTinfo_t* opaqueInfo, int rank) {
+ncclResult_t p2pFillInfo(ncclTinfo_t* opaqueInfo, int rank, uint64_t commHash) {
   struct p2pInfo* info = (struct p2pInfo*)opaqueInfo;
   static_assert(sizeof(struct p2pInfo) <= sizeof(ncclTinfo_t), "p2p Info too large");
   info->rank = rank;
   CUDACHECK(hipGetDevice(&info->cudaDev));
-  info->hostHash=getHostHash();
-  info->pidHash=getPidHash();
+  info->hostHash=getHostHash()+commHash;
+  info->pidHash=getPidHash()+commHash;
 
   // Get PCI Bus Id. We need to get the bus ID through CUDA first, since the
   // cudaDev is a CUDA runtime dev number which could be different from the
@@ -116,11 +117,6 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, ncclTinfo_t* myOpaqueInfo, ncclTin
     INFO(NCCL_INIT, "%d -> %d: link type %s hops %d", myInfo->cudaDev, peerInfo->cudaDev,
       link_type_name[link_type], hops);
     link_status_print_once_mask |= (1 << (myInfo->cudaDev*8 + peerInfo->cudaDev));
-  }
-  if (link_type != HSA_AMD_LINK_INFO_TYPE_XGMI) {
-  // enable below lines on release only: disable PCIe P2P until HDP flush is implemented.
-  //  p2p = 0;
-  //  return ncclSuccess;
   }
   int nvlinkp2p = 0;
   if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1)
@@ -289,7 +285,11 @@ int p2pComputeRingsNvLink(ncclTvalue_t* values, int nranks, int* rings, int nrin
   }
 
   // Duplicate the rings for direct NVLink
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+  compNrings = copyRings(nranks, rings, compNrings, compNrings*3);
+#else
   compNrings = copyRings(nranks, rings, compNrings, compNrings*2);
+#endif
 
   if (ncclCudaCompCap() == 6) *nthreads /= 2;
   return compNrings;
@@ -486,6 +486,15 @@ ncclResult_t p2pSendSetup(ncclTinfo_t* myOpaqueInfo, ncclTinfo_t* peerOpaqueInfo
   struct p2pInfo* myInfo = (struct p2pInfo*)myOpaqueInfo;
   struct p2pInfo* peerInfo = (struct p2pInfo*)peerOpaqueInfo;
   struct p2pConnectInfo info;
+  uint32_t linktype, hops;
+  if (hipExtGetLinkTypeAndHopCount(myInfo->cudaDev, peerInfo->cudaDev, &linktype, &hops) != hipSuccess) {
+    INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", ring->id, myInfo->rank, peerInfo->rank);
+    return ncclInternalError;
+  }
+  if (linktype != HSA_AMD_LINK_INFO_TYPE_XGMI) {
+    NCCLCHECK(getGpuHdpReg(peerInfo->cudaDev, &ring->next_hdp_reg));
+    TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", ring->id, myInfo->rank, peerInfo->rank, ring->next_hdp_reg);
+  }
   if (myInfo->pidHash == peerInfo->pidHash) {
     info.direct = 1;
     info.directPtr = ring->devMemSend;

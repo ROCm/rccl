@@ -20,17 +20,6 @@
 #include <hip/hip_runtime_api.h>
 #include <hip/hip_runtime.h>
 
-#if CUDART_VERSION < 9000
-struct cudaLaunchParams {
-  void (*func)(struct ncclColl);
-  dim3 gridDim;
-  dim3 blockDim;
-  struct ncclColl **args;
-  size_t sharedMem;
-  hipStream_t stream;
-};
-#endif
-
 #define MAXRINGS 16
 #define MAXTHREADS 256
 #define DEFAULT_BUFFER_SIZE_BYTES (1LL << 22) /* 4MiB */
@@ -153,6 +142,12 @@ struct ncclRing {
       int* userRanks;
       int* devUserRanks;
 
+      // GPU's HDP_MEM_FLUSH_ADDR: HDP Memory Coherency Flush Control. This register
+      // allows software to explicitly initiate a flush read to HDP memory. See more
+      // descriptions in primitives.h.
+      uint32_t* next_hdp_reg;  // Next GPU in ring (for p2p transport use only)
+      uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
+      
       // Operation list for aggregation
       struct ncclColl* collectives;
       struct ncclColl* devCollectives;
@@ -242,8 +237,8 @@ struct ncclComm {
   int intraPhase;
 
   // Storage for deferred intra-process launch
-  struct cudaLaunchParams * intraParams;
-  struct cudaLaunchParams *myParams;
+  hipLaunchParams* intraParams;
+  hipLaunchParams* myParams;
   int* intraCudaDevs;
   int* intraCGMode; // Whether we can use CUDA9 CGMD or not
   int* intraCC; // Only to check all have the same ComputeCap and disable CGMode if not

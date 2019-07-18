@@ -53,7 +53,7 @@ struct ncclTransportComm {
 
 struct ncclTransport {
   const char name[4];
-  ncclResult_t (*fillInfo)(ncclTinfo_t*, int);
+  ncclResult_t (*fillInfo)(ncclTinfo_t*, int, uint64_t);
   ncclResult_t (*canConnect)(ncclTvalue_t*, ncclTinfo_t*, ncclTinfo_t*);
   ncclResult_t (*getRings)(int, int*, int*, ncclTvalue_t*, int*, int*, int*, int, int*);
   struct ncclTransportComm send;
@@ -109,5 +109,9 @@ inline void transportProxyWait(const FUNC& func) {
 inline void transportProxyIdle(int idle) {
   sched_yield();
 }
+
+// Function to get GPU's HDP_MEM_FLUSH_ADDR: HDP Memory Coherency Flush Control
+// This register allows software to explicitly initiate a flush read to HDP memory
+ncclResult_t getGpuHdpReg(int cudaDev, uint32_t** hdp);
 
 #endif

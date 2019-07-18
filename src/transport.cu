@@ -186,3 +186,56 @@ ncclResult_t transportDestroyProxy(struct ncclConnector* connector) {
   }
   return ncclSuccess;
 }
+
+
+ncclResult_t getGpuHdpReg(int cudaDev, uint32_t** hdp) {
+  auto convert_bdf = [](const char *busId) {
+    char bdf[9];
+    strncpy(bdf, busId, 4);
+    strncpy(bdf+4, busId+5, 2);
+    strncpy(bdf+6, busId+8, 2);
+    bdf[8] = '\0';
+    uint16_t id = (uint16_t)strtol(bdf, NULL, 16);
+    return id;
+  };
+
+  union find_agent_args {
+    hsa_agent_t agent;
+    uint16_t id;
+  } args;
+
+  const auto& find_agent = [](hsa_agent_t agent, void* arg) {
+    uint16_t id = ((union find_agent_args *)arg)->id;
+    hsa_device_type_t type;
+    hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, (void*)&type);
+    if(type == HSA_DEVICE_TYPE_GPU) {
+      uint16_t bdf_id = 1;
+      hsa_agent_get_info(agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &bdf_id);
+      if(bdf_id == id) {
+        ((union find_agent_args *)arg)->agent=agent;
+        return HSA_STATUS_INFO_BREAK;
+      }
+    }
+    return HSA_STATUS_SUCCESS;
+  };
+
+#define PCI_BUS_ID_BUFFER_SIZE 16
+  char busId[PCI_BUS_ID_BUFFER_SIZE];
+  *hdp = NULL;
+  CUDACHECK(hipDeviceGetPCIBusId(busId, PCI_BUS_ID_BUFFER_SIZE, cudaDev));
+  args.id = convert_bdf(busId);
+  hsa_status_t err = hsa_iterate_agents(find_agent, (void*)&args);
+  if (err != HSA_STATUS_INFO_BREAK) {
+    WARN("failed to get locate HSA agent for GPU %d", cudaDev);
+    return ncclSystemError;
+  }
+  hsa_amd_hdp_flush_t hdpinfo;
+  err = hsa_agent_get_info(args.agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_HDP_FLUSH, &hdpinfo);
+  if ((err != HSA_STATUS_SUCCESS) && (err != HSA_STATUS_INFO_BREAK)) {
+    WARN("failed to get HSA_AMD_AGENT_INFO_HDP_FLUSH for GPU %d", cudaDev);
+    return ncclSystemError;
+  }
+  *hdp = hdpinfo.HDP_MEM_FLUSH_CNTL;
+  return ncclSuccess;
+#undef PCI_BUS_ID_BUFFER_SIZE
+}
