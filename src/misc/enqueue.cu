@@ -61,27 +61,23 @@ static ncclKern_t const ncclKerns[ncclCollCount*ncclNumOps*ncclNumTypes*2] = {
   NCCL_FUNCS2A(ncclAllReduce)
 };
 
-ncclResult_t ncclLaunchCooperativeKernelMultiDevice(struct cudaLaunchParams *paramsList, int* cudaDevs, int numDevices, int cgMode) {
-#if CUDART_VERSION >= 9000
+ncclResult_t ncclLaunchCooperativeKernelMultiDevice(hipLaunchParams *paramsList, int* cudaDevs, int numDevices, int cgMode) {
   if (cgMode & 0x01) {
-    CUDACHECK(cudaLaunchCooperativeKernelMultiDevice(paramsList, numDevices,
-            // These flags are to reduce the latency of using this API
-            cudaCooperativeLaunchMultiDeviceNoPreSync|cudaCooperativeLaunchMultiDeviceNoPostSync));
+    CUDACHECK(hipExtLaunchMultiKernelMultiDevice(paramsList, numDevices, 0));
     return ncclSuccess;
   }
-#endif
   int savedDev;
   CUDACHECK(hipGetDevice(&savedDev));
   for (int i = 0; i < numDevices; i++) {
-    struct cudaLaunchParams* params = paramsList+i;
+    hipLaunchParams* params = paramsList+i;
     CUDACHECK(hipSetDevice(cudaDevs[i]));
-    hipLaunchKernelGGL(params->func, params->gridDim, params->blockDim, params->sharedMem, params->stream, **params->args);
+    hipLaunchKernelGGL((void (*)(struct ncclColl))params->func, params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
   }
   CUDACHECK(hipSetDevice(savedDev));
   return ncclSuccess;
 }
 
-ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* params) {
+ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
   params->gridDim.x = std::min((int) params->gridDim.x, comm->nRings);
 
   // Set active = 2 for the last operation
@@ -97,7 +93,7 @@ ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* params)
   // As we pass that coll directly, we can free it immediately.
   STORE(&coll->active, 0);
 
-  params->func = ncclKerns[coll->funcIndex];
+  params->func = (void *)ncclKerns[coll->funcIndex];
   return ncclSuccess;
 }
 
@@ -142,7 +138,7 @@ ncclResult_t ncclCpuBarrierOut(struct ncclComm* comm) {
 
 ncclResult_t ncclBarrierEnqueue(struct ncclComm* comm) {
   if (comm->nRanks == 1) return ncclSuccess;
-  struct cudaLaunchParams* params = comm->myParams;
+  hipLaunchParams* params = comm->myParams;
 
   NCCLCHECK(setupLaunch(comm, params));
 
@@ -187,9 +183,9 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
 
   NCCLCHECK(ncclCpuBarrierOut(comm));
 
-  struct cudaLaunchParams *params = comm->myParams;
+  hipLaunchParams *params = comm->myParams;
   if (comm->launchMode == ncclComm::PARALLEL) {
-    hipLaunchKernelGGL(params->func, params->gridDim, params->blockDim, params->sharedMem, params->stream, **params->args);
+    hipLaunchKernelGGL((void (*)(struct ncclColl))params->func, params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
   }
   // Start the network proxies as soon as the kernel has been launched. We can't
   // perform any CUDA call between the two or having a hipFree between the CUDA
@@ -207,7 +203,7 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
 }
 
 ncclResult_t ncclEnqueueEvents(ncclComm_t comm) {
-  struct cudaLaunchParams *params = comm->myParams;
+  hipLaunchParams *params = comm->myParams;
   // Enqueue event after NCCL kernel
   CUDACHECK(hipEventRecord(comm->doneEvent, params->stream));
   // Use internal NCCL stream for CGMD/GROUP launch if required or if the user stream is NULL
