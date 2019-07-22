@@ -56,7 +56,7 @@ endif()
 
 # Setup VERSION
 set(VERSION_STRING "2.7.0")
-rocm_setup_version(VERSION ${BUILD_VERSION})
+rocm_setup_version(VERSION ${VERSION_STRING})
 
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
