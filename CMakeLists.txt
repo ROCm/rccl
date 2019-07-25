@@ -55,7 +55,7 @@ else()
 endif()
 
 # Setup VERSION
-set(VERSION_STRING "2.6.0.")
+set(VERSION_STRING "2.6.0")
 rocm_setup_version(VERSION ${VERSION_STRING})
 
 list(APPEND CMAKE_PREFIX_PATH
