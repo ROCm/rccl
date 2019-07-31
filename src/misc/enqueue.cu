@@ -71,7 +71,7 @@ ncclResult_t ncclLaunchCooperativeKernelMultiDevice(hipLaunchParams *paramsList,
   for (int i = 0; i < numDevices; i++) {
     hipLaunchParams* params = paramsList+i;
     CUDACHECK(hipSetDevice(cudaDevs[i]));
-    hipLaunchKernelGGL((void (*)(struct ncclColl))params->func, params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
+    hipLaunchKernelGGL(((void (*)(struct ncclColl))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
   }
   CUDACHECK(hipSetDevice(savedDev));
   return ncclSuccess;
@@ -185,7 +185,7 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
 
   hipLaunchParams *params = comm->myParams;
   if (comm->launchMode == ncclComm::PARALLEL) {
-    hipLaunchKernelGGL((void (*)(struct ncclColl))params->func, params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
+    hipLaunchKernelGGL(((void (*)(struct ncclColl))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
   }
   // Start the network proxies as soon as the kernel has been launched. We can't
   // perform any CUDA call between the two or having a hipFree between the CUDA
