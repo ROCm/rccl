@@ -361,8 +361,13 @@ static ncclResult_t ncclCalloc(T** ptr, size_t nelem) {
 
 template <typename T>
 static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem, bool isFineGrain = false) {
-  if (isFineGrain)
-    CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
+  if (isFineGrain) {
+    hipError_t e = hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained);
+    if (e != hipSuccess) {
+      *ptr = 0;
+      return ncclInvalidUsage;
+    }
+  }
   else
     CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
   CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
