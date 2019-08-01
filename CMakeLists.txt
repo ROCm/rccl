@@ -146,7 +146,7 @@ if("${HIP_COMPILER}" MATCHES "clang")
     PRIVATE --amdgpu-target=gfx908
     PRIVATE -fgpu-rdc)
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
-  target_include_directories(rccl PRIVATE /opt/rocm/include)
+  target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
 endif()
 
 if("${HIP_COMPILER}" MATCHES "hcc")
