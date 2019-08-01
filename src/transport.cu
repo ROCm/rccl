@@ -7,7 +7,8 @@
 
 #include "core.h"
 #include "common_coll.h"
-#include <hsa.h>
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
 
 extern struct ncclTransport p2pTransport;
 extern struct ncclTransport shmTransport;
