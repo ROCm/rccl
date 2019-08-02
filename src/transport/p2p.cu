@@ -101,8 +101,6 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, ncclTinfo_t* myOpaqueInfo, ncclTin
     return ncclSuccess;
   }
 
-  if (!useFineGrainVramPcie) p2p = 0;
-
   if (p2p == 0) return ncclSuccess;
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
@@ -119,8 +117,14 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, ncclTinfo_t* myOpaqueInfo, ncclTin
     link_status_print_once_mask |= (1 << (myInfo->cudaDev*8 + peerInfo->cudaDev));
   }
   int nvlinkp2p = 0;
-  if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1)
-    nvlinkp2p = CONNECT_NVLINK;
+  if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI) {
+    if (hops == 1)
+      nvlinkp2p = CONNECT_NVLINK;
+  } else {
+    if (!useFineGrainVramPcie)
+      return ncclSuccess;
+  }
+
 #else
  // Check for NVLink/NVswitch
   int nvlinkp2p = getNvlinkGpu(myInfo->busId, peerInfo->busId);

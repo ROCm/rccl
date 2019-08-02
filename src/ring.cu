@@ -8,8 +8,6 @@
 #include "ring.h"
 #include "param.h"
 
-extern bool useFineGrainVramPcie;
-
 NCCL_PARAM(Buffsize, "BUFFSIZE", DEFAULT_BUFFER_SIZE_BYTES);
 
 ncclResult_t initRing(struct ncclComm* comm, int ringid) {
@@ -19,26 +17,40 @@ ncclResult_t initRing(struct ncclComm* comm, int ringid) {
   // Setup intermediate buffering
   ring->buffSize = ncclParamBuffsize();
 
+  // attempt to allocate buffers in fine grain
   const int sendSize = ring->devMemSendSize = sizeof(struct ncclSendMem);
   struct ncclSendMem* sendMem;
-  NCCLCHECK(ncclCudaCalloc((char**)&sendMem, sendSize, useFineGrainVramPcie));
+  ncclCudaCalloc((char**)&sendMem, sendSize, true);
   ring->devMemSend = sendMem;
 
   const int recvSize = ring->devMemRecvSize = offsetof(struct ncclRecvMem, buff)+ring->buffSize;
   struct ncclRecvMem* recvMem;
-  NCCLCHECK(ncclCudaCalloc((char**)&recvMem, recvSize, useFineGrainVramPcie));
+  ncclCudaCalloc((char**)&recvMem, recvSize, true);
   ring->devMemRecv = recvMem;
 
   TRACE(NCCL_INIT,"sendMem %p size %d recvMem %p size %d", sendMem, sendSize, recvMem, recvSize);
 
   // Pre-configure send/recv pointers. Those are the default, they may change later.
-  ring->recv.conn.buff = recvMem->buff;
-  ring->recv.conn.llBuff = recvMem->llBuff;
-  ring->recv.conn.tail = &recvMem->tail;
-  ring->recv.conn.opCount = &recvMem->opCount;
+  if (recvMem){
+    ring->recv.conn.buff = recvMem->buff;
+    ring->recv.conn.llBuff = recvMem->llBuff;
+    ring->recv.conn.tail = &recvMem->tail;
+    ring->recv.conn.opCount = &recvMem->opCount;
+  } else {
+    ring->recv.conn.buff = 0;
+    ring->recv.conn.llBuff = 0;
+    ring->recv.conn.tail = 0;
+    ring->recv.conn.opCount = 0;
+  }
   ring->recv.conn.direct = 0;
-  ring->send.conn.head = &sendMem->head;
-  ring->send.conn.llHead = &sendMem->llHead;
+
+  if (sendMem) {
+    ring->send.conn.head = &sendMem->head;
+    ring->send.conn.llHead = &sendMem->llHead;
+  } else {
+    ring->send.conn.head = 0;
+    ring->send.conn.llHead = 0;
+  }
   ring->send.conn.direct = 0;
   ring->send.conn.llStep = 0;
   ring->send.conn.llLastCleaning = 0;
