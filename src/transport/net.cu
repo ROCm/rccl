@@ -294,7 +294,7 @@ ncclResult_t netRecvSetup(ncclTinfo_t* myOpaqueInfo, ncclTinfo_t* peerOpaqueInfo
     // Collect HDR register for local GPU to initiate flush after receive
     int cudaDev;
     hipGetDevice(&cudaDev);
-    NCCLCHECK(getGpuHdpReg(cudaDev, &ring->curr_hdp_reg));
+    CUDACHECK(hipDeviceGetAttribute((int*)&ring->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, cudaDev));
   }
 
   int sendSize = sizeof(struct ncclSendMem);
