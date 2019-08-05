@@ -496,7 +496,7 @@ ncclResult_t p2pSendSetup(ncclTinfo_t* myOpaqueInfo, ncclTinfo_t* peerOpaqueInfo
     return ncclInternalError;
   }
   if (linktype != HSA_AMD_LINK_INFO_TYPE_XGMI) {
-    NCCLCHECK(getGpuHdpReg(peerInfo->cudaDev, &ring->next_hdp_reg));
+    CUDACHECK(hipDeviceGetAttribute((int*)&ring->next_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
     TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", ring->id, myInfo->rank, peerInfo->rank, ring->next_hdp_reg);
   }
   if (myInfo->pidHash == peerInfo->pidHash) {
