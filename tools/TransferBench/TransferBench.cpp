@@ -126,10 +126,10 @@ int main(int argc, char **argv)
         {
             int const src = links[i].srcGpu;
             int const dst = links[i].dstGpu;
-            if (0 < src || src >= numDevices ||
-                0 < dst || dst >= numDevices)
+            if (src < 0 || src >= numDevices ||
+                dst < 0 || dst >= numDevices)
             {
-                printf("[ERROR] Invalid link (%d to %d)\n", src, dst);
+                printf("[ERROR] Invalid link (%d to %d). Total devices: %d\n", src, dst, numDevices);
                 exit(1);
             }
             snprintf(name + strlen(name), MAX_NAME_LEN, "%d->%d:%d ", src, dst, links[i].numBlocksToUse);
@@ -230,11 +230,25 @@ int main(int argc, char **argv)
             if (iteration >= 0)
             {
                 totalCpuTime += deltaSec;
-                for (int i = 0; i < numLinks; i++)
+
+                for (int i = 0; i < numDevices; i++)
                 {
-                    float gpuDeltaMsec;
-                    HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvents[i], stopEvents[i]));
-                    totalGpuTime[links[i].srcGpu] += gpuDeltaMsec / 1000.0;
+                    // Multiple links running on the same device may be running simultaneously
+                    // so try to figure out the first/last event across all links
+                    float maxTime = 0.0f;
+                    for (int j = 0; j < numLinks; j++)
+                    {
+                        if (links[j].srcGpu != i) continue;
+                        for (int k = 0; k < numLinks; k++)
+                        {
+                            if (links[k].srcGpu != i) continue;
+
+                            float gpuDeltaMsec;
+                            HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvents[j], stopEvents[k]));
+                            maxTime = std::max(maxTime, gpuDeltaMsec);
+                        }
+                    }
+                    totalGpuTime[i] += maxTime / 1000.0;
                 }
             }
         }
