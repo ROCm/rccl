@@ -234,6 +234,10 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
     return std::find(begin, end, option) != end;
 }
 
+
+static const char* link_type_name[] = {"HT", "QPI", "PCIE", "IB", "XGMI"};
+
+
 int main(int argc,char* argv[])
 {
   if (cmdOptionExists(argv, argv + argc, "-h")) {
@@ -365,7 +369,7 @@ int main(int argc,char* argv[])
   uint64_t opCount = 0;
   for (int op = begin_op; op < end_op; op ++) {
     const char *OpsName[] = {"Copy", "Local Copy", "Double Copy", "Reduce", "ReduceCopy"};
-    printf("Testing %s: \n", OpsName[op]);
+    printf("[Testing %s]: \n", OpsName[op]);
     // 2 warm up cycles
     for (int i = 0; i < 2; i ++) {
       for (int i = 0; i < nGpu; i ++) {
@@ -410,17 +414,23 @@ int main(int argc,char* argv[])
     auto delta = std::chrono::high_resolution_clock::now() - start;
     double deltaSec = std::chrono::duration_cast<std::chrono::duration<double>>(delta).count();
 
+    std::cout<<"***GPU to GPU Transfer Profiling Data***"<<std::endl;
     for (int i = 0; i < nGpu; i ++) {
       HIPCHECK(hipMemcpyAsync(profiling_data[i], d_profiling_data[i],
                               sizeof(struct profiling_data_t), hipMemcpyDeviceToHost,
                               stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
 #define RTC_CLOCK_FREQ 2.7E07
+      int next_gpu = findNextGpu(ring_0, i, nGpu);
+      uint32_t linktype;
+      uint32_t hopcount;
+      HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
+      
       double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ)/(double)workgroups;
-      fprintf(stderr, "GPU %d: time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
-        i, t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
+      fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
+        i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
     }
-
+    std::cout<<"***Application Level Transfer Profiling Data***"<<std::endl;
     double speed = (double)(profiling_data[0]->bytes_transferred) / (deltaSec*1.0E9);
     printf("Transfered %lu bytes in %f s. Throughput %f GB/s\n", profiling_data[0]->bytes_transferred, deltaSec, speed);
   }
