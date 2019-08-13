@@ -237,6 +237,7 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 
 static const char* link_type_name[] = {"HT", "QPI", "PCIE", "IB", "XGMI"};
 
+
 int main(int argc,char* argv[])
 {
   if (cmdOptionExists(argv, argv + argc, "-h")) {
