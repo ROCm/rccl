@@ -171,7 +171,9 @@ static ncclResult_t fillCoords(int nranks, int* matrix, int* coords, int* rankTo
   }
 }
 
-#ifdef __PPC__
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#define DEFAULT_MIN_NRINGS 2
+#elif defined(__PPC__)
 // Make the default NCCL_MIN_NRINGS=4 for IBM/Power nodes
 #define DEFAULT_MIN_NRINGS 4
 #else

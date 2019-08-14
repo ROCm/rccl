@@ -454,8 +454,8 @@ class ncclLLPrimitives {
       asm volatile ("flat_load_dwordx4 %0, %1, glc\n"
         "s_waitcnt vmcnt(0)\n"
         "buffer_wbinvl1_vol\n" : "=v"(i4) : "v"(src));
-      if (checkAbort(recvConn[i]->opCountRem)) break;
-    } while (i4[1] != flag || i4[3] != flag);
+      if (i4[1] == flag && i4[3] == flag) break;
+    } while (!checkAbort(recvConn[i]->opCountRem));
     uint64_t val64 = (uint64_t)(i4[0]) + (((uint64_t)i4[2]) << 32);
 #else
     do {
