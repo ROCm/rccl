@@ -80,7 +80,7 @@ rcclCI:
                       sudo dpkg -i package/*.deb
                       """
 
-        
+
         //platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
     }
 

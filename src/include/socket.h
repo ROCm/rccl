@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -18,8 +18,9 @@
 
 #define MAX_IFS 16
 #define MAX_IF_NAME_SIZE 16
-#define SLEEP_INT     1000  // sleep interval in usec
-#define RETRY_TIMES   2e4   // retry times before reporting a timeout (20 sec)
+#define SLEEP_INT            1000 // connection retry sleep interval in usec
+#define RETRY_REFUSED_TIMES   2e4 // connection refused retry times before reporting a timeout (20 sec)
+#define RETRY_TIMEDOUT_TIMES    3 // connection timed out retry times (each one can take 20s)
 
 /* Common socket address storage structure for IPv4/IPv6 */
 union socketAddress {
@@ -41,7 +42,7 @@ static inline const char *socketToString(struct sockaddr *saddr, char *buf) {
   return buf;
 }
 
-static inline short socketToPort(struct sockaddr *saddr) {
+static inline uint16_t socketToPort(struct sockaddr *saddr) {
   return ntohs(saddr->sa_family == AF_INET ? ((struct sockaddr_in*)saddr)->sin_port : ((struct sockaddr_in6*)saddr)->sin6_port);
 }
 
@@ -60,9 +61,12 @@ static inline int envSocketFamily(void) {
 }
 
 static int findInterfaces(const char* prefixList, char* names, union socketAddress *addrs, int sock_family, int maxIfNameSize, int maxIfs) {
+#ifdef ENABLE_TRACE
   char line[1024];
+#endif
   struct netIf userIfs[MAX_IFS];
   bool searchNot = prefixList && prefixList[0] == '^';
+  bool searchExact = prefixList && prefixList[0] == '=';
   int nUserIfs = parseStringList(prefixList, userIfs, MAX_IFS);
 
   int found = 0;
@@ -89,7 +93,7 @@ static int findInterfaces(const char* prefixList, char* names, union socketAddre
     }
 
     // check against user specified interfaces
-    if (!(matchIfList(interface->ifa_name, -1, userIfs, nUserIfs) ^ searchNot)) {
+    if (!(matchIfList(interface->ifa_name, -1, userIfs, nUserIfs, searchExact) ^ searchNot)) {
       continue;
     }
 
@@ -106,7 +110,6 @@ static int findInterfaces(const char* prefixList, char* names, union socketAddre
       // Store the IP address
       int salen = (family == AF_INET) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
       memcpy(addrs+found, interface->ifa_addr, salen);
-      INFO(NCCL_INIT|NCCL_NET,"NET : Using interface %s:%s", interface->ifa_name, socketToString(interface->ifa_addr, line));
       found++;
     }
   }
@@ -159,7 +162,10 @@ static bool matchSubnet(struct ifaddrs local_if, union socketAddress remote) {
 }
 
 static int findInterfaceMatchSubnet(char* ifNames, union socketAddress* localAddrs, union socketAddress remoteAddr, int ifNameMaxSize, int maxIfs) {
-  char line[1024], line_a[1024];
+#ifdef ENABLE_TRACE
+  char line[1024];
+#endif
+  char line_a[1024];
   int found = 0;
   struct ifaddrs *interfaces, *interface;
   getifaddrs(&interfaces);
@@ -183,7 +189,7 @@ static int findInterfaceMatchSubnet(char* ifNames, union socketAddress* localAdd
     // Store the interface name
     strncpy(ifNames+found*ifNameMaxSize, interface->ifa_name, ifNameMaxSize);
 
-    INFO(NCCL_INIT|NCCL_NET,"NET : Found interface %s:%s in the same subnet as remote address %s", interface->ifa_name, socketToString(&(localAddrs[found].sa), line), socketToString(&(remoteAddr.sa), line_a));
+    TRACE(NCCL_INIT|NCCL_NET,"NET : Found interface %s:%s in the same subnet as remote address %s", interface->ifa_name, socketToString(&(localAddrs[found].sa), line), socketToString(&(remoteAddr.sa), line_a));
     found++;
     if (found == maxIfs) break;
   }
@@ -336,8 +342,10 @@ static ncclResult_t createListenSocket(int *fd, union socketAddress *localAddr) 
   TRACE(NCCL_INIT|NCCL_NET,"Listening on socket %s", socketToString(&localAddr->sa, line));
 #endif
 
-  /* Put the socket in listen mode */
-  SYSCHECK(listen(sockfd, 128), "listen");
+  /* Put the socket in listen mode
+   * NB: The backlog will be silently truncated to the value in /proc/sys/net/core/somaxconn
+   */
+  SYSCHECK(listen(sockfd, 16384), "listen");
   *fd = sockfd;
   return ncclSuccess;
 }
@@ -367,14 +375,18 @@ static ncclResult_t connectAddress(int* fd, union socketAddress* remoteAddr) {
 #endif
 
   int ret;
-  int retries = 0;
+  int timedout_retries = 0;
+  int refused_retries = 0;
 retry:
   SYSCHECKSYNC(connect(*fd, &remoteAddr->sa, salen), "connect", ret);
   if (ret == 0) return ncclSuccess;
-  if (errno == ECONNREFUSED && ++retries < RETRY_TIMES) {
-    INFO(NCCL_ALL,"Call to connect returned %s, retrying", strerror(errno)); \
-    usleep(SLEEP_INT);
-    goto retry;
+  if ((errno == ECONNREFUSED || errno == ETIMEDOUT)) {
+    if ((errno == ECONNREFUSED && ++refused_retries < RETRY_REFUSED_TIMES) ||
+        (errno == ETIMEDOUT && ++timedout_retries < RETRY_TIMEDOUT_TIMES)) {
+      INFO(NCCL_ALL,"Call to connect returned %s, retrying", strerror(errno));
+      usleep(SLEEP_INT);
+      goto retry;
+    }
   }
   WARN("Connect to %s failed : %s", socketToString(&remoteAddr->sa, line), strerror(errno));
   return ncclSystemError;
@@ -382,12 +394,12 @@ retry:
 
 #define NCCL_SOCKET_SEND 0
 #define NCCL_SOCKET_RECV 1
-static ncclResult_t socketProgress(int op, int fd, void* ptr, int size, int* offset) {
+static ncclResult_t socketProgressOpt(int op, int fd, void* ptr, int size, int* offset, int block) {
   int bytes = 0;
   char* data = (char*)ptr;
   do {
-    if (op == NCCL_SOCKET_RECV) bytes = recv(fd, data+(*offset), size-(*offset), MSG_DONTWAIT);
-    if (op == NCCL_SOCKET_SEND) bytes = send(fd, data+(*offset), size-(*offset), MSG_DONTWAIT);
+    if (op == NCCL_SOCKET_RECV) bytes = recv(fd, data+(*offset), size-(*offset), block ? 0 : MSG_DONTWAIT);
+    if (op == NCCL_SOCKET_SEND) bytes = send(fd, data+(*offset), size-(*offset), block ? 0 : MSG_DONTWAIT);
     if (op == NCCL_SOCKET_RECV && bytes == 0) {
       WARN("Net : Connection closed by remote peer");
       return ncclSystemError;
@@ -405,9 +417,13 @@ static ncclResult_t socketProgress(int op, int fd, void* ptr, int size, int* off
   return ncclSuccess;
 }
 
+static ncclResult_t socketProgress(int op, int fd, void* ptr, int size, int* offset) {
+  return socketProgressOpt(op, fd, ptr, size, offset, 0);
+}
+
 static ncclResult_t socketWait(int op, int fd, void* ptr, int size, int* offset) {
   while (*offset < size)
-    NCCLCHECK(socketProgress(op, fd, ptr, size, offset));
+    NCCLCHECK(socketProgressOpt(op, fd, ptr, size, offset, 1));
   return ncclSuccess;
 }
 

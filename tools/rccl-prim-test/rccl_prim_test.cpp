@@ -425,7 +425,7 @@ int main(int argc,char* argv[])
       uint32_t linktype;
       uint32_t hopcount;
       HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
-      
+
       double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ)/(double)workgroups;
       fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
         i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));

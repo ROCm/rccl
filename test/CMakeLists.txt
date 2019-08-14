@@ -51,6 +51,8 @@ if(BUILD_TESTS)
     test_ReduceScatter.cpp
     test_GroupCalls.cpp
     test_CombinedCalls.cpp
+    test_AllReduceAbort.cpp
+    test_BroadcastAbort.cpp
   )
 
   add_executable(UnitTests ${TEST_SOURCES})
