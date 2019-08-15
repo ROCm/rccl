@@ -84,8 +84,8 @@ class ncclPrimitives {
 
   __device__ int checkAbort(volatile uint64_t* remoteOpCount) {
     spins++;
-    abort = LOAD(comm->abortFlag);
     if (spins == SPINS_BEFORE_CHECK_ABORT) {
+      abort = LOAD(comm->abortFlag);
       checkMismatch(remoteOpCount);
       spins = 0;
     }
@@ -404,8 +404,8 @@ class ncclLLPrimitives {
 
   __device__ int checkAbort(volatile uint64_t* remoteOpCount) {
     spins++;
-    abort = LOAD(comm->abortFlag);
     if (spins == SPINS_BEFORE_CHECK_ABORT) {
+      abort = LOAD(comm->abortFlag);
       checkMismatch(remoteOpCount);
       spins = 0;
     }

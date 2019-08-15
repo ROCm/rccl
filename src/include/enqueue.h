@@ -15,6 +15,7 @@
 #define NCCL_LL_CHANNEL_THRESHOLD 8 // Per thread size before we start increasing nrings
 #define NCCL_THREAD_THRESHOLD 256  // Per thread size before we switch to non-LL
 #define NCCL_THREAD_THRESHOLD_PREVOLTA 32 // Per thread size before we switch to non-LL for pre-Volta archs
+#define NCCL_THREAD_THRESHOLD_VEGA 8 // Per thread size before we switch to non-LL for VEGA
 #define NCCL_LL_MIN_NTHREADS 256
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info);

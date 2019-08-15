@@ -150,7 +150,11 @@ NCCL_PARAM(TreeThreshold, "TREE_THRESHOLD", 0);
 int ncclThreadThreshold(int minCompCap, int multiNode) {
   int threshold = ncclParamThreadThreshold();
   if (threshold == -2) { // user has not set this env variable
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+    threshold = NCCL_THREAD_THRESHOLD_VEGA;
+#else
     threshold = (minCompCap <= 6) ? NCCL_THREAD_THRESHOLD_PREVOLTA : NCCL_THREAD_THRESHOLD;
+#endif
     // multiply by 2 if running on multiple nodes
     if (multiNode) {
       threshold *= 2;
