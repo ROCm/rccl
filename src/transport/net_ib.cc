@@ -197,7 +197,7 @@ ncclResult_t ncclIbPciPath(int dev, char** path) {
 ncclResult_t ncclIbGdrSupport(int ibDev) {
   static int moduleLoaded = -1;
   if (moduleLoaded == -1) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
 #else
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/nv_mem/version", F_OK) == -1) ? 0 : 1;

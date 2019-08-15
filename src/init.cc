@@ -20,7 +20,7 @@
 #include "checks.h"
 #include "enqueue.h"
 #include "topo.h"
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #include "nvlink_stub.h"
 #else
 #include "nvlink.h"
@@ -52,7 +52,7 @@ FILE *ncclDebugFile = stdout;
 std::chrono::high_resolution_clock::time_point ncclEpoch;
 #endif
 
-#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #define NCCL_GROUP_CUDA_STREAM 0 // CGMD: CUDA 9.2,10.X Don't need to use an internal CUDA stream
 #else
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
@@ -150,7 +150,7 @@ NCCL_PARAM(TreeThreshold, "TREE_THRESHOLD", 0);
 int ncclThreadThreshold(int minCompCap, int multiNode) {
   int threshold = ncclParamThreadThreshold();
   if (threshold == -2) { // user has not set this env variable
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     threshold = NCCL_THREAD_THRESHOLD_VEGA;
 #else
     threshold = (minCompCap <= 6) ? NCCL_THREAD_THRESHOLD_PREVOLTA : NCCL_THREAD_THRESHOLD;
@@ -314,7 +314,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   comm->llThreshold = ncclParamLlThreshold();
   comm->treeThreshold = ncclParamTreeThreshold();
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
-#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   comm->groupCudaStream = ncclParamGroupCudaStream();
 #else
   // Don't allow the user to overload the default setting in older CUDA builds
@@ -355,7 +355,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 }
 
 // Pre-process the string so that running "strings" on the lib can quickly reveal the version.
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+hip"
 #else
 #define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+cuda" STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
@@ -383,7 +383,7 @@ static ncclResult_t fillInfo(struct ncclPeerInfo* info, int rank, uint64_t commH
   // NVML device number. Then we get the busID from NVML to be sure it is
   // consistent with NVML remote PCI bus Ids.
   CUDACHECK(hipDeviceGetPCIBusId(info->busId, NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE, info->cudaDev));
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
   nvmlDevice_t nvmlDevice;
   NCCLCHECK(wrapNvmlDeviceGetHandleByPciBusId(info->busId, &nvmlDevice));

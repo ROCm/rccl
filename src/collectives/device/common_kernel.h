@@ -19,7 +19,7 @@ static __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 
 typedef uint64_t PackType;
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 
 template<class FUNC, typename T>
 struct MULTI {
@@ -205,7 +205,7 @@ struct MULTI<FUNC, int64_t> {
   }
 };
 
-#endif //defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#endif //defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 
 template<typename T> inline __device__
 T vFetch(const volatile T* ptr) {
@@ -217,7 +217,7 @@ void vStore(volatile T* ptr, const T val) {
   *ptr = val;
 }
 
-#if CUDART_VERSION < 9000 && !(defined(__HIP_PLATFORM_HCC__) || defined(__HCC__))
+#if CUDART_VERSION < 9000 && !(defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__))
 template<> inline __device__
 half vFetch<half>(const volatile half* ptr) {
   half r;
@@ -254,7 +254,7 @@ struct MULTI128 {
 };
 
 inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   v.x = p->x;
   v.y = p->y;
 #else
@@ -262,7 +262,7 @@ inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
 #endif
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   p->x = v.x;
   p->y = v.y;
 #else

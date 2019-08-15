@@ -171,7 +171,7 @@ static ncclResult_t fillCoords(int nranks, int* matrix, int* coords, int* rankTo
   }
 }
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #define DEFAULT_MIN_NRINGS 2
 #elif defined(__PPC__)
 // Make the default NCCL_MIN_NRINGS=4 for IBM/Power nodes
@@ -381,7 +381,7 @@ ncclResult_t ncclGetRings(int* nrings, int* nthreads, int rank, int nranks, int*
     if (rank == 0) INFO(NCCL_INIT,"Limiting to %d rings per user request.", maxNrings);
     *nrings = maxNrings;
   } else {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     int defaultMinNrings = 1;
 #else
     int defaultMinNrings = ncclCudaCompCap() == 3 ? 2 : 1;

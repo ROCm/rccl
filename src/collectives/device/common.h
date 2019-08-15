@@ -18,7 +18,7 @@
 // Each thread sets a predicate to true if abort == 1
 // all CTA's threads enter the barrier and do a popc on their predicates being True
 // If any of the thread's predicate was True, all the threads call exit()
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #define exitIfAbortBarrier(abort, abortCount) \
   if (abort) __atomic_fetch_add(abortCount, 1, __ATOMIC_SEQ_CST); \
   __syncthreads(); \
@@ -102,7 +102,7 @@ static const __device__ constexpr ncclFunc_t ncclFuncs[]{
 
 template<unsigned short f, unsigned short l>
 struct Caller {
-  static
+  static __device__ __host__
   void call(ncclColl* const c) noexcept
   {
     constexpr unsigned short m = f + (l - f) / 2;
@@ -113,7 +113,7 @@ struct Caller {
 
 template<unsigned short f>
 struct Caller<f, f + 1>{
-  static
+  static __device__ __host__
   void call(struct ncclColl* const c) noexcept { ncclFuncs[f](&c->args); }
 };
 

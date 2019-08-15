@@ -9,7 +9,7 @@
 #define NCCL_RINGS_H_
 
 static int getDefaultThreads() {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   return 256;
 #else  // On Kepler, rings are doubled later.
   return ncclCudaCompCap() == 3 ? 128 : 256;
