@@ -13,8 +13,10 @@
 #include <unistd.h>
 #include <hip/hip_runtime.h>
 #include <ctype.h>
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #include "nvlink_stub.h"
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
 #else
 #include "nvlink.h"
 #endif
@@ -110,7 +112,7 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struc
   }
   if (p2p == 0) return ncclSuccess;
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   uint32_t link_type, hops;
   if (hipExtGetLinkTypeAndHopCount(myInfo->cudaDev, peerInfo->cudaDev, &link_type, &hops) != hipSuccess) {
     p2p = 0;
@@ -297,7 +299,7 @@ int p2pComputeRingsNvLink(ncclTvalue_t* values, int nranks, int* rings, int nrin
   }
 
   // Duplicate the rings for direct NVLink
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   compNrings = copyRings(nranks, rings, compNrings, compNrings*3);
 #else
   compNrings = copyRings(nranks, rings, compNrings, compNrings*2);

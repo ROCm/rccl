@@ -19,7 +19,7 @@ struct FuncNull {
   }
 };
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 
 //we really don't need any specializations and we don't need
 //to break things into uint32_t
@@ -180,7 +180,7 @@ static __device__ uint32_t addChar4(const uint32_t x, const uint32_t y) {
 template<>
 struct FuncSum<int8_t> {
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
@@ -198,7 +198,7 @@ struct FuncSum<int8_t> {
 template<>
 struct FuncSum<uint8_t> {
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
@@ -250,7 +250,7 @@ template<>
 struct FuncMax<int8_t> {
   union converter { uint32_t storage; char4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
@@ -276,7 +276,7 @@ template<>
 struct FuncMax<uint8_t> {
   union converter { uint32_t storage; uchar4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
@@ -303,7 +303,7 @@ template<>
 struct FuncMin<int8_t> {
   union converter { uint32_t storage; char4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
@@ -329,7 +329,7 @@ template<>
 struct FuncMin<uint8_t> {
   union converter { uint32_t storage; uchar4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
@@ -436,6 +436,6 @@ struct FuncMin<half> {
   }
 };
 
-#endif // defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#endif // defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 
 #endif // REDUCE_KERNEL_H_

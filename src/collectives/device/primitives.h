@@ -60,7 +60,7 @@ class ncclPrimitives {
   __device__ T* sendPtr(int i) { return ((T*)sendBuff[i])+sendOffset(i); }
 
   __device__ void barrier() {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     __syncthreads();
 #else
     asm volatile ("bar.sync 1, %0;" :: "r"(nthreads));
@@ -358,7 +358,7 @@ class ncclLLPrimitives {
   __device__ uint32_t recvFlag(int i) { return NCCL_LL_FLAG(recvStep[i]+1); }
   __device__ uint32_t sendFlag(int i) { return NCCL_LL_FLAG(sendStep[i]+1); }
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
   // Exit If Abort Barrier : make sure all threads exit consistently
   // Each thread sets a predicate to true if val == 1
@@ -379,7 +379,7 @@ class ncclLLPrimitives {
 #endif
 
   __device__ void barrier() {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     __syncthreads();
 #else
     asm volatile ("bar.sync 1, %0;" :: "r"(nthreads));
@@ -447,7 +447,7 @@ class ncclLLPrimitives {
     uint32_t data1, flag1, data2, flag2;
     spins = 0;
     mismatch = 0;
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     using Vec = uint32_t __attribute__((ext_vector_type(4)));
     Vec i4;
     do {
@@ -468,7 +468,7 @@ class ncclLLPrimitives {
   }
 
   __device__ __attribute__((noinline)) void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   using Vec = uint32_t __attribute__((ext_vector_type(4)));
   Vec i4;
   i4[0] = val & 0xffffffff;
@@ -529,7 +529,7 @@ class ncclLLPrimitives {
         }
       }
     }
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     exitIfAbortBarrier(abort, abortCount);
 #else
     exitIfAbortLocalBarrier();
