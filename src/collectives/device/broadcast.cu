@@ -9,6 +9,4 @@
 #include "broadcast.h"
 #include "collectives.h"
 
-#define UNROLL 4
-
 IMPL_COLL3(ncclBroadcast, copy, FuncSum, i8, int8_t, ncclCollBroadcast, ncclSum, ncclInt8);

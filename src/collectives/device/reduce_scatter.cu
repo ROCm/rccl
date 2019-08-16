@@ -9,8 +9,6 @@
 #include "reduce_scatter.h"
 #include "collectives.h"
 
-#define UNROLL 4
-
 IMPL_COLL2(ncclReduceScatter, sum,  FuncSum,  ncclCollReduceScatter, ncclSum);
 IMPL_COLL2(ncclReduceScatter, prod, FuncProd, ncclCollReduceScatter, ncclProd);
 IMPL_COLL2(ncclReduceScatter, min,  FuncMin,  ncclCollReduceScatter, ncclMin);

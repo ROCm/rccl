@@ -9,6 +9,4 @@
 #include "all_gather.h"
 #include "collectives.h"
 
-#define UNROLL 4
-
 IMPL_COLL3(ncclAllGather, copy, FuncSum, i8, int8_t, ncclCollAllGather, ncclSum, ncclInt8);
