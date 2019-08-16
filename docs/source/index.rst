@@ -7,10 +7,10 @@ Welcome to RCCL's documentation!
 ==================================
 
 .. toctree::
-   :maxdepth: 4 
+   :maxdepth: 4
    :caption: Contents:
 
-   library 
+   library
    api
    allapi
 

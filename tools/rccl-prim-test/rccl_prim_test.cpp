@@ -427,10 +427,12 @@ int main(int argc,char* argv[])
                               sizeof(struct profiling_data_t), hipMemcpyDeviceToHost,
                               stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
+
       int next_gpu = findNextGpu(ring_0, i, nGpu);
       uint32_t linktype;
       uint32_t hopcount;
       HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
+
       hipDeviceProp_t prop;
       HIPCHECK(hipGetDeviceProperties(&prop, i));
       if(prop.gcnArch == 906 ) {
@@ -441,11 +443,11 @@ int main(int argc,char* argv[])
         double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_MI100)/(double)workgroups;
         fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
           i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
-	  } else {
+	    } else {
         double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_DEFAULT)/(double)workgroups;
         fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
           i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
-	  }
+	    }
     }
     std::cout<<"***Application Level Transfer Profiling Data***"<<std::endl;
     double speed = (double)(profiling_data[0]->bytes_transferred) / (deltaSec*1.0E9);

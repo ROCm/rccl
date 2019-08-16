@@ -55,8 +55,16 @@ else()
 endif()
 
 # Setup VERSION
-set(VERSION_STRING "2.6.0")
-rocm_setup_version(VERSION ${VERSION_STRING})
+set(VERSION_STRING "2.6.0.")
+
+# Check if BUILD_NUMBER is defined in a Jenkins environment
+if($ENV{BUILD_NUMBER})
+  string(CONCAT BUILD_VERSION ${VERSION_STRING} $ENV{BUILD_NUMBER})
+else()
+  string(CONCAT BUILD_VERSION ${VERSION_STRING} "0")
+endif()
+
+rocm_setup_version(VERSION ${BUILD_VERSION} NO_GIT_TAG_VERSION)
 
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
@@ -79,27 +87,12 @@ include_directories(src/collectives)
 include_directories(src/collectives/device)
 
 set(CU_SOURCES
-    src/bootstrap.cu
-    src/collectives/all_gather.cu
-    src/collectives/all_reduce.cu
-    src/collectives/broadcast.cu
-    src/collectives/reduce.cu
-    src/collectives/reduce_scatter.cu
-    src/collectives/device/functions.cu
-    src/init.cu
-    src/misc/enqueue.cu
-    src/misc/group.cu
-    src/misc/ibvwrap.cu
-    src/misc/nvmlwrap_stub.cu
-    src/misc/rings.cu
-    src/misc/utils.cu
-    src/ring.cu
-    src/transport.cu
-    src/transport/net.cu
-    src/transport/net_ib.cu
-    src/transport/net_socket.cu
-    src/transport/p2p.cu
-    src/transport/shm.cu)
+    src/collectives/device/all_reduce.cu
+    src/collectives/device/all_gather.cu
+    src/collectives/device/reduce.cu
+    src/collectives/device/broadcast.cu
+    src/collectives/device/reduce_scatter.cu
+    src/collectives/device/functions.cu)
 
 set(CPP_SOURCES)
 foreach(filename ${CU_SOURCES})
@@ -111,20 +104,34 @@ foreach(filename ${CU_SOURCES})
   list(APPEND CPP_SOURCES ${cpp_filename})
 endforeach(filename)
 
-list(APPEND CPP_SOURCES src/collectives/device/all_gather_0.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/all_reduce_0.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/all_reduce_1.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/all_reduce_2.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/all_reduce_3.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/broadcast_0.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_0.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_1.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_2.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_3.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_scatter_0.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_scatter_1.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_scatter_2.cpp)
-list(APPEND CPP_SOURCES src/collectives/device/reduce_scatter_3.cpp)
+set(CC_SOURCES
+    src/init.cc
+    src/collectives/all_reduce.cc
+    src/collectives/all_gather.cc
+    src/collectives/reduce.cc
+    src/collectives/broadcast.cc
+    src/collectives/reduce_scatter.cc
+    src/channel.cc
+    src/misc/trees.cc
+    src/misc/rings.cc
+    src/misc/argcheck.cc
+    src/misc/group.cc
+    src/misc/utils.cc
+    src/misc/ibvwrap.cc
+    src/misc/nvmlwrap_stub.cc
+    src/misc/topo.cc
+    src/transport/net.cc
+    src/transport/net_ib.cc
+    src/transport/net_socket.cc
+    src/transport/p2p.cc
+    src/transport/shm.cc
+    src/transport.cc
+    src/bootstrap.cc
+    src/enqueue.cc)
+
+foreach(filename ${CC_SOURCES})
+  list(APPEND CPP_SOURCES ${filename})
+endforeach(filename)
 
 add_library(rccl ${CPP_SOURCES})
 
@@ -132,18 +139,20 @@ if(TRACE)
   add_definitions(-DENABLE_TRACE)
 endif()
 
+if(PROFILE)
+  add_definitions(-DENABLE_PROFILING)
+endif()
+
 target_link_libraries(rccl
   PRIVATE --amdgpu-target=gfx803
   PRIVATE --amdgpu-target=gfx900
-  PRIVATE --amdgpu-target=gfx906
-  PRIVATE --amdgpu-target=gfx908)
+  PRIVATE --amdgpu-target=gfx906)
 
 if("${HIP_COMPILER}" MATCHES "clang")
   target_compile_options(rccl
     PRIVATE --amdgpu-target=gfx803
     PRIVATE --amdgpu-target=gfx900
     PRIVATE --amdgpu-target=gfx906
-    PRIVATE --amdgpu-target=gfx908
     PRIVATE -fgpu-rdc)
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
   target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)

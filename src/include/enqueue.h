@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -11,12 +11,14 @@
 #include "core.h"
 #include "group.h"
 
-typedef ncclResult_t(*ncclFunc_t)(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t type, ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream);
+// Channels / LL tuning
+#define NCCL_LL_CHANNEL_THRESHOLD 8 // Per thread size before we start increasing nrings
+#define NCCL_THREAD_THRESHOLD 256  // Per thread size before we switch to non-LL
+#define NCCL_THREAD_THRESHOLD_PREVOLTA 32 // Per thread size before we switch to non-LL for pre-Volta archs
+#define NCCL_THREAD_THRESHOLD_VEGA 8 // Per thread size before we switch to non-LL for VEGA
+#define NCCL_LL_MIN_NTHREADS 256
 
-ncclResult_t ncclEnqueueCheck(ncclFunc_t func, const char* primName, const void* sendbuff,
-    void* recvbuff, size_t count, ncclDataType_t type, ncclRedOp_t op, int root,
-    ncclComm_t comm, hipStream_t stream);
+ncclResult_t ncclEnqueueCheck(struct ncclInfo* info);
 ncclResult_t ncclCpuBarrierIn(ncclComm_t comm, int* isLast);
 ncclResult_t ncclCpuBarrierLast(ncclComm_t comm);
 ncclResult_t ncclCpuBarrierOut(ncclComm_t comm);
