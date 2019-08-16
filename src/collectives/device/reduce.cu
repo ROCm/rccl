@@ -9,8 +9,6 @@
 #include "reduce.h"
 #include "collectives.h"
 
-#define UNROLL 4
-
 IMPL_COLL2(ncclReduce, sum,  FuncSum,  ncclCollReduce, ncclSum);
 IMPL_COLL2(ncclReduce, prod, FuncProd, ncclCollReduce, ncclProd);
 IMPL_COLL2(ncclReduce, min,  FuncMin,  ncclCollReduce, ncclMin);
