@@ -42,6 +42,13 @@ THE SOFTWARE.
 #define DOUBLECOPY_UNROLL 2
 #define REDUCECOPY_UNROLL 2
 
+#define RTC_CLOCK_FREQ_VEGA20 2.7E07
+//Right now kept the MI100 RTC frequency same as Vega20
+//as we are not aware of MI100 frequency, once we we come to know about it
+//we will update it.
+#define RTC_CLOCK_FREQ_MI100 2.7E07
+#define RTC_CLOCK_FREQ_DEFAULT 2.7E07
+
 struct transfer_data_t {
   float *dest0[MAX_WORKGROUPS]; //remote fine grain
   float *src0[MAX_WORKGROUPS];  //local fine grain
@@ -420,15 +427,27 @@ int main(int argc,char* argv[])
                               sizeof(struct profiling_data_t), hipMemcpyDeviceToHost,
                               stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
-#define RTC_CLOCK_FREQ 2.7E07
+
       int next_gpu = findNextGpu(ring_0, i, nGpu);
       uint32_t linktype;
       uint32_t hopcount;
       HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
 
-      double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ)/(double)workgroups;
-      fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
-        i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
+      hipDeviceProp_t prop;
+      HIPCHECK(hipGetDeviceProperties(&prop, i));
+      if(prop.gcnArch == 906 ) {
+        double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_VEGA20)/(double)workgroups;
+        fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
+          i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
+      } else if (prop.gcnArch == 908 ){
+        double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_MI100)/(double)workgroups;
+        fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
+          i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
+	    } else {
+        double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_DEFAULT)/(double)workgroups;
+        fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
+          i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
+	    }
     }
     std::cout<<"***Application Level Transfer Profiling Data***"<<std::endl;
     double speed = (double)(profiling_data[0]->bytes_transferred) / (deltaSec*1.0E9);
