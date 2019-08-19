@@ -43,7 +43,7 @@ THE SOFTWARE.
 #define REDUCECOPY_UNROLL 2
 
 #define RTC_CLOCK_FREQ_VEGA20 2.7E07
-//Right now kept the MI100 RTC frequency same as Vega20 
+//Right now kept the MI100 RTC frequency same as Vega20
 //as we are not aware of MI100 frequency, once we we come to know about it
 //we will update it.
 #define RTC_CLOCK_FREQ_MI100 2.7E07
