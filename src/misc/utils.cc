@@ -17,6 +17,10 @@
 
 // Convert a logical cudaDev index to the NVML device minor number
 ncclResult_t getNvmlDevice(int cudaDev, int *nvmlDev) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  // assign nmvlDev to be same as cudaDev to avoid garbage numbers
+  *nvmlDev = cudaDev;
+#else
   char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
   nvmlDevice_t nvmlDevice;
   unsigned int dev;
@@ -26,6 +30,7 @@ ncclResult_t getNvmlDevice(int cudaDev, int *nvmlDev) {
   NCCLCHECK(wrapNvmlDeviceGetMinorNumber(nvmlDevice, &dev));
 
   *nvmlDev = dev;
+#endif
 
   return ncclSuccess;
 }
