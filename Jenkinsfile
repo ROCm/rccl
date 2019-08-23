@@ -1,7 +1,7 @@
 #!/usr/bin/env groovy
 // Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
 // This shared library is available at https://github.com/ROCmSoftwarePlatform/rccl
-@Library('rocJenkins@noDocker') _
+@Library('rocJenkins') _
 
 // This is file for internal AMD use.
 // If you are interested in running your own Jenkins, please raise a github issue for assistance.
@@ -32,7 +32,7 @@ rcclCI:
 
     def rccl = new rocProject('rccl')
     // customize for project
-    rccl.paths.build_command = './install.sh -t'
+    rccl.paths.build_command = './install.sh'
 
     // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(['RCCL'], rccl)
@@ -47,10 +47,10 @@ rcclCI:
         def command = """#!/usr/bin/env bash
                   set -x
                   cd ${project.paths.project_build_prefix}
-                  LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX=${project.compiler.compiler_path} ${project.paths.build_command}
+                  LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX= ${project.paths.build_command} -t --hip-clang
                 """
 
-	  sh command
+        platform.runCommand(this,command)
     }
 
     def testCommand =
@@ -59,11 +59,11 @@ rcclCI:
 
         def command = """#!/usr/bin/env bash
                 set -x
-                cd ${project.paths.project_build_prefix}/build/release/test
-                HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
+                cd ${project.paths.project_build_prefix}
+                ${project.paths.project_build_prefix} -r --hip-clang
             """
 
-        sh command
+        platform.runCommand(this,command)
         //junit "${project.paths.project_build_prefix}/build/release/*.xml"
     }
 
@@ -79,11 +79,10 @@ rcclCI:
                       mv *.deb package/
                       sudo dpkg -i package/*.deb
                       """
-
-
-        //platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
+	platform.runCommand(this,command)
+        platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
     }
 
-    buildProjectNoDocker(rccl, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
+    buildProject(rccl, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
 
 }
