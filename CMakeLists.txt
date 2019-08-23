@@ -55,16 +55,7 @@ else()
 endif()
 
 # Setup VERSION
-set(VERSION_STRING "2.6.0.")
-
-# Check if BUILD_NUMBER is defined in a Jenkins environment
-if($ENV{BUILD_NUMBER})
-  string(CONCAT BUILD_VERSION ${VERSION_STRING} $ENV{BUILD_NUMBER})
-else()
-  string(CONCAT BUILD_VERSION ${VERSION_STRING} "0")
-endif()
-
-rocm_setup_version(VERSION ${BUILD_VERSION} NO_GIT_TAG_VERSION)
+rocm_setup_version(VERSION "2.7.0")
 
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
