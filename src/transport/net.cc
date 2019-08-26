@@ -248,7 +248,7 @@ end:
 extern bool useFineGrainVramPcie;
 
 NCCL_PARAM(NetGdrRead, "NET_GDR_READ", -2);
-NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
+NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", 0);
 
 static ncclResult_t netGetGdrSupport(int dev, int read, int* useGdr) {
   *useGdr = 0;
