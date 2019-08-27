@@ -13,6 +13,7 @@ function display_help()
     echo "    [-p|--package_build] Build RCCL package."
     echo "    [-t|--tests_build] Build unit tests, but do not run."
     echo "    [-r|--run_tests] Run unit tests (must be built already.)"
+    echo "    [--hip-clang] Build library using hip-clang compiler."
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
 }
 
@@ -26,6 +27,7 @@ build_tests=false
 run_tests=false
 build_release=true
 install_library=false
+build_hip_clang=false
 
 # #################################################
 # Parameter parsing
@@ -34,7 +36,7 @@ install_library=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,package_build,tests_build,run_tests,prefix: --options hiptr -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,package_build,tests_build,run_tests,hip-clang,prefix: --options hiptr -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -64,6 +66,9 @@ while true; do
         shift ;;
     -r|--run_tests)
         run_tests=true
+        shift ;;
+    --hip-clang)
+        build_hip_clang=true
         shift ;;
     --prefix)
         install_prefix=${2}
@@ -97,7 +102,6 @@ else
     mkdir -p debug; cd debug
 fi
 
-
 # build type
 if [[ "${build_release}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Release"
@@ -105,10 +109,23 @@ else
     cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug"
 fi
 
-if ($build_tests); then
-    CXX=$rocm_path/hcc cmake -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+compiler=hcc
+if [[ "${build_hip_clang}" == true ]]; then
+    compiler=hipcc
+fi
+
+cmake_executable=cmake
+if [[ -e /etc/redhat-release ]]; then
+    yum install chrpath libgomp
+    cmake_executable=cmake3
 else
-    CXX=$rocm_path/hcc cmake -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+    apt install chrpath libomp-dev
+fi
+
+if ($build_tests); then
+    CXX=$rocm_path/$compiler $cmake_executable -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+else
+    CXX=$rocm_path/$compiler $cmake_executable -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 fi
 
 if ($install_library); then
