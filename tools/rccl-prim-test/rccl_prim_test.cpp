@@ -42,6 +42,13 @@ THE SOFTWARE.
 #define DOUBLECOPY_UNROLL 2
 #define REDUCECOPY_UNROLL 2
 
+
+
+#define RST  "\x1B[0m"
+#define KBLU  "\x1B[34m"
+#define FBLU(x) KBLU x RST
+#define BOLD(x) "\x1B[1m" x RST
+
 #define RTC_CLOCK_FREQ_VEGA20 2.7E07
 //Right now kept the MI100 RTC frequency same as Vega20
 //as we are not aware of MI100 frequency, once we we come to know about it
@@ -61,13 +68,23 @@ struct transfer_data_t {
 };
 
 struct profiling_data_t {
-  uint64_t write_cycles;
-  uint64_t bytes_transferred;
+  uint64_t write_cycles[MAX_WORKGROUPS];
+  uint64_t bytes_transferred[MAX_WORKGROUPS];
 };
 
 
 #define LOAD(VAR) __atomic_load_n((VAR), __ATOMIC_SEQ_CST)
 #define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+
+void print_table_header(void) {
+  fprintf(stderr, "%120s","=================================================================================================================================\n");
+  fprintf(stderr, "%-20s %-13s %-13s %-13s %-13s %-20s %-20s\n","[Originating GPU]", "[Directions]", "[WorkGroup]", "[linktype]", "[time(sec)]" , "[bytes_transferred]",  "[kernel throughput(GB/s)]");
+  fprintf(stderr, "%120s","=================================================================================================================================\n");
+}
+
+void print_table_summary_line(void) {
+  fprintf(stderr, "%120s","---------------------------------------------------------------------------------------------------------------------------------\n");
+}
 
 enum Ops {
   OP_COPY,
@@ -110,8 +127,8 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   __syncthreads();
   if (idx == 0) {
     next_time = clock64();
-    __atomic_fetch_add(&(profiling_data->write_cycles), next_time - curr_time, __ATOMIC_SEQ_CST);
-    __atomic_fetch_add(&(profiling_data->bytes_transferred), n * sizeof(float), __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&(profiling_data->write_cycles[bid]), next_time - curr_time, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&(profiling_data->bytes_transferred[bid]), n * sizeof(float), __ATOMIC_SEQ_CST);
   }
 }
 
@@ -376,9 +393,9 @@ int main(int argc,char* argv[])
   uint64_t opCount = 0;
   for (int op = begin_op; op < end_op; op ++) {
     const char *OpsName[] = {"Copy", "Local Copy", "Double Copy", "Reduce", "ReduceCopy"};
-    printf("[Testing %s]: \n", OpsName[op]);
-    // 2 warm up cycles
-    for (int i = 0; i < 2; i ++) {
+    printf("\n[Testing %s]: \n", OpsName[op]);
+    // 4 warm up cycles
+    for (int i = 0; i < 4; i ++) {
       for (int i = 0; i < nGpu; i ++) {
         HIPCHECK(hipSetDevice(i));
         //launch the kernel
@@ -420,38 +437,71 @@ int main(int argc,char* argv[])
 
     auto delta = std::chrono::high_resolution_clock::now() - start;
     double deltaSec = std::chrono::duration_cast<std::chrono::duration<double>>(delta).count();
-
-    std::cout<<"***GPU to GPU Transfer Profiling Data***"<<std::endl;
+    std::cout << BOLD(FBLU("[GPU to GPU Transfer Profiling Data]"))<<std::endl;
+    print_table_header();
     for (int i = 0; i < nGpu; i ++) {
       HIPCHECK(hipMemcpyAsync(profiling_data[i], d_profiling_data[i],
                               sizeof(struct profiling_data_t), hipMemcpyDeviceToHost,
                               stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
 
-      int next_gpu = findNextGpu(ring_0, i, nGpu);
-      uint32_t linktype;
-      uint32_t hopcount;
-      HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
+      uint64_t write_cycle = 0;
+      uint64_t bytes_transferred = 0;
 
       hipDeviceProp_t prop;
       HIPCHECK(hipGetDeviceProperties(&prop, i));
+      for (int j = 0; j < workgroups; j++) {
+        int next_gpu;
+        if (j%2)
+          next_gpu = findNextGpu(ring_1, i, nGpu);
+        else
+          next_gpu = findNextGpu(ring_0, i, nGpu);
+
+        uint32_t linktype;
+        uint32_t hopcount;
+        HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
+
+
+        if(prop.gcnArch == 906 ) {
+	  write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
+	  bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+          double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
+          fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+            i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
+        } else if (prop.gcnArch == 908 ){
+	  write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
+	  bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+          double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_MI100);
+          fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+            i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
+	} else {
+	  write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
+	  bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+          double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_DEFAULT);
+          fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+            i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
+	}
+      }
+      print_table_summary_line();
+      double total = 0;
       if(prop.gcnArch == 906 ) {
-        double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_VEGA20)/(double)workgroups;
-        fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
-          i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
-      } else if (prop.gcnArch == 908 ){
-        double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_MI100)/(double)workgroups;
-        fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
-          i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
-	    } else {
-        double t0 = (double)profiling_data[i]->write_cycles/((double)RTC_CLOCK_FREQ_DEFAULT)/(double)workgroups;
-        fprintf(stderr, "[GPU %d -> GPU %d][%s]:time %.4fs bytes_transferred %lu kernel throughput %.2f GB/s\n",
-          i, next_gpu,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred, (double)profiling_data[i]->bytes_transferred/(t0*1.0E9));
-	    }
+        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_VEGA20)/(double)workgroups;
+      }else if (prop.gcnArch == 908 ){
+        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_MI100)/(double)workgroups;
+      } else {
+        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_DEFAULT)/(double)workgroups;
+      }
+      fprintf(stderr, " %-61s %-13.4f  %-20lu  %-.2f\n",
+             "Total" , total, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
+      print_table_summary_line();
     }
-    std::cout<<"***Application Level Transfer Profiling Data***"<<std::endl;
-    double speed = (double)(profiling_data[0]->bytes_transferred) / (deltaSec*1.0E9);
-    printf("Transfered %lu bytes in %f s. Throughput %f GB/s\n", profiling_data[0]->bytes_transferred, deltaSec, speed);
+    std::cout << BOLD(FBLU("[Application Level Transfer Profiling Data]"))<<std::endl;
+
+      uint64_t total_bytes_transferred = profiling_data[0]->bytes_transferred[0] * workgroups ;
+      print_table_summary_line();
+      fprintf(stderr, " %-61s %-13.4f  %-20lu  %-.2f\n",
+             "Total" , deltaSec, total_bytes_transferred, (double)total_bytes_transferred/(deltaSec*1.0E9));
+      print_table_summary_line();
   }
 
   for (int i = 0; i < nGpu; i ++) {
