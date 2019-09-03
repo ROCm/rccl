@@ -92,6 +92,7 @@ enum Ops {
   OP_DOUBLECOPY,
   OP_REDUCE,
   OP_REDUCECOPY,
+  OP_READ,
   NUM_OPS,
 };
 
@@ -123,7 +124,9 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   if (op == OP_DOUBLECOPY) DoubleCopy<DOUBLECOPY_UNROLL, THREADS, float>(transfer_data->dest0[bid], transfer_data->dest1[bid], transfer_data->src0[bid], n);
   if (op == OP_REDUCE) Reduce<REDUCE_UNROLL, THREADS, float>(transfer_data->dest0[bid], transfer_data->src0[bid], transfer_data->src1[bid], n);
   if (op == OP_REDUCECOPY) ReduceCopy<REDUCECOPY_UNROLL, THREADS, float>(transfer_data->dest0[bid], transfer_data->dest1[bid], transfer_data->src0[bid], transfer_data->src1[bid], n);
-
+  // Swapped the dest0 and src0 in passed parameter of copy kernel so that it can utilized for as a read kernel.
+  // fetch op will happen on transfer_data->dest0[bid] and store op will happen on transfer_data->src0[bid]
+  if (op == OP_READ) Copy<COPY_UNROLL, THREADS, float>(transfer_data->src0[bid],transfer_data->dest0[bid], n);
   __syncthreads();
   if (idx == 0) {
     next_time = clock64();
@@ -145,6 +148,8 @@ static flag_sync_kernel_t const flagSyncKerns[NUM_OPS*2] = {
   flag_sync_kernel<OP_REDUCE, 1>,
   flag_sync_kernel<OP_REDUCECOPY, 0>,
   flag_sync_kernel<OP_REDUCECOPY, 1>,
+  flag_sync_kernel<OP_READ, 0>,
+  flag_sync_kernel<OP_READ, 1>,
 };
 
 __global__ void initTestDataKernel(float* data, const size_t N, const int gpu) {
@@ -294,9 +299,9 @@ int main(int argc,char* argv[])
     sync = atol(s);
   if (sync) printf("Sync all GPUs before operation\n");
 
-  const char *ops[] = {"copy", "localcopy", "doublecopy", "reduce", "reducecopy", "all"};
+  const char *ops[] = {"copy", "localcopy", "doublecopy", "reduce", "reducecopy", "read", "all"};
   char *prim = getCmdOption(argv, argv + argc, "-p");
-  int op = 5, begin_op, end_op;
+  int op = NUM_OPS, begin_op, end_op;
   if (prim) {
     for (op = 0; op < sizeof(ops); op++)
       if (!strcmp((const char *)prim, ops[op]))
@@ -315,8 +320,8 @@ int main(int argc,char* argv[])
   // Enable peer access
   setupPeers(connection_info);
   // clockwise and counter clockwise rings
-  int ring_0[MAX_GPU] = {-1, -1, -1, -1};
-  int ring_1[MAX_GPU] = {-1, -1, -1, -1};
+  int ring_0[MAX_GPU] = {-1, -1, -1, -1,-1, -1, -1, -1};
+  int ring_1[MAX_GPU] = {-1, -1, -1, -1,-1, -1, -1, -1};
   setupRings(connection_info, ring_0, ring_1);
 
   // data buffers
@@ -392,7 +397,7 @@ int main(int argc,char* argv[])
 
   uint64_t opCount = 0;
   for (int op = begin_op; op < end_op; op ++) {
-    const char *OpsName[] = {"Copy", "Local Copy", "Double Copy", "Reduce", "ReduceCopy"};
+    const char *OpsName[] = {"Copy", "Local Copy", "Double Copy", "Reduce", "ReduceCopy","read"};
     printf("\n[Testing %s]: \n", OpsName[op]);
     // 4 warm up cycles
     for (int i = 0; i < 4; i ++) {
