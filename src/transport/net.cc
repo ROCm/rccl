@@ -333,7 +333,7 @@ ncclResult_t netRecvSetup(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peer
   int recvSize = offsetof(struct ncclRecvMem, buff)+buffSize;
   if (resources->useGdr) {
     NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize, true));
-    CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
+    CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, cudaDev));
   }
   NCCLCHECK(ncclCudaHostAlloc((void**)&resources->hostRecvMem, (void**)&resources->devHostRecvMem, recvSize));
   resources->buffSize = buffSize;
