@@ -137,13 +137,15 @@ endif()
 target_link_libraries(rccl
   PRIVATE --amdgpu-target=gfx803
   PRIVATE --amdgpu-target=gfx900
-  PRIVATE --amdgpu-target=gfx906)
+  PRIVATE --amdgpu-target=gfx906
+  PRIVATE --amdgpu-target=gfx908)
 
 if("${HIP_COMPILER}" MATCHES "clang")
   target_compile_options(rccl
     PRIVATE --amdgpu-target=gfx803
     PRIVATE --amdgpu-target=gfx900
     PRIVATE --amdgpu-target=gfx906
+    PRIVATE --amdgpu-target=gfx908
     PRIVATE -fgpu-rdc)
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
   target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
