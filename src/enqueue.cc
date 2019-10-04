@@ -17,7 +17,8 @@
   NCCL_KERN_NAME(coll##LL, op, dtype)
 
 #define NCCL_FUNC4(coll, op, dtype) \
-  NCCL_FUNC5(coll##Ring, op, dtype)
+  NCCL_FUNC5(coll##Ring, op, dtype), \
+  NCCL_FUNC5(coll##Tree, op, dtype)
 
 // Must be consistent with ncclDataType_t
 #define NCCL_FUNCS3A(coll, op) \
@@ -55,7 +56,7 @@
 
 typedef void(*ncclKern_t)(struct ncclColl);
 // Must be consistent with the ncclFuncSet enum
-static ncclKern_t const ncclKerns[ncclCollCount*ncclNumOps*ncclNumTypes*2] = {
+static ncclKern_t const ncclKerns[ncclCollCount*ncclNumOps*ncclNumTypes*2*2] = {
   NCCL_FUNCS2B(ncclBroadcast),
   NCCL_FUNCS2A(ncclReduce),
   NCCL_FUNCS2B(ncclAllGather),
