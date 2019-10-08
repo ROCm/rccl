@@ -35,7 +35,7 @@ rcclCI:
     rccl.paths.build_command = './install.sh'
 
     // Define test architectures, optional rocm version argument is available
-    def nodes = new dockerNodes(['RCCL && ubuntu', 'RCCL && centos7'], rccl)
+    def nodes = new dockerNodes(['rccl && ubuntu', 'rccl && centos7'], rccl)
 
     boolean formatCheck = false
 
