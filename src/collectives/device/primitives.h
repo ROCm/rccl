@@ -193,10 +193,11 @@ class ncclPrimitives {
       if (SEND) __threadfence_system();
       if (tid == 0) FOR_SEND(postSend);
       if (tid == 0) FOR_RECV(postRecv);
+
+      for (int i=0; i<RECV*NRECV+SRC; i++) srcs[i] += sliceSize;
+      for (int i=0; i<SEND*NSEND+DST; i++) dsts[i] += sliceSize;
+      offset += sliceSize;
     }
-    for (int i=0; i<RECV*NRECV+SRC; i++) srcs[i] += sliceSize;
-    for (int i=0; i<SEND*NSEND+DST; i++) dsts[i] += sliceSize;
-    offset += sliceSize;
   }
 
   __device__ void loadRecvConn(struct ncclConnInfo* conn, int i, T* directBuff) {
