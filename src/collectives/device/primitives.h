@@ -189,10 +189,13 @@ class ncclPrimitives {
         }
       }
       exitIfAbortBarrier(abort, abortCount);
-      if (tid == 0) FOR_SEND(postSendSize, realSize*sizeof(T));
-      if (SEND) __threadfence_system();
-      if (tid == 0) FOR_SEND(postSend);
-      if (tid == 0) FOR_RECV(postRecv);
+      if (tid == 0)
+      {
+        FOR_SEND(postSendSize, realSize*sizeof(T));
+        __threadfence_system();
+        FOR_SEND(postSend);
+        FOR_RECV(postRecv);
+      }
 
       for (int i=0; i<RECV*NRECV+SRC; i++) srcs[i] += sliceSize;
       for (int i=0; i<SEND*NSEND+DST; i++) dsts[i] += sliceSize;
