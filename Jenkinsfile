@@ -59,7 +59,7 @@ rcclCI:
 
         def command = """#!/usr/bin/env bash
                 set -x
-                cd ${project.paths.project_build_prefix}/test/
+                cd ${project.paths.project_build_prefix}/build/release/test/
                 HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
             """
 
@@ -73,7 +73,7 @@ rcclCI:
 
         def command = """
                       set -x
-                      cd ${project.paths.project_build_prefix}/build
+                      cd ${project.paths.project_build_prefix}/build/release
                       make package
                       rm -rf package && mkdir -p package
                       mv *.deb package/
