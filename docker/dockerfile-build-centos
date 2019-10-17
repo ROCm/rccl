@@ -21,7 +21,7 @@ RUN yum install -y \
     git \
     cmake3 \
     make \
-    libgomp-dev \
+    libgomp \
     clang \
     clang-devel \
     gcc-c++ \
