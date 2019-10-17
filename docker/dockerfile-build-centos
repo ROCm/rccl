@@ -12,6 +12,7 @@ ARG user_uid
 # Install dependent packages
 RUN yum install -y \
     sudo \
+    chrpath \
     rock-dkms \
     rocm-cmake \
     centos-release-scl \
