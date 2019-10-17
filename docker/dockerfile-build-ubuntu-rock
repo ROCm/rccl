@@ -23,6 +23,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     pkg-config \
     python2.7 \
     python-yaml \
+    rocm-cmake \
     libboost-program-options-dev \
     libnuma1 \
     && \
