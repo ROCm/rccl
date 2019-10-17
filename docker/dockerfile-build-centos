@@ -13,6 +13,7 @@ ARG user_uid
 RUN yum install -y \
     sudo \
     rock-dkms \
+    rocm-cmake \
     centos-release-scl \
     devtoolset-7 \
     ca-certificates \
