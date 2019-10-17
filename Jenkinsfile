@@ -60,7 +60,7 @@ rcclCI:
         def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}
-                ${project.paths.project_build_prefix} -r --hip-clang
+                HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
             """
 
         platform.runCommand(this,command)
