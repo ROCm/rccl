@@ -77,7 +77,6 @@ rcclCI:
                       make package
                       rm -rf package && mkdir -p package
                       mv *.deb package/
-                      dpkg -i package/*.deb
                       """
 	platform.runCommand(this,command)
         platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
