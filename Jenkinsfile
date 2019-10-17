@@ -47,7 +47,7 @@ rcclCI:
         def command = """#!/usr/bin/env bash
                   set -x
                   cd ${project.paths.project_build_prefix}
-                  LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX= ${project.paths.build_command} -t --hip-clang
+                  LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX= ${project.paths.build_command} -t
                 """
 
         platform.runCommand(this,command)
