@@ -1,6 +1,6 @@
-# This Dockerfile provides a starting point for a ROCm installation of rocRAND.
+# This Dockerfile provides a starting point for a ROCm installation of rccl
 
-# Parameters related to building rocRAND
+# Parameters related to building rccl
 ARG base_image
 
 FROM ${base_image}
