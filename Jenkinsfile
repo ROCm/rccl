@@ -79,7 +79,7 @@ rcclCI:
                       mv *.deb package/
                       """
 	platform.runCommand(this,command)
-        platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/package/*.deb""")
+        platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/release/package/*.deb""")
     }
 
     buildProject(rccl, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
