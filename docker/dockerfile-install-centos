@@ -1,0 +1,7 @@
+# Parameters related to building rccl
+ARG base_image
+
+FROM ${base_image}
+LABEL maintainer="rccl-maintainer@amd.com"
+
+#empty for now
