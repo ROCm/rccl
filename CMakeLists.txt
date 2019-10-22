@@ -6,6 +6,8 @@ set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
 
 project(rccl CXX)
 
+set(AMDGPU_TARGETS gfx803;gfx900;gfx906;gfx908 CACHE STRING "List of specific machine types for library to target")
+
 find_package(ROCM
              REQUIRED
              PATHS
@@ -134,19 +136,14 @@ if(PROFILE)
   add_definitions(-DENABLE_PROFILING)
 endif()
 
-target_link_libraries(rccl
-  PRIVATE --amdgpu-target=gfx803
-  PRIVATE --amdgpu-target=gfx900
-  PRIVATE --amdgpu-target=gfx906
-  PRIVATE --amdgpu-target=gfx908)
+foreach(target ${AMDGPU_TARGETS})
+target_link_libraries(rccl PRIVATE --amdgpu-target=${target})
+endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
-  target_compile_options(rccl
-    PRIVATE --amdgpu-target=gfx803
-    PRIVATE --amdgpu-target=gfx900
-    PRIVATE --amdgpu-target=gfx906
-    PRIVATE --amdgpu-target=gfx908
-    PRIVATE -fgpu-rdc)
+  foreach(target ${AMDGPU_TARGETS})
+    target_compile_options(rccl PRIVATE --amdgpu-target=${target} PRIVATE -fgpu-rdc)
+  endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
   target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
 endif()
