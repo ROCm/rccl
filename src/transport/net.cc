@@ -547,8 +547,8 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
             if (resources->useGdr) {
               ncclNetFlush(resources->netRecvComm, localBuff+buffSlot*stepSize, size, mhandle);
               // Flush local HDP register after local read-back finishes
-              STORE(resources->curr_hdp_reg, 0x1);
-              TRACE(NCCL_NET, "Flushing GPU memory via HDP %p", resources->curr_hdp_reg);
+              //STORE(resources->curr_hdp_reg, 0x1);
+              //TRACE(NCCL_NET, "Flushing GPU memory via HDP %p", resources->curr_hdp_reg);
             }
             STORE(&resources->hostRecvMem->tail, args->head);
           }
