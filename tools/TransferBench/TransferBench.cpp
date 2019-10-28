@@ -46,7 +46,12 @@ int main(int argc, char **argv)
         printf("      would define 2 links each using 3 threadblocks from GPU0 -> GPU1, and GPU1->GPU0\n");
         printf("- N: (Optional) Number of bytes to transfer per link.\n");
         printf("     If not specified, defaults to 2^28=256MB. Must be a multiple of 128 bytes\n");
-        printf("Set env var USE_MEMCPY_ASYNC to use hipMemcpyAsync instead of copy kernel\n");
+        printf("\n");
+        printf("Environment variables:\n");
+        printf("======================\n");
+        printf(" USE_HIP_CALL   - Use hip calls (hipMemcpyAsync/hipMemset) instead of kernel\n");
+        printf(" USE_MEMSET     - Write constant value (instead of doing a copy)\n");
+        printf(" USE_COARSE_MEM - Use coarse-grained dst GPU memory (instead of fine-grained)\n");
         exit(0);
     }
 
@@ -58,16 +63,30 @@ int main(int argc, char **argv)
         printf("[ERROR] numBytesPerLink (%lu) must be a multiple of 128\n", numBytesPerLink);
         exit(1);
     }
+    printf("Operating on %zu bytes per link (%zu floats)\n", numBytesPerLink, N);
+
+    bool useHipCall = getenv("USE_HIP_CALL");
+    bool useMemset  = getenv("USE_MEMSET");
+    bool useCoarseMem = getenv("USE_COARSE_MEM");
+    printf("Running %s%s tests (control using USE_HIP_CALL/USE_MEMSET)\n",
+           useHipCall ? "hipMem" : "mem",
+           useMemset ? "set" : "cpy");
+    printf("Destination memory: %s-grained (control using USE_COARSE_MEM)\n",
+           useCoarseMem ? "coarse" : "fine");
+    if (useHipCall && !useMemset)
+    {
+      if (getenv("HSA_ENABLE_SDMA") && !strcmp(getenv("HSA_ENABLE_SDMA"), "0"))
+        printf("Using blit kernels for hipMemcpy. (HSA_ENABLE_SDMA=0)\n");
+      else
+        printf("Using DMA copy engines (disable by setting HSA_ENABLE_SDMA=0)\n");
+    }
 
     // Currently an environment variable is required in order to enable fine-grained VRAM allocations
-    if (!getenv("HSA_FORCE_FINE_GRAIN_PCIE"))
+    if (!useCoarseMem && !getenv("HSA_FORCE_FINE_GRAIN_PCIE"))
     {
         printf("[ERROR] Currently you must set HSA_FORCE_FINE_GRAIN_PCIE=1 prior to execution\n");
         exit(1);
     }
-
-    bool useMemcpy = getenv("USE_MEMCPY_ASYNC");
-    printf("Using %s\n", useMemcpy ? "hipMemcpyAsync (USE_MEMCPY_ASYNC found) [# of blocks to use will be ignored]" : "copy kernel (USE_MEMCPY_ASYNC not found)");
 
     // Collect the number of available GPUs on this machine
     int numDevices;
@@ -160,11 +179,14 @@ int main(int argc, char **argv)
             HIP_CALL(hipEventCreate(&stopEvents[i]));
             HIP_CALL(hipMalloc((void **)&linkSrcMem[i], numBytesPerLink));
             HIP_CALL(hipMalloc((void**)&gpuBlockParams[i], sizeof(BlockParam) * numLinks));
-            CheckOrFill(N, linkSrcMem[i], false);
+            CheckOrFill(N, linkSrcMem[i], false, useMemset, useHipCall);
 
-            // Allocate fine-grained GPU memory on destination GPU
+            // Allocate GPU memory on destination GPU
             HIP_CALL(hipSetDevice(links[i].dstGpu));
-            HIP_CALL(hipExtMallocWithFlags((void**)&linkDstMem[i], numBytesPerLink, hipDeviceMallocFinegrained));
+            if (useCoarseMem)
+              HIP_CALL(hipMalloc((void**)&linkDstMem[i], numBytesPerLink));
+            else
+              HIP_CALL(hipExtMallocWithFlags((void**)&linkDstMem[i], numBytesPerLink, hipDeviceMallocFinegrained));
 
             // Each block needs to know src/dst pointers and how many elements to transfer
             // Figure out the sub-array each block does for this link
@@ -203,20 +225,39 @@ int main(int argc, char **argv)
             {
                 HIP_CALL(hipSetDevice(links[i].srcGpu));
                 HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
-                if (useMemcpy)
+                if (useHipCall)
                 {
+                  if (useMemset)
+                  {
+                    HIP_CALL(hipMemsetAsync(linkDstMem[i], 42, numBytesPerLink, streams[i]));
+                  }
+                  else
+                  {
                     HIP_CALL(hipMemcpyAsync(linkDstMem[i], linkSrcMem[i],
                                             numBytesPerLink, hipMemcpyDeviceToDevice,
                                             streams[i]));
+                  }
                 }
                 else
                 {
+                  if (useMemset)
+                  {
+                    hipLaunchKernelGGL(MemsetKernel,
+                                       dim3(links[i].numBlocksToUse, 1, 1),
+                                       dim3(BLOCKSIZE, 1, 1),
+                                       0,
+                                       streams[i],
+                                       gpuBlockParams[i]);
+                  }
+                  else
+                  {
                     hipLaunchKernelGGL(CopyKernel,
                                        dim3(links[i].numBlocksToUse, 1, 1),
                                        dim3(BLOCKSIZE, 1, 1),
                                        0,
                                        streams[i],
                                        gpuBlockParams[i]);
+                  }
                 }
                 HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
             }
@@ -255,7 +296,7 @@ int main(int argc, char **argv)
 
         // Validate that each link has transferred correctly
         for (int i = 0; i < numLinks; i++)
-            CheckOrFill(N, linkDstMem[i], true);
+          CheckOrFill(N, linkDstMem[i], true, useMemset, useHipCall);
 
         // Report timings
         printf("%-*s", MAX_NAME_LEN, name);
