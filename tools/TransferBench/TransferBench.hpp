@@ -35,6 +35,7 @@ THE SOFTWARE.
 #define MAX_NAME_LEN 64
 #define BLOCKSIZE 256
 #define COPY_UNROLL 4
+#define MEMSET_UNROLL 4
 
 // Each link is defined between a source GPU and destination GPU
 struct Link
@@ -64,6 +65,22 @@ CopyKernel(BlockParam* blockParams)
     Copy<COPY_UNROLL, BLOCKSIZE>(dst, src, N);
 }
 
+// GPU set kernel
+__global__ void __launch_bounds__(BLOCKSIZE)
+MemsetKernel(BlockParam* blockParams)
+{
+    // Collect the arguments for this block
+    int N = blockParams[blockIdx.x].N;
+    float* __restrict__ dst = (float*)blockParams[blockIdx.x].dst;
+
+    // Use non-zero value
+    #pragma unroll MEMSET_UNROLL
+    for (int tid = threadIdx.x; tid < N; tid += BLOCKSIZE)
+    {
+      dst[tid] = 1234.0;
+    }
+}
+
 // Helper function to parse a link of link definitions
 void ParseLinks(char const* line, std::vector<Link>& links)
 {
@@ -83,12 +100,27 @@ void ParseLinks(char const* line, std::vector<Link>& links)
 }
 
 // Helper function to either fill a device pointer with pseudo-random data, or to check to see if it matches
-void CheckOrFill(int N, float* devPtr, bool doCheck)
+void CheckOrFill(int N, float* devPtr, bool doCheck, bool isMemset, bool isHipCall)
 {
     float* refBuffer = (float*)malloc(N * sizeof(float));
 
-    for (int i = 0; i < N; i++)
-        refBuffer[i] = i % 383 + 31;
+    if (isMemset)
+    {
+      if (isHipCall)
+      {
+        memset(refBuffer, 42, N * sizeof(float));
+      }
+      else
+      {
+        for (int i = 0; i < N; i++)
+          refBuffer[i] = 1234.0f;
+      }
+    }
+    else
+    {
+      for (int i = 0; i < N; i++)
+        refBuffer[i] = (i % 383 + 31);
+    }
 
     if (doCheck)
     {
