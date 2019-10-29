@@ -49,9 +49,10 @@ int main(int argc, char **argv)
         printf("\n");
         printf("Environment variables:\n");
         printf("======================\n");
-        printf(" USE_HIP_CALL   - Use hip calls (hipMemcpyAsync/hipMemset) instead of kernel\n");
-        printf(" USE_MEMSET     - Write constant value (instead of doing a copy)\n");
-        printf(" USE_COARSE_MEM - Use coarse-grained dst GPU memory (instead of fine-grained)\n");
+        printf(" USE_HIP_CALL    - Use hip calls (hipMemcpyAsync/hipMemset) instead of kernel\n");
+        printf(" USE_MEMSET      - Write constant value (instead of doing a copy)\n");
+        printf(" USE_COARSE_MEM  - Use coarse-grained dst GPU memory (instead of fine-grained)\n");
+        printf(" USE_SINGLE_SYNC - Only synchronize once at end of iterations (disables GPU times)\n");
         exit(0);
     }
 
@@ -68,6 +69,8 @@ int main(int argc, char **argv)
     bool useHipCall = getenv("USE_HIP_CALL");
     bool useMemset  = getenv("USE_MEMSET");
     bool useCoarseMem = getenv("USE_COARSE_MEM");
+    bool useSingleSync = getenv("USE_SINGLE_SYNC");
+
     printf("Running %s%s tests (control using USE_HIP_CALL/USE_MEMSET)\n",
            useHipCall ? "hipMem" : "mem",
            useMemset ? "set" : "cpy");
@@ -80,6 +83,10 @@ int main(int argc, char **argv)
       else
         printf("Using DMA copy engines (disable by setting HSA_ENABLE_SDMA=0)\n");
     }
+    if (useSingleSync)
+      printf("Synchronizing only once, after all iterations (disables GPU timers)\n");
+    else
+      printf("Synchronizing per iteration  (disable via USE_SINGLE_SYNC)\n");
 
     // Currently an environment variable is required in order to enable fine-grained VRAM allocations
     if (!useCoarseMem && !getenv("HSA_FORCE_FINE_GRAIN_PCIE"))
@@ -224,7 +231,10 @@ int main(int argc, char **argv)
             for (int i = 0; i < numLinks; i++)
             {
                 HIP_CALL(hipSetDevice(links[i].srcGpu));
-                HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
+
+                if (!useSingleSync)
+                  HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
+
                 if (useHipCall)
                 {
                   if (useMemset)
@@ -259,11 +269,17 @@ int main(int argc, char **argv)
                                        gpuBlockParams[i]);
                   }
                 }
-                HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
+                if (!useSingleSync)
+                  HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
             }
 
-            for (int i = 0; i < numLinks; i++)
+            // Synchronize per iteration, unless in single sync mode, in which case
+            // synchronize during last warmup / last actual iteration
+            if (!useSingleSync || iteration == -1  || iteration == numIterations - 1)
+            {
+              for (int i = 0; i < numLinks; i++)
                 hipStreamSynchronize(streams[i]);
+            }
 
             auto cpuDelta = std::chrono::high_resolution_clock::now() - cpuStart;
             double deltaSec = std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count();
@@ -274,25 +290,33 @@ int main(int argc, char **argv)
 
                 for (int i = 0; i < numDevices; i++)
                 {
+                  if (useSingleSync)
+                  {
+                    totalGpuTime[i] = 0.00;
+                  }
+                  else
+                  {
                     // Multiple links running on the same device may be running simultaneously
                     // so try to figure out the first/last event across all links
                     float maxTime = 0.0f;
                     for (int j = 0; j < numLinks; j++)
                     {
-                        if (links[j].srcGpu != i) continue;
-                        for (int k = 0; k < numLinks; k++)
-                        {
-                            if (links[k].srcGpu != i) continue;
+                      if (links[j].srcGpu != i) continue;
+                      for (int k = 0; k < numLinks; k++)
+                      {
+                        if (links[k].srcGpu != i) continue;
 
-                            float gpuDeltaMsec;
-                            HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvents[j], stopEvents[k]));
-                            maxTime = std::max(maxTime, gpuDeltaMsec);
-                        }
+                        float gpuDeltaMsec;
+                        HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvents[j], stopEvents[k]));
+                        maxTime = std::max(maxTime, gpuDeltaMsec);
+                      }
                     }
                     totalGpuTime[i] += maxTime / 1000.0;
+                  }
                 }
             }
         }
+
 
         // Validate that each link has transferred correctly
         for (int i = 0; i < numLinks; i++)
