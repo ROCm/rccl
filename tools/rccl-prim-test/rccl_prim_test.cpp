@@ -34,7 +34,7 @@ THE SOFTWARE.
 #include "copy_kernel.h"
 
 #define MAX_GPU 8
-#define MAX_WORKGROUPS 8
+#define MAX_WORKGROUPS 16
 #define THREADS 256
 
 #define COPY_UNROLL       4
@@ -395,22 +395,29 @@ int main(int argc,char* argv[])
     HIPCHECK(hipStreamSynchronize(stream[i]));
   }
 
+  void *args[MAX_GPU*3];
+  hipLaunchParams *launchParamsList= reinterpret_cast<hipLaunchParams *>(
+            malloc(sizeof(hipLaunchParams)*MAX_GPU));
+
   uint64_t opCount = 0;
   for (int op = begin_op; op < end_op; op ++) {
-    const char *OpsName[] = {"Copy", "Local Copy", "Double Copy", "Reduce", "ReduceCopy","read"};
+    const char *OpsName[] = {"Copy", "Local Copy", "Double Copy", "Reduce", "ReduceCopy", "Read"};
     printf("\n[Testing %s]: \n", OpsName[op]);
     // 4 warm up cycles
-    for (int i = 0; i < 4; i ++) {
+    for (int j = 0; j < 4; j ++) {
       for (int i = 0; i < nGpu; i ++) {
-        HIPCHECK(hipSetDevice(i));
-        //launch the kernel
-        hipLaunchKernelGGL(flagSyncKerns[op*2 + sync],
-            /*grid dim x,y,z*/        dim3(workgroups, 1, 1),
-            /*block dim x,y,z*/       dim3(THREADS, 1, 1),
-            /*dynamic shared mem*/    0,
-            /*stream*/                stream[i],
-            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+        args[i*3] = &transfer_data[i];
+        args[i*3+1] = &d_profiling_data[i];
+        args[i*3+2] = &opCount;
+        launchParamsList[i].func =
+                reinterpret_cast<void *>(flagSyncKerns[op*2 + sync]);
+        launchParamsList[i].gridDim   = dim3(workgroups, 1, 1),
+        launchParamsList[i].blockDim  = dim3(THREADS, 1, 1),
+        launchParamsList[i].sharedMem = 0;
+        launchParamsList[i].stream    = stream[i];
+        launchParamsList[i].args      = args + i*3;
       }
+      hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu, 0);
       opCount++;
     }
 
@@ -421,17 +428,20 @@ int main(int argc,char* argv[])
     }
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iters; i ++) {
+    for (int j = 0; j < iters; j ++) {
       for (int i = 0; i < nGpu; i ++) {
-        HIPCHECK(hipSetDevice(i));
-        //launch the kernel
-        hipLaunchKernelGGL(flagSyncKerns[op*2 + sync],
-            /*grid dim x,y,z*/        dim3(workgroups, 1, 1),
-            /*block dim x,y,z*/       dim3(THREADS, 1, 1),
-            /*dynamic shared mem*/    0,
-            /*stream*/                stream[i],
-            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+        args[i*3] = &transfer_data[i];
+        args[i*3+1] = &d_profiling_data[i];
+        args[i*3+2] = &opCount;
+        launchParamsList[i].func =
+                reinterpret_cast<void *>(flagSyncKerns[op*2 + sync]);
+        launchParamsList[i].gridDim   = dim3(workgroups, 1, 1),
+        launchParamsList[i].blockDim  = dim3(THREADS, 1, 1),
+        launchParamsList[i].sharedMem = 0;
+        launchParamsList[i].stream    = stream[i];
+        launchParamsList[i].args      = args + i*3;
       }
+      hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu, 0);
       opCount++;
     }
 
@@ -467,25 +477,25 @@ int main(int argc,char* argv[])
         HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
 
 
-        if(prop.gcnArch == 906 ) {
-	  write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
-	  bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-          double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
-          fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-            i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
-        } else if (prop.gcnArch == 908 ){
-	  write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
-	  bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-          double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_MI100);
-          fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-            i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
-	} else {
-	  write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
-	  bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-          double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_DEFAULT);
-          fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-            i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
-	}
+        if(prop.gcnArch == 906) {
+          write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
+          bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+                double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
+                fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+                  i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
+        } else if (prop.gcnArch == 908) {
+          write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
+          bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+                double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_MI100);
+                fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+                  i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
+        } else {
+          write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
+          bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+                double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_DEFAULT);
+                fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+                  i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
+        }
       }
       print_table_summary_line();
       double total = 0;
