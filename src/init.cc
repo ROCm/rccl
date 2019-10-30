@@ -171,11 +171,14 @@ void parseHsaForceFineGrainVramPcie() {
     errno = 0;
     int64_t v = strtoll(str, NULL, 0);
     if (errno || (v != 0 && v != 1)) {
-      INFO(NCCL_ALL,"Invalid value %s for %s, using default %u.", str, "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie); \
+      INFO(NCCL_ALL,"Invalid value %s for %s, using default %u.", str, "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie);
     } else {
       useFineGrainVramPcie = v;
-      INFO(NCCL_ALL,"%s set by environment to %u.", "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie);  \
+      INFO(NCCL_ALL,"%s set by environment to %u.", "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie);
     }
+  }
+  else {
+    INFO(NCCL_ALL,"%s not set by environment.", "HSA_FORCE_FINE_GRAIN_PCIE");
   }
 }
 

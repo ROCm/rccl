@@ -86,6 +86,10 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struc
 
   *ret = 0;
 
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  if (!useFineGrainVramPcie) return ncclSuccess;
+#endif
+
   if (p2pLevel == 0) return ncclSuccess;
 
   // Rule out different nodes
