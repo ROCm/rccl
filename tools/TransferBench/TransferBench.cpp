@@ -105,12 +105,24 @@ int main(int argc, char **argv)
     }
 
     // Print header
-    printf("%-*s(GB/s)", MAX_NAME_LEN - 6, "Configuration");
+    printf("%*s", MAX_NAME_LEN, "");
+    printf("%*s | ", 8*(numDevices+1), "Bandwidth (GB/s)");
+    printf("%*s", 8*(numDevices+1), "Duration (msec)");
+    printf(" | Overhead\n");
+    printf("%-*s", MAX_NAME_LEN, "Configuration");
     for (int i = 0; i < numDevices; i++)
-        printf("  GPU %02d", i);
-    printf("   Total\n");
-    for (int i = 0; i < MAX_NAME_LEN + 8 * (numDevices + 1); i++) printf("=");
-    printf("\n");
+      printf("  GPU %02d", i);
+    printf("   Total");
+    printf(" | ");
+    for (int i = 0; i < numDevices; i++)
+      printf("  GPU %02d", i);
+    printf(" CpuTime");
+    printf(" |   (msec)\n");
+
+    for (int i = 0; i < MAX_NAME_LEN + (8 * (numDevices + 1)); i++) printf("=");
+    printf("=|=");
+    for (int i = 0; i < (8 * (numDevices + 1)); i++) printf("=");
+    printf("=|=========\n");
 
     // Read configuration file
     FILE* fp = fopen(argv[1], "r");
@@ -232,8 +244,7 @@ int main(int argc, char **argv)
             {
                 HIP_CALL(hipSetDevice(links[i].srcGpu));
 
-                if (!useSingleSync)
-                  HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
+                HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
 
                 if (useHipCall)
                 {
@@ -269,8 +280,7 @@ int main(int argc, char **argv)
                                        gpuBlockParams[i]);
                   }
                 }
-                if (!useSingleSync)
-                  HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
+                HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
             }
 
             // Synchronize per iteration, unless in single sync mode, in which case
@@ -290,7 +300,8 @@ int main(int argc, char **argv)
 
                 for (int i = 0; i < numDevices; i++)
                 {
-                  if (useSingleSync)
+                  // Collect GPU information only if this is the last iteration for single sync mode
+                  if (useSingleSync && iteration != numIterations - 1)
                   {
                     totalGpuTime[i] = 0.00;
                   }
@@ -326,20 +337,36 @@ int main(int argc, char **argv)
         printf("%-*s", MAX_NAME_LEN, name);
         for (int i = 0; i < numDevices; i++)
         {
-            if (linkCount[i] == 0)
-            {
-                printf("%8.3f", 0.0);
-            }
-            else
-            {
-                totalGpuTime[i] /= (1.0 * numIterations);
-                printf("%8.3f", (linkCount[i] * numBytesPerLink / 1.0E9) / totalGpuTime[i]);
-            }
+          if (linkCount[i] == 0)
+          {
+            printf("%8.3f", 0.0f);
+          }
+          else
+          {
+            if (!useSingleSync)
+              totalGpuTime[i] /= (1.0 * numIterations);
+            printf("%8.3f", (linkCount[i] * numBytesPerLink / 1.0E9) / totalGpuTime[i]);
+          }
         }
-
         // Print off bandwidth (based on CPU wall-time timer)
         totalCpuTime /= numIterations;
-        printf("%8.3f\n", (numLinks * numBytesPerLink / 1.0E9) / totalCpuTime);
+        printf("%8.3f", (numLinks * numBytesPerLink / 1.0E9) / totalCpuTime);
+        printf(" | ");
+
+        double maxGpuTime = 0;
+        for (int i = 0; i < numDevices; i++)
+        {
+          if (linkCount[i] == 0)
+          {
+            printf("%8.3f", 0.0f);
+          }
+          else
+          {
+            printf("%8.3f", totalGpuTime[i] * 1000.0f);
+            maxGpuTime = std::max(maxGpuTime, totalGpuTime[i]);
+          }
+        }
+        printf("%8.3f | %8.3f\n", totalCpuTime * 1000.0f, (totalCpuTime - maxGpuTime) * 1000.0f);
 
         // Release GPU memory
         for (int i = 0; i < numLinks; i++)
@@ -356,8 +383,10 @@ int main(int argc, char **argv)
     fclose(fp);
 
     // Print link information
-    for (int i = 0; i < MAX_NAME_LEN + 8 * (numDevices + 1); i++) printf("=");
-    printf("\n");
+    for (int i = 0; i < MAX_NAME_LEN + (8 * (numDevices + 1)); i++) printf("=");
+    printf("=|=");
+    for (int i = 0; i < (8 * (numDevices + 1)); i++) printf("=");
+    printf("=|=========\n");
     printf("Link topology:\n");
     uint32_t linkType;
     uint32_t hopCount;
