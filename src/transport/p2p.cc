@@ -58,8 +58,6 @@ struct p2pRecvResources {
 NCCL_PARAM(P2pLevel, "P2P_LEVEL", -2);
 NCCL_PARAM(P2pDisable, "P2P_DISABLE", -2);
 
-extern bool useFineGrainVramPcie;
-
 /* Convert a PCI busId string into a local cudaDev device index (cf. CUDA_VISIBLE_DEVICES) */
 static int busIdToCudaDev(const char* busId) {
   int ndev;
@@ -85,6 +83,10 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struc
   if (ncclParamP2pLevel() != -2) p2pLevel = ncclParamP2pLevel();
 
   *ret = 0;
+
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  if (!hasFineGrainVramPcie()) return ncclSuccess;
+#endif
 
   if (p2pLevel == 0) return ncclSuccess;
 
@@ -112,9 +114,6 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struc
 
   // Do not detect topology if we're on the same GPU. Note this is not really supported.
   if (myInfo->cudaDev == peerCudaDev) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    if (!useFineGrainVramPcie) return ncclSuccess;
-#endif
     *ret = 1 + PATH_SYS;
     return ncclSuccess;
   }
@@ -145,9 +144,6 @@ ncclResult_t p2pCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struc
   if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI) {
     if (hops == 1)
       nvlinkp2p = CONNECT_NVLINK;
-  } else {
-    if (!useFineGrainVramPcie)
-      return ncclSuccess;
   }
 #else
 // Check for NVLink/NVswitch

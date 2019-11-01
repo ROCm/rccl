@@ -51,4 +51,13 @@ static ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
   return ncclSuccess;
 }
 
+static bool hasFineGrainVramPcie() {
+  int *ptr;
+  if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocFinegrained) == hipSuccess) {
+    CUDACHECK(hipFree(ptr));
+    return true;
+  }
+  else
+    return false;
+}
 #endif

@@ -163,25 +163,6 @@ int ncclThreadThreshold(int minCompCap, int multiNode) {
   return threshold;
 }
 
-bool useFineGrainVramPcie = false;
-
-void parseHsaForceFineGrainVramPcie() {
-  char* str = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
-  if (str && strlen(str) > 0) {
-    errno = 0;
-    int64_t v = strtoll(str, NULL, 0);
-    if (errno || (v != 0 && v != 1)) {
-      INFO(NCCL_ALL,"Invalid value %s for %s, using default %u.", str, "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie);
-    } else {
-      useFineGrainVramPcie = v;
-      INFO(NCCL_ALL,"%s set by environment to %u.", "HSA_FORCE_FINE_GRAIN_PCIE", useFineGrainVramPcie);
-    }
-  }
-  else {
-    INFO(NCCL_ALL,"%s not set by environment.", "HSA_FORCE_FINE_GRAIN_PCIE");
-  }
-}
-
 pthread_mutex_t initLock = PTHREAD_MUTEX_INITIALIZER;
 static bool initialized = false;
 static ncclResult_t ncclInit() {
@@ -193,8 +174,6 @@ static ncclResult_t ncclInit() {
     initNet();
     initialized = true;
   }
-  // Check if HSA_FORCE_FINE_GRAIN_PCIE is set in env
-  parseHsaForceFineGrainVramPcie();
   pthread_mutex_unlock(&initLock);
   return ncclSuccess;
 }
