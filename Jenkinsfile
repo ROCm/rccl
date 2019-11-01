@@ -32,10 +32,10 @@ rcclCI:
 
     def rccl = new rocProject('rccl')
     // customize for project
-    rccl.paths.build_command = './install.sh'
+    rccl.paths.build_command = './install.sh --hip-clang'
 
     // Define test architectures, optional rocm version argument is available
-    def nodes = new dockerNodes(['rccl && ubuntu'], rccl)
+    def nodes = new dockerNodes(['rccl && ubuntu && hipc-clang'], rccl)
 
     boolean formatCheck = false
 
