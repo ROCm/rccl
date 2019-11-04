@@ -245,8 +245,6 @@ end:
   return dev;
 }
 
-extern bool useFineGrainVramPcie;
-
 NCCL_PARAM(NetGdrRead, "NET_GDR_READ", -2);
 NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
 
@@ -257,7 +255,7 @@ static ncclResult_t netGetGdrSupport(int dev, int read, int* useGdr) {
   CUDACHECK(hipGetDevice(&cudaDev));
   NCCLCHECK(getNvmlDevice(cudaDev, &nvmlDev))
 
-  if (!useFineGrainVramPcie) {
+  if (!hasFineGrainVramPcie()) {
     INFO(NCCL_INIT|NCCL_NET,"NET/%s : GPU Direct RDMA Disabled for GPU %d / Need Fine Grain VRAM over PCIe", ncclNetName(), cudaDev);
     return ncclSuccess;
   }
