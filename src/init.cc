@@ -209,7 +209,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
     wait_send_cycle += prof->wait_send_cycle[chan];
     wait_recv_cycle += prof->wait_recv_cycle[chan];
   }
-  #define VEGA_GPU_RTC_FREQUENCY 2.7E7
+  #define VEGA_GPU_RTC_FREQUENCY 2.5E7
   if (comm->rank == 0) {
     INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "Rank", "total", "w_send", "w_recv", "send", "rcRdS", "dRcRdCS", "dRcCS", "dRc", "cS", "rc", "rcCS");
     INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "", "(s)", "(s)", "(s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)");
