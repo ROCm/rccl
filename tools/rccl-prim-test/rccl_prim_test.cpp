@@ -243,11 +243,9 @@ static void setupRings(uint32_t *info, int *ring_0, int *ring_1) {
     printf("\n");
   }
   findConnect(info, ring_0, deviceCnt);
-  printRing(0, ring_0, deviceCnt);
   ring_1[0] =0;
   for (int i = 1; i < deviceCnt; i++)
     ring_1[i] = ring_0[deviceCnt-i];
-  printRing(1, ring_1, deviceCnt);
 }
 
 char* getCmdOption(char ** begin, char ** end, const std::string & option) {
@@ -270,7 +268,7 @@ static const char* link_type_name[] = {"HT", "QPI", "PCIE", "IB", "XGMI"};
 int main(int argc,char* argv[])
 {
   if (cmdOptionExists(argv, argv + argc, "-h")) {
-    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all -i iterations -n bytes -s 0|1\n");
+    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all -i iterations -n bytes -s 0|1 -r \"0 1 2 3|3 2 1 0\"\n");
     exit(0);
   }
 
@@ -299,6 +297,9 @@ int main(int argc,char* argv[])
     sync = atol(s);
   if (sync) printf("Sync all GPUs before operation\n");
 
+  char *r = getCmdOption(argv, argv + argc, "-r");
+  if (r) printf("User specified ring topology: %s\n", r);
+
   const char *ops[] = {"copy", "localcopy", "doublecopy", "reduce", "reducecopy", "read", "all"};
   char *prim = getCmdOption(argv, argv + argc, "-p");
   int op = NUM_OPS, begin_op, end_op;
@@ -320,9 +321,34 @@ int main(int argc,char* argv[])
   // Enable peer access
   setupPeers(connection_info);
   // clockwise and counter clockwise rings
-  int ring_0[MAX_GPU] = {-1, -1, -1, -1,-1, -1, -1, -1};
-  int ring_1[MAX_GPU] = {-1, -1, -1, -1,-1, -1, -1, -1};
-  setupRings(connection_info, ring_0, ring_1);
+  int ring[MAX_WORKGROUPS][MAX_GPU];
+  for (int i = 0; i < MAX_WORKGROUPS; i++)
+    for (int j = 0; j <MAX_GPU; j++)
+      ring[i][j] =  -1;
+
+  int num_rings = 0;
+  if (r) {
+    int j = 0, n = 0;
+    do {
+      if (r[n] == ' ') continue;
+      if (r[n] == '|') {
+        num_rings ++;
+        j = 0;
+        continue;
+      }
+      ring[num_rings][j++] = r[n] - '0';
+    } while (r[n++] != 0x0);
+    num_rings ++;
+  } else {
+    setupRings(connection_info, ring[0], ring[1]);
+    num_rings = 2;
+  }
+
+  // duplicate rings
+  for (int i = num_rings; i < MAX_WORKGROUPS; i++) {
+    for (int j = 0; j <MAX_GPU; j++)
+      ring[i][j] =  ring[i%num_rings][j];
+  }
 
   // data buffers
   float *buff[MAX_GPU*MAX_WORKGROUPS], *buff_coarse[MAX_GPU*MAX_WORKGROUPS];
@@ -336,6 +362,10 @@ int main(int argc,char* argv[])
   HIPCHECK(hipHostMalloc((void**)&remOpCount, sizeof(uint64_t)*MAX_GPU, hipHostMallocMapped));
   HIPCHECK(hipHostGetDevicePointer((void**)&d_remOpCount, (void*)remOpCount, 0));
 
+  // print rings
+  for (int i = 0; i < workgroups; i++) {
+    printRing(i, ring[i], nGpu);
+  }
 
   for (int i = 0; i < nGpu; i ++) {
     HIPCHECK(hipSetDevice(i));
@@ -371,10 +401,7 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nGpu; i ++) {
     for (int j = 0; j < workgroups; j++) {
       int next_gpu;
-      if (j%2)
-        next_gpu = findNextGpu(ring_1, i, nGpu);
-      else
-        next_gpu = findNextGpu(ring_0, i, nGpu);
+      next_gpu = findNextGpu(ring[j], i, nGpu);
       //printf("GPU %d Ring %d -> Next GPU %d\n", i, j, next_gpu);
       h_transfer_data[i].dest0[j] = buff[next_gpu*MAX_WORKGROUPS+j] + N;
       h_transfer_data[i].dest1[j] = buff_coarse[i*MAX_WORKGROUPS+j] + N;
@@ -467,10 +494,7 @@ int main(int argc,char* argv[])
       HIPCHECK(hipGetDeviceProperties(&prop, i));
       for (int j = 0; j < workgroups; j++) {
         int next_gpu;
-        if (j%2)
-          next_gpu = findNextGpu(ring_1, i, nGpu);
-        else
-          next_gpu = findNextGpu(ring_0, i, nGpu);
+        next_gpu = findNextGpu(ring[j], i, nGpu);
 
         uint32_t linktype;
         uint32_t hopcount;
