@@ -6,7 +6,7 @@ set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
 
 project(rccl CXX)
 
-set(AMDGPU_TARGETS gfx803;gfx900;gfx906;gfx908 CACHE STRING "List of specific machine types for library to target")
+set(AMDGPU_TARGETS gfx900;gfx906;gfx908 CACHE STRING "List of specific machine types for library to target")
 
 find_package(ROCM
              REQUIRED
