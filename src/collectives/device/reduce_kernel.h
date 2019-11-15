@@ -134,6 +134,86 @@ struct FuncMin : private FuncBase<T> {
   }
 };
 
+template<>
+struct FuncSum<rccl_bfloat16> {
+  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    union converter { PackType storage; rccl_bfloat16 vec[n]; };
+    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
+    converter cx, cy, cr;
+    cx.storage = x;
+    cy.storage = y;
+    for (auto i = 0u; i != n; ++i) {
+      cr.vec[i] = cx.vec[i] + cy.vec[i];
+    }
+    return cr.storage;
+  }
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+    return x + y;
+  }
+};
+
+template<>
+struct FuncProd<rccl_bfloat16> {
+  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    union converter { PackType storage; rccl_bfloat16 vec[n]; };
+    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
+    converter cx, cy, cr;
+    cx.storage = x;
+    cy.storage = y;
+    for (auto i = 0u; i != n; ++i) {
+      cr.vec[i] = cx.vec[i] * cy.vec[i];
+    }
+    return cr.storage;
+  }
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+    return x * y;
+  }
+};
+
+template<>
+struct FuncMax<rccl_bfloat16> {
+  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    union converter { PackType storage; rccl_bfloat16 vec[n]; };
+    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
+    converter cx, cy, cr;
+    cx.storage = x;
+    cy.storage = y;
+    for (auto i = 0u; i != n; ++i) {
+      cr.vec[i] = cx.vec[i] < cy.vec[i] ? cy.vec[i] : cx.vec[i];
+    }
+    return cr.storage;
+  }
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+    return x < y ? y : x;
+  }
+};
+
+template<>
+struct FuncMin<rccl_bfloat16> {
+  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
+  __device__ PackType operator()(PackType x, PackType y) const
+  {
+    union converter { PackType storage; rccl_bfloat16 vec[n]; };
+    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
+    converter cx, cy, cr;
+    cx.storage = x;
+    cy.storage = y;
+    for (auto i = 0u; i != n; ++i) {
+      cr.vec[i] = cx.vec[i] < cy.vec[i] ? cx.vec[i] : cy.vec[i];
+    }
+    return cr.storage;
+  }
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+    return x < y ? x : y;
+  }
+};
+
 #else
 
 template<typename T>

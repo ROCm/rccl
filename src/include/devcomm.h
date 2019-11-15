@@ -9,6 +9,7 @@
 #define NCCL_DEVICE_H_
 
 #include "nccl.h"
+#include "rccl_bfloat16.h"
 #include <stdint.h>
 
 // Convert volatile access to atomic

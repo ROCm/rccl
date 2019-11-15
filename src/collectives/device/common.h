@@ -53,8 +53,10 @@ static inline __device__ void exitIfAbortBarrier(int abort) {
   NCCL_FUNC4(coll, op, u64), \
   NCCL_FUNC4(coll, op, f16), \
   NCCL_FUNC4(coll, op, f32), \
-  NCCL_FUNC4(coll, op, f64)
+  NCCL_FUNC4(coll, op, f64), \
+  NCCL_FUNC4(coll, op, b16)
 #define NCCL_FUNCS3B(coll, op) \
+  NCCL_FUNC4(coll, op,  i8), \
   NCCL_FUNC4(coll, op,  i8), \
   NCCL_FUNC4(coll, op,  i8), \
   NCCL_FUNC4(coll, op,  i8), \
@@ -121,20 +123,20 @@ struct Caller<f, f + 1>{
 inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclColl* const c) noexcept {
-  if (c->funcIndex < 144) {
+  if (c->funcIndex < 160) {
     if (c->funcIndex % 4 == 0) ncclBroadcastRing_copy_i8(&c->args);
     else if (c->funcIndex % 4 == 1) ncclBroadcastRingLL_copy_i8(&c->args);
     else if (c->funcIndex % 4 == 2) ncclBroadcastTree_copy_i8(&c->args);
     else ncclBroadcastTreeLL_copy_i8(&c->args);
   }
-  else if (c->funcIndex < 288) Caller<144, 288>::call(c);
-  else if (c->funcIndex < 432) {
+  else if (c->funcIndex < 320) Caller<160, 320>::call(c);
+  else if (c->funcIndex < 480) {
     if (c->funcIndex % 4 == 0) ncclAllGatherRing_copy_i8(&c->args);
     else if (c->funcIndex % 4 == 1) ncclAllGatherRingLL_copy_i8(&c->args);
     else if (c->funcIndex % 4 == 2) ncclAllGatherTree_copy_i8(&c->args);
     else ncclAllGatherTreeLL_copy_i8(&c->args);
   }
-  else Caller<432, 720>::call(c);
+  else Caller<480, 800>::call(c);
 }
 
 static __device__ void load_parallel(void* dst, void* src, size_t size, int tid, uint32_t* abortCount) {
@@ -227,7 +229,8 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
   IMPL_COLL3(coll, op, ncclFunc, u64, uint64_t, ncclColl, ncclOp, ncclUint64) \
   IMPL_COLL3(coll, op, ncclFunc, f16, half,     ncclColl, ncclOp, ncclFloat16) \
   IMPL_COLL3(coll, op, ncclFunc, f32, float,    ncclColl, ncclOp, ncclFloat32) \
-  IMPL_COLL3(coll, op, ncclFunc, f64, double,   ncclColl, ncclOp, ncclFloat64)
+  IMPL_COLL3(coll, op, ncclFunc, f64, double,   ncclColl, ncclOp, ncclFloat64) \
+  IMPL_COLL3(coll, op, ncclFunc, b16, rccl_bfloat16, ncclColl, ncclOp, ncclBfloat16)
 
 #define COLL_UNROLL 2
 
