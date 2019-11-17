@@ -11,6 +11,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include "rccl.h"
+#include "../include/rccl_bfloat16.h"
 
 #define HIP_CALL(x) ASSERT_EQ(x, hipSuccess)
 #define NCCL_CALL(x) ASSERT_EQ(x, ncclSuccess)
@@ -47,6 +48,7 @@ namespace CorrectnessTests
         case ncclFloat16: return 2;
         case ncclFloat32: return 4;
         case ncclFloat64: return 8;
+        case ncclBfloat16: return 2;
         default:
             fprintf(stderr, "[ERROR] Unsupported datatype (%d)\n", dataType);
             exit(0);
@@ -217,6 +219,7 @@ namespace CorrectnessTests
             uint64_t* arrayU8 = (uint64_t *)arrayI1;
             float*    arrayF4 = (float    *)arrayI1;
             double*   arrayF8 = (double   *)arrayI1;
+            rccl_bfloat16* arrayB2 = (rccl_bfloat16 *)arrayI1;
 
             // NOTE: Currently half-precision float tests are unsupported due to half being supported
             //       on GPU only and not host
@@ -241,6 +244,7 @@ namespace CorrectnessTests
                     case ncclUint64:  arrayU8[j] = valueI; break;
                     case ncclFloat32: arrayF4[j] = valueF; break;
                     case ncclFloat64: arrayF8[j] = valueF; break;
+                    case ncclBfloat16: arrayB2[j] = rccl_bfloat16(valueF); break;
                     default:
                         fprintf(stderr, "[ERROR] Unsupported datatype\n");
                         exit(0);
@@ -278,6 +282,7 @@ namespace CorrectnessTests
             uint64_t* outputU8 = (uint64_t *)outputI1;
             float*    outputF4 = (float    *)outputI1;
             double*   outputF8 = (double   *)outputI1;
+            rccl_bfloat16* outputB2 = (rccl_bfloat16 *)outputI1;
 
             bool isMatch = true;
 
@@ -295,6 +300,7 @@ namespace CorrectnessTests
                 uint64_t* expectedU8 = (uint64_t *)expectedI1;
                 float*    expectedF4 = (float    *)expectedI1;
                 double*   expectedF8 = (double   *)expectedI1;
+                rccl_bfloat16* expectedB2 = (rccl_bfloat16 *)expectedI1;
 
                 for (int j = 0; j < dataset.numElements && isMatch; j++)
                 {
@@ -308,6 +314,7 @@ namespace CorrectnessTests
                     case ncclUint64:  isMatch &= (outputU8[j] == expectedU8[j]); break;
                     case ncclFloat32: isMatch &= (outputF4[j] == expectedF4[j]); break;
                     case ncclFloat64: isMatch &= (outputF8[j] == expectedF8[j]); break;
+                    case ncclBfloat16: isMatch &= (outputB2[j] == expectedB2[j]); break;
                     default:
                         fprintf(stderr, "[ERROR] Unsupported datatype\n");
                         exit(0);
@@ -333,6 +340,8 @@ namespace CorrectnessTests
                             printf("Expected %f.  Output %f on device %d[%d]\n", outputF4[j], expectedF4[j], i, j); break;
                         case ncclFloat64:
                             printf("Expected %lf.  Output %lf on device %d[%d]\n", outputF8[j], expectedF8[j], i, j); break;
+                        case ncclBfloat16:
+                            printf("Expected %f.  Output %f on device %d[%d]\n", (float)outputB2[j], (float)expectedB2[j], i, j); break;
                         default:
                             fprintf(stderr, "[ERROR] Unsupported datatype\n");
                             exit(0);
