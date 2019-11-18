@@ -89,7 +89,8 @@ namespace CorrectnessTests
                                                 ncclUint64,
                                                 //ncclFloat16,
                                                 ncclFloat32,
-                                                ncclFloat64),
+                                                ncclFloat64,
+                                                ncclBfloat16),
                                 // Number of elements
                                 testing::Values(3072, 3145728),
                                 // Number of devices
