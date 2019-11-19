@@ -39,7 +39,8 @@
   DECL_COLL3(coll, op, u64) \
   DECL_COLL3(coll, op, f16) \
   DECL_COLL3(coll, op, f32) \
-  DECL_COLL3(coll, op, f64)
+  DECL_COLL3(coll, op, f64) \
+  DECL_COLL3(coll, op, b16)
 
 #define DECL_COLL(coll) \
   DECL_COLL2(coll, sum) \

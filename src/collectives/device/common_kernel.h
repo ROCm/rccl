@@ -241,6 +241,18 @@ template<> inline __device__
 void vStore<half>(volatile half* ptr, const half val) {
   ((half*)ptr)[0] = val;
 }
+
+template<> inline __device__
+rccl_bfloat16 vFetch<rccl_bfloat16>(const volatile rccl_bfloat16* ptr) {
+  rccl_bfloat16 r;
+  r.data = ptr->data;
+  return r;
+}
+
+template<> inline __device__
+void vStore<rccl_bfloat16>(volatile rccl_bfloat16* ptr, const rccl_bfloat16 val) {
+  ptr->data = val.data;
+}
 #endif
 
 typedef ulong2 Pack128;

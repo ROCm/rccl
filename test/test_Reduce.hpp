@@ -29,6 +29,7 @@ namespace CorrectnessTests
             uint64_t* resultU8 = (uint64_t *)resultI1;
             float*    resultF4 = (float    *)resultI1;
             double*   resultF8 = (double   *)resultI1;
+            rccl_bfloat16* resultB2 = (rccl_bfloat16 *)resultI1;
 
             // Initialize the result with the first device's array
             memcpy(resultI1, dataset.expected[0], dataset.NumBytes());
@@ -44,6 +45,7 @@ namespace CorrectnessTests
                 uint64_t* arrayU8 = (uint64_t *)arrayI1;
                 float*    arrayF4 = (float    *)arrayI1;
                 double*   arrayF8 = (double   *)arrayI1;
+                rccl_bfloat16* arrayB2 = (rccl_bfloat16 *)arrayI1;
 
                 for (int j = 0; j < dataset.numElements; j++)
                 {
@@ -57,6 +59,7 @@ namespace CorrectnessTests
                     case ncclUint64:  resultU8[j] = ReduceOp(op, resultU8[j], arrayU8[j]); break;
                     case ncclFloat32: resultF4[j] = ReduceOp(op, resultF4[j], arrayF4[j]); break;
                     case ncclFloat64: resultF8[j] = ReduceOp(op, resultF8[j], arrayF8[j]); break;
+                    case ncclBfloat16: resultB2[j] = ReduceOp(op, resultB2[j], arrayB2[j]); break;
                     default:
                         fprintf(stderr, "[ERROR] Unsupported datatype\n");
                         exit(0);

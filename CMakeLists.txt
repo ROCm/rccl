@@ -2,6 +2,11 @@
 
 cmake_minimum_required(VERSION 2.8.12)
 
+# We use C++14 features, this will add compile option: -std=c++14
+set( CMAKE_CXX_STANDARD 14 )
+# Without this line, it will add -std=gnu++14 instead, which has some issues.
+set( CMAKE_CXX_EXTENSIONS OFF )
+
 set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
 
 project(rccl CXX)

@@ -19,6 +19,8 @@
 #define NCCL_VERSION_CODE ${NCCL_VERSION}
 #define NCCL_VERSION(X,Y,Z) ((X) * 1000 + (Y) * 100 + (Z))
 
+#define RCCL_BFLOAT16 1
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -116,7 +118,8 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
                ncclFloat16    = 6, ncclHalf       = 6,
                ncclFloat32    = 7, ncclFloat      = 7,
                ncclFloat64    = 8, ncclDouble     = 8,
-               ncclNumTypes   = 9 } ncclDataType_t;
+               ncclBfloat16   = 9,
+               ncclNumTypes   = 10 } ncclDataType_t;
 
 /*
  * Collective communication operations
