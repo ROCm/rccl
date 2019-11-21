@@ -104,26 +104,32 @@ endforeach(filename)
 
 set(CC_SOURCES
     src/init.cc
+    src/graph/trees.cc
+    src/graph/rings.cc
+    src/graph/paths.cc
+    src/graph/search.cc
+    src/graph/connect.cc
+    src/graph/tuning.cc
+    src/graph/topo.cc
     src/collectives/all_reduce.cc
     src/collectives/all_gather.cc
     src/collectives/reduce.cc
     src/collectives/broadcast.cc
     src/collectives/reduce_scatter.cc
     src/channel.cc
-    src/misc/trees.cc
-    src/misc/rings.cc
     src/misc/argcheck.cc
-    src/misc/group.cc
+    src/misc/nvmlwrap_stub.cc
     src/misc/utils.cc
     src/misc/ibvwrap.cc
     src/misc/nvmlwrap_stub.cc
-    src/misc/topo.cc
     src/transport/net.cc
     src/transport/net_ib.cc
     src/transport/net_socket.cc
     src/transport/p2p.cc
     src/transport/shm.cc
     src/transport.cc
+    src/debug.cc
+    src/group.cc
     src/bootstrap.cc
     src/enqueue.cc)
 

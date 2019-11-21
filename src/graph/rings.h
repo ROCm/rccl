@@ -1,11 +1,7 @@
 /*************************************************************************
- * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#include "all_gather.h"
-#include "common.h"
-#include "collectives.h"
-
-IMPL_COLL_C(ncclAllGather, ncclCollAllGather);
+ncclResult_t ncclBuildRings(int nrings, int* rings, int rank, int nranks, int* prev, int* next);

@@ -9,7 +9,7 @@
 #include "core.h"
 #include "socket.h"
 #include "net.h"
-#include "topo.h"
+#include "graph.h"
 #include "utils.h"
 #include "param.h"
 
@@ -108,7 +108,9 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
       char* userIbEnv = getenv("NCCL_IB_HCA");
       struct netIf userIfs[MAX_IB_DEVS];
       bool searchNot = userIbEnv && userIbEnv[0] == '^';
+      if (searchNot) userIbEnv++;
       bool searchExact = userIbEnv && userIbEnv[0] == '=';
+      if (searchExact) userIbEnv++;
       int nUserIfs = parseStringList(userIbEnv, userIfs, MAX_IB_DEVS);
 
       if (ncclSuccess != wrap_ibv_get_device_list(&devices, &nIbDevs)) return ncclInternalError;
@@ -204,32 +206,14 @@ ncclResult_t ncclIbGdrSupport(int ibDev) {
 #endif
   }
   if (moduleLoaded == 0) return ncclSystemError;
-  ncclResult_t ret = ncclSystemError;
-  void* ptr;
-  if (hipMalloc(&ptr, sizeof(int)) == hipSuccess) {
-    struct ibv_mr* mr;
-    struct ibv_pd* pd;
-    if (wrap_ibv_alloc_pd(&pd, ncclIbDevs[ibDev].context) == ncclSuccess) {
-      if ((mr = wrap_direct_ibv_reg_mr(pd, ptr, sizeof(int), IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ)) != NULL) {
-        ret = ncclSuccess;
-        wrap_ibv_dereg_mr(mr);
-      }
-      wrap_ibv_dealloc_pd(pd);
-    }
-    hipFree(ptr);
-  }
-  return ret;
+  return ncclSuccess;
 }
 
 ncclResult_t ncclIbPtrSupport(int dev, int* supportedTypes) {
   *supportedTypes = NCCL_PTR_HOST;
 
-  int cudaDev, nvmlDev;
-  CUDACHECK(hipGetDevice(&cudaDev));
-  NCCLCHECK(getNvmlDevice(cudaDev, &nvmlDev))
-
   if (ncclIbGdrSupport(dev) != ncclSuccess) {
-    INFO(NCCL_NET,"NET/IB : GPU Direct RDMA Disabled for GPU %d[%d] / HCA %d '%s' (no module or not supported by GPU)", cudaDev, nvmlDev, dev, ncclIbDevs[dev].devName);
+    INFO(NCCL_NET,"NET/IB : GPU Direct RDMA Disabled for HCA %d '%s' (no module)", dev, ncclIbDevs[dev].devName);
     return ncclSuccess;
   }
   *supportedTypes |= NCCL_PTR_CUDA;

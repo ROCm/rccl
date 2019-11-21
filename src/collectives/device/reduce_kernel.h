@@ -260,15 +260,12 @@ static __device__ uint32_t addChar4(const uint32_t x, const uint32_t y) {
 template<>
 struct FuncSum<int8_t> {
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vadd4.s32.s32.s32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
     return rv;
 #else
     return addChar4(x, y);
-#endif
 #endif
   }
   __device__ int8_t operator()(const int8_t x, const int8_t y) const {
@@ -278,15 +275,12 @@ struct FuncSum<int8_t> {
 template<>
 struct FuncSum<uint8_t> {
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vadd4.u32.u32.u32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
     return rv;
 #else
     return addChar4(x, y);
-#endif
 #endif
   }
   __device__ uint8_t operator()(const uint8_t x, const uint8_t y) const {
@@ -330,8 +324,6 @@ template<>
 struct FuncMax<int8_t> {
   union converter { uint32_t storage; char4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmax4.s32.s32.s32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -346,7 +338,6 @@ struct FuncMax<int8_t> {
     cr.a.w = max(cx.a.w, cy.a.w);
     return cr.storage;
 #endif
-#endif
   }
   __device__ int8_t operator()(const int8_t x, const int8_t y) const {
     return (x>y) ? x : y;
@@ -356,8 +347,6 @@ template<>
 struct FuncMax<uint8_t> {
   union converter { uint32_t storage; uchar4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmax4.u32.u32.u32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -372,7 +361,6 @@ struct FuncMax<uint8_t> {
     cr.a.w = max(cx.a.w, cy.a.w);
     return cr.storage;
 #endif
-#endif
   }
   __device__ uint8_t operator()(const uint8_t x, const uint8_t y) const {
     return (x>y) ? x : y;
@@ -383,8 +371,6 @@ template<>
 struct FuncMin<int8_t> {
   union converter { uint32_t storage; char4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmin4.s32.s32.s32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -399,7 +385,6 @@ struct FuncMin<int8_t> {
     cr.a.w = min(cx.a.w, cy.a.w);
     return cr.storage;
 #endif
-#endif
   }
   __device__ int8_t operator()(const int8_t x, const int8_t y) const {
     return (x<y) ? x : y;
@@ -409,8 +394,6 @@ template<>
 struct FuncMin<uint8_t> {
   union converter { uint32_t storage; uchar4 a; };
   __device__ uint32_t operator()(const uint32_t x, const uint32_t y) const {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#else
 #if (__CUDA_ARCH__ >= 300) && (__CUDA_ARCH__ < 500)
     int32_t rv, z=0;
     asm("vmin4.u32.u32.u32 %0, %1, %2, %3;" : "=r"(rv) : "r"(x), "r"(y), "r"(z));
@@ -424,7 +407,6 @@ struct FuncMin<uint8_t> {
     cr.a.z = min(cx.a.z, cy.a.z);
     cr.a.w = min(cx.a.w, cy.a.w);
     return cr.storage;
-#endif
 #endif
   }
   __device__ uint8_t operator()(const uint8_t x, const uint8_t y) const {
