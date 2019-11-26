@@ -311,11 +311,7 @@ int p2pComputeRingsNvLink(ncclTvalue_t* values, int nranks, int* rings, int nrin
   }
 
   // Duplicate the rings for direct NVLink
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  compNrings = copyRings(nranks, rings, compNrings, compNrings*3);
-#else
   compNrings = copyRings(nranks, rings, compNrings, compNrings*2);
-#endif
 
   return compNrings;
 }
