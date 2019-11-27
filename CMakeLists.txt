@@ -147,6 +147,11 @@ if(PROFILE)
   add_definitions(-DENABLE_PROFILING)
 endif()
 
+set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
+if(COLLTRACE)
+  add_definitions(-DENABLE_COLLTRACE)
+endif()
+
 foreach(target ${AMDGPU_TARGETS})
 target_link_libraries(rccl PRIVATE --amdgpu-target=${target})
 endforeach()

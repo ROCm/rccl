@@ -23,7 +23,7 @@
 /* Declare all collective operations */
 #define DECL_COLL5(coll, op, dtype) \
   extern __device__ __attribute__((noinline)) void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args); \
-  extern __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl c); \
+  extern __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm); \
 
 #define DECL_COLL4(coll, op, dtype) \
   DECL_COLL5(coll, op, dtype) \

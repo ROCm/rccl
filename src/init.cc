@@ -131,6 +131,54 @@ void __attribute__((optimize("O0"))) commPoison(ncclComm_t comm) {
   comm->rank = comm->cudaDev = comm->busId = comm->nRanks = -1;
 }
 
+#ifdef ENABLE_COLLTRACE
+void *ncclCommThreadMain(void *arg) {
+  ncclComm_t comm = (ncclComm_t)arg;
+  do {
+    int tail = LOAD(comm->hostDevComm.collTraceTail)%COLLTRACE_NUM_ITEMS;
+    int head = comm->hostDevComm.collTraceHead;
+    int count;
+    if (head <= tail)
+      count = tail - head;
+    else
+      count = COLLTRACE_NUM_ITEMS + head - tail;
+    usleep(1000); //sleep 1ms
+    for (int i = 0; i < count; i++) {
+      char line[1024];
+      int offset = 0;
+      #define VEGA_GPU_RTC_FREQUENCY 2.5E7
+      sprintf(line, "## [%12.6f] [%02d:%02d] %06lx",
+        (double)(comm->hostDevComm.collTrace[head].timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, comm->hostDevComm.collTrace[head].bid, comm->hostDevComm.collTrace[head].opCount);
+      offset = strlen(line);
+      switch (comm->hostDevComm.collTrace[head].type) {
+        case ncclCollTraceKernelLaunchType:
+          sprintf(line+offset, " KL hwid %8x funcIndex %d",
+            comm->hostDevComm.collTrace[head].data_0, comm->hostDevComm.collTrace[head].funcIndex);
+          break;
+        case ncclCollTraceCollEndType:
+          if (comm->hostDevComm.collTrace[head].funcIndex != -1)
+            sprintf(line+offset, " CE next funcIndex %d",
+              comm->hostDevComm.collTrace[head].funcIndex);
+          else
+            sprintf(line+offset, " KE");
+          break;
+        case ncclCollTraceAbortType:
+          sprintf(line+offset, " Abort");
+          break;
+        default:
+          sprintf(line+offset, " unknown collective trace data type");
+          break;
+      }
+      INFO(NCCL_COLL, "%s", line);
+      head ++;
+      head %= COLLTRACE_NUM_ITEMS;
+    }
+    comm->hostDevComm.collTraceHead = tail;
+  } while(!LOAD(&comm->hostDevComm.collTraceExit));
+  pthread_exit(NULL);
+}
+#endif
+
 static ncclResult_t commFree(ncclComm_t comm) {
   if (comm == NULL)
     return ncclSuccess;
@@ -162,6 +210,13 @@ static ncclResult_t commFree(ncclComm_t comm) {
     (prof->recvCopySend_cycle) ? (double)prof->recvCopySend_byte*comm->nChannels/((double)prof->recvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0);
   free(prof);
   CUDACHECK(hipFree(comm->hostDevComm.devProf));
+#endif
+
+#ifdef ENABLE_COLLTRACE
+  STORE(&comm->hostDevComm.collTraceExit, 1);
+  if (comm->hostDevComm.collTraceThread) pthread_join(comm->hostDevComm.collTraceThread, NULL);
+  CUDACHECK(hipHostFree((void *)comm->hostDevComm.collTrace));
+  CUDACHECK(hipHostFree((void *)comm->hostDevComm.collTraceTail));
 #endif
 
   free(comm->peerInfo);
@@ -246,6 +301,17 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   comm->argsptr = &comm->args;
 #ifdef ENABLE_PROFILING
   NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.devProf, 1));
+#endif
+
+#ifdef ENABLE_COLLTRACE
+  CUDACHECK(hipHostMalloc((void**) &comm->hostDevComm.collTraceTail, sizeof(uint32_t), hipHostMallocMapped));
+  CUDACHECK(hipHostMalloc((void**) &comm->hostDevComm.collTrace, sizeof(struct ncclCollTrace) * COLLTRACE_NUM_ITEMS, hipHostMallocMapped));
+  memset(comm->hostDevComm.collTrace, 0, sizeof(struct ncclCollTrace) * COLLTRACE_NUM_ITEMS);
+  comm->hostDevComm.collTraceExit = comm->hostDevComm.collTraceHead = *comm->hostDevComm.collTraceTail = 0;
+  if ((ncclDebugLevel >= NCCL_LOG_INFO) && (ncclDebugMask & NCCL_COLL))
+    pthread_create(&comm->hostDevComm.collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
+  else
+    comm->hostDevComm.collTraceThread = 0;
 #endif
 
   *comret = comm;

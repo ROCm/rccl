@@ -13,6 +13,10 @@
 #include "net.h"
 #include <sys/stat.h>
 #include <fcntl.h>
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
+#endif
 
 #define BUSID_SIZE (sizeof("0000:00:00.0"))
 #define BUSID_REDUCED_SIZE (sizeof("0000:00"))
@@ -96,15 +100,16 @@ ncclResult_t ncclTopoCudaPath(int cudaDev, char** path) {
 
 int interCpuWidth = 0;
 int cpuPciWidth = 0;
+int p2pPciWidth = 0;
 
 static ncclResult_t getCpuWidths() {
   // Check if already detected
-  if (interCpuWidth + cpuPciWidth) return ncclSuccess;
+  if (interCpuWidth + cpuPciWidth + p2pPciWidth) return ncclSuccess;
 
   // Defaults
   char cpu[256];
   sprintf(cpu, "Generic");
-  cpuPciWidth = interCpuWidth = PCI_WIDTH;
+  cpuPciWidth = interCpuWidth = p2pPciWidth = PCI_WIDTH;
 
 #ifdef __PPC__
   sprintf(cpu, "ppc64");
@@ -124,6 +129,7 @@ static ncclResult_t getCpuWidths() {
 
   asm volatile("cpuid" : "=b" (cpuid0.ebx), "=c" (cpuid0.ecx), "=d" (cpuid0.edx) : "a" (0));
   if (strncmp(cpuid0.vendor, "GenuineIntel", 12) == 0) sprintf(cpu, "Intel");
+  else if (strncmp(cpuid0.vendor, "AuthenticAMD", 12) == 0) sprintf(cpu, "AMD");
 
   if (strcmp(cpu, "Intel") == 0) {
     union {
@@ -133,22 +139,47 @@ static ncclResult_t getCpuWidths() {
         int familyId:4;
         int processorType:2;
         int resv0:2;
-        int extModelId:4;
-        int modelId:8;
+        int extModel:4;
+        int extFamily:8;
         int resv1:4;
       };
       uint32_t val;
     } cpuid1;
     asm volatile("cpuid" : "=a" (cpuid1.val) : "a" (1));
-    if (cpuid1.familyId == 6 && cpuid1.modelId >= 0x55) { // Skylake
+    if (cpuid1.familyId == 6 && (cpuid1.model + cpuid1.extModel * 16) >= 0x55) { // Skylake
       sprintf(cpu, "Intel/Skylake (or later)");
       interCpuWidth = SKL_QPI_WIDTH;
+      cpuPciWidth = SKL_CPUPCI_WIDTH;
+      p2pPciWidth = SKL_PCI_WIDTH;
+    } else {
+      interCpuWidth = QPI_WIDTH;
+    }
+  }
+  else if (strcmp(cpu, "AMD") == 0) {
+    union {
+      struct {
+        uint32_t steppingId:4;
+        uint32_t model:4;
+        uint32_t family:4;
+        uint32_t resv0:4;
+        uint32_t extModel:4;
+        uint32_t extFamily:8;
+        uint32_t resv1:4;
+      };
+      uint32_t val;
+    } cpuid1;
+    asm volatile("cpuid" : "=a" (cpuid1.val) : "a" (1));
+    if ((cpuid1.family + cpuid1.extFamily) == 23 && (cpuid1.model + cpuid1.extModel * 16) >= 49) {
+      sprintf(cpu, "AMD/Rome (or later)");
+      interCpuWidth = ROME_QPI_WIDTH;
+      cpuPciWidth = ROME_CPUPCI_WIDTH;
+      p2pPciWidth = ROME_PCI_WIDTH;
     } else {
       interCpuWidth = QPI_WIDTH;
     }
   }
 #endif
-  INFO(NCCL_GRAPH, "%s CPU (PCI %d, InterCpu %d)", cpu, cpuPciWidth, interCpuWidth);
+  INFO(NCCL_GRAPH, "%s CPU (CPU-PCI %d, PCI/P2P %d, InterCpu %d)", cpu, cpuPciWidth, p2pPciWidth, interCpuWidth);
   return ncclSuccess;
 }
 
@@ -163,7 +194,8 @@ static ncclResult_t ncclTopoGetCpuPciP2pWidth(int* width) {
   return ncclSuccess;
 }
 static ncclResult_t ncclTopoGetPciWidth(int* width) {
-  *width = PCI_WIDTH;
+  NCCLCHECK(getCpuWidths());
+  *width = p2pPciWidth;
   return ncclSuccess;
 }
 static ncclResult_t ncclTopoGetNetWidth(int* width) {
@@ -226,8 +258,9 @@ ncclResult_t ncclTopoConnectCpu(struct ncclTopoSystem* system, int numaId, struc
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #define VEGA_XGMI_WIDTH 20
+extern int busIdToCudaDev(int64_t busId);
 
-ncclResult_t ncclTopoConnectXGMI(int num_gpus, struct ncclTopoSystem* system) {
+ncclResult_t ncclTopoConnectXGMI(struct ncclComm* comm, struct ncclTopoSystem* system) {
   struct ncclTopoNode* nvsNode = NULL;
 
   int minNvlinks = 2, minWidth = VEGA_XGMI_WIDTH;
@@ -237,7 +270,9 @@ ncclResult_t ncclTopoConnectXGMI(int num_gpus, struct ncclTopoSystem* system) {
       struct ncclTopoNode* gpu1 = system->nodes[GPU].nodes+g1;
       struct ncclTopoNode* gpu2 = system->nodes[GPU].nodes+g2;
       uint32_t link_type, hops;
-      if (hipExtGetLinkTypeAndHopCount(gpu1->rank, gpu2->rank, &link_type, &hops) == hipSuccess) {
+      int cudaDev1 = busIdToCudaDev(comm->peerInfo[gpu1->rank].busId);
+      int cudaDev2 = busIdToCudaDev(comm->peerInfo[gpu2->rank].busId);
+      if (hipExtGetLinkTypeAndHopCount(cudaDev1, cudaDev2, &link_type, &hops) == hipSuccess) {
         if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1) {
           NCCLCHECK(ncclTopoConnectNodes(gpu1, gpu2, LINK_NVL, minWidth));
         }
@@ -613,7 +648,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   }
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  NCCLCHECK(ncclTopoConnectXGMI(g, s));
+  NCCLCHECK(ncclTopoConnectXGMI(comm, s));
 #else
   NCCLCHECK(ncclTopoConnectNVLink(nvmlDevs, s));
 #endif

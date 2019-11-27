@@ -134,8 +134,8 @@ struct ncclComm {
   int* intraCudaDevs;
   int* intraCGMode; // Whether we can use CUDA9 CGMD or not
   int* intraCC; // Only to check all have the same ComputeCap and disable CGMode if not
-  struct ncclColl args;
-  struct ncclColl* argsptr;
+  struct ncclDevComm* args;
+  struct ncclDevComm** argsptr;
 
   // Global proxy thread
   pthread_t proxyThread;

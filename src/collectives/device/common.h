@@ -12,6 +12,16 @@
 #include "collectives.h"
 #include "devcomm.h"
 
+__device__
+inline  __attribute((always_inline))
+long long int __rtc64() {
+#if __HIP__
+  return (long long int) __builtin_amdgcn_s_memrealtime();
+#else
+  return (long long int) __clock_u64();
+#endif
+}
+
 // Exit If Abort Barrier across CTA: make sure all threads exit consistently
 // Each thread sets a predicate to true if abort == 1
 // all CTA's threads enter the barrier and do a popc on their predicates being True
@@ -20,7 +30,7 @@
 #define exitIfAbortBarrier(abort, abortCount) \
   if (abort) __atomic_fetch_add(abortCount, 1, __ATOMIC_SEQ_CST); \
   __syncthreads(); \
-  if (LOAD(abortCount)) { asm volatile ("s_endpgm"); return; }
+  if (LOAD(abortCount)) { /*asm volatile ("s_endpgm");*/ return false; }
 #define __syncwarp()
 #else
 static inline __device__ void exitIfAbortBarrier(int abort) {
@@ -36,7 +46,7 @@ static inline __device__ void exitIfAbortBarrier(int abort) {
 
 #define NCCL_FUNC5(coll, op, dtype) \
   NCCL_COLL_NAME(coll##LL, op, dtype), \
-  NCCL_COLL_NAME(coll##LL128, op, dtype), \
+  NCCL_COLL_NAME(coll##LL, op, dtype), \
   NCCL_COLL_NAME(coll, op, dtype)
 
 #define NCCL_FUNC4(coll, op, dtype) \
@@ -149,16 +159,53 @@ static __device__ void load_parallel(void* dst, void* src, size_t size, int tid,
   for (int o = tid; o < (size/sizeof(int)); o += blockDim.x) d[o] = s[o];
 }
 
-static __device__ void load_coll(struct ncclColl* localColl, struct ncclColl* hostColl, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
+static __device__ bool load_coll(struct ncclColl* localColl, struct ncclColl* hostColl, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
   // Check whether the last operation was aborted and make sure all threads exit
   int abort = tid == 0 ? *(comm->abortFlag) : 0;
   exitIfAbortBarrier(abort, abortCount);
   load_parallel(localColl, hostColl, sizeof(struct ncclColl), tid, abortCount);
   __syncthreads();
   if (tid == 0) hostColl->active = 0;
+  return true;
 }
 
+#ifdef ENABLE_COLLTRACE
+#define traceColl(fIdx)  \
+    uint32_t pos = __atomic_fetch_add(comm->collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    comm->collTrace[pos].timeStamp = __rtc64(); \
+    comm->collTrace[pos].opCount = localColl.args.opCount; \
+    comm->collTrace[pos].bid = bid; \
+    comm->collTrace[pos].funcIndex = fIdx;
+#define traceKernelLaunch(fIdx)  { \
+    traceColl(fIdx); \
+    comm->collTrace[pos].type = ncclCollTraceKernelLaunchType; \
+    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (comm->collTrace[pos].data_0)); \
+  }
+#define traceCollEnd(fIdx)  { \
+    traceColl(fIdx); \
+    comm->collTrace[pos].type = ncclCollTraceCollEndType; \
+  }
+#define traceAbort(fIdx)  { \
+    traceColl(fIdx); \
+    comm->collTrace[pos].type = ncclCollTraceAbortType; \
+  }
+#else
+#define traceKernelLaunch()
+#define traceCollEnd()
+#define traceAbort()
+#endif
+
 extern __device__ volatile uint64_t* ncclShmem;
+
+#ifdef ENABLE_LL128
+#define ALLOCATE_SHMEM \
+  __shared__ volatile uint64_t shmem[NCCL_LL128_SHMEM_SIZE]; \
+  ncclShmem = shmem; \
+  __shared__ uint32_t sync[NCCL_LL128_MAX_NTHREADS/WARP_SIZE];
+#else
+#define ALLOCATE_SHMEM \
+  uint32_t* sync = 0;
+#endif
 
 /* Functions for aggregation case */
 #define IMPL_COLL_FUNC(coll, op, ncclFunc, dtype, ctype) \
@@ -168,47 +215,45 @@ __device__ void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args) { \
 
 /* Kernels with the first operation inlined */
 #define IMPL_COLL_KERN(coll, op, ncclFunc, dtype, ctype, fIndex) \
-__global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
+__launch_bounds__(NCCL_MAX_NTHREADS, 1) \
+__global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
   int tid = threadIdx.x; \
   int bid = blockIdx.x; \
-  __shared__ volatile uint64_t shmem[NCCL_LL128_SHMEM_SIZE]; \
-  ncclShmem = shmem; \
+  ALLOCATE_SHMEM; \
   __shared__ struct ncclColl localColl; \
   __shared__ uint32_t abortCount; \
-  __shared__ uint32_t sync[NCCL_LL128_MAX_NTHREADS/WARP_SIZE]; \
   if (tid == 0) abortCount = 0; \
   __syncthreads(); \
  \
-  struct ncclDevComm* comm = firstColl.args.comm; \
   struct ncclChannel* channel = comm->channels+bid; \
-  struct ncclColl* c; \
-  channel->abortCount = &abortCount; \
   channel->sync = sync; \
-  if (bid == 0) { \
-    /* To optimize for latency, (only) the first operation is passed as argument.*/ \
-    c = &firstColl; \
-  } else { \
-    c = &localColl; \
-    load_coll(c, channel->devCollectives+channel->collFifoHead, tid, comm, &abortCount); \
+  if (!load_coll(&localColl, channel->devCollectives+channel->collFifoHead, tid, comm, &abortCount)) { \
+    if (tid == 0) traceAbort(-1); \
+    return; \
   } \
+  if (tid == 0) traceKernelLaunch(localColl.funcIndex); \
   while (1) { \
-    if (tid < c->args.nThreads) { \
-      if (c->funcIndex == fIndex) { \
-        coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(&c->args); \
+    if (tid < localColl.args.nThreads) { \
+      if (localColl.funcIndex == fIndex) { \
+        coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(&localColl.args); \
       } else { \
-        NCCL_CALL_FUNCTIONS(c); \
+        NCCL_CALL_FUNCTIONS(&localColl); \
       } \
     } \
-    int nextIndex = c->nextIndex; \
+    int nextIndex = localColl.nextIndex; \
     if (tid == 0) channel->collFifoHead = nextIndex; \
  \
-    if (c->active == 2) { \
+    if (localColl.active == 2) { \
+      if (tid == 0) traceCollEnd(-1); \
       return; \
     } \
  \
     /* Load next collective operation*/ \
-    c = &localColl; /* for bid 0 */ \
-    load_coll(c, channel->devCollectives+nextIndex, tid, comm, &abortCount); \
+    if (!load_coll(&localColl, channel->devCollectives+nextIndex, tid, comm, &abortCount)) { \
+      if (tid == 0) traceAbort(-1); \
+      break; \
+    } \
+    if (tid == 0) traceCollEnd(localColl.funcIndex); \
   } \
 }
 

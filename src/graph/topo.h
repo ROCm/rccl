@@ -16,8 +16,13 @@
 #define PCI_WIDTH 12           // PCI Gen3 x16
 #define QPI_WIDTH 8
 #define SKL_QPI_WIDTH 12
+#define SKL_PCI_WIDTH 14
+#define SKL_CPUPCI_WIDTH 10
 #define P9_WIDTH 32
 #define NET_WIDTH 12           // 100Gbit
+#define ROME_QPI_WIDTH 12
+#define ROME_PCI_WIDTH 22
+#define ROME_CPUPCI_WIDTH 16
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, to GPU
 // to GPU traffic consumed more PCI bandwidth.

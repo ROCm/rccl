@@ -51,7 +51,7 @@ NCCL_PARAM(P2pLevel, "P2P_LEVEL", -2);
 NCCL_PARAM(P2pDisable, "P2P_DISABLE", -2);
 
 /* Convert a PCI busId string into a local cudaDev device index (cf. CUDA_VISIBLE_DEVICES) */
-static int busIdToCudaDev(int64_t busId) {
+int busIdToCudaDev(int64_t busId) {
   int ndev;
   if (hipGetDeviceCount(&ndev) != hipSuccess)
     return -1;
@@ -71,10 +71,14 @@ static int busIdToCudaDev(int64_t busId) {
 ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
   int cpuCount;
   NCCLCHECK(ncclTopoCpuCount(topo, &cpuCount));
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  int p2pLevel = PATH_ARRAY_SIZE;
+#else
   // Do not use P2P across sockets by default (provided CUDA permits it).
   // When we are on a single socket, don't even use P2P through the CPU as
   // it should be able to sustain two flows to sysmem faster than PCI P2P.
   int p2pLevel = cpuCount == 1 ? PATH_PHB : PATH_NODE;
+#endif
   if (ncclParamP2pDisable() == 1) p2pLevel = 0;
   if (ncclParamP2pLevel() != -2) p2pLevel = ncclParamP2pLevel();
 

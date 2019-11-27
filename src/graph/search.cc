@@ -12,6 +12,7 @@ static ncclResult_t ncclTopoFollowPath(struct ncclTopoGraph* graph, struct ncclT
   if (path->count == 0) return ncclSuccess;
 
   *node = NULL;
+  width /= 2;
   if (width > 0) {
     if (path->type > graph->type) return ncclSuccess;
     graph->type = std::max(graph->type, path->type);
@@ -204,7 +205,7 @@ ncclResult_t ncclTopoSearchRecGpu(struct ncclTopoSystem* system, struct ncclTopo
     NCCLCHECK(ncclTopoCompareGraphs(graph, saveGraph, &copy));
     if (copy) {
       memcpy(saveGraph, graph, sizeof(struct ncclTopoGraph));
-      if (graph->nChannels*graph->speedIntra == maxSpeed) *time = -1;
+      if (graph->nChannels*graph->speedIntra/2 == maxSpeed) *time = -1;
     }
     if (graph->nChannels < MAXCHANNELS/2) {
       NCCLCHECK(ncclTopoSearchRec(system, graph, saveGraph, maxSpeed, time));

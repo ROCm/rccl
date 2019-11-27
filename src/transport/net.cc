@@ -64,11 +64,15 @@ static ncclResult_t netGetGdrSupport(struct ncclTopoSystem* topo, int64_t busId,
   if (read) { // For reads (sends) only enable under certain conditions
     int gdrReadParam = ncclParamNetGdrRead();
     if (gdrReadParam == 0) return ncclSuccess;
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+    return ncclSuccess;
+#else
     if (gdrReadParam < 0) {
        int nvlink;
        NCCLCHECK(ncclTopoHasNvlink(topo, busId, &nvlink));
        if (!nvlink) return ncclSuccess;
     }
+#endif
   }
 
   // Check if we are close enough that it makes sense to enable GDR
@@ -234,7 +238,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
   struct netSendResources* resources = (struct netSendResources*) (args->connector->transportResources);
   if (args->state == ncclProxyOpReady) {
     // Update opCount
-    resources->hostRecvMem->opCount = args->opCount;
+    STORE(&resources->hostRecvMem->opCount, args->opCount);
 
     // Round to next multiple of sliceSteps
     resources->step = ROUNDUP(resources->step, args->chunkSteps);
@@ -251,9 +255,9 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
         volatile uint64_t* recvTail = &resources->hostRecvMem->tail;
         if (args->protocol == NCCL_PROTO_LL128) {
           int stepSize = NCCL_LL128_BUFF_SIZE/NCCL_STEPS;
-          if (args->tail < *recvTail) {
+          if (args->tail < LOAD(recvTail)) {
             int buffSlot = args->tail%NCCL_STEPS;
-            if (sizesFifo[buffSlot] != -1) {
+            if (LOAD(sizesFifo+buffSlot) != -1) {
               struct ncclRecvMem* localMem = resources->useGdr ? resources->devRecvMem : resources->hostRecvMem;
               char* localBuff = (char*)localMem->ll128Buff;
               int ready = resources->useGdr;
@@ -261,18 +265,18 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
                 // When data is in sysmem, we need to wait until all flags are correct since the GPU only
                 // called threadfence()
                 uint64_t flag = args->tail + 1;
-                int nFifoLines = DIVUP(sizesFifo[buffSlot], sizeof(uint64_t)*NCCL_LL128_LINEELEMS);
+                int nFifoLines = DIVUP(LOAD(sizesFifo+buffSlot), sizeof(uint64_t)*NCCL_LL128_LINEELEMS);
                 volatile uint64_t* lines = (volatile uint64_t*)(localBuff+buffSlot*stepSize);
                 ready = 1;
                 for (int i=0; i<nFifoLines; i++) {
-                  if (lines[i*NCCL_LL128_LINEELEMS+NCCL_LL128_DATAELEMS] != flag) { ready = 0; break; }
+                  if (LOAD(lines+i*NCCL_LL128_LINEELEMS+NCCL_LL128_DATAELEMS) != flag) { ready = 0; break; }
                 }
               }
               if (ready) {
                 // Send through network
-                NCCLCHECK(ncclNetIsend(resources->netSendComm, localBuff+buffSlot*stepSize, sizesFifo[buffSlot], resources->ll128Mhandle, args->requests+buffSlot));
+                NCCLCHECK(ncclNetIsend(resources->netSendComm, localBuff+buffSlot*stepSize, LOAD(sizesFifo+buffSlot), resources->ll128Mhandle, args->requests+buffSlot));
                 if (args->requests[buffSlot] != NULL) {
-                  sizesFifo[buffSlot] = -1;
+                  STORE(sizesFifo+buffSlot, -1);
                   // Make sure size is reset to zero before we update the head.
                   __sync_synchronize();
                   args->tail += args->sliceSteps;
@@ -311,7 +315,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
           struct ncclRecvMem* localMem = resources->useGdr ? resources->devRecvMem : resources->hostRecvMem;
           // Send through network
           int buffSlot = args->tail%NCCL_STEPS;
-          if (sizesFifo[buffSlot] != -1) {
+          if (LOAD(sizesFifo+buffSlot) != -1) {
             NCCLCHECK(ncclNetIsend(resources->netSendComm, localMem->buff+buffSlot*stepSize, LOAD(sizesFifo+buffSlot), resources->mhandle, args->requests+buffSlot));
             if (args->requests[buffSlot] != NULL) {
               STORE(sizesFifo+buffSlot, -1);
@@ -347,7 +351,7 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
   struct netRecvResources* resources = (struct netRecvResources*) (args->connector->transportResources);
   if (args->state == ncclProxyOpReady) {
     // Update opCount
-    resources->hostSendMem->opCount = args->opCount;
+    STORE(&resources->hostSendMem->opCount, args->opCount);
 
     // Round to next multiple of sliceSteps
     resources->step = ROUNDUP(resources->step, args->chunkSteps);

@@ -65,8 +65,7 @@ class ncclPrimitives {
 #endif
   const T* recvBuff[NRECV];
   T* sendBuff[NSEND];
-  struct ncclDevComm* comm;
-  uint32_t* abortCount;
+  const struct ncclDevComm* comm;
 
   inline __device__ int recvOffset(int i) { return (recvStep[i]%NCCL_STEPS)*stepSize; }
   inline __device__ int sendOffset(int i) { return (sendStep[i]%NCCL_STEPS)*stepSize; }
@@ -112,14 +111,14 @@ class ncclPrimitives {
     if (sendConnHeadPtr) {
 #ifdef ENABLE_PROFILING
       auto devProf = comm->devProf;
-      uint64_t t0 = clock64();
+      uint64_t t0 = __rtc64();
 #endif
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + SLICESTEPS) {
         sendConnHeadCache = LOAD(sendConnHeadPtr);
         if (checkAbort(wid, 1)) break;
       }
 #ifdef ENABLE_PROFILING
-      __atomic_fetch_add(&devProf->wait_send_cycle[blockIdx.x], clock64() - t0, __ATOMIC_SEQ_CST);
+      __atomic_fetch_add(&devProf->wait_send_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
 #endif
       if (sendConnFifoPtr) {
         STORE(sendConnFifoPtr+sendConnHead%NCCL_STEPS, nbytes);
@@ -134,14 +133,14 @@ class ncclPrimitives {
     if (recvConnTailPtr) {
 #ifdef ENABLE_PROFILING
       auto devProf = comm->devProf;
-      uint64_t t0 = clock64();
+      uint64_t t0 = __rtc64();
 #endif
       while (recvConnTailCache < recvConnTail + SLICESTEPS) {
         recvConnTailCache = LOAD(recvConnTailPtr);
         if (checkAbort(wid, 0)) break;
       }
 #ifdef ENABLE_PROFILING
-      __atomic_fetch_add(&devProf->wait_recv_cycle[blockIdx.x], clock64() - t0, __ATOMIC_SEQ_CST);
+      __atomic_fetch_add(&devProf->wait_recv_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
 #endif
       recvConnTail += SLICESTEPS;
     }
@@ -340,7 +339,6 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
   ncclPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount)
     : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), stepSize(stepSize), opCount(opCount) {
     // Make sure step is updated before we read it.
-    abortCount = channel->abortCount;
     barrier();
 
     for (int i=0; i<NRECV && recvPeers[i] >= 0; i++) loadRecvConn(&channel->devPeers[recvPeers[i]].recv.conn, i, 0);
@@ -417,11 +415,11 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
 
 #ifdef ENABLE_PROFILING
 #define INIT_COUNTER \
-  if (tid == 0) { t0 = clock64(); ws = LOAD(&(devProf->wait_send_cycle[blockIdx.x])); \
+  if (tid == 0) { t0 = __rtc64(); ws = LOAD(&(devProf->wait_send_cycle[blockIdx.x])); \
     wr = LOAD(&(devProf->wait_recv_cycle[blockIdx.x])); }
 
 #define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0) { __atomic_fetch_add(&(devProf->prim##_cycle), clock64() - t0 \
+  if (tid == 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __rtc64() - t0 \
     + ws - LOAD(&(devProf->wait_send_cycle[blockIdx.x])) \
     + wr - LOAD(&(devProf->wait_recv_cycle[blockIdx.x])), \
     __ATOMIC_SEQ_CST); \

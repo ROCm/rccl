@@ -5,7 +5,7 @@
  ************************************************************************/
 
 #include "test_AllReduceAbort.hpp"
-#include "../include/core.h"
+#include "../include/comm.h"
 #include <omp.h>
 
 #define NUM_ITER 8
@@ -41,31 +41,24 @@ namespace CorrectnessTests
         hipStream_t stream;
         HIPCHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
         struct ncclChannel* channel = comm->channels;
-        struct ncclRing *ring = &channel->ring;
-        struct ncclConnector* send = &channel->peers[ring->next].send;
-        size_t op_offset = &(send->conn.opCountRem) - (uint64_t **)channel->peers;
-        size_t head_offset = &(send->conn.head) - (uint64_t **)channel->peers;
-        uint64_t **p_dev_opCount = (uint64_t **)(channel->devPeers) + op_offset;
-        uint64_t **p_dev_head = (uint64_t **)(channel->devPeers) + head_offset;
+        uint64_t **p_dev_opCount = (uint64_t **)((uint8_t*)(channel->devPeers + channel->ring.next) + offsetof(struct ncclPeer, send.conn.opCountRem));
+        uint64_t **p_dev_head = (uint64_t **)((uint8_t*)(channel->devPeers + channel->ring.next) + offsetof(struct ncclPeer, send.conn.head));
         uint64_t *real_opCount, *fake_opCount, *fake_o;
         uint64_t *real_head, *fake_head, *fake_h;
 
         // get original opCount and head
-        HIPCHECK(hipMemcpyAsync(&real_opCount, p_dev_opCount, sizeof(uint64_t*), hipMemcpyDeviceToHost, stream));
-        HIPCHECK(hipMemcpyAsync(&real_head, p_dev_head, sizeof(uint64_t*), hipMemcpyDeviceToHost, stream));
-        HIPCHECK(hipStreamSynchronize(stream));
+        HIPCHECK(hipMemcpy(&real_opCount, p_dev_opCount, sizeof(uint64_t*), hipMemcpyDefault));
+        HIPCHECK(hipMemcpy(&real_head, p_dev_head, sizeof(uint64_t*), hipMemcpyDefault));
         // allocate and install fakes
         HIPCHECK(hipHostMalloc(&fake_opCount, sizeof(uint64_t*), hipHostMallocMapped));
-        HIPCHECK(hipMemcpyAsync(p_dev_opCount, &fake_opCount, sizeof(uint64_t*), hipMemcpyHostToDevice, stream));
+        HIPCHECK(hipMemcpy(p_dev_opCount, &fake_opCount, sizeof(uint64_t*), hipMemcpyDefault));
         *fake_opCount = FAKE_OP_COUNT;
         HIPCHECK(hipHostMalloc(&fake_head, sizeof(uint64_t*), hipHostMallocMapped));
-        HIPCHECK(hipMemcpyAsync(p_dev_head, &fake_head, sizeof(uint64_t*), hipMemcpyHostToDevice, stream));
+        HIPCHECK(hipMemcpy(p_dev_head, &fake_head, sizeof(uint64_t*), hipMemcpyDefault));
         *fake_head = 0;
-        HIPCHECK(hipStreamSynchronize(stream));
         // read back fakes to confirm
-        HIPCHECK(hipMemcpyAsync(&fake_o, p_dev_opCount, sizeof(uint64_t*), hipMemcpyDeviceToHost, stream));
-        HIPCHECK(hipMemcpyAsync(&fake_h, p_dev_head, sizeof(uint64_t*), hipMemcpyDeviceToHost, stream));
-        HIPCHECK(hipStreamSynchronize(stream));
+        HIPCHECK(hipMemcpy(&fake_o, p_dev_opCount, sizeof(uint64_t*), hipMemcpyDefault));
+        HIPCHECK(hipMemcpy(&fake_h, p_dev_head, sizeof(uint64_t*), hipMemcpyDefault));
         //std::cerr << "[          ] replaced gpu " << gpu << " real_opCount = " << real_opCount << " to fake_opCount = " << fake_o << std::endl;
         //std::cerr << "[          ] replaced gpu " << gpu << " real_head = " << real_head << " to fake_head = " << fake_h << std::endl;
 

@@ -54,7 +54,7 @@
   NCCL_FUNCS3B(coll, copy), \
   NCCL_FUNCS3B(coll, copy)
 
-typedef void(*ncclKern_t)(struct ncclColl);
+typedef void(*ncclKern_t)(struct ncclDevComm*);
 // Must be consistent with the ncclFuncSet enum
 static ncclKern_t const ncclKerns[NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
   NCCL_FUNCS2B(ncclBroadcast),
@@ -80,7 +80,7 @@ ncclResult_t ncclLaunchCooperativeKernelMultiDevice(hipLaunchParams *paramsList,
   for (int i = 0; i < numDevices; i++) {
     hipLaunchParams* params = paramsList+i;
     CUDACHECK(hipSetDevice(cudaDevs[i]));
-    hipLaunchKernelGGL(((void (*)(struct ncclColl))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
+    hipLaunchKernelGGL(((void (*)(struct ncclDevComm*))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclDevComm ***)(params->args)));
   }
   CUDACHECK(hipSetDevice(savedDev));
   return ncclSuccess;
@@ -98,10 +98,8 @@ ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
   // Find the first operation, choose the kernel accordingly and pass it
   // as the first argument.
   struct ncclColl* coll = comm->channels[0].collectives+comm->channels[0].collStart;
-  memcpy(&comm->args, coll, sizeof(struct ncclColl));
-  // As we pass that coll directly, we can free it immediately.
-  STORE(&coll->active, 0);
 
+  comm->args = comm->devComm;
   params->func = (void *)ncclKerns[coll->funcIndex];
   return ncclSuccess;
 }
@@ -194,7 +192,7 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
 
   hipLaunchParams *params = comm->myParams;
   if (comm->launchMode == ncclComm::PARALLEL) {
-    hipLaunchKernelGGL(((void (*)(struct ncclColl))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclColl **)(params->args)));
+    hipLaunchKernelGGL(((void (*)(struct ncclDevComm*))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclDevComm ***)(params->args)));
   }
   // Start the network proxies as soon as the kernel has been launched. We can't
   // perform any CUDA call between the two or having a hipFree between the CUDA
@@ -232,9 +230,9 @@ ncclResult_t ncclEnqueueEvents(ncclComm_t comm) {
 // Trees are not perfectly sticking to the model for medium sizes. Applying a static correction
 // factor is not ideal but works quite well. Powers of two, 64 B to 1 GB.
 static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][22] = {
-  { 1.0, 1.0, 1.0, 1.0,  .9,  .8,  .7,  .7,  .7,  .7,  .6,  .5,  .5,  .5,  .6,  .7,  .8,  .9,  .9, 1.0, 1.0, 1.0 },
-  { 1.0, 1.0, 1.0, 1.0, 1.0,  .9,  .8,  .8,  .8,  .8,  .7,  .7,  .7,  .6,  .6,  .7,  .7,  .8,  .8,  .9,  .9, 1.0 },
-  {  .9,  .9,  .9,  .9,  .9,  .9,  .9,  .8,  .7,  .6,  .6,  .5,  .5,  .5,  .5,  .5,  .5,  .6,  .6,  .7,  .8,  .9 }
+  {  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  .84,  .49,  .42,  .60,  .75,  .87,  .94,  .94,  .99,  1.0,  1.0 ,  1.0 ,  1.0 ,  1.0 ,  1.0 },
+  {  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  .84,  .49,  .42,  .60,  .75,  .87,  .94,  .94,  .99,  1.0,  1.0 ,  1.0 ,  1.0 ,  1.0 ,  1.0 },
+  {  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  .41,  .27,  .25,  .39,  .46,  .72,  .76,  .87,  .92,  .97,  1.0,  1.0 ,  1.0 ,  1.0 ,  1.0 ,  1.0 }
 };
 
 static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
@@ -262,7 +260,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
     return ncclInternalError;
   }
 
-  if (comm->rank == 0) INFO(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %d", info->nBytes, info->algorithm, info->protocol, minTime);
+  if (comm->rank == 0) INFO(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %d", info->nBytes, info->algorithm, info->protocol, (int)minTime);
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
 
   int nc = comm->nChannels;

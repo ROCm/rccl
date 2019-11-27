@@ -58,7 +58,7 @@ static const char* ncclProtoStr[] = { "LL", "LL128", "Simple" };
 
 // Latencies in us, Bandwidths in GB/s
 // Tree { LL, LL128, Simple } , Ring { LL, LL128, Simple }
-static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { { 4.4, 4.4,  0 }, { 3.6, 3.6, 8.4 } };
+static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { { 37.9, 37.9, 40.4 }, { 20.5, 20.5, 27.9 } };
 
 // NVLink, PCI, Network
 #define NCCL_HW_NVLINK 0
@@ -67,11 +67,11 @@ static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { { 4.4,
 // Tree/Simple is the latency a 256kB chunk, which is ~ base lat + 256k/12GB/s (+ 256k/12GB/s for the network).
 static const float hwLat [3][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] =
 { /* NVLINK */
-  { /* Tree (LL/LL128/Simple)*/ {  .5, 1.9, 28 }, /* Ring (LL/LL128/Simple)*/ {  .4, 2.5, 5.7 } },
+  { /* Tree (LL/LL128/Simple)*/ { 1.2, 1.2, 3.8 }, /* Ring (LL/LL128/Simple)*/ { 2.3, 2.3, 2.7 } },
   /* PCI */
-  { /* Tree (LL/LL128/Simple)*/ { 1.0, 1.9, 28 }, /* Ring (LL/LL128/Simple)*/ { 1.0, 2.5, 5.7 } },
+  { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 1.3, 1.3, 1.9 } },
   /* NET */
-  { /* Tree (LL/LL128/Simple)*/ { 5.0, 7.5, 50 }, /* Ring (LL/LL128/Simple)*/ {  .9, 2.5, 6.6 } }
+  { /* Tree (LL/LL128/Simple)*/ { 9.8, 9.8, 19.5 }, /* Ring (LL/LL128/Simple)*/ { 2.0, 2.0, 4.5 } }
 };
 
 // LL128 max BW for the different collectives
@@ -102,13 +102,13 @@ ncclResult_t ncclSetThresholds(struct ncclComm* comm, int minCompCap, int maxCom
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         int speed = comm->nNodes <= 2 ? graphs[a]->speedIntra : graphs[a]->speedInter;
-        float busBw = graphs[a]->nChannels * speed * 1.0;
+        float busBw = graphs[a]->nChannels * speed * 0.6;
 
         // Various model refinements
-        if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL)    busBw *= 1.0/4.0;
+        if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL)    busBw *= 1.0/5.0;
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL128) busBw = std::min(busBw*120.0/128.0, ll128MaxBw[coll]);
-        if (a == NCCL_ALGO_TREE) busBw = std::min(busBw*.9, comm->nNodes > 1 ? 70.0 : 90.0);
-        if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_LL) busBw *= 1.0/3.0;
+        if (a == NCCL_ALGO_TREE) busBw = std::min(busBw*.27, comm->nNodes > 1 ? 70.0 : 90.0);
+        if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_LL) busBw *= 1.0/2.3;
         if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_LL128) busBw *= 7.0/9.0;
 
         // Convert bus BW to algorithm BW

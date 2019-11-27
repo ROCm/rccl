@@ -34,7 +34,7 @@ THE SOFTWARE.
 #include "copy_kernel.h"
 
 #define MAX_GPU 8
-#define MAX_WORKGROUPS 16
+#define MAX_WORKGROUPS 32
 #define THREADS 256
 
 #define COPY_UNROLL       4
@@ -55,6 +55,16 @@ THE SOFTWARE.
 //we will update it.
 #define RTC_CLOCK_FREQ_MI100 2.5E07
 #define RTC_CLOCK_FREQ_DEFAULT 2.7E07
+
+__device__
+inline  __attribute((always_inline))
+long long int __rtc64() {
+#if __HIP__
+  return (long long int) __builtin_amdgcn_s_memrealtime();
+#else
+  return (long long int) __clock_u64();
+#endif
+}
 
 struct transfer_data_t {
   float *dest0[MAX_WORKGROUPS]; //remote fine grain
@@ -116,7 +126,7 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   __syncthreads();
 
   if (idx == 0) {
-    curr_time = clock64();
+    curr_time = __rtc64();
   }
 
   if (op == OP_COPY) Copy<COPY_UNROLL, THREADS, float>(transfer_data->dest0[bid], transfer_data->src0[bid], n);
@@ -129,7 +139,7 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   if (op == OP_READ) Copy<COPY_UNROLL, THREADS, float>(transfer_data->src0[bid],transfer_data->dest0[bid], n);
   __syncthreads();
   if (idx == 0) {
-    next_time = clock64();
+    next_time = __rtc64();
     __atomic_fetch_add(&(profiling_data->write_cycles[bid]), next_time - curr_time, __ATOMIC_SEQ_CST);
     __atomic_fetch_add(&(profiling_data->bytes_transferred[bid]), n * sizeof(float), __ATOMIC_SEQ_CST);
   }

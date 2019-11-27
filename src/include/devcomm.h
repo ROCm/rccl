@@ -207,7 +207,6 @@ struct ncclChannel {
       int collFifoHead; // Only used by GPU
       int collFifoTail; // Only used by CPU
 
-      uint32_t* abortCount;
       uint32_t* sync;
     };
     int data[0x80];
@@ -255,6 +254,27 @@ struct ncclProf {
 };
 #endif
 
+#ifdef ENABLE_COLLTRACE
+typedef enum {
+  ncclCollTraceKernelLaunchType,
+  ncclCollTraceCollEndType,
+  ncclCollTraceAbortType
+} ncclCollTraceDataType_t;
+
+struct ncclCollTrace {
+  uint8_t type;
+  uint8_t bid;
+  int16_t funcIndex;
+  uint32_t data_0;
+  uint64_t timeStamp;
+  uint64_t opCount;
+  uint64_t data_1;
+};
+static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must have a pow2 size");
+
+#define COLLTRACE_NUM_ITEMS 1024
+#endif
+
 typedef enum {
   ncclDevSuccess,
   ncclDevAssertedMismatch,
@@ -275,6 +295,13 @@ struct ncclDevComm {
 #ifdef ENABLE_PROFILING
   // Profiling counters
   struct ncclProf* devProf;
+#endif
+
+#ifdef ENABLE_COLLTRACE
+  struct ncclCollTrace* collTrace;
+  uint32_t collTraceHead, *collTraceTail;
+  pthread_t collTraceThread;
+  bool collTraceExit;
 #endif
 };
 

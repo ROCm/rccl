@@ -28,7 +28,7 @@ __device__ void ncclBroadcastRingKernel(struct CollectiveArgs* args) {
 #ifdef ENABLE_PROFILING
   auto devProf = comm->devProf;
   uint64_t clk, t0 = 0ULL, ws, wr;
-  if (tid == 0) clk = clock64();
+  if (tid == 0) clk = __rtc64();
 #endif
 
   // Compute pointers
@@ -65,7 +65,7 @@ __device__ void ncclBroadcastRingKernel(struct CollectiveArgs* args) {
     }
   }
 #ifdef ENABLE_PROFILING
-  if (tid == 0) __atomic_fetch_add(&(devProf->total_cycle), clock64() - clk, __ATOMIC_SEQ_CST);
+  if (tid == 0) __atomic_fetch_add(&(devProf->total_cycle), __rtc64() - clk, __ATOMIC_SEQ_CST);
 #endif
 }
 
