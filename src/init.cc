@@ -235,6 +235,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
+  NCCLCHECK(ncclCudaMemcpy(comm->channels, comm->hostDevComm.channels, comm->nChannels));
+  for (int channel=0; channel<comm->nChannels; channel++)
+    INFO(NCCL_INIT, "rank %d channel %d hwid %x", comm->rank, channel, comm->channels[channel].hwid);
+
   CUDACHECK(hipFree(comm->hostDevComm.channels));
   CUDACHECK(hipFree(comm->devComm));
 

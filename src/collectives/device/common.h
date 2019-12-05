@@ -174,6 +174,7 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
   struct ncclChannel* channel = comm->channels+bid; \
   struct ncclColl* c; \
   channel->abortCount = &abortCount; \
+  if (tid == 0) asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s"(channel->hwid)); \
   if (bid == 0) { \
     /* To optimize for latency, (only) the first operation is passed as argument.*/ \
     c = &firstColl; \

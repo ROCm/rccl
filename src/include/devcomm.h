@@ -186,6 +186,7 @@ struct ncclChannel {
       int collFifoTail; // Only used by CPU
 
       uint32_t* abortCount;
+      uint32_t hwid;
     };
     int data[0x80];
   };
