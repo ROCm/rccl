@@ -78,7 +78,7 @@ static int busIdToCudaDev(const char* busId) {
 /* Determine if we can communicate with the peer through p2p */
 ncclResult_t p2pCanConnect(ncclTvalue_t* ret, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo) {
   // Do not use P2P across root complexes by default (provided CUDA permits it)
-  int p2pLevel = PATH_NODE;
+  int p2pLevel = PATH_SYS;
   if (ncclParamP2pDisable() == 1) p2pLevel = 0;
   if (ncclParamP2pLevel() != -2) p2pLevel = ncclParamP2pLevel();
 
