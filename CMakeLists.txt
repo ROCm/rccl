@@ -188,7 +188,6 @@ rocm_export_targets(NAMESPACE
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-dev (>= 2.5.27)")
 set(CPACK_RPM_PACKAGE_REQUIRES "rocm-dev >= 2.5.27")
-
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
 
 rocm_create_package(
