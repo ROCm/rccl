@@ -186,8 +186,8 @@ rocm_export_targets(NAMESPACE
                     DEPENDS
                     hip)
 
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip_hcc")
-set(CPACK_RPM_PACKAGE_REQUIRES "hip_hcc")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-dev (>= 2.5.27)")
+set(CPACK_RPM_PACKAGE_REQUIRES "rocm-dev (>= 2.5.27)")
 
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
 
@@ -197,7 +197,7 @@ rocm_create_package(
   DESCRIPTION
   "Optimized primitives for collective multi-GPU communication"
   MAINTAINER
-  "<no-reply@amd.com>"
+  "<rccl-maintainer@amd.com>"
   LDCONFIG)
 
 rocm_install_symlink_subdir(rccl)
