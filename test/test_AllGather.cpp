@@ -4,7 +4,6 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "test_AllGather.hpp"
-#include <omp.h>
 
 namespace CorrectnessTests
 {
@@ -23,13 +22,14 @@ namespace CorrectnessTests
         size_t const sendCount = dataset.numElements / dataset.numDevices;
 
         // Launch the reduction (1 thread per GPU)
-        #pragma omp parallel for num_threads(numDevices)
+        ncclGroupStart();
         for (int i = 0; i < numDevices; i++)
         {
             ncclAllGather((int8_t *)dataset.inputs[i] + (i * byteCount),
                           dataset.outputs[i], sendCount,
                           dataType, comms[i], streams[i]);
         }
+        ncclGroupEnd();
 
         // Wait for reduction to complete
         Synchronize();
@@ -68,13 +68,14 @@ namespace CorrectnessTests
                 size_t const sendCount = subDataset.numElements / subDataset.numDevices;
 
                 // Launch the reduction (1 thread per GPU)
-                #pragma omp parallel for num_threads(numDevices)
+                ncclGroupStart();
                 for (int i = 0; i < numDevices; i++)
                 {
                     ncclAllGather((int8_t *)subDataset.inputs[i] + (i * byteCount),
                                   subDataset.outputs[i], sendCount,
                                   dataType, comms[i], streams[i]);
                 }
+                ncclGroupEnd();
 
                 // Wait for reduction to complete
                 Synchronize();
