@@ -5,7 +5,6 @@
  ************************************************************************/
 
 #include "test_Broadcast.hpp"
-#include <omp.h>
 
 namespace CorrectnessTests
 {
@@ -25,7 +24,7 @@ namespace CorrectnessTests
             ComputeExpectedResults(dataset, root);
 
             // Launch the reduction (1 thread per GPU)
-            #pragma omp parallel for num_threads(numDevices)
+            ncclGroupStart();
             for (int i = 0; i < numDevices; i++)
             {
                 ncclBroadcast(dataset.inputs[i],
@@ -33,7 +32,7 @@ namespace CorrectnessTests
                               numElements, dataType,
                               root, comms[i], streams[i]);
             }
-
+            ncclGroupEnd();
 
             // Wait for reduction to complete
             Synchronize();

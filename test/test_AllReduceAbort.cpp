@@ -6,7 +6,6 @@
 
 #include "test_AllReduceAbort.hpp"
 #include "../include/core.h"
-#include <omp.h>
 
 #define NUM_ITER 8
 #define FAKE_OP_COUNT NUM_ITER+1

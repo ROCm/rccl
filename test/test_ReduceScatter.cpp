@@ -5,7 +5,6 @@
  ************************************************************************/
 
 #include "test_ReduceScatter.hpp"
-#include <omp.h>
 
 namespace CorrectnessTests
 {
@@ -24,7 +23,7 @@ namespace CorrectnessTests
         size_t const recvCount = dataset.numElements / dataset.numDevices;
 
         // Launch the reduction (1 thread per GPU)
-        #pragma omp parallel for num_threads(numDevices)
+        ncclGroupStart();
         for (int i = 0; i < numDevices; i++)
         {
             ncclReduceScatter(dataset.inputs[i],
@@ -32,7 +31,7 @@ namespace CorrectnessTests
                               recvCount, dataType, op,
                               comms[i], streams[i]);
         }
-
+        ncclGroupEnd();
 
         // Wait for reduction to complete
         Synchronize();
