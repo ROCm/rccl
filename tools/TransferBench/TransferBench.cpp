@@ -28,7 +28,9 @@ THE SOFTWARE.
 #include <cstdlib>
 #include <set>
 #include <unistd.h>
-
+#include <map>
+#include <iostream>
+#include <sstream>
 #include <hip/hip_runtime.h>
 #include "copy_kernel.h"
 #include "TransferBench.hpp"
@@ -272,7 +274,8 @@ int main(int argc, char **argv)
       {
         HIP_CALL(hipSetDevice(links[i].srcGpu));
 
-        HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
+        if (!useSingleSync || iteration == 0)
+          HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
 
         if (useHipCall)
         {
@@ -308,7 +311,8 @@ int main(int argc, char **argv)
                                gpuBlockParams[i]);
           }
         }
-        HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
+        if (!useSingleSync || iteration == numIterations - 1)
+          HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
       }
 
       // Synchronize per iteration, unless in single sync mode, in which case
@@ -378,8 +382,7 @@ int main(int argc, char **argv)
       }
       else
       {
-        if (!useSingleSync)
-          totalGpuTime[i] /= (1.0 * numIterations);
+        totalGpuTime[i] /= (1.0 * numIterations);
         printf("%8.3f", (linkCount[i] * numBytesPerLink / 1.0E9) / totalGpuTime[i]);
       }
     }
