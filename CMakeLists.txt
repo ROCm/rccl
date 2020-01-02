@@ -173,18 +173,8 @@ else()
   target_link_libraries(rccl PUBLIC hip::hip_hcc ${hcc_LIBRARIES} numa)
 endif()
 
-## Set the VERSION and SOVERSION values
-set (LIB_VERSION_MAJOR 1 )
-set (LIB_VERSION_MINOR 0 )
-if ( ${ROCM_PATCH_VERSION} )
-    set (LIB_VERSION_PATCH ${ROCM_PATCH_VERSION} )
-else()
-    set (LIB_VERSION_PATCH 0 )
-endif()
-
-set ( LIB_VERSION_STRING "${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH}" )
-set_property ( TARGET rccl PROPERTY VERSION "${LIB_VERSION_STRING}" )
-set_property ( TARGET rccl PROPERTY SOVERSION "${LIB_VERSION_MAJOR}" )
+#Setup librccl.so version
+rocm_set_soversion(rccl "2.7")
 
 ## Linker Flags
 ## Add --enable-new-dtags to generate DT_RUNPATH
