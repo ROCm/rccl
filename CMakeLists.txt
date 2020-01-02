@@ -16,7 +16,7 @@ set(AMDGPU_TARGETS gfx900;gfx906;gfx908 CACHE STRING "List of specific machine t
 find_package(ROCM
              REQUIRED
              PATHS
-             /opt/rocm)
+             /opt/rocm $CMAKE_INSTALL_PREFIX)
 
 include(ROCMInstallTargets)
 include(ROCMPackageConfigHelpers)
@@ -67,7 +67,10 @@ rocm_setup_version(VERSION "2.7.0")
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
             /opt/rocm/hip
-            /opt/rocm/hcc)
+            /opt/rocm/hcc
+            $CMAKE_INSTALL_PREFIX
+            $CMAKE_INSTALL_PREFIX/hip
+            $CMAKE_INSTALL_PREFIX/hcc)
 
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
@@ -150,7 +153,7 @@ if("${HIP_COMPILER}" MATCHES "clang")
     target_compile_options(rccl PRIVATE --amdgpu-target=${target} PRIVATE -fgpu-rdc)
   endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
-  target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
+  target_include_directories(rccl PRIVATE /opt/rocm/hsa/include $CMAKE_INSTALL_PREFIX/hsa/include)
 endif()
 
 if("${HIP_COMPILER}" MATCHES "hcc")
@@ -169,6 +172,26 @@ if(TARGET hip::device)
 else()
   target_link_libraries(rccl PUBLIC hip::hip_hcc ${hcc_LIBRARIES} numa)
 endif()
+
+## Set the VERSION and SOVERSION values
+set (LIB_VERSION_MAJOR 1 )
+set (LIB_VERSION_MINOR 0 )
+if ( ${ROCM_PATCH_VERSION} )
+    set (LIB_VERSION_PATCH ${ROCM_PATCH_VERSION} )
+else()
+    set (LIB_VERSION_PATCH 0 )
+endif()
+
+set ( LIB_VERSION_STRING "${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH}" )
+set_property ( TARGET rccl PROPERTY VERSION "${LIB_VERSION_STRING}" )
+set_property ( TARGET rccl PROPERTY SOVERSION "${LIB_VERSION_MAJOR}" )
+
+## Linker Flags
+## Add --enable-new-dtags to generate DT_RUNPATH
+set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,--enable-new-dtags" )
+
+set ( CMAKE_SKIP_BUILD_RPATH TRUE )
+set ( CMAKE_INSTALL_RPATH "${ROCM_RPATH}" )
 
 rocm_install_targets(TARGETS
                      rccl

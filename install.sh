@@ -80,7 +80,7 @@ while true; do
     esac
     done
 
-rocm_path=/opt/rocm/bin
+rocm_path=$install_prefix/bin
 
 # #################################################
 # prep
