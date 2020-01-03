@@ -16,7 +16,7 @@ set(AMDGPU_TARGETS gfx900;gfx906;gfx908 CACHE STRING "List of specific machine t
 find_package(ROCM
              REQUIRED
              PATHS
-             /opt/rocm $CMAKE_INSTALL_PREFIX)
+             /opt/rocm)
 
 include(ROCMInstallTargets)
 include(ROCMPackageConfigHelpers)
@@ -67,10 +67,7 @@ rocm_setup_version(VERSION "2.7.0")
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
             /opt/rocm/hip
-            /opt/rocm/hcc
-            $CMAKE_INSTALL_PREFIX
-            $CMAKE_INSTALL_PREFIX/hip
-            $CMAKE_INSTALL_PREFIX/hcc)
+            /opt/rocm/hcc)
 
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
@@ -153,7 +150,7 @@ if("${HIP_COMPILER}" MATCHES "clang")
     target_compile_options(rccl PRIVATE --amdgpu-target=${target} PRIVATE -fgpu-rdc)
   endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
-  target_include_directories(rccl PRIVATE /opt/rocm/hsa/include $CMAKE_INSTALL_PREFIX/hsa/include)
+  target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
 endif()
 
 if("${HIP_COMPILER}" MATCHES "hcc")
@@ -174,14 +171,7 @@ else()
 endif()
 
 #Setup librccl.so version
-rocm_set_soversion(rccl "2.7")
-
-## Linker Flags
-## Add --enable-new-dtags to generate DT_RUNPATH
-set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,--enable-new-dtags" )
-
-set ( CMAKE_SKIP_BUILD_RPATH TRUE )
-set ( CMAKE_INSTALL_RPATH "${ROCM_RPATH}" )
+rocm_set_soversion(rccl "1.0")
 
 rocm_install_targets(TARGETS
                      rccl
