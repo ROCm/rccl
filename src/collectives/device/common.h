@@ -162,7 +162,7 @@ __device__ void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args) { \
 /* Kernels with the first operation inlined */
 #define IMPL_COLL_KERN(coll, op, ncclFunc, dtype, ctype, fIndex) \
 __launch_bounds__(MAXTHREADS+WARP_SIZE, 1) \
-__global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
+__global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
   int tid = threadIdx.x; \
   int bid = blockIdx.x; \
   __shared__ struct ncclColl localColl; \
@@ -170,35 +170,26 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclColl firstColl) { \
   if (tid == 0) abortCount = 0; \
   __syncthreads(); \
  \
-  struct ncclDevComm* comm = firstColl.args.comm; \
   struct ncclChannel* channel = comm->channels+bid; \
-  struct ncclColl* c; \
   channel->abortCount = &abortCount; \
-  if (bid == 0) { \
-    /* To optimize for latency, (only) the first operation is passed as argument.*/ \
-    c = &firstColl; \
-  } else { \
-    c = &localColl; \
-    load_coll(c, channel->devCollectives+channel->collFifoHead, tid, &abortCount); \
-  } \
+  load_coll(&localColl, channel->devCollectives+channel->collFifoHead, tid, &abortCount); \
   while (1) { \
-    if (tid < c->args.nThreads) { \
-      if (c->funcIndex == fIndex) { \
-        coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(&c->args); \
+    if (tid < localColl.args.nThreads) { \
+      if (localColl.funcIndex == fIndex) { \
+        coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(&localColl.args); \
       } else { \
-        NCCL_CALL_FUNCTIONS(c); \
+        NCCL_CALL_FUNCTIONS(&localColl); \
       } \
     } \
-    int nextIndex = c->nextIndex; \
+    int nextIndex = localColl.nextIndex; \
     if (tid == 0) channel->collFifoHead = nextIndex; \
  \
-    if (c->active == 2) { \
+    if (localColl.active == 2) { \
       return; \
     } \
  \
     /* Load next collective operation*/ \
-    c = &localColl; /* for bid 0 */ \
-    load_coll(c, channel->devCollectives+nextIndex, tid, &abortCount); \
+    load_coll(&localColl, channel->devCollectives+nextIndex, tid, &abortCount); \
   } \
 }
 
