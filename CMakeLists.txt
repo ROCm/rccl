@@ -170,6 +170,9 @@ else()
   target_link_libraries(rccl PUBLIC hip::hip_hcc ${hcc_LIBRARIES} numa)
 endif()
 
+#Setup librccl.so version
+rocm_set_soversion(rccl "1.0")
+
 rocm_install_targets(TARGETS
                      rccl
                      PREFIX
