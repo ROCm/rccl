@@ -1,3 +1,4 @@
+# Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
 HIP_PATH?= $(wildcard /opt/rocm/hip)
 ifeq (,$(HIP_PATH))
 HIP_PATH=../../..

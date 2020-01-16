@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
 
 if [ -d docBin ]; then
     rm -rf docBin

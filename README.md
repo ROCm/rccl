@@ -81,4 +81,4 @@ Please refer to the [Library documentation](http://rccl.readthedocs.io/) for cur
 
 All source code and accompanying documentation is copyright (c) 2015-2018, NVIDIA CORPORATION. All rights reserved.
 
-All modifications are copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+All modifications are copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.

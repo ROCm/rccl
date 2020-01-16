@@ -1,5 +1,5 @@
 #!/usr/bin/env groovy
-// Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
 // This shared library is available at https://github.com/ROCmSoftwarePlatform/rccl
 @Library('rocJenkins@rccl') _
 

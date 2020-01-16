@@ -1,4 +1,4 @@
-# Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
 
 cmake_minimum_required(VERSION 2.8.12)
 
