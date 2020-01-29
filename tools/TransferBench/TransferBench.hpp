@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#include <sstream>
+
 // Helper macro for catching HIP errors
 #define HIP_CALL(cmd)                                                   \
     do {                                                                \

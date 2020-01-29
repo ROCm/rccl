@@ -11,8 +11,6 @@
 #include "test_Reduce.hpp"
 #include "test_ReduceScatter.hpp"
 
-#include <omp.h>
-
 namespace CorrectnessTests
 {
     TEST_P(GroupCallsCorrectnessTest, Correctness)

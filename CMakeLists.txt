@@ -181,6 +181,9 @@ else()
   target_link_libraries(rccl PUBLIC hip::hip_hcc ${hcc_LIBRARIES} numa)
 endif()
 
+#Setup librccl.so version
+rocm_set_soversion(rccl "1.0")
+
 rocm_install_targets(TARGETS
                      rccl
                      PREFIX
@@ -197,8 +200,8 @@ rocm_export_targets(NAMESPACE
                     DEPENDS
                     hip)
 
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip_hcc")
-set(CPACK_RPM_PACKAGE_REQUIRES "hip_hcc")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-dev (>= 2.5.27)")
+set(CPACK_RPM_PACKAGE_REQUIRES "rocm-dev >= 2.5.27")
 
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
 
@@ -208,7 +211,7 @@ rocm_create_package(
   DESCRIPTION
   "Optimized primitives for collective multi-GPU communication"
   MAINTAINER
-  "<no-reply@amd.com>"
+  "<rccl-maintainer@amd.com>"
   LDCONFIG)
 
 rocm_install_symlink_subdir(rccl)

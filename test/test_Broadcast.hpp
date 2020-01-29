@@ -7,7 +7,6 @@
 #define TEST_BROADCAST_HPP
 
 #include "CorrectnessTest.hpp"
-#include <omp.h>
 
 namespace CorrectnessTests
 {

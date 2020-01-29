@@ -6,7 +6,6 @@
 
 #include "test_BroadcastAbort.hpp"
 #include "../include/comm.h"
-#include <omp.h>
 
 #define NUM_ITER 8
 #define FAKE_OP_COUNT NUM_ITER+1

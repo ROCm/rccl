@@ -11,8 +11,6 @@
 #include "test_Reduce.hpp"
 #include "test_ReduceScatter.hpp"
 
-#include <omp.h>
-
 namespace CorrectnessTests
 {
     TEST_P(CombinedCallsCorrectnessTest, Correctness)
@@ -38,7 +36,7 @@ namespace CorrectnessTests
         size_t const byteCount = datasets[0].NumBytes() / numDevices;
         size_t const elemCount = numElements / numDevices;
 
-        #pragma omp parallel for num_threads(numDevices)
+        ncclGroupStart();
         for (int i = 0; i < numDevices; i++)
         {
             ncclAllGather((int8_t *)datasets[0].inputs[i] + (i * byteCount),
@@ -63,6 +61,7 @@ namespace CorrectnessTests
                               elemCount, dataType, op,
                               comms[i], streams[i]);
         }
+        ncclGroupEnd();
 
         // Wait for reduction to complete
         Synchronize();

@@ -27,7 +27,10 @@ THE SOFTWARE.
 #include <cstdio>
 #include <cstdlib>
 #include <set>
-
+#include <unistd.h>
+#include <map>
+#include <iostream>
+#include <sstream>
 #include <hip/hip_runtime.h>
 #include "copy_kernel.h"
 #include "TransferBench.hpp"
@@ -49,12 +52,13 @@ int main(int argc, char **argv)
     printf("\n");
     printf("Environment variables:\n");
     printf("======================\n");
-    printf(" USE_HIP_CALL    - Use hip calls (hipMemcpyAsync/hipMemset) instead of kernel\n");
-    printf(" USE_MEMSET      - Write constant value (instead of doing a copy)\n");
-    printf(" USE_COARSE_MEM  - Use coarse-grained dst GPU memory (instead of fine-grained)\n");
-    printf(" USE_SINGLE_SYNC - Only synchronize once at end of iterations (disables GPU times)\n");
-    printf(" USE_INTERACTIVE - Waits for user-input prior to start and after transfer loop (for profiling)\n");
+    printf(" USE_HIP_CALL     - Use hip calls (hipMemcpyAsync/hipMemset) instead of kernel\n");
+    printf(" USE_MEMSET       - Write constant value (instead of doing a copy)\n");
+    printf(" USE_COARSE_MEM   - Use coarse-grained dst GPU memory (instead of fine-grained)\n");
+    printf(" USE_SINGLE_SYNC  - Only synchronize once at end of iterations (disables GPU times)\n");
+    printf(" USE_INTERACTIVE  - Waits for user-input prior to start and after transfer loop (for profiling)\n");
     printf(" USE_ITERATIONS=N - Sets number of iterations to run (default is 10)\n");
+    printf(" USE_SLEEP        - Adds a 100ms sleep after sync (for profiling)\n");
     exit(0);
   }
 
@@ -74,6 +78,7 @@ int main(int argc, char **argv)
   bool useCoarseMem = getenv("USE_COARSE_MEM");
   bool useSingleSync = getenv("USE_SINGLE_SYNC");
   bool useInteractive = getenv("USE_INTERACTIVE");
+  bool useSleep = getenv("USE_SLEEP");
 
   int numWarmups = 3;
   int numIterations = getenv("USE_ITERATIONS") ? atoi(getenv("USE_ITERATIONS")) : 10;
@@ -99,6 +104,10 @@ int main(int argc, char **argv)
     printf("Running in interactive mode (USE_INTERACTIVE)\n");
   else
     printf("Running in non-interactive mode (enable interactive mode via USE_INTERACTIVE)\n");
+  if (useSleep)
+    printf("Adding 100ms sleep after sync (USE_SLEEP)\n");
+  else
+    printf("No sleep per sync (enable sleep via USE_SLEEP)\n");
 
   printf("Executing %d warmup iteration(s), and %d timed iteration(s) (Set via USE_ITERATION=#)\n",
          numWarmups, numIterations);
@@ -265,7 +274,8 @@ int main(int argc, char **argv)
       {
         HIP_CALL(hipSetDevice(links[i].srcGpu));
 
-        HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
+        if (!useSingleSync || iteration == 0)
+          HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
 
         if (useHipCall)
         {
@@ -301,7 +311,8 @@ int main(int argc, char **argv)
                                gpuBlockParams[i]);
           }
         }
-        HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
+        if (!useSingleSync || iteration == numIterations - 1)
+          HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
       }
 
       // Synchronize per iteration, unless in single sync mode, in which case
@@ -314,6 +325,7 @@ int main(int argc, char **argv)
 
       auto cpuDelta = std::chrono::high_resolution_clock::now() - cpuStart;
       double deltaSec = std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count();
+      if (useSleep) usleep(100000);
 
       if (iteration >= 0)
       {
@@ -370,8 +382,7 @@ int main(int argc, char **argv)
       }
       else
       {
-        if (!useSingleSync)
-          totalGpuTime[i] /= (1.0 * numIterations);
+        totalGpuTime[i] /= (1.0 * numIterations);
         printf("%8.3f", (linkCount[i] * numBytesPerLink / 1.0E9) / totalGpuTime[i]);
       }
     }
