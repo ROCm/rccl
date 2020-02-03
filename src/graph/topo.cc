@@ -30,9 +30,15 @@ const char* topoLinkTypeStr[] = { "LOC", "XGMI", "PCI", "QPI", "NET" };
 const char* topoLinkTypeStr[] = { "LOC", "NVL", "PCI", "QPI", "NET" };
 #endif
 
+#ifdef TOPO_EXPL
+#include "model.h"
+extern NodeModel *node_model;
+#endif
+
 /******************************************************************/
 /******************* Graph Creation Functions *********************/
 /******************************************************************/
+#ifndef TOPO_EXPL
 static int getNumaId(char *path) {
   char npath[PATH_MAX];
   snprintf(npath, PATH_MAX, "%s/numa_node", path);
@@ -59,6 +65,15 @@ static ncclResult_t getPciPath(char* busId, char** path) {
   }
   return ncclSuccess;
 }
+#else
+static int getNumaId(char *path) {
+  return node_model->getNumaId(path);
+}
+
+static ncclResult_t getPciPath(char* busId, char** path) {
+  return node_model->getGpuPciPath(busId, path);
+}
+#endif
 
 // Get an int64 from a PCI path. For example, sys/class/pci0000:00/0000:00:02.0/0000:02:00.0/ will return 0x000002000.
 ncclResult_t pciPathToInt64(char* path, int offset, int minOffset, int64_t* id) {
@@ -102,6 +117,7 @@ int interCpuWidth = 0;
 int cpuPciWidth = 0;
 int p2pPciWidth = 0;
 
+#ifndef TOPO_EXPL
 static ncclResult_t getCpuWidths() {
   // Check if already detected
   if (interCpuWidth + cpuPciWidth + p2pPciWidth) return ncclSuccess;
@@ -182,6 +198,14 @@ static ncclResult_t getCpuWidths() {
   INFO(NCCL_GRAPH, "%s CPU (CPU-PCI %d, PCI/P2P %d, InterCpu %d)", cpu, cpuPciWidth, p2pPciWidth, interCpuWidth);
   return ncclSuccess;
 }
+#else
+static ncclResult_t getCpuWidths() {
+  char cpu[256];
+  node_model->getCpuWidths(cpu, &interCpuWidth, &cpuPciWidth, &p2pPciWidth);
+  TRACE(NCCL_GRAPH, "%s CPU (CPU-PCI %d, PCI/P2P %d, InterCpu %d)", cpu, cpuPciWidth, p2pPciWidth, interCpuWidth);
+  return ncclSuccess;
+}
+#endif
 
 static ncclResult_t ncclTopoGetInterCpuWidth(int* width) {
   NCCLCHECK(getCpuWidths());
@@ -272,7 +296,11 @@ ncclResult_t ncclTopoConnectXGMI(struct ncclComm* comm, struct ncclTopoSystem* s
       uint32_t link_type, hops;
       int cudaDev1 = busIdToCudaDev(comm->peerInfo[gpu1->rank].busId);
       int cudaDev2 = busIdToCudaDev(comm->peerInfo[gpu2->rank].busId);
+#ifndef TOPO_EXPL
       if (hipExtGetLinkTypeAndHopCount(cudaDev1, cudaDev2, &link_type, &hops) == hipSuccess) {
+#else
+      if (node_model->getLinkTypeAndHopCount(cudaDev1, cudaDev2, &link_type, &hops) == hipSuccess) {
+#endif
         if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1) {
           NCCLCHECK(ncclTopoConnectNodes(gpu1, gpu2, LINK_NVL, minWidth));
         }
@@ -424,6 +452,7 @@ ncclResult_t ncclTopoCreatePciPath(struct ncclTopoSystem* system, struct ncclTop
 // Try to detect if IB cards are in fact the same physical NIC, hence sharing ports.
 #include <glob.h>
 #define IB_GUID_PATH "%s/infiniband/mlx5_*/sys_image_guid"
+#ifndef TOPO_EXPL
 uint64_t getIbGuid(char* path) {
   uint64_t guid = 0ULL;
   char guidPath[PATH_MAX];
@@ -446,6 +475,11 @@ uint64_t getIbGuid(char* path) {
   }
   return guid;
 }
+#else
+uint64_t getIbGuid(char* path) {
+  return node_model->getIbGuid(path);
+}
+#endif
 
 struct netInfo {
   char* path;
