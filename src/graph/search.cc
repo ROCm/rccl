@@ -443,6 +443,56 @@ end:
   return ncclSuccess;
 }
 
+static void parseChordalRing(struct ncclTopoSystem* system, char **str) {
+  static const char *ringBase = "0 6 7 4 5 3 2 1|0 5 6 3 7 1 4 2|0 4 6 2 7 5 1 3|0 1 2 3 5 4 7 6|0 2 4 1 7 3 6 5|0 3 1 5 7 2 6 4";
+  static char ringRemap[256];
+  int id[8], dist[8];
+  int i;
+
+  int ngpus = system->nodes[GPU].count;
+  // single node CR8G only
+  if (ngpus != 8 && system->nodes[NET].count != 0)
+    return;
+  // validate chordal ring and calculate distance
+  for (i=0; i<ngpus; i++) {
+    struct ncclTopoNode* node = system->nodes[GPU].nodes+i;
+    if (node->paths[GPU] == NULL) continue;
+    int sum = ngpus*(ngpus-1)/2 - node->rank;
+    int count = 0;
+    for (int n = 0; n<ngpus; n++) {
+      if (node->paths[GPU][n].type != LINK_NVL) continue;
+      sum -= system->nodes[GPU].nodes[n].rank;
+      count ++;
+    }
+    if(count != ngpus-2 || sum < 0 || sum > ngpus-1) {
+      return;
+    }
+    dist[i] = sum;
+  }
+  // remap GPU ids
+  for (i = 0; i<ngpus; i++) id[i] = i;
+  for (i = 0; i<ngpus; i++) {
+    if (dist[i] == ngpus-1-i) continue;
+    int j, m, n, temp;
+    for (j=i+1; j < ngpus; j++)
+      if(dist[j] == ngpus-1-i) break;
+    m = dist[i]; n = dist[j]; dist[i] = n; dist[j] = m;
+    temp = id[m]; id[m] = id[n]; id[n] = temp; temp =dist[m];
+    dist[m] = dist[n]; dist[n] = temp;
+  }
+  // create chordal ring based on reference and remapped ids
+  for (i = 0; i <strlen(ringBase); i++) {
+    if (ringBase[i] >= '0' && ringBase[i] <= '9')
+      ringRemap[i] = id[ringBase[i]-'0']+'0';
+    else
+      ringRemap[i] = ringBase[i];
+  }
+  ringRemap[i] = 0;
+  *str = ringRemap;
+  INFO(NCCL_GRAPH, "Use chordal ring: %s", ringRemap);
+  return;
+}
+
 ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
   int crossNic = (system->nodes[NET].count > 1) && graph->crossNic ? 1 : 0;
@@ -454,6 +504,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   graph->sameChannels = 1;
 
   char* str = getenv("NCCL_GRAPH");
+  if (!str) parseChordalRing(system, &str);
   if (str) {
     NCCLCHECK(parseGraph(str, &graph->nChannels, ngpus, graph->intra));
     for (int i=0; i<graph->nChannels*ngpus; i++) {
