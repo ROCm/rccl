@@ -8,6 +8,9 @@ def runCompileCommand(platform, project, jobName)
     String hipclangArgs = jobName.contains('hipclang') ? '--hip-clang' : ''
     def command = """#!/usr/bin/env bash
                 set -x
+                ### temporary fix for hard coded home path in new containers
+                export HOME=/home/jenkins
+                ###
                 cd ${project.paths.project_build_prefix}
                 LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX= ${project.paths.build_command} -t {hipclangArgs}
             """
