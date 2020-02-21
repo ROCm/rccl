@@ -451,7 +451,7 @@ static void parseChordalRing(struct ncclTopoSystem* system, char **str) {
 
   int ngpus = system->nodes[GPU].count;
   // single node CR8G only
-  if (ngpus != 8 && system->nodes[NET].count != 0)
+  if (ngpus != 8 || system->nodes[NET].count != 0)
     return;
   // validate chordal ring and calculate distance
   for (i=0; i<ngpus; i++) {
