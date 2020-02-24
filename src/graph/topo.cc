@@ -282,13 +282,15 @@ ncclResult_t ncclTopoConnectCpu(struct ncclTopoSystem* system, int numaId, struc
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #define VEGA_XGMI_WIDTH 20
+#define VEGA_XGMI_MAX_LINKS 6
 extern int busIdToCudaDev(int64_t busId);
 
 ncclResult_t ncclTopoConnectXGMI(struct ncclComm* comm, struct ncclTopoSystem* system) {
   struct ncclTopoNode* nvsNode = NULL;
 
-  int minNvlinks = 2, minWidth = VEGA_XGMI_WIDTH;
+  int minNvlinks = VEGA_XGMI_MAX_LINKS, minWidth = VEGA_XGMI_WIDTH;
   for (int g1=0; g1<system->nodes[GPU].count; g1++) {
+    int nvlinks = 0;
     for(int g2=0; g2<system->nodes[GPU].count; g2++) {
       if (g1 == g2) continue;
       struct ncclTopoNode* gpu1 = system->nodes[GPU].nodes+g1;
@@ -303,9 +305,11 @@ ncclResult_t ncclTopoConnectXGMI(struct ncclComm* comm, struct ncclTopoSystem* s
 #endif
         if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1) {
           NCCLCHECK(ncclTopoConnectNodes(gpu1, gpu2, LINK_NVL, minWidth));
+          nvlinks++;
         }
       }
     }
+    minNvlinks = std::min(minNvlinks, nvlinks);
   }
   int pciWidth;
   NCCLCHECK(ncclTopoGetPciWidth(&pciWidth));
