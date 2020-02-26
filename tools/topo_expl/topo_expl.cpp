@@ -46,6 +46,7 @@ THE SOFTWARE.
 #include <cstring>
 #include "model.h"
 #include "utils.h"
+#include "topo.h"
 
 NodeModel *node_model;
 
@@ -94,7 +95,7 @@ int main(int argc,char* argv[])
     model_id = atol(mi);
 
   // CPU, GPU and NIC devices on Skylake
-  CpuDevices skylake("Skylake", 12, 12, 12);
+  CpuDevices skylake("Skylake", SKL_QPI_WIDTH, SKL_CPUPCI_WIDTH, SKL_PCI_WIDTH);
   GpuDevices vg20_pcie(8, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_pcie);
   GpuDevices vg20_4p1h(4, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_4p2h);
   GpuDevices vg20_4p2h(8, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_4p2h);
@@ -106,7 +107,7 @@ int main(int argc,char* argv[])
   NetDevices nic_2(2, netPciPaths_2, netGuids_2, netPciNumaIds_2);
 
   // CPU, GPU and NIC devices on Rome
-  CpuDevices rome("Rome", 18, 18, 18);
+  CpuDevices rome("Rome", ROME_QPI_WIDTH, ROME_CPUPCI_WIDTH, ROME_PCI_WIDTH);
   GpuDevices vg20_pcie_rome(8, rome_busIds_8, rome_gpuPciPaths_8, rome_gpuPciNumaIds_8, conn_mat_rome);
   NetDevices nic_1_rome(1, rome_netPciPaths_1, rome_netGuids_1, rom_netPciNumaIds_1);
   NetDevices nic_2_rome(2, rome_netPciPaths_2, rome_netGuids_2, rom_netPciNumaIds_2);
