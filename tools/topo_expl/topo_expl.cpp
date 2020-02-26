@@ -106,7 +106,7 @@ int main(int argc,char* argv[])
   NetDevices nic_2(2, netPciPaths_2, netGuids_2, netPciNumaIds_2);
 
   // CPU, GPU and NIC devices on Rome
-  CpuDevices rome("Rome", 24, 24, 24);
+  CpuDevices rome("Rome", 18, 18, 18);
   GpuDevices vg20_pcie_rome(8, rome_busIds_8, rome_gpuPciPaths_8, rome_gpuPciNumaIds_8, conn_mat_rome);
   NetDevices nic_1_rome(1, rome_netPciPaths_1, rome_netGuids_1, rom_netPciNumaIds_1);
   NetDevices nic_2_rome(2, rome_netPciPaths_2, rome_netGuids_2, rom_netPciNumaIds_2);
