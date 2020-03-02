@@ -64,14 +64,17 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 }
 
 const char *model_descriptions[] = {
+  "single node VEGA20 4P1H",
+  "single node VEGA20 4P2H",
+  "single node gfx908 4P3L",
+  "single node gfx908 8P6L",
+  "single node gfx908 8P6L Alt. Connection",
+  "single node 8 VEGA20 PCIe on Rome",
+  "single node gfx908 8P6L on Rome",
   "4 nodes with 8 GPUs PCIe 1 NIC",
   "4 nodes with 8 GPUs PCIe 2 NIC",
   "2 nodes VEGA20 4P1H",
   "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC",
-  "single node gfx908 4P3L",
-  "single node gfx908 8P6L",
-  "single node gfx908 8P6L Alt. Connection",
-  "single node 8 GPUs PCIe on Rome",
   "4 nodes 8 GPUs PCIe 2 NICs on Rome",
   "3 nodes 8 GPUs PCIe + 1 Rome 8 GPUs PCIe + 2 nodes gfx908 4P3L",
   NULL,
@@ -139,37 +142,49 @@ int main(int argc,char* argv[])
   // 8 GPUs PCIe 2 NICs on Rome
   NodeModel model_8pcie_2nic_rome(rome, vg20_pcie_rome, nic_2_rome, "Rome 8 GPUs PCIe 2 NICs");
 
+  // gfx908 8P6L on Rome
+  NodeModel model_gfx908_8p_1nic_rome(rome, gfx908_8p6l, nic_1, "Rome gfx908 8P6L");
+
   NetworkModel network;
 
   switch(model_id) {
     case 0:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_1nic);
+      network.AddNode(model_vg20_4p1h_1nic);
       break;
     case 1:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_2nic);
+      network.AddNode(model_vg20_4p2h_1nic);
       break;
     case 2:
-      for (int i = 0; i < 2; i ++) network.AddNode(model_vg20_4p1h_1nic);
-      break;
-    case 3:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_vg20_4p2h_1nic);
-      break;
-    case 4:
       network.AddNode(model_gfx908_4p_1nic);
       break;
-    case 5:
+    case 3:
       network.AddNode(model_gfx908_8p_1nic);
       break;
-    case 6:
+    case 4:
       network.AddNode(model_gfx908_8p_1nic_1);
       break;
-    case 7:
+    case 5:
       network.AddNode(model_8pcie_1nic_rome);
       break;
+    case 6:
+      network.AddNode(model_gfx908_8p_1nic_rome);
+      break;
+    case 7:
+      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_1nic);
+      break;
     case 8:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_2nic_rome);
+      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_2nic);
       break;
     case 9:
+      for (int i = 0; i < 2; i ++) network.AddNode(model_vg20_4p1h_1nic);
+      break;
+    case 10:
+      for (int i = 0; i < 4; i ++) network.AddNode(model_vg20_4p2h_1nic);
+      break;
+    case 11:
+      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_2nic_rome);
+      break;
+    case 12:
       for (int i = 0; i < 3; i ++) network.AddNode(model_8pcie_1nic);
       network.AddNode(model_8pcie_1nic_rome);
       for (int i = 0; i < 2; i ++) network.AddNode(model_gfx908_4p_1nic);
