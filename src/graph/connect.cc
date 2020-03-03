@@ -235,14 +235,12 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, struct nccl
   NCCLCHECK(connectRings(comm, ringRecv, ringSend, ringPrev, ringNext, firstRanks));
   NCCLCHECK(connectTrees(comm, treeUpRecv, treeUpSend, treeDnRecv, treeDnSend, firstRanks));
 
-  if (nChannels == 1) {
-    // Duplicate ringPrev/ringNext for ncclBuildRing
-    memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
-    memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
+  // Duplicate ringPrev/ringNext for ncclBuildRing
+  memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
+  memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
 
-    // Duplication should be complete now
-    nChannels = comm->nChannels = std::min(MAXCHANNELS,nChannels*2);
-  }
+  // Duplication should be complete now
+  nChannels = comm->nChannels = std::min(MAXCHANNELS,nChannels*2);
 
   // Honor NCCL_MIN_NRINGS/NCCL_MAX_NRINGS.
   // We permit combining max, then min, to only use the first channels, then duplicate them.
