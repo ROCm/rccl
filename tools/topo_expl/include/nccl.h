@@ -12,11 +12,11 @@
 #include <hip/hip_fp16.h>
 
 #define NCCL_MAJOR 2
-#define NCCL_MINOR 5
-#define NCCL_PATCH 6
+#define NCCL_MINOR 6
+#define NCCL_PATCH 2
 #define NCCL_SUFFIX ""
 
-#define NCCL_VERSION_CODE 2506
+#define NCCL_VERSION_CODE 2602
 #define NCCL_VERSION(X,Y,Z) ((X) * 1000 + (Y) * 100 + (Z))
 
 #define RCCL_BFLOAT16 1
