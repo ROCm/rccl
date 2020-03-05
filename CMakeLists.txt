@@ -174,12 +174,8 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-if(TARGET hip::device)
-  target_link_libraries(rccl PRIVATE hip::device)
-  target_link_libraries(rccl INTERFACE hip::host)
-else()
-  target_link_libraries(rccl PUBLIC hip::hip_hcc ${hcc_LIBRARIES} numa)
-endif()
+target_link_libraries(rccl PRIVATE hip::device)
+target_link_libraries(rccl INTERFACE hip::host)
 
 #Setup librccl.so version
 rocm_set_soversion(rccl "1.0")
