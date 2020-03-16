@@ -186,7 +186,7 @@ __device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(Pack128); }
 
 // Try to limit consecutive load/stores to 8.
 // Use UNROLL 8 when we have a single source and a single destination, 4 otherwise
-#define AUTOUNROLL (UNROLL*(4/(MINDSTS+MINSRCS)))
+#define AUTOUNROLL UNROLL
 
 template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS>
 __device__ void ReduceOrCopyMulti(const int tid, const int nthreads,
@@ -252,59 +252,4 @@ __device__ void ReduceOrCopyMulti(const int tid, const int nthreads,
   ReduceCopyMulti<FUNC, T, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(tid, nthreads, nsrcs, srcs, ndsts, dsts, offset, Nrem);
 }
 
-// Assumptions:
-// - there is exactly 1 block
-// - THREADS is the number of producer threads
-// - this function is called by all producer threads
-template<int UNROLL, int THREADS, typename T>
-__device__ void Copy(volatile T * __restrict__ const dest,
-    const volatile T * __restrict__ const src, const int N) {
-  const T* srcs[2];
-  T* dsts[2];
-  srcs[0] = (const T*)src;
-  dsts[0] = (T*)dest;
-  ReduceOrCopyMulti<UNROLL, FuncPassA<T>, T, 1, 2, 1, 2>(threadIdx.x, THREADS,
-      1, srcs, 1, dsts, N);
-}
-
-template<int UNROLL, int THREADS, typename T>
-__device__ void DoubleCopy(volatile T * __restrict__ const dest0,
-    volatile T * __restrict__ const dest1,
-    const volatile T * __restrict__ const src, const int N) {
-  const T* srcs[2];
-  T* dsts[2];
-  srcs[0] = (const T*)src;
-  dsts[0] = (T*)dest0;
-  dsts[1] = (T*)dest1;
-  ReduceOrCopyMulti<UNROLL, FuncPassA<T>, T, 1, 2, 1, 2>(threadIdx.x, THREADS,
-      1, srcs, 2, dsts, N);
-}
-
-template<int UNROLL, int THREADS, typename T>
-__device__ void Reduce(volatile T * __restrict__ const dest,
-    const volatile T * __restrict__ const src0,
-    const volatile T * __restrict__ const src1, const int N) {
-  const T* srcs[2];
-  T* dsts[2];
-  srcs[0] = (const T*)src0;
-  srcs[1] = (const T*)src1;
-  dsts[0] = (T*)dest;
-  ReduceOrCopyMulti<UNROLL, FuncPassA<T>, T, 1, 2, 1, 2>(threadIdx.x, THREADS,
-      2, srcs, 1, dsts, N);
-}
-
-template<int UNROLL, int THREADS, typename T>
-__device__ void ReduceCopy(volatile T * __restrict__ const dest0,
-    volatile T * __restrict__ const dest1,
-    const volatile T * __restrict__ const src0,
-    const volatile T * __restrict__ const src1, const int N) {
-  const T* srcs[2];
-  T* dsts[2];
-  srcs[0] = (const T*)src0;
-  srcs[1] = (const T*)src1;
-  dsts[0] = (T*)dest0;
-  dsts[1] = (T*)dest1;
-  ReduceOrCopyMulti<UNROLL, FuncPassA<T>, T, 1, 2, 1, 2>(threadIdx.x, THREADS,
-      2, srcs, 2, dsts, N);
-}
 #endif // COPY_KERNEL_H_
