@@ -60,6 +60,7 @@ enum proxyMode {
 
 ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks);
 ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel);
+ncclResult_t ncclProxySaveA2a(struct ncclProxyArgs* args, struct ncclInfo* info);
 ncclResult_t ncclProxyStart(struct ncclComm* comm);
 ncclResult_t ncclProxyCreate(struct ncclComm* comm);
 ncclResult_t ncclProxyDestroy(struct ncclComm* comm);

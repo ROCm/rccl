@@ -353,6 +353,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
   return ncclSuccess;
 }
 
+RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 0);
+
 ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t *allGather3Data,
   struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph) {
   int rank = comm->rank;
@@ -503,6 +505,45 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
 
+  if (rcclParamAllToAllDisable() == 0) {
+    for (int c=0; c<comm->nChannels; c++) {
+      const int peersPerChan = (comm->nChannels >= nranks ? 1 : DIVUP(nranks, comm->nChannels));
+      struct ncclP2PConnect* connect = &comm->p2plist.connect;
+      connect->nrecv[c] = 0;
+      connect->nsend[c] = 0;
+      for (int p=0; p<peersPerChan; p++) {
+        // first channel is reserved for self copy
+        if ((c*peersPerChan+p)%nranks == 0)
+          continue;
+        int peerSend = (rank+c*peersPerChan+p)%nranks;
+        int peerRecv = (2*nranks+rank-(c*peersPerChan)%nranks-p)%nranks;
+        if (comm->channels[c].peers[peerSend].send.connected == 0) {
+          connect->send[c*nranks+connect->nsend[c]++] = peerSend;
+        }
+        if (comm->channels[c].peers[peerRecv].recv.connected == 0) {
+          connect->recv[c*nranks+connect->nrecv[c]++] = peerRecv;
+        }
+      }
+    }
+
+    for (int c=0; c<comm->nChannels; c++) {
+      struct ncclChannel* channel = comm->channels+c;
+      struct ncclP2PConnect* connect = &comm->p2plist.connect;
+#if 0
+      printf("channel %d recv: ", c);
+      for (int i=0; i<connect->nrecv[c]; i++)
+        printf("%d ", connect->recv[c*nranks+i]);
+      printf("\n");
+      printf("channel %d send: ", c);
+      for (int i=0; i<connect->nsend[c]; i++)
+        printf("%d ", connect->send[c*nranks+i]);
+      printf("\n");
+#endif
+      NCCLCHECK(ncclTransportP2pSetup(comm, NULL, channel, connect->nrecv[c], connect->recv+c*nranks, connect->nsend[c], connect->send+c*nranks));
+      connect->nrecv[c] = 0;
+      connect->nsend[c] = 0;
+    }
+  }
   // We should have allocated all buffers, collective fifos, ... we can
   // restore the affinity.
 affinity_restore:

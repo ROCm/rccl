@@ -58,12 +58,15 @@
 
 typedef void(*ncclKern_t)(struct ncclDevComm*);
 // Must be consistent with the ncclFuncSet enum
-static ncclKern_t const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
+static ncclKern_t const ncclKerns[4+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
   NCCL_FUNCS2B(ncclBroadcast),
   NCCL_FUNCS2A(ncclReduce),
   NCCL_FUNCS2B(ncclAllGather),
   NCCL_FUNCS2A(ncclReduceScatter),
   NCCL_FUNCS2A(ncclAllReduce),
+  NCCL_KERN_NAME(ncclGather, copy, i8),
+  NCCL_KERN_NAME(ncclScatter, copy, i8),
+  NCCL_KERN_NAME(ncclAllToAll, copy, i8),
   NCCL_KERN_NAME(ncclSendRecv, copy, i8)
 };
 
@@ -277,6 +280,10 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
       }
     }
   }
+  if (info->coll == ncclCollAllToAll || info->coll == ncclCollGather || info->coll == ncclCollScatter) {
+    info->algorithm = NCCL_ALGO_RING;
+    info->protocol = NCCL_PROTO_SIMPLE;
+  }
   if (info->algorithm == -1 || info->protocol == -1) {
     WARN("Error : no algorithm/protocol available");
     return ncclInternalError;
@@ -288,7 +295,9 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   while (info->nBytes < nc*nt*threadThreshold) {
-    if (info->algorithm != NCCL_ALGO_COLLNET && nc >= 2) nc--;
+    // do not reduce channels in case of alltoall
+    if (info->algorithm != NCCL_ALGO_COLLNET && info->coll != ncclCollAllToAll &&
+      info->coll != ncclCollGather && info->coll != ncclCollScatter && nc >= 2) nc--;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     // do not reduce threads count on VEGA
 #else
@@ -316,6 +325,10 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = ncclPatternRing; break;
     case ncclCollAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
+    case ncclCollGather:
+    case ncclCollScatter:
+    case ncclCollAllToAll:
+      info->pattern = ncclPatternAll; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -332,7 +345,11 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
     case ncclPatternPipelineTo:
     case ncclPatternCollTreeUp:
     case ncclPatternCollTreeDown:
-      info->nstepsPerLoop = info-> nchunksPerLoop = 1; break;
+      info->nstepsPerLoop = info->nchunksPerLoop = 1; break;
+    case ncclPatternAll:
+      info->nstepsPerLoop = 1;
+      info->nchunksPerLoop = info->comm->nRanks;
+      break;
     case ncclPatternRing:
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
@@ -417,7 +434,11 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
-  int nLoops = (int)(DIVUP(info->nBytes, (((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)));
+  int nLoops;
+  if (info->pattern != ncclPatternAll)
+    nLoops = (int)(DIVUP(info->nBytes, (((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)));
+  else
+    nLoops = (int)(DIVUP(info->nBytes, (((size_t)((info->nChannels >= info->comm->nRanks ? (info->nChannels/info->comm->nRanks) : 1))))*info->nchunksPerLoop*chunkEffectiveSize));
   proxyArgs->nsteps = info->nstepsPerLoop * nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;
   proxyArgs->chunkSteps = chunkSteps;
@@ -425,8 +446,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   proxyArgs->opCount = info->comm->opCount;
   proxyArgs->dtype = info->datatype;
   proxyArgs->redOp = info->op;
-  TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
-      coll->args.opCount, proxyArgs->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, info->nBytes, info->protocol, info->nChannels, info->nThreads,
+  TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d ces %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
+      coll->args.opCount, proxyArgs->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, chunkEffectiveSize, info->nBytes, info->protocol, info->nChannels, info->nThreads,
       nLoops, proxyArgs->nsteps, info->comm);
   return ncclSuccess;
 }
@@ -479,6 +500,8 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     if (info->coll == ncclCollSendRecv) {
       info->comm->myParams->gridDim.x = std::max<unsigned>(info->comm->myParams->gridDim.x, channelId+1);
       NCCLCHECK(ncclProxySaveP2p(info, channel));
+    } else if (info->coll == ncclCollAllToAll || info->coll == ncclCollScatter || info->coll == ncclCollGather)  {
+      NCCLCHECK(ncclProxySaveA2a(&proxyArgs, info));
     } else {
       NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks));
     }

@@ -96,6 +96,9 @@ static inline __device__ void exitIfAbortBarrier(int abort) {
   NCCL_FUNCS2B(ncclAllGather), \
   NCCL_FUNCS2A(ncclReduceScatter), \
   NCCL_FUNCS2A(ncclAllReduce), \
+  NCCL_COLL_NAME(ncclGather, copy, i8), \
+  NCCL_COLL_NAME(ncclScatter, copy, i8), \
+  NCCL_COLL_NAME(ncclAllToAll, copy, i8), \
   NCCL_COLL_NAME(ncclSendRecv, copy, i8) }
 
 // Must be consistent with the ncclFuncSet enum
@@ -111,6 +114,9 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
   NCCL_FUNCS2B(ncclAllGather),
   NCCL_FUNCS2A(ncclReduceScatter),
   NCCL_FUNCS2A(ncclAllReduce),
+  NCCL_COLL_NAME(ncclGather, copy, i8),
+  NCCL_COLL_NAME(ncclScatter, copy, i8),
+  NCCL_COLL_NAME(ncclAllToAll, copy, i8),
   NCCL_COLL_NAME(ncclSendRecv, copy, i8)
 #endif
 };
@@ -159,6 +165,15 @@ void NCCL_CALL_FUNCTIONS(struct ncclColl* const c) noexcept {
     else ncclAllGatherCollNet_copy_i8(&c->args);
   }
   else if (c->funcIndex < 1800) Caller<1080, 1800>::call(c);
+  else if (c->funcIndex == 1800) {
+    ncclGather_copy_i8(&c->args);
+  }
+  else if (c->funcIndex == 1801) {
+    ncclScatter_copy_i8(&c->args);
+  }
+  else if (c->funcIndex == 1802) {
+    ncclAllToAll_copy_i8(&c->args);
+  }
   else ncclSendRecv_copy_i8(&c->args);
 }
 

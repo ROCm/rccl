@@ -147,6 +147,9 @@ struct ncclComm {
   int collNetSupport;
   //list of async p2p operation queued in a group semantics
   struct ncclP2Plist p2plist;
+
+  // RCCL AllToAll/Scatter/Gather API
+  bool alltoallDisable;
 };
 
 #endif

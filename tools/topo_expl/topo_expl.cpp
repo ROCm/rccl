@@ -200,6 +200,9 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nranks; i++) {
     comm[i].rank = i;
     comm[i].nRanks = nranks;
+    comm[i].p2plist.count=0;
+    NCCLCHECK(ncclCalloc(&comm[i].p2plist.connect.recv, MAXCHANNELS*comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].p2plist.connect.send, MAXCHANNELS*comm->nRanks));
     node_model = network.GetNode(i);
     assert(node_model!=0);
     comm[i].topo = node_model->getSystem(i);

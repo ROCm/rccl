@@ -46,11 +46,14 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
   }
   // Type is OK, compute nbytes. Convert Allgather/Broadcast/P2P calls to chars.
   info->nBytes = info->count * ncclTypeSize(info->datatype);
-  if (info->coll == ncclCollAllGather || info->coll == ncclCollBroadcast) {
+  if (info->coll == ncclCollAllGather || info->coll == ncclCollBroadcast
+    || info->coll == ncclCollGather || info->coll == ncclCollScatter || info->coll == ncclCollAllToAll) {
     info->count = info->nBytes;
     info->datatype = ncclInt8;
   }
-  if (info->coll == ncclCollAllGather || info->coll == ncclCollReduceScatter) info->nBytes *= info->comm->nRanks; // count is per rank
+  if (info->coll == ncclCollAllGather || info->coll == ncclCollReduceScatter
+    || info->coll == ncclCollGather || info->coll == ncclCollScatter || info->coll == ncclCollAllToAll)
+    info->nBytes *= info->comm->nRanks; // count is per rank
 
   if (info->op < 0 || info->op >= ncclNumOps) {
     WARN("%s : invalid reduction operation %d", info->opName, info->op);

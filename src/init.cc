@@ -41,7 +41,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "Gather", "Scatter", "AllToAll" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
@@ -521,6 +521,10 @@ static ncclResult_t computeBuffSizes(struct ncclComm* comm) {
   int defaults[NCCL_NUM_PROTOCOLS] = { DEFAULT_LL_BUFFSIZE, DEFAULT_LL128_BUFFSIZE, DEFAULT_BUFFSIZE };
 
   if (cpuArch == NCCL_TOPO_CPU_ARCH_ARM) defaults[NCCL_PROTO_SIMPLE] = DEFAULT_BUFFSIZE_ARM;
+  if (comm->nRanks >= 32) {
+    defaults[NCCL_PROTO_SIMPLE] = 524288;
+    INFO(NCCL_INIT, "Setting DEFAULT_BUFFSIZE to %d for nRanks %d", defaults[NCCL_PROTO_SIMPLE], comm->nRanks);
+  }
 
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     comm->buffSizes[p] = comm->hostDevComm.buffSizes[p] = envs[p] != -2 ? envs[p] : defaults[p];
@@ -652,6 +656,7 @@ static ncclResult_t checkCollNetSetup(struct ncclComm* comm, int rank, int collN
 
 NCCL_PARAM(CrossNic, "CROSS_NIC", 2);
 NCCL_PARAM(GraphDumpFileRank, "GRAPH_DUMP_FILE_RANK", 0);
+RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 0);
 
 static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* commId) {
   // We use 3 AllGathers
@@ -909,6 +914,48 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
 
+  comm->alltoallDisable = true;
+  if (rcclParamAllToAllDisable() == 0) {
+    comm->alltoallDisable = false;
+    for (int c=0; c<comm->nChannels; c++) {
+      const int peersPerChan = (comm->nChannels >= nranks ? 1 : DIVUP(nranks, comm->nChannels));
+      struct ncclP2PConnect* connect = &comm->p2plist.connect;
+      connect->nrecv[c] = 0;
+      connect->nsend[c] = 0;
+      for (int p=0; p<peersPerChan; p++) {
+        // first channel is reserved for self copy
+        if ((c*peersPerChan+p)%nranks == 0)
+          continue;
+        int peerSend = (rank+c*peersPerChan+p)%nranks;
+        int peerRecv = (2*nranks+rank-(c*peersPerChan)%nranks-p)%nranks;
+        if (comm->channels[c].peers[peerSend].send.connected == 0) {
+          connect->send[c*nranks+connect->nsend[c]++] = peerSend;
+        }
+        if (comm->channels[c].peers[peerRecv].recv.connected == 0) {
+          connect->recv[c*nranks+connect->nrecv[c]++] = peerRecv;
+        }
+      }
+    }
+
+    for (int c=0; c<comm->nChannels; c++) {
+      struct ncclChannel* channel = comm->channels+c;
+      struct ncclP2PConnect* connect = &comm->p2plist.connect;
+#if 0
+      printf("channel %d recv: ", c);
+      for (int i=0; i<connect->nrecv[c]; i++)
+        printf("%d ", connect->recv[c*nranks+i]);
+      printf("\n");
+      printf("channel %d send: ", c);
+      for (int i=0; i<connect->nsend[c]; i++)
+        printf("%d ", connect->send[c*nranks+i]);
+      printf("\n");
+#endif
+      NCCLCHECK(ncclTransportP2pSetup(comm, NULL, channel, connect->nrecv[c], connect->recv+c*nranks, connect->nsend[c], connect->send+c*nranks));
+      connect->nrecv[c] = 0;
+      connect->nsend[c] = 0;
+    }
+  }
+  INFO(NCCL_INIT, "RCCL AllToAll/Scatter/Gather kernels %s", comm->alltoallDisable ? "disabled" : "enabled");
   // We should have allocated all buffers, collective fifos, ... we can
   // restore the affinity.
 affinity_restore:

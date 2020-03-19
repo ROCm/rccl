@@ -165,6 +165,27 @@ ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel
   return ncclSuccess;
 }
 
+ncclResult_t ncclProxySaveA2a(struct ncclProxyArgs* args, struct ncclInfo* info) {
+  const int peersPerChan = (info->nChannels >= info->comm->nRanks ? 1 : DIVUP(info->comm->nRanks, info->nChannels));
+  for (int p=0; p<peersPerChan; p++) {
+    if ((peersPerChan == 1 && args->channel->id >= (info->nChannels/info->comm->nRanks)*info->comm->nRanks) ||
+      (peersPerChan > 1 && args->channel->id*peersPerChan+p >= info->comm->nRanks))
+      continue;
+    // first channel is reserved for self copy
+    if ((args->channel->id*peersPerChan+p)%info->comm->nRanks == 0)
+      continue;
+    int peerSend = (info->comm->rank+(args->channel->id*peersPerChan)+p)%info->comm->nRanks;
+    int peerRecv = (2*info->comm->nRanks+info->comm->rank-(args->channel->id*peersPerChan)%info->comm->nRanks-p%info->comm->nRanks)%info->comm->nRanks;
+    if (info->coll == ncclCollAllToAll || (info->coll == ncclCollScatter && info->comm->rank == info->root) ||
+      (info->coll == ncclCollGather && peerSend == info->root))
+      NCCLCHECK(SaveProxy<proxySend>(peerSend, args));
+    if (info->coll == ncclCollAllToAll || (info->coll == ncclCollGather && info->comm->rank == info->root) ||
+      (info->coll == ncclCollScatter && peerRecv == info->root))
+      NCCLCHECK(SaveProxy<proxyRecv>(peerRecv, args));
+  }
+  return ncclSuccess;
+}
+
 void* persistentThread(void *comm_) {
   struct ncclComm* comm = (struct ncclComm*)comm_;
   struct ncclProxyState* state = &comm->proxyState;
