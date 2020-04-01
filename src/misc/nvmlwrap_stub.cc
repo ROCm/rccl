@@ -20,7 +20,7 @@ ncclResult_t wrapNvmlShutdown(void) {
 }
 
 ncclResult_t wrapNvmlDeviceGetHandleByPciBusId(const char* pciBusId, nvmlDevice_t* device) {
-  return ncclSuccess;
+  return ncclSystemError;
 }
 
 ncclResult_t wrapNvmlDeviceGetIndex(nvmlDevice_t device, unsigned* index) {
@@ -29,7 +29,7 @@ ncclResult_t wrapNvmlDeviceGetIndex(nvmlDevice_t device, unsigned* index) {
 }
 
 ncclResult_t wrapNvmlDeviceGetPciInfo(nvmlDevice_t device, nvmlPciInfo_t* pci) {
-  return ncclSuccess;
+  return ncclSystemError;
 }
 
 ncclResult_t wrapNvmlDeviceGetMinorNumber(nvmlDevice_t device, unsigned int* minorNumber) {
@@ -38,17 +38,16 @@ ncclResult_t wrapNvmlDeviceGetMinorNumber(nvmlDevice_t device, unsigned int* min
 }
 
 ncclResult_t wrapNvmlDeviceGetNvLinkState(nvmlDevice_t device, unsigned int link, nvmlEnableState_t *isActive) {
-  return ncclSuccess;
+  return ncclSystemError;
 }
 
 ncclResult_t wrapNvmlDeviceGetNvLinkRemotePciInfo(nvmlDevice_t device, unsigned int link, nvmlPciInfo_t *pci) {
-  return ncclSuccess;
+  return ncclSystemError;
 }
 
 ncclResult_t wrapNvmlDeviceGetNvLinkCapability(nvmlDevice_t device, unsigned int link,
     nvmlNvLinkCapability_t capability, unsigned int *capResult) {
-  *capResult = 0;
-  return ncclSuccess;
+  return ncclSystemError;
 }
 
 ncclResult_t wrapNvmlDeviceGetCudaComputeCapability(nvmlDevice_t device, int* major, int* minor) {

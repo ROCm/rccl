@@ -67,6 +67,10 @@ template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclReduceScatterTreeKernel(struct CollectiveArgs* args) { }
 
+template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclReduceScatterCollNetKernel(struct CollectiveArgs* args) { }
+
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclReduceScatterRingLLKernel(struct CollectiveArgs* args) {
@@ -126,6 +130,10 @@ __device__ void ncclReduceScatterRingLLKernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclReduceScatterTreeLLKernel(struct CollectiveArgs* args) { }
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclReduceScatterCollNetLLKernel(struct CollectiveArgs* args) { }
 
 #include "prims_ll128.h"
 template<int UNUSED, class FUNC, typename T>
@@ -189,3 +197,7 @@ __device__ void ncclReduceScatterRingLL128Kernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclReduceScatterTreeLL128Kernel(struct CollectiveArgs* args) { }
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclReduceScatterCollNetLL128Kernel(struct CollectiveArgs* args) { }

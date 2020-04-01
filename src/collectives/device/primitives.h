@@ -283,7 +283,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     r.recvStep[i] = ROUNDUP(r.recvStep[i], SLICESPERCHUNK*SLICESTEPS);
 #if defined(RCCL_USE_DIRECT_BUFFER)
     r.recvDirectBuff[i] = NULL;
-    if (directBuff && LOAD(&conn->direct)) {
+    if (directBuff && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
       r.recvDirectBuff[i] = directBuff;
       if (tid == 0) STORE(conn->ptrExchange, directBuff);
     }
@@ -307,13 +307,13 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     }
   }
 
-  __device__ void loadSendConn(struct ncclConnInfo* conn, int i, T* directBuff) {
+  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i, T* directBuff) {
     s.sendBuff[i] = (T*)LOAD(&conn->buff);
     s.sendStep[i] = LOAD(&conn->step);
     s.sendStep[i] = ROUNDUP(s.sendStep[i], SLICESPERCHUNK*SLICESTEPS);
 #if defined(RCCL_USE_DIRECT_BUFFER)
     s.sendDirectBuff[i] = NULL;
-    if (directBuff && LOAD(&conn->direct)) {
+    if (directBuff && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
       void* volatile* ptr = LOAD(&conn->ptrExchange);
       while ((s.sendDirectBuff[i] = (T*)(LOAD(ptr))) == NULL);
       barrier();
@@ -324,7 +324,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     if (wid == i) s.sendConnTail = s.sendConnHead = s.sendStep[i]; // Make sure we set this after rounding up
     nsend++;
   }
-  __device__ void loadSendSync() {
+  __device__ __forceinline__ void loadSendSync() {
     if (tid < nsend) {
       s.sendConnHeadPtr = LOAD(&s.sendConn->head);
       s.sendConnHeadCache = LOAD(s.sendConnHeadPtr);
@@ -336,7 +336,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     }
   }
 
-  __device__ void saveRecvSync() {
+  __device__ __forceinline__ void saveRecvSync() {
     if (tid >= nthreads-WARP_SIZE && wid < nrecv) {
       STORE(&r.recvConn->step, r.recvConnHead);
       STORE(r.recvConn->opCountLoc, opCount+1);
@@ -344,7 +344,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     }
   }
 
-  __device__ void saveSendSync() {
+  __device__ __forceinline__ void saveSendSync() {
     if (tid < nsend) {
       STORE(&s.sendConn->step, s.sendConnHead);
       STORE(s.sendConn->opCountLoc, opCount+1);

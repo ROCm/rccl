@@ -163,6 +163,63 @@ __device__ void ncclAllReduceTreeKernel(struct CollectiveArgs* args) {
   } while(0);
 }
 
+template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclAllReduceCollNetKernel(struct CollectiveArgs* args) {
+  const int tid = threadIdx.x;
+  const int nthreads = args->nThreads;
+  const int bid = args->bid;
+  struct ncclDevComm* comm = args->comm;
+  struct ncclChannel* channel = comm->channels+blockIdx.x;
+  const ssize_t size = args->N;
+  const int stepSize = channel->buffSize / (sizeof(T)*NCCL_STEPS);
+  int chunkSize = args->lastChunkSize;
+  const ssize_t minChunkSize = nthreads*8*sizeof(uint64_t) / sizeof(T);
+  const ssize_t loopSize = args->nChannels*chunkSize;
+
+  if (loopSize > size) {
+    chunkSize = DIVUP(size, args->nChannels*minChunkSize)*minChunkSize;
+  }
+
+  // Compute pointers
+  const T * __restrict__ thisInput = (const T*)args->ThisInput;
+  T * __restrict__ thisOutput = (T*)args->ThisOutput;
+
+  if (blockIdx.x < args->nChannels) { // first half of the channels do reduce
+    struct ncclTree* tree = &channel->collTreeUp;
+    ncclPrimitives<UNROLL, 1, 1, T, 1, 1, FUNC> prims(tid, args->nThreads, tree->down, &tree->up, NULL, stepSize, channel, comm, args->opCount);
+    for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+      // Up
+      ssize_t offset = gridOffset + bid*chunkSize;
+      int nelem = min(chunkSize, size-offset);
+      if (tree->up == -1) {
+        prims.recvReduceCopy(thisInput+offset, thisOutput+offset, nelem);
+      } else if (tree->down[0] == -1) {
+        prims.send(thisInput+offset, nelem);
+      } else {
+        prims.recvReduceSend(thisInput+offset, nelem);
+      }
+    }
+  }
+
+  if (blockIdx.x >= args->nChannels) { // second half of the channels do broadcast
+    struct ncclTree* tree = &channel->collTreeDn;
+    ncclPrimitives<UNROLL, 1, 1, T, 1, 1, FUNC> prims(tid, args->nThreads, &tree->up, tree->down, NULL, stepSize, channel, comm, args->opCount);
+    for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+      // Down
+      ssize_t offset = gridOffset + bid*chunkSize;
+      int nelem = min(chunkSize, size-offset);
+      if (tree->up == -1) {
+        prims.send(thisOutput+offset, nelem);
+      } else if (tree->down[0] == -1) {
+        prims.recv(thisOutput+offset, nelem);
+      } else {
+        prims.recvCopySend(thisOutput+offset, nelem);
+      }
+    }
+  }
+}
+
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllReduceRingLLKernel(struct CollectiveArgs* args) {
@@ -296,6 +353,62 @@ __device__ void ncclAllReduceTreeLLKernel(struct CollectiveArgs* args) {
       }
     }
   } while(0);
+}
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclAllReduceCollNetLLKernel(struct CollectiveArgs* args) {
+  const int tid = threadIdx.x;
+  const int nthreads = args->nThreads;
+  const int bid = args->bid;
+  struct ncclDevComm* comm = args->comm;
+  struct ncclChannel* channel = comm->channels+blockIdx.x;
+  const ssize_t size = args->N;
+  ssize_t chunkSize = NCCL_LL_SLICE_LINES * sizeof(uint64_t) / sizeof(T);
+  const ssize_t minChunkSize = nthreads*sizeof(uint64_t) / sizeof(T);
+  const ssize_t loopSize = args->nChannels*chunkSize;
+
+  if (loopSize > size) {
+    chunkSize = DIVUP(size, args->nChannels*minChunkSize)*minChunkSize;
+  }
+
+  // Compute pointers
+  const T * __restrict__ thisInput = (const T*)args->ThisInput;
+  T * __restrict__ thisOutput = (T*)args->ThisOutput;
+
+  if (blockIdx.x < args->nChannels) { // first half of the channels do reduce
+    struct ncclTree* tree = &channel->collTreeUp;
+    ncclLLPrimitives<T, FUNC, 1, 1> LLprims(tid, nthreads, tree->down, &tree->up, channel, comm, args->opCount);
+    for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+      // Up
+      ssize_t offset = gridOffset + bid*chunkSize;
+      int nelem = min(chunkSize, size-offset);
+      if (tree->up == -1) {
+        LLprims.recvReduceCopy(thisInput+offset, thisOutput+offset, nelem);
+      } else if (tree->down[0] == -1) {
+        LLprims.send(thisInput+offset, nelem);
+      } else {
+        LLprims.recvReduceSend(thisInput+offset, nelem);
+      }
+    }
+  }
+
+  if (blockIdx.x >= args->nChannels) { // second half of the channels do broadcast
+    struct ncclTree* tree = &channel->collTreeDn;
+    ncclLLPrimitives<T, FUNC, 1, 1> LLprims(tid, nthreads, &tree->up, tree->down, channel, comm, args->opCount);
+    for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+      // Down
+      ssize_t offset = gridOffset + bid*chunkSize;
+      int nelem = min(chunkSize, size-offset);
+      if (tree->up == -1) {
+        LLprims.send(thisOutput+offset, nelem);
+      } else if (tree->down[0] == -1) {
+        LLprims.recv(thisOutput+offset, nelem);
+      } else {
+        LLprims.recvCopySend(thisOutput+offset, nelem);
+      }
+    }
+  }
 }
 
 #include "prims_ll128.h"
@@ -437,3 +550,7 @@ __device__ void ncclAllReduceTreeLL128Kernel(struct CollectiveArgs* args) {
     }
   }
 }
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclAllReduceCollNetLL128Kernel(struct CollectiveArgs* args) { }

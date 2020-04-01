@@ -57,7 +57,7 @@
   ncclResult_t res = call; \
   if (res != ncclSuccess) { \
     /* Print the back trace*/ \
-    INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
+    if (ncclDebugNoWarn == 0) INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
     return res; \
   } \
 } while (0);
@@ -66,7 +66,7 @@
   res = call; \
   if (res != ncclSuccess) { \
     /* Print the back trace*/ \
-    INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
+    if (ncclDebugNoWarn == 0) INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
     goto label; \
   } \
 } while (0);

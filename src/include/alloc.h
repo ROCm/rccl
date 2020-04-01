@@ -10,6 +10,7 @@
 
 #include "nccl.h"
 #include "checks.h"
+#include "align.h"
 #include <sys/mman.h>
 
 static inline ncclResult_t ncclCudaHostAlloc(void** ptr, void** devPtr, size_t size) {
@@ -61,4 +62,19 @@ static bool hasFineGrainVramPcie() {
   else
     return false;
 }
+
+// Allocate memory to be potentially ibv_reg_mr'd. This needs to be
+// allocated on separate pages as those pages will be marked DONTFORK
+// and if they are shared, that could cause a crash in a child process
+static ncclResult_t ncclIbMalloc(void** ptr, size_t size) {
+  size_t page_size = sysconf(_SC_PAGESIZE);
+  void* p;
+  int size_aligned = ROUNDUP(size, page_size);
+  int ret = posix_memalign(&p, page_size, size_aligned);
+  if (ret != 0) return ncclSystemError;
+  memset(p, 0, size);
+  *ptr = p;
+  return ncclSuccess;
+}
+
 #endif
