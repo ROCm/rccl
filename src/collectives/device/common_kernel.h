@@ -346,14 +346,9 @@ __device__ void ReduceCopy128bMulti( const int w, const int nw, const int t,
 template <typename T>
 __device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(Pack128); }
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-// Use UNROLL 4 for 2 SRCs, 2 for the rest
-#define AUTOUNROLL (UNROLL*(2/MINSRCS))
-#else
 // Try to limit consecutive load/stores to 8.
 // Use UNROLL 8 when we have a single source and a single destination, 4 otherwise
 #define AUTOUNROLL (UNROLL*(4/(MINDSTS+MINSRCS)))
-#endif
 
 template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS>
 __device__ void ReduceOrCopyMulti(const int tid, const int nthreads,

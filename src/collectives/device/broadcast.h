@@ -73,6 +73,10 @@ template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclBroadcastTreeKernel(struct CollectiveArgs* args) { }
 
+template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclBroadcastCollNetKernel(struct CollectiveArgs* args) { }
+
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclBroadcastRingLLKernel(struct CollectiveArgs* args) {
@@ -121,6 +125,10 @@ __device__ void ncclBroadcastRingLLKernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclBroadcastTreeLLKernel(struct CollectiveArgs* args) { }
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclBroadcastCollNetLLKernel(struct CollectiveArgs* args) { }
 
 #include "prims_ll128.h"
 template<int UNUSED, class FUNC, typename T>
@@ -171,3 +179,7 @@ __device__ void ncclBroadcastRingLL128Kernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclBroadcastTreeLL128Kernel(struct CollectiveArgs* args) { }
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclBroadcastCollNetLL128Kernel(struct CollectiveArgs* args) { }

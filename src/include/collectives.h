@@ -1,4 +1,3 @@
-#include "hip/hip_runtime.h"
 /*************************************************************************
  * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
@@ -32,7 +31,8 @@
 
 #define DECL_COLL3(coll, op, dtype) \
   DECL_COLL4(coll##Ring, op, dtype) \
-  DECL_COLL4(coll##Tree, op, dtype)
+  DECL_COLL4(coll##Tree, op, dtype) \
+  DECL_COLL4(coll##CollNet, op, dtype)
 
 #define DECL_COLL2(coll, op) \
   DECL_COLL3(coll, op, i8) \

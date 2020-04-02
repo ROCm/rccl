@@ -41,24 +41,14 @@ THE SOFTWARE.
 #include <sys/stat.h>
 #include <unistd.h>
 #include "model.h"
+#include "topo.h"
 
 extern NodeModel *node_model;
-
-static ncclResult_t dummyNetDevices(int* ndev) {
-  *ndev = node_model->getnNetDevs();
-  return ncclSuccess;
-}
-
-static ncclResult_t dummyNetPciPath(int dev, char** path) {
-  node_model->getNetPciPath(dev, path);
-  return ncclSuccess;
-}
 
 ncclNet_t ncclNetDummy = {
   "IB",
   0,
-  dummyNetDevices,
-  dummyNetPciPath,
+  0,
   0,
   0,
   0,
@@ -76,24 +66,9 @@ ncclNet_t ncclNetDummy = {
 
 ncclNet_t* ncclNet = &ncclNetDummy;
 
-ncclResult_t wrapNvmlDeviceGetHandleByPciBusId(const char* pciBusId, nvmlDevice_t* device) {
-  return ncclSuccess;
-}
-
 /* Convert a PCI busId string into a local cudaDev device index (cf. CUDA_VISIBLE_DEVICES) */
 int busIdToCudaDev(int64_t busId) {
-  int cudaDev;
-
-  for (cudaDev = 0; cudaDev < node_model->getnGpus(); cudaDev++) {
-    if (node_model->getGpuBusId(cudaDev) == busId)
-      break;
-  }
-
-  if (cudaDev < node_model->getnGpus())
-    return cudaDev;
-  else
-    WARN("Invalid busId %lx", busId);
-  return 0;
+  return node_model->busIdToCudaDev(busId);
 }
 
 /* Determine if two peers can communicate with P2P */
@@ -177,6 +152,8 @@ ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   int netDev, useGdr = 0;
 
   NCCLCHECK(ncclTopoGetNetDev(graph, 1, channelId, &netDev));
+  NCCLCHECK(ncclTopoCheckGdr(topo, myInfo->busId, netDev, 1, &useGdr));
+
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), netDev,
       useGdr ? "/GDRDMA" : "");
   return ncclSuccess;
@@ -188,15 +165,8 @@ ncclResult_t netRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   int netDev, useGdr = 0;
 
   NCCLCHECK(ncclTopoGetNetDev(graph, 0, channelId, &netDev));
-  // Check if we are close enough that it makes sense to enable GDR
-  int netGdrLevel = ncclParamNetGdrLevel();
-  int distance;
-  NCCLCHECK(ncclTopoNetDistance(topo, myInfo->busId, netDev, &distance));
-  if (distance >= netGdrLevel) {
-    INFO(NCCL_NET,"NET/%s : GPU Direct RDMA Disabled for GPU %lx / HCA %d (distance %d >= %d)", ncclNetName(), myInfo->busId, netDev, distance, netGdrLevel);
-  }
-  else
-    useGdr = 1;
+  NCCLCHECK(ncclTopoCheckGdr(topo, myInfo->busId, netDev, 0, &useGdr));
+
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s", channelId, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), netDev,
       useGdr ? "/GDRDMA" : "");
   return ncclSuccess;

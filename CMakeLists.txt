@@ -111,6 +111,7 @@ set(CC_SOURCES
     src/graph/connect.cc
     src/graph/tuning.cc
     src/graph/topo.cc
+    src/graph/xml.cc
     src/collectives/all_reduce.cc
     src/collectives/all_gather.cc
     src/collectives/reduce.cc
@@ -122,6 +123,7 @@ set(CC_SOURCES
     src/misc/utils.cc
     src/misc/ibvwrap.cc
     src/misc/nvmlwrap_stub.cc
+    src/transport/coll_net.cc
     src/transport/net.cc
     src/transport/net_ib.cc
     src/transport/net_socket.cc

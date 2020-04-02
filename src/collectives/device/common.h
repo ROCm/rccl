@@ -1,4 +1,3 @@
-#include "hip/hip_runtime.h"
 /*************************************************************************
  * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
@@ -51,7 +50,8 @@ static inline __device__ void exitIfAbortBarrier(int abort) {
 
 #define NCCL_FUNC4(coll, op, dtype) \
   NCCL_FUNC5(coll##Tree, op, dtype), \
-  NCCL_FUNC5(coll##Ring, op, dtype)
+  NCCL_FUNC5(coll##Ring, op, dtype), \
+  NCCL_FUNC5(coll##CollNet, op, dtype)
 
 // Must be consistent with ncclDataType_t
 #define NCCL_FUNCS3A(coll, op) \
@@ -133,24 +133,30 @@ struct Caller<f, f + 1>{
 inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclColl* const c) noexcept {
-  if (c->funcIndex < 240) {
-    if (c->funcIndex % 6 == 0) ncclBroadcastTreeLL_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 1) ncclBroadcastTreeLL128_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 2) ncclBroadcastTree_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 3) ncclBroadcastRingLL_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 4) ncclBroadcastRingLL128_copy_i8(&c->args);
-    else ncclBroadcastRing_copy_i8(&c->args);
+  if (c->funcIndex < 360) {
+    if (c->funcIndex % 9 == 0) ncclBroadcastTreeLL_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 1) ncclBroadcastTreeLL128_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 2) ncclBroadcastTree_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 3) ncclBroadcastRingLL_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 4) ncclBroadcastRingLL128_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 5) ncclBroadcastRing_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 6) ncclBroadcastCollNetLL_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 7) ncclBroadcastCollNetLL128_copy_i8(&c->args);
+    else ncclBroadcastCollNet_copy_i8(&c->args);
   }
-  else if (c->funcIndex < 480) Caller<240, 480>::call(c);
-  else if (c->funcIndex < 720) {
-    if (c->funcIndex % 6 == 0) ncclAllGatherTreeLL_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 1) ncclAllGatherTreeLL128_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 2) ncclAllGatherTree_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 3) ncclAllGatherRingLL_copy_i8(&c->args);
-    else if (c->funcIndex % 6 == 4) ncclAllGatherRingLL128_copy_i8(&c->args);
-    else ncclAllGatherRing_copy_i8(&c->args);
+  else if (c->funcIndex < 720) Caller<360, 720>::call(c);
+  else if (c->funcIndex < 1080) {
+    if (c->funcIndex % 9 == 0) ncclAllGatherTreeLL_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 1) ncclAllGatherTreeLL128_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 2) ncclAllGatherTree_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 3) ncclAllGatherRingLL_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 4) ncclAllGatherRingLL128_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 5) ncclAllGatherRing_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 6) ncclAllGatherCollNetLL_copy_i8(&c->args);
+    else if (c->funcIndex % 9 == 7) ncclAllGatherCollNetLL128_copy_i8(&c->args);
+    else ncclAllGatherCollNet_copy_i8(&c->args);
   }
-  else Caller<720, 1200>::call(c);
+  else Caller<1080, 1800>::call(c);
 }
 
 static __device__ void load_parallel(void* dst, void* src, size_t size, int tid, uint32_t* abortCount) {
@@ -274,7 +280,8 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
 
 #define IMPL_COLL3(coll, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType) \
   IMPL_COLL4(coll##Tree, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_TREE) \
-  IMPL_COLL4(coll##Ring, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_RING)
+  IMPL_COLL4(coll##Ring, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_RING) \
+  IMPL_COLL4(coll##CollNet, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_COLLNET)
 
 #define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
   IMPL_COLL3(coll, op, ncclFunc, i8,  int8_t,   ncclColl, ncclOp, ncclInt8) \

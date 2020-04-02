@@ -29,7 +29,6 @@ THE SOFTWARE.
 #include "net.h"
 #include "graph.h"
 #include "argcheck.h"
-#include "cpuset.h"
 #include <sched.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -65,18 +64,18 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 
 const char *model_descriptions[] = {
   "single node VEGA20 4P1H",
+  "single node VEGA20 4P1H Alt. Model",
   "single node VEGA20 4P2H",
   "single node gfx908 4P3L",
   "single node gfx908 8P6L",
-  "single node gfx908 8P6L Alt. Connection",
-  "single node 8 VEGA20 PCIe on Rome",
-  "single node gfx908 8P6L on Rome",
+  "single node 8 VEGA20 PCIe",
   "4 nodes with 8 GPUs PCIe 1 NIC",
+  "4 nodes with 8 GPUs PCIe 1 NIC 2nd PLX Bridge",
   "4 nodes with 8 GPUs PCIe 2 NIC",
   "2 nodes VEGA20 4P1H",
   "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC",
-  "4 nodes 8 GPUs PCIe 2 NICs on Rome",
-  "3 nodes 8 GPUs PCIe + 1 Rome 8 GPUs PCIe + 2 nodes gfx908 4P3L",
+  "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC 2nd Hive",
+  "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 2 NIC",
   NULL,
 };
 
@@ -97,97 +96,75 @@ int main(int argc,char* argv[])
   if (mi)
     model_id = atol(mi);
 
-  // CPU, GPU and NIC devices on Skylake
-  CpuDevices skylake("Skylake", SKL_QPI_WIDTH, SKL_CPUPCI_WIDTH, SKL_PCI_WIDTH);
-  GpuDevices vg20_pcie(8, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_pcie);
-  GpuDevices vg20_4p1h(4, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_4p2h);
-  GpuDevices vg20_4p2h(8, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_4p2h);
-  GpuDevices gfx908_4p3l(4, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_8p6l);
-  GpuDevices gfx908_8p6l(8, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_8p6l);
-  GpuDevices gfx908_8p6l_1(8, busIds_8, gpuPciPaths_8, gpuPciNumaIds_8, conn_mat_8p6l_1);
-  NetDevices nic_1(1, netPciPaths_1, netGuids_1, netPciNumaIds_1);
-  NetDevices nic_1_1(1, netPciPaths_1_1, netGuids_1, netPciNumaIds_1);
-  NetDevices nic_2(2, netPciPaths_2, netGuids_2, netPciNumaIds_2);
-
-  // CPU, GPU and NIC devices on Rome
-  CpuDevices rome("Rome", ROME_QPI_WIDTH, ROME_CPUPCI_WIDTH, ROME_PCI_WIDTH);
-  GpuDevices vg20_pcie_rome(8, rome_busIds_8, rome_gpuPciPaths_8, rome_gpuPciNumaIds_8, conn_mat_rome);
-  NetDevices nic_1_rome(1, rome_netPciPaths_1, rome_netGuids_1, rom_netPciNumaIds_1);
-  NetDevices nic_2_rome(2, rome_netPciPaths_2, rome_netGuids_2, rom_netPciNumaIds_2);
-
-  // 8 GPUs PCIe 1 NIC
-  NodeModel model_8pcie_1nic(skylake, vg20_pcie, nic_1, "Skylake 8 GPUs PCIe");
-
-  // 8 GPUs PCIe 2 NIC
-  NodeModel model_8pcie_2nic(skylake, vg20_pcie, nic_2, "Skylake 8 GPUs PCIe 2 NIC");
-
-  // VEGA20 4P1H, use VEGA20 4P2H model
-  NodeModel model_vg20_4p1h_1nic(skylake, vg20_4p1h, nic_1, "Skylake VEGA20 4P1H");
-
-  // VEGA20 GPUs XGMI 4P2H 1 NIC
-  NodeModel model_vg20_4p2h_1nic(skylake, vg20_4p2h, nic_1_1, "Skylake VEGA20 4P2H");
-
-  // gfx908 4P3L
-  NodeModel model_gfx908_4p_1nic(skylake, gfx908_4p3l, nic_1, "Skylake gfx908 4P3L");
-
-  // gfx908 8P6L
-  NodeModel model_gfx908_8p_1nic(skylake, gfx908_8p6l, nic_1, "Skylake gfx908 8P6L");
-
-  // gfx908 8P6L alternative connection
-  NodeModel model_gfx908_8p_1nic_1(skylake, gfx908_8p6l_1, nic_1, "Skylake gfx908 8P6L Alt. Connection");
-
-  // 8 GPUs PCIe on Rome
-  NodeModel model_8pcie_1nic_rome(rome, vg20_pcie_rome, nic_1_rome, "Rome 8 GPUs PCIe");
-
-  // 8 GPUs PCIe 2 NICs on Rome
-  NodeModel model_8pcie_2nic_rome(rome, vg20_pcie_rome, nic_2_rome, "Rome 8 GPUs PCIe 2 NICs");
-
-  // gfx908 8P6L on Rome
-  NodeModel model_gfx908_8p_1nic_rome(rome, gfx908_8p6l, nic_1, "Rome gfx908 8P6L");
-
   NetworkModel network;
+  NodeModel* node;
 
   switch(model_id) {
     case 0:
-      network.AddNode(model_vg20_4p1h_1nic);
+      node = new NodeModel("topo_4p1h.xml");
+      network.AddNode(node);
       break;
     case 1:
-      network.AddNode(model_vg20_4p2h_1nic);
+      node = new NodeModel("topo_4p1h_1.xml");
+      network.AddNode(node);
       break;
     case 2:
-      network.AddNode(model_gfx908_4p_1nic);
+      node = new NodeModel("topo_4p2h.xml");
+      network.AddNode(node);
       break;
     case 3:
-      network.AddNode(model_gfx908_8p_1nic);
+      node = new NodeModel("topo_4p3l.xml");
+      network.AddNode(node);
       break;
     case 4:
-      network.AddNode(model_gfx908_8p_1nic_1);
+      node = new NodeModel("topo_8p6l.xml");
+      network.AddNode(node);
       break;
     case 5:
-      network.AddNode(model_8pcie_1nic_rome);
+      node = new NodeModel("topo_8p_pcie.xml");
+      network.AddNode(node);
       break;
     case 6:
-      network.AddNode(model_gfx908_8p_1nic_rome);
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p_pcie.xml");
+        network.AddNode(node);
+      }
       break;
     case 7:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_1nic);
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p_pcie_1.xml");
+        network.AddNode(node);
+      }
       break;
     case 8:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_2nic);
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p_pcie_2nic.xml");
+        network.AddNode(node);
+      }
       break;
     case 9:
-      for (int i = 0; i < 2; i ++) network.AddNode(model_vg20_4p1h_1nic);
+      for (int i=0; i<2; i++) {
+        node = new NodeModel("topo_4p1h.xml");
+        network.AddNode(node);
+      }
       break;
     case 10:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_vg20_4p2h_1nic);
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_4p2h.xml");
+        network.AddNode(node);
+      }
       break;
     case 11:
-      for (int i = 0; i < 4; i ++) network.AddNode(model_8pcie_2nic_rome);
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_4p2h_1.xml");
+        network.AddNode(node);
+      }
       break;
     case 12:
-      for (int i = 0; i < 3; i ++) network.AddNode(model_8pcie_1nic);
-      network.AddNode(model_8pcie_1nic_rome);
-      for (int i = 0; i < 2; i ++) network.AddNode(model_gfx908_4p_1nic);
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_4p2h_2nic.xml");
+        network.AddNode(node);
+      }
       break;
     default:
       printf("Invalid model_id %d\n", model_id);
@@ -203,8 +180,8 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
-    printf("Rank %d: node %d (%s) GPU busId %lx\n", i, node_model->nodeId,
-      node_model->description, node_model->getGpuBusId(node_model->rankToCudaDev(i)));
+    printf("Rank %d: node %d cudaDev %d GPU busId %lx\n", i, node_model->nodeId,
+      node_model->rankToCudaDev(i), node_model->getGpuBusId(i));
   }
 
   NCCLCHECK(ncclCalloc(&comm, nranks));
@@ -220,21 +197,22 @@ int main(int argc,char* argv[])
     comm[i].nRanks = nranks;
     node_model = network.GetNode(i);
     assert(node_model!=0);
+    comm[i].topo = node_model->getSystem(i);
     bootstrapAllGather(&comm[i], allGather1Data);
   }
 
-  struct ncclTopoGraph treeGraph, ringGraph;
+  struct ncclTopoGraph treeGraph, ringGraph, collNetGraph;
 
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
-    initTransportsRank_1(&comm[i], allGather1Data, allGather3Data, treeGraph, ringGraph);
+    initTransportsRank_1(&comm[i], allGather1Data, allGather3Data, treeGraph, ringGraph, collNetGraph);
   }
 
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
-    initTransportsRank_3(&comm[i], allGather3Data, treeGraph, ringGraph);
+    initTransportsRank_3(&comm[i], allGather3Data, treeGraph, ringGraph, collNetGraph);
   }
 
   free(allGather3Data);

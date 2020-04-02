@@ -72,6 +72,10 @@ template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllGatherTreeKernel(struct CollectiveArgs* args) { }
 
+template<int UNROLL, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclAllGatherCollNetKernel(struct CollectiveArgs* args) { }
+
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllGatherRingLLKernel(struct CollectiveArgs* args) {
@@ -134,6 +138,10 @@ __device__ void ncclAllGatherRingLLKernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllGatherTreeLLKernel(struct CollectiveArgs* args) { }
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclAllGatherCollNetLLKernel(struct CollectiveArgs* args) { }
 
 #include "prims_ll128.h"
 template<int UNUSED, class FUNC, typename T>
@@ -200,3 +208,7 @@ __device__ void ncclAllGatherRingLL128Kernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllGatherTreeLL128Kernel(struct CollectiveArgs* args) { }
+
+template<int UNUSED, class FUNC, typename T>
+__attribute__((noinline))
+__device__ void ncclAllGatherCollNetLL128Kernel(struct CollectiveArgs* args) { }
