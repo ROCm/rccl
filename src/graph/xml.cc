@@ -13,6 +13,10 @@
 #include "core.h"
 #include "nvmlwrap.h"
 #include "xml.h"
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
+#endif
 
 /*******************/
 /* XML File Parser */

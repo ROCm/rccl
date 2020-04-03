@@ -34,6 +34,10 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include "copy_kernel.h"
 #include "TransferBench.hpp"
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
+#endif
 
 int main(int argc, char **argv)
 {
