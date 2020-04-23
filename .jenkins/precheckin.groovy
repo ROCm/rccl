@@ -31,7 +31,6 @@ def runCI =
         commonGroovy.runCompileCommand(platform, project, jobName)
     }
 
-
     def packageCommand =
     {
         platform, project->
@@ -51,10 +50,11 @@ ci: {
     propertyList = auxiliary.appendPropertyList(propertyList)
 
     def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['rccl']]), 
-                       "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['rccl']]),
+    //                   "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['rccl']]),
                        "rocm-docker":([ubuntu16:['rccl'],centos7:['rccl']])]
     jobNameList = auxiliary.appendJobNameList(jobNameList)
-
+    jobNameList['compute-rocm-dkms-no-npi-hipclang'] = [ubuntu16:['rccl']]
+    
     propertyList.each 
     {
         jobName, property->
