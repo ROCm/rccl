@@ -30,6 +30,13 @@ def runCI =
         commonGroovy = load "${project.paths.project_src_prefix}/.jenkins/common.groovy"
         commonGroovy.runCompileCommand(platform, project, jobName)
     }
+    
+    def testCommand =
+    {
+        platform, project->
+
+        commonGroovy.runTestCommand(platform, project)
+    }
 
     def packageCommand =
     {
