@@ -50,9 +50,9 @@ ci: {
                         "rocm-docker":[]]
     propertyList = auxiliary.appendPropertyList(propertyList)
 
-    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['any']]), 
-                       "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['any']]),
-                       "rocm-docker":([ubuntu16:['any'],centos7:['any']])]
+    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['rccl']]), 
+                       "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['rccl']]),
+                       "rocm-docker":([ubuntu16:['any'],centos7:['rccl']])]
     jobNameList = auxiliary.appendJobNameList(jobNameList)
 
     propertyList.each 
@@ -76,7 +76,7 @@ ci: {
     {
         properties(auxiliary.addCommonProperties([pipelineTriggers([cron('0 1 * * *')])]))
         stage(urlJobName) {
-            runCI([ubuntu16:['gfx906']], urlJobName)
+            runCI([ubuntu16:['rccl']], urlJobName)
         }
     }
 }
