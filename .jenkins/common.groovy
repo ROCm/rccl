@@ -21,7 +21,7 @@ def runTestCommand (platform, project)
 
     def command = """#!/usr/bin/env bash
                 set -x
-                cd ${project.paths.project_build_prefix}/rccl-install/test
+                cd ${project.paths.project_build_prefix}/build/release/test
                 ./UnitTest --gtest_output=xml --gtest_color=yes
             """
 
