@@ -22,7 +22,7 @@ def runTestCommand (platform, project)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
-                ./UnitTest --gtest_output=xml --gtest_color=yes
+                ./UnitTests --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)
