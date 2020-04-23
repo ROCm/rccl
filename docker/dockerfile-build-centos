@@ -11,7 +11,7 @@ USER root
 ARG user_uid
 
 # Install dependent packages
-RUN yum install -y \
+RUN yum install -y --no-gpg-check \
     sudo \
     chrpath \
     rock-dkms \
