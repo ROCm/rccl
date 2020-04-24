@@ -9,12 +9,25 @@ def runCompileCommand(platform, project, jobName)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}
-                LD_LIBRARY_PATH=/opt/rocm/hcc/lib CXX= ${project.paths.build_command} -t ${hipclangArgs}
+                LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command} -t ${hipclangArgs}
             """
 
     platform.runCommand(this,command)
 }
 
+def runTestCommand (platform, project)
+{
+    String sudo = auxiliary.sudo(platform.jenkinsLabel)
+
+    def command = """#!/usr/bin/env bash
+                set -x
+                cd ${project.paths.project_build_prefix}/build/release/test
+                HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
+            """
+
+   platform.runCommand(this, command)
+   junit "${project.paths.project_build_prefix}/rccl-install/*.xml"
+}
 
 def runPackageCommand(platform, project, jobName)
 {

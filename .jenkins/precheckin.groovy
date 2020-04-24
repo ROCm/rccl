@@ -30,7 +30,13 @@ def runCI =
         commonGroovy = load "${project.paths.project_src_prefix}/.jenkins/common.groovy"
         commonGroovy.runCompileCommand(platform, project, jobName)
     }
+    
+    def testCommand =
+    {
+        platform, project->
 
+        commonGroovy.runTestCommand(platform, project)
+    }
 
     def packageCommand =
     {
@@ -39,7 +45,7 @@ def runCI =
         commonGroovy.runPackageCommand(platform, project, jobName)
     }
 
-    buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, null, packageCommand)
+    buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
 }
 
 ci: { 
@@ -50,11 +56,11 @@ ci: {
                         "rocm-docker":[]]
     propertyList = auxiliary.appendPropertyList(propertyList)
 
-    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['any']]), 
-                       "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['any']]),
-                       "rocm-docker":([ubuntu16:['any'],centos7:['any']])]
+    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['rccl906']]), 
+                       "rocm-docker":([ubuntu16:['rccl906'],centos7:['rccl906']])]
     jobNameList = auxiliary.appendJobNameList(jobNameList)
-
+    jobNameList['compute-rocm-dkms-no-npi-hipclang'] = [ubuntu16:['rccl906'],centos7:['rccl906']]
+    
     propertyList.each 
     {
         jobName, property->
@@ -76,7 +82,7 @@ ci: {
     {
         properties(auxiliary.addCommonProperties([pipelineTriggers([cron('0 1 * * *')])]))
         stage(urlJobName) {
-            runCI([ubuntu16:['gfx906']], urlJobName)
+            runCI([ubuntu16:['rccl906']], urlJobName)
         }
     }
 }
