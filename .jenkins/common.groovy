@@ -9,7 +9,7 @@ def runCompileCommand(platform, project, jobName)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}
-                LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command} -t ${hipclangArgs}
+                LOG_LEVEL=3 NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=INIT,COLL LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command} -t ${hipclangArgs}
             """
 
     platform.runCommand(this,command)
