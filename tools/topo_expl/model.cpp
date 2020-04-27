@@ -151,7 +151,7 @@ ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int buffSize, int channelId) {
   int netDev, useGdr = 0;
 
-  NCCLCHECK(ncclTopoGetNetDev(graph, 1, channelId, &netDev));
+  NCCLCHECK(ncclTopoGetNetDev(topo, graph, myInfo->rank, channelId, &netDev));
   NCCLCHECK(ncclTopoCheckGdr(topo, myInfo->busId, netDev, 1, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), netDev,
@@ -164,7 +164,7 @@ NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
 ncclResult_t netRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int buffSize, int channelId) {
   int netDev, useGdr = 0;
 
-  NCCLCHECK(ncclTopoGetNetDev(graph, 0, channelId, &netDev));
+  NCCLCHECK(ncclTopoGetNetDev(topo, graph, myInfo->rank, channelId, &netDev));
   NCCLCHECK(ncclTopoCheckGdr(topo, myInfo->busId, netDev, 0, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s", channelId, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), netDev,
