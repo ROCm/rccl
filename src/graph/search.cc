@@ -345,7 +345,7 @@ ncclResult_t ncclTopoSearchRecGpu(struct ncclTopoSystem* system, struct ncclTopo
     int next[NCCL_TOPO_MAX_NODES];
     int count;
     if (forcedOrder == FORCED_ORDER_PCI) { // Try the PCI order
-      next[0] = (busIdToCudaDev(gpu->id)+1)%system->nodes[GPU].count;
+      next[0] = step+1;
       count = 1;
     } else if (forcedOrder == FORCED_ORDER_REPLAY) { // Try last channel order
       NCCLCHECK(ncclTopoReplayGetGpu(system, graph, step, next));
