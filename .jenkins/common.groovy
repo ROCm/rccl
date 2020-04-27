@@ -9,7 +9,7 @@ def runCompileCommand(platform, project, jobName)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}
-                LOG_LEVEL=3 NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=INIT,COLL LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command} -t ${hipclangArgs}
+                LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command} -t ${hipclangArgs}
             """
 
     platform.runCommand(this,command)
@@ -22,7 +22,7 @@ def runTestCommand (platform, project)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
-                HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
+                LOG_LEVEL=3 NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=INIT,COLL HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)
