@@ -44,11 +44,11 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
     /////////////// begin AllReduce steps ///////////////
     ssize_t offset;
     int nelem;
-    int slice;
+    int chunk;
 
     // step 0: push data to next GPU
-    slice = ring->devUserRanks[nranks-1];
-    offset = chunkOffset + slice * realChunkSize;
+    chunk = ring->devUserRanks[nranks-1];
+    offset = chunkOffset + chunk * realChunkSize;
     nelem = min(realChunkSize, size-offset);
 
     INIT_COUNTER;
@@ -57,8 +57,8 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
 
     // k-2 steps: reduce and copy to next GPU
     for (int j=2; j<nranks; ++j) {
-      slice = ring->devUserRanks[nranks-j];
-      offset = chunkOffset + slice * realChunkSize;
+      chunk = ring->devUserRanks[nranks-j];
+      offset = chunkOffset + chunk * realChunkSize;
       nelem = min(realChunkSize, size-offset);
 
       INIT_COUNTER;
@@ -68,8 +68,8 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
 
     // step k-1: reduce this buffer and data, which will produce the final
     // result that we store in this data and push to the next GPU
-    slice = ring->devUserRanks[0];
-    offset = chunkOffset + slice * realChunkSize;
+    chunk = ring->devUserRanks[0];
+    offset = chunkOffset + chunk * realChunkSize;
     nelem = min(realChunkSize, size-offset);
 
     INIT_COUNTER;
@@ -78,8 +78,8 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
 
     // k-2 steps: copy to next GPU
     for (int j=1; j<nranks-1; ++j) {
-      slice = ring->devUserRanks[nranks-j];
-      offset = chunkOffset + slice * realChunkSize;
+      chunk = ring->devUserRanks[nranks-j];
+      offset = chunkOffset + chunk * realChunkSize;
       nelem = min(realChunkSize, size-offset);
 
       INIT_COUNTER;
@@ -88,8 +88,8 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
     }
 
     // Make final copy from buffer to dest.
-    slice = ring->devUserRanks[1];
-    offset = chunkOffset + slice * realChunkSize;
+    chunk = ring->devUserRanks[1];
+    offset = chunkOffset + chunk * realChunkSize;
     nelem = min(realChunkSize, size-offset);
 
     // Final wait/copy.
@@ -250,19 +250,19 @@ __device__ void ncclAllReduceRingLLKernel(struct CollectiveArgs* args) {
     /////////////// begin AllReduce steps ///////////////
     ssize_t offset;
     int nelem;
-    int slice;
+    int chunk;
 
     // step 0: push data to next GPU
-    slice = ring->devUserRanks[nranks-1];
-    offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+    chunk = ring->devUserRanks[nranks-1];
+    offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
     nelem = min(chunkSize, size-offset);
 
     LLprims.send(thisInput+offset, nelem);
 
     // k-2 steps: reduce and copy to next GPU
     for (int j=2; j<nranks; ++j) {
-      slice = ring->devUserRanks[nranks-j];
-      offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+      chunk = ring->devUserRanks[nranks-j];
+      offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
       nelem = min(chunkSize, size-offset);
 
       LLprims.recvReduceSend(thisInput+offset, nelem);
@@ -270,24 +270,24 @@ __device__ void ncclAllReduceRingLLKernel(struct CollectiveArgs* args) {
 
     // step k-1: reduce this buffer and data, which will produce the final
     // result that we store in this data and push to the next GPU
-    slice = ring->devUserRanks[0];
-    offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+    chunk = ring->devUserRanks[0];
+    offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
     nelem = min(chunkSize, size-offset);
 
     LLprims.recvReduceCopySend(thisInput+offset, thisOutput+offset, nelem);
 
     // k-2 steps: copy to next GPU
     for (int j=1; j<nranks-1; ++j) {
-      slice = ring->devUserRanks[nranks-j];
-      offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+      chunk = ring->devUserRanks[nranks-j];
+      offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
       nelem = min(chunkSize, size-offset);
 
       LLprims.recvCopySend(thisOutput+offset, nelem);
     }
 
     // Make final copy from buffer to dest.
-    slice = ring->devUserRanks[1];
-    offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+    chunk = ring->devUserRanks[1];
+    offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
     nelem = min(chunkSize, size-offset);
 
     // Here we need to copy from buffer to this output.
@@ -443,19 +443,19 @@ __device__ void ncclAllReduceRingLL128Kernel(struct CollectiveArgs* args) {
     /////////////// begin AllReduce steps ///////////////
     ssize_t offset;
     int nelem;
-    int slice;
+    int chunk;
 
     // step 0: push data to next GPU
-    slice = ring->devUserRanks[nranks-1];
-    offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+    chunk = ring->devUserRanks[nranks-1];
+    offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
     nelem = min(chunkSize, size-offset);
 
     LLprims.send(thisInput+offset, nelem);
 
     // k-2 steps: reduce and copy to next GPU
     for (int j=2; j<nranks; ++j) {
-      slice = ring->devUserRanks[nranks-j];
-      offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+      chunk = ring->devUserRanks[nranks-j];
+      offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
       nelem = min(chunkSize, size-offset);
 
       LLprims.recvReduceSend(thisInput+offset, nelem);
@@ -463,24 +463,24 @@ __device__ void ncclAllReduceRingLL128Kernel(struct CollectiveArgs* args) {
 
     // step k-1: reduce this buffer and data, which will produce the final
     // result that we store in this data and push to the next GPU
-    slice = ring->devUserRanks[0];
-    offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+    chunk = ring->devUserRanks[0];
+    offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
     nelem = min(chunkSize, size-offset);
 
     LLprims.recvReduceCopySend(thisInput+offset, thisOutput+offset, nelem);
 
     // k-2 steps: copy to next GPU
     for (int j=1; j<nranks-1; ++j) {
-      slice = ring->devUserRanks[nranks-j];
-      offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+      chunk = ring->devUserRanks[nranks-j];
+      offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
       nelem = min(chunkSize, size-offset);
 
       LLprims.recvCopySend(thisOutput+offset, nelem);
     }
 
     // Make final copy from buffer to dest.
-    slice = ring->devUserRanks[1];
-    offset = gridOffset + (slice*args->nChannels+bid) * chunkSize;
+    chunk = ring->devUserRanks[1];
+    offset = gridOffset + (chunk*args->nChannels+bid) * chunkSize;
     nelem = min(chunkSize, size-offset);
 
     // Here we need to copy from buffer to this output.
