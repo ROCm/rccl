@@ -4,32 +4,30 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#include "test_ReduceScatter.hpp"
+#include "test_AllToAll.hpp"
 
 namespace CorrectnessTests
 {
-    TEST_P(ReduceScatterCorrectnessTest, Correctness)
+    TEST_P(AllToAllCorrectnessTest, Correctness)
     {
         if (numDevices > numDevicesAvailable) return;
-        if (numElements % numDevices != 0) return;
+
+        // Allocate data
+        Dataset dataset;
+        dataset.Initialize(numDevices, numElements, dataType, inPlace, ncclCollAllToAll);
 
         // Prepare input / output / expected results
-        Dataset dataset;
-        dataset.Initialize(numDevices, numElements, dataType, inPlace);
         FillDatasetWithPattern(dataset);
-        ComputeExpectedResults(dataset, op);
-
-        size_t const byteCount = dataset.NumBytes() / dataset.numDevices;
-        size_t const recvCount = dataset.numElements / dataset.numDevices;
+        ComputeExpectedResults(dataset);
 
         // Launch the reduction (1 thread per GPU)
         ncclGroupStart();
         for (int i = 0; i < numDevices; i++)
         {
-            ncclReduceScatter(dataset.inputs[i],
-                              (int8_t *)dataset.outputs[i] + (i * byteCount),
-                              recvCount, dataType, op,
-                              comms[i], streams[i]);
+            ncclAllToAll(dataset.inputs[i],
+                          dataset.outputs[i],
+                          numElements, dataType,
+                          comms[i], streams[i]);
         }
         ncclGroupEnd();
 
@@ -42,11 +40,11 @@ namespace CorrectnessTests
         dataset.Release();
     }
 
-    INSTANTIATE_TEST_CASE_P(ReduceScatterCorrectnessSweep,
-                            ReduceScatterCorrectnessTest,
+    INSTANTIATE_TEST_CASE_P(AllToAllCorrectnessSweep,
+                            AllToAllCorrectnessTest,
                             testing::Combine(
-                                // Reduction operator
-                                testing::Values(ncclSum, ncclProd, ncclMax, ncclMin),
+                                // Reduction operator is not used
+                                testing::Values(ncclSum),
                                 // Data types
                                 testing::Values(ncclInt8,
                                                 ncclUint8,
@@ -59,10 +57,10 @@ namespace CorrectnessTests
                                                 ncclFloat64,
                                                 ncclBfloat16),
                                 // Number of elements
-                                testing::Values(3072, 3145728),
+                                testing::Values(1024, 1048576),
                                 // Number of devices
                                 testing::Values(2,3,4),
                                 // In-place or not
-                                testing::Values(false, true),
-                                testing::Values("")));
+                                testing::Values(false),
+                                testing::Values("RCCL_ALLTOALL_KERNEL_DISABLE=0", "RCCL_ALLTOALL_KERNEL_DISABLE=1")));
 } // namespace

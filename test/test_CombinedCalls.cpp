@@ -95,5 +95,6 @@ namespace CorrectnessTests
                                 // Number of devices
                                 testing::Values(2,3,4),
                                 // In-place or not
-                                testing::Values(false, true)));
+                                testing::Values(false, true),
+                                testing::Values("")));
 } // namespace

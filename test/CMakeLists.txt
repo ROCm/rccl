@@ -48,6 +48,9 @@ if(BUILD_TESTS)
     test_CombinedCalls.cpp
     test_AllReduceAbort.cpp
     test_BroadcastAbort.cpp
+    test_Scatter.cpp
+    test_Gather.cpp
+    test_AllToAll.cpp
   )
 
   add_executable(UnitTests ${TEST_SOURCES})

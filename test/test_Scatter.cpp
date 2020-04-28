@@ -4,43 +4,51 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#include "test_AllReduce.hpp"
+#include "test_Scatter.hpp"
 
 namespace CorrectnessTests
 {
-    TEST_P(AllReduceCorrectnessTest, Correctness)
+    TEST_P(ScatterCorrectnessTest, Correctness)
     {
         if (numDevices > numDevicesAvailable) return;
 
-        // Prepare input / output / expected results
+        // Allocate data
         Dataset dataset;
-        dataset.Initialize(numDevices, numElements, dataType, inPlace);
-        FillDatasetWithPattern(dataset);
-        ComputeExpectedResults(dataset, op);
+        dataset.Initialize(numDevices, numElements, dataType, inPlace, ncclCollScatter);
 
-        // Launch the reduction (1 thread per GPU)
-        ncclGroupStart();
-        for (int i = 0; i < numDevices; i++)
+        // Test each possible root
+        for (int root = 0; root < numDevices; root++)
         {
-            ncclAllReduce(dataset.inputs[i], dataset.outputs[i],
-                          numElements, dataType, op, comms[i], streams[i]);
+            // Prepare input / output / expected results
+            FillDatasetWithPattern(dataset);
+            ComputeExpectedResults(dataset, root);
+
+            // Launch the reduction (1 thread per GPU)
+            ncclGroupStart();
+            for (int i = 0; i < numDevices; i++)
+            {
+                ncclScatter(dataset.inputs[i],
+                              dataset.outputs[i],
+                              numElements, dataType,
+                              root, comms[i], streams[i]);
+            }
+            ncclGroupEnd();
+
+            // Wait for reduction to complete
+            Synchronize();
+
+            // Check results
+            ValidateResults(dataset);
         }
-        ncclGroupEnd();
-
-        // Wait for reduction to complete
-        Synchronize();
-
-        // Check results
-        ValidateResults(dataset);
 
         dataset.Release();
     }
 
-    INSTANTIATE_TEST_CASE_P(AllReduceCorrectnessSweep,
-                            AllReduceCorrectnessTest,
+    INSTANTIATE_TEST_CASE_P(ScatterCorrectnessSweep,
+                            ScatterCorrectnessTest,
                             testing::Combine(
-                                // Reduction operator
-                                testing::Values(ncclSum, ncclProd, ncclMax, ncclMin),
+                                // Reduction operator is not used
+                                testing::Values(ncclSum),
                                 // Data types
                                 testing::Values(ncclInt8,
                                                 ncclUint8,
@@ -57,6 +65,6 @@ namespace CorrectnessTests
                                 // Number of devices
                                 testing::Values(2,3,4),
                                 // In-place or not
-                                testing::Values(false, true),
-                                testing::Values("")));
+                                testing::Values(false),
+                                testing::Values("RCCL_ALLTOALL_KERNEL_DISABLE=0", "RCCL_ALLTOALL_KERNEL_DISABLE=1")));
 } // namespace
