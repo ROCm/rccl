@@ -5,7 +5,7 @@ def runCompileCommand(platform, project, jobName)
 {
     project.paths.construct_build_prefix()
 
-    String hipclangArgs = jobName.contains('bisect') ? '--hip-clang' : ''
+    String hipclangArgs = '--hip-clang'
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}
