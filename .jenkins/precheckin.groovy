@@ -57,9 +57,9 @@ ci: {
     propertyList = auxiliary.appendPropertyList(propertyList)
 
     def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['rccl906']]), 
-                       "rocm-docker":([centos7:['rccl906']])]
+                       "rocm-docker":([ubuntu16:['rccl906']])]
     jobNameList = auxiliary.appendJobNameList(jobNameList)
-    jobNameList['compute-rocm-dkms-no-npi-hipclang'] = [centos7:['rccl906']]
+    jobNameList['compute-rocm-dkms-no-npi-hipclang'] = [ubuntu16:['rccl906']]
     
     propertyList.each 
     {
