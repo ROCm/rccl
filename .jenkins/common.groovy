@@ -31,15 +31,10 @@ def runTestCommand (platform, project)
 
 def runPackageCommand(platform, project, jobName)
 {
-    def command = """
-                      set -x
-                      cd ${project.paths.project_build_prefix}/build/release
-                      make package
-                      rm -rf package && mkdir -p package
-                      mv *.deb package/
-                      """
-	platform.runCommand(this,command)
-    platform.archiveArtifacts(this, """${project.paths.project_build_prefix}/build/release/package/*.deb""")
+    def packageHelper = platform.makePackage(platform.jenkinsLabel,"${project.paths.project_build_prefix}/build/release")
+
+    platform.runCommand(this, packageHelper[0])
+    platform.archiveArtifacts(this, packageHelper[1])
 }
 
 return this
