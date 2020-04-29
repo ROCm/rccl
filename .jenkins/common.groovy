@@ -26,7 +26,7 @@ def runTestCommand (platform, project)
             """
 
    platform.runCommand(this, command)
-   junit "${project.paths.project_build_prefix}/rccl-install/*.xml"
+   junit "${project.paths.project_build_prefix}/build/release/test/*.xml"
 }
 
 def runPackageCommand(platform, project, jobName)
