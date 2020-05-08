@@ -29,9 +29,9 @@
 #ifndef _RCCL_BFLOAT16_H_
 #define _RCCL_BFLOAT16_H_
 
-#if __cplusplus < 201402L || (!defined(__HCC__) && !defined(__HIPCC__))
+#if __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__) && !defined(__HIP_PLATFORM_HCC__))
 
-// If this is a C compiler, C++ compiler below C++14, or a host-only compiler, we only
+// If this is a C compiler, C++ compiler below C++11, or a host-only compiler, we only
 // include a minimal definition of rccl_bfloat16
 
 #include <stdint.h>
@@ -41,7 +41,7 @@ typedef struct
     uint16_t data;
 } rccl_bfloat16;
 
-#else // __cplusplus < 201402L || (!defined(__HCC__) && !defined(__HIPCC__))
+#else // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__) && !defined(__HIP_PLATFORM_HCC__))
 
 #include <cmath>
 #include <cstddef>
@@ -54,16 +54,26 @@ struct rccl_bfloat16
 {
     uint16_t data;
 
+    enum truncate_t
+    {
+        truncate
+    };
+
     __host__ __device__ rccl_bfloat16() = default;
 
     // round upper 16 bits of IEEE float to convert to bfloat16
-    explicit constexpr __host__ __device__ rccl_bfloat16(float f)
+    explicit __host__ __device__ rccl_bfloat16(float f)
         : data(float_to_bfloat16(f))
     {
     }
 
+    explicit __host__ __device__ rccl_bfloat16(float f, truncate_t)
+        : data(truncate_float_to_bfloat16(f))
+    {
+    }
+
     // zero extend lower 16 bits of bfloat16 to convert to IEEE float
-    constexpr __host__ __device__ operator float() const
+    __host__ __device__ operator float() const
     {
         union
         {
@@ -74,7 +84,7 @@ struct rccl_bfloat16
     }
 
 private:
-    static constexpr __host__ __device__ uint16_t float_to_bfloat16(float f)
+    static __host__ __device__ uint16_t float_to_bfloat16(float f)
     {
         union
         {
@@ -115,6 +125,17 @@ private:
         }
         return uint16_t(u.int32 >> 16);
     }
+
+    // Truncate instead of rounding, preserving SNaN
+    static __host__ __device__ uint16_t truncate_float_to_bfloat16(float f)
+    {
+        union
+        {
+            float    fp32;
+            uint32_t int32;
+        } u = {f};
+        return uint16_t(u.int32 >> 16) | (!(~u.int32 & 0x7f800000) && (u.int32 & 0xffff));
+    }
 };
 
 typedef struct
@@ -138,86 +159,86 @@ inline std::ostream& operator<<(std::ostream& os, const rccl_bfloat16& bf16)
 {
     return os << float(bf16);
 }
-constexpr __host__ __device__ rccl_bfloat16 operator+(rccl_bfloat16 a)
+inline __host__ __device__ rccl_bfloat16 operator+(rccl_bfloat16 a)
 {
     return a;
 }
-constexpr __host__ __device__ rccl_bfloat16 operator-(rccl_bfloat16 a)
+inline __host__ __device__ rccl_bfloat16 operator-(rccl_bfloat16 a)
 {
     a.data ^= 0x8000;
     return a;
 }
-constexpr __host__ __device__ rccl_bfloat16 operator+(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16 operator+(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return rccl_bfloat16(float(a) + float(b));
 }
-constexpr __host__ __device__ rccl_bfloat16 operator-(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16 operator-(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return rccl_bfloat16(float(a) - float(b));
 }
-constexpr __host__ __device__ rccl_bfloat16 operator*(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16 operator*(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return rccl_bfloat16(float(a) * float(b));
 }
-constexpr __host__ __device__ rccl_bfloat16 operator/(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16 operator/(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return rccl_bfloat16(float(a) / float(b));
 }
-constexpr __host__ __device__ bool operator<(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ bool operator<(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return float(a) < float(b);
 }
-constexpr __host__ __device__ bool operator==(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ bool operator==(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return float(a) == float(b);
 }
-constexpr __host__ __device__ bool operator>(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ bool operator>(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return b < a;
 }
-constexpr __host__ __device__ bool operator<=(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ bool operator<=(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return !(a > b);
 }
-constexpr __host__ __device__ bool operator!=(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ bool operator!=(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return !(a == b);
 }
-constexpr __host__ __device__ bool operator>=(rccl_bfloat16 a, rccl_bfloat16 b)
+inline __host__ __device__ bool operator>=(rccl_bfloat16 a, rccl_bfloat16 b)
 {
     return !(a < b);
 }
-constexpr __host__ __device__ rccl_bfloat16& operator+=(rccl_bfloat16& a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16& operator+=(rccl_bfloat16& a, rccl_bfloat16 b)
 {
     return a = a + b;
 }
-constexpr __host__ __device__ rccl_bfloat16& operator-=(rccl_bfloat16& a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16& operator-=(rccl_bfloat16& a, rccl_bfloat16 b)
 {
     return a = a - b;
 }
-constexpr __host__ __device__ rccl_bfloat16& operator*=(rccl_bfloat16& a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16& operator*=(rccl_bfloat16& a, rccl_bfloat16 b)
 {
     return a = a * b;
 }
-constexpr __host__ __device__ rccl_bfloat16& operator/=(rccl_bfloat16& a, rccl_bfloat16 b)
+inline __host__ __device__ rccl_bfloat16& operator/=(rccl_bfloat16& a, rccl_bfloat16 b)
 {
     return a = a / b;
 }
-constexpr __host__ __device__ rccl_bfloat16& operator++(rccl_bfloat16& a)
+inline __host__ __device__ rccl_bfloat16& operator++(rccl_bfloat16& a)
 {
     return a += rccl_bfloat16(1.0f);
 }
-constexpr __host__ __device__ rccl_bfloat16& operator--(rccl_bfloat16& a)
+inline __host__ __device__ rccl_bfloat16& operator--(rccl_bfloat16& a)
 {
     return a -= rccl_bfloat16(1.0f);
 }
-constexpr __host__ __device__ rccl_bfloat16 operator++(rccl_bfloat16& a, int)
+inline __host__ __device__ rccl_bfloat16 operator++(rccl_bfloat16& a, int)
 {
     rccl_bfloat16 orig = a;
     ++a;
     return orig;
 }
-constexpr __host__ __device__ rccl_bfloat16 operator--(rccl_bfloat16& a, int)
+inline __host__ __device__ rccl_bfloat16 operator--(rccl_bfloat16& a, int)
 {
     rccl_bfloat16 orig = a;
     --a;
@@ -248,6 +269,6 @@ namespace std
     }
 }
 
-#endif // __cplusplus < 201402L || (!defined(__HCC__) && !defined(__HIPCC__))
+#endif // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
 
 #endif // _RCCL_BFLOAT16_H_
