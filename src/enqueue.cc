@@ -74,7 +74,11 @@ ncclResult_t ncclLaunchCooperativeKernelMultiDevice(hipLaunchParams *paramsList,
   if (cgMode & 0x01) {
     CUDACHECK(hipExtLaunchMultiKernelMultiDevice(paramsList, numDevices,
             // These flags are to reduce the latency of using this API
+#if __HIP__
+            hipCooperativeLaunchMultiDeviceNoPreSync|hipCooperativeLaunchMultiDeviceNoPostSync));
+#else
             0));
+#endif
     return ncclSuccess;
   }
   int savedDev;
