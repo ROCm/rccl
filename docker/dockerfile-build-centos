@@ -14,7 +14,6 @@ ARG user_uid
 RUN yum install -y --nogpgcheck \
     sudo \
     chrpath \
-    rock-dkms \
     rocm-cmake \
     centos-release-scl \
     devtoolset-7 \

@@ -15,7 +15,6 @@ ARG user_uid
 # * rocblas-bench: libboost-program-options-dev
 # * libhsakmt.so: libnuma1
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    rock-dkms \
     sudo \
     ca-certificates \
     chrpath \
