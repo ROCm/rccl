@@ -19,6 +19,8 @@ Communicator Functions
 
 .. doxygenfunction:: ncclCommDestroy
 
+.. doxygenfunction:: ncclCommAbort
+
 .. doxygenfunction:: ncclCommCount
 
 .. doxygenfunction:: ncclCommCuDevice
