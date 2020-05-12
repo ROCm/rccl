@@ -4,19 +4,19 @@ ROCm Communication Collectives Library
 
 ## Introduction
 
-RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, and reduce-scatter. It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node, and can be used in either single- or multi-process (e.g., MPI) applications. Multi node support is planned for a future release.
+RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, and reduce-scatter. It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node or multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
 
-The collective operations are implemented using ring algorithms and have been optimized for throughput and latency. For best performance, small operations can be either batched into larger operations or aggregated through the API.
+The collective operations are implemented using ring and tree algorithms and have been optimized for throughput and latency. For best performance, small operations can be either batched into larger operations or aggregated through the API.
 
 ## Requirements
 
 1. ROCm supported GPUs
-2. ROCm stack installed on the system (HIP runtime & HCC)
+2. ROCm stack installed on the system (HIP runtime & HCC or HIP-Clang)
 3. For building and running the unit tests, chrpath will need to be installed on your machine first. (sudo apt-get install chrpath)
 
 ## Quickstart RCCL Build
 
-RCCL directly depends on HIP runtime & HCC C++ compiler which are part of the ROCm software stack.
+RCCL directly depends on HIP runtime, plus the HCC C++ compiler or the HIP-Clang compiler which are part of the ROCm software stack.
 In addition, HC Direct Function call support needs to be present on your machine.  There are binaries for hcc and HIP that need to be installed to get HC Direct Function call support.  These binaries are currently packaged with roc-master, and will be included in ROCm 2.4.
 
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
