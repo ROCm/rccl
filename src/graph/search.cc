@@ -286,7 +286,36 @@ ncclResult_t ncclTopoSearchTryGpu(struct ncclTopoSystem* system, struct ncclTopo
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoCompareGraphs(struct ncclTopoGraph* graph, struct ncclTopoGraph* refGraph, int* copy) {
+static int ncclTopoCountXGMI(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
+  int ngpus = system->nodes[GPU].count;
+  int count = 0;
+  for (int c=0; c<graph->nChannels; c++) {
+    for (int i=0; i<ngpus; i++) {
+      int g = graph->intra[ngpus*c+i];
+      int n = graph->intra[ngpus*c+((i+1)%ngpus)];
+      struct ncclTopoNode *node;
+      int j;
+      for (j=0; j<ngpus; j++)
+        if (system->nodes[GPU].nodes[j].gpu.rank == g) break;
+      if (j<ngpus) {
+        node = system->nodes[GPU].nodes+j;
+        for (int k = 0; k<system->nodes[GPU].count; k++) {
+          if (node->paths[GPU][k].count == 1) {
+            struct ncclTopoLink* link = node->paths[GPU][k].list[0];
+            struct ncclTopoNode* remNode = link->remNode;
+            if (remNode->gpu.rank == n) {
+              if (link->type == LINK_NVL)
+                count ++;
+            }
+          }
+        }
+      }
+    }
+  }
+  return count;
+}
+
+ncclResult_t ncclTopoCompareGraphs(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, struct ncclTopoGraph* refGraph, int* copy) {
   // 1. Constraint to get the same nChannels between Rings and Trees
   if (graph->nChannels < graph->minChannels) return ncclSuccess;
 
@@ -298,6 +327,10 @@ ncclResult_t ncclTopoCompareGraphs(struct ncclTopoGraph* graph, struct ncclTopoG
   }
   // 3. Less hops (but not at the price of going cross NICs)
   if (graph->crossNic == refGraph->crossNic && graph->nHops < refGraph->nHops) *copy = 1;
+
+  // 4. Prefer graph with more XGMI connections
+  if (graph->nChannels == refGraph->nChannels
+    && ncclTopoCountXGMI(system, refGraph) < ncclTopoCountXGMI(system, graph)) *copy = 1;
   return ncclSuccess;
 }
 
@@ -310,7 +343,7 @@ ncclResult_t ncclTopoSearchRecGpu(struct ncclTopoSystem* system, struct ncclTopo
     // Determine whether we found a better solution or not
     int copy = 0;
     graph->nChannels++;
-    NCCLCHECK(ncclTopoCompareGraphs(graph, saveGraph, &copy));
+    NCCLCHECK(ncclTopoCompareGraphs(system, graph, saveGraph, &copy));
     if (copy) {
       memcpy(saveGraph, graph, sizeof(struct ncclTopoGraph));
       if (graph->nChannels == graph->maxChannels) *time = -1;
