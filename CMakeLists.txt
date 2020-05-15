@@ -112,11 +112,11 @@ set(CC_SOURCES
     src/graph/tuning.cc
     src/graph/topo.cc
     src/graph/xml.cc
-    src/collectives/all_reduce.cc
-    src/collectives/all_gather.cc
-    src/collectives/reduce.cc
-    src/collectives/broadcast.cc
-    src/collectives/reduce_scatter.cc
+    src/collectives/all_reduce_api.cc
+    src/collectives/all_gather_api.cc
+    src/collectives/reduce_api.cc
+    src/collectives/broadcast_api.cc
+    src/collectives/reduce_scatter_api.cc
     src/channel.cc
     src/misc/argcheck.cc
     src/misc/nvmlwrap_stub.cc
