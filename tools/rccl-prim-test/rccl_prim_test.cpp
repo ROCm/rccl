@@ -556,7 +556,8 @@ int main(int argc,char* argv[])
         launchParamsList[i].stream    = stream[i];
         launchParamsList[i].args      = args + i*3;
       }
-      hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu, 0);
+      hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu,
+        hipCooperativeLaunchMultiDeviceNoPreSync|hipCooperativeLaunchMultiDeviceNoPostSync);
       opCount++;
     }
 
@@ -582,7 +583,8 @@ int main(int argc,char* argv[])
         launchParamsList[i].stream    = stream[i];
         launchParamsList[i].args      = args + i*3;
       }
-      hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu, 0);
+      hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu,
+        hipCooperativeLaunchMultiDeviceNoPreSync|hipCooperativeLaunchMultiDeviceNoPostSync);
       opCount++;
     }
 
