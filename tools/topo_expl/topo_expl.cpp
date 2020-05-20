@@ -77,6 +77,7 @@ const char *model_descriptions[] = {
   "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC 2nd Hive",
   "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 2 NIC",
   "single node 8 VEGA20 Rome",
+  "4 nodes with 8 VEGA20 Rome",
   NULL,
 };
 
@@ -170,6 +171,12 @@ int main(int argc,char* argv[])
     case 13:
       node = new NodeModel("topo_8p_rome.xml");
       network.AddNode(node);
+      break;
+    case 14:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p_rome.xml");
+        network.AddNode(node);
+      }
       break;
     default:
       printf("Invalid model_id %d\n", model_id);
