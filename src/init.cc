@@ -362,7 +362,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
 // Pre-process the string so that running "strings" on the lib can quickly reveal the version.
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+hip"
+#define VERSION_STRING "RCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+hip" STR(HIP_VERSION_MAJOR) "." STR(HIP_VERSION_MINOR)
 #else
 #define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+cuda" STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
 #endif
