@@ -72,13 +72,9 @@ static ncclKern_t const ncclKerns[NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCC
 
 ncclResult_t ncclLaunchCooperativeKernelMultiDevice(hipLaunchParams *paramsList, int* cudaDevs, int numDevices, int cgMode) {
   if (cgMode & 0x01) {
-    CUDACHECK(hipExtLaunchMultiKernelMultiDevice(paramsList, numDevices,
+    CUDACHECK(hipLaunchCooperativeKernelMultiDevice(paramsList, numDevices,
             // These flags are to reduce the latency of using this API
-#if __HIP__
             hipCooperativeLaunchMultiDeviceNoPreSync|hipCooperativeLaunchMultiDeviceNoPostSync));
-#else
-            0));
-#endif
     return ncclSuccess;
   }
   int savedDev;

@@ -480,7 +480,7 @@ ncclResult_t ncclCommSetIntra(struct ncclComm* comm, int rank, int ranks, struct
   comm->intraCudaDevs[comm->intraRank] = comm->cudaDev;
   NCCLCHECK(initParams(comm));
 
-  int cgMdLaunch = 1;
+  int cgMdLaunch = 0;
 
   // Set CG Mode
   comm->launchMode = ncclComm::GROUP;
@@ -490,12 +490,11 @@ ncclResult_t ncclCommSetIntra(struct ncclComm* comm, int rank, int ranks, struct
   }
   if (comm->launchMode == ncclComm::GROUP) {
     CUDACHECK(hipStreamCreateWithFlags(&comm->groupStream, hipStreamNonBlocking));
-#if CUDART_VERSION >= 9000
     if (*comm->intraCC && (ncclCudaCompCap() == *comm->intraCC)) {
       // Check whether the GPU supports Cooperative Group Multi Device Launch
-      (void) hipDeviceGetAttribute(&cgMdLaunch, cudaDevAttrCooperativeMultiDeviceLaunch, comm->cudaDev);
+      CUDACHECK(hipDeviceGetAttribute(&cgMdLaunch, hipDeviceAttributeCooperativeMultiDeviceLaunch, comm->cudaDev));
+      INFO(NCCL_INIT, "dev %d cgMdLaunch %d", comm->cudaDev, cgMdLaunch);
     }
-#endif
   }
 
   // Disable cgMdLaunch if any rank does not support it
