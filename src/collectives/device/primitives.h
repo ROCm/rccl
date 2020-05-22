@@ -135,17 +135,10 @@ class ncclPrimitives {
     spins = 0;
     mismatch = 0;
     if (s.sendConnHeadPtr) {
-#ifdef ENABLE_PROFILING
-      auto devProf = comm->devProf;
-      uint64_t t0 = __rtc64();
-#endif
       while (s.sendConnHeadCache + NCCL_STEPS < s.sendConnHead + SLICESTEPS) {
         s.sendConnHeadCache = LOAD(s.sendConnHeadPtr);
         if (checkAbort(wid, 1)) break;
       }
-#ifdef ENABLE_PROFILING
-      __atomic_fetch_add(&devProf->wait_send_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
-#endif
       if (s.sendConnFifoPtr) {
         STORE(s.sendConnFifoPtr+s.sendConnHead%NCCL_STEPS, nbytes);
       }
@@ -158,7 +151,6 @@ class ncclPrimitives {
     mismatch = 0;
     if (r.recvConnTailPtr) {
 #ifdef ENABLE_PROFILING
-      auto devProf = comm->devProf;
       uint64_t t0 = __rtc64();
 #endif
       while (r.recvConnTailCache < r.recvConnTail + SLICESTEPS) {
@@ -166,7 +158,7 @@ class ncclPrimitives {
         if (checkAbort(wid, 0)) break;
       }
 #ifdef ENABLE_PROFILING
-      __atomic_fetch_add(&devProf->wait_recv_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
+      if (opCount > 0) __atomic_fetch_add(&comm->devProf->wait_recv_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
 #endif
       r.recvConnTail += SLICESTEPS;
     }
@@ -249,10 +241,16 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     #pragma unroll
     for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
       int realSize = max(0, min(dataSize, nelem-offset));
+#ifdef ENABLE_PROFILING
+      uint64_t t0 = __rtc64();
+#endif
       if (SEND) waitSend(realSize*sizeof(T));
       if (RECV) waitRecv();
       if (realSize > 0) {
         barrier();
+#ifdef ENABLE_PROFILING
+        if (tid == 0  && opCount > 0) __atomic_fetch_add(&comm->devProf->wait_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
+#endif
 #if defined(RCCL_USE_DIRECT_BUFFER)
         if (DIRECTRECV && r.recvDirectBuff[0]) {
           // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
@@ -457,14 +455,11 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
 
 #ifdef ENABLE_PROFILING
 #define INIT_COUNTER \
-  if (tid == 0) { t0 = __rtc64(); ws = LOAD(&(devProf->wait_send_cycle[blockIdx.x])); \
-    wr = LOAD(&(devProf->wait_recv_cycle[blockIdx.x])); }
+  if (tid == 0) { t0 = __rtc64(); ws = LOAD(&(devProf->wait_cycle[blockIdx.x])); }
 
 #define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __rtc64() - t0 \
-    + ws - LOAD(&(devProf->wait_send_cycle[blockIdx.x])) \
-    + wr - LOAD(&(devProf->wait_recv_cycle[blockIdx.x])), \
-    __ATOMIC_SEQ_CST); \
+  if (tid == 0 && args->opCount > 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __rtc64() - t0 \
+    + ws - LOAD(&(devProf->wait_cycle[blockIdx.x])), __ATOMIC_SEQ_CST); \
     __atomic_fetch_add(&(devProf->prim##_byte), nelem * sizeof(T), __ATOMIC_SEQ_CST); }
 #else
 #define INIT_COUNTER

@@ -232,8 +232,8 @@ struct ncclProf {
   union {
     struct {
       uint64_t total_cycle;
-      uint64_t wait_send_cycle[MAXCHANNELS];
-      uint64_t wait_recv_cycle[MAXCHANNELS];
+      uint64_t wait_cycle[MAXCHANNELS];      // total wait cycle
+      uint64_t wait_recv_cycle[MAXCHANNELS]; // recv wait cycle
       // primtive cycles
       uint64_t send_cycle;
       uint64_t directSend_cycle;
