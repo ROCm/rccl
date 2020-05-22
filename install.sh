@@ -109,10 +109,7 @@ else
     cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug"
 fi
 
-compiler=hcc
-if [[ "${build_hip_clang}" == true ]]; then
-    compiler=hipcc
-fi
+compiler=hipcc
 
 cmake_executable=cmake
 if [[ -e /etc/redhat-release ]]; then
