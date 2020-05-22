@@ -104,9 +104,9 @@ fi
 
 # build type
 if [[ "${build_release}" == true ]]; then
-    cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Release"
+    cmake_common_options="-DCMAKE_BUILD_TYPE=Release"
 else
-    cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug"
+    cmake_common_options="-DCMAKE_BUILD_TYPE=Debug"
 fi
 
 compiler=hipcc
@@ -120,9 +120,9 @@ else
 fi
 
 if ($build_tests); then
-    CXX=$rocm_path/$compiler $cmake_executable -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+    CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 else
-    CXX=$rocm_path/$compiler $cmake_executable -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+    CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 fi
 
 if ($install_library); then
