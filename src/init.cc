@@ -241,6 +241,17 @@ static ncclResult_t commFree(ncclComm_t comm) {
     (prof->recvCopySend_cycle) ? (double)prof->recvCopySend_byte*comm->nChannels/((double)prof->recvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0);
   free(prof);
   CUDACHECK(hipFree(comm->hostDevComm.devProf));
+
+  for (int channel=0; channel<comm->p2pnChannels; channel++) {
+    if (comm->channels[channel].send_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Send %6.2f GB/s (%ld bytes %ld+%ld us)",
+      comm->rank, channel, (comm->channels[channel].send_us+comm->channels[channel].send_wait_us) ?
+      (double)comm->channels[channel].send_byte/(comm->channels[channel].send_us+comm->channels[channel].send_wait_us)/1000.0 : 0,
+      comm->channels[channel].send_byte, comm->channels[channel].send_wait_us, comm->channels[channel].send_us);
+    if (comm->channels[channel].recv_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Recv %6.2f GB/s (%ld bytes %ld+%ld us)",
+      comm->rank, channel, (comm->channels[channel].recv_us+comm->channels[channel].recv_flush_us) ?
+      (double)comm->channels[channel].recv_byte/(comm->channels[channel].recv_us+comm->channels[channel].recv_flush_us)/1000.0 : 0,
+      comm->channels[channel].recv_byte, comm->channels[channel].recv_us, comm->channels[channel].recv_flush_us);
+  }
 #endif
 
 #ifdef ENABLE_COLLTRACE

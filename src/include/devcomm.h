@@ -220,6 +220,16 @@ struct ncclChannel {
       int collFifoTail; // Only used by CPU
 
       uint32_t* sync;
+#ifdef ENABLE_PROFILING
+      struct timeval tv_send[NCCL_STEPS];
+      struct timeval tv_recv[NCCL_STEPS];
+      uint64_t send_byte;
+      uint64_t recv_byte;
+      uint64_t send_us;
+      uint64_t send_wait_us;
+      uint64_t recv_us;
+      uint64_t recv_flush_us;
+#endif
     };
     int data[0x80];
   };
