@@ -9,6 +9,7 @@
 #include "net.h"
 #include "graph.h"
 #include <sys/time.h>
+#include <numaif.h>
 
 struct netConnectInfo {
   ncclNetHandle_t netHandle;
@@ -90,8 +91,13 @@ ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   if (resources->buffSizes[LOC_DEVMEM]) {
     NCCLCHECK(ncclCudaCalloc(resources->buffers+LOC_DEVMEM, resources->buffSizes[LOC_DEVMEM], resources->useGdr));
   }
+  char line[16];
   if (resources->buffSizes[LOC_HOSTMEM]) {
     NCCLCHECK(ncclCudaHostCalloc(resources->buffers+LOC_HOSTMEM, resources->buffSizes[LOC_HOSTMEM]));
+    int status[1] = {-1};
+    line[0]= 0;
+    if (!move_pages(0, 1, (void **)resources->buffers+LOC_HOSTMEM, NULL, status, 0))
+      sprintf(line, "/MEM%d", status[0]);
   }
 
   int offsets[LOC_COUNT];
@@ -103,7 +109,7 @@ ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   }
 
   INFO(NCCL_INIT|NCCL_NET,"Channel %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), resources->netDev,
-      resources->useGdr ? "/GDRDMA" : "");
+      resources->useGdr ? "/GDRDMA" : line);
   return ncclSuccess;
 }
 
@@ -139,8 +145,13 @@ ncclResult_t netRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   if (resources->buffSizes[LOC_DEVMEM]) {
     NCCLCHECK(ncclCudaCalloc(resources->buffers+LOC_DEVMEM, resources->buffSizes[LOC_DEVMEM], resources->useGdr));
   }
+  char line[16];
   if (resources->buffSizes[LOC_HOSTMEM]) {
     NCCLCHECK(ncclCudaHostCalloc(resources->buffers+LOC_HOSTMEM, resources->buffSizes[LOC_HOSTMEM]));
+    int status[1] = {-1};
+    line[0]= 0;
+    if (!move_pages(0, 1, (void **)resources->buffers+LOC_HOSTMEM, NULL, status, 0))
+      sprintf(line, "/MEM%d", status[0]);
   }
 
   int offsets[LOC_COUNT];
@@ -152,7 +163,7 @@ ncclResult_t netRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   }
 
   INFO(NCCL_INIT|NCCL_NET,"Channel %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s", channelId, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), resources->netDev,
-      resources->useGdr ? "/GDRDMA" : "");
+      resources->useGdr ? "/GDRDMA" : line);
   struct netConnectInfo* info = (struct netConnectInfo*) connectInfo;
   NCCLCHECK(ncclNetListen(resources->netDev, &info->netHandle, &resources->netListenComm));
 

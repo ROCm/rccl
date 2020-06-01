@@ -191,7 +191,7 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-target_link_libraries(rccl PRIVATE hip::device)
+target_link_libraries(rccl PRIVATE hip::device numa)
 target_link_libraries(rccl INTERFACE hip::host)
 
 #Setup librccl.so version
