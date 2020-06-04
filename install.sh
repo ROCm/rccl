@@ -13,7 +13,7 @@ function display_help()
     echo "    [-p|--package_build] Build RCCL package."
     echo "    [-t|--tests_build] Build unit tests, but do not run."
     echo "    [-r|--run_tests] Run unit tests (must be built already.)"
-    echo "    [--hip-clang] Build library using hip-clang compiler."
+    echo "    [--hcc] Build library using deprecated hcc compiler (default:hip-clang)."
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
 }
 
@@ -27,7 +27,7 @@ build_tests=false
 run_tests=false
 build_release=true
 install_library=false
-build_hip_clang=false
+build_hip_clang=true
 
 # #################################################
 # Parameter parsing
@@ -36,7 +36,7 @@ build_hip_clang=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,package_build,tests_build,run_tests,hip-clang,prefix: --options hiptr -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,package_build,tests_build,run_tests,hcc,hip-clang,prefix: --options hiptr -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -67,6 +67,9 @@ while true; do
     -r|--run_tests)
         run_tests=true
         shift ;;
+    --hcc)
+        build_hip_clang=false
+        shift ;;
     --hip-clang)
         build_hip_clang=true
         shift ;;
@@ -81,6 +84,14 @@ while true; do
     done
 
 rocm_path=/opt/rocm/bin
+
+# throw error code after running a command in the install script
+check_exit_code( )
+{
+  if (( $1 != 0 )); then
+    exit $1
+  fi
+}
 
 # #################################################
 # prep
@@ -109,9 +120,9 @@ else
     cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug"
 fi
 
-compiler=hcc
-if [[ "${build_hip_clang}" == true ]]; then
-    compiler=hipcc
+compiler=hipcc
+if [[ "${build_hip_clang}" == false ]]; then
+    compiler=hcc
 fi
 
 cmake_executable=cmake
@@ -121,21 +132,25 @@ if [[ -e /etc/redhat-release ]]; then
 else
     apt install chrpath libomp-dev
 fi
+check_exit_code "$?"
 
 if ($build_tests); then
-    CXX=$rocm_path/$compiler $cmake_executable -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+    CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 else
-    CXX=$rocm_path/$compiler $cmake_executable -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+    CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 fi
+check_exit_code "$?"
 
 if ($install_library); then
     make -j$(nproc) install
 else
     make -j$(nproc)
 fi
+check_exit_code "$?"
 
 if ($build_package); then
     make package
+    check_exit_code "$?"
 fi
 
 # Optionally, run tests if they're enabled.

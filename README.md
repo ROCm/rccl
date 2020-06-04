@@ -27,22 +27,23 @@ The root of this repository has a helper script 'install.sh' to build and instal
 *  `./install.sh -t` -- builds library including unit tests
 *  `./install.sh -r` -- runs unit tests (must be already built)
 *  `./install.sh -p` -- builds RCCL package
+*  `./install.sh -hcc` -- builds RCCL with hcc compiler; note that hcc is now deprecated. (default:hip-clang)
 *  `./install.sh --prefix` -- specify custom path to install RCCL to (default:/opt/rocm)
 
 ## Manual build
 #### To build the library :
 
 ```shell
-$ git clone https://github.com/ROCmSoftwarePlatform/rccl.git
+$ git clone https://github.com/ROCmSoftwarePlatform/rccl.git
 $ cd rccl
 $ mkdir build
 $ cd build
-$ CXX=/opt/rocm/bin/hcc cmake ..
+$ CXX=/opt/rocm/bin/hipcc cmake ..
 $ make -j 8
 ```
 You may substitute an installation path of your own choosing by passing CMAKE_INSTALL_PREFIX. For example:
 ```shell
-$ CXX=/opt/rocm/bin/hcc cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
 ```
 Note: ensure rocm-cmake is installed, `apt install rocm-cmake`.
 
