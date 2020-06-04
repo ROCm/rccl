@@ -36,7 +36,7 @@ build_hip_clang=true
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,package_build,tests_build,run_tests,hcc,prefix: --options hiptr -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,package_build,tests_build,run_tests,hcc,hip-clang,prefix: --options hiptr -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -69,6 +69,9 @@ while true; do
         shift ;;
     --hcc)
         build_hip_clang=false
+        shift ;;
+    --hip-clang)
+        build_hip_clang=true
         shift ;;
     --prefix)
         install_prefix=${2}
