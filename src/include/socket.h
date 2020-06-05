@@ -332,6 +332,10 @@ static ncclResult_t createListenSocket(int *fd, union socketAddress *localAddr) 
     return ncclSystemError;
   }
 
+#if defined(RCCL_IB_TEST)
+  localAddr->sin.sin_port = htons(23456);
+#endif
+
   if (socketToPort(&localAddr->sa)) {
     // Port is forced by env. Make sure we get the port.
     int opt = 1;
