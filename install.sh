@@ -28,7 +28,7 @@ run_tests=false
 build_release=true
 install_library=false
 build_hip_clang=true
-
+install_dependencies=false
 # #################################################
 # Parameter parsing
 # #################################################
@@ -58,6 +58,9 @@ while true; do
     -i|--install)
         install_library=true
         shift ;;
+    -d|--dependencies)
+	install_dependencies=true
+	shift;;
     -p|--package_build)
         build_package=true
         shift ;;
@@ -84,6 +87,17 @@ while true; do
     done
 
 rocm_path=/opt/rocm/bin
+
+# /etc/*-release files describe the system
+if [[ -e "/etc/os-release" ]]; then
+    source /etc/os-release
+elif [[ -e "/etc/centos-release" ]]; then
+    OS_ID=$(cat /etc/centos-release | awk '{print tolower($1)}')
+    VERSION_ID=$(cat /etc/centos-release | grep -oP '(?<=release )[^ ]*' | cut -d "." -f1)
+else
+    echo "This script depends on the /etc/*-release files"
+    exit 2
+fi
 
 # throw error code after running a command in the install script
 check_exit_code( )
@@ -126,11 +140,18 @@ if [[ "${build_hip_clang}" == false ]]; then
 fi
 
 cmake_executable=cmake
-if [[ -e /etc/redhat-release ]]; then
-    yum install chrpath libgomp
-    cmake_executable=cmake3
-else
-    apt install chrpath libomp-dev
+case "${OS_ID}" in
+    centos|rhel)
+	cmake_executable=cmake3
+	;;
+    esac
+
+if ($install_dependencies); then
+    if [[ -e /etc/redhat-release ]]; then
+	yum install chrpath libgomp
+    else
+	apt install chrpath libomp-dev
+    fi
 fi
 check_exit_code "$?"
 
