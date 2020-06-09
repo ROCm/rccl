@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -95,7 +95,8 @@ static inline __device__ void exitIfAbortBarrier(int abort) {
   NCCL_FUNCS2A(ncclReduce), \
   NCCL_FUNCS2B(ncclAllGather), \
   NCCL_FUNCS2A(ncclReduceScatter), \
-  NCCL_FUNCS2A(ncclAllReduce) }
+  NCCL_FUNCS2A(ncclAllReduce), \
+  NCCL_COLL_NAME(ncclSendRecv, copy, i8) }
 
 // Must be consistent with the ncclFuncSet enum
 using ncclKernelFunc_t = void (*)(struct CollectiveArgs*);
@@ -109,7 +110,8 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
   NCCL_FUNCS2A(ncclReduce),
   NCCL_FUNCS2B(ncclAllGather),
   NCCL_FUNCS2A(ncclReduceScatter),
-  NCCL_FUNCS2A(ncclAllReduce)
+  NCCL_FUNCS2A(ncclAllReduce),
+  NCCL_COLL_NAME(ncclSendRecv, copy, i8)
 #endif
 };
 
@@ -156,7 +158,8 @@ void NCCL_CALL_FUNCTIONS(struct ncclColl* const c) noexcept {
     else if (c->funcIndex % 9 == 7) ncclAllGatherCollNetLL128_copy_i8(&c->args);
     else ncclAllGatherCollNet_copy_i8(&c->args);
   }
-  else Caller<1080, 1800>::call(c);
+  else if (c->funcIndex < 1800) Caller<1080, 1800>::call(c);
+  else ncclSendRecv_copy_i8(&c->args);
 }
 
 static __device__ void load_parallel(void* dst, void* src, size_t size, int tid, uint32_t* abortCount) {
@@ -233,13 +236,13 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
  \
   struct ncclChannel* channel = comm->channels+bid; \
   channel->sync = sync; \
-  if (!load_coll(&localColl, channel->devCollectives+channel->collFifoHead, tid, comm, &abortCount)) { \
+  if (!load_coll(&localColl, channel->collectives+channel->collFifoHead, tid, comm, &abortCount)) { \
     if (tid == 0) traceAbort(-1); \
     return; \
   } \
   if (tid == 0) traceKernelLaunch(localColl.funcIndex); \
   while (1) { \
-    if (tid < localColl.args.nThreads) { \
+    if (tid < localColl.args.common.nThreads) { \
       if (localColl.funcIndex == fIndex) { \
         coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(&localColl.args); \
       } else { \
@@ -255,7 +258,7 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
     } \
  \
     /* Load next collective operation*/ \
-    if (!load_coll(&localColl, channel->devCollectives+nextIndex, tid, comm, &abortCount)) { \
+    if (!load_coll(&localColl, channel->collectives+nextIndex, tid, comm, &abortCount)) { \
       if (tid == 0) traceAbort(-1); \
       break; \
     } \

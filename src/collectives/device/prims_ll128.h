@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -15,6 +15,7 @@ class ncclLL128Primitives {
   const int tid;
   const int nthreads;
   const int wid;
+  const int stepSize;
   const int warp;
   const bool flagThread;
   int nrecv = 0;
@@ -40,8 +41,8 @@ class ncclLL128Primitives {
   volatile uint64_t* shmem;
   uint32_t* sync;
 
-  inline __device__ int recvOffset(int i) { return (recvStep[i]%NCCL_STEPS)*NCCL_LL128_SLICE_ELEMS; }
-  inline __device__ int sendOffset(int i) { return (sendStep[i]%NCCL_STEPS)*NCCL_LL128_SLICE_ELEMS; }
+  inline __device__ int recvOffset(int i) { return (recvStep[i]%NCCL_STEPS)*stepSize; }
+  inline __device__ int sendOffset(int i) { return (sendStep[i]%NCCL_STEPS)*stepSize; }
   inline __device__ uint64_t* recvPtr(int i) { return recvBuff[i]+recvOffset(i); }
   inline __device__ uint64_t* sendPtr(int i) { return sendBuff[i]+sendOffset(i); }
   inline __device__ uint64_t recvFlag(int i) { return recvStep[i]+1; }
@@ -52,9 +53,9 @@ class ncclLL128Primitives {
     __syncthreads();
 #else
     if (NSEND>NRECV) {
-      asm volatile ("bar.sync 2, %0;" :: "r"(nthreads));
+      asm volatile ("bar.sync 1, %0;" :: "r"(nthreads));
     } else {
-      asm volatile ("bar.sync 3, %0;" :: "r"(nthreads));
+      asm volatile ("bar.sync 2, %0;" :: "r"(nthreads));
     }
 #endif
   }
@@ -321,7 +322,7 @@ class ncclLL128Primitives {
   }
 
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
-    recvBuff[i] = LOAD(&conn->ll128Buff);
+    recvBuff[i] = (uint64_t*)LOAD(conn->buffs+NCCL_PROTO_LL128);
     recvStep[i] = LOAD(&conn->step);
     if (wid == i) recvConn = conn;
     nrecv++;
@@ -336,7 +337,7 @@ class ncclLL128Primitives {
   }
 
   __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
-    sendBuff[i] = LOAD(&conn->ll128Buff);
+    sendBuff[i] = (uint64_t*)LOAD(conn->buffs+NCCL_PROTO_LL128);
     sendStep[i] = LOAD(&conn->step);
     if (wid == i) sendConn = conn;
     nsend++;
@@ -375,8 +376,8 @@ class ncclLL128Primitives {
 
  public:
   __device__ __forceinline__
-  ncclLL128Primitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount)
-    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE), flagThread((tid%8)==7), opCount(opCount), shmem(ncclShmem+(threadIdx.x/WARP_SIZE)*NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE+2*wid) {
+  ncclLL128Primitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount)
+    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE), flagThread((tid%8)==7), stepSize(stepSize), opCount(opCount), shmem(ncclShmem+(threadIdx.x/WARP_SIZE)*NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE+2*wid) {
     // for __any_sync
     if (NSEND > NRECV)
       sync = channel->sync + 2 + tid/WARP_SIZE;

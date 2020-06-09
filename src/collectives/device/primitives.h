@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -62,13 +62,13 @@ public:
 
   uint64_t sendStep[NSEND];
 #if defined(RCCL_USE_DIRECT_BUFFER)
-  const T* sendDirectBuff[NRECV];
+  const T* sendDirectBuff[NSEND];
 #endif
   T* sendBuff[NSEND];
 };
 
 // Implementation of primitive types
-template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, class FUNC>
+template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
 class ncclPrimitives {
  private:
   const int tid;
@@ -94,7 +94,15 @@ class ncclPrimitives {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     __syncthreads();
 #else
-    asm volatile ("bar.sync 1, %0;" :: "r"(nthreads));
+    asm volatile ("bar.sync 1, %0;" :: "r"(nthreads+WARP_SIZE));
+#endif
+  }
+
+  inline __device__ void subBarrier() {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+    __syncthreads();
+#else
+    asm volatile ("bar.sync 2, %0;" :: "r"(nthreads));
 #endif
   }
 
@@ -278,12 +286,12 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
   }
 
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i, T* directBuff) {
-    r.recvBuff[i] = (const T*)LOAD(&conn->buff);
+    r.recvBuff[i] = (const T*)LOAD(conn->buffs+NCCL_PROTO_SIMPLE);
     r.recvStep[i] = LOAD(&conn->step);
     r.recvStep[i] = ROUNDUP(r.recvStep[i], SLICESPERCHUNK*SLICESTEPS);
 #if defined(RCCL_USE_DIRECT_BUFFER)
     r.recvDirectBuff[i] = NULL;
-    if (directBuff && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
+    if (DIRECT && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
       r.recvDirectBuff[i] = directBuff;
       if (tid == 0) STORE(conn->ptrExchange, directBuff);
     }
@@ -307,13 +315,13 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     }
   }
 
-  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i, T* directBuff) {
-    s.sendBuff[i] = (T*)LOAD(&conn->buff);
+  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
+    s.sendBuff[i] = (T*)LOAD(conn->buffs+NCCL_PROTO_SIMPLE);
     s.sendStep[i] = LOAD(&conn->step);
     s.sendStep[i] = ROUNDUP(s.sendStep[i], SLICESPERCHUNK*SLICESTEPS);
 #if defined(RCCL_USE_DIRECT_BUFFER)
     s.sendDirectBuff[i] = NULL;
-    if (directBuff && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
+    if (DIRECT && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
       void* volatile* ptr = LOAD(&conn->ptrExchange);
       while ((s.sendDirectBuff[i] = (T*)(LOAD(ptr))) == NULL);
       barrier();
@@ -357,7 +365,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     barrier();
 
     for (int i=0; i<NRECV && recvPeers[i] >= 0; i++) loadRecvConn(&channel->devPeers[recvPeers[i]].recv.conn, i, 0);
-    for (int i=0; i<NSEND && sendPeers[i] >= 0; i++) loadSendConn(&channel->devPeers[sendPeers[i]].send.conn, i, 0);
+    for (int i=0; i<NSEND && sendPeers[i] >= 0; i++) loadSendConn(&channel->devPeers[sendPeers[i]].send.conn, i);
     loadRecvSync();
     loadSendSync();
   }

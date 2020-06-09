@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -33,6 +33,7 @@ class ncclLLPrimitives {
   const int tid;
   const int nthreads;
   const int wid;
+  const int stepLines;
   int nrecv = 0;
   int nsend = 0;
   struct ncclDevComm* comm;
@@ -42,8 +43,8 @@ class ncclLLPrimitives {
   typename std::conditional<NSEND == NCCL_MAX_TREE_ARITY,
     ncclLLPrimitivesSendData<T, NSEND>&, ncclLLPrimitivesSendData<T, NSEND>>::type s;
 
-  inline __device__ int recvOffset(int i) { return (r.recvStep[i]%NCCL_STEPS)*NCCL_LL_SLICE_LINES; }
-  inline __device__ int sendOffset(int i) { return (s.sendStep[i]%NCCL_STEPS)*NCCL_LL_SLICE_LINES; }
+  inline __device__ int recvOffset(int i) { return (r.recvStep[i]%NCCL_STEPS)*stepLines; }
+  inline __device__ int sendOffset(int i) { return (s.sendStep[i]%NCCL_STEPS)*stepLines; }
   inline __device__ union ncclLLFifoLine* recvPtr(int i) { return r.recvBuff[i]+recvOffset(i); }
   inline __device__ union ncclLLFifoLine* sendPtr(int i) { return s.sendBuff[i]+sendOffset(i); }
   inline __device__ uint32_t recvFlag(int i) { return NCCL_LL_FLAG(r.recvStep[i]+1); }
@@ -92,7 +93,7 @@ class ncclLLPrimitives {
         if (checkAbort(wid, 1)) break;
       }
       if (s.sendConnFifoPtr) {
-        int size = ((s.sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? NCCL_LL_SLICE_LINES*sizeof(union ncclLLFifoLine) : nbytes;
+        int size = ((s.sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
         STORE(s.sendConnFifoPtr+s.sendConnHead%NCCL_STEPS, size);
       }
       s.sendConnHead += 1;
@@ -112,7 +113,7 @@ class ncclLLPrimitives {
     // LL Cleanup : write all flags in the slice to make sure we don't have
     // data corruption when flag loops over.
     if ((s.sendStep[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
-      for (int o = offset; o<NCCL_LL_SLICE_LINES; o+=nthreads) storeLL(sendPtr(i)+o, 0, sendFlag(i));
+      for (int o = offset; o<stepLines; o+=nthreads) storeLL(sendPtr(i)+o, 0, sendFlag(i));
     }
     s.sendStep[i]++;
   }
@@ -212,7 +213,7 @@ class ncclLLPrimitives {
   }
 
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
-    r.recvBuff[i] = LOAD(&conn->llBuff);
+    r.recvBuff[i] = (union ncclLLFifoLine*)LOAD(conn->buffs+NCCL_PROTO_LL);
     r.recvStep[i] = LOAD(&conn->step);
     if (wid == i) r.recvConn = conn;
     nrecv++;
@@ -227,7 +228,7 @@ class ncclLLPrimitives {
   }
 
   __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
-    s.sendBuff[i] = LOAD(&conn->llBuff);
+    s.sendBuff[i] = (union ncclLLFifoLine*)LOAD(conn->buffs+NCCL_PROTO_LL);
     s.sendStep[i] = LOAD(&conn->step);
     if (wid == i) s.sendConn = conn;
     nsend++;
@@ -270,20 +271,20 @@ class ncclLLPrimitives {
 
  public:
   __device__ __forceinline__
-  ncclLLPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount)
-    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), opCount(opCount) {
+  ncclLLPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepLines, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount)
+    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), stepLines(stepLines), opCount(opCount) {
     init(recvPeers, sendPeers, channel);
   }
 
   __device__ __forceinline__
-  ncclLLPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount, ncclLLPrimitivesRecvData<T, NRECV>& r)
-    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), opCount(opCount), r(r) {
+  ncclLLPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepLines, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount, ncclLLPrimitivesRecvData<T, NRECV>& r)
+    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), stepLines(stepLines), opCount(opCount), r(r) {
     init(recvPeers, sendPeers, channel);
   }
 
   __device__ __forceinline__
-  ncclLLPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount, ncclLLPrimitivesSendData<T, NSEND>& s)
-    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), opCount(opCount), s(s) {
+  ncclLLPrimitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepLines, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount, ncclLLPrimitivesSendData<T, NSEND>& s)
+    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), stepLines(stepLines), opCount(opCount), s(s) {
     init(recvPeers, sendPeers, channel);
   }
 

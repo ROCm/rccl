@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -58,12 +58,13 @@
 
 typedef void(*ncclKern_t)(struct ncclDevComm*);
 // Must be consistent with the ncclFuncSet enum
-static ncclKern_t const ncclKerns[NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
+static ncclKern_t const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
   NCCL_FUNCS2B(ncclBroadcast),
   NCCL_FUNCS2A(ncclReduce),
   NCCL_FUNCS2B(ncclAllGather),
   NCCL_FUNCS2A(ncclReduceScatter),
-  NCCL_FUNCS2A(ncclAllReduce)
+  NCCL_FUNCS2A(ncclAllReduce),
+  NCCL_KERN_NAME(ncclSendRecv, copy, i8)
 };
 
 /*****************************************************************************/
@@ -93,11 +94,29 @@ ncclResult_t ncclLaunchCooperativeKernelMultiDevice(hipLaunchParams *paramsList,
 }
 
 ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
-  params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
+  // Only launch blocks where we have work to do.
+  for (int c=0; c<comm->p2pnChannels; c++) {
+    if (comm->channels[c].collCount) params->gridDim.x = c+1;
+  }
 
-  // Set active = 2 for the last operation
-  for (int r=0; r<params->gridDim.x; r++) {
-    struct ncclChannel* channel = comm->channels+r;
+  // Set active = 2 for the last operation and add a no-op on empty channels (p2p case).
+  for (int c=0; c<params->gridDim.x; c++) {
+    struct ncclChannel* channel = comm->channels+c;
+    if (channel->collCount == 0) {
+      int opIndex = channel->collFifoTail;
+      struct ncclColl* c = channel->collectives+opIndex;
+      volatile uint8_t* activePtr = (volatile uint8_t*)&c->active;
+      while (activePtr[0] != 0) sched_yield();
+
+      c->args.p2p.delta = -1; // no-op
+      c->funcIndex = FUNC_INDEX_P2P;
+      c->args.comm = comm->devComm;
+      c->active = 1;
+      opIndex = (opIndex+1)%NCCL_MAX_OPS;
+      c->nextIndex = opIndex;
+      channel->collFifoTail = opIndex;
+      channel->collCount++;
+    }
     STORE(&channel->collectives[(channel->collStart+channel->collCount-1)%NCCL_MAX_OPS].active, 2);
   }
 
@@ -150,8 +169,8 @@ ncclResult_t ncclCpuBarrierOut(struct ncclComm* comm) {
 }
 
 ncclResult_t ncclBarrierEnqueue(struct ncclComm* comm) {
-  if (comm->nRanks == 1) return ncclSuccess;
   hipLaunchParams* params = comm->myParams;
+  if (params->gridDim.x == 0) return ncclSuccess;
 
   NCCLCHECK(setupLaunch(comm, params));
 
@@ -170,21 +189,22 @@ ncclResult_t ncclBarrierEnqueue(struct ncclComm* comm) {
     params->stream = comm->userStream;
   }
 
-  int isLast = 0;
-  NCCLCHECK(ncclCpuBarrierIn(comm, &isLast));
-
-  if (isLast) {
-    if (comm->launchMode == ncclComm::GROUP) {
+  if (comm->launchMode == ncclComm::GROUP) {
+    int isLast = 0;
+    NCCLCHECK(ncclCpuBarrierIn(comm, &isLast));
+    if (isLast) {
       // I'm the last. Launch all operations.
       NCCLCHECK(ncclLaunchCooperativeKernelMultiDevice(comm->intraParams, comm->intraCudaDevs, comm->intraRanks, *comm->intraCGMode));
+      NCCLCHECK(ncclCpuBarrierLast(comm));
     }
-    NCCLCHECK(ncclCpuBarrierLast(comm));
   }
   return ncclSuccess;
 }
 
 ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
-  if (comm->nRanks == 1) return ncclSuccess;
+  hipLaunchParams *params = comm->myParams;
+  if (params->gridDim.x == 0) return ncclSuccess;
+
   // We can't print the CG mode before the first barrier happened.
   if (comm->rank == 0 && *comm->intraCGMode & 0x10) {
     *comm->intraCGMode ^= 0x10;
@@ -194,15 +214,16 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
         (comm->launchMode == ncclComm::GROUP && comm->groupCudaStream) ? "/Stream" : "");
   }
 
-  NCCLCHECK(ncclCpuBarrierOut(comm));
 
-  hipLaunchParams *params = comm->myParams;
   if (comm->launchMode == ncclComm::PARALLEL) {
     hipLaunchKernelGGL(((void (*)(struct ncclDevComm*))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclDevComm ***)(params->args)));
+  } else {
+    NCCLCHECK(ncclCpuBarrierOut(comm));
   }
+
   // Start the network proxies as soon as the kernel has been launched. We can't
   // perform any CUDA call between the two or having a cudaFree between the CUDA
-  // launch and the transportStartProxy call could cause a deadlock.
+  // launch and the ncclProxyStart call could cause a deadlock.
   // Also, starting the proxies after the CUDA launch seems to be better for
   // performance (latency).
   for (int r=0; r<params->gridDim.x; r++) {
@@ -212,7 +233,7 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
   }
   params->gridDim.x = params->blockDim.x = 0;
   comm->lastOpCount = comm->opCount;
-  NCCLCHECK(transportStartProxy(comm));
+  NCCLCHECK(ncclProxyStart(comm));
   return ncclSuccess;
 }
 
@@ -324,23 +345,36 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
 }
 
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclColl* coll, struct ncclProxyArgs* proxyArgs /* output */) {
+  coll->args.sendbuff = info->sendbuff;
+  coll->args.recvbuff = info->recvbuff;
+  coll->args.comm = info->comm->devComm;
+  coll->args.opCount = info->comm->opCount;
+
+  if (info->coll == ncclCollSendRecv) {
+    coll->args.p2p.sendCount = info->sendbytes;
+    coll->args.p2p.recvCount = info->recvbytes;
+    coll->args.p2p.delta = info->delta;
+    coll->funcIndex = FUNC_INDEX_P2P;
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+    coll->args.p2p.nThreads = info->nThreads = info->comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE];
+#else
+    coll->args.p2p.nThreads = info->nThreads = info->comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE]+2*WARP_SIZE;
+#endif
+    return ncclSuccess;
+  }
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getAlgoInfo(info));
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
 
-  coll->args.root = info->root;
-  coll->args.N = info->count;
-  coll->args.ThisInput = info->sendbuff;
-  coll->args.ThisOutput = info->recvbuff;
-  coll->args.comm = info->comm->devComm;
-  coll->args.opCount = info->comm->opCount;
-  coll->args.nChannels = info->nChannels;
-  coll->args.nThreads = info->nThreads;
+  coll->args.coll.root = info->root;
+  coll->args.coll.count = info->count;
+  coll->args.coll.nChannels = info->nChannels;
+  coll->args.coll.nThreads = info->nThreads;
 
   coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
-  int stepSize   = (info->protocol == NCCL_PROTO_LL ? NCCL_LL_BUFF_SIZE : info->protocol == NCCL_PROTO_LL128 ? NCCL_LL128_BUFF_SIZE : info->comm->channels[0].buffSize ) / NCCL_STEPS;
+  int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
   int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->chunkSteps : 1;
   int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->sliceSteps : 1;
   int chunkSize  = stepSize*chunkSteps;
@@ -354,25 +388,28 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
       while (info->nBytes / (info->nChannels*chunkSize) < info->comm->channels[0].treeUp.depth && chunkSize > 32768) chunkSize /= 2;
     }
     // Use lastChunkSize as chunkSize
-    coll->args.lastChunkSize = chunkSize / ncclTypeSize(info->datatype);
+    coll->args.coll.lastChunkSize = chunkSize / ncclTypeSize(info->datatype);
   } else if (info->algorithm == NCCL_ALGO_COLLNET && info->protocol == NCCL_PROTO_SIMPLE) {
     // Optimize chunkSize / nSteps
     while (info->nBytes / (info->nChannels*chunkSize) < info->comm->channels[0].collTreeUp.depth*16 && chunkSize > 131072) chunkSize /= 2;
     while (info->nBytes / (info->nChannels*chunkSize) < info->comm->channels[0].collTreeUp.depth*4 && chunkSize > 65536) chunkSize /= 2;
     while (info->nBytes / (info->nChannels*chunkSize) < info->comm->channels[0].collTreeUp.depth && chunkSize > 32768) chunkSize /= 2;
     // Use lastChunkSize as chunkSize
-    coll->args.lastChunkSize = chunkSize / ncclTypeSize(info->datatype);
+    coll->args.coll.lastChunkSize = chunkSize / ncclTypeSize(info->datatype);
   } else if (info->protocol == NCCL_PROTO_LL) {
-    int sliceSize = NCCL_LL_SLICE_LINES * sizeof(uint64_t);
+    const ssize_t sliceSize = stepSize*sizeof(uint64_t)/sizeof(union ncclLLFifoLine);
     const ssize_t loopSize = info->nChannels*info->nchunksPerLoop*(ssize_t)sliceSize;
-    coll->args.lastChunkSize = DIVUP((info->nBytes-(info->nBytes/loopSize)*loopSize), info->nChannels*info->nchunksPerLoop);
-    ALIGN_SIZE(coll->args.lastChunkSize, info->nThreads*sizeof(uint64_t));
-    coll->args.lastChunkSize /= ncclTypeSize(info->datatype);
+    coll->args.coll.lastChunkSize = DIVUP((info->nBytes-(info->nBytes/loopSize)*loopSize), info->nChannels*info->nchunksPerLoop);
+    ALIGN_SIZE(coll->args.coll.lastChunkSize, info->nThreads*sizeof(uint64_t));
+    coll->args.coll.lastChunkSize /= ncclTypeSize(info->datatype);
   } else if (info->algorithm == NCCL_ALGO_TREE && info->protocol == NCCL_PROTO_LL128) {
-    int nstepsInter = 1+log2i(info->comm->nNodes);
-    while (info->nBytes / (info->nChannels*chunkSize) < nstepsInter*4 && chunkSize > 32768) chunkSize /= 2;
+    int nNodes = info->comm->nNodes;
+    float ppn = info->comm->nRanks / (float)nNodes;
+    float nstepsLL128 = 1+log2i(nNodes) + 0.1*ppn;
+    while (info->nBytes / (info->nChannels*chunkSize) < nstepsLL128*64/ppn && chunkSize > 131072) chunkSize /= 2;
+    while (info->nBytes / (info->nChannels*chunkSize) < nstepsLL128*16/ppn && chunkSize > 32768) chunkSize /= 2;
     // Use lastChunkSize as chunkSize
-    coll->args.lastChunkSize = chunkSize*NCCL_LL128_DATAELEMS/(NCCL_LL128_LINEELEMS*ncclTypeSize(info->datatype));
+    coll->args.coll.lastChunkSize = chunkSize*NCCL_LL128_DATAELEMS/(NCCL_LL128_LINEELEMS*ncclTypeSize(info->datatype));
   }
 
   // Compute nSteps for proxies
@@ -394,8 +431,19 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   return ncclSuccess;
 }
 
-static ncclResult_t saveKernel(struct ncclInfo* info) {
-  if (info->comm->nRanks == 1) {
+static ncclResult_t checkSetStream(struct ncclInfo* info) {
+ if (info->comm->userStreamSet == false) {
+    info->comm->userStream = info->stream;
+    info->comm->userStreamSet = true;
+  } else if (info->stream != info->comm->userStream) {
+    WARN("Error : mixing different streams within a group call is not supported.");
+    return ncclInvalidUsage;
+  }
+  return ncclSuccess;
+}
+
+ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
+  if (info->comm->nRanks == 1 && info->coll != ncclCollSendRecv) {
     if (info->sendbuff != info->recvbuff)
       CUDACHECK(hipMemcpyAsync(info->recvbuff, info->sendbuff, info->nBytes, hipMemcpyDeviceToDevice, info->stream));
     return ncclSuccess;
@@ -406,22 +454,18 @@ static ncclResult_t saveKernel(struct ncclInfo* info) {
   memset(&proxyArgs, 0, sizeof(struct ncclProxyArgs));
   NCCLCHECK(computeColl(info, &coll, &proxyArgs));
 
-  info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, coll.args.nThreads);
-  if (info->comm->userStreamSet == false) {
-    info->comm->userStream = info->stream;
-    info->comm->userStreamSet = true;
-  } else if (info->stream != info->comm->userStream) {
-    WARN("Error : mixing different streams within a group call is not supported.");
-    return ncclInvalidUsage;
-  }
+  info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
 
+  int nChannels = info->coll == ncclCollSendRecv ? 1 : coll.args.coll.nChannels;
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
-  for (int bid=0; bid<coll.args.nChannels*nSubChannels; bid++) {
-    int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
+
+  for (int bid=0; bid<nChannels*nSubChannels; bid++) {
+    int channelId = (info->coll == ncclCollSendRecv) ? info->channelId :
+      info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
 
     if (channel->collCount == NCCL_MAX_OPS) {
-      WARN("Too many aggregated operations (%d max)", NCCL_MAX_OPS);
+      WARN("Too many aggregated operations on channel %d (%d max)", channel->id, NCCL_MAX_OPS);
       return ncclInvalidUsage;
     }
 
@@ -431,18 +475,22 @@ static ncclResult_t saveKernel(struct ncclInfo* info) {
     if (nSubChannels == 2) {
       info->pattern = (channelId < info->comm->nChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
     }
-    NCCLCHECK(transportSaveProxies(&proxyArgs, info->pattern, info->root, info->comm->nRanks));
 
+    if (info->coll == ncclCollSendRecv) {
+      info->comm->myParams->gridDim.x = std::max<unsigned>(info->comm->myParams->gridDim.x, channelId+1);
+      NCCLCHECK(ncclProxySaveP2p(info, channel));
+    } else {
+      NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks));
+    }
     info->comm->myParams->gridDim.x++;
-
     int opIndex = channel->collFifoTail;
     struct ncclColl* c = channel->collectives+opIndex;
     volatile uint8_t* activePtr = (volatile uint8_t*)&c->active;
     while (LOAD(activePtr) != 0) sched_yield();
 
     memcpy(c, &coll, sizeof(struct ncclColl));
+    if (info->coll != ncclCollSendRecv) c->args.coll.bid = bid % coll.args.coll.nChannels;
 
-    c->args.bid = bid % coll.args.nChannels;
     STORE(&c->active, 1);
     opIndex = (opIndex+1)%NCCL_MAX_OPS;
     c->nextIndex = opIndex;
@@ -453,35 +501,82 @@ static ncclResult_t saveKernel(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
+// Save p2p operations in comm->p2plist. Operations will be posted to channels
+// during ncclGroupEnd()
+ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
+  struct ncclComm* comm = info->comm;
+  struct ncclP2Plist* p2plist = &comm->p2plist;
+  int peer = info->root;
+  p2plist->count++;
+  ssize_t nBytes = info->count*ncclTypeSize(info->datatype);
+  if (info->recvbuff == NULL) {
+    if (peer != comm->rank) {
+      int delta = (comm->nRanks - (comm->rank-peer)) % comm->nRanks;
+      for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
+        int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
+        if (comm->channels[channelId].peers[peer].send.connected == 0) {
+          p2plist->connect.send[channelId*comm->nRanks+p2plist->connect.nsend[channelId]++] = peer;
+        }
+      }
+    }
+    p2plist->peerlist[info->root].sendbytes = nBytes;
+    p2plist->peerlist[info->root].sendbuff = info->sendbuff;
+  } else {
+    if (peer != comm->rank) {
+      int delta = (comm->nRanks + (comm->rank-peer)) % comm->nRanks;
+      for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
+        int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
+        if (comm->channels[channelId].peers[peer].recv.connected == 0) {
+          p2plist->connect.recv[channelId*comm->nRanks+p2plist->connect.nrecv[channelId]++] = peer;
+        }
+      }
+    }
+    p2plist->peerlist[info->root].recvbytes = nBytes;
+    p2plist->peerlist[info->root].recvbuff = info->recvbuff;
+  }
+  return ncclSuccess;
+}
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
-  if (info->comm == NULL) return ncclInvalidArgument;
-
-  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-       info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
-       info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
-
   // Launch asynchronously if needed
   if (ncclAsyncMode()) {
     ncclResult_t ret = ncclSuccess;
     int savedDev = -1;
+    // Check arguments
+    NCCLCHECK(PtrCheck(info->comm, info->opName, "comm"));
     if (info->comm->checkPointers) {
       CUDACHECKGOTO(hipGetDevice(&savedDev), ret, end);
       CUDACHECKGOTO(hipSetDevice(info->comm->cudaDev), ret, end);
     }
-    // Check arguments
     NCCLCHECKGOTO(ArgsCheck(info), ret, end);
     // Always register comm even in case of error to make sure ncclGroupEnd
     // cleans it up.
     NCCLCHECKGOTO(ncclAsyncColl(info->comm), ret, end);
-    NCCLCHECKGOTO(saveKernel(info), ret, end);
+    NCCLCHECKGOTO(checkSetStream(info), ret, end);
+
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
+        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
+        info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
+
+    if (info->coll == ncclCollSendRecv) { //p2p stored separately
+      NCCLCHECKGOTO(ncclSaveP2p(info), ret, end);
+    } else {
+      NCCLCHECKGOTO(ncclSaveKernel(info), ret, end);
+    }
 end:
     if (savedDev != -1) CUDACHECK(hipSetDevice(savedDev));
     ncclAsyncErrCheck(ret);
     return ret;
   } else {
+    NCCLCHECK(PtrCheck(info->comm, info->opName, "comm"));
     NCCLCHECK(ArgsCheck(info));
-    NCCLCHECK(saveKernel(info));
+    NCCLCHECK(checkSetStream(info));
+
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
+        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
+        info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
+
+    NCCLCHECK(ncclSaveKernel(info));
     NCCLCHECK(ncclBarrierEnqueue(info->comm));
     NCCLCHECK(ncclBarrierEnqueueWait(info->comm));
     NCCLCHECK(ncclEnqueueEvents(info->comm));
