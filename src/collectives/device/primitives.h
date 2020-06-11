@@ -113,7 +113,7 @@ class ncclPrimitives {
     if (mismatch) {
       // In non-LL, we use _threadfence_system before incrementing opCount, yet we are still waiting for credits here, so there must be a size mismatch
       STORE(comm->fatalDevError, ncclDevAssertedMismatch);
-    } else if (conn && LOAD(conn->opCountRem) > opCount) {
+    } else if (conn && LOAD(conn->opCountRem) > opCount+1) {
       mismatch += 1;
     }
   }
