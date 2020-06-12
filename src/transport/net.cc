@@ -314,19 +314,16 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
         } else if (args->tail < LOAD(recvTail)) {
           // Send through network
           if (LOAD(sizesFifo+buffSlot) != -1) {
-#ifdef ENABLE_PROFILING
-            if (args->channel->tv_send[buffSlot].tv_sec == 0 && args->channel->tv_send[buffSlot].tv_usec == 0)
-              gettimeofday(&args->channel->tv_send[buffSlot], NULL);
-#endif
             NCCLCHECK(ncclNetIsend(resources->netSendComm, localBuff+buffSlot*stepSize, sizesFifo[buffSlot], mhandle, args->requests+buffSlot));
             if (args->requests[buffSlot] != NULL) {
 #ifdef ENABLE_PROFILING
-              struct timeval tv;
-              gettimeofday(&tv, NULL);
-              if (args->opCount > 0) args->channel->send_wait_us += ((uint64_t)(tv.tv_sec - args->channel->tv_send[buffSlot].tv_sec)*1000*1000 + tv.tv_usec - args->channel->tv_send[buffSlot].tv_usec);
-              if (args->opCount > 0) args->channel->send_byte += LOAD(sizesFifo+buffSlot);
-              args->channel->tv_send[buffSlot].tv_sec = tv.tv_sec;
-              args->channel->tv_send[buffSlot].tv_usec = tv.tv_usec;
+              if (args->channel->active_req == 0) {
+                gettimeofday(&args->channel->tvs, NULL);
+                args->channel->sizes = 0;
+              }
+              args->channel->active_req ++;
+              args->channel->sizes += LOAD(sizesFifo+buffSlot);
+              args->channel->send_byte += LOAD(sizesFifo+buffSlot);
 #endif
               STORE(sizesFifo+buffSlot, -1);
               // Make sure size is reset to zero before we update the head.
@@ -343,11 +340,13 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
         NCCLCHECK(ncclNetTest(args->requests[buffSlot], &done, NULL));
         if (done) {
 #ifdef ENABLE_PROFILING
-          struct timeval tv;
-          gettimeofday(&tv, NULL);
-          if (args->opCount > 0) args->channel->send_us += ((uint64_t)(tv.tv_sec - args->channel->tv_send[buffSlot].tv_sec)*1000*1000 + tv.tv_usec - args->channel->tv_send[buffSlot].tv_usec);
-          args->channel->tv_send[buffSlot].tv_sec = 0;
-          args->channel->tv_send[buffSlot].tv_usec = 0;
+          args->channel->active_req --;
+          if (args->channel->active_req == 0) {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            args->channel->bw_cumulative += (float)args->channel->sizes/((tv.tv_sec - args->channel->tvs.tv_sec)*1000*1000 + tv.tv_usec - args->channel->tvs.tv_usec)/1000.0;
+            args->channel->bw_count ++;
+          }
 #endif
           args->head += args->sliceSteps;
           STORE(&resources->sendMem->head, args->head);
@@ -388,11 +387,15 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
       if ((args->tail < args->head + NCCL_STEPS) && (args->tail < LOAD(sendHead) + NCCL_STEPS) && (args->tail < args->end)) {
         int buffSlot = args->tail%NCCL_STEPS;
         int sliceSize = stepSize * args->sliceSteps;
-#ifdef ENABLE_PROFILING
-        gettimeofday(&args->channel->tv_recv[buffSlot], NULL);
-#endif
         NCCLCHECK(ncclNetIrecv(resources->netRecvComm, localBuff+buffSlot*stepSize, sliceSize, mhandle, args->requests+buffSlot));
         if (args->requests[buffSlot] != NULL) {
+#ifdef ENABLE_PROFILING
+          if (args->channel->active_req == 0) {
+            gettimeofday(&args->channel->tvs, NULL);
+            args->channel->sizes = 0;
+          }
+          args->channel->active_req ++;
+#endif
           args->tail += args->sliceSteps;
           args->idle = 0;
         }
@@ -405,18 +408,17 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
           args->head += args->sliceSteps;
           if (args->protocol == NCCL_PROTO_SIMPLE) {
 #ifdef ENABLE_PROFILING
+          args->channel->active_req --;
+          args->channel->sizes += size;
+          args->channel->recv_byte += size;
+          if (args->channel->active_req == 0) {
             struct timeval tv;
             gettimeofday(&tv, NULL);
-            if (args->opCount > 0) args->channel->recv_byte += size;
-            if (args->opCount > 0) args->channel->recv_us += ((uint64_t)(tv.tv_sec - args->channel->tv_recv[buffSlot].tv_sec)*1000*1000 + tv.tv_usec - args->channel->tv_recv[buffSlot].tv_usec);
-            args->channel->tv_recv[buffSlot].tv_sec = tv.tv_sec;
-            args->channel->tv_recv[buffSlot].tv_usec = tv.tv_usec;
+            args->channel->bw_cumulative += (float)args->channel->sizes/((tv.tv_sec - args->channel->tvs.tv_sec)*1000*1000 + tv.tv_usec - args->channel->tvs.tv_usec)/1000.0;
+            args->channel->bw_count ++;
+          }
 #endif
             if (resources->useGdr) NCCLCHECK(ncclNetFlush(resources->netRecvComm, localBuff+buffSlot*stepSize, size, mhandle));
-#ifdef ENABLE_PROFILING
-            gettimeofday(&tv, NULL);
-            if (args->opCount > 0) args->channel->recv_flush_us += ((uint64_t)(tv.tv_sec - args->channel->tv_recv[buffSlot].tv_sec)*1000*1000 + tv.tv_usec - args->channel->tv_recv[buffSlot].tv_usec);
-#endif
             STORE(&resources->recvMem->tail, args->head);
           }
           args->idle = 0;

@@ -221,14 +221,13 @@ struct ncclChannel {
 
       uint32_t* sync;
 #ifdef ENABLE_PROFILING
-      struct timeval tv_send[NCCL_STEPS];
-      struct timeval tv_recv[NCCL_STEPS];
+      struct timeval tvs;
+      int sizes;
+      int active_req;
       uint64_t send_byte;
       uint64_t recv_byte;
-      uint64_t send_us;
-      uint64_t send_wait_us;
-      uint64_t recv_us;
-      uint64_t recv_flush_us;
+      float bw_cumulative;
+      int bw_count;
 #endif
     };
     int data[0x80];
