@@ -294,7 +294,6 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
   IMPL_COLL_FUNC(coll##LL, op, ncclFunc, dtype, ctype) \
   IMPL_COLL_FUNC(coll##LL128, op, ncclFunc, dtype, ctype) \
   IMPL_COLL_FUNC(coll, op, ncclFunc, dtype, ctype) \
-  IMPL_COLL_KERN_##op(coll##LL, op, ncclFunc, dtype, ctype, FUNC_INDEX(ncclColl, ncclOp, ncclType, al, NCCL_PROTO_LL)) \
 
 #define IMPL_COLL3(coll, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType) \
   IMPL_COLL4(coll##Tree, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_TREE) \

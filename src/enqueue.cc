@@ -58,15 +58,7 @@
 
 typedef void(*ncclKern_t)(struct ncclDevComm*);
 // Must be consistent with the ncclFuncSet enum
-static ncclKern_t const ncclKerns[4+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
-  NCCL_FUNCS2B(ncclBroadcast),
-  NCCL_FUNCS2A(ncclReduce),
-  NCCL_FUNCS2B(ncclAllGather),
-  NCCL_FUNCS2A(ncclReduceScatter),
-  NCCL_FUNCS2A(ncclAllReduce),
-  NCCL_KERN_NAME(ncclGather, copy, i8),
-  NCCL_KERN_NAME(ncclScatter, copy, i8),
-  NCCL_KERN_NAME(ncclAllToAll, copy, i8),
+static ncclKern_t const ncclKerns[1] = {
   NCCL_KERN_NAME(ncclSendRecv, copy, i8)
 };
 
@@ -128,7 +120,7 @@ ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
   struct ncclColl* coll = comm->channels[0].collectives+comm->channels[0].collStart;
 
   comm->args = comm->devComm;
-  params->func = (void *)ncclKerns[coll->funcIndex];
+  params->func = (void *)ncclKerns[0];
   return ncclSuccess;
 }
 
