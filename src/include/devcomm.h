@@ -222,7 +222,7 @@ struct ncclChannel {
       uint32_t* sync;
 #ifdef ENABLE_PROFILING
       struct timeval tvs;
-      int sizes;
+      uint64_t sizes;
       int active_req;
       uint64_t send_byte;
       uint64_t recv_byte;
