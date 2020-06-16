@@ -84,7 +84,7 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 
 /* Send: Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
-    struct ncclConnect* connectInfo, struct ncclConnector* send, int buffSize, int channelId) {
+    struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId) {
   if (myInfo->pidHash == peerInfo->pidHash) {
     if (myInfo->cudaDev == peerInfo->cudaDev) {
       INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d[%d] -> %d[%d] via P2P/common device", channelId, myInfo->rank, myInfo->cudaDev, peerInfo->rank, peerInfo->cudaDev);
@@ -103,7 +103,7 @@ ncclResult_t p2pSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
 
 /* Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
-    struct ncclConnect* connectInfo, struct ncclConnector * recv, int buffSize, int channelId) {
+    struct ncclConnect* connectInfo, struct ncclConnector * recv, int channelId) {
   return ncclSuccess;
 }
 
@@ -126,12 +126,12 @@ ncclResult_t shmCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 }
 
 /* Create and return connect structures for this peer to connect to me */
-ncclResult_t shmSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int buffSize, int channelId) {
+ncclResult_t shmSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId) {
   INFO(NCCL_INIT|NCCL_SHM,"Ring %02d : %d[%lx] -> %d[%lx] via direct shared memory", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId);
   return ncclSuccess;
 }
 
-ncclResult_t shmRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int buffSize, int channelId) {
+ncclResult_t shmRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId) {
   return ncclSuccess;
 }
 
@@ -148,10 +148,10 @@ ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
   return ncclSuccess;
 }
 
-ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int buffSize, int channelId) {
+ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId) {
   int netDev, useGdr = 0;
 
-  NCCLCHECK(ncclTopoGetNetDev(topo, graph, myInfo->rank, channelId, &netDev));
+  NCCLCHECK(ncclTopoGetNetDev(topo, myInfo->rank, graph, channelId, &netDev));
   NCCLCHECK(ncclTopoCheckGdr(topo, myInfo->busId, netDev, 1, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), netDev,
@@ -161,10 +161,10 @@ ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
 
 NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
 
-ncclResult_t netRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int buffSize, int channelId) {
+ncclResult_t netRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId) {
   int netDev, useGdr = 0;
 
-  NCCLCHECK(ncclTopoGetNetDev(topo, graph, myInfo->rank, channelId, &netDev));
+  NCCLCHECK(ncclTopoGetNetDev(topo, myInfo->rank, graph, channelId, &netDev));
   NCCLCHECK(ncclTopoCheckGdr(topo, myInfo->busId, netDev, 0, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s", channelId, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), netDev,

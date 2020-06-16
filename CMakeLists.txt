@@ -90,6 +90,10 @@ set(CU_SOURCES
     src/collectives/device/reduce.cu
     src/collectives/device/broadcast.cu
     src/collectives/device/reduce_scatter.cu
+    src/collectives/device/sendrecv.cu
+    src/collectives/device/gather.cu
+    src/collectives/device/scatter.cu
+    src/collectives/device/all_to_all.cu
     src/collectives/device/functions.cu)
 
 set(CPP_SOURCES)
@@ -117,6 +121,10 @@ set(CC_SOURCES
     src/collectives/reduce_api.cc
     src/collectives/broadcast_api.cc
     src/collectives/reduce_scatter_api.cc
+    src/collectives/sendrecv_api.cc
+    src/collectives/gather_api.cc
+    src/collectives/scatter_api.cc
+    src/collectives/all_to_all_api.cc
     src/channel.cc
     src/misc/argcheck.cc
     src/misc/nvmlwrap_stub.cc
@@ -133,6 +141,7 @@ set(CC_SOURCES
     src/debug.cc
     src/group.cc
     src/bootstrap.cc
+    src/proxy.cc
     src/enqueue.cc)
 
 foreach(filename ${CC_SOURCES})
@@ -182,7 +191,7 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-target_link_libraries(rccl PRIVATE hip::device)
+target_link_libraries(rccl PRIVATE hip::device numa)
 target_link_libraries(rccl INTERFACE hip::host)
 
 #Setup librccl.so version

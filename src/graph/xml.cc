@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <ctype.h>
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
+#endif
 #include "core.h"
 #include "nvmlwrap.h"
 #include "xml.h"
@@ -628,7 +632,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
     }
 #else
     // NVML NVLink detection
-    int maxNvLinks = (sm < 60) ? 0 : (sm < 70) ? 4 : 6;
+    int maxNvLinks = (sm < 60) ? 0 : (sm < 70) ? 4 : (sm < 80) ? 6 : 12;
 
     if (maxNvLinks > 0 && nvmlDev == NULL) {
       WARN("No NVML device handle. Skipping nvlink detection.\n");

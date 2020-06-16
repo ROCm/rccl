@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -12,17 +12,17 @@
 
 // Check CUDA calls
 #define CUDACHECK(cmd) do {                                 \
-    hipError_t e = cmd;                                    \
-    if( e != hipSuccess ) {                                \
-        WARN("Cuda failure '%s'", hipGetErrorString(e));   \
+    hipError_t err = cmd;                                    \
+    if( err != hipSuccess ) {                                \
+        WARN("HIP failure '%s'", hipGetErrorString(err));   \
         return ncclUnhandledCudaError;                      \
     }                                                       \
 } while(false)
 
 #define CUDACHECKGOTO(cmd, res, label) do {                 \
-    hipError_t e = cmd;                                    \
-    if( e != hipSuccess ) {                                \
-        WARN("Cuda failure '%s'", hipGetErrorString(e));   \
+    hipError_t err = cmd;                                    \
+    if( err != hipSuccess ) {                                \
+        WARN("HIP failure '%s'", hipGetErrorString(err));   \
         res = ncclUnhandledCudaError;                       \
         goto label;                                         \
     }                                                       \

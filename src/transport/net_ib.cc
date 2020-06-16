@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -113,6 +113,7 @@ static int ncclIbSpeed(int speed) {
 }
 
 ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
+  static int shownIbHcaEnv = 0;
   if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
   if (ncclParamIbDisable()) return ncclInternalError;
 
@@ -132,6 +133,7 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
 
       // Check if user defined which IB device:port to use
       char* userIbEnv = getenv("NCCL_IB_HCA");
+      if (userIbEnv != NULL && shownIbHcaEnv++ == 0) INFO(NCCL_NET|NCCL_ENV, "NCCL_IB_HCA set to %s", userIbEnv);
       struct netIf userIfs[MAX_IB_DEVS];
       bool searchNot = userIbEnv && userIbEnv[0] == '^';
       if (searchNot) userIbEnv++;

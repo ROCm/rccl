@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -13,10 +13,10 @@
 #include "align.h"
 #include <sys/mman.h>
 
-static inline ncclResult_t ncclCudaHostAlloc(void** ptr, void** devPtr, size_t size) {
-  CUDACHECK(hipHostMalloc(ptr, size, hipHostMallocMapped));
-  memset(*ptr, 0, size);
-  *devPtr = *ptr;
+template <typename T>
+static ncclResult_t ncclCudaHostCalloc(T** ptr, size_t nelem) {
+  CUDACHECK(hipHostMalloc(ptr, nelem*sizeof(T), hipHostMallocMapped));
+  memset(*ptr, 0, nelem*sizeof(T));
   return ncclSuccess;
 }
 

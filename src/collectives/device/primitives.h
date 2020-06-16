@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -62,13 +62,13 @@ public:
 
   uint64_t sendStep[NSEND];
 #if defined(RCCL_USE_DIRECT_BUFFER)
-  const T* sendDirectBuff[NRECV];
+  const T* sendDirectBuff[NSEND];
 #endif
   T* sendBuff[NSEND];
 };
 
 // Implementation of primitive types
-template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, class FUNC>
+template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
 class ncclPrimitives {
  private:
   const int tid;
@@ -94,7 +94,15 @@ class ncclPrimitives {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     __syncthreads();
 #else
-    asm volatile ("bar.sync 1, %0;" :: "r"(nthreads));
+    asm volatile ("bar.sync 1, %0;" :: "r"(nthreads+WARP_SIZE));
+#endif
+  }
+
+  inline __device__ void subBarrier() {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+    __syncthreads();
+#else
+    asm volatile ("bar.sync 2, %0;" :: "r"(nthreads));
 #endif
   }
 
@@ -105,7 +113,7 @@ class ncclPrimitives {
     if (mismatch) {
       // In non-LL, we use _threadfence_system before incrementing opCount, yet we are still waiting for credits here, so there must be a size mismatch
       STORE(comm->fatalDevError, ncclDevAssertedMismatch);
-    } else if (conn && LOAD(conn->opCountRem) > opCount) {
+    } else if (conn && LOAD(conn->opCountRem) > opCount+1) {
       mismatch += 1;
     }
   }
@@ -127,17 +135,10 @@ class ncclPrimitives {
     spins = 0;
     mismatch = 0;
     if (s.sendConnHeadPtr) {
-#ifdef ENABLE_PROFILING
-      auto devProf = comm->devProf;
-      uint64_t t0 = __rtc64();
-#endif
       while (s.sendConnHeadCache + NCCL_STEPS < s.sendConnHead + SLICESTEPS) {
         s.sendConnHeadCache = LOAD(s.sendConnHeadPtr);
         if (checkAbort(wid, 1)) break;
       }
-#ifdef ENABLE_PROFILING
-      __atomic_fetch_add(&devProf->wait_send_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
-#endif
       if (s.sendConnFifoPtr) {
         STORE(s.sendConnFifoPtr+s.sendConnHead%NCCL_STEPS, nbytes);
       }
@@ -150,7 +151,6 @@ class ncclPrimitives {
     mismatch = 0;
     if (r.recvConnTailPtr) {
 #ifdef ENABLE_PROFILING
-      auto devProf = comm->devProf;
       uint64_t t0 = __rtc64();
 #endif
       while (r.recvConnTailCache < r.recvConnTail + SLICESTEPS) {
@@ -158,7 +158,7 @@ class ncclPrimitives {
         if (checkAbort(wid, 0)) break;
       }
 #ifdef ENABLE_PROFILING
-      __atomic_fetch_add(&devProf->wait_recv_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
+      if (opCount > 0) __atomic_fetch_add(&comm->devProf->wait_recv_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
 #endif
       r.recvConnTail += SLICESTEPS;
     }
@@ -241,10 +241,16 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     #pragma unroll
     for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
       int realSize = max(0, min(dataSize, nelem-offset));
+#ifdef ENABLE_PROFILING
+      uint64_t t0 = __rtc64();
+#endif
       if (SEND) waitSend(realSize*sizeof(T));
       if (RECV) waitRecv();
       if (realSize > 0) {
         barrier();
+#ifdef ENABLE_PROFILING
+        if (tid == 0  && opCount > 0) __atomic_fetch_add(&comm->devProf->wait_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
+#endif
 #if defined(RCCL_USE_DIRECT_BUFFER)
         if (DIRECTRECV && r.recvDirectBuff[0]) {
           // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
@@ -278,12 +284,12 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
   }
 
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i, T* directBuff) {
-    r.recvBuff[i] = (const T*)LOAD(&conn->buff);
+    r.recvBuff[i] = (const T*)LOAD(conn->buffs+NCCL_PROTO_SIMPLE);
     r.recvStep[i] = LOAD(&conn->step);
     r.recvStep[i] = ROUNDUP(r.recvStep[i], SLICESPERCHUNK*SLICESTEPS);
 #if defined(RCCL_USE_DIRECT_BUFFER)
     r.recvDirectBuff[i] = NULL;
-    if (directBuff && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
+    if (DIRECT && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
       r.recvDirectBuff[i] = directBuff;
       if (tid == 0) STORE(conn->ptrExchange, directBuff);
     }
@@ -307,13 +313,13 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     }
   }
 
-  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i, T* directBuff) {
-    s.sendBuff[i] = (T*)LOAD(&conn->buff);
+  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
+    s.sendBuff[i] = (T*)LOAD(conn->buffs+NCCL_PROTO_SIMPLE);
     s.sendStep[i] = LOAD(&conn->step);
     s.sendStep[i] = ROUNDUP(s.sendStep[i], SLICESPERCHUNK*SLICESTEPS);
 #if defined(RCCL_USE_DIRECT_BUFFER)
     s.sendDirectBuff[i] = NULL;
-    if (directBuff && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
+    if (DIRECT && LOAD((&conn->direct) & NCCL_DIRECT_GPU)) {
       void* volatile* ptr = LOAD(&conn->ptrExchange);
       while ((s.sendDirectBuff[i] = (T*)(LOAD(ptr))) == NULL);
       barrier();
@@ -357,7 +363,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
     barrier();
 
     for (int i=0; i<NRECV && recvPeers[i] >= 0; i++) loadRecvConn(&channel->devPeers[recvPeers[i]].recv.conn, i, 0);
-    for (int i=0; i<NSEND && sendPeers[i] >= 0; i++) loadSendConn(&channel->devPeers[sendPeers[i]].send.conn, i, 0);
+    for (int i=0; i<NSEND && sendPeers[i] >= 0; i++) loadSendConn(&channel->devPeers[sendPeers[i]].send.conn, i);
     loadRecvSync();
     loadSendSync();
   }
@@ -449,14 +455,11 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
 
 #ifdef ENABLE_PROFILING
 #define INIT_COUNTER \
-  if (tid == 0) { t0 = __rtc64(); ws = LOAD(&(devProf->wait_send_cycle[blockIdx.x])); \
-    wr = LOAD(&(devProf->wait_recv_cycle[blockIdx.x])); }
+  if (tid == 0) { t0 = __rtc64(); ws = LOAD(&(devProf->wait_cycle[blockIdx.x])); }
 
 #define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __rtc64() - t0 \
-    + ws - LOAD(&(devProf->wait_send_cycle[blockIdx.x])) \
-    + wr - LOAD(&(devProf->wait_recv_cycle[blockIdx.x])), \
-    __ATOMIC_SEQ_CST); \
+  if (tid == 0 && args->opCount > 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __rtc64() - t0 \
+    + ws - LOAD(&(devProf->wait_cycle[blockIdx.x])), __ATOMIC_SEQ_CST); \
     __atomic_fetch_add(&(devProf->prim##_byte), nelem * sizeof(T), __ATOMIC_SEQ_CST); }
 #else
 #define INIT_COUNTER

@@ -16,8 +16,13 @@
 #define HIP_CALL(x) ASSERT_EQ(x, hipSuccess)
 #define NCCL_CALL(x) ASSERT_EQ(x, ncclSuccess)
 
+#define MAX_ENV_TOKENS 16
+
 namespace CorrectnessTests
 {
+    typedef enum { ncclCollBroadcast, ncclCollReduce, ncclCollAllGather, ncclCollReduceScatter, ncclCollAllReduce, ncclCollGather, ncclCollScatter, ncclCollAllToAll, ncclCollSendRecv } ncclFunc_t;
+    typedef enum { ncclInputBuffer, ncclOutputBuffer } ncclBufferType_t;
+
     // Performs the various basic reduction operations
     template <typename T>
     T ReduceOp(ncclRedOp_t const op, T const A, T const B)
@@ -62,6 +67,7 @@ namespace CorrectnessTests
         size_t              numElements; // Number of elements per array
         ncclDataType_t      dataType;    // Data type of each input/output pointer
         bool                inPlace;     // Whether or not output pointers are same as input pointers
+        ncclFunc_t          function;    // Buffer sizes are different in case of gather, scatter and all to all
 
         std::vector<void *> inputs;      // Input pointers (1 per device)
         std::vector<void *> outputs;     // Output pointers (1 per device)
@@ -73,33 +79,42 @@ namespace CorrectnessTests
             return numElements * DataTypeToBytes(dataType);
         }
 
+        size_t NumBytes(ncclBufferType_t bufferType) const
+        {
+            if ((function == ncclCollGather && (bufferType == ncclOutputBuffer || inPlace == true)) ||
+                (function == ncclCollScatter && bufferType == ncclInputBuffer) ||
+                function == ncclCollAllToAll)
+                return numElements * DataTypeToBytes(dataType) * numDevices;
+            return numElements * DataTypeToBytes(dataType);
+        }
+
         void Initialize(int            const numDevices_,
                         size_t         const numElements_,
                         ncclDataType_t const dataType_,
-                        bool           const inPlace_)
+                        bool           const inPlace_,
+                        ncclFunc_t     const func_ = ncclCollBroadcast)
         {
             numDevices  = numDevices_;
             numElements = numElements_;
             dataType    = dataType_;
             inPlace     = inPlace_;
+            function    = func_;
 
             inputs.resize(numDevices);
             outputs.resize(numDevices);
             expected.resize(numDevices);
 
             // Allocate per-device memory
-            size_t const numBytes = NumBytes();
-
             for (int i = 0; i < numDevices; i++)
             {
                 HIP_CALL(hipSetDevice(i));
-                HIP_CALL(hipMalloc((void **)&inputs[i], numBytes));
+                HIP_CALL(hipMalloc((void **)&inputs[i], NumBytes(ncclInputBuffer)));
                 if (inPlace)
                     outputs[i] = inputs[i];
                 else
-                    HIP_CALL(hipMalloc((void **)&outputs[i], numBytes));
+                    HIP_CALL(hipMalloc((void **)&outputs[i], NumBytes(ncclOutputBuffer)));
 
-                expected[i] = malloc(numBytes);
+                expected[i] = malloc(NumBytes(ncclOutputBuffer));
             }
         }
 
@@ -148,7 +163,8 @@ namespace CorrectnessTests
                        ncclDataType_t /* dataType    */,
                        size_t         /* numElements */,
                        int            /* numDevices  */,
-                       bool           /* inPlace     */> TestTuple;
+                       bool           /* inPlace     */,
+                       const char*    /* envVals     */> TestTuple;
 
     // Base class for each collective test
     // - Each test is instantiated with a different TestTuple
@@ -167,7 +183,28 @@ namespace CorrectnessTests
             }
 
             // Make the test tuple parameters accessible
-            std::tie(op, dataType, numElements, numDevices, inPlace) = GetParam();
+            std::tie(op, dataType, numElements, numDevices, inPlace, envVals) = GetParam();
+
+            envString = 0;
+            numTokens = 0;
+            if (strcmp(envVals, "")) {
+                // enable RCCL env vars testing
+                setenv("RCCL_TEST_ENV_VARS", "ENABLE", 1);
+                envString = strdup(envVals);
+                tokens[numTokens] = strtok(envString, "=, ");
+                numTokens++;
+                while (tokens[numTokens-1] != NULL && numTokens < MAX_ENV_TOKENS)
+                    tokens[numTokens++] = strtok(NULL, "=, ");
+                for (int i = 0; i < numTokens/2; i++) {
+                    char *val = getenv(tokens[i*2]);
+                    if (val)
+                        savedEnv[i] = strdup(val);
+                    else
+                        savedEnv[i] = 0;
+                    setenv(tokens[i*2], tokens[i*2+1], 1);
+                    fprintf(stdout, "[          ] setting environmental variable %s to %s\n", tokens[i*2], getenv(tokens[i*2]));
+                }
+            }
 
             // Collect the number of available GPUs
             HIP_CALL(hipGetDeviceCount(&numDevicesAvailable));
@@ -207,11 +244,26 @@ namespace CorrectnessTests
                 NCCL_CALL(ncclCommDestroy(comms[i]));
                 HIP_CALL(hipStreamDestroy(streams[i]));
             }
+            // Restore env vars after tests
+            for (int i = 0; i < numTokens/2; i++) {
+                if (savedEnv[i]) {
+                    setenv(tokens[i*2], savedEnv[i], 1);
+                    fprintf(stdout, "[          ] restored environmental variable %s to %s\n", tokens[i*2], getenv(tokens[i*2]));
+                    free(savedEnv[i]);
+                }
+                else {
+                    unsetenv(tokens[i*2]);
+                    fprintf(stdout, "[          ] removed environmental variable %s\n", tokens[i*2]);
+                }
+            }
+            // Cleanup
+            unsetenv("RCCL_TEST_ENV_VARS");
+            free(envString);
         }
 
         void FillDatasetWithPattern(Dataset& dataset)
         {
-            int8_t*   arrayI1 = (int8_t   *)malloc(dataset.NumBytes());
+            int8_t*   arrayI1 = (int8_t   *)malloc(dataset.NumBytes(ncclInputBuffer));
             uint8_t*  arrayU1 = (uint8_t  *)arrayI1;
             int32_t*  arrayI4 = (int32_t  *)arrayI1;
             uint32_t* arrayU4 = (uint32_t *)arrayI1;
@@ -229,7 +281,7 @@ namespace CorrectnessTests
             // - Sticking with floating points values that are perfectly representable
             for (int i = 0; i < dataset.numDevices; i++)
             {
-                for (int j = 0; j < dataset.numElements; j++)
+                for (int j = 0; j < dataset.NumBytes(ncclInputBuffer)/DataTypeToBytes(dataset.dataType); j++)
                 {
                     int    valueI = (i + j) % 6;
                     float  valueF = (float)valueI;
@@ -252,11 +304,11 @@ namespace CorrectnessTests
                 }
 
                 HIP_CALL(hipSetDevice(i));
-                HIP_CALL(hipMemcpy(dataset.inputs[i], arrayI1, dataset.NumBytes(), hipMemcpyHostToDevice));
+                HIP_CALL(hipMemcpy(dataset.inputs[i], arrayI1, dataset.NumBytes(ncclInputBuffer), hipMemcpyHostToDevice));
 
                 // Fills output data[i][j] with 0 (if not inplace)
                 if (!dataset.inPlace)
-                    HIP_CALL(hipMemset(dataset.outputs[i], 0, dataset.NumBytes()));
+                    HIP_CALL(hipMemset(dataset.outputs[i], 0, dataset.NumBytes(ncclOutputBuffer)));
             }
 
             free(arrayI1);
@@ -272,9 +324,9 @@ namespace CorrectnessTests
             }
         }
 
-        void ValidateResults(Dataset const& dataset) const
+        void ValidateResults(Dataset const& dataset, int root = 0) const
         {
-            int8_t*   outputI1 = (int8_t   *)malloc(dataset.NumBytes());
+            int8_t*   outputI1 = (int8_t   *)malloc(dataset.NumBytes(ncclOutputBuffer));
             uint8_t*  outputU1 = (uint8_t  *)outputI1;
             int32_t*  outputI4 = (int32_t  *)outputI1;
             uint32_t* outputU4 = (uint32_t *)outputI1;
@@ -290,7 +342,10 @@ namespace CorrectnessTests
             // (Each collective operation computes its own expected results)
             for (int i = 0; i < dataset.numDevices && isMatch; i++)
             {
-                HIP_CALL(hipMemcpy(outputI1, dataset.outputs[i], dataset.NumBytes(), hipMemcpyDeviceToHost));
+                // only output on root rank is valid for gather collective
+                if (dataset.function == ncclCollGather && i != root)
+                    continue;
+                HIP_CALL(hipMemcpy(outputI1, dataset.outputs[i], dataset.NumBytes(ncclOutputBuffer), hipMemcpyDeviceToHost));
 
                 int8_t*   expectedI1 = (int8_t   *)dataset.expected[i];
                 uint8_t*  expectedU1 = (uint8_t  *)expectedI1;
@@ -358,10 +413,17 @@ namespace CorrectnessTests
         size_t                   numElements;
         int                      numDevices;
         bool                     inPlace;
+        const char*              envVals;
 
         int                      numDevicesAvailable;
         std::vector<ncclComm_t>  comms;
         std::vector<hipStream_t> streams;
+
+        // internal only
+        char*                    envString;
+        char*                    tokens[MAX_ENV_TOKENS];
+        int                      numTokens;
+        char*                    savedEnv[MAX_ENV_TOKENS/2];
     };
 
 }

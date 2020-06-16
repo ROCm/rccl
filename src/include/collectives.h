@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -8,10 +8,10 @@
 #ifndef NCCL_COLLECTIVES_H_
 #define NCCL_COLLECTIVES_H_
 
-#include "core.h"
-#include "info.h"
-
-#define FUNC_INDEX(coll, redop, dtype, al, pr) ((((((coll)*ncclNumOps + (redop))*ncclNumTypes) + (dtype))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr))
+#define FUNC_INDEX_P2P (3+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps)
+#define FUNC_INDEX(coll, redop, dtype, al, pr) ((coll >= NCCL_NUM_FUNCTIONS) \
+  ? (coll-NCCL_NUM_FUNCTIONS+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps) \
+  : ((((((coll)*ncclNumOps + (redop))*ncclNumTypes) + (dtype))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr)))
 
 #define NCCL_COLL_NAME(coll, op, dtype) \
   coll##_##op##_##dtype
@@ -58,6 +58,10 @@
   DECL_COLL2(ncclAllGather, copy) \
   DECL_COLL(ncclReduceScatter) \
   DECL_COLL(ncclAllReduce) \
+  DECL_COLL5(ncclGather, copy, i8) \
+  DECL_COLL5(ncclScatter, copy, i8) \
+  DECL_COLL5(ncclAllToAll, copy, i8) \
+  DECL_COLL5(ncclSendRecv, copy, i8) \
 
 DECL_ALL_COLLS
 
@@ -78,5 +82,12 @@ DECL_ALL_COLLS
 #define BROADCAST_CHUNKSTEPS 1
 #define REDUCE_SLICESTEPS 1
 #define REDUCE_CHUNKSTEPS 1
+#define SENDRECV_SLICEFACTOR 4
+#define GATHER_SLICESTEPS 4
+#define GATHER_CHUNKSTEPS 4
+#define SCATTER_SLICESTEPS 4
+#define SCATTER_CHUNKSTEPS 4
+#define ALLTOALL_SLICESTEPS 4
+#define ALLTOALL_CHUNKSTEPS 4
 
 #endif
