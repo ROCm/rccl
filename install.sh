@@ -29,6 +29,7 @@ build_release=true
 install_library=false
 build_hip_clang=true
 install_dependencies=false
+
 # #################################################
 # Parameter parsing
 # #################################################

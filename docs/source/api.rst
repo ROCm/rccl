@@ -27,7 +27,7 @@ Communicator Functions
 
 .. doxygenfunction:: ncclCommUserRank
 
-Collection Communication Operations
+Collective Communication Operations
 -----------------------------------
 
 Collective communication operations must be called separately for each communicator in a communicator clique.
@@ -48,6 +48,15 @@ Since they may perform inter-CPU synchronization, each call has to be done from 
 
 .. doxygenfunction:: ncclAllGather
 
+.. doxygenfunction:: ncclSend
+
+.. doxygenfunction:: ncclRecv
+
+.. doxygenfunction:: ncclGather
+
+.. doxygenfunction:: ncclScatter
+
+.. doxygenfunction:: ncclAllToAll
 
 Group Semantics
 ---------------
