@@ -29,6 +29,7 @@ build_release=true
 install_library=false
 build_hip_clang=true
 install_dependencies=false
+
 # #################################################
 # Parameter parsing
 # #################################################
@@ -88,7 +89,6 @@ while true; do
 
 rocm_path=/opt/rocm/bin
 
-# /etc/*-release files describe the system
 if [[ -e "/etc/os-release" ]]; then
     source /etc/os-release
 elif [[ -e "/etc/centos-release" ]]; then
