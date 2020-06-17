@@ -366,8 +366,8 @@ int main(int argc,char* argv[])
 #ifdef USE_MEMALIGN
       int page_size = getpagesize();
       posix_memalign((void **)&sendHostBuffer, page_size, sendBuffSize);
-      hipHostRegister(sendHostBuffer, sendBuffSize, hipHostRegisterMapped);
-      hipHostGetDevicePointer((void **)&d_sendHostBuffer, sendHostBuffer, 0);
+      CUDACHECK(hipHostRegister(sendHostBuffer, sendBuffSize, hipHostRegisterMapped));
+      CUDACHECK(hipHostGetDevicePointer((void **)&d_sendHostBuffer, sendHostBuffer, 0));
 #else
       NCCLCHECK(ncclCudaHostCalloc(&sendHostBuffer, sendBuffSize));
       d_sendHostBuffer = sendHostBuffer;
@@ -408,8 +408,8 @@ int main(int argc,char* argv[])
 #ifdef USE_MEMALIGN
       int page_size = getpagesize();
       posix_memalign((void **)&recvHostBuffer, page_size, recvBuffSize);
-      hipHostRegister(recvHostBuffer, recvBuffSize, hipHostRegisterMapped);
-      hipHostGetDevicePointer((void **)&d_recvHostBuffer, recvHostBuffer, 0);
+      CUDACHECK(hipHostRegister(recvHostBuffer, recvBuffSize, hipHostRegisterMapped));
+      CUDACHECK(hipHostGetDevicePointer((void **)&d_recvHostBuffer, recvHostBuffer, 0));
 #else
       NCCLCHECK(ncclCudaHostCalloc(&recvHostBuffer, recvBuffSize));
       d_recvHostBuffer = recvHostBuffer;
@@ -537,7 +537,7 @@ int main(int argc,char* argv[])
     } else {
       NCCLCHECK(ncclNetDeregMr(netSendComm, sendHostHandle));
 #ifdef USE_MEMALIGN
-      hipHostUnregister(sendHostBuffer);
+      CUDACHECK(hipHostUnregister(sendHostBuffer));
       free(sendHostBuffer);
 #else
       NCCLCHECK(ncclCudaHostFree(sendHostBuffer));
@@ -556,7 +556,7 @@ int main(int argc,char* argv[])
     } else {
       NCCLCHECK(ncclNetDeregMr(netRecvComm, recvHostHandle));
 #ifdef USE_MEMALIGN
-      hipHostUnregister(recvHostBuffer);
+      CUDACHECK(hipHostUnregister(recvHostBuffer));
       free(recvHostBuffer);
 #else
       NCCLCHECK(ncclCudaHostFree(recvHostBuffer));
