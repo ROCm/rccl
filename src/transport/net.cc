@@ -26,6 +26,9 @@ struct netSendResources {
   int netDev;
   int useGdr;
   char* buffers[LOC_COUNT];
+#ifdef USE_MEMALIGN
+  char* hostBuffer;
+#endif
   int buffSizes[LOC_COUNT];
   void* mhandles[LOC_COUNT];
   void** mhandlesProto[NCCL_NUM_PROTOCOLS];
@@ -93,10 +96,21 @@ ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   }
   char line[16];
   if (resources->buffSizes[LOC_HOSTMEM]) {
+#ifdef USE_MEMALIGN
+    int page_size = getpagesize();
+    posix_memalign((void **)&resources->hostBuffer, page_size, resources->buffSizes[LOC_HOSTMEM]);
+    CUDACHECK(hipHostRegister(resources->hostBuffer, resources->buffSizes[LOC_HOSTMEM], hipHostRegisterMapped));
+    CUDACHECK(hipHostGetDevicePointer((void **)resources->buffers+LOC_HOSTMEM, resources->hostBuffer, 0));
+#else
     NCCLCHECK(ncclCudaHostCalloc(resources->buffers+LOC_HOSTMEM, resources->buffSizes[LOC_HOSTMEM]));
+#endif
     int status[1] = {-1};
     line[0]= 0;
+#ifdef USE_MEMALIGN
+    if (!move_pages(0, 1, (void **)&resources->hostBuffer, NULL, status, 0))
+#else
     if (!move_pages(0, 1, (void **)resources->buffers+LOC_HOSTMEM, NULL, status, 0))
+#endif
       sprintf(line, "/MEM%d", status[0]);
   }
 
@@ -105,6 +119,12 @@ ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     resources->mhandlesProto[p] = resources->mhandles+protoLoc[p];
     send->conn.buffs[p] = resources->buffers[protoLoc[p]] + offsets[protoLoc[p]];
+#ifdef USE_MEMALIGN
+    if (protoLoc[p] == LOC_HOSTMEM)
+      send->conn.hostBuffs[p] = resources->hostBuffer + offsets[protoLoc[p]];
+    else
+      send->conn.hostBuffs[p] = send->conn.buffs[p];
+#endif
     offsets[protoLoc[p]] += buffSizes[p];
   }
 
@@ -182,7 +202,11 @@ ncclResult_t netSendConnect(struct ncclConnect* connectInfo, int nranks, int ran
     NCCLCHECK(ncclNetRegMr(resources->netSendComm, resources->buffers[LOC_DEVMEM], resources->buffSizes[LOC_DEVMEM], NCCL_PTR_CUDA, &resources->mhandles[LOC_DEVMEM]));
   }
   if (resources->buffSizes[LOC_HOSTMEM]) {
+#ifdef USE_MEMALIGN
+    NCCLCHECK(ncclNetRegMr(resources->netSendComm, resources->hostBuffer, resources->buffSizes[LOC_HOSTMEM], NCCL_PTR_HOST, &resources->mhandles[LOC_HOSTMEM]));
+#else
     NCCLCHECK(ncclNetRegMr(resources->netSendComm, resources->buffers[LOC_HOSTMEM], resources->buffSizes[LOC_HOSTMEM], NCCL_PTR_HOST, &resources->mhandles[LOC_HOSTMEM]));
+#endif
   }
   return ncclSuccess;
 }
@@ -213,7 +237,12 @@ ncclResult_t netSendFree(void* transportResources) {
     if (resources->buffers[l])
       NCCLCHECK(ncclNetDeregMr(resources->netSendComm, resources->mhandles[l]));
   }
+#ifdef USE_MEMALIGN
+  CUDACHECK(hipHostUnregister(resources->hostBuffer));
+  free(resources->hostBuffer);
+#else
   NCCLCHECK(ncclCudaHostFree(resources->buffers[LOC_HOSTMEM]));
+#endif
   CUDACHECK(hipFree(resources->buffers[LOC_DEVMEM]));
   NCCLCHECK(ncclNetCloseSend(resources->netSendComm));
   free(resources);
@@ -251,7 +280,11 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
   if (args->state == ncclProxyOpProgress) {
     int p = args->protocol;
     int stepSize = args->connector->comm->buffSizes[p] / NCCL_STEPS;
+#ifdef USE_MEMALIGN
+    char* localBuff = args->connector->conn.hostBuffs[p];
+#else
     char* localBuff = args->connector->conn.buffs[p];
+#endif
     void* mhandle = *(resources->mhandlesProto[p]);
     args->idle = 1;
     if (args->head < args->end) {
