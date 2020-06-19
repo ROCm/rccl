@@ -46,7 +46,6 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 
 #define DEFAULT_BUFFSIZE (1LL << 22) /* 4MiB */
 #define SLICE_STEPS 4
-#define ITERATIONS 2000
 #define VEGA_GPU_RTC_FREQUENCY 2.5E7
 #define ENABLE_VALIDATION
 #define USE_MEMALIGN
@@ -90,6 +89,8 @@ bool runSend = false, runRecv = false;
 
 uint64_t send_byte;
 uint64_t recv_byte;
+
+uint64_t iterations = 2000;
 
 __device__
 inline  __attribute((always_inline))
@@ -316,6 +317,12 @@ int main(int argc,char* argv[])
     CUDACHECK(hipSetDevice(atol(gpu)));
   }
 
+  char *iters = getCmdOption(argv, argv + argc, "-i");
+  if (iters) {
+    iterations = atol(iters);
+    printf("Running %ld iterations\n", iterations);
+  }
+
   char *gdr_read = getCmdOption(argv, argv + argc, "-r");
   if (gdr_read) {
     use_gdr_read = atol(gdr_read);
@@ -479,29 +486,30 @@ int main(int argc,char* argv[])
     *sendHead = 0; *sendTail = 0; *sourceCycle = 0; *sourceBytes = 0;
     send_sizes = 0; send_bw_cumulative = 0; send_bw_count =0; send_byte = 0;
     hipLaunchKernelGGL(DataSourceKernel, dim3(1, 1, 1), dim3(256, 1, 1), 0, 0,
-      NCCL_STEPS*ITERATIONS, (Pack128 *)(use_gdr_read ? sendDevBuffer : d_sendHostBuffer), sendHead, sendTail, sourceCycle, sourceBytes);
+      NCCL_STEPS*iterations, (Pack128 *)(use_gdr_read ? sendDevBuffer : d_sendHostBuffer), sendHead, sendTail, sourceCycle, sourceBytes);
     runSend = true;
   } else {
     *recvHead = 0; *recvTail = 0; *recvErrorCount = 0; *sinkCycle = 0, *sinkBytes = 0;
     recv_sizes = 0; recv_bw_cumulative = 0; recv_bw_count =0; recv_byte = 0;
     hipLaunchKernelGGL(DataSinkKernel, dim3(1, 1, 1), dim3(256, 1, 1), 0, 0,
-      NCCL_STEPS*ITERATIONS, (Pack128 *)(use_gdr_write ? recvDevBuffer : d_recvHostBuffer), recvHead, recvTail, recvErrorCount, sinkCycle, sinkBytes);
+      NCCL_STEPS*iterations, (Pack128 *)(use_gdr_write ? recvDevBuffer : d_recvHostBuffer), recvHead, recvTail, recvErrorCount, sinkCycle, sinkBytes);
     runRecv = true;
   }
 
-  struct timeval tv_start, tv_end;
+  struct timeval tv_start, tv_end, tv_prev;
   gettimeofday(&tv_start, NULL);
+  gettimeofday(&tv_prev, NULL);
 
   memset(&sendArgs, 0, sizeof(struct ncclProxyArgs));
   sendArgs.head = 0;
   sendArgs.tail = 0;
-  sendArgs.end = NCCL_STEPS*ITERATIONS;
+  sendArgs.end = NCCL_STEPS*iterations;
   sendArgs.sliceSteps = sliceSteps;
 
   memset(&recvArgs, 0, sizeof(struct ncclProxyArgs));
   recvArgs.head = 0;
   recvArgs.tail = 0;
-  recvArgs.end = NCCL_STEPS*ITERATIONS;
+  recvArgs.end = NCCL_STEPS*iterations;
   recvArgs.sliceSteps = sliceSteps;
 
   do {
@@ -509,6 +517,22 @@ int main(int argc,char* argv[])
       NCCLCHECK(netRecvProxy(&recvArgs));
     if (runSend)
       NCCLCHECK(netSendProxy(&sendArgs));
+
+    gettimeofday(&tv_end, NULL);
+    uint64_t timelap = ((uint64_t)(tv_end.tv_sec - tv_prev.tv_sec)*1000*1000 + tv_end.tv_usec - tv_prev.tv_usec);
+    if (timelap > 100000UL) {
+      uint64_t total_time = ((uint64_t)(tv_end.tv_sec - tv_start.tv_sec)*1000*1000 + tv_end.tv_usec - tv_start.tv_usec);
+      if (send_byte) printf("# Send %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes)\r",
+        sendArgs.head*100/(NCCL_STEPS*iterations), (total_time) ? (double)send_byte/total_time/1000.0 : 0,
+        send_byte, total_time, send_bw_count ? (float)send_bw_cumulative/send_bw_count : 0, send_bw_count,
+        *sourceCycle ? (double)(*sourceBytes)*sizeof(Pack128)/((double)(*sourceCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sourceBytes*sizeof(Pack128));
+      if (recv_byte) printf("# Recv %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes) Errors %ld\r",
+        recvArgs.head*100/(NCCL_STEPS*iterations), (total_time) ? (double)recv_byte/total_time/1000.0 : 0,
+        recv_byte, total_time, recv_bw_count ? (float)recv_bw_cumulative/recv_bw_count : 0, recv_bw_count,
+        *sinkCycle ? (double)(*sinkBytes)*sizeof(Pack128)/((double)(*sinkCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sinkBytes*sizeof(Pack128),
+        *recvErrorCount);
+      gettimeofday(&tv_prev, NULL);
+    }
   } while (runSend || runRecv);
 
   CUDACHECK(hipDeviceSynchronize());
@@ -516,12 +540,12 @@ int main(int argc,char* argv[])
   gettimeofday(&tv_end, NULL);
   uint64_t total_time = ((uint64_t)(tv_end.tv_sec - tv_start.tv_sec)*1000*1000 + tv_end.tv_usec - tv_start.tv_usec);
 
-  if (send_byte) printf("# Send %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes)\n",
-    (total_time) ? (double)send_byte/total_time/1000.0 : 0,
+  if (send_byte) printf("# Send %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes)\n",
+    sendArgs.head*100/(NCCL_STEPS*iterations), (total_time) ? (double)send_byte/total_time/1000.0 : 0,
     send_byte, total_time, send_bw_count ? (float)send_bw_cumulative/send_bw_count : 0, send_bw_count,
     *sourceCycle ? (double)(*sourceBytes)*sizeof(Pack128)/((double)(*sourceCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sourceBytes*sizeof(Pack128));
-  if (recv_byte) printf("# Recv %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes) Data Error Counts %ld\n",
-    (total_time) ? (double)recv_byte/total_time/1000.0 : 0,
+  if (recv_byte) printf("# Recv %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes) Errors %ld\n",
+    recvArgs.head*100/(NCCL_STEPS*iterations), (total_time) ? (double)recv_byte/total_time/1000.0 : 0,
     recv_byte, total_time, recv_bw_count ? (float)recv_bw_cumulative/recv_bw_count : 0, recv_bw_count,
     *sinkCycle ? (double)(*sinkBytes)*sizeof(Pack128)/((double)(*sinkCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sinkBytes*sizeof(Pack128),
     *recvErrorCount);
