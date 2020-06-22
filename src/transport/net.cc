@@ -98,7 +98,10 @@ ncclResult_t netSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   if (resources->buffSizes[LOC_HOSTMEM]) {
 #ifdef USE_MEMALIGN
     int page_size = getpagesize();
-    posix_memalign((void **)&resources->hostBuffer, page_size, resources->buffSizes[LOC_HOSTMEM]);
+    if (posix_memalign((void **)&resources->hostBuffer, page_size, resources->buffSizes[LOC_HOSTMEM])) {
+      WARN("Failed to posix_memalign %d bytes", resources->buffSizes[LOC_HOSTMEM]);
+      return ncclSystemError;
+    }
     CUDACHECK(hipHostRegister(resources->hostBuffer, resources->buffSizes[LOC_HOSTMEM], hipHostRegisterMapped));
     CUDACHECK(hipHostGetDevicePointer((void **)resources->buffers+LOC_HOSTMEM, resources->hostBuffer, 0));
 #else
