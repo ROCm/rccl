@@ -92,9 +92,6 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 struct ncclConnInfo {
   // Regular comm mechanism
   char *buffs[NCCL_NUM_PROTOCOLS]; // Local for recv, remote for send
-#ifdef USE_MEMALIGN
-  char *hostBuffs[NCCL_NUM_PROTOCOLS]; // Local for recv, remote for send
-#endif
   uint64_t *tail;     // Local for recv, remote for send
   uint64_t *head;     // Local for send, remote for recv
   uint64_t *opCountLoc; // opCount of local rank
