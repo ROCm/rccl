@@ -22,8 +22,15 @@ __device__ void ncclSendRecvKernel(struct CollectiveArgs* args) {
 
   if (args->p2p.delta == 0) {
     if (tid < nthreads && sendbuff != recvbuff) {
-      // local copy
-      ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, 1>(tid, nthreads, 1, &sendbuff, 1, &recvbuff, args->p2p.sendCount);
+      // local copy : ReduceOrCopyMulti takes an int as number of elements,
+      // so we split it in blocks of 1G elements.
+      int blockSize = 1<<30;
+      for (size_t offset=0; offset<args->p2p.sendCount; offset += blockSize) {
+        size_t remaining = args->p2p.sendCount - offset;
+        if (remaining < blockSize) blockSize = remaining;
+        ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, 1>(tid, nthreads, 1, &sendbuff, 1, &recvbuff, blockSize);
+        sendbuff += blockSize; recvbuff += blockSize;
+      }
     }
     return;
   }
@@ -31,40 +38,53 @@ __device__ void ncclSendRecvKernel(struct CollectiveArgs* args) {
   struct ncclDevComm* comm = args->comm;
   struct ncclChannel* channel = comm->channels+blockIdx.x;
 
-  const ssize_t sendSize = args->p2p.sendCount;
-  const ssize_t recvSize = args->p2p.recvCount;
-  const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS);
-  const int chunkSize = stepSize;
-  int peerRecv = recvSize >= 0 ? (comm->rank-(int)args->p2p.delta+comm->nRanks)%comm->nRanks : -1;
-  int peerSend = sendSize >= 0 ? (comm->rank+(int)args->p2p.delta)%comm->nRanks : -1;
+  const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE]/(sizeof(T)*NCCL_STEPS)/SENDRECV_SLICEFACTOR;
 
-  ncclPrimitives<UNROLL, 1, 1, T, 1, 1, 1, FUNC>
-    prims(tid, nthreads, &peerRecv, &peerSend, NULL, stepSize, channel, comm, args->opCount);
-
-  int maxSize = sendSize-chunkSize>recvSize ? sendSize-chunkSize : recvSize;
-
-  if (sendSize >= 0) {
-    int realChunkSize = min(chunkSize, sendSize);
-    ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
-    int nelem = min(realChunkSize, sendSize);
-    prims.send(sendbuff, nelem);
+  int nthreadsSplit;
+  const int64_t sendCount = static_cast<int64_t>(args->p2p.sendCount);
+  const int64_t recvCount = static_cast<int64_t>(args->p2p.recvCount);
+  if (sendCount >= 0 && recvCount >= 0)
+    nthreadsSplit = nthreads/2;
+  else {
+    if (sendCount >= 0) nthreadsSplit = nthreads;
+    else nthreadsSplit = 0;
   }
+  // We set NRECV or NSEND to 2 to use different barriers in primitives for the send threads and
+  // receive threads, but then we define all peers to -1 since sender threads don't receive and
+  // receive threads don't send.
+  int peerNone[2] = {-1,-1};
 
-  for (ssize_t gridOffset = 0; gridOffset < maxSize; gridOffset += chunkSize) {
-    if (gridOffset+chunkSize < sendSize) {
-      int realChunkSize = min(chunkSize, sendSize-gridOffset-chunkSize);
+  if (tid < nthreadsSplit ) {
+    const ssize_t sendSize = args->p2p.sendCount;
+    if (sendSize < 0) return;
+
+    int peer = (comm->rank+(int)args->p2p.delta)%comm->nRanks;
+    ncclPrimitives<UNROLL, 1, 1, T, 2, 1, 1, FUNC>
+      prims(tid, nthreadsSplit, peerNone, &peer, recvbuff, stepSize*SENDRECV_SLICEFACTOR, channel, comm, args->opCount);
+
+    if (sendSize == 0) {
+      prims.send(sendbuff, 0);
+    } else for (ssize_t offset = 0; offset < sendSize; offset += stepSize) {
+      int realChunkSize = min(stepSize, sendSize-offset);
       ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
-      ssize_t offset = gridOffset + chunkSize;
       int nelem = min(realChunkSize, sendSize-offset);
-      prims.send(sendbuff+offset, nelem);
+      prims.directSend(sendbuff+offset, offset, nelem);
     }
-    if (gridOffset < recvSize) {
-      int realChunkSize = min(chunkSize, recvSize-gridOffset);
+  } else {
+    const ssize_t recvSize = args->p2p.recvCount;
+    if (recvSize < 0) return;
+
+    int peer = (comm->rank-(int)args->p2p.delta+comm->nRanks)%comm->nRanks;
+    ncclPrimitives<UNROLL, 1, 1, T, 1, 2, 1, FUNC>
+      prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &peer, peerNone, recvbuff, stepSize*SENDRECV_SLICEFACTOR, channel, comm, args->opCount);
+
+    if (recvSize == 0) {
+      prims.recv(recvbuff, 0);
+    } else for (ssize_t offset = 0; offset < recvSize; offset += stepSize) {
+      int realChunkSize = min(stepSize, recvSize-offset);
       ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
-      ssize_t offset = gridOffset;
       int nelem = min(realChunkSize, recvSize-offset);
-      prims.recv(recvbuff+offset, nelem);
+      prims.directRecv(recvbuff+offset, offset, nelem);
     }
   }
-  if (recvSize == 0) prims.recv(recvbuff,0);
 }
