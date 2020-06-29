@@ -32,6 +32,13 @@
   } \
 } while (0)
 
+#define barrier_by_id(id) do { \
+  const int w = threadIdx.x/WARP_SIZE; \
+  barrier_next[id*MAXWARPS+w] += nthreads/WARP_SIZE; \
+  __atomic_fetch_add(barriers+id, 1, __ATOMIC_SEQ_CST); \
+  while (LOAD(barriers+id) < barrier_next[id*MAXWARPS+w]) /* spin */; \
+} while (0)
+
 template <typename T, int NRECV>
 class ncclPrimitivesRecvData {
 public:
@@ -90,9 +97,17 @@ class ncclPrimitives {
   inline __device__ const T* recvPtr(int i) { return ((const T*)r.recvBuff[i])+recvOffset(i); }
   inline __device__ T* sendPtr(int i) { return ((T*)s.sendBuff[i])+sendOffset(i); }
 
+  uint64_t* barriers;
+  uint64_t* barrier_next;
+
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    __syncthreads();
+    if (nthreads == gridDim.x) {
+      __syncthreads();
+    } else if (wid == 0) {
+      if (NRECV < NSEND) barrier_by_id(0);
+      else barrier_by_id(1);
+    }
 #else
     asm volatile ("bar.sync 1, %0;" :: "r"(nthreads+WARP_SIZE));
 #endif
@@ -359,6 +374,8 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
   }
 
   inline __device__ void init(int* recvPeers, int* sendPeers, struct ncclChannel* channel) {
+    barriers = channel->barrier;
+    barrier_next = channel->barrier_next;
     // Make sure step is updated before we read it.
     barrier();
 
