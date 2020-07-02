@@ -20,6 +20,7 @@
 #endif
 #include "xml.h"
 #include "cpuset.h"
+#include <numa.h>
 
 #define BUSID_SIZE (sizeof("0000:00:00.0"))
 #define BUSID_REDUCED_SIZE (sizeof("0000:00"))
@@ -733,6 +734,11 @@ ncclResult_t ncclTopoSetAffinity(struct ncclTopoSystem* system, int rank) {
     NCCLCHECK(ncclCpusetToStr(&finalMask, affinityStr));
     INFO(NCCL_INIT, "Setting affinity for GPU %d to %s", gpu->gpu.dev, affinityStr);
     SYSCHECK(sched_setaffinity(0, sizeof(cpu_set_t), &finalMask), "sched_setaffinity");
+    int ret = numa_run_on_node(cpu->id);
+    if (ret != 0)
+      INFO(NCCL_INIT, "Failed to run on numa node %ld", cpu->id);
+    else
+      INFO(NCCL_INIT, "Thread is set to run on numa node %ld", cpu->id);
   }
   return ncclSuccess;
 }

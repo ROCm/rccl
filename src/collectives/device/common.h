@@ -246,11 +246,19 @@ __global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
   ALLOCATE_SHMEM; \
   __shared__ struct ncclColl localColl; \
   __shared__ uint32_t abortCount; \
+  __shared__ uint64_t barrier[MAXBARRIERS]; \
+  __shared__ uint64_t barrier_next[MAXBARRIERS*MAXWARPS]; \
   if (tid == 0) abortCount = 0; \
   __syncthreads(); \
  \
   struct ncclChannel* channel = comm->channels+bid; \
-  channel->sync = sync; \
+  if (tid == 0) { \
+    channel->sync = sync; \
+    channel->barrier = barrier; \
+    channel->barrier_next = barrier_next; \
+    for (auto i = 0; i < MAXBARRIERS; i++) barrier[i] = 0; \
+    for (auto i = 0; i < MAXBARRIERS*MAXWARPS; i++) barrier_next[i] = 0; \
+  } \
   if (!load_coll(&localColl, channel->collectives+channel->collFifoHead, tid, comm, &abortCount)) { \
     if (tid == 0) traceAbort(-1); \
     return; \

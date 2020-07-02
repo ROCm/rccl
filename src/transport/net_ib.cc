@@ -291,7 +291,7 @@ struct ncclIbListenComm {
   int fd;
 };
 
-struct ncclIbSendFifo {
+struct alignas(64) ncclIbSendFifo {
   uint64_t addr;
   int      size;
   uint32_t seq;

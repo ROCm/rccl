@@ -89,6 +89,9 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_DIRECT_GPU 0x01
 #define NCCL_DIRECT_NIC 0x10
 
+#define MAXBARRIERS 2
+#define MAXWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
+
 struct ncclConnInfo {
   // Regular comm mechanism
   char *buffs[NCCL_NUM_PROTOCOLS]; // Local for recv, remote for send
@@ -220,6 +223,8 @@ struct ncclChannel {
       int collFifoTail; // Only used by CPU
 
       uint32_t* sync;
+      uint64_t* barrier;
+      uint64_t* barrier_next;
 #ifdef ENABLE_PROFILING
       struct timeval tvs;
       uint64_t sizes;

@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <numa.h>
 
 ncclResult_t initNet();
 
@@ -45,9 +46,11 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 
 #define DEFAULT_BUFFSIZE (1LL << 22) /* 4MiB */
 #define SLICE_STEPS 4
-#define ITERATIONS 2000
+#define DEFAULT_CYCLES 4000
 #define VEGA_GPU_RTC_FREQUENCY 2.5E7
 #define ENABLE_VALIDATION
+#define USE_MEMALIGN
+#define USE_UNROLL 8
 
 typedef ulong2 Pack128;
 
@@ -55,7 +58,7 @@ struct sockaddr_in netConnectAddr;
 void* netSendComm;
 int netSendDev;
 char *sendDevBuffer;
-char *sendHostBuffer;
+char *sendHostBuffer, *d_sendHostBuffer;
 void *sendDevHandle;
 void *sendHostHandle;
 int sendBuffSize;
@@ -71,7 +74,7 @@ void* netListenComm;
 void* netRecvComm;
 int netRecvDev;
 char *recvDevBuffer;
-char *recvHostBuffer;
+char *recvHostBuffer, *d_recvHostBuffer;
 void *recvDevHandle;
 void *recvHostHandle;
 int recvBuffSize;
@@ -87,6 +90,8 @@ bool runSend = false, runRecv = false;
 
 uint64_t send_byte;
 uint64_t recv_byte;
+
+uint64_t iterations = 1;
 
 __device__
 inline  __attribute((always_inline))
@@ -138,12 +143,15 @@ inline __device__ void DataSourceOrSink(const int w, const int nw, const int t,
   }
 }
 
-__global__ void DataSinkKernel(Pack128* data, uint64_t* recv_head, uint64_t* recv_tail, uint64_t* mismatch, uint64_t *sink_cycle, uint64_t *sink_bytes) {
+__global__ void DataSinkKernel(const uint64_t end, Pack128* data, uint64_t* recv_head, uint64_t* recv_tail, uint64_t* mismatch, uint64_t *sink_cycle, uint64_t *sink_bytes) {
   const int N = DEFAULT_BUFFSIZE*SLICE_STEPS/NCCL_STEPS/sizeof(Pack128);
   Pack128* recvBuff[NCCL_STEPS];
   const int tid = threadIdx.x;
   uint64_t tail = LOAD(recv_tail);
   __shared__ uint64_t error;
+  const int w = tid / WARP_SIZE;
+  const int nw = blockDim.x / WARP_SIZE;
+  const int t = tid % WARP_SIZE;
   uint64_t t0;
   if (tid == 0) error = 0;
   __syncthreads();
@@ -155,10 +163,7 @@ __global__ void DataSinkKernel(Pack128* data, uint64_t* recv_head, uint64_t* rec
     if (tid == 0) t0 = __rtc64();
 #ifdef ENABLE_VALIDATION
     Pack128* d = recvBuff[tail%NCCL_STEPS];
-    int w = tid / WARP_SIZE;
-    int nw = blockDim.x / WARP_SIZE;
-    int t = tid % WARP_SIZE;
-    DataSourceOrSink<2, 1>(w, nw, t, recvBuff[tail%NCCL_STEPS], N, tail, &error);
+    DataSourceOrSink<USE_UNROLL, 1>(w, nw, t, recvBuff[tail%NCCL_STEPS], N, tail, &error);
     __syncthreads();
 #endif
     tail += SLICE_STEPS;
@@ -167,7 +172,7 @@ __global__ void DataSinkKernel(Pack128* data, uint64_t* recv_head, uint64_t* rec
       *sink_cycle += (__rtc64() - t0);
       *sink_bytes += N;
     }
-  } while (tail < NCCL_STEPS*ITERATIONS);
+  } while (tail < end);
   if (tid == 0) STORE(mismatch, error);
 }
 
@@ -216,11 +221,14 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
   return ncclSuccess;
 }
 
-__global__ void DataSourceKernel(Pack128* data, uint64_t* send_head, uint64_t* send_tail, uint64_t *source_cycle, uint64_t *source_bytes) {
+__global__ void DataSourceKernel(const uint64_t end, Pack128* data, uint64_t* send_head, uint64_t* send_tail, uint64_t *source_cycle, uint64_t *source_bytes) {
   const int N = DEFAULT_BUFFSIZE*SLICE_STEPS/NCCL_STEPS/sizeof(Pack128);
   Pack128* sendBuff[NCCL_STEPS];
   const int tid = threadIdx.x;
   uint64_t head = LOAD(send_head);
+  const int w = tid / WARP_SIZE;
+  const int nw = blockDim.x / WARP_SIZE;
+  const int t = tid % WARP_SIZE;
   uint64_t t0;
   for (int i = 0; i < NCCL_STEPS; i++)
     sendBuff[i] = data + (i/SLICE_STEPS)*N;
@@ -228,10 +236,7 @@ __global__ void DataSourceKernel(Pack128* data, uint64_t* send_head, uint64_t* s
     if (tid == 0) while (LOAD(send_tail) + NCCL_STEPS < head + SLICE_STEPS);
     __syncthreads();
     if (tid == 0) t0 = __rtc64();
-    int w = tid / WARP_SIZE;
-    int nw = blockDim.x / WARP_SIZE;
-    int t = tid % WARP_SIZE;
-    DataSourceOrSink<2, 0>(w, nw, t, sendBuff[head%NCCL_STEPS], N, head, 0);
+    DataSourceOrSink<USE_UNROLL, 0>(w, nw, t, sendBuff[head%NCCL_STEPS], N, head, 0);
     __syncthreads();
     head += SLICE_STEPS;
     if (tid == 0) {
@@ -239,7 +244,7 @@ __global__ void DataSourceKernel(Pack128* data, uint64_t* send_head, uint64_t* s
       *source_cycle += (__rtc64() - t0);
       *source_bytes += N;
     }
-  } while (head < NCCL_STEPS*ITERATIONS);
+  } while (head < end);
 }
 
 ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
@@ -293,6 +298,7 @@ int main(int argc,char* argv[])
 {
   struct ncclComm *comm;
   int sliceSteps = SLICE_STEPS;
+  bool isSource;
 
   NCCLCHECK(initNet());
   int ndev;
@@ -312,6 +318,12 @@ int main(int argc,char* argv[])
     CUDACHECK(hipSetDevice(atol(gpu)));
   }
 
+  char *iters = getCmdOption(argv, argv + argc, "-i");
+  if (iters) {
+    iterations = atol(iters);
+    printf("Running %ld iterations\n", iterations);
+  }
+
   char *gdr_read = getCmdOption(argv, argv + argc, "-r");
   if (gdr_read) {
     use_gdr_read = atol(gdr_read);
@@ -320,6 +332,22 @@ int main(int argc,char* argv[])
   char *gdr_write = getCmdOption(argv, argv + argc, "-w");
   if (gdr_write) {
     use_gdr_write = atol(gdr_write);
+  }
+
+  char *node = getCmdOption(argv, argv + argc, "-n");
+  if (node) {
+#if 0
+    unsigned long nodemask = 1;
+    nodemask <<= atol(node);
+    set_mempolicy(MPOL_PREFERRED, (const unsigned long*)&nodemask, 16);
+    printf("Select node %s for preferred memory allocation\n", node);
+#else
+    int ret = numa_run_on_node(atol(node));
+    if (ret != 0)
+      printf("Failed to run on numa node %s\n", node);
+    else
+      printf("thread is set to run on numa node %ld\n", atol(node));
+#endif
   }
 
   if (cmdOptionExists(argv, argv + argc, "-d")) {
@@ -333,16 +361,30 @@ int main(int argc,char* argv[])
       netConnectAddr.sin_port = htons(23456);
 
     netConnectAddr.sin_family = AF_INET;
-    printf("Connecting to %s:%s\n", ip, port);
+    printf("Connecting to %s:%d\n", ip, ntohs(netConnectAddr.sin_port));
 
     printf("GDR Read %s\n", use_gdr_read ? "enabled" : "disabled");
 
-    NCCLCHECK(ncclCudaCalloc(&sendDevBuffer, sendBuffSize, 1));
-    NCCLCHECK(ncclCudaHostCalloc(&sendHostBuffer, sendBuffSize));
-    int status[1] = {-1};
-    if (!move_pages(0, 1, (void **)&sendHostBuffer, NULL, status, 0))
-      printf("Allocated sendHostBuffer %p of %d bytes on node %d, sliceSteps %d\n",
-        sendHostBuffer, sendBuffSize, status[0], sliceSteps);
+    if (use_gdr_read) {
+      NCCLCHECK(ncclCudaCalloc(&sendDevBuffer, sendBuffSize, 1));
+      printf("Allocated sendDevBuffer %p of %d bytes, sliceSteps %d\n",
+                sendDevBuffer, sendBuffSize, sliceSteps);
+    }
+    else {
+#ifdef USE_MEMALIGN
+      int page_size = getpagesize();
+      posix_memalign((void **)&sendHostBuffer, page_size, sendBuffSize);
+      CUDACHECK(hipHostRegister(sendHostBuffer, sendBuffSize, hipHostRegisterMapped));
+      CUDACHECK(hipHostGetDevicePointer((void **)&d_sendHostBuffer, sendHostBuffer, 0));
+#else
+      NCCLCHECK(ncclCudaHostCalloc(&sendHostBuffer, sendBuffSize));
+      d_sendHostBuffer = sendHostBuffer;
+#endif
+      int status[1] = {-1};
+      if (!move_pages(0, 1, (void **)&sendHostBuffer, NULL, status, 0))
+        printf("Allocated sendHostBuffer %p of %d bytes on node %d, sliceSteps %d\n",
+          sendHostBuffer, sendBuffSize, status[0], sliceSteps);
+    }
 
     NCCLCHECK(ncclCudaHostCalloc(&sendHead, 1));
     NCCLCHECK(ncclCudaHostCalloc(&sendTail, 1));
@@ -351,22 +393,40 @@ int main(int argc,char* argv[])
     netSendDev = 0;
     NCCLCHECK(ncclNetConnect(netSendDev, &netConnectAddr, &netSendComm));
 
-    NCCLCHECK(ncclNetRegMr(netSendComm, sendDevBuffer, sendBuffSize, NCCL_PTR_CUDA, &sendDevHandle));
-    NCCLCHECK(ncclNetRegMr(netSendComm, sendHostBuffer, sendBuffSize, NCCL_PTR_HOST, &sendHostHandle));
+    if (use_gdr_read) {
+      NCCLCHECK(ncclNetRegMr(netSendComm, sendDevBuffer, sendBuffSize, NCCL_PTR_CUDA, &sendDevHandle));
+    } else {
+      NCCLCHECK(ncclNetRegMr(netSendComm, sendHostBuffer, sendBuffSize, NCCL_PTR_HOST, &sendHostHandle));
+    }
 
     hipLaunchKernelGGL(DataSourceKernel, dim3(1, 1, 1), dim3(256, 1, 1), 0, 0,
-      (Pack128 *)(use_gdr_read ? sendDevBuffer : sendHostBuffer), sendHead, sendTail, sourceCycle, sourceBytes);
+      NCCL_STEPS, (Pack128 *)(use_gdr_read ? sendDevBuffer : d_sendHostBuffer), sendHead, sendTail, sourceCycle, sourceBytes);
 
     runSend = true;
+    isSource = true;
   } else {
     printf("GDR Write %s\n", use_gdr_write ? "enabled" : "disabled");
 
-    NCCLCHECK(ncclCudaCalloc(&recvDevBuffer, recvBuffSize, 1));
-    NCCLCHECK(ncclCudaHostCalloc(&recvHostBuffer, recvBuffSize));
-    int status[1] = {-1};
-    if (!move_pages(0, 1, (void **)&recvHostBuffer, NULL, status, 0))
-      printf("Allocated recvHostBuffer %p of %d bytes on node %d, sliceSteps %d\n",
-        recvHostBuffer, recvBuffSize, status[0], sliceSteps);
+    if (use_gdr_write) {
+      NCCLCHECK(ncclCudaCalloc(&recvDevBuffer, recvBuffSize, 1));
+      printf("Allocated recvDevBuffer %p of %d bytes, sliceSteps %d\n",
+                recvDevBuffer, recvBuffSize, sliceSteps);
+    }
+    else {
+#ifdef USE_MEMALIGN
+      int page_size = getpagesize();
+      posix_memalign((void **)&recvHostBuffer, page_size, recvBuffSize);
+      CUDACHECK(hipHostRegister(recvHostBuffer, recvBuffSize, hipHostRegisterMapped));
+      CUDACHECK(hipHostGetDevicePointer((void **)&d_recvHostBuffer, recvHostBuffer, 0));
+#else
+      NCCLCHECK(ncclCudaHostCalloc(&recvHostBuffer, recvBuffSize));
+      d_recvHostBuffer = recvHostBuffer;
+#endif
+      int status[1] = {-1};
+      if (!move_pages(0, 1, (void **)&recvHostBuffer, NULL, status, 0))
+        printf("Allocated recvHostBuffer %p of %d bytes on node %d, sliceSteps %d\n",
+          recvHostBuffer, recvBuffSize, status[0], sliceSteps);
+    }
 
     NCCLCHECK(ncclCudaHostCalloc(&recvHead, 1));
     NCCLCHECK(ncclCudaHostCalloc(&recvTail, 1));
@@ -384,13 +444,17 @@ int main(int argc,char* argv[])
     NCCLCHECK(ncclNetAccept(netListenComm, &netRecvComm));
     NCCLCHECK(ncclNetCloseListen(netListenComm));
 
-    NCCLCHECK(ncclNetRegMr(netRecvComm, recvDevBuffer, recvBuffSize, NCCL_PTR_CUDA, &recvDevHandle));
-    NCCLCHECK(ncclNetRegMr(netRecvComm, recvHostBuffer, recvBuffSize, NCCL_PTR_HOST, &recvHostHandle));
+    if (use_gdr_write) {
+      NCCLCHECK(ncclNetRegMr(netRecvComm, recvDevBuffer, recvBuffSize, NCCL_PTR_CUDA, &recvDevHandle));
+    } else {
+      NCCLCHECK(ncclNetRegMr(netRecvComm, recvHostBuffer, recvBuffSize, NCCL_PTR_HOST, &recvHostHandle));
+    }
 
     hipLaunchKernelGGL(DataSinkKernel, dim3(1, 1, 1), dim3(256, 1, 1), 0, 0,
-      (Pack128 *)(use_gdr_write ? recvDevBuffer : recvHostBuffer), recvHead, recvTail, recvErrorCount, sinkCycle, sinkBytes);
+      NCCL_STEPS, (Pack128 *)(use_gdr_write ? recvDevBuffer : d_recvHostBuffer), recvHead, recvTail, recvErrorCount, sinkCycle, sinkBytes);
 
     runRecv = true;
+    isSource = false;
   }
 
   struct ncclProxyArgs sendArgs, recvArgs;
@@ -398,20 +462,16 @@ int main(int argc,char* argv[])
   memset(&sendArgs, 0, sizeof(struct ncclProxyArgs));
   sendArgs.head = 0;
   sendArgs.tail = 0;
-  sendArgs.end = NCCL_STEPS*ITERATIONS;
+  sendArgs.end = NCCL_STEPS;
   sendArgs.sliceSteps = sliceSteps;
-  sendArgs.opCount = 1;
 
   memset(&recvArgs, 0, sizeof(struct ncclProxyArgs));
   recvArgs.head = 0;
   recvArgs.tail = 0;
-  recvArgs.end = NCCL_STEPS*ITERATIONS;
+  recvArgs.end = NCCL_STEPS;
   recvArgs.sliceSteps = sliceSteps;
-  recvArgs.opCount = 1;
 
-  struct timeval tv_start, tv_end;
-  gettimeofday(&tv_start, NULL);
-
+  printf("Running warm up...");
   do {
     if (runRecv)
       NCCLCHECK(netRecvProxy(&recvArgs));
@@ -420,29 +480,94 @@ int main(int argc,char* argv[])
   } while (runSend || runRecv);
 
   CUDACHECK(hipDeviceSynchronize());
+  printf("completed\n");
+
+  // reset all counters after warm up cycle
+  if (isSource) {
+    *sendHead = 0; *sendTail = 0; *sourceCycle = 0; *sourceBytes = 0;
+    send_sizes = 0; send_bw_cumulative = 0; send_bw_count =0; send_byte = 0;
+    hipLaunchKernelGGL(DataSourceKernel, dim3(1, 1, 1), dim3(256, 1, 1), 0, 0,
+      NCCL_STEPS*iterations*DEFAULT_CYCLES, (Pack128 *)(use_gdr_read ? sendDevBuffer : d_sendHostBuffer), sendHead, sendTail, sourceCycle, sourceBytes);
+    runSend = true;
+  } else {
+    *recvHead = 0; *recvTail = 0; *recvErrorCount = 0; *sinkCycle = 0, *sinkBytes = 0;
+    recv_sizes = 0; recv_bw_cumulative = 0; recv_bw_count =0; recv_byte = 0;
+    hipLaunchKernelGGL(DataSinkKernel, dim3(1, 1, 1), dim3(256, 1, 1), 0, 0,
+      NCCL_STEPS*iterations*DEFAULT_CYCLES, (Pack128 *)(use_gdr_write ? recvDevBuffer : d_recvHostBuffer), recvHead, recvTail, recvErrorCount, sinkCycle, sinkBytes);
+    runRecv = true;
+  }
+
+  struct timeval tv_start, tv_end, tv_prev;
+  gettimeofday(&tv_start, NULL);
+  gettimeofday(&tv_prev, NULL);
+
+  memset(&sendArgs, 0, sizeof(struct ncclProxyArgs));
+  sendArgs.head = 0;
+  sendArgs.tail = 0;
+  sendArgs.end = NCCL_STEPS*iterations*DEFAULT_CYCLES;
+  sendArgs.sliceSteps = sliceSteps;
+
+  memset(&recvArgs, 0, sizeof(struct ncclProxyArgs));
+  recvArgs.head = 0;
+  recvArgs.tail = 0;
+  recvArgs.end = NCCL_STEPS*iterations*DEFAULT_CYCLES;
+  recvArgs.sliceSteps = sliceSteps;
+
+  do {
+    if (runRecv)
+      NCCLCHECK(netRecvProxy(&recvArgs));
+    if (runSend)
+      NCCLCHECK(netSendProxy(&sendArgs));
+
+    gettimeofday(&tv_end, NULL);
+    uint64_t timelap = ((uint64_t)(tv_end.tv_sec - tv_prev.tv_sec)*1000*1000 + tv_end.tv_usec - tv_prev.tv_usec);
+    if (timelap > 100000UL) {
+      uint64_t total_time = ((uint64_t)(tv_end.tv_sec - tv_start.tv_sec)*1000*1000 + tv_end.tv_usec - tv_start.tv_usec);
+      if (send_byte) printf("# Send %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes)\r",
+        sendArgs.head*100/(NCCL_STEPS*iterations*DEFAULT_CYCLES), (total_time) ? (double)send_byte/total_time/1000.0 : 0,
+        send_byte, total_time, send_bw_count ? (float)send_bw_cumulative/send_bw_count : 0, send_bw_count,
+        *sourceCycle ? (double)(*sourceBytes)*sizeof(Pack128)/((double)(*sourceCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sourceBytes*sizeof(Pack128));
+      if (recv_byte) printf("# Recv %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes) Errors %ld\r",
+        recvArgs.head*100/(NCCL_STEPS*iterations*DEFAULT_CYCLES), (total_time) ? (double)recv_byte/total_time/1000.0 : 0,
+        recv_byte, total_time, recv_bw_count ? (float)recv_bw_cumulative/recv_bw_count : 0, recv_bw_count,
+        *sinkCycle ? (double)(*sinkBytes)*sizeof(Pack128)/((double)(*sinkCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sinkBytes*sizeof(Pack128),
+        *recvErrorCount);
+      gettimeofday(&tv_prev, NULL);
+    }
+  } while (runSend || runRecv);
+
+  CUDACHECK(hipDeviceSynchronize());
 
   gettimeofday(&tv_end, NULL);
   uint64_t total_time = ((uint64_t)(tv_end.tv_sec - tv_start.tv_sec)*1000*1000 + tv_end.tv_usec - tv_start.tv_usec);
 
-  if (send_byte) printf("# Send %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes)\n",
-    (total_time) ? (double)send_byte/total_time/1000.0 : 0,
+  if (send_byte) printf("# Send %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes)\n",
+    sendArgs.head*100/(NCCL_STEPS*iterations*DEFAULT_CYCLES), (total_time) ? (double)send_byte/total_time/1000.0 : 0,
     send_byte, total_time, send_bw_count ? (float)send_bw_cumulative/send_bw_count : 0, send_bw_count,
     *sourceCycle ? (double)(*sourceBytes)*sizeof(Pack128)/((double)(*sourceCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sourceBytes*sizeof(Pack128));
-  if (recv_byte) printf("# Recv %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes) Data Error Counts %ld\n",
-    (total_time) ? (double)recv_byte/total_time/1000.0 : 0,
+  if (recv_byte) printf("# Recv %3ld%% %6.2f GB/s (%ld bytes %ld us) Proxy %6.2f GB/s (%d mmts) Kernel %6.2f GB/s (%ld bytes) Errors %ld\n",
+    recvArgs.head*100/(NCCL_STEPS*iterations*DEFAULT_CYCLES), (total_time) ? (double)recv_byte/total_time/1000.0 : 0,
     recv_byte, total_time, recv_bw_count ? (float)recv_bw_cumulative/recv_bw_count : 0, recv_bw_count,
     *sinkCycle ? (double)(*sinkBytes)*sizeof(Pack128)/((double)(*sinkCycle)/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0, *sinkBytes*sizeof(Pack128),
     *recvErrorCount);
 
-  if (cmdOptionExists(argv, argv + argc, "-d")) {
+  if (isSource) {
     NCCLCHECK(ncclCudaHostFree(sourceCycle));
     NCCLCHECK(ncclCudaHostFree(sourceBytes));
     NCCLCHECK(ncclCudaHostFree(sendHead));
     NCCLCHECK(ncclCudaHostFree(sendTail));
-    NCCLCHECK(ncclNetDeregMr(netSendComm, sendDevHandle));
-    NCCLCHECK(ncclNetDeregMr(netSendComm, sendHostHandle));
-    NCCLCHECK(ncclCudaHostFree(sendHostBuffer));
-    CUDACHECK(hipFree(sendDevBuffer));
+    if (use_gdr_read) {
+      NCCLCHECK(ncclNetDeregMr(netSendComm, sendDevHandle));
+      CUDACHECK(hipFree(sendDevBuffer));
+    } else {
+      NCCLCHECK(ncclNetDeregMr(netSendComm, sendHostHandle));
+#ifdef USE_MEMALIGN
+      CUDACHECK(hipHostUnregister(sendHostBuffer));
+      free(sendHostBuffer);
+#else
+      NCCLCHECK(ncclCudaHostFree(sendHostBuffer));
+#endif
+    }
     NCCLCHECK(ncclNetCloseSend(netSendComm));
   } else {
     NCCLCHECK(ncclCudaHostFree(sinkCycle));
@@ -450,10 +575,18 @@ int main(int argc,char* argv[])
     NCCLCHECK(ncclCudaHostFree(recvErrorCount));
     NCCLCHECK(ncclCudaHostFree(recvHead));
     NCCLCHECK(ncclCudaHostFree(recvTail));
-    NCCLCHECK(ncclNetDeregMr(netRecvComm, recvDevHandle));
-    NCCLCHECK(ncclNetDeregMr(netRecvComm, recvHostHandle));
-    NCCLCHECK(ncclCudaHostFree(recvHostBuffer));
-    CUDACHECK(hipFree(recvDevBuffer));
+    if (use_gdr_write) {
+      NCCLCHECK(ncclNetDeregMr(netRecvComm, recvDevHandle));
+      CUDACHECK(hipFree(recvDevBuffer));
+    } else {
+      NCCLCHECK(ncclNetDeregMr(netRecvComm, recvHostHandle));
+#ifdef USE_MEMALIGN
+      CUDACHECK(hipHostUnregister(recvHostBuffer));
+      free(recvHostBuffer);
+#else
+      NCCLCHECK(ncclCudaHostFree(recvHostBuffer));
+#endif
+    }
     NCCLCHECK(ncclNetCloseRecv(netRecvComm));
   }
 
