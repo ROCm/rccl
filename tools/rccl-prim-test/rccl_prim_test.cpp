@@ -51,10 +51,10 @@ THE SOFTWARE.
 #define BOLD(x) "\x1B[1m" x RST
 
 #define RTC_CLOCK_FREQ_VEGA20 2.5E07
-//Right now kept the MI100 RTC frequency same as Vega20
-//as we are not aware of MI100 frequency, once we we come to know about it
+//Right now kept the Arcturus RTC frequency same as Vega20
+//as we are not aware of Arcturus frequency, once we we come to know about it
 //we will update it.
-#define RTC_CLOCK_FREQ_MI100 2.5E07
+#define RTC_CLOCK_FREQ_ARCTURUS 2.5E07
 #define RTC_CLOCK_FREQ_DEFAULT 2.7E07
 
 __device__
@@ -626,7 +626,7 @@ int main(int argc,char* argv[])
           } else if (prop.gcnArch == 908) {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_MI100);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_ARCTURUS);
             fprintf(stderr, "%-20d %-d<->all       %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           } else {
@@ -646,7 +646,7 @@ int main(int argc,char* argv[])
           } else if (prop.gcnArch == 908) {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_MI100);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_ARCTURUS);
             fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, next_gpu, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           } else {
@@ -663,7 +663,7 @@ int main(int argc,char* argv[])
       if(prop.gcnArch == 906 ) {
         total = (double)write_cycle/((double)RTC_CLOCK_FREQ_VEGA20)/(double)workgroups;
       }else if (prop.gcnArch == 908 ){
-        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_MI100)/(double)workgroups;
+        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_ARCTURUS)/(double)workgroups;
       } else {
         total = (double)write_cycle/((double)RTC_CLOCK_FREQ_DEFAULT)/(double)workgroups;
       }
