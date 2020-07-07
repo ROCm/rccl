@@ -62,7 +62,9 @@ else()
 endif()
 
 # Setup VERSION
-rocm_setup_version(VERSION "2.7.0")
+rocm_get_commit_count(COMMIT_COUNT PARENT ${PARSE_PARENT})
+set(VERSION "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}-${COMMIT_COUNT}")
+rocm_setup_version(NO_GIT_TAG_VERSION VERSION "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}-${COMMIT_COUNT}")
 
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
