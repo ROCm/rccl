@@ -214,7 +214,7 @@ rocm_export_targets(NAMESPACE
                     hip)
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
-set(CPACK_RPM_PACKAGE_REQUIRES "rocm-dev >= 3.5.0")
+set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
 
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
 
