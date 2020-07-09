@@ -175,13 +175,6 @@ namespace CorrectnessTests
         // This code is called per test-tuple
         void SetUp() override
         {
-            // Check for fine-grained env variable (otherwise will hang)
-            if (!getenv("HSA_FORCE_FINE_GRAIN_PCIE"))
-            {
-                printf("Must set HSA_FORCE_FINE_GRAIN_PCIE=1 prior to execution\n");
-                exit(0);
-            }
-
             // Make the test tuple parameters accessible
             std::tie(op, dataType, numElements, numDevices, inPlace, envVals) = GetParam();
 
