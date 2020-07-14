@@ -714,7 +714,7 @@ end:
   return ncclSuccess;
 }
 
-static void parseChordalRing(struct ncclTopoSystem* system, char **str) {
+ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) {
   static const char *ringBase = "0 6 7 4 5 3 2 1|0 5 6 3 7 1 4 2|0 4 6 2 7 5 1 3|0 1 2 3 5 4 7 6|0 2 4 1 7 3 6 5|0 3 1 5 7 2 6 4";
   static char ringRemap[256];
   int id[8], dist[8];
@@ -723,7 +723,7 @@ static void parseChordalRing(struct ncclTopoSystem* system, char **str) {
   int ngpus = system->nodes[GPU].count;
   // single node CR8G only
   if (ngpus != 8 || system->nodes[NET].count != 0)
-    return;
+    return ncclSuccess;
   // validate chordal ring and calculate distance
   for (i=0; i<ngpus; i++) {
     struct ncclTopoNode* node = system->nodes[GPU].nodes+i;
@@ -741,7 +741,7 @@ static void parseChordalRing(struct ncclTopoSystem* system, char **str) {
       count ++;
     }
     if(count != ngpus-2 || sum < 0 || sum > ngpus-1) {
-      return;
+      return ncclSuccess;
     }
     dist[i] = sum;
   }
@@ -766,7 +766,7 @@ static void parseChordalRing(struct ncclTopoSystem* system, char **str) {
   ringRemap[i] = 0;
   *str = ringRemap;
   INFO(NCCL_GRAPH, "Use chordal ring: %s", ringRemap);
-  return;
+  return ncclSuccess;
 }
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
@@ -799,7 +799,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels > 0) return ncclSuccess;
   }
 
-  if (!str) parseChordalRing(system, &str);
+  if (!str) NCCLCHECK(parseChordalRing(system, &str));
   if (str) {
     NCCLCHECK(parseGraph(str, &graph->nChannels, ngpus, graph->intra));
     for (int i=0; i<graph->nChannels*ngpus; i++) {

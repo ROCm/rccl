@@ -870,6 +870,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d|%d->%d->%d/%d/%d",
         c, treeUp->down[0], treeUp->down[1], treeUp->down[2], rank, treeUp->up,
         treeDn->up, rank, treeDn->down[0], treeDn->down[1], treeDn->down[2]);
+    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c, comm->channels[c].ring.prev, comm->rank, comm->channels[c].ring.next);
   }
   line[1023] = '\0';
   INFO(NCCL_INIT, "Trees%s", line);
