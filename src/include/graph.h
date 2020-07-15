@@ -101,4 +101,6 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 #include "info.h"
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time);
 
+ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str);
+
 #endif

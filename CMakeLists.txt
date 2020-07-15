@@ -62,7 +62,11 @@ else()
 endif()
 
 # Setup VERSION
-rocm_setup_version(VERSION "2.7.0")
+rocm_get_commit_count(COMMIT_COUNT)
+rocm_get_version(OUTPUT_VERSION)
+rocm_version_regex_parse("^[0-9]+\\.[0-9]+\\.[0-9]+[.-][0-9]+[.-](.*)" COMMIT_HASH "${OUTPUT_VERSION}")
+set(VERSION "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}-${COMMIT_COUNT}-${COMMIT_HASH}")
+rocm_setup_version(NO_GIT_TAG_VERSION VERSION "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}-${COMMIT_COUNT}-${COMMIT_HASH}")
 
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
@@ -213,8 +217,8 @@ rocm_export_targets(NAMESPACE
                     DEPENDS
                     hip)
 
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-dev (>= 2.5.27)")
-set(CPACK_RPM_PACKAGE_REQUIRES "rocm-dev >= 2.5.27")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
+set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
 
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
 

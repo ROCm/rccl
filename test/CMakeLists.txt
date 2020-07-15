@@ -37,15 +37,6 @@ if(BUILD_TESTS)
   add_executable(UnitTests ${TEST_SOURCES})
   target_include_directories(UnitTests PRIVATE /opt/rocm)
   target_link_libraries(UnitTests PRIVATE ${GTEST_LIBRARY} ${GTEST_MAIN_LIBRARY} PRIVATE rccl)
-  install(TARGETS UnitTests RUNTIME DESTINATION test)
-
-  # HCC adds /opt/rocm/lib as RPATH, even though the install process is supposed to
-  # remove RPATH.  As a work-around, set the correct RPATH for the unit test executable
-  # as a post-install step
-  install(
-    CODE
-      "execute_process(COMMAND chrpath -r ${CMAKE_INSTALL_PREFIX}/lib:/opt/rocm/lib ${CMAKE_INSTALL_PREFIX}/test/UnitTests)"
-    )
 else()
   message("Not building unit tests")
 endif()

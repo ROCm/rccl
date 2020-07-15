@@ -178,7 +178,7 @@ fi
 # Optionally, run tests if they're enabled.
 if ($run_tests); then
     if (test -f "./test/UnitTests"); then
-        HSA_FORCE_FINE_GRAIN_PCIE=1 ./test/UnitTests
+        ./test/UnitTests
     else
         echo "Unit tests have not been built yet; please re-run script with -t to build unit tests."
         exit 1

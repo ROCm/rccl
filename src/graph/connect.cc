@@ -110,8 +110,8 @@ static ncclResult_t connectRings(struct ncclComm* comm, int* ringRecv, int* ring
         channel1->ring.next = nextRecvRank;
       }
     }
-    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c, channel0->ring.prev, comm->rank, channel0->ring.next);
-    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c+nChannels, channel1->ring.prev, comm->rank, channel1->ring.next);
+    TRACE(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c, channel0->ring.prev, comm->rank, channel0->ring.next);
+    TRACE(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c+nChannels, channel1->ring.prev, comm->rank, channel1->ring.next);
   }
   return ncclSuccess;
 }
@@ -288,6 +288,10 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, struct nccl
   memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
   memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
 
+  char *str = NULL;
+  NCCLCHECK(parseChordalRing(comm->topo, &str));
+  int end = std::min((int)ncclMaxNchannels(), (str ? nChannels*3 : ncclMinNchannels()));
+
   // Duplication should be complete now
   nChannels = comm->nChannels = std::min(MAXCHANNELS,nChannels*2);
 
@@ -295,7 +299,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, struct nccl
   // We permit combining max, then min, to only use the first channels, then duplicate them.
   nChannels = comm->nChannels = std::min((int)ncclMaxNchannels(), nChannels);
   int c;
-  for (c=nChannels; c<ncclMinNchannels(); c++) {
+  for (c=nChannels; c<end; c++) {
     memcpy(ringPrev+c*nranks, ringPrev+(c-nChannels)*nranks, nranks*sizeof(int));
     memcpy(ringNext+c*nranks, ringNext+(c-nChannels)*nranks, nranks*sizeof(int));
     memcpy(comm->channels+c, comm->channels+c-nChannels, sizeof(struct ncclChannel));
