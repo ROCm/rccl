@@ -12,6 +12,10 @@ if(BUILD_TESTS)
   endif()
 
   find_package(GTest REQUIRED)
+  if (NOT GTest_FOUND)
+    message(FATAL_ERROR "Please ensure GTest is installed on the system")
+  endif()
+
   include_directories(${GTEST_INCLUDE_DIR})  
 
   # Collect source files for tests
