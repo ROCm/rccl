@@ -77,6 +77,8 @@ struct ncclTopoLinkList {
 
 #define NCCL_TOPO_UNDEF (-1)
 
+#define RCCL_TOPO_CR8G 1
+
 struct ncclTopoNode {
   int type;
   int64_t id;
@@ -119,6 +121,7 @@ struct ncclTopoNodeSet {
 struct ncclTopoSystem {
   struct ncclTopoNodeSet nodes[NCCL_TOPO_NODE_TYPES];
   float maxWidth;
+  int type;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
