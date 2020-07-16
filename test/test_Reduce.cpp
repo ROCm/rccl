@@ -44,9 +44,9 @@ namespace CorrectnessTests
         dataset.Release();
     }
 
-    INSTANTIATE_TEST_CASE_P(ReduceCorrectnessSweep,
-                            ReduceCorrectnessTest,
-                            testing::Combine(
+    INSTANTIATE_TEST_SUITE_P(ReduceCorrectnessSweep,
+                             ReduceCorrectnessTest,
+                             testing::Combine(
                                 // Reduction operator
                                 testing::Values(ncclSum, ncclProd, ncclMax, ncclMin),
                                 // Data types
@@ -66,5 +66,6 @@ namespace CorrectnessTests
                                 testing::Values(2,3,4,5,6,7,8),
                                 // In-place or not
                                 testing::Values(false, true),
-                                testing::Values("")));
+                                testing::Values("")),
+                             CorrectnessTest::PrintToStringParamName());
 } // namespace

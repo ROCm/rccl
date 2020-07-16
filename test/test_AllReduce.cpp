@@ -36,7 +36,7 @@ namespace CorrectnessTests
         dataset.Release();
     }
 
-    INSTANTIATE_TEST_CASE_P(AllReduceCorrectnessSweep,
+    INSTANTIATE_TEST_SUITE_P(AllReduceCorrectnessSweep,
                             AllReduceCorrectnessTest,
                             testing::Combine(
                                 // Reduction operator
@@ -58,5 +58,6 @@ namespace CorrectnessTests
                                 testing::Values(2,3,4,5,6,7,8),
                                 // In-place or not
                                 testing::Values(false, true),
-                                testing::Values("")));
+                                testing::Values("")),
+                            CorrectnessTest::PrintToStringParamName());
 } // namespace

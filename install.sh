@@ -12,7 +12,8 @@ function display_help()
     echo "    [-i|--install] install RCCL library (see --prefix argument below.)"
     echo "    [-p|--package_build] Build RCCL package."
     echo "    [-t|--tests_build] Build unit tests, but do not run."
-    echo "    [-r|--run_tests] Run unit tests (must be built already.)"
+    echo "    [-r|--run_tests_quick] Run small subset of unit tests (must be built already.)"
+    echo "    [--run_tests_all] Run all unit tests (must be built already.)"
     echo "    [--hcc] Build library using deprecated hcc compiler (default:hip-clang)."
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
 }
@@ -25,9 +26,11 @@ build_package=false
 install_prefix=$default_path
 build_tests=false
 run_tests=false
+run_tests_all=false
 build_release=true
 install_library=false
 build_hip_clang=true
+clean_build=true
 install_dependencies=false
 
 # #################################################
@@ -37,7 +40,7 @@ install_dependencies=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,package_build,tests_build,run_tests,hcc,hip-clang,prefix: --options hiptr -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,run_tests_all,hcc,hip-clang,no_clean,prefix: --options hiptr -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -68,14 +71,21 @@ while true; do
     -t|--tests_build)
         build_tests=true
         shift ;;
-    -r|--run_tests)
+    -r|--run_tests_quick)
         run_tests=true
+        shift ;;
+    --run_tests_all)
+        run_tests=true
+        run_tests_all=true
         shift ;;
     --hcc)
         build_hip_clang=false
         shift ;;
     --hip-clang)
         build_hip_clang=true
+        shift ;;
+    --no_clean)
+        clean_build=false
         shift ;;
     --prefix)
         install_prefix=${2}
@@ -112,10 +122,12 @@ check_exit_code( )
 # prep
 # #################################################
 # ensure a clean build environment
-if [[ "${build_release}" == true ]]; then
-    rm -rf build/release
-else
-    rm -rf build/debug
+if ($clean_build); then
+    if [[ "${build_release}" == true ]]; then
+        rm -rf build/release
+    else
+        rm -rf build/debug
+    fi
 fi
 
 
@@ -156,7 +168,7 @@ if ($install_dependencies); then
 fi
 check_exit_code "$?"
 
-if ($build_tests); then
+if ($build_tests) || (($run_tests) && [[ ! -f ./test/UnitTests ]]); then
     CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 else
     CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
@@ -178,7 +190,11 @@ fi
 # Optionally, run tests if they're enabled.
 if ($run_tests); then
     if (test -f "./test/UnitTests"); then
-        ./test/UnitTests
+        if ($run_tests_all); then
+            ./test/UnitTests
+        else
+            ./test/UnitTests --gtest_filter="BroadcastCorrectnessSweep*:*float32*"
+        fi
     else
         echo "Unit tests have not been built yet; please re-run script with -t to build unit tests."
         exit 1
