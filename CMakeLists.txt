@@ -13,7 +13,7 @@ project(rccl CXX)
 
 set(AMDGPU_TARGETS gfx803;gfx900;gfx906;gfx908 CACHE STRING "List of specific machine types for library to target")
 
-option(BUILD_TESTS "Build test programs" ON)
+option(BUILD_TESTS "Build test programs" OFF)
 
 include(cmake/Dependencies.cmake)
 
