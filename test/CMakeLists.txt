@@ -11,13 +11,12 @@ if(BUILD_TESTS)
       message(FATAL_ERROR "chrpath is required for UnitTests. Please install (e.g. sudo apt-get install chrpath)")
   endif()
 
-  find_package(GTest REQUIRED)
-  if (NOT GTest_FOUND)
-    message(FATAL_ERROR "Please ensure GTest is installed on the system")
-  endif()
-
-  include_directories(${GTEST_INCLUDE_DIR})  
-
+  #find_package(GTest REQUIRED)
+  include_directories(${GTEST_INCLUDE_DIRS})  
+  message (STATUS "Hello")
+  message (STATUS "Test ing ${GTEST_INCLUDE_DIR}")
+  message (STATUS ${GTEST_INCLUDE_DIRS})
+  
   # Collect source files for tests
   set(TEST_SOURCES
     test_AllGather.cpp
@@ -31,12 +30,12 @@ if(BUILD_TESTS)
     test_BroadcastAbort.cpp
     test_Scatter.cpp
     test_Gather.cpp
-    test_AllToAll.cpp
+    test_AllToAll.cpp    
   )
 
   add_executable(UnitTests ${TEST_SOURCES})
-  target_include_directories(UnitTests PRIVATE /opt/rocm)
-  target_link_libraries(UnitTests PRIVATE ${GTEST_LIBRARY} ${GTEST_MAIN_LIBRARY} PRIVATE rccl)
+  target_include_directories(UnitTests PRIVATE /opt/rocm ${GTEST_INCLUDE_DIRS})
+  target_link_libraries(UnitTests PRIVATE gtest gtest_main PRIVATE rccl)
 else()
   message("Not building unit tests")
 endif()

@@ -13,18 +13,9 @@ project(rccl CXX)
 
 set(AMDGPU_TARGETS gfx803;gfx900;gfx906;gfx908 CACHE STRING "List of specific machine types for library to target")
 
-find_package(ROCM
-             REQUIRED
-             PATHS
-             /opt/rocm)
+option(BUILD_TESTS "Build test programs" ON)
 
-include(ROCMInstallTargets)
-include(ROCMPackageConfigHelpers)
-include(ROCMSetupVersion)
-include(ROCMInstallSymlinks)
-include(ROCMCreatePackage)
-
-option(BUILD_TESTS "Build test programs" OFF)
+include(cmake/Dependencies.cmake)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
