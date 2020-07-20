@@ -62,11 +62,8 @@ else()
 endif()
 
 # Setup VERSION
-rocm_get_commit_count(COMMIT_COUNT)
-rocm_get_version(OUTPUT_VERSION)
-rocm_version_regex_parse("^[0-9]+\\.[0-9]+\\.[0-9]+[.-][0-9]+[.-](.*)" COMMIT_HASH "${OUTPUT_VERSION}")
-set(VERSION "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}-${COMMIT_COUNT}-${COMMIT_HASH}")
-rocm_setup_version(NO_GIT_TAG_VERSION VERSION "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}-${COMMIT_COUNT}-${COMMIT_HASH}")
+set(VERSION_STRING "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}")
+rocm_setup_version(VERSION ${VERSION_STRING})
 
 list(APPEND CMAKE_PREFIX_PATH
             /opt/rocm
