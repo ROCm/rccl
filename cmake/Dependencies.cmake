@@ -33,16 +33,16 @@
 include(cmake/DownloadProject.cmake)
 	
 if(BUILD_TESTS)
-#    find_package(GTest QUIET)
-    message(STATUS ${GTEST_INCLUDE_DIRS})
+    find_package(GTest QUIET)
 
+    if(NOT GTest_FOUND)
 
-    if(CMAKE_CXX_COMPILER MATCHES ".*/hipcc$")
-      # hip-clang cannot compile googlebenchmark for some reason
-      set(COMPILER_OVERRIDE "-DCMAKE_CXX_COMPILER=g++")
+        if(CMAKE_CXX_COMPILER MATCHES ".*/hipcc$")
+        # hip-clang cannot compile googlebenchmark for some reason
+        set(COMPILER_OVERRIDE "-DCMAKE_CXX_COMPILER=g++")
         endif()
-#    if(NOT GTest_FOUND)
-#        unset(GTEST_INCLUDE_DIR CACHE)
+
+#       unset(GTEST_INCLUDE_DIR CACHE)
 #	unset(GTEST_INCLUDE_DIRS CACHE)
         message(STATUS "GTest not found. Downloading and building GTest.")
         # Download, build and install googletest library
@@ -51,7 +51,6 @@ if(BUILD_TESTS)
                          GIT_REPOSITORY      https://github.com/google/googletest.git
                          GIT_TAG             release-1.10.0
                          INSTALL_DIR         ${GTEST_ROOT}
-#                         CMAKE_ARGS          -DBUILD_GTEST=ON -DINSTALL_GTEST=ON -Dgtest_force_shared_crt=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                          CMAKE_ARGS          -DBUILD_GTEST=ON -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> ${COMPILER_OVERRIDE}
                          LOG_DOWNLOAD        TRUE
                          LOG_CONFIGURE       TRUE
@@ -59,8 +58,8 @@ if(BUILD_TESTS)
                          LOG_INSTALL         TRUE
                          UPDATE_DISCONNECTED TRUE
         )
-      message (STATUS "Hello gtest_root is ${GTEST_ROOT}" )     #    endif()
-    find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
+        find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
+    endif()
 endif()
 
 # Find or download/install rocm-cmake project

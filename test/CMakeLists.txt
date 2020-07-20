@@ -5,17 +5,7 @@ if(BUILD_TESTS)
 
   message("Going to build unit tests (Installed in /test/UnitTests)")
 
-  # chrpath is required to properly set rpath for the UnitTests executable
-  find_program(CHRPATH chrpath)
-  if(NOT CHRPATH)
-      message(FATAL_ERROR "chrpath is required for UnitTests. Please install (e.g. sudo apt-get install chrpath)")
-  endif()
-
-  #find_package(GTest REQUIRED)
   include_directories(${GTEST_INCLUDE_DIRS})  
-  message (STATUS "Hello")
-  message (STATUS "Test ing ${GTEST_INCLUDE_DIR}")
-  message (STATUS ${GTEST_INCLUDE_DIRS})
   
   # Collect source files for tests
   set(TEST_SOURCES
