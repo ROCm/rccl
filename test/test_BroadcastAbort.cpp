@@ -129,7 +129,7 @@ namespace CorrectnessTests
         dataset.Release();
     }
 
-    INSTANTIATE_TEST_CASE_P(BroadcastAbortSweep,
+    INSTANTIATE_TEST_SUITE_P(BroadcastAbortSweep,
                             BroadcastAbortTest,
                             testing::Combine(
                                 // Reduction operator
@@ -142,5 +142,6 @@ namespace CorrectnessTests
                                 testing::Values(2, 4),
                                 // In-place or not
                                 testing::Values(false),
-                                testing::Values("")));
+                                testing::Values("")),
+                            CorrectnessTest::PrintToStringParamName());
 } // namespace

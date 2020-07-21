@@ -88,7 +88,7 @@ namespace CorrectnessTests
     }
 
 
-    INSTANTIATE_TEST_CASE_P(AllGatherCorrectnessSweep,
+    INSTANTIATE_TEST_SUITE_P(AllGatherCorrectnessSweep,
                             AllGatherCorrectnessTest,
                             testing::Combine(
                                 // Reduction operator (not used)
@@ -110,5 +110,6 @@ namespace CorrectnessTests
                                 testing::Values(2,3,4,5,6,7,8),
                                 // In-place or not
                                 testing::Values(false, true),
-                                testing::Values("")));
+                                testing::Values("")),
+                            CorrectnessTest::PrintToStringParamName());
 } // namespace

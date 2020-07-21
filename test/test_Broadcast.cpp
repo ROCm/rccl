@@ -44,7 +44,7 @@ namespace CorrectnessTests
         dataset.Release();
     }
 
-    INSTANTIATE_TEST_CASE_P(BroadcastCorrectnessSweep,
+    INSTANTIATE_TEST_SUITE_P(BroadcastCorrectnessSweep,
                             BroadcastCorrectnessTest,
                             testing::Combine(
                                 // Reduction operator is not used
@@ -66,5 +66,6 @@ namespace CorrectnessTests
                                 testing::Values(2,3,4,5,6,7,8),
                                 // In-place or not
                                 testing::Values(false, true),
-                                testing::Values("")));
+                                testing::Values("")),
+                            CorrectnessTest::PrintToStringParamName());
 } // namespace
