@@ -400,6 +400,12 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
       NCCLCHECK(xmlGetAttrInt(xmlCpu, "modelid", &modelId));
       cpu->cpu.model = (familyId == 6 && modelId >= 0x55) ? NCCL_TOPO_CPU_TYPE_SKL : NCCL_TOPO_CPU_INTEL_BDW;
     }
+    if (cpu->cpu.vendor == NCCL_TOPO_CPU_VENDOR_AMD) {
+      int familyId, modelId;
+      NCCLCHECK(xmlGetAttrInt(xmlCpu, "familyid", &familyId));
+      NCCLCHECK(xmlGetAttrInt(xmlCpu, "modelid", &modelId));
+      cpu->cpu.model = (familyId == 143 && modelId >= 49) ? NCCL_TOPO_CPU_TYPE_ROME : NCCL_TOPO_CPU_TYPE_ZEN;
+    }
   }
   for (int s=0; s<xmlCpu->nSubs; s++) {
     struct ncclXmlNode* node = xmlCpu->subs[s];

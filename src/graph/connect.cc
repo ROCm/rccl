@@ -9,6 +9,7 @@
 #include "graph.h"
 #include "trees.h"
 #include "rings.h"
+#include "topo.h"
 
 /******************************************************************/
 /********************* Internode connection ***********************/
@@ -288,9 +289,8 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, struct nccl
   memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
   memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
 
-  char *str = NULL;
-  NCCLCHECK(parseChordalRing(comm->topo, &str));
-  int end = std::min((int)ncclMaxNchannels(), (str ? nChannels*3 : ncclMinNchannels()));
+  int end = std::min((int)ncclMaxNchannels(),
+    ((comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_CR8G) ? nChannels*3 : ncclMinNchannels()));
 
   // Duplication should be complete now
   nChannels = comm->nChannels = std::min(MAXCHANNELS,nChannels*2);

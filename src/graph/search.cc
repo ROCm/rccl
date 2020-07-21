@@ -25,6 +25,7 @@ static float getMaxWidth(struct ncclTopoSystem* system, struct ncclTopoNode* gpu
 }
 ncclResult_t ncclTopoSearchInit(struct ncclTopoSystem* system) {
   system->maxWidth = 0.0;
+  system->type = 0;
   int inter = system->nodes[NET].count;
   if (inter == 0 && system->nodes[GPU].count == 1) {
     system->maxWidth = LOC_WIDTH;
@@ -714,30 +715,30 @@ end:
   return ncclSuccess;
 }
 
-ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) {
-  static const char *ringBase = "0 6 7 4 5 3 2 1|0 5 6 3 7 1 4 2|0 4 6 2 7 5 1 3|0 1 2 3 5 4 7 6|0 2 4 1 7 3 6 5|0 3 1 5 7 2 6 4";
+static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) {
+  static const char *ringBase = "0 1 2 3 5 4 7 6|0 2 4 1 7 3 6 5|0 3 1 5 7 2 6 4|0 6 7 4 5 3 2 1|0 5 6 3 7 1 4 2|0 4 6 2 7 5 1 3";
   static char ringRemap[256];
   int id[8], dist[8];
   int i;
 
+  *str = 0;
   int ngpus = system->nodes[GPU].count;
-  // single node CR8G only
-  if (ngpus != 8 || system->nodes[NET].count != 0)
+  if (ngpus != 8)
     return ncclSuccess;
   // validate chordal ring and calculate distance
   for (i=0; i<ngpus; i++) {
     struct ncclTopoNode* node = system->nodes[GPU].nodes+i;
     if (node->paths[GPU] == NULL) continue;
-    int sum = ngpus*(ngpus-1)/2 - node->gpu.rank;
+    int sum = ngpus*(ngpus-1)/2 - node->gpu.dev;
     int count = 0;
     for (int n = 0; n<ngpus; n++) {
       struct ncclTopoLink* link;
       for (link = node->links; link->remNode; link++) {
-        if (link->remNode->gpu.rank == n) break;
+        if (link->remNode->gpu.dev == n) break;
       }
       if (!link->remNode) continue;
       if (link->type != LINK_NVL) continue;
-      sum -= system->nodes[GPU].nodes[n].gpu.rank;
+      sum -= system->nodes[GPU].nodes[n].gpu.dev;
       count ++;
     }
     if(count != ngpus-2 || sum < 0 || sum > ngpus-1) {
@@ -765,6 +766,7 @@ ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) {
   }
   ringRemap[i] = 0;
   *str = ringRemap;
+  system->type = RCCL_TOPO_CR8G;
   INFO(NCCL_GRAPH, "Use chordal ring: %s", ringRemap);
   return ncclSuccess;
 }
@@ -806,18 +808,34 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
       // Translate gpu numbers into ranks
       graph->intra[i] = system->nodes[GPU].nodes[graph->intra[i]].gpu.rank;
     }
-    // TODO : let user specify NICs
-    graph->inter[0] = graph->inter[1] = 0;
     graph->speedIntra = graph->speedInter = system->maxWidth;
-    if (graph->pattern == NCCL_TOPO_PATTERN_RING) {
-      // Reverse the loop
-      for (int c=0; c<graph->nChannels; c++) {
-        for (int i=0; i<=ngpus/2; i++) {
-          int tmp = graph->intra[ngpus*c+i];
-          graph->intra[ngpus*c+i] = graph->intra[ngpus*c+(ngpus-i)%ngpus];
-          graph->intra[ngpus*c+ngpus-i] = tmp;
+    if (system->nodes[NET].count) {
+      int *intra, *used;
+      graph->nChannels = system->nodes[NET].count;
+      NCCLCHECK(ncclCalloc(&intra, ngpus));
+      NCCLCHECK(ncclCalloc(&used,system->nodes[NET].count));
+      for (int n = 0; n < system->nodes[NET].count; n++) {
+        graph->inter[n*2] = graph->inter[n*2+1] = n;
+        struct ncclTopoNode* net = system->nodes[NET].nodes+n;
+        struct ncclTopoLinkList* paths = net->paths[GPU];
+        // find the first unsed GPU that is closest to NIC
+        int f, m;
+        for (f = 0; f < ngpus; f++) {
+          int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank) break;
+          if(j >= n) break;
         }
+        for (int i = 0; i < ngpus; i++) {
+          int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank) break;
+          if (j < n) continue;
+          if (paths[i].count < paths[f].count) f = i;
+        }
+        for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank) break;
+        used[n] = graph->intra[n*ngpus+m];
+        for (int i = 0; i < ngpus; i++) intra[i] = graph->intra[n*ngpus+((i+m)%ngpus)];
+        for (int i = 0; i < ngpus; i++) graph->intra[n*ngpus+i] = intra[i];
       }
+      free(used);
+      free(intra);
     }
     if (graph->nChannels) return ncclSuccess;
   }

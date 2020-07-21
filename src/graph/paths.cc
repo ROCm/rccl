@@ -329,6 +329,12 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
 
   // Check if we are close enough that it makes sense to enable GDR
   int netGdrLevel = PATH_PXB;
+#ifdef TOPO_EXPL
+  int arch, vendor, model;
+  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME)
+    netGdrLevel = PATH_PHB;
+#endif
   NCCLCHECK(ncclGetLevel(&ncclTopoUserGdrLevel, NULL, "NCCL_NET_GDR_LEVEL"));
   if (ncclTopoUserGdrLevel != -2) netGdrLevel = ncclTopoUserGdrLevel;
   int distance = gpu->paths[NET][n].type;

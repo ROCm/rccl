@@ -42,6 +42,8 @@ ncclResult_t ncclTopoSetAffinity(struct ncclTopoSystem* system, int rank);
 #define NCCL_TOPO_CPU_VENDOR_AMD 2
 #define NCCL_TOPO_CPU_TYPE_BDW 1
 #define NCCL_TOPO_CPU_TYPE_SKL 2
+#define NCCL_TOPO_CPU_TYPE_ZEN 3
+#define NCCL_TOPO_CPU_TYPE_ROME 4
 ncclResult_t ncclTopoCpuType(struct ncclTopoSystem* system, int* arch, int* vendor, int* model);
 
 #define NCCL_TOPO_MAX_NODES 256
@@ -100,7 +102,5 @@ ncclResult_t ncclTopoConnectCollNet(struct ncclComm* comm, struct ncclTopoGraph*
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph, struct ncclTopoGraph* collNetGraph);
 #include "info.h"
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time);
-
-ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str);
 
 #endif

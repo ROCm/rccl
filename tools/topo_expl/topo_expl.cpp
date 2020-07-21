@@ -77,6 +77,12 @@ const char *model_descriptions[] = {
   "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC 2nd Hive",
   "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 2 NIC",
   "single node 8 VEGA20 Rome",
+  "4 nodes gfx908 8P6L 1 NIC",
+  "4 nodes gfx908 8P6L 2 NICs",
+  "4 nodes gfx908 8P6L 3 NICs",
+  "4 nodes gfx908 8P6L 4 NICs",
+  "4 nodes gfx908 8P6L 5 NICs",
+  "4 nodes gfx908 8P6L 6 NICs",
   NULL,
 };
 
@@ -170,6 +176,48 @@ int main(int argc,char* argv[])
     case 13:
       node = new NodeModel("topo_8p_rome.xml");
       network.AddNode(node);
+      break;
+    case 14:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p6l.xml");
+        network.AddNode(node);
+      }
+      break;
+    case 15:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p6l_1nic.xml");
+        network.AddNode(node);
+      }
+      break;
+    case 16:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p6l_2nic.xml");
+        network.AddNode(node);
+      }
+      break;
+    case 17:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p6l_3nic.xml");
+        network.AddNode(node);
+      }
+      break;
+    case 18:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p6l_4nic.xml");
+        network.AddNode(node);
+      }
+      break;
+    case 19:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p6l_5nic.xml");
+        network.AddNode(node);
+      }
+      break;
+    case 20:
+      for (int i=0; i<4; i++) {
+        node = new NodeModel("topo_8p6l_6nic.xml");
+        network.AddNode(node);
+      }
       break;
     default:
       printf("Invalid model_id %d\n", model_id);
