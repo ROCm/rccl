@@ -83,6 +83,7 @@ NodeModelDesc model_descs[] = {
   {4, "topo_4p2h_1.xml",        "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC 2nd Hive"},
   {4, "topo_4p2h_2nic.xml",     "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 2 NIC"},
   {1, "topo_8p_rome.xml",       "single node 8 VEGA20 Rome"},
+  {4, "topo_8p6l.xml",          "4 nodes gfx908 8P6L 1 NIC 2nd Hive"},
   {4, "topo_8p6l_1nic.xml",     "4 nodes gfx908 8P6L 1 NIC"},
   {4, "topo_8p6l_2nic.xml",     "4 nodes gfx908 8P6L 2 NICs"},
   {4, "topo_8p6l_3nic.xml",     "4 nodes gfx908 8P6L 3 NICs"},
