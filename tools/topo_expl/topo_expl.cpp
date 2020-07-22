@@ -62,39 +62,46 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
     return std::find(begin, end, option) != end;
 }
 
-const char *model_descriptions[] = {
-  "single node VEGA20 4P1H",
-  "single node VEGA20 4P1H Alt. Model",
-  "single node VEGA20 4P2H",
-  "single node gfx908 4P3L",
-  "single node gfx908 8P6L",
-  "single node 8 VEGA20 PCIe",
-  "4 nodes with 8 GPUs PCIe 1 NIC",
-  "4 nodes with 8 GPUs PCIe 1 NIC 2nd PLX Bridge",
-  "4 nodes with 8 GPUs PCIe 2 NIC",
-  "2 nodes VEGA20 4P1H",
-  "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC",
-  "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC 2nd Hive",
-  "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 2 NIC",
-  "single node 8 VEGA20 Rome",
-  "4 nodes gfx908 8P6L 1 NIC",
-  "4 nodes gfx908 8P6L 2 NICs",
-  "4 nodes gfx908 8P6L 3 NICs",
-  "4 nodes gfx908 8P6L 4 NICs",
-  "4 nodes gfx908 8P6L 5 NICs",
-  "4 nodes gfx908 8P6L 6 NICs",
-  NULL,
+typedef struct NodeModelDesc {
+    int         num_nodes;
+    const char *filename;
+    const char *description;
+} NodeModelDesc;
+
+NodeModelDesc model_descs[] = {
+  {1, "topo_4p1h.xml",          "single node VEGA20 4P1H"},
+  {1, "topo_4p1h_1.xml",        "single node VEGA20 4P1H Alt. Model"},
+  {1, "topo_4p2h.xml",          "single node VEGA20 4P2H"},
+  {1, "topo_4p3l.xml",          "single node gfx908 4P3L"},
+  {1, "topo_8p6l.xml",          "single node gfx908 8P6L"},
+  {1, "topo_8p_pcie.xml",       "single node 8 VEGA20 PCIe"},
+  {4, "topo_8p_pcie.xml",       "4 nodes with 8 GPUs PCIe 1 NIC"},
+  {4, "topo_8p_pcie_1.xml",     "4 nodes with 8 GPUs PCIe 1 NIC 2nd PLX Bridge"},
+  {4, "topo_8p_pcie_2nic.xml",  "4 nodes with 8 GPUs PCIe 2 NIC"},
+  {2, "topo_4p1h.xml",          "2 nodes VEGA20 4P1H"},
+  {4, "topo_4p2h.xml",          "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC"},
+  {4, "topo_4p2h_1.xml",        "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC 2nd Hive"},
+  {4, "topo_4p2h_2nic.xml",     "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 2 NIC"},
+  {1, "topo_8p_rome.xml",       "single node 8 VEGA20 Rome"},
+  {4, "topo_8p6l.xml",          "4 nodes gfx908 8P6L 1 NIC 2nd Hive"},
+  {4, "topo_8p6l_1nic.xml",     "4 nodes gfx908 8P6L 1 NIC"},
+  {4, "topo_8p6l_2nic.xml",     "4 nodes gfx908 8P6L 2 NICs"},
+  {4, "topo_8p6l_3nic.xml",     "4 nodes gfx908 8P6L 3 NICs"},
+  {4, "topo_8p6l_4nic.xml",     "4 nodes gfx908 8P6L 4 NICs"},
+  {4, "topo_8p6l_5nic.xml",     "4 nodes gfx908 8P6L 5 NICs"},
+  {4, "topo_8p6l_6nic.xml",     "4 nodes gfx908 8P6L 6 NICs"},
 };
 
 int main(int argc,char* argv[])
 {
   struct ncclComm *comm;
+  const int num_models = sizeof(model_descs) / sizeof(*model_descs);
 
   if (!cmdOptionExists(argv, argv + argc, "-m")) {
     printf("Usage: ./topo_expl -m model_id\n");
     printf("List of model_id:\n");
-    for (int i = 0; model_descriptions[i] != NULL; i++)
-      printf("  %d: %s\n", i, model_descriptions[i]);
+    for (int i = 0; i < num_models; i++)
+      printf("  %d: %s\n", i, model_descs[i].description);
     exit(0);
   }
 
@@ -103,128 +110,21 @@ int main(int argc,char* argv[])
   if (mi)
     model_id = atol(mi);
 
-  NetworkModel network;
-  NodeModel* node;
-
-  switch(model_id) {
-    case 0:
-      node = new NodeModel("topo_4p1h.xml");
-      network.AddNode(node);
-      break;
-    case 1:
-      node = new NodeModel("topo_4p1h_1.xml");
-      network.AddNode(node);
-      break;
-    case 2:
-      node = new NodeModel("topo_4p2h.xml");
-      network.AddNode(node);
-      break;
-    case 3:
-      node = new NodeModel("topo_4p3l.xml");
-      network.AddNode(node);
-      break;
-    case 4:
-      node = new NodeModel("topo_8p6l.xml");
-      network.AddNode(node);
-      break;
-    case 5:
-      node = new NodeModel("topo_8p_pcie.xml");
-      network.AddNode(node);
-      break;
-    case 6:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p_pcie.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 7:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p_pcie_1.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 8:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p_pcie_2nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 9:
-      for (int i=0; i<2; i++) {
-        node = new NodeModel("topo_4p1h.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 10:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_4p2h.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 11:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_4p2h_1.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 12:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_4p2h_2nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 13:
-      node = new NodeModel("topo_8p_rome.xml");
-      network.AddNode(node);
-      break;
-    case 14:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p6l.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 15:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p6l_1nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 16:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p6l_2nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 17:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p6l_3nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 18:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p6l_4nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 19:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p6l_5nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    case 20:
-      for (int i=0; i<4; i++) {
-        node = new NodeModel("topo_8p6l_6nic.xml");
-        network.AddNode(node);
-      }
-      break;
-    default:
+  if (model_id >= num_models) {
       printf("Invalid model_id %d\n", model_id);
       exit(0);
   }
 
-  printf("Generating topology using %d: %s\n", model_id, model_descriptions[model_id]);
+  NetworkModel network;
+  NodeModel* node;
+
+  NodeModelDesc *desc = &model_descs[model_id];
+  for (int i=0; i<desc->num_nodes; i++) {
+      node = new NodeModel(desc->filename);
+      network.AddNode(node);
+  }
+
+  printf("Generating topology using %d: %s\n", model_id, desc->description);
 
   int nranks = network.GetNRanks();
   int nnodes = network.GetNNodes();
@@ -285,7 +185,7 @@ int main(int argc,char* argv[])
   free(allGather1Data);
 
   free(comm);
-  printf("Done generating topology using %d: %s\n", model_id, model_descriptions[model_id]);
+  printf("Done generating topology using %d: %s\n", model_id, desc->description);
 
   return 0;
 }
