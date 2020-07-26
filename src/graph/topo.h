@@ -78,6 +78,7 @@ struct ncclTopoLinkList {
 #define NCCL_TOPO_UNDEF (-1)
 
 #define RCCL_TOPO_CR8G 1
+#define RCCL_TOPO_4P2H_ROME 2
 
 struct ncclTopoNode {
   int type;

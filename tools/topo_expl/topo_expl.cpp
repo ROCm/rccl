@@ -90,6 +90,9 @@ NodeModelDesc model_descs[] = {
   {4, "topo_8p6l_4nic.xml",     "4 nodes gfx908 8P6L 4 NICs"},
   {4, "topo_8p6l_5nic.xml",     "4 nodes gfx908 8P6L 5 NICs"},
   {4, "topo_8p6l_6nic.xml",     "4 nodes gfx908 8P6L 6 NICs"},
+  {1, "topo_8p_rome_n2.xml",    "singel node 8 VEGA20 Rome NPS=2"},
+  {4, "topo_8p_rome_n2.xml",    "4 nodes 8 VEGA20 Rome NPS=2"},
+  {4, "topo_8p_rome_n2_1.xml",  "4 nodes 8 VEGA20 Rome NPS=2 Alt. Model"},
 };
 
 int main(int argc,char* argv[])
