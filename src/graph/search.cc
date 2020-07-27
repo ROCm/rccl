@@ -774,10 +774,7 @@ static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) 
 static bool getGpuNetCount(struct ncclTopoSystem* system, int id, int *ngpu, int *nnet) {
   *ngpu = 0; *nnet = 0;
   int i;
-  for (i = 0; i < system->nodes[CPU].count; i++)
-    if (system->nodes[CPU].nodes[i].id == id) break;
-  if (i >= system->nodes[CPU].count)
-    return false;
+  if (ncclTopoIdToIndex(system, CPU, id, &i) == ncclInternalError) return false;
   for (int n = 0; n < system->nodes[NET].count; n++)
     if (system->nodes[NET].nodes[n].paths[CPU][i].count == 2) (*nnet)++;
   for (int n = 0; n < system->nodes[GPU].count; n++)
@@ -790,12 +787,8 @@ static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int
   int ngpus = system->nodes[GPU].count;
   *gpu1 = -1; *gpu2 = -1;
   int c1, c2;
-  for (c1 = 0; c1 < system->nodes[CPU].count; c1++)
-    if (system->nodes[CPU].nodes[c1].id == cpu1) break;
-  for (c2 = 0; c2 < system->nodes[CPU].count; c2++)
-    if (system->nodes[CPU].nodes[c2].id == cpu2) break;
-  if (c1 >= system->nodes[CPU].count || c2 >= system->nodes[CPU].count)
-    return false;
+  if (ncclTopoIdToIndex(system, CPU, cpu1, &c1) == ncclInternalError) return false;
+  if (ncclTopoIdToIndex(system, CPU, cpu2, &c2) == ncclInternalError) return false;
   for (n = 0; n < ngpus; n++) {
     if (system->nodes[GPU].nodes[n].gpu.dev == ex1) continue;
     if (system->nodes[GPU].nodes[n].paths[CPU][c1].count != 2) continue;
