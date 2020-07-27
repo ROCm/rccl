@@ -771,6 +771,130 @@ static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) 
   return ncclSuccess;
 }
 
+static bool getGpuNetCount(struct ncclTopoSystem* system, int id, int *ngpu, int *nnet) {
+  *ngpu = 0; *nnet = 0;
+  int i;
+  if (ncclTopoIdToIndex(system, CPU, id, &i) == ncclInternalError) return false;
+  for (int n = 0; n < system->nodes[NET].count; n++)
+    if (system->nodes[NET].nodes[n].paths[CPU][i].count == 2) (*nnet)++;
+  for (int n = 0; n < system->nodes[GPU].count; n++)
+    if (system->nodes[GPU].nodes[n].paths[CPU][i].count == 2) (*ngpu)++;
+  return true;
+}
+
+static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int *gpu1, int *gpu2, int ex1, int ex2) {
+  int n, m;
+  int ngpus = system->nodes[GPU].count;
+  *gpu1 = -1; *gpu2 = -1;
+  int c1, c2;
+  if (ncclTopoIdToIndex(system, CPU, cpu1, &c1) == ncclInternalError) return false;
+  if (ncclTopoIdToIndex(system, CPU, cpu2, &c2) == ncclInternalError) return false;
+  for (n = 0; n < ngpus; n++) {
+    if (system->nodes[GPU].nodes[n].gpu.dev == ex1) continue;
+    if (system->nodes[GPU].nodes[n].paths[CPU][c1].count != 2) continue;
+    struct ncclTopoNode* node = system->nodes[GPU].nodes+n;
+    if (node->paths[GPU] == NULL) continue;
+    for (m = 0; m < ngpus; m++) {
+      if (system->nodes[GPU].nodes[m].gpu.dev == ex2) continue;
+      if (system->nodes[GPU].nodes[m].paths[CPU][c2].count != 2) continue;
+      struct ncclTopoLink* link;
+      for (link = node->links; link->remNode; link++) {
+        if (link->remNode->gpu.dev == system->nodes[GPU].nodes[m].gpu.dev) break;
+      }
+      if (!link->remNode) continue;
+      if (link->type == LINK_NVL) break;
+    }
+    if (m < ngpus) break;
+  }
+  if (n < ngpus) {
+    *gpu1 = system->nodes[GPU].nodes[n].gpu.dev;
+    *gpu2 = system->nodes[GPU].nodes[m].gpu.dev;
+    return true;
+  }
+  return false;
+}
+
+static bool validate4P1H(struct ncclTopoSystem* system, int *hive) {
+  int g, n, m;
+  int ngpus = system->nodes[GPU].count;
+  for (g = 0; g < 4; g++) {
+    int gpu = hive[g];
+    int next_gpu = hive[(g+1)%4];
+    for (n = 0; n < ngpus; n++) {
+      if (system->nodes[GPU].nodes[n].gpu.dev != gpu) continue;
+      struct ncclTopoNode* node = system->nodes[GPU].nodes+n;
+      if (node->paths[GPU] == NULL) continue;
+      for (m = 0; m < ngpus; m++) {
+        struct ncclTopoLink* link;
+        for (link = node->links; link->remNode; link++) {
+          if (link->remNode->gpu.dev == next_gpu) break;
+        }
+        if (!link->remNode) continue;
+        if (link->type == LINK_NVL) break;
+      }
+      if (m < ngpus) break;
+    }
+    if (n < ngpus) continue;
+    else break;
+  }
+  if (g < 4) return false;
+  else return true;
+}
+
+static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
+  static const char *ringBase = "6 7 4 5 1 0 3 2";
+  static char ringRemap[64];
+  int id[8], dist[8];
+  int i;
+
+  *str = 0;
+  int ngpus = system->nodes[GPU].count;
+  int ncpus = system->nodes[CPU].count;
+  // 8 GPUs and 4 numa nodes on multi node only
+  if (ngpus != 8 || ncpus != 4 || !system->nodes[NET].count)
+    return ncclSuccess;
+  // only valid on Rome
+  int arch, vendor, model;
+  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+  if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
+    return ncclSuccess;
+  // number of GPUs and NICs on each numa node is used as first screening pattern
+  char pattern[9];
+  for (int i = 0; i < ncpus; i++) {
+    int g, n;
+    if (!getGpuNetCount(system, i, &g, &n)) return ncclSuccess;
+    pattern[i*2] = '0' + g;
+    pattern[i*2+1] = '0' + n;
+  }
+  pattern[8] = 0;
+  if (strcmp(pattern, "10302120")) return ncclSuccess;
+  // identify GPUs for pattern "10302120"
+  int g[8];
+  if (!findGpuByXGMI(system, 1, 3, &g[2], &g[6], -1, -1)) return ncclSuccess;
+  if (!findGpuByXGMI(system, 2, 3, &g[4], &g[7], -1, -1)) return ncclSuccess;
+  if (!findGpuByXGMI(system, 0, 1, &g[0], &g[1], -1, -1)) return ncclSuccess;
+  if (!findGpuByXGMI(system, 1, 2, &g[3], &g[5], g[1], g[4])) return ncclSuccess;
+  // finally verify two XGMI hives for pattern "10302120"
+  int h1[4], h2[4];
+  h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[5]; h1[3] = g[3];
+  h2[0] = g[2]; h2[1] = g[4]; h2[2] = g[7]; h2[3] = g[6];
+  if (!validate4P1H(system, h1)) return ncclSuccess;
+  if (!validate4P1H(system, h2)) return ncclSuccess;
+  // passed all validation
+  // create 4P2H based on reference and remapped ids
+  for (i = 0; i <strlen(ringBase); i++) {
+    if (ringBase[i] >= '0' && ringBase[i] <= '9')
+      ringRemap[i] = g[ringBase[i]-'0'] + '0';
+    else
+      ringRemap[i] = ringBase[i];
+  }
+  ringRemap[i] = 0;
+  *str = ringRemap;
+  system->type = RCCL_TOPO_4P2H_ROME;
+  INFO(NCCL_GRAPH, "Use 4P2H on Rome: %s", ringRemap);
+  return ncclSuccess;
+}
+
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 float speedArray[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #else
@@ -802,11 +926,19 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   }
 
   if (!str) NCCLCHECK(parseChordalRing(system, &str));
+  if (!str) NCCLCHECK(parseRome4P2H(system, &str));
   if (str) {
     NCCLCHECK(parseGraph(str, &graph->nChannels, ngpus, graph->intra));
     for (int i=0; i<graph->nChannels*ngpus; i++) {
       // Translate gpu numbers into ranks
-      graph->intra[i] = system->nodes[GPU].nodes[graph->intra[i]].gpu.rank;
+      int j = 0;
+      for (j = 0; j < system->nodes[GPU].count; j++)
+        if (graph->intra[i] == system->nodes[GPU].nodes[j].gpu.dev)
+          break;
+      if (j < system->nodes[GPU].count)
+        graph->intra[i] = system->nodes[GPU].nodes[j].gpu.rank;
+      else
+        return ncclInternalError;
     }
     graph->speedIntra = graph->speedInter = system->maxWidth;
     if (system->nodes[NET].count) {
@@ -816,6 +948,8 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
       NCCLCHECK(ncclCalloc(&used,system->nodes[NET].count));
       for (int n = 0; n < system->nodes[NET].count; n++) {
         graph->inter[n*2] = graph->inter[n*2+1] = n;
+        // do not change ring order for 4P2H on Rome
+        if (system->type == RCCL_TOPO_4P2H_ROME) continue;
         struct ncclTopoNode* net = system->nodes[NET].nodes+n;
         struct ncclTopoLinkList* paths = net->paths[GPU];
         // find the first unsed GPU that is closest to NIC
