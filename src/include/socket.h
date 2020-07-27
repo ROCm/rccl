@@ -333,7 +333,8 @@ static ncclResult_t createListenSocket(int *fd, union socketAddress *localAddr) 
   }
 
 #if defined(RCCL_IB_TEST)
-  localAddr->sin.sin_port = htons(23456);
+  static int port = 23456;
+  localAddr->sin.sin_port = htons(port++);
 #endif
 
   if (socketToPort(&localAddr->sa)) {
