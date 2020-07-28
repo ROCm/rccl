@@ -783,7 +783,7 @@ static bool getGpuNetCount(struct ncclTopoSystem* system, int id, int *ngpu, int
 }
 
 static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int *gpu1, int *gpu2, int ex1, int ex2) {
-  int n, m;
+  int n, m, idx, gid;
   int ngpus = system->nodes[GPU].count;
   *gpu1 = -1; *gpu2 = -1;
   int c1, c2;
@@ -794,6 +794,7 @@ static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int
     if (system->nodes[GPU].nodes[n].paths[CPU][c1].count != 2) continue;
     struct ncclTopoNode* node = system->nodes[GPU].nodes+n;
     if (node->paths[GPU] == NULL) continue;
+    idx = -1; gid = 0;
     for (m = 0; m < ngpus; m++) {
       if (system->nodes[GPU].nodes[m].gpu.dev == ex2) continue;
       if (system->nodes[GPU].nodes[m].paths[CPU][c2].count != 2) continue;
@@ -802,13 +803,18 @@ static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int
         if (link->remNode->gpu.dev == system->nodes[GPU].nodes[m].gpu.dev) break;
       }
       if (!link->remNode) continue;
-      if (link->type == LINK_NVL) break;
+      if (link->type == LINK_NVL) {
+        if (idx == -1 || (idx != -1 && system->nodes[GPU].nodes[m].id < gid)) {
+          idx = m;
+          gid = system->nodes[GPU].nodes[m].id;
+        }
+      }
     }
-    if (m < ngpus) break;
+    if (idx != -1) break;
   }
   if (n < ngpus) {
     *gpu1 = system->nodes[GPU].nodes[n].gpu.dev;
-    *gpu2 = system->nodes[GPU].nodes[m].gpu.dev;
+    *gpu2 = system->nodes[GPU].nodes[idx].gpu.dev;
     return true;
   }
   return false;
@@ -842,7 +848,7 @@ static bool validate4P1H(struct ncclTopoSystem* system, int *hive) {
 }
 
 static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
-  static const char *ringBase = "6 7 4 5 1 0 3 2";
+  static const char *ringBase = "6 7 4 5 1 0 3 2|7 6 2 3 0 1 5 4";
   static char ringRemap[64];
   int id[8], dist[8];
   int i;
@@ -850,8 +856,8 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
   *str = 0;
   int ngpus = system->nodes[GPU].count;
   int ncpus = system->nodes[CPU].count;
-  // 8 GPUs and 4 numa nodes on multi node only
-  if (ngpus != 8 || ncpus != 4 || !system->nodes[NET].count)
+  // 8 GPUs and 4 numa nodes only
+  if (ngpus != 8 || ncpus != 4)
     return ncclSuccess;
   // only valid on Rome
   int arch, vendor, model;
@@ -942,34 +948,38 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     }
     graph->speedIntra = graph->speedInter = system->maxWidth;
     if (system->nodes[NET].count) {
-      int *intra, *used;
-      graph->nChannels = system->nodes[NET].count;
-      NCCLCHECK(ncclCalloc(&intra, ngpus));
-      NCCLCHECK(ncclCalloc(&used,system->nodes[NET].count));
-      for (int n = 0; n < system->nodes[NET].count; n++) {
-        graph->inter[n*2] = graph->inter[n*2+1] = n;
-        // do not change ring order for 4P2H on Rome
-        if (system->type == RCCL_TOPO_4P2H_ROME) continue;
-        struct ncclTopoNode* net = system->nodes[NET].nodes+n;
-        struct ncclTopoLinkList* paths = net->paths[GPU];
-        // find the first unsed GPU that is closest to NIC
-        int f, m;
-        for (f = 0; f < ngpus; f++) {
-          int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank) break;
-          if(j >= n) break;
+      // do not change ring order for multi node 4P2H on Rome
+      if (system->type == RCCL_TOPO_4P2H_ROME) {
+        for (int n = 0; n < graph->nChannels; n++)
+          graph->inter[n*2] = graph->inter[n*2+1] = n%system->nodes[NET].count;
+      } else {
+        int *intra, *used;
+        graph->nChannels = system->nodes[NET].count;
+        NCCLCHECK(ncclCalloc(&intra, ngpus));
+        NCCLCHECK(ncclCalloc(&used,system->nodes[NET].count));
+        for (int n = 0; n < system->nodes[NET].count; n++) {
+          graph->inter[n*2] = graph->inter[n*2+1] = n;
+          struct ncclTopoNode* net = system->nodes[NET].nodes+n;
+          struct ncclTopoLinkList* paths = net->paths[GPU];
+          // find the first unsed GPU that is closest to NIC
+          int f, m;
+          for (f = 0; f < ngpus; f++) {
+            int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank) break;
+            if(j >= n) break;
+          }
+          for (int i = 0; i < ngpus; i++) {
+            int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank) break;
+            if (j < n) continue;
+            if (paths[i].count < paths[f].count) f = i;
+          }
+          for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank) break;
+          used[n] = graph->intra[n*ngpus+m];
+          for (int i = 0; i < ngpus; i++) intra[i] = graph->intra[n*ngpus+((i+m)%ngpus)];
+          for (int i = 0; i < ngpus; i++) graph->intra[n*ngpus+i] = intra[i];
         }
-        for (int i = 0; i < ngpus; i++) {
-          int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank) break;
-          if (j < n) continue;
-          if (paths[i].count < paths[f].count) f = i;
-        }
-        for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank) break;
-        used[n] = graph->intra[n*ngpus+m];
-        for (int i = 0; i < ngpus; i++) intra[i] = graph->intra[n*ngpus+((i+m)%ngpus)];
-        for (int i = 0; i < ngpus; i++) graph->intra[n*ngpus+i] = intra[i];
+        free(used);
+        free(intra);
       }
-      free(used);
-      free(intra);
     }
     if (graph->nChannels) return ncclSuccess;
   }
