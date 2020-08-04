@@ -931,6 +931,8 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels > 0) return ncclSuccess;
   }
 
+  str = getenv("NCCL_RINGS");
+  if (str) system->type = RCCL_TOPO_4P2H_ROME;
   if (!str) NCCLCHECK(parseChordalRing(system, &str));
   if (!str) NCCLCHECK(parseRome4P2H(system, &str));
   if (str) {
@@ -950,8 +952,10 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (system->nodes[NET].count) {
       // do not change ring order for multi node 4P2H on Rome
       if (system->type == RCCL_TOPO_4P2H_ROME) {
-        for (int n = 0; n < graph->nChannels; n++)
-          graph->inter[n*2] = graph->inter[n*2+1] = n%system->nodes[NET].count;
+        for (int n = 0; n < graph->nChannels; n++) {
+          graph->inter[n*2] = n%system->nodes[NET].count;
+          graph->inter[n*2+1] = (n+1)%system->nodes[NET].count;
+        }
       } else {
         int *intra, *used;
         graph->nChannels = system->nodes[NET].count;
