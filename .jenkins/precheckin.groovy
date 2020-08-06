@@ -14,7 +14,7 @@ def runCI =
     nodeDetails, jobName->
 
     def prj  = new rocProject('rccl', 'PreCheckin')
-    prj.paths.build_command = './install.sh'
+    prj.paths.build_command = './install.sh -t '
 
     // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
