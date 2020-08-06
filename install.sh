@@ -13,6 +13,7 @@ function display_help()
     echo "    [-p|--package_build] Build RCCL package."
     echo "    [-t|--tests_build] Build unit tests, but do not run."
     echo "    [-r|--run_tests_quick] Run small subset of unit tests (must be built already.)"
+    echo "    [-s|--static] Build RCCL as a static library instead of shared library."
     echo "    [--run_tests_all] Run all unit tests (must be built already.)"
     echo "    [--hcc] Build library using deprecated hcc compiler (default:hip-clang)."
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
@@ -32,6 +33,7 @@ install_library=false
 build_hip_clang=true
 clean_build=true
 install_dependencies=false
+build_static=false
 
 # #################################################
 # Parameter parsing
@@ -40,7 +42,7 @@ install_dependencies=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,run_tests_all,hcc,hip-clang,no_clean,prefix: --options hiptr -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix: --options hiptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -73,6 +75,9 @@ while true; do
         shift ;;
     -r|--run_tests_quick)
         run_tests=true
+        shift ;;
+    -s|--static)
+        build_static=true
         shift ;;
     --run_tests_all)
         run_tests=true
@@ -145,6 +150,11 @@ if [[ "${build_release}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Release"
 else
     cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug"
+fi
+
+# shared vs static
+if [[ "${build_static}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DBUILD_STATIC=ON"
 fi
 
 compiler=hipcc

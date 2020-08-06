@@ -1,28 +1,23 @@
 #!/usr/bin/env groovy
-// This shared library is available at https://github.com/ROCmSoftwarePlatform/rocJENKINS/
 @Library('rocJenkins@pong') _
-
-// This is file for internal AMD use.
-// If you are interested in running your own Jenkins, please raise a github issue for assistance.
-
 import com.amd.project.*
 import com.amd.docker.*
-import java.nio.file.Path
+import java.nio.file.Path;
 
-def runCI = 
+def runCI =
 {
     nodeDetails, jobName->
+    
+    def prj = new rocProject('rccl', 'Static Library PreCheckin')
+    prj.paths.build_command = './install.sh --static'
+    
 
-    def prj  = new rocProject('rccl', 'PreCheckin')
-    prj.paths.build_command = './install.sh -t '
-
-    // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
-
-    boolean formatCheck = false
 
     def commonGroovy
 
+    boolean formatCheck = false
+     
     def compileCommand =
     {
         platform, project->
@@ -30,6 +25,7 @@ def runCI =
         commonGroovy = load "${project.paths.project_src_prefix}/.jenkins/common.groovy"
         commonGroovy.runCompileCommand(platform, project, jobName)
     }
+
     
     def testCommand =
     {
@@ -41,11 +37,11 @@ def runCI =
     def packageCommand =
     {
         platform, project->
-        
-        commonGroovy.runPackageCommand(platform, project, jobName)
+
+        commonGroovy.runPackageCommand(platform, project)
     }
 
-    buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
+    buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, null, null)
 }
 
 ci: { 
@@ -56,11 +52,11 @@ ci: {
                         "rocm-docker":[]]
     propertyList = auxiliary.appendPropertyList(propertyList)
 
-    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['rccl906']]), 
-                       "rocm-docker":([ubuntu16:['rccl906']])]
+    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']]), 
+                       "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']]), 
+                       "rocm-docker":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']])]
     jobNameList = auxiliary.appendJobNameList(jobNameList)
-    jobNameList['compute-rocm-dkms-no-npi-hipclang'] = [ubuntu16:['rccl906']]
-    
+
     propertyList.each 
     {
         jobName, property->
@@ -68,7 +64,7 @@ ci: {
             properties(auxiliary.addCommonProperties(property))
     }
 
-    jobNameList.each 
+    jobNameList.each
     {
         jobName, nodeDetails->
         if (urlJobName == jobName)
@@ -82,7 +78,7 @@ ci: {
     {
         properties(auxiliary.addCommonProperties([pipelineTriggers([cron('0 1 * * *')])]))
         stage(urlJobName) {
-            runCI([ubuntu16:['rccl906']], urlJobName)
+            runCI([ubuntu16:['4gfx906']], urlJobName)
         }
     }
 }
