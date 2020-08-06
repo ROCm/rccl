@@ -61,7 +61,7 @@ __device__ void ncclAllToAllKernel(struct CollectiveArgs* args) {
       if (tid < nthreadsSplit ) {
         int peerSend = (rank+(blockIdx.x*peersPerChan)+i)%nranks;
         ncclPrimitives<UNROLL, ALLTOALL_CHUNKSTEPS/ALLTOALL_SLICESTEPS, ALLTOALL_SLICESTEPS, T, 2, 1, 0, FUNC>
-          prims(tid, nthreadsSplit, peerNone, &peerSend, NULL, stepSize, channel, comm, args->opCount);
+          prims(tid, nthreadsSplit, peerNone, &peerSend, NULL, stepSize, channel, comm);
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           int realChunkSize = min(chunkSize, DIVUP(size-gridOffset, (peersPerChan == 1 ? (nChannels/nranks) : 1)));
           ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
@@ -73,7 +73,7 @@ __device__ void ncclAllToAllKernel(struct CollectiveArgs* args) {
       } else {
         int peerRecv = (2*nranks+rank-((blockIdx.x*peersPerChan)%nranks)-(i%nranks))%nranks;
         ncclPrimitives<UNROLL, ALLTOALL_CHUNKSTEPS/ALLTOALL_SLICESTEPS, ALLTOALL_SLICESTEPS, T, 1, 2, 0, FUNC>
-          prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &peerRecv, peerNone, NULL, stepSize, channel, comm, args->opCount);
+          prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &peerRecv, peerNone, NULL, stepSize, channel, comm);
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           int realChunkSize = min(chunkSize, DIVUP(size-gridOffset, (peersPerChan == 1 ? (nChannels/nranks) : 1)));
           ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));

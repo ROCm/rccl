@@ -140,10 +140,8 @@ ncclResult_t collNetSendConnect(struct ncclConnect* connectInfos, int nranks, in
 
   // Head/Tail/Opcount/Fifos are always on host
   send->conn.tail = &resources->devHostRecvMem->tail;
-  send->conn.opCountRem = &resources->devHostRecvMem->opCount;
   send->conn.fifo = resources->devHostRecvMem->sizesFifo;
   send->conn.head = &resources->devHostSendMem->head;
-  send->conn.opCountLoc = &resources->devHostSendMem->opCount;
   for (int i=0; i<NCCL_STEPS; i++) send->conn.fifo[i] = -1;
 
   // Get info from recv side
@@ -179,9 +177,7 @@ ncclResult_t collNetRecvConnect(struct ncclConnect* connectInfos, int nranks, in
 
   // Head/Tail/Opcount are always on host
   recv->conn.tail = &resources->devHostRecvMem->tail;
-  recv->conn.opCountLoc = &resources->devHostRecvMem->opCount;
   recv->conn.head = &resources->devHostSendMem->head;
-  recv->conn.opCountRem = &resources->devHostSendMem->opCount;
 
   // Connect to coll comm
   collNetHandle_t** handlePtrs = NULL;
@@ -259,9 +255,6 @@ ncclResult_t collNetSendProxy(struct ncclProxyArgs* args) {
   }
   struct collNetSendResources* resources = (struct collNetSendResources*) (args->connector->transportResources);
   if (args->state == ncclProxyOpReady) {
-    // Update opCount
-    STORE(&resources->hostRecvMem->opCount, args->opCount);
-
     // Round to next multiple of sliceSteps
     resources->step = ROUNDUP(resources->step, args->chunkSteps);
     args->head = resources->step;
@@ -366,9 +359,6 @@ ncclResult_t collNetRecvProxy(struct ncclProxyArgs* args) {
   }
   struct collNetRecvResources* resources = (struct collNetRecvResources*) (args->connector->transportResources);
   if (args->state == ncclProxyOpReady) {
-    // Update opCount
-    STORE(&resources->hostSendMem->opCount, args->opCount);
-
     // Round to next multiple of sliceSteps
     resources->step = ROUNDUP(resources->step, args->chunkSteps);
     args->head = resources->step;

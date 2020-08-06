@@ -97,8 +97,6 @@ struct ncclConnInfo {
   char *buffs[NCCL_NUM_PROTOCOLS]; // Local for recv, remote for send
   uint64_t *tail;     // Local for recv, remote for send
   uint64_t *head;     // Local for send, remote for recv
-  uint64_t *opCountLoc; // opCount of local rank
-  uint64_t *opCountRem; // opCount of remote rank
 
   int direct;         // Direct communication
   void **ptrExchange; // Pointer exchange for direct communication
@@ -301,12 +299,6 @@ static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must
 #define COLLTRACE_NUM_ITEMS 1024
 #endif
 
-typedef enum {
-  ncclDevSuccess,
-  ncclDevAssertedMismatch,
-  ncclDevSuspectedMismatch
-} ncclDevError_t;
-
 struct ncclDevComm {
   int rank;
   int nRanks;
@@ -314,7 +306,6 @@ struct ncclDevComm {
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
-  volatile ncclDevError_t *fatalDevError;
 
   // Channels, device side
   struct ncclChannel* channels;
