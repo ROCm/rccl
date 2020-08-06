@@ -25,7 +25,7 @@ if(BUILD_TESTS)
 
   add_executable(UnitTests ${TEST_SOURCES})
   target_include_directories(UnitTests PRIVATE /opt/rocm ${GTEST_INCLUDE_DIRS})
-  target_link_libraries(UnitTests PRIVATE gtest gtest_main PRIVATE rccl)
+  target_link_libraries(UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES}  PRIVATE rccl)
 else()
   message("Not building unit tests")
 endif()

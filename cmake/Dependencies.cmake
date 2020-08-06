@@ -59,6 +59,8 @@ if(BUILD_TESTS)
                          UPDATE_DISCONNECTED TRUE
         )
         find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
+        set(GTEST_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/gtest/include CACHE PATH "")
+	set(GTEST_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest_main.a CACHE PATH "")
     endif()
 endif()
 
