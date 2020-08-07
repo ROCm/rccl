@@ -40,6 +40,7 @@ THE SOFTWARE.
 #define COPY_UNROLL       4
 #define REDUCE_UNROLL     2
 #define DOUBLECOPY_UNROLL 2
+#define DOUBLECOPYLOCAL_UNROLL 2
 #define REDUCECOPY_UNROLL 2
 #define ALL2ALL_UNROLL    2
 
@@ -72,6 +73,7 @@ struct transfer_data_t {
   float *dest0[MAX_WORKGROUPS]; //remote fine grain
   float *src0[MAX_WORKGROUPS];  //local fine grain
   float *dest1[MAX_WORKGROUPS]; //local coarse grain
+  float *dest2[MAX_WORKGROUPS]; //local fine grain
   float *src1[MAX_WORKGROUPS];  //local coarse grain
   // Buffers for all to all
   const float *srcs[MAX_WORKGROUPS][MAX_GPU];
@@ -104,6 +106,7 @@ enum Ops {
   OP_COPY,
   OP_LOCALCOPY,
   OP_DOUBLECOPY,
+  OP_DOUBLECOPYLOCAL,
   OP_REDUCE,
   OP_REDUCECOPY,
   OP_READ,
@@ -142,6 +145,13 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
     dsts[0] = transfer_data->dest0[bid];
     dsts[1] = transfer_data->dest1[bid];
     ReduceOrCopyMulti<DOUBLECOPY_UNROLL, FuncPassA<float>, float, 1, 1, 1, 2>(threadIdx.x, THREADS,
+      1, srcs, 2, dsts, n);
+  }
+  if (op == OP_DOUBLECOPYLOCAL) {
+    srcs[0] = transfer_data->src0[bid];
+    dsts[0] = transfer_data->dest1[bid];
+    dsts[1] = transfer_data->dest2[bid];
+    ReduceOrCopyMulti<DOUBLECOPYLOCAL_UNROLL, FuncPassA<float>, float, 1, 1, 1, 2>(threadIdx.x, THREADS,
       1, srcs, 2, dsts, n);
   }
   if (op == OP_REDUCE) {
@@ -192,6 +202,7 @@ static flag_sync_kernel_t const flagSyncKerns[NUM_OPS+1] = {
   flag_sync_kernel<OP_COPY, 2>,
   flag_sync_kernel<OP_LOCALCOPY, 2>,
   flag_sync_kernel<OP_DOUBLECOPY, 2>,
+  flag_sync_kernel<OP_DOUBLECOPYLOCAL, 2>,
   flag_sync_kernel<OP_REDUCE, 2>,
   flag_sync_kernel<OP_REDUCECOPY, 2>,
   flag_sync_kernel<OP_READ, 2>,
@@ -368,7 +379,7 @@ static const char* link_type_name[] = {"HT", "QPI", "PCIE", "IB", "XGMI"};
 int main(int argc,char* argv[])
 {
   if (cmdOptionExists(argv, argv + argc, "-h")) {
-    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|reduce|reducecopy|all2all -i iterations -n bytes -r \"0 1 2 3|3 2 1 0\"\n");
+    printf("./rccl_prim_test -w num_workgroups -p copy|localcopy|doublecopy|doublecopylocal|reduce|reducecopy|all2all -i iterations -n bytes -r \"0 1 2 3|3 2 1 0\"\n");
     exit(0);
   }
 
@@ -394,7 +405,7 @@ int main(int argc,char* argv[])
   char *r = getCmdOption(argv, argv + argc, "-r");
   if (r) printf("User specified ring topology: %s\n", r);
 
-  const char *ops[] = {"copy", "localcopy", "doublecopy", "reduce", "reducecopy", "read", "all2all"};
+  const char *ops[] = {"copy", "localcopy", "doublecopy", "doublecopylocal", "reduce", "reducecopy", "read", "all2all"};
   char *prim = getCmdOption(argv, argv + argc, "-p");
   int op = NUM_OPS, begin_op, end_op;
   if (prim) {
@@ -456,6 +467,7 @@ int main(int argc,char* argv[])
 
   // data buffers
   float *buff[MAX_GPU*MAX_WORKGROUPS], *buff_coarse[MAX_GPU*MAX_WORKGROUPS];
+  float *buff_fine[MAX_GPU*MAX_WORKGROUPS]; // additional fine grain buffer for local double copy
   struct transfer_data_t h_transfer_data[MAX_GPU], *transfer_data[MAX_GPU];
   struct profiling_data_t *profiling_data[MAX_GPU], *d_profiling_data[MAX_GPU];
   hipStream_t stream[MAX_GPU];
@@ -479,6 +491,8 @@ int main(int argc,char* argv[])
     HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), hipDeviceMallocFinegrained));
     for (int j = 0; j < workgroups; j++) {
       HIPCHECK(hipExtMallocWithFlags((void**) &buff[i*MAX_WORKGROUPS+j], 2*N*sizeof(float), hipDeviceMallocFinegrained));
+      // additional fine grained buffer for local doublecopy, only need 1 buffer (not used by remote)
+      HIPCHECK(hipExtMallocWithFlags((void**) &buff_fine[i*MAX_WORKGROUPS+j], N*sizeof(float), hipDeviceMallocFinegrained));
       HIPCHECK(hipMalloc((void**) &buff_coarse[i*MAX_WORKGROUPS+j], 2*N*sizeof(float)));
       //randomize test data
       hipLaunchKernelGGL(initTestDataKernel,
@@ -487,6 +501,12 @@ int main(int argc,char* argv[])
           /*dynamic shared mem*/    0,
           /*stream*/                stream[i],
           /*kernel args*/           buff[i*MAX_WORKGROUPS+j], 2*N, 0);
+      hipLaunchKernelGGL(initTestDataKernel,
+          /*grid dim x,y,z*/        dim3(32, 1, 1),
+          /*block dim x,y,z*/       dim3(THREADS, 1, 1),
+          /*dynamic shared mem*/    0,
+          /*stream*/                stream[i],
+          /*kernel args*/           buff_fine[i*MAX_WORKGROUPS+j], N, 0);
       hipLaunchKernelGGL(initTestDataKernel,
           /*grid dim x,y,z*/        dim3(32, 1, 1),
           /*block dim x,y,z*/       dim3(THREADS, 1, 1),
@@ -503,6 +523,7 @@ int main(int argc,char* argv[])
       //printf("GPU %d Ring %d -> Next GPU %d\n", i, j, next_gpu);
       h_transfer_data[i].dest0[j] = buff[next_gpu*MAX_WORKGROUPS+j] + N;
       h_transfer_data[i].dest1[j] = buff_coarse[i*MAX_WORKGROUPS+j] + N;
+      h_transfer_data[i].dest2[j] = buff_fine[i*MAX_WORKGROUPS+j]; // additional local fine grain
       h_transfer_data[i].src0[j] = buff[i*MAX_WORKGROUPS+j];
       h_transfer_data[i].src1[j] = buff_coarse[i*MAX_WORKGROUPS+j];
     }
@@ -685,6 +706,7 @@ int main(int argc,char* argv[])
     for (int j = 0; j < workgroups; j++) {
       HIPCHECK(hipFree((void*) buff[i*MAX_WORKGROUPS+j]));
       HIPCHECK(hipFree((void*) buff_coarse[i*MAX_WORKGROUPS+j]));
+      HIPCHECK(hipFree((void*) buff_fine[i*MAX_WORKGROUPS+j]));
     }
     HIPCHECK(hipFree((void*) d_profiling_data[i]));
     free(profiling_data[i]);
