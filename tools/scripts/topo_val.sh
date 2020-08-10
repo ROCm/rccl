@@ -21,7 +21,7 @@
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-for i in {0..27}
+for i in {0..29}
 do
 	$DIR/../topo_expl/topo_expl -m $i > "topo_m$i.log"
 	$DIR/../TopoVisual/topo_visual.sh -i "topo_m$i.log"
