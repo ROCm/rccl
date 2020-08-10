@@ -42,8 +42,6 @@ if(BUILD_TESTS)
         set(COMPILER_OVERRIDE "-DCMAKE_CXX_COMPILER=g++")
         endif()
 
-#       unset(GTEST_INCLUDE_DIR CACHE)
-#	unset(GTEST_INCLUDE_DIRS CACHE)
         message(STATUS "GTest not found. Downloading and building GTest.")
         # Download, build and install googletest library
         set(GTEST_ROOT ${CMAKE_CURRENT_BINARY_DIR}/gtest CACHE PATH "")
@@ -60,7 +58,7 @@ if(BUILD_TESTS)
         )
         find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
         set(GTEST_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/gtest/include CACHE PATH "")
-	set(GTEST_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest_main.a CACHE PATH "")
+	link_directories(${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/ )
     endif()
 endif()
 
