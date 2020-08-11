@@ -54,7 +54,7 @@ __device__ void ncclGatherKernel(struct CollectiveArgs* args) {
         int peerRecv = (2*nranks+rank-((blockIdx.x*peersPerChan)%nranks)-(i%nranks))%nranks;
         if (rank == root) {
           ncclPrimitives<UNROLL, GATHER_CHUNKSTEPS/GATHER_SLICESTEPS, GATHER_SLICESTEPS, T, 1, 1, 0, FUNC>
-            prims(tid, nthreads, &peerRecv, &peerSend, NULL, stepSize, channel, comm, args->opCount);
+            prims(tid, nthreads, &peerRecv, &peerSend, NULL, stepSize, channel, comm);
 
           ssize_t recv_offset = chunkOffset + peerRecv*size;
           prims.recv(thisOutput+recv_offset, nelem);
@@ -62,7 +62,7 @@ __device__ void ncclGatherKernel(struct CollectiveArgs* args) {
         else {
           if (peerSend == root) {
             ncclPrimitives<UNROLL, GATHER_CHUNKSTEPS/GATHER_SLICESTEPS, GATHER_SLICESTEPS, T, 1, 1, 0, FUNC>
-              prims(tid, nthreads, &peerRecv, &peerSend, NULL, stepSize, channel, comm, args->opCount);
+              prims(tid, nthreads, &peerRecv, &peerSend, NULL, stepSize, channel, comm);
 
             ssize_t send_offset = chunkOffset;
             prims.send(thisInput+send_offset, nelem);

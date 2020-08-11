@@ -60,19 +60,6 @@ class ncclLL128Primitives {
 #endif
   }
 
-  uint32_t mismatch = 0;
-  const uint64_t opCount;
-
-  inline __device__ void checkMismatch(struct ncclConnInfo* conn) {
-    if (mismatch > 20) {
-      // We have seen that the peer advanced opcount so many times yet we are still waiting for credit of current op, so it is _most likely_ a mismatch
-      // Note that we are not using _threadfence_system in LL so the error cannot be asserted
-      STORE(comm->fatalDevError, ncclDevSuspectedMismatch);
-    } else if (conn && LOAD(conn->opCountRem) > opCount) {
-      mismatch += 1;
-    }
-  }
-
   uint32_t spins = 0;
   uint32_t abort = 0;
 
@@ -80,7 +67,6 @@ class ncclLL128Primitives {
     spins++;
     if (abort == 0 && spins == SPINS_BEFORE_CHECK_ABORT) {
       abort = LOAD(comm->abortFlag);
-      if (wid == i) checkMismatch(send ? sendConn : recvConn);
       spins = 0;
     }
     return abort;
@@ -88,7 +74,6 @@ class ncclLL128Primitives {
 
   inline __device__ void waitSend(int nbytes) {
     spins = 0;
-    mismatch = 0;
     if (sendConnHeadPtr) {
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         sendConnHeadCache = LOAD(sendConnHeadPtr);
@@ -331,8 +316,6 @@ class ncclLL128Primitives {
     if (tid >= nthreads-WARP_SIZE && wid < nrecv) {
       recvConnHeadPtr = LOAD(&recvConn->head);
       recvConnHead = LOAD(&recvConn->step);
-      // Update opCount in case we skipped some operations
-      STORE(recvConn->opCountLoc, opCount);
     }
   }
 
@@ -348,7 +331,6 @@ class ncclLL128Primitives {
       sendConnHeadCache = LOAD(sendConnHeadPtr);
       sendConnHead = LOAD(&sendConn->step);
       sendConnFifoPtr = LOAD(&sendConn->fifo);
-      STORE(sendConn->opCountLoc, opCount);
     }
     if (tid >= nthreads-WARP_SIZE && wid<nsend) {
       if (sendConn->fifo) {
@@ -361,7 +343,6 @@ class ncclLL128Primitives {
   __device__ __forceinline__ void saveRecvSync() {
     if (tid >= nthreads-WARP_SIZE && wid < nrecv) {
       STORE(&recvConn->step, recvConnHead);
-      STORE(recvConn->opCountLoc, opCount+1);
       __threadfence_block();
     }
   }
@@ -369,15 +350,14 @@ class ncclLL128Primitives {
   __device__ __forceinline__ void saveSendSync() {
     if (tid < nsend) {
       STORE(&sendConn->step, sendConnHead);
-      STORE(sendConn->opCountLoc, opCount+1);
       __threadfence_block();
     }
   }
 
  public:
   __device__ __forceinline__
-  ncclLL128Primitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, const uint64_t opCount)
-    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE), flagThread((tid%8)==7), stepSize(stepSize), opCount(opCount), shmem(ncclShmem+(threadIdx.x/WARP_SIZE)*NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE+2*wid) {
+  ncclLL128Primitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm)
+    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE), flagThread((tid%8)==7), stepSize(stepSize), shmem(ncclShmem+(threadIdx.x/WARP_SIZE)*NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE+2*wid) {
     // for __any_sync
     if (NSEND > NRECV)
       sync = channel->sync + 2 + tid/WARP_SIZE;
