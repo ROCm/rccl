@@ -90,6 +90,8 @@ struct ncclTopoNode {
       int rank;
       int cudaCompCap;
       int gdrSupport;
+      int gcn;
+      hipDeviceArch_t arch;
     }gpu;
     struct {
       uint64_t asic;

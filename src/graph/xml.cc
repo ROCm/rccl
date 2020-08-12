@@ -599,6 +599,26 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
   int sm;
   NCCLCHECK(xmlGetAttrInt(gpuNode, "sm", &sm));
 
+  int gcn;
+  NCCLCHECK(xmlGetAttrIndex(gpuNode, "gcn", &index));
+  if (index == -1) {
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, dev));
+    gcn = devProp.gcnArch;
+    NCCLCHECK(xmlSetAttrInt(gpuNode, "gcn", gcn));
+  }
+  NCCLCHECK(xmlGetAttrInt(gpuNode, "gcn", &gcn));
+
+  rcclHipDeviceArch_t arch;
+  NCCLCHECK(xmlGetAttrIndex(gpuNode, "arch", &index));
+  if (index == -1) {
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, dev));
+    memcpy(&arch.arch, &devProp.arch, sizeof(hipDeviceArch_t));
+    NCCLCHECK(xmlSetAttrInt(gpuNode, "arch", arch.value));
+  }
+  NCCLCHECK(xmlGetAttrInt(gpuNode, "arch", &arch.value));
+
   struct ncclXmlNode* nvlNode = NULL;
   NCCLCHECK(xmlGetSub(pciNode, "nvlink", &nvlNode));
   if (nvlNode == NULL) {
