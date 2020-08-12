@@ -1,9 +1,9 @@
-<system version="1">
+<system version="2">
   <cpu numaid="0" affinity="0000ffff,0000ffff" arch="x86_64" vendor="GenuineIntel" familyid="6" modelid="85">
     <pci busid="0000:18:00.0" class="0x060400" link_speed="8 GT/s" link_width="16">
       <pci busid="0000:1b:00.0" class="0x060400" link_speed="8 GT/s" link_width="16">
         <pci busid="0000:1d:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-          <gpu dev="0" sm="30" rank="0" gdr="0">
+          <gpu dev="0" sm="98" gcn="908" arch="38911" rank="0" gdr="0">
             <xgmi target="0000:20:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:23:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:26:00.0" count="1" tclass="0x038000"/>
@@ -12,7 +12,7 @@
       </pci>
       <pci busid="0000:1e:00.0" class="0x060400" link_speed="8 GT/s" link_width="16">
         <pci busid="0000:20:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-          <gpu dev="1" sm="30" rank="1" gdr="0">
+          <gpu dev="1" sm="98" gcn="908" arch="38911" rank="1" gdr="0">
             <xgmi target="0000:1d:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:23:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:26:00.0" count="1" tclass="0x038000"/>
@@ -21,7 +21,7 @@
       </pci>
       <pci busid="0000:21:00.0" class="0x060400" link_speed="8 GT/s" link_width="16">
         <pci busid="0000:23:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-          <gpu dev="2" sm="30" rank="2" gdr="0">
+          <gpu dev="2" sm="98" gcn="908" arch="38911" rank="2" gdr="0">
             <xgmi target="0000:1d:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:20:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:26:00.0" count="1" tclass="0x038000"/>
@@ -30,7 +30,7 @@
       </pci>
       <pci busid="0000:24:00.0" class="0x060400" link_speed="8 GT/s" link_width="16">
         <pci busid="0000:26:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-          <gpu dev="3" sm="30" rank="3" gdr="0">
+          <gpu dev="3" sm="98" gcn="908" arch="38911" rank="3" gdr="0">
             <xgmi target="0000:1d:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:20:00.0" count="1" tclass="0x038000"/>
             <xgmi target="0000:23:00.0" count="1" tclass="0x038000"/>
