@@ -122,13 +122,6 @@ int main(int argc, char **argv)
   printf("Executing %d warmup iteration(s), and %d timed iteration(s) (Set via USE_ITERATIONS=#)\n",
          numWarmups, numIterations);
 
-  // Currently an environment variable is required in order to enable fine-grained VRAM allocations
-  if (!useCoarseMem && !getenv("HSA_FORCE_FINE_GRAIN_PCIE"))
-  {
-    printf("[ERROR] Currently you must set HSA_FORCE_FINE_GRAIN_PCIE=1 prior to execution\n");
-    exit(1);
-  }
-
   // Collect the number of available GPUs on this machine
   int numDevices;
   HIP_CALL(hipGetDeviceCount(&numDevices));
@@ -210,7 +203,7 @@ int main(int argc, char **argv)
       // Enable peer-to-peer access if this is the first time seeing this pair
       auto linkPair = std::make_pair(src, dst);
       linkMap[linkPair]++;
-      if (linkMap[linkPair] == 1)
+      if (linkMap[linkPair] == 1 && src != dst)
       {
         int canAccess;
         HIP_CALL(hipDeviceCanAccessPeer(&canAccess, src, dst));
