@@ -36,14 +36,6 @@ static ncclResult_t ncclNetCloseListen(void* listenComm) { NCCLCHECK(ncclNet->cl
 static ncclResult_t ncclGpuGdrSupport(int* gdrSupport) {
   int netDevs;
   NCCLCHECK(ncclNetDevices(&netDevs));
-  pthread_mutex_t ncclParamMutexGpuGdrSupport = PTHREAD_MUTEX_INITIALIZER;
-  static int gdrSupportCached[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
-  int cudaDev;
-  CUDACHECK(hipGetDevice(&cudaDev));
-  if (gdrSupportCached[cudaDev] != -1) {
-    *gdrSupport = gdrSupportCached[cudaDev];
-    return ncclSuccess;
-  }
   *gdrSupport = 0;
   for (int dev=0; dev<netDevs; dev++) {
     // Find a net device which is GDR-capable
@@ -59,7 +51,6 @@ static ncclResult_t ncclGpuGdrSupport(int* gdrSupport) {
     ncclNetHandle_t handle;
     void* gpuPtr = NULL;
     void* mHandle = NULL;
-    pthread_mutex_lock(&ncclParamMutexGpuGdrSupport);
     NCCLCHECK(ncclNetListen(dev, &handle, &lComm));
     NCCLCHECK(ncclNetConnect(dev, &handle, &sComm));
     NCCLCHECK(ncclNetAccept(lComm, &rComm));
@@ -76,10 +67,8 @@ static ncclResult_t ncclGpuGdrSupport(int* gdrSupport) {
     NCCLCHECK(ncclNetCloseRecv(rComm));
     NCCLCHECK(ncclNetCloseSend(sComm));
     NCCLCHECK(ncclNetCloseListen(lComm));
-    pthread_mutex_unlock(&ncclParamMutexGpuGdrSupport);
     break;
   }
-  gdrSupportCached[cudaDev] = *gdrSupport;
   return ncclSuccess;
 }
 
