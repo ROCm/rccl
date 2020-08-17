@@ -782,17 +782,33 @@ static bool getGpuNetCount(struct ncclTopoSystem* system, int id, int *ngpu, int
   return true;
 }
 
+/* compare GPUs by PCI ID */
+static int compareGPU (const void *g1, const void *g2, void *s) {
+  struct ncclTopoSystem* system = (struct ncclTopoSystem*)s;
+  return system->nodes[GPU].nodes[*(int *)g1].id > system->nodes[GPU].nodes[*(int *)g2].id;
+}
+
 static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int *gpu1, int *gpu2, int use_shared, int ex1, int ex2) {
   int n, m, k, idx, c1, c2;
   uint64_t gid;
   int ngpus = system->nodes[GPU].count;
   if (ncclTopoIdToIndex(system, CPU, cpu1, &c1) == ncclInternalError) return false;
   if (ncclTopoIdToIndex(system, CPU, cpu2, &c2) == ncclInternalError) return false;
+
+  int *s_gpus = (int *)malloc(sizeof(int)*ngpus);
+  int s_ngpus = 0;
+
+  // build a sorted list of source GPUs
   for (n = 0; n < ngpus; n++) {
     if (*gpu1 != -1 && system->nodes[GPU].nodes[n].gpu.dev != *gpu1) continue;
     if (system->nodes[GPU].nodes[n].gpu.dev == ex1) continue;
     if (system->nodes[GPU].nodes[n].paths[CPU][c1].count != 2) continue;
-    struct ncclTopoNode* node = system->nodes[GPU].nodes+n;
+    s_gpus[s_ngpus++] = n;
+  }
+  if (s_ngpus) qsort_r(s_gpus, s_ngpus, sizeof(int), compareGPU, system);
+
+  for (n = 0; n < s_ngpus; n++) {
+    struct ncclTopoNode* node = system->nodes[GPU].nodes+s_gpus[n];
     if (node->paths[GPU] == NULL) continue;
     idx = -1; gid = 0;
     for (m = 0; m < ngpus; m++) {
@@ -807,7 +823,7 @@ static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int
       if (link->type == LINK_NVL) {
         int is_shared = 0;
         for (k = 0; k < ngpus; k++) {
-          if (k == m || k == n) continue;
+          if (k == m || k == s_gpus[n]) continue;
           if ((system->nodes[GPU].nodes[k].id & 0xf0000) == (system->nodes[GPU].nodes[m].id & 0xf0000))
             break;
         }
@@ -822,13 +838,15 @@ static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int
     }
     if (idx != -1) break;
   }
-  if (n < ngpus) {
-    *gpu1 = system->nodes[GPU].nodes[n].gpu.dev;
+  if (n < s_ngpus) {
+    *gpu1 = system->nodes[GPU].nodes[s_gpus[n]].gpu.dev;
     *gpu2 = system->nodes[GPU].nodes[idx].gpu.dev;
-     //printf("%s: c1 %d c2 %d gpu1 %d gpu2 %d use_shared %d ex1 %d, ex2 %d\n",
-     //  __func__, cpu1, cpu2, *gpu1, *gpu2, use_shared, ex1, ex2);
-     return true;
+    //printf("%s+: c1 %d c2 %d gpu1 %d gpu2 %d use_shared %d ex1 %d, ex2 %d\n",
+    //  __func__, cpu1, cpu2, *gpu1, *gpu2, use_shared, ex1, ex2);
+    free(s_gpus);
+    return true;
   }
+  free(s_gpus);
   return false;
 }
 
@@ -860,8 +878,10 @@ static bool validate4P1H(struct ncclTopoSystem* system, int *hive) {
 }
 
 static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
-  static const char *ringBase_10302120 = "6 7 1 4 0 3 5 2|7 6 4 1 3 0 2 5";
-  static const char *ringBase_11303011 = "2 1 0 3 6 7 5 4|7 6 4 5 1 2 3 0";
+  static const char *ringBase_10302120_1 = "7 4 5 3 1 0 6 2|4 7 3 5 0 1 2 6";
+  static const char *ringBase_10302120_2 = "6 4 7 5 0 1 3 2|6 5 7 4 2 3 1 0";
+  static const char *ringBase_11303011_1 = "2 1 0 3 6 7 5 4|7 6 4 5 1 2 3 0";
+  static const char *ringBase_11303011_2 = "0 6 2 3 1 7 5 4|7 1 4 5 6 0 3 2";
   static const char *ringBase;
   static char ringRemap[64];
   int id[8], dist[8];
@@ -890,28 +910,56 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
   int g[8], h1[4], h2[4];
   for (int i = 0; i <8; i++) g[i] = -1;
   if (strcmp(pattern, "10302120") == 0) {
-    // identify GPUs for pattern "10302120"
-    if (!findGpuByXGMI(system, 1, 3, &g[1], &g[7], -1, -1, -1)) return ncclSuccess;
-    if (!findGpuByXGMI(system, 2, 3, &g[4], &g[6], -1, -1, -1)) return ncclSuccess;
-    if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
-    if (!findGpuByXGMI(system, 2, 1, &g[5], &g[2], 1, g[4], g[1])) return ncclSuccess;
-    // finally verify two XGMI hives for pattern "10302120"
-    h1[0] = g[3]; h1[1] = g[0]; h1[2] = g[2]; h1[3] = g[5];
-    h2[0] = g[7]; h2[1] = g[6]; h2[2] = g[4]; h2[3] = g[1];
-    ringBase = ringBase_10302120;
+    bool cross = findGpuByXGMI(system, 1, 2, &g[2], &g[6], 1, -1, -1);
+    g[2] = g[6] = -1;
+    if (cross) {
+      // identify GPUs for pattern "10302120"
+      if (!findGpuByXGMI(system, 0, 1, &g[1], &g[0], 0, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 0, 1, &g[1], &g[2], 1, -1, g[0])) return ncclSuccess;
+      if (!findGpuByXGMI(system, 1, 2, &g[2], &g[6], 1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 2, 1, &g[3], &g[5], 1, g[6], g[2])) return ncclSuccess;
+      if (!findGpuByXGMI(system, 1, 3, &g[5], &g[4], -1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 2, 3, &g[3], &g[7], -1, g[6], g[4])) return ncclSuccess;
+      // finally verify two XGMI hives for pattern "10302120"
+      h1[0] = g[1]; h1[1] = g[0]; h1[2] = g[6]; h1[3] = g[2];
+      h2[0] = g[7]; h2[1] = g[4]; h2[2] = g[5]; h2[3] = g[3];
+      ringBase = ringBase_10302120_1;
+    } else {
+      // identify GPUs for pattern "10302120"
+      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[1], 1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 1, 1, &g[1], &g[2], -1, -1, g[3])) return ncclSuccess;
+      if (!findGpuByXGMI(system, 2, 3, &g[5], &g[7], -1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 2, 3, &g[4], &g[6], -1, g[5], g[7])) return ncclSuccess;
+      // finally verify two XGMI hives for pattern "10302120"
+      h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[2]; h1[3] = g[3];
+      h2[0] = g[4]; h2[1] = g[5]; h2[2] = g[7]; h2[3] = g[6];
+      ringBase = ringBase_10302120_2;
+    }
   }
   else if (strcmp(pattern, "11303011") == 0) {
-    // identify GPUs for pattern "11303011"
-    if (!findGpuByXGMI(system, 0, 1, &g[0], &g[1], 1, -1, -1)) return ncclSuccess;
-    if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
-    if (!findGpuByXGMI(system, 1, 1, &g[1], &g[2], -1, -1, -1)) return ncclSuccess;
-    if (!findGpuByXGMI(system, 3, 2, &g[7], &g[5], -1, -1, -1)) return ncclSuccess;
-    if (!findGpuByXGMI(system, 3, 2, &g[7], &g[6], -1, -1, g[5])) return ncclSuccess;
-    if (!findGpuByXGMI(system, 2, 2, &g[5], &g[4], -1, -1, -1)) return ncclSuccess;
-    // finally verify two XGMI hives for pattern "10302120"
-    h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[2]; h1[3] = g[3];
-    h2[0] = g[4]; h2[1] = g[5]; h2[2] = g[7]; h2[3] = g[6];
-    ringBase = ringBase_11303011;
+    // there are 2 configurations for pattern "11303011"
+    if (findGpuByXGMI(system, 1, 2, &g[2], &g[6], 1, -1, -1)) {
+      if (!findGpuByXGMI(system, 2, 1, &g[4], &g[1], 1, g[6], g[2])) return ncclSuccess;
+      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 3, 2, &g[7], &g[5], 1, -1, -1)) return ncclSuccess;
+      // finally verify two XGMI hives for pattern "11303011"
+      h1[0] = g[0]; h1[1] = g[3]; h1[2] = g[2]; h1[3] = g[6];
+      h2[0] = g[1]; h2[1] = g[4]; h2[2] = g[5]; h2[3] = g[7];
+      ringBase = ringBase_11303011_2;
+    } else {
+      // identify GPUs for pattern "11303011"
+      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[1], 1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 1, 1, &g[1], &g[2], -1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 3, 2, &g[7], &g[5], -1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 3, 2, &g[7], &g[6], -1, -1, g[5])) return ncclSuccess;
+      if (!findGpuByXGMI(system, 2, 2, &g[5], &g[4], -1, -1, -1)) return ncclSuccess;
+      // finally verify two XGMI hives for pattern "11303011"
+      h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[2]; h1[3] = g[3];
+      h2[0] = g[4]; h2[1] = g[5]; h2[2] = g[7]; h2[3] = g[6];
+      ringBase = ringBase_11303011_1;
+    }
   }
   else
     return ncclSuccess;
