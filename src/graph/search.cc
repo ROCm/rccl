@@ -882,6 +882,8 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
   static const char *ringBase_10302120_2 = "6 4 7 5 0 1 3 2|6 5 7 4 2 3 1 0";
   static const char *ringBase_11303011_1 = "2 1 0 3 6 7 5 4|7 6 4 5 1 2 3 0";
   static const char *ringBase_11303011_2 = "0 6 2 3 1 7 5 4|7 1 4 5 6 0 3 2";
+  static const char *ringBase_0110201010200110_1 = "1 2 3 0 6 4 5 7|4 6 7 5 2 1 0 3";
+  static const char *ringBase_0110201010200110_2 = "3 0 6 2 1 4 5 7|4 1 0 3 2 6 7 5";
   static const char *ringBase;
   static char ringRemap[64];
   int id[8], dist[8];
@@ -891,7 +893,7 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
   int ngpus = system->nodes[GPU].count;
   int ncpus = system->nodes[CPU].count;
   // 8 GPUs and 4 numa nodes only
-  if (ngpus != 8 || ncpus != 4)
+  if (ngpus != 8 || (ncpus != 4 && ncpus != 8))
     return ncclSuccess;
   // only valid on Rome
   int arch, vendor, model;
@@ -899,14 +901,14 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
   if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
     return ncclSuccess;
   // number of GPUs and NICs on each numa node is used as first screening pattern
-  char pattern[9];
-  for (int i = 0; i < ncpus; i++) {
+  char pattern[256];
+  for (i = 0; i < ncpus; i++) {
     int g, n;
     if (!getGpuNetCount(system, i, &g, &n)) return ncclSuccess;
     pattern[i*2] = '0' + g;
     pattern[i*2+1] = '0' + n;
   }
-  pattern[8] = 0;
+  pattern[i*2] = 0;
   int g[8], h1[4], h2[4];
   for (int i = 0; i <8; i++) g[i] = -1;
   if (strcmp(pattern, "10302120") == 0) {
@@ -961,6 +963,26 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
       ringBase = ringBase_11303011_1;
     }
   }
+  else if (strcmp(pattern, "0110201010200110") == 0) {
+    if (findGpuByXGMI(system, 2, 5, &g[2], &g[6], 1, -1, -1)) {
+      if (!findGpuByXGMI(system, 4, 2, &g[4], &g[1], 1, g[6], g[2])) return ncclSuccess;
+      if (!findGpuByXGMI(system, 1, 3, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 7, 5, &g[7], &g[5], 1, -1, -1)) return ncclSuccess;
+      h1[0] = g[0]; h1[1] = g[3]; h1[2] = g[2]; h1[3] = g[6];
+      h2[0] = g[1]; h2[1] = g[4]; h2[2] = g[5]; h2[3] = g[7];
+      ringBase = ringBase_0110201010200110_2;
+    } else {
+      if (!findGpuByXGMI(system, 1, 2, &g[0], &g[1], 1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 1, 3, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 2, 2, &g[1], &g[2], -1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 7, 5, &g[7], &g[5], -1, -1, -1)) return ncclSuccess;
+      if (!findGpuByXGMI(system, 7, 5, &g[7], &g[6], -1, -1, g[5])) return ncclSuccess;
+      if (!findGpuByXGMI(system, 4, 5, &g[4], &g[5], -1, -1, -1)) return ncclSuccess;
+      h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[2]; h1[3] = g[3];
+      h2[0] = g[4]; h2[1] = g[5]; h2[2] = g[7]; h2[3] = g[6];
+      ringBase = ringBase_0110201010200110_1;
+    }
+}
   else
     return ncclSuccess;
 
