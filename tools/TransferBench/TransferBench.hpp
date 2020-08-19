@@ -94,12 +94,31 @@ void ParseLinks(char const* line, std::vector<Link>& links)
     iss.clear();
     iss.str(line);
     iss >> numLinks;
-    links.resize(numLinks);
     if (iss.fail()) return;
 
-
-    for (int i = 0; i < numLinks; i++)
+    if (numLinks > 0)
+    {
+      // Method 1: Take in triples (src, dst, # blocks to use)
+      links.resize(numLinks);
+      for (int i = 0; i < numLinks; i++)
         iss >> links[i].srcGpu >> links[i].dstGpu >> links[i].numBlocksToUse;
+
+    }
+    else
+    {
+      // Method 2: Read common # blocks to use, then read (src, dst) doubles
+      int numBlocksToUse;
+      iss >> numBlocksToUse;
+      if (iss.fail()) return;
+
+      numLinks *= -1;
+      links.resize(numLinks);
+      for (int i = 0; i < numLinks; i++)
+      {
+        iss >> links[i].srcGpu >> links[i].dstGpu;
+        links[i].numBlocksToUse = numBlocksToUse;
+      }
+    }
 }
 
 // Helper function to either fill a device pointer with pseudo-random data, or to check to see if it matches
