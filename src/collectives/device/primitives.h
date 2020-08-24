@@ -84,9 +84,7 @@ class ncclPrimitives {
 
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    if (nthreads == gridDim.x) {
-      __syncthreads();
-    } else if (wid == 0) {
+    if (wid == 0) {
       if (NRECV < NSEND) barrier_by_id(0);
       else barrier_by_id(1);
     }
