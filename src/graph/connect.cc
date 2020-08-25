@@ -255,7 +255,7 @@ int ncclMaxNchannels() {
   return maxNchannels;
 }
 
-ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, struct ncclTopoRanks** allTopoRanks, int* rings) {
+ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, struct ncclTopoRanks** allTopoRanks, int* rings, int gcn) {
   // Gather data from all ranks
   int *ringRecv, *ringSend, *ringPrev, *ringNext, *treeUpRecv, *treeUpSend, *treeDnRecv,*treeDnSend;
   int nranks = comm->nRanks;
@@ -290,6 +290,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, struct nccl
   memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
 
   int nc = nChannels*2;
+  if (gcn == 908) nc = std::max(nc, 4);
   if (comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_CR8G) nc = nChannels*3;
   if (comm->topo->nodes[NET].count && comm->topo->type == RCCL_TOPO_4P2H_ROME) nc = 4*comm->topo->nodes[NET].count;
   int end = std::min((int)ncclMaxNchannels(), std::max(nc, ncclMinNchannels()));

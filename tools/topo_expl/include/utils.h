@@ -25,6 +25,7 @@ struct allGather3Data_t{
   int cudaCompCap;
   int fullCudaCompCap;
   int nChannels;
+  int gcn;
   struct ncclGraphInfo tree;
   struct ncclGraphInfo ring;
   struct ncclGraphInfo collNet;
