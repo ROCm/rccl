@@ -40,15 +40,7 @@ __device__ void ncclSendRecvKernel(struct CollectiveArgs* args) {
 
   const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE]/(sizeof(T)*NCCL_STEPS)/SENDRECV_SLICEFACTOR;
 
-  int nthreadsSplit;
-  const int64_t sendCount = static_cast<int64_t>(args->p2p.sendCount);
-  const int64_t recvCount = static_cast<int64_t>(args->p2p.recvCount);
-  if (sendCount >= 0 && recvCount >= 0)
-    nthreadsSplit = nthreads/2;
-  else {
-    if (sendCount >= 0) nthreadsSplit = nthreads;
-    else nthreadsSplit = 0;
-  }
+  int nthreadsSplit = nthreads/2;
   // We set NRECV or NSEND to 2 to use different barriers in primitives for the send threads and
   // receive threads, but then we define all peers to -1 since sender threads don't receive and
   // receive threads don't send.
