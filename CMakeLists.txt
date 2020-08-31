@@ -176,6 +176,15 @@ if("${HIP_COMPILER}" MATCHES "clang")
     target_compile_options(rccl PRIVATE -parallel-jobs=4 PRIVATE -Wno-format-nonliteral)
     target_link_libraries(rccl PRIVATE -parallel-jobs=4)
   endif()
+
+  # RCCL static lib uses -fgpu-rdc which requires hipcc as the linker and archiver
+  if(BUILD_STATIC)
+    target_link_libraries(rccl PRIVATE --emit-static-lib)
+    set(CMAKE_AR "${hipcc_executable}")
+    get_property(link_libraries TARGET rccl PROPERTY LINK_LIBRARIES)
+    string (REPLACE ";" " " LINK_PROPS "${link_libraries}")
+    set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> -o <TARGET> ${LINK_PROPS} <LINK_FLAGS> <OBJECTS>")
+  endif()
 endif()
 
 if("${HIP_COMPILER}" MATCHES "hcc")
