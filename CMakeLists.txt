@@ -166,7 +166,7 @@ endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
   foreach(target ${AMDGPU_TARGETS})
-    target_compile_options(rccl PRIVATE --amdgpu-target=${target} PRIVATE -fgpu-rdc)
+    target_compile_options(rccl PRIVATE --amdgpu-target=${target} PRIVATE -fgpu-rdc PRIVATE -mno-xnack -Xarch_gfx906 -msram-ecc PRIVATE -Xarch_gfx908 -m-nosram-ecc)
   endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
   target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
