@@ -99,7 +99,7 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
     ACCUMULATE_COUNTER(directRecv);
   }
 #ifdef ENABLE_PROFILING
-  if (tid == 0 && args->opCount > 0) __atomic_fetch_add(&(devProf->total_cycle), __rtc64() - clk, __ATOMIC_SEQ_CST);
+  if (tid == 0) __atomic_fetch_add(&(devProf->total_cycle), __rtc64() - clk, __ATOMIC_SEQ_CST);
 #endif
 }
 

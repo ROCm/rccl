@@ -146,7 +146,7 @@ class ncclPrimitives {
         if (checkAbort(wid, 0)) break;
       }
 #ifdef ENABLE_PROFILING
-      if (opCount > 0) __atomic_fetch_add(&comm->devProf->wait_recv_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
+      __atomic_fetch_add(&comm->devProf->wait_recv_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
 #endif
       recvConnTail += SLICESTEPS;
     }
@@ -237,7 +237,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
       if (realSize > 0) {
         barrier();
 #ifdef ENABLE_PROFILING
-        if (tid == 0  && opCount > 0) __atomic_fetch_add(&comm->devProf->wait_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
+        if (tid == 0) __atomic_fetch_add(&comm->devProf->wait_cycle[blockIdx.x], __rtc64() - t0, __ATOMIC_SEQ_CST);
 #endif
 #if defined(RCCL_USE_DIRECT_BUFFER)
         if (DIRECTRECV && recvDirectBuff[0]) {
@@ -427,7 +427,7 @@ inline __device__ int directSendInc(int i, int directInc, int sliceInc) {
   if (tid == 0) { t0 = __rtc64(); ws = LOAD(&(devProf->wait_cycle[blockIdx.x])); }
 
 #define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0 && args->opCount > 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __rtc64() - t0 \
+  if (tid == 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __rtc64() - t0 \
     + ws - LOAD(&(devProf->wait_cycle[blockIdx.x])), __ATOMIC_SEQ_CST); \
     __atomic_fetch_add(&(devProf->prim##_byte), nelem * sizeof(T), __ATOMIC_SEQ_CST); }
 #else
