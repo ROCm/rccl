@@ -8,7 +8,7 @@
 #ifndef NCCL_COLLECTIVES_H_
 #define NCCL_COLLECTIVES_H_
 
-#define FUNC_INDEX_P2P (3+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps)
+#define FUNC_INDEX_P2P (4+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps)
 #define FUNC_INDEX(coll, redop, dtype, al, pr) ((coll >= NCCL_NUM_FUNCTIONS) \
   ? (coll-NCCL_NUM_FUNCTIONS+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps) \
   : ((((((coll)*ncclNumOps + (redop))*ncclNumTypes) + (dtype))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr)))
@@ -61,6 +61,7 @@
   DECL_COLL5(ncclGather, copy, i8) \
   DECL_COLL5(ncclScatter, copy, i8) \
   DECL_COLL5(ncclAllToAll, copy, i8) \
+  DECL_COLL5(ncclAllToAllv, copy, i8) \
   DECL_COLL5(ncclSendRecv, copy, i8) \
 
 DECL_ALL_COLLS
@@ -89,5 +90,7 @@ DECL_ALL_COLLS
 #define SCATTER_CHUNKSTEPS 4
 #define ALLTOALL_SLICESTEPS 4
 #define ALLTOALL_CHUNKSTEPS 4
+#define ALLTOALLV_SLICESTEPS 4
+#define ALLTOALLV_CHUNKSTEPS 4
 
 #endif
