@@ -23,6 +23,7 @@ The root of this repository has a helper script 'install.sh' to build and instal
 
 *  `./install.sh` -- builds library including unit tests
 *  `./install.sh -i` -- builds and installs the library to /opt/rocm/rccl; installation path can be changed with --prefix argument (see below.)
+*  `./install.sh -d` -- installs all necessary dependencies for RCCL.  Should be re-invoked if the build folder is removed.
 *  `./install.sh -h` -- shows help
 *  `./install.sh -t` -- builds library including unit tests
 *  `./install.sh -r` -- runs unit tests (must be already built)
@@ -62,15 +63,19 @@ RCCL package install requires sudo/root access because it creates a directory ca
 
 ## Tests
 
-There are unit tests implemented with the Googletest framework in RCCL, which are currently a work-in-progress.  To invoke the unit tests, go to the rccl-install folder, then the test/ subfolder, and execute the appropriate unit test executable(s). Several notes for running the unit tests:
+There are unit tests implemented with the Googletest framework in RCCL, which are currently a work-in-progress.  The unit tests require Googletest 1.10 or higher to build and execute properly.
+To invoke the unit tests, go to the build folder, then the test subfolder, and execute the appropriate unit test executable(s).
 
-1. The LD_LIBRARY_PATH environment variable will need to be set to include /path/to/rccl-install/lib/ in order to run the unit tests.
-2. The HSA_FORCE_FINE_GRAIN_PCIE environment variable will need to be set to 1 in order to run the unit tests.
+Unit test names are now of the format:
+[CollectiveCall]CorrectnessSweep/[CollectiveCall]CorrectnessTest.[Type of test]/[ncclRedOp_t]_[datatype]_[number of elements]_[number of devices]_[in place/out of place]_[environment variables]
 
-An example call to the unit tests:
+This allows filtering of unit tests being run by their parameter values by passing the --gtest_filter command line flag, for example:
+
 ```shell
-$ LD_LIBRARY_PATH=rccl-install/lib/ HSA_FORCE_FINE_GRAIN_PCIE=1 rccl-install/test/UnitTests
+--gtest_filter="AllReduceCorrectnessSweep*float32*"
 ```
+will run only AllReduce correctness tests with float32 datatype. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
+
 
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCmSoftwarePlatform/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
