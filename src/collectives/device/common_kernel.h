@@ -343,8 +343,12 @@ __device__ void ReduceCopy128bMulti( const int w, const int nw, const int t,
   }
 }
 
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 template <typename T>
+__device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(int32_t); }
+#else
 __device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(Pack128); }
+#endif
 
 // Try to limit consecutive load/stores to 8.
 // Use UNROLL 8 when we have a single source and a single destination, 4 otherwise
@@ -366,9 +370,15 @@ __device__ void ReduceOrCopyMulti(const int tid, const int nthreads,
   for (int i=0; i<MINDSTS; i++) alignDiff |= (align ^ ptrAlign128(dsts[i]));
   for (int i=MINDSTS; i<MAXDSTS && i<ndsts; i++) alignDiff |= (align ^ ptrAlign128(dsts[i]));
 
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  int Npreamble = alignDiff ? Nrem :
+    N < alignof(int32_t) ? N :
+    (alignof(int32_t) - align) % alignof(int32_t);
+#else
   int Npreamble = alignDiff ? Nrem :
     N < alignof(Pack128) ? N :
     (alignof(Pack128) - align) % alignof(Pack128);
+#endif
 
   // stage 1: preamble: handle any elements up to the point of everything coming
   // into alignment

@@ -20,7 +20,8 @@ if(BUILD_TESTS)
     test_BroadcastAbort.cpp
     test_Scatter.cpp
     test_Gather.cpp
-    test_AllToAll.cpp    
+    test_AllToAll.cpp
+    test_AllToAllv.cpp
   )
 
   add_executable(UnitTests ${TEST_SOURCES})
