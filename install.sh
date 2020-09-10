@@ -172,12 +172,8 @@ case "${OS_ID}" in
 
 if ($install_dependencies); then
     cmake_common_options="${cmake_common_options} -DINSTALL_DEPENDENCIES=ON"
-    if [[ -e /etc/redhat-release ]]; then
-	yum install chrpath libgomp
-    else
-	apt install chrpath libomp-dev
-    fi
 fi
+
 check_exit_code "$?"
 
 if ($build_tests) || (($run_tests) && [[ ! -f ./test/UnitTests ]]); then
