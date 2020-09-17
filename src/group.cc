@@ -304,7 +304,7 @@ group_cleanup:
         *args->init.newcomm = NULL;
       } else {
         struct ncclComm* comm = args->coll.comm;
-        for (int c=0; c<comm->p2pnChannels; c++) {
+        for (int c=0; c<std::max(comm->nChannels, comm->p2pnChannels); c++) {
           struct ncclChannel* channel = comm->channels+c;
           for (int i=0; i<channel->collCount; i++) {
             channel->collectives[(channel->collStart + i)%NCCL_MAX_OPS].active = 0;

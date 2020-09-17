@@ -892,13 +892,17 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
   *str = 0;
   int ngpus = system->nodes[GPU].count;
   int ncpus = system->nodes[CPU].count;
-  // 8 GPUs and 4 numa nodes only
-  if (ngpus != 8 || (ncpus != 4 && ncpus != 8))
+  // 8 GPUs only
+  if (ngpus != 8)
     return ncclSuccess;
   // only valid on Rome
   int arch, vendor, model;
   NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
   if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
+    return ncclSuccess;
+  system->type = RCCL_TOPO_4P2H_ROME;
+  // 4 or 8 numa nodes only
+  if (ncpus != 4 && ncpus != 8)
     return ncclSuccess;
   // number of GPUs and NICs on each numa node is used as first screening pattern
   char pattern[256];
@@ -998,7 +1002,6 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
   }
   ringRemap[i] = 0;
   *str = ringRemap;
-  system->type = RCCL_TOPO_4P2H_ROME;
   INFO(NCCL_GRAPH, "Use 4P2H on Rome: %s", ringRemap);
   return ncclSuccess;
 }
