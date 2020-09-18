@@ -510,9 +510,16 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     }
   }
 
-  // Round to next pow2 nChannelsPerPeer and nChannels
-  comm->p2pnChannelsPerPeer = nextPow2(minChannels);
-  comm->p2pnChannels = nextPow2(comm->p2pnChannels);
+  if (comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_4P2H_ROME) {
+    // Adjust P2P channels on Rome
+    comm->p2pnChannelsPerPeer = 2;
+    comm->p2pnChannels = 2;
+  }
+  else {
+    // Round to next pow2 nChannelsPerPeer and nChannels
+    comm->p2pnChannelsPerPeer = nextPow2(minChannels);
+    comm->p2pnChannels = nextPow2(comm->p2pnChannels);
+  }
 
   // Init channels that weren't used so far
   for (int c=comm->nChannels; c<comm->p2pnChannels; c++) NCCLCHECK(initChannel(comm, c));

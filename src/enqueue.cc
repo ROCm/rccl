@@ -90,7 +90,7 @@ ncclResult_t ncclLaunchCooperativeKernelMultiDevice(hipLaunchParams *paramsList,
 
 ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
   // Only launch blocks where we have work to do.
-  for (int c=0; c<comm->p2pnChannels; c++) {
+  for (int c=0; c<std::max(comm->nChannels, comm->p2pnChannels); c++) {
     if (comm->channels[c].collCount) params->gridDim.x = c+1;
   }
 

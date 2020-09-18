@@ -242,7 +242,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(prof);
   CUDACHECK(hipFree(comm->hostDevComm.devProf));
 
-  for (int channel=0; channel<comm->p2pnChannels; channel++) {
+  for (int channel=0; channel<std::max(comm->nChannels, comm->p2pnChannels); channel++) {
     if (comm->channels[channel].send_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Send %6.2f GB/s (%ld bytes %d measurements)",
       comm->rank, channel, (comm->channels[channel].bw_count) ?
       (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
@@ -368,11 +368,11 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
 static ncclResult_t devCommSetup(ncclComm_t comm) {
   // Duplicate the channels on the device
-  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.channels, comm->p2pnChannels));
-  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.channels, comm->channels, comm->p2pnChannels));
+  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.channels, std::max(comm->nChannels, comm->p2pnChannels)));
+  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.channels, comm->channels, std::max(comm->nChannels, comm->p2pnChannels)));
 
   // Copy userRanks and peers
-  for (int r=0; r<comm->p2pnChannels; r++) {
+  for (int r=0; r<std::max(comm->nChannels, comm->p2pnChannels); r++) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
