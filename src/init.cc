@@ -70,13 +70,13 @@ ncclResult_t initCollNet(ncclCollNet_t* collnet) {
 }
 
 ncclResult_t initNetPlugin(ncclNet_t** net, ncclCollNet_t** collnet) {
-  void* netPluginLib = dlopen("libnccl-net.so", RTLD_NOW | RTLD_LOCAL);
+  void* netPluginLib = dlopen("librccl-net.so", RTLD_NOW | RTLD_LOCAL);
   if (netPluginLib == NULL) {
     // dlopen does not guarantee to set errno, but dlerror only gives us a
     // string, so checking errno doesn't hurt to try to provide a better
     // error message
     if (errno == ENOENT) {
-      INFO(NCCL_INIT|NCCL_NET, "NET/Plugin : No plugin found (libnccl-net.so), using internal implementation");
+      INFO(NCCL_INIT|NCCL_NET, "NET/Plugin : No plugin found (librccl-net.so), using internal implementation");
     } else {
       INFO(NCCL_INIT|NCCL_NET, "NET/Plugin : Plugin load returned %d : %s.", errno, dlerror());
     }
