@@ -940,8 +940,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
 
   if (!alltoallDisable) {
-    for (int c=0; c<comm->nChannels; c++) {
-      const int peersPerChan = (comm->nChannels >= nranks ? 1 : DIVUP(nranks, comm->nChannels));
+    int nc = comm->nChannels;
+    if (comm->topo->type == RCCL_TOPO_4P2H_ROME)
+      nc = 2;
+    for (int c=0; c<nc; c++) {
+      const int peersPerChan = (nc >= nranks ? 1 : DIVUP(nranks, nc));
       struct ncclP2PConnect* connect = &comm->p2plist.connect;
       connect->nrecv[c] = 0;
       connect->nsend[c] = 0;
@@ -960,7 +963,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       }
     }
 
-    for (int c=0; c<comm->nChannels; c++) {
+    for (int c=0; c<nc; c++) {
       struct ncclChannel* channel = comm->channels+c;
       struct ncclP2PConnect* connect = &comm->p2plist.connect;
 #if 0
