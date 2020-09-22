@@ -70,13 +70,13 @@ ncclResult_t initCollNet(ncclCollNet_t* collnet) {
 }
 
 ncclResult_t initNetPlugin(ncclNet_t** net, ncclCollNet_t** collnet) {
-  void* netPluginLib = dlopen("libnccl-net.so", RTLD_NOW | RTLD_LOCAL);
+  void* netPluginLib = dlopen("librccl-net.so", RTLD_NOW | RTLD_LOCAL);
   if (netPluginLib == NULL) {
     // dlopen does not guarantee to set errno, but dlerror only gives us a
     // string, so checking errno doesn't hurt to try to provide a better
     // error message
     if (errno == ENOENT) {
-      INFO(NCCL_INIT|NCCL_NET, "NET/Plugin : No plugin found (libnccl-net.so), using internal implementation");
+      INFO(NCCL_INIT|NCCL_NET, "NET/Plugin : No plugin found (librccl-net.so), using internal implementation");
     } else {
       INFO(NCCL_INIT|NCCL_NET, "NET/Plugin : Plugin load returned %d : %s.", errno, dlerror());
     }
@@ -242,7 +242,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(prof);
   CUDACHECK(hipFree(comm->hostDevComm.devProf));
 
-  for (int channel=0; channel<comm->p2pnChannels; channel++) {
+  for (int channel=0; channel<std::max(comm->nChannels, comm->p2pnChannels); channel++) {
     if (comm->channels[channel].send_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Send %6.2f GB/s (%ld bytes %d measurements)",
       comm->rank, channel, (comm->channels[channel].bw_count) ?
       (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
@@ -368,11 +368,11 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
 static ncclResult_t devCommSetup(ncclComm_t comm) {
   // Duplicate the channels on the device
-  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.channels, comm->p2pnChannels));
-  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.channels, comm->channels, comm->p2pnChannels));
+  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.channels, std::max(comm->nChannels, comm->p2pnChannels)));
+  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.channels, comm->channels, std::max(comm->nChannels, comm->p2pnChannels)));
 
   // Copy userRanks and peers
-  for (int r=0; r<comm->p2pnChannels; r++) {
+  for (int r=0; r<std::max(comm->nChannels, comm->p2pnChannels); r++) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
