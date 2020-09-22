@@ -508,6 +508,7 @@ void DisplayUsage(char const* cmdName)
   printf(" USE_SLEEP          - Adds a 100ms sleep after each synchronization\n");
   printf(" REUSE_STREAMS      - Re-use streams instead of creating / destroying per test\n");
   printf(" SHOW_ADDR          - Print out memory addresses for each Link\n");
+  printf(" BYTE_OFFSET        - Initial byte-offset for memory allocations.  Must be multiple of 4. Defaults to 0\n");
   printf(" NUM_WARMUPS=W      - Perform W untimed warmup iteration(s) per test\n");
   printf(" NUM_ITERATIONS=I   - Perform I timed iteration(s) per test\n");
 }
