@@ -6,7 +6,7 @@ endif
 HIPCC=$(HIP_PATH)/bin/hipcc
 
 EXE=TransferBench
-CXXFLAGS = -g -O3 -fopenmp -I../../src/include -I.
+CXXFLAGS = -O3 -fopenmp -I../../src/include -I.
 
 all: $(EXE)
 
