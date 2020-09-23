@@ -849,6 +849,21 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   }
   INFO(NCCL_INIT, "RCCL AllToAll(v)/Scatter/Gather kernels %s", comm->alltoallDisable ? "disabled" : "enabled");
 
+  // count NETs used by ring
+  int nNets = 0;
+  int nets[MAXCHANNELS*2];
+  for (int i = 0; i < ringGraph.nChannels; i++) {
+    for (int j = 0; j < 2; j++) {
+      int k;
+      for (k = 0; k < nNets; k++)
+        if (nets[k] == ringGraph.inter[i*2+j]) break;
+      if (k >= nNets) {
+        nets[nNets] = ringGraph.inter[i*2+j];
+        nNets++;
+      }
+    }
+  }
+
   if (comm->nChannels < nChannelsOrig) {
     // We started duplicating channels during Preset(), so we need to move the
     // duplicated channels since we have removed some.
@@ -858,7 +873,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int *rings;
   NCCLCHECK(ncclCalloc(&rings, nranks*MAXCHANNELS));
 
-  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, allTopoRanks, rings, gcn));
+  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, allTopoRanks, rings, gcn, nNets));
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
