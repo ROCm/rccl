@@ -30,7 +30,7 @@
 #include "model.h"
 #include "utils.h"
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "Gather", "Scatter", "AllToAll" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+4] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "Gather", "Scatter", "AllToAll", "AllToAllv" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
@@ -220,7 +220,9 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].cudaCompCap = comm->topo->nodes[GPU].nodes[idx].gpu.cudaCompCap;
   allGather3Data[rank].gcn = comm->topo->nodes[GPU].nodes[idx].gpu.gcn;
-  allGather3Data[rank].nChannels = comm->nChannels = std::min(treeGraph.nChannels, ringGraph.nChannels);
+  allGather3Data[rank].nChannels = comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
+    std::min(treeGraph.nChannels, ringGraph.nChannels);
+  allGather3Data[rank].alltoallDisable = comm->alltoallDisable;
   allGather3Data[rank].tree.sameChannels = treeGraph.sameChannels;
   allGather3Data[rank].tree.speedIntra = treeGraph.speedIntra;
   allGather3Data[rank].tree.speedInter = treeGraph.speedInter;
@@ -401,9 +403,11 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   struct ncclTopoRanks** allTopoRanks;
   NCCLCHECK(ncclCalloc(&allTopoRanks, comm->nRanks));
   int gcn = allGather3Data[0].gcn;
+  int alltoallDisable = 0;
   for (int i=0; i<nranks; i++) {
     allTopoRanks[i] = &allGather3Data[i].topoRanks;
     gcn = std::min(allGather3Data[i].gcn, gcn);
+    alltoallDisable = std::max(allGather3Data[i].alltoallDisable, alltoallDisable);
     // Make sure we align all ranks so that the tuning is consistent across ranks
     treeGraph.nChannels = ringGraph.nChannels = comm->nChannels = std::min(allGather3Data[i].nChannels, comm->nChannels);
     treeGraph.sameChannels = std::min(allGather3Data[i].tree.sameChannels, treeGraph.sameChannels);
@@ -419,6 +423,10 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     collNetGraph.speedInter = std::min(allGather3Data[i].collNet.speedInter, collNetGraph.speedInter);
     collNetGraph.typeIntra = std::min(allGather3Data[i].collNet.typeIntra, collNetGraph.typeIntra);
   }
+  if (comm->alltoallDisable != alltoallDisable) {
+    comm->alltoallDisable = alltoallDisable;
+  }
+  INFO(NCCL_INIT, "RCCL AllToAll(v)/Scatter/Gather kernels %s", comm->alltoallDisable ? "disabled" : "enabled");
 
   if (comm->nChannels < nChannelsOrig) {
     // We started duplicating channels during Preset(), so we need to move the
@@ -432,7 +440,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, allTopoRanks, rings, gcn));
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
-      collNetSupport()) {
+      collNetSupport() && collNetGraph.nChannels) {
     NCCLCHECK(ncclTopoConnectCollNet(comm, &collNetGraph, rank));
   }
 
@@ -511,9 +519,12 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
 
-  if (rcclParamAllToAllDisable() == 0) {
-    for (int c=0; c<comm->nChannels; c++) {
-      const int peersPerChan = (comm->nChannels >= nranks ? 1 : DIVUP(nranks, comm->nChannels));
+  if (!alltoallDisable) {
+    int nc = comm->nChannels;
+    if (comm->topo->type == RCCL_TOPO_4P2H_ROME)
+      nc = 2;
+    for (int c=0; c<nc; c++) {
+      const int peersPerChan = (nc >= nranks ? 1 : DIVUP(nranks, nc));
       struct ncclP2PConnect* connect = &comm->p2plist.connect;
       connect->nrecv[c] = 0;
       connect->nsend[c] = 0;
@@ -532,7 +543,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
       }
     }
 
-    for (int c=0; c<comm->nChannels; c++) {
+    for (int c=0; c<nc; c++) {
       struct ncclChannel* channel = comm->channels+c;
       struct ncclP2PConnect* connect = &comm->p2plist.connect;
 #if 0
