@@ -35,29 +35,10 @@ namespace CorrectnessTests
                 sdispls[i] = rdispls[i] = disp;
                 disp += scount;
             }
-            for (int i = 0; i < numDevices; i++) {
-                if (sendcounts[i] != 0) {
-                  ncclSend(
-                      ((char*)dataset.inputs[r]) + sdispls[i] * DataTypeToBytes(dataType),
-                      sendcounts[i],
-                      dataType,
-                      i,
-                      comms[r],
-                      streams[r]);
-                }
-                if (recvcounts[i] != 0) {
-                  ncclRecv(
-                      ((char*)dataset.outputs[r]) + rdispls[i] * DataTypeToBytes(dataType),
-                      recvcounts[i],
-                      dataType,
-                      i,
-                      comms[r],
-                      streams[r]);
-                }
-            }
+            ncclAllToAllv((char*)dataset.inputs[r], sendcounts, sdispls,
+              (char*)dataset.outputs[r], recvcounts, rdispls, dataType, comms[r], streams[r]);
         }
         ncclGroupEnd();
-
         // Wait for reduction to complete
         Synchronize();
 
