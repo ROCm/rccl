@@ -10,6 +10,7 @@ function display_help()
     echo "./install [-h|--help] "
     echo "    [-h|--help] prints this help message."
     echo "    [-i|--install] install RCCL library (see --prefix argument below.)"
+    echo "    [-d|--dependencies] install RCCL depdencencies."
     echo "    [-p|--package_build] Build RCCL package."
     echo "    [-t|--tests_build] Build unit tests, but do not run."
     echo "    [-r|--run_tests_quick] Run small subset of unit tests (must be built already.)"
@@ -42,7 +43,7 @@ build_static=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix: --options hiptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix: --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -170,12 +171,9 @@ case "${OS_ID}" in
     esac
 
 if ($install_dependencies); then
-    if [[ -e /etc/redhat-release ]]; then
-	yum install chrpath libgomp
-    else
-	apt install chrpath libomp-dev
-    fi
+    cmake_common_options="${cmake_common_options} -DINSTALL_DEPENDENCIES=ON"
 fi
+
 check_exit_code "$?"
 
 if ($build_tests) || (($run_tests) && [[ ! -f ./test/UnitTests ]]); then
