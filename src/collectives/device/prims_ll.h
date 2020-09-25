@@ -99,9 +99,8 @@ class ncclLLPrimitives {
     using Vec = uint32_t __attribute__((ext_vector_type(4)));
     Vec i4;
     do {
-      asm volatile ("flat_load_dwordx4 %0, %1, glc\n"
-        "s_waitcnt vmcnt(0)\n"
-        "buffer_wbinvl1_vol\n" : "=v"(i4) : "v"(src));
+      asm volatile ("flat_load_dwordx4 %0, %1, glc, slc\n"
+        "s_waitcnt vmcnt(0)\n" : "=v"(i4) : "v"(src));
       if (checkAbort(i, 0)) break;
     } while ((i4[1] != flag) || (i4[3] != flag));
     uint64_t val64 = (uint64_t)(i4[0]) + (((uint64_t)i4[2]) << 32);
@@ -123,9 +122,8 @@ class ncclLLPrimitives {
     i4[1] = flag;
     i4[2] = (val >> 32);
     i4[3] = flag;
-    asm volatile ("flat_store_dwordx4 %0, %1, glc\n"
-      "s_waitcnt vmcnt(0)\n"
-      "buffer_wbinvl1_vol\n" : : "v"(dst), "v"(i4));
+    asm volatile ("flat_store_dwordx4 %0, %1, glc, slc\n"
+      "s_waitcnt vmcnt(0)\n" : : "v"(dst), "v"(i4));
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag));
 #endif
