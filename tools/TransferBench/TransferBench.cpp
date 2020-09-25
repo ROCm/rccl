@@ -23,190 +23,130 @@ THE SOFTWARE.
 // This program measures simultaneous copy performance across multiple GPUs
 // on the same node
 
-#include <chrono>
-#include <cstdio>
-#include <cstdlib>
-#include <set>
-#include <unistd.h>
-#include <map>
-#include <iostream>
-#include <sstream>
-#include <hip/hip_runtime.h>
-#include <hip/hip_ext.h>
-#include "copy_kernel.h"
 #include "TransferBench.hpp"
-#include <hsa/hsa.h>
-#include <hsa/hsa_ext_amd.h>
+
+// Simple configuration parameters
+size_t const DEFAULT_BYTES_PER_LINK = (1<<28);
+int    const DEFAULT_NUM_WARMUPS    = 3;
+int    const DEFAULT_NUM_ITERATIONS = 10;
 
 int main(int argc, char **argv)
 {
   // Display usage
   if (argc <= 1)
   {
-    printf("Usage: %s configFile <N>\n", argv[0]);
-    printf("- configFile: file describing topologies to test\n");
-    printf("  Each line should contain a single topology\n");
-    printf("  Either:\n");
-    printf("    Method 1: #Links followed by triplets:\n");
-    printf("    L - number of links followed by L white-space separated triples (src, dst, # blocks)\n");
-    printf("    For example:\n");
-    printf("      2  0 1 3  1 0 3\n");
-    printf("      would define 2 links each using 3 threadblocks from GPU0 -> GPU1, and GPU1->GPU0\n");
-    printf("  Or:\n");
-    printf("    Method 2: -#Links #BlocksToUse, followed by (src,dst) pairs\n");
-    printf("    -#Links - (negative) number of links\n");
-    printf("    #BlocksToUse - # of threadblocks/CUs to use per link\n");
-    printf("    Example:\n");
-    printf("    -2 3   0 1    1 0\n");
-    printf("      would define 2 links each using 3 threadblocks from GPU0 -> GPU1, and GPU1->GPU0\n");
-    printf("- N: (Optional) Number of bytes to transfer per link.\n");
-    printf("     If not specified, defaults to 2^28=256MB. Must be a multiple of 128 bytes\n");
-    printf("     If 0 is specified, a range of Ns will be benchmarked\n");
-    printf("\n");
-    printf("Environment variables:\n");
-    printf("======================\n");
-    printf(" USE_HIP_CALL     - Use hip calls (hipMemcpyAsync/hipMemset) instead of kernel\n");
-    printf(" USE_MEMSET       - Write constant value (instead of doing a copy)\n");
-    printf(" USE_COARSE_MEM   - Use coarse-grained dst GPU memory (instead of fine-grained)\n");
-    printf(" USE_SINGLE_SYNC  - Only synchronize once at end of iterations (disables GPU times)\n");
-    printf(" USE_INTERACTIVE  - Waits for user-input prior to start and after transfer loop (for profiling)\n");
-    printf(" USE_ITERATIONS=N - Sets number of iterations to run (default is 10)\n");
-    printf(" USE_SLEEP        - Adds a 100ms sleep after sync (for profiling)\n");
-    printf(" REUSE_STREAMS    - Re-uses streams instead of creating/destroying per topology\n");
-
-    printf("\nDetected topology:\n");
-    int numDevices;
-    HIP_CALL(hipGetDeviceCount(&numDevices));
-
-    printf("        |");
-    for (int j = 0; j < numDevices; j++)
-      printf(" GPU %02d |", j);
-    printf("\n");
-    for (int j = 0; j <= numDevices; j++)
-      printf("--------+");
-    printf("\n");
-
-    for (int i = 0; i < numDevices; i++)
-    {
-      printf(" GPU %02d |", i);
-      for (int j = 0; j < numDevices; j++)
-      {
-        if (i == j)
-          printf("    -   |");
-        else
-        {
-          uint32_t linkType, hopCount;
-          HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
-          printf(" %s-%d |",
-                 linkType == HSA_AMD_LINK_INFO_TYPE_HYPERTRANSPORT ? "  HT" :
-                 linkType == HSA_AMD_LINK_INFO_TYPE_QPI            ? " QPI" :
-                 linkType == HSA_AMD_LINK_INFO_TYPE_PCIE           ? "PCIE" :
-                 linkType == HSA_AMD_LINK_INFO_TYPE_INFINBAND      ? "INFB" :
-                 linkType == HSA_AMD_LINK_INFO_TYPE_XGMI           ? "XGMI" : "????",
-                 hopCount);
-        }
-      }
-      printf("\n");
-    }
+    DisplayUsage(argv[0]);
+    DisplayTopology();
     exit(0);
   }
 
-  // Parse number of bytes to use (or use default if not specified)
-  std::vector<size_t> Nvector;
-  size_t const numBytesPerLink = argc > 2 ? atoll(argv[2]) : (1<<28);
+  // Determine number of bytes to run per link
+  // If a non-zero number of bytes is specified, use it
+  // Otherwise generate array of bytes values to execute over
+  std::vector<size_t> valuesOfN;
+  size_t const numBytesPerLink = argc > 2 ? atoll(argv[2]) : DEFAULT_BYTES_PER_LINK;
 
   if (numBytesPerLink % 128)
   {
     printf("[ERROR] numBytesPerLink (%lu) must be a multiple of 128\n", numBytesPerLink);
     exit(1);
   }
-  if (numBytesPerLink == 0)
+
+  if (numBytesPerLink != 0)
+  {
+    size_t N = numBytesPerLink / sizeof(float);
+    printf("Operating on %zu bytes per link (%zu floats)\n", numBytesPerLink, N);
+    valuesOfN.push_back(N);
+  }
+  else
   {
     printf("Operating on range of sizes\n");
     for (int N = 256; N <= (1<<27); N *= 2)
     {
-      int decimationFactor = 1;
+      int decimationFactor = 1;  // This can be modified to increase number of samples between powers of two
       int delta = std::max(32, N / decimationFactor);
       int curr = N;
       while (curr < N * 2)
       {
-        Nvector.push_back(curr);
+        valuesOfN.push_back(curr);
         curr += delta;
       }
     }
   }
-  else
-  {
-    size_t N = numBytesPerLink / sizeof(float);
-    printf("Operating on %zu bytes per link (%zu floats)\n", numBytesPerLink, N);
-    Nvector.push_back(N);
-  }
 
   // Collect environment variables / display current run configuration
-  bool useHipCall     = getenv("USE_HIP_CALL");
-  bool useMemset      = getenv("USE_MEMSET");
-  bool useCoarseMem   = getenv("USE_COARSE_MEM");
-  bool useSingleSync  = getenv("USE_SINGLE_SYNC");
-  bool useInteractive = getenv("USE_INTERACTIVE");
-  bool useSleep       = getenv("USE_SLEEP");
-  bool reuseStreams   = getenv("REUSE_STREAMS");
+  bool useHipCall      = getenv("USE_HIP_CALL");       // Use hipMemcpy/hipMemset instead of custom shader kernels
+  bool useMemset       = getenv("USE_MEMSET");         // Perform a memset instead of a copy (ignores source memory)
+  bool useFineGrainMem = getenv("USE_FINEGRAIN_MEM");  // Allocate fine-grained GPU memory instead of coarse-grained GPU memory
+  bool useSingleSync   = getenv("USE_SINGLE_SYNC");    // Perform synchronization only once after all iterations instead of per iteration
+  bool useInteractive  = getenv("USE_INTERACTIVE");    // Pause for user-input before starting transfer loop
+  bool useSleep        = getenv("USE_SLEEP");          // Adds a 100ms sleep after each synchronization
+  bool reuseStreams    = getenv("REUSE_STREAMS");      // Re-use streams instead of creating / destroying per test
+  bool showAddr        = getenv("SHOW_ADDR");          // Print out memory addresses for each Link
+  int  byteOffset      = getenv("BYTE_OFFSET") ? atoi(getenv("BYTE_OFFSET")) : 0; // Byte-offset for memory allocations
+  int  numWarmups      = getenv("NUM_WARMUPS") ? atoi(getenv("NUM_WARMUPS")) : DEFAULT_NUM_WARMUPS;
+  int  numIterations   = getenv("NUM_ITERATIONS") ? atoi(getenv("NUM_ITERATIONS")) : DEFAULT_NUM_ITERATIONS;
 
-  int numWarmups = 3;
-  int numIterations = getenv("USE_ITERATIONS") ? atoi(getenv("USE_ITERATIONS")) : 10;
+  if (byteOffset % 4)
+  {
+    printf("[ERROR] byteOffset must be a multiple of 4\n");
+    exit(1);
+  }
+  int initOffset = byteOffset / sizeof(float);
 
-  printf("Running %s%s tests (control using USE_HIP_CALL/USE_MEMSET)\n",
-         useHipCall ? "hipMem" : "mem",
-         useMemset ? "set" : "cpy");
-  printf("Destination memory: %s-grained (control using USE_COARSE_MEM)\n",
-         useCoarseMem ? "coarse" : "fine");
+  char *env;
+  printf("Run configuration\n");
+  printf("=====================================================\n");
+  printf("%-20s %8s: Using %s\n",
+         "USE_HIP_CALL", useHipCall ? "(set)" : "(unset)",
+         useHipCall ? "HIP functions" : "custom kernels");
+  printf("%-20s %8s: Performing %s\n",
+         "USE_MEMSET", useMemset ? "(set)" : "(unset)",
+         useMemset ? "memset" : "memcopy");
   if (useHipCall && !useMemset)
   {
-    if (getenv("HSA_ENABLE_SDMA") && !strcmp(getenv("HSA_ENABLE_SDMA"), "0"))
-      printf("Using blit kernels for hipMemcpy. (HSA_ENABLE_SDMA=0)\n");
-    else
-      printf("Using DMA copy engines (disable by setting HSA_ENABLE_SDMA=0)\n");
+    env = getenv("HSA_ENABLE_SDMA");
+    printf("%-20s %8s: %s\n",
+           "HSA_ENABLE_SDMA", env ? env : "(unset)",
+           (env && !strcmp(env, "0")) ? "Using blit kernels for hipMemcpy" : "Using DMA copy engines");
   }
-  if (useSingleSync)
-    printf("Synchronizing only once, after all iterations\n");
-  else
-    printf("Synchronizing per iteration  (disable via USE_SINGLE_SYNC)\n");
+  printf("%-20s %8s: GPU destination memory type: %s-grained\n",
+         "USE_FINEGRAIN_MEM", useFineGrainMem ? "(set)" : "(unset)",
+         useFineGrainMem ? "fine" : "coarse");
+  printf("%-20s %8s: %s\n",
+         "USE_SINGLE_SYNC", useSingleSync ? "(set)" : "(unset)",
+         useSingleSync ? "Synchronizing only once, after all iterations" : "Synchronizing per iteration");
+  printf("%-20s %8s: Running in %s mode\n",
+         "USE_INTERACTIVE", useInteractive ? "(set)" : "(unset)",
+         useInteractive ? "interactive" : "non-interactive");
+  printf("%-20s %8s: %s\n",
+         "USE_SLEEP", useSleep ? "(set)" : "(unset)",
+         useSleep ? "Add sleep after each sync" : "No sleep per sync");
+  printf("%-20s %8s: %s\n",
+         "REUSE_STREAMS", reuseStreams ? "(set)" : "(unset)",
+         reuseStreams ? "Re-using streams per topology" : "Creating/destroying streams per topology");
+  printf("%-20s %8s: %s\n",
+         "SHOW_ADDR", showAddr ? "(set)" : "(unset)",
+         showAddr ? "Displaying src/dst mem addresses" : "Not displaying src/dst mem addresses");
+  env = getenv("BYTE_OFFSET");
+  printf("%-20s %8s: Using byte offset of %d\n",
+         "BYTE_OFFSET", env ? env : "(unset)", byteOffset);
+  env = getenv("NUM_WARMUPS");
+  printf("%-20s %8s: Running %d warmup iteration(s) per topology\n",
+         "NUM_WARMUPS", env ? env : "(unset)", numWarmups);
+  env = getenv("NUM_ITERATIONS");
+  printf("%-20s %8s: Running %d timed iteration(s) per topology\n",
+         "NUM_ITERATIONS", env ? env : "(unset)", numIterations);
+  printf("\n");
 
-  if (useInteractive)
-    printf("Running in interactive mode (USE_INTERACTIVE)\n");
-  else
-    printf("Running in non-interactive mode (enable interactive mode via USE_INTERACTIVE)\n");
-  if (useSleep)
-    printf("Adding 100ms sleep after sync (USE_SLEEP)\n");
-  else
-    printf("No sleep per sync (enable sleep via USE_SLEEP)\n");
-  if (reuseStreams)
-    printf("Re-using streams per topology (REUSE_STREAMS)\n");
-  else
-    printf("Creating/destroying streams per topology (re-use streams via REUSE_STREAMS)\n");
-
-  printf("Executing %d warmup iteration(s), and %d timed iteration(s) (Set via USE_ITERATIONS=#)\n",
-         numWarmups, numIterations);
-
-  // Collect the number of available GPUs on this machine
-  int numDevices;
-  HIP_CALL(hipGetDeviceCount(&numDevices));
-  if (numDevices < 1)
+  // Collect the number of available CPUs/GPUs on this machine
+  int numGpuDevices;
+  HIP_CALL(hipGetDeviceCount(&numGpuDevices));
+  if (numGpuDevices < 1)
   {
     printf("[ERROR] No GPU devices found\n");
     exit(1);
   }
-
-  // Print header
-  printf("%*s", MAX_NAME_LEN, "");
-  printf("%*s | ", 8*(numDevices+1), "GPU-event measured Bandwidth (GB/s)");
-  printf("CPU BW  |    Duration (msec) | Launch\n");
-  printf("%-*s", MAX_NAME_LEN, "Configuration");
-  for (int i = 0; i < numDevices; i++)
-    printf("  GPU %02d", i);
-  printf("   Total |  (GB/s) |  Max GPU  CPU-Time | Overhead\n");
-
-  for (int i = 0; i < MAX_NAME_LEN + (8 * (numDevices + 1)); i++) printf("=");
-  printf("=|=========|====================|=========\n");
 
   // Read configuration file
   FILE* fp = fopen(argv[1], "r");
@@ -218,8 +158,10 @@ int main(int argc, char **argv)
 
   // Track links that get used
   std::map<std::pair<int, int>, int> linkMap;
-  std::vector<std::vector<hipStream_t>> streamCache(numDevices);
+  std::vector<std::vector<hipStream_t>> streamCache(numGpuDevices);
 
+  // Loop over each line in the configuration file
+  int lineNum = 0;
   char line[2048];
   while(fgets(line, 2048, fp))
   {
@@ -229,83 +171,97 @@ int main(int argc, char **argv)
 
     int const numLinks = links.size();
     if (numLinks == 0) continue;
+    lineNum++;
 
-    for (auto N : Nvector)
+    // Loop over all the different number of bytes to use per Link
+    for (auto N : valuesOfN)
     {
+      printf("Test %d: [%lu bytes]\n", lineNum, N * sizeof(float));
+      float*                  linkSrcMem[numLinks];        // Source memory per Link
+      float*                  linkDstMem[numLinks];        // Destination memory per Link
+      hipStream_t             streams[numLinks];           // hipStream to use per Link
+      hipEvent_t              startEvents[numLinks];       // Start event per Link
+      hipEvent_t              stopEvents[numLinks];        // Stop event per Link
+      hipEvent_t              dummyEvents[numLinks];       // Dummy event per Link
+      std::vector<BlockParam> cpuBlockParams[numLinks];    // CPU copy of block parameters
+      BlockParam*             gpuBlockParams[numLinks];    // GPU copy of block parameters
+
       // Clear counters
-      int linkCount[numDevices];
-      for (int i = 0; i < numDevices; i++)
+      int linkCount[numGpuDevices];
+      for (int i = 0; i < numGpuDevices; i++)
         linkCount[i] = 0;
 
-      float* linkSrcMem[numLinks];
-      float* linkDstMem[numLinks];
-      hipStream_t streams[numLinks];
-      hipEvent_t startEvents[numLinks];
-      hipEvent_t stopEvents[numLinks];
-      std::vector<BlockParam> cpuBlockParams[numLinks];
-      BlockParam* gpuBlockParams[numLinks];
-
-      char name[MAX_NAME_LEN+1] = {};
-
+      char name[MAX_NAME_LEN+1] = {};                      // Used to describe the set of Links
       for (int i = 0; i < numLinks; i++)
       {
-        int const src = links[i].srcGpu;
-        int const dst = links[i].dstGpu;
-        if (src < 0 || src >= numDevices ||
-            dst < 0 || dst >= numDevices)
+        MemType srcMemType  = links[i].srcMemType;
+        MemType dstMemType  = links[i].dstMemType;
+        int     exeIndex    = links[i].exeIndex;
+        int     srcIndex    = links[i].srcIndex;
+        int     dstIndex    = links[i].dstIndex;
+        int     blocksToUse = links[i].numBlocksToUse;
+
+        // Check for valid src/dst indices
+        if ((srcIndex < 0 || srcIndex >= numGpuDevices) ||
+            (dstIndex < 0 || dstIndex >= numGpuDevices) ||
+            (exeIndex < 0 || exeIndex >= numGpuDevices))
         {
-          printf("[ERROR] Invalid link (%d to %d). Total devices: %d\n", src, dst, numDevices);
+          printf("[ERROR] Invalid link %d:(%c%d->%c%d). Total devices: %d\n",
+                 exeIndex, MemTypeStr[srcMemType], srcIndex, MemTypeStr[dstMemType], dstIndex, numGpuDevices);
           exit(1);
         }
-        snprintf(name + strlen(name), MAX_NAME_LEN, "%d->%d:%d ", src, dst, links[i].numBlocksToUse);
+        snprintf(name + strlen(name), MAX_NAME_LEN, "%d:(%c%d->%c%d:%d)",
+                 exeIndex, MemTypeStr[srcMemType], srcIndex, MemTypeStr[dstMemType], dstIndex, blocksToUse);
 
         // Enable peer-to-peer access if this is the first time seeing this pair
-        auto linkPair = std::make_pair(src, dst);
-        linkMap[linkPair]++;
-        if (linkMap[linkPair] == 1 && src != dst)
+        if (srcMemType == MEM_GPU && dstMemType == MEM_GPU)
         {
-          int canAccess;
-          HIP_CALL(hipDeviceCanAccessPeer(&canAccess, src, dst));
-          if (!canAccess)
+          auto linkPair = std::make_pair(srcIndex, dstIndex);
+          linkMap[linkPair]++;
+          if (linkMap[linkPair] == 1 && srcIndex != dstIndex)
           {
-            printf("[ERROR] Unable to enable peer access between device %d and %d\n", src, dst);
-            exit(1);
+            int canAccess;
+            HIP_CALL(hipDeviceCanAccessPeer(&canAccess, srcIndex, dstIndex));
+            if (!canAccess)
+            {
+              printf("[ERROR] Unable to enable peer access between GPU devices %d and %d\n", srcIndex, dstIndex);
+              exit(1);
+            }
+            HIP_CALL(hipSetDevice(srcIndex));
+            HIP_CALL(hipDeviceEnablePeerAccess(dstIndex, 0));
           }
-          HIP_CALL(hipSetDevice(src));
-          HIP_CALL(hipDeviceEnablePeerAccess(dst, 0));
         }
 
-        // Allocate GPU memory on source GPU / streams / events
-        HIP_CALL(hipSetDevice(src));
+        // Allocate hipEvents / hipStreams on executing GPU
+        HIP_CALL(hipSetDevice(exeIndex));
+        HIP_CALL(hipEventCreate(&startEvents[i]));
+        HIP_CALL(hipEventCreate(&stopEvents[i]));
+        HIP_CALL(hipEventCreate(&dummyEvents[i]));
+        HIP_CALL(hipMalloc((void**)&gpuBlockParams[i], sizeof(BlockParam) * numLinks));
         if (reuseStreams)
         {
-          // Create new stream if necessary
-          if (streamCache[src].size() <= linkCount[src])
+          // If re-using streams, create new stream, otherwise point to existing stream
+          if (streamCache[exeIndex].size() <= linkCount[exeIndex])
           {
-            streamCache[src].resize(linkCount[src] + 1);
-            HIP_CALL(hipStreamCreate(&streamCache[src][linkCount[src]]));
+            streamCache[exeIndex].resize(linkCount[exeIndex] + 1);
+            HIP_CALL(hipStreamCreate(&streamCache[exeIndex][linkCount[exeIndex]]));
           }
-          streams[i] = streamCache[src][linkCount[src]];
+          streams[i] = streamCache[exeIndex][linkCount[exeIndex]];
         }
         else
         {
           HIP_CALL(hipStreamCreate(&streams[i]));
         }
-        HIP_CALL(hipEventCreate(&startEvents[i]));
-        HIP_CALL(hipEventCreate(&stopEvents[i]));
-        HIP_CALL(hipMalloc((void **)&linkSrcMem[i], N * sizeof(float)));
-        HIP_CALL(hipMalloc((void**)&gpuBlockParams[i], sizeof(BlockParam) * numLinks));
-        CheckOrFill(N, linkSrcMem[i], false, useMemset, useHipCall);
+
+        // Allocate source / destination memory based on type / device index
+        AllocateMemory(srcMemType, srcIndex, N * sizeof(float) + byteOffset, useFineGrainMem, &linkSrcMem[i]);
+        AllocateMemory(dstMemType, dstIndex, N * sizeof(float) + byteOffset, useFineGrainMem, &linkDstMem[i]);
+
+        // Initialize source memory with patterned data
+        CheckOrFill(MODE_FILL, N, useMemset, useHipCall, linkSrcMem[i] + initOffset);
 
         // Count # of links / total blocks each GPU will be working on
-        linkCount[src]++;
-
-        // Allocate GPU memory on destination GPU
-        HIP_CALL(hipSetDevice(links[i].dstGpu));
-        if (useCoarseMem)
-          HIP_CALL(hipMalloc((void**)&linkDstMem[i], N * sizeof(float)));
-        else
-          HIP_CALL(hipExtMallocWithFlags((void**)&linkDstMem[i], N * sizeof(float), hipDeviceMallocFinegrained));
+        linkCount[exeIndex]++;
 
         // Each block needs to know src/dst pointers and how many elements to transfer
         // Figure out the sub-array each block does for this link
@@ -319,9 +275,9 @@ int main(int argc, char **argv)
           BlockParam param;
           param.N   = perBlockBaseN + ((j < blocksWithExtra) ? 32 : 0);
           param.src = linkSrcMem[i] + ((j * perBlockBaseN) + ((j < blocksWithExtra) ?
-                                                              j : blocksWithExtra) * 32);
+                                                              j : blocksWithExtra) * 32) + initOffset;
           param.dst = linkDstMem[i] + ((j * perBlockBaseN) + ((j < blocksWithExtra) ?
-                                                              j : blocksWithExtra) * 32);
+                                                              j : blocksWithExtra) * 32) + initOffset;
           cpuBlockParams[i].push_back(param);
         }
 
@@ -331,11 +287,13 @@ int main(int argc, char **argv)
 
       // Launch kernels (warmup iterations are not counted)
       double totalCpuTime = 0;
-      double totalGpuTime[numDevices];
-      for (int i = 0; i < numDevices; i++) totalGpuTime[i] = 0.0;
+      double totalGpuTime[numLinks];
+
+      for (int i = 0; i < numLinks; i++) totalGpuTime[i] = 0.0;
 
       for (int iteration = -numWarmups; iteration < numIterations; iteration++)
       {
+        // Pause before starting first timed iteration in interactive mode
         if (useInteractive && iteration == 0)
         {
           printf("Hit <Enter> to continue: ");
@@ -343,59 +301,62 @@ int main(int argc, char **argv)
           printf("\n");
         }
 
+        // Start CPU timing for this iteration
         auto cpuStart = std::chrono::high_resolution_clock::now();
 
-#pragma omp parallel for num_threads(numLinks)
+        // Run all links in parallel (one thread per link)
+        #pragma omp parallel for num_threads(numLinks)
         for (int i = 0; i < numLinks; i++)
         {
-          HIP_CALL(hipSetDevice(links[i].srcGpu));
+          HIP_CALL(hipSetDevice(links[i].exeIndex));
 
-          hipEvent_t startEvent = nullptr;
-          hipEvent_t stopEvent = nullptr;
-          if (!useSingleSync || iteration == 0)
-            startEvent = startEvents[i];
-          if (!useSingleSync || iteration == numIterations - 1)
-            stopEvent = stopEvents[i];
+          bool recordStart = (!useSingleSync || iteration == 0);
+          bool recordStop  = (!useSingleSync || iteration == numIterations - 1);
 
           if (useHipCall)
           {
-            if (startEvent != nullptr)
-              HIP_CALL(hipEventRecord(startEvent, streams[i]));
+            // Record start event
+            if (recordStart) HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
+
+            // Execute hipMemset / hipMemcpy
             if (useMemset)
-            {
-              HIP_CALL(hipMemsetAsync(linkDstMem[i], 42, N * sizeof(float), streams[i]));
-            }
+              HIP_CALL(hipMemsetAsync(linkDstMem[i] + initOffset, 42, N * sizeof(float), streams[i]));
             else
-            {
-              HIP_CALL(hipMemcpyAsync(linkDstMem[i], linkSrcMem[i],
+              HIP_CALL(hipMemcpyAsync(linkDstMem[i] + initOffset,
+                                      linkSrcMem[i] + initOffset,
                                       N * sizeof(float), hipMemcpyDeviceToDevice,
                                       streams[i]));
-            }
-            if (stopEvent != nullptr)
-              HIP_CALL(hipEventRecord(stopEvent, streams[i]));
+            // Record stop event
+            if (recordStop) HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
           }
           else
           {
+            // Record start event
+            //if (recordStart) HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
             hipExtLaunchKernelGGL(useMemset ? MemsetKernel : CopyKernel,
                                   dim3(links[i].numBlocksToUse, 1, 1),
                                   dim3(BLOCKSIZE, 1, 1),
-                                  0,
-                                  streams[i],
-                                  startEvent,
-                                  stopEvent,
-                                  0,
-                                  gpuBlockParams[i]);
+                                  0, streams[i],
+                                  recordStart ? startEvents[i] : dummyEvents[i],
+                                  recordStop  ?  stopEvents[i] : dummyEvents[i],
+                                  0, gpuBlockParams[i]);
+            // Record stop event
+            //if (recordStop) HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
           }
         }
 
         // Synchronize per iteration, unless in single sync mode, in which case
         // synchronize during last warmup / last actual iteration
-        if (!useSingleSync || iteration == -1  || iteration == numIterations - 1)
+        if (!useSingleSync || iteration == -1 || iteration == numIterations - 1)
         {
           for (int i = 0; i < numLinks; i++)
+          {
+            HIP_CALL(hipSetDevice(links[i].exeIndex));
             hipStreamSynchronize(streams[i]);
+          }
         }
 
+        // Stop CPU timing for this iteration
         auto cpuDelta = std::chrono::high_resolution_clock::now() - cpuStart;
         double deltaSec = std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count();
         if (useSleep) usleep(100000);
@@ -404,31 +365,17 @@ int main(int argc, char **argv)
         {
           totalCpuTime += deltaSec;
 
-          for (int i = 0; i < numDevices; i++)
+          // Record GPU timing
+          if (!useSingleSync || iteration == numIterations - 1)
           {
-            // Collect GPU information only if this is the last iteration for single sync mode
-            if (useSingleSync && iteration != numIterations - 1)
+            for (int i = 0; i < numLinks; i++)
             {
-              totalGpuTime[i] = 0.00;
-            }
-            else
-            {
-              // Multiple links running on the same device may be running simultaneously
-              // so try to figure out the first/last event across all links
-              float maxTime = 0.0f;
-              for (int j = 0; j < numLinks; j++)
-              {
-                if (links[j].srcGpu != i) continue;
-                for (int k = 0; k < numLinks; k++)
-                {
-                  if (links[k].srcGpu != i) continue;
-
-                  float gpuDeltaMsec;
-                  HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvents[j], stopEvents[k]));
-                  maxTime = std::max(maxTime, gpuDeltaMsec);
-                }
-              }
-              totalGpuTime[i] += maxTime / 1000.0;
+              HIP_CALL(hipSetDevice(links[i].exeIndex));
+              HIP_CALL(hipEventSynchronize(startEvents[i]));
+              HIP_CALL(hipEventSynchronize(stopEvents[i]));
+              float gpuDeltaMsec;
+              HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvents[i], stopEvents[i]));
+              totalGpuTime[i] += gpuDeltaMsec;
             }
           }
         }
@@ -443,60 +390,40 @@ int main(int argc, char **argv)
 
       // Validate that each link has transferred correctly
       for (int i = 0; i < numLinks; i++)
-        CheckOrFill(N, linkDstMem[i], true, useMemset, useHipCall);
+        CheckOrFill(MODE_CHECK, N, useMemset, useHipCall, linkDstMem[i] + initOffset);
 
       // Report timings
-      double totalGpuBandwidth = 0;
-      snprintf(name + strlen(name), MAX_NAME_LEN, "[%lu] ", N * sizeof(float));
 
-      printf("%-*s", MAX_NAME_LEN, name);
-      for (int i = 0; i < numDevices; i++)
+      for (int i = 0; i < numLinks; i++)
       {
-        if (linkCount[i] == 0)
-        {
-          printf("%8.3f", 0.0f);
-        }
-        else
-        {
-          totalGpuTime[i] /= (1.0 * numIterations);
-          double linkBandwidth = (linkCount[i] * N * sizeof(float) / 1.0E9) / totalGpuTime[i];
-          printf("%8.3f", linkBandwidth);
-          totalGpuBandwidth += linkBandwidth;
-        }
+        double linkDurationMsec = totalGpuTime[i] / (1.0 * numIterations);
+        double linkBandwidthGbs = (N * sizeof(float) / 1.0E9) / linkDurationMsec * 1000.0f;
+        printf(" Link %02d: %c%02d -> [GPU %02d:%02d] -> %c%02d | %9.3f GB/s | %8.3f ms |",
+               i + 1,
+               MemTypeStr[links[i].srcMemType], links[i].srcIndex,
+               links[i].exeIndex, links[i].numBlocksToUse,
+               MemTypeStr[links[i].dstMemType], links[i].dstIndex,
+               linkBandwidthGbs, linkDurationMsec);
+        if (showAddr) printf(" %16p | %16p |", linkSrcMem[i] + initOffset, linkDstMem[i] + initOffset);
+        printf("\n");
       }
-      // Print off total bandwidth
-      totalCpuTime /= numIterations;
-      printf("%8.3f", totalGpuBandwidth);
-      printf(" |");
-
-      double maxGpuTime = 0.0;
-      for (int i = 0; i < numDevices; i++)
-      {
-        if (linkCount[i] != 0)
-          maxGpuTime = std::max(maxGpuTime, totalGpuTime[i]);
-      }
-      printf("%8.3f | %8.3f  %8.3f | %6.2f%%\n",
-             ((numLinks * N * sizeof(float) / 1.0E9) / totalCpuTime),
-             maxGpuTime * 1000.0f,
-             totalCpuTime * 1000.0f,
-             (totalCpuTime - maxGpuTime) / totalCpuTime * 100.0f);
 
       // Release GPU memory
       for (int i = 0; i < numLinks; i++)
       {
-        HIP_CALL(hipFree(linkSrcMem[i]));
-        HIP_CALL(hipFree(linkDstMem[i]));
+        DeallocateMemory(links[i].srcMemType, links[i].srcIndex, linkSrcMem[i]);
+        DeallocateMemory(links[i].dstMemType, links[i].dstIndex, linkDstMem[i]);
         HIP_CALL(hipFree(gpuBlockParams[i]));
         if (!reuseStreams)
           HIP_CALL(hipStreamDestroy(streams[i]));
         HIP_CALL(hipEventDestroy(startEvents[i]));
         HIP_CALL(hipEventDestroy(stopEvents[i]));
-
       }
     }
   }
   fclose(fp);
 
+  // Clean up stream cache if re-using streams
   if (reuseStreams)
   {
     for (auto streamVector : streamCache)
@@ -505,8 +432,6 @@ int main(int argc, char **argv)
   }
 
   // Print link information
-  for (int i = 0; i < MAX_NAME_LEN + (8 * (numDevices + 1)); i++) printf("=");
-  printf("=|=========|====================|=========\n");
   printf("Link topology:\n");
   uint32_t linkType;
   uint32_t hopCount;
@@ -524,4 +449,254 @@ int main(int argc, char **argv)
            hopCount);
   }
   return 0;
+}
+
+void DisplayUsage(char const* cmdName)
+{
+  printf("Usage: %s configFile <N>\n", cmdName);
+
+  printf("  configFile: File containing Links to execute (see below for format)\n");
+  printf("  N         : (Optional) Number of bytes to transfer per link.\n");
+  printf("              If not specified, defaults to %lu bytes. Must be a multiple of 128 bytes\n", DEFAULT_BYTES_PER_LINK);
+  printf("              If 0 is specified, a range of Ns will be benchmarked\n");
+  printf("\n");
+  printf("Configfile Format:\n");
+  printf("==================\n");
+  printf("A Link is defined as a uni-directional transfer from src memory location to dst memory location\n");
+  printf("Each single line in the configuration file defines a set of Links to run in parallel\n");
+  printf("\n");
+  printf("There are two ways to specify the configuration file:\n");
+  printf("\n");
+  printf("1) Basic\n");
+  printf("   The basic specification assumes the same number of threadblocks/CUs used per link\n");
+  printf("   A positive number of Links is specified followed by that number of triplets describing each Link\n");
+  printf("\n");
+  printf("   #Links #CUs (GPUIndex1 srcMem1 dstMem1) ... (GPUIndexL srcMemL dstMemL)\n");
+  printf("\n");
+  printf("2) Advanced\n");
+  printf("   The advanced specification allows different number of threadblocks/CUs used per Link\n");
+  printf("   A negative number of links is specified, followed by quadruples describing each Link\n");
+  printf("   -#Links (GPUIndex1 #CUs1 srcMem1 dstMem1) ... (GPUIndexL #CUsL srcMemL dstMemL)\n");
+  printf("\n");
+  printf("Argument Details:\n");
+  printf("  #Links  :   Number of Links to be run in parallel\n");
+  printf("  #CUs    :   Number of threadblocks/CUs to use for a Link\n");
+  printf("  GpuIndex:   0-indexed GPU id executing the Link\n");
+  printf("  srcMemL :   Source memory location (Where the data is to be read from). Ignored in memset mode\n");
+  printf("  dstMemL :   Destination memory location (Where the data is to be written to)\n");
+  printf("              Memory locations are specified by a character indicating memory type, followed by GPU device index (0-indexed)\n");
+  printf("              Supported memory locations are:\n");
+  printf("              - P:    Pinned host memory   (on CPU, on NUMA node closest to provided GPU index)\n");
+  printf("              - G:    Global device memory (on GPU)\n");
+  printf("Round brackets may be included for human clarity, but will be ignored\n");
+  printf("\n");
+  printf("Examples:\n");
+  printf("1 4 (0 G0 G1)              Single Link that uses 4 CUs on GPU 0 that reads memory from GPU 0 and copies it to memory on GPU 1\n");
+  printf("1 4 (0 G1 G0)              Single Link that uses 4 CUs on GPU 0 that reads memory from GPU 1 and copies it to memory on GPU 0\n");
+  printf("1 4 (2 P0 G2)              Single Link that uses 4 CUs on GPU 2 that reads memory from CPU 0 and copies it to memory on GPU 2\n");
+  printf("2 4 (0 G0 G1) (1 G1 G0)    Runs 2 Links in parallel.  GPU 0 - > GPU1, and GP1 -> GPU 0, each with 4 CUs\n");
+  printf("-2 (0 G0 G1 4) (1 G1 G0 2) Runs 2 Links in parallel.  GPU 0 - > GPU 1 using four CUs, and GPU1 -> GPU 0 using two CUs\n");
+  printf("\n");
+  printf("\n");
+  printf("Environment variables:\n");
+  printf("======================\n");
+  printf(" USE_HIP_CALL       - Use hipMemcpy/hipMemset instead of custom shader kernels\n");
+  printf(" USE_MEMSET         - Perform a memset instead of a copy (ignores source memory)\n");
+  printf(" USE_FINEGRAIN_MEM  - Allocate fine-grained GPU memory instead of coarse-grained GPU memory\n");
+  printf(" USE_SINGLE_SYNC    - Perform synchronization only once after all iterations instead of per iteration\n");
+  printf(" USE_INTERACTIVE    - Pause for user-input before starting transfer loop\n");
+  printf(" USE_SLEEP          - Adds a 100ms sleep after each synchronization\n");
+  printf(" REUSE_STREAMS      - Re-use streams instead of creating / destroying per test\n");
+  printf(" SHOW_ADDR          - Print out memory addresses for each Link\n");
+  printf(" BYTE_OFFSET        - Initial byte-offset for memory allocations.  Must be multiple of 4. Defaults to 0\n");
+  printf(" NUM_WARMUPS=W      - Perform W untimed warmup iteration(s) per test\n");
+  printf(" NUM_ITERATIONS=I   - Perform I timed iteration(s) per test\n");
+}
+
+void DisplayTopology()
+{
+  printf("\nDetected topology:\n");
+  int numGpuDevices;
+  HIP_CALL(hipGetDeviceCount(&numGpuDevices));
+
+  printf("        |");
+  for (int j = 0; j < numGpuDevices; j++)
+    printf(" GPU %02d |", j);
+  printf("\n");
+  for (int j = 0; j <= numGpuDevices; j++)
+    printf("--------+");
+  printf("\n");
+
+  for (int i = 0; i < numGpuDevices; i++)
+  {
+    printf(" GPU %02d |", i);
+    for (int j = 0; j < numGpuDevices; j++)
+    {
+      if (i == j)
+        printf("    -   |");
+      else
+      {
+        uint32_t linkType, hopCount;
+        HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
+        printf(" %s-%d |",
+               linkType == HSA_AMD_LINK_INFO_TYPE_HYPERTRANSPORT ? "  HT" :
+               linkType == HSA_AMD_LINK_INFO_TYPE_QPI            ? " QPI" :
+               linkType == HSA_AMD_LINK_INFO_TYPE_PCIE           ? "PCIE" :
+               linkType == HSA_AMD_LINK_INFO_TYPE_INFINBAND      ? "INFB" :
+               linkType == HSA_AMD_LINK_INFO_TYPE_XGMI           ? "XGMI" : "????",
+               hopCount);
+      }
+    }
+    printf("\n");
+  }
+}
+
+void ParseMemType(std::string const& token, MemType* memType, int* memIndex)
+{
+  char typeChar;
+  if (sscanf(token.c_str(), " %c %d", &typeChar, memIndex) != 2)
+  {
+    printf("Error parsing memory type token %s\n", token.c_str());
+    exit(1);
+  }
+
+  switch (typeChar)
+  {
+  case 'C': case 'c': *memType = MEM_CPU; break;
+  case 'G': case 'g': *memType = MEM_GPU; break;
+  default: printf("Unrecognized memory type %s\n", token.c_str()); exit(1);
+  }
+}
+
+// Helper function to parse a link of link definitions
+void ParseLinks(char* line, std::vector<Link>& links)
+{
+  // Replace any round brackets with spaces
+  for (int i = 0; line[i]; i++)
+    if (line[i] == '(' || line[i] == ')') line[i] = ' ';
+
+  links.clear();
+  int numLinks = 0;
+
+  std::istringstream iss;
+  iss.clear();
+  iss.str(line);
+  iss >> numLinks;
+  if (iss.fail()) return;
+
+  std::string srcMem;
+  std::string dstMem;
+  if (numLinks > 0)
+  {
+    // Method 1: Take in triples (exeGpu, srcMem, dstMem)
+    int numBlocksToUse;
+    iss >> numBlocksToUse;
+    if (numBlocksToUse <= 0)
+    {
+      printf("Parsing error: Number of blocks to use (%d) must be greater than 0\n", numBlocksToUse);
+      exit(1);
+    }
+    links.resize(numLinks);
+    for (int i = 0; i < numLinks; i++)
+    {
+      iss >> links[i].exeIndex >> srcMem >> dstMem;
+      ParseMemType(srcMem, &links[i].srcMemType, &links[i].srcIndex);
+      ParseMemType(dstMem, &links[i].dstMemType, &links[i].dstIndex);
+      links[i].numBlocksToUse = numBlocksToUse;
+    }
+  }
+  else
+  {
+    // Method 2: Read in quads (exeGpu, srcMem, dstMem,  Read common # blocks to use, then read (src, dst) doubles
+    numLinks *= -1;
+    links.resize(numLinks);
+
+    for (int i = 0; i < numLinks; i++)
+    {
+      iss >> links[i].exeIndex >> srcMem >> dstMem >> links[i].numBlocksToUse;
+      ParseMemType(srcMem, &links[i].srcMemType, &links[i].srcIndex);
+      ParseMemType(dstMem, &links[i].dstMemType, &links[i].dstIndex);
+    }
+  }
+}
+
+void AllocateMemory(MemType memType, int devIndex, size_t numBytes, bool useFineGrainMem, float** memPtr)
+{
+  HIP_CALL(hipSetDevice(devIndex));
+
+  if (memType == MEM_CPU)
+  {
+    // // Allocate pinned-memory on NUMA node closest to the selected GPU
+    HIP_CALL(hipHostMalloc((void **)memPtr, numBytes, hipHostMallocPortable));
+  }
+  else if (memType == MEM_GPU)
+  {
+    // Allocate GPU memory
+    if (useFineGrainMem)
+      HIP_CALL(hipExtMallocWithFlags((void**)memPtr, numBytes, hipDeviceMallocFinegrained));
+    else
+      HIP_CALL(hipMalloc((void**)memPtr, numBytes));
+  }
+  else
+  {
+    printf("Error: Unsupported memory type %d\n", memType);
+    exit(1);
+  }
+}
+
+void DeallocateMemory(MemType memType, int devIndex, float* memPtr)
+{
+  if (memType == MEM_CPU)
+  {
+    HIP_CALL(hipHostFree(memPtr));
+  }
+  else if (memType == MEM_GPU)
+  {
+    HIP_CALL(hipFree(memPtr));
+  }
+}
+
+// Helper function to either fill a device pointer with pseudo-random data, or to check to see if it matches
+void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr)
+{
+  // Prepare reference resultx
+  float* refBuffer = (float*)malloc(N * sizeof(float));
+  if (isMemset)
+  {
+    if (isHipCall)
+    {
+      memset(refBuffer, 42, N * sizeof(float));
+    }
+    else
+    {
+      for (int i = 0; i < N; i++)
+        refBuffer[i] = 1234.0f;
+    }
+  }
+  else
+  {
+    for (int i = 0; i < N; i++)
+        refBuffer[i] = (i % 383 + 31);
+  }
+
+  // Either fill the memory with the reference buffer, or compare against it
+  if (mode == MODE_FILL)
+  {
+    HIP_CALL(hipMemcpy(ptr, refBuffer, N * sizeof(float), hipMemcpyDefault));
+  }
+  else if (mode == MODE_CHECK)
+  {
+    float* hostBuffer = (float*) malloc(N * sizeof(float));
+    HIP_CALL(hipMemcpy(hostBuffer, ptr, N * sizeof(float), hipMemcpyDefault));
+    for (int i = 0; i < N; i++)
+    {
+      if (refBuffer[i] != hostBuffer[i])
+      {
+        printf("[ERROR] Mismatch at element %d Ref: %f Actual: %f\n", i, refBuffer[i], hostBuffer[i]);
+        exit(1);
+      }
+    }
+  }
+
+  free(refBuffer);
 }

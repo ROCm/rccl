@@ -22,6 +22,18 @@ THE SOFTWARE.
 
 #include <vector>
 #include <sstream>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <set>
+#include <unistd.h>
+#include <map>
+#include <iostream>
+#include <sstream>
+#include <hip/hip_runtime.h>
+#include <hip/hip_ext.h>
+#include <hsa/hsa_ext_amd.h>
+#include "copy_kernel.h"
 
 // Helper macro for catching HIP errors
 #define HIP_CALL(cmd)                                                   \
@@ -35,17 +47,30 @@ THE SOFTWARE.
         }                                                               \
     } while (0)
 
-#define MAX_NAME_LEN 64
-#define BLOCKSIZE 256
-#define COPY_UNROLL 4
-#define MEMSET_UNROLL 4
+// Different src/dst memory types supported
+typedef enum
+{
+  MEM_CPU = 0,             // Pinned CPU memory
+  MEM_GPU = 1              // Global GPU memory
+} MemType;
 
-// Each link is defined between a source GPU and destination GPU
+char const MemTypeStr[3] = "CG";
+
+typedef enum
+{
+  MODE_FILL  = 0,         // Fill data with pattern
+  MODE_CHECK = 1          // Check data against pattern
+} ModeType;
+
+// Each Link is a uni-direction operation from a src memory to dst memory executed by a specific GPU
 struct Link
 {
-    int srcGpu;         // Source GPU      (global memory source)
-    int dstGpu;         // Destination GPU (fine-grained memory destination)
-    int numBlocksToUse; // Number of threadblocks to use for this link
+  int     exeIndex;        // GPU to execute on
+  MemType srcMemType;      // Source memory type
+  int     srcIndex;        // Source device index
+  MemType dstMemType;      // Destination memory type
+  int     dstIndex;        // Destination device index
+  int     numBlocksToUse;  // Number of threadblocks to use for this Link
 };
 
 // Each threadblock copies N floats from src to dst
@@ -55,6 +80,18 @@ struct BlockParam
     float* src;
     float* dst;
 };
+
+void DisplayUsage(char const* cmdName);                // Display usage instructions
+void DisplayTopology();                                // Display GPU topology
+void ParseLinks(char* line, std::vector<Link>& links); // Parse Link information
+void AllocateMemory(MemType memType, int devIndex, size_t numBytes, bool useFineGrainMem, float** memPtr);
+void DeallocateMemory(MemType memType, int devIndex, float* memPtr);
+void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr);
+
+#define MAX_NAME_LEN 64
+#define BLOCKSIZE 256
+#define COPY_UNROLL 4
+#define MEMSET_UNROLL 4
 
 // GPU copy kernel
 __global__ void __launch_bounds__(BLOCKSIZE)
@@ -82,84 +119,4 @@ MemsetKernel(BlockParam* blockParams)
     {
       dst[tid] = 1234.0;
     }
-}
-
-// Helper function to parse a link of link definitions
-void ParseLinks(char const* line, std::vector<Link>& links)
-{
-    links.clear();
-    int numLinks = 0;
-
-    std::istringstream iss;
-    iss.clear();
-    iss.str(line);
-    iss >> numLinks;
-    if (iss.fail()) return;
-
-    if (numLinks > 0)
-    {
-      // Method 1: Take in triples (src, dst, # blocks to use)
-      links.resize(numLinks);
-      for (int i = 0; i < numLinks; i++)
-        iss >> links[i].srcGpu >> links[i].dstGpu >> links[i].numBlocksToUse;
-
-    }
-    else
-    {
-      // Method 2: Read common # blocks to use, then read (src, dst) doubles
-      int numBlocksToUse;
-      iss >> numBlocksToUse;
-      if (iss.fail()) return;
-
-      numLinks *= -1;
-      links.resize(numLinks);
-      for (int i = 0; i < numLinks; i++)
-      {
-        iss >> links[i].srcGpu >> links[i].dstGpu;
-        links[i].numBlocksToUse = numBlocksToUse;
-      }
-    }
-}
-
-// Helper function to either fill a device pointer with pseudo-random data, or to check to see if it matches
-void CheckOrFill(int N, float* devPtr, bool doCheck, bool isMemset, bool isHipCall)
-{
-    float* refBuffer = (float*)malloc(N * sizeof(float));
-
-    if (isMemset)
-    {
-      if (isHipCall)
-      {
-        memset(refBuffer, 42, N * sizeof(float));
-      }
-      else
-      {
-        for (int i = 0; i < N; i++)
-          refBuffer[i] = 1234.0f;
-      }
-    }
-    else
-    {
-      for (int i = 0; i < N; i++)
-        refBuffer[i] = (i % 383 + 31);
-    }
-
-    if (doCheck)
-    {
-        float* hostBuffer = (float*) malloc(N * sizeof(float));
-        HIP_CALL(hipMemcpy(hostBuffer, devPtr, N * sizeof(float), hipMemcpyDeviceToHost));
-        for (int i = 0; i < N; i++)
-        {
-            if (refBuffer[i] != hostBuffer[i])
-            {
-                printf("[ERROR] Mismatch at element %d Ref: %f Actual: %f\n", i, refBuffer[i], hostBuffer[i]);
-                exit(1);
-            }
-        }
-    }
-    else
-    {
-        HIP_CALL(hipMemcpy(devPtr, refBuffer, N * sizeof(float), hipMemcpyHostToDevice));
-    }
-    free(refBuffer);
 }
