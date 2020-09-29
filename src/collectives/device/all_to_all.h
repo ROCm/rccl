@@ -24,7 +24,7 @@ __device__ void ncclAllToAllKernel(struct CollectiveArgs* args) {
   const int rank = ring->devUserRanks[0];
   const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS);
   const int chunkSize = stepSize * ALLTOALL_CHUNKSTEPS;
-  const int peersPerChan = (nChannels >= nranks ? 1 : DIVUP(nranks, nChannels));
+  const int peersPerChan = DIVUP(nranks, nChannels);
   const ssize_t loopSize = (peersPerChan == 1 ? (nChannels/nranks)*(ssize_t)chunkSize : (ssize_t)chunkSize);
 
   // Compute pointers

@@ -166,7 +166,7 @@ ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel
 }
 
 ncclResult_t ncclProxySaveA2a(struct ncclProxyArgs* args, struct ncclInfo* info) {
-  const int peersPerChan = (info->nChannels >= info->comm->nRanks ? 1 : DIVUP(info->comm->nRanks, info->nChannels));
+  const int peersPerChan = DIVUP(info->comm->nRanks, info->nChannels);
   const int chunkSize  = info->comm->buffSizes[info->protocol]/NCCL_STEPS*info->chunkSteps;
   const int loopSize = (info->nChannels >= info->comm->nRanks ? (info->nChannels/info->comm->nRanks) : 1)*info->nchunksPerLoop*chunkSize;
   for (int p=0; p<peersPerChan; p++) {

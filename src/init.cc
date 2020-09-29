@@ -944,7 +944,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     if (comm->topo->type == RCCL_TOPO_4P2H_ROME)
       nc = 2;
     for (int c=0; c<nc; c++) {
-      const int peersPerChan = (nc >= nranks ? 1 : DIVUP(nranks, nc));
+      const int peersPerChan = DIVUP(nranks, nc);
       struct ncclP2PConnect* connect = &comm->p2plist.connect;
       connect->nrecv[c] = 0;
       connect->nsend[c] = 0;
