@@ -21,6 +21,7 @@
 
 #define RCCL_BFLOAT16 1
 #define RCCL_GATHER_SCATTER 1
+#define RCCL_ALLTOALLV 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -312,6 +313,24 @@ ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 ncclResult_t pncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+
+/*! @brief All-To-Allv
+ *
+ * @details Device (i) sends sendcounts[j] of data from offset sdispls[j]
+ * to device (j). In the same time, device (i) receives recvcounts[j] of data
+ * from device (j) to be placed at rdispls[j].
+
+ * sendcounts, sdispls, recvcounts and rdispls are all measured in the units
+ * of datatype, not bytes.
+ *
+ * In-place operation will happen if sendbuff == recvbuff.
+ */
+ncclResult_t  ncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
+    const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
+    const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
+    const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
+    const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 
 /*
  * Group semantics

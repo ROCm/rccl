@@ -599,7 +599,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     }
   }
 
-  if (comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_4P2H_ROME) {
+  if (comm->topo->type == RCCL_TOPO_4P2H_ROME) {
     // Adjust P2P channels on Rome
     comm->p2pnChannelsPerPeer = 2;
     comm->p2pnChannels = 2;

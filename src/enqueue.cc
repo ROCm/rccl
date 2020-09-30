@@ -8,6 +8,7 @@
 #include "enqueue.h"
 #include "argcheck.h"
 #include "coll_net.h"
+#include "../graph/topo.h"
 
 // Only generate inline kernels for LL
 #define NCCL_FUNC5(coll, op, dtype) \
@@ -272,7 +273,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
       }
     }
   }
-  if (info->coll == ncclCollAllToAll || info->coll == ncclCollGather || info->coll == ncclCollScatter) {
+  if (info->coll == ncclCollAllToAll || info->coll == ncclCollGather || info->coll == ncclCollScatter || info->coll == ncclCollAllToAllv) {
     info->algorithm = NCCL_ALGO_RING;
     info->protocol = NCCL_PROTO_SIMPLE;
   }
@@ -284,12 +285,15 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
 
   int nc = (info->algorithm == NCCL_ALGO_COLLNET) ? comm->nChannels/2 : comm->nChannels; // CollNet uses one channel for up and one channel for down
+  if (info->comm->topo->type == RCCL_TOPO_4P2H_ROME && (info->coll == ncclCollAllToAll ||
+    info->coll == ncclCollGather || info->coll == ncclCollScatter || info->coll == ncclCollAllToAllv))
+    nc = 2;
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   while (info->nBytes < nc*nt*threadThreshold) {
     // do not reduce channels in case of alltoall
     if (info->algorithm != NCCL_ALGO_COLLNET && info->coll != ncclCollAllToAll &&
-      info->coll != ncclCollGather && info->coll != ncclCollScatter && nc >= 2) nc--;
+      info->coll != ncclCollGather && info->coll != ncclCollScatter && info->coll != ncclCollAllToAllv && nc >= 2) nc--;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     // do not reduce threads count on VEGA
 #else
@@ -320,6 +324,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
     case ncclCollGather:
     case ncclCollScatter:
     case ncclCollAllToAll:
+    case ncclCollAllToAllv:
       info->pattern = ncclPatternAll; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
@@ -337,11 +342,8 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
     case ncclPatternPipelineTo:
     case ncclPatternCollTreeUp:
     case ncclPatternCollTreeDown:
-      info->nstepsPerLoop = info->nchunksPerLoop = 1; break;
     case ncclPatternAll:
-      info->nstepsPerLoop = 1;
-      info->nchunksPerLoop = info->comm->nRanks;
-      break;
+      info->nstepsPerLoop = info->nchunksPerLoop = 1; break;
     case ncclPatternRing:
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
@@ -376,10 +378,16 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
 
-  coll->args.coll.root = info->root;
-  coll->args.coll.count = info->count;
-  coll->args.coll.nChannels = info->nChannels;
-  coll->args.coll.nThreads = info->nThreads;
+  if (info->coll == ncclCollAllToAllv)  {
+    coll->args.a2av.count = info->count;
+    coll->args.a2av.nChannels = info->nChannels;
+    coll->args.a2av.nThreads = info->nThreads;
+  } else {
+    coll->args.coll.root = info->root;
+    coll->args.coll.count = info->count;
+    coll->args.coll.nChannels = info->nChannels;
+    coll->args.coll.nThreads = info->nThreads;
+  }
 
   coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
@@ -430,7 +438,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   if (info->pattern != ncclPatternAll)
     nLoops = (int)(DIVUP(info->nBytes, (((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)));
   else
-    nLoops = (int)(DIVUP(info->nBytes, (((size_t)((info->nChannels >= info->comm->nRanks ? (info->nChannels/info->comm->nRanks) : 1))))*info->nchunksPerLoop*chunkEffectiveSize));
+    nLoops = (int)(DIVUP(info->nBytes, (((size_t)((info->nChannels >= info->comm->nRanks ? (info->nChannels/info->comm->nRanks) : 1))))*info->comm->nRanks*info->nchunksPerLoop*chunkEffectiveSize));
   proxyArgs->nsteps = info->nstepsPerLoop * nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;
   proxyArgs->chunkSteps = chunkSteps;
@@ -438,7 +446,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   proxyArgs->opCount = info->comm->opCount;
   proxyArgs->dtype = info->datatype;
   proxyArgs->redOp = info->op;
-  TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d ces %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
+  if (info->coll != ncclCollAllToAllv) TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d ces %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
       coll->args.opCount, proxyArgs->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, chunkEffectiveSize, info->nBytes, info->protocol, info->nChannels, info->nThreads,
       nLoops, proxyArgs->nsteps, info->comm);
   return ncclSuccess;
@@ -492,7 +500,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     if (info->coll == ncclCollSendRecv) {
       info->comm->myParams->gridDim.x = std::max<unsigned>(info->comm->myParams->gridDim.x, channelId+1);
       NCCLCHECK(ncclProxySaveP2p(info, channel));
-    } else if (info->coll == ncclCollAllToAll || info->coll == ncclCollScatter || info->coll == ncclCollGather)  {
+    } else if (info->coll == ncclCollAllToAll || info->coll == ncclCollScatter || info->coll == ncclCollGather || info->coll == ncclCollAllToAllv)  {
       NCCLCHECK(ncclProxySaveA2a(&proxyArgs, info));
     } else {
       NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks));
@@ -504,7 +512,15 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     while (LOAD(activePtr) != 0) sched_yield();
 
     memcpy(c, &coll, sizeof(struct ncclColl));
-    if (info->coll != ncclCollSendRecv) c->args.coll.bid = bid % coll.args.coll.nChannels;
+    if (info->coll == ncclCollAllToAllv) {
+      c->args.a2av.extra = channel->collectivesExtra + info->comm->nRanks*4*opIndex;
+      memcpy(c->args.a2av.extra, info->sendcounts, sizeof(size_t*)*(info->comm->nRanks));
+      memcpy(c->args.a2av.extra+info->comm->nRanks, info->sdispls, sizeof(size_t*)*(info->comm->nRanks));
+      memcpy(c->args.a2av.extra+info->comm->nRanks*2, info->recvcounts, sizeof(size_t*)*(info->comm->nRanks));
+      memcpy(c->args.a2av.extra+info->comm->nRanks*3, info->rdispls, sizeof(size_t*)*(info->comm->nRanks));
+      c->args.a2av.bid = bid % coll.args.coll.nChannels;
+    } else if (info->coll != ncclCollSendRecv)
+      c->args.coll.bid = bid % coll.args.coll.nChannels;
 
     STORE(&c->active, 1);
     opIndex = (opIndex+1)%NCCL_MAX_OPS;
@@ -569,7 +585,12 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     NCCLCHECKGOTO(ncclAsyncColl(info->comm), ret, end);
     NCCLCHECKGOTO(checkSetStream(info), ret, end);
 
-    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
+    if (info->coll == ncclCollAllToAllv)
+      INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p sendcounts %p sdispls %p recvbuff %p recvcounts %p rdispls %p datatype %d typesize %zi op %d root %d comm %p [nranks=%d] stream %p",
+        info->opName, info->comm->opCount, info->sendbuff, info->sendcounts, info->sdispls, info->recvbuff, info->recvcounts, info->rdispls,
+        info->datatype, info->count, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
+    else
+      INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
         info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
 
@@ -587,7 +608,12 @@ end:
     NCCLCHECK(ArgsCheck(info));
     NCCLCHECK(checkSetStream(info));
 
-    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
+    if (info->coll == ncclCollAllToAllv)
+      INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p sendcounts %p sdispls %p recvbuff %p recvcounts %p rdispls %p datatype %d typesize %zi op %d root %d comm %p [nranks=%d] stream %p",
+        info->opName, info->comm->opCount, info->sendbuff, info->sendcounts, info->sdispls, info->recvbuff, info->recvcounts, info->rdispls,
+        info->datatype, info->count, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
+    else
+      INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
         info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
 

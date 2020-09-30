@@ -41,7 +41,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "Gather", "Scatter", "AllToAll" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+4] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "Gather", "Scatter", "AllToAll", "AllToAllv" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
@@ -847,7 +847,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   if (comm->alltoallDisable != alltoallDisable) {
     comm->alltoallDisable = alltoallDisable;
   }
-  INFO(NCCL_INIT, "RCCL AllToAll/Scatter/Gather kernels %s", comm->alltoallDisable ? "disabled" : "enabled");
+  INFO(NCCL_INIT, "RCCL AllToAll(v)/Scatter/Gather kernels %s", comm->alltoallDisable ? "disabled" : "enabled");
 
   if (comm->nChannels < nChannelsOrig) {
     // We started duplicating channels during Preset(), so we need to move the
@@ -940,8 +940,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
 
   if (!alltoallDisable) {
-    for (int c=0; c<comm->nChannels; c++) {
-      const int peersPerChan = (comm->nChannels >= nranks ? 1 : DIVUP(nranks, comm->nChannels));
+    int nc = comm->nChannels;
+    if (comm->topo->type == RCCL_TOPO_4P2H_ROME)
+      nc = 2;
+    for (int c=0; c<nc; c++) {
+      const int peersPerChan = DIVUP(nranks, nc);
       struct ncclP2PConnect* connect = &comm->p2plist.connect;
       connect->nrecv[c] = 0;
       connect->nsend[c] = 0;
@@ -960,7 +963,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       }
     }
 
-    for (int c=0; c<comm->nChannels; c++) {
+    for (int c=0; c<nc; c++) {
       struct ncclChannel* channel = comm->channels+c;
       struct ncclP2PConnect* connect = &comm->p2plist.connect;
 #if 0
