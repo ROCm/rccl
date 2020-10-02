@@ -34,7 +34,7 @@ include(cmake/DownloadProject.cmake)
 
 find_package(GTest 1.10)
 
-if(NOT GTest_FOUND OR INSTALL_DEPENDENCIES)
+if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
     if(CMAKE_CXX_COMPILER MATCHES ".*/hipcc$")
         # hip-clang cannot compile googlebenchmark for some reason
         set(COMPILER_OVERRIDE "-DCMAKE_CXX_COMPILER=g++")
