@@ -617,6 +617,31 @@ end:
         info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
 
+    // [RCCL] Alternative launch path for clique-based kernels (if supported and enabled)
+    {
+      if (info->comm->cliqueManager->IsSupported(info->coll,
+                                                 info->count,
+                                                 info->datatype,
+                                                 info->op))
+      {
+        // Declare the input / output pointers being used (to exchange via IPC with other ranks)
+        NCCLCHECK(info->comm->cliqueManager->DeclarePointers(info->comm->opCount,
+                                                             info->sendbuff,
+                                                             info->recvbuff));
+
+        // Queue the clique-based kernel
+        NCCLCHECK(info->comm->cliqueManager->QueueKernel(info->comm->opCount,
+                                                         info->coll,
+                                                         info->count,
+                                                         info->datatype,
+                                                         info->op,
+                                                         info->root,
+                                                         info->stream));
+        return ncclSuccess;
+      }
+    }
+    // [/RCCL]
+
     NCCLCHECK(ncclSaveKernel(info));
     NCCLCHECK(ncclBarrierEnqueue(info->comm));
     NCCLCHECK(ncclBarrierEnqueueWait(info->comm));

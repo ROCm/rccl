@@ -28,6 +28,10 @@
 #include <unistd.h>
 #include "graph/topo.h"
 
+// [RCCL]
+#include "clique/CliqueManager.h"
+// [/RCCL]
+
 #define STR2(v) #v
 #define STR(v) STR2(v)
 
@@ -678,7 +682,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int nranks = comm->nRanks;
   uint64_t commHash = getHash(commId->internal, NCCL_UNIQUE_ID_BYTES);
   TRACE(NCCL_INIT, "comm %p, commHash %lx, rank %d nranks %d - BEGIN", comm, commHash, rank, nranks);
-  NCCLCHECK(bootstrapInit(commId, rank, nranks, &comm->bootstrap));
+  // [RCCL] Collect the PID of the root
+  int rootPid;
+  NCCLCHECK(bootstrapInit(commId, rank, nranks, &comm->bootstrap, &rootPid));
+  // [/RCCL]
 
   // AllGather1 - begin
   struct {
@@ -1017,6 +1024,40 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
     NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, allGather1Data[intraRank0].comm));
   } while(0);
+
+  { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager if so
+    CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
+    if (comm->localRanks == comm->nRanks)
+    {
+      // Check that all the GPUs have peer access to one another
+      bool hasPeerAccess = true;
+      for (int i = 0; i < nranks && hasPeerAccess; i++)
+      {
+        int cudaDev1 = allGather1Data[i].peerInfo.cudaDev;
+        for (int j = 0; j < nranks; j++)
+        {
+          if (i == j) continue;
+          int cudaDev2 = allGather1Data[j].peerInfo.cudaDev;
+          int p2p;
+          if (hipDeviceCanAccessPeer(&p2p, cudaDev1, cudaDev2) != hipSuccess || !p2p)
+          {
+            hasPeerAccess = false;
+            break;
+          }
+        }
+      }
+
+      if (hasPeerAccess)
+      {
+        if (intraRanks == nranks)
+          cliqueMode = CliqueManager::CLIQUE_SINGLE_PROCESS;
+        else
+          cliqueMode = CliqueManager::CLIQUE_SINGLE_NODE;
+      }
+    }
+    comm->cliqueManager = new CliqueManager(rank, nranks, cliqueMode);
+    NCCLCHECK(comm->cliqueManager->Init(commId, rootPid));
+  } // [/RCCL]
 
   // Done with AllGather1 data
   free(allGather1Data);

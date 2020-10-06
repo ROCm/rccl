@@ -10,6 +10,9 @@
 
 #include "transport.h"
 #include "p2p.h"
+// [RCCL]
+#include "clique/CliqueManager.h"
+// [/RCCL]
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
@@ -143,8 +146,12 @@ struct ncclComm {
   //list of async p2p operation queued in a group semantics
   struct ncclP2Plist p2plist;
 
-  // RCCL AllToAll/Scatter/Gather API
-  bool alltoallDisable;
+  // [RCCL]
+  bool alltoallDisable;            // RCCL AllToAll/Scatter/Gather API
+  CliqueManager* cliqueManager;    // CliqueManager handles pointer collection / distribution for clique-based kernels
+  int rootPid;                     // Process ID of root
+  // [/RCCL]
+
 };
 
 #endif
