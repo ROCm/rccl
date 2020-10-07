@@ -10,6 +10,8 @@
 #include "topo.h"
 #include "xml.h"
 #include <math.h>
+#include <sys/time.h>
+#include "rome_models.h"
 
 // Initialize system->maxWidth. This is the per-channel (i.e. per-SM)
 // max speed.
@@ -663,64 +665,111 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
 }
 
 /* Parse user defined rings. Format is like :
- * "0 1|1 0|0 1 2 3|3 2 1 0|0 2 3 1|1 3 2 0|0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0"
- * Rings with a non-matching number of ranks are ignored so we can provide
+ * "0 1|1 0|0 1 2 3|3 2 1 0|N0 0 2 3 1 N1|1 3 2 0|0 1 2 3 4 5 6 7|N2 7 6 5 4 3 2 1 0 N1"
+ * Network interfaces can be optionally specified by N prefix.
+ * Rings with a non-matching number of gpus are ignored so we can provide
  * rings for multiple cases.
  */
-#define MAX_ENV_RANKS 512
-static ncclResult_t parseGraph(const char* str, int* nChannelsRet, int ngpus, int* channels) {
-  int ranks[MAX_ENV_RANKS];
+static ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int nnets, int* net_map ) {
+  int gpus[MAX_ROME_GPUS];
   int nChannels = 0;
-  int rank = 0;
+  int gpu = 0;
   int offset = 0;
-  int status = 0; // 0 : between numbers, 1 : inside number
+  int status = 0; // 0 : between numbers, 1 : inside number, 2: start NET
+  int nets[2];
+  int net = 0;
+  int ngpus = system->nodes[GPU].count;
   do {
-    int digit = str[offset] - '0';
-    if (digit >= 0 && digit <= 9) {
+    if (str[offset] == 'N') {
       if (status == 0) {
-        ranks[rank] = digit;
-        status = 1;
-      } else {
-        ranks[rank] = ranks[rank]*10+digit;
+        status = 2;
       }
     } else {
-      if (status == 1) {
-        rank++;
-        if (rank == MAX_ENV_RANKS) goto end;
-      }
-      status = 0;
-      if (str[offset] == '|' || str[offset] == '\0') {
-        // Ignore if ngpus doesn't match
-        if (rank != ngpus) goto newchannel;
-
-        for (int r=0; r<ngpus; r++) {
-          int rank = ranks[r];
-          // Ignore if ranks are out of bounds
-          if (rank < 0 || rank >= ngpus) goto newchannel;
-          // Ignore if ranks are duplicate
-          for (int i=0; i<r; i++)
-            if (ranks[i] == rank) goto newchannel;
-
-          channels[nChannels*ngpus+r] = rank;
+      int digit = str[offset] - '0';
+      if (digit >= 0 && digit <= 9) {
+        if (status == 0) {
+          gpus[gpu] = digit;
+          status = 1;
+        } else if (status == 2) {
+          nets[net] = digit;
         }
-        nChannels++;
+        else{
+          gpus[gpu] = gpus[gpu]*10+digit;
+        }
+      } else {
+        if (status == 1) {
+          gpu++;
+          if (gpu > MAX_ROME_GPUS) goto end;
+        } else if (status == 2) {
+          net++;
+          if (net > 2) goto end;
+        }
+        status = 0;
+        if (str[offset] == '|' || str[offset] == '\0') {
+          // Ignore if ngpus doesn't match
+          if (gpu != ngpus) goto newchannel;
+          // Ignore if nnets are not 0 or 2
+          if (net && net != 2) goto newchannel;
+
+          for (int r=0; r<ngpus; r++) {
+            int g = gpus[r];
+            // Ignore if gpus are out of bounds
+            if (g < 0 || g >= ngpus) goto newchannel;
+            // Ignore if gpus are duplicate
+            for (int i=0; i<r; i++)
+              if (gpus[i] == g) goto newchannel;
+            // remap if needed
+            if (gpu_map) g = gpu_map[g];
+            // Translate gpu numbers into ranks
+            int j = 0;
+            for (j = 0; j < ngpus; j++)
+              if (g == system->nodes[GPU].nodes[j].gpu.dev)
+                break;
+            if (j < ngpus)
+              graph->intra[nChannels*ngpus+r] = system->nodes[GPU].nodes[j].gpu.rank;
+            else
+              return ncclInternalError;
+          }
+
+          if (net) {
+            if (nets[0] >= nnets || nets[1] >= nnets) goto newchannel;
+            graph->inter[nChannels*2] = nets[0];
+            graph->inter[nChannels*2+1] = nets[1];
+          } else if (net_map && nnets) {
+            graph->inter[nChannels*2] = net_map[nChannels%nnets];
+            graph->inter[nChannels*2+1] = net_map[(nChannels+1)%nnets];
+          } else if (nnets) {
+            graph->inter[nChannels*2] = nChannels%nnets;
+            graph->inter[nChannels*2+1] = (nChannels+1)%nnets;
+          }
+          nChannels++;
 newchannel:
-        rank = 0;
+          gpu = 0;
+          net = 0;
+        }
       }
     }
   } while (str[offset++] != 0);
 end:
-  *nChannelsRet = nChannels;
+  graph->nChannels = nChannels;
+  graph->speedIntra = graph->speedInter = system->maxWidth;
+#if 0
+  for (int i=0; i<graph->nChannels; i++) {
+    printf("%d: ", i);
+    printf ("NET/%d ", graph->inter[i*2]);
+    for (int j=0; j<ngpus; j++) printf("GPU/%d ", graph->intra[i*ngpus+j]);
+    printf ("NET/%d ", graph->inter[i*2+1]);
+    printf("\n");
+  }
+#endif
   return ncclSuccess;
 }
 
-static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) {
+static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   static const char *ringBase = "0 1 2 3 5 4 7 6|0 2 4 1 7 3 6 5|0 3 1 5 7 2 6 4|0 6 7 4 5 3 2 1|0 5 6 3 7 1 4 2|0 4 6 2 7 5 1 3";
-  static char ringRemap[256];
   int id[8], dist[8];
   int i;
 
-  *str = 0;
   int ngpus = system->nodes[GPU].count;
   if (ngpus != 8)
     return ncclSuccess;
@@ -757,251 +806,242 @@ static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, char **str) 
     dist[m] = dist[n]; dist[n] = temp;
   }
   // create chordal ring based on reference and remapped ids
-  for (i = 0; i <strlen(ringBase); i++) {
-    if (ringBase[i] >= '0' && ringBase[i] <= '9')
-      ringRemap[i] = id[ringBase[i]-'0']+'0';
-    else
-      ringRemap[i] = ringBase[i];
-  }
-  ringRemap[i] = 0;
-  *str = ringRemap;
   system->type = RCCL_TOPO_CR8G;
-  INFO(NCCL_GRAPH, "Use chordal ring: %s", ringRemap);
+  NCCLCHECK(parseGraph(ringBase, system, graph, id, 0, NULL));
+  if (system->nodes[NET].count) {
+    int *intra, *used;
+    graph->nChannels = system->nodes[NET].count;
+    NCCLCHECK(ncclCalloc(&intra, ngpus));
+    NCCLCHECK(ncclCalloc(&used,system->nodes[NET].count));
+    for (int n = 0; n < system->nodes[NET].count; n++) {
+      graph->inter[n*2] = graph->inter[n*2+1] = n;
+      struct ncclTopoNode* net = system->nodes[NET].nodes+n;
+      struct ncclTopoLinkList* paths = net->paths[GPU];
+      // find the first unsed GPU that is closest to NIC
+      int f, m;
+      for (f = 0; f < ngpus; f++) {
+        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank) break;
+        if(j >= n) break;
+      }
+      for (int i = 0; i < ngpus; i++) {
+        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank) break;
+        if (j < n) continue;
+        if (paths[i].count < paths[f].count) f = i;
+      }
+      for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank) break;
+      used[n] = graph->intra[n*ngpus+m];
+      for (int i = 0; i < ngpus; i++) intra[i] = graph->intra[n*ngpus+((i+m)%ngpus)];
+      for (int i = 0; i < ngpus; i++) graph->intra[n*ngpus+i] = intra[i];
+    }
+    free(used);
+    free(intra);
+  }
   return ncclSuccess;
 }
 
-static bool getGpuNetCount(struct ncclTopoSystem* system, int id, int *ngpu, int *nnet) {
-  *ngpu = 0; *nnet = 0;
+static bool getGpuNetCount(struct ncclTopoSystem* system, int id, int *g, int *n, int nnet, int *net_map) {
+  *g = 0; *n = 0;
   int i;
   if (ncclTopoIdToIndex(system, CPU, id, &i) == ncclInternalError) return false;
-  for (int n = 0; n < system->nodes[NET].count; n++)
-    if (system->nodes[NET].nodes[n].paths[CPU][i].count == 2) (*nnet)++;
-  for (int n = 0; n < system->nodes[GPU].count; n++)
-    if (system->nodes[GPU].nodes[n].paths[CPU][i].count == 2) (*ngpu)++;
+  for (int j = 0; j < nnet; j++)
+    if (system->nodes[NET].nodes[net_map[j]].paths[CPU][i].count == 2) (*n)++;
+  for (int j = 0; j < system->nodes[GPU].count; j++)
+    if (system->nodes[GPU].nodes[j].paths[CPU][i].count == 2) (*g)++;
   return true;
 }
 
-/* compare GPUs by PCI ID */
-static int compareGPU (const void *g1, const void *g2, void *s) {
-  struct ncclTopoSystem* system = (struct ncclTopoSystem*)s;
-  return system->nodes[GPU].nodes[*(int *)g1].id > system->nodes[GPU].nodes[*(int *)g2].id;
+static ncclResult_t ncclGpuIdToIndex(struct ncclTopoSystem* system, int id, int* index) {
+  *index = -1;
+  for (int i=0; i<system->nodes[GPU].count; i++) {
+    if (system->nodes[GPU].nodes[i].gpu.dev == id) {
+      *index = i;
+      return ncclSuccess;
+    }
+  }
+  return ncclInternalError;
 }
 
-static bool findGpuByXGMI(struct ncclTopoSystem* system, int cpu1, int cpu2, int *gpu1, int *gpu2, int use_shared, int ex1, int ex2) {
-  int n, m, k, idx, c1, c2;
-  uint64_t gid;
-  int ngpus = system->nodes[GPU].count;
-  if (ncclTopoIdToIndex(system, CPU, cpu1, &c1) == ncclInternalError) return false;
-  if (ncclTopoIdToIndex(system, CPU, cpu2, &c2) == ncclInternalError) return false;
+static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo, char *pattern, int *net_map) {
+  pattern[0] = 0; // pattern will be NULL for invalid topology
+  romeTopo->nGpus = system->nodes[GPU].count;
+  romeTopo->nCpus = system->nodes[CPU].count;
+  romeTopo->nNics = 0;
+  romeTopo->nLinks = 0;
+  for (int i = 0; i < romeTopo->nGpus; i ++) {
+    int gpu, n;
+    NCCLCHECK(ncclGpuIdToIndex(system, i, &gpu));
+    romeTopo->gpuIds[i] = system->nodes[GPU].nodes[gpu].id;
+    for (n = 0; n < romeTopo->nCpus; n++)
+      if (system->nodes[GPU].nodes[gpu].paths[CPU][n].count == 2) break;
+    if (n < romeTopo->nCpus) romeTopo->gpuNuma[i] = system->nodes[CPU].nodes[n].id;
 
-  int *s_gpus = (int *)malloc(sizeof(int)*ngpus);
-  int s_ngpus = 0;
-
-  // build a sorted list of source GPUs
-  for (n = 0; n < ngpus; n++) {
-    if (*gpu1 != -1 && system->nodes[GPU].nodes[n].gpu.dev != *gpu1) continue;
-    if (system->nodes[GPU].nodes[n].gpu.dev == ex1) continue;
-    if (system->nodes[GPU].nodes[n].paths[CPU][c1].count != 2) continue;
-    s_gpus[s_ngpus++] = n;
-  }
-  if (s_ngpus) qsort_r(s_gpus, s_ngpus, sizeof(int), compareGPU, system);
-
-  for (n = 0; n < s_ngpus; n++) {
-    struct ncclTopoNode* node = system->nodes[GPU].nodes+s_gpus[n];
+    struct ncclTopoNode* node = system->nodes[GPU].nodes+gpu;
     if (node->paths[GPU] == NULL) continue;
-    idx = -1; gid = 0;
-    for (m = 0; m < ngpus; m++) {
-      if (*gpu2 != -1 && system->nodes[GPU].nodes[m].gpu.dev != *gpu2) continue;
-      if (system->nodes[GPU].nodes[m].gpu.dev == ex2) continue;
-      if (system->nodes[GPU].nodes[m].paths[CPU][c2].count != 2) continue;
+    int count = 0;
+    for (n = 0; n < romeTopo->nGpus; n++) {
+      romeTopo->connMatrix[i*romeTopo->nGpus+n] = 0;
       struct ncclTopoLink* link;
       for (link = node->links; link->remNode; link++) {
-        if (link->remNode->gpu.dev == system->nodes[GPU].nodes[m].gpu.dev) break;
+        if (link->remNode->gpu.dev == n) break;
       }
       if (!link->remNode) continue;
-      if (link->type == LINK_NVL) {
-        int is_shared = 0;
-        for (k = 0; k < ngpus; k++) {
-          if (k == m || k == s_gpus[n]) continue;
-          if ((system->nodes[GPU].nodes[k].id & 0xf0000) == (system->nodes[GPU].nodes[m].id & 0xf0000))
-            break;
-        }
-        if (k < ngpus) is_shared = 1;
-        if (use_shared == -1 || is_shared == use_shared) {
-          if (idx == -1 || (idx != -1 && system->nodes[GPU].nodes[m].id < gid)) {
-            idx = m;
-            gid = system->nodes[GPU].nodes[m].id;
-          }
-        }
+      if (link->type != LINK_NVL) continue;
+      romeTopo->connMatrix[i*romeTopo->nGpus+n] = 1;
+      count ++;
+    }
+    if (!romeTopo->nLinks) romeTopo->nLinks = count;
+    else if (romeTopo->nLinks != count) return ncclSuccess;
+  }
+
+  // trim ports and create NET map
+  for (int i = 0; i < system->nodes[NET].count; i ++) {
+    int j;
+    for (j = 0; j < romeTopo->nNics; j++) {
+      if (system->nodes[NET].nodes[i].net.asic == system->nodes[NET].nodes[net_map[j]].net.asic) {
+        if (system->nodes[NET].nodes[i].net.width > system->nodes[NET].nodes[net_map[j]].net.width)
+          net_map[j] = i;
+        break;
       }
     }
-    if (idx != -1) break;
+    if (j >= romeTopo->nNics) {
+      net_map[j] = i;
+      (romeTopo->nNics)++;
+      if (romeTopo->nNics >= MAX_ROME_NICS) break;
+    }
   }
-  if (n < s_ngpus) {
-    *gpu1 = system->nodes[GPU].nodes[s_gpus[n]].gpu.dev;
-    *gpu2 = system->nodes[GPU].nodes[idx].gpu.dev;
-    //printf("%s+: c1 %d c2 %d gpu1 %d gpu2 %d use_shared %d ex1 %d, ex2 %d\n",
-    //  __func__, cpu1, cpu2, *gpu1, *gpu2, use_shared, ex1, ex2);
-    free(s_gpus);
+
+  // number of GPUs and NICs on each numa node is used as first screening pattern
+  for (int i = 0; i < romeTopo->nCpus; i++) {
+    int g, n;
+    if (!getGpuNetCount(system, i, &g, &n, romeTopo->nNics, net_map)) return ncclSuccess;
+    pattern[i*2] = '0' + g;
+    pattern[i*2+1] = '0' + n;
+  }
+  pattern[romeTopo->nCpus*2] = 0;
+
+  for (int i = 0; i < romeTopo->nNics; i ++) {
+    int net, n;
+    NCCLCHECK(ncclTopoIdToIndex(system, NET, net_map[i], &net));
+    for (n = 0; n < romeTopo->nCpus; n++)
+      if (system->nodes[NET].nodes[net].paths[CPU][n].count == 2) break;
+    if (n < romeTopo->nCpus) romeTopo->nicNuma[i] = system->nodes[CPU].nodes[n].id;
+    else return ncclSuccess;
+  }
+
+  const char* romeModelFile = getenv("RCCL_DUMP_ROME_MODEL_FILE");
+  if (romeModelFile) {
+    INFO(NCCL_ENV, "RCCL_DUMP_ROME_MODEL_FILE set by environment to %s", romeModelFile);
+    FILE* file = fopen(romeModelFile, "w");
+    if (file == NULL) {
+      WARN("Unable to open %s, not dumping Rome model.", romeModelFile);
+      return ncclSuccess;
+    }
+    fprintf(file, "static struct rcclRomeModel rome_model_ = {\n");
+    fprintf(file, "  .nGpus = %d, .nCpus = %d, .nNics = %d, .nLinks = %d,\n", romeTopo->nGpus, romeTopo->nCpus, romeTopo->nNics, romeTopo->nLinks);
+    fprintf(file, "  .gpuIds = { ");
+    for (int i = 0; i < romeTopo->nGpus; i ++) fprintf(file, "0x%lx, ", romeTopo->gpuIds[i]);
+    fprintf(file, "},\n");
+    fprintf(file, "  .gpuNuma = { ");
+    for (int i = 0; i < romeTopo->nGpus; i ++) fprintf(file, "%ld, ", romeTopo->gpuNuma[i]);
+    fprintf(file, "},\n");
+    fprintf(file, "  .nicNuma = { ");
+    for (int i = 0; i < romeTopo->nNics; i ++) fprintf(file, "%ld, ", romeTopo->nicNuma[i]);
+    fprintf(file, "},\n");
+    fprintf(file, "  .connMatrix = { ");
+    for (int i = 0; i < romeTopo->nGpus; i ++)
+      for (int n = 0; n < romeTopo->nGpus; n++) fprintf(file, "%d, ", romeTopo->connMatrix[i*romeTopo->nGpus+n]);
+    fprintf(file, "},\n");
+    fprintf(file, "  .pattern = \"%s\",\n", pattern);
+    fprintf(file, "  .ringBase = \"\",\n");
+    fprintf(file, "};\n");
+    fclose(file);
+  }
+  return ncclSuccess;
+}
+
+static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time) {
+  (*time) ++;
+  if (n == last) {
+    int i, j;
+    // match GPU numa
+    for (i = 0; i < ref->nGpus; i++)
+      if (ref->gpuNuma[i] != topo->gpuNuma[g[i]]) break;
+    if (i < ref->nGpus) return false;
+    // match XGMI connection
+    for (i = 0; i < ref->nGpus; i++) {
+      for (j = 0; j < ref->nGpus; j++)
+        if (ref->connMatrix[i*ref->nGpus+j] != topo->connMatrix[g[i]*ref->nGpus+g[j]]) break;
+      if (j < ref->nGpus) break;
+    }
+    if (i < ref->nGpus) return false;
+    // match NBIO
+    for (i = 0; i < ref->nGpus; i++) {
+      for (j = 0; j < ref->nGpus; j++) {
+        if (i == j) continue;
+        bool nbio_ref = (ref->gpuIds[i]&0xf0000) == (ref->gpuIds[j]&0xf0000);
+        bool nbio_topo = (topo->gpuIds[g[i]]&0xf0000) == (topo->gpuIds[g[j]]&0xf0000);
+        if (nbio_ref != nbio_topo) break;
+        if (nbio_ref && ((ref->gpuIds[i]-ref->gpuIds[j])*(topo->gpuIds[g[i]]-topo->gpuIds[g[j]]) < 0)) break;
+      }
+      if (j < ref->nGpus) break;
+    }
+    if (i < ref->nGpus) return false;
     return true;
+  } else {
+    for (int i = n; i <= last; i++) {
+      std::swap(g[n], g[i]);
+      if (permuteGpuIds(g, n+1, last, ref, topo, time)) return true;
+      std::swap(g[n], g[i]);
+    }
   }
-  free(s_gpus);
   return false;
 }
 
-static bool validate4P1H(struct ncclTopoSystem* system, int *hive) {
-  int g, n, m;
-  int ngpus = system->nodes[GPU].count;
-  for (g = 0; g < 4; g++) {
-    int gpu = hive[g];
-    int next_gpu = hive[(g+1)%4];
-    for (n = 0; n < ngpus; n++) {
-      if (system->nodes[GPU].nodes[n].gpu.dev != gpu) continue;
-      struct ncclTopoNode* node = system->nodes[GPU].nodes+n;
-      if (node->paths[GPU] == NULL) continue;
-      for (m = 0; m < ngpus; m++) {
-        struct ncclTopoLink* link;
-        for (link = node->links; link->remNode; link++) {
-          if (link->remNode->gpu.dev == next_gpu) break;
-        }
-        if (!link->remNode) continue;
-        if (link->type == LINK_NVL) break;
-      }
-      if (m < ngpus) break;
-    }
-    if (n < ngpus) continue;
-    else break;
-  }
-  if (g < 4) return false;
-  else return true;
-}
-
-static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, char **str) {
-  static const char *ringBase_10302120_1 = "7 4 5 3 1 0 6 2|4 7 3 5 0 1 2 6";
-  static const char *ringBase_10302120_2 = "6 4 7 5 0 1 3 2|6 5 7 4 2 3 1 0";
-  static const char *ringBase_11303011_1 = "2 1 0 3 6 7 5 4|7 6 4 5 1 2 3 0";
-  static const char *ringBase_11303011_2 = "0 6 2 3 1 7 5 4|7 1 4 5 6 0 3 2";
-  static const char *ringBase_0110201010200110_1 = "1 2 3 0 6 4 5 7|4 6 7 5 2 1 0 3";
-  static const char *ringBase_0110201010200110_2 = "3 0 6 2 1 4 5 7|4 1 0 3 2 6 7 5";
-  static const char *ringBase;
+static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   static char ringRemap[64];
-  int id[8], dist[8];
   int i;
 
-  *str = 0;
   int ngpus = system->nodes[GPU].count;
   int ncpus = system->nodes[CPU].count;
-  // 8 GPUs only
-  if (ngpus != 8)
-    return ncclSuccess;
+
   // only valid on Rome
   int arch, vendor, model;
   NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
   if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
     return ncclSuccess;
-  system->type = RCCL_TOPO_4P2H_ROME;
-  // 4 or 8 numa nodes only
-  if (ncpus != 4 && ncpus != 8)
-    return ncclSuccess;
-  // number of GPUs and NICs on each numa node is used as first screening pattern
-  char pattern[256];
-  for (i = 0; i < ncpus; i++) {
-    int g, n;
-    if (!getGpuNetCount(system, i, &g, &n)) return ncclSuccess;
-    pattern[i*2] = '0' + g;
-    pattern[i*2+1] = '0' + n;
-  }
-  pattern[i*2] = 0;
-  int g[8], h1[4], h2[4];
-  for (int i = 0; i <8; i++) g[i] = -1;
-  if (strcmp(pattern, "10302120") == 0) {
-    bool cross = findGpuByXGMI(system, 1, 2, &g[2], &g[6], 1, -1, -1);
-    g[2] = g[6] = -1;
-    if (cross) {
-      // identify GPUs for pattern "10302120"
-      if (!findGpuByXGMI(system, 0, 1, &g[1], &g[0], 0, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 0, 1, &g[1], &g[2], 1, -1, g[0])) return ncclSuccess;
-      if (!findGpuByXGMI(system, 1, 2, &g[2], &g[6], 1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 2, 1, &g[3], &g[5], 1, g[6], g[2])) return ncclSuccess;
-      if (!findGpuByXGMI(system, 1, 3, &g[5], &g[4], -1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 2, 3, &g[3], &g[7], -1, g[6], g[4])) return ncclSuccess;
-      // finally verify two XGMI hives for pattern "10302120"
-      h1[0] = g[1]; h1[1] = g[0]; h1[2] = g[6]; h1[3] = g[2];
-      h2[0] = g[7]; h2[1] = g[4]; h2[2] = g[5]; h2[3] = g[3];
-      ringBase = ringBase_10302120_1;
-    } else {
-      // identify GPUs for pattern "10302120"
-      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[1], 1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 1, 1, &g[1], &g[2], -1, -1, g[3])) return ncclSuccess;
-      if (!findGpuByXGMI(system, 2, 3, &g[5], &g[7], -1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 2, 3, &g[4], &g[6], -1, g[5], g[7])) return ncclSuccess;
-      // finally verify two XGMI hives for pattern "10302120"
-      h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[2]; h1[3] = g[3];
-      h2[0] = g[4]; h2[1] = g[5]; h2[2] = g[7]; h2[3] = g[6];
-      ringBase = ringBase_10302120_2;
-    }
-  }
-  else if (strcmp(pattern, "11303011") == 0) {
-    // there are 2 configurations for pattern "11303011"
-    if (findGpuByXGMI(system, 1, 2, &g[2], &g[6], 1, -1, -1)) {
-      if (!findGpuByXGMI(system, 2, 1, &g[4], &g[1], 1, g[6], g[2])) return ncclSuccess;
-      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 3, 2, &g[7], &g[5], 1, -1, -1)) return ncclSuccess;
-      // finally verify two XGMI hives for pattern "11303011"
-      h1[0] = g[0]; h1[1] = g[3]; h1[2] = g[2]; h1[3] = g[6];
-      h2[0] = g[1]; h2[1] = g[4]; h2[2] = g[5]; h2[3] = g[7];
-      ringBase = ringBase_11303011_2;
-    } else {
-      // identify GPUs for pattern "11303011"
-      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[1], 1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 0, 1, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 1, 1, &g[1], &g[2], -1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 3, 2, &g[7], &g[5], -1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 3, 2, &g[7], &g[6], -1, -1, g[5])) return ncclSuccess;
-      if (!findGpuByXGMI(system, 2, 2, &g[5], &g[4], -1, -1, -1)) return ncclSuccess;
-      // finally verify two XGMI hives for pattern "11303011"
-      h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[2]; h1[3] = g[3];
-      h2[0] = g[4]; h2[1] = g[5]; h2[2] = g[7]; h2[3] = g[6];
-      ringBase = ringBase_11303011_1;
-    }
-  }
-  else if (strcmp(pattern, "0110201010200110") == 0) {
-    if (findGpuByXGMI(system, 2, 5, &g[2], &g[6], 1, -1, -1)) {
-      if (!findGpuByXGMI(system, 4, 2, &g[4], &g[1], 1, g[6], g[2])) return ncclSuccess;
-      if (!findGpuByXGMI(system, 1, 3, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 7, 5, &g[7], &g[5], 1, -1, -1)) return ncclSuccess;
-      h1[0] = g[0]; h1[1] = g[3]; h1[2] = g[2]; h1[3] = g[6];
-      h2[0] = g[1]; h2[1] = g[4]; h2[2] = g[5]; h2[3] = g[7];
-      ringBase = ringBase_0110201010200110_2;
-    } else {
-      if (!findGpuByXGMI(system, 1, 2, &g[0], &g[1], 1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 1, 3, &g[0], &g[3], 0, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 2, 2, &g[1], &g[2], -1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 7, 5, &g[7], &g[5], -1, -1, -1)) return ncclSuccess;
-      if (!findGpuByXGMI(system, 7, 5, &g[7], &g[6], -1, -1, g[5])) return ncclSuccess;
-      if (!findGpuByXGMI(system, 4, 5, &g[4], &g[5], -1, -1, -1)) return ncclSuccess;
-      h1[0] = g[0]; h1[1] = g[1]; h1[2] = g[2]; h1[3] = g[3];
-      h2[0] = g[4]; h2[1] = g[5]; h2[2] = g[7]; h2[3] = g[6];
-      ringBase = ringBase_0110201010200110_1;
-    }
-}
-  else
-    return ncclSuccess;
 
-  if (!validate4P1H(system, h1)) return ncclSuccess;
-  if (!validate4P1H(system, h2)) return ncclSuccess;
-  // passed all validation
-  // create 4P2H based on reference and remapped ids
-  for (i = 0; i <strlen(ringBase); i++) {
-    if (ringBase[i] >= '0' && ringBase[i] <= '9')
-      ringRemap[i] = g[ringBase[i]-'0'] + '0';
-    else
-      ringRemap[i] = ringBase[i];
+  // number of GPUs and NICs on each numa node is used as first screening pattern
+  struct rcclRomeModel romeTopo;
+  char pattern[256];
+  int net_map[MAX_ROME_NICS];
+  parseRomeSystem(system, &romeTopo, pattern, net_map);
+
+  // recognize system as Rome 4P2H even if no matching model
+  if (ngpus == 8 && romeTopo.nLinks) system->type = RCCL_TOPO_4P2H_ROME;
+
+  int g[MAX_ROME_GPUS];
+  int time = 0;
+  struct timeval tvs, tve;
+  gettimeofday(&tvs, NULL);
+  for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
+    if (romeTopo.nCpus != romeTopoModels[i].nCpus || romeTopo.nGpus != romeTopoModels[i].nGpus ||
+      romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
+    if (strcmp(romeTopoModels[i].pattern, pattern)) continue;
+    for (int j = 0; j < ngpus; j++) g[j] = (j+2)%ngpus;
+    if (permuteGpuIds(g, 0, ngpus-1, romeTopoModels+i, &romeTopo, &time)) break;
   }
-  ringRemap[i] = 0;
-  *str = ringRemap;
-  INFO(NCCL_GRAPH, "Use 4P2H on Rome: %s", ringRemap);
+  gettimeofday(&tve, NULL);
+  float t = (tve.tv_sec - tvs.tv_sec)*1E3 + (tve.tv_usec - tvs.tv_usec)/1E3;
+  if (i >= sizeof(romeTopoModels)/sizeof(romeTopoModels[0])) {
+    //printf("No solution in %.2fms (%d iter)\n", t, time);
+    return ncclSuccess;
+  }
+  //printf("Solution in %.2fms (%d iter): ", t, time);
+  //for (int k = 0; k < ngpus; k++) printf("%d ", g[k]);
+  //printf("\n");
+
+  // create 4P2H based on reference and remapped ids
+  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, romeTopo.nNics, net_map));
   return ncclSuccess;
 }
 
@@ -1014,6 +1054,7 @@ float speedArray[] = { 42.0, 24.0, 21.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 
 
 ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
+  int nnets = system->nodes[NET].count;
   int crossNic = (system->nodes[NET].count > 1) && graph->crossNic ? 1 : 0;
   graph->speedIntra = graph->speedInter = 0;
   if (graph->crossNic == 2) graph->crossNic = 0;
@@ -1036,59 +1077,19 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   }
 
   str = getenv("NCCL_RINGS");
-  if (str) system->type = RCCL_TOPO_4P2H_ROME;
-  if (!str) NCCLCHECK(parseChordalRing(system, &str));
-  if (!str) NCCLCHECK(parseRome4P2H(system, &str));
   if (str) {
-    NCCLCHECK(parseGraph(str, &graph->nChannels, ngpus, graph->intra));
-    for (int i=0; i<graph->nChannels*ngpus; i++) {
-      // Translate gpu numbers into ranks
-      int j = 0;
-      for (j = 0; j < system->nodes[GPU].count; j++)
-        if (graph->intra[i] == system->nodes[GPU].nodes[j].gpu.dev)
-          break;
-      if (j < system->nodes[GPU].count)
-        graph->intra[i] = system->nodes[GPU].nodes[j].gpu.rank;
-      else
-        return ncclInternalError;
+    // user supplied topo
+    NCCLCHECK(parseGraph(str, system, graph, NULL, nnets, NULL));
+    if (graph->nChannels) {
+      system->type = RCCL_TOPO_4P2H_ROME;
+      return ncclSuccess;
     }
-    graph->speedIntra = graph->speedInter = system->maxWidth;
-    if (system->nodes[NET].count) {
-      // do not change ring order for multi node 4P2H on Rome
-      if (system->type == RCCL_TOPO_4P2H_ROME) {
-        for (int n = 0; n < graph->nChannels; n++) {
-          graph->inter[n*2] = n%system->nodes[NET].count;
-          graph->inter[n*2+1] = (n+1)%system->nodes[NET].count;
-        }
-      } else {
-        int *intra, *used;
-        graph->nChannels = system->nodes[NET].count;
-        NCCLCHECK(ncclCalloc(&intra, ngpus));
-        NCCLCHECK(ncclCalloc(&used,system->nodes[NET].count));
-        for (int n = 0; n < system->nodes[NET].count; n++) {
-          graph->inter[n*2] = graph->inter[n*2+1] = n;
-          struct ncclTopoNode* net = system->nodes[NET].nodes+n;
-          struct ncclTopoLinkList* paths = net->paths[GPU];
-          // find the first unsed GPU that is closest to NIC
-          int f, m;
-          for (f = 0; f < ngpus; f++) {
-            int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank) break;
-            if(j >= n) break;
-          }
-          for (int i = 0; i < ngpus; i++) {
-            int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank) break;
-            if (j < n) continue;
-            if (paths[i].count < paths[f].count) f = i;
-          }
-          for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank) break;
-          used[n] = graph->intra[n*ngpus+m];
-          for (int i = 0; i < ngpus; i++) intra[i] = graph->intra[n*ngpus+((i+m)%ngpus)];
-          for (int i = 0; i < ngpus; i++) graph->intra[n*ngpus+i] = intra[i];
-        }
-        free(used);
-        free(intra);
-      }
-    }
+  } else {
+    // try to match 8P6L
+    NCCLCHECK(parseChordalRing(system, graph));
+    if (graph->nChannels) return ncclSuccess;
+    // try to match Rome 4P2H
+    NCCLCHECK(parseRome4P2H(system, graph));
     if (graph->nChannels) return ncclSuccess;
   }
 
