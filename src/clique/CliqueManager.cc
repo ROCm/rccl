@@ -110,7 +110,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   // For now, opt-into clique based kernels via RCCL_ENABLE_CLIQUE env var
   if (!getenv("RCCL_ENABLE_CLIQUE"))
   {
-    if (m_rank == 0) WARN("Disabling clique-based kernels (did not find env var RCCL_ENABLE_CLIQUE)");
+    if (m_rank == 0) INFO(NCCL_INIT, "Disabling clique-based kernels (did not find env var RCCL_ENABLE_CLIQUE)");
     m_cliqueMode = CLIQUE_DISABLED;
     return ncclSuccess;
   }
