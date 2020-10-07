@@ -1,3 +1,25 @@
+/*
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
 #ifndef NCCL_HANDLE_CACHE_H_
 #define NCCL_HANDLE_CACHE_H_
 
@@ -9,8 +31,8 @@
 
 //#include "llvm/ADT/DenseMap.h"
 
-template <    
-    class Key,     
+template <
+    class Key,
     class Value,
     class Hash,
     class KeyEqual,
@@ -18,7 +40,7 @@ template <
 >
 class NcclIpcHandleCache
 {
-    typedef std::unordered_map<Key, std::pair<Value, typename std::list<Key>::iterator>, Hash, KeyEqual, Allocator> LRUCache;    
+    typedef std::unordered_map<Key, std::pair<Value, typename std::list<Key>::iterator>, Hash, KeyEqual, Allocator> LRUCache;
 public:
     using iterator = typename LRUCache::iterator;
     NcclIpcHandleCache(size_t size,
@@ -28,7 +50,7 @@ public:
                        const Allocator& alloc = Allocator() ) : m_cache(bucket_count, hash, eql, alloc)
     {
         m_capacity = size;
-    } 
+    }
 
     ~NcclIpcHandleCache()
     {
@@ -79,7 +101,7 @@ public:
         }
 
         return std::pair<iterator, bool>(it, inserted);
-    } 
+    }
 
 private:
     void pop()
@@ -87,7 +109,7 @@ private:
         typename LRUCache::iterator it = m_cache.find(m_lruHistory.front());
         m_cache.erase(it);
         m_lruHistory.pop_front();
-    } 
+    }
 
     void updateHistory(const Key& key)
     {
@@ -97,7 +119,7 @@ private:
         }
     }
     size_t m_capacity;
-    std::list<Key> m_lruHistory; 
+    std::list<Key> m_lruHistory;
     LRUCache m_cache;
 };
 

@@ -351,10 +351,8 @@ __device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(Pack128); }
 #endif
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-// Use UNROLL 4 for 2 SRCs, 2 for the rest
-//#define AUTOUNROLL (UNROLL*(2/MINSRCS))
-// Uuse UNROLL 2 for MINSRCS=1, 4 for 2 MINSRCS=2, 1 for rest
-#define AUTOUNROLL (UNROLL*((MINSRCS<=2)?(2*MINSRCS):1))
+// Multiply UNROLL by 2 if single source/single destination
+#define AUTOUNROLL (UNROLL*((MINSRCS==1 && MINDSTS==1) ? 2 : 1))
 #else
 // Try to limit consecutive load/stores to 8.
 // Use UNROLL 8 when we have a single source and a single destination, 4 otherwise
