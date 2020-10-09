@@ -376,8 +376,9 @@ ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
   {
     int msgid, fd;
     std::string msgQueueName = "/tmp/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
-    SYSCHECKVAL(open(msgQueueName.c_str(), O_CREAT | O_RDWR), "open", fd);
+    SYSCHECKVAL(open(msgQueueName.c_str(), O_CREAT | O_RDWR, 0606), "open", fd);
     NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
+    SYSCHECK(close(fd), "close");
   }
 
   std::string shmDir = "/dev/shm/";

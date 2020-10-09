@@ -1188,6 +1188,10 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
     return ncclInvalidArgument;
   }
 
+  // [RCCL] Delete CliqueManager if it exists
+  if (comm->cliqueManager) delete comm->cliqueManager;
+  // [/RCCL]
+
   return commDestroy(comm);
 }
 
