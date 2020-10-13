@@ -913,7 +913,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   // number of GPUs and NICs on each numa node is used as first screening pattern
   for (int i = 0; i < romeTopo->nCpus; i++) {
     int g, n;
-    if (!getGpuNetCount(system, i, &g, &n, romeTopo->nNics, net_map)) return ncclSuccess;
+    getGpuNetCount(system, i, &g, &n, romeTopo->nNics, net_map);
     pattern[i*2] = '0' + g;
     pattern[i*2+1] = '0' + n;
   }
@@ -1036,10 +1036,15 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
     //printf("No solution in %.2fms (%d iter)\n", t, time);
     return ncclSuccess;
   }
-  //printf("Solution in %.2fms (%d iter): ", t, time);
-  //for (int k = 0; k < ngpus; k++) printf("%d ", g[k]);
-  //printf("\n");
 
+  char line[1024];
+  sprintf(line, "Found matching Rome model index %d in %.2fms (%d iter) with GPU mapping: ", i, t, time);
+  int offset = strlen(line);
+  for (int k = 0; k < ngpus; k++) {
+    sprintf(line+offset, "%d ", g[k]);
+    offset = strlen(line);
+  }
+  INFO(NCCL_GRAPH, "%s", line);
   // create 4P2H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, romeTopo.nNics, net_map));
   return ncclSuccess;
