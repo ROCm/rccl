@@ -996,35 +996,38 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       connect->nsend[c] = 0;
     }
   }
-  // We should have allocated all buffers, collective fifos, ... we can
-  // restore the affinity.
-affinity_restore:
-  sched_setaffinity(0, sizeof(cpu_set_t), &affinitySave);
-  if (ret != ncclSuccess) return ret;
 
   // Compute intra ranks (using AllGather1 data)
-  int intraRank0 = -1, intraRank = -1, intraRanks = 0;
-  for (int i = 0; i < nranks; i++) {
-    if ((allGather1Data[i].peerInfo.hostHash == allGather1Data[rank].peerInfo.hostHash) &&
-        (allGather1Data[i].peerInfo.pidHash == allGather1Data[rank].peerInfo.pidHash)) {
-      if (intraRanks == 0) intraRank0 = i;
-      if (i == rank) intraRank = intraRanks;
-      intraRanks++;
+  do {
+    int intraRank0 = -1, intraRank = -1, intraRanks = 0;
+    for (int i = 0; i < nranks; i++) {
+      if ((allGather1Data[i].peerInfo.hostHash == allGather1Data[rank].peerInfo.hostHash) &&
+          (allGather1Data[i].peerInfo.pidHash == allGather1Data[rank].peerInfo.pidHash)) {
+        if (intraRanks == 0) intraRank0 = i;
+        if (i == rank) intraRank = intraRanks;
+        intraRanks++;
+      }
     }
-  }
-  TRACE(NCCL_INIT,"hostHash[%d] %lx intraRank %d intraRanks %d intraRank0 %d",
+    TRACE(NCCL_INIT,"hostHash[%d] %lx intraRank %d intraRanks %d intraRank0 %d",
         rank, allGather1Data[rank].peerInfo.hostHash, intraRank, intraRanks, intraRank0);
-  if (intraRank == -1 || intraRank0 == -1 || allGather1Data[intraRank0].comm == NULL) {
-    WARN("Failed to determine intra ranks hostHash[%d] %lx intraRank %d intraRanks %d intraRank0 %d",
-         rank, allGather1Data[rank].peerInfo.hostHash, intraRank, intraRanks, intraRank0);
-    return ncclInternalError;
-  }
-  NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, allGather1Data[intraRank0].comm));
+    if (intraRank == -1 || intraRank0 == -1 || allGather1Data[intraRank0].comm == NULL) {
+      WARN("Failed to determine intra ranks hostHash[%d] %lx intraRank %d intraRanks %d intraRank0 %d",
+          rank, allGather1Data[rank].peerInfo.hostHash, intraRank, intraRanks, intraRank0);
+      return ncclInternalError;
+    }
+    NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, allGather1Data[intraRank0].comm));
+  } while(0);
 
   // Done with AllGather1 data
   free(allGather1Data);
 
   if (comm->nNodes) NCCLCHECK(ncclProxyCreate(comm));
+
+  // We should have allocated all buffers, collective fifos, ... we can
+  // restore the affinity.
+affinity_restore:
+  sched_setaffinity(0, sizeof(cpu_set_t), &affinitySave);
+  if (ret != ncclSuccess) return ret;
 
   TRACE(NCCL_INIT, "rank %d nranks %d - DONE", rank, nranks);
   return ncclSuccess;
