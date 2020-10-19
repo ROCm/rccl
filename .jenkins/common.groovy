@@ -5,11 +5,10 @@ def runCompileCommand(platform, project, jobName)
 {
     project.paths.construct_build_prefix()
 
-    String hipclangArgs = jobName.contains('hipclang') ? '--hip-clang' : ''
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}
-                LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command} ${hipclangArgs}
+                LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command}
             """
 
     platform.runCommand(this,command)
