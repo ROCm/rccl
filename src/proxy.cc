@@ -166,7 +166,9 @@ ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel
 }
 
 ncclResult_t ncclProxySaveA2a(struct ncclProxyArgs* args, struct ncclInfo* info) {
-  const int peersPerChan = (info->nChannels >= info->comm->nRanks ? 1 : DIVUP(info->comm->nRanks, info->nChannels));
+  const int peersPerChan = DIVUP(info->comm->nRanks, info->nChannels);
+  const int chunkSize  = info->comm->buffSizes[info->protocol]/NCCL_STEPS*info->chunkSteps;
+  const int loopSize = (info->nChannels >= info->comm->nRanks ? (info->nChannels/info->comm->nRanks) : 1)*info->nchunksPerLoop*chunkSize;
   for (int p=0; p<peersPerChan; p++) {
     if ((peersPerChan == 1 && args->channel->id >= (info->nChannels/info->comm->nRanks)*info->comm->nRanks) ||
       (peersPerChan > 1 && args->channel->id*peersPerChan+p >= info->comm->nRanks))
@@ -182,6 +184,22 @@ ncclResult_t ncclProxySaveA2a(struct ncclProxyArgs* args, struct ncclInfo* info)
     if (info->coll == ncclCollAllToAll || (info->coll == ncclCollGather && info->comm->rank == info->root) ||
       (info->coll == ncclCollScatter && peerRecv == info->root))
       NCCLCHECK(SaveProxy<proxyRecv>(peerRecv, args));
+    if (info->coll == ncclCollAllToAllv) {
+      info->nBytes = info->sendcounts[peerSend]*info->count;
+      int nLoops = (int)(DIVUP(info->nBytes, loopSize));
+      args->nsteps = info->nstepsPerLoop*nLoops*info->chunkSteps;
+      TRACE(NCCL_NET,"peerSend %d opCount %lx slicesteps %d spl %d cpl %d ces %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
+          peerSend, args->opCount, args->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, chunkSize, info->nBytes, info->protocol, info->nChannels, info->nThreads,
+          nLoops, args->nsteps, info->comm);
+      NCCLCHECK(SaveProxy<proxySend>(peerSend, args));
+      info->nBytes = info->recvcounts[peerRecv]*info->count;
+      nLoops = (int)(DIVUP(info->nBytes, loopSize));
+      args->nsteps = info->nstepsPerLoop*nLoops*info->chunkSteps;
+      TRACE(NCCL_NET,"peerRecv %d opCount %lx slicesteps %d spl %d cpl %d ces %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
+          peerRecv, args->opCount, args->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, chunkSize, info->nBytes, info->protocol, info->nChannels, info->nThreads,
+          nLoops, args->nsteps, info->comm);
+      NCCLCHECK(SaveProxy<proxyRecv>(peerRecv, args));
+    }
   }
   return ncclSuccess;
 }

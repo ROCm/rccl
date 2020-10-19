@@ -23,8 +23,8 @@
 #endif
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
-typedef enum { ncclCollBroadcast, ncclCollReduce, ncclCollAllGather, ncclCollReduceScatter, ncclCollAllReduce, ncclCollGather, ncclCollScatter, ncclCollAllToAll, ncclCollSendRecv} ncclFunc_t;
-extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3];
+typedef enum { ncclCollBroadcast, ncclCollReduce, ncclCollAllGather, ncclCollReduceScatter, ncclCollAllReduce, ncclCollGather, ncclCollScatter, ncclCollAllToAll, ncclCollAllToAllv, ncclCollSendRecv} ncclFunc_t;
+extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+4];
 
 #define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
@@ -183,6 +183,13 @@ struct CollectiveArgs {
       size_t sendCount;
       size_t recvCount;
     } p2p;
+    struct {
+      uint16_t nThreads;
+      uint8_t bid;
+      uint8_t nChannels;
+      size_t count;
+      size_t* extra;
+    } a2av;
   };
 };
 struct ncclColl {
@@ -215,6 +222,7 @@ struct ncclChannel {
 
       // Operation list for aggregation
       struct ncclColl* collectives;
+      size_t* collectivesExtra;
       int collStart;
       int collCount;
       int collFifoHead; // Only used by GPU

@@ -92,6 +92,7 @@ set(CU_SOURCES
     src/collectives/device/gather.cu
     src/collectives/device/scatter.cu
     src/collectives/device/all_to_all.cu
+    src/collectives/device/all_to_allv.cu
     src/collectives/device/functions.cu)
 
 set(CPP_SOURCES)
@@ -123,6 +124,7 @@ set(CC_SOURCES
     src/collectives/gather_api.cc
     src/collectives/scatter_api.cc
     src/collectives/all_to_all_api.cc
+    src/collectives/all_to_allv_api.cc
     src/channel.cc
     src/clique/CliqueManager.cc     # RCCL
     src/clique/HandleCache.cc       # RCCL

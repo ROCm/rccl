@@ -21,29 +21,17 @@ struct p2pConnectInfo {
     void* directPtr;
     hipIpcMemHandle_t devIpc;
   };
-  uint64_t pidHash;
-  int id;
-  int sendRank;
-  int recvRank;
 };
 
 struct p2pSendResources {
   struct ncclSendMem* devMem;
   void* ipcPtr;
   uint32_t* next_hdp_reg;  // Next GPU in ring (for p2p transport use only)
-  uint64_t* opCount;  // opCount allocated in host memory
-  uint64_t* devOpCount;  // device side pointer to opCount
-  uint64_t* remOpCount;  // remote opCount allocated in host memory
-  uint64_t* devRemOpCount;  // device side pointer to remote opCount
 };
 
 struct p2pRecvResources {
   struct ncclRecvMem* devMem;
   void* ipcPtr;
-  uint64_t* opCount;  // opCount allocated in host memory
-  uint64_t* devOpCount;  // device side pointer to opCount
-  uint64_t* remOpCount;  // remote opCount allocated in host memory
-  uint64_t* devRemOpCount;  // device side pointer to remote opCount
 };
 
 #include <sys/types.h>
@@ -123,7 +111,6 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
     TRACE(P2P,"IPC: %016lx %016lx %016lx %016lx", devIpc[4], devIpc[5], devIpc[6], devIpc[7]); \
   } while (0)
 
-#define MAX_SHM_NAME_LEN 1024
 // Setting this to non zero causes P2P to use Reads rather than Writes
 NCCL_PARAM(P2pReadEnable, "P2P_READ_ENABLE", -2);
 
@@ -165,16 +152,6 @@ ncclResult_t p2pSendSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   }
 
   struct p2pConnectInfo info;
-  info.id = channelId;
-  info.pidHash = myInfo->pidHash;
-  info.sendRank = myInfo->cudaDev;
-  info.recvRank = peerInfo->cudaDev;
-
-  char shmName[MAX_SHM_NAME_LEN];
-  sprintf(shmName, "nccl-p2p-send-opcount-%lx-%d-%d-%d", info.pidHash, info.id, info.sendRank, info.recvRank);
-  TRACE(NCCL_P2P,"Open shmName %s", shmName);
-  NCCLCHECK(shmOpen(shmName, sizeof(uint64_t), (void**)&resources->opCount, (void**)&resources->devOpCount, 1));
-
   info.read = useRead;
   const char* useReadStr = info.read ? "/read" : "";
   if (myInfo->pidHash == peerInfo->pidHash) {
@@ -232,16 +209,6 @@ ncclResult_t p2pRecvSetup(struct ncclTopoSystem* topo, struct ncclTopoGraph* gra
   NCCLCHECK(ncclCudaCalloc((char**)&resources->devMem, recvSize, true));
 
   struct p2pConnectInfo info;
-  info.id = channelId;
-  info.pidHash = myInfo->pidHash;
-  info.sendRank = peerInfo->cudaDev;
-  info.recvRank = myInfo->cudaDev;
-
-  char shmName[MAX_SHM_NAME_LEN];
-  sprintf(shmName, "nccl-p2p-recv-opcount-%lx-%d-%d-%d", info.pidHash, info.id, info.sendRank, info.recvRank);
-  TRACE(NCCL_P2P,"Open shmName %s", shmName);
-  NCCLCHECK(shmOpen(shmName, sizeof(uint64_t), (void**)&resources->opCount, (void**)&resources->devOpCount, 1));
-
   info.read = useRead;
   if (myInfo->pidHash == peerInfo->pidHash) {
     info.direct = 1;
@@ -298,13 +265,6 @@ static ncclResult_t p2pSendConnect(struct ncclConnect* connectInfo, int nranks, 
     }
   }
 
-  char shmName[MAX_SHM_NAME_LEN];
-  sprintf(shmName, "nccl-p2p-recv-opcount-%lx-%d-%d-%d", info->pidHash, info->id, info->sendRank, info->recvRank);
-  TRACE(NCCL_P2P,"Open shmName %s", shmName);
-  NCCLCHECK(shmOpen(shmName, sizeof(uint64_t), (void**)&resources->remOpCount, (void**)&resources->devRemOpCount, 0));
-  // Remove the file to ensure proper clean-up
-  NCCLCHECK(shmUnlink(shmName));
-
   int offset = 0;
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     if (info->read && p == NCCL_PROTO_SIMPLE) {
@@ -344,12 +304,6 @@ ncclResult_t p2pRecvConnect(struct ncclConnect* connectInfo, int nranks, int ran
     }
   }
 
-  char shmName[MAX_SHM_NAME_LEN];
-  sprintf(shmName, "nccl-p2p-send-opcount-%lx-%d-%d-%d", info->pidHash, info->id, info->sendRank, info->recvRank);
-  TRACE(NCCL_P2P,"Open shmName %s", shmName);
-  NCCLCHECK(shmOpen(shmName, sizeof(uint64_t), (void**)&resources->remOpCount, (void**)&resources->devRemOpCount, 0));
-  NCCLCHECK(shmUnlink(shmName));
-
   int offset = 0;
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     if (info->read && p == NCCL_PROTO_SIMPLE) {
@@ -370,8 +324,6 @@ ncclResult_t p2pSendFree(void* resources) {
   if (sendRes->ipcPtr)
     CUDACHECK(hipIpcCloseMemHandle(sendRes->ipcPtr));
   CUDACHECK(hipFree(sendRes->devMem));
-  NCCLCHECK(shmClose(sendRes->opCount, sendRes->devOpCount, sizeof(uint64_t)));
-  NCCLCHECK(shmClose(sendRes->remOpCount, sendRes->devRemOpCount, sizeof(uint64_t)));
   free(sendRes);
   return ncclSuccess;
 }
@@ -381,8 +333,6 @@ ncclResult_t p2pRecvFree(void* resources) {
   if (recvRes->ipcPtr)
     CUDACHECK(hipIpcCloseMemHandle(recvRes->ipcPtr));
   CUDACHECK(hipFree(recvRes->devMem));
-  NCCLCHECK(shmClose(recvRes->opCount, recvRes->devOpCount, sizeof(uint64_t)));
-  NCCLCHECK(shmClose(recvRes->remOpCount, recvRes->devRemOpCount, sizeof(uint64_t)));
   free(recvRes);
   return ncclSuccess;
 }

@@ -40,6 +40,11 @@ struct ncclInfo {
   // Algorithm details
   int chunkSteps;
   int sliceSteps;
+  // For alltoallv
+  const size_t *sendcounts;
+  const size_t *sdispls;
+  const size_t *recvcounts;
+  const size_t *rdispls;
   // Computed later
   int algorithm;
   int protocol;
