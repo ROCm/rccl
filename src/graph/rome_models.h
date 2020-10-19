@@ -96,6 +96,76 @@ static struct rcclRomeModel rome_model_33 = {
   .ringBase = "1 4 5 7 0 3 2 6|4 1 7 5 6 2 3 0",
 };
 
+static struct rcclRomeModel rome_model_30 = {
+  .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, },
+  .pattern = "0010201010200010",
+  .ringBase = "3 0 1 2 6 7 5 4|2 1 0 3 7 6 4 5",
+};
+
+static struct rcclRomeModel rome_model_32 = {
+  .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
+  .nicNuma = { },
+  .connMatrix = { 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, },
+  .pattern = "0010201010200010",
+  .ringBase = "0 6 2 3 4 5 7 1|3 2 6 0 1 7 5 4",
+};
+
+static struct rcclRomeModel rome_model_24 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, },
+  .pattern = "10303010",
+  .ringBase = "0 1 2 3 5 7 6 4|1 0 3 2 7 5 4 6",
+};
+
+static struct rcclRomeModel rome_model_26 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
+  .nicNuma = { },
+  .connMatrix = { 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, },
+  .pattern = "10303010",
+  .ringBase = "4 5 7 1 0 3 2 6|3 0 6 2 1 7 5 4",
+};
+
+static struct rcclRomeModel rome_model_23 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
+  .nicNuma = { },
+  .connMatrix = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, },
+  .pattern = "10302020",
+  .ringBase = "1 7 6 4 5 2 0 3|2 5 3 0 4 6 7 1",
+};
+
+static struct rcclRomeModel rome_model_38 = {
+  .nGpus = 8, .nCpus = 7, .nNics = 0, .nLinks = 2,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
+  .nicNuma = { },
+  .connMatrix = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, },
+  .pattern = "00102010002010",
+  .ringBase = "6 7 1 4 3 5 2 0|0 2 5 3 4 1 7 6",
+};
+
+static struct rcclRomeModel rome_model_28 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
+  .pattern = "10302020",
+  .ringBase = "0 3 2 1 4 5 6 7|7 6 5 4 1 2 3 0|0 2 5 7 4 6 3 1|1 3 6 4 7 5 2 0",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -103,4 +173,11 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_29,
   rome_model_31,
   rome_model_33,
+  rome_model_30,
+  rome_model_32,
+  rome_model_24,
+  rome_model_26,
+  rome_model_23,
+  rome_model_38,
+  rome_model_28,
 };

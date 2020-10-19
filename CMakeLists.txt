@@ -126,12 +126,6 @@ set(CC_SOURCES
     src/collectives/all_to_all_api.cc
     src/collectives/all_to_allv_api.cc
     src/channel.cc
-    src/clique/CliqueManager.cc     # RCCL
-    src/clique/HandleCache.cc       # RCCL
-    src/clique/HandleShm.cc         # RCCL
-    src/clique/Hash.cc              # RCCL
-    src/clique/MsgQueue.cc          # RCCL
-    src/clique/ShmObject.cc         # RCCL
     src/misc/argcheck.cc
     src/misc/nvmlwrap_stub.cc
     src/misc/utils.cc
@@ -175,7 +169,7 @@ endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
   foreach(target ${AMDGPU_TARGETS})
-    target_compile_options(rccl PRIVATE --cuda-gpu-arch=${target} PRIVATE -fgpu-rdc PRIVATE -mno-xnack -Xarch_gfx906 -msram-ecc -Xarch_gfx908 -mno-sram-ecc)
+    target_compile_options(rccl PRIVATE --cuda-gpu-arch=${target} PRIVATE -fgpu-rdc)
   endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
   target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
