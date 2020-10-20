@@ -486,14 +486,14 @@ void DisplayUsage(char const* cmdName)
   printf("  dstMemL :   Destination memory location (Where the data is to be written to)\n");
   printf("              Memory locations are specified by a character indicating memory type, followed by GPU device index (0-indexed)\n");
   printf("              Supported memory locations are:\n");
-  printf("              - P:    Pinned host memory   (on CPU, on NUMA node closest to provided GPU index)\n");
+  printf("              - C:    Pinned host memory   (on CPU, on NUMA node closest to provided GPU index)\n");
   printf("              - G:    Global device memory (on GPU)\n");
   printf("Round brackets may be included for human clarity, but will be ignored\n");
   printf("\n");
   printf("Examples:\n");
   printf("1 4 (0 G0 G1)              Single Link that uses 4 CUs on GPU 0 that reads memory from GPU 0 and copies it to memory on GPU 1\n");
   printf("1 4 (0 G1 G0)              Single Link that uses 4 CUs on GPU 0 that reads memory from GPU 1 and copies it to memory on GPU 0\n");
-  printf("1 4 (2 P0 G2)              Single Link that uses 4 CUs on GPU 2 that reads memory from CPU 0 and copies it to memory on GPU 2\n");
+  printf("1 4 (2 C0 G2)              Single Link that uses 4 CUs on GPU 2 that reads memory from CPU 0 and copies it to memory on GPU 2\n");
   printf("2 4 (0 G0 G1) (1 G1 G0)    Runs 2 Links in parallel.  GPU 0 - > GPU1, and GP1 -> GPU 0, each with 4 CUs\n");
   printf("-2 (0 G0 G1 4) (1 G1 G0 2) Runs 2 Links in parallel.  GPU 0 - > GPU 1 using four CUs, and GPU1 -> GPU 0 using two CUs\n");
   printf("\n");
