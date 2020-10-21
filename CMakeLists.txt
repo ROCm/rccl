@@ -223,17 +223,47 @@ rocm_export_targets(NAMESPACE
                     hip)
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
-
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
+
+find_file (DEBIAN debian_version debconf.conf PATHS /etc)
+if(DEBIAN)
+  # Write copyright file
+  file(WRITE "${CMAKE_BINARY_DIR}/copyright"
+  "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: rccl
+Source: https://github.com/ROCmSoftwarePlatform/rccl
+
+Files: *
+Copyright: (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
+Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+License: See LICENSE.txt for license information\n")
+  install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION /usr/share/doc/rccl)
+  # Write changelog file
+  find_program( date_executable date )
+  execute_process(COMMAND ${date_executable} -R OUTPUT_VARIABLE TIMESTAMP)
+  file(WRITE "${CMAKE_BINARY_DIR}/changelog"
+  "rccl (${VERSION_STRING}-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- RCCL Maintainer <rccl-maintainer@amd.com>  ${TIMESTAMP}\n")
+  find_program( gzip_executable gzip )
+  execute_process(COMMAND bash "-c" "${gzip_executable} -9 -c ${CMAKE_BINARY_DIR}/changelog"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR} OUTPUT_FILE "${CMAKE_BINARY_DIR}/changelog.Debian.gz")
+  install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION /usr/share/doc/rccl)
+  set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "ROCm Communication Collectives Library
+  Optimized primitives for collective multi-GPU communication")
+endif()
 
 rocm_create_package(
   NAME
   rccl
   DESCRIPTION
-  "Optimized primitives for collective multi-GPU communication"
+  "ROCm Communication Collectives Library"
   MAINTAINER
-  "<rccl-maintainer@amd.com>"
+  "RCCL Maintainer <rccl-maintainer@amd.com>"
   LDCONFIG)
 
 rocm_install_symlink_subdir(rccl)
