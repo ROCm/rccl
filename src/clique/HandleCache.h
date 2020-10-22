@@ -40,8 +40,9 @@ template <
 >
 class NcclIpcHandleCache
 {
-    typedef std::unordered_map<Key, std::pair<Value, typename std::list<Key>::iterator>, Hash, KeyEqual, Allocator> LRUCache;
 public:
+    typedef std::pair<Value, typename std::list<Key>::iterator> NcclIpcHandleCacheValueType;
+    typedef std::unordered_map<Key, NcclIpcHandleCacheValueType, Hash, KeyEqual, Allocator> LRUCache;
     using iterator = typename LRUCache::iterator;
     NcclIpcHandleCache(size_t size,
                        size_t bucket_count = 100,
@@ -73,7 +74,7 @@ public:
         iterator it = m_cache.find(key);
         if (it != m_cache.end())
         {
-            updateHistory(key);
+            updateHistory(it);
         }
 
         return it;
@@ -111,11 +112,11 @@ private:
         m_lruHistory.pop_front();
     }
 
-    void updateHistory(const Key& key)
+    void updateHistory(const iterator& it)
     {
         if (m_lruHistory.size() > 0)
         {
-            m_lruHistory.splice(m_lruHistory.end(), m_lruHistory, m_cache[key].second);
+            m_lruHistory.splice(m_lruHistory.end(), m_lruHistory, (it->second).second);
         }
     }
     size_t m_capacity;
@@ -135,7 +136,7 @@ auto hipIpcMemHandleEqual = [](const hipIpcMemHandle_t& l, const hipIpcMemHandle
 //typedef llvm::DenseMap<uint64_t, hipIpcMemHandle_t> SendCache;
 //typedef llvm::DenseMap<hipIpcMemHandle_t, void*, decltype(&HandleHash), decltype(HandleEqual)> RecvCache;
 
-typedef NcclIpcHandleCache<uint64_t, hipIpcMemHandle_t, std::hash<uint64_t>, std::equal_to<uint64_t>, std::allocator< std::pair<const uint64_t, hipIpcMemHandle_t>>> NcclIpcHandleSendCache;
-typedef NcclIpcHandleCache<hipIpcMemHandle_t, void*, decltype(&hipIpcMemHandleHash), decltype(hipIpcMemHandleEqual), std::allocator< std::pair<const uint64_t, hipIpcMemHandle_t>>> NcclIpcHandleRecvCache;
+typedef NcclIpcHandleCache<uint64_t, hipIpcMemHandle_t, std::hash<uint64_t>, std::equal_to<uint64_t>, std::allocator< std::pair<const uint64_t, std::pair<hipIpcMemHandle_t, std::list<uint64_t>::iterator>>>> NcclIpcHandleSendCache;
+typedef NcclIpcHandleCache<hipIpcMemHandle_t, void*, decltype(&hipIpcMemHandleHash), decltype(hipIpcMemHandleEqual), std::allocator< std::pair<const hipIpcMemHandle_t, std::pair<void*, std::list<hipIpcMemHandle_t>::iterator>>>> NcclIpcHandleRecvCache;
 
 #endif
