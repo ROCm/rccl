@@ -12,6 +12,9 @@
 #include "rccl_bfloat16.h"
 #include "align.h"
 #include <stdint.h>
+// [RCCL] Support for clique-based kernels
+#include "clique/CliqueCommon.h"
+// [/RCCL]
 
 // Convert volatile access to atomic
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
@@ -35,6 +38,7 @@ extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
 #define NCCL_PROTO_LL 0
 #define NCCL_PROTO_LL128 1
+#define NCCL_PROTO_CLIQUE 1  // [RCCL] Clique takes up same protocol as unused LL128
 #define NCCL_PROTO_SIMPLE 2
 extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
 
@@ -190,8 +194,15 @@ struct CollectiveArgs {
       size_t count;
       size_t* extra;
     } a2av;
+    // [RCCL] Clique-based arguments
+    struct {
+      uint16_t nThreads;
+      cliqueDevicePtrs_t* ptrs;
+    } clique;
+    // [/RCCL]
   };
 };
+
 struct ncclColl {
   union {
     struct {
@@ -199,6 +210,7 @@ struct ncclColl {
       uint16_t funcIndex;
       uint16_t nextIndex;
       uint8_t  active;
+      uint8_t  useCliqueKernel; // [RCCL] Use clique-based kernels to execute this collective
     };
     int data[0x10];
   };

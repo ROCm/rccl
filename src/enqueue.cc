@@ -116,6 +116,19 @@ ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
     STORE(&channel->collectives[(channel->collStart+channel->collCount-1)%NCCL_MAX_OPS].active, 2);
   }
 
+  { // [RCCL] Wait for any clique-based collectives
+    // Only need to check the first channel for clique-based collectives
+    struct ncclChannel* channel = comm->channels;
+    for (int i = 0; i < channel->collCount; i++)
+    {
+      struct ncclColl* c = &channel->collectives[i];
+      if (c->useCliqueKernel)
+      {
+        NCCLCHECK(comm->cliqueManager->WaitForPointers(c->args.opCount));
+      }
+    }
+  } // [/RCCL]
+
   // Find the first operation, choose the kernel accordingly and pass it
   // as the first argument.
   struct ncclColl* coll = comm->channels[0].collectives+comm->channels[0].collStart;
@@ -257,6 +270,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   info->algorithm = -1;
   info->protocol = -1;
   int nAlgos = NCCL_NUM_ALGORITHMS;
+
   // Check collNet support
   int collNetTypeSupport = 0;
   if (info->comm->collNetSupport)
@@ -373,6 +387,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
 #endif
     return ncclSuccess;
   }
+
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getAlgoInfo(info));
   NCCLCHECK(getPatternInfo(info));
@@ -390,6 +405,27 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   }
 
   coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+
+  { // [RCCL] Check for clique-based kernel support
+    INFO(NCCL_INIT, "Checking for clique-based kernel support");
+    if (info->comm->cliqueManager->IsSupported(info->coll,
+                                               info->count,
+                                               info->datatype,
+                                               info->op))
+    {
+      // Declare the input / output pointers being used (to exchange via IPC with other ranks)
+      INFO(NCCL_INIT, "Declaring pointers for clique kernels");
+      NCCLCHECK(info->comm->cliqueManager->DeclarePointers(info->comm->opCount,
+                                                           info->sendbuff,
+                                                           info->recvbuff));
+
+
+      info->algorithm = NCCL_ALGO_RING;
+      info->protocol = NCCL_PROTO_CLIQUE;
+      coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+      return ncclSuccess;
+    }
+  } // [RCCL]
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
   int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->chunkSteps : 1;
@@ -474,6 +510,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   struct ncclProxyArgs proxyArgs;
   memset(&proxyArgs, 0, sizeof(struct ncclProxyArgs));
   NCCLCHECK(computeColl(info, &coll, &proxyArgs));
+  INFO(NCCL_INIT, "Function index: %d [coll = %d op = %d datatype = %d alg = %d proto = %d", coll.funcIndex, info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
 
@@ -519,8 +556,12 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       memcpy(c->args.a2av.extra+info->comm->nRanks*2, info->recvcounts, sizeof(size_t*)*(info->comm->nRanks));
       memcpy(c->args.a2av.extra+info->comm->nRanks*3, info->rdispls, sizeof(size_t*)*(info->comm->nRanks));
       c->args.a2av.bid = bid % coll.args.coll.nChannels;
-    } else if (info->coll != ncclCollSendRecv)
+    } else if (info->coll != ncclCollSendRecv) {
       c->args.coll.bid = bid % coll.args.coll.nChannels;
+    } else if (info->protocol == NCCL_PROTO_CLIQUE) {
+      // Prepare collectiveArgs for clique-based kernels
+      NCCLCHECK(info->comm->cliqueManager->SetCliqueCollectiveArgs(&c->args));
+    }
 
     STORE(&c->active, 1);
     opIndex = (opIndex+1)%NCCL_MAX_OPS;
@@ -599,6 +640,7 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     } else {
       NCCLCHECKGOTO(ncclSaveKernel(info), ret, end);
     }
+
 end:
     if (savedDev != -1) CUDACHECK(hipSetDevice(savedDev));
     ncclAsyncErrCheck(ret);
@@ -618,6 +660,7 @@ end:
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
 
     // [RCCL] Alternative launch path for clique-based kernels (if supported and enabled)
+    /*
     {
       if (info->comm->cliqueManager->IsSupported(info->coll,
                                                  info->count,
@@ -640,6 +683,7 @@ end:
         return ncclSuccess;
       }
     }
+    */
     // [/RCCL]
 
     NCCLCHECK(ncclSaveKernel(info));
