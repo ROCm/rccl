@@ -61,24 +61,18 @@ public:
   // Provide the pointers to be exchanged across the clique for the given rank / opCount
   ncclResult_t DeclarePointers(uint64_t opCount, void const* inputPtr, void* outputPtr);
 
-  // Launch a clique based kernel
-  ncclResult_t QueueKernel(uint64_t       const opCount,
-                           ncclFunc_t     const coll,
-                           size_t         const count,
-                           ncclDataType_t const datatype,
-                           ncclRedOp_t    const op,
-                           int            const root,
-                           hipStream_t    const stream);
+  // Set pointers for where clique-related arguments will be found
+  // This sets pointers to device-accessible memory where the arguments will eventually reside
+  ncclResult_t SetCliqueCollectiveArgs(CollectiveArgs* args);
 
-  ncclResult_t CloseSharedMemory();
+  // Blocking call which waits until exchanged pointers are ready for the given rank / opCount
+  // Requires all participating ranks to
+  ncclResult_t WaitForPointers(uint64_t const opCount);
 
+  // Prepares shared memory files upon initialization
   static ncclResult_t BootstrapRootInit(int pid, unsigned long hash);
 
 protected:
-  // Collect the device pointers from all GPUs for specified opCount
-  ncclResult_t GetCliqueDevicePointers(uint64_t opCount, cliqueDevicePtrs_t& cliquePtrs);
-
-
   ncclResult_t CheckCacheForPtr(void* devPtr,
                                 NcclIpcHandleSendCache* cache,
                                 int rank,
@@ -91,25 +85,29 @@ protected:
   // Race-condition helper functions
   void WaitForBarrier(int opIndex);
 
-  cliqueMode_t  m_cliqueMode;
-  int           m_rank;
-  int           m_numRanks;
-  bool          m_init;
-  int           m_nextBarrierValue[NCCL_MAX_OPS];
-  uint32_t*     m_arrivalCounter;
+  int                          m_rank;                            // Associated rank
+  int                          m_numRanks;                        // Total number of ranks
+  cliqueMode_t                 m_cliqueMode;                      // Clique mode (off/single process/single node)
+  bool                         m_init;                            // Whether CliqueManager has been initialized
+  int                          m_nextBarrierValue[NCCL_MAX_OPS];  // Next expected barrier value
+  cliqueDevicePtrs_t*          m_pinnedCliquePtrs;                // Pinned-host-memory (device accessible) containing device pointers
+  uint32_t*                    m_cpuBarrierPtr;                   // Points to appropriate CPU barrier counter
+  int*                         m_gpuBarrierPtr;                   // Points to appropriate GPU barrier counter
 
   // IPC-related (CLIQUE_SINGLE_NODE)
   NcclIpcHandleShm             m_shmHandles;
   NcclIpcHandleSendCache*      m_ipcHandleSendCache;
   NcclIpcHandleRecvCache*      m_ipcHandleRecvCache;
-  ShmObject<uint32_t>          m_sharedCounters; // Tracks # of ranks that have finished declaring pointers
-  ShmObject<hipIpcMemHandle_t> m_sharedBarrier;  // Used to pass fine-grained device memory buffer
-  int*                         m_deviceBarriers; // fine-grained barrier
+  ShmObject<uint32_t>          m_sharedCounters;                 // Tracks # of ranks that have finished declaring pointers
+  ShmObject<hipIpcMemHandle_t> m_sharedBarrier;                  // Used to pass fine-grained device memory buffer
+  int*                         m_deviceBarriers;                 // Fine-grained GPU memory barrier allocated only on first rank
 
   // Single-process (CLIQUE_SINGLE_PROCESS)
-  static cliqueDevicePtrs_t    m_cliquePtrs[NCCL_MAX_OPS];
+  static cliqueDevicePtrs_t    m_staticCliquePtrs[NCCL_MAX_OPS];
   static uint32_t              m_staticCounters[NCCL_MAX_OPS];
   static int*                  m_staticBarriers;
+
+
 };
 
 // For use in bootstrapping code

@@ -25,8 +25,8 @@ THE SOFTWARE.
 
 #include "nccl.h"
 #include <cstdint>
-#include "rccl_bfloat16.h"
-#include "reduce_kernel.h"
+//#include "rccl_bfloat16.h"
+//#include "reduce_kernel.h"
 
 #define MIN_CLIQUE_SIZE 2
 #define MAX_CLIQUE_SIZE 8

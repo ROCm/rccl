@@ -28,6 +28,7 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include "hip/hip_ext.h"
 
+#if 0
 #define ALL_REDUCE_SPLIT_BLOCKSIZE 256
 
 template <typename T, class FUNC, int NUM_RANKS>
@@ -141,5 +142,5 @@ protected:
     m_allReduceCliqueKernels[ncclNumTypes][ncclNumOps][MAX_CLIQUE_SIZE - MIN_CLIQUE_SIZE + 1] =
     KERNEL_LIST_MACRO(AllReduceCliqueSplitKernel);
 };
-
+#endif
 #endif

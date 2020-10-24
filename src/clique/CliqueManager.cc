@@ -40,9 +40,9 @@ THE SOFTWARE.
 #include <sstream>
 #include <thread>
 
-cliqueDevicePtrs_t CliqueManager::m_cliquePtrs[NCCL_MAX_OPS]     = {};
-uint32_t           CliqueManager::m_staticCounters[NCCL_MAX_OPS] = {};
-int*               CliqueManager::m_staticBarriers = NULL;
+cliqueDevicePtrs_t CliqueManager::m_staticCliquePtrs[NCCL_MAX_OPS] = {};
+uint32_t           CliqueManager::m_staticCounters[NCCL_MAX_OPS]   = {};
+int*               CliqueManager::m_staticBarriers                 = NULL;
 
 CliqueManager::CliqueManager(int          const  rank,
                              int          const  numRanks,
@@ -51,7 +51,7 @@ CliqueManager::CliqueManager(int          const  rank,
   m_numRanks(numRanks),
   m_cliqueMode(cliqueMode),
   m_init(false),
-  m_deviceBarriers(NULL)
+  m_pinnedCliquePtrs(NULL)
 {
 }
 
@@ -65,6 +65,10 @@ CliqueManager::~CliqueManager()
 
 void CliqueManager::CleanUp()
 {
+  if (m_cliqueMode == CLIQUE_DISABLED) return;
+
+  if (m_pinnedCliquePtrs) hipHostFree(m_pinnedCliquePtrs);
+
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
     // Release caches
@@ -78,7 +82,7 @@ void CliqueManager::CleanUp()
 
     if (m_rank == 0)
     {
-      hipFree(m_deviceBarriers);
+      if (m_deviceBarriers) hipFree(m_deviceBarriers);
     }
   }
   else if (m_cliqueMode == CLIQUE_SINGLE_PROCESS)
@@ -115,6 +119,15 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     return ncclSuccess;
   }
 
+  // Allocate pinned CPU memory for holding clique pointers, which kernels will have access to
+  if (hipHostMalloc(&m_pinnedCliquePtrs, sizeof(cliqueDevicePtrs_t) * NCCL_MAX_OPS) != hipSuccess)
+  {
+    WARN("Unable to allocated pinned host memory for clique pointers.  Disabling clique-based kernels");
+    m_cliqueMode = CLIQUE_DISABLED;
+    m_init = true;
+    return ncclSuccess;
+  }
+
   unsigned long hash = djb2Hash(commId->internal);
   std::string shmSuffix = std::to_string(hash) + "_" + std::to_string(suffix);
 
@@ -138,7 +151,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
                                            m_numRanks,
                                            hash);
     NCCLCHECKGOTO(m_sharedCounters.Open(), res, dropback);
-    m_arrivalCounter = m_sharedCounters.Get();
+    m_cpuBarrierPtr = m_sharedCounters.Get();
 
     // Initialized shared barriers
     m_sharedBarrier = ShmObject<hipIpcMemHandle_t>(std::max(4096LU, sizeof(hipIpcMemHandle_t)),
@@ -173,7 +186,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
       return ncclSuccess;
     }
     memset(m_staticBarriers, 0, NCCL_MAX_OPS * sizeof(int));
-    m_arrivalCounter = m_staticCounters;
+    m_cpuBarrierPtr = m_staticCounters;
   }
   m_init = true;
   return ncclSuccess;
@@ -229,17 +242,81 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
 
     // Write IPC handles to shared memory for given rank / opCount
     NCCLCHECK(m_shmHandles.WriteHandles(opIndex, handles));
-
+    m_pinnedCliquePtrs[opIndex].barrierCounter = &m_deviceBarriers[opIndex];
   }
   else if (m_cliqueMode == CLIQUE_SINGLE_PROCESS)
   {
     // Store this rank's input/output pointers into static member
-    m_cliquePtrs[opIndex].inputs[m_rank]  = inputPtr;
-    m_cliquePtrs[opIndex].outputs[m_rank] = outputPtr;
+    m_staticCliquePtrs[opIndex].inputs[m_rank]  = inputPtr;
+    m_staticCliquePtrs[opIndex].outputs[m_rank] = outputPtr;
+    m_staticCliquePtrs[opIndex].barrierCounter = &m_staticBarriers[opIndex];
+  }
+
+  return ncclSuccess;
+}
+
+ncclResult_t CliqueManager::SetCliqueCollectiveArgs(CollectiveArgs* args)
+{
+  // Do nothing if disabled
+  if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
+  if (!m_init)
+  {
+    WARN("CliqueManager must be initialized before use");
+    return ncclInvalidUsage;
+  }
+
+  // Prepare clique argments (NOTE: clique pointers are not ready yet)
+  int opIndex = args->opCount % NCCL_MAX_OPS;
+  args->clique.ptrs = &m_pinnedCliquePtrs[opIndex];
+
+  return ncclSuccess;
+}
+
+ncclResult_t CliqueManager::WaitForPointers(uint64_t const opCount)
+{
+  // Do nothing if disabled
+  if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
+  if (!m_init)
+  {
+    WARN("CliqueManager must be initialized before use");
+    return ncclInvalidUsage;
+  }
+
+  // Wait for all ranks to declare pointers
+  INFO(NCCL_INIT, "Waiting for clique pointers for opCount %d", opCount);
+
+  int opIndex = opCount % NCCL_MAX_OPS;
+  WaitForBarrier(opIndex);
+
+  // Copy clique device pointers to pinned device memory
+  if (m_cliqueMode == CLIQUE_SINGLE_NODE)
+  {
+    // Collect the ready handles from shared memory and convert them to device pointers
+    int numHandles = m_numRanks * NUM_HANDLES_PER_RANK;
+    std::vector<hipIpcMemHandle_t> handles(numHandles);
+
+    NCCLCHECK(m_shmHandles.ReadHandles(opIndex, handles));
+
+    for (int i = 0; i < m_numRanks; i++)
+    {
+      void *input;
+      NCCLCHECK(CheckCacheForHandle(handles[i * NUM_HANDLES_PER_RANK],
+                                    m_ipcHandleRecvCache, &input));
+      m_pinnedCliquePtrs[opIndex].inputs[i] = const_cast<const void *>(input);
+
+      NCCLCHECK(CheckCacheForHandle(handles[(i * NUM_HANDLES_PER_RANK) + 1],
+                                    m_ipcHandleRecvCache, &m_pinnedCliquePtrs[opIndex].outputs[i]));
+    }
+  }
+  else if (m_cliqueMode == CLIQUE_SINGLE_PROCESS)
+  {
+    // Copy from static memory to pinned host memory
+    memcpy(&m_pinnedCliquePtrs[opIndex], &m_staticCliquePtrs[opIndex], sizeof(cliqueDevicePtrs_t));
   }
   return ncclSuccess;
 }
 
+#if 0
 ncclResult_t CliqueManager::QueueKernel(uint64_t       const opCount,
                                         ncclFunc_t     const coll,
                                         size_t         const count,
@@ -305,11 +382,12 @@ ncclResult_t CliqueManager::GetCliqueDevicePointers(uint64_t opCount, cliqueDevi
   }
   else if (m_cliqueMode == CLIQUE_SINGLE_PROCESS)
   {
-    m_cliquePtrs[opIndex].barrierCounter = &m_staticBarriers[opIndex];
-    cliquePtrs = m_cliquePtrs[opIndex];
+    m_staticCliquePtrs[opIndex].barrierCounter = &m_staticBarriers[opIndex];
+    cliquePtrs = m_staticCliquePtrs[opIndex];
   }
   return ncclSuccess;
 }
+#endif
 
 ncclResult_t CliqueManager::CheckCacheForPtr(void* devPtr,
                                              NcclIpcHandleSendCache* cache,
@@ -363,8 +441,8 @@ void CliqueManager::WaitForBarrier(int opIndex)
   m_nextBarrierValue[opIndex] += m_numRanks;
   int const nextValue = m_nextBarrierValue[opIndex];
 
-  __atomic_add_fetch(&m_arrivalCounter[opIndex], 1, __ATOMIC_SEQ_CST);
-  while (m_arrivalCounter[opIndex] < nextValue)
+  __atomic_add_fetch(&m_cpuBarrierPtr[opIndex], 1, __ATOMIC_SEQ_CST);
+  while (m_cpuBarrierPtr[opIndex] < nextValue)
   {
     std::this_thread::yield();
   }
