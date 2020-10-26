@@ -81,12 +81,16 @@ struct BlockParam
     float* dst;
 };
 
-void DisplayUsage(char const* cmdName);                // Display usage instructions
-void DisplayTopology();                                // Display GPU topology
-void ParseLinks(char* line, std::vector<Link>& links); // Parse Link information
+void DisplayUsage(char const* cmdName);                      // Display usage instructions
+void GenerateConfigFile(char const* cfgFile, int numBlocks); // Generate a sample config file
+void DisplayTopology();                                      // Display GPU topology
+void ParseLinks(char* line, std::vector<Link>& links);       // Parse Link information
 void AllocateMemory(MemType memType, int devIndex, size_t numBytes, bool useFineGrainMem, float** memPtr);
 void DeallocateMemory(MemType memType, int devIndex, float* memPtr);
 void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr);
+std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount);
+std::string GetLinkDesc(Link const& link);
+
 
 #define MAX_NAME_LEN 64
 #define BLOCKSIZE 256
