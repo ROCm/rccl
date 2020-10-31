@@ -166,6 +166,36 @@ static struct rcclRomeModel rome_model_28 = {
   .ringBase = "0 3 2 1 4 5 6 7|7 6 5 4 1 2 3 0|0 2 5 7 4 6 3 1|1 3 6 4 7 5 2 0",
 };
 
+static struct rcclRomeModel rome_model_40 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
+  .nicNuma = { 2, },
+  .connMatrix = { 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, },
+  .pattern = "10302120",
+  .ringBase = "6 7 1 4 0 5 3 2|7 6 4 1 0 2 3 5",
+};
+
+static struct rcclRomeModel rome_model_42 = {
+  .nGpus = 8, .nCpus = 7, .nNics = 1, .nLinks = 3,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
+  .nicNuma = { 4, },
+  .connMatrix = { 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, },
+  .pattern = "00102010012010",
+  .ringBase = "7 4 6 1 3 0 2 5|6 4 7 1 3 2 5 0",
+};
+
+static struct rcclRomeModel rome_model_44 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
+  .gpuIds = { 0x63000, 0x43000, 0x27000, 0x3000, 0xe3000, 0xc3000, 0xa3000, 0x83000, },
+  .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
+  .nicNuma = { 2, },
+  .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
+  .pattern = "20202120",
+  .ringBase = "4 5 7 6 2 1 3 0|7 4 5 6 2 0 1 3",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -180,4 +210,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_23,
   rome_model_38,
   rome_model_28,
+  rome_model_40,
+  rome_model_42,
+  rome_model_44,
 };
