@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 
   // Loop over powers of 2
   int minPow = 10;
-  int maxPow = 20;
+  int maxPow = 28;
   //int maxPow = 28;
 
   if (rank == 0)
@@ -114,7 +114,9 @@ int main(int argc, char **argv)
     HIP_CALL(hipEventRecord(startEvent, stream));
     for (int iteration = 0; iteration < numIterations; iteration++)
     {
+      NCCL_CALL(ncclGroupStart());
       NCCL_CALL(ncclAllReduce(iputGpu, oputGpu, N, ncclFloat, ncclSum, comm, stream));
+      NCCL_CALL(ncclGroupEnd());
     }
     HIP_CALL(hipEventRecord(stopEvent, stream));
     HIP_CALL(hipStreamSynchronize(stream));

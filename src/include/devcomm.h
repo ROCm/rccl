@@ -25,6 +25,7 @@
 #define STORE(DST, SRC) *(DST) = (SRC)
 #endif
 
+
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
 typedef enum { ncclCollBroadcast, ncclCollReduce, ncclCollAllGather, ncclCollReduceScatter, ncclCollAllReduce, ncclCollGather, ncclCollScatter, ncclCollAllToAll, ncclCollAllToAllv, ncclCollSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+4];
@@ -197,6 +198,7 @@ struct CollectiveArgs {
     // [RCCL] Clique-based arguments
     struct {
       uint16_t nThreads;
+      size_t count;
       cliqueDevicePtrs_t* ptrs;
     } clique;
     // [/RCCL]
