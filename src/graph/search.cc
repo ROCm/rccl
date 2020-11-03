@@ -905,6 +905,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     }
     if (j >= romeTopo->nNics) {
       net_map[j] = i;
+      romeTopo->nicIds[romeTopo->nNics] = system->nodes[NET].nodes[i].net.busId;
       (romeTopo->nNics)++;
       if (romeTopo->nNics >= MAX_ROME_NICS) break;
     }
@@ -940,6 +941,9 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     fprintf(file, "  .nGpus = %d, .nCpus = %d, .nNics = %d, .nLinks = %d,\n", romeTopo->nGpus, romeTopo->nCpus, romeTopo->nNics, romeTopo->nLinks);
     fprintf(file, "  .gpuIds = { ");
     for (int i = 0; i < romeTopo->nGpus; i ++) fprintf(file, "0x%lx, ", romeTopo->gpuIds[i]);
+    fprintf(file, "},\n");
+    fprintf(file, "  .nicIds = { ");
+    for (int i = 0; i < romeTopo->nNics; i ++) fprintf(file, "0x%lx, ", romeTopo->nicIds[i]);
     fprintf(file, "},\n");
     fprintf(file, "  .gpuNuma = { ");
     for (int i = 0; i < romeTopo->nGpus; i ++) fprintf(file, "%ld, ", romeTopo->gpuNuma[i]);
@@ -1038,13 +1042,18 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
   }
 
   char line[1024];
+#ifdef ENABLE_TRACE
   sprintf(line, "Found matching Rome model index %d in %.2fms (%d iter) with GPU mapping: ", i, t, time);
+#else
+  sprintf(line, "Found matching Rome model index %d with GPU mapping: ", i);
+#endif
   int offset = strlen(line);
   for (int k = 0; k < ngpus; k++) {
     sprintf(line+offset, "%d ", g[k]);
     offset = strlen(line);
   }
   INFO(NCCL_GRAPH, "%s", line);
+
   // create 4P2H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, romeTopo.nNics, net_map));
   return ncclSuccess;
