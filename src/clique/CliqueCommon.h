@@ -25,79 +25,67 @@ THE SOFTWARE.
 
 #include "nccl.h"
 #include <cstdint>
-//#include "rccl_bfloat16.h"
-//#include "reduce_kernel.h"
 
 #define MIN_CLIQUE_SIZE 2
 #define MAX_CLIQUE_SIZE 8
 
 typedef struct
 {
-  void const*   inputs[MAX_CLIQUE_SIZE];
-  void*         outputs[MAX_CLIQUE_SIZE];
-  int*          barrierCounter;
+  int* globalCount;   // Shared across GPUs
+  int* globalSense;   // Shared across GPUs
+  int* localSense;    // Local to this GPU
+} gpuBarrier_t;
+
+typedef struct
+{
+  // Input/output pointers from participating ranks
+  void const* inputs[MAX_CLIQUE_SIZE];
+  void*       outputs[MAX_CLIQUE_SIZE];
+
+  // Barrier variable
+  gpuBarrier_t barrier;
 } cliqueDevicePtrs_t;
 
-// Helper macro to generate a table of templated kernel functions
-// This is expected to run between MIN_CLIQUE_SIZE to MAX_CLIQUE_SIZE
-#define KERNEL_LIST_RANK(kernelname, datatype, func) \
-  {                                              \
-    kernelname<datatype, func<datatype>, 2>,     \
-    kernelname<datatype, func<datatype>, 3>,     \
-    kernelname<datatype, func<datatype>, 4>,     \
-    kernelname<datatype, func<datatype>, 5>,     \
-    kernelname<datatype, func<datatype>, 6>,     \
-    kernelname<datatype, func<datatype>, 7>,     \
-    kernelname<datatype, func<datatype>, 8>      \
+// Helper macro to launch an appropriate kernel by converting rank to a template argument
+#define LAUNCH_CLIQUE_KERNEL(kernelname, FUNC, T, args)  \
+  {                                                      \
+    switch (args->comm->nRanks){                         \
+    case 2: kernelname<FUNC, T, 2>(args); break;         \
+    case 3: kernelname<FUNC, T, 3>(args); break;         \
+    case 4: kernelname<FUNC, T, 4>(args); break;         \
+    case 5: kernelname<FUNC, T, 5>(args); break;         \
+    case 6: kernelname<FUNC, T, 6>(args); break;         \
+    case 7: kernelname<FUNC, T, 7>(args); break;         \
+    case 8: kernelname<FUNC, T, 8>(args); break;         \
+    }                                                    \
   }
 
-// Helper macro to generate a table of templated kernel functions
-// This is expected to match the number of supported reduction operations (ncclNumOps)
-#define KERNEL_LIST_OP(kernelname, datatype)          \
-  {                                                   \
-    KERNEL_LIST_RANK(kernelname, datatype, FuncSum),  \
-    KERNEL_LIST_RANK(kernelname, datatype, FuncProd), \
-    KERNEL_LIST_RANK(kernelname, datatype, FuncMax),  \
-    KERNEL_LIST_RANK(kernelname, datatype, FuncMin)   \
-  }
-
-// Helper Macro to generate table of templated kernel functions
-// This is expected to match the number of supported datatypes (ncclNumTypes)
-#define KERNEL_LIST_MACRO(kernelname)         \
-  {                                           \
-    KERNEL_LIST_OP(kernelname, int8_t),       \
-    KERNEL_LIST_OP(kernelname, uint8_t),      \
-    KERNEL_LIST_OP(kernelname, int32_t),      \
-    KERNEL_LIST_OP(kernelname, uint32_t),     \
-    KERNEL_LIST_OP(kernelname, int64_t),      \
-    KERNEL_LIST_OP(kernelname, uint64_t),     \
-    KERNEL_LIST_OP(kernelname, half),         \
-    KERNEL_LIST_OP(kernelname, float),        \
-    KERNEL_LIST_OP(kernelname, double),       \
-    KERNEL_LIST_OP(kernelname, rccl_bfloat16) \
-  }
-
+// Multi-GPU (on same node) barrier.  One thread per grid per GPU updates barrier / waits
 template <int NUM_RANKS>
-__forceinline__ __device__ void WaitForBarrier(int* counter)
+__forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier)
 {
   if (threadIdx.x == 0 & blockIdx.x == 0)
   {
-    // Assumes counter starts at 0 prior to any rank access
-    __atomic_add_fetch(counter, 1, __ATOMIC_SEQ_CST);
+    // Sense inversion barrier
+    *barrier.localSense = 1 - *barrier.localSense;
+    int localSense = *barrier.localSense;
 
-    // Wait for all ranks to reach barrier
-    while (__atomic_load_n(counter, __ATOMIC_SEQ_CST) < NUM_RANKS);
-
-    // Each rank increments again, last one resets barrier
-    if (__atomic_add_fetch(counter, 1, __ATOMIC_SEQ_CST) == (2*NUM_RANKS))
-      __atomic_store_n(counter, 0, __ATOMIC_SEQ_CST);
-
-    // Wait for counter to be zeroed
-    while (__atomic_load_n(counter, __ATOMIC_SEQ_CST) != 0);
+    int val = __atomic_add_fetch(barrier.globalCount, 1, __ATOMIC_SEQ_CST);
+    if (val == NUM_RANKS)
+    {
+      // Last arrival resets barrier
+      __atomic_store_n(barrier.globalCount, 0, __ATOMIC_SEQ_CST);
+      __atomic_store_n(barrier.globalSense, localSense, __ATOMIC_SEQ_CST);
+    }
+    else
+    {
+      // Wait for all ranks to reach barrier
+      while (__atomic_load_n(barrier.globalSense, __ATOMIC_SEQ_CST) != localSense);
+    }
   }
 }
 
-__forceinline__ __host__ __device__ int RoundUp(int X, int Y)
+__forceinline__ __host__ __device__ size_t RoundUp(size_t X, size_t Y)
 {
   return (X+Y-1)/Y * Y;
 }

@@ -9,6 +9,8 @@
 #include "argcheck.h"
 #include "coll_net.h"
 #include "../graph/topo.h"
+#include <hip/hip_runtime.h>
+#include <hip/hip_ext.h>
 
 // Only generate inline kernels for LL
 #define NCCL_FUNC5(coll, op, dtype) \
@@ -121,11 +123,9 @@ ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
     struct ncclChannel* channel = comm->channels;
     for (int i = 0; i < channel->collCount; i++)
     {
-      struct ncclColl* c = &channel->collectives[i];
+      struct ncclColl* c = &channel->collectives[(channel->collStart + i) % NCCL_MAX_OPS];
       if (c->useCliqueKernel)
-      {
         NCCLCHECK(comm->cliqueManager->WaitForPointers(c->args.opCount));
-      }
     }
   } // [/RCCL]
 
@@ -223,7 +223,8 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
         (comm->launchMode == ncclComm::GROUP && comm->groupCudaStream) ? "/Stream" : "");
   }
 
-
+  hipEvent_t startEvent;
+  hipEvent_t stopEvent;
   if (comm->launchMode == ncclComm::PARALLEL) {
     hipLaunchKernelGGL(((void (*)(struct ncclDevComm*))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclDevComm ***)(params->args)));
   } else {
@@ -407,14 +408,12 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   { // [RCCL] Check for clique-based kernel support
-    INFO(NCCL_INIT, "Checking for clique-based kernel support");
     if (info->comm->cliqueManager->IsSupported(info->coll,
                                                info->count,
                                                info->datatype,
                                                info->op))
     {
       // Declare the input / output pointers being used (to exchange via IPC with other ranks)
-      INFO(NCCL_INIT, "Declaring pointers for clique kernels");
       NCCLCHECK(info->comm->cliqueManager->DeclarePointers(info->comm->opCount,
                                                            info->sendbuff,
                                                            info->recvbuff));
@@ -422,6 +421,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
 
       info->algorithm = NCCL_ALGO_RING;
       info->protocol = NCCL_PROTO_CLIQUE;
+      coll->args.clique.count = info->count;
       coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
       return ncclSuccess;
     }
@@ -510,7 +510,6 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   struct ncclProxyArgs proxyArgs;
   memset(&proxyArgs, 0, sizeof(struct ncclProxyArgs));
   NCCLCHECK(computeColl(info, &coll, &proxyArgs));
-  INFO(NCCL_INIT, "Function index: %d [coll = %d op = %d datatype = %d alg = %d proto = %d", coll.funcIndex, info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
 
@@ -558,10 +557,18 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       c->args.a2av.bid = bid % coll.args.coll.nChannels;
     } else if (info->coll != ncclCollSendRecv) {
       c->args.coll.bid = bid % coll.args.coll.nChannels;
-    } else if (info->protocol == NCCL_PROTO_CLIQUE) {
-      // Prepare collectiveArgs for clique-based kernels
+    }
+
+    // [RCCL] Setup pointers to where all the input/output pointers will be
+    if (info->protocol == NCCL_PROTO_CLIQUE) {
+      c->useCliqueKernel = 1;
       NCCLCHECK(info->comm->cliqueManager->SetCliqueCollectiveArgs(&c->args));
     }
+    else
+    {
+      c->useCliqueKernel = 0;
+    }
+    // [/RCCL]
 
     STORE(&c->active, 1);
     opIndex = (opIndex+1)%NCCL_MAX_OPS;
@@ -658,33 +665,6 @@ end:
       INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
         info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
-
-    // [RCCL] Alternative launch path for clique-based kernels (if supported and enabled)
-    /*
-    {
-      if (info->comm->cliqueManager->IsSupported(info->coll,
-                                                 info->count,
-                                                 info->datatype,
-                                                 info->op))
-      {
-        // Declare the input / output pointers being used (to exchange via IPC with other ranks)
-        NCCLCHECK(info->comm->cliqueManager->DeclarePointers(info->comm->opCount,
-                                                             info->sendbuff,
-                                                             info->recvbuff));
-
-        // Queue the clique-based kernel
-        NCCLCHECK(info->comm->cliqueManager->QueueKernel(info->comm->opCount,
-                                                         info->coll,
-                                                         info->count,
-                                                         info->datatype,
-                                                         info->op,
-                                                         info->root,
-                                                         info->stream));
-        return ncclSuccess;
-      }
-    }
-    */
-    // [/RCCL]
 
     NCCLCHECK(ncclSaveKernel(info));
     NCCLCHECK(ncclBarrierEnqueue(info->comm));

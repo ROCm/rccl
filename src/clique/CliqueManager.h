@@ -85,29 +85,31 @@ protected:
   // Race-condition helper functions
   void WaitForBarrier(int opIndex);
 
-  int                          m_rank;                            // Associated rank
-  int                          m_numRanks;                        // Total number of ranks
-  cliqueMode_t                 m_cliqueMode;                      // Clique mode (off/single process/single node)
-  bool                         m_init;                            // Whether CliqueManager has been initialized
-  int                          m_nextBarrierValue[NCCL_MAX_OPS];  // Next expected barrier value
-  cliqueDevicePtrs_t*          m_pinnedCliquePtrs;                // Pinned-host-memory (device accessible) containing device pointers
-  uint32_t*                    m_cpuBarrierPtr;                   // Points to appropriate CPU barrier counter
-  int*                         m_gpuBarrierPtr;                   // Points to appropriate GPU barrier counter
+  int                          m_rank;                               // Associated rank
+  int                          m_numRanks;                           // Total number of ranks
+  cliqueMode_t                 m_cliqueMode;                         // Clique mode (off/single process/single node)
+  bool                         m_init;                               // Whether CliqueManager has been initialized
+  cliqueDevicePtrs_t*          m_pinnedCliquePtrs;                   // Pinned-host-memory (device accessible) containing device pointers
+  int*                         m_cpuBarrierGlobalCount;              // Part of CPU barrier (count variable shared across ranks)
+  int*                         m_cpuBarrierGlobalSense;              // Part of CPU barrier (reset variable shared across ranks)
+  int                          m_cpuBarrierLocalSense[NCCL_MAX_OPS]; // Part of CPU barrier (reset variable local to this rank)
+  int*                         m_gpuBarrierGlobalCount;              // Part of GPU barrier (count variable shared across ranks)
+  int*                         m_gpuBarrierGlobalSense;              // Part of GPU barrier (reset variable shared across ranks)
+  int*                         m_gpuBarrierLocalSense;               // Part of GPU barrier (reset variable local to this rank)
 
   // IPC-related (CLIQUE_SINGLE_NODE)
   NcclIpcHandleShm             m_shmHandles;
-  NcclIpcHandleSendCache*      m_ipcHandleSendCache;
-  NcclIpcHandleRecvCache*      m_ipcHandleRecvCache;
-  ShmObject<uint32_t>          m_sharedCounters;                 // Tracks # of ranks that have finished declaring pointers
-  ShmObject<hipIpcMemHandle_t> m_sharedBarrier;                  // Used to pass fine-grained device memory buffer
-  int*                         m_deviceBarriers;                 // Fine-grained GPU memory barrier allocated only on first rank
+  NcclIpcHandleSendCache*      m_ipcHandleSendCache;                 // Caches pointers to IPC handles (to send to other processes)
+  NcclIpcHandleRecvCache*      m_ipcHandleRecvCache;                 // Caches IPC handles to pointers (received from other processes)
+  ShmObject<int32_t>           m_sharedCpuMemory;                    // Used to pass shared memory used for CPU barrier
+  ShmObject<hipIpcMemHandle_t> m_sharedIpcHandle;                    // Used to pass fine-grained device memory buffer IPC handle
+  int*                         m_fineGrainBarrierMem;                // Fine-grained GPU memory barrier (allocated only on 1st rank, shared on others)
 
   // Single-process (CLIQUE_SINGLE_PROCESS)
   static cliqueDevicePtrs_t    m_staticCliquePtrs[NCCL_MAX_OPS];
-  static uint32_t              m_staticCounters[NCCL_MAX_OPS];
-  static int*                  m_staticBarriers;
-
-
+  static int32_t               m_staticGlobalCount[NCCL_MAX_OPS];
+  static int32_t               m_staticGlobalSense[NCCL_MAX_OPS];
+  static int*                  m_staticBarrierMem;
 };
 
 // For use in bootstrapping code

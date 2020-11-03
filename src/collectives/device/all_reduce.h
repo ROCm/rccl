@@ -8,6 +8,7 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
+#include "clique/AllReduceCliqueKernel.h" // [RCCL] AllReduce Clique-based kernel support
 
 template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
@@ -29,8 +30,6 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
   uint64_t clk, t0 = 0ULL, ws;
   if (tid == 0) clk = __rtc64();
 #endif
-
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from Ring Kernel Rank %d\n", comm->rank);;
 
   // Compute pointers
   const T * __restrict__ thisInput = (const T*)args->sendbuff;
@@ -120,8 +119,6 @@ __device__ void ncclAllReduceTreeKernel(struct CollectiveArgs* args) {
   const ssize_t loopSize = nChannels*chunkSize;
   const ssize_t size = args->coll.count;
 
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from Tree Kernel Rank %d\n", comm->rank);;
-
   if (loopSize > size) {
     chunkSize = DIVUP(size, nChannels*minChunkSize)*minChunkSize;
   }
@@ -182,8 +179,6 @@ __device__ void ncclAllReduceCollNetKernel(struct CollectiveArgs* args) {
   const ssize_t loopSize = nChannels*chunkSize;
   const ssize_t size = args->coll.count;
 
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from CollNet Kernel Rank %d\n", comm->rank);;
-
   if (loopSize > size) {
     chunkSize = DIVUP(size, nChannels*minChunkSize)*minChunkSize;
   }
@@ -243,8 +238,6 @@ __device__ void ncclAllReduceRingLLKernel(struct CollectiveArgs* args) {
   const int nranks = comm->nRanks;
   const ssize_t loopSize = nChannels*nranks*chunkSize;
   const ssize_t size = args->coll.count;
-
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from RingLL Kernel Rank %d\n", comm->rank);;
 
   ncclLLPrimitives<T, FUNC, 1, 1> LLprims(tid, nthreads, &ring->prev, &ring->next, stepLines, channel, comm);
 
@@ -319,8 +312,6 @@ __device__ void ncclAllReduceTreeLLKernel(struct CollectiveArgs* args) {
   const ssize_t size = args->coll.count;
 
 
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from TreeLL Kernel Rank %d\n", comm->rank);;
-
   if (loopSize > size) {
     chunkSize = DIVUP(size, nChannels*minChunkSize)*minChunkSize;
   }
@@ -381,8 +372,6 @@ __device__ void ncclAllReduceCollNetLLKernel(struct CollectiveArgs* args) {
   const ssize_t loopSize = nChannels*chunkSize;
   const ssize_t size = args->coll.count;
 
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from CollNetLL Kernel Rank %d\n", comm->rank);;
-
   if (loopSize > size) {
     chunkSize = DIVUP(size, nChannels*minChunkSize)*minChunkSize;
   }
@@ -430,24 +419,10 @@ __device__ void ncclAllReduceCollNetLLKernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllReduceRingLL128Kernel(struct CollectiveArgs* args) {
-  struct ncclDevComm* comm = args->comm;
-/*
-  const int tid = threadIdx.x;
-  const int nthreads = args->coll.nThreads;
-  const int bid = args->coll.bid;
-  const int nChannels = args->coll.nChannels;
 
-  struct ncclChannel* channel = comm->channels+blockIdx.x;
-  struct ncclRing* ring = &channel->ring;
-  const int stepSize = comm->buffSizes[NCCL_PROTO_LL128] / (sizeof(uint64_t)*NCCL_STEPS);
-  ssize_t chunkSize = stepSize*NCCL_LL128_DATAELEMS*sizeof(uint64_t) / (NCCL_LL128_LINEELEMS*sizeof(T));
-  // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
-  const ssize_t minChunkSize = (NCCL_LL128_SHMEM_ELEMS_PER_THREAD*nthreads*NCCL_LL128_DATAELEMS*sizeof(uint64_t))/(NCCL_LL128_LINEELEMS*sizeof(T))/2;
-  const int nranks = comm->nRanks;
-  const ssize_t loopSize = nChannels*nranks*chunkSize;
-  const ssize_t size = args->coll.count;
-*/
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from Ring LL128 Kernel Rank %d\n", comm->rank);;
+  // [RCCL] RingLL128 is re-purposed as clique-based kernel
+  LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, FUNC, T, args);
+  // [/RCCL]
 }
 
 template<int UNUSED, class FUNC, typename T>
@@ -468,8 +443,6 @@ __device__ void ncclAllReduceTreeLL128Kernel(struct CollectiveArgs* args) {
   int nthreadsSplit = NCCL_LL128_SPLIT(nthreads);
   const ssize_t size = args->coll.count;
 
-
-  if (blockIdx.x == 0 && threadIdx.x == 0) printf("Hello from TreeLL128 Kernel Rank %d\n", comm->rank);;
 
   if (loopSize > size) {
     chunkSize = DIVUP(size, nChannels*minChunkSize)*minChunkSize;
