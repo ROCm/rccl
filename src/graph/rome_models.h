@@ -29,6 +29,7 @@ struct rcclRomeModel {
   int nNics;
   int nLinks;
   int64_t gpuIds[MAX_ROME_GPUS];
+  int64_t nicIds[MAX_ROME_NICS];
   int64_t gpuNuma[MAX_ROME_GPUS];
   int64_t nicNuma[MAX_ROME_NICS];
   int connMatrix[MAX_ROME_GPUS*MAX_ROME_GPUS];
@@ -39,6 +40,7 @@ struct rcclRomeModel {
 static struct rcclRomeModel rome_model_22 = {
   .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 2,
   .gpuIds = { 0x3000, 0x43000, 0x26000, 0xc3000, 0x83000, 0x23000, 0xc6000, 0xa3000, },
+  .nicIds = { 0xe1000, },
   .gpuNuma = { 1, 0, 1, 2, 3, 1, 2, 3, },
   .nicNuma = { 2, },
   .connMatrix = { 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, },
@@ -49,6 +51,7 @@ static struct rcclRomeModel rome_model_22 = {
 static struct rcclRomeModel rome_model_25 = {
   .nGpus = 8, .nCpus = 4, .nNics = 2, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
   .nicNuma = { 0, 3, },
   .connMatrix = { 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, },
@@ -59,6 +62,7 @@ static struct rcclRomeModel rome_model_25 = {
 static struct rcclRomeModel rome_model_27 = {
   .nGpus = 8, .nCpus = 4, .nNics = 2, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
   .nicNuma = { 0, 3, },
   .connMatrix = { 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, },
@@ -69,6 +73,7 @@ static struct rcclRomeModel rome_model_27 = {
 static struct rcclRomeModel rome_model_29 = {
   .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .nicIds = { 0xe1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
   .nicNuma = { 2, },
   .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
@@ -79,6 +84,7 @@ static struct rcclRomeModel rome_model_29 = {
 static struct rcclRomeModel rome_model_31 = {
   .nGpus = 8, .nCpus = 8, .nNics = 2, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
   .nicNuma = { 0, 6, },
   .connMatrix = { 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, },
@@ -89,6 +95,7 @@ static struct rcclRomeModel rome_model_31 = {
 static struct rcclRomeModel rome_model_33 = {
   .nGpus = 8, .nCpus = 8, .nNics = 2, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
   .nicNuma = { 0, 6, },
   .connMatrix = { 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, },
@@ -99,6 +106,7 @@ static struct rcclRomeModel rome_model_33 = {
 static struct rcclRomeModel rome_model_30 = {
   .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
   .nicNuma = { },
   .connMatrix = { 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, },
@@ -109,6 +117,7 @@ static struct rcclRomeModel rome_model_30 = {
 static struct rcclRomeModel rome_model_32 = {
   .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
   .nicNuma = { },
   .connMatrix = { 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, },
@@ -119,6 +128,7 @@ static struct rcclRomeModel rome_model_32 = {
 static struct rcclRomeModel rome_model_24 = {
   .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
   .nicNuma = { },
   .connMatrix = { 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, },
@@ -129,6 +139,7 @@ static struct rcclRomeModel rome_model_24 = {
 static struct rcclRomeModel rome_model_26 = {
   .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
+  .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
   .nicNuma = { },
   .connMatrix = { 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, },
@@ -139,6 +150,7 @@ static struct rcclRomeModel rome_model_26 = {
 static struct rcclRomeModel rome_model_23 = {
   .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
   .nicNuma = { },
   .connMatrix = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, },
@@ -149,6 +161,7 @@ static struct rcclRomeModel rome_model_23 = {
 static struct rcclRomeModel rome_model_38 = {
   .nGpus = 8, .nCpus = 7, .nNics = 0, .nLinks = 2,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .nicIds = { },
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
   .nicNuma = { },
   .connMatrix = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, },
@@ -159,6 +172,7 @@ static struct rcclRomeModel rome_model_38 = {
 static struct rcclRomeModel rome_model_28 = {
   .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
   .nicNuma = { },
   .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
@@ -169,6 +183,7 @@ static struct rcclRomeModel rome_model_28 = {
 static struct rcclRomeModel rome_model_40 = {
   .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .nicIds = { 0xe1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
   .nicNuma = { 2, },
   .connMatrix = { 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, },
@@ -179,6 +194,7 @@ static struct rcclRomeModel rome_model_40 = {
 static struct rcclRomeModel rome_model_42 = {
   .nGpus = 8, .nCpus = 7, .nNics = 1, .nLinks = 3,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .nicIds = { 0xe1000, },
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
   .nicNuma = { 4, },
   .connMatrix = { 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, },
@@ -189,11 +205,12 @@ static struct rcclRomeModel rome_model_42 = {
 static struct rcclRomeModel rome_model_44 = {
   .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
   .gpuIds = { 0x63000, 0x43000, 0x27000, 0x3000, 0xe3000, 0xc3000, 0xa3000, 0x83000, },
+  .nicIds = { 0xc4000, },
   .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
   .nicNuma = { 2, },
   .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
   .pattern = "20202120",
-  .ringBase = "4 5 7 6 2 1 3 0|7 4 5 6 2 0 1 3",
+  .ringBase = "5 4 7 6 2 1 3 0|5 6 7 4 1 0 2 3",
 };
 
 static struct rcclRomeModel romeTopoModels[] = {
