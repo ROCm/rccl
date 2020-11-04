@@ -158,7 +158,7 @@ void ExecuteTest(int numIntraRank, int intraRankStartId, int numTotalRanks, nccl
       NCCL_CALL(ncclGroupStart());
       for (int r = 0; r < numIntraRank; r++)
       {
-        HIP_CALL(hipSetDevice(r));
+        HIP_CALL(hipSetDevice(intraRankStartId + r));
         NCCL_CALL(ncclAllReduce(iputGpu[r], oputGpu[r], N, ncclFloat, ncclSum, comm[r], stream[r]));
       }
       NCCL_CALL(ncclGroupEnd());
