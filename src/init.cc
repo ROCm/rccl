@@ -1023,41 +1023,41 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       return ncclInternalError;
     }
     NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, allGather1Data[intraRank0].comm));
-  } while(0);
 
-  { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager if so
-    CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
-    if (comm->localRanks == comm->nRanks)
-    {
-      // Check that all the GPUs have peer access to one another
-      bool hasPeerAccess = true;
-      for (int i = 0; i < nranks && hasPeerAccess; i++)
+    { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager if so
+      CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
+      if (comm->localRanks == comm->nRanks)
       {
-        int cudaDev1 = allGather1Data[i].peerInfo.cudaDev;
-        for (int j = 0; j < nranks; j++)
+        // Check that all the GPUs have peer access to one another
+        bool hasPeerAccess = true;
+        for (int i = 0; i < nranks && hasPeerAccess; i++)
         {
-          if (i == j) continue;
-          int cudaDev2 = allGather1Data[j].peerInfo.cudaDev;
-          int p2p;
-          if (hipDeviceCanAccessPeer(&p2p, cudaDev1, cudaDev2) != hipSuccess || !p2p)
+          int cudaDev1 = allGather1Data[i].peerInfo.cudaDev;
+          for (int j = 0; j < nranks; j++)
           {
-            hasPeerAccess = false;
-            break;
+            if (i == j) continue;
+            int cudaDev2 = allGather1Data[j].peerInfo.cudaDev;
+            int p2p;
+            if (hipDeviceCanAccessPeer(&p2p, cudaDev1, cudaDev2) != hipSuccess || !p2p)
+            {
+              hasPeerAccess = false;
+              break;
+            }
           }
         }
+        if (hasPeerAccess)
+        {
+          if (intraRanks == nranks)
+            cliqueMode = CliqueManager::CLIQUE_SINGLE_PROCESS;
+          else
+            cliqueMode = CliqueManager::CLIQUE_SINGLE_NODE;
+        }
       }
+      comm->cliqueManager = new CliqueManager(rank, nranks, cliqueMode);
+      NCCLCHECK(comm->cliqueManager->Init(commId, rootPid));
+    } // [/RCCL]
+  } while(0);
 
-      if (hasPeerAccess)
-      {
-        if (intraRanks == nranks)
-          cliqueMode = CliqueManager::CLIQUE_SINGLE_PROCESS;
-        else
-          cliqueMode = CliqueManager::CLIQUE_SINGLE_NODE;
-      }
-    }
-    comm->cliqueManager = new CliqueManager(rank, nranks, cliqueMode);
-    NCCLCHECK(comm->cliqueManager->Init(commId, rootPid));
-  } // [/RCCL]
 
   // Done with AllGather1 data
   free(allGather1Data);

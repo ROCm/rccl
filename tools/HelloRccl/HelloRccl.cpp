@@ -33,62 +33,94 @@ THE SOFTWARE.
 
 
 void Usage(char *argv0);
+void ExecuteTest(int numIntraRank, int intraRankStartId, int numTotalRanks, ncclComm_t* comm);
 
 int main(int argc, char **argv)
 {
-  // This example program uses NCCL_COMM_ID to perform bootstrapping
-  // to sidestep the need to communicate the ncclUniqueId (e.g. via MPI)
-  if (argc < 3 || getenv("NCCL_COMM_ID") == NULL)
+  if (getenv("NCCL_COMM_ID") && argc == 3) // Run in multi-process mode
+  {
+    int nranks   = atoi(argv[1]);
+    int rank     = atoi(argv[2]);
+    if (rank == 0) printf("Running in multi-process mode\n");
+
+    // Create communicator for this rank
+    ncclUniqueId commId;
+    NCCL_CALL(ncclGetUniqueId(&commId));
+
+    // Initialize communicator
+    ncclComm_t comm;
+    HIP_CALL(hipSetDevice(rank));
+    NCCL_CALL(ncclCommInitRank(&comm, nranks, commId, rank));
+
+    // Run the test
+    ExecuteTest(1, rank, nranks, &comm);
+  }
+  else if (argc == 2) // Run in single-process mode
+  {
+    printf("Running in single-process mode\n");
+
+    int nranks   = atoi(argv[1]);
+
+    // Initialize communicators for each rank
+    ncclComm_t comm[nranks];
+    NCCL_CALL(ncclCommInitAll(comm, nranks, NULL));
+
+    // Run the test
+    ExecuteTest(nranks, 0, nranks, comm);
+  }
+  else
   {
     Usage(argv[0]);
     return 1;
   }
-  // Collect command-line arguments
-  int nranks   = atoi(argv[1]);
-  int rank     = atoi(argv[2]);
-  int deviceId = atoi(argv[3]);
+  return 0;
+}
 
-  // Allocate GPU resources
-  hipStream_t stream;
-  hipEvent_t startEvent, stopEvent;
-  HIP_CALL(hipSetDevice(deviceId));
-  HIP_CALL(hipStreamCreate(&stream));
-  HIP_CALL(hipEventCreate(&startEvent));
-  HIP_CALL(hipEventCreate(&stopEvent));
+void ExecuteTest(int numIntraRank, int intraRankStartId, int numTotalRanks, ncclComm_t* comm)
+{
+  // Test configuration settings
+  int minPow        = 10;      // Starting power of 2 input size
+  int maxPow        = 28;      // Ending power of 2 input size
+  int numWarmups    =  3;      // Number of untimed warmup iterations
+  int numIterations = 10;      // Number of timed iterations
 
-  // Create communicator
-  ncclUniqueId commId;
-  NCCL_CALL(ncclGetUniqueId(&commId));
+  // Allocate GPU resources for this process
+  hipStream_t stream[numIntraRank];
+  hipEvent_t  startEvent[numIntraRank];
+  hipEvent_t  stopEvent[numIntraRank];
+  for (int i = 0; i < numIntraRank; i++)
+  {
+    HIP_CALL(hipSetDevice(intraRankStartId + i));
+    HIP_CALL(hipStreamCreate(&stream[i]));
+    HIP_CALL(hipEventCreate(&startEvent[i]));
+    HIP_CALL(hipEventCreate(&stopEvent[i]));
+  }
 
-  // Initialize communicator
-  ncclComm_t comm;
-  NCCL_CALL(ncclCommInitRank(&comm, nranks, commId, rank));
-
-  // Loop over powers of 2
-  int minPow = 10;
-  int maxPow = 28;
-  //int maxPow = 28;
-
-  if (rank == 0)
+  if (intraRankStartId == 0)
   {
     printf("AllReduce Performance (sum of floats):\n");
     printf("%10s %10s %10s\n", "Bytes", "CpuTime(ms)", "GpuTime(ms)");
   }
 
+  // Loop over power-of-two input sizes
   for (int power = minPow; power <= maxPow; power++)
   {
     int N = 1 << power;
 
     // Allocate GPU memory
-    float *iputGpu, *oputGpu;
-    HIP_CALL(hipMalloc((void **)&iputGpu, N * sizeof(float)));
-    HIP_CALL(hipMalloc((void **)&oputGpu, N * sizeof(float)));
+    float *iputGpu[numIntraRank], *oputGpu[numIntraRank];
+    for (int r = 0; r < numIntraRank; r++)
+    {
+      HIP_CALL(hipSetDevice(intraRankStartId + r));
+      HIP_CALL(hipMalloc((void **)&iputGpu[r], N * sizeof(float)));
+      HIP_CALL(hipMalloc((void **)&oputGpu[r], N * sizeof(float)));
+    }
 
-    // Allocate CPU memory
+    // Allocate CPU memory for input/output
     float *iputCpu = (float *)malloc(N * sizeof(float));
     float *oputCpu = (float *)malloc(N * sizeof(float));
 
-    // Fill CPU with a simple pattern
+    // Fill CPU memory with a simple pattern
     for (int i = 0; i < N; i++)
     {
       iputCpu[i] = 1.0f;
@@ -96,71 +128,98 @@ int main(int argc, char **argv)
     }
 
     // Copy the input from CPU memory to GPU memory
-    HIP_CALL(hipMemcpy(iputGpu, iputCpu, N * sizeof(float), hipMemcpyHostToDevice));
+    for (int r = 0; r < numIntraRank; r++)
+    {
+      HIP_CALL(hipSetDevice(intraRankStartId + r));
+      HIP_CALL(hipMemcpy(iputGpu[r], iputCpu, N * sizeof(float), hipMemcpyHostToDevice));
+    }
 
     // Perform some untimed initial warmup iterations
-    int numWarmups = 3;
     for (int iteration = 0; iteration < numWarmups; iteration++)
     {
       NCCL_CALL(ncclGroupStart());
-      NCCL_CALL(ncclAllReduce(iputGpu, oputGpu, N, ncclFloat, ncclSum, comm, stream));
+      for (int r = 0; r < numIntraRank; r++)
+      {
+        HIP_CALL(hipSetDevice(intraRankStartId + r));
+        NCCL_CALL(ncclAllReduce(iputGpu[r], oputGpu[r], N, ncclFloat, ncclSum, comm[r], stream[r]));
+      }
       NCCL_CALL(ncclGroupEnd());
     }
-    HIP_CALL(hipStreamSynchronize(stream));
+    for (int r = 0; r < numIntraRank; r++)
+      HIP_CALL(hipStreamSynchronize(stream[r]));
 
     // Perform timed iterations
-    int numIterations = 10;
     auto cpuStart = std::chrono::high_resolution_clock::now();
-    HIP_CALL(hipEventRecord(startEvent, stream));
+    for (int r = 0; r < numIntraRank; r++)
+      HIP_CALL(hipEventRecord(startEvent[r], stream[r]));
+
     for (int iteration = 0; iteration < numIterations; iteration++)
     {
       NCCL_CALL(ncclGroupStart());
-      NCCL_CALL(ncclAllReduce(iputGpu, oputGpu, N, ncclFloat, ncclSum, comm, stream));
+      for (int r = 0; r < numIntraRank; r++)
+      {
+        HIP_CALL(hipSetDevice(r));
+        NCCL_CALL(ncclAllReduce(iputGpu[r], oputGpu[r], N, ncclFloat, ncclSum, comm[r], stream[r]));
+      }
       NCCL_CALL(ncclGroupEnd());
     }
-    HIP_CALL(hipEventRecord(stopEvent, stream));
-    HIP_CALL(hipStreamSynchronize(stream));
+
+    for (int r = 0; r < numIntraRank; r++)
+      HIP_CALL(hipEventRecord(stopEvent[r], stream[r]));
+
+    for (int r = 0; r < numIntraRank; r++)
+      HIP_CALL(hipStreamSynchronize(stream[r]));
+
     auto cpuDelta = std::chrono::high_resolution_clock::now() - cpuStart;
     double totalCpuTime = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(cpuDelta).count();
+
     float totalGpuTime;
-    HIP_CALL(hipEventElapsedTime(&totalGpuTime, startEvent, stopEvent));
+    HIP_CALL(hipEventElapsedTime(&totalGpuTime, startEvent[0], stopEvent[0]));
 
-    if (rank == 0) printf("%10lu %10.3f %10.3f\n", N * sizeof(float), (totalCpuTime / numIterations), (totalGpuTime / numIterations));
-
+    if (intraRankStartId == 0) printf("%10lu %10.3f %10.3f\n", N * sizeof(float), (totalCpuTime / numIterations), (totalGpuTime / numIterations));
 
     // Validate results
-    HIP_CALL(hipMemcpy(oputCpu, oputGpu, N * sizeof(float), hipMemcpyDeviceToHost));
-    bool isOK = true;
-    int expected = nranks;
-    for (int i = 0; i < N; i++)
+    for (int r = 0; r < numIntraRank; r++)
     {
-      isOK &= (oputCpu[i] == expected);
-    }
-    if (!isOK)
-    {
-      printf("[ERROR] Rank %d Incorrect results for N = %d\n", rank, N);
-      NCCL_CALL(ncclCommDestroy(comm));
-      exit(1);
+      HIP_CALL(hipMemcpy(oputCpu, oputGpu[r], N * sizeof(float), hipMemcpyDeviceToHost));
+      bool isOK = true;
+      int expected = numTotalRanks;
+      for (int i = 0; i < N; i++)
+      {
+        isOK &= (oputCpu[i] == expected);
+      }
+      if (!isOK)
+      {
+        printf("[ERROR] Rank %d Incorrect results for N = %d\n", intraRankStartId + r, N);
+        NCCL_CALL(ncclCommDestroy(comm[r]));
+        exit(1);
+      }
     }
 
     // Release GPU resources
-    HIP_CALL(hipFree(oputGpu));
-    HIP_CALL(hipFree(iputGpu));
-
+    for (int r = 0; r < numIntraRank; r++)
+    {
+      HIP_CALL(hipFree(oputGpu[r]));
+      HIP_CALL(hipFree(iputGpu[r]));
+    }
     free(iputCpu);
     free(oputCpu);
   }
 
-  HIP_CALL(hipStreamDestroy(stream));
-  HIP_CALL(hipEventDestroy(startEvent));
-  HIP_CALL(hipEventDestroy(stopEvent));
-  NCCL_CALL(ncclCommDestroy(comm));
-  return 0;
+  for (int r = 0; r < numIntraRank; r++)
+  {
+    HIP_CALL(hipStreamDestroy(stream[r]));
+    HIP_CALL(hipEventDestroy(startEvent[r]));
+    HIP_CALL(hipEventDestroy(stopEvent[r]));
+    NCCL_CALL(ncclCommDestroy(comm[r]));
+  }
 }
 
 void Usage(char *argv0)
 {
-  printf("Usage: %s numRanks rank deviceId [N=8] [verbose=0]\n", argv0);
+  printf("Single Process Usage: %s numRanks\n", argv0);
+  printf("\n");
+  printf("Multi Process Usage: %s numRanks rank\n", argv0);
   printf(" - NCCL_COMM_ID must be set in order to use this\n\n");
   printf(" - To use this process as the root process you may use any of the following:\n");
 
