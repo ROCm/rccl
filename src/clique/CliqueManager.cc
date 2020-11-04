@@ -328,13 +328,15 @@ ncclResult_t CliqueManager::WaitForPointers(uint64_t const opCount)
     return ncclInvalidUsage;
   }
 
-  // Wait for all ranks to declare pointers
   int opIndex = opCount % NCCL_MAX_OPS;
-  WaitForBarrier(opIndex);
+
 
   // Copy clique device pointers to pinned device memory
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
+    // Wait for all ranks to declare pointers
+    WaitForBarrier(opIndex);
+
     // Collect the ready handles from shared memory and convert them to device pointers
     int numHandles = m_numRanks * NUM_HANDLES_PER_RANK;
     std::vector<hipIpcMemHandle_t> handles(numHandles);
