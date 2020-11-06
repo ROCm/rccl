@@ -304,6 +304,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 }
 
 RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 0);
+RCCL_PARAM(ForceEnableClique, "FORCE_ENABLE_CLIQUE", 0);
 
 static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   if (ndev < 1) {
@@ -1051,6 +1052,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
             cliqueMode = CliqueManager::CLIQUE_SINGLE_PROCESS;
           else
             cliqueMode = CliqueManager::CLIQUE_SINGLE_NODE;
+        }
+
+        // For now, only enable clique-based kernels on CR8_G topologies, unless explicitly asked
+        if (!rcclParamForceEnableClique())
+        {
+          // Disable clique-kernel support if not on CR8 topology
+          if (!(comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_CR8G))
+          {
+            INFO(NCCL_INIT, "Disabling clique-based kernels due to topology (force enable with RCCL_FORCE_ENABLE_CLIQUE)");
+            cliqueMode = CliqueManager::CLIQUE_DISABLED;
+          }
         }
       }
       comm->cliqueManager = new CliqueManager(rank, nranks, cliqueMode);

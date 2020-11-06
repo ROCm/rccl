@@ -45,6 +45,11 @@ int32_t            CliqueManager::m_staticGlobalCount[NCCL_MAX_OPS] = {};
 int32_t            CliqueManager::m_staticGlobalSense[NCCL_MAX_OPS] = {};
 int*               CliqueManager::m_staticBarrierMem                = NULL;
 
+
+// Define some environment variables that affect clique-based kernels
+RCCL_PARAM(EnableClique, "ENABLE_CLIQUE", 0);                                  // Opt-in environment variable for clique-based kernels
+RCCL_PARAM(AllReduceCliqueByteLimit, "CLIQUE_ALLREDUCE_BYTE_LIMIT", 2097152);  // Max number of bytes to use clique-based kernels for all reduce
+
 CliqueManager::CliqueManager(int          const  rank,
                              int          const  numRanks,
                              cliqueMode_t const  cliqueMode) :
@@ -107,6 +112,8 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   if (m_init) return ncclSuccess;
   m_init = true;
 
+  if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
+
   // Check parameters
   if (m_rank < 0 || m_rank >= m_numRanks)
   {
@@ -120,9 +127,9 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   }
 
   // For now, opt-into clique based kernels via RCCL_ENABLE_CLIQUE env var
-  if (!getenv("RCCL_ENABLE_CLIQUE"))
+  if (!rcclParamEnableClique())
   {
-    if (m_rank == 0) INFO(NCCL_INIT, "Disabling clique-based kernels (did not find env var RCCL_ENABLE_CLIQUE)");
+    INFO(NCCL_INIT, "Disabling clique-based kernels (did not find env var RCCL_ENABLE_CLIQUE)");
     m_cliqueMode = CLIQUE_DISABLED;
     return ncclSuccess;
   }
@@ -245,9 +252,9 @@ bool CliqueManager::IsSupported(ncclFunc_t const coll,
 {
   if (m_cliqueMode == CLIQUE_DISABLED) return false;
 
-  // NOTE: Currently only allReduce is supported up to a certain size
-  #define ALL_REDUCE_COUNT 2097152
-  if (coll == ncclCollAllReduce && count * ncclTypeSize(datatype)  < ALL_REDUCE_COUNT) return true;
+  // Filter based on total input size for each collective type
+  size_t totalBytes = count * ncclTypeSize(datatype);
+  if (coll == ncclCollAllReduce && (totalBytes <= rcclParamAllReduceCliqueByteLimit())) return true;
 
   return false;
 }
