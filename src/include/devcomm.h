@@ -212,7 +212,6 @@ struct ncclColl {
       uint16_t funcIndex;
       uint16_t nextIndex;
       uint8_t  active;
-      uint8_t  useCliqueKernel; // [RCCL] Use clique-based kernels to execute this collective
     };
     int data[0x10];
   };

@@ -41,10 +41,7 @@ THE SOFTWARE.
 #include <thread>
 
 cliqueDevicePtrs_t CliqueManager::m_staticCliquePtrs[NCCL_MAX_OPS]  = {};
-int32_t            CliqueManager::m_staticGlobalCount[NCCL_MAX_OPS] = {};
-int32_t            CliqueManager::m_staticGlobalSense[NCCL_MAX_OPS] = {};
-int*               CliqueManager::m_staticBarrierMem                = NULL;
-
+int*               CliqueManager::m_staticGpuBarrierMem             = NULL;
 
 // Define some environment variables that affect clique-based kernels
 RCCL_PARAM(EnableClique, "ENABLE_CLIQUE", 0);                                  // Opt-in environment variable for clique-based kernels
@@ -99,8 +96,8 @@ void CliqueManager::CleanUp()
   }
   else if (m_cliqueMode == CLIQUE_SINGLE_PROCESS)
   {
-    if (m_rank == 0 && m_staticBarrierMem)
-      hipFree(m_staticBarrierMem);
+    if (m_rank == 0 && m_staticGpuBarrierMem)
+      hipFree(m_staticGpuBarrierMem);
   }
   m_init = false;
 }
@@ -149,7 +146,6 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   // Allocate sense barrier variable on local GPU
   NCCLCHECKGOTO(ncclCudaCalloc(&m_gpuBarrierLocalSense, sizeof(int)), res, dropback);
 
-
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
     // Initialize shared memory file for IPC handles (based on commId hash)
@@ -191,7 +187,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     }
 
     // Initialize shared CPU memory to be used for barrier variables
-    m_sharedCpuMemory = ShmObject<int32_t>(NCCL_MAX_OPS * sizeof(int32_t) * 2,
+    m_sharedCpuMemory = ShmObject<int32_t>(2 * sizeof(int32_t),
                                            CliqueShmNames["SharedCounters"] + shmSuffix,
                                            m_rank,
                                            m_numRanks,
@@ -199,38 +195,33 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     NCCLCHECKGOTO(m_sharedCpuMemory.Open(), res, dropback);
 
     // Split up the shared CPU memory for barrier counters / global sense
-    m_cpuBarrierGlobalCount = m_sharedCpuMemory.Get();
-    m_cpuBarrierGlobalSense = m_sharedCpuMemory.Get() + NCCL_MAX_OPS;
+    m_cpuBarrierGlobalCount = &m_sharedCpuMemory.Get()[0];
+    m_cpuBarrierGlobalSense = &m_sharedCpuMemory.Get()[1];
+
+    // Initialize CPU barriers
+    if (m_rank == 0)
+    {
+      *m_cpuBarrierGlobalCount = 0;
+      *m_cpuBarrierGlobalSense = 0;
+    }
+    m_cpuBarrierLocalSense = 0;
   }
   else if (m_cliqueMode == CLIQUE_SINGLE_PROCESS)
   {
-    m_cpuBarrierGlobalCount = m_staticGlobalCount;
-    m_cpuBarrierGlobalSense = m_staticGlobalSense;
-
     // First rank prepares fine-grained memory shared across ranks used for the two barrier variables
     if (m_rank == 0)
     {
-      NCCLCHECKGOTO(ncclCudaCalloc(&m_staticBarrierMem, 2 * sizeof(int), true), res, dropback);
+      NCCLCHECKGOTO(ncclCudaCalloc(&m_staticGpuBarrierMem, 2 * sizeof(int), true), res, dropback);
 
       // Prepare all barriers
       for (int opIndex = 0; opIndex < NCCL_MAX_OPS; opIndex++)
       {
-        m_staticCliquePtrs[opIndex].barrier.globalCount = &m_staticBarrierMem[0];
-        m_staticCliquePtrs[opIndex].barrier.globalSense = &m_staticBarrierMem[1];;
+        m_staticCliquePtrs[opIndex].barrier.globalCount = &m_staticGpuBarrierMem[0];
+        m_staticCliquePtrs[opIndex].barrier.globalSense = &m_staticGpuBarrierMem[1];;
       }
     }
   }
 
-  // Initialize CPU barrier variable values
-  if (m_rank == 0)
-  {
-    for (int i = 0; i < NCCL_MAX_OPS; i++)
-    {
-      m_cpuBarrierGlobalCount[i] = 0;
-      m_cpuBarrierGlobalSense[i] = 0;
-    }
-  }
-  memset(m_cpuBarrierLocalSense, 0, sizeof(m_cpuBarrierLocalSense));
 
   m_init = true;
   INFO(NCCL_INIT, "Clique-based kernels enabled (mode %d)", m_cliqueMode);
@@ -271,6 +262,10 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
   }
 
   int const opIndex = opCount % NCCL_MAX_OPS;
+
+  // Add opIndex to queue of in-progress collectives
+  m_inProgress.push(opIndex);
+  
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
     // Get fine-grained device memory if not already done
@@ -324,7 +319,7 @@ ncclResult_t CliqueManager::SetCliqueCollectiveArgs(CollectiveArgs* args)
   return ncclSuccess;
 }
 
-ncclResult_t CliqueManager::WaitForPointers(uint64_t const opCount)
+ncclResult_t CliqueManager::WaitForPointers()
 {
   // Do nothing if disabled
   if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
@@ -335,37 +330,48 @@ ncclResult_t CliqueManager::WaitForPointers(uint64_t const opCount)
     return ncclInvalidUsage;
   }
 
-  int opIndex = opCount % NCCL_MAX_OPS;
-
-
+  // Do nothing if there are no outstanding clique-kernels
+  if (m_inProgress.empty()) return ncclSuccess;
+  
   // Copy clique device pointers to pinned device memory
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
-    // Wait for all ranks to declare pointers
-    WaitForBarrier(opIndex);
+    // Wait for all ranks to arrive
+    WaitForBarrier();
 
-    // Collect the ready handles from shared memory and convert them to device pointers
     int numHandles = m_numRanks * NUM_HANDLES_PER_RANK;
     std::vector<hipIpcMemHandle_t> handles(numHandles);
-
-    NCCLCHECK(m_shmHandles.ReadHandles(opIndex, handles));
-
-    for (int i = 0; i < m_numRanks; i++)
+    
+    while (!m_inProgress.empty())
     {
-      void *input;
-      NCCLCHECK(CheckCacheForHandle(handles[i * NUM_HANDLES_PER_RANK],
-                                    m_ipcHandleRecvCache, &input));
-      m_pinnedCliquePtrs[opIndex].inputs[i] = const_cast<const void *>(input);
+      int const opIndex = m_inProgress.front();
+      m_inProgress.pop();
 
-      NCCLCHECK(CheckCacheForHandle(handles[(i * NUM_HANDLES_PER_RANK) + 1],
-                                    m_ipcHandleRecvCache, &m_pinnedCliquePtrs[opIndex].outputs[i]));
+      // Collect the ready handles from shared memory and convert them to device pointers
+      NCCLCHECK(m_shmHandles.ReadHandles(opIndex, handles));
+      for (int i = 0; i < m_numRanks; i++)
+      {
+	void *input;
+	NCCLCHECK(CheckCacheForHandle(handles[i * NUM_HANDLES_PER_RANK],
+				      m_ipcHandleRecvCache, &input));
+	m_pinnedCliquePtrs[opIndex].inputs[i] = const_cast<const void *>(input);
+	
+	NCCLCHECK(CheckCacheForHandle(handles[(i * NUM_HANDLES_PER_RANK) + 1],
+				      m_ipcHandleRecvCache, &m_pinnedCliquePtrs[opIndex].outputs[i]));
+      }
     }
   }
   else if (m_cliqueMode == CLIQUE_SINGLE_PROCESS)
   {
-    // Copy from static memory to pinned host memory
-    memcpy(&m_pinnedCliquePtrs[opIndex], &m_staticCliquePtrs[opIndex], sizeof(cliqueDevicePtrs_t));
-    m_pinnedCliquePtrs[opIndex].barrier.localSense = m_gpuBarrierLocalSense;
+    while (!m_inProgress.empty())
+    {
+      int const opIndex = m_inProgress.front();
+      m_inProgress.pop();
+
+      // Copy from static memory to pinned host memory
+      memcpy(&m_pinnedCliquePtrs[opIndex], &m_staticCliquePtrs[opIndex], sizeof(cliqueDevicePtrs_t));
+      m_pinnedCliquePtrs[opIndex].barrier.localSense = m_gpuBarrierLocalSense;
+    }
   }
   return ncclSuccess;
 }
@@ -380,7 +386,7 @@ ncclResult_t CliqueManager::CheckCacheForPtr(void* devPtr,
   // handle NULL ptr case
   if (addr == 0)
   {
-    WARN("Error while checking IPC memory handle cache for ptr: null pointer specified.\n");
+    WARN("Error while checking IPC memory handle cache for ptr: null pointer specified");
     return ncclInternalError;
   }
 
@@ -417,22 +423,18 @@ ncclResult_t CliqueManager::CheckCacheForHandle(hipIpcMemHandle_t handle,
   return ncclSuccess;
 }
 
-void CliqueManager::WaitForBarrier(int opIndex)
+void CliqueManager::WaitForBarrier()
 {
   // Sense inversion barrier
-  int* count = &m_cpuBarrierGlobalCount[opIndex];
-  int* sense = &m_cpuBarrierGlobalSense[opIndex];
+  m_cpuBarrierLocalSense = 1 - m_cpuBarrierLocalSense;
 
-  m_cpuBarrierLocalSense[opIndex] = 1 - m_cpuBarrierLocalSense[opIndex];
-  int const localSense = m_cpuBarrierLocalSense[opIndex];
-
-  if (__sync_add_and_fetch(count, 1) == m_numRanks)
+  if (__sync_add_and_fetch(m_cpuBarrierGlobalCount, 1) == m_numRanks)
   {
     // Reset the barrier
-    STORE(count, 0);
-    STORE(sense, localSense);
+    STORE(m_cpuBarrierGlobalCount, 0);
+    STORE(m_cpuBarrierGlobalSense, m_cpuBarrierLocalSense);
   } else {
-    while (LOAD(sense) != localSense);
+    while (LOAD(m_cpuBarrierGlobalSense) != m_cpuBarrierLocalSense);
   }
 }
 

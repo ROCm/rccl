@@ -25,6 +25,7 @@ THE SOFTWARE.
 
 #include <semaphore.h>
 #include <mutex>
+#include <queue>
 
 #include "nccl.h"
 #include "devcomm.h"
@@ -65,9 +66,8 @@ public:
   // This sets pointers to device-accessible memory where the arguments will eventually reside
   ncclResult_t SetCliqueCollectiveArgs(CollectiveArgs* args);
 
-  // Blocking call which waits until exchanged pointers are ready for the given rank / opCount
-  // Requires all participating ranks to
-  ncclResult_t WaitForPointers(uint64_t const opCount);
+  // Blocking call that only returns after all out-standing clique pointers are ready
+  ncclResult_t WaitForPointers();
 
   // Prepares shared memory files upon initialization
   static ncclResult_t BootstrapRootInit(int pid, unsigned long hash);
@@ -83,33 +83,32 @@ protected:
                                    void** ptr);
 
   // Race-condition helper functions
-  void WaitForBarrier(int opIndex);
+  void WaitForBarrier();
 
   int                          m_rank;                               // Associated rank
   int                          m_numRanks;                           // Total number of ranks
   cliqueMode_t                 m_cliqueMode;                         // Clique mode (off/single process/single node)
   bool                         m_init;                               // Whether CliqueManager has been initialized
   cliqueDevicePtrs_t*          m_pinnedCliquePtrs;                   // Pinned-host-memory (device accessible) containing device pointers
-  int*                         m_cpuBarrierGlobalCount;              // Part of CPU barrier (count variable shared across ranks)
-  int*                         m_cpuBarrierGlobalSense;              // Part of CPU barrier (reset variable shared across ranks)
-  int                          m_cpuBarrierLocalSense[NCCL_MAX_OPS]; // Part of CPU barrier (reset variable local to this rank)
   int*                         m_gpuBarrierGlobalCount;              // Part of GPU barrier (count variable shared across ranks)
   int*                         m_gpuBarrierGlobalSense;              // Part of GPU barrier (reset variable shared across ranks)
   int*                         m_gpuBarrierLocalSense;               // Part of GPU barrier (reset variable local to this rank)
-
+  std::queue<int>              m_inProgress;                         // Queue of clique-based collectives waiting for pointers
+  
   // IPC-related (CLIQUE_SINGLE_NODE)
-  NcclIpcHandleShm             m_shmHandles;
+  NcclIpcHandleShm             m_shmHandles;                         // Used to exchange IPC handles between ranks
   NcclIpcHandleSendCache*      m_ipcHandleSendCache;                 // Caches pointers to IPC handles (to send to other processes)
   NcclIpcHandleRecvCache*      m_ipcHandleRecvCache;                 // Caches IPC handles to pointers (received from other processes)
   ShmObject<int32_t>           m_sharedCpuMemory;                    // Used to pass shared memory used for CPU barrier
   ShmObject<hipIpcMemHandle_t> m_sharedIpcHandle;                    // Used to pass fine-grained device memory buffer IPC handle
   int*                         m_fineGrainBarrierMem;                // Fine-grained GPU memory barrier (allocated only on 1st rank, shared on others)
-
+  int*                         m_cpuBarrierGlobalCount;              // Part of CPU barrier (count variable shared across ranks)
+  int*                         m_cpuBarrierGlobalSense;              // Part of CPU barrier (reset variable shared across ranks)
+  int                          m_cpuBarrierLocalSense;               // Part of CPU barrier (reset variable local to this rank)
+  
   // Single-process (CLIQUE_SINGLE_PROCESS)
-  static cliqueDevicePtrs_t    m_staticCliquePtrs[NCCL_MAX_OPS];
-  static int32_t               m_staticGlobalCount[NCCL_MAX_OPS];
-  static int32_t               m_staticGlobalSense[NCCL_MAX_OPS];
-  static int*                  m_staticBarrierMem;
+  static cliqueDevicePtrs_t    m_staticCliquePtrs[NCCL_MAX_OPS];     // Use shared static memory to exchange pointer info
+  static int*                  m_staticGpuBarrierMem;                // Static storage backing for fine-grained gpu barrier
 };
 
 // For use in bootstrapping code

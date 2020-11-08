@@ -119,14 +119,7 @@ ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
   }
 
   { // [RCCL] Wait for any clique-based collectives
-    // Only need to check the first channel for clique-based collectives
-    struct ncclChannel* channel = comm->channels;
-    for (int i = 0; i < channel->collCount; i++)
-    {
-      struct ncclColl* c = &channel->collectives[(channel->collStart + i) % NCCL_MAX_OPS];
-      if (c->useCliqueKernel)
-        NCCLCHECK(comm->cliqueManager->WaitForPointers(c->args.opCount));
-    }
+    NCCLCHECK(comm->cliqueManager->WaitForPointers());
   } // [/RCCL]
 
   // Find the first operation, choose the kernel accordingly and pass it
@@ -561,12 +554,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
 
     // [RCCL] Setup pointers to where all the input/output pointers will be
     if (info->protocol == NCCL_PROTO_CLIQUE) {
-      c->useCliqueKernel = 1;
       NCCLCHECK(info->comm->cliqueManager->SetCliqueCollectiveArgs(&c->args));
-    }
-    else
-    {
-      c->useCliqueKernel = 0;
     }
     // [/RCCL]
 
