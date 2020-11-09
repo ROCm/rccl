@@ -198,6 +198,8 @@ struct CollectiveArgs {
     // [RCCL] Clique-based arguments
     struct {
       uint16_t nThreads;
+      uint8_t bid;
+      uint8_t nChannels;
       size_t count;
       cliqueDevicePtrs_t* ptrs;
     } clique;

@@ -414,6 +414,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
 
       info->algorithm = NCCL_ALGO_RING;
       info->protocol = NCCL_PROTO_CLIQUE;
+      coll->args.clique.nChannels = 1;
       coll->args.clique.count = info->count;
       coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
       return ncclSuccess;
@@ -507,6 +508,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
 
   int nChannels = info->coll == ncclCollSendRecv ? 1 : coll.args.coll.nChannels;
+
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
 
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
