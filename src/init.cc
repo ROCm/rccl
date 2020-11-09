@@ -299,7 +299,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   return ncclSuccess;
 }
 
-RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 0);
+RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 1);
 
 static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   if (ndev < 1) {
