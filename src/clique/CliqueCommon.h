@@ -64,7 +64,7 @@ typedef struct
 template <int NUM_RANKS>
 __forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier)
 {
-  if (threadIdx.x == 0 & blockIdx.x == 0)
+  if (threadIdx.x == 0)
   {
     // Sense inversion barrier
     *barrier.localSense = 1 - *barrier.localSense;

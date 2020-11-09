@@ -418,23 +418,24 @@ namespace CorrectnessTests
                         switch (dataset.dataType)
                         {
                         case ncclInt8:
-                            printf("Expected %d.  Output %d on device %d[%d]\n", outputI1[j], expectedI1[j], i, j); break;
+                            printf("Expected %d.  Output %d on device %d[%d]\n", expectedI1[j], outputI1[j], i, j);
+                            break;
                         case ncclUint8:
-                            printf("Expected %u.  Output %u on device %d[%d]\n", outputU1[j], expectedU1[j], i, j); break;
+                            printf("Expected %u.  Output %u on device %d[%d]\n", expectedU1[j], outputU1[j], i, j); break;
                         case ncclInt32:
-                            printf("Expected %d.  Output %d on device %d[%d]\n", outputI4[j], expectedI4[j], i, j); break;
+                            printf("Expected %d.  Output %d on device %d[%d]\n", expectedI4[j], outputI4[j], i, j); break;
                         case ncclUint32:
-                            printf("Expected %u.  Output %u on device %d[%d]\n", outputU4[j], expectedU4[j], i, j); break;
+                            printf("Expected %u.  Output %u on device %d[%d]\n", expectedU4[j], outputU4[j], i, j); break;
                         case ncclInt64:
-                            printf("Expected %ld.  Output %ld on device %d[%d]\n", outputI8[j], expectedI8[j], i, j); break;
+                            printf("Expected %ld.  Output %ld on device %d[%d]\n", expectedI8[j], outputI8[j], i, j); break;
                         case ncclUint64:
-                            printf("Expected %lu.  Output %lu on device %d[%d]\n", outputU8[j], expectedU8[j], i, j); break;
+                            printf("Expected %lu.  Output %lu on device %d[%d]\n", expectedU8[j], outputU8[j], i, j); break;
                         case ncclFloat32:
-                            printf("Expected %f.  Output %f on device %d[%d]\n", outputF4[j], expectedF4[j], i, j); break;
+                            printf("Expected %f.  Output %f on device %d[%d]\n", expectedF4[j], outputF4[j], i, j); break;
                         case ncclFloat64:
-                            printf("Expected %lf.  Output %lf on device %d[%d]\n", outputF8[j], expectedF8[j], i, j); break;
+                            printf("Expected %lf.  Output %lf on device %d[%d]\n", expectedF8[j], outputF8[j], i, j); break;
                         case ncclBfloat16:
-                            printf("Expected %f.  Output %f on device %d[%d]\n", (float)outputB2[j], (float)expectedB2[j], i, j); break;
+                            printf("Expected %f.  Output %f on device %d[%d]\n", (float)expectedB2[j], (float)outputB2[j], i, j); break;
                         default:
                             fprintf(stderr, "[ERROR] Unsupported datatype\n");
                             exit(0);

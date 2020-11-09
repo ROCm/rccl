@@ -36,15 +36,15 @@ __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
   size_t const N                 = args->clique.count; // Total number of elements to reduce
   int    const rank              = args->comm->rank;   // Current rank
 
+  // This assumes only 1 threadblock per rank
   // Each threadblock works independently of others on a subsection of the input
-  // First split evently across ranks, then across threadblocks per rank, while maintaining multiples of blocksize
-  size_t const perRankN          = RoundUp((N + NUM_RANKS - 1) / NUM_RANKS, blockDim.x);
-  size_t const perBlockN         = RoundUp((perRankN + gridDim.x - 1) / gridDim.x, blockDim.x);
-  size_t const currBlockStart    = min((rank * gridDim.x + blockIdx.x) * perBlockN, N);
-  size_t const currBlockStop     = min(currBlockStart + perBlockN, N);
-  size_t const blockN            = currBlockStop - currBlockStart;
+  // First split evently across ranks, while maintaining multiples of blocksize
+  size_t const perRankN      = RoundUp((N + NUM_RANKS - 1) / NUM_RANKS, blockDim.x);
+  size_t const currRankStart = min(rank * perRankN, N);
+  size_t const currRankStop  = min(currRankStart + perRankN, N);
+  size_t const rankN         = currRankStop - currRankStart;
 
-  if (blockN > 0)
+  if (rankN > 0)
   {
     // Prepare input / output subarrays
     T const** inputs  = (T const**)cliquePtrs->inputs;
@@ -55,14 +55,14 @@ __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
     #pragma unroll
     for (int r = 0; r < NUM_RANKS; r++)
     {
-      srcs[r] = inputs[r]  + currBlockStart;
-      dsts[r] = outputs[r] + currBlockStart;
+      srcs[r] = inputs[r]  + currRankStart;
+      dsts[r] = outputs[r] + currRankStart;
     }
 
     // Perform the reduction
     #define ALL_REDUCE_CLIQUE_UNROLL 2
     ReduceOrCopyMulti<ALL_REDUCE_CLIQUE_UNROLL, FUNC, T, NUM_RANKS, NUM_RANKS, NUM_RANKS, NUM_RANKS>(
-      threadIdx.x, blockDim.x, NUM_RANKS, srcs, NUM_RANKS, dsts, blockN);
+      threadIdx.x, blockDim.x, NUM_RANKS, srcs, NUM_RANKS, dsts, rankN);
   }
 
   // Even if there was nothing for this GPU to do, it must participate in a barrier

@@ -144,7 +144,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   std::string shmSuffix = std::to_string(hash) + "_" + std::to_string(suffix);
 
   // Allocate sense barrier variable on local GPU
-  NCCLCHECKGOTO(ncclCudaCalloc(&m_gpuBarrierLocalSense, sizeof(int)), res, dropback);
+  NCCLCHECKGOTO(ncclCudaCalloc(&m_gpuBarrierLocalSense, NCCL_MAX_OPS * sizeof(int)), res, dropback);
 
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
@@ -172,7 +172,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
       hipIpcMemHandle_t handle;
       // Allocate fine-grained device memory on rank 0 and get IPC handle for it
       // Re-usable barrier consists of (globalCount / globalSense) pair of integers
-      NCCLCHECKGOTO(ncclCudaCalloc(&m_fineGrainBarrierMem, 2 * sizeof(int), true), res, dropback);
+      NCCLCHECKGOTO(ncclCudaCalloc(&m_fineGrainBarrierMem, NCCL_MAX_OPS * 2 * sizeof(int), true), res, dropback);
       if (hipIpcGetMemHandle(&handle, m_fineGrainBarrierMem) != hipSuccess)
       {
         WARN("Unable to get IPC handle for barrier memory");
@@ -183,7 +183,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
 
       // Set up global count/sense for first rank
       m_gpuBarrierGlobalCount = &m_fineGrainBarrierMem[0];
-      m_gpuBarrierGlobalSense = &m_fineGrainBarrierMem[1];
+      m_gpuBarrierGlobalSense = &m_fineGrainBarrierMem[NCCL_MAX_OPS];
     }
 
     // Initialize shared CPU memory to be used for barrier variables
@@ -211,13 +211,13 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     // First rank prepares fine-grained memory shared across ranks used for the two barrier variables
     if (m_rank == 0)
     {
-      NCCLCHECKGOTO(ncclCudaCalloc(&m_staticGpuBarrierMem, 2 * sizeof(int), true), res, dropback);
+      NCCLCHECKGOTO(ncclCudaCalloc(&m_staticGpuBarrierMem, NCCL_MAX_OPS * 2 * sizeof(int), true), res, dropback);
 
       // Prepare all barriers
       for (int opIndex = 0; opIndex < NCCL_MAX_OPS; opIndex++)
       {
-        m_staticCliquePtrs[opIndex].barrier.globalCount = &m_staticGpuBarrierMem[0];
-        m_staticCliquePtrs[opIndex].barrier.globalSense = &m_staticGpuBarrierMem[1];;
+        m_staticCliquePtrs[opIndex].barrier.globalCount = &m_staticGpuBarrierMem[opIndex];
+        m_staticCliquePtrs[opIndex].barrier.globalSense = &m_staticGpuBarrierMem[opIndex + NCCL_MAX_OPS];;
       }
     }
   }
@@ -265,7 +265,7 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
 
   // Add opIndex to queue of in-progress collectives
   m_inProgress.push(opIndex);
-  
+
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
     // Get fine-grained device memory if not already done
@@ -276,7 +276,7 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
 
       // Prepare global count/sense barrier variables used the ipc-shared gpu device memory
       m_gpuBarrierGlobalCount = &m_fineGrainBarrierMem[0];
-      m_gpuBarrierGlobalSense = &m_fineGrainBarrierMem[1];
+      m_gpuBarrierGlobalSense = &m_fineGrainBarrierMem[NCCL_MAX_OPS];
     }
 
     std::vector<hipIpcMemHandle_t> handles(NUM_HANDLES_PER_RANK);
@@ -286,9 +286,9 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
     NCCLCHECK(CheckCacheForPtr(outputPtr                  , m_ipcHandleSendCache, m_rank, &handles[1]));
 
     // Prepare barrier pointers (done after the IpcOpenMemory)
-    m_pinnedCliquePtrs[opIndex].barrier.globalCount = m_gpuBarrierGlobalCount;
-    m_pinnedCliquePtrs[opIndex].barrier.globalSense = m_gpuBarrierGlobalSense;
-    m_pinnedCliquePtrs[opIndex].barrier.localSense  = m_gpuBarrierLocalSense;
+    m_pinnedCliquePtrs[opIndex].barrier.globalCount = &m_gpuBarrierGlobalCount[opIndex];
+    m_pinnedCliquePtrs[opIndex].barrier.globalSense = &m_gpuBarrierGlobalSense[opIndex];
+    m_pinnedCliquePtrs[opIndex].barrier.localSense  = &m_gpuBarrierLocalSense[opIndex];
 
     // Write IPC handles to shared memory for given rank / opCount
     NCCLCHECK(m_shmHandles.WriteHandles(opIndex, handles));
@@ -332,7 +332,7 @@ ncclResult_t CliqueManager::WaitForPointers()
 
   // Do nothing if there are no outstanding clique-kernels
   if (m_inProgress.empty()) return ncclSuccess;
-  
+
   // Copy clique device pointers to pinned device memory
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
@@ -341,7 +341,7 @@ ncclResult_t CliqueManager::WaitForPointers()
 
     int numHandles = m_numRanks * NUM_HANDLES_PER_RANK;
     std::vector<hipIpcMemHandle_t> handles(numHandles);
-    
+
     while (!m_inProgress.empty())
     {
       int const opIndex = m_inProgress.front();
@@ -351,13 +351,13 @@ ncclResult_t CliqueManager::WaitForPointers()
       NCCLCHECK(m_shmHandles.ReadHandles(opIndex, handles));
       for (int i = 0; i < m_numRanks; i++)
       {
-	void *input;
-	NCCLCHECK(CheckCacheForHandle(handles[i * NUM_HANDLES_PER_RANK],
-				      m_ipcHandleRecvCache, &input));
-	m_pinnedCliquePtrs[opIndex].inputs[i] = const_cast<const void *>(input);
-	
-	NCCLCHECK(CheckCacheForHandle(handles[(i * NUM_HANDLES_PER_RANK) + 1],
-				      m_ipcHandleRecvCache, &m_pinnedCliquePtrs[opIndex].outputs[i]));
+        void *input;
+        NCCLCHECK(CheckCacheForHandle(handles[i * NUM_HANDLES_PER_RANK],
+                                      m_ipcHandleRecvCache, &input));
+        m_pinnedCliquePtrs[opIndex].inputs[i] = const_cast<const void *>(input);
+
+        NCCLCHECK(CheckCacheForHandle(handles[(i * NUM_HANDLES_PER_RANK) + 1],
+                                      m_ipcHandleRecvCache, &m_pinnedCliquePtrs[opIndex].outputs[i]));
       }
     }
   }
@@ -368,9 +368,9 @@ ncclResult_t CliqueManager::WaitForPointers()
       int const opIndex = m_inProgress.front();
       m_inProgress.pop();
 
-      // Copy from static memory to pinned host memory
+      // Copy from static memory to pinned host memory and set local sense
       memcpy(&m_pinnedCliquePtrs[opIndex], &m_staticCliquePtrs[opIndex], sizeof(cliqueDevicePtrs_t));
-      m_pinnedCliquePtrs[opIndex].barrier.localSense = m_gpuBarrierLocalSense;
+      m_pinnedCliquePtrs[opIndex].barrier.localSense = &m_gpuBarrierLocalSense[opIndex];
     }
   }
   return ncclSuccess;
