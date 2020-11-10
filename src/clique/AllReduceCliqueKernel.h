@@ -32,19 +32,21 @@ template <class FUNC, typename T, int NUM_RANKS>
 __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
 {
   // Clique-specific kernel arguments
-  cliqueDevicePtrs_t* cliquePtrs = args->clique.ptrs;  // Collection of all input/output pointers across ranks in clique
-  size_t const N                 = args->clique.count; // Total number of elements to reduce
-  int    const rank              = args->comm->rank;   // Current rank
+  cliqueDevicePtrs_t* cliquePtrs = args->clique.ptrs;      // Collection of all input/output pointers across ranks in clique
+  size_t const N                 = args->clique.count;     // Total number of elements to reduce
+  int    const nBlocks           = args->clique.nChannels; // Total number of blocks assigned to this kernel (may be different than gridDim.x)
+  int    const blockId           = args->clique.bid;       // 0-indexed blockIdx for this threadblock (may be different than blockIdx.x)
+  int    const rank              = args->comm->rank;       // Current rank
 
-  // This assumes only 1 threadblock per rank
   // Each threadblock works independently of others on a subsection of the input
   // First split evently across ranks, while maintaining multiples of blocksize
-  size_t const perRankN      = RoundUp((N + NUM_RANKS - 1) / NUM_RANKS, blockDim.x);
-  size_t const currRankStart = min(rank * perRankN, N);
-  size_t const currRankStop  = min(currRankStart + perRankN, N);
-  size_t const rankN         = currRankStop - currRankStart;
+  size_t const perRankN       = RoundUp((N + NUM_RANKS - 1) / NUM_RANKS, blockDim.x);
+  size_t const perBlockN      = RoundUp((perRankN + nBlocks - 1) / nBlocks, blockDim.x);
+  size_t const currBlockStart = min((rank * nBlocks + blockId) * perBlockN, N);
+  size_t const currBlockStop  = min(currBlockStart + perBlockN, N);
+  size_t const blockN         = currBlockStop - currBlockStart;
 
-  if (rankN > 0)
+  if (blockN > 0)
   {
     // Prepare input / output subarrays
     T const** inputs  = (T const**)cliquePtrs->inputs;
@@ -55,19 +57,19 @@ __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
     #pragma unroll
     for (int r = 0; r < NUM_RANKS; r++)
     {
-      srcs[r] = inputs[r]  + currRankStart;
-      dsts[r] = outputs[r] + currRankStart;
+      srcs[r] = inputs[r]  + currBlockStart;
+      dsts[r] = outputs[r] + currBlockStart;
     }
 
     // Perform the reduction
     #define ALL_REDUCE_CLIQUE_UNROLL 2
     ReduceOrCopyMulti<ALL_REDUCE_CLIQUE_UNROLL, FUNC, T, NUM_RANKS, NUM_RANKS, NUM_RANKS, NUM_RANKS>(
-      threadIdx.x, blockDim.x, NUM_RANKS, srcs, NUM_RANKS, dsts, rankN);
+      threadIdx.x, blockDim.x, NUM_RANKS, srcs, NUM_RANKS, dsts, blockN);
   }
 
   // Even if there was nothing for this GPU to do, it must participate in a barrier
   // because other GPUs may be modifying this GPUs output buffer still
-  WaitForBarrier<NUM_RANKS>(cliquePtrs->barrier);
+  if (blockId == 0) WaitForBarrier<NUM_RANKS>(cliquePtrs->barrier);
 }
 
 #endif

@@ -46,7 +46,8 @@ int*               CliqueManager::m_staticGpuBarrierMem             = NULL;
 // Define some environment variables that affect clique-based kernels
 RCCL_PARAM(EnableClique, "ENABLE_CLIQUE", 0);                                  // Opt-in environment variable for clique-based kernels
 RCCL_PARAM(AllReduceCliqueByteLimit, "CLIQUE_ALLREDUCE_BYTE_LIMIT", 2097152);  // Max number of bytes to use clique-based kernels for all reduce
-
+RCCL_PARAM(AllReduceNumChannels,     "CLIQUE_ALLREDUCE_NCHANNELS", 4);         // Number of channels to use for all-reduce
+	   
 CliqueManager::CliqueManager(int          const  rank,
                              int          const  numRanks,
                              cliqueMode_t const  cliqueMode) :
@@ -303,6 +304,25 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
   return ncclSuccess;
 }
 
+ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
+						size_t const count,
+						ncclDataType_t const datatype,
+						ncclRedOp_t const op,
+						int const totalNumChannels,
+						uint8_t* numChannelstoUse)
+{
+  size_t const totalBytes = count * ncclTypeSize(datatype);
+  *numChannelstoUse = 1;
+  
+  if (coll == ncclCollAllReduce) {
+    *numChannelstoUse = std::min((int)rcclParamAllReduceNumChannels(), totalNumChannels);
+  }
+
+  return ncclSuccess;
+}
+
+
+
 ncclResult_t CliqueManager::SetCliqueCollectiveArgs(CollectiveArgs* args)
 {
   // Do nothing if disabled
@@ -316,6 +336,11 @@ ncclResult_t CliqueManager::SetCliqueCollectiveArgs(CollectiveArgs* args)
   // Prepare clique argments (NOTE: clique pointers are not ready yet)
   int opIndex = args->opCount % NCCL_MAX_OPS;
   args->clique.ptrs = &m_pinnedCliquePtrs[opIndex];
+
+
+  // Determine number of channels to use for this collective
+  args->clique.nChannels = rcclParamAllReduceNumChannels();
+  
   return ncclSuccess;
 }
 

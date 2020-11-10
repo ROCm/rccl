@@ -62,6 +62,14 @@ public:
   // Provide the pointers to be exchanged across the clique for the given rank / opCount
   ncclResult_t DeclarePointers(uint64_t opCount, void const* inputPtr, void* outputPtr);
 
+  // Determine the number of channels / CUs to use for this call
+  ncclResult_t GetNumChannelsToUse(ncclFunc_t const coll,
+				   size_t const count,
+				   ncclDataType_t const datatype,
+				   ncclRedOp_t const op,
+				   int const totalNumChannels,
+				   uint8_t* numChannelstoUse);
+
   // Set pointers for where clique-related arguments will be found
   // This sets pointers to device-accessible memory where the arguments will eventually reside
   ncclResult_t SetCliqueCollectiveArgs(CollectiveArgs* args);
