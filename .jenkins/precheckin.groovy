@@ -55,7 +55,7 @@ ci: {
 
     propertyList = auxiliary.appendPropertyList(propertyList)
 
-    def jobNameList = ["compute-rocm-dkms-no-npi-hipclang":([ubuntu18:['4gfx906','4gfx908']])]
+    def jobNameList = ["compute-rocm-dkms-no-npi-hipclang":([sles15sp1:['4gfx906'],centos8:['4gfx908'],centos7:['4gfx906'],ubuntu18:['4gfx906']])]
     
     jobNameList = auxiliary.appendJobNameList(jobNameList)
     
@@ -80,7 +80,7 @@ ci: {
     {
         properties(auxiliary.addCommonProperties([pipelineTriggers([cron('0 1 * * *')])]))
         stage(urlJobName) {
-            runCI([ubuntu16:['rccl906']], urlJobName)
+            runCI([ubuntu18:['4gfx906']], urlJobName)
         }
     }
 }

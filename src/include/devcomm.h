@@ -12,6 +12,9 @@
 #include "rccl_bfloat16.h"
 #include "align.h"
 #include <stdint.h>
+// [RCCL] Support for clique-based kernels
+#include "clique/CliqueCommon.h"
+// [/RCCL]
 
 // Convert volatile access to atomic
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
@@ -21,6 +24,7 @@
 #define LOAD(VAR) *(VAR)
 #define STORE(DST, SRC) *(DST) = (SRC)
 #endif
+
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
 typedef enum { ncclCollBroadcast, ncclCollReduce, ncclCollAllGather, ncclCollReduceScatter, ncclCollAllReduce, ncclCollGather, ncclCollScatter, ncclCollAllToAll, ncclCollAllToAllv, ncclCollSendRecv} ncclFunc_t;
@@ -35,6 +39,7 @@ extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
 #define NCCL_PROTO_LL 0
 #define NCCL_PROTO_LL128 1
+#define NCCL_PROTO_CLIQUE 1  // [RCCL] Clique takes up same protocol as unused LL128
 #define NCCL_PROTO_SIMPLE 2
 extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
 
@@ -190,8 +195,18 @@ struct CollectiveArgs {
       size_t count;
       size_t* extra;
     } a2av;
+    // [RCCL] Clique-based arguments
+    struct {
+      uint16_t nThreads;
+      uint8_t bid;
+      uint8_t nChannels;
+      size_t count;
+      cliqueDevicePtrs_t* ptrs;
+    } clique;
+    // [/RCCL]
   };
 };
+
 struct ncclColl {
   union {
     struct {

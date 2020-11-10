@@ -12,6 +12,11 @@
 #include "socket.h"
 #include <unistd.h>
 #include <sys/types.h>
+// [RCCL]
+#include "clique/CliqueManager.h"
+#include "clique/CliqueShmNames.h"
+#include "clique/Hash.h"
+// [/RCCL]
 
 struct bootstrapNetComm {
   int fd;
@@ -163,7 +168,14 @@ static ncclResult_t setFilesLimit() {
   return ncclSuccess;
 }
 
-static void *bootstrapRoot(void* listenComm) {
+static void *bootstrapRoot(void* bootstrapRootStruct) { // [RCCL] Modified to include hash argument)
+  // [RCCL] Unpack bootstrapRootStruct
+  struct bootstrapRootStruct* rootStruct = (struct bootstrapRootStruct*) bootstrapRootStruct;
+  void* listenComm = rootStruct->listenComm;
+  unsigned long hash = rootStruct->hash;
+  int pid = getpid(); // sharing PID to other ranks for creating shared memory files for CliqueManager
+  // [/RCCL]
+
   struct extInfo info;
   ncclNetHandle_t *rankHandles = NULL;
   ncclNetHandle_t *rankHandlesRoot = NULL; // for initial rank <-> root information exchange
@@ -205,12 +217,19 @@ static void *bootstrapRoot(void* listenComm) {
   } while (c < nranks);
   TRACE(NCCL_INIT, "COLLECTED ALL %d HANDLES", nranks);
 
+  { // [RCCL] Initialize message queues / shared memory files
+    NCCLCHECKGOTO(CliqueManager::BootstrapRootInit(pid, hash), res, out);
+  } // [/RCCL]
+
   // Send the connect handle for the next rank in the AllGather ring
   for (int r=0; r<nranks; ++r) {
     int next = (r+1) % nranks;
     void *tmpSendComm;
     NCCLCHECKGOTO(bootstrapNetConnect(0, rankHandlesRoot+r, &tmpSendComm), res, out);
     NCCLCHECKGOTO(bootstrapNetSend(tmpSendComm, rankHandles+next, sizeof(ncclNetHandle_t)), res, out);
+    { // [RCCL] Send the root pid for shared file naming
+      NCCLCHECKGOTO(bootstrapNetSend(tmpSendComm, &pid, sizeof(int)), res, out);
+    } // [/RCCL]
     NCCLCHECKGOTO(bootstrapNetCloseSend(tmpSendComm), res, out);
   }
   TRACE(NCCL_INIT, "SENT OUT ALL %d HANDLES", nranks);
@@ -229,7 +248,14 @@ ncclResult_t bootstrapCreateRoot(ncclUniqueId* id, bool idFromEnv) {
   void* listenComm;
   NCCLCHECK(bootstrapNetListen(idFromEnv ? dontCareIf : 0, netHandle, &listenComm));
   pthread_t thread;
-  pthread_create(&thread, NULL, bootstrapRoot, listenComm);
+
+  // [RCCL] Use the ncclUniqueId to get a hash for bootstrap
+  struct bootstrapRootStruct* rootStruct = new bootstrapRootStruct;
+  rootStruct->hash = djb2Hash(id->internal);
+  rootStruct->listenComm = listenComm;
+  pthread_create(&thread, NULL, bootstrapRoot, (void *)rootStruct);
+  // [/RCCL]
+
   return ncclSuccess;
 }
 
@@ -267,9 +293,10 @@ struct extState {
   int rank;
   int nranks;
   int dev;
+  int rootPid;  // [RCCL] PID of root
 };
 
-ncclResult_t bootstrapInit(ncclUniqueId * id, int rank, int nranks, void** commState) {
+ncclResult_t bootstrapInit(ncclUniqueId * id, int rank, int nranks, void** commState, int* rootPid) { // [RCCL] Adding rootPid
   ncclNetHandle_t* netHandle = (ncclNetHandle_t*) id;
   bool idFromEnv = getenv("NCCL_COMM_ID") != NULL;
   struct extState* state;
@@ -314,6 +341,9 @@ ncclResult_t bootstrapInit(ncclUniqueId * id, int rank, int nranks, void** commS
   ncclNetHandle_t extHandleNext;
   NCCLCHECK(bootstrapNetAccept(extBstrapListenCommRoot, &tmpRecvComm));
   NCCLCHECK(bootstrapNetRecv(tmpRecvComm, &extHandleNext, sizeof(extHandleNext)));
+  { // [RCCL] Receive PID from root
+    NCCLCHECK(bootstrapNetRecv(tmpRecvComm, rootPid, sizeof(int)));
+  } // [/RCCL]
   NCCLCHECK(bootstrapNetCloseRecv(tmpRecvComm));
   NCCLCHECK(bootstrapNetCloseListen(extBstrapListenCommRoot));
 

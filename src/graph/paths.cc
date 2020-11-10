@@ -414,14 +414,15 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
 
   // Check if we are close enough that it makes sense to enable GDR
   int netGdrLevel = PATH_PXB;
-#ifdef TOPO_EXPL
-  int arch, vendor, model;
-  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME)
-    netGdrLevel = PATH_PHB;
-#endif
   NCCLCHECK(ncclGetLevel(&ncclTopoUserGdrLevel, NULL, "NCCL_NET_GDR_LEVEL"));
   if (ncclTopoUserGdrLevel != -2) netGdrLevel = ncclTopoUserGdrLevel;
+  else {
+    int arch, vendor, model;
+    NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+    if((system->nodes[GPU].nodes[g].id & 0xf0000) == (system->nodes[NET].nodes[n].net.busId & 0xf0000))
+      netGdrLevel = PATH_PHB;
+  }
+
   int distance = gpu->paths[NET][n].type;
   if (distance > netGdrLevel) {
     INFO(NCCL_NET,"GPU Direct RDMA Disabled for GPU %lx / HCA %d (distance %d > %d)", busId, netDev, distance, netGdrLevel);
