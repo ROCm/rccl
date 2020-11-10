@@ -3,8 +3,17 @@
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
 ## [Unreleased]
+### Added
+- Experimental support for clique-based kernels (opt in with RCCL_ENABLE_CLIQUE=1)
+- Clique-based kernels may offer better performance for smaller input sizes
+- Clique-based kernels are currently only enabled for AllReduce under a certain byte limit (controlled via RCCL_CLIQUE_ALLREDUCE_BYTE_LIMIT)
 ### Optimizations
 - Performance improvements for Rome-based systems
+### Known issues
+- Clique-based kernels are currently experimental and have not been fully tested on all topologies.  By default, clique-based kernels are disabled if the detected topology is not supported (override with RCCL_FORCE_ENABLE_CLIQUE)
+- Clique-based kernels may hang if there are differences between environment variables set across ranks.
+- Clique-based kernels may fail if the input / output device pointers are not the base device pointers returned by hipMalloc.
+
 
 ## [RCCL-2.7.8 for ROCm 3.9.0]
 ### Added

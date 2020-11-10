@@ -12,7 +12,7 @@
 ncclResult_t bootstrapNetInit();
 ncclResult_t bootstrapCreateRoot(ncclUniqueId* commId, bool idFromEnv);
 ncclResult_t bootstrapGetUniqueId(ncclUniqueId* out);
-ncclResult_t bootstrapInit(ncclUniqueId* id, int rank, int nranks, void** commState);
+ncclResult_t bootstrapInit(ncclUniqueId* id, int rank, int nranks, void** commState, int* rootPid); // [RCCL] Adding rootPid
 ncclResult_t bootstrapAllGather(void* commState, void* allData, int size);
 ncclResult_t bootstrapSend(void* commState, int peer, void* data, int size);
 ncclResult_t bootstrapRecv(void* commState, int peer, void* data, int size);

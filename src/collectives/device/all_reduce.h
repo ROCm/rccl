@@ -8,6 +8,7 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
+#include "clique/AllReduceCliqueKernel.h" // [RCCL] AllReduce Clique-based kernel support
 
 template<int UNROLL, class FUNC, typename T>
 __attribute__((noinline))
@@ -310,6 +311,7 @@ __device__ void ncclAllReduceTreeLLKernel(struct CollectiveArgs* args) {
   const ssize_t loopSize = nChannels*chunkSize;
   const ssize_t size = args->coll.count;
 
+
   if (loopSize > size) {
     chunkSize = DIVUP(size, nChannels*minChunkSize)*minChunkSize;
   }
@@ -417,76 +419,10 @@ __device__ void ncclAllReduceCollNetLLKernel(struct CollectiveArgs* args) {
 template<int UNUSED, class FUNC, typename T>
 __attribute__((noinline))
 __device__ void ncclAllReduceRingLL128Kernel(struct CollectiveArgs* args) {
-  const int tid = threadIdx.x;
-  const int nthreads = args->coll.nThreads;
-  const int bid = args->coll.bid;
-  const int nChannels = args->coll.nChannels;
-  struct ncclDevComm* comm = args->comm;
-  struct ncclChannel* channel = comm->channels+blockIdx.x;
-  struct ncclRing* ring = &channel->ring;
-  const int stepSize = comm->buffSizes[NCCL_PROTO_LL128] / (sizeof(uint64_t)*NCCL_STEPS);
-  ssize_t chunkSize = stepSize*NCCL_LL128_DATAELEMS*sizeof(uint64_t) / (NCCL_LL128_LINEELEMS*sizeof(T));
-  // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
-  const ssize_t minChunkSize = (NCCL_LL128_SHMEM_ELEMS_PER_THREAD*nthreads*NCCL_LL128_DATAELEMS*sizeof(uint64_t))/(NCCL_LL128_LINEELEMS*sizeof(T))/2;
-  const int nranks = comm->nRanks;
-  const ssize_t loopSize = nChannels*nranks*chunkSize;
-  const ssize_t size = args->coll.count;
 
-  ncclLL128Primitives<T, FUNC, 1, 1> LLprims(tid, nthreads, &ring->prev, &ring->next, stepSize, channel, comm);
-
-  // Compute pointers
-  const T * __restrict__ thisInput = (const T*)args->sendbuff;
-  T * __restrict__ thisOutput = (T*)args->recvbuff;
-
-  for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-    chunkSize = min(DIVUP(size-gridOffset, nChannels*nranks*minChunkSize)*minChunkSize, chunkSize);
-
-    /////////////// begin AllReduce steps ///////////////
-    ssize_t offset;
-    int nelem;
-    int chunk;
-
-    // step 0: push data to next GPU
-    chunk = ring->devUserRanks[nranks-1];
-    offset = gridOffset + (chunk*nChannels+bid) * chunkSize;
-    nelem = min(chunkSize, size-offset);
-
-    LLprims.send(thisInput+offset, nelem);
-
-    // k-2 steps: reduce and copy to next GPU
-    for (int j=2; j<nranks; ++j) {
-      chunk = ring->devUserRanks[nranks-j];
-      offset = gridOffset + (chunk*nChannels+bid) * chunkSize;
-      nelem = min(chunkSize, size-offset);
-
-      LLprims.recvReduceSend(thisInput+offset, nelem);
-    }
-
-    // step k-1: reduce this buffer and data, which will produce the final
-    // result that we store in this data and push to the next GPU
-    chunk = ring->devUserRanks[0];
-    offset = gridOffset + (chunk*nChannels+bid) * chunkSize;
-    nelem = min(chunkSize, size-offset);
-
-    LLprims.recvReduceCopySend(thisInput+offset, thisOutput+offset, nelem);
-
-    // k-2 steps: copy to next GPU
-    for (int j=1; j<nranks-1; ++j) {
-      chunk = ring->devUserRanks[nranks-j];
-      offset = gridOffset + (chunk*nChannels+bid) * chunkSize;
-      nelem = min(chunkSize, size-offset);
-
-      LLprims.recvCopySend(thisOutput+offset, nelem);
-    }
-
-    // Make final copy from buffer to dest.
-    chunk = ring->devUserRanks[1];
-    offset = gridOffset + (chunk*nChannels+bid) * chunkSize;
-    nelem = min(chunkSize, size-offset);
-
-    // Here we need to copy from buffer to this output.
-    LLprims.recv(thisOutput+offset, nelem);
-  }
+  // [RCCL] RingLL128 is re-purposed as clique-based kernel
+  LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, FUNC, T, args);
+  // [/RCCL]
 }
 
 template<int UNUSED, class FUNC, typename T>
@@ -506,6 +442,7 @@ __device__ void ncclAllReduceTreeLL128Kernel(struct CollectiveArgs* args) {
   const ssize_t loopSize = nChannels*chunkSize;
   int nthreadsSplit = NCCL_LL128_SPLIT(nthreads);
   const ssize_t size = args->coll.count;
+
 
   if (loopSize > size) {
     chunkSize = DIVUP(size, nChannels*minChunkSize)*minChunkSize;

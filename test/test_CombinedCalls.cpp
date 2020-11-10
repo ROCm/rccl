@@ -96,6 +96,6 @@ namespace CorrectnessTests
                                 testing::Values(2,3,4,5,6,7,8),
                                 // In-place or not
                                 testing::Values(false, true),
-                                testing::Values("")),
+                                testing::Values("RCCL_ENABLE_CLIQUE=0", "RCCL_ENABLE_CLIQUE=1")),
                             CorrectnessTest::PrintToStringParamName());
 } // namespace

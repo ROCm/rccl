@@ -89,13 +89,45 @@ static inline __device__ void exitIfAbortBarrier(int abort) {
   NCCL_FUNCS3B(coll, copy), \
   NCCL_FUNCS3B(coll, copy)
 
+// [RCCL] Adding clique-based kernels for AllReduce, in-place of unused RingLL28 kernels
+#define NCCL_FUNC5B(coll, op, dtype) \
+  NCCL_COLL_NAME(coll##LL, op, dtype), \
+  NCCL_COLL_NAME(coll##LL128, op, dtype), \
+  NCCL_COLL_NAME(coll, op, dtype)
+
+#define NCCL_FUNC4B(coll, op, dtype) \
+  NCCL_FUNC5(coll##Tree, op, dtype), \
+  NCCL_FUNC5B(coll##Ring, op, dtype), \
+  NCCL_FUNC5(coll##CollNet, op, dtype)
+
+#define NCCL_FUNCS3C(coll, op)                  \
+  NCCL_FUNC4B(coll, op,  i8), \
+  NCCL_FUNC4B(coll, op,  u8), \
+  NCCL_FUNC4B(coll, op, i32), \
+  NCCL_FUNC4B(coll, op, u32), \
+  NCCL_FUNC4B(coll, op, i64), \
+  NCCL_FUNC4B(coll, op, u64), \
+  NCCL_FUNC4B(coll, op, f16), \
+  NCCL_FUNC4B(coll, op, f32), \
+  NCCL_FUNC4B(coll, op, f64), \
+  NCCL_FUNC4B(coll, op, b16)
+
+#define NCCL_FUNCS2C(coll) \
+  NCCL_FUNCS3C(coll, sum ), \
+  NCCL_FUNCS3C(coll, prod), \
+  NCCL_FUNCS3C(coll, max ), \
+  NCCL_FUNCS3C(coll, min )
+
+// [/RCCL]
+
+
 // Must be consistent with ncclFunc_t
 #define NCCL_FUNCS() { \
   NCCL_FUNCS2B(ncclBroadcast), \
   NCCL_FUNCS2A(ncclReduce), \
   NCCL_FUNCS2B(ncclAllGather), \
   NCCL_FUNCS2A(ncclReduceScatter), \
-  NCCL_FUNCS2A(ncclAllReduce), \
+  NCCL_FUNCS2C(ncclAllReduce), \
   NCCL_COLL_NAME(ncclGather, copy, i8), \
   NCCL_COLL_NAME(ncclScatter, copy, i8), \
   NCCL_COLL_NAME(ncclAllToAll, copy, i8), \
@@ -114,7 +146,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
   NCCL_FUNCS2A(ncclReduce),
   NCCL_FUNCS2B(ncclAllGather),
   NCCL_FUNCS2A(ncclReduceScatter),
-  NCCL_FUNCS2A(ncclAllReduce),
+  NCCL_FUNCS2C(ncclAllReduce),
   NCCL_COLL_NAME(ncclGather, copy, i8),
   NCCL_COLL_NAME(ncclScatter, copy, i8),
   NCCL_COLL_NAME(ncclAllToAll, copy, i8),
