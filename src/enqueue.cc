@@ -9,6 +9,8 @@
 #include "argcheck.h"
 #include "coll_net.h"
 #include "../graph/topo.h"
+#include <hip/hip_runtime.h>
+#include <hip/hip_ext.h>
 
 // Only generate inline kernels for LL
 #define NCCL_FUNC5(coll, op, dtype) \
@@ -116,6 +118,10 @@ ncclResult_t setupLaunch(struct ncclComm* comm, hipLaunchParams* params) {
     STORE(&channel->collectives[(channel->collStart+channel->collCount-1)%NCCL_MAX_OPS].active, 2);
   }
 
+  { // [RCCL] Wait for any clique-based collectives
+    NCCLCHECK(comm->cliqueManager->WaitForPointers());
+  } // [/RCCL]
+
   // Find the first operation, choose the kernel accordingly and pass it
   // as the first argument.
   struct ncclColl* coll = comm->channels[0].collectives+comm->channels[0].collStart;
@@ -210,7 +216,8 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
         (comm->launchMode == ncclComm::GROUP && comm->groupCudaStream) ? "/Stream" : "");
   }
 
-
+  hipEvent_t startEvent;
+  hipEvent_t stopEvent;
   if (comm->launchMode == ncclComm::PARALLEL) {
     hipLaunchKernelGGL(((void (*)(struct ncclDevComm*))params->func), params->gridDim, params->blockDim, params->sharedMem, params->stream, **((struct ncclDevComm ***)(params->args)));
   } else {
@@ -257,6 +264,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   info->algorithm = -1;
   info->protocol = -1;
   int nAlgos = NCCL_NUM_ALGORITHMS;
+
   // Check collNet support
   int collNetTypeSupport = 0;
   if (info->comm->collNetSupport)
@@ -373,6 +381,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
 #endif
     return ncclSuccess;
   }
+
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getAlgoInfo(info));
   NCCLCHECK(getPatternInfo(info));
@@ -390,6 +399,33 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   }
 
   coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+
+  { // [RCCL] Check for clique-based kernel support
+    if (info->comm->cliqueManager->IsSupported(info->coll,
+                                               info->count,
+                                               info->datatype,
+                                               info->op))
+    {
+      // Declare the input / output pointers being used (to exchange via IPC with other ranks)
+      NCCLCHECK(info->comm->cliqueManager->DeclarePointers(info->comm->opCount,
+                                                           info->sendbuff,
+                                                           info->recvbuff));
+
+
+      info->algorithm = NCCL_ALGO_RING;
+      info->protocol = NCCL_PROTO_CLIQUE;
+      // Determine the number of channels to use for clique-kernel
+      NCCLCHECK(info->comm->cliqueManager->GetNumChannelsToUse(info->coll,
+							       info->count,
+							       info->datatype,
+							       info->op,
+							       info->comm->nChannels,
+							       &coll->args.clique.nChannels));
+      coll->args.clique.count = info->count;
+      coll->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+      return ncclSuccess;
+    }
+  } // [RCCL]
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
   int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->chunkSteps : 1;
@@ -478,6 +514,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
 
   int nChannels = info->coll == ncclCollSendRecv ? 1 : coll.args.coll.nChannels;
+  
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
 
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
@@ -519,8 +556,15 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       memcpy(c->args.a2av.extra+info->comm->nRanks*2, info->recvcounts, sizeof(size_t*)*(info->comm->nRanks));
       memcpy(c->args.a2av.extra+info->comm->nRanks*3, info->rdispls, sizeof(size_t*)*(info->comm->nRanks));
       c->args.a2av.bid = bid % coll.args.coll.nChannels;
-    } else if (info->coll != ncclCollSendRecv)
+    } else if (info->coll != ncclCollSendRecv) {
       c->args.coll.bid = bid % coll.args.coll.nChannels;
+    }
+
+    // [RCCL] Setup pointers to where all the input/output pointers will be
+    if (info->protocol == NCCL_PROTO_CLIQUE) {
+      NCCLCHECK(info->comm->cliqueManager->SetCliqueCollectiveArgs(&c->args));
+    }
+    // [/RCCL]
 
     STORE(&c->active, 1);
     opIndex = (opIndex+1)%NCCL_MAX_OPS;
@@ -599,6 +643,7 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     } else {
       NCCLCHECKGOTO(ncclSaveKernel(info), ret, end);
     }
+
 end:
     if (savedDev != -1) CUDACHECK(hipSetDevice(savedDev));
     ncclAsyncErrCheck(ret);
