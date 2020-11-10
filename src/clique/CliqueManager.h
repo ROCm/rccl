@@ -64,11 +64,11 @@ public:
 
   // Determine the number of channels / CUs to use for this call
   ncclResult_t GetNumChannelsToUse(ncclFunc_t const coll,
-				   size_t const count,
-				   ncclDataType_t const datatype,
-				   ncclRedOp_t const op,
-				   int const totalNumChannels,
-				   uint8_t* numChannelstoUse);
+                                   size_t const count,
+                                   ncclDataType_t const datatype,
+                                   ncclRedOp_t const op,
+                                   int const totalNumChannels,
+                                   uint8_t* numChannelstoUse);
 
   // Set pointers for where clique-related arguments will be found
   // This sets pointers to device-accessible memory where the arguments will eventually reside
@@ -84,9 +84,9 @@ protected:
   ncclResult_t CheckCacheForPtr(void* devPtr,
                                 NcclIpcHandleSendCache* cache,
                                 int rank,
-                                hipIpcMemHandle_t* handle);
+                                std::pair<hipIpcMemHandle_t, size_t>* handlePair);
 
-  ncclResult_t CheckCacheForHandle(hipIpcMemHandle_t handle,
+  ncclResult_t CheckCacheForHandle(std::pair<hipIpcMemHandle_t, size_t> const& handlePair,
                                    NcclIpcHandleRecvCache* cache,
                                    void** ptr);
 
@@ -102,7 +102,7 @@ protected:
   int*                         m_gpuBarrierGlobalSense;              // Part of GPU barrier (reset variable shared across ranks)
   int*                         m_gpuBarrierLocalSense;               // Part of GPU barrier (reset variable local to this rank)
   std::queue<int>              m_inProgress;                         // Queue of clique-based collectives waiting for pointers
-  
+
   // IPC-related (CLIQUE_SINGLE_NODE)
   NcclIpcHandleShm             m_shmHandles;                         // Used to exchange IPC handles between ranks
   NcclIpcHandleSendCache*      m_ipcHandleSendCache;                 // Caches pointers to IPC handles (to send to other processes)
@@ -113,7 +113,7 @@ protected:
   int*                         m_cpuBarrierGlobalCount;              // Part of CPU barrier (count variable shared across ranks)
   int*                         m_cpuBarrierGlobalSense;              // Part of CPU barrier (reset variable shared across ranks)
   int                          m_cpuBarrierLocalSense;               // Part of CPU barrier (reset variable local to this rank)
-  
+
   // Single-process (CLIQUE_SINGLE_PROCESS)
   static cliqueDevicePtrs_t    m_staticCliquePtrs[NCCL_MAX_OPS];     // Use shared static memory to exchange pointer info
   static int*                  m_staticGpuBarrierMem;                // Static storage backing for fine-grained gpu barrier

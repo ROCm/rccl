@@ -30,7 +30,7 @@ THE SOFTWARE.
 #include "nccl.h"
 #include "ShmObject.h"
 
-class NcclIpcHandleShm : public ShmObject<hipIpcMemHandle_t>
+class NcclIpcHandleShm : public ShmObject<std::pair<hipIpcMemHandle_t,size_t>>
 {
 public:
     NcclIpcHandleShm(int rank, int numRanks, int projid, int numHandlesPerRank, int capacity, std::string suffix);
@@ -41,9 +41,9 @@ public:
 
     ncclResult_t Open();
 
-    ncclResult_t WriteHandles(uint64_t opCount, std::vector<hipIpcMemHandle_t> const& sendHandles);
+    ncclResult_t WriteHandles(uint64_t opCount, std::vector<std::pair<hipIpcMemHandle_t,size_t>> const& sendHandles);
 
-    ncclResult_t ReadHandles(uint64_t opCount, std::vector<hipIpcMemHandle_t>& recvHandles);
+    ncclResult_t ReadHandles(uint64_t opCount, std::vector<std::pair<hipIpcMemHandle_t,size_t>>& recvHandles);
 
 private:
     int m_numHandlesPerRank;

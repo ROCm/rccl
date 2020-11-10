@@ -32,6 +32,7 @@ THE SOFTWARE.
 #include "AllReduceCliqueKernel.h"
 
 #include <hip/hip_runtime.h>
+#include <hsa/hsa_ext_amd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
@@ -47,7 +48,7 @@ int*               CliqueManager::m_staticGpuBarrierMem             = NULL;
 RCCL_PARAM(EnableClique, "ENABLE_CLIQUE", 0);                                  // Opt-in environment variable for clique-based kernels
 RCCL_PARAM(AllReduceCliqueByteLimit, "CLIQUE_ALLREDUCE_BYTE_LIMIT", 2097152);  // Max number of bytes to use clique-based kernels for all reduce
 RCCL_PARAM(AllReduceNumChannels,     "CLIQUE_ALLREDUCE_NCHANNELS", 4);         // Number of channels to use for all-reduce
-	   
+
 CliqueManager::CliqueManager(int          const  rank,
                              int          const  numRanks,
                              cliqueMode_t const  cliqueMode) :
@@ -280,7 +281,7 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
       m_gpuBarrierGlobalSense = &m_fineGrainBarrierMem[NCCL_MAX_OPS];
     }
 
-    std::vector<hipIpcMemHandle_t> handles(NUM_HANDLES_PER_RANK);
+    std::vector<std::pair<hipIpcMemHandle_t,size_t>> handles(NUM_HANDLES_PER_RANK);
 
     // Get IPC handles for input/output pointers from cache
     NCCLCHECK(CheckCacheForPtr(const_cast<void*>(inputPtr), m_ipcHandleSendCache, m_rank, &handles[0]));
@@ -305,15 +306,15 @@ ncclResult_t CliqueManager::DeclarePointers(uint64_t opCount, void const* inputP
 }
 
 ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
-						size_t const count,
-						ncclDataType_t const datatype,
-						ncclRedOp_t const op,
-						int const totalNumChannels,
-						uint8_t* numChannelstoUse)
+                                                size_t const count,
+                                                ncclDataType_t const datatype,
+                                                ncclRedOp_t const op,
+                                                int const totalNumChannels,
+                                                uint8_t* numChannelstoUse)
 {
   size_t const totalBytes = count * ncclTypeSize(datatype);
   *numChannelstoUse = 1;
-  
+
   if (coll == ncclCollAllReduce) {
     *numChannelstoUse = std::min((int)rcclParamAllReduceNumChannels(), totalNumChannels);
   }
@@ -340,7 +341,7 @@ ncclResult_t CliqueManager::SetCliqueCollectiveArgs(CollectiveArgs* args)
 
   // Determine number of channels to use for this collective
   args->clique.nChannels = rcclParamAllReduceNumChannels();
-  
+
   return ncclSuccess;
 }
 
@@ -365,7 +366,7 @@ ncclResult_t CliqueManager::WaitForPointers()
     WaitForBarrier();
 
     int numHandles = m_numRanks * NUM_HANDLES_PER_RANK;
-    std::vector<hipIpcMemHandle_t> handles(numHandles);
+    std::vector<std::pair<hipIpcMemHandle_t,size_t>> handles(numHandles);
 
     while (!m_inProgress.empty())
     {
@@ -401,50 +402,76 @@ ncclResult_t CliqueManager::WaitForPointers()
   return ncclSuccess;
 }
 
+std::string HandleToString(hipIpcMemHandle_t handle)
+{
+  char mapping[17] = "0123456789ABCDEF";
+  std::string result;
+  for (int i = 0; i < 4; i++)
+  {
+    unsigned char val = (unsigned char)handle.reserved[i];
+    result += mapping[val / 16];
+    result += mapping[val % 16];
+  }
+  return result;
+}
+
+
 ncclResult_t CliqueManager::CheckCacheForPtr(void* devPtr,
                                              NcclIpcHandleSendCache* cache,
                                              int rank,
-                                             hipIpcMemHandle_t* handle)
+                                             std::pair<hipIpcMemHandle_t, size_t>* handlePair)
 {
-  uint64_t addr = (uint64_t)devPtr;
-
-  // handle NULL ptr case
-  if (addr == 0)
-  {
-    WARN("Error while checking IPC memory handle cache for ptr: null pointer specified");
-    return ncclInternalError;
+  // Get the base address for this device allocation
+  hsa_status_t status;
+  hsa_amd_pointer_info_t info;
+  info.size = sizeof(hsa_amd_pointer_info_t);
+  status = hsa_amd_pointer_info(devPtr, &info, NULL, NULL, NULL);
+  if (status != HSA_STATUS_SUCCESS) {
+    WARN("Uanble to get pointer information for %p", devPtr);
+    return ncclInvalidArgument;
   }
 
-  NcclIpcHandleSendCache::iterator it = cache->find(addr);
+  // Compute the offset between the device addres and the base address
+  uint64_t baseAddr = (uint64_t)info.agentBaseAddress;
+  uint64_t realAddr = (uint64_t)devPtr;
+  handlePair->second = realAddr - baseAddr;
 
-  if (it == cache->end())
-  {
-    CUDACHECK(hipIpcGetMemHandle(handle, devPtr));
-    std::pair<uint64_t, hipIpcMemHandle_t> ptrHandleMap(addr, *handle) ;
-    cache->insert(addr, *handle);
-  }
-  else
-  {
-    *handle = (it->second).first;
-  }
-  return ncclSuccess;
+  // IPC handles are only supported for base address pointers
+  NcclIpcHandleSendCache::iterator it = cache->find(baseAddr);
+
+   if (it == cache->end())
+   {
+     CUDACHECK(hipIpcGetMemHandle(&handlePair->first, (void*)baseAddr));
+     cache->insert(baseAddr, handlePair->first);
+   }
+   else
+   {
+     handlePair->first = (it->second).first;
+   }
+   return ncclSuccess;
 }
 
-ncclResult_t CliqueManager::CheckCacheForHandle(hipIpcMemHandle_t handle,
+ncclResult_t CliqueManager::CheckCacheForHandle(std::pair<hipIpcMemHandle_t, size_t> const& handlePair,
                                                 NcclIpcHandleRecvCache* cache,
                                                 void** ptr)
 {
-  NcclIpcHandleRecvCache::iterator it = cache->find(handle);
+  NcclIpcHandleRecvCache::iterator it = cache->find(handlePair.first);
 
+  // Get base address pointer from cache if it exists
+  void* baseAddr;
   if (it == cache->end())
   {
-    CUDACHECK(hipIpcOpenMemHandle(ptr, handle, hipIpcMemLazyEnablePeerAccess));
-    cache->insert(handle, *ptr);
+    CUDACHECK(hipIpcOpenMemHandle(&baseAddr, handlePair.first, hipIpcMemLazyEnablePeerAccess));
+    cache->insert(handlePair.first, baseAddr);
   }
   else
   {
-    *ptr = (it->second).first;
+    baseAddr = (it->second).first;
   }
+
+  // Modify base address pointer with offset
+  uint64_t realAddr = (uint64_t)baseAddr + handlePair.second;
+  *ptr = (void*)realAddr;
   return ncclSuccess;
 }
 

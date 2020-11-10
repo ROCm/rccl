@@ -113,6 +113,7 @@ protected:
       ncclResult_t InitIfSemaphore(OpenTag<uint32_t> tag);
       ncclResult_t InitIfSemaphore(OpenTag<hipIpcMemHandle_t> tag);
       ncclResult_t InitIfSemaphore(OpenTag<sem_t> tag);
+      ncclResult_t InitIfSemaphore(OpenTag<std::pair<hipIpcMemHandle_t,size_t>> tag);
 
       size_t      m_shmSize;
       std::string m_shmName;
@@ -185,6 +186,12 @@ ncclResult_t ShmObject<T>::InitIfSemaphore(OpenTag<unsigned int> tag)
 
 template<typename T>
 ncclResult_t ShmObject<T>::InitIfSemaphore(OpenTag<hipIpcMemHandle_t> tag)
+{
+  return ncclSuccess;
+}
+
+template<typename T>
+ncclResult_t ShmObject<T>::InitIfSemaphore(OpenTag<std::pair<hipIpcMemHandle_t,size_t>> tag)
 {
   return ncclSuccess;
 }
