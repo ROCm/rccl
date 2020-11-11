@@ -62,7 +62,7 @@ typedef struct
 
 // Multi-GPU (on same node) barrier.  One thread per grid per GPU updates barrier / waits
 template <int NUM_RANKS>
-__forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier)
+__forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier, int const rank, int const verbose)
 {
   if (threadIdx.x == 0)
   {
@@ -71,6 +71,7 @@ __forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier)
     int localSense = *barrier.localSense;
 
     int val = __atomic_add_fetch(barrier.globalCount, 1, __ATOMIC_SEQ_CST);
+    if (verbose) printf("Rank %d arrived at GPU barrier %d\n", rank, val);
     if (val == NUM_RANKS)
     {
       // Last arrival resets barrier
@@ -80,7 +81,18 @@ __forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier)
     else
     {
       // Wait for all ranks to reach barrier
-      while (__atomic_load_n(barrier.globalSense, __ATOMIC_SEQ_CST) != localSense);
+      int counter = 0;
+      while (__atomic_load_n(barrier.globalSense, __ATOMIC_SEQ_CST) != localSense)
+      {
+        if (verbose)
+        {
+          counter++;
+          if (counter == 100000000)
+          {
+            printf("Rank %d waiting on GPU barrier: (%d != %d)", rank, *barrier.globalSense, localSense);
+          }
+        }
+      }
     }
   }
 }

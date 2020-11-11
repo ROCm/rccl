@@ -201,6 +201,7 @@ struct CollectiveArgs {
       uint8_t bid;
       uint8_t nChannels;
       size_t count;
+      int verbose;
       cliqueDevicePtrs_t* ptrs;
     } clique;
     // [/RCCL]
