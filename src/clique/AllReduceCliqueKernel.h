@@ -36,6 +36,7 @@ __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
   size_t const N                 = args->clique.count;     // Total number of elements to reduce
   int    const nBlocks           = args->clique.nChannels; // Total number of blocks assigned to this kernel (may be different than gridDim.x)
   int    const blockId           = args->clique.bid;       // 0-indexed blockIdx for this threadblock (may be different than blockIdx.x)
+  int    const verbose           = args->clique.verbose;   // For debug purposes
   int    const rank              = args->comm->rank;       // Current rank
 
   // Each threadblock works independently of others on a subsection of the input
@@ -46,6 +47,10 @@ __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
   size_t const currBlockStop  = min(currBlockStart + perBlockN, N);
   size_t const blockN         = currBlockStop - currBlockStart;
 
+  if (verbose && threadIdx.x == 0)
+  {
+    printf("Rank %d block %d of %d %lu -> %lu [%lu]\n", rank, blockId, nBlocks, currBlockStart, currBlockStop, blockN);
+  }
   if (blockN > 0)
   {
     // Prepare input / output subarrays
@@ -69,7 +74,12 @@ __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
 
   // Even if there was nothing for this GPU to do, it must participate in a barrier
   // because other GPUs may be modifying this GPUs output buffer still
-  if (blockId == 0) WaitForBarrier<NUM_RANKS>(cliquePtrs->barrier);
+  if (blockId == 0)
+  {
+    if (verbose && threadIdx.x == 0)  printf("Rank %d enters GPU barrier\n", rank);
+    WaitForBarrier<NUM_RANKS>(cliquePtrs->barrier, rank, verbose);
+    if (verbose && threadIdx.x == 0)  printf("Rank %d exits GPU barrier\n", rank);
+  }
 }
 
 #endif
