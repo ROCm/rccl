@@ -77,17 +77,15 @@ namespace CorrectnessTests
             ncclGroupEnd();
             // Wait for reduction to complete
             Synchronize();
+            // Check results for each collective in the combined
+            for (int i = 0; i < 5; i++)
+                ValidateResults(datasets[i]);
+
+            ValidateResults(scatter_dataset);
         }
 
-
-        // Check results for each collective in the combined
         for (int i = 0; i < 5; i++)
-        {
-            ValidateResults(datasets[i]);
             datasets[i].Release();
-        }
-
-        ValidateResults(scatter_dataset);
         scatter_dataset.Release();
     }
 
