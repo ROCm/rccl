@@ -103,14 +103,16 @@ public:
 
         return std::pair<iterator, bool>(it, inserted);
     }
-
+    ncclResult_t close();
 private:
-    void pop()
-    {
-        typename LRUCache::iterator it = m_cache.find(m_lruHistory.front());
-        m_cache.erase(it);
-        m_lruHistory.pop_front();
-    }
+    // tag for dispatch
+    template<class U>
+        struct CloseTag{};
+
+    hipError_t CloseIfPointer(CloseTag<hipIpcMemHandle_t> tag, iterator it);
+    hipError_t CloseIfPointer(CloseTag<void*> tag, iterator it);
+
+    void pop();
 
     void updateHistory(const iterator& it)
     {
@@ -133,8 +135,60 @@ auto hipIpcMemHandleEqual = [](const hipIpcMemHandle_t& l, const hipIpcMemHandle
     return memcmp(l.reserved, r.reserved, sizeof(l.reserved)) == 0;
 };
 
-//typedef llvm::DenseMap<uint64_t, hipIpcMemHandle_t> SendCache;
-//typedef llvm::DenseMap<hipIpcMemHandle_t, void*, decltype(&HandleHash), decltype(HandleEqual)> RecvCache;
+template <
+    class Key,
+    class Value,
+    class Hash,
+    class KeyEqual,
+    class Allocator
+>
+ncclResult_t NcclIpcHandleCache<Key, Value, Hash, KeyEqual, Allocator>::close()
+{
+    for (auto it = m_cache.begin(); it != m_cache.end(); it ++)
+    {
+        CUDACHECK(CloseIfPointer(CloseTag<Value>{}, it));
+    }
+    return ncclSuccess;
+}
+
+template <
+    class Key,
+    class Value,
+    class Hash,
+    class KeyEqual,
+    class Allocator
+>
+void NcclIpcHandleCache<Key, Value, Hash, KeyEqual, Allocator>::pop()
+{
+    typename LRUCache::iterator it = m_cache.find(m_lruHistory.front());
+    CloseIfPointer(CloseTag<Value>{}, it);
+    m_cache.erase(it);
+    m_lruHistory.pop_front();
+}
+
+template <
+    class Key,
+    class Value,
+    class Hash,
+    class KeyEqual,
+    class Allocator
+>
+hipError_t NcclIpcHandleCache<Key, Value, Hash, KeyEqual, Allocator>::CloseIfPointer(CloseTag<void*> tag, iterator it)
+{
+    return hipIpcCloseMemHandle(it->second.first);
+}
+
+template <
+    class Key,
+    class Value,
+    class Hash,
+    class KeyEqual,
+    class Allocator
+>
+hipError_t NcclIpcHandleCache<Key, Value, Hash, KeyEqual, Allocator>::CloseIfPointer(CloseTag<hipIpcMemHandle_t> tag, iterator it)
+{
+    return hipSuccess;
+}
 
 typedef NcclIpcHandleCache<uint64_t, hipIpcMemHandle_t, std::hash<uint64_t>, std::equal_to<uint64_t>, std::allocator< std::pair<const uint64_t, std::pair<hipIpcMemHandle_t, std::list<uint64_t>::iterator>>>> NcclIpcHandleSendCache;
 typedef NcclIpcHandleCache<hipIpcMemHandle_t, void*, decltype(&hipIpcMemHandleHash), decltype(hipIpcMemHandleEqual), std::allocator< std::pair<const hipIpcMemHandle_t, std::pair<void*, std::list<hipIpcMemHandle_t>::iterator>>>> NcclIpcHandleRecvCache;
