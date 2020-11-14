@@ -444,6 +444,7 @@ namespace CorrectnessTests
                 }
                 ASSERT_EQ(isMatch, true);
             }
+            free(outputI1);
         }
 
         // Passed in parameters from TestTuple
