@@ -973,8 +973,10 @@ static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, st
     if (i < ref->nGpus) return false;
     // match XGMI connection
     for (i = 0; i < ref->nGpus; i++) {
-      for (j = 0; j < ref->nGpus; j++)
+      for (j = 0; j < ref->nGpus; j++) {
         if (ref->connMatrix[i*ref->nGpus+j] != topo->connMatrix[g[i]*ref->nGpus+g[j]]) break;
+        if ((ref->gpuIds[i]-ref->gpuIds[j])*(topo->gpuIds[g[i]]-topo->gpuIds[g[j]]) < 0) break;
+      }
       if (j < ref->nGpus) break;
     }
     if (i < ref->nGpus) return false;
