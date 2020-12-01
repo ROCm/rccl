@@ -29,9 +29,10 @@ ncclResult_t ncclScatter(const void* sendbuff, void* recvbuff, size_t recvcount,
     return ncclSuccess;
   }
   else {
-    struct ncclInfo info = { ncclCollScatter, "Scatter",
-      sendbuff, recvbuff, recvcount, datatype, ncclSum, root, comm, stream, /* Args */
-      SCATTER_CHUNKSTEPS, SCATTER_SLICESTEPS };
-    return ncclEnqueueCheck(&info);
+    //struct ncclInfo info = { ncclCollScatter, "Scatter",
+    //  sendbuff, recvbuff, recvcount, datatype, ncclSum, root, comm, stream, /* Args */
+    //  SCATTER_CHUNKSTEPS, SCATTER_SLICESTEPS };
+    //return ncclEnqueueCheck(&info);
+    return ncclInternalError;
   }
 }

@@ -118,9 +118,14 @@ class ncclLL128Primitives {
     #pragma unroll
     for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
       if (u*WARP_SIZE < maxOffset) {
-        uint64_t v0, v1;
-        load128(src64Ptr+u*WARP_SIZE, v0, v1);
-        storeShmem128(shmemAsmPtr+u*WARP_SIZE, v0, v1);
+        using Vec = uint64_t __attribute__((ext_vector_type(2)));
+        Vec i2;
+        //load128(src64Ptr+u*WARP_SIZE, v0, v1);
+        asm volatile ("flat_load_dwordx4 %0, %1\n"
+          "s_waitcnt vmcnt(0)\n" : "=v"(i2) : "v"(src64Ptr+u*WARP_SIZE));
+        //storeShmem128(shmemAsmPtr+u*WARP_SIZE, i2[0], i2[1]);
+        *(shmemAsmPtr+u*WARP_SIZE) = i2[0];
+        *(shmemAsmPtr+u*WARP_SIZE+1) = i2[1];
       }
     }
 #endif
@@ -135,15 +140,24 @@ class ncclLL128Primitives {
 
   template <int ELEMS_PER_THREAD>
   inline __device__ void storeShmemToDst128(int maxOffset, uint64_t* dst64Ptr) {
-    uint64_t v[ELEMS_PER_THREAD];
+    using Velem = uint64_t __attribute__((ext_vector_type(ELEMS_PER_THREAD)));
+    Velem v;
     uint64_t* shmemAsmPtr = shmemCvtPtr(shmem);
     #pragma unroll
     for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-      loadShmem128(shmemAsmPtr+u*WARP_SIZE, v[u], v[u+1]);
+      v[u] = *(shmemAsmPtr+u*WARP_SIZE);
+      v[u+1] = *(shmemAsmPtr+u*WARP_SIZE+1);
+      //loadShmem128(shmemAsmPtr+u*WARP_SIZE, v[u], v[u+1]);
     }
     #pragma unroll
     for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-      if (u*WARP_SIZE < maxOffset) store128(dst64Ptr+u*WARP_SIZE, v[u], v[u+1]);
+      //if (u*WARP_SIZE < maxOffset) store128(dst64Ptr+u*WARP_SIZE, v[u], v[u+1]);
+      using Vec = uint64_t __attribute__((ext_vector_type(2)));
+      Vec i2;
+      i2[0] = v[u];
+      i2[1] = v[u+1];//
+      if (u*WARP_SIZE < maxOffset) asm volatile ("flat_store_dwordx4 %0, %1\n"
+        "s_waitcnt vmcnt(0)\n" : : "v"(dst64Ptr+u*WARP_SIZE), "v"(i2));
     }
   }
 
@@ -176,45 +190,52 @@ class ncclLL128Primitives {
       uint64_t flag = recvFlag(0);
       uint64_t* ptr = recvPtr(0)+ll128Offset;
       bool needReload;
-      uint64_t v0, v1;
+      using Vec = uint64_t __attribute__((ext_vector_type(2)));
+      Vec i2;
       do {
         if (wid == 0) STORE(sync, 0);
         needReload = false;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          load128(ptr+u*WARP_SIZE, v0, v1);
-          needReload |= flagThread && (v1 != flag);
+          asm volatile ("flat_load_dwordx4 %0, %1, glc, slc\n"
+            "s_waitcnt vmcnt(0)\n" : "=v"(i2) : "v"(ptr+u*WARP_SIZE));
+          //load128(ptr+u*WARP_SIZE, v0, v1);
+          needReload |= flagThread && (i2[1] != flag);
         }
         if (needReload) __atomic_fetch_add(sync, 1, __ATOMIC_SEQ_CST);
-        if (LOAD(sync) == 0) break;
-      } while (checkAbort(0, 0) == 0);
+      } while (LOAD(sync) && checkAbort(0, 0) == 0);
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-        load128(ptr+u*WARP_SIZE, v0, v1);
-        v[u] = SRC ? MULTI<FUNC, T>()(v0, v[u]) : v0;
-        v[u+1] = SRC ? MULTI<FUNC, T>()(v1, v[u+1]) : v1;
+        asm volatile ("flat_load_dwordx4 %0, %1, glc, slc\n"
+          "s_waitcnt vmcnt(0)\n" : "=v"(i2) : "v"(ptr+u*WARP_SIZE));
+        //load128(ptr+u*WARP_SIZE, v0, v1);
+        v[u] = SRC ? MULTI<FUNC, T>()(i2[0], v[u]) : i2[0];
+        v[u+1] = SRC ? MULTI<FUNC, T>()(i2[1], v[u+1]) : i2[1];
       }
 
       for (int i=1; i<NRECV && i<nrecv; i++) {
         uint64_t flag = recvFlag(i);
         uint64_t* ptr = recvPtr(i)+ll128Offset;
-        uint64_t v0, v1;
+        Vec i2;
         do {
           if (wid == 0) STORE(sync, 0);
-          needReload = false;
+          needReload = 0;
           #pragma unroll
           for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-            load128(ptr+u*WARP_SIZE, v0, v1);
-            needReload |= flagThread && (v1 != flag);
+            asm volatile ("flat_load_dwordx4 %0, %1, glc, slc\n"
+              "s_waitcnt vmcnt(0)\n" : "=v"(i2) : "v"(ptr+u*WARP_SIZE));
+            //load128(ptr+u*WARP_SIZE, v0, v1);
+            needReload |= flagThread && (i2[1] != flag);
           }
           if (needReload) __atomic_fetch_add(sync, 1, __ATOMIC_SEQ_CST);
-          if (LOAD(sync) == 0) break;
-        } while (checkAbort(i, 0) == 0);
+        } while (LOAD(sync) && checkAbort(i, 0) == 0);
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          load128(ptr+u*WARP_SIZE, v0, v1);
-          v[u] = MULTI<FUNC, T>()(v0, v[u]);
-          v[u+1] = MULTI<FUNC, T>()(v1, v[u+1]);
+          asm volatile ("flat_load_dwordx4 %0, %1, glc, slc\n"
+            "s_waitcnt vmcnt(0)\n" : "=v"(i2) : "v"(ptr+u*WARP_SIZE));
+          //load128(ptr+u*WARP_SIZE, v0, v1);
+          v[u] = MULTI<FUNC, T>()(i2[0], v[u]);
+          v[u+1] = MULTI<FUNC, T>()(i2[1], v[u+1]);
         }
       }
     }
@@ -223,18 +244,30 @@ class ncclLL128Primitives {
     /************************ Send **************************/
     if (SEND) {
       for (int i=1; i<NSEND && i<nsend; i++) {
-        int flag = sendFlag(i);
+        uint64_t flag = sendFlag(i);
         uint64_t* ptr = sendPtr(i)+ll128Offset;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          store128(ptr+u*WARP_SIZE, v[u], flagThread ? flag : v[u+1]);
+          //store128(ptr+u*WARP_SIZE, v[u], flagThread ? flag : v[u+1]);
+          using Vec = uint64_t __attribute__((ext_vector_type(2)));
+          Vec i2;
+          i2[0] = v[u];
+          i2[1] = flagThread ? flag : v[u+1];//
+          asm volatile ("flat_store_dwordx4 %0, %1, glc, slc\n"
+            "s_waitcnt vmcnt(0)\n" : : "v"(ptr+u*WARP_SIZE), "v"(i2));
         }
       }
-      int flag = sendFlag(0);
+      uint64_t flag = sendFlag(0);
       uint64_t* ptr = sendPtr(0)+ll128Offset;
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-        store128(ptr+u*WARP_SIZE, v[u], flagThread ? flag : v[u+1]);
+        //store128(ptr+u*WARP_SIZE, v[u], flagThread ? flag : v[u+1]);
+        using Vec = uint64_t __attribute__((ext_vector_type(2)));
+        Vec i2;
+        i2[0] = v[u];
+        i2[1] = flagThread ? flag : v[u+1];//
+        asm volatile ("flat_store_dwordx4 %0, %1, glc, slc\n"
+          "s_waitcnt vmcnt(0)\n" : : "v"(ptr+u*WARP_SIZE), "v"(i2));
       }
     }
     /********************** End Send ************************/
@@ -279,7 +312,7 @@ class ncclLL128Primitives {
       const int maxOffset = min(nelem-(elemOffset*((int)(sizeof(uint64_t)/sizeof(T)))), (int)(ELEMINC*(sizeof(uint64_t)/sizeof(T))));
       if (SRC) {
         int done = 0;
-        if ((((uint64_t)srcPtr)&0xf) == 0) {
+        if ((((uint64_t)srcPtr)&0x3) == 0) {
           loadSrcToShmem128<NCCL_LL128_SHMEM_ELEMS_PER_THREAD>(maxOffset128-2*wid, src64Ptr+elemOffset+2*wid);
           done = maxOffset128*(sizeof(uint64_t)/sizeof(T));
         }
@@ -290,7 +323,7 @@ class ncclLL128Primitives {
       __syncwarp();
       if (DST) {
         int done = 0;
-        if ((((uint64_t)dstPtr)&0xf) == 0) {
+        if ((((uint64_t)dstPtr)&0x3) == 0) {
           storeShmemToDst128<NCCL_LL128_SHMEM_ELEMS_PER_THREAD>(maxOffset128-2*wid, dst64Ptr+elemOffset+2*wid);
           done = maxOffset128*(sizeof(uint64_t)/sizeof(T));
         }
@@ -330,10 +363,10 @@ class ncclLL128Primitives {
       sendConnHeadPtr = LOAD(&sendConn->head);
       sendConnHeadCache = LOAD(sendConnHeadPtr);
       sendConnHead = LOAD(&sendConn->step);
-      sendConnFifoPtr = LOAD(&sendConn->fifo);
+      sendConnFifoPtr = LOAD(&sendConn->sizesFifo);
     }
     if (tid >= nthreads-WARP_SIZE && wid<nsend) {
-      if (sendConn->fifo) {
+      if (sendConn->sizesFifo) {
         sendConnTailPtr = LOAD(&sendConn->tail);
         sendConnTail = LOAD(&sendConn->step);
       }
@@ -357,12 +390,7 @@ class ncclLL128Primitives {
  public:
   __device__ __forceinline__
   ncclLL128Primitives(const int tid, const int nthreads, int* recvPeers, int* sendPeers, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm)
-    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE), flagThread((tid%8)==7), stepSize(stepSize), shmem(ncclShmem+(threadIdx.x/WARP_SIZE)*NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE+2*wid) {
-    // for __any_sync
-    if (NSEND > NRECV)
-      sync = channel->sync + 2 + tid/WARP_SIZE;
-    else
-      sync = channel->sync + tid/WARP_SIZE;
+    : comm(comm), tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE), flagThread((tid%8)==7), stepSize(stepSize), shmem(ncclShmem->data+(threadIdx.x/WARP_SIZE)*NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE+2*wid), sync(ncclShmem->sync+warp) {
     // Make sure step is updated before we read it.
     barrier();
 

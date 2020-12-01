@@ -46,26 +46,19 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
   }
   // Type is OK, compute nbytes. Convert Allgather/Broadcast/P2P calls to chars.
   info->nBytes = info->count * ncclTypeSize(info->datatype);
-  if (info->coll == ncclCollAllGather || info->coll == ncclCollBroadcast
-    || info->coll == ncclCollGather || info->coll == ncclCollScatter || info->coll == ncclCollAllToAll) {
+  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast) {
     info->count = info->nBytes;
     info->datatype = ncclInt8;
   }
-  if (info->coll == ncclCollAllGather || info->coll == ncclCollReduceScatter
-    || info->coll == ncclCollGather || info->coll == ncclCollScatter || info->coll == ncclCollAllToAll)
-    info->nBytes *= info->comm->nRanks; // count is per rank
-  if (info->coll == ncclCollAllToAllv) {
-    // Use count to store data type size for alltoallv
-    info->count = ncclTypeSize(info->datatype);
-    info->datatype = ncclInt8;
-  }
+  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter) info->nBytes *= info->comm->nRanks; // count is per rank
+
   if (info->op < 0 || info->op >= ncclNumOps) {
     WARN("%s : invalid reduction operation %d", info->opName, info->op);
     return ncclInvalidArgument;
   }
 
   if (info->comm->checkPointers) {
-    if (info->coll == ncclCollSendRecv) {
+    if (info->coll == ncclFuncSendRecv) {
       if (strcmp(info->opName, "Send") == 0) {
         NCCLCHECK(CudaPtrCheck(info->sendbuff, info->comm, "sendbuff", "Send"));
       } else {
@@ -73,10 +66,10 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
       }
     } else {
       // Check CUDA device pointers
-      if ((info->coll != ncclCollBroadcast && info->coll != ncclCollScatter) || info->comm->rank == info->root) {
+      if (info->coll != ncclFuncBroadcast || info->comm->rank == info->root) {
         NCCLCHECK(CudaPtrCheck(info->sendbuff, info->comm, "sendbuff", info->opName));
       }
-      if ((info->coll != ncclCollReduce && info->coll != ncclCollGather) || info->comm->rank == info->root) {
+      if (info->coll != ncclFuncReduce || info->comm->rank == info->root) {
         NCCLCHECK(CudaPtrCheck(info->recvbuff, info->comm, "recvbuff", info->opName));
       }
     }

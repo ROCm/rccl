@@ -11,14 +11,17 @@
 struct allGather1Data_t {
   struct ncclPeerInfo peerInfo;
   struct ncclComm* comm;
+  int cudaCompCap;
 };
 
 // AllGather3 - begin
 struct ncclGraphInfo {
+  int pattern;
   int sameChannels;
   float speedIntra;
   float speedInter;
   int typeIntra;
+  int typeInter;
 };
 
 struct allGather3Data_t{

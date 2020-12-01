@@ -29,9 +29,10 @@ ncclResult_t ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     return ncclSuccess;
   }
   else {
-    struct ncclInfo info = { ncclCollGather, "Gather",
-      sendbuff, recvbuff, sendcount, datatype, ncclSum, root, comm, stream, /* Args */
-      GATHER_CHUNKSTEPS, GATHER_SLICESTEPS };
-    return ncclEnqueueCheck(&info);
+    //struct ncclInfo info = { ncclCollGather, "Gather",
+    //  sendbuff, recvbuff, sendcount, datatype, ncclSum, root, comm, stream, /* Args */
+    //  GATHER_CHUNKSTEPS, GATHER_SLICESTEPS };
+    //return ncclEnqueueCheck(&info);
+    return ncclInternalError;
   }
 }

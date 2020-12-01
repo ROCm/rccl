@@ -31,6 +31,32 @@
 #include <list>
 #include <iterator>
 
+struct ibtestProxyArgs {
+  proxyProgressFunc_t progress;
+  struct ncclChannel* channel;
+  struct ncclConnector* connector;
+  int sliceSteps;
+  int chunkSteps;
+  int nsteps;
+  uint64_t opCount;
+  int protocol;
+  ncclDataType_t dtype;
+  ncclRedOp_t redOp;
+  int state;   // add component before this line -- it is left out during initialization
+
+  // Internal state
+  uint64_t head;
+  uint64_t tail;
+  uint64_t end;
+  void* requests[NCCL_STEPS];
+  int idle;
+
+  // Element linking
+  pthread_mutex_t mutex;
+  struct ibtestProxyArgs* next;
+  struct ibtestProxyArgs* nextPeer;
+};
+
 ncclResult_t initNet();
 
 char* getCmdOption(char ** begin, char ** end, const std::string & option) {
@@ -204,7 +230,7 @@ private:
   bool runSend;
   bool use_gdr_read;
   int sliceSteps;
-  struct ncclProxyArgs args;
+  struct ibtestProxyArgs args;
 
   ncclResult_t connect(char* ip, uint16_t port) {
     inet_pton(AF_INET, ip, &netConnectAddr.sin_addr);
@@ -326,7 +352,7 @@ public:
   void launchKernel(uint64_t end) {
     *sendHead = 0; *sendTail = 0; *sourceCycle = 0; *sourceBytes = 0;
     send_sizes = 0; send_bw_cumulative = 0; send_bw_count =0; send_byte = 0;
-    memset(&args, 0, sizeof(struct ncclProxyArgs));
+    memset(&args, 0, sizeof(struct ibtestProxyArgs));
     args.head = 0;
     args.tail = 0;
     args.end = end;
@@ -365,7 +391,7 @@ private:
   bool runRecv;
   bool use_gdr_write;
   int sliceSteps;
-  struct ncclProxyArgs args;
+  struct ibtestProxyArgs args;
 
   ncclResult_t listen() {
     printf("GDR Write %s\n", use_gdr_write ? "enabled" : "disabled");
@@ -472,7 +498,7 @@ public:
           }
           args.head += args.sliceSteps;
           recv_byte += size;
-          NCCLCHECK(ncclNetFlush(netRecvComm, localBuff+buffSlot*stepSize, size, mhandle));
+          NCCLCHECK(ncclNetIflush(netRecvComm, localBuff+buffSlot*stepSize, size, mhandle, args.requests+buffSlot));
           STORE(recvHead, args.head);
           args.idle = 0;
         }
@@ -486,7 +512,7 @@ public:
   void launchKernel(uint64_t end) {
     *recvHead = 0; *recvTail = 0; *recvErrorCount = 0; *sinkCycle = 0, *sinkBytes = 0;
     recv_sizes = 0; recv_bw_cumulative = 0; recv_bw_count =0; recv_byte = 0;
-    memset(&args, 0, sizeof(struct ncclProxyArgs));
+    memset(&args, 0, sizeof(struct ibtestProxyArgs));
     args.head = 0;
     args.tail = 0;
     args.end = end;

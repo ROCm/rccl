@@ -172,9 +172,11 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nranks; i++) {
     comm[i].rank = i;
     comm[i].nRanks = nranks;
-    comm[i].p2plist.count=0;
-    NCCLCHECK(ncclCalloc(&comm[i].p2plist.connect.recv, MAXCHANNELS*comm->nRanks));
-    NCCLCHECK(ncclCalloc(&comm[i].p2plist.connect.send, MAXCHANNELS*comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].connectSend, comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].connectRecv, comm->nRanks));
+    comm[i].p2pSendCount = comm[i].p2pRecvCount = 0;
+    NCCLCHECK(ncclCalloc(&comm[i].p2pSends, comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].p2pRecvs, comm->nRanks));
     node_model = network.GetNode(i);
     assert(node_model!=0);
     comm[i].topo = node_model->getSystem(i);
@@ -200,6 +202,13 @@ int main(int argc,char* argv[])
     node_model = network.GetNode(i);
     assert(node_model!=0);
     initTransportsRank_3(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
+  }
+
+  for (int i = 0; i < nranks; i++) {
+    free(comm[i].connectSend);
+    free(comm[i].connectRecv);
+    free(comm[i].p2pSends);
+    free(comm[i].p2pRecvs);
   }
 
   free(treeGraph);

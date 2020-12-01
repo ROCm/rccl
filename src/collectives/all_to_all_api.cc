@@ -25,9 +25,10 @@ ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count, nc
     NCCLCHECK(ncclGroupEnd());
     return ncclSuccess;
   } else {
-    struct ncclInfo info = { ncclCollAllToAll, "AllToAll",
-      sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream, /* Args */
-      ALLTOALL_CHUNKSTEPS, ALLTOALL_SLICESTEPS };
-    return ncclEnqueueCheck(&info);
+    //struct ncclInfo info = { ncclCollAllToAll, "AllToAll",
+    //  sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream, /* Args */
+    //  ALLTOALL_CHUNKSTEPS, ALLTOALL_SLICESTEPS };
+    //return ncclEnqueueCheck(&info);
+    return ncclInternalError;
   }
 }

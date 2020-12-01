@@ -23,8 +23,8 @@
 #endif
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
-typedef enum { ncclCollBroadcast, ncclCollReduce, ncclCollAllGather, ncclCollReduceScatter, ncclCollAllReduce, ncclCollGather, ncclCollScatter, ncclCollAllToAll, ncclCollAllToAllv, ncclCollSendRecv} ncclFunc_t;
-extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+4];
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv} ncclFunc_t;
+extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
 #define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
@@ -59,6 +59,7 @@ union ncclLLFifoLine {
 #define WARP_SIZE 64
 #define MAXCHANNELS 32
 #define NCCL_MAX_NTHREADS 256
+#define NCCL_SIMPLE_MAX_NTHREADS NCCL_MAX_NTHREADS
 #define NCCL_LL_MAX_NTHREADS NCCL_MAX_NTHREADS
 #define NCCL_LL_LINES_PER_THREAD 8
 #ifdef TEST_LL_CLEANUP
@@ -72,7 +73,7 @@ union ncclLLFifoLine {
 // Make sure the clean mask will last for at least NCCL_NSTEPS
 static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK value");
 
-#define NCCL_LL128_LINESIZE 64
+#define NCCL_LL128_LINESIZE 128
 #define NCCL_LL128_LINEELEMS (NCCL_LL128_LINESIZE/sizeof(uint64_t))
 #define NCCL_LL128_DATAELEMS (NCCL_LL128_LINEELEMS-1)
 
@@ -83,14 +84,11 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 // to 3 dests. Use 70% for reduce and 30% for bcast.
 #define NCCL_LL128_SPLIT(nt) ((nt*7/(10*32))*32)
 
-#define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 8
+#define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 2
 #define NCCL_LL128_SHMEM_SIZE (NCCL_LL128_SHMEM_ELEMS_PER_THREAD*NCCL_LL128_MAX_NTHREADS)
 
 #define NCCL_DIRECT_GPU 0x01
 #define NCCL_DIRECT_NIC 0x10
-
-#define MAXBARRIERS 2
-#define MAXWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 
 struct ncclConnInfo {
   // Regular comm mechanism
@@ -99,9 +97,11 @@ struct ncclConnInfo {
   uint64_t *head;     // Local for send, remote for recv
 
   int direct;         // Direct communication
+  int shared;         // Buffers are shared
   void **ptrExchange; // Pointer exchange for direct communication
 
-  int *fifo;          // Size fifo for proxy
+  int *sizesFifo;     // Sizes fifo from GPU to proxy
+  void* *ptrsFifo;      // Buffer fifo from proxy to GPU
 
   uint64_t step;      // Keep where we are
   uint64_t llLastCleaning;
@@ -110,7 +110,6 @@ struct ncclConnInfo {
   // allows software to explicitly initiate a flush read to HDP memory. See more
   // descriptions in primitives.h.
   uint32_t* next_hdp_reg;  // Next GPU in ring (for p2p transport use only)
-  uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
 };
 
 struct ncclConnector {
@@ -151,68 +150,53 @@ struct ncclDevComm;
 
 #pragma pack(push)  /* push current alignment to stack */
 #pragma pack(4)     /* set alignment to 4 bytes boundary */
-/* CollectiveArgs + ncclColl are to be a power of two, currently 64 bytes, */
-/* to make sure reads to host from the CUDA kernel are aligned. */
-/* Make sure to adjust padding at the end of ncclColl. */
-struct CollectiveArgs {
-  struct ncclDevComm* comm;
-  uint64_t opCount;
+#define NCCL_MAX_WORK_ELEMENTS 2
+#define NCCL_MAX_GROUPS (NCCL_MAX_WORK_ELEMENTS*2)
 
-  // local and remote input, output, and buffer
+/* ncclWork is to be a power of two, currently 8x64 bytes, */
+/* to make sure reads to host from the CUDA kernel are aligned. */
+/* Make sure to adjust padding at the end of ncclWorkElem. */
+struct ncclWorkElem {
+  // Header
+  struct ncclDevComm* comm;
+  uint16_t nThreads;
+  uint16_t funcIndex;
+  uint16_t index;
+  uint16_t active;
+
   const void * sendbuff;
   void * recvbuff;
 
-  // Op-specific fields. Make sure the common part stays the
-  // same on all structs of the union
+  uint64_t opCount;
+  // Op-specific fields.
   union {
     struct {
-      uint16_t nThreads;
-    } common;
-    struct {
-      uint16_t nThreads;
-      uint8_t bid;
-      uint8_t nChannels;
-      uint32_t root;
       size_t count;
       size_t lastChunkSize;
-    } coll;
-    struct {
-      uint16_t nThreads;
-      uint16_t unused;
-      int32_t delta;
-      size_t sendCount;
-      size_t recvCount;
-    } p2p;
-    struct {
-      uint16_t nThreads;
+      uint32_t root;
       uint8_t bid;
       uint8_t nChannels;
-      size_t count;
-      size_t* extra;
-    } a2av;
-  };
-};
-struct ncclColl {
-  union {
+    } coll;
     struct {
-      struct CollectiveArgs args;
-      uint16_t funcIndex;
-      uint16_t nextIndex;
-      uint8_t  active;
-    };
-    int data[0x10];
+      size_t sendCount;
+      size_t recvCount;
+      int32_t delta;
+      uint16_t nThreads;
+    } p2p;
+    uint64_t align[3];
   };
 };
-static_assert(sizeof(struct ncclColl) == (0x10*sizeof(int)), "ncclColl must have a pow2 size");
+struct ncclWork {
+  struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
+};
+static_assert(sizeof(struct ncclWorkElem) == (0x10*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {
     struct {
       struct ncclRing ring;
-      struct ncclTree treeUp;
-      struct ncclTree treeDn;
-      struct ncclTree collTreeUp;
-      struct ncclTree collTreeDn;
+      struct ncclTree tree;
+      struct ncclTree collTree;
 
       int id;
 
@@ -221,16 +205,10 @@ struct ncclChannel {
       struct ncclPeer* devPeers;
 
       // Operation list for aggregation
-      struct ncclColl* collectives;
-      size_t* collectivesExtra;
-      int collStart;
-      int collCount;
-      int collFifoHead; // Only used by GPU
-      int collFifoTail; // Only used by CPU
+      struct ncclWork* workFifo;
+      int workCount;
+      uint64_t workFifoTail; // Only used by CPU
 
-      uint32_t* sync;
-      uint64_t* barrier;
-      uint64_t* barrier_next;
 #ifdef ENABLE_PROFILING
       struct timeval tvs;
       uint64_t sizes;
@@ -288,9 +266,11 @@ struct ncclProf {
 
 #ifdef ENABLE_COLLTRACE
 typedef enum {
+  ncclCollTraceNotReady,
   ncclCollTraceKernelLaunchType,
   ncclCollTraceCollEndType,
-  ncclCollTraceAbortType
+  ncclCollTraceAbortType,
+  ncclCollTraceDataType
 } ncclCollTraceDataType_t;
 
 struct ncclCollTrace {
@@ -304,7 +284,7 @@ struct ncclCollTrace {
 };
 static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must have a pow2 size");
 
-#define COLLTRACE_NUM_ITEMS 1024
+#define COLLTRACE_NUM_ITEMS 8192
 #endif
 
 struct ncclDevComm {

@@ -25,9 +25,18 @@ static float getMaxWidth(struct ncclTopoSystem* system, struct ncclTopoNode* gpu
   }
   return maxWidth;
 }
+static float getTotalWidth(struct ncclTopoSystem* system, struct ncclTopoNode* gpu) {
+  float nvlinkWidth = 0.0, pciWidth = 0.0;
+  for (int l=0; l<gpu->nlinks; l++) {
+    struct ncclTopoLink* link = gpu->links+l;
+    if (link->type == LINK_NVL) nvlinkWidth += link->width;
+    if (link->type == LINK_PCI) pciWidth = link->width;
+  }
+  return std::max(pciWidth, nvlinkWidth);
+}
 ncclResult_t ncclTopoSearchInit(struct ncclTopoSystem* system) {
   system->maxWidth = 0.0;
-  system->type = 0;
+  system->totalWidth = 0.0;
   int inter = system->nodes[NET].count;
   if (inter == 0 && system->nodes[GPU].count == 1) {
     system->maxWidth = LOC_WIDTH;
@@ -36,6 +45,7 @@ ncclResult_t ncclTopoSearchInit(struct ncclTopoSystem* system) {
   for (int g=0; g<system->nodes[GPU].count; g++) {
     struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
     system->maxWidth = std::max(system->maxWidth, getMaxWidth(system, gpu, inter ? NET : GPU));
+    system->totalWidth = std::max(system->totalWidth, getTotalWidth(system, gpu));
   }
   return ncclSuccess;
 }
@@ -293,7 +303,6 @@ ncclResult_t ncclTopoSearchRecGpu(struct ncclTopoSystem* system, struct ncclTopo
 ncclResult_t ncclTopoSearchTryGpu(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, struct ncclTopoGraph* saveGraph, int step, int backToNet, int backToFirstRank, int forcedOrder, int *time, int type, int index, int g) {
   const uint64_t flag = 1ULL<<(graph->nChannels);
   struct ncclTopoNode* gpu;
-
   NCCLCHECK(ncclTopoFollowPath(system, graph, type, index, GPU, g, 1, &gpu));
   if (gpu) {
     gpu->used ^= flag;
@@ -352,11 +361,26 @@ ncclResult_t ncclTopoSearchRecGpu(struct ncclTopoSystem* system, struct ncclTopo
         struct ncclTopoNode* net = system->nodes[NET].nodes+n;
         if (graph->pattern == NCCL_TOPO_PATTERN_TREE && net->id != startNet->id) continue; // Trees are symmetric
         if (graph->crossNic != 1 && (net->net.asic != startNet->net.asic || net->net.port != startNet->net.port)) continue;
+
+        // Balanced Tree : count half of the bandwidth on first two GPUs
+        int nextBackToNet = -1;
+        float speedInterSave = graph->speedInter;
+        if (graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) {
+          // Count half of the bandwidth on each of the first two GPUs
+          if (step == 0) nextBackToNet = 1;
+          else if (net->id != graph->inter[graph->nChannels*2+1]) continue;
+          graph->speedInter /= 2;
+        }
+
         NCCLCHECK(ncclTopoFollowPath(system, graph, GPU, g, NET, n, 1, &net));
+        graph->speedInter = speedInterSave;
         if (net) {
           graph->inter[graph->nChannels*2+1] = net->id;
-          NCCLCHECK(ncclTopoSearchRecGpu(system, graph, saveGraph, gpu, step, -1, backToFirstRank, forcedOrder, time));
+          NCCLCHECK(ncclTopoSearchRecGpu(system, graph, saveGraph, gpu, step, nextBackToNet, backToFirstRank, forcedOrder, time));
+
+          if (graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) graph->speedInter /= 2;
           NCCLCHECK(ncclTopoFollowPath(system, graph, GPU, g, NET, n, -1, &net));
+          graph->speedInter = speedInterSave;
         }
       }
     }
@@ -493,13 +517,12 @@ ncclResult_t ncclTopoSearchRecNet(struct ncclTopoSystem* system, struct ncclTopo
 ncclResult_t ncclTopoSearchParams(struct ncclTopoSystem* system, int pattern, int* backToNet, int* backToFirstRank) {
   if (system->nodes[NET].count) {
     if (pattern == NCCL_TOPO_PATTERN_RING) *backToNet = system->nodes[GPU].count-1;
-    else if (pattern == NCCL_TOPO_PATTERN_TREE) *backToNet = 0;
-    else *backToNet = 1;
-    if (pattern == NCCL_TOPO_PATTERN_SPLIT_TREE_LOOP) *backToFirstRank = system->nodes[GPU].count-1;
-    else *backToFirstRank = -1;
+    else if (pattern == NCCL_TOPO_PATTERN_SPLIT_TREE) *backToNet = 1;
+    else *backToNet = 0;
+    *backToFirstRank = -1;
   } else {
     *backToNet = -1;
-    if (pattern == NCCL_TOPO_PATTERN_RING || pattern == NCCL_TOPO_PATTERN_SPLIT_TREE_LOOP) *backToFirstRank = system->nodes[GPU].count-1;
+    if (pattern == NCCL_TOPO_PATTERN_RING) *backToFirstRank = system->nodes[GPU].count-1;
     else *backToFirstRank = -1;
   }
   return ncclSuccess;
@@ -544,7 +567,7 @@ ncclResult_t ncclTopoSearchRec(struct ncclTopoSystem* system, struct ncclTopoGra
 /* User defined graph from XML file */
 /************************************/
 
-struct kvDict kvDictLinkType[] = { { "SYS", PATH_SYS }, { "PHB", PATH_PHB }, { "PIX", PATH_PIX }, { "PXB", PATH_PXB }, { "NVL", PATH_NVL }, { "LOC", PATH_LOC }, { NULL, 0 } };
+struct kvDict kvDictLinkType[] = { { "SYS", PATH_SYS }, { "PHB", PATH_PHB }, { "PIX", PATH_PIX }, { "PXB", PATH_PXB }, { "NVL", PATH_NVL }, { "NVB", PATH_NVB}, { "LOC", PATH_LOC }, { NULL, 0 } };
 ncclResult_t ncclTopoGetChannelFromXml(struct ncclXmlNode *xmlChannel, int c, struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
   int* inter = graph->inter+2*c;
@@ -1062,7 +1085,7 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 float speedArray[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #else
-float speedArray[] = { 42.0, 24.0, 21.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+float speedArray[] = { 42.0, 30.0, 24.0, 21.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #endif
 #define NSPEEDS (sizeof(speedArray)/sizeof(float))
 
@@ -1109,11 +1132,20 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
 
   if (ngpus == 1) if (graph->pattern != NCCL_TOPO_PATTERN_RING) graph->pattern = NCCL_TOPO_PATTERN_TREE;
 
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  // TODO: benchmark balance tree vs split tree
+  //if (graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) graph->pattern = NCCL_TOPO_PATTERN_SPLIT_TREE;
+#else
+  // SPLIT_TREE works better on older archs.
+  int ccMin;
+  NCCLCHECK(ncclTopoGetCompCap(system, &ccMin, NULL));
+  if (ccMin < 80 && graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) graph->pattern = NCCL_TOPO_PATTERN_SPLIT_TREE;
+#endif
+
   struct ncclTopoGraph tmpGraph;
   memcpy(&tmpGraph, graph, sizeof(struct ncclTopoGraph));
 
   // First try crossnic, then decrease speed and finally increase speedIntra.
-  tmpGraph.pattern = graph->pattern;
   int pass = 1;
   int speedIndex = 0;
   while (speedArray[speedIndex] > system->maxWidth && speedIndex < NSPEEDS-1) speedIndex++;
@@ -1128,7 +1160,7 @@ search:
 
   NCCLCHECK(ncclTopoSearchRec(system, &tmpGraph, graph, &time));
 #if 0
-  printf("Pattern %d, crossNic %d, Speed %g/%g, type %d/%d, channels %d-%d sameChannels %d -> nChannels %dx%g/%g %s\n", tmpGraph.pattern, tmpGraph.crossNic, tmpGraph.speedInter, tmpGraph.speedIntra, tmpGraph.typeInter, tmpGraph.typeIntra, tmpGraph.minChannels, tmpGraph.maxChannels, tmpGraph.sameChannels, graph->nChannels, graph->speedInter, graph->speedIntra, time == 0 ? "TIMEOUT" : "");
+  printf("Pattern %d, crossNic %d, Speed %g/%g, type %d/%d, channels %d-%d sameChannels %d -> nChannels %dx%g/%g %s\n", tmpGraph.pattern, tmpGraph.crossNic, tmpGraph.speedInter, tmpGraph.speedIntra, tmpGraph.typeInter, tmpGraph.typeIntra, tmpGraph.minChannels, tmpGraph.maxChannels, tmpGraph.sameChannels, graph->nChannels, graph->speedInter, graph->speedIntra, time == 0 ? "TIMEOUT" : time == -1 ? "PERFECT" : "");
   for (int c=0; c<graph->nChannels; c++) {
     printf("%2d : ", c);
     for (int g=0; g<ngpus; g++) {
@@ -1138,7 +1170,8 @@ search:
   }
 #endif
   // Optimal solution, stop here
-  if (graph->nChannels == graph->maxChannels && graph->speedInter == system->maxWidth) goto done;
+  if (time == -1) goto done;
+  if (graph->nChannels*graph->speedInter >= system->totalWidth) goto done;
 
   if (pass == 1) {
     // First pass, we don't have a solution yet ; try other options
@@ -1152,7 +1185,7 @@ search:
 
     if (time != -1) globalTimeout += time;
     else globalTimeout = NCCL_SEARCH_GLOBAL_TIMEOUT;
-    if (globalTimeout < 0) goto done;
+    if (globalTimeout < 0 && graph->nChannels) goto done;
 
     int maxTypeIntra = system->nodes[NET].count > 0 ? tmpGraph.typeInter : PATH_SYS;
     if (tmpGraph.typeIntra < maxTypeIntra && (graph->nChannels == 0 || tmpGraph.typeIntra < graph->typeIntra)) {
@@ -1167,10 +1200,6 @@ search:
     tmpGraph.typeInter = PATH_PIX;
 
     // Try a simpler tree
-    if (tmpGraph.pattern == NCCL_TOPO_PATTERN_SPLIT_TREE_LOOP) {
-      tmpGraph.pattern = NCCL_TOPO_PATTERN_SPLIT_TREE;
-      goto search;
-    }
     if (tmpGraph.pattern == NCCL_TOPO_PATTERN_SPLIT_TREE) {
       tmpGraph.pattern = NCCL_TOPO_PATTERN_TREE;
       goto search;

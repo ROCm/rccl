@@ -89,10 +89,6 @@ set(CU_SOURCES
     src/collectives/device/broadcast.cu
     src/collectives/device/reduce_scatter.cu
     src/collectives/device/sendrecv.cu
-    src/collectives/device/gather.cu
-    src/collectives/device/scatter.cu
-    src/collectives/device/all_to_all.cu
-    src/collectives/device/all_to_allv.cu
     src/collectives/device/functions.cu)
 
 set(CPP_SOURCES)
