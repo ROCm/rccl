@@ -425,19 +425,19 @@ ncclResult_t ncclProxySharedBuffersInit(struct ncclComm* comm, int cuda, int* si
 
   char* buff;
   int* used;
-  *size = 2*comm->p2pnChannels*state->slotSize*state->nslots;
+  *size = 2*std::max(comm->nChannels, comm->p2pnChannels)*state->slotSize*state->nslots;
 
   if (cuda && state->cudaBuff[0] == NULL) {
     NCCLCHECK(ncclCudaCalloc(&buff, *size, cuda));
-    NCCLCHECK(ncclCalloc(&used, 2*comm->p2pnChannels*state->nslots));
-    for (int i=0; i<2*comm->p2pnChannels; i++) {
+    NCCLCHECK(ncclCalloc(&used, 2*std::max(comm->nChannels, comm->p2pnChannels)*state->nslots));
+    for (int i=0; i<2*std::max(comm->nChannels, comm->p2pnChannels); i++) {
       state->cudaBuff[i] = buff + state->nslots*state->slotSize*i;
       state->cudaUsed[i] = used + state->nslots*i;
     }
   } else if (state->hostBuff[0] == NULL) {
     NCCLCHECK(ncclCudaHostCalloc(&buff, *size));
-    NCCLCHECK(ncclCalloc(&used, 2*comm->p2pnChannels*state->nslots));
-    for (int i=0; i<2*comm->p2pnChannels; i++) {
+    NCCLCHECK(ncclCalloc(&used, 2*std::max(comm->nChannels, comm->p2pnChannels)*state->nslots));
+    for (int i=0; i<2*std::max(comm->nChannels, comm->p2pnChannels); i++) {
       state->hostBuff[i] = buff + state->nslots*state->slotSize*i;
       state->hostUsed[i] = used + state->nslots*i;
     }

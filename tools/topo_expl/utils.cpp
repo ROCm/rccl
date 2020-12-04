@@ -30,7 +30,7 @@
 #include "model.h"
 #include "utils.h"
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
@@ -282,7 +282,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].cudaCompCap = comm->topo->nodes[GPU].nodes[idx].gpu.cudaCompCap;
   allGather3Data[rank].gcn = comm->topo->nodes[GPU].nodes[idx].gpu.gcn;
-  allGather3Data[rank].alltoallDisable = comm->alltoallDisable;
+  allGather3Data[rank].alltoallDisable = comm->topo->nodes[NET].count? 1 : comm->alltoallDisable;
 
   allGather3Data[rank].nChannels = comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
     std::min(treeGraph.nChannels, ringGraph.nChannels);
@@ -623,6 +623,29 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
 
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
+
+  if (!alltoallDisable) {
+    int nc = comm->nChannels;
+    for (int c=0; c<nc; c++) {
+      const int peersPerChan = DIVUP(nranks, nc);
+      for (int p=0; p<peersPerChan; p++) {
+        // first channel is reserved for self copy
+        if ((c*peersPerChan+p)%nranks == 0)
+          continue;
+        int peerSend = (rank+c*peersPerChan+p)%nranks;
+        int peerRecv = (2*nranks+rank-(c*peersPerChan)%nranks-p)%nranks;
+        if (comm->channels[c].peers[peerSend].send.connected == 0) {
+          comm->connectSend[peerSend] |= (1<<c);
+          comm->connect = 1;
+        }
+        if (comm->channels[c].peers[peerRecv].recv.connected == 0) {
+          comm->connectRecv[peerRecv] |= (1<<c);
+          comm->connect = 1;
+        }
+      }
+    }
+    NCCLCHECK(ncclTransportP2pSetup(comm, NULL));
+  }
 
   //NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, intraRank0Comm));
 

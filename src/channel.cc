@@ -27,12 +27,14 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelid) {
 
   // Per-channel operation list.
   NCCLCHECK(ncclCudaHostCalloc(&channel->workFifo, NCCL_MAX_OPS));
+  NCCLCHECK(ncclCudaHostCalloc(&channel->a2avParams, comm->nRanks*NCCL_MAX_OPS*4));
   return ncclSuccess;
 }
 
 ncclResult_t freeChannel(struct ncclChannel* channel, int nRanks) {
   if (channel->id == -1) return ncclSuccess;
   // Operation list
+  NCCLCHECK(ncclCudaHostFree(channel->a2avParams));
   NCCLCHECK(ncclCudaHostFree(channel->workFifo));
 
   // Free Ring index to rank tables

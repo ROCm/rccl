@@ -41,7 +41,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll", "AllToAllv" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
@@ -395,7 +395,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   for (int c=0; c<MAXCHANNELS; c++) comm->channels[c].id = -1;
 
   comm->alltoallDisable = true;
-  //if (rcclParamAllToAllDisable() == 0) comm->alltoallDisable = false;
+  if (rcclParamAllToAllDisable() == 0) comm->alltoallDisable = false;
 
   *comret = comm;
   return ncclSuccess;
@@ -403,11 +403,11 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
 static ncclResult_t devCommSetup(ncclComm_t comm) {
   // Duplicate the channels on the device
-  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.channels, comm->p2pnChannels));
-  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.channels, comm->channels, comm->p2pnChannels));
+  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.channels, std::max(comm->nChannels, comm->p2pnChannels)));
+  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.channels, comm->channels, std::max(comm->nChannels, comm->p2pnChannels)));
 
   // Copy userRanks and peers
-  for (int r=0; r<comm->p2pnChannels; r++) {
+  for (int r=0; r<std::max(comm->nChannels, comm->p2pnChannels); r++) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
@@ -838,7 +838,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].cudaCompCap = comm->topo->nodes[GPU].nodes[idx].gpu.cudaCompCap;
   allGather3Data[rank].gcn = comm->topo->nodes[GPU].nodes[idx].gpu.gcn;
-  allGather3Data[rank].alltoallDisable = comm->alltoallDisable;
+  allGather3Data[rank].alltoallDisable = comm->topo->nodes[NET].count? 1 : comm->alltoallDisable;
 
   allGather3Data[rank].nChannels = comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
     std::min(treeGraph.nChannels, ringGraph.nChannels);
@@ -1030,6 +1030,29 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
+
+  if (!alltoallDisable) {
+    int nc = comm->p2pnChannels;
+    for (int c=0; c<nc; c++) {
+      const int peersPerChan = DIVUP(nranks, nc);
+      for (int p=0; p<peersPerChan; p++) {
+        // first channel is reserved for self copy
+        if ((c*peersPerChan+p)%nranks == 0)
+          continue;
+        int peerSend = (rank+c*peersPerChan+p)%nranks;
+        int peerRecv = (2*nranks+rank-(c*peersPerChan)%nranks-p)%nranks;
+        if (comm->channels[c].peers[peerSend].send.connected == 0) {
+          comm->connectSend[peerSend] |= (1<<c);
+          comm->connect = 1;
+        }
+        if (comm->channels[c].peers[peerRecv].recv.connected == 0) {
+          comm->connectRecv[peerRecv] |= (1<<c);
+          comm->connect = 1;
+        }
+      }
+    }
+    NCCLCHECK(ncclTransportP2pSetup(comm, NULL));
+  }
 
   NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, intraRank0Comm));
 

@@ -12,7 +12,6 @@ NCCL_API(ncclResult_t, ncclScatter, const void* sendbuff, void* recvbuff, size_t
     ncclComm_t comm, hipStream_t stream);
 ncclResult_t ncclScatter(const void* sendbuff, void* recvbuff, size_t recvcount, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream) {
-  if (comm->alltoallDisable) {
     int nRanks;
     NCCLCHECK(ncclCommCount(comm, &nRanks));
     size_t rankOffset = recvcount * ncclTypeSize(datatype);
@@ -27,12 +26,4 @@ ncclResult_t ncclScatter(const void* sendbuff, void* recvbuff, size_t recvcount,
     NCCLCHECK(ncclRecv(recvbuff, recvcount, datatype, root, comm, stream));
     NCCLCHECK(ncclGroupEnd());
     return ncclSuccess;
-  }
-  else {
-    //struct ncclInfo info = { ncclCollScatter, "Scatter",
-    //  sendbuff, recvbuff, recvcount, datatype, ncclSum, root, comm, stream, /* Args */
-    //  SCATTER_CHUNKSTEPS, SCATTER_SLICESTEPS };
-    //return ncclEnqueueCheck(&info);
-    return ncclInternalError;
-  }
 }

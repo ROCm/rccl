@@ -8,8 +8,10 @@
 #ifndef NCCL_COLLECTIVES_H_
 #define NCCL_COLLECTIVES_H_
 
-#define FUNC_INDEX_P2P 1800
-#define FUNC_INDEX(func, redop, ncclType, al, pr) ((((((func)*ncclNumOps + (redop))*ncclNumTypes) + (ncclType))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr))
+#define FUNC_INDEX_P2P (NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps)
+#define FUNC_INDEX(func, redop, ncclType, al, pr) ((func >= NCCL_NUM_FUNCTIONS) \
+  ? (func-NCCL_NUM_FUNCTIONS+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps) \
+  : ((((((func)*ncclNumOps + (redop))*ncclNumTypes) + (ncclType))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr)))
 
 #define NCCL_FUNC_NAME(func, algo, proto, redop, type) \
   ncclFunction_##func##_##algo##_##proto##_##redop##_##type
@@ -60,6 +62,8 @@
   DECL(ReduceScatter) \
   DECL(AllReduce) \
   DECL5(SendRecv, RING, SIMPLE, Sum, int8_t) \
+  DECL5(AllToAll, RING, SIMPLE, Sum, int8_t) \
+  DECL5(AllToAllv, RING, SIMPLE, Sum, int8_t) \
 
 DECL_ALL
 
@@ -81,4 +85,12 @@ DECL_ALL
 #define REDUCE_SLICESTEPS 1
 #define REDUCE_CHUNKSTEPS 1
 #define SENDRECV_SLICEFACTOR 1
+#define GATHER_SLICESTEPS 4
+#define GATHER_CHUNKSTEPS 4
+#define SCATTER_SLICESTEPS 4
+#define SCATTER_CHUNKSTEPS 4
+#define ALLTOALL_SLICESTEPS 4
+#define ALLTOALL_CHUNKSTEPS 4
+#define ALLTOALLV_SLICESTEPS 4
+#define ALLTOALLV_CHUNKSTEPS 4
 #endif
