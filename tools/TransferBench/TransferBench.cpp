@@ -54,6 +54,7 @@ int main(int argc, char **argv)
   bool useSingleSync   = getenv("USE_SINGLE_SYNC");    // Perform synchronization only once after all iterations instead of per iteration
   bool useInteractive  = getenv("USE_INTERACTIVE");    // Pause for user-input before starting transfer loop
   bool useSleep        = getenv("USE_SLEEP");          // Adds a 100ms sleep after each synchronization
+  bool combineTiming   = getenv("COMBINE_TIMING");     // Combines the timing with kernel launch
   bool reuseStreams    = getenv("REUSE_STREAMS");      // Re-use streams instead of creating / destroying per test
   bool showAddr        = getenv("SHOW_ADDR");          // Print out memory addresses for each Link
   bool outputToCsv     = getenv("OUTPUT_TO_CSV");      // Output in CSV format
@@ -131,6 +132,9 @@ int main(int argc, char **argv)
            "USE_SLEEP", useSleep ? "(set)" : "(unset)",
            useSleep ? "Add sleep after each sync" : "No sleep per sync");
     printf("%-20s %8s: %s\n",
+           "COMBINE_TIMING", combineTiming ? "(set)" : "(unset)",
+           combineTiming ? "Using combined timing+launch" : "Using separate timing / launch");
+    printf("%-20s %8s: %s\n",
            "REUSE_STREAMS", reuseStreams ? "(set)" : "(unset)",
            reuseStreams ? "Re-using streams per topology" : "Creating/destroying streams per topology");
     printf("%-20s %8s: %s\n",
@@ -200,7 +204,6 @@ int main(int argc, char **argv)
       hipStream_t             streams[numLinks];           // hipStream to use per Link
       hipEvent_t              startEvents[numLinks];       // Start event per Link
       hipEvent_t              stopEvents[numLinks];        // Stop event per Link
-      hipEvent_t              dummyEvents[numLinks];       // Dummy event per Link
       std::vector<BlockParam> cpuBlockParams[numLinks];    // CPU copy of block parameters
       BlockParam*             gpuBlockParams[numLinks];    // GPU copy of block parameters
 
@@ -251,7 +254,6 @@ int main(int argc, char **argv)
         HIP_CALL(hipSetDevice(exeIndex));
         HIP_CALL(hipEventCreate(&startEvents[i]));
         HIP_CALL(hipEventCreate(&stopEvents[i]));
-        HIP_CALL(hipEventCreate(&dummyEvents[i]));
         HIP_CALL(hipMalloc((void**)&gpuBlockParams[i], sizeof(BlockParam) * numLinks));
         if (reuseStreams)
         {
@@ -345,13 +347,15 @@ int main(int argc, char **argv)
           }
           else
           {
+            if (!combineTiming && recordStart) HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
             hipExtLaunchKernelGGL(useMemset ? MemsetKernel : CopyKernel,
                                   dim3(links[i].numBlocksToUse, 1, 1),
                                   dim3(BLOCKSIZE, 1, 1),
                                   0, streams[i],
-                                  recordStart ? startEvents[i] : NULL,
-                                  recordStop  ?  stopEvents[i] : NULL,
+                                  (combineTiming && recordStart) ? startEvents[i] : NULL,
+                                  (combineTiming && recordStop)  ?  stopEvents[i] : NULL,
                                   0, gpuBlockParams[i]);
+            if (!combineTiming & recordStop) HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
           }
         }
 
@@ -381,7 +385,6 @@ int main(int argc, char **argv)
             for (int i = 0; i < numLinks; i++)
             {
               HIP_CALL(hipSetDevice(links[i].exeIndex));
-              HIP_CALL(hipEventSynchronize(startEvents[i]));
               HIP_CALL(hipEventSynchronize(stopEvents[i]));
               float gpuDeltaMsec;
               HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvents[i], stopEvents[i]));
@@ -404,12 +407,11 @@ int main(int argc, char **argv)
 
       // Report timings
       totalCpuTime = totalCpuTime / (1.0 * numIterations) * 1000;
-      double totalBandwidthGbs = 0.0;
+      double totalBandwidthGbs = (numLinks * N * sizeof(float) / 1.0E6) / totalCpuTime;
       for (int i = 0; i < numLinks; i++)
       {
         double linkDurationMsec = totalGpuTime[i] / (1.0 * numIterations);
         double linkBandwidthGbs = (N * sizeof(float) / 1.0E9) / linkDurationMsec * 1000.0f;
-        totalBandwidthGbs += linkBandwidthGbs;
         if (!outputToCsv)
         {
           printf(" Link %02d: %c%02d -> [GPU %02d:%02d] -> %c%02d | %9.3f GB/s | %8.3f ms | %9s |",
@@ -443,7 +445,7 @@ int main(int argc, char **argv)
       // Display aggregate statistics
       if (!outputToCsv)
       {
-        printf(" Aggregate Bandwidth                | %9.3f GB/s | %8.3f ms |\n", totalBandwidthGbs, totalCpuTime);
+        printf(" Aggregate Bandwidth (CPU timed)    | %9.3f GB/s | %8.3f ms |\n", totalBandwidthGbs, totalCpuTime);
       }
       else
       {
@@ -538,6 +540,7 @@ void DisplayUsage(char const* cmdName)
   printf(" USE_SINGLE_SYNC    - Perform synchronization only once after all iterations instead of per iteration\n");
   printf(" USE_INTERACTIVE    - Pause for user-input before starting transfer loop\n");
   printf(" USE_SLEEP          - Adds a 100ms sleep after each synchronization\n");
+  printf(" COMBINE_TIMING     - Combines timing with launch (potentially lower timing overhead)\n");
   printf(" REUSE_STREAMS      - Re-use streams instead of creating / destroying per test\n");
   printf(" SHOW_ADDR          - Print out memory addresses for each Link\n");
   printf(" OUTPUT_TO_CSV      - Outputs to CSV format if set\n");
