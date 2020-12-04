@@ -68,9 +68,9 @@ int main(int argc, char **argv)
   std::vector<size_t> valuesOfN;
   size_t const numBytesPerLink = argc > 2 ? atoll(argv[2]) : DEFAULT_BYTES_PER_LINK;
 
-  if (numBytesPerLink % 128)
+  if (numBytesPerLink % 4)
   {
-    printf("[ERROR] numBytesPerLink (%lu) must be a multiple of 128\n", numBytesPerLink);
+    printf("[ERROR] numBytesPerLink (%lu) must be a multiple of 4\n", numBytesPerLink);
     exit(1);
   }
 
@@ -280,21 +280,23 @@ int main(int argc, char **argv)
         // Count # of links / total blocks each GPU will be working on
         linkCount[exeIndex]++;
 
+
         // Each block needs to know src/dst pointers and how many elements to transfer
-        // Figure out the sub-array each block does for this link
-        // NOTE: Have each sub-array to work on multiple of 32-floats (128-bytes),
-        //       but divide as evenly as possible
-        // NOTE: N is always a multiple of 32
-        int blocksWithExtra = (N / 32) % links[i].numBlocksToUse;
-        int perBlockBaseN   = (N / 32) / links[i].numBlocksToUse * 32;
+        // Figure out the sub-array each block does for this Link
+        // - Partition N as evenly as posible, but try to keep blocks as multiples of 32,
+        //   except the very last one, for alignment reasons
+        size_t assigned = 0;
+        int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)links[i].numBlocksToUse);
         for (int j = 0; j < links[i].numBlocksToUse; j++)
         {
           BlockParam param;
-          param.N   = perBlockBaseN + ((j < blocksWithExtra) ? 32 : 0);
-          param.src = linkSrcMem[i] + ((j * perBlockBaseN) + ((j < blocksWithExtra) ?
-                                                              j : blocksWithExtra) * 32) + initOffset;
-          param.dst = linkDstMem[i] + ((j * perBlockBaseN) + ((j < blocksWithExtra) ?
-                                                              j : blocksWithExtra) * 32) + initOffset;
+          int blocksLeft = std::max(0, maxNumBlocksToUse - j);
+          size_t leftover = N - assigned;
+          size_t roundedN = (leftover + 31) / 32;
+          param.N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+          param.src = linkSrcMem[i] + assigned + initOffset;
+          param.dst = linkDstMem[i] + assigned + initOffset;
+          assigned += param.N;
           cpuBlockParams[i].push_back(param);
         }
 
@@ -490,7 +492,7 @@ void DisplayUsage(char const* cmdName)
 
   printf("  configFile: File containing Links to execute (see below for format)\n");
   printf("  N         : (Optional) Number of bytes to transfer per link.\n");
-  printf("              If not specified, defaults to %lu bytes. Must be a multiple of 128 bytes\n", DEFAULT_BYTES_PER_LINK);
+  printf("              If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
   printf("              If 0 is specified, a range of Ns will be benchmarked\n");
   printf("              If a negative number is specified, a configFile gets generated with this number as default number of CUs per link\n");
   printf("\n");
