@@ -84,6 +84,7 @@ struct BlockParam
 void DisplayUsage(char const* cmdName);                      // Display usage instructions
 void GenerateConfigFile(char const* cfgFile, int numBlocks); // Generate a sample config file
 void DisplayTopology();                                      // Display GPU topology
+void PopulateTestSizes(size_t const numBytesPerLink, int const samplingFactor, std::vector<size_t>& valuesofN);
 void ParseLinks(char* line, std::vector<Link>& links);       // Parse Link information
 void AllocateMemory(MemType memType, int devIndex, size_t numBytes, bool useFineGrainMem, float** memPtr);
 void DeallocateMemory(MemType memType, int devIndex, float* memPtr);

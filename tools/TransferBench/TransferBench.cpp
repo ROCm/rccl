@@ -24,11 +24,10 @@ THE SOFTWARE.
 // on the same node
 
 #include "TransferBench.hpp"
+#include "EnvVars.hpp"
 
 // Simple configuration parameters
-size_t const DEFAULT_BYTES_PER_LINK = (1<<26);
-int    const DEFAULT_NUM_WARMUPS    = 3;
-int    const DEFAULT_NUM_ITERATIONS = 10;
+size_t const DEFAULT_BYTES_PER_LINK = (1<<26);  // Amount of data transferred per Link
 
 int main(int argc, char **argv)
 {
@@ -40,120 +39,33 @@ int main(int argc, char **argv)
     exit(0);
   }
 
+  // Check that Link configuration file can be opened
+  FILE* fp = fopen(argv[1], "r");
+  if (!fp)
+  {
+    printf("[ERROR] Unable to open link configuration file: [%s]\n", argv[1]);
+    exit(1);
+  }
+
   // If a negative value is listed for N, generate a comprehensive config file for this node
-  if (argc > 2 && atoi(argv[2]) < 0)
+  if (argc > 2 && atoll(argv[2]) < 0)
   {
     GenerateConfigFile(argv[1], -1*atoi(argv[2]));
     exit(0);
   }
 
   // Collect environment variables / display current run configuration
-  bool useHipCall      = getenv("USE_HIP_CALL");       // Use hipMemcpy/hipMemset instead of custom shader kernels
-  bool useMemset       = getenv("USE_MEMSET");         // Perform a memset instead of a copy (ignores source memory)
-  bool useFineGrainMem = getenv("USE_FINEGRAIN_MEM");  // Allocate fine-grained GPU memory instead of coarse-grained GPU memory
-  bool useSingleSync   = getenv("USE_SINGLE_SYNC");    // Perform synchronization only once after all iterations instead of per iteration
-  bool useInteractive  = getenv("USE_INTERACTIVE");    // Pause for user-input before starting transfer loop
-  bool useSleep        = getenv("USE_SLEEP");          // Adds a 100ms sleep after each synchronization
-  bool combineTiming   = getenv("COMBINE_TIMING");     // Combines the timing with kernel launch
-  bool reuseStreams    = getenv("REUSE_STREAMS");      // Re-use streams instead of creating / destroying per test
-  bool showAddr        = getenv("SHOW_ADDR");          // Print out memory addresses for each Link
-  bool outputToCsv     = getenv("OUTPUT_TO_CSV");      // Output in CSV format
-  int  byteOffset      = getenv("BYTE_OFFSET") ? atoi(getenv("BYTE_OFFSET")) : 0; // Byte-offset for memory allocations
-  int  numWarmups      = getenv("NUM_WARMUPS") ? atoi(getenv("NUM_WARMUPS")) : DEFAULT_NUM_WARMUPS;
-  int  numIterations   = getenv("NUM_ITERATIONS") ? atoi(getenv("NUM_ITERATIONS")) : DEFAULT_NUM_ITERATIONS;
+  EnvVars ev;
+  ev.DisplayEnvVars();
 
-  // Determine number of bytes to run per link
+  // Determine number of bytes to run per Link
   // If a non-zero number of bytes is specified, use it
   // Otherwise generate array of bytes values to execute over
   std::vector<size_t> valuesOfN;
   size_t const numBytesPerLink = argc > 2 ? atoll(argv[2]) : DEFAULT_BYTES_PER_LINK;
+  PopulateTestSizes(numBytesPerLink, ev.samplingFactor, valuesOfN);
 
-  if (numBytesPerLink % 4)
-  {
-    printf("[ERROR] numBytesPerLink (%lu) must be a multiple of 4\n", numBytesPerLink);
-    exit(1);
-  }
-
-  if (numBytesPerLink != 0)
-  {
-    size_t N = numBytesPerLink / sizeof(float);
-    valuesOfN.push_back(N);
-  }
-  else
-  {
-    for (int N = 256; N <= (1<<27); N *= 2)
-    {
-      int decimationFactor = 1;  // This can be modified to increase number of samples between powers of two
-      int delta = std::max(32, N / decimationFactor);
-      int curr = N;
-      while (curr < N * 2)
-      {
-        valuesOfN.push_back(curr);
-        curr += delta;
-      }
-    }
-  }
-
-  if (byteOffset % 4)
-  {
-    printf("[ERROR] byteOffset must be a multiple of 4\n");
-    exit(1);
-  }
-  int initOffset = byteOffset / sizeof(float);
-
-  char *env;
-  if (!outputToCsv)
-  {
-    printf("Run configuration\n");
-    printf("=====================================================\n");
-    printf("%-20s %8s: Using %s\n",
-           "USE_HIP_CALL", useHipCall ? "(set)" : "(unset)",
-           useHipCall ? "HIP functions" : "custom kernels");
-    printf("%-20s %8s: Performing %s\n",
-           "USE_MEMSET", useMemset ? "(set)" : "(unset)",
-           useMemset ? "memset" : "memcopy");
-    if (useHipCall && !useMemset)
-    {
-      env = getenv("HSA_ENABLE_SDMA");
-      printf("%-20s %8s: %s\n",
-             "HSA_ENABLE_SDMA", env ? env : "(unset)",
-             (env && !strcmp(env, "0")) ? "Using blit kernels for hipMemcpy" : "Using DMA copy engines");
-    }
-    printf("%-20s %8s: GPU destination memory type: %s-grained\n",
-           "USE_FINEGRAIN_MEM", useFineGrainMem ? "(set)" : "(unset)",
-           useFineGrainMem ? "fine" : "coarse");
-    printf("%-20s %8s: %s\n",
-           "USE_SINGLE_SYNC", useSingleSync ? "(set)" : "(unset)",
-           useSingleSync ? "Synchronizing only once, after all iterations" : "Synchronizing per iteration");
-    printf("%-20s %8s: Running in %s mode\n",
-           "USE_INTERACTIVE", useInteractive ? "(set)" : "(unset)",
-           useInteractive ? "interactive" : "non-interactive");
-    printf("%-20s %8s: %s\n",
-           "USE_SLEEP", useSleep ? "(set)" : "(unset)",
-           useSleep ? "Add sleep after each sync" : "No sleep per sync");
-    printf("%-20s %8s: %s\n",
-           "COMBINE_TIMING", combineTiming ? "(set)" : "(unset)",
-           combineTiming ? "Using combined timing+launch" : "Using separate timing / launch");
-    printf("%-20s %8s: %s\n",
-           "REUSE_STREAMS", reuseStreams ? "(set)" : "(unset)",
-           reuseStreams ? "Re-using streams per topology" : "Creating/destroying streams per topology");
-    printf("%-20s %8s: %s\n",
-           "SHOW_ADDR", showAddr ? "(set)" : "(unset)",
-           showAddr ? "Displaying src/dst mem addresses" : "Not displaying src/dst mem addresses");
-    env = getenv("OUTPUT_TO_CSV");
-    printf("%-20s %8s: Output to csv\n",
-           "OUTPUT_TO_CSV", env ? env : "(unset)");
-    env = getenv("BYTE_OFFSET");
-    printf("%-20s %8s: Using byte offset of %d\n",
-           "BYTE_OFFSET", env ? env : "(unset)", byteOffset);
-    env = getenv("NUM_WARMUPS");
-    printf("%-20s %8s: Running %d warmup iteration(s) per topology\n",
-           "NUM_WARMUPS", env ? env : "(unset)", numWarmups);
-    env = getenv("NUM_ITERATIONS");
-    printf("%-20s %8s: Running %d timed iteration(s) per topology\n",
-           "NUM_ITERATIONS", env ? env : "(unset)", numIterations);
-    printf("\n");
-  }
+  int initOffset = ev.byteOffset / sizeof(float);
 
   // Collect the number of available CPUs/GPUs on this machine
   int numGpuDevices;
@@ -164,20 +76,12 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  // Read configuration file
-  FILE* fp = fopen(argv[1], "r");
-  if (!fp)
-  {
-    printf("[ERROR] Unable to open link configuration file: [%s]\n", argv[1]);
-    exit(1);
-  }
-
   // Track links that get used
   std::map<std::pair<int, int>, int> linkMap;
   std::vector<std::vector<hipStream_t>> streamCache(numGpuDevices);
 
   // Print CSV header
-  if (outputToCsv)
+  if (ev.outputToCsv)
   {
     printf("Test,NumBytes,ExeGpu,SrcMem,DstMem,BW(GB/s),Time(ms),LinkDesc,SrcAddr,DstAddr,numWarmups,numIters,useHipCall,useMemSet,useFineGrain,useSingleSync,resuseStreams\n");
   }
@@ -198,7 +102,7 @@ int main(int argc, char **argv)
     // Loop over all the different number of bytes to use per Link
     for (auto N : valuesOfN)
     {
-      if (!outputToCsv) printf("Test %d: [%lu bytes]\n", testNum, N * sizeof(float));
+      if (!ev.outputToCsv) printf("Test %d: [%lu bytes]\n", testNum, N * sizeof(float));
       float*                  linkSrcMem[numLinks];        // Source memory per Link
       float*                  linkDstMem[numLinks];        // Destination memory per Link
       hipStream_t             streams[numLinks];           // hipStream to use per Link
@@ -255,7 +159,7 @@ int main(int argc, char **argv)
         HIP_CALL(hipEventCreate(&startEvents[i]));
         HIP_CALL(hipEventCreate(&stopEvents[i]));
         HIP_CALL(hipMalloc((void**)&gpuBlockParams[i], sizeof(BlockParam) * numLinks));
-        if (reuseStreams)
+        if (ev.reuseStreams)
         {
           // If re-using streams, create new stream, otherwise point to existing stream
           if (streamCache[exeIndex].size() <= linkCount[exeIndex])
@@ -271,11 +175,11 @@ int main(int argc, char **argv)
         }
 
         // Allocate source / destination memory based on type / device index
-        AllocateMemory(srcMemType, srcIndex, N * sizeof(float) + byteOffset, useFineGrainMem, &linkSrcMem[i]);
-        AllocateMemory(dstMemType, dstIndex, N * sizeof(float) + byteOffset, useFineGrainMem, &linkDstMem[i]);
+        AllocateMemory(srcMemType, srcIndex, N * sizeof(float) + ev.byteOffset, ev.useFineGrainMem, &linkSrcMem[i]);
+        AllocateMemory(dstMemType, dstIndex, N * sizeof(float) + ev.byteOffset, ev.useFineGrainMem, &linkDstMem[i]);
 
         // Initialize source memory with patterned data
-        CheckOrFill(MODE_FILL, N, useMemset, useHipCall, linkSrcMem[i] + initOffset);
+        CheckOrFill(MODE_FILL, N, ev.useMemset, ev.useHipCall, linkSrcMem[i] + initOffset);
 
         // Count # of links / total blocks each GPU will be working on
         linkCount[exeIndex]++;
@@ -310,10 +214,10 @@ int main(int argc, char **argv)
 
       for (int i = 0; i < numLinks; i++) totalGpuTime[i] = 0.0;
 
-      for (int iteration = -numWarmups; iteration < numIterations; iteration++)
+      for (int iteration = -ev.numWarmups; iteration < ev.numIterations; iteration++)
       {
         // Pause before starting first timed iteration in interactive mode
-        if (useInteractive && iteration == 0)
+        if (ev.useInteractive && iteration == 0)
         {
           printf("Hit <Enter> to continue: ");
           scanf("%*c");
@@ -328,16 +232,16 @@ int main(int argc, char **argv)
         {
           HIP_CALL(hipSetDevice(links[i].exeIndex));
 
-          bool recordStart = (!useSingleSync || iteration == 0);
-          bool recordStop  = (!useSingleSync || iteration == numIterations - 1);
+          bool recordStart = (!ev.useSingleSync || iteration == 0);
+          bool recordStop  = (!ev.useSingleSync || iteration == ev.numIterations - 1);
 
-          if (useHipCall)
+          if (ev.useHipCall)
           {
             // Record start event
             if (recordStart) HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
 
             // Execute hipMemset / hipMemcpy
-            if (useMemset)
+            if (ev.useMemset)
               HIP_CALL(hipMemsetAsync(linkDstMem[i] + initOffset, 42, N * sizeof(float), streams[i]));
             else
               HIP_CALL(hipMemcpyAsync(linkDstMem[i] + initOffset,
@@ -349,21 +253,21 @@ int main(int argc, char **argv)
           }
           else
           {
-            if (!combineTiming && recordStart) HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
-            hipExtLaunchKernelGGL(useMemset ? MemsetKernel : CopyKernel,
+            if (!ev.combineTiming && recordStart) HIP_CALL(hipEventRecord(startEvents[i], streams[i]));
+            hipExtLaunchKernelGGL(ev.useMemset ? MemsetKernel : CopyKernel,
                                   dim3(links[i].numBlocksToUse, 1, 1),
                                   dim3(BLOCKSIZE, 1, 1),
                                   0, streams[i],
-                                  (combineTiming && recordStart) ? startEvents[i] : NULL,
-                                  (combineTiming && recordStop)  ?  stopEvents[i] : NULL,
+                                  (ev.combineTiming && recordStart) ? startEvents[i] : NULL,
+                                  (ev.combineTiming && recordStop)  ?  stopEvents[i] : NULL,
                                   0, gpuBlockParams[i]);
-            if (!combineTiming & recordStop) HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
+            if (!ev.combineTiming & recordStop) HIP_CALL(hipEventRecord(stopEvents[i], streams[i]));
           }
         }
 
         // Synchronize per iteration, unless in single sync mode, in which case
         // synchronize during last warmup / last actual iteration
-        if (!useSingleSync || iteration == -1 || iteration == numIterations - 1)
+        if (!ev.useSingleSync || iteration == -1 || iteration == ev.numIterations - 1)
         {
           for (int i = 0; i < numLinks; i++)
           {
@@ -375,14 +279,14 @@ int main(int argc, char **argv)
         // Stop CPU timing for this iteration
         auto cpuDelta = std::chrono::high_resolution_clock::now() - cpuStart;
         double deltaSec = std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count();
-        if (useSleep) usleep(100000);
+        if (ev.useSleep) usleep(100000);
 
         if (iteration >= 0)
         {
           totalCpuTime += deltaSec;
 
           // Record GPU timing
-          if (!useSingleSync || iteration == numIterations - 1)
+          if (!ev.useSingleSync || iteration == ev.numIterations - 1)
           {
             for (int i = 0; i < numLinks; i++)
             {
@@ -396,7 +300,7 @@ int main(int argc, char **argv)
         }
       }
 
-      if (useInteractive)
+      if (ev.useInteractive)
       {
         printf("Transfers complete. Hit <Enter> to continue: ");
         scanf("%*c");
@@ -405,16 +309,16 @@ int main(int argc, char **argv)
 
       // Validate that each link has transferred correctly
       for (int i = 0; i < numLinks; i++)
-        CheckOrFill(MODE_CHECK, N, useMemset, useHipCall, linkDstMem[i] + initOffset);
+        CheckOrFill(MODE_CHECK, N, ev.useMemset, ev.useHipCall, linkDstMem[i] + initOffset);
 
       // Report timings
-      totalCpuTime = totalCpuTime / (1.0 * numIterations) * 1000;
+      totalCpuTime = totalCpuTime / (1.0 * ev.numIterations) * 1000;
       double totalBandwidthGbs = (numLinks * N * sizeof(float) / 1.0E6) / totalCpuTime;
       for (int i = 0; i < numLinks; i++)
       {
-        double linkDurationMsec = totalGpuTime[i] / (1.0 * numIterations);
+        double linkDurationMsec = totalGpuTime[i] / (1.0 * ev.numIterations);
         double linkBandwidthGbs = (N * sizeof(float) / 1.0E9) / linkDurationMsec * 1000.0f;
-        if (!outputToCsv)
+        if (!ev.outputToCsv)
         {
           printf(" Link %02d: %c%02d -> [GPU %02d:%02d] -> %c%02d | %9.3f GB/s | %8.3f ms | %9s |",
                  i + 1,
@@ -423,7 +327,7 @@ int main(int argc, char **argv)
                  MemTypeStr[links[i].dstMemType], links[i].dstIndex,
                  linkBandwidthGbs, linkDurationMsec,
                  GetLinkDesc(links[i]).c_str());
-          if (showAddr) printf(" %16p | %16p |", linkSrcMem[i] + initOffset, linkDstMem[i] + initOffset);
+          if (ev.showAddr) printf(" %16p | %16p |", linkSrcMem[i] + initOffset, linkDstMem[i] + initOffset);
           printf("\n");
         }
         else
@@ -435,29 +339,29 @@ int main(int argc, char **argv)
                  linkBandwidthGbs, linkDurationMsec,
                  GetLinkDesc(links[i]).c_str(),
                  linkSrcMem[i] + initOffset, linkDstMem[i] + initOffset,
-                 numWarmups, numIterations,
-                 useHipCall ? "true" : "false",
-                 useMemset ? "true" : "false",
-                 useFineGrainMem ? "true" : "false",
-                 useSingleSync ? "true" : "false",
-                 reuseStreams ? "true" : "false");
+                 ev.numWarmups, ev.numIterations,
+                 ev.useHipCall ? "true" : "false",
+                 ev.useMemset ? "true" : "false",
+                 ev.useFineGrainMem ? "true" : "false",
+                 ev.useSingleSync ? "true" : "false",
+                 ev.reuseStreams ? "true" : "false");
         }
       }
 
       // Display aggregate statistics
-      if (!outputToCsv)
+      if (!ev.outputToCsv)
       {
         printf(" Aggregate Bandwidth (CPU timed)    | %9.3f GB/s | %8.3f ms |\n", totalBandwidthGbs, totalCpuTime);
       }
       else
       {
         printf("%d,%lu,ALL,ALL,ALL,%9.3f,%8.3f,ALL,ALL,ALL,%d,%d,%s,%s,%s,%s,%s\n",
-               testNum, N * sizeof(float), totalBandwidthGbs, totalCpuTime, numWarmups, numIterations,
-               useHipCall ? "true" : "false",
-               useMemset ? "true" : "false",
-               useFineGrainMem ? "true" : "false",
-               useSingleSync ? "true" : "false",
-               reuseStreams ? "true" : "false");
+               testNum, N * sizeof(float), totalBandwidthGbs, totalCpuTime, ev.numWarmups, ev.numIterations,
+               ev.useHipCall ? "true" : "false",
+               ev.useMemset ? "true" : "false",
+               ev.useFineGrainMem ? "true" : "false",
+               ev.useSingleSync ? "true" : "false",
+               ev.reuseStreams ? "true" : "false");
       }
 
       // Release GPU memory
@@ -466,7 +370,7 @@ int main(int argc, char **argv)
         DeallocateMemory(links[i].srcMemType, links[i].srcIndex, linkSrcMem[i]);
         DeallocateMemory(links[i].dstMemType, links[i].dstIndex, linkDstMem[i]);
         HIP_CALL(hipFree(gpuBlockParams[i]));
-        if (!reuseStreams)
+        if (!ev.reuseStreams)
           HIP_CALL(hipStreamDestroy(streams[i]));
         HIP_CALL(hipEventDestroy(startEvents[i]));
         HIP_CALL(hipEventDestroy(stopEvents[i]));
@@ -476,7 +380,7 @@ int main(int argc, char **argv)
   fclose(fp);
 
   // Clean up stream cache if re-using streams
-  if (reuseStreams)
+  if (ev.reuseStreams)
   {
     for (auto streamVector : streamCache)
       for (auto stream : streamVector)
@@ -534,21 +438,8 @@ void DisplayUsage(char const* cmdName)
   printf("-2 (0 G0 G1 4) (1 G1 G0 2) Runs 2 Links in parallel.  GPU 0 - > GPU 1 using four CUs, and GPU1 -> GPU 0 using two CUs\n");
   printf("\n");
   printf("\n");
-  printf("Environment variables:\n");
-  printf("======================\n");
-  printf(" USE_HIP_CALL       - Use hipMemcpy/hipMemset instead of custom shader kernels\n");
-  printf(" USE_MEMSET         - Perform a memset instead of a copy (ignores source memory)\n");
-  printf(" USE_FINEGRAIN_MEM  - Allocate fine-grained GPU memory instead of coarse-grained GPU memory\n");
-  printf(" USE_SINGLE_SYNC    - Perform synchronization only once after all iterations instead of per iteration\n");
-  printf(" USE_INTERACTIVE    - Pause for user-input before starting transfer loop\n");
-  printf(" USE_SLEEP          - Adds a 100ms sleep after each synchronization\n");
-  printf(" COMBINE_TIMING     - Combines timing with launch (potentially lower timing overhead)\n");
-  printf(" REUSE_STREAMS      - Re-use streams instead of creating / destroying per test\n");
-  printf(" SHOW_ADDR          - Print out memory addresses for each Link\n");
-  printf(" OUTPUT_TO_CSV      - Outputs to CSV format if set\n");
-  printf(" BYTE_OFFSET        - Initial byte-offset for memory allocations.  Must be multiple of 4. Defaults to 0\n");
-  printf(" NUM_WARMUPS=W      - Perform W untimed warmup iteration(s) per test\n");
-  printf(" NUM_ITERATIONS=I   - Perform I timed iteration(s) per test\n");
+
+  EnvVars::DisplayUsage();
 }
 
 void GenerateConfigFile(char const* cfgFile, int numBlocks)
@@ -689,6 +580,40 @@ void DisplayTopology()
       }
     }
     printf("\n");
+  }
+}
+
+void PopulateTestSizes(size_t const numBytesPerLink,
+                       int const samplingFactor,
+                       std::vector<size_t>& valuesOfN)
+{
+  valuesOfN.clear();
+
+  // If the number of bytes is specified, use it
+  if (numBytesPerLink != 0)
+  {
+    if (numBytesPerLink % 4)
+    {
+      printf("[ERROR] numBytesPerLink (%lu) must be a multiple of 4\n", numBytesPerLink);
+      exit(1);
+    }
+    size_t N = numBytesPerLink / sizeof(float);
+    valuesOfN.push_back(N);
+  }
+  else
+  {
+    // Otherwise generate a range of values
+    // (Powers of 2, with samplingFactor samples between successive powers of 2)
+    for (int N = 256; N <= (1<<27); N *= 2)
+    {
+      int delta = std::max(32, N / samplingFactor);
+      int curr = N;
+      while (curr < N * 2)
+      {
+        valuesOfN.push_back(curr);
+        curr += delta;
+      }
+    }
   }
 }
 
