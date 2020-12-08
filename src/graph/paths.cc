@@ -87,14 +87,17 @@ static ncclResult_t ncclTopoSetPaths(struct ncclTopoNode* baseNode, struct ncclT
           // Consider a path going through the CPU as PATH_PHB
           if (link->type == LINK_PCI && (node->type == CPU || link->remNode->type == CPU)) type = PATH_PHB;
           // Set 1 hop NVLink as NVB
-          if (node->type == GPU && path->type == PATH_NVL && type == PATH_NVL && remPath->count > 1) type = PATH_NVB;
+          //if (node->type == GPU && path->type == PATH_NVL && type == PATH_NVL && remPath->count > 1) type = PATH_NVB;
 
           remPath->type = std::max(path->type, type);
 
           // Add to the list for the next iteration if not already in the list
-          int i;
-          for (i=0; i<nextNodeList.count; i++) if (nextNodeList.list[i] == remNode) break;
-          if (i == nextNodeList.count) nextNodeList.list[nextNodeList.count++] = remNode;
+          // Disallow GPUs as intermediate steps for now
+          if (remNode->type != GPU) {
+            int i;
+            for (i=0; i<nextNodeList.count; i++) if (nextNodeList.list[i] == remNode) break;
+            if (i == nextNodeList.count) nextNodeList.list[nextNodeList.count++] = remNode;
+          }
         }
       }
     }
