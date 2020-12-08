@@ -23,7 +23,7 @@
 #define P9_WIDTH 32.0
 #define ARM_WIDTH 6.0
 #define NET_WIDTH 12.0           // 100Gbit
-#define VEGA_XGMI_WIDTH 20.0
+#define VEGA_XGMI_WIDTH 24.0
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, so GPU
 // to GPU traffic consumes more PCI bandwidth.

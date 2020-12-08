@@ -30,84 +30,6 @@ static ncclResult_t getPath(struct ncclTopoSystem* system, struct ncclTopoNode* 
   return ncclInternalError;
 }
 
-// [RCCL]
-// This function traverses only XGMI links (including multi-GPU hops) and builds them into the
-// topology system, which corresponds to how XGMI hardware operates
-static ncclResult_t ncclTopoSetXgmi(struct ncclTopoSystem* system)
-{
-  // Compute paths to GPU g
-  for (int g=0; g<system->nodes[GPU].count; g++) {
-    struct ncclTopoNode *baseNode = system->nodes[GPU].nodes+g;
-
-    if (baseNode->paths[baseNode->type] == NULL) {
-      NCCLCHECK(ncclCalloc(baseNode->paths+baseNode->type, system->nodes[baseNode->type].count));
-    }
-
-    // breadth-first search to set all paths to that node in the system
-    struct ncclTopoNodeList nodeList;
-    struct ncclTopoNodeList nextNodeList;
-    nodeList.count = 1; nodeList.list[0] = baseNode;
-    nextNodeList.count = 0;
-    struct ncclTopoLinkList* basePath;
-    NCCLCHECK(getPath(system, baseNode, baseNode->type, baseNode->id, &basePath));
-    basePath->count = 0;
-    basePath->width = LOC_WIDTH;
-    basePath->type = PATH_LOC;
-
-    while (nodeList.count) {
-      nextNodeList.count = 0;
-      for (int n=0; n<nodeList.count; n++) {
-        struct ncclTopoNode* node = nodeList.list[n];
-        struct ncclTopoLinkList* path;
-        NCCLCHECK(getPath(system, node, baseNode->type, baseNode->id, &path));
-        for (int l=0; l<node->nlinks; l++) {
-          struct ncclTopoLink* link = node->links+l;
-          struct ncclTopoNode* remNode = link->remNode;
-
-          // Skip non-XGMI links
-          if (link->type != LINK_NVL) continue;
-
-          if (remNode->paths[baseNode->type] == NULL) {
-            NCCLCHECK(ncclCalloc(remNode->paths+baseNode->type, system->nodes[baseNode->type].count));
-          }
-
-          struct ncclTopoLinkList* remPath;
-          NCCLCHECK(getPath(system, remNode, baseNode->type, baseNode->id, &remPath));
-          float width = std::min(path->width, link->width);
-          if (remPath->width < width) {
-            // Find reverse link
-            for (int l=0; l<remNode->nlinks; l++) {
-              if (remNode->links[l].remNode == node) {
-                remPath->list[0] = remNode->links+l;
-                break;
-              }
-            }
-            if (remPath->list[0] == NULL) {
-              WARN("Failed to find reverse path from remNode %d/%lx nlinks %d to node %d/%lx",
-                   remNode->type, remNode->id, remNode->nlinks, node->type, node->id);
-              return ncclInternalError;
-            }
-            // Copy the rest of the path
-            for (int i=0; i<path->count; i++) remPath->list[i+1] = path->list[i];
-            remPath->count = path->count + 1;
-            remPath->width = width;
-            remPath->type = PATH_NVL;
-
-            // Add to the list for the next iteration if not already in the list
-            // In this case, permit GPUs are intermediate XGMI steps
-            for (int i=0; i<nextNodeList.count; i++) if (nextNodeList.list[i] == remNode) continue;
-            nextNodeList.list[nextNodeList.count++] = remNode;
-          }
-        }
-      }
-      memcpy(&nodeList, &nextNodeList, sizeof(nodeList));
-    }
-  }
-  return ncclSuccess;
-}
-// [/RCCL]
-
-
 static ncclResult_t ncclTopoSetPaths(struct ncclTopoNode* baseNode, struct ncclTopoSystem* system) {
   if (baseNode->paths[baseNode->type] == NULL) {
     NCCLCHECK(ncclCalloc(baseNode->paths+baseNode->type, system->nodes[baseNode->type].count));
@@ -139,14 +61,7 @@ static ncclResult_t ncclTopoSetPaths(struct ncclTopoNode* baseNode, struct ncclT
         struct ncclTopoLinkList* remPath;
         NCCLCHECK(getPath(system, remNode, baseNode->type, baseNode->id, &remPath));
         float width = std::min(path->width, link->width);
-
-        // [RCCL] Do not let XGMI paths be overwritten (even if PCIe path may be faster)
-        //        Unless they are of shorter length
-     // if (remPath->width < width) {
-        bool notXGMI = remPath->type != PATH_NVL;
-        if (remPath->width < width && notXGMI) {
-        // [/RCCL]
-
+        if (remPath->width < width) {
           // Find reverse link
           for (int l=0; l<remNode->nlinks; l++) {
             if (remNode->links[l].remNode == node) {
@@ -450,10 +365,6 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclPeer
   for (int c=0; c<system->nodes[CPU].count; c++) {
     NCCLCHECK(ncclTopoSetPaths(system->nodes[CPU].nodes+c, system));
   }
-
-  // [RCCL] Add XGMI-only links between GPUs first before any other paths
-  NCCLCHECK(ncclTopoSetXgmi(system));
-  // [/RCCL]
 
   // Set direct paths from/to GPUs.
   for (int g=0; g<system->nodes[GPU].count; g++) {
