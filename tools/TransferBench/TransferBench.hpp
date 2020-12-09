@@ -33,7 +33,9 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include <hip/hip_ext.h>
 #include <hsa/hsa_ext_amd.h>
+
 #include "copy_kernel.h"
+#include "EnvVars.hpp"
 
 // Helper macro for catching HIP errors
 #define HIP_CALL(cmd)                                                   \
@@ -62,6 +64,14 @@ typedef enum
   MODE_CHECK = 1          // Check data against pattern
 } ModeType;
 
+// Each threadblock copies N floats from src to dst
+struct BlockParam
+{
+    int N;
+    float* src;
+    float* dst;
+};
+
 // Each Link is a uni-direction operation from a src memory to dst memory executed by a specific GPU
 struct Link
 {
@@ -71,14 +81,17 @@ struct Link
   MemType dstMemType;      // Destination memory type
   int     dstIndex;        // Destination device index
   int     numBlocksToUse;  // Number of threadblocks to use for this Link
-};
 
-// Each threadblock copies N floats from src to dst
-struct BlockParam
-{
-    int N;
-    float* src;
-    float* dst;
+  float*      srcMem;
+  float*      dstMem;
+
+  hipEvent_t  startEvent;
+  hipEvent_t  stopEvent;
+  hipStream_t stream;
+  BlockParam* blockParam;
+
+  double totalGpuTime;
+
 };
 
 void DisplayUsage(char const* cmdName);                      // Display usage instructions
@@ -89,6 +102,7 @@ void ParseLinks(char* line, std::vector<Link>& links);       // Parse Link infor
 void AllocateMemory(MemType memType, int devIndex, size_t numBytes, bool useFineGrainMem, float** memPtr);
 void DeallocateMemory(MemType memType, int devIndex, float* memPtr);
 void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr);
+void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link);
 std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount);
 std::string GetLinkDesc(Link const& link);
 

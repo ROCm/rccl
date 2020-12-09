@@ -18,7 +18,6 @@ public:
   int useInteractive;  // Pause for user-input before starting transfer loop
   int useSleep;        // Adds a 100ms sleep after each synchronization
   int combineTiming;   // Combines the timing with kernel launch
-  int reuseStreams;    // Re-use streams instead of creating / destroying per test
   int showAddr;        // Print out memory addresses for each Link
   int outputToCsv;     // Output in CSV format
   int byteOffset;      // Byte-offset for memory allocations
@@ -35,9 +34,7 @@ public:
     useFineGrainMem = GetEnvVar("USE_FINEGRAIN_MEM", 0);
     useSingleSync   = GetEnvVar("USE_SINGLE_SYNC"  , 0);
     useInteractive  = GetEnvVar("USE_INTERACTIVE"  , 0);
-    useSleep        = GetEnvVar("USE_SLEEP"        , 0);
     combineTiming   = GetEnvVar("COMBINE_TIMING"   , 0);
-    reuseStreams    = GetEnvVar("REUSE_STREAMS"    , 0);
     showAddr        = GetEnvVar("SHOW_ADDR"        , 0);
     outputToCsv     = GetEnvVar("OUTPUT_TO_CSV"    , 0);
     byteOffset      = GetEnvVar("BYTE_OFFSET"      , 0);
@@ -78,9 +75,7 @@ public:
     printf(" USE_FINEGRAIN_MEM  - Allocate fine-grained GPU memory instead of coarse-grained GPU memory\n");
     printf(" USE_SINGLE_SYNC    - Perform synchronization only once after all iterations instead of per iteration\n");
     printf(" USE_INTERACTIVE    - Pause for user-input before starting transfer loop\n");
-    printf(" USE_SLEEP          - Adds a 100ms sleep after each synchronization\n");
     printf(" COMBINE_TIMING     - Combines timing with launch (potentially lower timing overhead)\n");
-    printf(" REUSE_STREAMS      - Re-use streams instead of creating / destroying per test\n");
     printf(" SHOW_ADDR          - Print out memory addresses for each Link\n");
     printf(" OUTPUT_TO_CSV      - Outputs to CSV format if set\n");
     printf(" BYTE_OFFSET        - Initial byte-offset for memory allocations.  Must be multiple of 4. Defaults to 0\n");
@@ -112,12 +107,8 @@ public:
              useSingleSync ? "Synchronizing only once, after all iterations" : "Synchronizing per iteration");
       printf("%-20s: Running in %s mode\n", "USE_INTERACTIVE",
              useInteractive ? "interactive" : "non-interactive");
-      printf("%-20s: %s\n", "USE_SLEEP",
-             useSleep ? "Add sleep after each sync" : "No sleep per sync");
-      printf("%-20s %s\n", "COMBINE_TIMING",
+      printf("%-20s: %s\n", "COMBINE_TIMING",
              combineTiming ? "Using combined timing+launch" : "Using separate timing / launch");
-      printf("%-20s: %s\n", "REUSE_STREAMS",
-             reuseStreams ? "Re-using streams per topology" : "Creating/destroying streams per topology");
       printf("%-20s: %s\n", "SHOW_ADDR",
              showAddr ? "Displaying src/dst mem addresses" : "Not displaying src/dst mem addresses");
       printf("%-20s: Output to %s\n", "OUTPUT_TO_CSV",
