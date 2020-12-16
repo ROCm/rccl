@@ -764,6 +764,7 @@ void AllocateMemory(MemType memType, int devIndex, size_t numBytes, float** memP
   }
   else if (memType == MEM_GPU_FINE)
   {
+    HIP_CALL(hipSetDevice(devIndex));
     HIP_CALL(hipExtMallocWithFlags((void**)memPtr, numBytes, hipDeviceMallocFinegrained));
   }
   else
