@@ -426,7 +426,7 @@ ncclResult_t ncclTopoSearchRecNet(struct ncclTopoSystem* system, struct ncclTopo
         for (int i = 0; i<system->nodes[GPU].count; i++)
           if (paths[i].count < paths[f].count) f = i;
         int t = 1 << 10;
-        NCCLCHECK(ncclTopoSearchTryGpu(system, graph, saveGraph, 0, backToNet, backToFirstRank, FORCED_ORDER_PCI, &t, NET, n, f));
+        NCCLCHECK(ncclTopoSearchTryGpu(system, graph, saveGraph, 0, backToNet, backToFirstRank, (f == 0) ? FORCED_ORDER_PCI : 0, &t, NET, n, f));
         // [RCCL] Event if forced order PCI is found, continue the search instead of ending early
         // if (t == -1) *time = -1;
         // [/RCCL]

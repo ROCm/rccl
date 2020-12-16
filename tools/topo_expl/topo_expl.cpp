@@ -116,6 +116,7 @@ NodeModelDesc model_descs[] = {
   {4, "topo_4p3l_n2_1.xml",     "4 nodes 8 gfx908 Rome"},
   {1, "topo_8p_rome_n4_1.xml",  "single node 8 gfx908 Rome NPS=4"},
   {4, "topo_8p_rome_n4_1.xml",  "4 nodes node 8 gfx908 Rome NPS=4"},
+  {2, "topo_8p_rome_pcie.xml",  "2 nodes node 8 VEGA20 PCIe"},
 };
 
 int main(int argc,char* argv[])
