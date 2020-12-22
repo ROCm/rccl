@@ -9,6 +9,9 @@
 #define NCCL_COLLECTIVES_H_
 
 #define FUNC_INDEX_P2P (NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps)
+#define FUNC_INDEX_A2A (FUNC_INDEX_P2P+1)
+#define FUNC_INDEX_A2AV (FUNC_INDEX_P2P+2)
+
 #define FUNC_INDEX(func, redop, ncclType, al, pr) ((func >= NCCL_NUM_FUNCTIONS) \
   ? (func-NCCL_NUM_FUNCTIONS+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps) \
   : ((((((func)*ncclNumOps + (redop))*ncclNumTypes) + (ncclType))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr)))

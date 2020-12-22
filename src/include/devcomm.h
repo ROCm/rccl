@@ -286,7 +286,18 @@ struct ncclCollTrace {
   uint32_t data_0;
   uint64_t timeStamp;
   uint64_t opCount;
-  uint64_t data_1;
+  union {
+    uint64_t data_1;
+    struct {
+      uint16_t nThreads;
+      uint8_t bid;
+      uint8_t nChannels;
+    } coll;
+    struct {
+      uint16_t nThreads;
+      uint16_t delta;
+    } p2p;
+  };
 };
 static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must have a pow2 size");
 

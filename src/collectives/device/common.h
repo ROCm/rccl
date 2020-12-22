@@ -117,6 +117,8 @@ struct Caller<f, f + 1>{
   void call(struct ncclWorkElem* const c) noexcept { ncclFuncs[f](c); }
 };
 
+static_assert(FUNC_INDEX_P2P == 1800, "Wrong P2P function index");
+
 inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
@@ -177,7 +179,19 @@ class ncclFunction {
     comm->collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
     comm->collTrace[pos].opCount = w->opCount; \
     comm->collTrace[pos].bid = bid; \
-    comm->collTrace[pos].funcIndex = fIdx;
+    comm->collTrace[pos].funcIndex = fIdx; \
+    if (fIdx == FUNC_INDEX_P2P) { \
+      comm->collTrace[pos].p2p.nThreads = w->p2p.nThreads; \
+      comm->collTrace[pos].p2p.delta = (uint16_t)(w->p2p.delta); \
+    } else if (fIdx == FUNC_INDEX_A2AV) { \
+      comm->collTrace[pos].coll.nThreads = w->nThreads; \
+      comm->collTrace[pos].coll.bid = w->a2av.bid; \
+      comm->collTrace[pos].coll.nChannels = w->a2av.nChannels; \
+    } else { \
+      comm->collTrace[pos].coll.nThreads = w->nThreads; \
+      comm->collTrace[pos].coll.bid = w->coll.bid; \
+      comm->collTrace[pos].coll.nChannels = w->coll.nChannels; \
+    }
 #define traceKernelLaunch(fIdx)  { \
     traceColl(fIdx); \
     asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (comm->collTrace[pos].data_0)); \
@@ -262,7 +276,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
     if (w == NULL) {
       w = shmem.localWork.elems;
       if (!load_coll(&shmem.localWork, channel->workFifo+index, tid, comm, &abortCount)) {
-        if (COLLTRACE && tid == 0) traceAbort(-1);
+        if (COLLTRACE && tid == 0) traceAbort(0xffff);
         return;
       }
       if (COLLTRACE && tid == 0) {
@@ -270,11 +284,9 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
         if (!firstLaunch) traceCollEnd(w->funcIndex);
         firstLaunch = false;
       }
-    } else {
-      if (COLLTRACE && tid == 0) {
+    } else if (COLLTRACE && tid == 0) {
         traceKernelLaunch(w->funcIndex);
         firstLaunch = false;
-      }
     }
     if (tid < w->nThreads) {
       if (w->funcIndex == FINDEX) {
@@ -285,7 +297,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
     }
     index = (index+1) % NCCL_MAX_OPS;
     if (w->active == 2) {
-      if (COLLTRACE && tid == 0) traceCollEnd(-1);
+      if (COLLTRACE && tid == 0) traceCollEnd(0xffff);
       return;
     }
     w = NULL;
