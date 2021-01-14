@@ -28,7 +28,9 @@ if(BUILD_TESTS)
     test_AllGatherMultiProcess.cpp
     test_AllReduceMultiProcess.cpp
     test_AllToAllMultiProcess.cpp
+    test_CombinedCallsMultiProcess.cpp
     test_GatherMultiProcess.cpp
+    test_GroupCallsMultiProcess.cpp
     test_ReduceMultiProcess.cpp
     test_ReduceScatterMultiProcess.cpp
     test_ScatterMultiProcess.cpp

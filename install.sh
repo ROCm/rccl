@@ -200,8 +200,10 @@ if ($run_tests); then
     if (test -f "./test/UnitTests"); then
         if ($run_tests_all); then
             ./test/UnitTests
+            NCCL_COMM_ID=ixt-rack-87:55512 ./test/UnitTestsMultiProcess
         else
             ./test/UnitTests --gtest_filter="BroadcastCorrectnessSweep*:*float32*"
+            NCCL_COMM_ID=ixt-rack-87:55512 ./test/UnitTestsMultiProcess --gtest_filter="BroadcastCorrectnessSweep*:*float32*"
         fi
     else
         echo "Unit tests have not been built yet; please re-run script with -t to build unit tests."
