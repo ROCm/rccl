@@ -203,7 +203,7 @@ if ($run_tests); then
             NCCL_COMM_ID=$HOSTNAME:55512 ./test/UnitTestsMultiProcess
         else
             ./test/UnitTests --gtest_filter="BroadcastCorrectnessSweep*:*float32*"
-            NCCL_COMM_ID=$HOSTNAME:55512 ./test/UnitTestsMultiProcess --gtest_filter="BroadcastCorrectnessSweep*:*float32*"
+            NCCL_COMM_ID=$HOSTNAME:55512 ./test/UnitTestsMultiProcess --gtest_filter="BroadcastMultiProcessCorrectnessSweep*:*float32*"
         fi
     else
         echo "Unit tests have not been built yet; please re-run script with -t to build unit tests."
