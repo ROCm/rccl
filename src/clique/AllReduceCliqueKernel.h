@@ -67,7 +67,7 @@ __device__ void AllReduceCliqueSplitKernel(struct CollectiveArgs* args)
     }
 
     // Perform the reduction
-    #define ALL_REDUCE_CLIQUE_UNROLL 2
+    #define ALL_REDUCE_CLIQUE_UNROLL 1
     ReduceOrCopyMulti<ALL_REDUCE_CLIQUE_UNROLL, FUNC, T, NUM_RANKS, NUM_RANKS, NUM_RANKS, NUM_RANKS>(
       threadIdx.x, blockDim.x, NUM_RANKS, srcs, NUM_RANKS, dsts, blockN);
   }
