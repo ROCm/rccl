@@ -94,6 +94,10 @@ namespace CorrectnessTests
             exit(0);
         }
         waitpid(pid1, NULL, 0);
+        for (int i = 0; i < datasets.size(); i++)
+        {
+            munmap(datasets[i], sizeof(Dataset));
+        }
     }
 
     INSTANTIATE_TEST_SUITE_P(GroupCallsMultiProcessCorrectnessSweep,
