@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -27,6 +27,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "graph/topo.h"
+
+// [RCCL]
+#include "clique/CliqueManager.h"
+// [/RCCL]
 
 #define STR2(v) #v
 #define STR(v) STR2(v)
@@ -357,6 +361,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 }
 
 RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 1);
+RCCL_PARAM(ForceEnableClique, "FORCE_ENABLE_CLIQUE", 0);
 
 static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   if (ndev < 1) {
@@ -738,7 +743,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int nranks = comm->nRanks;
   uint64_t commHash = getHash(commId->internal, NCCL_UNIQUE_ID_BYTES);
   TRACE(NCCL_INIT, "comm %p, commHash %lx, rank %d nranks %d - BEGIN", comm, commHash, rank, nranks);
-  NCCLCHECK(bootstrapInit(commId, rank, nranks, &comm->bootstrap));
+  // [RCCL] Collect the PID of the root
+  int rootPid;
+  NCCLCHECK(bootstrapInit(commId, rank, nranks, &comm->bootstrap, &rootPid));
+  // [/RCCL]
 
   // AllGather1 - begin
   struct {
@@ -810,6 +818,50 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoSearchInit(comm->topo));
   // Print final topology
   NCCLCHECK(ncclTopoPrint(comm->topo));
+
+  { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager
+    CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
+    if (intraRanks == nranks)
+    {
+      // Check that all the GPUs have peer access to one another
+      bool hasPeerAccess = true;
+      for (int i = 0; i < nranks && hasPeerAccess; i++)
+      {
+        int cudaDev1 = allGather1Data[i].peerInfo.cudaDev;
+        for (int j = 0; j < nranks; j++)
+        {
+          if (i == j) continue;
+          int cudaDev2 = allGather1Data[j].peerInfo.cudaDev;
+          int p2p;
+          if (hipDeviceCanAccessPeer(&p2p, cudaDev1, cudaDev2) != hipSuccess || !p2p)
+          {
+            hasPeerAccess = false;
+            break;
+          }
+        }
+      }
+      if (hasPeerAccess)
+      {
+        if (intraRanks == nranks)
+          cliqueMode = CliqueManager::CLIQUE_SINGLE_PROCESS;
+        else
+          cliqueMode = CliqueManager::CLIQUE_SINGLE_NODE;
+      }
+
+      // For now, only enable clique-based kernels on CR8_G topologies, unless explicitly asked
+      if (!rcclParamForceEnableClique())
+      {
+        // Disable clique-kernel support if not on CR8 topology
+        if (!(comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_CR8G))
+        {
+          INFO(NCCL_INIT, "Disabling clique-based kernels due to topology (force enable with RCCL_FORCE_ENABLE_CLIQUE)");
+          cliqueMode = CliqueManager::CLIQUE_DISABLED;
+        }
+      }
+    }
+    comm->cliqueManager = new CliqueManager(rank, nranks, cliqueMode);
+    NCCLCHECK(comm->cliqueManager->Init(commId, rootPid));
+  } // [/RCCL]
 
   // Get rings and trees
   struct ncclTopoGraph ringGraph;
@@ -1216,6 +1268,10 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
     WARN("comm %p has already been destroyed", comm);
     return ncclInvalidArgument;
   }
+
+  // [RCCL] Delete CliqueManager if it exists
+  if (comm->cliqueManager) delete comm->cliqueManager;
+  // [/RCCL]
 
   return commDestroy(comm);
 }

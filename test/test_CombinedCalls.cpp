@@ -114,7 +114,7 @@ namespace CorrectnessTests
                                 // Number of devices
                                 testing::Values(2,3,4,5,6,7,8),
                                 // In-place or not
-                                testing::Values(false),
-                                testing::Values("RCCL_ALLTOALL_KERNEL_DISABLE=1")),
-                            CorrectnessTest::PrintToStringParamName());
+                                testing::Values(false, true),
+                                testing::Values("RCCL_ALLTOALL_KERNEL_DISABLE=1", "RCCL_ENABLE_CLIQUE=0", "RCCL_ENABLE_CLIQUE=1")),
+                             CorrectnessTest::PrintToStringParamName());
 } // namespace

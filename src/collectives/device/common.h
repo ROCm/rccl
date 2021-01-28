@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -70,16 +70,46 @@
   NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum)
 
+// [RCCL] Adding clique-based kernels for AllReduce, in-place of unused RingLL28 kernels
+#define NCCL_FUNC5B(func, algo, redop, type) \
+  NCCL_FUNC_NAME(func, algo, LL,     redop, type), \
+  NCCL_FUNC_NAME(func, algo, LL128,  redop, type), \
+  NCCL_FUNC_NAME(func, algo, SIMPLE, redop, type)
+
+#define NCCL_FUNC4B(func, redop, type) \
+  NCCL_FUNC5(func, TREE,    redop, type), \
+  NCCL_FUNC5B(func, RING,    redop, type), \
+  NCCL_FUNC5(func, COLLNET, redop, type)
+
+#define NCCL_FUNCS3C(func, redop) \
+  NCCL_FUNC4B(func, redop, int8_t), \
+  NCCL_FUNC4B(func, redop, uint8_t), \
+  NCCL_FUNC4B(func, redop, int32_t), \
+  NCCL_FUNC4B(func, redop, uint32_t), \
+  NCCL_FUNC4B(func, redop, int64_t), \
+  NCCL_FUNC4B(func, redop, uint64_t), \
+  NCCL_FUNC4B(func, redop, half), \
+  NCCL_FUNC4B(func, redop, float), \
+  NCCL_FUNC4B(func, redop, double), \
+  NCCL_FUNC4B(func, redop, rccl_bfloat16)
+
+#define NCCL_FUNCS2C(func) \
+  NCCL_FUNCS3C(func, Sum ), \
+  NCCL_FUNCS3C(func, Prod), \
+  NCCL_FUNCS3C(func, Max ), \
+  NCCL_FUNCS3C(func, Min )
+
 // Must be consistent with ncclFunc_t
 #define NCCL_FUNCS() { \
   NCCL_FUNCS2B(Broadcast), \
   NCCL_FUNCS2A(Reduce), \
   NCCL_FUNCS2B(AllGather), \
   NCCL_FUNCS2A(ReduceScatter), \
-  NCCL_FUNCS2A(AllReduce), \
+  NCCL_FUNCS2C(AllReduce), \
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), \
   NCCL_FUNC_NAME(AllToAll, RING, SIMPLE, Sum, int8_t), \
   NCCL_FUNC_NAME(AllToAllv, RING, SIMPLE, Sum, int8_t) }
+// [/RCCL]
 
 // Must be consistent with the ncclFuncSet enum
 using ncclKernelFunc_t = void (*)(struct ncclWorkElem* args);
@@ -93,7 +123,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
-  NCCL_FUNCS2A(AllReduce),
+  NCCL_FUNCS2C(AllReduce),
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
   NCCL_FUNC_NAME(AllToAll, RING, SIMPLE, Sum, int8_t),
   NCCL_FUNC_NAME(AllToAllv, RING, SIMPLE, Sum, int8_t),
@@ -324,7 +354,7 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, red
 // Only generate inline kernels for LL
 #define IMPL_COLL4(func, algo, redop, type, ncclType) \
   IMPL_COLL_FUNC(func, algo, LL,     redop, type) \
-  IMPL_COLL_FUNC(func, algo, SIMPLE, redop, type) \
+  IMPL_COLL_FUNC(func, algo, SIMPLE, redop, type)
 
 #define IMPL_COLL3(func, redop, type, ncclType) \
   IMPL_COLL4(func, TREE,    redop, type, ncclType) \
@@ -349,6 +379,37 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, red
   IMPL_COLL2(func, Prod) \
   IMPL_COLL2(func, Min) \
   IMPL_COLL2(func, Max)
+
+// [RCCL] Define clique-based implementations (repurposed LL128)
+#define IMPL_COLL4_CLIQUE(func, algo, redop, type, ncclType) \
+  IMPL_COLL_FUNC(func, algo, LL,     redop, type) \
+  IMPL_COLL_FUNC(func, algo, LL128,  redop, type) \
+  IMPL_COLL_FUNC(func, algo, SIMPLE, redop, type)
+
+#define IMPL_COLL3_CLIQUE(func, redop, type, ncclType) \
+  IMPL_COLL4(func, TREE,    redop, type, ncclType) \
+  IMPL_COLL4_CLIQUE(func, RING,    redop, type, ncclType) \
+  IMPL_COLL4(func, COLLNET, redop, type, ncclType)
+
+#define IMPL_COLL2_CLIQUE(func, redop) \
+  IMPL_COLL3_CLIQUE(func, redop, int8_t,   ncclInt8) \
+  IMPL_COLL3_CLIQUE(func, redop, uint8_t,  ncclUint8) \
+  IMPL_COLL3_CLIQUE(func, redop, int32_t,  ncclInt32) \
+  IMPL_COLL3_CLIQUE(func, redop, uint32_t, ncclUint32) \
+  IMPL_COLL3_CLIQUE(func, redop, int64_t,  ncclInt64) \
+  IMPL_COLL3_CLIQUE(func, redop, uint64_t, ncclUint64) \
+  IMPL_COLL3_CLIQUE(func, redop, half,     ncclFloat16) \
+  IMPL_COLL3_CLIQUE(func, redop, float,    ncclFloat32) \
+  IMPL_COLL3_CLIQUE(func, redop, double,   ncclFloat64) \
+  IMPL_COLL3_CLIQUE(func, redop, rccl_bfloat16,   ncclBfloat16)
+
+#define IMPL_COLL_CLIQUE(func) \
+  IMPL_COLL2_CLIQUE(func, Sum) \
+  IMPL_COLL2_CLIQUE(func, Prod) \
+  IMPL_COLL2_CLIQUE(func, Min) \
+  IMPL_COLL2_CLIQUE(func, Max)
+// [/RCCL]
+
 
 // Copy primitives only define one function for copy
 #define IMPL_COLL_C(func) IMPL_COLL3(func, Sum, int8_t, ncclInt8);

@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,6 +13,11 @@
 #include "socket.h"
 #include <unistd.h>
 #include <sys/types.h>
+// [RCCL]
+#include "clique/CliqueManager.h"
+#include "clique/CliqueShmNames.h"
+#include "clique/Hash.h"
+// [/RCCL]
 
 /* Init functions */
 static char bootstrapNetIfName[MAX_IF_NAME_SIZE+1];
@@ -96,10 +102,19 @@ static ncclResult_t setFilesLimit() {
   return ncclSuccess;
 }
 
-static void *bootstrapRoot(void* args) {
-  int listenFd = (uint64_t)args;
+static void *bootstrapRoot(void* bootstrapRootStruct) { // [RCCL] Modified to include hash argument)
+
+  // [RCCL] Unpack bootstrapRootStruct
+  struct bootstrapRootStruct rootStruct = *(struct bootstrapRootStruct*)bootstrapRootStruct;
+  int listenFd = rootStruct.listenFd;
+  unsigned long hash = rootStruct.hash;
+  int pid = getpid(); // sharing PID to other ranks for creating shared memory files for CliqueManager
+  free(bootstrapRootStruct);
+  // [/RCCL]
+
   ncclResult_t res = ncclSuccess;
   int nranks = 0, c = 0;
+
   struct extInfo info;
   union socketAddress *rankAddresses = NULL;
   union socketAddress *rankAddressesRoot = NULL; // for initial rank <-> root information exchange
@@ -140,12 +155,20 @@ static void *bootstrapRoot(void* args) {
   } while (c < nranks);
   TRACE(NCCL_INIT, "COLLECTED ALL %d HANDLES", nranks);
 
+  { // [RCCL] Initialize message queues / shared memory files
+    NCCLCHECKGOTO(CliqueManager::BootstrapRootInit(pid, hash), res, out);
+  } // [/RCCL]
+
   // Send the connect handle for the next rank in the AllGather ring
   for (int r=0; r<nranks; ++r) {
     int next = (r+1) % nranks;
+
     int tmpSendFd;
     NCCLCHECKGOTO(connectAddress(&tmpSendFd, rankAddressesRoot+r), res, out);
     NCCLCHECKGOTO(bootstrapNetSend(tmpSendFd, rankAddresses+next, sizeof(union socketAddress)), res, out);
+    { // [RCCL] Send the root pid for shared file naming
+      NCCLCHECKGOTO(bootstrapNetSend(tmpSendFd, &pid, sizeof(int)), res, out);
+    } // [/RCCL]
     close(tmpSendFd);
   }
   TRACE(NCCL_INIT, "SENT OUT ALL %d HANDLES", nranks);
@@ -165,7 +188,14 @@ ncclResult_t bootstrapCreateRoot(ncclUniqueId* id, bool idFromEnv) {
   int listenFd;
   NCCLCHECK(createListenSocket(&listenFd, connectAddr));
   pthread_t thread;
-  pthread_create(&thread, NULL, bootstrapRoot, (void*)(uint64_t)listenFd);
+
+  // [RCCL] Use the ncclUniqueId to get a hash for bootstrap
+  struct bootstrapRootStruct* rootStruct = new struct bootstrapRootStruct;
+  rootStruct->hash = djb2Hash(id->internal);
+  rootStruct->listenFd = listenFd;
+  pthread_create(&thread, NULL, bootstrapRoot, (void *)rootStruct);
+  // [/RCCL]
+
   return ncclSuccess;
 }
 
@@ -319,7 +349,7 @@ ncclResult_t bootstrapRemFree(int id, int rank, void* commState) {
   return ncclSuccess;
 }
 
-ncclResult_t bootstrapInit(ncclUniqueId * id, int rank, int nranks, void** commState) {
+ncclResult_t bootstrapInit(ncclUniqueId * id, int rank, int nranks, void** commState, int* rootPid) { // [RCCL] Adding rootPid
   struct extState* state;
   NCCLCHECK(ncclCalloc(&state, 1));
   state->rank = rank;
@@ -359,6 +389,9 @@ ncclResult_t bootstrapInit(ncclUniqueId * id, int rank, int nranks, void** commS
   union socketAddress extAddressNext;
   NCCLCHECK(bootstrapNetAccept(extListenFdRoot, &tmpRecvFd));
   NCCLCHECK(bootstrapNetRecv(tmpRecvFd, &extAddressNext, sizeof(extAddressNext)));
+  { // [RCCL] Receive PID from root
+    NCCLCHECK(bootstrapNetRecv(tmpRecvFd, rootPid, sizeof(int)));
+  } // [/RCCL]
   close(tmpRecvFd);
   close(extListenFdRoot);
 

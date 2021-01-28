@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,6 +12,9 @@
 #include "rccl_bfloat16.h"
 #include "align.h"
 #include <stdint.h>
+// [RCCL] Support for clique-based kernels
+#include "clique/CliqueCommon.h"
+// [/RCCL]
 
 // Convert volatile access to atomic
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
@@ -21,6 +24,7 @@
 #define LOAD(VAR) *(VAR)
 #define STORE(DST, SRC) *(DST) = (SRC)
 #endif
+
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncAllToAll, ncclFuncAllToAllv } ncclFunc_t;
@@ -35,6 +39,7 @@ extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
 #define NCCL_PROTO_LL 0
 #define NCCL_PROTO_LL128 1
+#define NCCL_PROTO_CLIQUE 1  // [RCCL] Clique takes up same protocol as unused LL128
 #define NCCL_PROTO_SIMPLE 2
 extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
 
@@ -188,6 +193,17 @@ struct ncclWorkElem {
       uint8_t bid;
       uint8_t nChannels;
     } a2av;
+    // [RCCL] Clique-based arguments
+    //        NOTE: Follows same field structure as coll
+    //              because nChannels is accessed from "coll" struct.
+    struct {
+      size_t count;
+      cliqueDevicePtrs_t* ptrs;
+      uint32_t unused;
+      uint8_t bid;
+      uint8_t nChannels;
+    } clique;
+    // [/RCCL]
     uint64_t align[3];
   };
 };
