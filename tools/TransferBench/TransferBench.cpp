@@ -540,11 +540,12 @@ void DisplayTopology()
   printf("        |");
   for (int j = 0; j < numGpuDevices; j++)
     printf(" GPU %02d |", j);
-  printf("\n");
+  printf(" PCIe Bus ID\n");
   for (int j = 0; j <= numGpuDevices; j++)
     printf("--------+");
-  printf("\n");
+  printf("-------------\n");
 
+  char pciBusId[20];
   for (int i = 0; i < numGpuDevices; i++)
   {
     printf(" GPU %02d |", i);
@@ -565,7 +566,8 @@ void DisplayTopology()
                hopCount);
       }
     }
-    printf("\n");
+    HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, i));
+    printf(" %s\n", pciBusId);
   }
 }
 
@@ -865,6 +867,7 @@ void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr
         exit(1);
       }
     }
+    free(hostBuffer);
   }
 
   free(refBuffer);
