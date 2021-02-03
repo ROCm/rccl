@@ -10,6 +10,7 @@
 #include "graph.h"
 #include <sys/time.h>
 #include "collectives.h"
+#include <hsa/hsa_ext_amd.h>
 
 struct netConnectInfo {
   ncclNetHandle_t netHandle;
@@ -32,6 +33,7 @@ struct netSendResources {
   void** mhandlesProto[NCCL_NUM_PROTOCOLS];
   uint64_t step;
   uint64_t llLastCleaning;
+  uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
 };
 
 struct netRecvResources {
@@ -98,6 +100,29 @@ ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     }
     if (resources->buffSizes[LOC_HOSTMEM]) {
       NCCLCHECK(ncclCudaHostCalloc(resources->buffers+LOC_HOSTMEM, resources->buffSizes[LOC_HOSTMEM]));
+    }
+    if (resources->useGdr) {
+      //CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
+      struct data_struct {hsa_agent_t agent; int counter;} out;
+      out.counter = 0;
+      out.agent.handle = myInfo->cudaDev;
+      hsa_iterate_agents([](hsa_agent_t agent, void* data) {
+        int devId = ((struct data_struct *)data)->agent.handle;
+        hsa_device_type_t type;
+        hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type);
+        if(type != HSA_DEVICE_TYPE_GPU)
+          return HSA_STATUS_SUCCESS;
+        if(((struct data_struct *)data)->counter!=devId) {
+          ((struct data_struct *)data)->counter++;
+          return HSA_STATUS_SUCCESS;
+        }
+        ((struct data_struct *)data)->agent = agent;
+        return HSA_STATUS_SUCCESS;
+      }, (void*)&out);
+      hsa_amd_hdp_flush_t hdpinfo;
+      hsa_status_t err = hsa_agent_get_info(out.agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_HDP_FLUSH, &hdpinfo);
+      resources->curr_hdp_reg = hdpinfo.HDP_MEM_FLUSH_CNTL;
+      send->conn.curr_hdp_reg = resources->curr_hdp_reg;
     }
 
     int offsets[LOC_COUNT];

@@ -158,6 +158,7 @@ class ncclPrimitives {
 
   inline __device__ void postSend() {
     if (conn->next_hdp_reg) STORE(conn->next_hdp_reg, 0x1);
+    if (conn->curr_hdp_reg) STORE(conn->curr_hdp_reg, 0x1);
     STORE(connTailPtr, step += SLICESTEPS);
   }
 

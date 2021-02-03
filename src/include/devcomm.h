@@ -115,6 +115,7 @@ struct ncclConnInfo {
   // allows software to explicitly initiate a flush read to HDP memory. See more
   // descriptions in primitives.h.
   uint32_t* next_hdp_reg;  // Next GPU in ring (for p2p transport use only)
+  uint32_t* curr_hdp_reg;  // Current GPU's HDP register
 };
 
 struct ncclConnector {
