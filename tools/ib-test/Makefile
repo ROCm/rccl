@@ -6,7 +6,7 @@ endif
 HIPCC = $(HIP_PATH)/bin/hipcc
 
 EXE = ib_test
-CXXFLAGS = -g -O3 -Iinclude -I../../src/include -DENABLE_TRACE -DRCCL_IB_TEST -ldl -lnuma
+CXXFLAGS = -g -O3 -Iinclude -I../../src -I../../src/include -I../../src/clique -DENABLE_TRACE -DRCCL_IB_TEST -ldl -lnuma
 
 files = $(EXE).cpp utils.cpp ../../src/transport/net_ib.cc ../../src/misc/ibvwrap.cc ../../src/debug.cc
 
