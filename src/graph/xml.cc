@@ -492,7 +492,10 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
     char portSpeedStr[MAX_STR_LEN];
     float portSpeed;
     NCCLCHECK(ncclTopoGetStrFromSys(path, "../max_link_speed", portSpeedStr));
-    sscanf(portSpeedStr, "%f GT/s", &portSpeed);
+    if (portSpeedStr[0])
+      sscanf(portSpeedStr, "%f GT/s", &portSpeed);
+    else
+      portSpeed = deviceSpeed;
     NCCLCHECK(xmlSetAttr(pciNode, "link_speed", portSpeed < deviceSpeed ? portSpeedStr : deviceSpeedStr));
   }
   NCCLCHECK(xmlGetAttrIndex(pciNode, "link_width", &index));
@@ -502,7 +505,11 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
     NCCLCHECK(ncclTopoGetStrFromSys(path, "max_link_width", strValue));
     int deviceWidth = strtol(strValue, NULL, 0);
     NCCLCHECK(ncclTopoGetStrFromSys(path, "../max_link_width", strValue));
-    int portWidth = strtol(strValue, NULL, 0);
+    int portWidth;
+    if (strValue[0])
+      portWidth = strtol(strValue, NULL, 0);
+    else
+      portWidth = deviceWidth;
     NCCLCHECK(xmlSetAttrInt(pciNode, "link_width", std::min(deviceWidth,portWidth)));
   }
   struct ncclXmlNode* parent = pciNode->parent;

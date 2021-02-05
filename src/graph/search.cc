@@ -462,7 +462,7 @@ ncclResult_t ncclTopoSearchRecNet(struct ncclTopoSystem* system, struct ncclTopo
         for (int i = 0; i<system->nodes[GPU].count; i++)
           if (paths[i].count < paths[f].count) f = i;
         int t = 1 << 10;
-        NCCLCHECK(ncclTopoSearchTryGpu(system, graph, saveGraph, 0, backToNet, backToFirstRank, FORCED_ORDER_PCI, &t, NET, n, f));
+        NCCLCHECK(ncclTopoSearchTryGpu(system, graph, saveGraph, 0, backToNet, backToFirstRank, (f == 0) ? FORCED_ORDER_PCI : 0, &t, NET, n, f));
         if (t == -1) *time = -1;
       }
 
@@ -998,8 +998,10 @@ static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, st
     if (i < ref->nGpus) return false;
     // match XGMI connection
     for (i = 0; i < ref->nGpus; i++) {
-      for (j = 0; j < ref->nGpus; j++)
+      for (j = 0; j < ref->nGpus; j++) {
         if (ref->connMatrix[i*ref->nGpus+j] != topo->connMatrix[g[i]*ref->nGpus+g[j]]) break;
+        if ((ref->gpuIds[i]-ref->gpuIds[j])*(topo->gpuIds[g[i]]-topo->gpuIds[g[j]]) < 0) break;
+      }
       if (j < ref->nGpus) break;
     }
     if (i < ref->nGpus) return false;

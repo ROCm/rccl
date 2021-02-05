@@ -166,12 +166,21 @@ int main(int argc, char **argv)
         links[i].blockParam = (BlockParam*)malloc(ev.numCpuPerLink * sizeof(BlockParam));
       }
     }
+<<<<<<< HEAD
 
     // Loop over all the different number of bytes to use per Link
     for (auto N : valuesOfN)
     {
       if (!ev.outputToCsv) printf("Test %d: [%lu bytes]\n", testNum, N * sizeof(float));
 
+=======
+
+    // Loop over all the different number of bytes to use per Link
+    for (auto N : valuesOfN)
+    {
+      if (!ev.outputToCsv) printf("Test %d: [%lu bytes]\n", testNum, N * sizeof(float));
+
+>>>>>>> origin/develop
       // Prepare links based on current N
       for (int i = 0; i < numLinks; i++)
       {
@@ -331,6 +340,7 @@ int main(int argc, char **argv)
       DeallocateMemory(links[i].dstMemType, links[i].dstIndex, links[i].dstMem);
 
       if (links[i].exeMemType == MEM_GPU)
+<<<<<<< HEAD
       {
         HIP_CALL(hipEventDestroy(links[i].startEvent));
         HIP_CALL(hipEventDestroy(links[i].stopEvent));
@@ -339,6 +349,16 @@ int main(int argc, char **argv)
       }
       else if (links[i].exeMemType == MEM_CPU)
       {
+=======
+      {
+        HIP_CALL(hipEventDestroy(links[i].startEvent));
+        HIP_CALL(hipEventDestroy(links[i].stopEvent));
+        HIP_CALL(hipStreamDestroy(links[i].stream));
+        HIP_CALL(hipFree(links[i].blockParam));
+      }
+      else if (links[i].exeMemType == MEM_CPU)
+      {
+>>>>>>> origin/develop
         free(links[i].blockParam);
       }
     }
@@ -540,11 +560,12 @@ void DisplayTopology()
   printf("        |");
   for (int j = 0; j < numGpuDevices; j++)
     printf(" GPU %02d |", j);
-  printf("\n");
+  printf(" PCIe Bus ID\n");
   for (int j = 0; j <= numGpuDevices; j++)
     printf("--------+");
-  printf("\n");
+  printf("-------------\n");
 
+  char pciBusId[20];
   for (int i = 0; i < numGpuDevices; i++)
   {
     printf(" GPU %02d |", i);
@@ -565,7 +586,8 @@ void DisplayTopology()
                hopCount);
       }
     }
-    printf("\n");
+    HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, i));
+    printf(" %s\n", pciBusId);
   }
 }
 
@@ -865,6 +887,7 @@ void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr
         exit(1);
       }
     }
+    free(hostBuffer);
   }
 
   free(refBuffer);
