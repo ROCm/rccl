@@ -166,21 +166,12 @@ int main(int argc, char **argv)
         links[i].blockParam = (BlockParam*)malloc(ev.numCpuPerLink * sizeof(BlockParam));
       }
     }
-<<<<<<< HEAD
 
     // Loop over all the different number of bytes to use per Link
     for (auto N : valuesOfN)
     {
       if (!ev.outputToCsv) printf("Test %d: [%lu bytes]\n", testNum, N * sizeof(float));
 
-=======
-
-    // Loop over all the different number of bytes to use per Link
-    for (auto N : valuesOfN)
-    {
-      if (!ev.outputToCsv) printf("Test %d: [%lu bytes]\n", testNum, N * sizeof(float));
-
->>>>>>> origin/develop
       // Prepare links based on current N
       for (int i = 0; i < numLinks; i++)
       {
@@ -340,7 +331,6 @@ int main(int argc, char **argv)
       DeallocateMemory(links[i].dstMemType, links[i].dstIndex, links[i].dstMem);
 
       if (links[i].exeMemType == MEM_GPU)
-<<<<<<< HEAD
       {
         HIP_CALL(hipEventDestroy(links[i].startEvent));
         HIP_CALL(hipEventDestroy(links[i].stopEvent));
@@ -349,16 +339,6 @@ int main(int argc, char **argv)
       }
       else if (links[i].exeMemType == MEM_CPU)
       {
-=======
-      {
-        HIP_CALL(hipEventDestroy(links[i].startEvent));
-        HIP_CALL(hipEventDestroy(links[i].stopEvent));
-        HIP_CALL(hipStreamDestroy(links[i].stream));
-        HIP_CALL(hipFree(links[i].blockParam));
-      }
-      else if (links[i].exeMemType == MEM_CPU)
-      {
->>>>>>> origin/develop
         free(links[i].blockParam);
       }
     }
