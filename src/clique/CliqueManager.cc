@@ -40,6 +40,7 @@ THE SOFTWARE.
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <unistd.h>
 
 cliqueDevicePtrs_t CliqueManager::m_staticCliquePtrs[NCCL_MAX_OPS]  = {};
 int*               CliqueManager::m_staticGpuBarrierMem             = NULL;
@@ -502,28 +503,36 @@ void CliqueManager::WaitForBarrier()
 
 ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
 {
-  for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
+  if (rcclParamEnableClique())
   {
-    int msgid, fd;
-    std::string msgQueueName = "/tmp/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
-    SYSCHECKVAL(open(msgQueueName.c_str(), O_CREAT | O_RDWR, 0606), "open", fd);
-    NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
-    SYSCHECK(close(fd), "close");
+      for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
+      {
+        int msgid, fd;
+        std::string msgQueueName = "/tmp/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
+        SYSCHECKVAL(open(msgQueueName.c_str(), O_CREAT | O_RDWR, 0606), "open", fd);
+        NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
+        SYSCHECK(unlink(msgQueueName.c_str()), "unlink");
+        SYSCHECK(close(fd), "close");
+      }
+
+      std::string shmDir = "/dev/shm/";
+
+      for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
+      {
+        struct stat fileStatus;
+        std::string shmFileName = it->second + std::to_string(hash) + "_" + std::to_string(pid);
+        std::string shmFullPath = shmDir + shmFileName;
+
+        // Check if shm file already exists; if so, unlink it
+        if (stat(shmFullPath.c_str(), &fileStatus) == 0)
+        {
+          NCCLCHECK(shmUnlink(shmFileName.c_str()));
+        }
+      }
   }
-
-  std::string shmDir = "/dev/shm/";
-
-  for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
+  else
   {
-    struct stat fileStatus;
-    std::string shmFileName = it->second + std::to_string(hash) + "_" + std::to_string(pid);
-    std::string shmFullPath = shmDir + shmFileName;
-
-    // Check if shm file already exists; if so, unlink it
-    if (stat(shmFullPath.c_str(), &fileStatus) == 0)
-    {
-      NCCLCHECK(shmUnlink(shmFileName.c_str()));
-    }
+    INFO(NCCL_INIT, "Not performing bootstrap root for clique kernels as clique mode not enabled.");
   }
   return ncclSuccess;
 }

@@ -13,13 +13,17 @@ namespace CorrectnessTests
     class AllReduceMultiProcessCorrectnessTest : public MultiProcessCorrectnessTest
     {
     public:
-        static void ComputeExpectedResults(Dataset& dataset, Barrier& barrier, ncclRedOp_t const op, int const rank)
+        static void ComputeExpectedResults(Dataset& dataset, Barrier& barrier, ncclRedOp_t const op, std::vector<int> const& ranks)
         {
             // Copy all inputs to expected arrays temporarily to perform reduction on host
-            HIP_CALL(hipMemcpy(dataset.expected[rank], dataset.inputs[rank],
-                               dataset.NumBytes(), hipMemcpyDeviceToHost));
-
+            for (int i = 0; i < ranks.size(); i++)
+            {
+                int rank = ranks[i];
+                HIP_CALL(hipMemcpy(dataset.expected[rank], dataset.inputs[rank],
+                                   dataset.NumBytes(), hipMemcpyDeviceToHost));
+            }
             barrier.Wait();
+
             // Allocate temporary host array to accumulate results
             int8_t*   resultI1 = (int8_t   *)malloc(dataset.NumBytes());
             uint8_t*  resultU1 = (uint8_t  *)resultI1;
@@ -68,23 +72,31 @@ namespace CorrectnessTests
                 }
             }
             barrier.Wait();
-            // Copy results into expected array
-            memcpy(dataset.expected[rank], resultI1, dataset.NumBytes());
 
+            // Copy results into expected array
+            for (int i = 0; i < ranks.size(); i++)
+            {
+                int rank = ranks[i];
+                memcpy(dataset.expected[rank], resultI1, dataset.NumBytes());
+            }
             free(resultI1);
         }
 
-        void TestAllReduce(int rank, Dataset& dataset)
+        void TestAllReduce(int rank, Dataset& dataset, bool& pass)
         {
             SetUpPerProcess(rank, ncclCollAllReduce, comms[rank], streams[rank], dataset);
 
-            if (numDevices > numDevicesAvailable) return;
+            if (numDevices > numDevicesAvailable)
+            {
+                pass = true;
+                return;
+            }
 
             Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
 
             // Prepare input / output / expected results
             FillDatasetWithPattern(dataset, rank);
-            ComputeExpectedResults(dataset, barrier, op, rank);
+            ComputeExpectedResults(dataset, barrier, op, std::vector<int>(1, rank));
 
             // Launch the reduction
             ncclAllReduce(dataset.inputs[rank], dataset.outputs[rank],
@@ -94,7 +106,7 @@ namespace CorrectnessTests
             HIP_CALL(hipStreamSynchronize(streams[rank]));
 
             // Check results
-            ValidateResults(dataset, rank);
+            pass = ValidateResults(dataset, rank);
 
             TearDownPerProcess(comms[rank], streams[rank]);
             dataset.Release(rank);
