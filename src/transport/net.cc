@@ -101,29 +101,6 @@ ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     if (resources->buffSizes[LOC_HOSTMEM]) {
       NCCLCHECK(ncclCudaHostCalloc(resources->buffers+LOC_HOSTMEM, resources->buffSizes[LOC_HOSTMEM]));
     }
-    if (resources->useGdr) {
-      //CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
-      struct data_struct {hsa_agent_t agent; int counter;} out;
-      out.counter = 0;
-      out.agent.handle = myInfo->cudaDev;
-      hsa_iterate_agents([](hsa_agent_t agent, void* data) {
-        int devId = ((struct data_struct *)data)->agent.handle;
-        hsa_device_type_t type;
-        hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type);
-        if(type != HSA_DEVICE_TYPE_GPU)
-          return HSA_STATUS_SUCCESS;
-        if(((struct data_struct *)data)->counter!=devId) {
-          ((struct data_struct *)data)->counter++;
-          return HSA_STATUS_SUCCESS;
-        }
-        ((struct data_struct *)data)->agent = agent;
-        return HSA_STATUS_SUCCESS;
-      }, (void*)&out);
-      hsa_amd_hdp_flush_t hdpinfo;
-      hsa_status_t err = hsa_agent_get_info(out.agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_HDP_FLUSH, &hdpinfo);
-      resources->curr_hdp_reg = hdpinfo.HDP_MEM_FLUSH_CNTL;
-      send->conn.curr_hdp_reg = resources->curr_hdp_reg;
-    }
 
     int offsets[LOC_COUNT];
     offsets[LOC_HOSTMEM] = offsets[LOC_DEVMEM] = 0;
@@ -134,6 +111,29 @@ ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     }
   }
 
+  if (resources->useGdr) {
+    //CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
+    struct data_struct {hsa_agent_t agent; int counter;} out;
+    out.counter = 0;
+    out.agent.handle = myInfo->cudaDev;
+    hsa_iterate_agents([](hsa_agent_t agent, void* data) {
+      int devId = ((struct data_struct *)data)->agent.handle;
+      hsa_device_type_t type;
+      hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type);
+      if(type != HSA_DEVICE_TYPE_GPU)
+        return HSA_STATUS_SUCCESS;
+      if(((struct data_struct *)data)->counter!=devId) {
+        ((struct data_struct *)data)->counter++;
+        return HSA_STATUS_SUCCESS;
+      }
+      ((struct data_struct *)data)->agent = agent;
+      return HSA_STATUS_SUCCESS;
+    }, (void*)&out);
+    hsa_amd_hdp_flush_t hdpinfo;
+    hsa_status_t err = hsa_agent_get_info(out.agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_HDP_FLUSH, &hdpinfo);
+    resources->curr_hdp_reg = hdpinfo.HDP_MEM_FLUSH_CNTL;
+    send->conn.curr_hdp_reg = resources->curr_hdp_reg;
+  }
   INFO(NCCL_INIT|NCCL_NET,"Channel %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), resources->netDev,
       resources->useGdr ? "/GDRDMA" : "", resources->shared ? "/Shared" : "");
   return ncclSuccess;
