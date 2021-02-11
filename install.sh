@@ -23,7 +23,6 @@ function display_help()
 # #################################################
 # global variables
 # #################################################
-ROCM_PATH=$ROCM_PATH
 build_package=false
 install_prefix=$ROCM_PATH
 build_tests=false
