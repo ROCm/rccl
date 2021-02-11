@@ -23,9 +23,9 @@ function display_help()
 # #################################################
 # global variables
 # #################################################
-default_path=/opt/rocm
+ROCM_PATH=$ROCM_PATH
 build_package=false
-install_prefix=$default_path
+install_prefix=$ROCM_PATH
 build_tests=false
 run_tests=false
 run_tests_all=false
@@ -103,7 +103,7 @@ while true; do
     esac
     done
 
-rocm_path=/opt/rocm/bin
+ROCM_BIN_PATH=$ROCM_PATH/bin
 
 # /etc/*-release files describe the system
 if [[ -e "/etc/os-release" ]]; then
@@ -177,9 +177,9 @@ fi
 check_exit_code "$?"
 
 if ($build_tests) || (($run_tests) && [[ ! -f ./test/UnitTests ]]); then
-    CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 else
-    CXX=$rocm_path/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
+    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$install_prefix ../../.
 fi
 check_exit_code "$?"
 
