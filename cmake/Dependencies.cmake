@@ -32,7 +32,9 @@
 # For downloading, building, and installing required dependencies
 include(cmake/DownloadProject.cmake)
 
-find_package(GTest 1.10)
+if(NOT INSTALL_DEPENDENCIES)
+    find_package(GTest 1.10)
+endif()
 
 if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
     if(CMAKE_CXX_COMPILER MATCHES ".*/hipcc$")
@@ -45,6 +47,7 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
     message(STATUS "GTest not found. Downloading and building GTest.")
     # Download, build and install googletest library
     set(GTEST_ROOT ${CMAKE_CURRENT_BINARY_DIR}/gtest CACHE PATH "")
+
     download_project(PROJ                googletest
                      GIT_REPOSITORY      https://github.com/google/googletest.git
                      GIT_TAG             release-1.10.0
