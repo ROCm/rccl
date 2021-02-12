@@ -36,6 +36,7 @@ struct ncclProxyArgs {
   uint64_t transmitted;
   uint64_t done;
   uint64_t end;
+  uint64_t hdp_flushed;
   void* requests[NCCL_STEPS];
   int idle;
 

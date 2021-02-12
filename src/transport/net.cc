@@ -283,7 +283,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
   if (args->state == ncclProxyOpReady) {
     // Round to next multiple of sliceSteps
     resources->step = ROUNDUP(resources->step, args->chunkSteps);
-    args->posted = args->transmitted = args->done = resources->step;
+    args->posted = args->transmitted = args->done = args->hdp_flushed = resources->step;
     args->end = resources->step + args->nsteps;
     args->state = ncclProxyOpProgress;
   }
@@ -345,6 +345,11 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
           }
         }
         if (ready) {
+          // flush HDP if not done
+          if (resources->curr_hdp_reg && args->hdp_flushed < LOAD(recvTail)) {
+            args->hdp_flushed = LOAD(recvTail);
+            STORE(resources->curr_hdp_reg, 1);
+          }
           // Data is ready, try to send.
           NCCLCHECK(ncclNetIsend(resources->netSendComm, buff, size, mhandle, args->requests+buffSlot));
           if (args->requests[buffSlot] != NULL) {
