@@ -82,6 +82,9 @@ static ncclResult_t ncclTopoGetInterCpuWidth(struct ncclTopoNode* cpu, float* wi
   if (cpu->cpu.arch == NCCL_TOPO_CPU_ARCH_X86 && cpu->cpu.vendor == NCCL_TOPO_CPU_VENDOR_INTEL) {
     *width = cpu->cpu.model == NCCL_TOPO_CPU_TYPE_SKL ? SKL_QPI_WIDTH : QPI_WIDTH;
   }
+  if (cpu->cpu.arch == NCCL_TOPO_CPU_ARCH_X86 && cpu->cpu.vendor == NCCL_TOPO_CPU_VENDOR_ZHAOXIN) {
+    *width = cpu->cpu.model ==  NCCL_TOPO_CPU_TYPE_YONGFENG ? YONGFENG_ZPI_WIDTH : ZPI_WIDTH;
+  }
   return ncclSuccess;
 }
 
@@ -104,7 +107,7 @@ ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode*
 
 ncclResult_t ncclTopoCreateNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id) {
   if (system->nodes[type].count == NCCL_TOPO_MAX_NODES) {
-    WARN("Error : tried to create too many nodes of type %d\n", type);
+    WARN("Error : tried to create too many nodes of type %d", type);
     return ncclInternalError;
   }
   struct ncclTopoNode* n = system->nodes[type].nodes+system->nodes[type].count;
@@ -379,7 +382,7 @@ ncclResult_t ncclTopoAddPci(struct ncclXmlNode* xmlPci, struct ncclTopoSystem* s
 }
 
 struct kvDict kvDictCpuArch[] = { { "x86_64", NCCL_TOPO_CPU_ARCH_X86 }, { "arm64", NCCL_TOPO_CPU_ARCH_ARM }, { "ppc64", NCCL_TOPO_CPU_ARCH_POWER }, { NULL, 0 } };
-struct kvDict kvDictCpuVendor[] = { { "GenuineIntel", NCCL_TOPO_CPU_VENDOR_INTEL }, { "AuthenticAMD", NCCL_TOPO_CPU_VENDOR_AMD }, { NULL, 0 } };
+struct kvDict kvDictCpuVendor[] = { { "GenuineIntel", NCCL_TOPO_CPU_VENDOR_INTEL }, { "AuthenticAMD", NCCL_TOPO_CPU_VENDOR_AMD }, { "CentaurHauls", NCCL_TOPO_CPU_VENDOR_ZHAOXIN }, { "  Shanghai  ", NCCL_TOPO_CPU_VENDOR_ZHAOXIN }, { NULL, 0 } };
 
 ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* system) {
   int numaId;
@@ -402,6 +405,11 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
       NCCLCHECK(xmlGetAttrInt(xmlCpu, "familyid", &familyId));
       NCCLCHECK(xmlGetAttrInt(xmlCpu, "modelid", &modelId));
       cpu->cpu.model = (familyId == 6 && modelId >= 0x55) ? NCCL_TOPO_CPU_TYPE_SKL : NCCL_TOPO_CPU_INTEL_BDW;
+    } else if (cpu->cpu.vendor == NCCL_TOPO_CPU_VENDOR_ZHAOXIN) {
+      int familyId, modelId;
+      NCCLCHECK(xmlGetAttrInt(xmlCpu, "familyid", &familyId));
+      NCCLCHECK(xmlGetAttrInt(xmlCpu, "modelid", &modelId));
+      if (familyId == 7 && modelId == 0x5B) cpu->cpu.model = NCCL_TOPO_CPU_TYPE_YONGFENG;
     }
     if (cpu->cpu.vendor == NCCL_TOPO_CPU_VENDOR_AMD) {
       int familyId, modelId;
@@ -486,7 +494,7 @@ ncclResult_t ncclTopoAddNvLinks(struct ncclXmlNode* node, struct ncclTopoSystem*
     NCCLCHECK(busIdToInt64(parentBusId, &pBusId));
     NCCLCHECK(ncclTopoGetNode(system, &gpu, GPU, pBusId));
     if (gpu == NULL) {
-      WARN("Add NVLink error : could not find GPU %lx\n", pBusId);
+      WARN("Add NVLink error : could not find GPU %lx", pBusId);
       return ncclInternalError;
     }
     int count;

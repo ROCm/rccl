@@ -40,10 +40,12 @@ ncclResult_t ncclTopoSetAffinity(struct ncclTopoSystem* system, int rank);
 #define NCCL_TOPO_CPU_ARCH_ARM 3
 #define NCCL_TOPO_CPU_VENDOR_INTEL 1
 #define NCCL_TOPO_CPU_VENDOR_AMD 2
+#define NCCL_TOPO_CPU_VENDOR_ZHAOXIN 3
 #define NCCL_TOPO_CPU_TYPE_BDW 1
 #define NCCL_TOPO_CPU_TYPE_SKL 2
 #define NCCL_TOPO_CPU_TYPE_ZEN 3
 #define NCCL_TOPO_CPU_TYPE_ROME 4
+#define NCCL_TOPO_CPU_TYPE_YONGFENG 1
 ncclResult_t ncclTopoCpuType(struct ncclTopoSystem* system, int* arch, int* vendor, int* model);
 ncclResult_t ncclTopoGetNetCount(struct ncclTopoSystem* system, int* count);
 

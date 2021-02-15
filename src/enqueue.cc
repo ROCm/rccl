@@ -376,7 +376,7 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
       info->nstepsPerLoop = 1;
       info->nchunksPerLoop = info->comm->nRanks; break;
     default:
-      WARN("Unknown pattern %d\n", info->pattern);
+      WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
   }
   return ncclSuccess;

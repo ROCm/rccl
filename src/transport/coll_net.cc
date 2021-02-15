@@ -295,7 +295,7 @@ ncclResult_t collNetSendProxy(struct ncclProxyArgs* args) {
           int count = size/ncclTypeSize(args->dtype);
           NCCLCHECK(collNetIallreduce(resources->collNetSendComm, (void*) buff, (void*)(reqFifo[buffSlot].recvBuff), count, args->dtype, args->redOp, sendMhandle, recvMhandle, args->requests+buffSlot));
           if (args->requests[buffSlot] != NULL) {
-            TRACE(NCCL_NET, "sendProxy [%d/%d] Iallreduce posted, req %p", args->transmitted, buffSlot, args->requests[buffSlot]);
+            TRACE(NCCL_NET, "sendProxy [%lu/%d] Iallreduce posted, req %p", args->transmitted, buffSlot, args->requests[buffSlot]);
             STORE(sizesFifo+buffSlot, -1);
             // Make sure size is reset to zero before we update the head.
             __sync_synchronize();
@@ -312,7 +312,7 @@ ncclResult_t collNetSendProxy(struct ncclProxyArgs* args) {
       int buffSlot = args->done%NCCL_STEPS;
       NCCLCHECK(collNetTest((void*)(args->requests[buffSlot]), &done, &size));
       if (done) {
-        TRACE(NCCL_NET, "sendProxy [%d/%d] request %p done, size %d", args->done, buffSlot, args->requests[buffSlot], size);
+        TRACE(NCCL_NET, "sendProxy [%lu/%d] request %p done, size %d", args->done, buffSlot, args->requests[buffSlot], size);
         STORE(&reqFifo[buffSlot].size, size);
         // Make sure size is updated before we set recvBuff to NULL (from the view of recv proxy, concerning the flush)
         // (reordered store after store is possible on POWER, though not on x86)
@@ -357,7 +357,7 @@ ncclResult_t collNetRecvProxy(struct ncclProxyArgs* args) {
       char* recvBuff = p == NCCL_PROTO_LL ? (char*)resources->llData : localBuff;
       int recvStepSize = p == NCCL_PROTO_LL ? stepSize/2 : stepSize;
       STORE(&reqFifo[buffSlot].recvBuff, recvBuff+buffSlot*recvStepSize);
-      TRACE(NCCL_NET, "recvProxy [%d/%d] posted buffer %p", args->posted, buffSlot, reqFifo[buffSlot].recvBuff);
+      TRACE(NCCL_NET, "recvProxy [%lu/%d] posted buffer %p", args->posted, buffSlot, reqFifo[buffSlot].recvBuff);
       args->posted += args->sliceSteps;
       args->idle = 0;
       return ncclSuccess;
@@ -365,7 +365,7 @@ ncclResult_t collNetRecvProxy(struct ncclProxyArgs* args) {
     if (args->posted > args->received) {
       int buffSlot = args->received%NCCL_STEPS;
       if (LOAD(&reqFifo[buffSlot].recvBuff) == NULL) { // Buffer is cleared : coll is complete
-        TRACE(NCCL_NET, "recvProxy [%d/%d] done, size %d", args->received, buffSlot, LOAD(&reqFifo[buffSlot].size));
+        TRACE(NCCL_NET, "recvProxy [%lu/%d] done, size %d", args->received, buffSlot, LOAD(&reqFifo[buffSlot].size));
         if (args->protocol == NCCL_PROTO_LL) { // ll
           // re-attach flag
           uint32_t flag = NCCL_LL_FLAG(args->received + 1);

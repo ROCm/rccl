@@ -26,7 +26,7 @@ static ncclResult_t getPath(struct ncclTopoSystem* system, struct ncclTopoNode* 
       return ncclSuccess;
     }
   }
-  WARN("Could not find node of type %d id %lx\n", t, id);
+  WARN("Could not find node of type %d id %lx", t, id);
   return ncclInternalError;
 }
 
@@ -281,6 +281,9 @@ ncclResult_t ncclTopoCheckP2p(struct ncclTopoSystem* system, int64_t id1, int64_
   if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_INTEL) {
     if (model == NCCL_TOPO_CPU_TYPE_BDW) p2pLevel = PATH_PXB;
     else p2pLevel = PATH_SYS;
+  }
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_ZHAOXIN) {
+    p2pLevel = PATH_PXB;
   }
 
 compare:

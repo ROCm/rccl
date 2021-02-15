@@ -78,7 +78,7 @@ static ncclResult_t bootstrapNetRecv(int fd, void* data, int size) {
   int recvSize;
   NCCLCHECK(socketRecv(fd, &recvSize, sizeof(int)));
   if (recvSize > size) {
-    WARN("Message truncated : received %d bytes instead of %d\n", recvSize, size);
+    WARN("Message truncated : received %d bytes instead of %d", recvSize, size);
     return ncclInternalError;
   }
   NCCLCHECK(socketRecv(fd, data, std::min(recvSize, size)));
@@ -274,7 +274,7 @@ static ncclResult_t remoteAlloc(void** ptr, int fd) {
 void* ncclRemoteMemAllocationService(void* args) {
   struct remAllocState* state = (struct remAllocState *) args;
   if (hipSetDevice(state->cudaDev) != hipSuccess) {
-    WARN("[Rem Allocator] Failed to set CUDA device %d\n", state->cudaDev);
+    WARN("[Rem Allocator] Failed to set CUDA device %d", state->cudaDev);
   }
 
   // Prepare poll descriptor
@@ -523,7 +523,7 @@ ncclResult_t bootstrapRecv(void* commState, int peer, void* data, int size) {
 ncclResult_t bootstrapClose(void* commState) {
   struct extState* state = (struct extState*)commState;
   if (state->unexpectedConnections != NULL) {
-    WARN("Unexpected connections are not empty.\n");
+    WARN("Unexpected connections are not empty");
     return ncclInternalError;
   }
   close(state->extListenFd);

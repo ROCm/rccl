@@ -362,7 +362,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
             args->channel->sizes += LOAD(sizesFifo+buffSlot);
             args->channel->send_byte += LOAD(sizesFifo+buffSlot);
 #endif
-            TRACE(NCCL_NET, "sendProxy [%d/%d] Isend (LL) posted, req %p", args->transmitted, buffSlot, args->requests[buffSlot]);
+            TRACE(NCCL_NET, "sendProxy [%lu/%d] Isend (LL) posted, req %p", args->transmitted, buffSlot, args->requests[buffSlot]);
             STORE(sizesFifo+buffSlot, -1);
             // Make sure size is reset to zero before we update the head.
             __sync_synchronize();
@@ -379,7 +379,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
       int buffSlot = args->done%NCCL_STEPS;
       NCCLCHECK(ncclNetTest(args->requests[buffSlot], &done, NULL));
       if (done) {
-        TRACE(NCCL_NET, "sendProxy [%d/%d] request %p done, size %d", args->done, buffSlot, args->requests[buffSlot]);
+        TRACE(NCCL_NET, "sendProxy [%lu/%d] request %p done", args->done, buffSlot, args->requests[buffSlot]);
 #ifdef ENABLE_PROFILING
         if (args->protocol == NCCL_PROTO_SIMPLE) {
           args->channel->active_req --;
@@ -446,7 +446,7 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
       }
       NCCLCHECK(ncclNetIrecv(resources->netRecvComm, ptr, buffSize, mhandle, args->requests+buffSlot));
       if (args->requests[buffSlot] != NULL) {
-        TRACE(NCCL_NET, "recvProxy [%d/%d] posted recv request %p", args->posted, buffSlot, args->requests[buffSlot]);
+        TRACE(NCCL_NET, "recvProxy [%lu/%d] posted recv request %p", args->posted, buffSlot, args->requests[buffSlot]);
 #ifdef ENABLE_PROFILING
         if (args->protocol == NCCL_PROTO_SIMPLE) {
           if (args->channel->active_req == 0) {
