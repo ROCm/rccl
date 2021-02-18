@@ -67,7 +67,8 @@ There are unit tests implemented with the Googletest framework in RCCL, which ar
 To invoke the unit tests, go to the build folder, then the test subfolder, and execute the appropriate unit test executable(s).
 
 Unit test names are now of the format:
-[CollectiveCall]CorrectnessSweep/[CollectiveCall]CorrectnessTest.[Type of test]/[ncclRedOp_t]_[datatype]_[number of elements]_[number of devices]_[in place/out of place]_[environment variables]
+
+    [CollectiveCall]CorrectnessSweep/[CollectiveCall]CorrectnessTest.[Type of test]/[ncclRedOp_t]_[datatype]_[number of elements]_[number of devices]_[in place/out of place]_[environment variables]
 
 This allows filtering of unit tests being run by their parameter values by passing the --gtest_filter command line flag, for example:
 
@@ -82,7 +83,7 @@ See the rccl-tests README for more information on how to build and run those tes
 
 ## Library and API Documentation
 
-Please refer to the [Library documentation](http://rccl.readthedocs.io/) for current documentation.
+Please refer to the [Library documentation](https://rccl.readthedocs.io/) for current documentation.
 
 ## Copyright
 

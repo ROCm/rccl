@@ -1,13 +1,17 @@
 #!/bin/bash
-# # Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+# # Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
 
-if [ -d docBin ]; then
-    rm -rf docBin
-fi
+set -eu
 
-rm nccl.h
+# Make this directory the PWD
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-sed -e 's/ROCFFT_EXPORT //g' ../src/nccl.h.in > nccl.h
+# Rename our input file
+cp ../src/nccl.h.in nccl.h
+
+# Build the doxygen info
+rm -rf docBin
 doxygen Doxyfile
-#rm nccl.h
 
+# Cleanup
+rm nccl.h

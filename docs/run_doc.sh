@@ -1,17 +1,15 @@
 #!/bin/bash
-# Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
 
-if [ -d docBin ]; then
-    rm -rf docBin
-fi
+set -eu
 
-sed -e 's/ROCFFT_EXPORT //g' ../library/include/rocfft.h > rocfft.h
-doxygen Doxyfile
+# Make this directory the PWD
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Build doxygen info
+./run_doxygen.sh
+
+# Build sphinx docs
 cd source
 make clean
 make html
-cd ..
-
-rm rocfft.h
-
