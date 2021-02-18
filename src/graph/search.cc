@@ -864,17 +864,6 @@ static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclT
   return ncclSuccess;
 }
 
-static bool getGpuNetCount(struct ncclTopoSystem* system, int id, int *g, int *n, int nnet, int *net_map) {
-  *g = 0; *n = 0;
-  int i;
-  if (ncclTopoIdToIndex(system, CPU, id, &i) == ncclInternalError) return false;
-  for (int j = 0; j < nnet; j++)
-    if (system->nodes[NET].nodes[net_map[j]].paths[CPU][i].count == 2) (*n)++;
-  for (int j = 0; j < system->nodes[GPU].count; j++)
-    if (system->nodes[GPU].nodes[j].paths[CPU][i].count == 2) (*g)++;
-  return true;
-}
-
 static ncclResult_t ncclGpuIdToIndex(struct ncclTopoSystem* system, int id, int* index) {
   *index = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
@@ -893,12 +882,18 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   romeTopo->nNics = 0;
   romeTopo->nLinks = 0;
   for (int i = 0; i < romeTopo->nGpus; i ++) {
-    int gpu, n;
+    int gpu, n, m, distance;
     NCCLCHECK(ncclGpuIdToIndex(system, i, &gpu));
     romeTopo->gpuIds[i] = system->nodes[GPU].nodes[gpu].id;
-    for (n = 0; n < romeTopo->nCpus; n++)
-      if (system->nodes[GPU].nodes[gpu].paths[CPU][n].count == 2) break;
-    if (n < romeTopo->nCpus) romeTopo->gpuNuma[i] = system->nodes[CPU].nodes[n].id;
+    m = 0;
+    distance = system->nodes[GPU].nodes[gpu].paths[CPU][m].count;
+    for (n = 1; n < romeTopo->nCpus; n++) {
+      if (system->nodes[GPU].nodes[gpu].paths[CPU][n].count < distance) {
+        distance = system->nodes[GPU].nodes[gpu].paths[CPU][n].count;
+        m = n;
+      }
+    }
+    if (m < romeTopo->nCpus) romeTopo->gpuNuma[i] = system->nodes[CPU].nodes[m].id;
 
     struct ncclTopoNode* node = system->nodes[GPU].nodes+gpu;
     if (node->paths[GPU] == NULL) continue;
@@ -936,23 +931,31 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     }
   }
 
+  for (int i = 0; i < romeTopo->nNics; i ++) {
+    int net, n, m, distance;
+    NCCLCHECK(ncclTopoIdToIndex(system, NET, net_map[i], &net));
+    m = 0;
+    distance = system->nodes[NET].nodes[net].paths[CPU][m].count;
+    for (n = 0; n < romeTopo->nCpus; n++)
+      if (system->nodes[NET].nodes[net].paths[CPU][n].count < distance) {
+        distance = system->nodes[NET].nodes[net].paths[CPU][n].count;
+        m = n;
+      }
+    if (m < romeTopo->nCpus) romeTopo->nicNuma[i] = system->nodes[CPU].nodes[m].id;
+    else return ncclSuccess;
+  }
+
   // number of GPUs and NICs on each numa node is used as first screening pattern
   for (int i = 0; i < romeTopo->nCpus; i++) {
-    int g, n;
-    getGpuNetCount(system, i, &g, &n, romeTopo->nNics, net_map);
+    int g = 0, n = 0;
+    for (int j = 0; j < romeTopo->nGpus; j++)
+      if (romeTopo->gpuNuma[j] == i) g++;
+    for (int j = 0; j < romeTopo->nNics; j++)
+      if (romeTopo->nicNuma[j] == i) n++;
     pattern[i*2] = '0' + g;
     pattern[i*2+1] = '0' + n;
   }
   pattern[romeTopo->nCpus*2] = 0;
-
-  for (int i = 0; i < romeTopo->nNics; i ++) {
-    int net, n;
-    NCCLCHECK(ncclTopoIdToIndex(system, NET, net_map[i], &net));
-    for (n = 0; n < romeTopo->nCpus; n++)
-      if (system->nodes[NET].nodes[net].paths[CPU][n].count == 2) break;
-    if (n < romeTopo->nCpus) romeTopo->nicNuma[i] = system->nodes[CPU].nodes[n].id;
-    else return ncclSuccess;
-  }
 
   const char* romeModelFile = getenv("RCCL_DUMP_ROME_MODEL_FILE");
   if (romeModelFile) {
