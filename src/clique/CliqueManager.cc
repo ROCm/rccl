@@ -82,7 +82,7 @@ void CliqueManager::CleanUp()
   {
     // Release caches
     if (m_ipcHandleSendCache) delete m_ipcHandleSendCache;
-    if (m_ipcHandleSendCache) delete m_ipcHandleRecvCache;
+    if (m_ipcHandleRecvCache) delete m_ipcHandleRecvCache;
 
     // Close shared memory
     m_shmHandles.Close();
