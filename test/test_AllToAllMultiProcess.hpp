@@ -13,24 +13,32 @@ namespace CorrectnessTests
     class AllToAllMultiProcessCorrectnessTest : public MultiProcessCorrectnessTest
     {
     public:
-        static void ComputeExpectedResults(Dataset& dataset, int const rank)
+        static void ComputeExpectedResults(Dataset& dataset, std::vector<int> const& ranks)
         {
-            for (int i = 0; i < dataset.numDevices; i++)
+            for (int i = 0; i < ranks.size(); i++)
             {
-                HIP_CALL(hipMemcpy((int8_t *)dataset.expected[i]+dataset.NumBytes()*rank, (int8_t *)dataset.inputs[rank]+dataset.NumBytes()*i,
-                               dataset.NumBytes(), hipMemcpyDeviceToHost));
+                int rank = ranks[i];
+                for (int j = 0; j < dataset.numDevices; j++)
+                {
+                    HIP_CALL(hipMemcpy((int8_t *)dataset.expected[j]+dataset.NumBytes()*rank, (int8_t *)dataset.inputs[rank]+dataset.NumBytes()*j,
+                                   dataset.NumBytes(), hipMemcpyDeviceToHost));
+                }
             }
         }
 
-        void TestAllToAll(int rank, Dataset& dataset)
+        void TestAllToAll(int rank, Dataset& dataset, bool& pass)
         {
             SetUpPerProcess(rank, ncclCollAllToAll, comms[rank], streams[rank], dataset);
 
-            if (numDevices > numDevicesAvailable) return;
+            if (numDevices > numDevicesAvailable)
+            {
+                pass = true;
+                return;
+            }
 
             // Prepare input / output / expected results
             FillDatasetWithPattern(dataset, rank);
-            ComputeExpectedResults(dataset, rank);
+            ComputeExpectedResults(dataset, std::vector<int>(1, rank));
 
             // Launch the reduction
             ncclAllToAll(dataset.inputs[rank],
@@ -42,7 +50,7 @@ namespace CorrectnessTests
             HIP_CALL(hipStreamSynchronize(streams[rank]));
 
             // Check results
-            ValidateResults(dataset, rank);
+            pass = ValidateResults(dataset, rank);
 
             TearDownPerProcess(comms[rank], streams[rank]);
             dataset.Release(rank);

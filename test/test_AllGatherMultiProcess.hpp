@@ -13,38 +13,50 @@ namespace CorrectnessTests
     class AllGatherMultiProcessCorrectnessTest : public MultiProcessCorrectnessTest
     {
     public:
-        static void ComputeExpectedResults(Dataset& dataset, Barrier& barrier, int const rank, int const numDevices)
+        static void ComputeExpectedResults(Dataset& dataset, Barrier& barrier, int const numDevices, std::vector<int> const& ranks)
         {
             size_t const byteCount = dataset.NumBytes() / dataset.numDevices;
 
-            HIP_CALL(hipMemcpy(static_cast<char*>(dataset.expected[0]) + rank * byteCount, (int8_t *)dataset.inputs[rank] + (rank * byteCount),
-                               byteCount, hipMemcpyDeviceToHost));
-
-            barrier.Wait();
-            // Rank 0 sends answer to other ranks
-            if (rank == 0)
+            for (int i = 0; i < ranks.size(); i++)
             {
-                for (int i = 0; i < dataset.numDevices; i++)
+                int rank = ranks[i];
+                HIP_CALL(hipMemcpy(static_cast<char*>(dataset.expected[0]) + rank * byteCount, (int8_t *)dataset.inputs[rank] + (rank * byteCount),
+                                   byteCount, hipMemcpyDeviceToHost));
+            }
+            barrier.Wait();
+
+            // Rank 0 sends answer to other ranks
+            for (int i = 0; i < ranks.size(); i++)
+            {
+                int rank = ranks[i];
+                if (rank == 0)
                 {
-                    if (i == rank) continue;
-                    memcpy(dataset.expected[i], dataset.expected[0], dataset.NumBytes());
+                    for (int i = 0; i < dataset.numDevices; i++)
+                    {
+                        if (i == rank) continue;
+                        memcpy(dataset.expected[i], dataset.expected[0], dataset.NumBytes());
+                    }
                 }
             }
         }
 
-        void TestAllGather(int rank, Dataset& dataset)
+        void TestAllGather(int rank, Dataset& dataset, bool& pass)
         {
             // Prepare input / output / expected results
             SetUpPerProcess(rank, ncclCollAllGather, comms[rank], streams[rank], dataset);
 
-            if (numDevices > numDevicesAvailable) return;
-            if (numElements % numDevices != 0) return;
+            if (numDevices > numDevicesAvailable || numElements % numDevices != 0)
+            {
+                pass = true;
+                return;
+            }
 
             Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
 
             // Prepare input / output / expected results
             FillDatasetWithPattern(dataset, rank);
-            ComputeExpectedResults(dataset, barrier, rank, numDevices);
+
+            ComputeExpectedResults(dataset, barrier, numDevices, std::vector<int>(1, rank));
 
             size_t const byteCount = dataset.NumBytes() / numDevices;
             size_t const sendCount = dataset.numElements / numDevices;
@@ -58,7 +70,7 @@ namespace CorrectnessTests
             HIP_CALL(hipStreamSynchronize(streams[rank]));
 
             // Check results
-            ValidateResults(dataset, rank);
+            pass = ValidateResults(dataset, rank);
 
             TearDownPerProcess(comms[rank], streams[rank]);
             dataset.Release(rank);

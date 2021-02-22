@@ -37,7 +37,7 @@ ncclResult_t ncclAllToAllv(const void *sendbuff, const size_t sendcounts[], cons
     NCCLCHECK(ncclGroupEnd());
     return ncclSuccess;
   } else {
-    struct ncclInfo info = { ncclCollAllToAllv, "AllToAllv",
+    struct ncclInfo info = { ncclFuncAllToAllv, "AllToAllv",
       sendbuff, recvbuff, 0, datatype, ncclSum, 0, comm, stream, /* Args */
       ALLTOALLV_CHUNKSTEPS, ALLTOALLV_SLICESTEPS, sendcounts, sdispls, recvcounts, rdispls };
     return ncclEnqueueCheck(&info);

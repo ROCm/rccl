@@ -13,26 +13,35 @@ namespace CorrectnessTests
     class BroadcastMultiProcessCorrectnessTest : public MultiProcessCorrectnessTest
     {
     public:
-        static void ComputeExpectedResults(Dataset& dataset, int const root, int const rank)
+        static void ComputeExpectedResults(Dataset& dataset, int const root, std::vector<int> const& ranks)
         {
-            // Root has the answer; share it via host memcpy's
-            if (rank == root)
+            for (int h = 0; h < ranks.size(); h++)
             {
-                HIP_CALL(hipMemcpy(dataset.expected[rank], dataset.inputs[rank],
-                                   dataset.NumBytes(), hipMemcpyDeviceToHost));
-                for (int i = 0; i < dataset.numDevices; i++)
+                int rank = ranks[h];
+                // Root has the answer; share it via host memcpy's
+                if (rank == root)
                 {
-                    if (i == rank) continue;
-                    memcpy(dataset.expected[i], dataset.expected[root], dataset.NumBytes());
+                    HIP_CALL(hipMemcpy(dataset.expected[rank], dataset.inputs[rank],
+                                       dataset.NumBytes(), hipMemcpyDeviceToHost));
+                    for (int i = 0; i < dataset.numDevices; i++)
+                    {
+                        if (i == rank) continue;
+                        memcpy(dataset.expected[i], dataset.expected[root], dataset.NumBytes());
+                    }
+                    break;
                 }
             }
         }
 
-        void TestBroadcast(int rank, Dataset& dataset)
+        void TestBroadcast(int rank, Dataset& dataset, bool& pass)
         {
             SetUpPerProcess(rank, ncclCollBroadcast, comms[rank], streams[rank], dataset);
 
-            if (numDevices > numDevicesAvailable) return;
+            if (numDevices > numDevicesAvailable)
+            {
+                pass = true;
+                return;
+            }
 
             Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
 
@@ -41,7 +50,7 @@ namespace CorrectnessTests
             {
                 // Prepare input / output / expected results
                 FillDatasetWithPattern(dataset, rank);
-                ComputeExpectedResults(dataset, root, rank);
+                ComputeExpectedResults(dataset, root, std::vector<int>(1, rank));
 
                 // Launch the reduction (1 process per GPU)
                 ncclResult_t res = ncclBroadcast(dataset.inputs[rank],
@@ -53,7 +62,7 @@ namespace CorrectnessTests
                 HIP_CALL(hipStreamSynchronize(streams[rank]));
 
                 // Check results
-                ValidateResults(dataset, rank);
+                pass = ValidateResults(dataset, rank);
 
                 // Ensure all processes have finished current iteration before proceeding
                 barrier.Wait();

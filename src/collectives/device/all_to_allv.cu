@@ -8,5 +8,4 @@
 #include "common.h"
 #include "collectives.h"
 
-IMPL_COLL_FUNC(ncclAllToAllv, copy, FuncSum, i8, int8_t);
-IMPL_COLL_KERN(ncclAllToAllv, copy, FuncSum, i8, int8_t, 0);
+IMPL_COLL_FUNC(AllToAllv, RING, SIMPLE, Sum, int8_t);

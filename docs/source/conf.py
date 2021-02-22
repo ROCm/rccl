@@ -56,8 +56,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'RCCL'
-copyright = u'2015-2018, NVIDIA CORPORATION; Modifications Copyright 2019-2020 Advanced Mirco Devices'
-author = u'Advanced Mirco Devices'
+copyright = u'2015-2018, NVIDIA CORPORATION; Modifications Copyright 2019-2021 Advanced Micro Devices'
+author = u'Advanced Micro Devices'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -156,7 +156,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'RCCL.tex', u'RCCL Documentation',
-     u'Advanced Mirco Devices', 'manual'),
+     u'Advanced Micro Devices', 'manual'),
 ]
 
 

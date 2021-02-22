@@ -9,28 +9,8 @@
 #define OP128_H_
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {
-  v0=LOAD(ptr);
-  v1=LOAD(ptr+1);
-}
-
-inline __device__ void store128(uint64_t* ptr, uint64_t v0, uint64_t v1) {
-  STORE(ptr, v0);
-  STORE(ptr+1, v1);
-}
-
 inline __device__ uint64_t* shmemCvtPtr(volatile uint64_t* shmemGenericPtr) {
   return (uint64_t*)shmemGenericPtr;
-}
-
-inline __device__ void loadShmem128(uint64_t* shmemAsmPtr, uint64_t &v0, uint64_t &v1) {
-  v0=LOAD(shmemAsmPtr);
-  v1=LOAD(shmemAsmPtr+1);
-}
-
-inline __device__ void storeShmem128(uint64_t* shmemAsmPtr, uint64_t v0, uint64_t v1) {
-  STORE(shmemAsmPtr, v0);
-  STORE(shmemAsmPtr+1, v1);
 }
 #else
 inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {

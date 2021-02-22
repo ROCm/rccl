@@ -65,13 +65,25 @@ BEGIN {
     do {
       match($col_1, /\[([0-9]+)\]/, ary)
       chan=strtonum(ary[1])
-      match($col_2, /(\-?[0-9]+)\/(\-?[0-9]+)\/(\-?[0-9]+)\->(\-?[0-9]+)\->(\-?[0-9]+)\|(\-?[0-9]+)\->(\-?[0-9]+)\->(\-?[0-9]+)\/(\-?[0-9]+)\/(\-?[0-9]+)/, ary)
-      if(ary[8]!="-1")
-        treedns[ary[7] "," ary[8] "," chan]="1"
-      if(ary[9]!="-1")
-        treedns[ary[7] "," ary[9] "," chan]="1"
-      if(ary[10]!="-1")
-        treedns[ary[7] "," ary[10] "," chan]="1"
+      where = match($col_2, /(\-?[0-9]+)\/(\-?[0-9]+)\/(\-?[0-9]+)\->(\-?[0-9]+)\->(\-?[0-9]+)\|(\-?[0-9]+)\->(\-?[0-9]+)\->(\-?[0-9]+)\/(\-?[0-9]+)\/(\-?[0-9]+)/, ary)
+      if(where != 0) {
+        if(ary[8]!="-1")
+          treedns[ary[7] "," ary[8] "," chan]="1"
+        if(ary[9]!="-1")
+          treedns[ary[7] "," ary[9] "," chan]="1"
+        if(ary[10]!="-1")
+          treedns[ary[7] "," ary[10] "," chan]="1"
+      } else {
+        where = match($col_2, /(\-?[0-9]+)\/(\-?[0-9]+)\/(\-?[0-9]+)\->(\-?[0-9]+)\->(\-?[0-9]+)/, ary)
+        if(where != 0) {
+          if(ary[1]!="-1")
+            treedns[ary[4] "," ary[1] "," chan]="1"
+          if(ary[2]!="-1")
+            treedns[ary[4] "," ary[2] "," chan]="1"
+          if(ary[3]!="-1")
+            treedns[ary[4] "," ary[3] "," chan]="1"
+        }
+      }
       if(chan>max_treedn)
         max_treedn=chan
       col_1=col_1+2

@@ -46,7 +46,7 @@ static ncclResult_t shmOpen(const char* shmname, const int shmsize, void** shmPt
   *shmPtr = ptr;
   return ncclSuccess;
 sysError:
-  WARN("Error while %s shared memory segment %s (size %d)\n", create ? "creating" : "attaching to", shmname, shmsize);
+  WARN("Error while %s shared memory segment %s (size %d)", create ? "creating" : "attaching to", shmname, shmsize);
 hipError:
   if (fd != -1) close(fd);
   if (create) shm_unlink(shmname);

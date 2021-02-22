@@ -114,6 +114,7 @@ namespace CorrectnessTests
             if (idle) pthread_yield();
         }
 
+        free(done);
         HIPCHECK(hipHostFree(fake_head));
         HIPCHECK(hipStreamDestroy(stream));
         dataset.Release();

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020-2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -72,7 +72,7 @@ public:
 
   // Set pointers for where clique-related arguments will be found
   // This sets pointers to device-accessible memory where the arguments will eventually reside
-  ncclResult_t SetCliqueCollectiveArgs(CollectiveArgs* args);
+  ncclResult_t SetCliqueArgs(ncclWorkElem* args);
 
   // Blocking call that only returns after all out-standing clique pointers are ready
   ncclResult_t WaitForPointers();
@@ -121,8 +121,8 @@ protected:
 
 // For use in bootstrapping code
 struct bootstrapRootStruct {
-    void* listenComm;
-    unsigned long hash;
+  int listenFd;
+  unsigned long hash;
 };
 
 #endif

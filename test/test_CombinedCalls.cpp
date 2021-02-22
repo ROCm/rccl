@@ -51,7 +51,11 @@ namespace CorrectnessTests
                               scatter_dataset.outputs[i],
                               numElements, dataType,
                               root, comms[i], streams[i]);
-
+            }
+            ncclGroupEnd();
+            ncclGroupStart();
+            for (int i = 0; i < numDevices; i++)
+            {
                 ncclAllGather((int8_t *)datasets[0].inputs[i] + (i * byteCount),
                               datasets[0].outputs[i], elemCount,
                               dataType, comms[i], streams[i]);

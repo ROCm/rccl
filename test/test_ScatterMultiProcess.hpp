@@ -23,12 +23,16 @@ namespace CorrectnessTests
             }
         }
 
-        void TestScatter(int rank, Dataset& dataset)
+        void TestScatter(int rank, Dataset& dataset, bool& pass)
         {
             // Prepare input / output / expected results
             SetUpPerProcess(rank, ncclCollScatter, comms[rank], streams[rank], dataset);
 
-            if (numDevices > numDevicesAvailable) return;
+            if (numDevices > numDevicesAvailable)
+            {
+                pass = true;
+                return;
+            }
 
             Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
 
@@ -50,7 +54,7 @@ namespace CorrectnessTests
                 HIP_CALL(hipStreamSynchronize(streams[rank]));
 
                 // Check results
-                ValidateResults(dataset, rank);
+                pass = ValidateResults(dataset, rank);
 
                 barrier.Wait();
             }

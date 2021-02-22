@@ -181,7 +181,7 @@ namespace CorrectnessTests
         // Explicit memory release to avoid double-free from subDatasets
         void Release()
         {
-            for (int i = 0; i < outputs.size(); i++)
+            for (int i = 0; i < numDevices; i++)
             {
                 if (!inPlace) hipFree(outputs[i]);
                 hipFree(inputs[i]);
@@ -456,6 +456,16 @@ namespace CorrectnessTests
             // Make the test tuple parameters accessible
             std::tie(op, dataType, numElements, numDevices, inPlace, envVals) = GetParam();
 
+            // Collect the number of available GPUs
+            HIP_CALL(hipGetDeviceCount(&numDevicesAvailable));
+
+            // Only proceed with testing if there are enough GPUs
+            if (numDevices > numDevicesAvailable)
+            {
+              GTEST_SKIP();
+              return;
+            }
+
             envString = 0;
             numTokens = 0;
             if (strcmp(envVals, "")) {
@@ -477,22 +487,6 @@ namespace CorrectnessTests
                 }
             }
 
-            // Collect the number of available GPUs
-            HIP_CALL(hipGetDeviceCount(&numDevicesAvailable));
-
-            // Only proceed with testing if there are enough GPUs
-            if (numDevices > numDevicesAvailable)
-            {
-                fprintf(stdout, "[  SKIPPED ] Test requires %d devices (only %d available)\n",
-                        numDevices, numDevicesAvailable);
-
-                // Modify the number of devices so that tear-down doesn't occur
-                // This is temporary until GTEST_SKIP() becomes available
-                numDevices = 0;
-                numDevicesAvailable = -1;
-                return;
-            }
-
             // Initialize communicators
             comms.resize(numDevices);
             NCCL_CALL(ncclCommInitAll(comms.data(), numDevices, NULL));
@@ -509,6 +503,8 @@ namespace CorrectnessTests
         // Clean up per TestTuple
         void TearDown() override
         {
+            if (IsSkipped()) return;
+
             // Release communicators and streams
             for (int i = 0; i < numDevices; i++)
             {
@@ -702,13 +698,18 @@ namespace CorrectnessTests
     class MultiProcessCorrectnessTest : public CorrectnessTest
     {
     protected:
+        // IMPORTANT: We cannot have any HIP API calls in the parent process.
+        // Do any HIP setup in SetupPerProcess().
         void SetUp() override
         {
-            // Check for NCCL_COMM_ID env variable (otherwise will not init)
+            // Check if NCCL_COMM_ID is already set; if not, set it now
             if (!getenv("NCCL_COMM_ID"))
             {
-                printf("Must set NCCL_COMM_ID prior to execution\n");
-                exit(0);
+                char hostname[HOST_NAME_MAX+1];
+                gethostname(hostname, HOST_NAME_MAX+1);
+                std::string hostnameString(hostname);
+                hostnameString.append(":55513");
+                setenv("NCCL_COMM_ID", hostnameString.c_str(), 0);
             }
 
             // Make the test tuple parameters accessible
@@ -737,10 +738,14 @@ namespace CorrectnessTests
 
             comms.resize(numDevices);
             streams.resize(numDevices);
+            dataset = (Dataset*)mmap(NULL, sizeof(Dataset), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+            Barrier::ClearShmFiles(std::atoi(getenv("NCCL_COMM_ID")));
         }
 
         void TearDown() override
         {
+            munmap(dataset, sizeof(Dataset));
+
             // Restore env vars after tests
             for (int i = 0; i < numTokens/2; i++) {
                 if (savedEnv[i]) {
@@ -773,9 +778,11 @@ namespace CorrectnessTests
             // Only proceed with testing if there are enough GPUs
             if (numDevices > numDevicesAvailable)
             {
-                fprintf(stdout, "[  SKIPPED ] Test requires %d devices (only %d available)\n",
-                        numDevices, numDevicesAvailable);
-
+                if (rank == 0)
+                {
+                    fprintf(stdout, "[  SKIPPED ] Test requires %d devices (only %d available)\n",
+                            numDevices, numDevicesAvailable);
+                }
                 // Modify the number of devices so that tear-down doesn't occur
                 // This is temporary until GTEST_SKIP() becomes available
                 numDevices = 0;
@@ -795,7 +802,7 @@ namespace CorrectnessTests
             if (res != ncclSuccess)
             {
                 printf("Test failure:%s %d '%s' numRanks:%d\n", __FILE__,__LINE__,ncclGetErrorString(res), numDevices);
-                ASSERT_EQ(res, hipSuccess);
+                ASSERT_EQ(res, ncclSuccess);
             }
         }
 
@@ -803,17 +810,22 @@ namespace CorrectnessTests
         void SetUpPerProcess(int rank, ncclFunc_t const func, ncclComm_t& comm, hipStream_t& stream, Dataset& dataset)
         {
             SetUpPerProcessHelper(rank, comm, stream);
-            dataset.Initialize(numDevices, numElements, dataType, inPlace, func, rank);
+            if (numDevices <= numDevicesAvailable)
+            {
+                dataset.Initialize(numDevices, numElements, dataType, inPlace, func, rank);
+            }
         }
 
         // To be called by each process/rank individually (see GroupCallsMultiProcess)
         void SetUpPerProcess(int rank, std::vector<ncclFunc_t> const& func, ncclComm_t& comm, hipStream_t& stream, std::vector<Dataset*>& datasets)
         {
             SetUpPerProcessHelper(rank, comm, stream);
-
-            for (int i = 0; i < datasets.size(); i++)
+            if (numDevices <= numDevicesAvailable)
             {
-                datasets[i]->Initialize(numDevices, numElements, dataType, inPlace, func[i], rank);
+                for (int i = 0; i < datasets.size(); i++)
+                {
+                    datasets[i]->Initialize(numDevices, numElements, dataType, inPlace, func[i], rank);
+                }
             }
         }
 
@@ -875,7 +887,7 @@ namespace CorrectnessTests
             free(arrayI1);
         }
 
-        void ValidateResults(Dataset const& dataset, int rank, int root = 0) const
+        bool ValidateResults(Dataset const& dataset, int rank, int root = 0) const
         {
             int8_t*   outputI1 = (int8_t   *)malloc(dataset.NumBytes(ncclOutputBuffer));
             uint8_t*  outputU1 = (uint8_t  *)outputI1;
@@ -894,8 +906,11 @@ namespace CorrectnessTests
 
             // only output on root rank is valid for gather collective
             if (dataset.function == ncclCollGather && rank != root)
-                return;
-            HIP_CALL(hipMemcpy(outputI1, dataset.outputs[rank], dataset.NumBytes(ncclOutputBuffer), hipMemcpyDeviceToHost));
+                return true;
+
+            hipError_t err = hipMemcpy(outputI1, dataset.outputs[rank], dataset.NumBytes(ncclOutputBuffer), hipMemcpyDeviceToHost);
+            if (err != hipSuccess)
+                return false;
 
             int8_t*   expectedI1 = (int8_t   *)dataset.expected[rank];
             uint8_t*  expectedU1 = (uint8_t  *)expectedI1;
@@ -953,8 +968,35 @@ namespace CorrectnessTests
                     }
                 }
             }
-            ASSERT_EQ(isMatch, true);
+            return isMatch;
         }
+
+        void ValidateProcesses(std::vector<int> const& pids)
+        {
+            int numProcesses = pids.size();
+            int status[numProcesses];
+            for (int i = 0; i < numProcesses; i++)
+            {
+                waitpid(pids[i], &status[i], 0);
+
+                ASSERT_NE(WIFEXITED(status[i]), 0) << "[ERROR] Child process " << i << " did not exit cleanly.";
+                ASSERT_EQ(WEXITSTATUS(status[i]), EXIT_SUCCESS) << "[ERROR] Child process " << i << " had a test failure.";
+            }
+        }
+
+        void TerminateChildProcess(bool const pass)
+        {
+            if (pass)
+            {
+                exit(EXIT_SUCCESS);
+            }
+            else
+            {
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        Dataset* dataset;
     };
 
     std::string GenerateTestNameString(testing::TestParamInfo<MultiProcessCorrectnessTest::ParamType>& info);

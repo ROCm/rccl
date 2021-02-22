@@ -12,7 +12,6 @@ NCCL_API(ncclResult_t, ncclGather, const void* sendbuff, void* recvbuff, size_t 
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
 ncclResult_t ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream) {
-  if (comm->alltoallDisable) {
     int nRanks;
     NCCLCHECK(ncclCommCount(comm, &nRanks));
     size_t rankOffset = sendcount * ncclTypeSize(datatype);
@@ -27,11 +26,4 @@ ncclResult_t ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     NCCLCHECK(ncclSend(sendbuff, sendcount, datatype, root, comm, stream));
     NCCLCHECK(ncclGroupEnd());
     return ncclSuccess;
-  }
-  else {
-    struct ncclInfo info = { ncclCollGather, "Gather",
-      sendbuff, recvbuff, sendcount, datatype, ncclSum, root, comm, stream, /* Args */
-      GATHER_CHUNKSTEPS, GATHER_SLICESTEPS };
-    return ncclEnqueueCheck(&info);
-  }
 }

@@ -19,11 +19,15 @@ namespace CorrectnessTests
                                dataset.NumBytes(), hipMemcpyDeviceToHost));
         }
 
-        void TestGather(int rank, Dataset& dataset)
+        void TestGather(int rank, Dataset& dataset, bool& pass)
         {
             SetUpPerProcess(rank, ncclCollGather, comms[rank], streams[rank], dataset);
 
-            if (numDevices > numDevicesAvailable) return;
+            if (numDevices > numDevicesAvailable)
+            {
+                pass = true;
+                return;
+            }
 
             Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
 
@@ -44,7 +48,7 @@ namespace CorrectnessTests
                 HIP_CALL(hipStreamSynchronize(streams[rank]));
 
                 // Check results
-                ValidateResults(dataset, rank, root);
+                pass = ValidateResults(dataset, rank, root);
 
                 // Ensure all processes have finished current iteration before proceeding
                 barrier.Wait();

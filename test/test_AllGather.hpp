@@ -25,6 +25,8 @@ namespace CorrectnessTests
 
             for (int i = 0; i < dataset.numDevices; i++)
                 memcpy(dataset.expected[i], result, dataset.NumBytes());
+
+            free(result);
         }
     };
 }

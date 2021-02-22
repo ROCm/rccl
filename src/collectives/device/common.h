@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -11,154 +11,129 @@
 #include "collectives.h"
 #include "devcomm.h"
 
-__device__
-inline  __attribute((always_inline))
-long long int __rtc64() {
-#if __HIP__
-  return (long long int) __builtin_amdgcn_s_memrealtime();
-#else
-  return (long long int) __clock_u64();
-#endif
-}
+#define COLL_UNROLL 2
+#define NCCL_MAX_DEV_ARITY NCCL_MAX_TREE_ARITY
 
 // Exit If Abort Barrier across CTA: make sure all threads exit consistently
 // Each thread sets a predicate to true if abort == 1
 // all CTA's threads enter the barrier and do a popc on their predicates being True
 // If any of the thread's predicate was True, all the threads call exit()
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #define exitIfAbortBarrier(abort, abortCount) \
   if (abort) __atomic_fetch_add(abortCount, 1, __ATOMIC_SEQ_CST); \
   __syncthreads(); \
   if (LOAD(abortCount)) { /*asm volatile ("s_endpgm");*/ return false; }
 #define __syncwarp()
-#else
-static inline __device__ void exitIfAbortBarrier(int abort) {
-  uint32_t popc;
-  asm ("{");
-  asm volatile ("   .reg .pred barr_pred;");
-  asm volatile ("   setp.eq.u32 barr_pred,%0,1;" :: "r"(abort));
-  asm volatile ("   bar.red.popc.u32 %0, 13, barr_pred;" : "=r"(popc));
-  asm ("}");
-  if (popc) { asm volatile ("exit;"); }
-}
-#endif
 
-#define NCCL_FUNC5(coll, op, dtype) \
-  NCCL_COLL_NAME(coll##LL, op, dtype), \
-  NCCL_COLL_NAME(coll##LL, op, dtype), \
-  NCCL_COLL_NAME(coll, op, dtype)
+#define NCCL_FUNC5(func, algo, redop, type) \
+  NCCL_FUNC_NAME(func, algo, LL,     redop, type), \
+  NCCL_FUNC_NAME(func, algo, LL,     redop, type), \
+  NCCL_FUNC_NAME(func, algo, SIMPLE, redop, type)
 
-#define NCCL_FUNC4(coll, op, dtype) \
-  NCCL_FUNC5(coll##Tree, op, dtype), \
-  NCCL_FUNC5(coll##Ring, op, dtype), \
-  NCCL_FUNC5(coll##CollNet, op, dtype)
+#define NCCL_FUNC4(func, redop, type) \
+  NCCL_FUNC5(func, TREE,    redop, type), \
+  NCCL_FUNC5(func, RING,    redop, type), \
+  NCCL_FUNC5(func, COLLNET, redop, type)
 
 // Must be consistent with ncclDataType_t
-#define NCCL_FUNCS3A(coll, op) \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  u8), \
-  NCCL_FUNC4(coll, op, i32), \
-  NCCL_FUNC4(coll, op, u32), \
-  NCCL_FUNC4(coll, op, i64), \
-  NCCL_FUNC4(coll, op, u64), \
-  NCCL_FUNC4(coll, op, f16), \
-  NCCL_FUNC4(coll, op, f32), \
-  NCCL_FUNC4(coll, op, f64), \
-  NCCL_FUNC4(coll, op, b16)
-#define NCCL_FUNCS3B(coll, op) \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8), \
-  NCCL_FUNC4(coll, op,  i8)
+#define NCCL_FUNCS3A(func, redop) \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, uint8_t), \
+  NCCL_FUNC4(func, redop, int32_t), \
+  NCCL_FUNC4(func, redop, uint32_t), \
+  NCCL_FUNC4(func, redop, int64_t), \
+  NCCL_FUNC4(func, redop, uint64_t), \
+  NCCL_FUNC4(func, redop, half), \
+  NCCL_FUNC4(func, redop, float), \
+  NCCL_FUNC4(func, redop, double), \
+  NCCL_FUNC4(func, redop, rccl_bfloat16)
+#define NCCL_FUNCS3B(func, redop) \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t), \
+  NCCL_FUNC4(func, redop, int8_t)
 
 // Must be consistent with ncclRedOp_t
-#define NCCL_FUNCS2A(coll) \
-  NCCL_FUNCS3A(coll, sum ), \
-  NCCL_FUNCS3A(coll, prod), \
-  NCCL_FUNCS3A(coll, max ), \
-  NCCL_FUNCS3A(coll, min )
-#define NCCL_FUNCS2B(coll) \
-  NCCL_FUNCS3B(coll, copy), \
-  NCCL_FUNCS3B(coll, copy), \
-  NCCL_FUNCS3B(coll, copy), \
-  NCCL_FUNCS3B(coll, copy)
+#define NCCL_FUNCS2A(func) \
+  NCCL_FUNCS3A(func, Sum ), \
+  NCCL_FUNCS3A(func, Prod), \
+  NCCL_FUNCS3A(func, Max ), \
+  NCCL_FUNCS3A(func, Min )
+#define NCCL_FUNCS2B(func) \
+  NCCL_FUNCS3B(func, Sum), \
+  NCCL_FUNCS3B(func, Sum), \
+  NCCL_FUNCS3B(func, Sum), \
+  NCCL_FUNCS3B(func, Sum)
 
 // [RCCL] Adding clique-based kernels for AllReduce, in-place of unused RingLL28 kernels
-#define NCCL_FUNC5B(coll, op, dtype) \
-  NCCL_COLL_NAME(coll##LL, op, dtype), \
-  NCCL_COLL_NAME(coll##LL128, op, dtype), \
-  NCCL_COLL_NAME(coll, op, dtype)
+#define NCCL_FUNC5B(func, algo, redop, type) \
+  NCCL_FUNC_NAME(func, algo, LL,     redop, type), \
+  NCCL_FUNC_NAME(func, algo, LL128,  redop, type), \
+  NCCL_FUNC_NAME(func, algo, SIMPLE, redop, type)
 
-#define NCCL_FUNC4B(coll, op, dtype) \
-  NCCL_FUNC5(coll##Tree, op, dtype), \
-  NCCL_FUNC5B(coll##Ring, op, dtype), \
-  NCCL_FUNC5(coll##CollNet, op, dtype)
+#define NCCL_FUNC4B(func, redop, type) \
+  NCCL_FUNC5(func, TREE,    redop, type), \
+  NCCL_FUNC5B(func, RING,    redop, type), \
+  NCCL_FUNC5(func, COLLNET, redop, type)
 
-#define NCCL_FUNCS3C(coll, op)                  \
-  NCCL_FUNC4B(coll, op,  i8), \
-  NCCL_FUNC4B(coll, op,  u8), \
-  NCCL_FUNC4B(coll, op, i32), \
-  NCCL_FUNC4B(coll, op, u32), \
-  NCCL_FUNC4B(coll, op, i64), \
-  NCCL_FUNC4B(coll, op, u64), \
-  NCCL_FUNC4B(coll, op, f16), \
-  NCCL_FUNC4B(coll, op, f32), \
-  NCCL_FUNC4B(coll, op, f64), \
-  NCCL_FUNC4B(coll, op, b16)
+#define NCCL_FUNCS3C(func, redop) \
+  NCCL_FUNC4B(func, redop, int8_t), \
+  NCCL_FUNC4B(func, redop, uint8_t), \
+  NCCL_FUNC4B(func, redop, int32_t), \
+  NCCL_FUNC4B(func, redop, uint32_t), \
+  NCCL_FUNC4B(func, redop, int64_t), \
+  NCCL_FUNC4B(func, redop, uint64_t), \
+  NCCL_FUNC4B(func, redop, half), \
+  NCCL_FUNC4B(func, redop, float), \
+  NCCL_FUNC4B(func, redop, double), \
+  NCCL_FUNC4B(func, redop, rccl_bfloat16)
 
-#define NCCL_FUNCS2C(coll) \
-  NCCL_FUNCS3C(coll, sum ), \
-  NCCL_FUNCS3C(coll, prod), \
-  NCCL_FUNCS3C(coll, max ), \
-  NCCL_FUNCS3C(coll, min )
-
-// [/RCCL]
-
+#define NCCL_FUNCS2C(func) \
+  NCCL_FUNCS3C(func, Sum ), \
+  NCCL_FUNCS3C(func, Prod), \
+  NCCL_FUNCS3C(func, Max ), \
+  NCCL_FUNCS3C(func, Min )
 
 // Must be consistent with ncclFunc_t
 #define NCCL_FUNCS() { \
-  NCCL_FUNCS2B(ncclBroadcast), \
-  NCCL_FUNCS2A(ncclReduce), \
-  NCCL_FUNCS2B(ncclAllGather), \
-  NCCL_FUNCS2A(ncclReduceScatter), \
-  NCCL_FUNCS2C(ncclAllReduce), \
-  NCCL_COLL_NAME(ncclGather, copy, i8), \
-  NCCL_COLL_NAME(ncclScatter, copy, i8), \
-  NCCL_COLL_NAME(ncclAllToAll, copy, i8), \
-  NCCL_COLL_NAME(ncclAllToAllv, copy, i8), \
-  NCCL_COLL_NAME(ncclSendRecv, copy, i8) }
+  NCCL_FUNCS2B(Broadcast), \
+  NCCL_FUNCS2A(Reduce), \
+  NCCL_FUNCS2B(AllGather), \
+  NCCL_FUNCS2A(ReduceScatter), \
+  NCCL_FUNCS2C(AllReduce), \
+  NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), \
+  NCCL_FUNC_NAME(AllToAll, RING, SIMPLE, Sum, int8_t), \
+  NCCL_FUNC_NAME(AllToAllv, RING, SIMPLE, Sum, int8_t) }
+// [/RCCL]
 
 // Must be consistent with the ncclFuncSet enum
-using ncclKernelFunc_t = void (*)(struct CollectiveArgs*);
+using ncclKernelFunc_t = void (*)(struct ncclWorkElem* args);
 
 static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 // Don't try to initialize the host shadow copy of this device-side global
 // variable. There is no host pointer to a device-side function, which
 // confuses clang. This will be fixed in the next clang release.
 #if defined(__HIP_DEVICE_COMPILE__)
-  NCCL_FUNCS2B(ncclBroadcast),
-  NCCL_FUNCS2A(ncclReduce),
-  NCCL_FUNCS2B(ncclAllGather),
-  NCCL_FUNCS2A(ncclReduceScatter),
-  NCCL_FUNCS2C(ncclAllReduce),
-  NCCL_COLL_NAME(ncclGather, copy, i8),
-  NCCL_COLL_NAME(ncclScatter, copy, i8),
-  NCCL_COLL_NAME(ncclAllToAll, copy, i8),
-  NCCL_COLL_NAME(ncclAllToAllv, copy, i8),
-  NCCL_COLL_NAME(ncclSendRecv, copy, i8)
+  NCCL_FUNCS2B(Broadcast),
+  NCCL_FUNCS2A(Reduce),
+  NCCL_FUNCS2B(AllGather),
+  NCCL_FUNCS2A(ReduceScatter),
+  NCCL_FUNCS2C(AllReduce),
+  NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
+  NCCL_FUNC_NAME(AllToAll, RING, SIMPLE, Sum, int8_t),
+  NCCL_FUNC_NAME(AllToAllv, RING, SIMPLE, Sum, int8_t),
 #endif
 };
 
 template<unsigned short f, unsigned short l>
 struct Caller {
   static __device__ __host__
-  void call(ncclColl* const c) noexcept
+  void call(struct ncclWorkElem* const c) noexcept
   {
     constexpr unsigned short m = f + (l - f) / 2;
 
@@ -169,78 +144,88 @@ struct Caller {
 template<unsigned short f>
 struct Caller<f, f + 1>{
   static __device__ __host__
-  void call(struct ncclColl* const c) noexcept { ncclFuncs[f](&c->args); }
+  void call(struct ncclWorkElem* const c) noexcept { ncclFuncs[f](c); }
 };
+
+static_assert(FUNC_INDEX_P2P == 1800, "Wrong P2P function index");
 
 inline
 __device__
-void NCCL_CALL_FUNCTIONS(struct ncclColl* const c) noexcept {
+void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
   if (c->funcIndex < 360) {
-    if (c->funcIndex % 9 == 0) ncclBroadcastTreeLL_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 1) ncclBroadcastTreeLL128_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 2) ncclBroadcastTree_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 3) ncclBroadcastRingLL_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 4) ncclBroadcastRingLL128_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 5) ncclBroadcastRing_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 6) ncclBroadcastCollNetLL_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 7) ncclBroadcastCollNetLL128_copy_i8(&c->args);
-    else ncclBroadcastCollNet_copy_i8(&c->args);
+    if (c->funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 1) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 2) ncclFunction_Broadcast_TREE_SIMPLE_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 3) ncclFunction_Broadcast_RING_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 4) ncclFunction_Broadcast_RING_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 5) ncclFunction_Broadcast_RING_SIMPLE_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 6) ncclFunction_Broadcast_COLLNET_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 7) ncclFunction_Broadcast_COLLNET_LL_Sum_int8_t(c);
+    else ncclFunction_Broadcast_COLLNET_SIMPLE_Sum_int8_t(c);
   }
   else if (c->funcIndex < 720) Caller<360, 720>::call(c);
   else if (c->funcIndex < 1080) {
-    if (c->funcIndex % 9 == 0) ncclAllGatherTreeLL_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 1) ncclAllGatherTreeLL128_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 2) ncclAllGatherTree_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 3) ncclAllGatherRingLL_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 4) ncclAllGatherRingLL128_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 5) ncclAllGatherRing_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 6) ncclAllGatherCollNetLL_copy_i8(&c->args);
-    else if (c->funcIndex % 9 == 7) ncclAllGatherCollNetLL128_copy_i8(&c->args);
-    else ncclAllGatherCollNet_copy_i8(&c->args);
+    if (c->funcIndex % 9 == 0) ncclFunction_AllGather_TREE_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 1) ncclFunction_AllGather_TREE_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 2) ncclFunction_AllGather_TREE_SIMPLE_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 3) ncclFunction_AllGather_RING_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 4) ncclFunction_AllGather_RING_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 5) ncclFunction_AllGather_RING_SIMPLE_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 6) ncclFunction_AllGather_COLLNET_LL_Sum_int8_t(c);
+    else if (c->funcIndex % 9 == 7) ncclFunction_AllGather_COLLNET_LL_Sum_int8_t(c);
+    else ncclFunction_AllGather_COLLNET_SIMPLE_Sum_int8_t(c);
   }
   else if (c->funcIndex < 1800) Caller<1080, 1800>::call(c);
-  else if (c->funcIndex == 1800) {
-    ncclGather_copy_i8(&c->args);
-  }
-  else if (c->funcIndex == 1801) {
-    ncclScatter_copy_i8(&c->args);
-  }
-  else if (c->funcIndex == 1802) {
-    ncclAllToAll_copy_i8(&c->args);
-  }
-  else if (c->funcIndex == 1803) {
-    ncclAllToAllv_copy_i8(&c->args);
-  }
-  else ncclSendRecv_copy_i8(&c->args);
+  else if (c->funcIndex == 1800) ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
+  else if (c->funcIndex == 1801) ncclFunction_AllToAll_RING_SIMPLE_Sum_int8_t(c);
+  else if (c->funcIndex == 1802) ncclFunction_AllToAllv_RING_SIMPLE_Sum_int8_t(c);
 }
 
-static __device__ void load_parallel(void* dst, void* src, size_t size, int tid, uint32_t* abortCount) {
+static __device__ void load_parallel(void* dst, void* src, size_t size, int tid) {
   int* d = (int*)dst;
   int* s = (int*)src;
   for (int o = tid; o < (size/sizeof(int)); o += blockDim.x) d[o] = s[o];
 }
 
-static __device__ bool load_coll(struct ncclColl* localColl, struct ncclColl* hostColl, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
-  // Check whether the last operation was aborted and make sure all threads exit
-  int abort = tid == 0 ? *(comm->abortFlag) : 0;
-  exitIfAbortBarrier(abort, abortCount);
-  load_parallel(localColl, hostColl, sizeof(struct ncclColl), tid, abortCount);
+static __device__ bool load_coll(struct ncclWork* localWork, struct ncclWork* hostWork, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
   __syncthreads();
-  if (tid == 0) hostColl->active = 0;
+  load_parallel(localWork, hostWork, sizeof(struct ncclWork), tid);
+  // Check whether the last operation was aborted and make sure all threads exit
+  int abort = tid == 0 ? LOAD(comm->abortFlag) : 0;
+  exitIfAbortBarrier(abort, abortCount);
+  if (tid == 0) hostWork->elems[0].active = 0;
   return true;
 }
+
+template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
+class ncclFunction {
+  public:
+  __device__ void run(struct ncclWorkElem* args) {}
+};
 
 #ifdef ENABLE_COLLTRACE
 #define traceColl(fIdx)  \
     uint32_t pos = __atomic_fetch_add(comm->collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    comm->collTrace[pos].timeStamp = __rtc64(); \
-    comm->collTrace[pos].opCount = localColl.args.opCount; \
+    comm->collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    comm->collTrace[pos].opCount = w->opCount; \
     comm->collTrace[pos].bid = bid; \
-    comm->collTrace[pos].funcIndex = fIdx;
+    comm->collTrace[pos].funcIndex = fIdx; \
+    if (fIdx == FUNC_INDEX_P2P) { \
+      comm->collTrace[pos].p2p.nThreads = w->p2p.nThreads; \
+      comm->collTrace[pos].p2p.delta = (uint16_t)(w->p2p.delta); \
+    } else if (fIdx == FUNC_INDEX_A2AV) { \
+      comm->collTrace[pos].coll.nThreads = w->nThreads; \
+      comm->collTrace[pos].coll.bid = w->a2av.bid; \
+      comm->collTrace[pos].coll.nChannels = w->a2av.nChannels; \
+    } else { \
+      comm->collTrace[pos].coll.nThreads = w->nThreads; \
+      comm->collTrace[pos].coll.bid = w->coll.bid; \
+      comm->collTrace[pos].coll.nChannels = w->coll.nChannels; \
+    }
 #define traceKernelLaunch(fIdx)  { \
     traceColl(fIdx); \
-    comm->collTrace[pos].type = ncclCollTraceKernelLaunchType; \
     asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (comm->collTrace[pos].data_0)); \
+    comm->collTrace[pos].type = ncclCollTraceKernelLaunchType; \
   }
 #define traceCollEnd(fIdx)  { \
     traceColl(fIdx); \
@@ -250,124 +235,188 @@ static __device__ bool load_coll(struct ncclColl* localColl, struct ncclColl* ho
     traceColl(fIdx); \
     comm->collTrace[pos].type = ncclCollTraceAbortType; \
   }
+//  traceData(int16_t data2, uint32_t data4, uint64_t data8_0, uint64_t data8_1)
+#define traceData(data2, data4, data8_0, data8_1) { \
+    uint32_t pos = __atomic_fetch_add(comm->collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    comm->collTrace[pos].bid = blockIdx.x; \
+    comm->collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    comm->collTrace[pos].funcIndex = data2; \
+    comm->collTrace[pos].data_0 = data4; \
+    comm->collTrace[pos].opCount = data8_0; \
+    comm->collTrace[pos].data_1 = data8_1; \
+    comm->collTrace[pos].type = ncclCollTraceDataType; \
+  }
 #else
-#define traceKernelLaunch()
-#define traceCollEnd()
-#define traceAbort()
+#define traceKernelLaunch(fIdx)
+#define traceCollEnd(fIdx)
+#define traceAbort(fIdx)
+#define traceData(data2, data4, data8_0, data8_1)
 #endif
 
-extern __device__ volatile uint64_t* ncclShmem;
+#define MAXWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 
+struct ncclShmemPtrs {
+  void* srcs[NCCL_MAX_DEV_ARITY+1];
+  void* dsts[NCCL_MAX_DEV_ARITY+1];
+  uint64_t barrier;
+  uint64_t barrier_next[MAXWARPS];
+};
+
+struct ncclShmemData {
+  union {
 #ifdef ENABLE_LL128
-#define ALLOCATE_SHMEM \
-  __shared__ volatile uint64_t shmem[NCCL_LL128_SHMEM_SIZE]; \
-  ncclShmem = shmem; \
-  __shared__ uint32_t sync[NCCL_LL128_MAX_NTHREADS/WARP_SIZE];
+    volatile uint64_t data[NCCL_LL128_SHMEM_SIZE];
 #else
-#define ALLOCATE_SHMEM \
-  uint32_t* sync = 0;
+    volatile uint64_t* data;
 #endif
+    struct ncclShmemPtrs ptrs[NCCL_MAX_GROUPS];
+  };
+  uint32_t sync[MAXWARPS];
+  struct ncclWork localWork;
+};
 
-/* Functions for aggregation case */
-#define IMPL_COLL_FUNC(coll, op, ncclFunc, dtype, ctype) \
-__device__ void NCCL_COLL_NAME(coll, op, dtype)(struct CollectiveArgs* args) { \
-  coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(args); \
+extern __device__ struct ncclShmemData *ncclShmem;
+template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL, int FINDEX, bool COLLTRACE>
+__device__ void ncclKernel(struct ncclWorkElem first)  {
+  int tid = threadIdx.x;
+  int bid = blockIdx.x;
+  __shared__ struct ncclShmemData shmem;
+  ncclShmem = &shmem;
+  __shared__ uint32_t abortCount;
+  if (tid == 0) {
+    abortCount = 0;
+    for (auto i = 0; i < NCCL_MAX_GROUPS; i++) {
+      shmem.ptrs[i].barrier = 0;
+      for (auto j = 0; j < MAXWARPS; j++) shmem.ptrs[i].barrier_next[j] = 0;
+    }
+  }
+  __syncthreads();
+
+  auto f = ncclFunction<FUNCTION, ALGO, PROTO, REDOP, T, UNROLL>();
+
+  struct ncclDevComm* comm = first.comm;
+  struct ncclChannel* channel = comm->channels+bid;
+  struct ncclWorkElem* w = NULL;
+  uint16_t index = first.index;
+  bool firstLaunch = true;
+
+  if (bid == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
+
+  while (1) {
+    if (w == NULL) {
+      w = shmem.localWork.elems;
+      if (!load_coll(&shmem.localWork, channel->workFifo+index, tid, comm, &abortCount)) {
+        if (COLLTRACE && tid == 0) traceAbort(0xffff);
+        return;
+      }
+      if (COLLTRACE && tid == 0) {
+        if (firstLaunch) traceKernelLaunch(w->funcIndex);
+        if (!firstLaunch) traceCollEnd(w->funcIndex);
+        firstLaunch = false;
+      }
+    } else if (COLLTRACE && tid == 0) {
+        traceKernelLaunch(w->funcIndex);
+        firstLaunch = false;
+    }
+    if (tid < w->nThreads) {
+      if (w->funcIndex == FINDEX) {
+        f.run(w);
+      } else {
+        NCCL_CALL_FUNCTIONS(w);
+      }
+    }
+    index = (index+1) % NCCL_MAX_OPS;
+    if (w->active == 2) {
+      if (COLLTRACE && tid == 0) traceCollEnd(0xffff);
+      return;
+    }
+    w = NULL;
+  }
 }
 
-/* Kernels with the first operation inlined */
-#define IMPL_COLL_KERN(coll, op, ncclFunc, dtype, ctype, fIndex) \
+#define IMPL_COLL_KERN(func, algo, proto, redop, type, fIndex) \
 __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
-__global__ void NCCL_KERN_NAME(coll, op, dtype)(struct ncclDevComm* comm) { \
-  int tid = threadIdx.x; \
-  int bid = blockIdx.x; \
-  ALLOCATE_SHMEM; \
-  __shared__ struct ncclColl localColl; \
-  __shared__ uint32_t abortCount; \
-  __shared__ uint64_t barrier[MAXBARRIERS]; \
-  __shared__ uint64_t barrier_next[MAXBARRIERS*MAXWARPS]; \
-  if (tid == 0) abortCount = 0; \
-  __syncthreads(); \
- \
-  struct ncclChannel* channel = comm->channels+bid; \
-  if (tid == 0) { \
-    channel->sync = sync; \
-    channel->barrier = barrier; \
-    channel->barrier_next = barrier_next; \
-    for (auto i = 0; i < MAXBARRIERS; i++) barrier[i] = 0; \
-    for (auto i = 0; i < MAXBARRIERS*MAXWARPS; i++) barrier_next[i] = 0; \
-  } \
-  if (!load_coll(&localColl, channel->collectives+channel->collFifoHead, tid, comm, &abortCount)) { \
-    if (tid == 0) traceAbort(-1); \
-    return; \
-  } \
-  if (tid == 0) traceKernelLaunch(localColl.funcIndex); \
-  while (1) { \
-    if (tid < localColl.args.common.nThreads) { \
-      if (localColl.funcIndex == fIndex) { \
-        coll##Kernel<COLL_UNROLL, ncclFunc<ctype>, ctype>(&localColl.args); \
-      } else { \
-        NCCL_CALL_FUNCTIONS(&localColl); \
-      } \
-    } \
-    int nextIndex = localColl.nextIndex; \
-    if (tid == 0) channel->collFifoHead = nextIndex; \
- \
-    if (localColl.active == 2) { \
-      if (tid == 0) traceCollEnd(-1); \
-      return; \
-    } \
- \
-    /* Load next collective operation*/ \
-    if (!load_coll(&localColl, channel->collectives+nextIndex, tid, comm, &abortCount)) { \
-      if (tid == 0) traceAbort(-1); \
-      break; \
-    } \
-    if (tid == 0) traceCollEnd(localColl.funcIndex); \
-  } \
+__global__ void NCCL_KERN_NAME(func, algo, proto, redop, type)(struct ncclWorkElem first) { \
+  if (first.comm->collTraceThread) \
+    ncclKernel<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL, fIndex, true>(first); \
+  else \
+    ncclKernel<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL, fIndex, false>(first); \
 }
 
-#define IMPL_COLL_KERN_sum(coll, op, ncclFunc, dtype, ctype, fIndex) \
-  IMPL_COLL_KERN(coll, op, ncclFunc, dtype, ctype, fIndex)
-#define IMPL_COLL_KERN_copy(coll, op, ncclFunc, dtype, ctype, fIndex) \
-  IMPL_COLL_KERN(coll, op, ncclFunc, dtype, ctype, fIndex)
-#define IMPL_COLL_KERN_prod(coll, op, ncclFunc, dtype, ctype, fIndex)
-#define IMPL_COLL_KERN_min(coll, op, ncclFunc, dtype, ctype, fIndex)
-#define IMPL_COLL_KERN_max(coll, op, ncclFunc, dtype, ctype, fIndex)
+// Examples :     AllReduce, RING, LL,    Sum,   uint8
+/* Functions for aggregation case */
+#define IMPL_COLL_FUNC(func, algo, proto, redop, type) \
+__device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, redop, type)(struct ncclWorkElem* args) { \
+  auto f = ncclFunction<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL>(); \
+  f.run(args); \
+}
 
 // Only generate inline kernels for LL
-#define IMPL_COLL4(coll, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, al) \
-  IMPL_COLL_FUNC(coll##LL, op, ncclFunc, dtype, ctype) \
-  IMPL_COLL_FUNC(coll##LL128, op, ncclFunc, dtype, ctype) \
-  IMPL_COLL_FUNC(coll, op, ncclFunc, dtype, ctype) \
+#define IMPL_COLL4(func, algo, redop, type, ncclType) \
+  IMPL_COLL_FUNC(func, algo, LL,     redop, type) \
+  IMPL_COLL_FUNC(func, algo, SIMPLE, redop, type)
 
-#define IMPL_COLL3(coll, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType) \
-  IMPL_COLL4(coll##Tree, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_TREE) \
-  IMPL_COLL4(coll##Ring, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_RING) \
-  IMPL_COLL4(coll##CollNet, op, ncclFunc, dtype, ctype, ncclColl, ncclOp, ncclType, NCCL_ALGO_COLLNET)
+#define IMPL_COLL3(func, redop, type, ncclType) \
+  IMPL_COLL4(func, TREE,    redop, type, ncclType) \
+  IMPL_COLL4(func, RING,    redop, type, ncclType) \
+  IMPL_COLL4(func, COLLNET, redop, type, ncclType)
 
-#define IMPL_COLL2(coll, op, ncclFunc, ncclColl, ncclOp) \
-  IMPL_COLL3(coll, op, ncclFunc, i8,  int8_t,   ncclColl, ncclOp, ncclInt8) \
-  IMPL_COLL3(coll, op, ncclFunc, u8,  uint8_t,  ncclColl, ncclOp, ncclUint8) \
-  IMPL_COLL3(coll, op, ncclFunc, i32, int32_t,  ncclColl, ncclOp, ncclInt32) \
-  IMPL_COLL3(coll, op, ncclFunc, u32, uint32_t, ncclColl, ncclOp, ncclUint32) \
-  IMPL_COLL3(coll, op, ncclFunc, i64, int64_t,  ncclColl, ncclOp, ncclInt64) \
-  IMPL_COLL3(coll, op, ncclFunc, u64, uint64_t, ncclColl, ncclOp, ncclUint64) \
-  IMPL_COLL3(coll, op, ncclFunc, f16, half,     ncclColl, ncclOp, ncclFloat16) \
-  IMPL_COLL3(coll, op, ncclFunc, f32, float,    ncclColl, ncclOp, ncclFloat32) \
-  IMPL_COLL3(coll, op, ncclFunc, f64, double,   ncclColl, ncclOp, ncclFloat64) \
-  IMPL_COLL3(coll, op, ncclFunc, b16, rccl_bfloat16, ncclColl, ncclOp, ncclBfloat16)
+#define IMPL_COLL2(func, redop) \
+  IMPL_COLL3(func, redop, int8_t,   ncclInt8) \
+  IMPL_COLL3(func, redop, uint8_t,  ncclUint8) \
+  IMPL_COLL3(func, redop, int32_t,  ncclInt32) \
+  IMPL_COLL3(func, redop, uint32_t, ncclUint32) \
+  IMPL_COLL3(func, redop, int64_t,  ncclInt64) \
+  IMPL_COLL3(func, redop, uint64_t, ncclUint64) \
+  IMPL_COLL3(func, redop, half,     ncclFloat16) \
+  IMPL_COLL3(func, redop, float,    ncclFloat32) \
+  IMPL_COLL3(func, redop, double,   ncclFloat64) \
+  IMPL_COLL3(func, redop, rccl_bfloat16,   ncclBfloat16)
 
 // Reduction define all functions
-#define IMPL_COLL_R(collf, colln) \
-  IMPL_COLL2(collf, sum,  FuncSum,  colln, ncclSum); \
-  IMPL_COLL2(collf, prod, FuncProd, colln, ncclProd); \
-  IMPL_COLL2(collf, min,  FuncMin,  colln, ncclMin); \
-  IMPL_COLL2(collf, max,  FuncMax,  colln, ncclMax);
+#define IMPL_COLL_R(func) \
+  IMPL_COLL2(func, Sum) \
+  IMPL_COLL2(func, Prod) \
+  IMPL_COLL2(func, Min) \
+  IMPL_COLL2(func, Max)
 
-// Copy primitives only define one
-#define IMPL_COLL_C(collf, colln) \
-  IMPL_COLL3(collf, copy, FuncSum, i8, int8_t, colln, ncclSum, ncclInt8);
+// [RCCL] Define clique-based implementations (repurposed LL128)
+#define IMPL_COLL4_CLIQUE(func, algo, redop, type, ncclType) \
+  IMPL_COLL_FUNC(func, algo, LL,     redop, type) \
+  IMPL_COLL_FUNC(func, algo, LL128,  redop, type) \
+  IMPL_COLL_FUNC(func, algo, SIMPLE, redop, type)
 
-#define COLL_UNROLL 2
+#define IMPL_COLL3_CLIQUE(func, redop, type, ncclType) \
+  IMPL_COLL4(func, TREE,    redop, type, ncclType) \
+  IMPL_COLL4_CLIQUE(func, RING,    redop, type, ncclType) \
+  IMPL_COLL4(func, COLLNET, redop, type, ncclType)
+
+#define IMPL_COLL2_CLIQUE(func, redop) \
+  IMPL_COLL3_CLIQUE(func, redop, int8_t,   ncclInt8) \
+  IMPL_COLL3_CLIQUE(func, redop, uint8_t,  ncclUint8) \
+  IMPL_COLL3_CLIQUE(func, redop, int32_t,  ncclInt32) \
+  IMPL_COLL3_CLIQUE(func, redop, uint32_t, ncclUint32) \
+  IMPL_COLL3_CLIQUE(func, redop, int64_t,  ncclInt64) \
+  IMPL_COLL3_CLIQUE(func, redop, uint64_t, ncclUint64) \
+  IMPL_COLL3_CLIQUE(func, redop, half,     ncclFloat16) \
+  IMPL_COLL3_CLIQUE(func, redop, float,    ncclFloat32) \
+  IMPL_COLL3_CLIQUE(func, redop, double,   ncclFloat64) \
+  IMPL_COLL3_CLIQUE(func, redop, rccl_bfloat16,   ncclBfloat16)
+
+#define IMPL_COLL_CLIQUE(func) \
+  IMPL_COLL2_CLIQUE(func, Sum) \
+  IMPL_COLL2_CLIQUE(func, Prod) \
+  IMPL_COLL2_CLIQUE(func, Min) \
+  IMPL_COLL2_CLIQUE(func, Max)
+// [/RCCL]
+
+
+// Copy primitives only define one function for copy
+#define IMPL_COLL_C(func) IMPL_COLL3(func, Sum, int8_t, ncclInt8);
+
+// Point-to-point primitives only have one function/kernel.
+#define IMPL_COLL_P(func) \
+  IMPL_COLL_FUNC(func, RING, SIMPLE, Sum, int8_t); \
+  IMPL_COLL_KERN(func, RING, SIMPLE, Sum, int8_t, FUNC_INDEX_P2P);
 
 #endif

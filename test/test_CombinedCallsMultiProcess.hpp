@@ -20,21 +20,26 @@ namespace CorrectnessTests
     class CombinedCallsMultiProcessCorrectnessTest : public MultiProcessCorrectnessTest
     {
     public:
-        void TestCombinedCalls(int rank, std::vector<Dataset*>& datasets, std::vector<ncclFunc_t> const& funcs)
+        void TestCombinedCalls(int rank, std::vector<Dataset*>& datasets, std::vector<ncclFunc_t> const& funcs, bool& pass)
         {
             SetUpPerProcess(rank, funcs, comms[rank], streams[rank], datasets);
 
-            if (numDevices > numDevicesAvailable) return;
+            if (numDevices > numDevicesAvailable)
+            {
+                pass = true;
+                return;
+            }
 
             Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
 
             // Compute expected results for each dataset in combined
             int const root = 0;
-            AllGatherMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[0], barrier, rank, numDevices);
-            AllReduceMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[1], barrier, op, rank);
-            BroadcastMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[2], root, rank);
-            ReduceMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[3], barrier, op, root, rank);
-            ReduceScatterMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[4], barrier, op, rank);
+            std::vector<int> ranks(1, rank);
+            AllGatherMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[0], barrier, numDevices, ranks);
+            AllReduceMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[1], barrier, op, ranks);
+            BroadcastMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[2], root, ranks);
+            ReduceMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[3], barrier, op, root, ranks);
+            ReduceScatterMultiProcessCorrectnessTest::ComputeExpectedResults(*datasets[4], barrier, op, ranks);
 
             size_t const byteCount = datasets[0]->NumBytes() / numDevices;
             size_t const elemCount = numElements / numDevices;
@@ -64,12 +69,26 @@ namespace CorrectnessTests
             // Wait for reduction to complete
             HIP_CALL(hipStreamSynchronize(streams[rank]));
 
-            // Check results for each collective in the combined
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < funcs.size(); i++)
             {
-                ValidateResults(*datasets[i], rank);
+                for (int j = 0; j < ranks.size(); j++)
+                {
+                    pass = ValidateResults(*datasets[i], ranks[j], root);
+                    if (!pass)
+                    {
+                        break;
+                    }
+                }
                 barrier.Wait();
-                datasets[i]->Release(rank);
+                for (int j = 0; j < ranks.size(); j++)
+                {
+                    datasets[i]->Release(ranks[j]);
+                }
+            }
+
+            for (int i = 0; i < ranks.size(); i++)
+            {
+                TearDownPerProcess(comms[ranks[i]], streams[ranks[i]]);
             }
         }
     };

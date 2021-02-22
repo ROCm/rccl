@@ -71,7 +71,7 @@ ncclResult_t xmlGetToken(FILE* file, char* name, char* value, char* last) {
     if (c == '=') {
       ptr[o] = '\0';
       if (value == NULL) {
-        WARN("XML Parse : Unexpected value with name %s\n", ptr);
+        WARN("XML Parse : Unexpected value with name %s", ptr);
         return ncclInternalError;
       }
       return xmlGetValue(file, value, last);
@@ -137,7 +137,7 @@ ncclResult_t xmlGetNode(FILE* file, struct ncclXmlNode* node) {
     // Re-read the name, we got '/' in the first call
     NCCLCHECK(xmlGetToken(file, node->name, NULL, &c));
     if (c != '>') {
-      WARN("XML Parse error : unexpected trailing %c in closing tag %s\n", c, node->name);
+      WARN("XML Parse error : unexpected trailing %c in closing tag %s", c, node->name);
       return ncclInternalError;
     }
     return ncclSuccess;
@@ -150,7 +150,7 @@ ncclResult_t xmlGetNode(FILE* file, struct ncclXmlNode* node) {
   while (c == ' ') {
     NCCLCHECK(xmlGetToken(file, node->attrs[a].key, node->attrs[a].value, &c));
     if (a == MAX_ATTR_COUNT) {
-      INFO(NCCL_GRAPH, "XML Parse : Ignoring extra attributes (max %d)\n", MAX_ATTR_COUNT);
+      INFO(NCCL_GRAPH, "XML Parse : Ignoring extra attributes (max %d)", MAX_ATTR_COUNT);
       // Actually we need to still consume the extra attributes so we have an extra one.
     } else a++;
   }
@@ -178,7 +178,7 @@ ncclResult_t xmlLoadSub(FILE* file, struct ncclXml* xml, struct ncclXmlNode* hea
   if (head && head->type == NODE_TYPE_SINGLE) return ncclSuccess;
   while (1) {
     if (xml->maxIndex == MAX_NODES) {
-      WARN("Error : XML parser is limited to 1024 nodes\n");
+      WARN("Error : XML parser is limited to 1024 nodes");
       return ncclInternalError;
     }
     struct ncclXmlNode* node = xml->nodes+xml->maxIndex;
@@ -373,7 +373,7 @@ ncclResult_t ncclTopoSetAttrFromSys(struct ncclXmlNode* pciNode, const char* pat
   char strValue[MAX_STR_LEN];
   NCCLCHECK(ncclTopoGetStrFromSys(path, fileName, strValue));
   if (strValue[0] != '\0') { NCCLCHECK(xmlSetAttr(pciNode, attrName, strValue)); }
-  TRACE(NCCL_GRAPH, "Read from sys %s/%s -> %s=%s\n", path, fileName, attrName, strValue);
+  TRACE(NCCL_GRAPH, "Read from sys %s/%s -> %s=%s", path, fileName, attrName, strValue);
   return ncclSuccess;
 }
 
@@ -579,7 +579,6 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
   NCCLCHECK(xmlGetAttrIndex(gpuNode, "dev", &index));
   if (index == -1) {
     if (nvmlDev == NULL) {
-      //WARN("No NVML, trying to use CUDA instead");
       const char* busId;
       NCCLCHECK(xmlGetAttr(pciNode, "busid", &busId));
       if (busId == NULL || hipDeviceGetByPCIBusId(&dev, busId) != hipSuccess) dev = -1;
@@ -662,7 +661,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
     int maxNvLinks = (sm < 60) ? 0 : (sm < 70) ? 4 : (sm < 80) ? 6 : 12;
 
     if (maxNvLinks > 0 && nvmlDev == NULL) {
-      WARN("No NVML device handle. Skipping nvlink detection.\n");
+      WARN("No NVML device handle. Skipping nvlink detection.");
       maxNvLinks = 0;
     }
 
@@ -721,6 +720,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
         char* path;
         NCCLCHECK(getPciPath(busId, &path));
         NCCLCHECK(ncclTopoSetAttrFromSys(sub, path, "class", "tclass"));
+        free(path);
       }
     }
   }
@@ -732,10 +732,14 @@ ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct nccl
   struct ncclXmlNode* node;
   NCCLCHECK(ncclTopoGetPciNode(xml, busId, &node));
   NCCLCHECK(ncclTopoGetXmlFromSys(node, xml));
-  NCCLCHECK(wrapNvmlSymbols());
-  NCCLCHECK(wrapNvmlInit());
-  nvmlDevice_t nvmlDev;
-  if (wrapNvmlDeviceGetHandleByPciBusId(busId, &nvmlDev) != ncclSuccess) nvmlDev = NULL;
+  nvmlDevice_t nvmlDev = NULL;
+  static int nvmlInit = 0;
+  if (nvmlInit == 0) {
+    nvmlInit = (wrapNvmlSymbols() != ncclSuccess || wrapNvmlInit() != ncclSuccess) ? 2 : 1;
+  }
+  if (nvmlInit == 1) {
+    if (wrapNvmlDeviceGetHandleByPciBusId(busId, &nvmlDev) != ncclSuccess) nvmlDev = NULL;
+  }
   NCCLCHECK(ncclTopoGetXmlFromGpu(node, nvmlDev, xml, gpuNode));
   return ncclSuccess;
 }
@@ -778,12 +782,8 @@ ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const cha
     for (offset=strlen(pciSysPath)-1; pciSysPath[offset] != '/'; offset--);
     char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
     strcpy(busId, pciSysPath+offset+1);
-    NCCLCHECK(xmlFindTagKv(xml, "pci", &parent, "busid", busId));
-    if (parent == NULL) {
-      NCCLCHECK(xmlAddNode(xml, NULL, "pci", &parent));
-      NCCLCHECK(xmlSetAttr(parent, "busid", busId));
-      NCCLCHECK(ncclTopoGetXmlFromSys(parent, xml));
-    }
+    NCCLCHECK(ncclTopoGetPciNode(xml, busId, &parent));
+    NCCLCHECK(ncclTopoGetXmlFromSys(parent, xml));
   } else {
     // Virtual NIC, no PCI device, attach to first CPU
     NCCLCHECK(xmlFindTag(xml, "cpu", &parent));
@@ -799,6 +799,28 @@ ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const cha
   // beginning of this function), so we can add it.
   NCCLCHECK(xmlAddNode(xml, nicNode, "net", netNode));
   NCCLCHECK(xmlSetAttr(*netNode, "name", netName));
+  return ncclSuccess;
+}
+
+ncclResult_t ncclTopoTrimXmlRec(struct ncclXmlNode* node) {
+  const char* str;
+  NCCLCHECK(xmlGetAttr(node, "keep", &str));
+  if (str && strcmp(str, "1") == 0) {
+    NCCLCHECK(xmlUnsetAttr(node, "keep"));
+  } else {
+    // Copy nSubs and subs as they could change as we trim recursively.
+    struct ncclXmlNode* subs[MAX_SUBS];
+    int nSubs = node->nSubs;
+    memcpy(subs, node->subs, node->nSubs*sizeof(struct ncclXmlNode*));
+    for (int s=0; s<nSubs; s++) {
+      NCCLCHECK(ncclTopoTrimXmlRec(subs[s]));
+    }
+    if (node->nSubs == 0) NCCLCHECK(xmlRemoveNode(node));
+  }
+  return ncclSuccess;
+}
+ncclResult_t ncclTopoTrimXml(struct ncclXml* xml) {
+  NCCLCHECK(ncclTopoTrimXmlRec(xml->nodes));
   return ncclSuccess;
 }
 

@@ -22,7 +22,7 @@ namespace CorrectnessTests
 
         size_t chunksize = numElements*2/numDevices;
         #define MAX_ALLTOALLV_RANKS 16
-        static size_t sendcounts[MAX_ALLTOALLV_RANKS], recvcounts[MAX_ALLTOALLV_RANKS], sdispls[MAX_ALLTOALLV_RANKS], rdispls[MAX_ALLTOALLV_RANKS];
+        static size_t sendcounts[MAX_ALLTOALLV_RANKS*MAX_ALLTOALLV_RANKS], recvcounts[MAX_ALLTOALLV_RANKS*MAX_ALLTOALLV_RANKS], sdispls[MAX_ALLTOALLV_RANKS*MAX_ALLTOALLV_RANKS], rdispls[MAX_ALLTOALLV_RANKS*MAX_ALLTOALLV_RANKS];
         // Launch the reduction (1 thread per GPU)
         ncclGroupStart();
         for (int r = 0; r < numDevices; r++) {
@@ -31,12 +31,12 @@ namespace CorrectnessTests
                 size_t scount = ((i+r)%numDevices)*chunksize;
                 if (i+r == numDevices-1)
                   scount += (numElements*numDevices-chunksize*(numDevices-1)*numDevices/2);
-                sendcounts[i] = recvcounts[i] = scount;
-                sdispls[i] = rdispls[i] = disp;
+                sendcounts[i+r*MAX_ALLTOALLV_RANKS] = recvcounts[i+r*MAX_ALLTOALLV_RANKS] = scount;
+                sdispls[i+r*MAX_ALLTOALLV_RANKS] = rdispls[i+r*MAX_ALLTOALLV_RANKS] = disp;
                 disp += scount;
             }
-            ncclAllToAllv((char*)dataset.inputs[r], sendcounts, sdispls,
-              (char*)dataset.outputs[r], recvcounts, rdispls, dataType, comms[r], streams[r]);
+            ncclAllToAllv((char*)dataset.inputs[r], sendcounts+r*MAX_ALLTOALLV_RANKS, sdispls+r*MAX_ALLTOALLV_RANKS,
+              (char*)dataset.outputs[r], recvcounts+r*MAX_ALLTOALLV_RANKS, rdispls+r*MAX_ALLTOALLV_RANKS, dataType, comms[r], streams[r]);
         }
         ncclGroupEnd();
         // Wait for reduction to complete

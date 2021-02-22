@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020-2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +49,6 @@ int*               CliqueManager::m_staticGpuBarrierMem             = NULL;
 RCCL_PARAM(EnableClique, "ENABLE_CLIQUE", 0);                                  // Opt-in environment variable for clique-based kernels
 RCCL_PARAM(AllReduceCliqueByteLimit, "CLIQUE_ALLREDUCE_BYTE_LIMIT", 16777216); // Max number of bytes to use clique-based kernels for all reduce
 RCCL_PARAM(AllReduceNumChannels,     "CLIQUE_ALLREDUCE_NCHANNELS", 0);         // Number of channels to use for all-reduce. (0 for auto-select)
-RCCL_PARAM(CliqueDebug, "CLIQUE_DEBUG", 0);                                    // Emit debug messages
 
 CliqueManager::CliqueManager(int          const  rank,
                              int          const  numRanks,
@@ -83,11 +82,7 @@ void CliqueManager::CleanUp()
   {
     // Release caches
     if (m_ipcHandleSendCache) delete m_ipcHandleSendCache;
-    if (m_ipcHandleRecvCache)
-    {
-        m_ipcHandleRecvCache->close();
-        delete m_ipcHandleRecvCache;
-    }
+    if (m_ipcHandleRecvCache) delete m_ipcHandleRecvCache;
 
     // Close shared memory
     m_shmHandles.Close();
@@ -220,7 +215,6 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     if (m_rank == 0)
     {
       NCCLCHECKGOTO(ncclCudaCalloc(&m_staticGpuBarrierMem, NCCL_MAX_OPS * 2 * sizeof(int), true), res, dropback);
-
       // Prepare all barriers
       for (int opIndex = 0; opIndex < NCCL_MAX_OPS; opIndex++)
       {
@@ -253,7 +247,7 @@ bool CliqueManager::IsSupported(ncclFunc_t const coll,
 
   // Filter based on total input size for each collective type
   size_t totalBytes = count * ncclTypeSize(datatype);
-  if (coll == ncclCollAllReduce && (totalBytes <= rcclParamAllReduceCliqueByteLimit())) return true;
+  if (coll == ncclFuncAllReduce && (totalBytes <= rcclParamAllReduceCliqueByteLimit())) return true;
 
   return false;
 }
@@ -321,7 +315,7 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
   size_t const totalBytes = count * ncclTypeSize(datatype);
   *numChannelstoUse = 1;
 
-  if (coll == ncclCollAllReduce) {
+  if (coll == ncclFuncAllReduce) {
     if (rcclParamAllReduceNumChannels() == 0)
     {
       // NOTE: These are currently based on collected data and not necessarily ideal for all hardware
@@ -345,7 +339,7 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
 
 
 
-ncclResult_t CliqueManager::SetCliqueCollectiveArgs(CollectiveArgs* args)
+ncclResult_t CliqueManager::SetCliqueArgs(ncclWorkElem* args)
 {
   // Do nothing if disabled
   if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
@@ -358,7 +352,6 @@ ncclResult_t CliqueManager::SetCliqueCollectiveArgs(CollectiveArgs* args)
   // Prepare clique argments (NOTE: clique pointers are not ready yet)
   int opIndex = args->opCount % NCCL_MAX_OPS;
   args->clique.ptrs = &m_pinnedCliquePtrs[opIndex];
-  args->clique.verbose = rcclParamCliqueDebug();
 
   return ncclSuccess;
 }
@@ -495,33 +488,16 @@ ncclResult_t CliqueManager::CheckCacheForHandle(std::pair<hipIpcMemHandle_t, siz
 
 void CliqueManager::WaitForBarrier()
 {
-  int const verbose = rcclParamCliqueDebug();
-
   // Sense inversion barrier
   m_cpuBarrierLocalSense = 1 - m_cpuBarrierLocalSense;
 
-  int val = __sync_add_and_fetch(m_cpuBarrierGlobalCount, 1);
-  if (verbose) INFO(NCCL_INIT, "Rank %d reaches barrier at %d", m_rank, val);
-
-  if (val == m_numRanks)
+  if (__sync_add_and_fetch(m_cpuBarrierGlobalCount, 1) == m_numRanks)
   {
     // Reset the barrier
     STORE(m_cpuBarrierGlobalCount, 0);
     STORE(m_cpuBarrierGlobalSense, m_cpuBarrierLocalSense);
   } else {
-    size_t counter = 0;
-    while (LOAD(m_cpuBarrierGlobalSense) != m_cpuBarrierLocalSense)
-    {
-      if (verbose)
-      {
-        counter++;
-        if (counter == 100000000)
-        {
-          WARN("Rank %d waiting in CPU barrier: (%d != %d)", m_rank, *m_cpuBarrierGlobalSense, m_cpuBarrierLocalSense);
-        }
-      }
-    }
-    if (verbose) INFO(NCCL_INIT, "Rank %d leaves CPU barrier", m_rank);
+    while (LOAD(m_cpuBarrierGlobalSense) != m_cpuBarrierLocalSense);
   }
 }
 

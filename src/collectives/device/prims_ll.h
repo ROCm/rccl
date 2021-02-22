@@ -205,7 +205,7 @@ class ncclLLPrimitives {
       sendConnHeadPtr = LOAD(&sendConn->head);
       sendConnHeadCache = LOAD(sendConnHeadPtr);
       sendConnHead = LOAD(&sendConn->step);
-      sendConnFifoPtr = LOAD(&sendConn->fifo);
+      sendConnFifoPtr = LOAD(&sendConn->sizesFifo);
     }
   }
 

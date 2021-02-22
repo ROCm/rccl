@@ -21,7 +21,8 @@ def runTestCommand (platform, project)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
-                ${sudo} NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_output=xml --gtest_color=yes
+                ${sudo} NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_filter="BroadcastCorrectnessSweep*:*float32*" --gtest_output=xml --gtest_color=yes
+                ${sudo} NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTestsMultiProcess --gtest_filter="BroadcastMultiProcessCorrectnessSweep*:*float32*" --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)

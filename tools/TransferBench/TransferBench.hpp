@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
 #include <set>
 #include <unistd.h>
 #include <map>
@@ -33,8 +34,21 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include <hip/hip_ext.h>
 #include <hsa/hsa_ext_amd.h>
+#include <hip/hcc_detail/hip_fp16.h>
 
-#include "copy_kernel.h"
+// Include common_kernel.h from RCCL for copy kernel
+// However define some variables to avoid extra includes / missing defines
+#define NCCL_DEVICE_H_   // Avoid loading devcomm.h
+#define WARP_SIZE 64
+
+typedef uint64_t PackType;
+typedef ulong2 Pack128;
+typedef struct
+{
+  uint16_t data;
+} rccl_bfloat16;
+
+#include "../../src/collectives/device/common_kernel.h"
 #include "EnvVars.hpp"
 
 // Helper macro for catching HIP errors
@@ -120,16 +134,24 @@ std::string GetLinkDesc(Link const& link);
 #define COPY_UNROLL 4
 #define MEMSET_UNROLL 4
 
+// Dummy reduction function (not used because it's just a copy)
+struct FuncNull {
+  __device__ float operator()(const float x, const float y) const {
+    return 0;
+  }
+};
+
 // GPU copy kernel
 __global__ void __launch_bounds__(BLOCKSIZE)
 GpuCopyKernel(BlockParam* blockParams)
 {
   // Collect the arguments for this block
   int N = blockParams[blockIdx.x].N;
-  const float* __restrict__ src = (float* )blockParams[blockIdx.x].src;
-  float* __restrict__ dst = (float* )blockParams[blockIdx.x].dst;
+  const float* src[1] = {(float* )blockParams[blockIdx.x].src};
+  float* dst[1] = {(float* )blockParams[blockIdx.x].dst};
 
-  Copy<COPY_UNROLL, BLOCKSIZE>(dst, src, N);
+  ReduceOrCopyMulti<COPY_UNROLL, FuncNull, float, 1, 1, 1, 1>(
+    threadIdx.x, BLOCKSIZE, 1, src, 1, dst, N);
 }
 
 // GPU set kernel

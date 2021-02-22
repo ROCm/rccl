@@ -51,22 +51,12 @@ THE SOFTWARE.
 #define FBLU(x) KBLU x RST
 #define BOLD(x) "\x1B[1m" x RST
 
-#define RTC_CLOCK_FREQ_VEGA20 2.5E07
+#define RTC_CLOCK_FREQ_VEGA20 2.5E7
 //Right now kept the Arcturus RTC frequency same as Vega20
 //as we are not aware of Arcturus frequency, once we we come to know about it
 //we will update it.
-#define RTC_CLOCK_FREQ_ARCTURUS 2.5E07
-#define RTC_CLOCK_FREQ_DEFAULT 2.7E07
-
-__device__
-inline  __attribute((always_inline))
-long long int __rtc64() {
-#if __HIP__
-  return (long long int) __builtin_amdgcn_s_memrealtime();
-#else
-  return (long long int) __clock_u64();
-#endif
-}
+#define RTC_CLOCK_FREQ_ARCTURUS 2.5E7
+#define RTC_CLOCK_FREQ_DEFAULT 2.7E7
 
 struct transfer_data_t {
   // Buffers for all OPs except all to all
@@ -117,7 +107,7 @@ enum Ops {
 template<int op, int NGPUS>
 __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct profiling_data_t* profiling_data, uint64_t opCount) {
   size_t tid = threadIdx.x;
-  uint64_t curr_time, next_time;
+  uint64_t curr_time;
   int bid = blockIdx.x;
   int n = transfer_data->N;
 
@@ -125,7 +115,7 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   float *dsts[NGPUS];
 
   if (tid == 0) {
-    curr_time = __rtc64();
+    curr_time = __builtin_amdgcn_s_memrealtime();
   }
 
   if (op == OP_COPY) {
@@ -188,8 +178,7 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
 
   __syncthreads();
   if (tid == 0) {
-    next_time = __rtc64();
-    __atomic_fetch_add(&(profiling_data->write_cycles[bid]), next_time - curr_time, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&(profiling_data->write_cycles[bid]), __builtin_amdgcn_s_memrealtime() - curr_time, __ATOMIC_SEQ_CST);
     // for all to all, read and write n itmes to all other GPUs, thus "n * sizeof(float) * (transfer_data->ngpu - 1) * 2" bytes
     if (op == OP_ALL2ALL) __atomic_fetch_add(&(profiling_data->bytes_transferred[bid]), n * sizeof(float) * (transfer_data->ngpu - 1) * 2, __ATOMIC_SEQ_CST);
     else __atomic_fetch_add(&(profiling_data->bytes_transferred[bid]), n * sizeof(float), __ATOMIC_SEQ_CST);
@@ -564,6 +553,7 @@ int main(int argc,char* argv[])
     // 4 warm up cycles
     for (int j = 0; j < 4; j ++) {
       for (int i = 0; i < nGpu; i ++) {
+#if 0
         args[i*3] = &transfer_data[i];
         args[i*3+1] = &d_profiling_data[i];
         args[i*3+2] = &opCount;
@@ -579,6 +569,17 @@ int main(int argc,char* argv[])
       }
       hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu,
         hipCooperativeLaunchMultiDeviceNoPreSync|hipCooperativeLaunchMultiDeviceNoPostSync);
+#else
+        HIPCHECK(hipSetDevice(i));
+        //launch the kernel
+        hipLaunchKernelGGL(flagSyncKerns[op == OP_ALL2ALL ? op + (nGpu/8) : op],
+            /*grid dim x,y,z*/        dim3(workgroups, 1, 1),
+            /*block dim x,y,z*/       dim3(THREADS, 1, 1),
+            /*dynamic shared mem*/    0,
+            /*stream*/                stream[i],
+            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+      }
+#endif
       opCount++;
     }
 
@@ -591,6 +592,7 @@ int main(int argc,char* argv[])
     auto start = std::chrono::high_resolution_clock::now();
     for (int j = 0; j < iters; j ++) {
       for (int i = 0; i < nGpu; i ++) {
+#if 0
         args[i*3] = &transfer_data[i];
         args[i*3+1] = &d_profiling_data[i];
         args[i*3+2] = &opCount;
@@ -606,6 +608,17 @@ int main(int argc,char* argv[])
       }
       hipExtLaunchMultiKernelMultiDevice(launchParamsList, nGpu,
         hipCooperativeLaunchMultiDeviceNoPreSync|hipCooperativeLaunchMultiDeviceNoPostSync);
+#else
+        HIPCHECK(hipSetDevice(i));
+        //launch the kernel
+        hipLaunchKernelGGL(flagSyncKerns[op == OP_ALL2ALL ? op + (nGpu/8) : op],
+            /*grid dim x,y,z*/        dim3(workgroups, 1, 1),
+            /*block dim x,y,z*/       dim3(THREADS, 1, 1),
+            /*dynamic shared mem*/    0,
+            /*stream*/                stream[i],
+            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+      }
+#endif
       opCount++;
     }
 
@@ -641,19 +654,19 @@ int main(int argc,char* argv[])
           if(prop.gcnArch == 906) {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/RTC_CLOCK_FREQ_VEGA20;
             fprintf(stderr, "%-20d %-d<->all       %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           } else if (prop.gcnArch == 908) {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_ARCTURUS);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/RTC_CLOCK_FREQ_ARCTURUS;
             fprintf(stderr, "%-20d %-d<->all       %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           } else {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_DEFAULT);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/RTC_CLOCK_FREQ_DEFAULT;
             fprintf(stderr, "%-20d %-d<->all       %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           }
@@ -661,19 +674,19 @@ int main(int argc,char* argv[])
           if(prop.gcnArch == 906) {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/RTC_CLOCK_FREQ_VEGA20;
             fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, next_gpu, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           } else if (prop.gcnArch == 908) {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_ARCTURUS);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/RTC_CLOCK_FREQ_ARCTURUS;
             fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, next_gpu, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           } else {
             write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
             bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-            double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_DEFAULT);
+            double t0 = (double)profiling_data[i]->write_cycles[j]/RTC_CLOCK_FREQ_DEFAULT;
             fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
               i, i, next_gpu, j, link_type_name[linktype], t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
           }
