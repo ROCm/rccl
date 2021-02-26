@@ -194,6 +194,7 @@ ncclResult_t bootstrapCreateRoot(ncclUniqueId* id, bool idFromEnv) {
   rootStruct->hash = djb2Hash(id->internal);
   rootStruct->listenFd = listenFd;
   pthread_create(&thread, NULL, bootstrapRoot, (void *)rootStruct);
+  pthread_detach(thread); // [RCCL] Adding detach to properly clean up bootstrapRoot thread
   // [/RCCL]
 
   return ncclSuccess;
@@ -533,7 +534,9 @@ ncclResult_t bootstrapClose(void* commState) {
   state->allocState->stop = 1;
 
   // Join the allocThread so we catch resource leaks as being hung here
-  // pthread_join(state->allocThread, nullptr);
+  // [RCCL] Uncommenting this join to clean up the allocThread
+  pthread_join(state->allocThread, nullptr);
+  // [/RCCL]
 
   free(state->peerCommAddresses);
   free(state->peerAllocAddresses);

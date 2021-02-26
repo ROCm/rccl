@@ -186,6 +186,9 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
           ncclNIbDevs++;
           nPorts++;
           pthread_create(&ncclIbAsyncThread, NULL, ncclIbAsyncThreadMain, context);
+          // [RCCL]
+          pthread_detach(ncclIbAsyncThread);
+          // [/RCCL]
         }
         if (nPorts == 0 && ncclSuccess != wrap_ibv_close_device(context)) { return ncclInternalError; }
       }
@@ -915,4 +918,3 @@ ncclNet_t ncclNetIb = {
   ncclIbCloseRecv,
   ncclIbCloseListen
 };
-
