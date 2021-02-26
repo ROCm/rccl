@@ -342,8 +342,19 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
   else {
     int arch, vendor, model;
     NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-    if((system->nodes[GPU].nodes[g].id & 0xf0000) == (system->nodes[NET].nodes[n].net.busId & 0xf0000))
-      netGdrLevel = PATH_PHB;
+    if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME) {
+      int i, d1 = -1, d2 = -1;
+      for (i = 0; i < system->nodes[CPU].count; i++)
+        if (system->nodes[GPU].nodes[g].paths[CPU][i].count == 2) break;
+      if (i <system->nodes[CPU].count) d1 = system->nodes[CPU].nodes[i].id;
+      for (i = 0; i < system->nodes[CPU].count; i++)
+        if (system->nodes[NET].nodes[n].paths[CPU][i].count == 2) break;
+      if (i <system->nodes[CPU].count) d2 = system->nodes[CPU].nodes[i].id;
+      if (d1 != -1 && d2 != -1 && d1 == d2 &&
+        (system->nodes[GPU].nodes[g].id & 0xf0000) == (system->nodes[NET].nodes[n].net.busId & 0xf0000)) {
+        netGdrLevel = PATH_PHB;
+      }
+    }
   }
 
   int distance = gpu->paths[NET][n].type;

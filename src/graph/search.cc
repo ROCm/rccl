@@ -991,7 +991,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   return ncclSuccess;
 }
 
-static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time) {
+static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time, bool nbio) {
   (*time) ++;
   if (n == last) {
     int i, j;
@@ -1009,22 +1009,24 @@ static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, st
     }
     if (i < ref->nGpus) return false;
     // match NBIO
-    for (i = 0; i < ref->nGpus; i++) {
-      for (j = 0; j < ref->nGpus; j++) {
-        if (i == j) continue;
-        bool nbio_ref = (ref->gpuIds[i]&0xf0000) == (ref->gpuIds[j]&0xf0000);
-        bool nbio_topo = (topo->gpuIds[g[i]]&0xf0000) == (topo->gpuIds[g[j]]&0xf0000);
-        if (nbio_ref != nbio_topo) break;
-        if (nbio_ref && ((ref->gpuIds[i]-ref->gpuIds[j])*(topo->gpuIds[g[i]]-topo->gpuIds[g[j]]) < 0)) break;
+    if (nbio) {
+      for (i = 0; i < ref->nGpus; i++) {
+        for (j = 0; j < ref->nGpus; j++) {
+          if (i == j) continue;
+          bool nbio_ref = (ref->gpuIds[i]&0xf0000) == (ref->gpuIds[j]&0xf0000);
+          bool nbio_topo = (topo->gpuIds[g[i]]&0xf0000) == (topo->gpuIds[g[j]]&0xf0000);
+          if (nbio_ref != nbio_topo) break;
+          if (nbio_ref && ((ref->gpuIds[i]-ref->gpuIds[j])*(topo->gpuIds[g[i]]-topo->gpuIds[g[j]]) < 0)) break;
+        }
+        if (j < ref->nGpus) break;
       }
-      if (j < ref->nGpus) break;
+      if (i < ref->nGpus) return false;
     }
-    if (i < ref->nGpus) return false;
     return true;
   } else {
     for (int i = n; i <= last; i++) {
       std::swap(g[n], g[i]);
-      if (permuteGpuIds(g, n+1, last, ref, topo, time)) return true;
+      if (permuteGpuIds(g, n+1, last, ref, topo, time, nbio)) return true;
       std::swap(g[n], g[i]);
     }
   }
@@ -1057,12 +1059,23 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
   int time = 0;
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
+
+  // check if GPUs are directly connected to CPU
+  bool match_nbio = true;
+  for (i = 0; i < romeTopo.nGpus; i++) {
+    int cpu, gpu;
+    NCCLCHECK(ncclTopoIdToIndex(system, CPU,  romeTopo.gpuNuma[i], &cpu));
+    NCCLCHECK(ncclTopoIdToIndex(system, GPU,  romeTopo.gpuIds[i], &gpu));
+    if (system->nodes[GPU].nodes[gpu].paths[CPU][cpu].count > 2) break;
+  }
+  if (i < romeTopo.nGpus) match_nbio = false;
+
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
     if (romeTopo.nCpus != romeTopoModels[i].nCpus || romeTopo.nGpus != romeTopoModels[i].nGpus ||
       romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
     if (strcmp(romeTopoModels[i].pattern, pattern)) continue;
     for (int j = 0; j < ngpus; j++) g[j] = (j+2)%ngpus;
-    if (permuteGpuIds(g, 0, ngpus-1, romeTopoModels+i, &romeTopo, &time)) break;
+    if (permuteGpuIds(g, 0, ngpus-1, romeTopoModels+i, &romeTopo, &time, match_nbio)) break;
   }
   gettimeofday(&tve, NULL);
   float t = (tve.tv_sec - tvs.tv_sec)*1E3 + (tve.tv_usec - tvs.tv_usec)/1E3;
@@ -1072,11 +1085,8 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
   }
 
   char line[1024];
-#ifdef ENABLE_TRACE
-  sprintf(line, "Found matching Rome model index %d in %.2fms (%d iter) with GPU mapping: ", i, t, time);
-#else
+  //sprintf(line, "Found matching Rome model index %d in %.2fms (%d iter) with GPU mapping: ", i, t, time);
   sprintf(line, "Found matching Rome model index %d with GPU mapping: ", i);
-#endif
   int offset = strlen(line);
   for (int k = 0; k < ngpus; k++) {
     sprintf(line+offset, "%d ", g[k]);

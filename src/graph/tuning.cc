@@ -54,7 +54,7 @@ ncclResult_t parseList(const char* str, const char* elems[], int nelems, int* li
 
 // Latencies in us, Bandwidths in GB/s
 // Tree { LL, LL128, Simple } , Ring { LL, LL128, Simple }
-static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { { 37.9, 37.9, 40.4 }, { 20.5, 20.5, 27.9 }, { 37.9, 37.9, 40.4 } };
+static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { { 39.0, 39.0, 49.0 }, { 21.0, 21.0, 30.0 }, { 37.9, 37.9, 40.4 } };
 
 // NVLink, PCI, Network
 #define NCCL_HW_NVLINK 0
@@ -63,11 +63,11 @@ static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { { 37.9
 // Tree/Simple is the latency a 256kB chunk, which is ~ base lat + 256k/12GB/s (+ 256k/12GB/s for the network).
 static const float hwLat [3][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] =
 { /* NVLINK */
-  { /* Tree (LL/LL128/Simple)*/ { 1.2, 1.2, 3.8 }, /* Ring (LL/LL128/Simple)*/ { 2.3, 2.3, 2.7 }, /* CollNet (LL/LL128/Simple)*/ { 1.2, 1.2, 3.8 } },
+  { /* Tree (LL/LL128/Simple)*/ { 2.5, 2.5, 5.5 }, /* Ring (LL/LL128/Simple)*/ { 2.5, 2.5, 5 }, /* CollNet (LL/LL128/Simple)*/ { 1.2, 1.2, 3.8 } },
   /* PCI */
   { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 1.3, 1.3, 1.9 }, /* CollNet (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 } },
   /* NET */
-  { /* Tree (LL/LL128/Simple)*/ { 9.8, 9.8, 19.5 }, /* Ring (LL/LL128/Simple)*/ { 2.0, 2.0, 4.5 }, /* CollNet (LL/LL128/Simple)*/ { 9.8, 9.8, 19.5 } }
+  { /* Tree (LL/LL128/Simple)*/ { 28.0, 28.0, 66.0 }, /* Ring (LL/LL128/Simple)*/ { 8.5, 8.5, 19.0 }, /* CollNet (LL/LL128/Simple)*/ { 9.8, 9.8, 19.5 } }
 };
 
 // LL128 max BW (per channel) for the different collectives
@@ -158,7 +158,6 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         comm->latencies[coll][a][p] = baseLat[a][p];
         float intraLat = hwLat[intraHw[a]][a][p];
         float interLat = hwLat[NCCL_HW_NET][a][p];
-        if (nNodes > 1 && p == NCCL_PROTO_LL) intraLat *= 1.8;
         if (a == NCCL_ALGO_RING) {
           float lat = hwLat[hw[a]][a][p];
           if ((coll == ncclFuncReduce || coll == ncclFuncBroadcast)) {

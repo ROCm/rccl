@@ -199,10 +199,8 @@ if ($run_tests); then
     if (test -f "./test/UnitTests"); then
         if ($run_tests_all); then
             ./test/UnitTests
-            ./test/UnitTestsMultiProcess
         else
             ./test/UnitTests --gtest_filter="BroadcastCorrectnessSweep*:*float32*"
-            ./test/UnitTestsMultiProcess --gtest_filter="BroadcastMultiProcessCorrectnessSweep*:*float32*"
         fi
     else
         echo "Unit tests have not been built yet; please re-run script with -t to build unit tests."
