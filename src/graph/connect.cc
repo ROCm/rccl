@@ -267,9 +267,9 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
   int nc = nChannels*2;
   if (gcn == 908) nc = std::max(nc, 4);
-  if (comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_CR8G) nc = nChannels*4;
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G)) nc = nChannels*4;
   if (!nnets) nnets = comm->topo->nodes[NET].count;
-  if (nnets && comm->topo->type == RCCL_TOPO_4P2H_ROME) nc = (nnets > 3 ? 2 : 4)*nnets;
+  if (nnets && (comm->topo->type & RCCL_TOPO_4P2H_ROME)) nc = (nnets > 3 ? 2 : 4)*nnets;
   int end = std::min((int)ncclMaxNchannels(), std::max(nc, ncclMinNchannels()));
 
   // Duplication should be complete now

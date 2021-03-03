@@ -391,8 +391,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   NCCLCHECK(getLoopInfo(info));
 
   if ((info->coll == ncclFuncAllToAll || info->coll == ncclFuncAllToAllv)
-    && info->comm->topo->nodes[NET].count == 0 && info->comm->topo->type == RCCL_TOPO_4P2H_ROME)
-    info->nChannels =info->comm->p2pnChannels;
+    && info->comm->topo->nodes[GPU].count == info->comm->topo->nRanks && (info->comm->topo->type & RCCL_TOPO_4P2H_ROME))
+    info->nChannels = info->comm->p2pnChannels;
 
   work->opCount = info->comm->opCount;
   work->sendbuff = info->sendbuff;
@@ -617,7 +617,8 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
       int delta = (comm->nRanks - (comm->rank-peer)) % comm->nRanks;
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
-        if (comm->channels[channelId].peers[peer].send.connected == 0) {
+        if ((LOAD(comm->p2pNet) ? comm->channels[channelId].peers[peer].p2pSend.connected :
+          comm->channels[channelId].peers[peer].send.connected) == 0) {
           comm->connectSend[peer] |= (1<<channelId);
           comm->connect = 1;
         }
@@ -630,7 +631,8 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
       int delta = (comm->nRanks + (comm->rank-peer)) % comm->nRanks;
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
-        if (comm->channels[channelId].peers[peer].recv.connected == 0) {
+        if ((LOAD(comm->p2pNet) ? comm->channels[channelId].peers[peer].p2pRecv.connected :
+          comm->channels[channelId].peers[peer].recv.connected ) == 0) {
           comm->connectRecv[peer] |= (1<<channelId);
           comm->connect = 1;
         }
@@ -643,7 +645,7 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
 }
 
 static int getSegment(struct ncclInfo* info, struct ncclWork* work) {
-  const int e = (info->comm->topo->nodes[NET].count == 0 && info->comm->topo->type == RCCL_TOPO_4P2H_ROME)
+  const int e = (info->comm->topo->nodes[GPU].count == info->comm->topo->nRanks && (info->comm->topo->type & RCCL_TOPO_4P2H_ROME))
     ? 1 : NCCL_MAX_WORK_ELEMENTS;
   for (int s=0; s<e && work->elems[s].p2p.delta != info->delta; s++) {
     if (work->elems[s].p2p.nThreads == 0) return s;

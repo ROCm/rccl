@@ -352,6 +352,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
     free(comm->intraCC);
   }
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
+  NCCLCHECK(ncclCudaHostFree((void *)comm->p2pNet));
 
   // Poison comm to try and catch a double free
   commPoison(comm);
@@ -362,6 +363,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
 RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 1);
 RCCL_PARAM(ForceEnableClique, "FORCE_ENABLE_CLIQUE", 0);
+RCCL_PARAM(P2pNetDisable, "P2P_NET_DISABLE", 0);
 
 static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   if (ndev < 1) {
@@ -400,6 +402,10 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   NCCLCHECK(ncclCudaHostCalloc((uint32_t**)&comm->abortFlag, 1));
   comm->hostDevComm.abortFlag = comm->abortFlag;
   STORE(comm->abortFlag, 0);
+
+  NCCLCHECK(ncclCudaHostCalloc((uint32_t**)&comm->p2pNet, 1));
+  comm->hostDevComm.p2pNet = comm->p2pNet;
+  STORE(comm->p2pNet, 0);
 
   comm->argsptr = &comm->args;
 #ifdef ENABLE_PROFILING
@@ -808,6 +814,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   // Topo detection / System graph creation
   NCCLCHECK(ncclTopoGetSystem(comm, &comm->topo));
+  // save nRanks to ncclTopoSystem as indicator of multi-node
+  comm->topo->nRanks = comm->nRanks;
   // Compute paths between GPUs and NICs
   NCCLCHECK(ncclTopoComputePaths(comm->topo, comm->peerInfo));
   // Remove inaccessible GPUs and unused NICs
@@ -852,7 +860,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       if (!rcclParamForceEnableClique())
       {
         // Disable clique-kernel support if not on CR8 topology
-        if (!(comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_CR8G))
+        if (!(comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G)))
         {
           INFO(NCCL_INIT, "Disabling clique-based kernels due to topology (force enable with RCCL_FORCE_ENABLE_CLIQUE)");
           cliqueMode = CliqueManager::CLIQUE_DISABLED;
@@ -898,6 +906,14 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECK(ncclTopoDumpGraphs(comm->topo, 3, graphs));
   }
 
+  if ((comm->topo->type & RCCL_TOPO_4P2H_ROME) && (comm->topo->type & RCCL_TOPO_GDR_ALL)) {
+    if (rcclParamP2pNetDisable() == 0) {
+      STORE(comm->p2pNet, 1);
+      INFO(NCCL_INIT, "RCCL enabled same node P2P over network");
+    }
+    else
+      INFO(NCCL_INIT, "RCCL force disabled same node P2P over network");
+  }
   // AllGather3 - begin
   struct ncclGraphInfo {
     int pattern;
@@ -925,7 +941,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].cudaCompCap = comm->topo->nodes[GPU].nodes[idx].gpu.cudaCompCap;
   allGather3Data[rank].gcn = comm->topo->nodes[GPU].nodes[idx].gpu.gcn;
-  allGather3Data[rank].alltoallDisable = comm->topo->nodes[NET].count? 1 : comm->alltoallDisable;
+  allGather3Data[rank].alltoallDisable = comm->topo->nodes[GPU].count == comm->topo->nRanks ? 1 : comm->alltoallDisable;
 
   allGather3Data[rank].nChannels = comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
     std::min(treeGraph.nChannels, ringGraph.nChannels);

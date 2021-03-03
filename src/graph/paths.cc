@@ -468,8 +468,29 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     NCCLCHECK(ncclTopoRemoveNode(system, GPU, g));
   }
 
+  int remove = 1;
+  int arch, vendor, model;
+  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD
+    && model == NCCL_TOPO_CPU_TYPE_ROME) {
+    int gdr, ret = 1;
+    int64_t net;
+    for (int g = 0; g < system->nodes[GPU].count; g++) {
+      NCCLCHECK(ncclTopoGetLocalNet(system, system->nodes[GPU].nodes[g].gpu.rank, &net, 0));
+      NCCLCHECK(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[g].id, net, 1, &gdr));
+      if (!gdr) {
+        ret = 0;
+        break;
+      }
+    }
+    if (ret) {
+      system->type |= RCCL_TOPO_GDR_ALL;
+      remove = 0;
+      INFO(NCCL_GRAPH, "GDR is available on all GPUs");
+    }
+  }
   comm->localRanks = system->nodes[GPU].count;
-  if (system->nodes[GPU].count == comm->nRanks) {
+  if (system->nodes[GPU].count == comm->nRanks && remove) {
     for (int n=system->nodes[NET].count-1; n>=0; n--)
       NCCLCHECK(ncclTopoRemoveNode(system, NET, n));
   }
@@ -529,7 +550,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     }
   }
 
-  if (comm->topo->nodes[NET].count == 0 && comm->topo->type == RCCL_TOPO_4P2H_ROME) {
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_4P2H_ROME) && !(comm->topo->type & RCCL_TOPO_GDR_ALL)) {
     // Adjust P2P channels on Rome
     comm->p2pnChannelsPerPeer = 2;
     comm->p2pnChannels = 2;
