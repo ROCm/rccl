@@ -163,7 +163,6 @@ struct ncclComm {
   int p2pRecvCount;
 
   // [RCCL]
-  bool alltoallDisable;            // RCCL AllToAll/Scatter/Gather API
   CliqueManager* cliqueManager;    // CliqueManager handles pointer collection / distribution for clique-based kernels
   int rootPid;                     // Process ID of root
   // [/RCCL]
