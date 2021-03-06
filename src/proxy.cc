@@ -9,7 +9,7 @@
 #include "graph.h"
 #include "collectives.h"
 
-enum { proxyRecv=0, proxySend=1 };
+enum { proxyRecv=0, proxySend=1, p2pProxyRecv=2, p2pProxySend=3 };
 
 static bool NeedProxy(int type, int pattern, int root, struct ncclRing* ring, int nranks) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice) return true;
@@ -162,10 +162,12 @@ static ncclResult_t SaveProxy(int type, int peer, struct ncclProxyArgs* args) {
   if (peer < 0) return ncclSuccess;
 
   struct ncclPeer* peerComm = args->channel->peers+peer;
-  struct ncclConnector* connector = type == proxyRecv ? &peerComm->recv : &peerComm->send;
+  struct ncclConnector* connector = type < p2pProxyRecv ? (type == proxyRecv ? &peerComm->recv : &peerComm->send)
+    : (type == p2pProxyRecv ? &peerComm->p2pRecv : &peerComm->p2pSend);
   if (connector->transportComm == NULL) {
     WARN("[%d] Error no transport for %s peer %d on channel %d", connector->comm->rank,
-        type == proxyRecv ? "recv" : "send", peer, args->channel->id);
+      type < p2pProxyRecv ? (type == proxyRecv ? "recv" : "send") : (type == p2pProxyRecv ? "p2pRecv" : "p2pSend"),
+      peer, args->channel->id);
     return ncclInternalError;
   }
   if (connector->transportComm->proxy == NULL) return ncclSuccess;
@@ -238,7 +240,7 @@ ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel
     if (args.nsteps == 0) args.nsteps = 1;
     args.recvbytes = info->recvbytes;
     args.sendbytes = 0;
-    NCCLCHECK(SaveProxy(proxyRecv, peerrecv, &args));
+    NCCLCHECK(SaveProxy(LOAD(info->comm->p2pNet) ? p2pProxyRecv : proxyRecv, peerrecv, &args));
   }
   if (info->delta > 0 && info->sendbytes >= 0) {
     int peersend = (info->comm->rank+info->delta)%info->comm->nRanks;
@@ -246,7 +248,7 @@ ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel
     if (args.nsteps == 0) args.nsteps = 1;
     args.sendbytes = info->sendbytes;
     args.recvbytes = 0;
-    NCCLCHECK(SaveProxy(proxySend, peersend, &args));
+    NCCLCHECK(SaveProxy(LOAD(info->comm->p2pNet) ? p2pProxySend : proxySend, peersend, &args));
   }
   return ncclSuccess;
 }

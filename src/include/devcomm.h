@@ -150,6 +150,8 @@ struct ncclTree {
 struct ncclPeer {
   struct ncclConnector send;
   struct ncclConnector recv;
+  struct ncclConnector p2pSend;
+  struct ncclConnector p2pRecv;
 };
 
 struct ncclDevComm;
@@ -331,6 +333,9 @@ struct ncclDevComm {
 
   // Channels, device side
   struct ncclChannel* channels;
+
+  // Flags for enable P2P NET
+  uint32_t *p2pNet;
 
 #ifdef ENABLE_PROFILING
   // Profiling counters

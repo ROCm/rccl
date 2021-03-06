@@ -121,6 +121,9 @@ struct ncclComm {
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
 
+  // Flags for enable P2P NET
+  uint32_t *p2pNet;
+
   // Device side of the communicator
   struct ncclDevComm *devComm;
   // Host copy of the devComm (to free CUDA allocs)

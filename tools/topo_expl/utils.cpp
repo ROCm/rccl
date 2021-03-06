@@ -207,6 +207,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
 
   // Topo detection / System graph creation
   //NCCLCHECK(ncclTopoGetSystem(comm, &comm->topo));
+  comm->topo->nRanks = comm->nRanks;
   // Compute paths between GPUs and NICs
   NCCLCHECK(ncclTopoComputePaths(comm->topo, comm->peerInfo));
   // Remove inaccessible GPUs and unused NICs

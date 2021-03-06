@@ -71,6 +71,7 @@ class ncclPrimitives {
   int peer = -1;
   int role = 0;
   int group;
+  const int p2p;
   uint64_t step;
   T* direct = NULL;
   T* buff;
@@ -198,7 +199,7 @@ class ncclPrimitives {
 
   __device__ __forceinline__ void loadRecvConn(struct ncclChannel* channel, T* directBuff) {
     if (role & (ROLE_WAIT_RECV|ROLE_POST_RECV)) {
-      conn = &channel->devPeers[peer].recv.conn;
+      conn = (LOAD(comm->p2pNet) && p2p) ? &channel->devPeers[peer].p2pRecv.conn : &channel->devPeers[peer].recv.conn;
       step = conn->step;
       step = ROUNDUP(step, SLICESPERCHUNK*SLICESTEPS);
       if (role & ROLE_POST_RECV) {
@@ -221,7 +222,7 @@ class ncclPrimitives {
 
   __device__ __forceinline__ void loadSendConn(struct ncclChannel* channel) {
     if (role & (ROLE_WAIT_SEND|ROLE_POST_SEND)) {
-      conn = &channel->devPeers[peer].send.conn;
+      conn = (LOAD(comm->p2pNet) && p2p) ? &channel->devPeers[peer].p2pSend.conn : &channel->devPeers[peer].send.conn;
       step = conn->step;
       step = ROUNDUP(step, SLICESPERCHUNK*SLICESTEPS);
       if (role & ROLE_POST_SEND) {
@@ -251,8 +252,8 @@ class ncclPrimitives {
 
  public:
   __device__ __forceinline__
-  ncclPrimitives(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group)
-    : comm(comm), tid(tid), nworkers(nworkers), stepSize(stepSize), srcs((const T**)ptrs[group].srcs), dsts((T**)ptrs[group].dsts), group(group), barriers(&ptrs[group].barrier), barrier_next(ptrs[group].barrier_next) {
+  ncclPrimitives(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group, int p2p = 0)
+    : comm(comm), tid(tid), nworkers(nworkers), stepSize(stepSize), srcs((const T**)ptrs[group].srcs), dsts((T**)ptrs[group].dsts), group(group), barriers(&ptrs[group].barrier), barrier_next(ptrs[group].barrier_next), p2p(p2p) {
     nthreads = nworkers;
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     // int postThreads = NSEND && nworkers >= 64 ? WARP_SIZE : 0;

@@ -525,7 +525,7 @@ ncclResult_t ncclTopoSearchRecNet(struct ncclTopoSystem* system, struct ncclTopo
  *                                       `--> NET n (or m if crossNic)
  */
 ncclResult_t ncclTopoSearchParams(struct ncclTopoSystem* system, int pattern, int* backToNet, int* backToFirstRank) {
-  if (system->nodes[NET].count) {
+  if (system->nodes[NET].count && system->nodes[GPU].count != system->nRanks) {
     if (pattern == NCCL_TOPO_PATTERN_RING) *backToNet = system->nodes[GPU].count-1;
     else if (pattern == NCCL_TOPO_PATTERN_SPLIT_TREE) *backToNet = 1;
     else *backToNet = 0;
@@ -541,7 +541,7 @@ ncclResult_t ncclTopoSearchParams(struct ncclTopoSystem* system, int pattern, in
 ncclResult_t ncclTopoSearchRec(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, struct ncclTopoGraph* saveGraph, int* time) {
   int backToNet, backToFirstRank;
   NCCLCHECK(ncclTopoSearchParams(system, graph->pattern, &backToNet, &backToFirstRank));
-  if (system->nodes[NET].count) {
+  if (system->nodes[NET].count && system->nodes[GPU].count != system->nRanks) {
     // Start from NET
     ncclTopoSearchRecNet(system, graph, saveGraph, backToNet, backToFirstRank, time);
   } else {
@@ -831,9 +831,9 @@ static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclT
     dist[m] = dist[n]; dist[n] = temp;
   }
   // create chordal ring based on reference and remapped ids
-  system->type = RCCL_TOPO_CR8G;
+  system->type |= RCCL_TOPO_CR8G;
   NCCLCHECK(parseGraph(ringBase, system, graph, id, 0, NULL));
-  if (system->nodes[NET].count) {
+  if (system->nodes[NET].count && system->nodes[GPU].count != system->nRanks) {
     int *intra, *used;
     graph->nChannels = system->nodes[NET].count;
     NCCLCHECK(ncclCalloc(&intra, ngpus));
@@ -909,8 +909,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
       romeTopo->connMatrix[i*romeTopo->nGpus+n] = 1;
       count ++;
     }
-    if (!romeTopo->nLinks) romeTopo->nLinks = count;
-    else if (romeTopo->nLinks != count) return ncclSuccess;
+    if (romeTopo->nLinks < count) romeTopo->nLinks = count;
   }
 
   // trim ports and create NET map
@@ -1050,10 +1049,10 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
   struct rcclRomeModel romeTopo;
   char pattern[256];
   int net_map[MAX_ROME_NICS];
-  parseRomeSystem(system, &romeTopo, pattern, net_map);
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern, net_map));
 
   // recognize system as Rome 4P2H even if no matching model
-  if (ngpus == 8 && romeTopo.nLinks) system->type = RCCL_TOPO_4P2H_ROME;
+  if (ngpus > 4 && romeTopo.nLinks) system->type |= RCCL_TOPO_4P2H_ROME;
 
   int g[MAX_ROME_GPUS];
   int time = 0;
@@ -1135,8 +1134,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     // user supplied topo
     NCCLCHECK(parseGraph(str, system, graph, NULL, nnets, NULL));
     if (graph->nChannels) {
-      system->type = RCCL_TOPO_4P2H_ROME;
-      return ncclSuccess;
+      system->type |= RCCL_TOPO_4P2H_ROME;
     }
   } else {
     // try to match 8P6L
@@ -1144,8 +1142,8 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels) return ncclSuccess;
     // try to match Rome 4P2H
     NCCLCHECK(parseRome4P2H(system, graph));
-    if (graph->nChannels) return ncclSuccess;
   }
+  if (graph->nChannels) return ncclSuccess;
 
   if (ngpus == 1) if (graph->pattern != NCCL_TOPO_PATTERN_RING) graph->pattern = NCCL_TOPO_PATTERN_TREE;
 
@@ -1293,7 +1291,7 @@ ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGr
   for (int c=0; c<graph->nChannels; c++) {
     sprintf(line, "%2d :", c);
     int offset = strlen(line);
-    if (system->nodes[NET].count > 0) {
+    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks) {
       sprintf(line+offset, " %s/%d", topoNodeTypeStr[NET], graph->inter[2*c]);
       offset = strlen(line);
     }
@@ -1301,7 +1299,7 @@ ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGr
       sprintf(line+offset, " %s/%d", topoNodeTypeStr[GPU], graph->intra[ngpus*c+i]);
       offset = strlen(line);
     }
-    if (system->nodes[NET].count > 0) {
+    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks) {
       sprintf(line+offset, " %s/%d", topoNodeTypeStr[NET], graph->inter[2*c+1]);
       offset = strlen(line);
     }
