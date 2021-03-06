@@ -38,9 +38,13 @@ static ncclResult_t ncclCalloc(T** ptr, size_t nelem) {
 }
 
 struct __attribute__ ((aligned(64))) allocationTracker {
-  uint64_t totalAlloc;
-  uint64_t totalAllocSize;
-  uint64_t align[6];
+  union {
+    struct {
+      uint64_t totalAlloc;
+      uint64_t totalAllocSize;
+    };
+    char align[64];
+  };
 };
 static_assert(sizeof(struct allocationTracker) == 64, "allocationTracker must be size of 64 bytes");
 #define MAX_ALLOC_TRACK_NGPU 32
