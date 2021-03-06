@@ -45,7 +45,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "AllToAll", "AllToAllv" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 const char* ncclRedOpStr[ncclNumOps] = { "Sum", "Prod", "Max", "Min" };
@@ -168,7 +168,7 @@ void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
   int head = comm->hostDevComm.collTraceHead;
   #define MAX_NAME_LENGTH 32
-  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_A2AV+1));
+  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+1));
   for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
     for (int al = 0; al < NCCL_NUM_ALGORITHMS; al++) {
       for (int type = 0; type < ncclNumTypes; type++) {
@@ -182,10 +182,8 @@ void *ncclCommThreadMain(void *arg) {
       }
     }
   }
-  for (int func = NCCL_NUM_FUNCTIONS; func < NCCL_NUM_FUNCTIONS+3; func++) {
-    char* line = func_names+MAX_NAME_LENGTH*(FUNC_INDEX_P2P+func-NCCL_NUM_FUNCTIONS);
-    sprintf(line, "%s", ncclFuncStr[func]);
-  }
+  char* line = func_names+MAX_NAME_LENGTH*FUNC_INDEX_P2P;
+  sprintf(line, "%s", ncclFuncStr[NCCL_NUM_FUNCTIONS]);
   do {
     int tail = LOAD(comm->hostDevComm.collTraceTail)%COLLTRACE_NUM_ITEMS;
     int count;
@@ -223,7 +221,7 @@ void *ncclCommThreadMain(void *arg) {
             sprintf(line+offset, " KL HWID %8x %s ",
               td->data_0, func_names+MAX_NAME_LENGTH*fIdx);
             offset = strlen(line);
-            if (fIdx > FUNC_INDEX_A2AV)
+            if (fIdx > FUNC_INDEX_P2P)
               sprintf(line+offset, "ERROR bad function index %d", fIdx);
             else if (fIdx == FUNC_INDEX_P2P)
               sprintf(line+offset, "nt %d dt %d", td->p2p.nThreads, td->p2p.delta);
@@ -234,7 +232,7 @@ void *ncclCommThreadMain(void *arg) {
             if (fIdx != 0xffff) {
               sprintf(line+offset, " CE %s ", func_names+MAX_NAME_LENGTH*fIdx);
               offset = strlen(line);
-              if (fIdx > FUNC_INDEX_A2AV)
+              if (fIdx > FUNC_INDEX_P2P)
                 sprintf(line+offset, "ERROR bad function index %d", fIdx);
               else if (fIdx == FUNC_INDEX_P2P)
                 sprintf(line+offset, "nt %d dt %d", td->p2p.nThreads, td->p2p.delta);
@@ -318,8 +316,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
 #ifdef ENABLE_COLLTRACE
   STORE(&comm->hostDevComm.collTraceExit, 1);
   if (comm->hostDevComm.collTraceThread) pthread_join(comm->hostDevComm.collTraceThread, NULL);
-  CUDACHECK(hipHostFree((void *)comm->hostDevComm.collTrace));
-  CUDACHECK(hipHostFree((void *)comm->hostDevComm.collTraceTail));
+  NCCLCHECK(ncclCudaHostFree((void *)comm->hostDevComm.collTrace));
+  NCCLCHECK(ncclCudaHostFree((void *)comm->hostDevComm.collTraceTail));
 #endif
 
   free(comm->peerInfo);
@@ -361,7 +359,6 @@ static ncclResult_t commFree(ncclComm_t comm) {
   return ncclSuccess;
 }
 
-RCCL_PARAM(AllToAllDisable, "ALLTOALL_KERNEL_DISABLE", 1);
 RCCL_PARAM(ForceEnableClique, "FORCE_ENABLE_CLIQUE", 0);
 RCCL_PARAM(P2pNetDisable, "P2P_NET_DISABLE", 0);
 
@@ -413,8 +410,8 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 #endif
 
 #ifdef ENABLE_COLLTRACE
-  CUDACHECK(hipHostMalloc((void**) &comm->hostDevComm.collTraceTail, sizeof(uint32_t), hipHostMallocMapped));
-  CUDACHECK(hipHostMalloc((void**) &comm->hostDevComm.collTrace, sizeof(struct ncclCollTrace) * COLLTRACE_NUM_ITEMS, hipHostMallocMapped));
+  NCCLCHECK(ncclCudaHostCalloc(&comm->hostDevComm.collTraceTail, 1));
+  NCCLCHECK(ncclCudaHostCalloc(&comm->hostDevComm.collTrace, COLLTRACE_NUM_ITEMS));
   memset(comm->hostDevComm.collTrace, 0, sizeof(struct ncclCollTrace) * COLLTRACE_NUM_ITEMS);
   comm->hostDevComm.collTraceExit = comm->hostDevComm.collTraceHead = *comm->hostDevComm.collTraceTail = 0;
   if ((ncclDebugLevel >= NCCL_LOG_INFO) && (ncclDebugMask & NCCL_COLL))
@@ -439,9 +436,6 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
   // Mark channels as non initialized.
   for (int c=0; c<MAXCHANNELS; c++) comm->channels[c].id = -1;
-
-  comm->alltoallDisable = true;
-  if (rcclParamAllToAllDisable() == 0) comm->alltoallDisable = false;
 
   *comret = comm;
   return ncclSuccess;
@@ -929,7 +923,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     int fullCudaCompCap;
     int nChannels;
     int gcn;
-    int alltoallDisable;
     struct ncclGraphInfo tree;
     struct ncclGraphInfo ring;
     struct ncclGraphInfo collNet;
@@ -941,7 +934,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].cudaCompCap = comm->topo->nodes[GPU].nodes[idx].gpu.cudaCompCap;
   allGather3Data[rank].gcn = comm->topo->nodes[GPU].nodes[idx].gpu.gcn;
-  allGather3Data[rank].alltoallDisable = comm->topo->nodes[GPU].count == comm->topo->nRanks ? 1 : comm->alltoallDisable;
 
   allGather3Data[rank].nChannels = comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
     std::min(treeGraph.nChannels, ringGraph.nChannels);
@@ -991,11 +983,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   struct ncclTopoRanks** allTopoRanks;
   NCCLCHECK(ncclCalloc(&allTopoRanks, comm->nRanks));
   int gcn = allGather3Data[0].gcn;
-  int alltoallDisable = 0;
   for (int i=0; i<nranks; i++) {
     allTopoRanks[i] = &allGather3Data[i].topoRanks;
     gcn = std::min(allGather3Data[i].gcn, gcn);
-    alltoallDisable = std::max(allGather3Data[i].alltoallDisable, alltoallDisable);
     // Make sure we align all ranks so that the tuning is consistent across ranks
     treeGraph.nChannels = ringGraph.nChannels = comm->nChannels = std::min(allGather3Data[i].nChannels, comm->nChannels);
     treeGraph.sameChannels = std::min(allGather3Data[i].tree.sameChannels, treeGraph.sameChannels);
@@ -1014,11 +1004,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeIntra = std::min(allGather3Data[i].collNet.typeIntra, collNetGraph.typeIntra);
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
   }
-
-  if (comm->alltoallDisable != alltoallDisable) {
-    comm->alltoallDisable = alltoallDisable;
-  }
-  INFO(NCCL_INIT, "RCCL AllToAll(v)/Scatter/Gather kernels %s", comm->alltoallDisable ? "disabled" : "enabled");
 
   // count NETs used by ring
   int nNets = 0;
@@ -1133,29 +1118,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
-
-  if (!alltoallDisable) {
-    int nc = comm->p2pnChannels;
-    for (int c=0; c<nc; c++) {
-      const int peersPerChan = DIVUP(nranks, nc);
-      for (int p=0; p<peersPerChan; p++) {
-        // first channel is reserved for self copy
-        if ((c*peersPerChan+p)%nranks == 0)
-          continue;
-        int peerSend = (rank+c*peersPerChan+p)%nranks;
-        int peerRecv = (2*nranks+rank-(c*peersPerChan)%nranks-p)%nranks;
-        if (comm->channels[c].peers[peerSend].send.connected == 0) {
-          comm->connectSend[peerSend] |= (1<<c);
-          comm->connect = 1;
-        }
-        if (comm->channels[c].peers[peerRecv].recv.connected == 0) {
-          comm->connectRecv[peerRecv] |= (1<<c);
-          comm->connect = 1;
-        }
-      }
-    }
-    NCCLCHECK(ncclTransportP2pSetup(comm, NULL));
-  }
 
   NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, intraRank0Comm));
 

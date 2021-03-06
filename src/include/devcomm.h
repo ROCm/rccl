@@ -27,8 +27,8 @@
 
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncAllToAll, ncclFuncAllToAllv } ncclFunc_t;
-extern const char* ncclFuncStr[];
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv} ncclFunc_t;
+extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1];
 
 #define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
@@ -191,11 +191,6 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    struct {
-      size_t count;
-      uint8_t bid;
-      uint8_t nChannels;
-    } a2av;
     // [RCCL] Clique-based arguments
     //        NOTE: Follows same field structure as coll
     //              because nChannels is accessed from "coll" struct.
@@ -232,7 +227,6 @@ struct ncclChannel {
       struct ncclWork* workFifo;
       int workCount;
       uint64_t workFifoTail; // Only used by CPU
-      size_t* a2avParams;
 
 #ifdef ENABLE_PROFILING
       struct timeval tvs;
