@@ -58,6 +58,8 @@ NCCL_PARAM(CheckPointers, "CHECK_POINTERS", 0);
 ncclNet_t* ncclNet = NULL;
 ncclCollNet_t* ncclCollNet = NULL;
 
+struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU];
+
 // Returns ncclInternalError if anything fails, causing that network to be ignored.
 ncclResult_t initNet(ncclNet_t* net) {
   int ndev;
@@ -1179,7 +1181,7 @@ ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId 
   NCCLCHECKGOTO(initTransportsRank(*newcomm, &commId), res, cleanup);
   NCCLCHECKGOTO(devCommSetup(*newcomm), res, cleanup);
 
-  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx - Init COMPLETE", *newcomm, myrank, nranks, (*newcomm)->cudaDev, (*newcomm)->busId);
+  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx used %ld bytes - Init COMPLETE", *newcomm, myrank, nranks, (*newcomm)->cudaDev, (*newcomm)->busId, allocTracker[(*newcomm)->cudaDev].totalAllocSize);
 
   return ncclSuccess;
 cleanup:
