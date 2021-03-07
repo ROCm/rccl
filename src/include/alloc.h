@@ -37,6 +37,19 @@ static ncclResult_t ncclCalloc(T** ptr, size_t nelem) {
   return ncclSuccess;
 }
 
+struct __attribute__ ((aligned(64))) allocationTracker {
+  union {
+    struct {
+      uint64_t totalAlloc;
+      uint64_t totalAllocSize;
+    };
+    char align[64];
+  };
+};
+static_assert(sizeof(struct allocationTracker) == 64, "allocationTracker must be size of 64 bytes");
+#define MAX_ALLOC_TRACK_NGPU 32
+extern struct allocationTracker allocTracker[];
+
 template <typename T>
 static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem, bool isFineGrain = false) {
   if (isFineGrain)
@@ -44,6 +57,12 @@ static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem, bool isFineGrain = fal
   else
     CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
   CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
+  int dev;
+  CUDACHECK(hipGetDevice(&dev));
+  if (dev < MAX_ALLOC_TRACK_NGPU) {
+    __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*sizeof(T), __ATOMIC_SEQ_CST);
+  }
   return ncclSuccess;
 }
 
