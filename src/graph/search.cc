@@ -1112,6 +1112,8 @@ float speedArray[] = { 42.0, 30.0, 24.0, 21.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0,
 #endif
 #define NSPEEDS (sizeof(speedArray)/sizeof(float))
 
+RCCL_PARAM(ModelMatchingDisable, "MODEL_MATCHING_DISABLE", 0);
+
 ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
   int nnets = system->nodes[NET].count;
@@ -1143,12 +1145,17 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels) {
       system->type |= RCCL_TOPO_4P2H_ROME;
     }
-  } else {
+  } else if (!rcclParamModelMatchingDisable()) {
     // try to match 8P6L
     NCCLCHECK(parseChordalRing(system, graph));
     if (graph->nChannels) return ncclSuccess;
     // try to match Rome 4P2H
     NCCLCHECK(parseRome4P2H(system, graph));
+  }
+  if (graph->collNet && graph->nChannels) {
+    graph->nChannels = 1;
+    memcpy(graph->intra+graph->nChannels*ngpus, graph->intra, ngpus*sizeof(int));
+    memcpy(graph->inter+graph->nChannels*2, graph->inter, 2*sizeof(int));
   }
   if (graph->nChannels) return ncclSuccess;
 

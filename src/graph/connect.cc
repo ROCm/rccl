@@ -174,7 +174,7 @@ ncclResult_t ncclTopoConnectCollNet(struct ncclComm* comm, struct ncclTopoGraph*
   int depth = nranks/comm->nNodes;
   int sendIndex = collNetGraph->pattern == NCCL_TOPO_PATTERN_TREE ? 0 : 1;  // send GPU index depends on topo pattern
   int sendEndIndex = (sendIndex+comm->localRanks-1)%comm->localRanks;
-  for (int c=0; c<comm->nChannels/2; c++) {
+  for (int c=0; c<comm->collNetnChannels/2; c++) {
     struct ncclChannel* channel = comm->channels+c;
     // Set root of collTree to id nranks
     if (rank == collNetGraph->intra[sendIndex+c*comm->localRanks]) { // is master
@@ -188,8 +188,8 @@ ncclResult_t ncclTopoConnectCollNet(struct ncclComm* comm, struct ncclTopoGraph*
   }
   int recvIndex = 0;  // recv GPU index is always 0
   int recvEndIndex = (recvIndex+comm->localRanks-1)%comm->localRanks;
-  for (int c=0; c<comm->nChannels/2; c++) {
-    struct ncclChannel* channel = comm->channels+comm->nChannels/2+c;
+  for (int c=0; c<comm->collNetnChannels/2; c++) {
+    struct ncclChannel* channel = comm->channels+comm->collNetnChannels/2+c;
     // Set root of collTree to id nranks
     if (rank == collNetGraph->intra[recvIndex+c*comm->localRanks]) { // is master
       channel->collTree.up = nranks;
@@ -198,7 +198,7 @@ ncclResult_t ncclTopoConnectCollNet(struct ncclComm* comm, struct ncclTopoGraph*
       channel->collTree.down[0] = -1;
     }
     channel->collTree.depth = depth;
-    INFO(NCCL_GRAPH, "CollNet Channel %d rank %d up %d down %d", comm->nChannels/2+c, rank, channel->collTree.up, channel->collTree.down[0]);
+    INFO(NCCL_GRAPH, "CollNet Channel %d rank %d up %d down %d", comm->collNetnChannels/2+c, rank, channel->collTree.up, channel->collTree.down[0]);
   }
   return ncclSuccess;
 }

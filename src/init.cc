@@ -717,7 +717,7 @@ static ncclResult_t checkCollNetSetup(struct ncclComm* comm, int rank, int collN
   if (collNetSetupFail) {
     if (rank == 0) WARN("Cannot initialize CollNet, using %s instead", ncclNetName());
     // Free collNet resources
-    for (int r=0; r<comm->nChannels; r++) {
+    for (int r=0; r<comm->collNetnChannels; r++) {
       struct ncclChannel* channel = comm->channels+r;
       struct ncclPeer* peer = channel->peers+nranks;
       if (peer->send.transportResources && peer->send.transportComm) NCCLCHECK(peer->send.transportComm->free(peer->send.transportResources));
@@ -1035,6 +1035,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
+    // Force 2 channels for CollNet
+    comm->collNetnChannels = collNetGraph.nChannels = 2;
     NCCLCHECK(ncclTopoConnectCollNet(comm, &collNetGraph, rank));
   }
 
@@ -1092,7 +1094,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
-    int logicChannels = comm->nChannels/2;
+    int logicChannels = comm->collNetnChannels/2;
     int collNetSetupFail = 0;
     const int recvIndex = 0;  // recv GPU index is always 0
     const int sendIndex = collNetGraph.pattern == NCCL_TOPO_PATTERN_TREE ? 0 : 1;  // send GPU index depends on topo pattern

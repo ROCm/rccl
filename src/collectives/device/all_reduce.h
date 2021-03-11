@@ -258,7 +258,7 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_COLLNET, NCCL_PROTO_SIMPLE, FUNC
       }
     }
 
-    if (blockIdx.x >= nChannels) { // second half of the channels do broadcast
+    if (blockIdx.x >= nChannels && blockIdx.x < 2*nChannels) { // second half of the channels do broadcast
       ncclPrimitives<UNROLL, 1, 1, T, 1, 1, 0, FUNC>
         prims(tid, nthreads, &tree->up, tree->down, NULL, stepSize, channel, comm, ncclShmem->ptrs, 0);
       for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
@@ -455,7 +455,7 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_COLLNET, NCCL_PROTO_LL, FUNC, T,
       }
     }
 
-    if (blockIdx.x >= nChannels) { // second half of the channels do broadcast
+    if (blockIdx.x >= nChannels && blockIdx.x < 2*nChannels) { // second half of the channels do broadcast
       ncclLLPrimitives<T, FUNC, 1, 1> LLprims(tid, nthreads, &tree->up, tree->down, stepLines, channel, comm);
       for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
         // Down
