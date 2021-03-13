@@ -1,5 +1,5 @@
 #!/usr/bin/gawk -f
-# Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,8 +26,15 @@ BEGIN {
   treedns[""]=0
   max_treedn=0
   conn[""]=0
+  has_collnet=0
+  max_collnet=0
+  max_collnet_rank=0
+  collnet[""]=0
+  collnet_conn[""]=0
+  collnet_conn_type[""]=0
   col_start=2
   col_p1=col_start+1
+  col_p2=col_start+2
   col_p3=col_start+3
   col_p4=col_start+4
   col_p5=col_start+5
@@ -40,6 +47,7 @@ BEGIN {
   if($3=="NCCL" && $4=="INFO" && col_start==2) {
     col_start=5
     col_p1=col_start+1
+    col_p2=col_start+2
     col_p3=col_start+3
     col_p4=col_start+4
     col_p5=col_start+5
@@ -48,7 +56,19 @@ BEGIN {
     col_p8=col_start+8
   }
 
-  if($col_start=="Ring" && $col_p4="->" && $col_p6=="->") {
+  if($5=="NCCL" && $6=="INFO" && col_start==2) {
+    col_start=7
+    col_p1=col_start+1
+    col_p2=col_start+2
+    col_p3=col_start+3
+    col_p4=col_start+4
+    col_p5=col_start+5
+    col_p6=col_start+6
+    col_p7=col_start+7
+    col_p8=col_start+8
+  }
+
+  if($col_start=="Ring" && $col_p4=="->" && $col_p6=="->") {
     chan=strtonum($col_p1)
     rank=strtonum($col_p5)
     next_rank=strtonum($col_p7)
@@ -89,6 +109,31 @@ BEGIN {
       col_1=col_1+2
       col_2=col_2+2
     } while ($col_1!="")
+  }
+
+  if($col_start=="CollNet" && $col_p1=="Channel") {
+    chan=strtonum($col_p2)
+    rank=strtonum($col_p4)
+    up_rank=strtonum($col_p6)
+    collnet[up_rank "," rank "," chan]="1"
+    if(has_collnet==0)
+      has_collnet=1
+    if(chan>max_collnet)
+      max_collnet=chan
+    if(up_rank>max_collnet_rank)
+      max_collnet_rank=up_rank
+  }
+
+  if($col_start=="Coll" && $col_p2==":") {
+    chan=strtonum($col_p1)
+    rank=strtonum($col_p3)
+    if($col_p4=="[receive]")
+      collnet_conn[rank "," chan]=0
+    else if($col_p4=="[send]")
+      collnet_conn[rank "," chan]=1
+    else
+      printf "Error!\n"
+    collnet_conn_type[rank "," chan]=$col_p6
   }
 
   if($col_p6=="via") {
@@ -177,6 +222,68 @@ END {
     printf "\n"
     for(s=0;s<=max_rank;s++) {
       printf "    r%d_%d [label=\"%d\",fontsize=\"28\"];\n", r, s, s
+    }
+    printf "  }\n\n"
+  }
+
+  for(r=0; has_collnet && r<=max_collnet; r++) {
+    printf "  subgraph collnet_%d {\n", r
+    num_top_ranks=0
+    for(s=0;s<max_collnet_rank;s++) {
+      if((max_collnet_rank "," s "," r) in collnet)
+        top_ranks[num_top_ranks++]=s
+    }
+    for(d=0; d<num_top_ranks; d++) {
+      rank=top_ranks[d]
+      send=collnet_conn[rank "," r]
+      val=collnet_conn_type[rank "," r]
+      style="solid"
+      color="red"
+      if (match(val,"COLLNET")) {
+        style="dashed"
+        if (match(val,"GDRDMA"))
+          color="green"
+      }
+      if (match(val,"P2P")) {
+        color="green"
+      }
+      if(send)
+        printf "    c%d_%d -> c%d_%d [dir=back label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, max_collnet_rank, r, rank, val, color, style
+      else
+        printf "    c%d_%d -> c%d_%d [label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, max_collnet_rank, r, rank, val, color, style
+      while(1) {
+        for(s=0;s<max_collnet_rank;s++) {
+          if((rank "," s "," r) in collnet) {
+            if(send)
+              val=conn[s "," rank "," r]
+            else
+              val=conn[rank "," s "," r]
+            style="solid"
+            color="red"
+            if (match(val,"NET")) {
+              style="dashed"
+              if (match(val,"GDRDMA"))
+                color="green"
+            }
+            if (match(val,"P2P")) {
+              color="green"
+            }
+            if(send)
+              printf "    c%d_%d -> c%d_%d [dir=back label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, rank, r, s, val, color, style
+            else
+              printf "    c%d_%d -> c%d_%d [label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, rank, r, s, val, color, style
+            rank=s
+            break;
+          }
+        }
+        if(s>=max_collnet_rank) {
+          break;
+        }
+      }
+    }
+    printf "\n"
+    for(s=0;s<=max_collnet_rank;s++) {
+      printf "    c%d_%d [label=\"%d\",fontsize=\"28\"];\n", r, s, s
     }
     printf "  }\n\n"
   }

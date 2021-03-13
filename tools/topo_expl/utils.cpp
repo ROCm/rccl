@@ -41,7 +41,7 @@ NCCL_PARAM(CollNetEnable, "COLLNET_ENABLE", 0);
 NCCL_PARAM(GraphDumpFileRank, "GRAPH_DUMP_FILE_RANK", 0);
 
 thread_local int ncclDebugNoWarn = 0;
-ncclCollNet_t* ncclCollNet = NULL;
+ncclCollNet_t* ncclCollNet = 0;
 
 // Get current Compute Capability
 int ncclCudaCompCap() {
@@ -137,10 +137,107 @@ ncclResult_t bootstrapAllGather(struct ncclComm* comm, struct allGather1Data_t *
   return ncclSuccess;
 }
 
+extern struct ncclTransport collNetTransport;
+
+// All ranks must participate in collNetSetup call
+// type: 0 for send, 1 for recv
+// return: 0 - unsupported, 1 - supported
+// We do not NCCLCHECK this call because we would fall back to P2P network in case CollNet setup fails
+static int collNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collNetGraph, struct ncclChannel* channel, int rank, int nranks,  int masterRank, int masterPeer, int nMasters, int type) {
+  int rankInCollNet = -1;
+  int supported = 0;
+  int isMaster = (rank == masterRank) ? 1 : 0;
+  struct {
+    int collNetRank;
+    ncclConnect connect;
+  } sendrecvExchange;
+
+  // check if we can connect to collnet, whose root is the nranks-th rank
+  struct ncclPeerInfo *myInfo = comm->peerInfo+rank, *peerInfo = comm->peerInfo+nranks;
+  peerInfo->rank = nranks;
+  int ret = 1;
+  if (isMaster) {
+    NCCLCHECK(collNetTransport.canConnect(&ret, comm->topo, collNetGraph, myInfo, peerInfo));
+  }
+
+  // send master receives connect info from peer recv master
+  if (isMaster && type == 0) {
+    //NCCLCHECK(bootstrapRecv(comm->bootstrap, masterPeer, &sendrecvExchange, sizeof(sendrecvExchange)));
+    rankInCollNet = sendrecvExchange.collNetRank;
+    INFO(NCCL_INIT, "CollNet [send] : rank %d collNetRank %d collNetNranks %d received connect from rank %d", rank, rankInCollNet, nMasters, masterPeer);
+  }
+
+  // select
+  struct ncclPeer* root = channel->peers+nranks;
+  struct ncclConnector* conn = (type == 1) ? &root->recv : &root->send;
+  struct ncclTransportComm* transportComm = (type == 1) ? &(collNetTransport.recv) : &(collNetTransport.send);
+  conn->transportComm = transportComm;
+  // setup
+  struct ncclConnect myConnect;
+  if (isMaster && ret > 0) {
+    NCCLCHECK(transportComm->setup(comm, collNetGraph, myInfo, peerInfo, &myConnect, conn, channel->id));
+  }
+  // prepare connect handles
+  ncclResult_t res;
+  struct {
+    int isMaster;
+    ncclConnect connect;
+  } *allConnects = NULL;
+  ncclConnect *masterConnects = NULL;
+  //NCCLCHECK(ncclCalloc(&masterConnects, nMasters));
+  if (type == 1) {  // recv side: AllGather
+    // all ranks must participate
+    //NCCLCHECK(ncclCalloc(&allConnects, nranks));
+    //allConnects[rank].isMaster = isMaster;
+    //memcpy(&(allConnects[rank].connect), &myConnect, sizeof(struct ncclConnect));
+    //NCCLCHECKGOTO(bootstrapAllGather(comm->bootstrap, allConnects, sizeof(*allConnects)), res, cleanup);
+    // consolidate
+    //int c = 0;
+    //for (int r = 0; r < nranks; r++) {
+      //if (allConnects[r].isMaster) {
+        //memcpy(masterConnects+c, &(allConnects[r].connect), sizeof(struct ncclConnect));
+        //if (r == rank) rankInCollNet = c;
+        //c++;
+      //}
+    //}
+  } else { // send side : copy in connect info received from peer recv master
+    //if (isMaster) memcpy(masterConnects+rankInCollNet, &(sendrecvExchange.connect), sizeof(struct ncclConnect));
+  }
+  // connect
+  if (isMaster && ret > 0) {
+    //NCCLCHECKGOTO(transportComm->connect(comm, masterConnects, nMasters, rankInCollNet, conn), res, cleanup);
+    //struct ncclPeer* devRoot = channel->devPeers+nranks;
+    //struct ncclConnector* devConn = (type == 1) ? &devRoot->recv : &devRoot->send;
+    //CUDACHECKGOTO(hipMemcpy(devConn, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice), res, cleanup);
+  }
+  // recv side sends connect info to send side
+  if (isMaster && type == 1) {
+    //sendrecvExchange.collNetRank = rankInCollNet;
+    //memcpy(&sendrecvExchange.connect, masterConnects+rankInCollNet, sizeof(struct ncclConnect));
+    //NCCLCHECKGOTO(bootstrapSend(comm->bootstrap, masterPeer, &sendrecvExchange, sizeof(sendrecvExchange)), res, cleanup);
+    INFO(NCCL_INIT, "CollNet [recv] : rank %d collNetRank %d collNetNranks %d sent connect to rank %d", rank, rankInCollNet, nMasters, masterPeer);
+  }
+  if (ret > 0) {
+    supported = 1;
+  }
+cleanup:
+  //if (allConnects != NULL) free(allConnects);
+  //if (masterConnects != NULL) free(masterConnects);
+  return supported;
+}
+
+static ncclResult_t checkCollNetSetup(struct ncclComm* comm, int rank, int collNetSetupFail) {
+  comm->collNetSupport = 1;
+  return ncclSuccess;
+}
+
 ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t *allGather1Data, struct allGather3Data_t *allGather3Data,
   struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph) {
   int rank = comm->rank;
   int nranks = comm->nRanks;
+
+  if (ncclParamCollNetEnable() == 1 && ncclCollNet == 0)
+    ncclCollNet = (ncclCollNet_t*)0x12345678;
   //uint64_t commHash = getHash(commId->internal, NCCL_UNIQUE_ID_BYTES);
   //TRACE(NCCL_INIT, "comm %p, commHash %lx, rank %d nranks %d - BEGIN", comm, commHash, rank, nranks);
   //NCCLCHECK(bootstrapInit(commId, rank, nranks, &comm->bootstrap));
@@ -527,6 +624,8 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
+    // Force 2 channels for CollNet
+    comm->collNetnChannels = collNetGraph.nChannels = 2;
     NCCLCHECK(ncclTopoConnectCollNet(comm, &collNetGraph, rank));
   }
 
@@ -580,11 +679,10 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   INFO(NCCL_INIT, "Connected all trees");
 
   // Check if we can setup CollNet
-#if 0
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
-    int logicChannels = comm->nChannels/2;
+    int logicChannels = comm->collNetnChannels/2;
     int collNetSetupFail = 0;
     const int recvIndex = 0;  // recv GPU index is always 0
     const int sendIndex = collNetGraph.pattern == NCCL_TOPO_PATTERN_TREE ? 0 : 1;  // send GPU index depends on topo pattern
@@ -604,7 +702,6 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     // Verify CollNet setup across ranks
     NCCLCHECK(checkCollNetSetup(comm, rank, collNetSetupFail));
   }
-#endif
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
   free(rings);
 
