@@ -864,15 +864,15 @@ static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclT
   return ncclSuccess;
 }
 
-static ncclResult_t ncclGpuIdToIndex(struct ncclTopoSystem* system, int id, int* index) {
-  *index = -1;
-  for (int i=0; i<system->nodes[GPU].count; i++) {
-    if (system->nodes[GPU].nodes[i].gpu.dev == id) {
-      *index = i;
-      return ncclSuccess;
-    }
-  }
-  return ncclInternalError;
+struct ncclGpuIdHIP {
+  int g;
+  int dev;
+};
+
+static int cmpIds(const void * g1, const void * g2) {
+  struct ncclGpuIdHIP *s1 = (struct ncclGpuIdHIP*)g1;
+  struct ncclGpuIdHIP *s2 = (struct ncclGpuIdHIP*)g2;
+  return s1->dev - s2->dev;
 }
 
 static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo, char *pattern, int *net_map) {
@@ -881,9 +881,16 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   romeTopo->nCpus = system->nodes[CPU].count;
   romeTopo->nNics = 0;
   romeTopo->nLinks = 0;
+  // sort GPU devices by HIP device ID
+  struct ncclGpuIdHIP scores[MAX_ROME_GPUS];
+  for (int i = 0; i < romeTopo->nGpus; i ++) {
+    scores[i].g = i;
+    scores[i].dev = system->nodes[GPU].nodes[i].gpu.dev;
+  }
+  qsort(scores, romeTopo->nGpus, sizeof(struct ncclGpuIdHIP), cmpIds);
   for (int i = 0; i < romeTopo->nGpus; i ++) {
     int gpu, n, m, distance;
-    NCCLCHECK(ncclGpuIdToIndex(system, i, &gpu));
+    gpu = scores[i].g;
     romeTopo->gpuIds[i] = system->nodes[GPU].nodes[gpu].id;
     m = 0;
     distance = system->nodes[GPU].nodes[gpu].paths[CPU][m].count;
