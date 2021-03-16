@@ -870,9 +870,9 @@ struct ncclGpuIdHIP {
 };
 
 static int cmpIds(const void * g1, const void * g2) {
-   struct ncclGpuIdHIP *s1 = (struct ncclGpuIdHIP*)g1;
-   struct ncclGpuIdHIP *s2 = (struct ncclGpuIdHIP*)g2;
-   return s1->dev - s2->dev;
+  struct ncclGpuIdHIP *s1 = (struct ncclGpuIdHIP*)g1;
+  struct ncclGpuIdHIP *s2 = (struct ncclGpuIdHIP*)g2;
+  return s1->dev - s2->dev;
 }
 
 static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo, char *pattern, int *net_map) {
