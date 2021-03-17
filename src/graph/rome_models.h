@@ -257,6 +257,17 @@ static struct rcclRomeModel rome_model_49 = {
   .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
 };
 
+static struct rcclRomeModel rome_model_50 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 1, .nLinks = 2,
+  .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
+  .nicIds = { 0xe1000, },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { 1, },
+  .connMatrix = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, },
+  .pattern = "4041",
+  .ringBase = "1 7 6 4 5 2 0 3|2 5 3 0 4 6 7 1",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -278,4 +289,5 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_46,
   rome_model_48,
   rome_model_49,
+  rome_model_50,
 };
