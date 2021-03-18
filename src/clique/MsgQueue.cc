@@ -32,7 +32,6 @@ ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, int& ms
   key_t key;
   SYSCHECKVAL(ftok(name.c_str(), projid), "ftok", key);
   int flag = (exclusive == true ? IPC_CREAT | IPC_EXCL : IPC_CREAT);
-
   msgid = msgget(key, MSG_QUEUE_PERM | flag);
   // Check if we're trying to create message queue and it already exists; if so, delete existing queue
   if (msgid == -1 && exclusive == true && errno == EEXIST)
@@ -66,7 +65,7 @@ ncclResult_t MsgQueueClose(std::string name, int projid)
   key_t key;
   int msgid;
   key = ftok(name.c_str(), projid);
-  SYSCHECKVAL(msgget(key, IPC_CREAT), "msgget", msgid);
+  SYSCHECKVAL(msgget(key, 0), "msgget", msgid);
   SYSCHECK(msgctl(msgid, IPC_RMID, NULL), "msgctl");
   return ncclSuccess;
 }

@@ -95,6 +95,7 @@ protected:
 
   int                          m_rank;                               // Associated rank
   int                          m_numRanks;                           // Total number of ranks
+  unsigned long                m_hash;                               // Hash used for identifying message queues & shared memory
   cliqueMode_t                 m_cliqueMode;                         // Clique mode (off/single process/single node)
   bool                         m_init;                               // Whether CliqueManager has been initialized
   cliqueDevicePtrs_t*          m_pinnedCliquePtrs;                   // Pinned-host-memory (device accessible) containing device pointers

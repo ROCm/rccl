@@ -72,6 +72,28 @@ CliqueManager::~CliqueManager()
 
 void CliqueManager::CleanUp()
 {
+  if (rcclParamEnableClique())
+  {
+    if (m_rank == 0)
+    {
+      int pid = getpid();
+      for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
+      {
+        std::string msgQueueName = "/tmp/" + it->second + std::to_string(m_hash) + "_" + std::to_string(pid);
+        ncclResult_t res = MsgQueueClose(msgQueueName, m_hash);
+        if (res != ncclSuccess)
+        {
+          WARN("Unable to close Message Queue: %s\n", msgQueueName.c_str());
+        }
+        int ret = unlink(msgQueueName.c_str());
+        if (ret != 0)
+        {
+          WARN("Unable to unlink %s\n", msgQueueName.c_str());
+        }
+      }
+    }
+  }
+
   if (m_cliqueMode == CLIQUE_DISABLED) return;
 
   // Free variables that are shared between SINGLE_PROCESS / SINGLE_NODE
@@ -102,6 +124,7 @@ void CliqueManager::CleanUp()
     if (m_rank == 0 && m_staticGpuBarrierMem)
       hipFree(m_staticGpuBarrierMem);
   }
+
   m_init = false;
 }
 
@@ -112,6 +135,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   if (m_init) return ncclSuccess;
   m_init = true;
 
+  m_hash = djb2Hash(commId->internal);
   if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
 
   // Check parameters
@@ -143,8 +167,8 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     return ncclSuccess;
   }
 
-  unsigned long hash = djb2Hash(commId->internal);
-  std::string shmSuffix = std::to_string(hash) + "_" + std::to_string(suffix);
+
+  std::string shmSuffix = std::to_string(m_hash) + "_" + std::to_string(suffix);
 
   // Allocate sense barrier variable on local GPU
   NCCLCHECKGOTO(ncclCudaCalloc(&m_gpuBarrierLocalSense, NCCL_MAX_OPS * sizeof(int)), res, dropback);
@@ -152,7 +176,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
     // Initialize shared memory file for IPC handles (based on commId hash)
-    m_shmHandles = NcclIpcHandleShm(m_rank, m_numRanks, hash, NUM_HANDLES_PER_RANK, NCCL_MAX_OPS, shmSuffix);
+    m_shmHandles = NcclIpcHandleShm(m_rank, m_numRanks, m_hash, NUM_HANDLES_PER_RANK, NCCL_MAX_OPS, shmSuffix);
     NCCLCHECKGOTO(m_shmHandles.Open(), res, dropback);
 
     // Initialize IPC caches
@@ -167,7 +191,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
                                                      CliqueShmNames["Barriers"] + shmSuffix,
                                                      m_rank,
                                                      m_numRanks,
-                                                     hash);
+                                                     m_hash);
     NCCLCHECKGOTO(m_sharedIpcHandle.Open(), res, dropback);
 
     if (m_rank == 0)
@@ -194,7 +218,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
                                            CliqueShmNames["SharedCounters"] + shmSuffix,
                                            m_rank,
                                            m_numRanks,
-                                           hash);
+                                           m_hash);
     NCCLCHECKGOTO(m_sharedCpuMemory.Open(), res, dropback);
 
     // Split up the shared CPU memory for barrier counters / global sense
@@ -511,7 +535,6 @@ ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
         std::string msgQueueName = "/tmp/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
         SYSCHECKVAL(open(msgQueueName.c_str(), O_CREAT | O_RDWR, 0606), "open", fd);
         NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
-        SYSCHECK(unlink(msgQueueName.c_str()), "unlink");
         SYSCHECK(close(fd), "close");
       }
 

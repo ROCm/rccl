@@ -136,6 +136,7 @@ ncclResult_t ShmObject<T>::Open()
     int msgid;
     std::string tmpFileName = "/tmp/" + m_shmName;
     NCCLCHECK(MsgQueueGetId(tmpFileName, m_projid, false, msgid));
+
     if (m_rank == 0)
     {
       ncclResult_t resultSetup = shmSetupExclusive(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 1);
