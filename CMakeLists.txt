@@ -192,7 +192,7 @@ if("${HIP_COMPILER}" MATCHES "clang")
   find_program( hipcc_executable hipcc )
   execute_process(COMMAND bash "-c" "${hipcc_executable} -help | grep 'parallel-jobs'" OUTPUT_VARIABLE hipcc_parallel_jobs)
   if("${hipcc_parallel_jobs}" MATCHES "parallel-jobs")
-    target_compile_options(rccl PRIVATE -parallel-jobs=4 PRIVATE -Wno-format-nonliteral)
+    target_compile_options(rccl PRIVATE -parallel-jobs=4 PRIVATE -Wno-format-nonliteral -fvisibility=hidden)
     target_link_libraries(rccl PRIVATE -parallel-jobs=4)
   endif()
 
