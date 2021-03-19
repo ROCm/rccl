@@ -184,6 +184,7 @@ target_link_libraries(rccl PRIVATE --cuda-gpu-arch=${target})
 endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
+  target_compile_options(rccl PRIVATE -fvisibility=hidden)
   foreach(target ${AMDGPU_TARGETS})
     target_compile_options(rccl PRIVATE --cuda-gpu-arch=${target} PRIVATE -fgpu-rdc)
   endforeach()
