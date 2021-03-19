@@ -101,6 +101,8 @@ struct ncclComm {
   int p2pnChannels;
   int p2pnChannelsPerPeer;
   int p2pChannels[MAXCHANNELS];
+  //Channels for collnet
+  int collNetnChannels;
 
   // Buffer sizes
   int buffSizes[NCCL_NUM_PROTOCOLS];

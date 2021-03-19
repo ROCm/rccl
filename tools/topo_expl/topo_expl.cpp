@@ -119,6 +119,7 @@ NodeModelDesc model_descs[] = {
   {2, "topo_8p_rome_pcie.xml",  "2 nodes node 8 VEGA20 PCIe"},
   {1, "topo_8p_rome_4nics.xml", "single node 8 gfx908 Rome 4 NICs"},
   {4, "topo_8p_rome_4nics.xml", "4 nodes node 8 gfx908 Rome 4 NICs"},
+  {4, "topo_collnet_n1.xml",    "4 nodes collnet 1 NICs"},
 };
 
 int main(int argc,char* argv[])

@@ -308,7 +308,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
 
   int nc = (info->nChannels > 0) ? info->nChannels :
-           (info->algorithm == NCCL_ALGO_COLLNET) ? comm->nChannels/2 : comm->nChannels; // CollNet uses one channel for up and one channel for down
+           (info->algorithm == NCCL_ALGO_COLLNET) ? comm->collNetnChannels/2 : comm->nChannels; // CollNet uses one channel for up and one channel for down
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   while (info->nBytes < nc*nt*threadThreshold) {
@@ -511,7 +511,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     proxyArgs.channel = channel;
     // Adjust pattern for CollNet based on channel index
     if (nSubChannels == 2) {
-      info->pattern = (channelId < info->comm->nChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
+      info->pattern = (channelId < info->comm->collNetnChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
     }
 
     if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks));

@@ -159,8 +159,6 @@ ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   return ncclSuccess;
 }
 
-NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
-
 ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId) {
   int netDev, useGdr = 0;
 
@@ -177,6 +175,39 @@ struct ncclTransport netTransport = {
   netCanConnect,
   { netSendSetup, NULL, NULL, NULL },
   { netRecvSetup, NULL, NULL, NULL }
+};
+
+/* Determine if two peers can communicate with NET */
+ncclResult_t collNetCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
+  *ret = 1;
+  return ncclSuccess;
+}
+
+ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId) {
+  int netDev, useGdr = 0;
+
+  NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, &netDev));
+  NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 1, &useGdr));
+
+  INFO(NCCL_INIT|NCCL_NET,"Coll %02d : %d [send] via COLLNET/%s/%d%s", channelId, myInfo->rank, "SHARP", netDev, useGdr ? "/GDRDMA" : "");
+  return ncclSuccess;
+}
+
+ncclResult_t collNetRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId) {
+  int netDev, useGdr = 0;
+
+  NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, &netDev));
+  NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 0, &useGdr));
+
+  INFO(NCCL_INIT|NCCL_NET,"Coll %02d : %d [receive] via COLLNET/%s/%d%s", channelId, myInfo->rank, "SHARP", netDev, useGdr ? "/GDRDMA" : "");
+  return ncclSuccess;
+}
+
+struct ncclTransport collNetTransport = {
+  "COL",
+  collNetCanConnect,
+  { collNetSendSetup, NULL, NULL, NULL },
+  { collNetRecvSetup, NULL, NULL, NULL }
 };
 
 struct ncclTransport ncclTransports[NTRANSPORTS] = {

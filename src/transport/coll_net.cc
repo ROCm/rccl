@@ -9,12 +9,14 @@
 #include "coll_net.h"
 #include "graph.h"
 #include <assert.h>
+#include <hsa/hsa_ext_amd.h>
 
 struct collNetRecvConnectInfo {
   collNetHandle_t collNetHandle;
 };
 
 struct collNetSendConnectInfo {
+  collNetHandle_t collNetHandle;
   void* collNetComm;
   void* mhandles[NCCL_NUM_PROTOCOLS];
   struct reqSlot* reqFifo;
@@ -39,6 +41,7 @@ struct collNetSendResources {
   uint64_t llLastCleaning;
   struct reqSlot* reqFifo;
   int collNetRank;
+  uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
 };
 
 struct collNetRecvResources {
@@ -55,6 +58,7 @@ struct collNetRecvResources {
   uint64_t llLastCleaning;
   struct reqSlot* reqFifo;
   int collNetRank;
+  uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
 };
 
 /* Determine if we can communicate with the peer */
@@ -78,7 +82,28 @@ ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) recvSize += send->comm->buffSizes[p];
 
   if (resources->useGdr) {
-    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize));
+    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize, resources->useGdr));
+    //CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
+    struct data_struct {hsa_agent_t agent; int counter;} out;
+    out.counter = 0;
+    out.agent.handle = myInfo->cudaDev;
+    hsa_iterate_agents([](hsa_agent_t agent, void* data) {
+      int devId = ((struct data_struct *)data)->agent.handle;
+      hsa_device_type_t type;
+      hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type);
+      if(type != HSA_DEVICE_TYPE_GPU)
+        return HSA_STATUS_SUCCESS;
+      if(((struct data_struct *)data)->counter!=devId) {
+        ((struct data_struct *)data)->counter++;
+        return HSA_STATUS_SUCCESS;
+      }
+      ((struct data_struct *)data)->agent = agent;
+      return HSA_STATUS_SUCCESS;
+    }, (void*)&out);
+    hsa_amd_hdp_flush_t hdpinfo;
+    hsa_status_t err = hsa_agent_get_info(out.agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_HDP_FLUSH, &hdpinfo);
+    resources->curr_hdp_reg = hdpinfo.HDP_MEM_FLUSH_CNTL;
+    send->conn.curr_hdp_reg = resources->curr_hdp_reg;
   }
   NCCLCHECK(ncclCudaHostCalloc((char**)&resources->recvMem, recvSize));
   NCCLCHECK(ncclIbMalloc((void**)&(resources->llData), send->comm->buffSizes[NCCL_PROTO_LL]/2));
@@ -103,7 +128,7 @@ ncclResult_t collNetRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) recvSize += recv->comm->buffSizes[p];
 
   if (resources->useGdr) {
-    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize));
+    NCCLCHECK(ncclCudaCalloc((char**)(&resources->devRecvMem), recvSize, resources->useGdr));
   }
   NCCLCHECK(ncclCudaHostCalloc((char**)&resources->recvMem, recvSize));
 
@@ -291,6 +316,11 @@ ncclResult_t collNetSendProxy(struct ncclProxyArgs* args) {
           size = nFifoLines*2*sizeof(uint32_t);
         }
         if (ready) {
+          // flush HDP if not done
+          if (resources->curr_hdp_reg && args->hdp_flushed < LOAD(recvTail)) {
+            args->hdp_flushed = LOAD(recvTail);
+            STORE(resources->curr_hdp_reg, 1);
+          }
           // Data is ready, try to send.
           int count = size/ncclTypeSize(args->dtype);
           NCCLCHECK(collNetIallreduce(resources->collNetSendComm, (void*) buff, (void*)(reqFifo[buffSlot].recvBuff), count, args->dtype, args->redOp, sendMhandle, recvMhandle, args->requests+buffSlot));
