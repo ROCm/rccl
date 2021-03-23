@@ -20,19 +20,15 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
     struct ncclTopoRanks* topoRanks) {
   int rank = comm->rank;
   int localRanks = comm->localRanks;
-  int nChannels = comm->nChannels;
 
-  for (int c=0; c<nChannels; c++) {
+  for (int c=0; c<comm->nChannels; c++) {
     struct ncclChannel* channel = comm->channels+c;
     channel->ring.prev = channel->ring.next = -1;
     channel->tree.up = -1;
     for (int i=0; i<NCCL_MAX_TREE_ARITY; i++) channel->tree.down[i] = -1;
-    channel->collTree.up = -1;
-    for (int i=0; i<NCCL_MAX_TREE_ARITY; i++) channel->collTree.down[i] = -1;
 
     int* ringIntra = ringGraph->intra+c*localRanks;
     int* treeIntra = treeGraph->intra+c*localRanks;
-    int* collNetIntra = collNetGraph->intra+c*localRanks;
 
     for (int i=0; i<localRanks; i++) {
       if (ringIntra[i] == rank) {
@@ -52,6 +48,23 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         channel->tree.up         = i == 0 ? -1 : treeIntra[i-1];
         channel->tree.down[0]    = i == localRanks-1 ? -1 : treeIntra[i+1];
       }
+    }
+    topoRanks->ringPrev[c] = channel->ring.prev;
+    topoRanks->ringNext[c] = channel->ring.next;
+  }
+  // Duplicate channels rings/trees
+  struct ncclChannel* channel0 = comm->channels;
+  struct ncclChannel* channel1 = channel0+comm->nChannels;
+  memcpy(channel1, channel0, comm->nChannels*sizeof(struct ncclChannel));
+  // Setup collnet tree
+  for (int c=0; c<comm->collNetnChannels; c++) {
+    struct ncclChannel* channel = comm->channels+c;
+    channel->collTree.up = -1;
+    for (int i=0; i<NCCL_MAX_TREE_ARITY; i++) channel->collTree.down[i] = -1;
+
+    int* collNetIntra = collNetGraph->intra+c*localRanks;
+
+    for (int i=0; i<localRanks; i++) {
       if (collNetIntra[i] == rank) {
         int prev = (i-1+localRanks)%localRanks, next = (i+1)%localRanks;
 
@@ -59,13 +72,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         channel->collTree.down[0] = collNetIntra[next];
       }
     }
-    topoRanks->ringPrev[c] = channel->ring.prev;
-    topoRanks->ringNext[c] = channel->ring.next;
   }
-  // Duplicate channels rings/trees
-  struct ncclChannel* channel0 = comm->channels;
-  struct ncclChannel* channel1 = channel0+nChannels;
-  memcpy(channel1, channel0, nChannels*sizeof(struct ncclChannel));
   return ncclSuccess;
 }
 

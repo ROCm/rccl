@@ -1153,9 +1153,32 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     NCCLCHECK(parseRome4P2H(system, graph));
   }
   if (graph->collNet && graph->nChannels) {
-    graph->nChannels = 1;
-    memcpy(graph->intra+graph->nChannels*ngpus, graph->intra, ngpus*sizeof(int));
-    memcpy(graph->inter+graph->nChannels*2, graph->inter, 2*sizeof(int));
+    struct ncclTopoGraph tmpGraph;
+    memcpy(&tmpGraph, graph, sizeof(struct ncclTopoGraph));
+    int nets[MAXCHANNELS], n = 0;
+    for (int i = 0; i < tmpGraph.nChannels; i++) {
+      int j;
+      for (j = 0; j < n; j++) {
+        if (nets[j] == tmpGraph.inter[i*2])
+          break;
+      }
+      if (j >= n)
+        nets[n++] = tmpGraph.inter[i*2];
+    }
+    for (int i = 0; i < n; i++) {
+      int j;
+      for (j = 0; j < tmpGraph.nChannels; j++) {
+        if (nets[i] == tmpGraph.inter[j*2])
+          break;
+      }
+      if (j < tmpGraph.nChannels) {
+        memcpy(graph->intra+i*ngpus, &tmpGraph.intra[j*ngpus], ngpus*sizeof(int));
+        memcpy(graph->inter+i*2, &tmpGraph.inter[j*2], 2*sizeof(int));
+      }
+    }
+    memcpy(graph->intra+n*ngpus, graph->intra, ngpus*sizeof(int)*n);
+    memcpy(graph->inter+n*2, graph->inter, 2*sizeof(int)*n);
+    graph->nChannels = n;
   }
   if (graph->nChannels) return ncclSuccess;
 
@@ -1286,7 +1309,12 @@ done:
     graph->nChannels = 1;
   }
 
-  if (graph->speedIntra >= 25.0) {
+  if (graph->nChannels && graph->collNet) {
+    // duplicate collnet channels
+    memcpy(graph->intra+graph->nChannels*ngpus, graph->intra, ngpus*sizeof(int)*graph->nChannels);
+    memcpy(graph->inter+graph->nChannels*2, graph->inter, 2*sizeof(int)*graph->nChannels);
+  }
+  else if (graph->speedIntra >= 25.0) {
     int dupChannels = std::min(graph->nChannels*2, graph->maxChannels);
     memcpy(graph->intra+graph->nChannels*ngpus, graph->intra, (dupChannels-graph->nChannels)*ngpus*sizeof(int));
     memcpy(graph->inter+graph->nChannels*2,graph->inter, (dupChannels-graph->nChannels)*2*sizeof(int));

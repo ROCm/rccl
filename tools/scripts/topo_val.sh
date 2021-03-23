@@ -21,9 +21,9 @@
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-for i in {0..50}
+for i in {0..51}
 do
-	if [[ $i -eq 50 ]]
+	if [[ $i -eq 50 ]] || [[ $i -eq 51 ]]
 	then
 		NCCL_COLLNET_ENABLE=1 $DIR/../topo_expl/topo_expl -m $i > "topo_m$i.log"
 	else
