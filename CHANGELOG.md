@@ -2,7 +2,20 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## [Unreleased]
+## [RCCL-2.8.4 for ROCm 4.2.0]
+### Added
+- Compatibility with NCCL 2.8.4
+
+### Optimizations
+- Additional tuning for clique-based kernels
+- Enabling GPU direct RDMA read from GPU
+- Fixing potential memory leak issue when re-creating multiple communicators within same process
+- Improved topology detection
+
+### Known issues
+- None
+
+## [RCCL-2.7.8 for ROCm 4.1.0]
 ### Added
 - Experimental support for clique-based kernels (opt in with RCCL_ENABLE_CLIQUE=1)
 - Clique-based kernels may offer better performance for smaller input sizes
