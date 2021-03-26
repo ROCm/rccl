@@ -231,13 +231,16 @@ static ncclResult_t checkCollNetSetup(struct ncclComm* comm, int rank, int collN
   return ncclSuccess;
 }
 
+void initCollNet() {
+  if (ncclParamCollNetEnable() == 1 && ncclCollNet == 0)
+    ncclCollNet = (ncclCollNet_t*)0x12345678;
+}
+
 ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t *allGather1Data, struct allGather3Data_t *allGather3Data,
   struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph) {
   int rank = comm->rank;
   int nranks = comm->nRanks;
 
-  if (ncclParamCollNetEnable() == 1 && ncclCollNet == 0)
-    ncclCollNet = (ncclCollNet_t*)0x12345678;
   //uint64_t commHash = getHash(commId->internal, NCCL_UNIQUE_ID_BYTES);
   //TRACE(NCCL_INIT, "comm %p, commHash %lx, rank %d nranks %d - BEGIN", comm, commHash, rank, nranks);
   //NCCLCHECK(bootstrapInit(commId, rank, nranks, &comm->bootstrap));
@@ -401,6 +404,8 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   allGather3Data[rank].collNet.typeIntra = collNetGraph.typeIntra;
   allGather3Data[rank].collNet.typeInter = collNetGraph.typeInter;
 
+  // CollNet channels are already duplicated
+  comm->collNetnChannels = 2*collNetGraph.nChannels;
   NCCLCHECK(ncclTopoPreset(comm, &treeGraph, &ringGraph, &collNetGraph, &allGather3Data[rank].topoRanks));
 
   return ncclSuccess;
@@ -624,9 +629,9 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
-    // Force 2 channels for CollNet
-    comm->collNetnChannels = collNetGraph.nChannels = 2;
     NCCLCHECK(ncclTopoConnectCollNet(comm, &collNetGraph, rank));
+  } else {
+    comm->collNetnChannels = 0;
   }
 
   free(allTopoRanks);
@@ -682,6 +687,8 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
+    for (int c=comm->nChannels; c<comm->collNetnChannels; c++)
+      NCCLCHECK(initChannel(comm, c));;
     int logicChannels = comm->collNetnChannels/2;
     int collNetSetupFail = 0;
     const int recvIndex = 0;  // recv GPU index is always 0

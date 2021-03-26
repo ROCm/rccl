@@ -283,10 +283,11 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   info->algorithm = -1;
   info->protocol = -1;
   int nAlgos = NCCL_NUM_ALGORITHMS;
+  #define SHARP_COLL_SAT_THRESHOLD 16384
 
   // Check collNet support
   int collNetTypeSupport = 0;
-  if (info->comm->collNetSupport)
+  if (info->comm->collNetSupport && info->nBytes < SHARP_COLL_SAT_THRESHOLD*comm->collNetnChannels/2)
     NCCLCHECK(collNetReduceSupport(info->datatype, info->op, &collNetTypeSupport));
   if (collNetTypeSupport != 1) nAlgos--;
   for (int a=0; a<nAlgos; a++) {

@@ -36,6 +36,8 @@ struct allGather3Data_t{
   struct ncclTopoRanks topoRanks;
 };
 
+void initCollNet();
+
 ncclResult_t ncclTopoGetSystem(const char* xmlTopoFile, struct ncclTopoSystem** system);
 
 ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem** topoSystem);

@@ -958,6 +958,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   allGather3Data[rank].collNet.typeIntra = collNetGraph.typeIntra;
   allGather3Data[rank].collNet.typeInter = collNetGraph.typeInter;
 
+  // CollNet channels are already duplicated
+  comm->collNetnChannels = 2*collNetGraph.nChannels;
   NCCLCHECK(ncclTopoPreset(comm, &treeGraph, &ringGraph, &collNetGraph, &allGather3Data[rank].topoRanks));
 
   NCCLCHECK(bootstrapAllGather(comm->bootstrap, allGather3Data, sizeof(*allGather3Data)));
@@ -1035,9 +1037,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
-    // Force 2 channels for CollNet
-    comm->collNetnChannels = collNetGraph.nChannels = 2;
     NCCLCHECK(ncclTopoConnectCollNet(comm, &collNetGraph, rank));
+  } else {
+    comm->collNetnChannels = 0;
   }
 
   free(allTopoRanks);
@@ -1094,6 +1096,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
+    for (int c=comm->nChannels; c<comm->collNetnChannels; c++)
+      NCCLCHECK(initChannel(comm, c));;
     int logicChannels = comm->collNetnChannels/2;
     int collNetSetupFail = 0;
     const int recvIndex = 0;  // recv GPU index is always 0
