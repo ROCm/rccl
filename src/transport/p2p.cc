@@ -92,6 +92,17 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 #endif
   }
 
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  int dev;
+  CUDACHECK(hipGetDevice(&dev));
+  CUDACHECK(hipSetDevice(cudaDev2));
+  if (!hasFineGrainVramPcie())  {
+    *ret = 0;
+    CUDACHECK(hipSetDevice(dev));
+    return ncclSuccess;
+  }
+  CUDACHECK(hipSetDevice(dev));
+#endif
   // Check that CUDA can do P2P
   int p2p;
   if (hipDeviceCanAccessPeer(&p2p, cudaDev1, cudaDev2) != hipSuccess) {
