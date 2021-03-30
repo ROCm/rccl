@@ -468,6 +468,28 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     NCCLCHECK(ncclTopoRemoveNode(system, GPU, g));
   }
 
+  // trim low speed port on same NIC
+  for (int i = 0; i < system->nodes[NET].count; i ++) {
+    for (int j = 0; j < system->nodes[NET].count; j ++) {
+      if (i == j) continue;
+      if (system->nodes[NET].nodes[i].net.asic == system->nodes[NET].nodes[j].net.asic) {
+        if (system->nodes[NET].nodes[i].net.width > system->nodes[NET].nodes[j].net.width)
+          system->nodes[NET].nodes[j].net.width = 0;
+      }
+    }
+  }
+  do {
+    int n;
+    for (n=0; n<system->nodes[NET].count; n++) {
+      if (system->nodes[NET].nodes[n].net.width == 0) break;
+    }
+    if (n<system->nodes[NET].count) {
+      NCCLCHECK(ncclTopoRemoveNode(system, NET, n));
+    }
+    else
+      break;
+  } while (system->nodes[NET].count);
+
   int remove = 1;
   int arch, vendor, model;
   NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
@@ -494,6 +516,7 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     for (int n=system->nodes[NET].count-1; n>=0; n--)
       NCCLCHECK(ncclTopoRemoveNode(system, NET, n));
   }
+
   free(domains);
   free(ids);
   return ncclSuccess;

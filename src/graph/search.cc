@@ -695,7 +695,7 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
  * Rings with a non-matching number of gpus are ignored so we can provide
  * rings for multiple cases.
  */
-static ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int nnets, int* net_map ) {
+static ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map) {
   int gpus[MAX_ROME_GPUS];
   int nChannels = 0;
   int gpu = 0;
@@ -704,6 +704,7 @@ static ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, s
   int nets[2];
   int net = 0;
   int ngpus = system->nodes[GPU].count;
+  int nnets = system->nodes[NET].count;
   do {
     if (str[offset] == 'N') {
       if (status == 0) {
@@ -758,14 +759,11 @@ static ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, s
 
           if (net) {
             if (nets[0] >= nnets || nets[1] >= nnets) goto newchannel;
-            graph->inter[nChannels*2] = nets[0];
-            graph->inter[nChannels*2+1] = nets[1];
-          } else if (net_map && nnets) {
-            graph->inter[nChannels*2] = net_map[nChannels%nnets];
-            graph->inter[nChannels*2+1] = net_map[(nChannels+1)%nnets];
+            graph->inter[nChannels*2] = system->nodes[NET].nodes[nets[0]].id;
+            graph->inter[nChannels*2+1] = system->nodes[NET].nodes[nets[1]].id;
           } else if (nnets) {
-            graph->inter[nChannels*2] = nChannels%nnets;
-            graph->inter[nChannels*2+1] = (nChannels+1)%nnets;
+            graph->inter[nChannels*2] = system->nodes[NET].nodes[nChannels%nnets].id;
+            graph->inter[nChannels*2+1] = system->nodes[NET].nodes[(nChannels+1)%nnets].id;
           }
           nChannels++;
 newchannel:
@@ -832,7 +830,7 @@ static ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclT
   }
   // create chordal ring based on reference and remapped ids
   system->type |= RCCL_TOPO_CR8G;
-  NCCLCHECK(parseGraph(ringBase, system, graph, id, 0, NULL));
+  NCCLCHECK(parseGraph(ringBase, system, graph, id));
   if (system->nodes[NET].count && system->nodes[GPU].count != system->nRanks) {
     int *intra, *used;
     graph->nChannels = system->nodes[NET].count;
@@ -875,11 +873,11 @@ static int cmpIds(const void * g1, const void * g2) {
   return s1->dev - s2->dev;
 }
 
-static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo, char *pattern, int *net_map) {
+static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo, char *pattern) {
   pattern[0] = 0; // pattern will be NULL for invalid topology
   romeTopo->nGpus = system->nodes[GPU].count;
   romeTopo->nCpus = system->nodes[CPU].count;
-  romeTopo->nNics = 0;
+  romeTopo->nNics = system->nodes[NET].count;
   romeTopo->nLinks = 0;
   // sort GPU devices by HIP device ID
   struct ncclGpuIdHIP scores[MAX_ROME_GPUS];
@@ -919,27 +917,8 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     if (romeTopo->nLinks < count) romeTopo->nLinks = count;
   }
 
-  // trim ports and create NET map
-  for (int i = 0; i < system->nodes[NET].count; i ++) {
-    int j;
-    for (j = 0; j < romeTopo->nNics; j++) {
-      if (system->nodes[NET].nodes[i].net.asic == system->nodes[NET].nodes[net_map[j]].net.asic) {
-        if (system->nodes[NET].nodes[i].net.width > system->nodes[NET].nodes[net_map[j]].net.width)
-          net_map[j] = i;
-        break;
-      }
-    }
-    if (j >= romeTopo->nNics) {
-      net_map[j] = i;
-      romeTopo->nicIds[romeTopo->nNics] = system->nodes[NET].nodes[i].net.busId;
-      (romeTopo->nNics)++;
-      if (romeTopo->nNics >= MAX_ROME_NICS) break;
-    }
-  }
-
-  for (int i = 0; i < romeTopo->nNics; i ++) {
-    int net, n, m, distance;
-    NCCLCHECK(ncclTopoIdToIndex(system, NET, net_map[i], &net));
+  for (int net = 0; net < romeTopo->nNics; net++) {
+    int n, m, distance;
     m = 0;
     distance = system->nodes[NET].nodes[net].paths[CPU][m].count;
     for (n = 0; n < romeTopo->nCpus; n++)
@@ -947,7 +926,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
         distance = system->nodes[NET].nodes[net].paths[CPU][n].count;
         m = n;
       }
-    if (m < romeTopo->nCpus) romeTopo->nicNuma[i] = system->nodes[CPU].nodes[m].id;
+    if (m < romeTopo->nCpus) romeTopo->nicNuma[net] = system->nodes[CPU].nodes[m].id;
     else return ncclSuccess;
   }
 
@@ -1055,8 +1034,7 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
   // number of GPUs and NICs on each numa node is used as first screening pattern
   struct rcclRomeModel romeTopo;
   char pattern[256];
-  int net_map[MAX_ROME_NICS];
-  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern, net_map));
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern));
 
   // recognize system as Rome 4P2H even if no matching model
   if (ngpus > 4 && romeTopo.nLinks) system->type |= RCCL_TOPO_4P2H_ROME;
@@ -1101,7 +1079,7 @@ static ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopo
   INFO(NCCL_GRAPH, "%s", line);
 
   // create 4P2H based on reference and remapped ids
-  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, romeTopo.nNics, net_map));
+  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g));
   return ncclSuccess;
 }
 
@@ -1141,7 +1119,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   str = getenv("NCCL_RINGS");
   if (str) {
     // user supplied topo
-    NCCLCHECK(parseGraph(str, system, graph, NULL, nnets, NULL));
+    NCCLCHECK(parseGraph(str, system, graph, NULL));
     if (graph->nChannels) {
       system->type |= RCCL_TOPO_4P2H_ROME;
     }
