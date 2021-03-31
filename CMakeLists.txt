@@ -125,6 +125,7 @@ set(CC_SOURCES
     src/graph/tuning.cc
     src/graph/topo.cc
     src/graph/xml.cc
+    src/graph/rome_models.cc
     src/collectives/all_reduce_api.cc
     src/collectives/all_gather_api.cc
     src/collectives/reduce_api.cc
