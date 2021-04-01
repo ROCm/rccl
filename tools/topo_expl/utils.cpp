@@ -604,7 +604,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   // count NETs used by ring
   int nNets = 0;
   int nets[MAXCHANNELS*2];
-  for (int i = 0; i < ringGraph.nChannels; i++) {
+  for (int i = 0; comm->topo->nodes[GPU].count != comm->topo->nRanks && i < ringGraph.nChannels; i++) {
     for (int j = 0; j < 2; j++) {
       int k;
       for (k = 0; k < nNets; k++)
