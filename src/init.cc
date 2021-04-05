@@ -1012,7 +1012,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // count NETs used by ring
   int nNets = 0;
   int nets[MAXCHANNELS*2];
-  for (int i = 0; i < ringGraph.nChannels; i++) {
+  // do not count NETs in case of single node, i.e comm->topo->nodes[GPU].count == comm->topo->nRanks
+  for (int i = 0; comm->topo->nodes[GPU].count != comm->topo->nRanks && i < ringGraph.nChannels; i++) {
     for (int j = 0; j < 2; j++) {
       int k;
       for (k = 0; k < nNets; k++)
