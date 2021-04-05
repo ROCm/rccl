@@ -369,7 +369,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
     int cudaCompCap;
     int fullCudaCompCap;
     int nChannels;
-    int gcn;
+    int nc;
     struct ncclGraphInfo tree;
     struct ncclGraphInfo ring;
     struct ncclGraphInfo collNet;
@@ -381,10 +381,14 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   int idx;
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].cudaCompCap = comm->topo->nodes[GPU].nodes[idx].gpu.cudaCompCap;
-  allGather3Data[rank].gcn = comm->topo->nodes[GPU].nodes[idx].gpu.gcn;
-
   allGather3Data[rank].nChannels = comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
     std::min(treeGraph.nChannels, ringGraph.nChannels);
+  allGather3Data[rank].nc = comm->nChannels*2;
+  if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 908) allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4);
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G))
+    allGather3Data[rank].nc = comm->nChannels*4;
+  if (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count && (comm->topo->type & RCCL_TOPO_4P2H_ROME))
+    allGather3Data[rank].nc = (comm->topo->nodes[NET].count > 3 ? 2 : 4)*comm->topo->nodes[NET].count;
   allGather3Data[rank].tree.pattern = treeGraph.pattern;
   allGather3Data[rank].tree.sameChannels = treeGraph.sameChannels;
   allGather3Data[rank].tree.speedIntra = treeGraph.speedIntra;
@@ -578,10 +582,10 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   int nChannelsOrig = comm->nChannels;
   struct ncclTopoRanks** allTopoRanks;
   NCCLCHECK(ncclCalloc(&allTopoRanks, comm->nRanks));
-  int gcn = allGather3Data[0].gcn;
+  int nc = allGather3Data[0].nc;
   for (int i=0; i<nranks; i++) {
     allTopoRanks[i] = &allGather3Data[i].topoRanks;
-    gcn = std::min(allGather3Data[i].gcn, gcn);
+    nc = std::min(allGather3Data[i].nc, nc);
     // Make sure we align all ranks so that the tuning is consistent across ranks
     treeGraph.nChannels = ringGraph.nChannels = comm->nChannels = std::min(allGather3Data[i].nChannels, comm->nChannels);
     treeGraph.sameChannels = std::min(allGather3Data[i].tree.sameChannels, treeGraph.sameChannels);
@@ -601,22 +605,6 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
   }
 
-  // count NETs used by ring
-  int nNets = 0;
-  int nets[MAXCHANNELS*2];
-  // do not count NETs in case of single node, i.e comm->topo->nodes[GPU].count == comm->topo->nRanks
-  for (int i = 0; comm->topo->nodes[GPU].count != comm->topo->nRanks && i < ringGraph.nChannels; i++) {
-    for (int j = 0; j < 2; j++) {
-      int k;
-      for (k = 0; k < nNets; k++)
-        if (nets[k] == ringGraph.inter[i*2+j]) break;
-      if (k >= nNets) {
-        nets[nNets] = ringGraph.inter[i*2+j];
-        nNets++;
-      }
-    }
-  }
-
   if (comm->nChannels < nChannelsOrig) {
     // We started duplicating channels during Preset(), so we need to move the
     // duplicated channels since we have removed some.
@@ -626,7 +614,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   int *rings;
   NCCLCHECK(ncclCalloc(&rings, nranks*MAXCHANNELS));
 
-  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, gcn, nNets));
+  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, nc));
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {

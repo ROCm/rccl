@@ -28,7 +28,7 @@ struct allGather3Data_t{
   int cudaCompCap;
   int fullCudaCompCap;
   int nChannels;
-  int gcn;
+  int nc;
   int alltoallDisable;
   struct ncclGraphInfo tree;
   struct ncclGraphInfo ring;
