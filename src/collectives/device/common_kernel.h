@@ -255,7 +255,7 @@ void vStore<rccl_bfloat16>(volatile rccl_bfloat16* ptr, const rccl_bfloat16 val)
 }
 #endif
 
-typedef ulong2 Pack128;
+typedef struct { uint64_t x; uint64_t y; } Pack128;
 
 template<class FUNC, typename T>
 struct MULTI128 {
@@ -267,16 +267,17 @@ struct MULTI128 {
 
 inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  v.x = p->x;
-  v.y = p->y;
+  v.x = __builtin_nontemporal_load(&p->x);
+  v.y = __builtin_nontemporal_load(&p->y);
 #else
   asm volatile("ld.volatile.global.v2.u64 {%0,%1}, [%2];" : "=l"(v.x), "=l"(v.y) : "l"(p) : "memory");
 #endif
 }
+
 inline __device__ void Store128(Pack128* p, Pack128& v) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  p->x = v.x;
-  p->y = v.y;
+  __builtin_nontemporal_store(v.x, &p->x);
+  __builtin_nontemporal_store(v.y, &p->y);
 #else
   asm volatile("st.volatile.global.v2.u64 [%0], {%1,%2};" :: "l"(p), "l"(v.x), "l"(v.y) : "memory");
 #endif
