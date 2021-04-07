@@ -855,7 +855,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager
     CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
-    if (intraRanks == nranks)
+    if (comm->localRanks == comm->nRanks)
     {
       // Check that all the GPUs have peer access to one another
       bool hasPeerAccess = true;
