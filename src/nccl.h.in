@@ -8,7 +8,7 @@
 #ifndef NCCL_H_
 #define NCCL_H_
 
-#include <hip/hip_runtime_api.h>
+#include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
 
 #define NCCL_MAJOR ${NCCL_MAJOR}

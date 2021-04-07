@@ -255,7 +255,7 @@ void vStore<rccl_bfloat16>(volatile rccl_bfloat16* ptr, const rccl_bfloat16 val)
 }
 #endif
 
-typedef struct { uint64_t x; uint64_t y; } Pack128;
+typedef ulong2 Pack128;
 
 template<class FUNC, typename T>
 struct MULTI128 {

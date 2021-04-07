@@ -74,7 +74,7 @@ struct MULTI<FUNC, float> {
 };
 
 
-typedef struct { uint64_t x; uint64_t y; } Pack128;
+typedef ulong2 Pack128;
 
 template<class FUNC, typename T>
 struct MULTI128 {
