@@ -96,14 +96,13 @@ class ncclLLPrimitives {
     uint32_t data1, flag1, data2, flag2;
     spins = 0;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    using Vec = uint32_t __attribute__((ext_vector_type(4)));
-    Vec i4;
+    union ncclLLFifoLine i4;
     do {
-      asm volatile ("flat_load_dwordx4 %0, %1, glc, slc\n"
-        "s_waitcnt vmcnt(0)\n" : "=v"(i4) : "v"(src));
+      i4.v[0] = __builtin_nontemporal_load(src->v);
+      i4.v[1] = __builtin_nontemporal_load(src->v+1);
       if (checkAbort(i, 0)) break;
-    } while ((i4[1] != flag) || (i4[3] != flag));
-    uint64_t val64 = (uint64_t)(i4[0]) + (((uint64_t)i4[2]) << 32);
+    } while ((i4.flag1 != flag) || (i4.flag2 != flag));
+    uint64_t val64 = (uint64_t)(i4.data1) + (((uint64_t)i4.data2) << 32);
 #else
     do {
       asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(data1), "=r"(flag1), "=r"(data2), "=r"(flag2) : "l"(&src->i4));
@@ -116,14 +115,13 @@ class ncclLLPrimitives {
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    using Vec = uint32_t __attribute__((ext_vector_type(4)));
-    Vec i4;
-    i4[0] = val & 0xffffffff;
-    i4[1] = flag;
-    i4[2] = (val >> 32);
-    i4[3] = flag;
-    asm volatile ("flat_store_dwordx4 %0, %1, glc, slc\n"
-      "s_waitcnt vmcnt(0)\n" : : "v"(dst), "v"(i4));
+    union ncclLLFifoLine i4;
+    i4.data1 = val & 0xffffffff;
+    i4.flag1 = flag;
+    i4.data2 = (val >> 32);
+    i4.flag2 = flag;
+    __builtin_nontemporal_store(i4.v[0], dst->v);
+    __builtin_nontemporal_store(i4.v[1], dst->v+1);
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag));
 #endif
