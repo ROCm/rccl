@@ -106,9 +106,7 @@
   NCCL_FUNCS2B(AllGather), \
   NCCL_FUNCS2A(ReduceScatter), \
   NCCL_FUNCS2C(AllReduce), \
-  NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), \
-  NCCL_FUNC_NAME(AllToAll, RING, SIMPLE, Sum, int8_t), \
-  NCCL_FUNC_NAME(AllToAllv, RING, SIMPLE, Sum, int8_t) }
+  NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t) }
 // [/RCCL]
 
 // Must be consistent with the ncclFuncSet enum
@@ -125,8 +123,6 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2C(AllReduce),
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
-  NCCL_FUNC_NAME(AllToAll, RING, SIMPLE, Sum, int8_t),
-  NCCL_FUNC_NAME(AllToAllv, RING, SIMPLE, Sum, int8_t),
 #endif
 };
 
@@ -176,9 +172,7 @@ void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
     else ncclFunction_AllGather_COLLNET_SIMPLE_Sum_int8_t(c);
   }
   else if (c->funcIndex < 1800) Caller<1080, 1800>::call(c);
-  else if (c->funcIndex == 1800) ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
-  else if (c->funcIndex == 1801) ncclFunction_AllToAll_RING_SIMPLE_Sum_int8_t(c);
-  else if (c->funcIndex == 1802) ncclFunction_AllToAllv_RING_SIMPLE_Sum_int8_t(c);
+  else ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
 }
 
 static __device__ void load_parallel(void* dst, void* src, size_t size, int tid) {
@@ -213,10 +207,6 @@ class ncclFunction {
     if (fIdx == FUNC_INDEX_P2P) { \
       comm->collTrace[pos].p2p.nThreads = w->p2p.nThreads; \
       comm->collTrace[pos].p2p.delta = (uint16_t)(w->p2p.delta); \
-    } else if (fIdx == FUNC_INDEX_A2AV) { \
-      comm->collTrace[pos].coll.nThreads = w->nThreads; \
-      comm->collTrace[pos].coll.bid = w->a2av.bid; \
-      comm->collTrace[pos].coll.nChannels = w->a2av.nChannels; \
     } else { \
       comm->collTrace[pos].coll.nThreads = w->nThreads; \
       comm->collTrace[pos].coll.bid = w->coll.bid; \

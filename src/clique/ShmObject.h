@@ -128,14 +128,12 @@ ncclResult_t ShmObject<T>::Open()
 {
   if (m_alloc == false)
   {
-    printf("Rank %d in ShmObject Open %s\n", m_rank,  m_shmName.c_str());
     int shmFd;
     int protection = PROT_READ | PROT_WRITE;
     int visibility = MAP_SHARED;
 
     mqd_t mq_desc;
-    std::string tmpFileName = "/tmp/" + m_shmName;
-    NCCLCHECK(MsgQueueGetId(tmpFileName, m_projid, false, mq_desc));
+    NCCLCHECK(MsgQueueGetId(m_shmName, m_projid, false, mq_desc));
 
     if (m_rank == 0)
     {

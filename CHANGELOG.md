@@ -2,7 +2,7 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## [Unreleased]
+## [RCCL-2.7.8 for ROCm 4.1.0]
 ### Added
 - Experimental support for clique-based kernels (opt in with RCCL_ENABLE_CLIQUE=1)
 - Clique-based kernels may offer better performance for smaller input sizes

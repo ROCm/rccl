@@ -79,7 +79,7 @@ void CliqueManager::CleanUp()
       int pid = getpid();
       for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
       {
-        std::string msgQueueName = "/" + it->second + std::to_string(m_hash) + "_" + std::to_string(pid);
+        std::string msgQueueName = it->second + std::to_string(m_hash) + "_" + std::to_string(pid);
         ncclResult_t res = MsgQueueClose(msgQueueName, m_hash);
         if (res != ncclSuccess)
         {
@@ -527,7 +527,7 @@ ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
       for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
       {
         int msgid, fd;
-        std::string msgQueueName = "/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
+        std::string msgQueueName = it->second + std::to_string(hash) + "_" + std::to_string(pid);
         NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
       }
 

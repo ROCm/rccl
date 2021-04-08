@@ -15,6 +15,7 @@ thread_local pthread_t ncclGroupThreads[MAX_ASYNC_OPS];
 thread_local int ncclGroupIndex = 0;
 thread_local int ncclGroupMode = 0;
 thread_local ncclResult_t ncclGroupError = ncclSuccess;
+extern struct allocationTracker allocTracker[];
 
 bool ncclAsyncMode() {
   return ncclGroupMode > 0;
@@ -205,6 +206,7 @@ ncclResult_t ncclGroupEnd() {
         WARN("Error waiting for pthread_join : %s", strerror(errno));
         return ncclSystemError;
       }
+      INFO(NCCL_INIT, "comm %p rank %d total %ld bytes - P2P preconnect COMPLETE", args->coll.comm, args->coll.comm->rank, allocTracker[args->coll.comm->cudaDev].totalAllocSize);
       NCCLCHECKGOTO(args->ret, ret, end);
       args->coll.comm->connect = 0;
     }

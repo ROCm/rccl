@@ -101,6 +101,8 @@ struct ncclComm {
   int p2pnChannels;
   int p2pnChannelsPerPeer;
   int p2pChannels[MAXCHANNELS];
+  //Channels for collnet
+  int collNetnChannels;
 
   // Buffer sizes
   int buffSizes[NCCL_NUM_PROTOCOLS];
@@ -120,6 +122,9 @@ struct ncclComm {
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
+
+  // Flags for enable P2P NET
+  uint32_t *p2pNet;
 
   // Device side of the communicator
   struct ncclDevComm *devComm;
@@ -160,7 +165,6 @@ struct ncclComm {
   int p2pRecvCount;
 
   // [RCCL]
-  bool alltoallDisable;            // RCCL AllToAll/Scatter/Gather API
   CliqueManager* cliqueManager;    // CliqueManager handles pointer collection / distribution for clique-based kernels
   int rootPid;                     // Process ID of root
   // [/RCCL]

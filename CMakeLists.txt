@@ -103,8 +103,6 @@ set(CU_SOURCES
     src/collectives/device/broadcast.cu
     src/collectives/device/reduce_scatter.cu
     src/collectives/device/sendrecv.cu
-    src/collectives/device/all_to_all.cu
-    src/collectives/device/all_to_allv.cu
     src/collectives/device/functions.cu)
 
 set(CPP_SOURCES)
@@ -127,6 +125,7 @@ set(CC_SOURCES
     src/graph/tuning.cc
     src/graph/topo.cc
     src/graph/xml.cc
+    src/graph/rome_models.cc
     src/collectives/all_reduce_api.cc
     src/collectives/all_gather_api.cc
     src/collectives/reduce_api.cc
@@ -186,6 +185,7 @@ target_link_libraries(rccl PRIVATE --cuda-gpu-arch=${target})
 endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
+  target_compile_options(rccl PRIVATE -fvisibility=hidden)
   foreach(target ${AMDGPU_TARGETS})
     target_compile_options(rccl PRIVATE --cuda-gpu-arch=${target} PRIVATE -fgpu-rdc)
   endforeach()

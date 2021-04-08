@@ -28,13 +28,15 @@ struct allGather3Data_t{
   int cudaCompCap;
   int fullCudaCompCap;
   int nChannels;
-  int gcn;
+  int nc;
   int alltoallDisable;
   struct ncclGraphInfo tree;
   struct ncclGraphInfo ring;
   struct ncclGraphInfo collNet;
   struct ncclTopoRanks topoRanks;
 };
+
+void initCollNet();
 
 ncclResult_t ncclTopoGetSystem(const char* xmlTopoFile, struct ncclTopoSystem** system);
 

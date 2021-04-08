@@ -24,23 +24,24 @@ THE SOFTWARE.
 
 #define MSG_QUEUE_PERM S_IRUSR | S_IWUSR
 #define MSG_QUEUE_MODE O_RDWR
-#define MSG_SIZE 256
+#define MSG_SIZE 1
 
 ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, mqd_t& mq_desc)
 {
   int flag = (exclusive == true ? O_CREAT | O_EXCL : O_CREAT);
   struct mq_attr attr;
-  attr.mq_maxmsg = 5;
+  attr.mq_maxmsg = 8;
   attr.mq_msgsize = MSG_SIZE;
   attr.mq_flags = 0;
 
-  mq_desc = mq_open(name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, &attr);
+  std::string mq_name = "/" + name;
+  mq_desc = mq_open(mq_name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, &attr);
 
   // Check if we're trying to create message queue and it already exists; if so, delete existing queue
   if (mq_desc == -1 && exclusive == true && errno == EBUSY)
   {
     NCCLCHECK(MsgQueueClose(name, projid));
-    SYSCHECKVAL(mq_open(name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, attr), "mq_open", mq_desc);
+    SYSCHECKVAL(mq_open(mq_name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, attr), "mq_open", mq_desc);
   }
   else if (mq_desc == -1)
   {
@@ -65,8 +66,9 @@ ncclResult_t MsgQueueRecv(mqd_t const& mq_desc, char* msgp, size_t msgsz)
 ncclResult_t MsgQueueClose(std::string name, int projid)
 {
   mqd_t mq_desc;
-  SYSCHECKVAL(mq_open(name.c_str(), MSG_QUEUE_MODE), "mq_open", mq_desc);
-  SYSCHECK(mq_unlink(name.c_str()), "mq_unlink");
+  std::string mq_name = "/" + name;
+  SYSCHECKVAL(mq_open(mq_name.c_str(), MSG_QUEUE_MODE), "mq_open", mq_desc);
+  SYSCHECK(mq_unlink(mq_name.c_str()), "mq_unlink");
   SYSCHECK(mq_close(mq_desc), "mq_close");
   return ncclSuccess;
 }

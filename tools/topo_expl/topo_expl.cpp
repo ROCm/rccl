@@ -119,6 +119,8 @@ NodeModelDesc model_descs[] = {
   {2, "topo_8p_rome_pcie.xml",  "2 nodes node 8 VEGA20 PCIe"},
   {1, "topo_8p_rome_4nics.xml", "single node 8 gfx908 Rome 4 NICs"},
   {4, "topo_8p_rome_4nics.xml", "4 nodes node 8 gfx908 Rome 4 NICs"},
+  {4, "topo_collnet_n1.xml",    "4 nodes collnet 1 NICs"},
+  {4, "topo_collnet_n4.xml",    "4 nodes collnet 4 NICs"},
 };
 
 int main(int argc,char* argv[])
@@ -146,6 +148,8 @@ int main(int argc,char* argv[])
 
   NetworkModel network;
   NodeModel* node;
+
+  initCollNet();
 
   NodeModelDesc *desc = &model_descs[model_id];
   for (int i=0; i<desc->num_nodes; i++) {
@@ -189,14 +193,9 @@ int main(int argc,char* argv[])
   }
 
   struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;
-  treeGraph = (struct ncclTopoGraph *)malloc(sizeof(struct ncclTopoGraph)*nranks);
-  ringGraph = (struct ncclTopoGraph *)malloc(sizeof(struct ncclTopoGraph)*nranks);
-  collNetGraph = (struct ncclTopoGraph *)malloc(sizeof(struct ncclTopoGraph)*nranks);
-  if (!treeGraph || !ringGraph || !collNetGraph) {
-    printf("Failed to allocate memory for graphs\n");
-    return -1;
-  }
-
+  NCCLCHECK(ncclCalloc(&treeGraph, nranks));
+  NCCLCHECK(ncclCalloc(&ringGraph, nranks));
+  NCCLCHECK(ncclCalloc(&collNetGraph, nranks));
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);

@@ -23,18 +23,18 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelid) {
   for (size_t i=0; i<comm->nRanks+1; ++i) {
     channel->peers[i].send.comm = comm;
     channel->peers[i].recv.comm = comm;
+    channel->peers[i].p2pSend.comm = comm;
+    channel->peers[i].p2pRecv.comm = comm;
   }
 
   // Per-channel operation list.
   NCCLCHECK(ncclCudaHostCalloc(&channel->workFifo, NCCL_MAX_OPS));
-  NCCLCHECK(ncclCudaHostCalloc(&channel->a2avParams, comm->nRanks*NCCL_MAX_OPS*4));
   return ncclSuccess;
 }
 
 ncclResult_t freeChannel(struct ncclChannel* channel, int nRanks) {
   if (channel->id == -1) return ncclSuccess;
   // Operation list
-  NCCLCHECK(ncclCudaHostFree(channel->a2avParams));
   NCCLCHECK(ncclCudaHostFree(channel->workFifo));
 
   // Free Ring index to rank tables
@@ -46,10 +46,16 @@ ncclResult_t freeChannel(struct ncclChannel* channel, int nRanks) {
   for (int r=0; r<nRanks+1; r++) {
     struct ncclPeer* peer = channel->peers+r;
     if (peer->send.transportResources) NCCLCHECK(peer->send.transportComm->free(peer->send.transportResources));
+    if (peer->send.transportResources == peer->p2pSend.transportResources) peer->p2pSend.transportResources = NULL;
+    peer->send.transportResources = NULL;
+    if (peer->p2pSend.transportResources) NCCLCHECK(peer->p2pSend.transportComm->free(peer->p2pSend.transportResources));
   }
   for (int r=0; r<nRanks+1; r++) {
     struct ncclPeer* peer = channel->peers+r;
     if (peer->recv.transportResources) NCCLCHECK(peer->recv.transportComm->free(peer->recv.transportResources));
+    if (peer->recv.transportResources == peer->p2pRecv.transportResources) peer->p2pRecv.transportResources = NULL;
+    peer->recv.transportResources = NULL;
+    if (peer->p2pRecv.transportResources) NCCLCHECK(peer->p2pRecv.transportComm->free(peer->p2pRecv.transportResources));
   }
 
   // Free the peer structures.

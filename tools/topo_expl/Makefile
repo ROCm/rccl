@@ -9,7 +9,7 @@ EXE = topo_expl
 CXXFLAGS = -g -O3 -Iinclude -I../../src -I../../src/include -I../../src/graph/ -DTOPO_EXPL -DENABLE_TRACE -lnuma
 
 files = $(EXE).cpp model.cpp utils.cpp ../../src/graph/topo.cc ../../src/graph/rings.cc ../../src/graph/paths.cc ../../src/graph/trees.cc \
-	../../src/graph/search.cc ../../src/graph/connect.cc ../../src/graph/tuning.cc ../../src/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc
+	../../src/graph/search.cc ../../src/graph/connect.cc ../../src/graph/tuning.cc ../../src/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc ../../src/graph/rome_models.cc
 
 all: $(EXE)
 
