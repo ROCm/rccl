@@ -92,15 +92,14 @@ ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid)
     return m_shmPtr;
   }
 protected:
-  ncclResult_t BroadcastMessage(int msgid, bool pass)
+  ncclResult_t BroadcastMessage(mqd_t& mq_desc, bool pass)
   {
-    MsgBuffer msg;
-    msg.msg_text[0] = (pass == 0 ? 'F': 'P');
+    char msg_text[1];
+    msg_text[0] = (pass == 0 ? 'F': 'P');
     for (int rank = 0; rank < m_numRanks; rank++)
     {
       if (rank == m_rank) continue;
-      msg.msg_type = rank;
-      NCCLCHECK(MsgQueueSend(msgid, &msg, sizeof(msg), 0));
+      NCCLCHECK(MsgQueueSend(mq_desc, &msg_text[0], sizeof(msg_text)));
     }
     return ncclSuccess;
   }
@@ -129,13 +128,14 @@ ncclResult_t ShmObject<T>::Open()
 {
   if (m_alloc == false)
   {
+    printf("Rank %d in ShmObject Open %s\n", m_rank,  m_shmName.c_str());
     int shmFd;
     int protection = PROT_READ | PROT_WRITE;
     int visibility = MAP_SHARED;
 
-    int msgid;
+    mqd_t mq_desc;
     std::string tmpFileName = "/tmp/" + m_shmName;
-    NCCLCHECK(MsgQueueGetId(tmpFileName, m_projid, false, msgid));
+    NCCLCHECK(MsgQueueGetId(tmpFileName, m_projid, false, mq_desc));
 
     if (m_rank == 0)
     {
@@ -143,18 +143,19 @@ ncclResult_t ShmObject<T>::Open()
       ncclResult_t resultSemInit = InitIfSemaphore(OpenTag<T>{});
       if ((resultSetup != ncclSuccess && errno != EEXIST) || (resultSemInit != ncclSuccess))
       {
-        NCCLCHECK(BroadcastMessage(msgid, false));
+        NCCLCHECK(BroadcastMessage(mq_desc, false));
         WARN("Call to ShmObject::Open in root rank failed : %s", strerror(errno));
         return ncclSystemError;
       }
-      NCCLCHECK(BroadcastMessage(msgid, true));
+      NCCLCHECK(BroadcastMessage(mq_desc, true));
     }
     else
     {
-      MsgBuffer msg;
-      NCCLCHECK(MsgQueueRecv(msgid, &msg, sizeof(msg), m_rank, true));
-      if (msg.msg_text[0] == 'P')
+      char msg_text[1];
+      NCCLCHECK(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)));
+      if (msg_text[0] == 'P')
       {
+        printf("Rank %d got message for %s\n", m_rank, m_shmName.c_str());
         NCCLCHECK(shmSetup(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 0));
       }
       else

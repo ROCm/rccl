@@ -79,16 +79,11 @@ void CliqueManager::CleanUp()
       int pid = getpid();
       for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
       {
-        std::string msgQueueName = "/tmp/" + it->second + std::to_string(m_hash) + "_" + std::to_string(pid);
+        std::string msgQueueName = "/" + it->second + std::to_string(m_hash) + "_" + std::to_string(pid);
         ncclResult_t res = MsgQueueClose(msgQueueName, m_hash);
         if (res != ncclSuccess)
         {
           WARN("Unable to close Message Queue: %s\n", msgQueueName.c_str());
-        }
-        int ret = unlink(msgQueueName.c_str());
-        if (ret != 0)
-        {
-          WARN("Unable to unlink %s\n", msgQueueName.c_str());
         }
       }
     }
@@ -532,10 +527,8 @@ ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
       for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
       {
         int msgid, fd;
-        std::string msgQueueName = "/tmp/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
-        SYSCHECKVAL(open(msgQueueName.c_str(), O_CREAT | O_RDWR, 0606), "open", fd);
+        std::string msgQueueName = "/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
         NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
-        SYSCHECK(close(fd), "close");
       }
 
       std::string shmDir = "/dev/shm/";

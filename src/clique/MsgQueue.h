@@ -24,19 +24,14 @@ THE SOFTWARE.
 #define RCCL_MSG_QUEUE_HPP_
 
 #include <string>
+#include <mqueue.h>
 
 #include "nccl.h"
 #include "core.h"
 
-struct MsgBuffer
-{
-  long msg_type;
-  char msg_text[1];
-};
-
-ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, int& msgid);
-ncclResult_t MsgQueueSend(int msgid, const void* msgp, size_t msgsz, int msgflg);
-ncclResult_t MsgQueueRecv(int msgid, void* msgp, size_t msgsz, long msgtyp, bool wait);
+ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, mqd_t& mq_desc);
+ncclResult_t MsgQueueSend(mqd_t const& mq_desc, const char* msgp, size_t msgsz);
+ncclResult_t MsgQueueRecv(mqd_t const& mq_desc, char* msgp, size_t msgsz);
 ncclResult_t MsgQueueClose(std::string name, int projid);
 
 #endif
