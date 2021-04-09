@@ -257,7 +257,7 @@ Files: *
 Copyright: (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
 Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 License: See LICENSE.txt for license information\n")
-  install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION /usr/share/doc/rccl)
+  install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   # Write changelog file
   find_program( date_executable date )
   execute_process(COMMAND ${date_executable} -R OUTPUT_VARIABLE TIMESTAMP)
@@ -270,7 +270,7 @@ License: See LICENSE.txt for license information\n")
   find_program( gzip_executable gzip )
   execute_process(COMMAND bash "-c" "${gzip_executable} -9 -c ${CMAKE_BINARY_DIR}/changelog"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR} OUTPUT_FILE "${CMAKE_BINARY_DIR}/changelog.Debian.gz")
-  install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION /usr/share/doc/rccl)
+  install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "ROCm Communication Collectives Library
   Optimized primitives for collective multi-GPU communication")
 endif()
