@@ -55,7 +55,8 @@ ci: {
 
     propertyList = auxiliary.appendPropertyList(propertyList)
 
-    def jobNameList = ["compute-rocm-dkms-no-npi-hipclang":([sles15sp1:['4gfx906'],centos8:['4gfx908'],centos7:['4gfx906'],ubuntu18:['4gfx906', '4gfx908']])]
+    def jobNameList = ["compute-rocm-dkms-no-npi-hipclang":([sles15sp1:['4gfx906'],centos8:['4gfx908'],centos7:['4gfx906'],ubuntu18:['4gfx906', '4gfx908']]),
+                       "hipclang-bleeding-edge":([sles15sp1:['4gfx906'],centos8:['4gfx908'],centos7:['4gfx906'],ubuntu18:['4gfx906', '4gfx908', '4gfx90a']])]
     
     jobNameList = auxiliary.appendJobNameList(jobNameList)
     
