@@ -11,6 +11,8 @@ set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
 
 project(rccl CXX)
 
+include(cmake/Dependencies.cmake)
+
 # Detect compiler support for target ID
 # This section is deprecated. Please use rocm_check_target_ids for future use.
 if( CMAKE_CXX_COMPILER MATCHES ".*/hipcc$" )
@@ -38,8 +40,6 @@ set(AMDGPU_TARGETS "${DEFAULT_AMDGPU_TARGETS}" CACHE STRING "List of specific ma
 
 option(BUILD_TESTS "Build test programs" OFF)
 option(INSTALL_DEPENDENCIES "Force install dependencies" OFF)
-
-include(cmake/Dependencies.cmake)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
