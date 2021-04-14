@@ -519,6 +519,8 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
     // Save that for later in case next step is a CPU
     char numaIdStr[MAX_STR_LEN];
     NCCLCHECK(ncclTopoGetStrFromSys(path, "numa_node", numaIdStr));
+    // Workaround kernel bug for now
+    if (strcmp(numaIdStr, "-1") == 0) strcpy(numaIdStr, "0");
 
     // Go up one level in the PCI tree. Rewind two "/" and follow the upper PCI
     // switch, or stop if we reach a CPU root complex.

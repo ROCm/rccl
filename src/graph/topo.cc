@@ -415,7 +415,8 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
       int familyId, modelId;
       NCCLCHECK(xmlGetAttrInt(xmlCpu, "familyid", &familyId));
       NCCLCHECK(xmlGetAttrInt(xmlCpu, "modelid", &modelId));
-      cpu->cpu.model = (familyId == 143 && modelId >= 49) ? NCCL_TOPO_CPU_TYPE_ROME : NCCL_TOPO_CPU_TYPE_ZEN;
+      // Treat "Milan" also as "Rome"
+      cpu->cpu.model = ((familyId == 143 && modelId >= 49) || familyId == 175) ? NCCL_TOPO_CPU_TYPE_ROME : NCCL_TOPO_CPU_TYPE_ZEN;
     }
   }
   for (int s=0; s<xmlCpu->nSubs; s++) {
