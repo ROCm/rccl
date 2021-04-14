@@ -72,3 +72,10 @@ ncclResult_t MsgQueueClose(std::string name, int projid)
   SYSCHECK(mq_close(mq_desc), "mq_close");
   return ncclSuccess;
 }
+
+ncclResult_t MsgQueueUnlink(std::string name)
+{
+  std::string mq_name = "/" + name;
+  SYSCHECK(mq_unlink(mq_name.c_str()), "mq_unlink");
+  return ncclSuccess;
+}

@@ -134,6 +134,7 @@ ncclResult_t ShmObject<T>::Open()
 
     mqd_t mq_desc;
     NCCLCHECK(MsgQueueGetId(m_shmName, m_projid, false, mq_desc));
+    NCCLCHECK(MsgQueueUnlink(m_shmName));
 
     if (m_rank == 0)
     {
