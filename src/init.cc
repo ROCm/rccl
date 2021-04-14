@@ -949,6 +949,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     allGather3Data[rank].nc = comm->nChannels*4;
   if (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count && (comm->topo->type & RCCL_TOPO_4P2H_ROME))
     allGather3Data[rank].nc = (comm->topo->nodes[NET].count > 3 ? 2 : 4)*comm->topo->nodes[NET].count;
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
+    allGather3Data[rank].nc = comm->nChannels*6;
   allGather3Data[rank].tree.pattern = treeGraph.pattern;
   allGather3Data[rank].tree.sameChannels = treeGraph.sameChannels;
   allGather3Data[rank].tree.speedIntra = treeGraph.speedIntra;
