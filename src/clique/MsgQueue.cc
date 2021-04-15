@@ -26,11 +26,11 @@ THE SOFTWARE.
 #define MSG_QUEUE_MODE O_RDWR
 #define MSG_SIZE 1
 
-ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, mqd_t& mq_desc)
+ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc)
 {
   int flag = (exclusive == true ? O_CREAT | O_EXCL : O_CREAT);
   struct mq_attr attr;
-  attr.mq_maxmsg = 8;
+  attr.mq_maxmsg = 10;
   attr.mq_msgsize = MSG_SIZE;
   attr.mq_flags = 0;
 
@@ -40,7 +40,8 @@ ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, mqd_t& 
   // Check if we're trying to create message queue and it already exists; if so, delete existing queue
   if (mq_desc == -1 && exclusive == true && errno == EBUSY)
   {
-    NCCLCHECK(MsgQueueClose(name, projid));
+    INFO(NCCL_INIT, "Found existing msg queue: %s", name.c_str());
+    NCCLCHECK(MsgQueueClose(name));
     SYSCHECKVAL(mq_open(mq_name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, attr), "mq_open", mq_desc);
   }
   else if (mq_desc == -1)
@@ -63,8 +64,9 @@ ncclResult_t MsgQueueRecv(mqd_t const& mq_desc, char* msgp, size_t msgsz)
   return ncclSuccess;
 }
 
-ncclResult_t MsgQueueClose(std::string name, int projid)
+ncclResult_t MsgQueueClose(std::string name)
 {
+  INFO(NCCL_INIT, "In MsgQueueClose for %s\n", name.c_str());
   mqd_t mq_desc;
   std::string mq_name = "/" + name;
   SYSCHECKVAL(mq_open(mq_name.c_str(), MSG_QUEUE_MODE), "mq_open", mq_desc);
@@ -75,6 +77,7 @@ ncclResult_t MsgQueueClose(std::string name, int projid)
 
 ncclResult_t MsgQueueUnlink(std::string name)
 {
+  INFO(NCCL_INIT, "In MsgQueueUnlink for %s\n", name.c_str());
   std::string mq_name = "/" + name;
   SYSCHECK(mq_unlink(mq_name.c_str()), "mq_unlink");
   return ncclSuccess;

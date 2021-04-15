@@ -72,23 +72,6 @@ CliqueManager::~CliqueManager()
 
 void CliqueManager::CleanUp()
 {
-  if (rcclParamEnableClique())
-  {
-    if (m_rank == 0)
-    {
-      int pid = getpid();
-      for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
-      {
-        std::string msgQueueName = it->second + std::to_string(m_hash) + "_" + std::to_string(pid);
-        ncclResult_t res = MsgQueueClose(msgQueueName, m_hash);
-        if (res != ncclSuccess)
-        {
-          WARN("Unable to close Message Queue: %s\n", msgQueueName.c_str());
-        }
-      }
-    }
-  }
-
   if (m_cliqueMode == CLIQUE_DISABLED) return;
 
   // Free variables that are shared between SINGLE_PROCESS / SINGLE_NODE
@@ -126,13 +109,13 @@ void CliqueManager::CleanUp()
 ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
 {
   ncclResult_t res;
-
+  INFO(NCCL_INIT, "Rank %d in init", m_rank);
   if (m_init) return ncclSuccess;
   m_init = true;
 
   m_hash = djb2Hash(commId->internal);
   if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
-
+  INFO(NCCL_INIT, "Rank %d in init a", m_rank);
   // Check parameters
   if (m_rank < 0 || m_rank >= m_numRanks)
   {
@@ -144,7 +127,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     WARN("CommId should not be empty");
     return ncclInvalidUsage;
   }
-
+  INFO(NCCL_INIT, "Rank %d in init b", m_rank);
   // For now, opt-into clique based kernels via RCCL_ENABLE_CLIQUE env var
   if (!rcclParamEnableClique())
   {
@@ -152,7 +135,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     m_cliqueMode = CLIQUE_DISABLED;
     return ncclSuccess;
   }
-
+  INFO(NCCL_INIT, "Rank %d in init c", m_rank);
   // Allocate pinned CPU memory for holding clique pointers, which kernels will have access to
   if (hipHostMalloc(&m_pinnedCliquePtrs, sizeof(cliqueDevicePtrs_t) * NCCL_MAX_OPS) != hipSuccess)
   {
@@ -162,14 +145,15 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     return ncclSuccess;
   }
 
-
+  INFO(NCCL_INIT, "Rank %d in init d", m_rank);
   std::string shmSuffix = std::to_string(m_hash) + "_" + std::to_string(suffix);
 
   // Allocate sense barrier variable on local GPU
   NCCLCHECKGOTO(ncclCudaCalloc(&m_gpuBarrierLocalSense, NCCL_MAX_OPS * sizeof(int)), res, dropback);
-
+  INFO(NCCL_INIT, "Rank %d in init e", m_rank);
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
+    INFO(NCCL_INIT, "Rank %d in init 0", m_rank);
     // Initialize shared memory file for IPC handles (based on commId hash)
     m_shmHandles = NcclIpcHandleShm(m_rank, m_numRanks, m_hash, NUM_HANDLES_PER_RANK, NCCL_MAX_OPS, shmSuffix);
     NCCLCHECKGOTO(m_shmHandles.Open(), res, dropback);
@@ -180,7 +164,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
                                                       100,
                                                       hipIpcMemHandleHash,
                                                       hipIpcMemHandleEqual);
-
+    INFO(NCCL_INIT, "Rank %d in init 1", m_rank);
     // Initialize shared object for GPU barrier IPC handle
     m_sharedIpcHandle = ShmObject<hipIpcMemHandle_t>(std::max(4096LU, sizeof(hipIpcMemHandle_t)),
                                                      CliqueShmNames["Barriers"] + shmSuffix,
@@ -188,7 +172,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
                                                      m_numRanks,
                                                      m_hash);
     NCCLCHECKGOTO(m_sharedIpcHandle.Open(), res, dropback);
-
+    INFO(NCCL_INIT, "Rank %d in init 2", m_rank);
     if (m_rank == 0)
     {
       hipIpcMemHandle_t handle;
@@ -207,7 +191,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
       m_gpuBarrierGlobalCount = &m_fineGrainBarrierMem[0];
       m_gpuBarrierGlobalSense = &m_fineGrainBarrierMem[NCCL_MAX_OPS];
     }
-
+    INFO(NCCL_INIT, "Rank %d in init 3", m_rank);
     // Initialize shared CPU memory to be used for barrier variables
     m_sharedCpuMemory = ShmObject<int32_t>(2 * sizeof(int32_t),
                                            CliqueShmNames["SharedCounters"] + shmSuffix,
@@ -215,7 +199,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
                                            m_numRanks,
                                            m_hash);
     NCCLCHECKGOTO(m_sharedCpuMemory.Open(), res, dropback);
-
+    INFO(NCCL_INIT, "Rank %d in init 4", m_rank);
     // Split up the shared CPU memory for barrier counters / global sense
     m_cpuBarrierGlobalCount = &m_sharedCpuMemory.Get()[0];
     m_cpuBarrierGlobalSense = &m_sharedCpuMemory.Get()[1];
@@ -528,7 +512,8 @@ ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
       {
         int msgid, fd;
         std::string msgQueueName = it->second + std::to_string(hash) + "_" + std::to_string(pid);
-        NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
+        NCCLCHECK(MsgQueueGetId(msgQueueName, true, msgid));
+        NCCLCHECK(MsgQueueClose(msgQueueName));
       }
 
       std::string shmDir = "/dev/shm/";
