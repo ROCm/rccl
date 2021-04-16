@@ -14,14 +14,14 @@ def runCompileCommand(platform, project, jobName)
     platform.runCommand(this,command)
 }
 
-def runTestCommand (platform, project)
+def runTestCommand (platform, project, gfilter)
 {
     String sudo = auxiliary.sudo(platform.jenkinsLabel)
 
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
-                ${sudo} NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_filter="BroadcastCorrectnessSweep*:*float32*" --gtest_output=xml --gtest_color=yes
+                ${sudo} NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)
