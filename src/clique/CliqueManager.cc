@@ -138,7 +138,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   m_hash = djb2Hash(commId->internal);
   if (m_cliqueMode == CLIQUE_DISABLED)
   {
-    INFO(NCCL_INIT, "Clique kernels disabled\n");
+    INFO(NCCL_INIT, "Clique kernels disabled");
     return ncclSuccess;
   }
 
@@ -282,6 +282,7 @@ void CliqueManager::SetByteLimits()
     switch (m_gcnArch)
     {
     case 906: m_allReduceByteLimit = 536870912; break;
+    case 908: m_allReduceByteLimit = 536870912; break;
     default:  m_allReduceByteLimit =  16777216; break;
     }
   }
@@ -374,6 +375,10 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
       case 906:
         if      (totalBytes <=    4096) numChannels =  1;
         else                            numChannels =  3;
+        break;
+      case 908:
+        if      (totalBytes <=  262144) numChannels =  4;
+        else                            numChannels = 14;
         break;
       case 910:
         if      (totalBytes <=  262144) numChannels =  4;
