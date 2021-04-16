@@ -53,6 +53,8 @@ public:
 
   ncclResult_t Init(ncclUniqueId const* commId, int suffix);
 
+  void SetByteLimits();
+
   // Returns true if the collective is supported via a clique-based kernel
   bool IsSupported(ncclFunc_t const coll,
                    size_t const count,
@@ -98,6 +100,8 @@ protected:
   unsigned long                m_hash;                               // Hash used for identifying message queues & shared memory
   cliqueMode_t                 m_cliqueMode;                         // Clique mode (off/single process/single node)
   bool                         m_init;                               // Whether CliqueManager has been initialized
+  int                          m_gcnArch;                            // Device GCN arch value
+  size_t                       m_allReduceByteLimit;                 // Byte limit for AllReduce
   cliqueDevicePtrs_t*          m_pinnedCliquePtrs;                   // Pinned-host-memory (device accessible) containing device pointers
   int*                         m_gpuBarrierGlobalCount;              // Part of GPU barrier (count variable shared across ranks)
   int*                         m_gpuBarrierGlobalSense;              // Part of GPU barrier (reset variable shared across ranks)

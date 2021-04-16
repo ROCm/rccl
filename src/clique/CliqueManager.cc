@@ -46,9 +46,9 @@ cliqueDevicePtrs_t CliqueManager::m_staticCliquePtrs[NCCL_MAX_OPS]  = {};
 int*               CliqueManager::m_staticGpuBarrierMem             = NULL;
 
 // Define some environment variables that affect clique-based kernels
-RCCL_PARAM(EnableClique, "ENABLE_CLIQUE", 0);                                  // Opt-in environment variable for clique-based kernels
-RCCL_PARAM(AllReduceCliqueByteLimit, "CLIQUE_ALLREDUCE_BYTE_LIMIT", 16777216); // Max number of bytes to use clique-based kernels for all reduce
-RCCL_PARAM(AllReduceNumChannels,     "CLIQUE_ALLREDUCE_NCHANNELS", 0);         // Number of channels to use for all-reduce. (0 for auto-select)
+RCCL_PARAM(EnableClique, "ENABLE_CLIQUE", 0);                           // Opt-in environment variable for clique-based kernels
+RCCL_PARAM(AllReduceCliqueByteLimit, "CLIQUE_ALLREDUCE_BYTE_LIMIT", 0); // Max number of bytes to use clique-based kernels for all reduce (0 for auto-select)
+RCCL_PARAM(AllReduceNumChannels,     "CLIQUE_ALLREDUCE_NCHANNELS", 0);  // Number of channels to use for all-reduce. (0 for auto-select)
 
 CliqueManager::CliqueManager(int          const  rank,
                              int          const  numRanks,
@@ -136,7 +136,11 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   m_init = true;
 
   m_hash = djb2Hash(commId->internal);
-  if (m_cliqueMode == CLIQUE_DISABLED) return ncclSuccess;
+  if (m_cliqueMode == CLIQUE_DISABLED)
+  {
+    INFO(NCCL_INIT, "Clique kernels disabled\n");
+    return ncclSuccess;
+  }
 
   // Check parameters
   if (m_rank < 0 || m_rank >= m_numRanks)
@@ -166,7 +170,6 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     m_init = true;
     return ncclSuccess;
   }
-
 
   std::string shmSuffix = std::to_string(m_hash) + "_" + std::to_string(suffix);
 
@@ -248,9 +251,18 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     }
   }
 
+  // Figure out device arch
+  int deviceId;
+  CUDACHECK(hipGetDevice(&deviceId));
+  hipDeviceProp_t devProp;
+  CUDACHECK(hipGetDeviceProperties(&devProp, deviceId));
+  m_gcnArch = devProp.gcnArch;
+
+  // Establish when to use clique-based kernels based on input size
+  SetByteLimits();
 
   m_init = true;
-  INFO(NCCL_INIT, "Clique-based kernels enabled (mode %d)", m_cliqueMode);
+  INFO(NCCL_INIT, "Clique-based kernels enabled (mode %d) [GCN %d]", m_cliqueMode, m_gcnArch);
   return ncclSuccess;
 
 dropback:
@@ -262,6 +274,19 @@ dropback:
   return ncclSuccess;
 }
 
+void CliqueManager::SetByteLimits()
+{
+  m_allReduceByteLimit = rcclParamAllReduceCliqueByteLimit();
+  if (m_allReduceByteLimit == 0)
+  {
+    switch (m_gcnArch)
+    {
+    case 906: m_allReduceByteLimit = 536870912; break;
+    default:  m_allReduceByteLimit =  16777216; break;
+    }
+  }
+}
+
 bool CliqueManager::IsSupported(ncclFunc_t const coll,
                                 size_t const count,
                                 ncclDataType_t const datatype,
@@ -271,7 +296,7 @@ bool CliqueManager::IsSupported(ncclFunc_t const coll,
 
   // Filter based on total input size for each collective type
   size_t totalBytes = count * ncclTypeSize(datatype);
-  if (coll == ncclFuncAllReduce && (totalBytes <= rcclParamAllReduceCliqueByteLimit())) return true;
+  if (coll == ncclFuncAllReduce && (totalBytes <= m_allReduceByteLimit)) return true;
 
   return false;
 }
@@ -344,12 +369,23 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
     {
       // NOTE: These are currently based on collected data and not necessarily ideal for all hardware
       int numChannels;
-      if (totalBytes <= 65536) numChannels = 1;
-      else if (totalBytes <= 262144) numChannels = 2;
-      else if (totalBytes <= 524288) numChannels = 4;
-      else if (totalBytes <= 2097152) numChannels = 8;
-      else numChannels = 11;
-
+      switch (m_gcnArch)
+      {
+      case 906:
+        if      (totalBytes <=    4096) numChannels =  1;
+        else                            numChannels =  3;
+        break;
+      case 910:
+        if      (totalBytes <=  262144) numChannels =  4;
+        else                            numChannels =  8;
+        break;
+      default:
+        if      (totalBytes <=   65536) numChannels =  1;
+        else if (totalBytes <=  262144) numChannels =  2;
+        else if (totalBytes <=  524288) numChannels =  4;
+        else if (totalBytes <= 2097152) numChannels =  8;
+        else                            numChannels = 11;
+      }
       *numChannelstoUse = std::min(numChannels, totalNumChannels);
     }
     else
@@ -357,7 +393,6 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
       *numChannelstoUse = std::min((int)rcclParamAllReduceNumChannels(), totalNumChannels);
     }
   }
-
   return ncclSuccess;
 }
 
