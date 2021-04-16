@@ -11,26 +11,35 @@ set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
 
 project(rccl CXX)
 
+include(cmake/Dependencies.cmake)
+
 # Detect compiler support for target ID
+# This section is deprecated. Please use rocm_check_target_ids for future use.
 if( CMAKE_CXX_COMPILER MATCHES ".*/hipcc$" )
-  execute_process(COMMAND ${CMAKE_CXX_COMPILER} "--help"
-    OUTPUT_VARIABLE CXX_OUTPUT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_STRIP_TRAILING_WHITESPACE)
-  string(REGEX MATCH ".mcode\-object\-version" TARGET_ID_SUPPORT ${CXX_OUTPUT})
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} "--help"
+        OUTPUT_VARIABLE CXX_OUTPUT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_STRIP_TRAILING_WHITESPACE)
+    string(REGEX MATCH ".mcode\-object\-version" TARGET_ID_SUPPORT ${CXX_OUTPUT})
 endif()
 
-# Use target ID syntax if supported for AMDGPU_TARGETS
-if(TARGET_ID_SUPPORT)
-  set(AMDGPU_TARGETS gfx803;gfx900;gfx906:xnack-;gfx908:xnack- CACHE STRING "List of specific machine types for library to target")
+#Set the AMDGPU_TARGETS with backward compatiblity
+if(COMMAND rocm_check_target_ids)
+   rocm_check_target_ids(DEFAULT_AMDGPU_TARGETS
+       TARGETS "gfx803;gfx900:xnack-;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack-;gfx90a:xnack+;gfx1030"
+   )
 else()
-  set(AMDGPU_TARGETS gfx803;gfx900;gfx906;gfx908 CACHE STRING "List of specific machine types for library to target")
+    # Use target ID syntax if supported for AMDGPU_TARGETS
+    if(TARGET_ID_SUPPORT)
+        set(DEFAULT_AMDGPU_TARGETS "gfx803;gfx900:xnack-;gfx906:xnack-;gfx908:xnack-;gfx1030")
+    else()
+        set(DEFAULT_AMDGPU_TARGETS "gfx803;gfx900;gfx906;gfx908")
+    endif()
 endif()
+set(AMDGPU_TARGETS "${DEFAULT_AMDGPU_TARGETS}" CACHE STRING "List of specific machine types for library to target")
 
 option(BUILD_TESTS "Build test programs" OFF)
 option(INSTALL_DEPENDENCIES "Force install dependencies" OFF)
-
-include(cmake/Dependencies.cmake)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
@@ -218,7 +227,7 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-target_link_libraries(rccl PRIVATE hip::device numa)
+target_link_libraries(rccl PRIVATE hip::device)
 target_link_libraries(rccl INTERFACE hip::host)
 
 #Setup librccl.so version
@@ -257,7 +266,7 @@ Files: *
 Copyright: (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
 Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 License: See LICENSE.txt for license information\n")
-  install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION /usr/share/doc/rccl)
+  install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   # Write changelog file
   find_program( date_executable date )
   execute_process(COMMAND ${date_executable} -R OUTPUT_VARIABLE TIMESTAMP)
@@ -270,7 +279,7 @@ License: See LICENSE.txt for license information\n")
   find_program( gzip_executable gzip )
   execute_process(COMMAND bash "-c" "${gzip_executable} -9 -c ${CMAKE_BINARY_DIR}/changelog"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR} OUTPUT_FILE "${CMAKE_BINARY_DIR}/changelog.Debian.gz")
-  install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION /usr/share/doc/rccl)
+  install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "ROCm Communication Collectives Library
   Optimized primitives for collective multi-GPU communication")
 endif()
