@@ -48,6 +48,7 @@ typedef enum { ncclSuccess                 =  0,
  * NCCL library
  */
 ncclResult_t  ncclGetVersion(int *version);
+/// @private
 ncclResult_t pncclGetVersion(int *version);
 
 /*! @brief Generates an ID for ncclCommInitRank
