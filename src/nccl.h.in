@@ -48,7 +48,7 @@ typedef enum { ncclSuccess                 =  0,
  * NCCL library
  */
 ncclResult_t  ncclGetVersion(int *version);
-/// @private
+/// @cond include_hidden 
 ncclResult_t pncclGetVersion(int *version);
 /// @endcond
   
