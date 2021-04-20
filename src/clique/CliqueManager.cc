@@ -281,7 +281,7 @@ void CliqueManager::SetByteLimits()
   {
     switch (m_gcnArch)
     {
-    case 906: m_allReduceByteLimit = 536870912; break;
+    case 906: m_allReduceByteLimit =  16777216; break;
     case 908: m_allReduceByteLimit = 536870912; break;
     default:  m_allReduceByteLimit =  16777216; break;
     }
@@ -373,8 +373,8 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
       switch (m_gcnArch)
       {
       case 906:
-        if      (totalBytes <=    4096) numChannels =  1;
-        else                            numChannels =  3;
+        if      (totalBytes <=   16384) numChannels =  1;
+        else                            numChannels =  2;
         break;
       case 908:
         if      (totalBytes <=  262144) numChannels =  4;
