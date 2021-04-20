@@ -50,7 +50,8 @@ typedef enum { ncclSuccess                 =  0,
 ncclResult_t  ncclGetVersion(int *version);
 /// @private
 ncclResult_t pncclGetVersion(int *version);
-
+/// @endcond
+  
 /*! @brief Generates an ID for ncclCommInitRank
 
     @details
