@@ -48,7 +48,9 @@ typedef enum { ncclSuccess                 =  0,
  * NCCL library
  */
 ncclResult_t  ncclGetVersion(int *version);
+/// @cond include_hidden 
 ncclResult_t pncclGetVersion(int *version);
+/// @endcond
 
 /*! @brief Generates an ID for ncclCommInitRank
 
@@ -63,7 +65,9 @@ ncclResult_t pncclGetVersion(int *version);
 
 */
 ncclResult_t  ncclGetUniqueId(ncclUniqueId* uniqueId);
+/// @cond include_hidden 
 ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
+/// @endcond
 
 /*! @brief Creates a new communicator (multi thread/process version).
 
@@ -79,7 +83,9 @@ ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
                 communicator struct pointer
     */
 ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
+/// @cond include_hidden 
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
+/// @endcond
 
 /*! @brief Creates a clique of communicators (single process version).
  *
@@ -90,15 +96,21 @@ ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
  * Order of devlist defines user-order of processors within the communicator.
  * */
 ncclResult_t  ncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
+/// @cond include_hidden 
 ncclResult_t pncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
+/// @endcond
 
  /*! @brief Frees resources associated with communicator object, but waits for any operations that might still be running on the device */
 ncclResult_t  ncclCommDestroy(ncclComm_t comm);
+/// @cond include_hidden 
 ncclResult_t pncclCommDestroy(ncclComm_t comm);
+/// @endcond
 
 /*! @brief Frees resources associated with communicator object and aborts any operations that might still be running on the device. */
 ncclResult_t  ncclCommAbort(ncclComm_t comm);
+/// @cond include_hidden 
 ncclResult_t pncclCommAbort(ncclComm_t comm);
+/// @endcond
 
 /*! @brief Returns a human-readable error message. */
 const char*  ncclGetErrorString(ncclResult_t result);
@@ -106,19 +118,27 @@ const char* pncclGetErrorString(ncclResult_t result);
 
 /*! @brief Checks whether the comm has encountered any asynchronous errors */
 ncclResult_t  ncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
+/// @cond include_hidden 
 ncclResult_t pncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
+/// @endcond
 
 /*! @brief Gets the number of ranks in the communicator clique. */
 ncclResult_t  ncclCommCount(const ncclComm_t comm, int* count);
+/// @cond include_hidden 
 ncclResult_t pncclCommCount(const ncclComm_t comm, int* count);
+/// @endcond
 
 /*! @brief Returns the rocm device number associated with the communicator. */
 ncclResult_t  ncclCommCuDevice(const ncclComm_t comm, int* device);
+/// @cond include_hidden 
 ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
+/// @endcond
 
 /*! @brief Returns the user-ordered "rank" associated with the communicator. */
 ncclResult_t  ncclCommUserRank(const ncclComm_t comm, int* rank);
+/// @cond include_hidden 
 ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
+/// @endcond
 
 /*! @brief Reduction operation selector */
 typedef enum { ncclSum        = 0,
@@ -166,8 +186,10 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
  */
 ncclResult_t  ncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
     ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
     ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief (deprecated) Broadcast (in-place)
  *
@@ -179,8 +201,10 @@ ncclResult_t pncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncc
  */
 ncclResult_t  ncclBcast(void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclBcast(void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief Broadcast
  *
@@ -192,8 +216,10 @@ ncclResult_t pncclBcast(void* buff, size_t count, ncclDataType_t datatype, int r
  */
 ncclResult_t  ncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief All-Reduce
  *
@@ -204,8 +230,10 @@ ncclResult_t pncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, 
  */
 ncclResult_t  ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*!
  * @brief Reduce-Scatter
@@ -221,9 +249,11 @@ ncclResult_t pncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
 ncclResult_t  ncclReduceScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm,
     hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclReduceScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm,
     hipStream_t stream);
+/// @endcond
 
 /*! @brief All-Gather
  *
@@ -236,8 +266,10 @@ ncclResult_t pncclReduceScatter(const void* sendbuff, void* recvbuff,
  */
 ncclResult_t  ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief Send
  *
@@ -251,8 +283,10 @@ ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
  */
 ncclResult_t  ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief Receive
  *
@@ -264,10 +298,12 @@ ncclResult_t pncclSend(const void* sendbuff, size_t count, ncclDataType_t dataty
  * need to progress concurrently to complete, they must be fused within a ncclGroupStart/
  * ncclGroupEnd section.
  */
+/// @cond include_hidden 
 ncclResult_t pncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
 ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief Gather
  *
@@ -281,8 +317,10 @@ ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
  */
 ncclResult_t  ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief Scatter
  *
@@ -297,9 +335,11 @@ ncclResult_t pncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
 ncclResult_t  ncclScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, int root, ncclComm_t comm,
     hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, int root, ncclComm_t comm,
     hipStream_t stream);
+/// @endcond
 
 /*! @brief All-To-All
  *
@@ -311,8 +351,10 @@ ncclResult_t pncclScatter(const void* sendbuff, void* recvbuff,
  */
 ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*! @brief All-To-Allv
  *
@@ -328,9 +370,11 @@ ncclResult_t pncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
 ncclResult_t  ncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
     const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
     const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+/// @cond include_hidden 
 ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
     const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
     const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
+/// @endcond
 
 /*
  * Group semantics
@@ -361,7 +405,9 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
  * ncclGroupEnd.
  */
 ncclResult_t  ncclGroupStart();
+/// @cond include_hidden 
 ncclResult_t pncclGroupStart();
+/// @endcond
 
 /*! @brief Group End
  *
@@ -370,7 +416,9 @@ ncclResult_t pncclGroupStart();
  * need to be called after ncclGroupEnd.
  */
 ncclResult_t  ncclGroupEnd();
+/// @cond include_hidden 
 ncclResult_t pncclGroupEnd();
+/// @endcond
 
 #ifdef __cplusplus
 } // end extern "C"
