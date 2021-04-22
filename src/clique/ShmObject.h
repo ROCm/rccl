@@ -148,7 +148,7 @@ ncclResult_t ShmObject<T>::Open()
 
     if (m_rank == 0)
     {
-      INFO(NCCL_INIT, "Initializing message queue for %s: %ld\n", m_shmName.c_str());
+      INFO(NCCL_INIT, "Initializing message queue for %s\n", m_shmName.c_str());
     }
 
     mqd_t mq_desc;
