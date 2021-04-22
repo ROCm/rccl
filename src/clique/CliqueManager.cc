@@ -507,10 +507,10 @@ ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
   {
       for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
       {
-        int msgid, fd;
+        mqd_t mq_desc;
         std::string msgQueueName = it->second + std::to_string(hash) + "_" + std::to_string(pid);
-        NCCLCHECK(MsgQueueGetId(msgQueueName, true, msgid));
-        NCCLCHECK(MsgQueueClose(msgQueueName));
+        NCCLCHECK(MsgQueueGetId(msgQueueName, true, mq_desc));
+        NCCLCHECK(MsgQueueClose(msgQueueName, mq_desc, true));
       }
 
       std::string shmDir = "/dev/shm/";

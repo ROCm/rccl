@@ -42,7 +42,7 @@ ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc)
   // Check if we're trying to create message queue and it already exists; if so, delete existing queue
   if (mq_desc == -1 && exclusive == true && errno == EBUSY)
   {
-    NCCLCHECK(MsgQueueClose(name));
+    NCCLCHECK(MsgQueueClose(name, mq_desc, true));
     SYSCHECKVAL(mq_open(mq_name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, attr), "mq_open", mq_desc);
   }
   else if (mq_desc == -1)
@@ -83,12 +83,12 @@ ncclResult_t MsgQueueWaitUntilEmpty(mqd_t const& mq_desc)
   return ncclSuccess;
 }
 
-ncclResult_t MsgQueueClose(std::string name)
+ncclResult_t MsgQueueClose(std::string name, mqd_t& mq_desc, bool unlink)
 {
-  mqd_t mq_desc;
-  std::string mq_name = "/" + name;
-  SYSCHECKVAL(mq_open(mq_name.c_str(), MSG_QUEUE_MODE), "mq_open", mq_desc);
-  SYSCHECK(mq_unlink(mq_name.c_str()), "mq_unlink");
+  if (unlink)
+  {
+    NCCLCHECK(MsgQueueUnlink(name));
+  }
   SYSCHECK(mq_close(mq_desc), "mq_close");
   return ncclSuccess;
 }

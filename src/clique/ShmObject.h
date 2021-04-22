@@ -109,12 +109,12 @@ protected:
     ncclResult_t res;
     NCCLCHECKGOTO(BroadcastMessage(mq_desc, pass), res, dropback);
     NCCLCHECKGOTO(MsgQueueWaitUntilEmpty(mq_desc), res, dropback);
-    NCCLCHECK(MsgQueueClose(m_shmName));
+    NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, true));
     return ncclSuccess;
 
 dropback:
     WARN("Root rank unable to broadcast across message queue.  Closing message queue.");
-    NCCLCHECK(MsgQueueClose(m_shmName));
+    NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, true));
     return ncclSystemError;
   }
 
@@ -140,18 +140,15 @@ dropback:
 template <typename T>
 ncclResult_t ShmObject<T>::Open()
 {
+  mqd_t mq_desc;
   if (m_alloc == false)
   {
     int shmFd;
     int protection = PROT_READ | PROT_WRITE;
     int visibility = MAP_SHARED;
 
-    if (m_rank == 0)
-    {
-      INFO(NCCL_INIT, "Initializing message queue for %s\n", m_shmName.c_str());
-    }
+    INFO(NCCL_INIT, "Rank %d Initializing message queue for %s\n", m_rank, m_shmName.c_str());
 
-    mqd_t mq_desc;
     NCCLCHECK(MsgQueueGetId(m_shmName, false, mq_desc));
     if (m_rank == 0)
     {
@@ -168,7 +165,9 @@ ncclResult_t ShmObject<T>::Open()
     else
     {
       char msg_text[1];
-      NCCLCHECK(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)));
+      ncclResult_t res;
+      NCCLCHECKGOTO(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)), res, dropback);
+      NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
       if (msg_text[0] == 'P')
       {
         NCCLCHECK(shmSetup(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 0));
@@ -187,6 +186,11 @@ ncclResult_t ShmObject<T>::Open()
     return ncclInvalidUsage;
   }
   return ncclSuccess;
+
+dropback:
+  WARN("Rank %d unable to receive message from root.  Closing message queue.", m_rank);
+  NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
+  return ncclSystemError;
 }
 
 template<typename T>
