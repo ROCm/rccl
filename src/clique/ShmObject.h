@@ -98,11 +98,24 @@ protected:
     msg_text[0] = (pass == 0 ? 'F': 'P');
     for (int rank = 0; rank < m_numRanks; rank++)
     {
-      INFO(NCCL_INIT, "Root broadcasting to %d", rank);
       if (rank == m_rank) continue;
       NCCLCHECK(MsgQueueSend(mq_desc, &msg_text[0], sizeof(msg_text)));
     }
     return ncclSuccess;
+  }
+
+  ncclResult_t BroadcastAndCloseMessageQueue(mqd_t& mq_desc, bool pass)
+  {
+    ncclResult_t res;
+    NCCLCHECKGOTO(BroadcastMessage(mq_desc, pass), res, dropback);
+    NCCLCHECKGOTO(MsgQueueWaitUntilEmpty(mq_desc), res, dropback);
+    NCCLCHECK(MsgQueueClose(m_shmName));
+    return ncclSuccess;
+
+dropback:
+    WARN("Root rank unable to broadcast across message queue.  Closing message queue.");
+    NCCLCHECK(MsgQueueClose(m_shmName));
+    return ncclSystemError;
   }
 
   // tag for dispatch
@@ -133,43 +146,34 @@ ncclResult_t ShmObject<T>::Open()
     int protection = PROT_READ | PROT_WRITE;
     int visibility = MAP_SHARED;
 
-    INFO(NCCL_INIT, "Rank %d in Open for %s\n", m_rank, m_shmName.c_str());
+    if (m_rank == 0)
+    {
+      INFO(NCCL_INIT, "Initializing message queue for %s: %ld\n", m_shmName.c_str());
+    }
+
     mqd_t mq_desc;
     NCCLCHECK(MsgQueueGetId(m_shmName, false, mq_desc));
-    INFO(NCCL_INIT, "Rank %d got msgqueue id for %s\n", m_rank, m_shmName.c_str());
     if (m_rank == 0)
     {
       ncclResult_t resultSetup = shmSetupExclusive(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 1);
       ncclResult_t resultSemInit = InitIfSemaphore(OpenTag<T>{});
       if ((resultSetup != ncclSuccess && errno != EEXIST) || (resultSemInit != ncclSuccess))
       {
-        NCCLCHECK(BroadcastMessage(mq_desc, false));
+        NCCLCHECK(BroadcastAndCloseMessageQueue(mq_desc, false));
         WARN("Call to ShmObject::Open in root rank failed : %s", strerror(errno));
         return ncclSystemError;
       }
-      NCCLCHECK(BroadcastMessage(mq_desc, true));
-
-      mq_attr attr;
-      mq_getattr (mq_desc, &attr);
-      INFO(NCCL_INIT, "Number of messages in queue %s: %ld\n", m_shmName.c_str(), attr.mq_curmsgs);
-      while (attr.mq_curmsgs > 0)
-      {
-        mq_getattr (mq_desc, &attr);
-      }
-      NCCLCHECK(MsgQueueClose(m_shmName));
+      NCCLCHECK(BroadcastAndCloseMessageQueue(mq_desc, true));
     }
     else
     {
       mq_attr attr;
       mq_getattr (mq_desc, &attr);
-      INFO(NCCL_INIT, "Number of messages in queue %s: %ld\n", m_shmName.c_str(), attr.mq_curmsgs);
       char msg_text[1];
       NCCLCHECK(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)));
       if (msg_text[0] == 'P')
       {
-        INFO(NCCL_INIT, "Rank %d got message for %s\n", m_rank, m_shmName.c_str());
         NCCLCHECK(shmSetup(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 0));
-        INFO(NCCL_INIT, "Rank %d finished shmSetup\n", m_rank);
       }
       else
       {

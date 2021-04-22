@@ -32,6 +32,7 @@ THE SOFTWARE.
 ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc);
 ncclResult_t MsgQueueSend(mqd_t const& mq_desc, const char* msgp, size_t msgsz);
 ncclResult_t MsgQueueRecv(mqd_t const& mq_desc, char* msgp, size_t msgsz);
+ncclResult_t MsgQueueWaitUntilEmpty(mqd_t const& mq_desc);
 ncclResult_t MsgQueueClose(std::string name);
 ncclResult_t MsgQueueUnlink(std::string name);
 

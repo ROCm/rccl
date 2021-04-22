@@ -21,10 +21,12 @@ THE SOFTWARE.
 */
 
 #include "MsgQueue.h"
+#include <chrono>
 
 #define MSG_QUEUE_PERM S_IRUSR | S_IWUSR
 #define MSG_QUEUE_MODE O_RDWR
 #define MSG_SIZE 1
+#define MSG_QUEUE_TIMEOUT 60
 
 ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc)
 {
@@ -40,7 +42,6 @@ ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc)
   // Check if we're trying to create message queue and it already exists; if so, delete existing queue
   if (mq_desc == -1 && exclusive == true && errno == EBUSY)
   {
-    INFO(NCCL_INIT, "Found existing msg queue: %s", name.c_str());
     NCCLCHECK(MsgQueueClose(name));
     SYSCHECKVAL(mq_open(mq_name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, attr), "mq_open", mq_desc);
   }
@@ -64,9 +65,26 @@ ncclResult_t MsgQueueRecv(mqd_t const& mq_desc, char* msgp, size_t msgsz)
   return ncclSuccess;
 }
 
+ncclResult_t MsgQueueWaitUntilEmpty(mqd_t const& mq_desc)
+{
+  mq_attr attr;
+  mq_getattr(mq_desc, &attr);
+
+  auto start = std::chrono::steady_clock::now();
+  while(attr.mq_curmsgs > 0)
+  {
+    SYSCHECK(mq_getattr(mq_desc, &attr), "mq_getattr");
+    if(std::chrono::steady_clock::now() - start > std::chrono::seconds(MSG_QUEUE_TIMEOUT))
+    {
+      WARN("Message Queue timed out waiting for all ranks to receive messages.");
+      return ncclSystemError;
+    }
+  }
+  return ncclSuccess;
+}
+
 ncclResult_t MsgQueueClose(std::string name)
 {
-  INFO(NCCL_INIT, "In MsgQueueClose for %s\n", name.c_str());
   mqd_t mq_desc;
   std::string mq_name = "/" + name;
   SYSCHECKVAL(mq_open(mq_name.c_str(), MSG_QUEUE_MODE), "mq_open", mq_desc);
@@ -77,7 +95,6 @@ ncclResult_t MsgQueueClose(std::string name)
 
 ncclResult_t MsgQueueUnlink(std::string name)
 {
-  INFO(NCCL_INIT, "In MsgQueueUnlink for %s\n", name.c_str());
   std::string mq_name = "/" + name;
   SYSCHECK(mq_unlink(mq_name.c_str()), "mq_unlink");
   return ncclSuccess;
