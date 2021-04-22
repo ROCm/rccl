@@ -167,8 +167,6 @@ ncclResult_t ShmObject<T>::Open()
     }
     else
     {
-      mq_attr attr;
-      mq_getattr (mq_desc, &attr);
       char msg_text[1];
       NCCLCHECK(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)));
       if (msg_text[0] == 'P')
