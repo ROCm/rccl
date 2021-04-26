@@ -165,14 +165,12 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
   comm->rank = comm->cudaDev = comm->busId = comm->nRanks = -1;
 }
 
-RCCL_PARAM(KernelCollEnable, "KERNEL_COLL_ENABLE", 0);
-RCCL_PARAM(KernelCollPrint, "KERNEL_COLL_PRINT", 0);
+RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 
 #ifdef ENABLE_COLLTRACE
 void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
   int head = comm->hostDevComm.collTraceHead;
-  bool kern_print = rcclParamKernelCollPrint() && rcclParamKernelCollEnable();
   #define MAX_NAME_LENGTH 32
   char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+1));
   for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
@@ -256,7 +254,7 @@ void *ncclCommThreadMain(void *arg) {
             break;
         }
       }
-      if (kern_print) INFO(NCCL_INIT, "%s", line);
+      INFO(NCCL_COLL, "%s", line);
       STORE(&(td->type), ncclCollTraceNotReady);
       head ++;
       head %= COLLTRACE_NUM_ITEMS;
@@ -420,7 +418,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   NCCLCHECK(ncclCudaHostCalloc(&comm->hostDevComm.collTrace, COLLTRACE_NUM_ITEMS));
   memset(comm->hostDevComm.collTrace, 0, sizeof(struct ncclCollTrace) * COLLTRACE_NUM_ITEMS);
   comm->hostDevComm.collTraceExit = comm->hostDevComm.collTraceHead = *comm->hostDevComm.collTraceTail = 0;
-  if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollEnable())
+  if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable())
     pthread_create(&comm->hostDevComm.collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
   else
     comm->hostDevComm.collTraceThread = 0;
