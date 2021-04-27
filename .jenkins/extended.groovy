@@ -13,7 +13,7 @@ def runCI =
 {
     nodeDetails, jobName->
 
-    def prj  = new rocProject('rccl', 'PreCheckin')
+    def prj  = new rocProject('rccl', 'Extended')
     prj.paths.build_command = './install.sh -t '
 
     // Define test architectures, optional rocm version argument is available
@@ -35,7 +35,7 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project, "BroadcastCorrectnessSweep*:*float32*")
+        commonGroovy.runTestCommand(platform, project, "*")
     }
 
     def packageCommand =
@@ -55,7 +55,7 @@ ci: {
 
     propertyList = auxiliary.appendPropertyList(propertyList)
 
-    def jobNameList = ["compute-rocm-dkms-no-npi-hipclang":([sles15sp1:['4gfx906'],centos8:['8gfx908'],centos7:['8gfx906'],ubuntu18:['4gfx906', '4gfx908']])]
+    def jobNameList = ["compute-rocm-dkms-no-npi-hipclang":([centos8:['8gfx906']])]
     
     jobNameList = auxiliary.appendJobNameList(jobNameList)
     
