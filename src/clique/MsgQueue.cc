@@ -21,25 +21,31 @@ THE SOFTWARE.
 */
 
 #include "MsgQueue.h"
+#include <chrono>
 
-#include <sys/ipc.h>
-#include <sys/msg.h>
+#define MSG_QUEUE_PERM S_IRUSR | S_IWUSR
+#define MSG_QUEUE_MODE O_RDWR
+#define MSG_SIZE 1
+#define MSG_QUEUE_TIMEOUT 60
 
-#define MSG_QUEUE_PERM 0666
-
-ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, int& msgid)
+ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc)
 {
-  key_t key;
-  SYSCHECKVAL(ftok(name.c_str(), projid), "ftok", key);
-  int flag = (exclusive == true ? IPC_CREAT | IPC_EXCL : IPC_CREAT);
-  msgid = msgget(key, MSG_QUEUE_PERM | flag);
+  int flag = (exclusive == true ? O_CREAT | O_EXCL : O_CREAT);
+  struct mq_attr attr;
+  attr.mq_maxmsg = 10;
+  attr.mq_msgsize = MSG_SIZE;
+  attr.mq_flags = 0;
+
+  std::string mq_name = "/" + name;
+  mq_desc = mq_open(mq_name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, &attr);
+
   // Check if we're trying to create message queue and it already exists; if so, delete existing queue
-  if (msgid == -1 && exclusive == true && errno == EEXIST)
+  if (mq_desc == -1 && exclusive == true && errno == EBUSY)
   {
-    NCCLCHECK(MsgQueueClose(name, projid));
-    SYSCHECKVAL(msgget(key, MSG_QUEUE_PERM | flag), "msgget", msgid);
+    NCCLCHECK(MsgQueueClose(name, mq_desc, true));
+    SYSCHECKVAL(mq_open(mq_name.c_str(), flag | MSG_QUEUE_MODE, MSG_QUEUE_PERM, attr), "mq_open", mq_desc);
   }
-  else if (msgid == -1)
+  else if (mq_desc == -1)
   {
     WARN("Call to MsgQueueGetId failed : %s", strerror(errno));
     return ncclSystemError;
@@ -47,25 +53,49 @@ ncclResult_t MsgQueueGetId(std::string name, int projid, bool exclusive, int& ms
   return ncclSuccess;
 }
 
-ncclResult_t MsgQueueSend(int msgid, const void* msgp, size_t msgsz, int msgflg)
+ncclResult_t MsgQueueSend(mqd_t const& mq_desc, const char* msgp, size_t msgsz)
 {
-  SYSCHECK(msgsnd(msgid, msgp, msgsz, msgflg), "msgsnd");
+  SYSCHECK(mq_send(mq_desc, msgp, msgsz, 0), "mq_send");
   return ncclSuccess;
 }
 
-ncclResult_t MsgQueueRecv(int msgid, void* msgp, size_t msgsz, long msgtyp, bool wait)
+ncclResult_t MsgQueueRecv(mqd_t const& mq_desc, char* msgp, size_t msgsz)
 {
-  int msgflg = (wait == false ? IPC_NOWAIT : 0);
-  SYSCHECK(msgrcv(msgid, msgp, msgsz, msgtyp, msgflg), "msgrcv");
+  SYSCHECK(mq_receive(mq_desc, msgp, msgsz, NULL), "mq_receive");
   return ncclSuccess;
 }
 
-ncclResult_t MsgQueueClose(std::string name, int projid)
+ncclResult_t MsgQueueWaitUntilEmpty(mqd_t const& mq_desc)
 {
-  key_t key;
-  int msgid;
-  key = ftok(name.c_str(), projid);
-  SYSCHECKVAL(msgget(key, 0), "msgget", msgid);
-  SYSCHECK(msgctl(msgid, IPC_RMID, NULL), "msgctl");
+  mq_attr attr;
+  mq_getattr(mq_desc, &attr);
+
+  auto start = std::chrono::steady_clock::now();
+  while(attr.mq_curmsgs > 0)
+  {
+    SYSCHECK(mq_getattr(mq_desc, &attr), "mq_getattr");
+    if(std::chrono::steady_clock::now() - start > std::chrono::seconds(MSG_QUEUE_TIMEOUT))
+    {
+      WARN("Message Queue timed out waiting for all ranks to receive messages.");
+      return ncclSystemError;
+    }
+  }
+  return ncclSuccess;
+}
+
+ncclResult_t MsgQueueClose(std::string name, mqd_t& mq_desc, bool unlink)
+{
+  if (unlink)
+  {
+    NCCLCHECK(MsgQueueUnlink(name));
+  }
+  SYSCHECK(mq_close(mq_desc), "mq_close");
+  return ncclSuccess;
+}
+
+ncclResult_t MsgQueueUnlink(std::string name)
+{
+  std::string mq_name = "/" + name;
+  SYSCHECK(mq_unlink(mq_name.c_str()), "mq_unlink");
   return ncclSuccess;
 }

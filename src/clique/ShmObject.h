@@ -92,17 +92,30 @@ ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid)
     return m_shmPtr;
   }
 protected:
-  ncclResult_t BroadcastMessage(int msgid, bool pass)
+  ncclResult_t BroadcastMessage(mqd_t& mq_desc, bool pass)
   {
-    MsgBuffer msg;
-    msg.msg_text[0] = (pass == 0 ? 'F': 'P');
+    char msg_text[1];
+    msg_text[0] = (pass == 0 ? 'F': 'P');
     for (int rank = 0; rank < m_numRanks; rank++)
     {
       if (rank == m_rank) continue;
-      msg.msg_type = rank;
-      NCCLCHECK(MsgQueueSend(msgid, &msg, sizeof(msg), 0));
+      NCCLCHECK(MsgQueueSend(mq_desc, &msg_text[0], sizeof(msg_text)));
     }
     return ncclSuccess;
+  }
+
+  ncclResult_t BroadcastAndCloseMessageQueue(mqd_t& mq_desc, bool pass)
+  {
+    ncclResult_t res;
+    NCCLCHECKGOTO(BroadcastMessage(mq_desc, pass), res, dropback);
+    NCCLCHECKGOTO(MsgQueueWaitUntilEmpty(mq_desc), res, dropback);
+    NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, true));
+    return ncclSuccess;
+
+dropback:
+    WARN("Root rank unable to broadcast across message queue.  Closing message queue.");
+    NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, true));
+    return ncclSystemError;
   }
 
   // tag for dispatch
@@ -127,33 +140,35 @@ protected:
 template <typename T>
 ncclResult_t ShmObject<T>::Open()
 {
+  mqd_t mq_desc;
   if (m_alloc == false)
   {
     int shmFd;
     int protection = PROT_READ | PROT_WRITE;
     int visibility = MAP_SHARED;
 
-    int msgid;
-    std::string tmpFileName = "/tmp/" + m_shmName;
-    NCCLCHECK(MsgQueueGetId(tmpFileName, m_projid, false, msgid));
+    INFO(NCCL_INIT, "Rank %d Initializing message queue for %s\n", m_rank, m_shmName.c_str());
 
+    NCCLCHECK(MsgQueueGetId(m_shmName, false, mq_desc));
     if (m_rank == 0)
     {
       ncclResult_t resultSetup = shmSetupExclusive(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 1);
       ncclResult_t resultSemInit = InitIfSemaphore(OpenTag<T>{});
       if ((resultSetup != ncclSuccess && errno != EEXIST) || (resultSemInit != ncclSuccess))
       {
-        NCCLCHECK(BroadcastMessage(msgid, false));
+        NCCLCHECK(BroadcastAndCloseMessageQueue(mq_desc, false));
         WARN("Call to ShmObject::Open in root rank failed : %s", strerror(errno));
         return ncclSystemError;
       }
-      NCCLCHECK(BroadcastMessage(msgid, true));
+      NCCLCHECK(BroadcastAndCloseMessageQueue(mq_desc, true));
     }
     else
     {
-      MsgBuffer msg;
-      NCCLCHECK(MsgQueueRecv(msgid, &msg, sizeof(msg), m_rank, true));
-      if (msg.msg_text[0] == 'P')
+      char msg_text[1];
+      ncclResult_t res;
+      NCCLCHECKGOTO(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)), res, dropback);
+      NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
+      if (msg_text[0] == 'P')
       {
         NCCLCHECK(shmSetup(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 0));
       }
@@ -171,6 +186,11 @@ ncclResult_t ShmObject<T>::Open()
     return ncclInvalidUsage;
   }
   return ncclSuccess;
+
+dropback:
+  WARN("Rank %d unable to receive message from root.  Closing message queue.", m_rank);
+  NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
+  return ncclSystemError;
 }
 
 template<typename T>

@@ -83,9 +83,11 @@ pthread_mutex_t rcclParamMutex##name = PTHREAD_MUTEX_INITIALIZER; \
 int64_t rcclParam##name() { \
   static_assert(default_value != -1LL, "default value cannot be -1"); \
   static int64_t value = -1LL; \
+  int64_t localValue; \
   pthread_mutex_lock(&rcclParamMutex##name); \
+  localValue = value; \
   char* en = getenv("RCCL_TEST_ENV_VARS"); \
-  if (value == -1LL || (en && (strcmp(en, "ENABLE") == 0))) { \
+  if (value == -1LL || (en && (strcmp(en, "ENABLE") == 0))){  \
     value = default_value; \
     char* str = getenv("RCCL_" env); \
     if (str && strlen(str) > 0) { \
@@ -98,9 +100,10 @@ int64_t rcclParam##name() { \
         INFO(NCCL_ALL,"%s set by environment to %lu.", "RCCL_" env, value);  \
       } \
     } \
+    localValue = value; \
   } \
   pthread_mutex_unlock(&rcclParamMutex##name); \
-  return value; \
+  return localValue; \
 }
 
 #endif

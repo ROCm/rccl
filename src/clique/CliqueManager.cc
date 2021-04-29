@@ -72,28 +72,6 @@ CliqueManager::~CliqueManager()
 
 void CliqueManager::CleanUp()
 {
-  if (rcclParamEnableClique())
-  {
-    if (m_rank == 0)
-    {
-      int pid = getpid();
-      for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
-      {
-        std::string msgQueueName = "/tmp/" + it->second + std::to_string(m_hash) + "_" + std::to_string(pid);
-        ncclResult_t res = MsgQueueClose(msgQueueName, m_hash);
-        if (res != ncclSuccess)
-        {
-          WARN("Unable to close Message Queue: %s\n", msgQueueName.c_str());
-        }
-        int ret = unlink(msgQueueName.c_str());
-        if (ret != 0)
-        {
-          WARN("Unable to unlink %s\n", msgQueueName.c_str());
-        }
-      }
-    }
-  }
-
   if (m_cliqueMode == CLIQUE_DISABLED) return;
 
   // Free variables that are shared between SINGLE_PROCESS / SINGLE_NODE
@@ -131,7 +109,6 @@ void CliqueManager::CleanUp()
 ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
 {
   ncclResult_t res;
-
   if (m_init) return ncclSuccess;
   m_init = true;
 
@@ -166,7 +143,6 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     m_init = true;
     return ncclSuccess;
   }
-
 
   std::string shmSuffix = std::to_string(m_hash) + "_" + std::to_string(suffix);
 
@@ -531,11 +507,10 @@ ncclResult_t CliqueManager::BootstrapRootInit(int pid, unsigned long hash)
   {
       for (auto it = CliqueShmNames.begin(); it != CliqueShmNames.end(); it++)
       {
-        int msgid, fd;
-        std::string msgQueueName = "/tmp/" + it->second + std::to_string(hash) + "_" + std::to_string(pid);
-        SYSCHECKVAL(open(msgQueueName.c_str(), O_CREAT | O_RDWR, 0606), "open", fd);
-        NCCLCHECK(MsgQueueGetId(msgQueueName, hash, true, msgid));
-        SYSCHECK(close(fd), "close");
+        mqd_t mq_desc;
+        std::string msgQueueName = it->second + std::to_string(hash) + "_" + std::to_string(pid);
+        NCCLCHECK(MsgQueueGetId(msgQueueName, true, mq_desc));
+        NCCLCHECK(MsgQueueClose(msgQueueName, mq_desc, true));
       }
 
       std::string shmDir = "/dev/shm/";
