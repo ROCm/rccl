@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -81,4 +81,5 @@ DECL_ALL
 #define REDUCE_SLICESTEPS 1
 #define REDUCE_CHUNKSTEPS 1
 #define SENDRECV_SLICEFACTOR 1
+
 #endif

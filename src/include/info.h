@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -19,8 +19,7 @@ typedef enum {
   ncclPatternTreeUp,
   ncclPatternTreeDown,
   ncclPatternTreeUpDown,
-  ncclPatternCollTreeUp,
-  ncclPatternCollTreeDown
+  ncclPatternCollTreeUpDown
 } ncclPattern_t;
 
 // Used to pass NCCL call information between functions
@@ -50,6 +49,8 @@ struct ncclInfo {
   int nchunksPerLoop;
   ssize_t sendbytes;
   ssize_t recvbytes;
+  int recvChunkSize;
+  int sendChunkSize;
   uint32_t delta;
   int channelId;
 };

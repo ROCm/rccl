@@ -350,7 +350,7 @@ ncclResult_t CliqueManager::SetCliqueArgs(ncclWorkElem* args)
   }
 
   // Prepare clique argments (NOTE: clique pointers are not ready yet)
-  int opIndex = args->opCount % NCCL_MAX_OPS;
+  int opIndex = args->op.opCount % NCCL_MAX_OPS;
   args->clique.ptrs = &m_pinnedCliquePtrs[opIndex];
 
   return ncclSuccess;
