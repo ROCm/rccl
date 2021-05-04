@@ -30,7 +30,7 @@ namespace CorrectnessTests
                 return;
             }
 
-            Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
+            Barrier barrier(rank, numDevices, StripPortNumberFromCommId(std::string(getenv("NCCL_COMM_ID"))));
 
             // Compute expected results for each dataset in combined
             int const root = 0;
