@@ -25,7 +25,6 @@ THE SOFTWARE.
 
 #include <semaphore.h>
 #include <mutex>
-#include <queue>
 
 #include "nccl.h"
 #include "devcomm.h"
@@ -62,7 +61,7 @@ public:
                    ncclRedOp_t const op) const;
 
   // Provide the pointers to be exchanged across the clique for the given rank / opCount
-  ncclResult_t DeclarePointers(uint64_t opCount, void const* inputPtr, void* outputPtr);
+  ncclResult_t DeclarePointers(void const* inputPtr, void* outputPtr);
 
   // Determine the number of channels / CUs to use for this call
   ncclResult_t GetNumChannelsToUse(ncclFunc_t const coll,
@@ -72,12 +71,9 @@ public:
                                    int const totalNumChannels,
                                    uint8_t* numChannelstoUse);
 
-  // Set pointers for where clique-related arguments will be found
-  // This sets pointers to device-accessible memory where the arguments will eventually reside
-  ncclResult_t SetCliqueArgs(ncclWorkElem* args);
-
-  // Blocking call that only returns after all out-standing clique pointers are ready
-  ncclResult_t WaitForPointers();
+  // Blocking call that only returns the in-progress clique pointers are ready
+  // This needs to be called in same order as DeclarePointers
+  ncclResult_t WaitForPointers(ncclWorkElem* args);
 
   // Prepares shared memory files upon initialization
   static ncclResult_t BootstrapRootInit(int pid, unsigned long hash);
@@ -92,13 +88,12 @@ protected:
                                    NcclIpcHandleRecvCache* cache,
                                    void** ptr);
 
-  // Race-condition helper functions
-  void WaitForBarrier();
-
   int                          m_rank;                               // Associated rank
   int                          m_numRanks;                           // Total number of ranks
   unsigned long                m_hash;                               // Hash used for identifying message queues & shared memory
   cliqueMode_t                 m_cliqueMode;                         // Clique mode (off/single process/single node)
+  int32_t                      m_opIndexHead;                        // Track start of outstanding requests
+  int32_t                      m_opIndexTail;                        // Track end of outstanding requests
   bool                         m_init;                               // Whether CliqueManager has been initialized
   int                          m_gcnArch;                            // Device GCN arch value
   size_t                       m_allReduceByteLimit;                 // Byte limit for AllReduce
@@ -106,7 +101,7 @@ protected:
   int*                         m_gpuBarrierGlobalCount;              // Part of GPU barrier (count variable shared across ranks)
   int*                         m_gpuBarrierGlobalSense;              // Part of GPU barrier (reset variable shared across ranks)
   int*                         m_gpuBarrierLocalSense;               // Part of GPU barrier (reset variable local to this rank)
-  std::queue<int>              m_inProgress;                         // Queue of clique-based collectives waiting for pointers
+  int*                         m_cpuBarrierCount;                    // Points to either m_sharedBarrierCount or m_staticBarrierCount
 
   // IPC-related (CLIQUE_SINGLE_NODE)
   NcclIpcHandleShm             m_shmHandles;                         // Used to exchange IPC handles between ranks
@@ -115,12 +110,11 @@ protected:
   ShmObject<int32_t>           m_sharedCpuMemory;                    // Used to pass shared memory used for CPU barrier
   ShmObject<hipIpcMemHandle_t> m_sharedIpcHandle;                    // Used to pass fine-grained device memory buffer IPC handle
   int*                         m_fineGrainBarrierMem;                // Fine-grained GPU memory barrier (allocated only on 1st rank, shared on others)
-  int*                         m_cpuBarrierGlobalCount;              // Part of CPU barrier (count variable shared across ranks)
-  int*                         m_cpuBarrierGlobalSense;              // Part of CPU barrier (reset variable shared across ranks)
-  int                          m_cpuBarrierLocalSense;               // Part of CPU barrier (reset variable local to this rank)
+  int*                         m_sharedBarrierCount;                 // Part of CPU barrier (count variable shared across ranks)
 
   // Single-process (CLIQUE_SINGLE_PROCESS)
   static cliqueDevicePtrs_t    m_staticCliquePtrs[NCCL_MAX_OPS];     // Use shared static memory to exchange pointer info
+  static int                   m_staticBarrierCount[2*NCCL_MAX_OPS]; // Part of CPU barrier (count variable shared across ranks)
   static int*                  m_staticGpuBarrierMem;                // Static storage backing for fine-grained gpu barrier
 };
 
