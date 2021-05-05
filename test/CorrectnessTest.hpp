@@ -43,6 +43,20 @@
   } \
 } while (false)
 
+#define SYSCHECK_GOTO_TEST(call, name, label) do { \
+  int retval; \
+  SYSCHECKVAL_GOTO_TEST(call, name, retval, label); \
+} while (false)
+
+#define SYSCHECKVAL_GOTO_TEST(call, name, retval, label) do { \
+  SYSCHECKSYNC_TEST(call, name, retval); \
+  if (retval == -1) { \
+    printf("Call to %s failed : %s\n", name, strerror(errno)); \
+    fflush(stdout); \
+    goto label; \
+  } \
+} while (false)
+
 #define SYSCHECKSYNC_TEST(call, name, retval) do { \
   retval = call; \
   if (retval == -1 && (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN)) { \
@@ -51,16 +65,17 @@
   } \
 } while(true)
 
-#define NCCLCHECK_NORET_TEST(call, name, rank) do { \
+#define NCCLCHECK_BARRIER_TEST(call, name, rank) do { \
   ncclResult_t retval; \
   retval = call; \
   if (retval != ncclSuccess) { \
         printf("Rank %d call to %s failed : %s\n", rank, name, strerror(errno)); \
         fflush(stdout); \
+        return; \
   } \
 } while (false)
 
-#define NCCLCHECK_RET_TEST(call, name) do { \
+#define NCCLCHECK_TEST(call, name) do { \
   ncclResult_t retval; \
   retval = call; \
   if (retval != ncclSuccess) { \
@@ -296,19 +311,19 @@ namespace CorrectnessTests
 
             if (rank == 0)
             {
-                NCCLCHECK_NORET_TEST(InitSemaphore(smSize, mutexName, 1, mutex), "InitSemaphore", rank);
-                NCCLCHECK_NORET_TEST(InitSemaphore(smSize, turnstile1Name, 0, turnstile1), "InitSemaphore", rank);
-                NCCLCHECK_NORET_TEST(InitSemaphore(smSize, turnstile2Name, 0, turnstile2), "InitSemaphore", rank);
-                NCCLCHECK_NORET_TEST(OpenSharedMemoryVariable(sizeof(int), counterName, true, counter), "OpenSharedMemoryVariable", rank);
-                NCCLCHECK_NORET_TEST(OpenSharedMemoryVariable(smSize, tinyBarrierName, true, tinyBarrier), "OpenSharedMemoryVariable", rank);
+                NCCLCHECK_BARRIER_TEST(InitSemaphore(smSize, mutexName, 1, mutex), "InitSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(InitSemaphore(smSize, turnstile1Name, 0, turnstile1), "InitSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(InitSemaphore(smSize, turnstile2Name, 0, turnstile2), "InitSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(sizeof(int), counterName, true, counter), "OpenSharedMemoryVariable", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(smSize, tinyBarrierName, true, tinyBarrier), "OpenSharedMemoryVariable", rank);
             }
             else
             {
-                NCCLCHECK_NORET_TEST(OpenSharedMemoryVariable(smSize, tinyBarrierName, false, tinyBarrier), "OpenSharedMemoryVariable", rank);
-                NCCLCHECK_NORET_TEST(OpenSemaphore(smSize, mutexName, mutex), "OpenSemaphore", rank);
-                NCCLCHECK_NORET_TEST(OpenSemaphore(smSize, turnstile1Name, turnstile1), "OpenSemaphore", rank);
-                NCCLCHECK_NORET_TEST(OpenSemaphore(smSize, turnstile2Name, turnstile2), "OpenSemaphore", rank);
-                NCCLCHECK_NORET_TEST(OpenSharedMemoryVariable(sizeof(int), counterName, false, counter), "OpenSharedMemoryVariable", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(smSize, tinyBarrierName, false, tinyBarrier), "OpenSharedMemoryVariable", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSemaphore(smSize, mutexName, mutex), "OpenSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSemaphore(smSize, turnstile1Name, turnstile1), "OpenSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSemaphore(smSize, turnstile2Name, turnstile2), "OpenSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(sizeof(int), counterName, false, counter), "OpenSharedMemoryVariable", rank);
             }
             ncclResult_t res = Wait(20);
             if (res != ncclSuccess)
@@ -326,8 +341,8 @@ namespace CorrectnessTests
 
         ncclResult_t Wait(int timeoutSecs)
         {
-            NCCLCHECK_RET_TEST(Part1(timeoutSecs), "Part 1 of Barrier Wait");
-            NCCLCHECK_RET_TEST(Part2(timeoutSecs), "Part 2 of Barrier Wait");
+            NCCLCHECK_TEST(Part1(timeoutSecs), "Part 1 of Barrier Wait");
+            NCCLCHECK_TEST(Part2(timeoutSecs), "Part 2 of Barrier Wait");
 
             return ncclSuccess;
         }
@@ -373,7 +388,7 @@ namespace CorrectnessTests
             {
                 SYSCHECKVAL_TEST(shm_open(name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR), msg_open.c_str(), fd);
                 //fd = shm_open(name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-                SYSCHECK_TEST(ftruncate(fd, size), "ftruncate");
+                SYSCHECK_GOTO_TEST(ftruncate(fd, size), "ftruncate", dropback);
             }
             else
             {
@@ -392,13 +407,15 @@ namespace CorrectnessTests
             close(fd);
             if (val == MAP_FAILED)
             {
-                std::string msg_unlink("shm_unlink ");
-                msg_unlink.append(name);
-                SYSCHECK_TEST(shm_unlink(name.c_str()), "shm_unlink");
-                return ncclSystemError;
+                goto dropback;
             }
 
             return ncclSuccess;
+dropback:
+            std::string msg_unlink("shm_unlink ");
+            msg_unlink.append(name);
+            SYSCHECK_TEST(shm_unlink(name.c_str()), "shm_unlink");
+            return ncclSystemError;
         }
 
         ncclResult_t InitSemaphore(size_t size, std::string name, int semValue, sem_t*& semaphore)
