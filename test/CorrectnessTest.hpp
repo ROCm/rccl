@@ -276,12 +276,14 @@ namespace CorrectnessTests
             ClearShmFiles(uniqueId);
         }
 
+        // Wait with no timeout
         void Wait()
         {
             Part1();
             Part2();
         }
 
+        // Wait with timeout option
         ncclResult_t Wait(int timeoutSecs)
         {
             NCCLCHECK_TEST(Part1(timeoutSecs), "Part 1 of Barrier Wait");
@@ -292,6 +294,12 @@ namespace CorrectnessTests
 
         ~Barrier()
         {
+            size_t smSize = sizeof(sem_t);
+            munmap(mutex, smSize);
+            munmap(turnstile1, smSize);
+            munmap(turnstile2, smSize);
+            munmap(tinyBarrier, smSize);
+            munmap(counter, sizeof(int));
         }
 
         static void ClearShmFiles(int uniqueId)
@@ -330,7 +338,6 @@ namespace CorrectnessTests
             if (create)
             {
                 SYSCHECKVAL_TEST(shm_open(name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR), msg_open.c_str(), fd);
-                //fd = shm_open(name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
                 SYSCHECK_GOTO_TEST(ftruncate(fd, size), "ftruncate", dropback);
             }
             else
@@ -338,7 +345,6 @@ namespace CorrectnessTests
                 do
                 {
                     fd = shm_open(name.c_str(), O_RDWR, S_IRUSR | S_IWUSR);
-                    //fd = shm_open(name.c_str(), O_RDWR, S_IRUSR | S_IWUSR);
                 } while (fd == -1 && errno == ENOENT);
                 if (fd == -1 && errno != ENOENT)
                 {
