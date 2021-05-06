@@ -160,8 +160,7 @@ ncclResult_t ShmObject<T>::Open()
       // has successfully opened shared memory; second set is consumed by the other ranks to indicate
       // that they have successfully opened shared memory and root rank can now unlink shared memory
       NCCLCHECK(BroadcastMessage(mq_desc, true));
-      NCCLCHECK(BroadcastMessage(mq_desc, true));
-      NCCLCHECKGOTO(MsgQueueWaitUntilEmpty(mq_desc), result, dropback);
+      NCCLCHECK(BroadcastAndCloseMessageQueue(mq_desc, true));
 
       int retVal = shm_unlink(m_shmName.c_str());
       if (retVal == -1 && errno != ENOENT)
