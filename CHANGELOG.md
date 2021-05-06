@@ -2,6 +2,15 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## [Unreleased]
+### Optimizations
+- Additional tuning for clique-based kernel AllReduce performance (still requires opt in with RCCL_ENABLE_CLIQUE=1)
+
+### Changed
+- Replaced RCCL_FORCE_ENABLE_CLIQUE to RCCL_CLIQUE_IGNORE_TOPO
+- Clique-based kernels can now be enabled on topologies where all active GPUs are XGMI-connected
+- Topologies not normally supported by clique-based kernels require RCCL_CLIQUE_IGNORE_TOPO=1
+
 ## [RCCL-2.7.8 for ROCm 4.1.0]
 ### Added
 - Experimental support for clique-based kernels (opt in with RCCL_ENABLE_CLIQUE=1)

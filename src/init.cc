@@ -30,6 +30,7 @@
 
 // [RCCL]
 #include "clique/CliqueManager.h"
+#include <hsa/hsa_ext_amd.h>
 // [/RCCL]
 
 #define STR2(v) #v
@@ -363,7 +364,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   return ncclSuccess;
 }
 
-RCCL_PARAM(ForceEnableClique, "FORCE_ENABLE_CLIQUE", 0);
+RCCL_PARAM(CliqueIgnoreTopo, "CLIQUE_IGNORE_TOPO", 0);
 RCCL_PARAM(P2pNetDisable, "P2P_NET_DISABLE", 0);
 
 static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
@@ -865,7 +866,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
     if (comm->localRanks == comm->nRanks)
     {
-      // Check that all the GPUs have peer access to one another
+      // Check that all the GPUs have peer access to one another and are XGMI connected
+      bool allXgmi = true;
       bool hasPeerAccess = true;
       for (int i = 0; i < nranks && hasPeerAccess; i++)
       {
@@ -880,6 +882,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
             hasPeerAccess = false;
             break;
           }
+
+          uint32_t linkType, hopCount;
+          CUDACHECK(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
+          allXgmi &= (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI);
         }
       }
       if (hasPeerAccess)
@@ -890,15 +896,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
           cliqueMode = CliqueManager::CLIQUE_SINGLE_NODE;
       }
 
-      // For now, only enable clique-based kernels on CR8_G topologies, unless explicitly asked
-      if (!rcclParamForceEnableClique())
+      // For now, only enable clique-based kernels on nodes where all GPUs are XGMI connected
+      if (!allXgmi && !rcclParamCliqueIgnoreTopo())
       {
-        // Disable clique-kernel support if not on CR8 topology
-        if (!(comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G)))
-        {
-          INFO(NCCL_INIT, "Disabling clique-based kernels due to topology (force enable with RCCL_FORCE_ENABLE_CLIQUE)");
-          cliqueMode = CliqueManager::CLIQUE_DISABLED;
-        }
+        INFO(NCCL_INIT, "Disabling clique-based kernels due to topology (ignore with RCCL_CLIQUE_IGNORE_TOPO)");
+        cliqueMode = CliqueManager::CLIQUE_DISABLED;
       }
     }
     comm->cliqueManager = new CliqueManager(rank, nranks, cliqueMode);
