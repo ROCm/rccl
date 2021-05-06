@@ -11,6 +11,7 @@ if(BUILD_TESTS)
   set(TEST_SOURCES_SINGLE_PROCESS
     test_AllGather.cpp
     test_AllReduce.cpp
+    test_AllReduceGroup.cpp
     test_Broadcast.cpp
     test_Reduce.cpp
     test_ReduceScatter.cpp
@@ -27,6 +28,7 @@ if(BUILD_TESTS)
   set(TEST_SOURCES_MULTI_PROCESS
     test_AllGatherMultiProcess.cpp
     test_AllReduceMultiProcess.cpp
+    test_AllReduceGroupMultiProcess.cpp
     test_AllToAllMultiProcess.cpp
     test_BroadcastMultiProcess.cpp
     test_CombinedCallsMultiProcess.cpp
