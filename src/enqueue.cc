@@ -152,10 +152,6 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
     }
     STORE(&channel->workFifo[(channel->workFifoTail-1)%NCCL_MAX_OPS].elems[0].active, 2);
 
-    { // [RCCL] Wait for any clique-based collectives
-      NCCLCHECK(comm->cliqueManager->WaitForPointers());
-    } // [/RCCL]
-
     if (c == 0) {
       // Find the first operation, choose the kernel accordingly and pass it as the first argument.
       // Note that changing cuda launch argument after capture is not supported by cudaGraph
@@ -480,12 +476,6 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
                                                info->datatype,
                                                info->op))
     {
-      // Declare the input / output pointers being used (to exchange via IPC with other ranks)
-      NCCLCHECK(info->comm->cliqueManager->DeclarePointers(info->comm->opCount,
-                                                           info->sendbuff,
-                                                           info->recvbuff));
-
-
       info->algorithm = NCCL_ALGO_RING;
       info->protocol = NCCL_PROTO_CLIQUE;
       // Determine the number of channels to use for clique-kernel
@@ -497,6 +487,9 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
                                                                &work->clique.nChannels));
       work->clique.count = info->count;
       work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+
+      // Setup pointers to where all the input/output pointers will be
+      NCCLCHECK(info->comm->cliqueManager->WaitForPointers(work));
       return ncclSuccess;
     }
   } // [RCCL]
@@ -631,11 +624,6 @@ static ncclResult_t ncclEnqueueCollKernel(ncclComm_t comm, struct ncclQueueElem*
     if (proxyArgs->subs[0].nsteps) NCCLCHECK(ncclProxySaveColl(proxyArgs, comm->nRanks));
 
     comm->lastChannel++;
-    // [RCCL] Setup pointers to where all the input/output pointers will be
-    if (proxyArgs->protocol == NCCL_PROTO_CLIQUE) {
-      NCCLCHECK(comm->cliqueManager->SetCliqueArgs(work));
-    }
-    // [/RCCL]
     work->coll.bid = bid % nChannels;
     NCCLCHECK(getNextOp(channel, NULL, work));
     //INFO(NCCL_COLL, "Host enqueue: bid %d channel %d index %ld nThreads %d funcIndex %d count %ld nChannels %d",
@@ -890,6 +878,20 @@ ncclResult_t ncclCudaGraphHostSetup(ncclComm_t comm, cudaGraph_t graph) {
 }
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
+  // [RCCL] Check for clique-based kernel support
+  {
+    if (info->comm->cliqueManager->IsSupported(info->coll,
+                                               info->count,
+                                               info->datatype,
+                                               info->op))
+    {
+      // Declare the input / output pointers being used (to exchange via IPC with other ranks)
+      // This is done immediately, and does not block
+      NCCLCHECK(info->comm->cliqueManager->DeclarePointers(info->sendbuff, info->recvbuff));
+    }
+  }
+  // [/RCCL]
+
   // Launch asynchronously if needed
   if (ncclAsyncMode()) {
     ncclResult_t ret = ncclSuccess;
