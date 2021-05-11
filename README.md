@@ -12,12 +12,11 @@ The collective operations are implemented using ring and tree algorithms and hav
 
 1. ROCm supported GPUs
 2. ROCm stack installed on the system (HIP runtime & HCC or HIP-Clang)
-3. For building and running the unit tests, chrpath will need to be installed on your machine first. (sudo apt-get install chrpath)
 
 ## Quickstart RCCL Build
 
 RCCL directly depends on HIP runtime, plus the HCC C++ compiler or the HIP-Clang compiler which are part of the ROCm software stack.
-In addition, HC Direct Function call support needs to be present on your machine.  There are binaries for hcc and HIP that need to be installed to get HC Direct Function call support.  These binaries are currently packaged with roc-master, and will be included in ROCm 2.4.
+For ROCm installation instructions, see https://github.com/RadeonOpenCompute/ROCm.
 
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
 
@@ -61,9 +60,12 @@ $ sudo dpkg -i *.deb
 
 RCCL package install requires sudo/root access because it creates a directory called "rccl" under /opt/rocm/. This is an optional step and RCCL can be used directly by including the path containing librccl.so.
 
+## Enabling peer-to-peer transport
+In order to enable peer-to-peer access on machines with PCIe-connected GPUs, the HSA environment variable HSA_FORCE_FINE_GRAIN_PCIE=1 is required to be set, on top of requiring GPUs that support peer-to-peer access and proper large BAR addressing support.
+
 ## Tests
 
-There are unit tests implemented with the Googletest framework in RCCL, which are currently a work-in-progress.  The unit tests require Googletest 1.10 or higher to build and execute properly.
+There are unit tests implemented with the Googletest framework in RCCL.  The unit tests require Googletest 1.10 or higher to build and execute properly (installed with the -d option to install.sh).
 To invoke the unit tests, go to the build folder, then the test subfolder, and execute the appropriate unit test executable(s).
 
 Unit test names are now of the format:
@@ -87,6 +89,6 @@ Please refer to the [Library documentation](https://rccl.readthedocs.io/) for cu
 
 ## Copyright
 
-All source code and accompanying documentation is copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
+All source code and accompanying documentation is copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
 
-All modifications are copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+All modifications are copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
