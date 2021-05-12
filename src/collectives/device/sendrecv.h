@@ -1,6 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -50,14 +49,14 @@ class ncclFunction<ncclFuncSendRecv, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T,
             struct ncclChannel* channel = comm->channels+blockIdx.x;
 
             const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE]/(sizeof(T)*NCCL_STEPS);
+            const int chunkSize = stepSize/SENDRECV_SLICEFACTOR;
 
             int nThreadsSplit = nThreads/2;
             if ((tid < nThreadsSplit) && recvCount >= 0) {
-	      const int chunkSize = args->p2p.recvChunkSize/sizeof(T);
               int peer = (comm->rank-delta+comm->nRanks)%comm->nRanks;
               int nt = nThreadsSplit;
               ncclPrimitives<UNROLL, 1, 1, T, 1, 0, 1, FUNC>
-                prims(tid, nt, &peer, NULL, recvbuff, stepSize, channel, comm, ncclShmem->ptrs, groupRecv);
+                prims(tid, nt, &peer, NULL, recvbuff, stepSize, channel, comm, ncclShmem->ptrs, groupRecv, 1);
 
               if (recvCount == 0) {
                 prims.recv(recvbuff, 0);
@@ -69,11 +68,10 @@ class ncclFunction<ncclFuncSendRecv, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T,
               }
             }
             if ((tid >= nThreadsSplit) && sendCount >= 0) {
-	      const int chunkSize = args->p2p.sendChunkSize/sizeof(T);
               int peer = (comm->rank+delta)%comm->nRanks;
               int nt = nThreads-nThreadsSplit;
               ncclPrimitives<UNROLL, 1, 1, T, 0, 1, 1, FUNC>
-                prims(tid-nThreadsSplit, nt, NULL, &peer, recvbuff, stepSize, channel, comm, ncclShmem->ptrs, groupSend);
+                prims(tid-nThreadsSplit, nt, NULL, &peer, recvbuff, stepSize, channel, comm, ncclShmem->ptrs, groupSend, 1);
 
               if (sendCount == 0) {
                 prims.send(sendbuff, 0);

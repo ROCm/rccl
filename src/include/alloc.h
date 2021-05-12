@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -52,16 +52,11 @@ extern struct allocationTracker allocTracker[];
 
 template <typename T>
 static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem, bool isFineGrain = false) {
-  // Need async stream for P2P pre-connect + CUDA Graph
-  hipStream_t stream;
-  CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
   if (isFineGrain)
     CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
   else
     CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
-  CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
-  CUDACHECK(hipStreamSynchronize(stream));
-  CUDACHECK(hipStreamDestroy(stream));
+  CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
   int dev;
   CUDACHECK(hipGetDevice(&dev));
   if (dev < MAX_ALLOC_TRACK_NGPU) {

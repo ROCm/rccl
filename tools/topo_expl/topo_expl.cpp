@@ -191,9 +191,6 @@ int main(int argc,char* argv[])
     assert(node_model!=0);
     comm[i].topo = node_model->getSystem(i);
     bootstrapAllGather(&comm[i], allGather1Data);
-    // Mark channels as non initialized.
-    for (int c=0; c<MAXCHANNELS; c++) comm[i].channels[c].id = -1;
-    NCCLCHECK(ncclCalloc((uint32_t**)&comm[i].p2pNet, 1));
   }
 
   struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;

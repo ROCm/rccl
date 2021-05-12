@@ -17,7 +17,6 @@ struct allGather1Data_t {
 // AllGather3 - begin
 struct ncclGraphInfo {
   int pattern;
-  int nChannels;
   int sameChannels;
   float speedIntra;
   float speedInter;
@@ -26,8 +25,11 @@ struct ncclGraphInfo {
 };
 
 struct allGather3Data_t{
-  int collNetSupport;
+  int cudaCompCap;
+  int fullCudaCompCap;
+  int nChannels;
   int nc;
+  int alltoallDisable;
   struct ncclGraphInfo tree;
   struct ncclGraphInfo ring;
   struct ncclGraphInfo collNet;

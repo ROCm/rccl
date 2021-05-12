@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -127,7 +127,7 @@ static ncclResult_t scheduleSendRecv(struct ncclComm* comm, int delta, int chann
   info.sendbytes = sendbytes;
   info.recvbytes = recvbytes;
   if (delta == 0 && sendbytes != recvbytes) return ncclInvalidUsage;
-  NCCLCHECK(ncclSetupP2pKernel(&info));
+  NCCLCHECK(ncclSaveP2pKernel(&info));
   return ncclSuccess;
 }
 
@@ -135,7 +135,7 @@ void* ncclAsyncThreadPreconnect(void* args_) {
   struct ncclAsyncArgs* args = (struct ncclAsyncArgs*)args_;
   struct ncclComm* comm = args->coll.comm;
   CUDACHECKTHREAD(hipSetDevice(comm->cudaDev));
-  NCCLCHECKTHREAD(ncclTransportP2pSetup(comm, NULL, NCCL_CONN_IDX_P2P));
+  NCCLCHECKTHREAD(ncclTransportP2pSetup(comm, NULL));
   return args;
 }
 
@@ -165,7 +165,6 @@ ncclResult_t ncclGroupEnd() {
   int doneArray[MAX_ASYNC_OPS];
   for (int i=0; i<ncclGroupIndex; i++) doneArray[i] = 1;
   ncclResult_t ret = ncclGroupError;
-  int usingCudaGraphAll = -1;
   if (ret != ncclSuccess) goto group_cleanup;
 
   /* Launch async ncclCommInitRank */
@@ -308,62 +307,34 @@ sched_delta:
    * prevent some ranks from launching their network threads, which would
    * prevent the NCCL call from completing, blocking the cudaFree call.
    */
-
-  // Check whether we are in cuda graph mode
-  cudaGraph_t* graphs;
-  NCCLCHECK(ncclCalloc(&graphs, ncclGroupIndex));
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
       ncclComm_t comm = args->coll.comm;
-      NCCLCHECKGOTO(ncclGetCudaGraph(comm, graphs+i), ret, group_cleanup);
-      if (usingCudaGraphAll == -1) {
-        usingCudaGraphAll = comm->usingCudaGraph;
-      } else if (usingCudaGraphAll != comm->usingCudaGraph) {
-        WARN("Illegal to have some communicators in graph mode while others not");
-        ret = ncclInvalidUsage;
-        goto group_cleanup;
-      }
+      NCCLCHECKGOTO(ncclSaveCommKernels(comm), ret, group_cleanup);
     }
   }
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
-      ncclComm_t comm = args->coll.comm;
-      NCCLCHECKGOTO(ncclSetupAsyncKernels(comm), ret, group_cleanup);
-    }
-  }
-  for (int i=0; i<ncclGroupIndex; i++) {
-    struct ncclAsyncArgs* args = ncclGroupArgs+i;
-    if (args->funcType == ASYNC_FUNC_COLL) {
-      if (args->coll.comm->userStream == hipStreamDefault/* ||
-          args->coll.comm->userStream == hipStreamPerThread ||
-          args->coll.comm->userStream == hipStreamLegacy*/)
+      if (args->coll.comm->userStream == NULL)
         CUDACHECKGOTO(hipSetDevice(args->coll.comm->cudaDev), ret, end);
-      if (usingCudaGraphAll == 1) {
-        NCCLCHECKGOTO(ncclCudaGraphHostSetup(args->coll.comm, graphs[i]), ret, end);
-      } else {
-        ncclEnqueueHostSetup<0>(args->coll.comm->enqueueInfo);
-      }
-      NCCLCHECKGOTO(ncclLaunchBarrier(args->coll.comm), ret, end);
+      NCCLCHECKGOTO(ncclBarrierEnqueue(args->coll.comm), ret, end);
     }
   }
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
       CUDACHECKGOTO(hipSetDevice(args->coll.comm->cudaDev), ret, end);
-      NCCLCHECKGOTO(ncclLaunchKernel(args->coll.comm), ret, end);
+      NCCLCHECKGOTO(ncclBarrierEnqueueWait(args->coll.comm), ret, end);
     }
   }
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
-      if (args->coll.comm->userStream == hipStreamDefault/* ||
-          args->coll.comm->userStream == hipStreamPerThread ||
-          args->coll.comm->userStream == hipStreamLegacy*/)
+      if (args->coll.comm->userStream == NULL)
         CUDACHECKGOTO(hipSetDevice(args->coll.comm->cudaDev), ret, end);
-      NCCLCHECKGOTO(ncclRecordEvents(args->coll.comm), ret, end);
-      NCCLCHECKGOTO(ncclLaunchReset(args->coll.comm), ret, end);
+      NCCLCHECKGOTO(ncclEnqueueEvents(args->coll.comm), ret, end);
     }
   }
 
@@ -402,7 +373,8 @@ group_cleanup:
 	pthread_mutex_unlock(&state->poolMutex);
         state->nextOps = NULL;
 
-        ncclLaunchReset(comm);
+        comm->myParams->gridDim.x = comm->myParams->blockDim.x = 0;
+        comm->userStreamSet = false;
       }
     }
   }

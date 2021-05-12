@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -15,9 +15,6 @@
 // [/RCCL]
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  typedef void *cudaGraph_t;
-  typedef void *cudaGraphNode_t;
-  #define HIPRT_CB
 #else
 #if CUDART_VERSION < 9000
 struct cudaLaunchParams {
@@ -87,17 +84,16 @@ struct ncclComm {
   int nNodes;
   int localRanks;
 
-  enum { GROUP, PARALLEL, GROUP_GRAPH } launchMode;
+  enum { GROUP, PARALLEL } launchMode;
   hipStream_t userStream;
   bool userStreamSet;
   hipEvent_t doneEvent;
-  hipEvent_t intDoneEvent;
   bool checkPointers;
 
-  // Counter for tracking CUDA launches (P2P and collectives included)
+  // Counter to make sure collectives match (needed for bcast/reduce
+  // where syncs are not symmetric).
   uint64_t opCount;
-  // Collective operation counter
-  uint64_t collOpCount;
+  uint64_t lastOpCount;
 
   // Channels for collectives
   int nChannels;
@@ -105,6 +101,8 @@ struct ncclComm {
   int p2pnChannels;
   int p2pnChannelsPerPeer;
   int p2pChannels[MAXCHANNELS];
+  //Channels for collnet
+  int collNetnChannels;
 
   // Buffer sizes
   int buffSizes[NCCL_NUM_PROTOCOLS];
@@ -159,7 +157,6 @@ struct ncclComm {
   struct ncclInfo* asyncOps;
   int asyncOpCount;
   size_t asyncTotalSize;
-  int lastChannel;
 
   //list of async p2p operation queued in a group semantics
   struct ncclP2Plist* p2pSends;
@@ -172,11 +169,6 @@ struct ncclComm {
   int rootPid;                     // Process ID of root
   // [/RCCL]
 
-  // Store info for cudaGraph
-  int usingCudaGraph; // Only use it during capture time, not launch time
-  struct ncclQueueInfo* enqueueInfo;
-  cudaGraphNode_t lastSetupNode;
-  unsigned long long lastCudaGraphId;
 };
 
 #endif
