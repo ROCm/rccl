@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2017-2021, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -181,9 +181,8 @@ static __device__ void load_parallel(void* dst, void* src, size_t size, int tid)
   for (int o = tid; o < (size/sizeof(int)); o += blockDim.x) d[o] = s[o];
 }
 
-static __device__ bool load_coll(struct ncclWork* localWork, struct ncclWork* hostWork, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
-  __syncthreads();
-  load_parallel(localWork, hostWork, sizeof(struct ncclWork), tid);
+static __device__ bool load_coll(struct ncclWork* localWork, struct ncclWork *hostWork, struct ncclWork* workFifo, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
+  load_parallel(localWork, workFifo, sizeof(struct ncclWork), tid);
   // Check whether the last operation was aborted and make sure all threads exit
   int abort = tid == 0 ? LOAD(comm->abortFlag) : 0;
   exitIfAbortBarrier(abort, abortCount);
@@ -201,7 +200,7 @@ class ncclFunction {
 #define traceColl(fIdx)  \
     uint32_t pos = __atomic_fetch_add(comm->collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
     comm->collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-    comm->collTrace[pos].opCount = w->opCount; \
+    comm->collTrace[pos].opCount = w->op.opCount; \
     comm->collTrace[pos].bid = bid; \
     comm->collTrace[pos].funcIndex = fIdx; \
     if (fIdx == FUNC_INDEX_P2P) { \
@@ -246,8 +245,8 @@ class ncclFunction {
 #define MAXWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 
 struct ncclShmemPtrs {
-  void* srcs[NCCL_MAX_DEV_ARITY+1];
-  void* dsts[NCCL_MAX_DEV_ARITY+1];
+  void* srcs[NCCL_MAX_DIRECT_ARITY+1];
+  void* dsts[NCCL_MAX_DIRECT_ARITY+1];
   uint64_t barrier;
   uint64_t barrier_next[MAXWARPS];
 };
@@ -287,7 +286,6 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   struct ncclDevComm* comm = first.comm;
   struct ncclChannel* channel = comm->channels+bid;
   struct ncclWorkElem* w = NULL;
-  uint16_t index = first.index;
   bool firstLaunch = true;
 
   if (bid == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
@@ -295,7 +293,8 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   while (1) {
     if (w == NULL) {
       w = shmem.localWork.elems;
-      if (!load_coll(&shmem.localWork, channel->workFifo+index, tid, comm, &abortCount)) {
+      __syncthreads();
+      if (!load_coll(&shmem.localWork, channel->workFifo+channel->index, channel->workFifoDev+channel->index, tid, comm, &abortCount)) {
         if (COLLTRACE && tid == 0) traceAbort(0xffff);
         return;
       }
@@ -315,7 +314,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
         NCCL_CALL_FUNCTIONS(w);
       }
     }
-    index = (index+1) % NCCL_MAX_OPS;
+    if (tid == 0) channel->index = (channel->index+1) % NCCL_MAX_OPS;
     if (w->active == 2) {
       if (COLLTRACE && tid == 0) traceCollEnd(0xffff);
       return;

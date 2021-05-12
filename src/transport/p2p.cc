@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2016-2021, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -165,17 +165,12 @@ static ncclResult_t p2pMap(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* pee
 
 /* Send: Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
-    struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId) {
-
+    struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
   struct p2pSendResources* resources;
   NCCLCHECK(ncclCalloc(&resources, 1));
   send->transportResources = resources;
   int useRead, intermediateRank;
   NCCLCHECK(p2pGetInfo(comm->topo, myInfo, peerInfo, &useRead, &intermediateRank));
-  int sendSize = sizeof(struct ncclSendMem);
-  // For P2P Read the SIMPLE buffer is tagged on the end of the ncclSendMem structure
-  if (useRead) sendSize += send->comm->buffSizes[NCCL_PROTO_SIMPLE];
-  ALIGN_SIZE(sendSize, CUDA_IPC_MIN);
 
   resources->next_hdp_reg = 0;
   uint32_t linktype, hops;
@@ -189,8 +184,14 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   }
 
   struct p2pConnectInfo info;
-  info.read = useRead;
+  // For CollNet, we use write for scatter-reduce (conn 1), read for broadcast-gather (conn 0)
+  info.read = (connIndex == 0) ? useRead : 0;
   const char* useReadStr = info.read ? "/read" : "";
+
+  int sendSize = sizeof(struct ncclSendMem);
+  // For P2P Read the SIMPLE buffer is tagged on the end of the ncclSendMem structure
+  if (info.read) sendSize += send->comm->buffSizes[NCCL_PROTO_SIMPLE];
+  ALIGN_SIZE(sendSize, CUDA_IPC_MIN);
 
   resources->remoteId = -1;
   resources->bootstrap = comm->bootstrap;
@@ -198,7 +199,7 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     NCCLCHECK(ncclCudaCalloc((char**)&info.directPtr, sendSize, true));
     info.rank = myInfo->rank;
     if (myInfo->pidHash == peerInfo->pidHash) {
-      if (useRead == 0) send->conn.direct |= NCCL_DIRECT_GPU;
+      if (info.read == 0) send->conn.direct |= NCCL_DIRECT_GPU;
       INFO(NCCL_INIT|NCCL_P2P, "Channel %02d : %d[%lx] -> %d[%lx] via P2P/direct pointer%s",
           channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr);
     } else {
@@ -224,20 +225,21 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
 
 /* Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
-    struct ncclConnect* connectInfo, struct ncclConnector * recv, int channelId) {
-
+    struct ncclConnect* connectInfo, struct ncclConnector * recv, int channelId, int connIndex) {
   struct p2pRecvResources* resources;
   NCCLCHECK(ncclCalloc(&resources, 1));
   recv->transportResources = resources;
   int useRead, intermediateRank;
   NCCLCHECK(p2pGetInfo(comm->topo, myInfo, peerInfo, &useRead, &intermediateRank));
-  int recvSize = offsetof(struct ncclRecvMem, buff);
-  // For P2P Read the SIMPLE buffer is tagged on the end of the ncclSendMem structure
-  for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) if (!(useRead && p == NCCL_PROTO_SIMPLE)) recvSize += recv->comm->buffSizes[p];
-  ALIGN_SIZE(recvSize, CUDA_IPC_MIN);
 
   struct p2pConnectInfo info;
-  info.read = useRead;
+  // For CollNet, we use write for scatter-reduce (conn 1), read for broadcast-gather (conn 0)
+  info.read = (connIndex == 0) ? useRead : 0;
+
+  int recvSize = offsetof(struct ncclRecvMem, buff);
+  // For P2P Read the SIMPLE buffer is tagged on the end of the ncclSendMem structure
+  for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) if (!(info.read && p == NCCL_PROTO_SIMPLE)) recvSize += recv->comm->buffSizes[p];
+  ALIGN_SIZE(recvSize, CUDA_IPC_MIN);
 
   resources->remoteId = -1;
   resources->bootstrap = comm->bootstrap;
@@ -245,7 +247,7 @@ ncclResult_t p2pRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     NCCLCHECK(ncclCudaCalloc((char**)&info.directPtr, recvSize, true));
     info.rank = myInfo->rank;
     if (myInfo->pidHash == peerInfo->pidHash) {
-      if (useRead == 0) recv->conn.direct |= NCCL_DIRECT_GPU;
+      if (info.read == 0) recv->conn.direct |= NCCL_DIRECT_GPU;
     } else {
       CUDACHECK(hipIpcGetMemHandle(&info.devIpc, info.directPtr));
     }

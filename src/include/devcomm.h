@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -125,8 +125,9 @@ struct ncclConnInfo {
 struct ncclConnector {
   int connected;
   struct ncclProxyArgs *proxyAppend;
+  struct ncclProxyArgs **proxyAppendPtr;
   struct ncclTransportComm* transportComm;
-  void* transportResources; // Host-side resources
+  void* transportResources;
   struct ncclConnInfo conn;
   struct ncclComm *comm;
 };
@@ -151,11 +152,23 @@ struct ncclTree {
   int down[NCCL_MAX_TREE_ARITY];
 };
 
+#define NCCL_MAX_DIRECT_ARITY 7
+struct ncclDirect {
+  int depth;
+  int out;
+  int nHeads;
+  int headRank;
+  int shift;
+  int up[NCCL_MAX_DIRECT_ARITY];
+  int down[NCCL_MAX_DIRECT_ARITY];
+};
+
+#define NCCL_CONN_IDX_P2P (*(comm->p2pNet)*2)
+#define NCCL_CONN_IDX_P2P_NET 2
+#define NCCL_MAX_CONNS 3
 struct ncclPeer {
-  struct ncclConnector send;
-  struct ncclConnector recv;
-  struct ncclConnector p2pSend;
-  struct ncclConnector p2pRecv;
+  struct ncclConnector send[NCCL_MAX_CONNS];
+  struct ncclConnector recv[NCCL_MAX_CONNS];
 };
 
 struct ncclDevComm;
@@ -179,7 +192,6 @@ struct ncclWorkElem {
   const void * sendbuff;
   void * recvbuff;
 
-  uint64_t opCount;
   // Op-specific fields.
   union {
     struct {
@@ -192,9 +204,15 @@ struct ncclWorkElem {
     struct {
       size_t sendCount;
       size_t recvCount;
+      int sendChunkSize;
+      int recvChunkSize;
       int32_t delta;
       uint16_t nThreads;
     } p2p;
+    struct {
+      uint16_t padding[15];
+      uint16_t opCount;
+    } op;
     // [RCCL] Clique-based arguments
     //        NOTE: Follows same field structure as coll
     //              because nChannels is accessed from "coll" struct.
@@ -206,7 +224,7 @@ struct ncclWorkElem {
       uint8_t nChannels;
     } clique;
     // [/RCCL]
-    uint64_t align[3];
+    uint64_t align[4];
   };
 };
 struct ncclWork {
@@ -219,7 +237,7 @@ struct ncclChannel {
     struct {
       struct ncclRing ring;
       struct ncclTree tree;
-      struct ncclTree collTree;
+      struct ncclDirect collTree;
 
       int id;
 
@@ -241,6 +259,12 @@ struct ncclChannel {
       float bw_cumulative;
       int bw_count;
 #endif
+      uint16_t index;        // Only used by GPU
+
+      // GDRCOPY support
+      struct ncclWork* workFifoGdr;
+      struct ncclWork* workFifoDev;
+      void* gdrMemDesc;
     };
     int data[0x80];
   };

@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -53,11 +53,12 @@ static ncclResult_t ncclGpuGdrSupport(int* gdrSupport) {
     ncclNetHandle_t handle;
     void* gpuPtr = NULL;
     void* mHandle = NULL;
-    NCCLCHECK(ncclNetListen(dev, &handle, &lComm));
-    NCCLCHECK(ncclNetConnect(dev, &handle, &sComm));
-    NCCLCHECK(ncclNetAccept(lComm, &rComm));
-    CUDACHECK(hipExtMallocWithFlags(&gpuPtr, GPU_BUF_SIZE, hipDeviceMallocFinegrained));
+    ncclResult_t ret;
     ncclDebugNoWarn = NCCL_NET;
+    NCCLCHECKGOTO(ncclNetListen(dev, &handle, &lComm), ret, cleanup1);
+    NCCLCHECKGOTO(ncclNetConnect(dev, &handle, &sComm), ret, cleanup2);
+    NCCLCHECKGOTO(ncclNetAccept(lComm, &rComm), ret, cleanup3);
+    CUDACHECKGOTO(hipMalloc(&gpuPtr, GPU_BUF_SIZE), ret, cleanup4);
     if (ncclNetRegMr(sComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle) == ncclSuccess) {
       NCCLCHECK(ncclNetDeregMr(sComm, mHandle));
       NCCLCHECK(ncclNetRegMr(rComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle));
@@ -66,9 +67,13 @@ static ncclResult_t ncclGpuGdrSupport(int* gdrSupport) {
     }
     ncclDebugNoWarn = 0;
     CUDACHECK(hipFree(gpuPtr));
+cleanup4:
     NCCLCHECK(ncclNetCloseRecv(rComm));
+cleanup3:
     NCCLCHECK(ncclNetCloseSend(sComm));
+cleanup2:
     NCCLCHECK(ncclNetCloseListen(lComm));
+cleanup1:
     break;
   }
   return ncclSuccess;

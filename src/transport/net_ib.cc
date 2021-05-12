@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2016-2021, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -649,22 +649,22 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, int size, void* mhandle, vo
   NCCLCHECK(ncclIbGetRequest(&comm->verbs, &req));
   req->size = size;
 
-  struct ibv_send_wr wr;
-  memset(&wr, 0, sizeof(wr));
-  wr.wr_id = (uint64_t)req;
+  struct ibv_send_wr wr[2];
+  memset(&wr[0], 0, sizeof(wr[0]));
+  wr[0].wr_id = (uint64_t)req;
 
   struct ibv_sge sge;
   if (size == 0) {
-    wr.sg_list = NULL;
-    wr.num_sge = 0;
+    wr[0].sg_list = NULL;
+    wr[0].num_sge = 0;
   } else {
     sge.addr=(uintptr_t)data; sge.length=(unsigned int)size; sge.lkey=mr->lkey;
-    wr.sg_list = &sge;
-    wr.num_sge = 1;
+    wr[0].sg_list = &sge;
+    wr[0].num_sge = 1;
   }
 #if USE_RDMA_WRITE == 0
-  wr.opcode = IBV_WR_SEND;
-  wr.send_flags = IBV_SEND_SIGNALED;
+  wr[0].opcode = IBV_WR_SEND;
+  wr[0].send_flags = IBV_SEND_SIGNALED;
 #else
   __sync_synchronize(); // order the readyPtr load against rkey load below
   // Sanity checks to catch user collective call count/size mismatches
@@ -674,15 +674,11 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, int size, void* mhandle, vo
         size, LOAD(&slot->size), LOAD(&slot->addr), LOAD(&slot->rkey), LOAD(&slot->seq), comm->fifoHead);
     return ncclInternalError;
   }
-  int useAr = 0;
-  if (size > ncclParamIbArThreshold()) {
-    useAr = 1;
-  }
-  wr.opcode = useAr ? IBV_WR_RDMA_WRITE : IBV_WR_RDMA_WRITE_WITH_IMM;
-  wr.send_flags = useAr ? 0 : IBV_SEND_SIGNALED;
-  wr.wr.rdma.remote_addr = LOAD(&slot->addr);
-  wr.wr.rdma.rkey = LOAD(&slot->rkey);
-  wr.imm_data = size; // Send the message size via imm_data
+  wr[0].opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
+  wr[0].send_flags = IBV_SEND_SIGNALED;
+  wr[0].wr.rdma.remote_addr = slot->addr;
+  wr[0].wr.rdma.rkey = slot->rkey;
+  wr[0].imm_data = size; // Send the message size via imm_data
   __sync_synchronize();
 #endif
   // We must clear slot->ready, but reset other fields to aid
@@ -692,21 +688,29 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, int size, void* mhandle, vo
   STORE(&slot->rkey, 0); STORE(&slot->size, 0); STORE(&slot->seq, 0);
   comm->fifoHead++;
 
-  struct ibv_send_wr* bad_wr;
-  NCCLCHECK(wrap_ibv_post_send(comm->qp, &wr, &bad_wr));
 
 #if USE_RDMA_WRITE
   // When using adaptive routing, send the bulk of the data first as an
   // RDMA_WRITE, then a 0-byte RDMA_WRITE_WITH_IMM to trigger a remote
   // completion.
-  if (useAr) {
-    wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
-    wr.sg_list = NULL;
-    wr.num_sge = 0;
-    wr.send_flags |= IBV_SEND_SIGNALED;
-    NCCLCHECK(wrap_ibv_post_send(comm->qp, &wr, &bad_wr));
+  if (size > ncclParamIbArThreshold()) {
+    memset(&wr[1], 0, sizeof(wr[1]));
+    memcpy(&wr[1], &wr[0], sizeof(wr[0]));
+    wr[1].sg_list = NULL;
+    wr[1].num_sge = 0;
+    wr[0].next = &wr[1];
+
+    wr[0].opcode = IBV_WR_RDMA_WRITE;
+    wr[1].opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
+
+    wr[0].send_flags = 0;
+    wr[1].send_flags = IBV_SEND_SIGNALED;
   }
 #endif
+
+  struct ibv_send_wr* bad_wr;
+  NCCLCHECK(wrap_ibv_post_send(comm->qp, wr, &bad_wr));
+
   *request = req;
   return ncclSuccess;
 }
