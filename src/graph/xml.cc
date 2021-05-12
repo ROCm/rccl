@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -17,6 +17,10 @@
 #include "core.h"
 #include "nvmlwrap.h"
 #include "xml.h"
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
+#endif
 
 /*******************/
 /* XML File Parser */
@@ -477,26 +481,6 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
   if (index == -1) {
     if (path == NULL) NCCLCHECK(getPciPath(busId, &path));
     NCCLCHECK(ncclTopoSetAttrFromSys(pciNode, path, "class", "class"));
-  }
-  NCCLCHECK(xmlGetAttrIndex(pciNode, "vendor", &index));
-  if (index == -1) {
-    if (path == NULL) NCCLCHECK(getPciPath(busId, &path));
-    NCCLCHECK(ncclTopoSetAttrFromSys(pciNode, path, "vendor", "vendor"));
-  }
-  NCCLCHECK(xmlGetAttrIndex(pciNode, "device", &index));
-  if (index == -1) {
-    if (path == NULL) NCCLCHECK(getPciPath(busId, &path));
-    NCCLCHECK(ncclTopoSetAttrFromSys(pciNode, path, "device", "device"));
-  }
-  NCCLCHECK(xmlGetAttrIndex(pciNode, "subsystem_vendor", &index));
-  if (index == -1) {
-    if (path == NULL) NCCLCHECK(getPciPath(busId, &path));
-    NCCLCHECK(ncclTopoSetAttrFromSys(pciNode, path, "subsystem_vendor", "subsystem_vendor"));
-  }
-  NCCLCHECK(xmlGetAttrIndex(pciNode, "subsystem_device", &index));
-  if (index == -1) {
-    if (path == NULL) NCCLCHECK(getPciPath(busId, &path));
-    NCCLCHECK(ncclTopoSetAttrFromSys(pciNode, path, "subsystem_device", "subsystem_device"));
   }
   NCCLCHECK(xmlGetAttrIndex(pciNode, "link_speed", &index));
   if (index == -1) {

@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -26,15 +26,6 @@
         res = ncclUnhandledCudaError;                       \
         goto label;                                         \
     }                                                       \
-} while(false)
-
-// Report failure but clear error and continue
-#define CUDACHECKIGNORE(cmd) do {  \
-    hipError_t err = cmd;         \
-    if( err != hipSuccess ) {     \
-        INFO(NCCL_ALL,"%s:%d Cuda failure '%s'", __FILE__, __LINE__, hipGetErrorString(err)); \
-        (void) hipGetLastError(); \
-    }                              \
 } while(false)
 
 #include <errno.h>

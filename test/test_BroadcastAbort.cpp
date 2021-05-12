@@ -41,7 +41,7 @@ namespace CorrectnessTests
         hipStream_t stream;
         HIPCHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
         struct ncclChannel* channel = comm->channels;
-        uint64_t **p_dev_head = (uint64_t **)((uint8_t*)(channel->devPeers + channel->ring.next) + offsetof(struct ncclPeer, send[0].conn.head));
+        uint64_t **p_dev_head = (uint64_t **)((uint8_t*)(channel->devPeers + channel->ring.next) + offsetof(struct ncclPeer, send.conn.head));
         uint64_t *real_head, *fake_head, *fake_h;
 
         // get original head
