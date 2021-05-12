@@ -37,6 +37,4 @@ static long log2i(long n) {
  return l;
 }
 
-int busIdToCudaDev(int64_t busId);
-
 #endif

@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -17,7 +17,7 @@
 #define NCCL_SUFFIX "${NCCL_SUFFIX}"
 
 #define NCCL_VERSION_CODE ${NCCL_VERSION}
-#define NCCL_VERSION(X,Y,Z) ((X) * 1000 + (Y) * 100 + (Z))
+#define NCCL_VERSION(X,Y,Z) (((X) >= 2 && (Y) >= 9) ? (X) * 10000 + (Y) * 100 + (Z) : (X) * 1000 + (Y) * 100 + (Z))
 
 #define RCCL_BFLOAT16 1
 #define RCCL_GATHER_SCATTER 1
