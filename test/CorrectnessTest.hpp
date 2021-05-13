@@ -113,20 +113,21 @@ namespace CorrectnessTests
             inPlace     = inPlace_;
             function    = func_;
 
+            inputs.resize(numDevices);
+            outputs.resize(numDevices);
+            expected.resize(numDevices);
+
             for (int i = 0; i < numDevices_; i++)
             {
-                void* ptr = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-                inputs.push_back(ptr);
+                inputs[i] = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
             }
             for (int i = 0; i < numDevices_; i++)
             {
-                void* ptr = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-                outputs.push_back(ptr);
+                outputs[i] = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
             }
             for (int i = 0; i < numDevices_; i++)
             {
-                void* ptr = (void*)mmap(NULL, NumBytes(ncclOutputBuffer), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-                expected.push_back(ptr);
+                expected[i] = (void*)mmap(NULL, NumBytes(ncclOutputBuffer), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
             }
         }
 
@@ -195,6 +196,19 @@ namespace CorrectnessTests
         {
             if (!inPlace) hipFree(outputs[rank]);
             hipFree(inputs[rank]);
+        }
+
+        void ReleaseRootProcess()
+        {
+            for (int i = 0; i < numDevices; i++)
+            {
+                munmap(inputs[i], sizeof(void*));
+                munmap(outputs[i], sizeof(void*));
+                munmap(expected[i], NumBytes(ncclOutputBuffer));
+            }
+            inputs.clear();
+            outputs.clear();
+            expected.clear();
         }
 
         // Creates a dataset by pointing to an existing dataset
