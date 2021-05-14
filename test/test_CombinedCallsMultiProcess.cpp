@@ -49,6 +49,7 @@ namespace CorrectnessTests
 
         for (int i = 0; i < datasets.size(); i++)
         {
+            datasets[i]->ReleaseRootProcess();
             munmap(datasets[i], sizeof(Dataset));
         }
     }

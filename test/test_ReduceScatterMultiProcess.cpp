@@ -31,6 +31,7 @@ namespace CorrectnessTests
         }
 
         ValidateProcesses(pids);
+        dataset->ReleaseRootProcess();
     }
 
     INSTANTIATE_TEST_SUITE_P(ReduceScatterMultiProcessCorrectnessSweep,

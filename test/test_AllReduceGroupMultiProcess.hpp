@@ -36,7 +36,7 @@ namespace CorrectnessTests
             }
 
             int numProcesses = numDevices / ranks.size();
-            Barrier barrier(process, numProcesses, std::atoi(getenv("NCCL_COMM_ID")));
+            Barrier barrier(process, numProcesses, StripPortNumberFromCommId(std::string(getenv("NCCL_COMM_ID"))));
 
             for (int i = 0; i < ranks.size(); i++)
             {

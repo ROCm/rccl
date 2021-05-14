@@ -34,7 +34,7 @@ namespace CorrectnessTests
                 return;
             }
 
-            Barrier barrier(rank, numDevices, std::atoi(getenv("NCCL_COMM_ID")));
+            Barrier barrier(rank, numDevices, StripPortNumberFromCommId(std::string(getenv("NCCL_COMM_ID"))));
 
             // Test each possible root
             for (int root = 0; root < numDevices; root++)

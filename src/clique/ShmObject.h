@@ -72,17 +72,7 @@ ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid)
   {
     if (m_alloc)
     {
-      if (m_rank == 0)
-      {
-        std::string tmpFileName = "/tmp/" + m_shmName;
-        remove(tmpFileName.c_str());
-      }
-      int retVal = shm_unlink(m_shmName.c_str());
-      if (retVal == -1 && errno != ENOENT)
-      {
-        WARN("Call to shm_unlink in ShmObject failed : %s", strerror(errno));
-        return ncclSystemError;
-      }
+      SYSCHECK(munmap(m_shmPtr, m_shmSize), "munmap");
     }
     return ncclSuccess;
   }
@@ -158,22 +148,42 @@ ncclResult_t ShmObject<T>::Open()
       {
         NCCLCHECK(BroadcastAndCloseMessageQueue(mq_desc, false));
         WARN("Call to ShmObject::Open in root rank failed : %s", strerror(errno));
+        if (resultSetup == ncclSuccess)
+        {
+            Close();
+        }
         return ncclSystemError;
       }
+      ncclResult_t result;
+
+      // Broadcast two sets of messages: one set is consumed by the other ranks to acknowledge root rank
+      // has successfully opened shared memory; second set is consumed by the other ranks to indicate
+      // that they have successfully opened shared memory and root rank can now unlink shared memory
+      NCCLCHECK(BroadcastMessage(mq_desc, true));
       NCCLCHECK(BroadcastAndCloseMessageQueue(mq_desc, true));
+
+      int retVal = shm_unlink(m_shmName.c_str());
+      if (retVal == -1 && errno != ENOENT)
+      {
+        WARN("Call to shm_unlink in ShmObject failed : %s", strerror(errno));
+        return ncclSystemError;
+      }
     }
     else
     {
       char msg_text[1];
       ncclResult_t res;
       NCCLCHECKGOTO(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)), res, dropback);
-      NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
+
       if (msg_text[0] == 'P')
       {
         NCCLCHECK(shmSetup(m_shmName.c_str(), m_shmSize, &shmFd, (void**)&m_shmPtr, 0));
+        NCCLCHECKGOTO(MsgQueueRecv(mq_desc, &msg_text[0], sizeof(msg_text)), res, dropback);
+        NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
       }
       else
       {
+        NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
         WARN("Call to shm_open from non-root rank in ShmObject failed : %s", strerror(errno));
         return ncclSystemError;
       }
@@ -188,8 +198,10 @@ ncclResult_t ShmObject<T>::Open()
   return ncclSuccess;
 
 dropback:
-  WARN("Rank %d unable to receive message from root.  Closing message queue.", m_rank);
+  WARN("Rank %d failed ShmObject::Open().  Closing message queue.", m_rank);
   NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));
+  SYSCHECK(shm_unlink(m_shmName.c_str()), "shm_unlink");
+  NCCLCHECK(Close());
   return ncclSystemError;
 }
 

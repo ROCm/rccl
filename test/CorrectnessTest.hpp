@@ -26,8 +26,7 @@
 #include "rccl.h"
 #include "../include/rccl_bfloat16.h"
 
-#define HIP_CALL(x) ASSERT_EQ(x, hipSuccess)
-#define NCCL_CALL(x) ASSERT_EQ(x, ncclSuccess)
+#include "TestChecks.hpp"
 
 #define MAX_ENV_TOKENS 16
 
@@ -114,20 +113,21 @@ namespace CorrectnessTests
             inPlace     = inPlace_;
             function    = func_;
 
+            inputs.resize(numDevices);
+            outputs.resize(numDevices);
+            expected.resize(numDevices);
+
             for (int i = 0; i < numDevices_; i++)
             {
-                void* ptr = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-                inputs.push_back(ptr);
+                inputs[i] = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
             }
             for (int i = 0; i < numDevices_; i++)
             {
-                void* ptr = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-                outputs.push_back(ptr);
+                outputs[i] = (void*)mmap(NULL, sizeof(void*), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
             }
             for (int i = 0; i < numDevices_; i++)
             {
-                void* ptr = (void*)mmap(NULL, NumBytes(ncclOutputBuffer), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-                expected.push_back(ptr);
+                expected[i] = (void*)mmap(NULL, NumBytes(ncclOutputBuffer), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
             }
         }
 
@@ -198,6 +198,19 @@ namespace CorrectnessTests
             hipFree(inputs[rank]);
         }
 
+        void ReleaseRootProcess()
+        {
+            for (int i = 0; i < numDevices; i++)
+            {
+                munmap(inputs[i], sizeof(void*));
+                munmap(outputs[i], sizeof(void*));
+                munmap(expected[i], NumBytes(ncclOutputBuffer));
+            }
+            inputs.clear();
+            outputs.clear();
+            expected.clear();
+        }
+
         // Creates a dataset by pointing to an existing dataset
         // Primarily to allow for testing with different starting byte-alignments
         void ExtractSubDataset(size_t const startElement,
@@ -255,35 +268,52 @@ namespace CorrectnessTests
 
             if (rank == 0)
             {
-                InitSemaphore(smSize, mutexName, 1, mutex);
-                InitSemaphore(smSize, turnstile1Name, 0, turnstile1);
-                InitSemaphore(smSize, turnstile2Name, 0, turnstile2);
-                OpenSharedMemoryVariable(sizeof(int), counterName, true, counter);
-                OpenSharedMemoryVariable(smSize, tinyBarrierName, true, tinyBarrier);
+                NCCLCHECK_BARRIER_TEST(InitSemaphore(smSize, mutexName, 1, mutex), "InitSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(InitSemaphore(smSize, turnstile1Name, 0, turnstile1), "InitSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(InitSemaphore(smSize, turnstile2Name, 0, turnstile2), "InitSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(sizeof(int), counterName, true, counter), "OpenSharedMemoryVariable", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(smSize, tinyBarrierName, true, tinyBarrier), "OpenSharedMemoryVariable", rank);
             }
             else
             {
-                OpenSharedMemoryVariable(smSize, tinyBarrierName, false, tinyBarrier);
-                OpenSemaphore(smSize, mutexName, mutex);
-                OpenSemaphore(smSize, turnstile1Name, turnstile1);
-                OpenSemaphore(smSize, turnstile2Name, turnstile2);
-                OpenSharedMemoryVariable(sizeof(int), counterName, false, counter);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(smSize, tinyBarrierName, false, tinyBarrier), "OpenSharedMemoryVariable", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSemaphore(smSize, mutexName, mutex), "OpenSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSemaphore(smSize, turnstile1Name, turnstile1), "OpenSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSemaphore(smSize, turnstile2Name, turnstile2), "OpenSemaphore", rank);
+                NCCLCHECK_BARRIER_TEST(OpenSharedMemoryVariable(sizeof(int), counterName, false, counter), "OpenSharedMemoryVariable", rank);
             }
+            ncclResult_t res = Wait(20);
+            if (res != ncclSuccess)
+            {
+                printf("Rank %d timed out during Barrier initialization.\n", rank);
+            }
+            ClearShmFiles(uniqueId);
         }
 
+        // Wait with no timeout
         void Wait()
         {
             Part1();
             Part2();
         }
 
+        // Wait with timeout option
+        ncclResult_t Wait(int timeoutSecs)
+        {
+            NCCLCHECK_TEST(Part1(timeoutSecs), "Part 1 of Barrier Wait");
+            NCCLCHECK_TEST(Part2(timeoutSecs), "Part 2 of Barrier Wait");
+
+            return ncclSuccess;
+        }
+
         ~Barrier()
         {
-            shm_unlink(mutexName.c_str());
-            shm_unlink(turnstile1Name.c_str());
-            shm_unlink(turnstile2Name.c_str());
-            shm_unlink(counterName.c_str());
-            shm_unlink(tinyBarrierName.c_str());
+            size_t smSize = sizeof(sem_t);
+            munmap(mutex, smSize);
+            munmap(turnstile1, smSize);
+            munmap(turnstile2, smSize);
+            munmap(tinyBarrier, smSize);
+            munmap(counter, sizeof(int));
         }
 
         static void ClearShmFiles(int uniqueId)
@@ -311,38 +341,59 @@ namespace CorrectnessTests
         }
     private:
         template <typename T>
-        void OpenSharedMemoryVariable(size_t size, std::string name, bool create, T& val)
+        ncclResult_t OpenSharedMemoryVariable(size_t size, std::string name, bool create, T& val)
         {
             int protection = PROT_READ | PROT_WRITE;
             int visibility = MAP_SHARED;
             int fd;
 
+            std::string msg_open("shm_open ");
+            msg_open.append(name);
             if (create)
             {
-                fd = shm_open(name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-                ftruncate(fd, size);
+                SYSCHECKVAL_TEST(shm_open(name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR), msg_open.c_str(), fd);
+                SYSCHECK_GOTO_TEST(ftruncate(fd, size), "ftruncate", dropback);
             }
             else
             {
                 do
                 {
-                    // TODO: Error checking so we don't just infinite loop
                     fd = shm_open(name.c_str(), O_RDWR, S_IRUSR | S_IWUSR);
                 } while (fd == -1 && errno == ENOENT);
+                if (fd == -1 && errno != ENOENT)
+                {
+                    printf("Call to %s failed: %s\n", msg_open.c_str(), strerror(errno));
+                    return ncclSystemError;
+                }
             }
             val = (T)mmap(NULL, size, protection, visibility, fd, 0);
             close(fd);
+            if (val == MAP_FAILED)
+            {
+                goto dropback;
+            }
+
+            return ncclSuccess;
+dropback:
+            std::string msg_unlink("shm_unlink ");
+            msg_unlink.append(name);
+            SYSCHECK_TEST(shm_unlink(name.c_str()), "shm_unlink");
+            return ncclSystemError;
         }
 
-        void InitSemaphore(size_t size, std::string name, int semValue, sem_t*& semaphore)
+        ncclResult_t InitSemaphore(size_t size, std::string name, int semValue, sem_t*& semaphore)
         {
-            OpenSharedMemoryVariable<sem_t*>(size, name, true, semaphore);
-            sem_init(semaphore, 1, semValue);
+            ncclResult_t res = OpenSharedMemoryVariable<sem_t*>(size, name, true, semaphore);
+            std::string msg_init("sem_init ");
+            msg_init.append(name);
+            SYSCHECK_TEST(sem_init(semaphore, 1, semValue), "sem_init");
+
+            return res;
         }
 
-        void OpenSemaphore(size_t size, std::string name, sem_t*& semaphore)
+        ncclResult_t OpenSemaphore(size_t size, std::string name, sem_t*& semaphore)
         {
-            OpenSharedMemoryVariable<sem_t*>(size, name, false, semaphore);
+            return OpenSharedMemoryVariable<sem_t*>(size, name, false, semaphore);
         }
 
         void Part1()
@@ -365,6 +416,40 @@ namespace CorrectnessTests
             }
             sem_post(mutex);
             sem_wait(turnstile2);
+        }
+
+        ncclResult_t Part1(int timeoutSecs)
+        {
+            struct timespec ts;
+            SYSCHECK_TEST(clock_gettime(CLOCK_REALTIME, &ts), "clock_gettime 1");
+            ts.tv_sec += timeoutSecs;
+
+            SYSCHECK_TEST(sem_timedwait(mutex, &ts), "sem_timedwait 1-1");
+            if (++(*counter) == numRanks)
+            {
+                SYSCHECK_TEST(sem_post_batch(turnstile1, numRanks), "sem_post_batch 1");
+            }
+            SYSCHECK_TEST(sem_post(mutex), "sem_post 1");
+            SYSCHECK_TEST(sem_timedwait(turnstile1, &ts), "sem_timedwait 1-2");
+
+            return ncclSuccess;
+        }
+
+        ncclResult_t Part2(int timeoutSecs)
+        {
+            struct timespec ts;
+            SYSCHECK_TEST(clock_gettime(CLOCK_REALTIME, &ts), "clock_gettime 2");
+            ts.tv_sec += timeoutSecs;
+
+            SYSCHECK_TEST(sem_timedwait(mutex, &ts), "sem_timedwait 2");
+            if (--(*counter) == 0)
+            {
+                SYSCHECK_TEST(sem_post_batch(turnstile2, numRanks), "sem_post_batch 2");
+            }
+            SYSCHECK_TEST(sem_post(mutex), "sem_post 2");
+            SYSCHECK_TEST(sem_timedwait(turnstile2, &ts), "sem_timedwait 2-2");
+
+            return ncclSuccess;
         }
 
         int sem_post_batch(sem_t*& sem, int n)
@@ -739,7 +824,7 @@ namespace CorrectnessTests
             comms.resize(numDevices);
             streams.resize(numDevices);
             dataset = (Dataset*)mmap(NULL, sizeof(Dataset), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-            Barrier::ClearShmFiles(std::atoi(getenv("NCCL_COMM_ID")));
+            Barrier::ClearShmFiles(StripPortNumberFromCommId(std::string(getenv("NCCL_COMM_ID"))));
         }
 
         void TearDown() override
@@ -975,12 +1060,13 @@ namespace CorrectnessTests
         {
             int numProcesses = pids.size();
             int status[numProcesses];
+
             for (int i = 0; i < numProcesses; i++)
             {
                 waitpid(pids[i], &status[i], 0);
 
-                ASSERT_NE(WIFEXITED(status[i]), 0) << "[ERROR] Child process " << i << " did not exit cleanly.";
-                ASSERT_EQ(WEXITSTATUS(status[i]), EXIT_SUCCESS) << "[ERROR] Child process " << i << " had a test failure.";
+                EXPECT_NE(WIFEXITED(status[i]), 0) << "[ERROR] Child process " << i << " did not exit cleanly.";
+                EXPECT_EQ(WEXITSTATUS(status[i]), EXIT_SUCCESS) << "[ERROR] Child process " << i << " had a test failure.";
             }
         }
 
@@ -994,6 +1080,13 @@ namespace CorrectnessTests
             {
                 exit(EXIT_FAILURE);
             }
+        }
+
+        int StripPortNumberFromCommId(std::string commId)
+        {
+            size_t pos = commId.find(":");
+            std::string portNumString = commId.substr(pos + 1);
+            return std::atoi(portNumString.c_str());
         }
 
         Dataset* dataset;
