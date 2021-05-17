@@ -166,6 +166,7 @@ ncclResult_t ncclGroupEnd() {
   for (int i=0; i<ncclGroupIndex; i++) doneArray[i] = 1;
   ncclResult_t ret = ncclGroupError;
   int usingCudaGraphAll = -1;
+  cudaGraph_t* graphs = NULL;
   if (ret != ncclSuccess) goto group_cleanup;
 
   /* Launch async ncclCommInitRank */
@@ -310,7 +311,6 @@ sched_delta:
    */
 
   // Check whether we are in cuda graph mode
-  cudaGraph_t* graphs;
   NCCLCHECK(ncclCalloc(&graphs, ncclGroupIndex));
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
@@ -410,5 +410,6 @@ end:
   ncclGroupError = ncclSuccess;
   ncclGroupIndex = 0;
   CUDACHECK(hipSetDevice(savedDev)); // do other clean-ups first before calling hipSetDevice, because this call can fail too
+  if (graphs) free(graphs);
   return ret;
 }
