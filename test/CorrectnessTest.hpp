@@ -803,9 +803,9 @@ dropback:
 
             envString = 0;
             numTokens = 0;
+            setenv("RCCL_TEST_ENV_VARS", "ENABLE", 1);
             if (strcmp(envVals, "")) {
                 // enable RCCL env vars testing
-                setenv("RCCL_TEST_ENV_VARS", "ENABLE", 1);
                 envString = strdup(envVals);
                 tokens[numTokens] = strtok(envString, "=, ");
                 numTokens++;
