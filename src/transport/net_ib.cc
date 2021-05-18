@@ -229,7 +229,10 @@ ncclResult_t ncclIbGdrSupport(int ibDev) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
 #else
-    moduleLoaded = (access("/sys/kernel/mm/memory_peers/nv_mem/version", F_OK) == -1) ? 0 : 1;
+    // Check for the nv_peer_mem module being loaded
+    moduleLoaded = ((access("/sys/kernel/mm/memory_peers/nv_mem/version", F_OK) == -1) &&
+                    // Also support the new nvidia-peermem module
+                    (access("/sys/kernel/mm/memory_peers/nvidia-peermem/version", F_OK) == -1)) ? 0 : 1;
 #endif
   }
   if (moduleLoaded == 0) return ncclSystemError;
