@@ -261,7 +261,7 @@ void CliqueManager::SetByteLimits()
     switch (m_gcnArch)
     {
     case 906: m_allReduceByteLimit =  16777216; break;
-    case 908: m_allReduceByteLimit = 536870912; break;
+    case 908: m_allReduceByteLimit =   8388608; break;
     default:  m_allReduceByteLimit =  16777216; break;
     }
   }
