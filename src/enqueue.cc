@@ -714,8 +714,8 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
-static int getSegment(int delta, struct ncclWork* work, int e) {
-  for (int s=0; s<e && work->elems[s].p2p.delta != delta; s++) {
+static int getSegment(int delta, struct ncclWork* work) {
+  for (int s=0; s<NCCL_MAX_WORK_ELEMENTS && work->elems[s].p2p.delta != delta; s++) {
     if (work->elems[s].p2p.nThreads == 0) return s;
   }
   return -1;
@@ -759,11 +759,9 @@ ncclResult_t ncclEnqueueP2pKernel(struct ncclComm* comm, struct ncclQueueElem* e
   int opIndex = (channel->workFifoTail-1+NCCL_MAX_OPS)%NCCL_MAX_OPS;
   struct ncclWork* w = channel->workFifo+opIndex;
   int segment = -1;
-  const int e = ((comm->topo->nodes[GPU].count == comm->topo->nRanks) && (comm->topo->type & RCCL_TOPO_4P2H_ROME))
-    ? 1 : NCCL_MAX_WORK_ELEMENTS;
   if (channel->workCount && w->elems[0].funcIndex == FUNC_INDEX_P2P && w->elems[NCCL_MAX_WORK_ELEMENTS-1].p2p.nThreads == 0) {
     // Try to pack more segments into a single operation
-    segment = getSegment(workElem->p2p.delta, w, e);
+    segment = getSegment(workElem->p2p.delta, w);
   }
   if (segment == -1) {
     NCCLCHECK(getNextOp(channel, &w, NULL));
