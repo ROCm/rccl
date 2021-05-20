@@ -176,7 +176,7 @@ struct ncclDevComm;
 #pragma pack(push)  /* push current alignment to stack */
 #pragma pack(4)     /* set alignment to 4 bytes boundary */
 #define NCCL_MAX_WORK_ELEMENTS 1
-#define NCCL_MAX_GROUPS (NCCL_MAX_WORK_ELEMENTS*2)
+#define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 
 /* ncclWork is to be a power of two, currently 8x64 bytes, */
 /* to make sure reads to host from the CUDA kernel are aligned. */
