@@ -115,7 +115,16 @@ namespace CorrectnessTests
         // Check if user has opted-in to use managed memory
         static bool UseHmm()
         {
-            return std::getenv("RCCL_USE_HMM");
+            if (getenv("RCCL_USE_HMM") == nullptr)
+            {
+                return false;
+            }
+
+            if (strcmp(getenv("RCCL_USE_HMM"), "1") == 0)
+            {
+                return true;
+            }
+            return false;
         }
 
         // Helper for HMM allocations: if device supports managedMemory, and HMM is requested through
