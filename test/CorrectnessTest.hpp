@@ -100,6 +100,40 @@ namespace CorrectnessTests
             return numElements * DataTypeToBytes(dataType);
         }
 
+        // Checks if the current HIP Runtime and GPU support managed memory
+        bool SupportsHmm()
+        {
+            hipDeviceProp_t device_prop;
+            int device_id;
+            hipGetDevice(&device_id);
+            hipGetDeviceProperties(&device_prop, device_id);
+            if (device_prop.managedMemory == 1) return true;
+
+            return false;
+        }
+
+        // Check if user has opted-in to use managed memory
+        static bool UseHmm()
+        {
+            return std::getenv("RCCL_USE_HMM");
+        }
+
+        // Helper for HMM allocations: if device supports managedMemory, and HMM is requested through
+        // RCCL_USE_HMM environment variable
+        template <class T>
+        hipError_t hipMallocHelper(T** devPtr, size_t size)
+        {
+            if (SupportsHmm() && UseHmm())
+            {
+                return hipMallocManaged((void**)devPtr, size);
+            }
+            else
+            {
+                return hipMalloc((void**)devPtr, size);
+            }
+            return hipSuccess;
+        }
+
         // To be used in multi-process tests, in the parent process before forking children.
         void InitializeRootProcess(int            const numDevices_,
                                    size_t         const numElements_,
@@ -155,22 +189,22 @@ namespace CorrectnessTests
             if (multiProcessRank_ > -1)
             {
                 HIP_CALL(hipSetDevice(multiProcessRank_));
-                HIP_CALL(hipMalloc((void **)&inputs[multiProcessRank_], NumBytes(ncclInputBuffer)));
+                HIP_CALL(hipMallocHelper((void **)&inputs[multiProcessRank_], NumBytes(ncclInputBuffer)));
                 if (inPlace)
                     outputs[multiProcessRank_] = inputs[multiProcessRank_];
                 else
-                    HIP_CALL(hipMalloc((void **)&outputs[multiProcessRank_], NumBytes(ncclOutputBuffer)));
+                    HIP_CALL(hipMallocHelper((void **)&outputs[multiProcessRank_], NumBytes(ncclOutputBuffer)));
             }
             else
             {
               for (int i = 0; i < numDevices; i++)
               {
                   HIP_CALL(hipSetDevice(i));
-                  HIP_CALL(hipMalloc((void **)&inputs[i], NumBytes(ncclInputBuffer)));
+                  HIP_CALL(hipMallocHelper((void **)&inputs[i], NumBytes(ncclInputBuffer)));
                   if (inPlace)
                       outputs[i] = inputs[i];
                   else
-                      HIP_CALL(hipMalloc((void **)&outputs[i], NumBytes(ncclOutputBuffer)));
+                      HIP_CALL(hipMallocHelper((void **)&outputs[i], NumBytes(ncclOutputBuffer)));
 
                   expected[i] = malloc(NumBytes(ncclOutputBuffer));
               }
@@ -547,16 +581,17 @@ dropback:
             // Only proceed with testing if there are enough GPUs
             if (numDevices > numDevicesAvailable)
             {
-              GTEST_SKIP();
-              return;
+                fprintf(stdout, "[  SKIPPED ] Test requires %d devices (only %d available)\n",
+                        numDevices, numDevicesAvailable);
+                GTEST_SKIP();
             }
 
+            bool enableClique = false;
             envString = 0;
             numTokens = 0;
             setenv("RCCL_TEST_ENV_VARS", "ENABLE", 1);
             if (strcmp(envVals, "")) {
                 // enable RCCL env vars testing
-
                 envString = strdup(envVals);
                 tokens[numTokens] = strtok(envString, "=, ");
                 numTokens++;
@@ -570,7 +605,20 @@ dropback:
                         savedEnv[i] = 0;
                     setenv(tokens[i*2], tokens[i*2+1], 1);
                     fprintf(stdout, "[          ] setting environmental variable %s to %s\n", tokens[i*2], getenv(tokens[i*2]));
+                    if (strcmp(tokens[i*2], "RCCL_ENABLE_CLIQUE") == 0)
+                    {
+                        if (strcmp(getenv(tokens[i*2]), "1") == 0)
+                        {
+                            enableClique = true;
+                        }
+                    }
                 }
+            }
+
+            if (Dataset::UseHmm() && enableClique)
+            {
+                fprintf(stdout, "[  SKIPPED ] Clique mode and unified memory together not supported\n");
+                GTEST_SKIP();
             }
 
             // Initialize communicators
@@ -803,6 +851,8 @@ dropback:
 
             envString = 0;
             numTokens = 0;
+            bool enableClique = false;
+
             setenv("RCCL_TEST_ENV_VARS", "ENABLE", 1);
             if (strcmp(envVals, "")) {
                 // enable RCCL env vars testing
@@ -819,7 +869,20 @@ dropback:
                         savedEnv[i] = 0;
                     setenv(tokens[i*2], tokens[i*2+1], 1);
                     fprintf(stdout, "[          ] setting environmental variable %s to %s\n", tokens[i*2], getenv(tokens[i*2]));
+                    if (strcmp(tokens[i*2], "RCCL_ENABLE_CLIQUE") == 0)
+                    {
+                        if (strcmp(getenv(tokens[i*2]), "1") == 0)
+                        {
+                            enableClique = true;
+                        }
+                    }
                 }
+            }
+
+            if (Dataset::UseHmm() && enableClique)
+            {
+                fprintf(stdout, "[  SKIPPED ] Clique mode and unified memory together not supported\n");
+                GTEST_SKIP();
             }
 
             comms.resize(numDevices);
@@ -869,11 +932,7 @@ dropback:
                     fprintf(stdout, "[  SKIPPED ] Test requires %d devices (only %d available)\n",
                             numDevices, numDevicesAvailable);
                 }
-                // Modify the number of devices so that tear-down doesn't occur
-                // This is temporary until GTEST_SKIP() becomes available
-                numDevices = 0;
-                numDevicesAvailable = -1;
-                return;
+                GTEST_SKIP();
             }
 
             HIP_CALL(hipSetDevice(rank));
