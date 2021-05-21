@@ -367,8 +367,10 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
         else                            numChannels =  2;
         break;
       case 908:
-        if      (totalBytes <=  262144) numChannels =  4;
-        else                            numChannels = 14;
+        if      (totalBytes <=  131072) numChannels =  2;
+        else if (totalBytes <=  524288) numChannels =  6;
+        else if (totalBytes <= 1048576) numChannels = 13;
+        else                            numChannels = 16;
         break;
       case 910:
         if      (totalBytes <=  262144) numChannels =  4;
