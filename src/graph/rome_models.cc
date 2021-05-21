@@ -27,6 +27,7 @@ THE SOFTWARE.
 #include <sys/time.h>
 #include "rome_models.h"
 
+#define MAX_ROME_CPUS 8
 #define MAX_ROME_GPUS 16
 #define MAX_ROME_NICS 8
 
@@ -172,7 +173,7 @@ static struct rcclRomeModel rome_model_38 = {
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
   .nicNuma = { },
   .connMatrix = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, },
-  .pattern = "00102010002010",
+  .pattern = "10201000201010",
   .ringBase = "6 7 1 4 3 5 2 0|0 2 5 3 4 1 7 6",
 };
 
@@ -205,7 +206,7 @@ static struct rcclRomeModel rome_model_42 = {
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
   .nicNuma = { 4, },
   .connMatrix = { 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, },
-  .pattern = "00102010012010",
+  .pattern = "10201001201010",
   .ringBase = "7 4 6 1 3 0 2 5|6 4 7 1 3 2 5 0",
 };
 
@@ -227,7 +228,7 @@ static struct rcclRomeModel rome_model_45 = {
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
   .nicNuma = { },
   .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
-  .pattern = "00102010002010",
+  .pattern = "10201000201010",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
 };
 
@@ -238,7 +239,7 @@ static struct rcclRomeModel rome_model_46 = {
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
   .nicNuma = { 4, },
   .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
-  .pattern = "00102010012010",
+  .pattern = "10201001201010",
   .ringBase = "6 5 7 4 1 2 3 0|7 4 6 5 1 0 3 2",
 };
 
@@ -275,6 +276,17 @@ static struct rcclRomeModel rome_model_52 = {
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
 };
 
+static struct rcclRomeModel rome_model_53 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .gpuIds = { 0x4a000, 0x50000, 0xa000, 0xf000, 0xcb000, 0xd1000, 0x8a000, 0x90000, },
+  .nicIds = { 0x45000, 0x13000, 0xc6000, 0x85000, },
+  .gpuNuma = { 1, 1, 3, 3, 5, 5, 7, 7, },
+  .nicNuma = { 1, 3, 5, 7, },
+  .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
+  .pattern = "21212121",
+  .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -297,6 +309,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_48,
   rome_model_49,
   rome_model_52,
+  rome_model_53,
 };
 
 /* Parse user defined rings. Format is like :
@@ -483,6 +496,17 @@ static int cmpIds(const void * g1, const void * g2) {
   return s1->dev - s2->dev;
 }
 
+struct ncclCpuNuma {
+  int c;
+  uint64_t numa;
+};
+
+static int cmpNuma(const void * g1, const void * g2) {
+  struct ncclCpuNuma *s1 = (struct ncclCpuNuma*)g1;
+  struct ncclCpuNuma *s2 = (struct ncclCpuNuma*)g2;
+  return s1->numa - s2->numa;
+}
+
 static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo, char *pattern) {
   pattern[0] = 0; // pattern will be NULL for invalid topology
   romeTopo->nGpus = system->nodes[GPU].count;
@@ -496,6 +520,14 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     scores[i].dev = system->nodes[GPU].nodes[i].gpu.dev;
   }
   qsort(scores, romeTopo->nGpus, sizeof(struct ncclGpuIdHIP), cmpIds);
+  // sort CPU devices by NUMA id
+  struct ncclCpuNuma cpu_scores[MAX_ROME_CPUS];
+  for (int i = 0; i < romeTopo->nCpus; i ++) {
+    cpu_scores[i].c = i;
+    cpu_scores[i].numa = system->nodes[CPU].nodes[i].id;
+  }
+  qsort(cpu_scores, romeTopo->nCpus, sizeof(struct ncclCpuNuma), cmpNuma);
+
   for (int i = 0; i < romeTopo->nGpus; i ++) {
     int gpu, n, m, distance;
     gpu = scores[i].g;
@@ -530,6 +562,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   for (int net = 0; net < romeTopo->nNics; net++) {
     int n, m, distance;
     m = 0;
+    romeTopo->nicIds[net] = system->nodes[NET].nodes[net].net.busId;
     distance = system->nodes[NET].nodes[net].paths[CPU][m].count;
     for (n = 0; n < romeTopo->nCpus; n++)
       if (system->nodes[NET].nodes[net].paths[CPU][n].count < distance) {
@@ -542,11 +575,12 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
 
   // number of GPUs and NICs on each numa node is used as first screening pattern
   for (int i = 0; i < romeTopo->nCpus; i++) {
+    uint64_t id = system->nodes[CPU].nodes[cpu_scores[i].c].id;
     int g = 0, n = 0;
     for (int j = 0; j < romeTopo->nGpus; j++)
-      if (romeTopo->gpuNuma[j] == i) g++;
+      if (romeTopo->gpuNuma[j] == id) g++;
     for (int j = 0; j < romeTopo->nNics; j++)
-      if (romeTopo->nicNuma[j] == i) n++;
+      if (romeTopo->nicNuma[j] == id) n++;
     pattern[i*2] = '0' + g;
     pattern[i*2+1] = '0' + n;
   }
