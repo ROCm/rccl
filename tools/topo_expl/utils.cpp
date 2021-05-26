@@ -254,17 +254,26 @@ ncclResult_t ncclTransportCollNetCheck(struct ncclComm* comm, int collNetSetupFa
   free(allGatherFailures);
   if (collNetSetupFail) {
     if (rank == 0) WARN("Cannot initialize CollNet, using point-to-point network instead");
-    // Free collNet resources
-    for (int r=0; r<comm->nChannels; r++) {
-      struct ncclChannel* channel = comm->channels+r;
-      struct ncclPeer* peer = channel->peers+nranks;
-      //if (peer->send->transportResources && peer->send->transportComm) NCCLCHECK(peer->send->transportComm->free(peer->send->transportResources));
-      //if (peer->recv->transportResources && peer->recv->transportComm) NCCLCHECK(peer->recv->transportComm->free(peer->recv->transportResources));
-      peer->send->transportResources = NULL; // avoid double free
-      peer->recv->transportResources = NULL; // avoid double free
+    return ncclSystemError;
+  }
+  return ncclSuccess;
+}
+
+ncclResult_t ncclTransportCollNetFree(struct ncclComm* comm) {
+  // Free collNet resources
+  for (int r=0; r<comm->nChannels; r++) {
+    struct ncclChannel* channel = comm->channels+r;
+    struct ncclPeer* peer = channel->peers+comm->nRanks;
+    for (int b=0; b<NCCL_MAX_CONNS; b++) {
+      struct ncclConnector* send = peer->send + b;
+      //if (send->transportResources && send->transportComm) NCCLCHECK(send->transportComm->free(send->transportResources));
+      send->transportResources = NULL; // avoid double free
     }
-    // Set support to 0
-    comm->collNetSupport = 0;
+    for (int b=0; b<NCCL_MAX_CONNS; b++) {
+      struct ncclConnector* recv = peer->recv + b;
+      //if (recv->transportResources && recv->transportComm) NCCLCHECK(recv->transportComm->free(recv->transportResources));
+      recv->transportResources = NULL; // avoid double free
+    }
   }
   return ncclSuccess;
 }
@@ -454,7 +463,8 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   allGather3Data[rank].collNet.typeInter = collNetGraph.typeInter;
   allGather3Data[rank].collNetSupport = comm->collNetSupport;
 
-  comm->nChannels = std::min(treeGraph.nChannels, ringGraph.nChannels);
+  comm->nChannels = (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count)
+    ? std::min(treeGraph.nChannels, ringGraph.nChannels) : ringGraph.nChannels;
   NCCLCHECK(ncclTopoPreset(comm, &treeGraph, &ringGraph, &allGather3Data[rank].topoRanks));
   return ncclSuccess;
 }
@@ -682,7 +692,9 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     comm->collNetSupport = std::min(allGather3Data[i].collNetSupport, comm->collNetSupport);
   }
 
-  comm->nChannels = treeGraph.nChannels = ringGraph.nChannels = std::min(treeGraph.nChannels, ringGraph.nChannels);
+  comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
+    (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count)
+    ? std::min(treeGraph.nChannels, ringGraph.nChannels) : ringGraph.nChannels;
   if (comm->nChannels < nChannelsOrig) {
     // We started duplicating channels during Preset(), so we need to move the
     // duplicated channels since we have removed some.
@@ -730,6 +742,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->ring.prev, 1, &channel->ring.next, 0), ret, affinity_restore);
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0), ret, affinity_restore);
+  free(rings);
   INFO(NCCL_INIT, "Connected all rings");
 
   // Connect Trees
@@ -762,26 +775,37 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
         else if (ncclTransportCollNetSetup(comm, &collNetGraph, channel, head, head, h, collNetSend) != 1)
           collNetSetupFail = 1;
       }
+      // Verify CollNet setup across ranks after trying the first channel
+      if (c == 0) {
+        NCCLCHECKGOTO(ncclTransportCollNetCheck(comm, collNetSetupFail), ret, collnet_cleanup);
+      }
     }
-    // Verify CollNet setup across ranks
-    NCCLCHECK(ncclTransportCollNetCheck(comm, collNetSetupFail));
-    if (comm->collNetSupport) {
-      TRACE(NCCL_INIT, "rank %d Connected inter-node CollNet", rank);
-      for (int c=0; c<comm->nChannels; c++) {
-        struct ncclChannel* channelRecv = comm->channels+c;
-        NCCLCHECK(ncclTransportP2pConnect(comm, channelRecv, NCCL_MAX_DIRECT_ARITY, channelRecv->collTree.up, NCCL_MAX_DIRECT_ARITY, channelRecv->collTree.down, 0));
-      }
-      NCCLCHECK(ncclTransportP2pSetup(comm, &collNetGraph, 0));
-      for (int c=0; c<comm->nChannels; c++) {
-        struct ncclChannel* channelSend = comm->channels+c;
-        NCCLCHECK(ncclTransportP2pConnect(comm, channelSend, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.down, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.up, 1));
-      }
-      NCCLCHECK(ncclTransportP2pSetup(comm, &collNetGraph, 1));
-      INFO(NCCL_INIT, "rank %d Connected CollNet", rank);
+    // Verify CollNet setup across ranks after trying all channels
+    NCCLCHECKGOTO(ncclTransportCollNetCheck(comm, collNetSetupFail), ret, collnet_cleanup);
+    TRACE(NCCL_INIT, "rank %d Connected inter-node CollNet", rank);
+
+    // Connect intra-node CollNet
+    for (int c=0; c<comm->nChannels; c++) {
+      struct ncclChannel* channelRecv = comm->channels+c;
+      NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channelRecv, NCCL_MAX_DIRECT_ARITY, channelRecv->collTree.up, NCCL_MAX_DIRECT_ARITY, channelRecv->collTree.down, 0), ret, collnet_cleanup);
+    }
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 0), ret, collnet_cleanup);
+    for (int c=0; c<comm->nChannels; c++) {
+      struct ncclChannel* channelSend = comm->channels+c;
+      NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channelSend, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.down, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.up, 1), ret, collnet_cleanup);
+    }
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 1), ret, collnet_cleanup);
+    INFO(NCCL_INIT, "rank %d Connected CollNet", rank);
+
+collnet_cleanup:
+    free(heads);
+    if (ret != ncclSuccess) {
+      NCCLCHECK(ncclTransportCollNetFree(comm));
+      comm->collNetSupport = 0;
+      ret = ncclSuccess;
     }
   }
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
-  free(rings);
 
   // Compute time models for algorithm and protocol combinations
   //NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph));
