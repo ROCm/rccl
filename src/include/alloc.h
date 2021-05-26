@@ -17,6 +17,7 @@ template <typename T>
 static ncclResult_t ncclCudaHostCalloc(T** ptr, size_t nelem) {
   CUDACHECK(hipHostMalloc(ptr, nelem*sizeof(T), hipHostMallocMapped));
   memset(*ptr, 0, nelem*sizeof(T));
+  INFO(NCCL_ALLOC, "Cuda Host Alloc Size %ld pointer %p", nelem*sizeof(T), *ptr);
   return ncclSuccess;
 }
 
@@ -34,6 +35,7 @@ static ncclResult_t ncclCalloc(T** ptr, size_t nelem) {
   }
   memset(p, 0, nelem*sizeof(T));
   *ptr = (T*)p;
+  INFO(NCCL_ALLOC, "Mem Alloc Size %ld pointer %p", nelem*sizeof(T), *ptr);
   return ncclSuccess;
 }
 
@@ -62,6 +64,7 @@ static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem, bool isFineGrain = fal
   CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
   CUDACHECK(hipStreamSynchronize(stream));
   CUDACHECK(hipStreamDestroy(stream));
+  INFO(NCCL_ALLOC, "Cuda Alloc Size %ld pointer %p", nelem*sizeof(T), *ptr);
   int dev;
   CUDACHECK(hipGetDevice(&dev));
   if (dev < MAX_ALLOC_TRACK_NGPU) {
@@ -98,6 +101,7 @@ static ncclResult_t ncclIbMalloc(void** ptr, size_t size) {
   if (ret != 0) return ncclSystemError;
   memset(p, 0, size);
   *ptr = p;
+  INFO(NCCL_ALLOC, "Ib Alloc Size %ld pointer %p", size, *ptr);
   return ncclSuccess;
 }
 

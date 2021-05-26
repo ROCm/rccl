@@ -395,7 +395,7 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
               sub->channel->sizes += LOAD(sizesFifo+buffSlot);
               sub->channel->send_byte += LOAD(sizesFifo+buffSlot);
 #endif
-              TRACE(NCCL_NET, "sendProxy [%lu/%d] Isend (LL) posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
+              TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend (LL) posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
               sizesFifo[buffSlot] = -1;
               // Make sure size is reset to zero before we update the head.
               __sync_synchronize();

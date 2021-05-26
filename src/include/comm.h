@@ -177,6 +177,7 @@ struct ncclComm {
   struct ncclQueueInfo* enqueueInfo;
   cudaGraphNode_t lastSetupNode;
   unsigned long long lastCudaGraphId;
+  int driverVersion;
 };
 
 #endif
