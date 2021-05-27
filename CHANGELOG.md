@@ -1,6 +1,9 @@
 # Change Log for RCCL
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
+## [UNRELEASED]
+### Added
+- Compatibility with NCCL 2.9.9
 
 ## [RCCL-2.8.4 for ROCm 4.3.0]
 ### Added
@@ -18,7 +21,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## [RCCL-2.8.4 for ROCm 4.2.0]
 ### Added
 - Compatibility with NCCL 2.8.4
-- 
+
 ### Optimizations
 - Additional tuning for clique-based kernels
 - Enabling GPU direct RDMA read from GPU
@@ -26,15 +29,6 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - Improved topology detection
 ### Known issues
 - None
-
-## [Unreleased]
-### Optimizations
-- Additional tuning for clique-based kernel AllReduce performance (still requires opt in with RCCL_ENABLE_CLIQUE=1)
-
-### Changed
-- Replaced RCCL_FORCE_ENABLE_CLIQUE to RCCL_CLIQUE_IGNORE_TOPO
-- Clique-based kernels can now be enabled on topologies where all active GPUs are XGMI-connected
-- Topologies not normally supported by clique-based kernels require RCCL_CLIQUE_IGNORE_TOPO=1
 
 ## [RCCL-2.7.8 for ROCm 4.1.0]
 ### Added
