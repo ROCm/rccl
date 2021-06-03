@@ -765,6 +765,7 @@ float speedArray[] = { 42.0, 30.0, 24.0, 21.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0,
 #define NSPEEDS (sizeof(speedArray)/sizeof(float))
 
 RCCL_PARAM(ModelMatchingDisable, "MODEL_MATCHING_DISABLE", 0);
+RCCL_PARAM(EnableMultipleSAT, "ENABLE_MULTIPLE_SAT", 0);
 
 ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
@@ -809,6 +810,8 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     // limit single node max channels when searching ring graph on Rome
     graph->maxChannels = 2;
   }
+  if (graph->collNet && !rcclParamEnableMultipleSAT())
+    graph->maxChannels = 1;
   if (ngpus == 1) if (graph->pattern != NCCL_TOPO_PATTERN_RING) graph->pattern = NCCL_TOPO_PATTERN_TREE;
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
