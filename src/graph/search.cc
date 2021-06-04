@@ -776,6 +776,8 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   graph->typeInter = PATH_PIX;
   graph->nChannels = 0;
   graph->sameChannels = 1;
+  graph->nIntraChannels = 0;
+  memset(graph->intraNets, 0, MAXCHANNELS*NCCL_TOPO_MAX_NODES*2*sizeof(int));
 
   char* str = getenv("NCCL_GRAPH_FILE");
   if (str) {
@@ -944,6 +946,7 @@ done:
     int dupChannels = std::min(graph->nChannels*2, graph->maxChannels);
     memcpy(graph->intra+graph->nChannels*ngpus, graph->intra, (dupChannels-graph->nChannels)*ngpus*sizeof(int));
     memcpy(graph->inter+graph->nChannels*2,graph->inter, (dupChannels-graph->nChannels)*2*sizeof(int));
+    memcpy(graph->intraNets+graph->nChannels*ngpus*2, graph->intraNets, (dupChannels-graph->nChannels)*2*ngpus*sizeof(int));
     graph->speedIntra /= DIVUP(dupChannels, graph->nChannels);
     graph->speedInter /= DIVUP(dupChannels, graph->nChannels);
     graph->nChannels = dupChannels;
@@ -959,15 +962,25 @@ ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGr
   for (int c=0; c<graph->nChannels; c++) {
     sprintf(line, "%2d :", c);
     int offset = strlen(line);
-    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks) {
+    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks && !graph->nIntraChannels) {
       sprintf(line+offset, " %s/%d", topoNodeTypeStr[NET], graph->inter[2*c]);
       offset = strlen(line);
     }
     for (int i=0; i<ngpus; i++) {
+      int n = graph->intraNets[(ngpus*c+i)*2]-'N';
+      if(n >= 0 && n < system->nodes[NET].count) {
+        sprintf(line+offset, " NET/%d", n);
+        offset = strlen(line);
+      }
       sprintf(line+offset, " %s/%d", topoNodeTypeStr[GPU], graph->intra[ngpus*c+i]);
       offset = strlen(line);
+      n = graph->intraNets[(ngpus*c+i)*2+1]-'N';
+      if(n >= 0 && n < system->nodes[NET].count) {
+        sprintf(line+offset, " NET/%d", n);
+        offset = strlen(line);
+      }
     }
-    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks) {
+    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks && !graph->nIntraChannels) {
       sprintf(line+offset, " %s/%d", topoNodeTypeStr[NET], graph->inter[2*c+1]);
       offset = strlen(line);
     }
@@ -1000,6 +1013,28 @@ ncclResult_t ncclTopoGetNetDev(struct ncclTopoSystem* system, int rank, struct n
     int64_t id;
     NCCLCHECK(ncclTopoGetLocalNet(system, rank, &id, rr));
     *dev = id;
+  }
+  return ncclSuccess;
+}
+
+extern int64_t rcclParamP2pNetDisable();
+
+ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, struct ncclTopoGraph* graph, int channelId, int type, int* dev) {
+  *dev = -1;
+  if (graph->nIntraChannels && rcclParamP2pNetDisable() == 0) {
+    int n1 = -1;
+    int ngpus = system->nodes[GPU].count;
+    int nnets = system->nodes[NET].count;
+    int chan = channelId%graph->nIntraChannels;
+    for (int i = 0; i < ngpus; i++) {
+      if (graph->intra[ngpus*chan+i] == rank) {
+        n1 = graph->intraNets[(ngpus*chan+i)*2+type]-'N';
+        break;
+      }
+    }
+    if (n1 >= 0 && n1 < nnets) {
+      *dev = n1;
+    }
   }
   return ncclSuccess;
 }

@@ -151,9 +151,12 @@ ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
   int netDev, useGdr = 0;
 
-  // Send/Receive: Round-robin NICs based on the receiver's CUDA device
-  int nicRR = comm->peerInfo[peerInfo->rank].cudaDev;
-  NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, nicRR, &netDev));
+  NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &netDev));
+  if (netDev < 0) {
+    // Send/Receive: Round-robin NICs based on the receiver's CUDA device
+    int nicRR = comm->peerInfo[peerInfo->rank].cudaDev;
+    NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, nicRR, &netDev));
+  }
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 1, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), netDev,
@@ -166,9 +169,12 @@ NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
 ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
   int netDev, useGdr = 0;
 
-  // Send/Receive: Round-robin NICs based on the receiver's CUDA device
-  int nicRR = comm->cudaDev;
-  NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, nicRR, &netDev));
+  NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &netDev));
+  if (netDev < 0) {
+    // Send/Receive: Round-robin NICs based on the receiver's CUDA device
+    int nicRR = comm->cudaDev;
+    NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, nicRR, &netDev));
+  }
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 0, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s", channelId, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), netDev,
