@@ -29,6 +29,7 @@ BEGIN {
   has_collnet=0
   max_collnet=0
   max_collnet_rank=0
+  max_collnet_channel=0
   collnet[""]=0
   collnet_conn[""]=0
   collnet_conn_type[""]=0
@@ -111,17 +112,22 @@ BEGIN {
     } while ($col_1!="")
   }
 
-  if($col_start=="CollNet" && $col_p1=="Channel") {
-    chan=strtonum($col_p2)
-    rank=strtonum($col_p4)
-    up_rank=strtonum($col_p6)
-    collnet[up_rank "," rank "," chan]="1"
-    if(has_collnet==0)
-      has_collnet=1
-    if(chan>max_collnet)
-      max_collnet=chan
+  if($col_start=="CollNet" && $col_p1=="channel" && $col_p5=="down") {
+    channel=strtonum($col_p2)
+    up_rank=strtonum($col_p4)
     if(up_rank>max_collnet_rank)
       max_collnet_rank=up_rank
+    for(s=col_p6;s<=NF;s++) {
+      if($s=="nDown") break;
+      rank=$s
+      collnet[up_rank "," rank]="1"
+      if(rank>max_collnet_rank)
+        max_collnet_rank=rank
+    }
+    if(has_collnet==0)
+      has_collnet=1
+    if(channel>max_collnet_channel)
+      max_collnet_channel=channel
   }
 
   if($col_start=="Coll" && $col_p2==":") {
@@ -134,6 +140,8 @@ BEGIN {
     else
       printf "Error!\n"
     collnet_conn_type[rank "," chan]=$col_p6
+    if(chan>max_collnet)
+      max_collnet=chan
   }
 
   if($col_p6=="via") {
@@ -229,8 +237,9 @@ END {
   for(r=0; has_collnet && r<=max_collnet; r++) {
     printf "  subgraph collnet_%d {\n", r
     num_top_ranks=0
-    for(s=0;s<max_collnet_rank;s++) {
-      if((max_collnet_rank "," s "," r) in collnet)
+    rank_switch=max_collnet_rank+1
+    for(s=0;s<=max_collnet_rank;s++) {
+      if((s "," r) in collnet_conn_type)
         top_ranks[num_top_ranks++]=s
     }
     for(d=0; d<num_top_ranks; d++) {
@@ -244,40 +253,12 @@ END {
         if (match(val,"GDRDMA"))
           color="green"
       }
-      if (match(val,"P2P")) {
-        color="green"
-      }
-      if(send)
-        printf "    c%d_%d -> c%d_%d [dir=back label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, max_collnet_rank, r, rank, val, color, style
-      else
-        printf "    c%d_%d -> c%d_%d [label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, max_collnet_rank, r, rank, val, color, style
-      while(1) {
-        for(s=0;s<max_collnet_rank;s++) {
-          if((rank "," s "," r) in collnet) {
-            if(send)
-              val=conn[s "," rank "," r]
-            else
-              val=conn[rank "," s "," r]
-            style="solid"
-            color="red"
-            if (match(val,"NET")) {
-              style="dashed"
-              if (match(val,"GDRDMA"))
-                color="green"
-            }
-            if (match(val,"P2P")) {
-              color="green"
-            }
-            if(send)
-              printf "    c%d_%d -> c%d_%d [dir=back label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, rank, r, s, val, color, style
-            else
-              printf "    c%d_%d -> c%d_%d [label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, rank, r, s, val, color, style
-            rank=s
-            break;
-          }
-        }
-        if(s>=max_collnet_rank) {
-          break;
+      printf "    c%d_%d -> c%d_%d [label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, rank_switch, r, rank, val, color, style
+      for(s=0;s<=max_collnet_rank;s++) {
+        if((rank "," s) in collnet) {
+          style="solid"
+          color="green"
+          printf "    c%d_%d -> c%d_%d [label=\"%s\",color=\"%s\",style=\"%s\",fontname=\"Helvetica\"];\n", r, rank, r, s, "", color, style
         }
       }
     }
@@ -285,6 +266,7 @@ END {
     for(s=0;s<=max_collnet_rank;s++) {
       printf "    c%d_%d [label=\"%d\",fontsize=\"28\"];\n", r, s, s
     }
+    printf "    c%d_%d [label=\"SHARP:%d\",fontsize=\"28\"];\n", r, rank_switch, r
     printf "  }\n\n"
   }
   printf "}\n"

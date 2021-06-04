@@ -29,7 +29,7 @@ THE SOFTWARE.
 
 #define MAX_ROME_CPUS 8
 #define MAX_ROME_GPUS 16
-#define MAX_ROME_NICS 8
+#define MAX_ROME_NICS 16
 
 struct rcclRomeModel {
   int nGpus;
