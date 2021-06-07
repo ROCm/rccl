@@ -15,6 +15,8 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - Replaced RCCL_FORCE_ENABLE_CLIQUE to RCCL_CLIQUE_IGNORE_TOPO
 - Clique-based kernels can now be enabled on topologies where all active GPUs are XGMI-connected
 - Topologies not normally supported by clique-based kernels require RCCL_CLIQUE_IGNORE_TOPO=1
+### Fixed
+- Install script '-r' flag invoked alone no longer incorrectly deletes any existing builds.
 ### Known issues
 - Managed memory is not currently supported for clique-based kernels
 
