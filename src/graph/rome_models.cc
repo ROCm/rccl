@@ -27,20 +27,16 @@ THE SOFTWARE.
 #include <sys/time.h>
 #include "rome_models.h"
 
-#define MAX_ROME_CPUS 8
-#define MAX_ROME_GPUS 16
-#define MAX_ROME_NICS 16
-
 struct rcclRomeModel {
   int nGpus;
   int nCpus;
   int nNics;
   int nLinks;
-  int64_t gpuIds[MAX_ROME_GPUS];
-  int64_t nicIds[MAX_ROME_NICS];
-  int64_t gpuNuma[MAX_ROME_GPUS];
-  int64_t nicNuma[MAX_ROME_NICS];
-  int connMatrix[MAX_ROME_GPUS*MAX_ROME_GPUS];
+  int64_t gpuIds[NCCL_TOPO_MAX_NODES];
+  int64_t nicIds[NCCL_TOPO_MAX_NODES];
+  int64_t gpuNuma[NCCL_TOPO_MAX_NODES];
+  int64_t nicNuma[NCCL_TOPO_MAX_NODES];
+  uint8_t connMatrix[NCCL_TOPO_MAX_NODES*NCCL_TOPO_MAX_NODES];
   const char *pattern;
   const char *ringBase;
 };
@@ -319,13 +315,13 @@ static struct rcclRomeModel romeTopoModels[] = {
  * rings for multiple cases.
  */
 ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map) {
-  int gpus[MAX_ROME_GPUS];
+  int gpus[NCCL_TOPO_MAX_NODES];
   int nChannels = 0;
   int gpu = 0;
   int offset = 0;
-  int status = 0; // 0 : between numbers, 1 : inside number, 2: start NET
-  int nets[2];
-  int net = 0;
+  int status = 0; // 0 : between numbers, 1 : inside number, 2: start NET, 3: inside NET
+  int nets[NCCL_TOPO_MAX_NODES*2];
+  int net_offset = 0, net_count = 0;
   int ngpus = system->nodes[GPU].count;
   int nnets = system->nodes[NET].count;
   do {
@@ -336,29 +332,38 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
     } else {
       int digit = str[offset] - '0';
       if (digit >= 0 && digit <= 9) {
-        if (status == 0) {
-          gpus[gpu] = digit;
-          status = 1;
-        } else if (status == 2) {
-          nets[net] = digit;
-        }
-        else{
-          gpus[gpu] = gpus[gpu]*10+digit;
+        switch (status) {
+          case 0:
+            gpus[gpu] = digit;
+            status = 1;
+            break;
+          case 1:
+            gpus[gpu] = gpus[gpu]*10+digit;
+            break;
+          case 2:
+            nets[net_offset] = digit+'N';
+            status = 3;
+            break;
+          case 3:
+            nets[net_offset] = (nets[net_offset]-'N')*10+digit+'N';
+            break;
         }
       } else {
         if (status == 1) {
           gpu++;
-          if (gpu > MAX_ROME_GPUS) goto end;
-        } else if (status == 2) {
-          net++;
-          if (net > 2) goto end;
+          net_offset = 2*gpu-1;
+          if (gpu > NCCL_TOPO_MAX_NODES) goto end;
+        } else if (status == 2 || status == 3) {
+          net_offset++;
+          net_count++;
+          if (net_offset > ngpus*2) goto end;
         }
         status = 0;
         if (str[offset] == '|' || str[offset] == '\0') {
           // Ignore if ngpus doesn't match
           if (gpu != ngpus) goto newchannel;
-          // Ignore if nnets are not 0 or 2
-          if (net && net != 2) goto newchannel;
+          // Ignore if net_count is not 0 or odd number
+          if (net_count && net_count%2) goto newchannel;
 
           for (int r=0; r<ngpus; r++) {
             int g = gpus[r];
@@ -380,10 +385,12 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
               return ncclInternalError;
           }
 
-          if (net) {
-            if (nets[0] >= nnets || nets[1] >= nnets) goto newchannel;
-            graph->inter[nChannels*2] = system->nodes[NET].nodes[nets[0]].id;
-            graph->inter[nChannels*2+1] = system->nodes[NET].nodes[nets[1]].id;
+          if (net_count) {
+            memcpy(&graph->intraNets[ngpus*nChannels*2], nets, ngpus*2*sizeof(int));
+            graph->nIntraChannels++;
+            if (nets[0]-'N' >= nnets || nets[ngpus*2-1]-'N' >= nnets) goto newchannel;
+            graph->inter[nChannels*2] = nets[0]-'N';
+            graph->inter[nChannels*2+1] = nets[ngpus*2-1]-'N';
           } else if (nnets) {
             graph->inter[nChannels*2] = system->nodes[NET].nodes[nChannels%nnets].id;
             graph->inter[nChannels*2+1] = system->nodes[NET].nodes[(nChannels+1)%nnets].id;
@@ -391,7 +398,8 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
           nChannels++;
 newchannel:
           gpu = 0;
-          net = 0;
+          net_offset = 0;
+          net_count = 0;
         }
       }
     }
@@ -514,14 +522,14 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   romeTopo->nNics = system->nodes[NET].count;
   romeTopo->nLinks = 0;
   // sort GPU devices by HIP device ID
-  struct ncclGpuIdHIP scores[MAX_ROME_GPUS];
+  struct ncclGpuIdHIP scores[NCCL_TOPO_MAX_NODES];
   for (int i = 0; i < romeTopo->nGpus; i ++) {
     scores[i].g = i;
     scores[i].dev = system->nodes[GPU].nodes[i].gpu.dev;
   }
   qsort(scores, romeTopo->nGpus, sizeof(struct ncclGpuIdHIP), cmpIds);
   // sort CPU devices by NUMA id
-  struct ncclCpuNuma cpu_scores[MAX_ROME_CPUS];
+  struct ncclCpuNuma cpu_scores[NCCL_TOPO_MAX_NODES];
   for (int i = 0; i < romeTopo->nCpus; i ++) {
     cpu_scores[i].c = i;
     cpu_scores[i].numa = system->nodes[CPU].nodes[i].id;
@@ -683,7 +691,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   // recognize system as Rome 4P2H even if no matching model
   if (ngpus > 4 && romeTopo.nLinks) system->type |= RCCL_TOPO_4P2H_ROME;
 
-  int g[MAX_ROME_GPUS];
+  int g[NCCL_TOPO_MAX_NODES];
   int time = 0;
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
