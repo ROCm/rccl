@@ -200,6 +200,7 @@ struct ncclWorkElem {
       uint32_t root;
       uint8_t bid;
       uint8_t nChannels;
+      uint8_t connIndex;
     } coll;
     struct {
       size_t sendCount;

@@ -60,6 +60,7 @@ struct ncclProxyArgs {
 
   int idle;
   uint64_t hdp_flushed;
+  uint8_t connIndex;
 
   // Element linking
   pthread_mutex_t mutex;

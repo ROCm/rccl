@@ -38,16 +38,17 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
                                                   comm->channels[channelId].peers[peer].recv + connIndex;
 
   // handle intra-node network connections
-  int n1, n2;
-  NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, comm->rank, graph, channelId, (type == 1) ? 1 : 0, &n1));
-  NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, peer, graph, channelId, (type == 1) ? 0 : 1, &n2));
+  int n1 = -1, n2 = -1;
+  if (connIndex == NCCL_CONN_IDX_P2P_NET) {
+    NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, comm->rank, graph, channelId, (type == 1) ? 1 : 0, &n1));
+    NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, peer, graph, channelId, (type == 1) ? 0 : 1, &n2));
+  }
 
   int xgmi;
   NCCLCHECK(connectedByXGMI(&xgmi, comm->topo, myInfo, peerInfo));
   for (int t=0; t<NTRANSPORTS; t++) {
-    if (connIndex == NCCL_CONN_IDX_P2P_NET && (t == TRANSPORT_SHM || (!xgmi && t == TRANSPORT_P2P)))
-      continue;
-    if (n1 >= 0 && n2 >= 0 && t != TRANSPORT_NET) continue;
+    if (graph == NULL && connIndex == NCCL_CONN_IDX_P2P_NET && (t == TRANSPORT_SHM || (!xgmi && t == TRANSPORT_P2P))) continue;
+    if (graph && n1 >= 0 && n2 >= 0 && t != TRANSPORT_NET) continue;
     struct ncclTransport *transport = ncclTransports+t;
     struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
     int ret = 0;

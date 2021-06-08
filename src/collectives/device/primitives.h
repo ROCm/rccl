@@ -247,7 +247,8 @@ class ncclPrimitives {
   __device__ __forceinline__ void loadRecvConn(struct ncclChannel* channel, T* directBuff) {
     if (role & (ROLE_WAIT_RECV|ROLE_POST_RECV)) {
       // For oneshot: groups 0,1 use conn 0, groups 2,3 use conn 1
-      const int connIndex = (NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? group/2 : (((p2pNet && (NSEND+NRECV) == 1)) ? NCCL_CONN_IDX_P2P_NET : 0);
+      const int connIndex = (NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? group/2 :
+        ((p2pNet && (NSEND+NRECV) == 1 ? NCCL_CONN_IDX_P2P_NET : ((NSEND+NRECV) == 1 ? 0 : group)));
       conn = &channel->devPeers[peer].recv[connIndex].conn;
       step = conn->step;
       step = ROUNDUP(step, SLICESPERCHUNK*SLICESTEPS);
@@ -272,7 +273,8 @@ class ncclPrimitives {
   __device__ __forceinline__ void loadSendConn(struct ncclChannel* channel) {
     if (role & (ROLE_WAIT_SEND|ROLE_POST_SEND)) {
       // For oneshot: groups 0,1 use conn 0, groups 2,3 use conn 1
-      const int connIndex = (NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? group/2 : (((p2pNet && (NSEND+NRECV) == 1)) ? NCCL_CONN_IDX_P2P_NET : 0);
+      const int connIndex = (NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? group/2 :
+        ((p2pNet && (NSEND+NRECV) == 1 ? NCCL_CONN_IDX_P2P_NET : ((NSEND+NRECV) == 1 ? 0 : group)));
       conn = &channel->devPeers[peer].send[connIndex].conn;
       step = conn->step;
       step = ROUNDUP(step, SLICESPERCHUNK*SLICESTEPS);

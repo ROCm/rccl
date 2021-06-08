@@ -127,6 +127,7 @@ struct ncclComm {
 
   // Flags for enable P2P NET
   uint32_t *p2pNet;
+  uint32_t useIntraNet;
 
   // Device side of the communicator
   struct ncclDevComm *devComm;

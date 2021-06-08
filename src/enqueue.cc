@@ -453,6 +453,8 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
+RCCL_PARAM(IntraNetThreshold, "RCCL_INTRANET_THRESHOLD", 8388608);
+
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWorkElem* work, struct ncclProxyArgs* proxyArgs /* output */) {
   work->comm = info->comm->devComm;
 
@@ -470,6 +472,15 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->nThreads = info->nThreads;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+
+  work->coll.connIndex = 0;
+  proxyArgs->connIndex = 0;
+  if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) {
+    if (info->comm->useIntraNet && info->nBytes > rcclParamIntraNetThreshold()) {
+      work->coll.connIndex = NCCL_CONN_IDX_P2P_NET;
+      proxyArgs->connIndex = NCCL_CONN_IDX_P2P_NET;
+    }
+  }
 
   { // [RCCL] Check for clique-based kernel support
     if (info->comm->cliqueManager->IsSupported(info->coll,

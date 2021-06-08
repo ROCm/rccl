@@ -1017,11 +1017,9 @@ ncclResult_t ncclTopoGetNetDev(struct ncclTopoSystem* system, int rank, struct n
   return ncclSuccess;
 }
 
-extern int64_t rcclParamP2pNetDisable();
-
 ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, struct ncclTopoGraph* graph, int channelId, int type, int* dev) {
   *dev = -1;
-  if (graph && graph->nIntraChannels && rcclParamP2pNetDisable() == 0) {
+  if (graph && graph->nIntraChannels) {
     int n1 = -1;
     int ngpus = system->nodes[GPU].count;
     int nnets = system->nodes[NET].count;
