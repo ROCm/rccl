@@ -433,6 +433,8 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   NCCLCHECK(ncclCudaHostCalloc((uint32_t**)&comm->p2pNet, 1));
   comm->hostDevComm.p2pNet = comm->p2pNet;
   STORE(comm->p2pNet, 0);
+  comm->collOpCount = 0;
+  comm->p2pOpCount = 0x8000;
 
   comm->argsptr = &comm->args;
 #ifdef ENABLE_PROFILING

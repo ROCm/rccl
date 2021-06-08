@@ -98,6 +98,8 @@ struct ncclComm {
   uint64_t opCount;
   // Collective operation counter
   uint64_t collOpCount;
+  // P2P operation counter
+  uint64_t p2pOpCount;
 
   // Channels for collectives
   int nChannels;
