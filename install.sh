@@ -123,6 +123,18 @@ check_exit_code( )
   fi
 }
 
+if [[ "$build_release" == true ]]; then
+    unit_test_path="./build/release/test/UnitTests"
+else
+    unit_test_path="./build/debug/test/UnitTests"
+fi
+
+if ($run_tests) && [[ -f $unit_test_path ]]; then
+    if [[ "$build_tests" == false ]]; then
+        clean_build=false
+    fi
+fi
+
 # #################################################
 # prep
 # #################################################
@@ -134,7 +146,6 @@ if ($clean_build); then
         rm -rf build/debug
     fi
 fi
-
 
 # Create and go to the build directory.
 mkdir -p build; cd build
