@@ -69,12 +69,12 @@ ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* 
   for (int i=0; i<nrecv; i++) {
     int peer = peerRecv[i];
     if (peer == -1 || peer >= comm->nRanks || peer == comm->rank || channel->peers[peer].recv[connIndex].connected) continue;
-    comm->connectRecv[peer] |= mask;
+    comm->connectRecv[peer+comm->nRanks*connIndex] |= mask;
   }
   for (int i=0; i<nsend; i++) {
     int peer = peerSend[i];
     if (peer == -1 || peer >= comm->nRanks || peer == comm->rank || channel->peers[peer].send[connIndex].connected) continue;
-    comm->connectSend[peer] |= mask;
+    comm->connectSend[peer+comm->nRanks*connIndex] |= mask;
   }
   return ncclSuccess;
 }
@@ -98,8 +98,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int bootstrapTag = (i<<8) + (graph ? graph->id+1 : 0);
     int recvPeer = (comm->rank - i + comm->nRanks) % comm->nRanks;
     int sendPeer = (comm->rank + i) % comm->nRanks;
-    uint32_t recvMask = comm->connectRecv[recvPeer];
-    uint32_t sendMask = comm->connectSend[sendPeer];
+    uint32_t recvMask = comm->connectRecv[recvPeer+comm->nRanks*connIndex];
+    uint32_t sendMask = comm->connectSend[sendPeer+comm->nRanks*connIndex];
 
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
@@ -145,7 +145,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[recvPeer].recv+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, transportSetupStream));
       }
     }
-    comm->connectRecv[recvPeer] = comm->connectSend[sendPeer] = 0;
+    comm->connectRecv[recvPeer+comm->nRanks*connIndex] = comm->connectSend[sendPeer+comm->nRanks*connIndex] = 0;
   }
   CUDACHECK(hipStreamSynchronize(transportSetupStream));
   CUDACHECK(hipStreamDestroy(transportSetupStream));

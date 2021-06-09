@@ -163,7 +163,6 @@ struct ncclDirect {
   int down[NCCL_MAX_DIRECT_ARITY];
 };
 
-#define NCCL_CONN_IDX_P2P (*(comm->p2pNet)*2)
 #define NCCL_CONN_IDX_P2P_NET 2
 #define NCCL_MAX_CONNS 3
 struct ncclPeer {
@@ -208,7 +207,14 @@ struct ncclWorkElem {
       int sendChunkSize;
       int recvChunkSize;
       int32_t delta;
-      uint16_t nThreads;
+      union {
+        struct {
+          uint16_t nThreads:12;
+          uint16_t sendIdx:2;
+          uint16_t recvIdx:2;
+        };
+        uint16_t padding;
+      };
     } p2p;
     struct {
       uint16_t padding[15];
@@ -356,9 +362,6 @@ struct ncclDevComm {
 
   // Channels, device side
   struct ncclChannel* channels;
-
-  // Flags for enable P2P NET
-  uint32_t *p2pNet;
 
 #ifdef ENABLE_PROFILING
   // Profiling counters

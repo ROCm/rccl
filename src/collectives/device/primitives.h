@@ -49,6 +49,10 @@
 #define ROLE_POST_SEND 0x10
 #define ROLE_POST_RECV 0x20
 
+#define PACK_GROUP(gr, idx) (gr | (idx<<16))
+#define TO_GR(group) (group&0xffff)
+#define TO_IDX(group) (group>>16)
+
 // Implementation of primitive types
 template <int UNROLL, int SLICESPERCHUNK, int SLICESTEPS, typename T, int NRECV, int NSEND, int DIRECT, class FUNC>
 class ncclPrimitives {
@@ -75,7 +79,7 @@ class ncclPrimitives {
   T* direct = NULL;
   T* buff;
   struct ncclDevComm* comm;
-  const int p2pNet;
+  const int connIndex;
 
   const T** srcs;
   T** dsts;
@@ -247,8 +251,6 @@ class ncclPrimitives {
   __device__ __forceinline__ void loadRecvConn(struct ncclChannel* channel, T* directBuff) {
     if (role & (ROLE_WAIT_RECV|ROLE_POST_RECV)) {
       // For oneshot: groups 0,1 use conn 0, groups 2,3 use conn 1
-      const int connIndex = (NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? group/2 :
-        ((p2pNet && (NSEND+NRECV) == 1 ? NCCL_CONN_IDX_P2P_NET : ((NSEND+NRECV) == 1 ? 0 : group)));
       conn = &channel->devPeers[peer].recv[connIndex].conn;
       step = conn->step;
       step = ROUNDUP(step, SLICESPERCHUNK*SLICESTEPS);
@@ -273,8 +275,6 @@ class ncclPrimitives {
   __device__ __forceinline__ void loadSendConn(struct ncclChannel* channel) {
     if (role & (ROLE_WAIT_SEND|ROLE_POST_SEND)) {
       // For oneshot: groups 0,1 use conn 0, groups 2,3 use conn 1
-      const int connIndex = (NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? group/2 :
-        ((p2pNet && (NSEND+NRECV) == 1 ? NCCL_CONN_IDX_P2P_NET : ((NSEND+NRECV) == 1 ? 0 : group)));
       conn = &channel->devPeers[peer].send[connIndex].conn;
       step = conn->step;
       step = ROUNDUP(step, SLICESPERCHUNK*SLICESTEPS);
@@ -308,7 +308,9 @@ class ncclPrimitives {
  public:
   __device__ __forceinline__
   ncclPrimitives(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group)
-    : comm(comm), tid(tid), nworkers(nworkers), stepSize(stepSize), srcs((const T**)ptrs[group].srcs), dsts((T**)ptrs[group].dsts), group(group), barriers(&ptrs[group].barrier), barrier_next(ptrs[group].barrier_next), p2pNet(*comm->p2pNet) {
+    : comm(comm), tid(tid), nworkers(nworkers), stepSize(stepSize), srcs((const T**)ptrs[TO_GR(group)].srcs), dsts((T**)ptrs[TO_GR(group)].dsts),
+    group(TO_GR(group)), barriers(&ptrs[TO_GR(group)].barrier), barrier_next(ptrs[TO_GR(group)].barrier_next),
+    connIndex((NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? TO_GR(group)/2 : TO_IDX(group)) {
     nthreads = nworkers;
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     // int postThreads = NSEND && nworkers >= 64 ? WARP_SIZE : 0;

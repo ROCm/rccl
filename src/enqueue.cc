@@ -701,9 +701,13 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
       int delta = (comm->nRanks - (comm->rank-peer)) % comm->nRanks;
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
-        if (comm->channels[channelId].peers[peer].send[NCCL_CONN_IDX_P2P].connected == 0) { // P2P uses only 1 connector
+        if (comm->channels[channelId].peers[peer].send[0].connected == 0) {
           comm->connectSend[peer] |= (1<<channelId);
-          comm->connect = 1;
+          comm->connect[0] = 1;
+        }
+        if (comm->p2pNet && comm->channels[channelId].peers[peer].send[NCCL_CONN_IDX_P2P_NET].connected == 0) {
+          comm->connectSend[peer+comm->nRanks*NCCL_CONN_IDX_P2P_NET] |= (1<<channelId);
+          comm->connect[NCCL_CONN_IDX_P2P_NET] = 1;
         }
       }
     }
@@ -714,9 +718,13 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
       int delta = (comm->nRanks + (comm->rank-peer)) % comm->nRanks;
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
-        if (comm->channels[channelId].peers[peer].recv[NCCL_CONN_IDX_P2P].connected == 0) { // P2P uses only 1 connector
+        if (comm->channels[channelId].peers[peer].recv[0].connected == 0) {
           comm->connectRecv[peer] |= (1<<channelId);
-          comm->connect = 1;
+          comm->connect[0] = 1;
+        }
+        if (comm->p2pNet && comm->channels[channelId].peers[peer].recv[NCCL_CONN_IDX_P2P_NET].connected == 0) {
+          comm->connectRecv[peer+comm->nRanks*NCCL_CONN_IDX_P2P_NET] |= (1<<channelId);
+          comm->connect[NCCL_CONN_IDX_P2P_NET] = 1;
         }
       }
     }
@@ -792,9 +800,15 @@ ncclResult_t ncclSetupP2pKernel(struct ncclInfo* info) {
   // Compute cuda kernel arg and proxy arg templates
   struct ncclQueueElem* eqElem;
   NCCLCHECK(ncclAddQueueElem(comm->enqueueInfo, &eqElem));
+
   // The proxy code will set and tune the send/recv chunk size, make sure to run it first.
   NCCLCHECK(ncclProxyComputeP2p(info, &eqElem->proxyArgs));
   NCCLCHECK(computeP2pWorkElem(info, &eqElem->work));
+
+  eqElem->proxyArgs.sendIdx = info->sendIdx;
+  eqElem->proxyArgs.recvIdx = info->recvIdx;
+  eqElem->work.p2p.sendIdx = info->sendIdx;
+  eqElem->work.p2p.recvIdx = info->recvIdx;
 
   int channelId = info->channelId;
   hipLaunchParams* params = comm->myParams;
