@@ -209,8 +209,8 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int nranks) {
   int pattern = args->pattern;
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice || pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {
     struct ncclRing* ring = &channel->ring;
-    if (NeedProxy(proxyRecv, pattern, args->root, ring, nranks)) NCCLCHECK(SaveProxy(proxyRecv, ring->prev, args, 0));
-    if (NeedProxy(proxySend, pattern, args->root, ring, nranks)) NCCLCHECK(SaveProxy(proxySend, ring->next, args, 0));
+    if (NeedProxy(proxyRecv, pattern, args->root, ring, nranks)) NCCLCHECK(SaveProxy(proxyRecv, ring->prev, args, args->connIndex));
+    if (NeedProxy(proxySend, pattern, args->root, ring, nranks)) NCCLCHECK(SaveProxy(proxySend, ring->next, args, args->connIndex));
   }
   if (pattern == ncclPatternTreeUp || pattern == ncclPatternTreeUpDown) {
     // Tree up

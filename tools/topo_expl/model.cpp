@@ -151,7 +151,8 @@ ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
   int netDev, useGdr = 0;
 
-  NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &netDev));
+  netDev = -1;
+  if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &netDev));
   if (netDev < 0) {
     // Send/Receive: Round-robin NICs based on the receiver's CUDA device
     int nicRR = comm->peerInfo[peerInfo->rank].cudaDev;
@@ -169,7 +170,8 @@ NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
 ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
   int netDev, useGdr = 0;
 
-  NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &netDev));
+  netDev = -1;
+  if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &netDev));
   if (netDev < 0) {
     // Send/Receive: Round-robin NICs based on the receiver's CUDA device
     int nicRR = comm->cudaDev;

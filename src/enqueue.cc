@@ -453,6 +453,8 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
+RCCL_PARAM(IntraNetThreshold, "RCCL_INTRANET_THRESHOLD", 8388608);
+
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWorkElem* work, struct ncclProxyArgs* proxyArgs /* output */) {
   work->comm = info->comm->devComm;
 
@@ -470,6 +472,15 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->nThreads = info->nThreads;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
+
+  work->coll.connIndex = 0;
+  proxyArgs->connIndex = 0;
+  if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) {
+    if (info->comm->useIntraNet && info->nBytes > rcclParamIntraNetThreshold()) {
+      work->coll.connIndex = NCCL_CONN_IDX_P2P_NET;
+      proxyArgs->connIndex = NCCL_CONN_IDX_P2P_NET;
+    }
+  }
 
   { // [RCCL] Check for clique-based kernel support
     if (info->comm->cliqueManager->IsSupported(info->coll,
@@ -728,7 +739,7 @@ static ncclResult_t computeP2pWorkElem(struct ncclInfo* info /* input */, struct
   elem->nThreads = NCCL_MAX_NTHREADS;
   elem->sendbuff = info->sendbuff;
   elem->recvbuff = info->recvbuff;
-  elem->op.opCount = info->comm->collOpCount;
+  elem->op.opCount = info->comm->p2pOpCount;
   elem->p2p.sendCount = info->sendbytes;
   elem->p2p.recvCount = info->recvbytes;
   elem->p2p.sendChunkSize = info->sendChunkSize;
@@ -772,7 +783,7 @@ ncclResult_t ncclEnqueueP2pKernel(struct ncclComm* comm, struct ncclQueueElem* e
   // store work element into FIFO
   NCCLCHECK(ncclProxySaveP2p(comm, proxyArgs));
   NCCLCHECK(enqueueP2pOp(workElem, w, segment));
-  comm->collOpCount++;
+  comm->p2pOpCount++;
   return ncclSuccess;
 }
 
@@ -916,13 +927,10 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     NCCLCHECKGOTO(checkSetStream(info), ret, end);
 
     INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-        info->opName, info->comm->collOpCount, info->sendbuff, info->recvbuff, info->count,
+        info->opName, info->coll == ncclFuncSendRecv ? info->comm->p2pOpCount : info->comm->collOpCount, info->sendbuff, info->recvbuff, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
 
     if (info->coll == ncclFuncSendRecv) { //p2p stored separately
-      INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-        info->opName, info->comm->collOpCount, info->sendbuff, info->recvbuff, info->count,
-        info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
       NCCLCHECKGOTO(ncclSaveP2p(info), ret, end);
     } else {
       NCCLCHECKGOTO(ncclSaveAsyncColl(info), ret, end);

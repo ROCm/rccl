@@ -151,7 +151,8 @@ BEGIN {
     s=ary[1]
     match($col_p5, /([0-9]+)\[.*\]/, ary)
     d=ary[1]
-    conn[s "," d "," chan]=$col_p7
+    if(!((s "," d "," chan) in conn) || match($col_p7,"NET"))
+      conn[s "," d "," chan]=$col_p7
   }
 
   if($col_p6=="[receive]" && $col_p7=="via") {
@@ -161,7 +162,8 @@ BEGIN {
     s=ary[1]
     match($col_p5, /([0-9]+)\[.*\]/, ary)
     d=ary[1]
-    conn[s "," d "," chan]=$col_p8
+    if(!((s "," d "," chan) in conn) || match($col_p8,"NET"))
+      conn[s "," d "," chan]=$col_p8
   }
 }
 
