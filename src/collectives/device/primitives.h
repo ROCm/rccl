@@ -49,6 +49,9 @@
 #define ROLE_POST_SEND 0x10
 #define ROLE_POST_RECV 0x20
 
+// Connection index is used to select P2P and NET and needs to be passed into ncclPrimitives constructor.
+// To avoid adding another parameter which requires changes to every places ncclPrimitives are constructed,
+// we pack group (max 7) and connection index (max 2) to original group which is 32-bit.
 #define PACK_GROUP(gr, idx) (gr | (idx<<16))
 #define TO_GR(group) (group&0xffff)
 #define TO_IDX(group) (group>>16)
