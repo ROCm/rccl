@@ -15,7 +15,7 @@ namespace CorrectnessTests
 
         // Prepare input / output / expected results
         Dataset dataset;
-        dataset.Initialize(numDevices, numElements, dataType, inPlace);
+        dataset.Initialize(numDevices, numElements, dataType, inPlace, ncclCollReduceScatter);
         FillDatasetWithPattern(dataset);
         ComputeExpectedResults(dataset, op);
 

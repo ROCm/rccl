@@ -15,9 +15,9 @@ namespace CorrectnessTests
 
     // Prepare input / output / expected results
     Dataset dataset1, dataset2, dataset3;
-    dataset1.Initialize(numDevices, numElements, dataType, inPlace);
-    dataset2.Initialize(numDevices, numElements, dataType, inPlace);
-    dataset3.Initialize(numDevices, numElements, dataType, inPlace);
+    dataset1.Initialize(numDevices, numElements, dataType, inPlace, ncclCollAllReduce);
+    dataset2.Initialize(numDevices, numElements, dataType, inPlace, ncclCollAllReduce);
+    dataset3.Initialize(numDevices, numElements, dataType, inPlace, ncclCollAllReduce);
     FillDatasetWithPattern(dataset1);
     FillDatasetWithPattern(dataset2);
     FillDatasetWithPattern(dataset3);

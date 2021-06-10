@@ -14,7 +14,7 @@ namespace CorrectnessTests
 
         // Prepare input / output / expected results
         Dataset dataset;
-        dataset.Initialize(numDevices, numElements, dataType, inPlace);
+        dataset.Initialize(numDevices, numElements, dataType, inPlace, ncclCollAllGather);
         FillDatasetWithPattern(dataset);
         ComputeExpectedResults(dataset);
 
@@ -46,7 +46,7 @@ namespace CorrectnessTests
 
         // Allocate dataset
         Dataset dataset;
-        dataset.Initialize(numDevices, numElements, dataType, inPlace);
+        dataset.Initialize(numDevices, numElements, dataType, inPlace, ncclCollAllGather);
 
         // Loop over several offsets (so that device pointers are not aligned)
         for (int firstElement = 1; firstElement <= 11; firstElement += 2)

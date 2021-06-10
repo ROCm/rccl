@@ -14,7 +14,7 @@ namespace CorrectnessTests
 
         // Allocate data
         Dataset dataset;
-        dataset.Initialize(numDevices, numElements, dataType, inPlace);
+        dataset.Initialize(numDevices, numElements, dataType, inPlace, ncclCollBroadcast);
 
         // Test each possible root
         for (int root = 0; root < numDevices; root++)
