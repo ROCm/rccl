@@ -19,9 +19,16 @@ namespace CorrectnessTests
 
         // Create multiple datasets for group operation
         std::vector<Dataset> datasets(5);
+        std::vector<ncclFunc_t> ncclFuncs(5);
+        ncclFuncs.push_back(ncclCollAllGather);
+        ncclFuncs.push_back(ncclCollAllReduce);
+        ncclFuncs.push_back(ncclCollBroadcast);
+        ncclFuncs.push_back(ncclCollReduce);
+        ncclFuncs.push_back(ncclCollReduceScatter);
+
         for (int i = 0; i < datasets.size(); i++)
         {
-            datasets[i].Initialize(numDevices, numElements, dataType, inPlace);
+            datasets[i].Initialize(numDevices, numElements, dataType, inPlace, ncclFuncs[i]);
             FillDatasetWithPattern(datasets[i]);
         }
 

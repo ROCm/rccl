@@ -268,6 +268,7 @@ namespace CorrectnessTests
             subDataset.numElements = lastElement - startElement + 1;
             subDataset.dataType    = dataType;
             subDataset.inPlace     = inPlace;
+            subDataset.function    = function;
 
             subDataset.inputs.resize(numDevices);
             subDataset.outputs.resize(numDevices);
