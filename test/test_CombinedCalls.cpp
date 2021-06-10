@@ -115,6 +115,6 @@ namespace CorrectnessTests
                                 testing::Values(2,3,4,5,6,7,8),
                                 // In-place or not
                                 testing::Values(false),
-                                testing::Values("RCCL_ENABLE_CLIQUE=0", "RCCL_ENABLE_CLIQUE=1")),
+                                testing::Values("RCCL_ENABLE_CLIQUE=0", "RCCL_ENABLE_CLIQUE=1", "RCCL_P2P_NET_DISABLE=0", "RCCL_P2P_NET_DISABLE=1")),
                             CorrectnessTest::PrintToStringParamName());
 } // namespace
