@@ -40,6 +40,7 @@ set(AMDGPU_TARGETS "${DEFAULT_AMDGPU_TARGETS}" CACHE STRING "List of specific ma
 
 option(BUILD_TESTS "Build test programs" OFF)
 option(INSTALL_DEPENDENCIES "Force install dependencies" OFF)
+option(BUILD_ADDRESS_SANITIZER "Build with address sanitizer enabled" OFF)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
@@ -214,6 +215,12 @@ if("${HIP_COMPILER}" MATCHES "clang")
     get_property(link_libraries TARGET rccl PROPERTY LINK_LIBRARIES)
     string (REPLACE ";" " " LINK_PROPS "${link_libraries}")
     set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> -o <TARGET> ${LINK_PROPS} <LINK_FLAGS> <OBJECTS>")
+  endif()
+
+  if(BUILD_ADDRESS_SANITIZER)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -shared-libasan")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -shared-libasan")
+    add_link_options(-fuse-ld=lld)
   endif()
 endif()
 

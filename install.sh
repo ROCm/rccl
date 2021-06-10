@@ -18,6 +18,7 @@ function display_help()
     echo "    [--run_tests_all] Run all unit tests (must be built already.)"
     echo "    [--hcc] Build library using deprecated hcc compiler (default:hip-clang)."
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
+    echo "    [--address-sanitizer] Build with address sanitizer enabled"
 }
 
 # #################################################
@@ -29,6 +30,7 @@ build_tests=false
 run_tests=false
 run_tests_all=false
 build_release=true
+build_address_sanitizer=false
 install_library=false
 build_hip_clang=true
 clean_build=true
@@ -42,7 +44,7 @@ build_static=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix: --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -91,6 +93,9 @@ while true; do
         shift ;;
     --no_clean)
         clean_build=false
+        shift ;;
+    --address-sanitizer)
+        build_address_sanitizer=true
         shift ;;
     --prefix)
         install_prefix=${2}
@@ -166,6 +171,11 @@ fi
 # shared vs static
 if [[ "${build_static}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_STATIC=ON"
+fi
+
+# sanitizer
+if [[ "${build_address_sanitizer}" == true ]]; then
+cmake_common_options="${cmake_common_options} -DBUILD_ADDRESS_SANITIZER=ON"
 fi
 
 compiler=hipcc
