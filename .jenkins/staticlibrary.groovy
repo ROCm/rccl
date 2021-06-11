@@ -9,7 +9,7 @@ def runCI =
     nodeDetails, jobName->
     
     def prj = new rocProject('rccl', 'Static Library PreCheckin')
-    prj.paths.build_command = './install.sh --static'
+    prj.paths.build_command = './install.sh -t --static'
     
 
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
