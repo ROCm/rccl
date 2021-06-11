@@ -97,6 +97,12 @@ else()
   option(BUILD_SHARED_LIBS "Build as a shared library" ON)
 endif()
 
+if(BUILD_ADDRESS_SANITIZER)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -shared-libasan")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -shared-libasan")
+  add_link_options(-fuse-ld=lld)
+endif()
+
 configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/rccl.h)
 configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/nccl.h)
 
@@ -215,12 +221,6 @@ if("${HIP_COMPILER}" MATCHES "clang")
     get_property(link_libraries TARGET rccl PROPERTY LINK_LIBRARIES)
     string (REPLACE ";" " " LINK_PROPS "${link_libraries}")
     set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> -o <TARGET> ${LINK_PROPS} <LINK_FLAGS> <OBJECTS>")
-  endif()
-
-  if(BUILD_ADDRESS_SANITIZER)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -shared-libasan")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -shared-libasan")
-    add_link_options(-fuse-ld=lld)
   endif()
 endif()
 
