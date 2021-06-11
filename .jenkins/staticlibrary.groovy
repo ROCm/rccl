@@ -31,7 +31,7 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project)
+        commonGroovy.runTestCommand(platform, project, "*sum_float32*")
     }
 
     def packageCommand =
