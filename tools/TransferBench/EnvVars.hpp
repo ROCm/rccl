@@ -53,36 +53,45 @@ public:
         printf("[ERROR] FILL_PATTERN must contain an even-number of hex digits\n");
         exit(1);
       }
-      fillPattern.resize(patternLen / 8);
+
+      // Figure out how many copies of the pattern are necessary to fill a 4-byte float properly
+      int copies;
+      switch (patternLen % 8)
+      {
+      case 0:  copies = 1; break;
+      case 4:  copies = 2; break;
+      default: copies = 4; break;
+      }
+
+      fillPattern.resize(copies * patternLen / 8);
       unsigned char* rawData = (unsigned char*) fillPattern.data();
 
       unsigned char val = 0;
-      for (int i = 0; i < patternLen; i++)
+      for (int c = 0; c < copies; c++)
       {
-        if ('0' <= pattern[i] && pattern[i] <= '9')
-          val += (pattern[i] - '0');
-        else if ('A' <= pattern[i] && pattern[i] <= 'F')
-          val += (pattern[i] - 'A' + 10);
-        else if ('a' <= pattern[i] && pattern[i] <= 'f')
-          val += (pattern[i] - 'a' + 10);
-        else
+        for (int i = 0; i < patternLen; i++)
         {
-          printf("[ERROR] FILL_PATTERN must contain an even-number of hex digits (0-9'/a-f/A-F).  (not %c)\n", pattern[i]);
-          exit(1);
-        }
+          if ('0' <= pattern[i] && pattern[i] <= '9')
+            val += (pattern[i] - '0');
+          else if ('A' <= pattern[i] && pattern[i] <= 'F')
+            val += (pattern[i] - 'A' + 10);
+          else if ('a' <= pattern[i] && pattern[i] <= 'f')
+            val += (pattern[i] - 'a' + 10);
+          else
+          {
+            printf("[ERROR] FILL_PATTERN must contain an even-number of hex digits (0-9'/a-f/A-F).  (not %c)\n", pattern[i]);
+            exit(1);
+          }
 
-        // Bit shift or else add and reset to 0
-        if (i % 2 == 0)
-          val <<= 4;
-        else
-        {
-          rawData[i / 2] = val;
-          val = 0;
+          // Bit shift or else add and reset to 0
+          if (i % 2 == 0)
+            val <<= 4;
+          else
+          {
+            rawData[(c * patternLen + i) / 2] = val;
+            val = 0;
+          }
         }
-      }
-      for (int i = 0; i < fillPattern.size(); i++)
-      {
-        printf("%02d: %f\n", i, fillPattern[i]);
       }
     }
     else fillPattern.clear();
@@ -169,13 +178,7 @@ public:
       printf("%-20s = %12s : ", "FILL_PATTERN", getenv("FILL_PATTERN") ? "(specified)" : "(unspecified)");
       if (fillPattern.size())
       {
-        printf("Pattern: ");
-        unsigned char* rawData = (unsigned char*)fillPattern.data();
-        for (int i = 0; i < fillPattern.size() * 4; i++)
-        {
-          printf("%02x", rawData[i]);
-        }
-        printf("\n");
+        printf("Pattern: %s", getenv("FILL_PATTERN"));
       }
       else
       {
