@@ -176,7 +176,7 @@ int main(int argc, char **argv)
       for (int i = 0; i < numLinks; i++)
       {
         // Initialize source memory with patterned data
-        CheckOrFill(MODE_FILL, N, ev.useMemset, ev.useHipCall, links[i].srcMem + initOffset);
+        CheckOrFill(MODE_FILL, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].srcMem + initOffset);
 
         // Each block needs to know src/dst pointers and how many elements to transfer
         // Figure out the sub-array each block does for this Link
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
 
       // Validate that each link has transferred correctly
       for (int i = 0; i < numLinks; i++)
-        CheckOrFill(MODE_CHECK, N, ev.useMemset, ev.useHipCall, links[i].dstMem + initOffset);
+        CheckOrFill(MODE_CHECK, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].dstMem + initOffset);
 
       // Report timings
       totalCpuTime = totalCpuTime / (1.0 * ev.numIterations) * 1000;
@@ -828,7 +828,7 @@ void CheckPages(char* array, size_t numBytes, int targetId)
 }
 
 // Helper function to either fill a device pointer with pseudo-random data, or to check to see if it matches
-void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr)
+void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, std::vector<float>const& fillPattern, float* ptr)
 {
   // Prepare reference resultx
   float* refBuffer = (float*)malloc(N * sizeof(float));
@@ -846,8 +846,18 @@ void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr
   }
   else
   {
-    for (int i = 0; i < N; i++)
+    // Fill with repeated pattern if specified
+    size_t patternLen = fillPattern.size();
+    if (patternLen > 0)
+    {
+      for (int i = 0; i < N; i++)
+        refBuffer[i] = fillPattern[i % patternLen];
+    }
+    else // Otherwise fill with pseudo-random values
+    {
+      for (int i = 0; i < N; i++)
         refBuffer[i] = (i % 383 + 31);
+    }
   }
 
   // Either fill the memory with the reference buffer, or compare against it

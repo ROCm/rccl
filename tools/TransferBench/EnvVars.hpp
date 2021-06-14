@@ -25,6 +25,7 @@ public:
   int numIterations;   // Number of timed iterations to perform
   int samplingFactor;  // Affects how many different values of N are generated (when N set to 0)
   int numCpuPerLink;   // Number of CPU child threads to use per CPU link
+  std::vector<float> fillPattern; // Pattern of floats used to fill source data
 
   // Constructor that collects values
   EnvVars()
@@ -41,6 +42,50 @@ public:
     numIterations   = GetEnvVar("NUM_ITERATIONS"   , DEFAULT_NUM_ITERATIONS);
     samplingFactor  = GetEnvVar("SAMPLING_FACTOR"  , DEFAULT_SAMPLING_FACTOR);
     numCpuPerLink   = GetEnvVar("NUM_CPU_PER_LINK" , DEFAULT_NUM_CPU_PER_LINK);
+
+    // Check for fill pattern
+    char* pattern = getenv("FILL_PATTERN");
+    if (pattern != NULL)
+    {
+      int patternLen = strlen(pattern);
+      if (patternLen % 2)
+      {
+        printf("[ERROR] FILL_PATTERN must contain an even-number of hex digits\n");
+        exit(1);
+      }
+      fillPattern.resize(patternLen / 8);
+      unsigned char* rawData = (unsigned char*) fillPattern.data();
+
+      unsigned char val = 0;
+      for (int i = 0; i < patternLen; i++)
+      {
+        if ('0' <= pattern[i] && pattern[i] <= '9')
+          val += (pattern[i] - '0');
+        else if ('A' <= pattern[i] && pattern[i] <= 'F')
+          val += (pattern[i] - 'A' + 10);
+        else if ('a' <= pattern[i] && pattern[i] <= 'f')
+          val += (pattern[i] - 'a' + 10);
+        else
+        {
+          printf("[ERROR] FILL_PATTERN must contain an even-number of hex digits (0-9'/a-f/A-F).  (not %c)\n", pattern[i]);
+          exit(1);
+        }
+
+        // Bit shift or else add and reset to 0
+        if (i % 2 == 0)
+          val <<= 4;
+        else
+        {
+          rawData[i / 2] = val;
+          val = 0;
+        }
+      }
+      for (int i = 0; i < fillPattern.size(); i++)
+      {
+        printf("%02d: %f\n", i, fillPattern[i]);
+      }
+    }
+    else fillPattern.clear();
 
     // Perform some basic validation
     if (byteOffset % sizeof(float))
@@ -87,6 +132,7 @@ public:
     printf(" NUM_ITERATIONS=I   - Perform I timed iteration(s) per test\n");
     printf(" SAMPLING_FACTOR=F  - Add F samples (when possible) between powers of 2 when auto-generating data sizes\n");
     printf(" NUM_CPU_PER_LINK=C - Use C threads per Link for CPU-executed copies\n");
+    printf(" FILL_PATTERN=STR   - Fill input buffer with pattern specified in hex digits (0-9,a-f,A-F).  Must be even number of digits\n");
   }
 
   // Display env var settings
@@ -120,6 +166,21 @@ public:
       printf("%-20s = %12d : Running %d warmup iteration(s) per topology\n", "NUM_WARMUPS", numWarmups, numWarmups);
       printf("%-20s = %12d : Running %d timed iteration(s) per topology\n", "NUM_ITERATIONS", numIterations, numIterations);
       printf("%-20s = %12d : Using %d CPU thread(s) per CPU-based-copy Link\n", "NUM_CPU_PER_LINK", numCpuPerLink, numCpuPerLink);
+      printf("%-20s = %12s : ", "FILL_PATTERN", getenv("FILL_PATTERN") ? "(specified)" : "(unspecified)");
+      if (fillPattern.size())
+      {
+        printf("Pattern: ");
+        unsigned char* rawData = (unsigned char*)fillPattern.data();
+        for (int i = 0; i < fillPattern.size() * 4; i++)
+        {
+          printf("%02x", rawData[i]);
+        }
+        printf("\n");
+      }
+      else
+      {
+        printf("Pseudo-random: (Element i = i modulo 383 + 31)");
+      }
       printf("\n");
     }
   };
