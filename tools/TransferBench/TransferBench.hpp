@@ -121,7 +121,7 @@ void EnablePeerAccess(int const deviceId, int const peerDeviceId);
 void AllocateMemory(MemType memType, int devIndex, size_t numBytes, float** memPtr);
 void DeallocateMemory(MemType memType, int devIndex, float* memPtr);
 void CheckPages(char* byteArray, size_t numBytes, int targetId);
-void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, float* ptr);
+void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, std::vector<float> const& fillPattern, float* ptr);
 void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link);
 
 
