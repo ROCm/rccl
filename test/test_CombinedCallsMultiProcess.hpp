@@ -32,6 +32,12 @@ namespace CorrectnessTests
 
             Barrier barrier(rank, numDevices, StripPortNumberFromCommId(std::string(getenv("NCCL_COMM_ID"))));
 
+            for (int i = 0; i < datasets.size(); i++)
+            {
+                FillDatasetWithPattern(*datasets[i], rank);
+            }
+            barrier.Wait();
+
             // Compute expected results for each dataset in combined
             int const root = 0;
             std::vector<int> ranks(1, rank);
