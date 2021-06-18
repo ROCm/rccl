@@ -7,7 +7,7 @@ set( CMAKE_CXX_STANDARD 14 )
 # Without this line, it will add -std=gnu++14 instead, which has some issues.
 set( CMAKE_CXX_EXTENSIONS OFF )
 
-set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
+set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
 
 project(rccl CXX)
 
@@ -82,10 +82,10 @@ set(VERSION_STRING "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}")
 rocm_setup_version(VERSION ${VERSION_STRING})
 
 list(APPEND CMAKE_PREFIX_PATH
-            /opt/rocm
-            /opt/rocm/hip
-            /opt/rocm/llvm
-            /opt/rocm/hcc)
+            ${ROCM_PATH}
+            ${ROCM_PATH}/hip
+            ${ROCM_PATH}/llvm
+            ${ROCM_PATH}/hcc)
 
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
@@ -206,7 +206,7 @@ if("${HIP_COMPILER}" MATCHES "clang")
     target_compile_options(rccl PRIVATE --cuda-gpu-arch=${target} PRIVATE -fgpu-rdc)
   endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
-  target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
+  target_include_directories(rccl PRIVATE ${ROCM_PATH}/hsa/include)
   find_program( hipcc_executable hipcc )
   execute_process(COMMAND bash "-c" "${hipcc_executable} -help | grep 'parallel-jobs'" OUTPUT_VARIABLE hipcc_parallel_jobs)
   if("${hipcc_parallel_jobs}" MATCHES "parallel-jobs")
@@ -259,7 +259,7 @@ rocm_export_targets(NAMESPACE
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
-set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
+set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "${ROCM_PATH}")
 
 find_file (DEBIAN debian_version debconf.conf PATHS /etc)
 if(DEBIAN)
