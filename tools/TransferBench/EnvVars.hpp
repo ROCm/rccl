@@ -1,6 +1,8 @@
 #ifndef ENVVARS_HPP
 #define ENVVARS_HPP
 
+#include <algorithm>
+
 // This class manages environment variable that affect TransferBench
 class EnvVars
 {
@@ -54,6 +56,35 @@ public:
         exit(1);
       }
 
+      // Read in bytes
+      std::vector<unsigned char> bytes;
+      unsigned char val = 0;
+      for (int i = 0; i < patternLen; i++)
+      {
+        if ('0' <= pattern[i] && pattern[i] <= '9')
+          val += (pattern[i] - '0');
+        else if ('A' <= pattern[i] && pattern[i] <= 'F')
+          val += (pattern[i] - 'A' + 10);
+        else if ('a' <= pattern[i] && pattern[i] <= 'f')
+          val += (pattern[i] - 'a' + 10);
+        else
+        {
+          printf("[ERROR] FILL_PATTERN must contain an even-number of hex digits (0-9'/a-f/A-F).  (not %c)\n", pattern[i]);
+          exit(1);
+        }
+
+        if (i % 2 == 0)
+          val <<= 4;
+        else
+        {
+          bytes.push_back(val);
+          val = 0;
+        }
+      }
+
+      // Reverse bytes (input is assumed to be given in big-endian)
+      std::reverse(bytes.begin(), bytes.end());
+
       // Figure out how many copies of the pattern are necessary to fill a 4-byte float properly
       int copies;
       switch (patternLen % 8)
@@ -63,36 +94,12 @@ public:
       default: copies = 4; break;
       }
 
-      fillPattern.resize(copies * patternLen / 8);
+      // Fill floats
+      int numFloats = copies * patternLen / 8;
+      fillPattern.resize(numFloats);
       unsigned char* rawData = (unsigned char*) fillPattern.data();
-
-      unsigned char val = 0;
-      for (int c = 0; c < copies; c++)
-      {
-        for (int i = 0; i < patternLen; i++)
-        {
-          if ('0' <= pattern[i] && pattern[i] <= '9')
-            val += (pattern[i] - '0');
-          else if ('A' <= pattern[i] && pattern[i] <= 'F')
-            val += (pattern[i] - 'A' + 10);
-          else if ('a' <= pattern[i] && pattern[i] <= 'f')
-            val += (pattern[i] - 'a' + 10);
-          else
-          {
-            printf("[ERROR] FILL_PATTERN must contain an even-number of hex digits (0-9'/a-f/A-F).  (not %c)\n", pattern[i]);
-            exit(1);
-          }
-
-          // Bit shift or else add and reset to 0
-          if (i % 2 == 0)
-            val <<= 4;
-          else
-          {
-            rawData[(c * patternLen + i) / 2] = val;
-            val = 0;
-          }
-        }
-      }
+      for (int i = 0; i < numFloats * 4; i++)
+        rawData[i] = bytes[i % bytes.size()];
     }
     else fillPattern.clear();
 
@@ -141,7 +148,7 @@ public:
     printf(" NUM_ITERATIONS=I   - Perform I timed iteration(s) per test\n");
     printf(" SAMPLING_FACTOR=F  - Add F samples (when possible) between powers of 2 when auto-generating data sizes\n");
     printf(" NUM_CPU_PER_LINK=C - Use C threads per Link for CPU-executed copies\n");
-    printf(" FILL_PATTERN=STR   - Fill input buffer with pattern specified in hex digits (0-9,a-f,A-F).  Must be even number of digits\n");
+    printf(" FILL_PATTERN=STR   - Fill input buffer with pattern specified in hex digits (0-9,a-f,A-F).  Must be even number of digits, (byte-level big-endian)\n");
   }
 
   // Display env var settings
