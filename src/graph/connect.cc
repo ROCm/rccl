@@ -292,6 +292,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
   // Get number of channels after duplication
   nc *= comm->nChannels;
+  nc = std::min((int)ncclMaxNchannels(), nc);
   // Duplication should be complete now
   nChannels = comm->nChannels = std::min(MAXCHANNELS,nChannels*2);
 
