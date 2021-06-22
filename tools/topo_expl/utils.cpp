@@ -404,7 +404,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
 
   if ((comm->topo->type & RCCL_TOPO_4P2H_ROME) && (comm->topo->type & RCCL_TOPO_GDR_ALL)) {
     if (rcclParamP2pNetDisable() == 0) {
-      STORE(comm->p2pNet, 1);
+      comm->p2pNet = 1;
       INFO(NCCL_INIT, "RCCL enabled same node P2P over network");
     }
     else
