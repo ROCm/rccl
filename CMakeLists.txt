@@ -7,8 +7,6 @@ set( CMAKE_CXX_STANDARD 14 )
 # Without this line, it will add -std=gnu++14 instead, which has some issues.
 set( CMAKE_CXX_EXTENSIONS OFF )
 
-set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
-
 project(rccl CXX)
 
 include(cmake/Dependencies.cmake)
@@ -22,6 +20,14 @@ if( CMAKE_CXX_COMPILER MATCHES ".*/hipcc$" )
         ERROR_STRIP_TRAILING_WHITESPACE)
     string(REGEX MATCH ".mcode\-object\-version" TARGET_ID_SUPPORT ${CXX_OUTPUT})
 endif()
+
+if(NOT DEFINED ROCM_PATH)
+  get_filename_component(_relative_path ${CMAKE_CXX_COMPILER} DIRECTORY )
+  get_filename_component(_new_path "${_relative_path}/../" REALPATH )
+  get_filename_component(ROCM_PATH ${_new_path} REALPATH )
+endif()
+
+set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
 
 #Set the AMDGPU_TARGETS with backward compatiblity
 if(COMMAND rocm_check_target_ids)
