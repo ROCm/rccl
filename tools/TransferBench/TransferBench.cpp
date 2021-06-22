@@ -402,7 +402,7 @@ void DisplayUsage(char const* cmdName)
   printf("\n");
   printf("Examples:\n");
   printf("1 4 (G0->G0->G1)             Single Link that uses 4 CUs on GPU 0 that reads memory from GPU 0 and copies it to memory on GPU 1\n");
-  printf("1 4 (G1->C0->G0)             Single Link that uses 4 CUs on GPU 0 that reads memory from CPU 1 and copies it to memory on GPU 0\n");
+  printf("1 4 (G1->C0->G0)             Single Link that uses CPU 0 to read memory from GPU 1 and then copies it to memory on GPU 0\n");
   printf("1 4 (C0->G2->G2)             Single Link that uses 4 CUs on GPU 2 that reads memory from CPU 0 and copies it to memory on GPU 2\n");
   printf("2 4 G0->G0->G1 G1->G1->G0    Runs 2 Links in parallel.  GPU 0 - > GPU1, and GP1 -> GPU 0, each with 4 CUs\n");
   printf("-2 (G0 G0 G1 4) (G1 G1 G0 2) Runs 2 Links in parallel.  GPU 0 - > GPU 1 using four CUs, and GPU1 -> GPU 0 using two CUs\n");
