@@ -22,9 +22,9 @@ if( CMAKE_CXX_COMPILER MATCHES ".*/hipcc$" )
 endif()
 
 if(NOT DEFINED ROCM_PATH)
-  get_filename_component(_relative_path ${CMAKE_CXX_COMPILER} DIRECTORY )
-  get_filename_component(_new_path "${_relative_path}/../" REALPATH )
-  get_filename_component(ROCM_PATH ${_new_path} REALPATH )
+  get_filename_component(_real_path ${CMAKE_CXX_COMPILER} REALPATH)
+  get_filename_component(_new_path "${_real_path}" DIRECTORY)
+  get_filename_component(ROCM_PATH "${_new_path}/../.." REALPATH)
 endif()
 
 set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
