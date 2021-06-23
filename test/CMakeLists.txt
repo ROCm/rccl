@@ -42,20 +42,20 @@ if(BUILD_TESTS)
   add_executable(UnitTests ${TEST_SOURCES_SINGLE_PROCESS})
   target_include_directories(UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
   target_link_libraries(UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
+  target_link_libraries(UnitTests PRIVATE hip::host hip::device)
 
   add_executable(UnitTestsMultiProcess ${TEST_SOURCES_MULTI_PROCESS})
   target_include_directories(UnitTestsMultiProcess PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
   target_link_libraries(UnitTestsMultiProcess PRIVATE ${GTEST_BOTH_LIBRARIES})
+  target_link_libraries(UnitTestsMultiProcess PRIVATE hip::host hip::device)
 
   # UnitTests using static library of rccl requires passing rccl
   # through -l and -L instead of command line input.
   if(BUILD_STATIC)
     add_dependencies(UnitTests rccl)
     target_link_libraries(UnitTests PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR})
-    target_link_libraries(UnitTests PRIVATE amdhip64 amd_comgr hsa-runtime64::hsa-runtime64)
     add_dependencies(UnitTestsMultiProcess rccl)
     target_link_libraries(UnitTestsMultiProcess PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR})
-    target_link_libraries(UnitTestsMultiProcess PRIVATE amdhip64 amd_comgr hsa-runtime64::hsa-runtime64)
   else()
     target_link_libraries(UnitTests PRIVATE rccl)
     target_link_libraries(UnitTestsMultiProcess PRIVATE rt rccl)
