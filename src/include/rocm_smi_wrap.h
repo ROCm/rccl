@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,11 +19,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-#ifndef RCCL_ROME_MODELS_H_
-#define RCCL_ROME_MODELS_H_
 
-ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map);
-ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
-ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
+#ifndef ROCM_SMI_WRAP_H_
+#define ROCM_SMI_WRAP_H_
+
+#include "rocm_smi/rocm_smi.h"
+#include "nccl.h"
+
+ncclResult_t rocm_smi_init();
+ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* deviceIndex);
+ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *bw);
 
 #endif

@@ -17,6 +17,7 @@
 #include "core.h"
 #include "nvmlwrap.h"
 #include "xml.h"
+#include "rocm_smi_wrap.h"
 
 /*******************/
 /* XML File Parser */
@@ -656,9 +657,10 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
     CUDACHECK(hipGetDeviceCount(&deviceCnt));
     for (int i=0; i<deviceCnt; i++) {
       if (i != dev) {
-        uint32_t link_type, hops;
-        if (hipExtGetLinkTypeAndHopCount(dev, i, &link_type, &hops) == hipSuccess) {
-          if (link_type == HSA_AMD_LINK_INFO_TYPE_XGMI && hops == 1) {
+        RSMI_IO_LINK_TYPE rsmi_type;
+        int hops, bw;
+        if (rocm_smi_getLinkInfo(dev, i, &rsmi_type, &hops, &bw) == ncclSuccess) {
+          if (rsmi_type == RSMI_IOLINK_TYPE_XGMI && hops == 1) {
             char busIdStr[] = "00000000:00:00.0";
             CUDACHECK(hipDeviceGetPCIBusId(busIdStr, sizeof(busIdStr), i));
             char lowerId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
@@ -752,6 +754,17 @@ ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct nccl
   struct ncclXmlNode* node;
   NCCLCHECK(ncclTopoGetPciNode(xml, busId, &node));
   NCCLCHECK(ncclTopoGetXmlFromSys(node, xml));
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  uint32_t devIndex;
+  static int rocmsmiInit = 0;
+  if (rocmsmiInit == 0) {
+    rocmsmiInit = (rocm_smi_init() != ncclSuccess) ? 2 : 1;
+  }
+  if (rocmsmiInit == 1) {
+    if (rocm_smi_getDeviceIndexByPciBusId(busId, &devIndex) != ncclSuccess) devIndex = -1;
+  }
+  NCCLCHECK(ncclTopoGetXmlFromGpu(node, NULL, xml, gpuNode));
+#else
   nvmlDevice_t nvmlDev = NULL;
   static int nvmlInit = 0;
   if (nvmlInit == 0) {
@@ -761,6 +774,7 @@ ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct nccl
     if (wrapNvmlDeviceGetHandleByPciBusId(busId, &nvmlDev) != ncclSuccess) nvmlDev = NULL;
   }
   NCCLCHECK(ncclTopoGetXmlFromGpu(node, nvmlDev, xml, gpuNode));
+#endif
   return ncclSuccess;
 }
 

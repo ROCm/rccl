@@ -170,6 +170,7 @@ set(CC_SOURCES
     src/misc/utils.cc
     src/misc/ibvwrap.cc
     src/misc/nvmlwrap_stub.cc
+    src/misc/rocm_smi_wrap.cc
     src/transport/coll_net.cc
     src/transport/net.cc
     src/transport/net_ib.cc
@@ -240,7 +241,8 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-target_link_libraries(rccl PRIVATE hip::device dl)
+target_include_directories(rccl PRIVATE ${ROCM_PATH}/rocm_smi/include)
+target_link_libraries(rccl PRIVATE hip::device dl -lrocm_smi64 -L${ROCM_PATH}/rocm_smi/lib)
 target_link_libraries(rccl INTERFACE hip::host)
 
 #Setup librccl.so version
