@@ -8,11 +8,8 @@
 #include "comm.h"
 #include "graph.h"
 #include "utils.h"
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#include <hsa/hsa.h>
-#include <hsa/hsa_ext_amd.h>
-#endif
 #include "bootstrap.h"
+#include "rocm_smi_wrap.h"
 
 struct p2pConnectInfo {
   int rank;
@@ -173,12 +170,13 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   NCCLCHECK(p2pGetInfo(comm->topo, myInfo, peerInfo, &useRead, &intermediateRank));
 
   resources->next_hdp_reg = 0;
-  uint32_t linktype, hops;
-  if (hipExtGetLinkTypeAndHopCount(myInfo->cudaDev, peerInfo->cudaDev, &linktype, &hops) != hipSuccess) {
+  RSMI_IO_LINK_TYPE linktype;
+  int hops, bw;
+  if (rocm_smi_getLinkInfo(myInfo->cudaDev, peerInfo->cudaDev, &linktype, &hops, &bw) != ncclSuccess) {
     INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", channelId, myInfo->rank, peerInfo->rank);
     return ncclInternalError;
   }
-  if (linktype != HSA_AMD_LINK_INFO_TYPE_XGMI) {
+  if (linktype != RSMI_IOLINK_TYPE_XGMI) {
     CUDACHECK(hipDeviceGetAttribute((int*)&resources->next_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
     TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", channelId, myInfo->rank, peerInfo->rank, resources->next_hdp_reg);
   }

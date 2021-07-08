@@ -28,6 +28,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "graph/topo.h"
+#include "rocm_smi_wrap.h"
 
 // [RCCL]
 #include "clique/CliqueManager.h"
@@ -795,9 +796,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
             break;
           }
 
-          uint32_t linkType, hopCount;
-          CUDACHECK(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
-          allXgmi &= (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI);
+          RSMI_IO_LINK_TYPE linkType;
+          int hopCount, bw;
+          NCCLCHECK(rocm_smi_getLinkInfo(i, j, &linkType, &hopCount, &bw));
+          allXgmi &= (linkType == RSMI_IOLINK_TYPE_XGMI);
         }
       }
       if (hasPeerAccess)
