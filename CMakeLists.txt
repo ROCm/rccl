@@ -265,8 +265,10 @@ rocm_export_targets(NAMESPACE
                     hip)
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-smi-lib (>= 4.0.0)")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
+set(CPACK_RPM_PACKAGE_REQUIRES "rocm-smi-lib >= 4.0.0")
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "${ROCM_PATH}")
 
 find_file (DEBIAN debian_version debconf.conf PATHS /etc)
