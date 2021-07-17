@@ -130,8 +130,9 @@ ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     CUDACHECK(hipDeviceGetAttribute((int*)&resources->curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
     send->conn.curr_hdp_reg = resources->curr_hdp_reg;
   }
-  INFO(NCCL_INIT|NCCL_NET,"Channel %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), resources->netDev,
-      resources->useGdr ? "/GDRDMA" : "", resources->shared ? "/Shared" : "");
+  INFO(NCCL_INIT|NCCL_NET,"Channel %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s%s comm %p nRanks %02d", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, 
+		  peerInfo->busId, ncclNetName(), resources->netDev,resources->useGdr ? "/GDRDMA" : "", 
+		  resources->shared ? "/Shared" : "", comm, comm->nRanks);
   return ncclSuccess;
 }
 
@@ -210,8 +211,9 @@ ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     }
   }
 
-  INFO(NCCL_INIT|NCCL_NET,"Channel %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s%s", channelId, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), resources->netDev,
-      resources->useGdr ? "/GDRDMA" : "", resources->shared ? "/Shared" : "");
+  INFO(NCCL_INIT|NCCL_NET,"Channel %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s%s comm %p nRanks %02d", channelId, peerInfo->rank, 
+		  peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), resources->netDev,resources->useGdr ? "/GDRDMA" : "", 
+		  resources->shared ? "/Shared" : "", comm, comm->nRanks);
   struct netConnectInfo* info = (struct netConnectInfo*) connectInfo;
   NCCLCHECK(ncclNetListen(resources->netDev, &info->netHandle, &resources->netListenComm));
 

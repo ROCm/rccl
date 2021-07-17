@@ -247,9 +247,9 @@ void *ncclCommThreadMain(void *arg) {
             if (fIdx > FUNC_INDEX_P2P)
               sprintf(line+offset, "ERROR bad function index %d", fIdx);
             else if (fIdx == FUNC_INDEX_P2P)
-              sprintf(line+offset, "nt %d dt %d", td->p2p.nThreads, td->p2p.delta);
+              sprintf(line+offset, "nt %d dt %d busId %lx nRanks %d", td->p2p.nThreads, td->p2p.delta, comm->busId, comm->nRanks);
             else
-              sprintf(line+offset, "nt %d bi %d nc %d", td->coll.nThreads, td->coll.bid, td->coll.nChannels);
+              sprintf(line+offset, "nt %d bi %d nc %d busId %lx nRanks %d", td->coll.nThreads, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
             break;
           case ncclCollTraceCollEndType:
             if (fIdx != 0xffff) {
@@ -258,12 +258,12 @@ void *ncclCommThreadMain(void *arg) {
               if (fIdx > FUNC_INDEX_P2P)
                 sprintf(line+offset, "ERROR bad function index %d", fIdx);
               else if (fIdx == FUNC_INDEX_P2P)
-                sprintf(line+offset, "nt %d dt %d", td->p2p.nThreads, td->p2p.delta);
+                sprintf(line+offset, "nt %d dt %d busId %lx nRanks %d", td->p2p.nThreads, td->p2p.delta, comm->busId, comm->nRanks);
               else
-                sprintf(line+offset, "nt %d bi %d nc %d", td->coll.nThreads, td->coll.bid, td->coll.nChannels);
+                sprintf(line+offset, "nt %d bi %d nc %d busId %lx nRanks %d", td->coll.nThreads, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
             }
             else
-              sprintf(line+offset, " KE");
+              sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);
             break;
           case ncclCollTraceAbortType:
             sprintf(line+offset, " Abort");
@@ -983,10 +983,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     struct ncclTree* tree = &comm->channels[c].tree;
     snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
-    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c, comm->channels[c].ring.prev, comm->rank, comm->channels[c].ring.next);
+    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev, 
+         comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
   }
   line[1023] = '\0';
-  INFO(NCCL_INIT, "Trees%s", line);
+  INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
 
   // Set Affinity to a CPU local the our GPU, so that all memory we allocate
   // on the host is local.
@@ -1016,7 +1017,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, NCCL_CONN_IDX_P2P_NET), ret, affinity_restore);
   }
   free(rings);
-  INFO(NCCL_INIT, "Connected all rings");
+  INFO(NCCL_INIT, "Connected all rings comm %p nRanks %02d busId %lx", comm, comm->nRanks, comm->busId);
 
   // Connect Trees
   for (int c=0; c<comm->nChannels; c++) {
@@ -1026,7 +1027,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->tree.up, NCCL_MAX_TREE_ARITY, channel->tree.down, 0), ret, affinity_restore);
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0), ret, affinity_restore);
-  INFO(NCCL_INIT, "Connected all trees");
+  INFO(NCCL_INIT, "Connected all trees comm %p nRanks %02d busId %lx", comm, comm->nRanks, comm->busId);
 
   // Check if we can setup CollNet
   if (comm->collNetSupport > 0) {
@@ -1068,7 +1069,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channelSend, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.down, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.up, 1), ret, collnet_cleanup);
     }
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 1), ret, collnet_cleanup);
-    INFO(NCCL_INIT, "rank %d Connected CollNet", rank);
+    INFO(NCCL_INIT, "rank %d Connected CollNet comm %p nRanks %02d", rank, comm, comm->nRanks);
 
 collnet_cleanup:
     free(heads);
