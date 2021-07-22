@@ -29,6 +29,7 @@
 #include "coll_net.h"
 #include "model.h"
 #include "utils.h"
+#include "rocm_smi/rocm_smi.h"
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
@@ -841,5 +842,17 @@ affinity_restore:
   if (ret != ncclSuccess) return ret;
 
   TRACE(NCCL_INIT, "rank %d nranks %d - DONE", rank, nranks);
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_init() {
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* deviceIndex) {
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *bw) {
   return ncclSuccess;
 }

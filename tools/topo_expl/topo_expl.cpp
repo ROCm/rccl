@@ -184,8 +184,8 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nranks; i++) {
     comm[i].rank = i;
     comm[i].nRanks = nranks;
-    NCCLCHECK(ncclCalloc(&comm[i].connectSend, comm->nRanks));
-    NCCLCHECK(ncclCalloc(&comm[i].connectRecv, comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].connectSend, NCCL_MAX_CONNS*comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].connectRecv, NCCL_MAX_CONNS*comm->nRanks));
     comm[i].p2pSendCount = comm[i].p2pRecvCount = 0;
     NCCLCHECK(ncclCalloc(&comm[i].p2pSends, comm->nRanks));
     NCCLCHECK(ncclCalloc(&comm[i].p2pRecvs, comm->nRanks));
