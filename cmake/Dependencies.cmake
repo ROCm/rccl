@@ -72,12 +72,13 @@ endif()
 
 
 # Find or download/install rocm-cmake project
-find_package(ROCM QUIET CONFIG PATHS /opt/rocm)
+set( PROJECT_EXTERN_DIR ${CMAKE_CURRENT_BINARY_DIR}/extern )
+find_package(ROCM 0.6 QUIET CONFIG PATHS /opt/rocm)
 if(NOT ROCM_FOUND)
     set(rocm_cmake_tag "master" CACHE STRING "rocm-cmake tag to download")
     file(
         DOWNLOAD https://github.com/RadeonOpenCompute/rocm-cmake/archive/${rocm_cmake_tag}.zip
-        ${CMAKE_CURRENT_BINARY_DIR}/rocm-cmake-${rocm_cmake_tag}.zip
+        ${PROJECT_EXTERN_DIR}/rocm-cmake-${rocm_cmake_tag}.zip
         STATUS rocm_cmake_download_status LOG rocm_cmake_download_log
     )
     list(GET rocm_cmake_download_status 0 rocm_cmake_download_error_code)
@@ -90,14 +91,19 @@ if(NOT ROCM_FOUND)
     endif()
 
     execute_process(
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_BINARY_DIR}/rocm-cmake-${rocm_cmake_tag}.zip
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${PROJECT_EXTERN_DIR}/rocm-cmake-${rocm_cmake_tag}.zip
+        WORKING_DIRECTORY ${PROJECT_EXTERN_DIR}
         RESULT_VARIABLE rocm_cmake_unpack_error_code
     )
+    execute_process( COMMAND ${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=${PROJECT_EXTERN_DIR}/rocm-cmake .
+      WORKING_DIRECTORY ${PROJECT_EXTERN_DIR}/rocm-cmake-${rocm_cmake_tag} )
+    execute_process( COMMAND ${CMAKE_COMMAND} --build rocm-cmake-${rocm_cmake_tag} --target install
+      WORKING_DIRECTORY ${PROJECT_EXTERN_DIR})
+  
     if(rocm_cmake_unpack_error_code)
         message(FATAL_ERROR "Error: unpacking ${CMAKE_CURRENT_BINARY_DIR}/rocm-cmake-${rocm_cmake_tag}.zip failed")
     endif()
-    find_package(ROCM REQUIRED CONFIG PATHS ${CMAKE_CURRENT_BINARY_DIR}/rocm-cmake-${rocm_cmake_tag})
+    find_package( ROCM 0.6 REQUIRED CONFIG PATHS ${PROJECT_EXTERN_DIR}/rocm-cmake )
 endif()
 
 include(ROCMSetupVersion)
