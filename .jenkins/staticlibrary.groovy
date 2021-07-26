@@ -9,9 +9,10 @@ def runCI =
     nodeDetails, jobName->
     
     def prj = new rocProject('rccl', 'Static Library PreCheckin')
+
+    prj.timeout.test = 1440
     prj.paths.build_command = './install.sh -t --static'
     
-
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
 
     def commonGroovy
