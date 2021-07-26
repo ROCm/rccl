@@ -252,7 +252,7 @@ rocm_install_targets(TARGETS
                      rccl
                      PREFIX
                      rccl)
-install(FILES ${PROJECT_BINARY_DIR}/rccl.h
+rocm_install(FILES ${PROJECT_BINARY_DIR}/rccl.h
         DESTINATION rccl/${CMAKE_INSTALL_INCLUDEDIR})
 
 rocm_export_targets(NAMESPACE
