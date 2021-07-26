@@ -4,6 +4,8 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## [UNRELEASED]
 ### Added
 - Compatibility with NCCL 2.9.9
+### Changed
+- Packaging split into a runtime package called rccl and a development package called rccl-devel. The development package depends on runtime. The runtime package suggests the development package for all supported OSes except CentOS 7 to aid in the transition. The suggests feature in packaging is introduced as a deprecated feature and will be removed in a future rocm release.
 
 ## [RCCL-2.8.4 for ROCm 4.3.0]
 ### Added
