@@ -391,6 +391,51 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   NCCLCHECK(ncclTopoCompute(comm->topo, &collNetGraph));
   NCCLCHECK(ncclTopoPrintGraph(comm->topo, &collNetGraph));
 
+  bool allXgmi = true;
+  { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager
+    //CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
+    if (comm->localRanks == comm->nRanks)
+    {
+      // Check that all the GPUs have peer access to one another and are XGMI connected
+      bool hasPeerAccess = true;
+      for (int i = 0; i < nranks && hasPeerAccess; i++)
+      {
+        int cudaDev1 = allGather1Data[i].peerInfo.cudaDev;
+        for (int j = 0; j < nranks; j++)
+        {
+          if (i == j) continue;
+          int cudaDev2 = allGather1Data[j].peerInfo.cudaDev;
+          //int p2p;
+          //if (hipDeviceCanAccessPeer(&p2p, cudaDev1, cudaDev2) != hipSuccess || !p2p)
+          //{
+          //  hasPeerAccess = false;
+          //  break;
+          //}
+
+          bool isXGMI;
+          NCCLCHECK(ncclTopoGetLinkType(comm->topo, i, j, &isXGMI));
+          allXgmi &= isXGMI;
+        }
+      }
+      //if (hasPeerAccess)
+      //{
+      //  if (intraRanks == nranks)
+      //    cliqueMode = CliqueManager::CLIQUE_SINGLE_PROCESS;
+      //  else
+      //    cliqueMode = CliqueManager::CLIQUE_SINGLE_NODE;
+      //}
+
+      // For now, only enable clique-based kernels on nodes where all GPUs are XGMI connected
+      //if (!allXgmi && !rcclParamCliqueIgnoreTopo())
+      //{
+      //  INFO(NCCL_INIT, "Disabling clique-based kernels due to topology (ignore with RCCL_CLIQUE_IGNORE_TOPO)");
+      //  cliqueMode = CliqueManager::CLIQUE_DISABLED;
+      //}
+    }
+    //comm->cliqueManager = new CliqueManager(rank, nranks, cliqueMode);
+    //NCCLCHECK(comm->cliqueManager->Init(commId, rootPid));
+  } // [/RCCL]
+
   if (comm->rank == ncclParamGraphDumpFileRank()) {
     struct ncclTopoGraph* graphs[3] = { &ringGraph, &treeGraph, &collNetGraph };
     NCCLCHECK(ncclTopoDumpGraphs(comm->topo, 3, graphs));
@@ -437,6 +482,8 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   int idx;
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].nc = 2;
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 906 && allXgmi)
+    allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 908)
     allGather3Data[rank].nc = std::max(4/ringGraph.nChannels, 2);
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G))
