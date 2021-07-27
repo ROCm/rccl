@@ -29,6 +29,7 @@
 #include "coll_net.h"
 #include "model.h"
 #include "utils.h"
+#include "rocm_smi/rocm_smi.h"
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
@@ -436,6 +437,8 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   int idx;
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].nc = 2;
+  if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 908)
+    allGather3Data[rank].nc = std::max(4/ringGraph.nChannels, 2);
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G))
     allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
@@ -841,5 +844,17 @@ affinity_restore:
   if (ret != ncclSuccess) return ret;
 
   TRACE(NCCL_INIT, "rank %d nranks %d - DONE", rank, nranks);
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_init() {
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* deviceIndex) {
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *bw) {
   return ncclSuccess;
 }
