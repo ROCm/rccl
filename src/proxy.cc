@@ -42,9 +42,19 @@ static ncclResult_t allocateArgs(struct ncclComm* comm, struct ncclProxyArgs** a
       state->poolReturned = NULL;
       pthread_mutex_unlock(&state->poolMutex);
     } else {
-      // Allocate a new pool of elements
+      // Allocate a new pool of elements. Make sure we allocate the memory close
+      // to the network thread
       struct ncclProxyPool* newPool;
+      cpu_set_t affinitySave;
+      if (CPU_COUNT(&comm->cpuAffinity)) {
+        sched_getaffinity(0, sizeof(cpu_set_t), &affinitySave);
+        sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
+      }
       NCCLCHECK(ncclCalloc(&newPool, 1));
+      if (CPU_COUNT(&comm->cpuAffinity)) {
+        sched_setaffinity(0, sizeof(cpu_set_t), &affinitySave);
+      }
+
       struct ncclProxyArgs* newElems = newPool->elems;
       // Chain newly allocated elements
       for (int i=0; i<PROXYARGS_ALLOCATE_SIZE; i++) {
@@ -420,11 +430,11 @@ void* persistentThread(void *comm_) {
 
   struct ncclProxyArgs** opsPtr = &state->ops;
   while (1) {
-    if (LOAD(comm->abortFlag)) {
+    if (*comm->abortFlag) {
       return NULL;
     }
 
-    while (LOAD(opsPtr) == NULL) {
+    while (*opsPtr == NULL) {
       if (state->stop) {
         // No more commands to process and proxy has been requested to stop
         return NULL;

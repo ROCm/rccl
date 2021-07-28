@@ -145,7 +145,8 @@ typedef enum { ncclSum        = 0,
                ncclProd       = 1,
                ncclMax        = 2,
                ncclMin        = 3,
-               ncclNumOps     = 4 } ncclRedOp_t;
+               ncclAvg        = 4,
+               ncclNumOps     = 5 } ncclRedOp_t;
 
 /*! @brief Data types */
 typedef enum { ncclInt8       = 0, ncclChar       = 0,
