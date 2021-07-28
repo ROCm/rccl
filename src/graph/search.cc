@@ -1036,3 +1036,38 @@ ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, str
   }
   return ncclSuccess;
 }
+
+ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, int cudaDev2, bool* isXGMI, bool direct_only) {
+  int ngpus = system->nodes[GPU].count;
+  *isXGMI = false;
+  // check for direct XGMI connection
+  for (int i=0; i<ngpus; i++) {
+    if (system->nodes[GPU].nodes[i].gpu.dev == cudaDev1) {
+      struct ncclTopoNode *node = system->nodes[GPU].nodes+i;
+      for (int k = 0; k<system->nodes[GPU].count; k++) {
+        if (node->paths[GPU][k].count == 1) {
+          struct ncclTopoLink* link = node->paths[GPU][k].list[0];
+          struct ncclTopoNode* remNode = link->remNode;
+          if (remNode->gpu.dev == cudaDev2) {
+            *isXGMI = (link->type == LINK_NVL);
+            return ncclSuccess;
+          }
+        }
+      }
+    }
+  }
+  if (direct_only) return ncclSuccess;
+  // check if there is intermediate GPU that is connected to both
+  for (int i=0; i<ngpus; i++) {
+    if (system->nodes[GPU].nodes[i].gpu.dev == cudaDev1 || system->nodes[GPU].nodes[i].gpu.dev == cudaDev2)
+      continue;
+    bool res1, res2;
+    ncclTopoGetLinkType(system, system->nodes[GPU].nodes[i].gpu.dev, cudaDev1, &res1, true);
+    ncclTopoGetLinkType(system, system->nodes[GPU].nodes[i].gpu.dev, cudaDev2, &res2, true);
+    if (res1 && res2) {
+      *isXGMI = true;
+      return ncclSuccess;
+    }
+  }
+  return ncclSuccess;
+}

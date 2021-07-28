@@ -28,7 +28,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "graph/topo.h"
-#include "rocm_smi_wrap.h"
 
 // [RCCL]
 #include "clique/CliqueManager.h"
@@ -775,12 +774,12 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoCompute(comm->topo, &collNetGraph));
   NCCLCHECK(ncclTopoPrintGraph(comm->topo, &collNetGraph));
 
+  bool allXgmi = true;
   { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager
     CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
     if (comm->localRanks == comm->nRanks)
     {
       // Check that all the GPUs have peer access to one another and are XGMI connected
-      bool allXgmi = true;
       bool hasPeerAccess = true;
       for (int i = 0; i < nranks && hasPeerAccess; i++)
       {
@@ -796,10 +795,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
             break;
           }
 
-          RSMI_IO_LINK_TYPE linkType;
-          int hopCount, bw;
-          NCCLCHECK(rocm_smi_getLinkInfo(i, j, &linkType, &hopCount, &bw));
-          allXgmi &= (linkType == RSMI_IOLINK_TYPE_XGMI);
+          bool isXGMI;
+          NCCLCHECK(ncclTopoGetLinkType(comm->topo, i, j, &isXGMI));
+          allXgmi &= isXGMI;
         }
       }
       if (hasPeerAccess)
@@ -865,6 +863,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int idx;
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, myInfo->busId, &idx));
   allGather3Data[rank].nc = 2;
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 906 && allXgmi)
+    allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 908)
     allGather3Data[rank].nc = std::max(4/ringGraph.nChannels, 2);
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G))

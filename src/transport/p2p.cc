@@ -9,7 +9,6 @@
 #include "graph.h"
 #include "utils.h"
 #include "bootstrap.h"
-#include "rocm_smi_wrap.h"
 
 struct p2pConnectInfo {
   int rank;
@@ -170,13 +169,12 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   NCCLCHECK(p2pGetInfo(comm->topo, myInfo, peerInfo, &useRead, &intermediateRank));
 
   resources->next_hdp_reg = 0;
-  RSMI_IO_LINK_TYPE linktype;
-  int hops, bw;
-  if (rocm_smi_getLinkInfo(myInfo->cudaDev, peerInfo->cudaDev, &linktype, &hops, &bw) != ncclSuccess) {
+  bool isXGMI;
+  if (ncclTopoGetLinkType(comm->topo, myInfo->cudaDev, peerInfo->cudaDev, &isXGMI) != ncclSuccess) {
     INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", channelId, myInfo->rank, peerInfo->rank);
     return ncclInternalError;
   }
-  if (linktype != RSMI_IOLINK_TYPE_XGMI) {
+  if (!isXGMI) {
     CUDACHECK(hipDeviceGetAttribute((int*)&resources->next_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
     TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", channelId, myInfo->rank, peerInfo->rank, resources->next_hdp_reg);
   }
