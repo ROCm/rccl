@@ -47,7 +47,7 @@ typedef struct
   uint16_t data;
 } rccl_bfloat16;
 
-#include "../../src/collectives/device/common_kernel.h"
+#include "common_kernel.h"
 #include "EnvVars.hpp"
 
 // Helper macro for catching HIP errors
