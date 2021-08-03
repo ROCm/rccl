@@ -1,9 +1,11 @@
 # Change Log for RCCL
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
-## [UNRELEASED]
+## [RCCL-2.9.9 for ROCm 4.4.0]
 ### Added
 - Compatibility with NCCL 2.9.9
+### Known issues
+- Managed memory is not currently supported for clique-based kernels
 
 ## [RCCL-2.8.4 for ROCm 4.3.0]
 ### Added
