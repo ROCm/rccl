@@ -94,7 +94,7 @@ int main(int argc, char **argv)
   // Print CSV header
   if (ev.outputToCsv)
   {
-    printf("Test,NumBytes,Executor,SrcMem,DstMem,CUs,BW(GB/s),Time(ms),LinkDesc,SrcAddr,DstAddr,ByteOffset,numWarmups,numIters,useHipCall,useMemSet,useSingleSync,combinedTiming\n");
+    printf("Test,NumBytes,SrcMem,Executor,DstMem,CUs,BW(GB/s),Time(ms),LinkDesc,SrcAddr,DstAddr,ByteOffset,numWarmups,numIters,useHipCall,useMemSet,useSingleSync,combinedTiming\n");
   }
 
   // Loop over each line in the Link configuration file
