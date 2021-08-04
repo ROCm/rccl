@@ -8,7 +8,6 @@
 #include "comm.h"
 #include "info.h"
 #include "bootstrap.h"
-#include "../graph/topo.h"
 
 extern struct ncclTransport p2pTransport;
 extern struct ncclTransport shmTransport;
@@ -19,16 +18,6 @@ struct ncclTransport ncclTransports[NTRANSPORTS] = {
   shmTransport,
   netTransport,
 };
-
-static ncclResult_t connectedByXGMI(int* ret, struct ncclTopoSystem* system, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
-  *ret = 0;
-  if (info1->hostHash != info2->hostHash) return ncclSuccess;
-  int g1, g2;
-  NCCLCHECK(ncclTopoRankToIndex(system, info1->rank, &g1));
-  NCCLCHECK(ncclTopoRankToIndex(system, info2->rank, &g2));
-  if (system->nodes[GPU].nodes[g1].paths[GPU][g2].type == PATH_NVL) *ret = 1;
-  return ncclSuccess;
-}
 
 template <int type>
 static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex) {
@@ -44,8 +33,8 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, peer, graph, channelId, (type == 1) ? 0 : 1, &n2));
   }
 
-  int xgmi;
-  NCCLCHECK(connectedByXGMI(&xgmi, comm->topo, myInfo, peerInfo));
+  bool xgmi;
+  NCCLCHECK(ncclTopoGetLinkType(comm->topo, myInfo->cudaDev, peerInfo->cudaDev, &xgmi));
   for (int t=0; t<NTRANSPORTS; t++) {
     if (graph == NULL && connIndex == NCCL_CONN_IDX_P2P_NET && (t == TRANSPORT_SHM || (!xgmi && t == TRANSPORT_P2P))) continue;
     if (graph && n1 >= 0 && n2 >= 0 && t != TRANSPORT_NET) continue;

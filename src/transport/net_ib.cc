@@ -199,6 +199,8 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
     if (ncclNIbDevs == 0) {
       INFO(NCCL_INIT|NCCL_NET, "NET/IB : No device found.");
     } else {
+      auto cmpIbDevs = [](const void* n1, const void* n2) { return strcmp(((struct ncclIbDev*)n1)->devName, ((struct ncclIbDev*)n2)->devName); };
+      qsort(ncclIbDevs, ncclNIbDevs, sizeof(struct ncclIbDev), cmpIbDevs);
       char line[1024];
       line[0] = '\0';
       for (int d=0; d<ncclNIbDevs; d++) {
