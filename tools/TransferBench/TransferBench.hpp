@@ -34,13 +34,12 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include <hip/hip_ext.h>
 #include <hsa/hsa_ext_amd.h>
-#include <hip/hcc_detail/hip_fp16.h>
 
 // Include common_kernel.h from RCCL for copy kernel
 // However define some variables to avoid extra includes / missing defines
 #define NCCL_DEVICE_H_   // Avoid loading devcomm.h
 #define WARP_SIZE 64
-
+typedef float half;  // TransferBench doesn't actually operate on half-precision floats
 typedef uint64_t PackType;
 typedef ulong2 Pack128;
 typedef struct
