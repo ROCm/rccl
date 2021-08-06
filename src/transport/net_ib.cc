@@ -901,10 +901,7 @@ ncclResult_t ncclIbTest(void* request, int* done, int* size) {
           doneReq->size = wc->byte_len;
 #if USE_RDMA_WRITE
         } else if (wc->opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
-          if (doneReq->size == -1)
-            doneReq->size = wc->imm_data;
-          else
-            doneReq->size += wc->imm_data;
+          doneReq->size = wc->imm_data;
 #endif
         }
         doneReq->events--;
