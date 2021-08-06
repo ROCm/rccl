@@ -173,7 +173,7 @@ void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
 class ncclFunction {
   public:
-  __device__ void run(struct ncclWorkElem* args) {}
+  __device__ __attribute__((noinline)) void run(struct ncclWorkElem* args) {}
 };
 
 #ifdef ENABLE_COLLTRACE
@@ -262,14 +262,14 @@ __device__ int copyToShmem(T *dst, T const *src, int turn=0) {
 
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
 struct RunWorkElement {
-  __device__ void run(ncclWorkElem*) {
+  __device__ __attribute__((noinline)) void run(ncclWorkElem*) {
     // Put NOT IMPLEMENTED behavior here.
   }
 };
 
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
 struct RunWork {
-  __device__ void run(ncclWork *w) {
+  __device__ __attribute__((noinline)) void run(ncclWork *w) {
   }
 };
 

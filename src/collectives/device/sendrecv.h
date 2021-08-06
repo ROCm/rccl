@@ -11,7 +11,7 @@
 
 template<typename T, typename RedOp>
 struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ void run(ncclWork *work) {
+  __device__ __attribute__((noinline)) void run(ncclWork *work) {
     int tid = threadIdx.x;
     int group = 0;
     const int rank = ncclShmem->comm.rank;
