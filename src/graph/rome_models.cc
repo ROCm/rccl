@@ -286,6 +286,17 @@ static struct rcclRomeModel rome_model_43 = {
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
 };
 
+static struct rcclRomeModel rome_model_53 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .gpuIds = { 0x4a000, 0x50000, 0xa000, 0xf000, 0xca000, 0xd0000, 0x8a000, 0x90000, },
+  .nicIds = { 0x0, 0x0, 0x0, 0x0, },
+  .gpuNuma = { 1, 1, 3, 3, 5, 5, 7, 7, },
+  .nicNuma = { 1, 3, 5, 7, },
+  .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
+  .pattern = "00210021",
+  .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -309,6 +320,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_49,
   rome_model_52,
   rome_model_43,
+  rome_model_53,
 };
 
 /* Parse user defined rings. Format is like :
