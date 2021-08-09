@@ -294,6 +294,17 @@ static struct rcclRomeModel rome_model_43 = {
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
 };
 
+static struct rcclRomeModel rome_model_55 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .gpuIds = { 0x100000, 0x200000, 0x300000, 0x400000, 0x500000, 0x600000, 0x700000, 0x800000, },
+  .nicIds = { },
+  .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
+  .pattern = "20202020",
+  .ringBase = "0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0|2 3 0 1 6 7 4 5|5 4 7 6 1 0 3 2",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -318,6 +329,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_52,
   rome_model_53,
   rome_model_43,
+  rome_model_55,
 };
 
 /* Parse user defined rings. Format is like :
