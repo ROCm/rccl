@@ -175,14 +175,14 @@ class Primitives<
           if (Send) {
             // (1-Send) is only there to avoid compilation errors in case MaxSend=0 (and Send=0).
             ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, (1-Send)+MaxSend>
-              (tid, nworkers, redOp, false, false,
+              (tid, nworkers, redOp, 0, false,
                1, (T const**)ncclShmem->groups[group].srcs,
                fan.nsend(), (T**)ncclShmem->groups[group].dsts+1,
                sliceSize);
           }
         } else {
           ReduceOrCopyMulti<Unroll, RedOp, T, Recv+Src, Recv*MaxRecv+Src, Send+Dst, Send*MaxSend+Dst>
-            (tid, nworkers, redOp, SrcBuf==Input, postOp,
+            (tid, nworkers, redOp, SrcBuf==Input ? 1 : 0, postOp,
              Recv*fan.nrecv()+Src, (T const**)ncclShmem->groups[group].srcs,
              Send*fan.nsend()+Dst, (T**)ncclShmem->groups[group].dsts,
              sliceSize);
@@ -241,7 +241,7 @@ class Primitives<
             if (skip >= 0 && i >= skip) peerOffset += peerElem;
             const T* src0 = (T*)ncclShmem->groups[group].srcs[0] + peerOffset;
             int realPeerSize = min(realSize, totalElem-peerOffset);
-            if (realPeerSize > 0) ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1>(tid, nworkers, redOp, true, false, 1, &src0, 1, (T**)ncclShmem->groups[group].dsts+i, realPeerSize);
+            if (realPeerSize > 0) ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1>(tid, nworkers, redOp, 1, false, 1, &src0, 1, (T**)ncclShmem->groups[group].dsts+i, realPeerSize);
           }
         } else if (Recv) {
           #pragma unroll 1
@@ -251,7 +251,7 @@ class Primitives<
             if (skip >= 0 && i >= skip) peerOffset += peerElem;
             T* dst0 = (T*)ncclShmem->groups[group].dsts[0] + peerOffset;
             int realPeerSize = min(realSize, totalElem-peerOffset);
-            if (realPeerSize > 0) ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1>(tid, nworkers, redOp, false, postOp, 1, (T const**)ncclShmem->groups[group].srcs+i, 1, &dst0, realPeerSize);
+            if (realPeerSize > 0) ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1>(tid, nworkers, redOp, 0, postOp, 1, (T const**)ncclShmem->groups[group].srcs+i, 1, &dst0, realPeerSize);
           }
         }
       }
