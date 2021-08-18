@@ -795,7 +795,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   str = getenv("NCCL_RINGS");
   if (str) {
     // user supplied topo
-    NCCLCHECK(parseGraph(str, system, graph, NULL));
+    NCCLCHECK(parseGraph(str, system, graph, NULL, NULL));
     if (graph->nChannels) {
       system->type |= RCCL_TOPO_4P2H_ROME;
     }
