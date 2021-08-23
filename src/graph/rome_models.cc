@@ -965,10 +965,21 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
       }
     }
     if (gcnt && gcnt == mcnt) {
+      // final check to match all GPUs' XGMI connection
+      int k;
+      for (k = 0; k < romeTopoModels[i].nGpus; k++) {
+        int m;
+        for (m = 0; m < romeTopoModels[i].nGpus; m++) {
+          if (romeTopoModels[i].connMatrix[k*romeTopoModels[i].nGpus+m] != romeTopo.connMatrix[g16[k]*romeTopoModels[i].nGpus+g16[m]]) break;
+          if ((romeTopoModels[i].gpuIds[k]-romeTopoModels[i].gpuIds[m])*(romeTopo.gpuIds[g16[k]]-romeTopo.gpuIds[g16[m]]) < 0) break;
+        }
+        if (m < romeTopoModels[i].nGpus) break;
+      }
+      if (k < romeTopoModels[i].nGpus) continue;
       if (nnets > 1) {
       // permute NET IDs
       int time = 0;
-      for (int j = 0; j < nnets; j++) n[j] = (j+2)%nnets;
+      for (int m = 0; m < nnets; m++) n[m] = (m+2)%nnets;
       if (permuteNetIds(n, g16, 0, nnets-1, romeTopoModels+i, &romeTopo, &time)) break;
       } else break;
     }
@@ -979,17 +990,6 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     //printf("No solution in %.2fms (%d iter)\n", t, time);
     return ncclSuccess;
   }
-  // final check to match all GPUs' XGMI connection
-  int k;
-  for (k = 0; k < romeTopoModels[i].nGpus; k++) {
-    int j;
-    for (j = 0; j < romeTopoModels[i].nGpus; j++) {
-      if (romeTopoModels[i].connMatrix[k*romeTopoModels[i].nGpus+j] != romeTopo.connMatrix[g16[k]*romeTopoModels[i].nGpus+g16[j]]) break;
-      if ((romeTopoModels[i].gpuIds[k]-romeTopoModels[i].gpuIds[j])*(romeTopo.gpuIds[g16[k]]-romeTopo.gpuIds[g16[j]]) < 0) break;
-    }
-    if (j < romeTopoModels[i].nGpus) break;
-  }
-  if (k < romeTopoModels[i].nGpus) return ncclSuccess;
 
   char line[1024];
   //sprintf(line, "Found matching Rome model index %d in %.2fms (%d iter) with GPU mapping: ", i, t, time);
