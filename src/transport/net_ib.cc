@@ -113,8 +113,6 @@ static int ncclIbSpeed(int speed) {
   return ibvSpeeds[firstBitSet(speed, sizeof(ibvSpeeds)/sizeof(int)-1)];
 }
 
-RCCL_PARAM(IbHcaSkipLinkLayer, "IB_HCA_SKIP_LINK_LAYER", 0);
-
 ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
   static int shownIbHcaEnv = 0;
   if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
@@ -167,8 +165,8 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
             continue;
           }
           if (portAttr.state != IBV_PORT_ACTIVE) continue;
-          if ((rcclParamIbHcaSkipLinkLayer() == IBV_LINK_LAYER_INFINIBAND || portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND)
-              && (rcclParamIbHcaSkipLinkLayer() == IBV_LINK_LAYER_ETHERNET || portAttr.link_layer != IBV_LINK_LAYER_ETHERNET)) continue;
+          if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND
+              && portAttr.link_layer != IBV_LINK_LAYER_ETHERNET) continue;
 
           // check against user specified HCAs/ports
           if (! (matchIfList(devices[d]->name, port, userIfs, nUserIfs, searchExact) ^ searchNot)) {
