@@ -124,6 +124,9 @@ NodeModelDesc model_descs[] = {
   {1, "topo_8p_90a.xml",        "single node gfx90a"},
   {4, "topo_8p_rome_4n_1.xml",  "4 nodes node 8 gfx908 Rome 4 NICs NPS=4"},
   {4, "topo_collnet_n4.xml",    "4 nodes collnet 4 NICs for multiple SAT"},
+  {1, "topo_8p_rome_vm1.xml",   "single node 8 gfx908 Rome VM"},
+  {1, "topo_16p1h.xml",         "single node 16P1H"},
+  {4, "topo_8p_rome_4n_2.xml",  "4 nodes 8 gfx908 Rome 4 NICs NPS=4 Alt. Model"},
 };
 
 int main(int argc,char* argv[])

@@ -798,7 +798,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   str = getenv("NCCL_RINGS");
   if (str) {
     // user supplied topo
-    NCCLCHECK(parseGraph(str, system, graph, NULL));
+    NCCLCHECK(parseGraph(str, system, graph, NULL, NULL));
     if (graph->nChannels) {
       system->type |= RCCL_TOPO_4P2H_ROME;
     }
@@ -808,6 +808,9 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels) return ncclSuccess;
     // try to match Rome 4P2H
     NCCLCHECK(parseRome4P2H(system, graph));
+    if (graph->nChannels) return ncclSuccess;
+    // try to match 1H16P
+    NCCLCHECK(parse1H16P(system, graph));
   }
   if (graph->nChannels) return ncclSuccess;
 
