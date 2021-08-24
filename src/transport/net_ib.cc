@@ -99,7 +99,7 @@ static ncclResult_t ncclIbGetPciPath(char* devName, char** path, int* realPort) 
   return ncclSuccess;
 }
 
-static int ibvWidths[] = { 1, 4, 8, 12 };
+static int ibvWidths[] = { 1, 4, 8, 12, 2 };
 static int ibvSpeeds[] = { 2500, 5000, 10000, 10000, 14000, 25000, 50000 };
 static int firstBitSet(int val, int max) {
   int i = 0;
@@ -112,8 +112,6 @@ static int ncclIbWidth(int width) {
 static int ncclIbSpeed(int speed) {
   return ibvSpeeds[firstBitSet(speed, sizeof(ibvSpeeds)/sizeof(int)-1)];
 }
-
-RCCL_PARAM(IbHcaSkipLinkLayer, "IB_HCA_SKIP_LINK_LAYER", 0);
 
 ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
   static int shownIbHcaEnv = 0;
@@ -167,8 +165,8 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
             continue;
           }
           if (portAttr.state != IBV_PORT_ACTIVE) continue;
-          if ((rcclParamIbHcaSkipLinkLayer() == IBV_LINK_LAYER_INFINIBAND || portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND)
-              && (rcclParamIbHcaSkipLinkLayer() == IBV_LINK_LAYER_ETHERNET || portAttr.link_layer != IBV_LINK_LAYER_ETHERNET)) continue;
+          if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND
+              && portAttr.link_layer != IBV_LINK_LAYER_ETHERNET) continue;
 
           // check against user specified HCAs/ports
           if (! (matchIfList(devices[d]->name, port, userIfs, nUserIfs, searchExact) ^ searchNot)) {
@@ -199,8 +197,6 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
     if (ncclNIbDevs == 0) {
       INFO(NCCL_INIT|NCCL_NET, "NET/IB : No device found.");
     } else {
-      auto cmpIbDevs = [](const void* n1, const void* n2) { return strcmp(((struct ncclIbDev*)n1)->devName, ((struct ncclIbDev*)n2)->devName); };
-      qsort(ncclIbDevs, ncclNIbDevs, sizeof(struct ncclIbDev), cmpIbDevs);
       char line[1024];
       line[0] = '\0';
       for (int d=0; d<ncclNIbDevs; d++) {
