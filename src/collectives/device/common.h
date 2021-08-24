@@ -206,14 +206,14 @@ class ncclFunction {
   }
 //  traceData(int16_t data2, uint32_t data4, uint64_t data8_0, uint64_t data8_1)
 #define traceData(data2, data4, data8_0, data8_1) { \
-    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    shmem.comm.collTrace[pos].bid = blockIdx.x; \
-    shmem.comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-    shmem.comm.collTrace[pos].funcIndex = data2; \
-    shmem.comm.collTrace[pos].data_0 = data4; \
-    shmem.comm.collTrace[pos].opCount = data8_0; \
-    shmem.comm.collTrace[pos].data_1 = data8_1; \
-    shmem.comm.collTrace[pos].type = ncclCollTraceDataType; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem->comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    ncclShmem->comm.collTrace[pos].bid = blockIdx.x; \
+    ncclShmem->comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    ncclShmem->comm.collTrace[pos].funcIndex = data2; \
+    ncclShmem->comm.collTrace[pos].data_0 = data4; \
+    ncclShmem->comm.collTrace[pos].opCount = data8_0; \
+    ncclShmem->comm.collTrace[pos].data_1 = data8_1; \
+    ncclShmem->comm.collTrace[pos].type = ncclCollTraceDataType; \
   }
 #else
 #define traceKernelLaunch(fIdx)
