@@ -520,8 +520,8 @@ struct FuncAvg<rccl_bfloat16>: FuncSum<rccl_bfloat16> {
   // Obviously, the only invalid combination is both true. An improvement would be
   // make this parameterized as a build time setting and passed here through
   // preprocessor definitions.
-  static constexpr bool IsPreOpIdentity = false;
-  static constexpr bool IsPostOpIdentity = true;
+  static constexpr bool IsPreOpIdentity = true;
+  static constexpr bool IsPostOpIdentity = false;
 
 #if __CUDA_ARCH__ >= 800
   __device__ FuncAvg(int n) {

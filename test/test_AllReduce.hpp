@@ -33,6 +33,7 @@ namespace CorrectnessTests
 
             // Initialize the result with the first device's array
             memcpy(resultI1, dataset.expected[0], dataset.NumBytes());
+            ncclRedOp_t red_op = ((op == ncclAvg) ? ncclSum : op);
 
             // Perform reduction on the other device arrays
             for (int i = 1; i < dataset.numDevices; i++)
@@ -51,21 +52,24 @@ namespace CorrectnessTests
                 {
                     switch (dataset.dataType)
                     {
-                    case ncclInt8:    resultI1[j] = ReduceOp(op, resultI1[j], arrayI1[j]); break;
-                    case ncclUint8:   resultU1[j] = ReduceOp(op, resultU1[j], arrayU1[j]); break;
-                    case ncclInt32:   resultI4[j] = ReduceOp(op, resultI4[j], arrayI4[j]); break;
-                    case ncclUint32:  resultU4[j] = ReduceOp(op, resultU4[j], arrayU4[j]); break;
-                    case ncclInt64:   resultI8[j] = ReduceOp(op, resultI8[j], arrayI8[j]); break;
-                    case ncclUint64:  resultU8[j] = ReduceOp(op, resultU8[j], arrayU8[j]); break;
-                    case ncclFloat32: resultF4[j] = ReduceOp(op, resultF4[j], arrayF4[j]); break;
-                    case ncclFloat64: resultF8[j] = ReduceOp(op, resultF8[j], arrayF8[j]); break;
-                    case ncclBfloat16: resultB2[j] = ReduceOp(op, resultB2[j], arrayB2[j]); break;
+                    case ncclInt8:    resultI1[j] = ReduceOp(red_op, resultI1[j], arrayI1[j]); break;
+                    case ncclUint8:   resultU1[j] = ReduceOp(red_op, resultU1[j], arrayU1[j]); break;
+                    case ncclInt32:   resultI4[j] = ReduceOp(red_op, resultI4[j], arrayI4[j]); break;
+                    case ncclUint32:  resultU4[j] = ReduceOp(red_op, resultU4[j], arrayU4[j]); break;
+                    case ncclInt64:   resultI8[j] = ReduceOp(red_op, resultI8[j], arrayI8[j]); break;
+                    case ncclUint64:  resultU8[j] = ReduceOp(red_op, resultU8[j], arrayU8[j]); break;
+                    case ncclFloat32: resultF4[j] = ReduceOp(red_op, resultF4[j], arrayF4[j]); break;
+                    case ncclFloat64: resultF8[j] = ReduceOp(red_op, resultF8[j], arrayF8[j]); break;
+                    case ncclBfloat16: resultB2[j] = ReduceOp(red_op, resultB2[j], arrayB2[j]); break;
                     default:
                         fprintf(stderr, "[ERROR] Unsupported datatype\n");
                         exit(0);
                     }
                 }
             }
+
+            if (op == ncclAvg)
+                Average(dataset, resultI1);
 
             // Copy results into expected arrays
             for (int i = 0; i < dataset.numDevices; i++)
