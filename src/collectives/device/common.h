@@ -92,7 +92,7 @@
   NCCL_FUNCS3C(func, Prod), \
   NCCL_FUNCS3C(func, Max ), \
   NCCL_FUNCS3C(func, Min ), \
-  NCCL_FUNCS3A(func, Avg)
+  NCCL_FUNCS3C(func, Avg)
 
 // Must be consistent with ncclFunc_t
 #define NCCL_FUNCS() { \
@@ -116,7 +116,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
-  NCCL_FUNCS2A(AllReduce),
+  NCCL_FUNCS2C(AllReduce),
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
 #endif
 };
