@@ -67,7 +67,7 @@ struct MULTI<FUNC, int8_t> {
       int8_t elt[8];
     } u;
     u.pack = x;
-    #pragma unroll 1
+    #pragma unroll
     for (int i=0; i < 8; i++)
       u.elt[i] = FuncTraits<FUNC>().preOp(fn, u.elt[i]);
     return u.pack;
@@ -78,7 +78,7 @@ struct MULTI<FUNC, int8_t> {
       int8_t elt[8];
     } u;
     u.pack = x;
-    #pragma unroll 1
+    #pragma unroll
     for (int i=0; i < 8; i++)
       u.elt[i] = FuncTraits<FUNC>().postOp(fn, u.elt[i]);
     return u.pack;
@@ -113,7 +113,7 @@ struct MULTI<FUNC, uint8_t> {
       uint8_t elt[8];
     } u;
     u.pack = x;
-    #pragma unroll 1
+    #pragma unroll
     for (int i=0; i < 8; i++)
       u.elt[i] = FuncTraits<FUNC>().preOp(fn, u.elt[i]);
     return u.pack;
@@ -124,7 +124,7 @@ struct MULTI<FUNC, uint8_t> {
       uint8_t elt[8];
     } u;
     u.pack = x;
-    #pragma unroll 1
+    #pragma unroll
     for (int i=0; i < 8; i++)
       u.elt[i] = FuncTraits<FUNC>().postOp(fn, u.elt[i]);
     return u.pack;
@@ -578,13 +578,13 @@ __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, c
       for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>().preOp(fn, vals[u]);
     }
 
-    #pragma unroll 1
+    #pragma unroll
     for (int i=1; i<MINSRCS; i++) {
       Pack128 vals2[UNROLL];
       for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
       for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(fn, vals[u], vals2[u]);
     }
-    #pragma unroll 1
+    #pragma unroll
     for (int i=MINSRCS; i<MAXSRCS; i++) {
       if (i<nsrcs) {
         Pack128 vals2[UNROLL];
@@ -594,16 +594,16 @@ __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, c
     }
 
     if (postOp) {
-      #pragma unroll 1
+      #pragma unroll
       for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>().postOp(fn, vals[u]);
     }
 
     // Store
-    #pragma unroll 1
+    #pragma unroll
     for (int i = 0; i < MINDSTS; i++) {
       for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
     }
-    #pragma unroll 1
+    #pragma unroll
     for (int i=MINDSTS; i<MAXDSTS; i++) {
       if (i<ndsts) {
         for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
@@ -670,9 +670,9 @@ __device__ __forceinline__ void ReduceOrCopyMulti(
   }
 
   // unrolled, by-type (mostly for unaligned buffers)
-  int Nelem = (Nrem / (UNROLL*PACKELEMS/2*WARP_SIZE)) * (UNROLL*PACKELEMS/2*WARP_SIZE); // round down
+  int Nelem = (Nrem / (AUTOUNROLL*PACKELEMS/2*WARP_SIZE)) * (AUTOUNROLL*PACKELEMS/2*WARP_SIZE); // round down
 
-  ReduceCopyMulti<FUNC, T, UNROLL*PACKELEMS/2, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>
+  ReduceCopyMulti<FUNC, T, AUTOUNROLL*PACKELEMS/2, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>
     (w, nw, t, fn, preOpSrc0, postOp, nsrcs, srcs, ndsts, dsts, offset, Nelem);
 
   Nrem -= Nelem;
