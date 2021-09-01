@@ -270,6 +270,27 @@ struct RunWorkElement {
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
 struct RunWork {
   __device__ __attribute__((noinline)) void run(ncclWork *w) {
+    /* Some invariants that must hold:
+     * 1. All elems[] have same funcIndex.
+     * 2. All elems[] have same nThreads.
+     * 3. The thread-to-group relation (as in prims group numbers) is the same
+     *    for all elems[].
+     *
+     * If (1) isn't true then we might be in the wrong function since dispatch
+     * on ncclFuncs[w->elems[0].funcIndex] is how we got here.
+     *
+     * If (2) or (3) aren't true, then threads from different work elements
+     * could race for barrier resources (barrier numbers 0...15) which is fatal.
+     *
+     * Important, to ensure (3), implementations of
+     * `RunWorkElement<Fn,T,RedOp,Algo,Proto>::run()` may only use values which
+     * are the same for all elems[] when deciding how to map threads to groups,
+     * such as  the following:
+     *    Fn, T, RedOp, Algo, Proto, nThreads
+     *
+     * This last one is difficult to enforce and diagnosing it is a headeache.
+     * Device-side developers, consider yourselves warned.
+     */
   }
 };
 
@@ -352,11 +373,12 @@ __device__ void ncclKernel(ncclWorkElem first)  {
     workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
     if (tid == 0)
       channel->index = workFifoIx; // write back to real channel, not shmem shadow
-    if (elems->funcIndex == FnIndex) {
-      RunWork<Fn, T, RedOp, Algo, Proto>().run(&shmem.work);
-    } else {
-      if (tid < elems->nThreads && elems->active != 0)
+    if (tid < elems->nThreads && elems->active != 0) {
+      if (elems->funcIndex == FnIndex) {
+        RunWork<Fn, T, RedOp, Algo, Proto>().run(&shmem.work);
+      } else {
         NCCL_CALL_FUNCTIONS(elems);
+      }
     }
     if (elems->active == 2) {
       if (COLLTRACE && tid == 0) traceCollEnd(0xffff);
