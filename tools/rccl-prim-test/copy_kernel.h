@@ -264,4 +264,4 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
   ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem);
 }
 
-#endif // COMMON_KERNEL_H_
+#endif
