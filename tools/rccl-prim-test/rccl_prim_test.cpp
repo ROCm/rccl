@@ -33,7 +33,7 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include "copy_kernel.h"
 
-#define MAX_GPU 8
+#define MAX_GPU 16
 #define MAX_WORKGROUPS 32
 #define THREADS 256
 #define NGPUS 2
@@ -241,7 +241,9 @@ static void setupPeers(uint32_t *info, bool* is_xgmi) {
         }
         HIPCHECK(hipDeviceEnablePeerAccess(j, 0));
         uint32_t linktype;
-        HIPCHECK(hipExtGetLinkTypeAndHopCount(i, j, &linktype, &info[i*deviceCnt+j]));
+        hipError_t error = hipExtGetLinkTypeAndHopCount(i, j, &linktype, &info[i*deviceCnt+j]);
+        if (error != hipSuccess)
+          *is_xgmi = 0;
         if (linktype != 4 || info[i*deviceCnt+j] != 1) *is_xgmi = 0;
       }
       else
@@ -268,7 +270,9 @@ static void parseChordalRing(char **str) {
     int count = 0;
     for (int n = 0; n<ngpus; n++) {
       uint32_t linktype, hop;
-      HIPCHECK(hipExtGetLinkTypeAndHopCount(i, n, &linktype, &hop));
+      hipError_t error = hipExtGetLinkTypeAndHopCount(i, n, &linktype, &hop);
+      if (error != hipSuccess)
+        return;
       if (linktype != 4 || hop != 1) continue;
       sum -= n;
       count ++;
@@ -374,7 +378,7 @@ int main(int argc,char* argv[])
     exit(0);
   }
 
-  int workgroups = 1;
+  int workgroups = 0;
   char *wg = getCmdOption(argv, argv + argc, "-w");
   if (wg)
     workgroups = atol(wg);
@@ -427,11 +431,24 @@ int main(int argc,char* argv[])
   bool is_xgmi;
   char *cr8g = 0;
   static const char *ring_4p3l = "0 1 2 3|0 1 3 2|0 2 1 3|0 2 3 1|0 3 1 2|0 3 2 1";
+  static const char *ring_8p1h = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0";
+  static const char *ring_16p1h = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0";
   setupPeers(connection_info, &is_xgmi);
-  parseChordalRing(&cr8g);
-  if (nGpu == 4 && is_xgmi) r = (char *)ring_4p3l;
-  if (nGpu == 8 && cr8g) r = (char *)cr8g;
+  if (!r) {
+    parseChordalRing(&cr8g);
+    if (nGpu == 4 && is_xgmi) r = (char *)ring_4p3l;
+    if (nGpu == 8 && cr8g) r = (char *)cr8g;
+    if (nGpu == 8 && !cr8g) {
+      r = (char *)ring_8p1h;
+      if(!workgroups) workgroups = 16;
+    }
+    if (nGpu == 16) {
+      r = (char *)ring_16p1h;
+      if(!workgroups) workgroups = 24;
+    }
+  }
 
+  if(!workgroups) workgroups = 1;
   // clockwise and counter clockwise rings
   int ring[MAX_WORKGROUPS][MAX_GPU];
   for (int i = 0; i < MAX_WORKGROUPS; i++)
@@ -441,14 +458,27 @@ int main(int argc,char* argv[])
   int num_rings = 0;
   if (r) {
     int j = 0, n = 0;
+    int state = 0;
     do {
-      if (r[n] == ' ') continue;
-      if (r[n] == '|') {
-        num_rings ++;
-        j = 0;
-        continue;
+      int digit = r[n] - '0';
+      if (digit >= 0 && digit <= 9) {
+        if (state)
+          ring[num_rings][j] = ring[num_rings][j]*10 + digit;
+        else {
+          ring[num_rings][j] = digit;
+          state = 1;
+        }
       }
-      ring[num_rings][j++] = r[n] - '0';
+      else {
+        state = 0;
+        j++;
+        if (r[n] == ' ') continue;
+        if (r[n] == '|') {
+          num_rings ++;
+          j = 0;
+          continue;
+        }
+      }
     } while (r[n++] != 0x0);
     num_rings ++;
   } else {
