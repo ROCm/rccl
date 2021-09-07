@@ -46,6 +46,14 @@ struct AgentData
 hsa_status_t MemPoolInfoCallback(hsa_amd_memory_pool_t pool, void *data)
 {
   hsa_amd_memory_pool_t* poolData = reinterpret_cast<hsa_amd_memory_pool_t*>(data);
+
+  // Check memory pool flags
+  uint32_t poolFlags;
+  HSA_CHECK(hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &poolFlags));
+
+  // Only consider coarse-grained pools
+  if (!(poolFlags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED)) return HSA_STATUS_SUCCESS;
+
   *poolData = pool;
   return HSA_STATUS_SUCCESS;
 }
