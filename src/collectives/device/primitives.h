@@ -33,12 +33,16 @@
 } while (0)
 
 #define barrier_by_group() do { \
-  const int w = threadIdx.x/WARP_SIZE; \
-  const int wid = threadIdx.x%WARP_SIZE; \
-  if (wid == 0) { \
-    barrier_next[w] += nthreads/WARP_SIZE; \
-    __atomic_fetch_add(barriers, 1, __ATOMIC_SEQ_CST); \
-    while (LOAD(barriers) < barrier_next[w]) /* spin */; \
+  if (nthreads == NCCL_MAX_NTHREADS) \
+    __syncthreads(); \
+  else { \
+    const int w = threadIdx.x/WARP_SIZE; \
+    const int wid = threadIdx.x%WARP_SIZE; \
+    if (wid == 0) { \
+      barrier_next[w] += nthreads/WARP_SIZE; \
+      __atomic_fetch_add(barriers, 1, __ATOMIC_SEQ_CST); \
+      while (LOAD(barriers) < barrier_next[w]) /* spin */; \
+    } \
   } \
 } while (0)
 
