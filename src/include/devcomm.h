@@ -280,12 +280,12 @@ static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must 
 #pragma pack(pop)   /* restore original alignment from stack */
 
 #ifdef ENABLE_PROFILING
-struct ncclProf {
+struct ncclProfElem {
   union {
     struct {
       uint64_t total_cycle;
-      uint64_t wait_cycle[MAXCHANNELS];      // total wait cycle
-      uint64_t wait_recv_cycle[MAXCHANNELS]; // recv wait cycle
+      uint64_t wait_cycle;      // total wait cycle
+      uint64_t wait_recv_cycle; // recv wait cycle
       // primtive cycles
       uint64_t send_cycle;
       uint64_t directSend_cycle;
@@ -315,6 +315,10 @@ struct ncclProf {
     };
     int data[0x80];
   };
+};
+
+struct ncclProf {
+  struct ncclProfElem elems[MAXCHANNELS];
 };
 #endif
 

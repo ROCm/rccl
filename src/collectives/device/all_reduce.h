@@ -101,7 +101,7 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T
       ACCUMULATE_COUNTER(directRecv);
     }
 #ifdef ENABLE_PROFILING
-    if (tid == 0) __atomic_fetch_add(&(devProf->total_cycle), __builtin_amdgcn_s_memrealtime() - clk, __ATOMIC_SEQ_CST);
+    if (tid == 0) devProf->elems[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
 #endif
   }
 };

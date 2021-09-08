@@ -298,10 +298,40 @@ static ncclResult_t commFree(ncclComm_t comm) {
 #ifdef ENABLE_PROFILING
   struct ncclProf* prof = (struct ncclProf*)malloc(sizeof(struct ncclProf));
   CUDACHECK(hipMemcpy(prof, comm->hostDevComm.devProf, sizeof(struct ncclProf), hipMemcpyDeviceToHost));
-  uint64_t wait_cycle = 0, wait_recv_cycle = 0;
+  uint64_t total_cycle = 0, wait_cycle = 0, wait_recv_cycle = 0, send_cycle = 0, directSend_cycle = 0, recv_cycle = 0, \
+    directRecv_cycle = 0, copySend_cycle = 0, directCopySend_cycle = 0, recvCopySend_cycle = 0, directRecvCopySend_cycle = 0, \
+    recvReduceCopy_cycle = 0, recvReduceSend_cycle = 0, recvReduceCopySend_cycle = 0, directRecvReduceCopySend_cycle = 0, \
+    send_byte = 0, directSend_byte = 0, recv_byte = 0, directRecv_byte = 0, copySend_byte = 0, directCopySend_byte = 0, \
+    recvCopySend_byte = 0, directRecvCopySend_byte = 0, recvReduceCopy_byte = 0, recvReduceSend_byte = 0, \
+    recvReduceCopySend_byte = 0, directRecvReduceCopySend_byte = 0;
   for (int chan=0; chan<comm->nChannels; chan++) {
-    wait_cycle += prof->wait_cycle[chan];
-    wait_recv_cycle += prof->wait_recv_cycle[chan];
+    total_cycle += prof->elems[chan].total_cycle;
+    wait_cycle += prof->elems[chan].wait_cycle;
+    wait_recv_cycle += prof->elems[chan].wait_recv_cycle;
+    send_cycle += prof->elems[chan].send_cycle;
+    directSend_cycle += prof->elems[chan].directSend_cycle;
+    recv_cycle += prof->elems[chan].recv_cycle;
+    directRecv_cycle += prof->elems[chan].directRecv_cycle;
+    copySend_cycle += prof->elems[chan].copySend_cycle;
+    directCopySend_cycle += prof->elems[chan].directCopySend_cycle;
+    recvCopySend_cycle += prof->elems[chan].recvCopySend_cycle;
+    directRecvCopySend_cycle += prof->elems[chan].directRecvCopySend_cycle;
+    recvReduceCopy_cycle += prof->elems[chan].recvReduceCopy_cycle;
+    recvReduceSend_cycle += prof->elems[chan].recvReduceSend_cycle;
+    recvReduceCopySend_cycle += prof->elems[chan].recvReduceCopySend_cycle;
+    directRecvReduceCopySend_cycle += prof->elems[chan].directRecvReduceCopySend_cycle;
+    send_byte += prof->elems[chan].send_byte;
+    directSend_byte += prof->elems[chan].directSend_byte;
+    recv_byte += prof->elems[chan].recv_byte;
+    directRecv_byte += prof->elems[chan].directRecv_byte;
+    copySend_byte += prof->elems[chan].copySend_byte;
+    directCopySend_byte += prof->elems[chan].directCopySend_byte;
+    recvCopySend_byte += prof->elems[chan].recvCopySend_byte;
+    directRecvCopySend_byte += prof->elems[chan].directRecvCopySend_byte;
+    recvReduceCopy_byte += prof->elems[chan].recvReduceCopy_byte;
+    recvReduceSend_byte += prof->elems[chan].recvReduceSend_byte;
+    recvReduceCopySend_byte += prof->elems[chan].recvReduceCopySend_byte;
+    directRecvReduceCopySend_byte += prof->elems[chan].directRecvReduceCopySend_byte;
   }
   #define VEGA_GPU_RTC_FREQUENCY 2.5E7
   if (comm->rank == 0) {
@@ -309,17 +339,17 @@ static ncclResult_t commFree(ncclComm_t comm) {
     INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "", "(s)", "(s)", "(s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)");
   }
   INFO(NCCL_INIT, "# %4d %6.4f %6.4f %6.4f %6.2f %6.2f %7.2f %6.2f %6.2f %6.2f %6.2f %6.2f",
-    comm->rank, (double)prof->total_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
+    comm->rank, (double)total_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
     (double)wait_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
     (double)wait_recv_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
-    (prof->send_cycle) ? (double)prof->send_byte*comm->nChannels/((double)prof->send_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->recvReduceSend_cycle) ? (double)prof->recvReduceSend_byte*comm->nChannels/((double)prof->recvReduceSend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->directRecvReduceCopySend_cycle) ? (double)prof->directRecvReduceCopySend_byte*comm->nChannels/((double)prof->directRecvReduceCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->directRecvCopySend_cycle) ? (double)prof->directRecvCopySend_byte*comm->nChannels/((double)prof->directRecvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->directRecv_cycle) ? (double)prof->directRecv_byte*comm->nChannels/((double)prof->directRecv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->copySend_cycle) ? (double)prof->copySend_byte*comm->nChannels/((double)prof->copySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->recv_cycle) ? (double)prof->recv_byte*comm->nChannels/((double)prof->recv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-    (prof->recvCopySend_cycle) ? (double)prof->recvCopySend_byte*comm->nChannels/((double)prof->recvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0);
+    (send_cycle) ? (double)send_byte*comm->nChannels/((double)send_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (recvReduceSend_cycle) ? (double)recvReduceSend_byte*comm->nChannels/((double)recvReduceSend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (directRecvReduceCopySend_cycle) ? (double)directRecvReduceCopySend_byte*comm->nChannels/((double)directRecvReduceCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (directRecvCopySend_cycle) ? (double)directRecvCopySend_byte*comm->nChannels/((double)directRecvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (directRecv_cycle) ? (double)directRecv_byte*comm->nChannels/((double)directRecv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (copySend_cycle) ? (double)copySend_byte*comm->nChannels/((double)copySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (recv_cycle) ? (double)recv_byte*comm->nChannels/((double)recv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
+    (recvCopySend_cycle) ? (double)recvCopySend_byte*comm->nChannels/((double)recvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0);
   free(prof);
   CUDACHECK(hipFree(comm->hostDevComm.devProf));
 
