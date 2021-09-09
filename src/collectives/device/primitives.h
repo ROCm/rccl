@@ -33,12 +33,16 @@
 } while (0)
 
 #define barrier_by_group() do { \
-  const int w = threadIdx.x/WARP_SIZE; \
-  const int wid = threadIdx.x%WARP_SIZE; \
-  if (wid == 0) { \
-    barrier_next[w] += nthreads/WARP_SIZE; \
-    __atomic_fetch_add(barriers, 1, __ATOMIC_SEQ_CST); \
-    while (LOAD(barriers) < barrier_next[w]) /* spin */; \
+  if (nthreads == NCCL_MAX_NTHREADS) \
+    __syncthreads(); \
+  else { \
+    const int w = threadIdx.x/WARP_SIZE; \
+    const int wid = threadIdx.x%WARP_SIZE; \
+    if (wid == 0) { \
+      barrier_next[w] += nthreads/WARP_SIZE; \
+      __atomic_fetch_add(barriers, 1, __ATOMIC_SEQ_CST); \
+      while (LOAD(barriers) < barrier_next[w]) /* spin */; \
+    } \
   } \
 } while (0)
 
@@ -146,14 +150,15 @@ class ncclPrimitives {
   inline __device__ void waitRecv(ssize_t directOffset) {
     spins = 0;
 #ifdef ENABLE_PROFILING
-    uint64_t t0 = __builtin_amdgcn_s_memrealtime();
+    uint64_t t0;
+    if (tid == 0) t0 = __builtin_amdgcn_s_memrealtime();
 #endif
     while (connTailCache < step + SLICESTEPS) {
       connTailCache = LOAD(connTailPtr);
       if (checkAbort()) break;
     }
 #ifdef ENABLE_PROFILING
-    if (tid == 0) __atomic_fetch_add(&comm->devProf->wait_recv_cycle[blockIdx.x], __builtin_amdgcn_s_memrealtime() - t0, __ATOMIC_SEQ_CST);
+    if (tid == 0) comm->devProf->elems[blockIdx.x].wait_recv_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
 #endif
     if (connPtrsFifoPtr) srcs[SRC+index] = (const T *)LOAD(connPtrsFifoPtr+step%NCCL_STEPS);
     else srcs[SRC+index] = directPtr<DIRECTRECV>(directOffset);
@@ -180,7 +185,8 @@ class ncclPrimitives {
     for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
       int realSize = max(0, min(dataSize, nelem-offset));
 #ifdef ENABLE_PROFILING
-      uint64_t t0 = __builtin_amdgcn_s_memrealtime();
+      uint64_t t0;
+      if (tid == 0) t0 = __builtin_amdgcn_s_memrealtime();
 #endif
       if (tid < nworkers) {
         if (SRC && (role & ROLE_SRC)) srcs[0] = srcPtr+offset;
@@ -189,7 +195,7 @@ class ncclPrimitives {
         if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
         if (realSize > 0) {
 #ifdef ENABLE_PROFILING
-          if (tid == 0) __atomic_fetch_add(&comm->devProf->wait_cycle[blockIdx.x], __builtin_amdgcn_s_memrealtime() - t0, __ATOMIC_SEQ_CST);
+        if (tid == 0) comm->devProf->elems[blockIdx.x].wait_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
 #endif
           subBarrier();
           ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize);
@@ -428,12 +434,12 @@ class ncclPrimitives {
 
 #ifdef ENABLE_PROFILING
 #define INIT_COUNTER \
-  if (tid == 0) { t0 = __builtin_amdgcn_s_memrealtime(); ws = LOAD(&(devProf->wait_cycle[blockIdx.x])); }
+  if (tid == 0) { t0 = __builtin_amdgcn_s_memrealtime(); ws = devProf->elems[blockIdx.x].wait_cycle; }
 
 #define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0) { __atomic_fetch_add(&(devProf->prim##_cycle), __builtin_amdgcn_s_memrealtime() - t0 \
-    + ws - LOAD(&(devProf->wait_cycle[blockIdx.x])), __ATOMIC_SEQ_CST); \
-    __atomic_fetch_add(&(devProf->prim##_byte), nelem * sizeof(T), __ATOMIC_SEQ_CST); }
+  if (tid == 0) { devProf->elems[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
+    + ws - devProf->elems[blockIdx.x].wait_cycle); \
+    devProf->elems[blockIdx.x].prim##_byte += nelem * sizeof(T); }
 #else
 #define INIT_COUNTER
 #define ACCUMULATE_COUNTER(prim)
