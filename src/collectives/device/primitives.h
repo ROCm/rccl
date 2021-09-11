@@ -41,7 +41,7 @@
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       atomicAdd((unsigned long long *)barriers, 1); \
-      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(64); \
+      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(8); \
       __asm__ __volatile__("s_wakeup"); \
     } \
   } \
@@ -120,7 +120,7 @@ class ncclPrimitives {
   inline __device__ int checkAbort() {
     spins++;
     if (abort == 0 && spins == SPINS_BEFORE_CHECK_ABORT) {
-      abort = LOAD(comm->abortFlag);
+      abort = atomicAdd_system((unsigned int *)comm->abortFlag, 0);
       spins = 0;
     }
     return abort;
@@ -135,11 +135,13 @@ class ncclPrimitives {
   inline __device__ void waitSend(ssize_t directOffset, int nbytes) {
     spins = 0;
     while (connHeadCache + NCCL_STEPS < step + SLICESTEPS) {
-      connHeadCache = LOAD(connHeadPtr);
+      __builtin_amdgcn_s_sleep(8);
+      connHeadCache = atomicAdd_system((unsigned long long *)connHeadPtr, 0);
       if (checkAbort()) break;
     }
+    __asm__ __volatile__("s_wakeup");
     if (connSizesFifoPtr) {
-      STORE(connSizesFifoPtr+step%NCCL_STEPS, nbytes);
+      atomicExch_system((unsigned long long *)connSizesFifoPtr+step%NCCL_STEPS, nbytes);
     }
 
     if (connPtrsFifoPtr) dsts[DST+index] = (T *)LOAD(connPtrsFifoPtr+step%NCCL_STEPS);
@@ -155,9 +157,11 @@ class ncclPrimitives {
     if (tid == 0) t0 = __builtin_amdgcn_s_memrealtime();
 #endif
     while (connTailCache < step + SLICESTEPS) {
-      connTailCache = LOAD(connTailPtr);
+      __builtin_amdgcn_s_sleep(8);
+      connTailCache = atomicAdd_system((unsigned long long *)connTailPtr, 0);
       if (checkAbort()) break;
     }
+    __asm__ __volatile__("s_wakeup");
 #ifdef ENABLE_PROFILING
     if (tid == 0) comm->devProf->elems[blockIdx.x].wait_recv_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
 #endif
@@ -167,12 +171,12 @@ class ncclPrimitives {
   }
 
   inline __device__ void postRecv() {
-    STORE(connHeadPtr, step += SLICESTEPS);
+    atomicExch_system((unsigned long long *)connHeadPtr, step += SLICESTEPS);
   }
 
   inline __device__ void postSend() {
-    if (conn->next_hdp_reg) STORE(conn->next_hdp_reg, 0x1);
-    STORE(connTailPtr, step += SLICESTEPS);
+    if (conn->next_hdp_reg) atomicExch_system(conn->next_hdp_reg, 0x1);
+    atomicExch_system((unsigned long long *)connTailPtr, step += SLICESTEPS);
   }
 
   template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST>
