@@ -24,6 +24,7 @@ THE SOFTWARE.
 // on the same node
 
 #include "TransferBench.hpp"
+#include "GetClosestNumaNode.hpp"
 #include <numa.h>
 #include <numaif.h>
 #include <stack>
@@ -270,10 +271,12 @@ int main(int argc, char **argv)
       // Report timings
       totalCpuTime = totalCpuTime / (1.0 * ev.numIterations) * 1000;
       double totalBandwidthGbs = (numLinks * N * sizeof(float) / 1.0E6) / totalCpuTime;
+      double maxGpuTime = 0;
       for (int i = 0; i < numLinks; i++)
       {
         double linkDurationMsec = links[i].totalTime / (1.0 * ev.numIterations);
         double linkBandwidthGbs = (N * sizeof(float) / 1.0E9) / linkDurationMsec * 1000.0f;
+        maxGpuTime = std::max(maxGpuTime, linkDurationMsec);
         if (!ev.outputToCsv)
         {
           printf(" Link %02d: %c%02d -> [%cPU %02d:%02d] -> %c%02d | %9.3f GB/s | %8.3f ms | %-16s",
@@ -310,7 +313,8 @@ int main(int argc, char **argv)
       // Display aggregate statistics
       if (!ev.outputToCsv)
       {
-        printf(" Aggregate Bandwidth (CPU timed)    | %9.3f GB/s | %8.3f ms |\n", totalBandwidthGbs, totalCpuTime);
+        printf(" Aggregate Bandwidth (CPU timed)    | %9.3f GB/s | %8.3f ms | Overhead: %.3f ms\n", totalBandwidthGbs, totalCpuTime,
+               totalCpuTime - maxGpuTime);
       }
       else
       {
@@ -514,7 +518,7 @@ void GenerateConfigFile(char const* cfgFile, int numBlocks)
   fprintf(fp, "# GPU 0 Gather\n");
   fprintf(fp, "%d %d", numGpuDevices-1, numBlocks);
   for (int i = 1; i < numGpuDevices; i++)
-    fprintf(fp, " (G%d->G%d->G%d)", 0, i, 0);
+    fprintf(fp, " (G%d->G%d->G%d)", i, 0, 0);
   fprintf(fp, "\n\n");
 
   // Full stress test
@@ -533,17 +537,16 @@ void GenerateConfigFile(char const* cfgFile, int numBlocks)
 
 void DisplayTopology()
 {
-  printf("\nDetected topology:\n");
   int numGpuDevices;
   HIP_CALL(hipGetDeviceCount(&numGpuDevices));
-
+  printf("\nDetected topology: %d CPU NUMA node(s)   %d GPU device(s)\n", numa_num_configured_nodes(), numGpuDevices);
   printf("        |");
   for (int j = 0; j < numGpuDevices; j++)
     printf(" GPU %02d |", j);
-  printf(" PCIe Bus ID\n");
+  printf(" PCIe Bus ID  | Closest NUMA\n");
   for (int j = 0; j <= numGpuDevices; j++)
     printf("--------+");
-  printf("-------------\n");
+  printf("--------------+-------------\n");
 
   char pciBusId[20];
   for (int i = 0; i < numGpuDevices; i++)
@@ -567,7 +570,7 @@ void DisplayTopology()
       }
     }
     HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, i));
-    printf(" %s\n", pciBusId);
+    printf(" %11s |  %d  \n", pciBusId, GetClosestNumaNode(i));
   }
 }
 
@@ -670,7 +673,7 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
     // Method 1: Take in triples (srcMem, exeMem, dstMem)
     int numBlocksToUse;
     iss >> numBlocksToUse;
-    if (numBlocksToUse <= 0)
+    if (numBlocksToUse <= 0 || iss.fail())
     {
       printf("Parsing error: Number of blocks to use (%d) must be greater than 0\n", numBlocksToUse);
       exit(1);
@@ -679,6 +682,11 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
     for (int i = 0; i < numLinks; i++)
     {
       iss >> srcMem >> exeMem >> dstMem;
+      if (iss.fail())
+      {
+        printf("Parsing error: Unable to read valid Link triplet (possibly missing a SRC or EXE or DST)\n");
+        exit(1);
+      }
       ParseMemType(srcMem, numCpus, numGpus, &links[i].srcMemType, &links[i].srcIndex);
       ParseMemType(exeMem, numCpus, numGpus, &links[i].exeMemType, &links[i].exeIndex);
       ParseMemType(dstMem, numCpus, numGpus, &links[i].dstMemType, &links[i].dstIndex);
@@ -699,6 +707,11 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
     for (int i = 0; i < numLinks; i++)
     {
       iss >> srcMem >> exeMem >> dstMem >> links[i].numBlocksToUse;
+      if (iss.fail())
+      {
+        printf("Parsing error: Unable to read valid Link quadruple (possibly missing a SRC or EXE or DST or #CU)\n");
+        exit(1);
+      }
       ParseMemType(srcMem, numCpus, numGpus, &links[i].srcMemType, &links[i].srcIndex);
       ParseMemType(exeMem, numCpus, numGpus, &links[i].exeMemType, &links[i].exeIndex);
       ParseMemType(dstMem, numCpus, numGpus, &links[i].dstMemType, &links[i].dstIndex);

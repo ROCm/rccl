@@ -293,11 +293,12 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
 #ifdef ENABLE_PROFILING
-    uint64_t t0 = __builtin_amdgcn_s_memrealtime();
+    uint64_t t0;
+    if (tid == 0) t0 = __builtin_amdgcn_s_memrealtime();
 #endif
     if (SEND) waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
 #ifdef ENABLE_PROFILING
-    if (SEND && tid == 0) __atomic_fetch_add(&ncclShmem->comm.devProf->wait_cycle[blockIdx.x], __builtin_amdgcn_s_memrealtime() - t0, __ATOMIC_SEQ_CST);
+    if (SEND && tid == 0) ncclShmem->comm.devProf->elems[blockIdx.x].wait_cycle = (__builtin_amdgcn_s_memrealtime() - t0);
 #endif
 
     nelem -= tid*EltPerLine;
