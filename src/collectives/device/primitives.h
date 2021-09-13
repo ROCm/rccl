@@ -141,7 +141,7 @@ class ncclPrimitives {
     }
     __asm__ __volatile__("s_wakeup");
     if (connSizesFifoPtr) {
-      atomicExch_system((unsigned long long *)connSizesFifoPtr+step%NCCL_STEPS, nbytes);
+      STORE(connSizesFifoPtr+step%NCCL_STEPS, nbytes);
     }
 
     if (connPtrsFifoPtr) dsts[DST+index] = (T *)LOAD(connPtrsFifoPtr+step%NCCL_STEPS);
