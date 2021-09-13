@@ -175,7 +175,7 @@ class ncclPrimitives {
   }
 
   inline __device__ void postSend() {
-    if (conn->next_hdp_reg) atomicExch_system(conn->next_hdp_reg, 0x1);
+    if (conn->next_hdp_reg) STORE(conn->next_hdp_reg, 0x1);
     atomicExch_system((unsigned long long *)connTailPtr, step += SLICESTEPS);
   }
 
