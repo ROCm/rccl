@@ -19,9 +19,9 @@
 // all CTA's threads enter the barrier and do a popc on their predicates being True
 // If any of the thread's predicate was True, all the threads call exit()
 #define exitIfAbortBarrier(abort, abortCount) \
-  if (abort) __atomic_fetch_add(abortCount, 1, __ATOMIC_SEQ_CST); \
+  if (abort) atomicAdd(abortCount, 1); \
   __syncthreads(); \
-  if (LOAD(abortCount)) { /*asm volatile ("s_endpgm");*/ return false; }
+  if (atomicAdd(abortCount, 0)) { /*asm volatile ("s_endpgm");*/ return false; }
 #define __syncwarp()
 
 #define NCCL_FUNC5(func, algo, redop, type) \
@@ -184,7 +184,7 @@ static __device__ void load_parallel(void* dst, void* src, size_t size, int tid)
 static __device__ bool load_coll(struct ncclWork* localWork, struct ncclWork *hostWork, struct ncclWork* workFifo, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
   load_parallel(localWork, workFifo, sizeof(struct ncclWork), tid);
   // Check whether the last operation was aborted and make sure all threads exit
-  int abort = tid == 0 ? LOAD(comm->abortFlag) : 0;
+  int abort = tid == 0 ? atomicAdd_system((unsigned int *)comm->abortFlag, 0) : 0;
   exitIfAbortBarrier(abort, abortCount);
   if (tid == 0) hostWork->elems[0].active = 0;
   return true;
