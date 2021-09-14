@@ -76,7 +76,7 @@ class Primitives<
   inline __device__ bool checkAbort(int &spins) {
     spins++;
     if (!(flags & Aborted) && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      flags |= LOAD(ncclShmem->comm.abortFlag) ? Aborted : 0;
+      flags |= atomicAdd_system((unsigned int *)ncclShmem->comm.abortFlag, 0) ? Aborted : 0;
       spins = 0;
     }
     return flags & Aborted;
@@ -88,10 +88,12 @@ class Primitives<
       bool const isSendNotRecv = (Send && Recv) ? (flags & RoleWaitSend) : Send;
       int spins = 0;
       while (connStepCache + (isSendNotRecv ? NCCL_STEPS : 0) < step + StepPerSlice) {
-        connStepCache = LOAD(connStepPtr);
+        __builtin_amdgcn_s_sleep(8);
+        connStepCache = atomicAdd_system((unsigned long long *)connStepPtr, 0);
         if (checkAbort(spins)) break;
         //if (spins == 0) printf("r=%d b=%d t=%d SPUN OUT got=%d want=%d\n", ncclShmem->comm.rank, blockIdx.x, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
       }
+      __asm__ __volatile__("s_wakeup");
 
       if (isSendNotRecv && (flags & SizesFifoEnabled))
         STORE(connSizesFifoPtr+step%NCCL_STEPS, nelts*sizeof(T));
@@ -112,7 +114,7 @@ class Primitives<
   inline __device__ void postPeer() {
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
-      STORE(connStepPtr, step);
+      atomicExch_system((unsigned long long *)connStepPtr, step);
     }
   }
 

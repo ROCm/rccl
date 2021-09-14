@@ -22,8 +22,9 @@
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
-      __atomic_fetch_add(barriers, 1, __ATOMIC_SEQ_CST); \
-      while (LOAD(barriers) < barrier_next[w]) /* spin */; \
+      atomicAdd((unsigned long long *)barriers, 1); \
+      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(8); \
+      __asm__ __volatile__("s_wakeup"); \
     } \
   } \
 } while (0)

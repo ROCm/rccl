@@ -223,9 +223,9 @@ class ncclFunction {
 #endif
 
 __device__ inline bool barrierReduceAny(int bit, uint32_t* abortCount) {
-  if (bit) __atomic_fetch_add(abortCount, 1, __ATOMIC_SEQ_CST); \
+  if (bit) atomicAdd(abortCount, 1); \
   __syncthreads(); \
-  return LOAD(abortCount) != 0;
+  return atomicAdd(abortCount, 0) != 0;
 }
 
 template<typename T>
