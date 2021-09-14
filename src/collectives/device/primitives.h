@@ -136,7 +136,7 @@ class ncclPrimitives {
     spins = 0;
     while (connHeadCache + NCCL_STEPS < step + SLICESTEPS) {
       __builtin_amdgcn_s_sleep(8);
-      connHeadCache = atomicAdd_system((unsigned long long *)connHeadPtr, 0);
+      connHeadCache = LOAD(connHeadPtr);
       if (checkAbort()) break;
     }
     __asm__ __volatile__("s_wakeup");
@@ -158,7 +158,7 @@ class ncclPrimitives {
 #endif
     while (connTailCache < step + SLICESTEPS) {
       __builtin_amdgcn_s_sleep(8);
-      connTailCache = atomicAdd_system((unsigned long long *)connTailPtr, 0);
+      connTailCache =LOAD(connTailPtr);
       if (checkAbort()) break;
     }
     __asm__ __volatile__("s_wakeup");
@@ -207,7 +207,11 @@ class ncclPrimitives {
         }
       }
       barrier();
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+      // L1 cache invalidation by __threadfence_system() is already done in above barrier()
+#else
       if (SEND && (role & ROLE_POST_SEND) && realSize > 0 && index == 0) __threadfence_system();
+#endif
       __syncwarp();
       if (SEND && (role & ROLE_POST_SEND)) postSend();
       if (RECV && (role & ROLE_POST_RECV)) postRecv();
