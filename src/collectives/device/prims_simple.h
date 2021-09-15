@@ -89,7 +89,7 @@ class Primitives<
       int spins = 0;
       while (connStepCache + (isSendNotRecv ? NCCL_STEPS : 0) < step + StepPerSlice) {
         __builtin_amdgcn_s_sleep(8);
-        connStepCache = atomicAdd_system((unsigned long long *)connStepPtr, 0);
+        connStepCache = LOAD(connStepPtr);
         if (checkAbort(spins)) break;
         //if (spins == 0) printf("r=%d b=%d t=%d SPUN OUT got=%d want=%d\n", ncclShmem->comm.rank, blockIdx.x, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
       }
@@ -191,7 +191,7 @@ class Primitives<
              sliceSize);
         }
         barrier(); // This barrier has a counterpart in following loop
-        if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
+        //if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
         __syncwarp();
         postPeer<Recv, Send>();
         offset += sliceSize;
@@ -211,7 +211,7 @@ class Primitives<
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(0, 0, 0, 0);
       }
       barrier(); // Has couterpart in preceding worker-only loop.
-      if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
+      //if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
       __syncwarp();
       postPeer<Recv, Send>();
       offset += sliceSize;
@@ -259,7 +259,7 @@ class Primitives<
         }
       }
       barrier();
-      if (Send && (flags & RolePostSend) && realSize > 0 && index == 0) __threadfence_system();
+      //if (Send && (flags & RolePostSend) && realSize > 0 && index == 0) __threadfence_system();
       __syncwarp();
       postPeer<Recv, Send>();
       offset += realSize;
