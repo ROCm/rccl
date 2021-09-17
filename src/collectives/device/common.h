@@ -14,14 +14,6 @@
 #define COLL_UNROLL 2
 #define NCCL_MAX_DEV_ARITY NCCL_MAX_TREE_ARITY
 
-// Exit If Abort Barrier across CTA: make sure all threads exit consistently
-// Each thread sets a predicate to true if abort == 1
-// all CTA's threads enter the barrier and do a popc on their predicates being True
-// If any of the thread's predicate was True, all the threads call exit()
-#define exitIfAbortBarrier(abort, abortCount) \
-  if (abort) atomicAdd(abortCount, 1); \
-  __syncthreads(); \
-  if (atomicAdd(abortCount, 0)) { /*asm volatile ("s_endpgm");*/ return false; }
 #define __syncwarp()
 
 #define NCCL_FUNC5(func, algo, redop, type) \
@@ -63,8 +55,10 @@
   NCCL_FUNCS3A(func, Sum ), \
   NCCL_FUNCS3A(func, Prod), \
   NCCL_FUNCS3A(func, Max ), \
-  NCCL_FUNCS3A(func, Min )
+  NCCL_FUNCS3A(func, Min ), \
+  NCCL_FUNCS3A(func, Avg)
 #define NCCL_FUNCS2B(func) \
+  NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum), \
@@ -97,7 +91,8 @@
   NCCL_FUNCS3C(func, Sum ), \
   NCCL_FUNCS3C(func, Prod), \
   NCCL_FUNCS3C(func, Max ), \
-  NCCL_FUNCS3C(func, Min )
+  NCCL_FUNCS3C(func, Min ), \
+  NCCL_FUNCS3C(func, Avg)
 
 // Must be consistent with ncclFunc_t
 #define NCCL_FUNCS() { \
@@ -143,12 +138,12 @@ struct Caller<f, f + 1>{
   void call(struct ncclWorkElem* const c) noexcept { ncclFuncs[f](c); }
 };
 
-static_assert(FUNC_INDEX_P2P == 1800, "Wrong P2P function index");
+static_assert(FUNC_INDEX_P2P == 2250, "Wrong P2P function index");
 
 inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
-  if (c->funcIndex < 360) {
+  if (c->funcIndex < 450) {
     if (c->funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
     else if (c->funcIndex % 9 == 1) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
     else if (c->funcIndex % 9 == 2) ncclFunction_Broadcast_TREE_SIMPLE_Sum_int8_t(c);
@@ -159,8 +154,8 @@ void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
     else if (c->funcIndex % 9 == 7) ncclFunction_Broadcast_COLLNET_LL_Sum_int8_t(c);
     else ncclFunction_Broadcast_COLLNET_SIMPLE_Sum_int8_t(c);
   }
-  else if (c->funcIndex < 720) Caller<360, 720>::call(c);
-  else if (c->funcIndex < 1080) {
+  else if (c->funcIndex < 900) Caller<450, 900>::call(c);
+  else if (c->funcIndex < 1350) {
     if (c->funcIndex % 9 == 0) ncclFunction_AllGather_TREE_LL_Sum_int8_t(c);
     else if (c->funcIndex % 9 == 1) ncclFunction_AllGather_TREE_LL_Sum_int8_t(c);
     else if (c->funcIndex % 9 == 2) ncclFunction_AllGather_TREE_SIMPLE_Sum_int8_t(c);
@@ -171,69 +166,54 @@ void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
     else if (c->funcIndex % 9 == 7) ncclFunction_AllGather_COLLNET_LL_Sum_int8_t(c);
     else ncclFunction_AllGather_COLLNET_SIMPLE_Sum_int8_t(c);
   }
-  else if (c->funcIndex < 1800) Caller<1080, 1800>::call(c);
+  else if (c->funcIndex < 2250) Caller<1350, 2250>::call(c);
   else ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
-}
-
-static __device__ void load_parallel(void* dst, void* src, size_t size, int tid) {
-  int* d = (int*)dst;
-  int* s = (int*)src;
-  for (int o = tid; o < (size/sizeof(int)); o += blockDim.x) d[o] = s[o];
-}
-
-static __device__ bool load_coll(struct ncclWork* localWork, struct ncclWork *hostWork, struct ncclWork* workFifo, int tid, struct ncclDevComm* comm, uint32_t* abortCount) {
-  load_parallel(localWork, workFifo, sizeof(struct ncclWork), tid);
-  // Check whether the last operation was aborted and make sure all threads exit
-  int abort = tid == 0 ? atomicAdd_system((unsigned int *)comm->abortFlag, 0) : 0;
-  exitIfAbortBarrier(abort, abortCount);
-  if (tid == 0) hostWork->elems[0].active = 0;
-  return true;
 }
 
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
 class ncclFunction {
   public:
-  __device__ void run(struct ncclWorkElem* args) {}
+  __device__ __attribute__((noinline)) void run(struct ncclWorkElem* args) {}
 };
 
 #ifdef ENABLE_COLLTRACE
 #define traceColl(fIdx)  \
-    uint32_t pos = __atomic_fetch_add(comm->collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    comm->collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-    comm->collTrace[pos].opCount = w->op.opCount; \
-    comm->collTrace[pos].bid = bid; \
-    comm->collTrace[pos].funcIndex = fIdx; \
+    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    shmem.comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    shmem.comm.collTrace[pos].opCount = elems[0].op.opCount; \
+    shmem.comm.collTrace[pos].bid = bid; \
+    shmem.comm.collTrace[pos].funcIndex = fIdx; \
     if (fIdx == FUNC_INDEX_P2P) { \
-      comm->collTrace[pos].p2p.nThreads = w->p2p.nThreads; \
-      comm->collTrace[pos].p2p.delta = (uint16_t)(w->p2p.delta); \
+      shmem.comm.collTrace[pos].p2p.nThreads = elems[0].p2p.nThreads; \
+      shmem.comm.collTrace[pos].p2p.delta = (uint16_t)(elems[0].p2p.delta); \
     } else { \
-      comm->collTrace[pos].coll.nThreads = w->nThreads; \
-      comm->collTrace[pos].coll.bid = w->coll.bid; \
-      comm->collTrace[pos].coll.nChannels = w->coll.nChannels; \
+      shmem.comm.collTrace[pos].coll.nThreads = elems[0].nThreads; \
+      shmem.comm.collTrace[pos].coll.bid = elems[0].coll.bid; \
+      shmem.comm.collTrace[pos].coll.nChannels = elems[0].coll.nChannels; \
     }
 #define traceKernelLaunch(fIdx)  { \
     traceColl(fIdx); \
-    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (comm->collTrace[pos].data_0)); \
-    comm->collTrace[pos].type = ncclCollTraceKernelLaunchType; \
+    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (shmem.comm.collTrace[pos].data_0)); \
+    shmem.comm.collTrace[pos].type = ncclCollTraceKernelLaunchType; \
   }
 #define traceCollEnd(fIdx)  { \
     traceColl(fIdx); \
-    comm->collTrace[pos].type = ncclCollTraceCollEndType; \
+    shmem.comm.collTrace[pos].type = ncclCollTraceCollEndType; \
   }
 #define traceAbort(fIdx)  { \
     traceColl(fIdx); \
-    comm->collTrace[pos].type = ncclCollTraceAbortType; \
+    shmem.comm.collTrace[pos].type = ncclCollTraceAbortType; \
   }
 //  traceData(int16_t data2, uint32_t data4, uint64_t data8_0, uint64_t data8_1)
 #define traceData(data2, data4, data8_0, data8_1) { \
-    uint32_t pos = __atomic_fetch_add(comm->collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    comm->collTrace[pos].bid = blockIdx.x; \
-    comm->collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-    comm->collTrace[pos].funcIndex = data2; \
-    comm->collTrace[pos].data_0 = data4; \
-    comm->collTrace[pos].opCount = data8_0; \
-    comm->collTrace[pos].data_1 = data8_1; \
-    comm->collTrace[pos].type = ncclCollTraceDataType; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem->comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    ncclShmem->comm.collTrace[pos].bid = blockIdx.x; \
+    ncclShmem->comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    ncclShmem->comm.collTrace[pos].funcIndex = data2; \
+    ncclShmem->comm.collTrace[pos].data_0 = data4; \
+    ncclShmem->comm.collTrace[pos].opCount = data8_0; \
+    ncclShmem->comm.collTrace[pos].data_1 = data8_1; \
+    ncclShmem->comm.collTrace[pos].type = ncclCollTraceDataType; \
   }
 #else
 #define traceKernelLaunch(fIdx)
@@ -242,9 +222,82 @@ class ncclFunction {
 #define traceData(data2, data4, data8_0, data8_1)
 #endif
 
-#define MAXWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
+__device__ inline bool barrierReduceAny(int bit, uint32_t* abortCount) {
+  if (bit) atomicAdd(abortCount, 1); \
+  __syncthreads(); \
+  return atomicAdd(abortCount, 0) != 0;
+}
 
-struct ncclShmemPtrs {
+template<typename T>
+__device__ int copyToShmem(T *dst, T const *src, int turn=0) {
+  static_assert(sizeof(uint64_t) <= alignof(T), "Uhoh");
+  uint64_t *d = reinterpret_cast<uint64_t*>(dst);
+  uint64_t const *s = reinterpret_cast<uint64_t const*>(src);
+  int t = threadIdx.x - turn;
+  if (t < 0) t += blockDim.x;
+  int n = sizeof(T)/sizeof(uint64_t);
+
+  int delta = (n + WARP_SIZE-1) & -WARP_SIZE; // round up to warp lane 0
+  if (delta < blockDim.x) {
+    turn += delta;
+    if (turn >= blockDim.x) turn -= blockDim.x;
+  }
+  else
+    turn = 0;
+
+  n -= t;
+  d += t;
+  s += t;
+  #pragma unroll
+  for (int i=0; i < divUp(sizeof(T), WARP_SIZE*sizeof(uint64_t)); i++) {
+    if (n > 0) {
+      *d = *s;
+      d += blockDim.x;
+      s += blockDim.x;
+      n -= blockDim.x;
+    }
+  }
+  return turn;
+}
+
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
+struct RunWorkElement {
+  __device__ __attribute__((noinline)) void run(ncclWorkElem*) {
+    // Put NOT IMPLEMENTED behavior here.
+  }
+};
+
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
+struct RunWork {
+  __device__ __attribute__((noinline)) void run(ncclWork *w) {
+    /* Some invariants that must hold:
+     * 1. All elems[] have same funcIndex.
+     * 2. All elems[] have same nThreads.
+     * 3. The thread-to-group relation (as in prims group numbers) is the same
+     *    for all elems[].
+     *
+     * If (1) isn't true then we might be in the wrong function since dispatch
+     * on ncclFuncs[w->elems[0].funcIndex] is how we got here.
+     *
+     * If (2) or (3) aren't true, then threads from different work elements
+     * could race for barrier resources (barrier numbers 0...15) which is fatal.
+     *
+     * Important, to ensure (3), implementations of
+     * `RunWorkElement<Fn,T,RedOp,Algo,Proto>::run()` may only use values which
+     * are the same for all elems[] when deciding how to map threads to groups,
+     * such as  the following:
+     *    Fn, T, RedOp, Algo, Proto, nThreads
+     *
+     * This last one is difficult to enforce and diagnosing it is a headeache.
+     * Device-side developers, consider yourselves warned.
+     */
+  }
+};
+
+#define MAXWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
+struct ncclShmemGroup {
+  ncclConnInfo *recvConns[NCCL_MAX_DIRECT_ARITY];
+  ncclConnInfo *sendConns[NCCL_MAX_DIRECT_ARITY];
   void* srcs[NCCL_MAX_DIRECT_ARITY+1];
   void* dsts[NCCL_MAX_DIRECT_ARITY+1];
   uint64_t barrier;
@@ -253,20 +306,19 @@ struct ncclShmemPtrs {
 
 struct ncclShmemData {
   union {
-#ifdef ENABLE_LL128
-    volatile uint64_t data[NCCL_LL128_SHMEM_SIZE];
-#else
-    volatile uint64_t* data;
-#endif
-    struct ncclShmemPtrs ptrs[NCCL_MAX_GROUPS];
+    uint64_t ll128warp[NCCL_MAX_GROUPS][NCCL_MAX_GROUPS];
+    struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
   };
   uint32_t sync[MAXWARPS];
-  struct ncclWork localWork;
+  ncclDevComm comm;
+  ncclChannel channel;
+  ncclWork work;
 };
 
 extern __device__ struct ncclShmemData *ncclShmem;
-template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL, int FINDEX, bool COLLTRACE>
-__device__ void ncclKernel(struct ncclWorkElem first)  {
+
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnIndex, bool COLLTRACE>
+__device__ void ncclKernel(ncclWorkElem first)  {
   int tid = threadIdx.x;
   int bid = blockIdx.x;
   __shared__ struct ncclShmemData shmem;
@@ -275,51 +327,64 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   if (tid == 0) {
     abortCount = 0;
     for (auto i = 0; i < NCCL_MAX_GROUPS; i++) {
-      shmem.ptrs[i].barrier = 0;
-      for (auto j = 0; j < MAXWARPS; j++) shmem.ptrs[i].barrier_next[j] = 0;
+      shmem.groups[i].barrier = 0;
+      for (auto j = 0; j < MAXWARPS; j++) shmem.groups[i].barrier_next[j] = 0;
     }
   }
   __syncthreads();
 
-  auto f = ncclFunction<FUNCTION, ALGO, PROTO, REDOP, T, UNROLL>();
+  int turn = copyToShmem(&shmem.comm, first.comm);
+  // get address of channel without incurring indirect load from ncclDevCom::channels
+  ncclChannel *channel = &((ncclDevCommAndChannels*)first.comm)->channels[bid];
+  turn = copyToShmem(&shmem.channel, channel, turn);
 
-  struct ncclDevComm* comm = first.comm;
-  struct ncclChannel* channel = comm->channels+bid;
-  struct ncclWorkElem* w = NULL;
+  // To optimize for latency, (only) the first operation is passed as argument.
+  struct ncclWorkElem* elems = NULL;
   bool firstLaunch = true;
+  if (bid == 0 && first.funcIndex != FUNC_INDEX_P2P) elems = &first;
 
-  if (bid == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
+  ncclWork *workFifoHost = channel->workFifo;
+  ncclWork *workFifoDev = channel->workFifoDev;
+  int workFifoIx = channel->index;
 
   while (1) {
-    if (w == NULL) {
-      w = shmem.localWork.elems;
+    if (elems == NULL) {
+      elems = shmem.work.elems;
       __syncthreads();
-      if (!load_coll(&shmem.localWork, channel->workFifo+channel->index, channel->workFifoDev+channel->index, tid, comm, &abortCount)) {
-        if (COLLTRACE && tid == 0) traceAbort(0xffff);
-        return;
+      copyToShmem(&shmem.work, &workFifoDev[workFifoIx]);
+      { // Check whether the last operation was aborted and make sure all threads exit
+        int aborted = tid == 0 ? *shmem.comm.abortFlag : 0;
+        if (barrierReduceAny(aborted, &abortCount)) { // publish ncclShmem->work
+          if (COLLTRACE && tid == 0) traceAbort(0xffff);
+          break;
+        }
+        if (tid == 0)
+          workFifoHost[workFifoIx].elems[0].active = 0;
       }
       if (COLLTRACE && tid == 0) {
-        if (firstLaunch) traceKernelLaunch(w->funcIndex);
-        if (!firstLaunch) traceCollEnd(w->funcIndex);
+        if (firstLaunch) traceKernelLaunch(elems->funcIndex);
+        if (!firstLaunch) traceCollEnd(elems->funcIndex);
         firstLaunch = false;
       }
     } else if (COLLTRACE && tid == 0) {
-        traceKernelLaunch(w->funcIndex);
+        traceKernelLaunch(elems->funcIndex);
         firstLaunch = false;
     }
-    if (tid < w->nThreads) {
-      if (w->funcIndex == FINDEX) {
-        f.run(w);
+    workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
+    if (tid == 0)
+      channel->index = workFifoIx; // write back to real channel, not shmem shadow
+    if (tid < elems->nThreads && elems->active != 0) {
+      if (elems->funcIndex == FnIndex) {
+        RunWork<Fn, T, RedOp, Algo, Proto>().run(&shmem.work);
       } else {
-        NCCL_CALL_FUNCTIONS(w);
+        NCCL_CALL_FUNCTIONS(elems);
       }
     }
-    if (tid == 0) channel->index = (channel->index+1) % NCCL_MAX_OPS;
-    if (w->active == 2) {
+    if (elems->active == 2) {
       if (COLLTRACE && tid == 0) traceCollEnd(0xffff);
       return;
     }
-    w = NULL;
+    elems = NULL;
   }
 }
 
@@ -327,17 +392,16 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
 __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
 __global__ void NCCL_KERN_NAME(func, algo, proto, redop, type)(struct ncclWorkElem first) { \
   if (first.comm->collTraceThread) \
-    ncclKernel<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL, fIndex, true>(first); \
+    ncclKernel<ncclFunc##func, type, Func##redop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, true>(first); \
   else \
-    ncclKernel<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL, fIndex, false>(first); \
+    ncclKernel<ncclFunc##func, type, Func##redop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, false>(first); \
 }
 
 // Examples :     AllReduce, RING, LL,    Sum,   uint8
 /* Functions for aggregation case */
 #define IMPL_COLL_FUNC(func, algo, proto, redop, type) \
 __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, redop, type)(struct ncclWorkElem* args) { \
-  auto f = ncclFunction<ncclFunc##func, NCCL_ALGO_##algo, NCCL_PROTO_##proto, Func##redop<type>, type, COLL_UNROLL>(); \
-  f.run(args); \
+  RunWorkElement<ncclFunc##func, type, Func##redop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto>().run(args); \
 }
 
 // Only generate inline kernels for LL
@@ -367,7 +431,8 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, red
   IMPL_COLL2(func, Sum) \
   IMPL_COLL2(func, Prod) \
   IMPL_COLL2(func, Min) \
-  IMPL_COLL2(func, Max)
+  IMPL_COLL2(func, Max) \
+  IMPL_COLL2(func, Avg)
 
 // [RCCL] Define clique-based implementations (repurposed LL128)
 #define IMPL_COLL4_CLIQUE(func, algo, redop, type, ncclType) \
@@ -396,7 +461,8 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, red
   IMPL_COLL2_CLIQUE(func, Sum) \
   IMPL_COLL2_CLIQUE(func, Prod) \
   IMPL_COLL2_CLIQUE(func, Min) \
-  IMPL_COLL2_CLIQUE(func, Max)
+  IMPL_COLL2_CLIQUE(func, Max) \
+  IMPL_COLL2_CLIQUE(func, Avg)
 // [/RCCL]
 
 

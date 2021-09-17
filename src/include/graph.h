@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <sched.h>
 
 ncclResult_t ncclTopoCudaPath(int cudaDev, char** path);
 
@@ -36,8 +37,8 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* topo, int64_t busId, int ne
 ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, struct ncclTopoGraph* graph, int channelId, int type, int* dev);
 ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, int cudaDev2, bool* isXGMI, bool direct_only=false);
 
-// Set CPU affinity
-ncclResult_t ncclTopoSetAffinity(struct ncclTopoSystem* system, int rank);
+// Find CPU affinity
+ncclResult_t ncclTopoGetCpuAffinity(struct ncclTopoSystem* system, int rank, cpu_set_t* affinity);
 
 #define NCCL_TOPO_CPU_ARCH_X86 1
 #define NCCL_TOPO_CPU_ARCH_POWER 2
@@ -107,6 +108,6 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph, struct ncclTopoGraph* collNetGraph, int gcn);
 #include "info.h"
-ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time);
+ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, int numPipeOps, float* time);
 
 #endif

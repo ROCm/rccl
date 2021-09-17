@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -16,6 +17,7 @@ ncclResult_t bootstrapInit(ncclUniqueId* id, int rank, int nranks, void** commSt
 ncclResult_t bootstrapAllGather(void* commState, void* allData, int size);
 ncclResult_t bootstrapSend(void* commState, int peer, int tag, void* data, int size);
 ncclResult_t bootstrapRecv(void* commState, int peer, int tag, void* data, int size);
+ncclResult_t bootstrapBarrier(void* commState, int *ranks, int tag, int rank, int nranks);
 ncclResult_t bootstrapRemAlloc(size_t size, int rank, void* commState, int* id, hipIpcMemHandle_t* ipc, void** ptr);
 ncclResult_t bootstrapRemFree(int id, int rank, void* commState);
 ncclResult_t bootstrapClose(void* commState);

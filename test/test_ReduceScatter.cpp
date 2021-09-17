@@ -46,7 +46,7 @@ namespace CorrectnessTests
                              ReduceScatterCorrectnessTest,
                              testing::Combine(
                                 // Reduction operator
-                                testing::Values(ncclSum, ncclProd, ncclMax, ncclMin),
+                                testing::Values(ncclSum, ncclProd, ncclMax, ncclMin, ncclAvg),
                                 // Data types
                                 testing::Values(ncclInt8,
                                                 ncclUint8,

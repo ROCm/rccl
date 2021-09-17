@@ -333,7 +333,7 @@ ncclResult_t ncclTopoCompareGraphs(struct ncclTopoSystem* system, struct ncclTop
     return ncclSuccess;
   }
   // 3. Less hops (but not at the price of going cross NICs)
-  if (graph->crossNic == refGraph->crossNic && graph->nHops < refGraph->nHops) *copy = 1;
+  if (graph->pattern == refGraph->pattern && graph->crossNic == refGraph->crossNic && graph->nHops < refGraph->nHops) *copy = 1;
 
   // 4. Prefer graph with more XGMI connections
   if (graph->nChannels == refGraph->nChannels
@@ -758,11 +758,14 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
 }
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-float speedArray[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+float speedArrayIntra[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+float speedArrayInter[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #else
-float speedArray[] = { 42.0, 30.0, 24.0, 21.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+float speedArrayIntra[] = { 44.0, 30.0, 22.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0 };
+float speedArrayInter[] = { 48.0, 30.0, 24.0, 22.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #endif
-#define NSPEEDS (sizeof(speedArray)/sizeof(float))
+#define NSPEEDSINTRA (sizeof(speedArrayIntra)/sizeof(float))
+#define NSPEEDSINTER (sizeof(speedArrayInter)/sizeof(float))
 
 RCCL_PARAM(ModelMatchingDisable, "MODEL_MATCHING_DISABLE", 0);
 RCCL_PARAM(EnableMultipleSAT, "ENABLE_MULTIPLE_SAT", 0);
@@ -819,23 +822,26 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     graph->maxChannels = 1;
   if (ngpus == 1) if (graph->pattern != NCCL_TOPO_PATTERN_RING) graph->pattern = NCCL_TOPO_PATTERN_TREE;
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  // TODO: benchmark balance tree vs split tree
-  //if (graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) graph->pattern = NCCL_TOPO_PATTERN_SPLIT_TREE;
-#else
   // SPLIT_TREE works better on older archs.
   int ccMin;
   NCCLCHECK(ncclTopoGetCompCap(system, &ccMin, NULL));
-  if (ccMin < 80 && graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) graph->pattern = NCCL_TOPO_PATTERN_SPLIT_TREE;
-#endif
 
   struct ncclTopoGraph tmpGraph;
   memcpy(&tmpGraph, graph, sizeof(struct ncclTopoGraph));
 
   // First try crossnic, then decrease speed and finally increase speedIntra.
+  int nspeeds = 0;
+  float* speedArray = NULL;
+  if (system->nodes[NET].count == 0) {
+    nspeeds = NSPEEDSINTRA;
+    speedArray = speedArrayIntra;
+  } else {
+    nspeeds = NSPEEDSINTER;
+    speedArray = speedArrayInter;
+  }
   int pass = 1;
   int speedIndex = 0;
-  while (speedArray[speedIndex] > system->maxWidth && speedIndex < NSPEEDS-1) speedIndex++;
+  while (speedArray[speedIndex] > system->maxWidth && speedIndex < nspeeds-1) speedIndex++;
   tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
   int64_t globalTimeout = NCCL_SEARCH_GLOBAL_TIMEOUT;
 
@@ -902,12 +908,12 @@ search:
     tmpGraph.crossNic = 0;
 
     // Decrease speed until we find a solution
-    if ((speedIndex < NSPEEDS-1) && (graph->nChannels == 0 || (speedArray[speedIndex+1]/graph->speedInter > .49))) {
+    if ((speedIndex < nspeeds-1) && (graph->nChannels == 0 || (speedArray[speedIndex+1]/graph->speedInter > .49))) {
       tmpGraph.speedInter = tmpGraph.speedIntra = speedArray[++speedIndex];
       goto search;
     }
     speedIndex = 0;
-    while (speedArray[speedIndex] > system->maxWidth && speedIndex < NSPEEDS-1) speedIndex++;
+    while (speedArray[speedIndex] > system->maxWidth && speedIndex < nspeeds-1) speedIndex++;
     tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
 
   }
@@ -918,7 +924,7 @@ done:
     time = -1;
     memcpy(&tmpGraph, graph, sizeof(tmpGraph));
     speedIndex = 0;
-    while (speedArray[speedIndex] > graph->speedInter && speedIndex < NSPEEDS-1) speedIndex++;
+    while (speedArray[speedIndex] > graph->speedInter && speedIndex < nspeeds-1) speedIndex++;
     tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
     tmpGraph.minChannels = graph->nChannels;
     pass = 2;

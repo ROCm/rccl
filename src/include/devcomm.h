@@ -27,7 +27,7 @@
 
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv} ncclFunc_t;
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclNumFuncs} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1];
 
 #define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
@@ -142,6 +142,8 @@ struct ncclRing {
   // devices. Ordered from current device.
   int* userRanks;
   int* devUserRanks;
+
+  int index; // This rank's index in the ring
 };
 
 
@@ -173,7 +175,7 @@ struct ncclPeer {
 struct ncclDevComm;
 
 #pragma pack(push)  /* push current alignment to stack */
-#pragma pack(4)     /* set alignment to 4 bytes boundary */
+#pragma pack(8)     /* set alignment to 4 bytes boundary */
 #define NCCL_MAX_WORK_ELEMENTS 1
 #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 
@@ -255,6 +257,7 @@ struct ncclChannel {
       // Operation list for aggregation
       struct ncclWork* workFifo;
       int workCount;
+      size_t totalSize;
       uint64_t workFifoTail; // Only used by CPU
 
 #ifdef ENABLE_PROFILING
@@ -285,7 +288,6 @@ struct ncclProfElem {
     struct {
       uint64_t total_cycle;
       uint64_t wait_cycle;      // total wait cycle
-      uint64_t wait_recv_cycle; // recv wait cycle
       // primtive cycles
       uint64_t send_cycle;
       uint64_t directSend_cycle;
@@ -378,6 +380,11 @@ struct ncclDevComm {
   pthread_t collTraceThread;
   bool collTraceExit;
 #endif
+};
+
+struct ncclDevCommAndChannels {
+  ncclDevComm comm;
+  ncclChannel channels[MAXCHANNELS];
 };
 
 #endif

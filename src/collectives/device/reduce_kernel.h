@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
@@ -11,6 +11,7 @@
 
 #include "common_kernel.h"
 #include <limits>
+#include <type_traits>
 
 template<typename T>
 struct FuncNull {
@@ -18,203 +19,6 @@ struct FuncNull {
     return 0;
   }
 };
-
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-
-//we really don't need any specializations and we don't need
-//to break things into uint32_t
-template<typename T>
-__device__ inline T ncclMinFunc(T x, T y) { return y < x ? y : x; }
-
-template<typename T>
-__device__ inline T ncclMaxFunc(T x, T y) { return y < x ? x : y; }
-
-template<typename T>
-class FuncBase {
-protected:
-  static constexpr auto n = sizeof(PackType) / sizeof(T);
-
-  union Cvt {
-    using Vec = T __attribute__((ext_vector_type(n)));
-
-    PackType data;
-    Vec vec;
-
-    static_assert(sizeof(Vec) == sizeof(data), "Vec must be the same size of data.");
-  };
-};
-
-template<>
-class FuncBase<half> {
-protected:
-  static constexpr auto n = sizeof(PackType) / sizeof(_Float16);
-  union Cvt {
-    using Vec = _Float16 __attribute__((ext_vector_type(n)));
-
-    PackType data;
-    Vec vec;
-
-    static_assert(sizeof(Vec) == sizeof(data), "Vec must be the same size of data.");
-  };
-};
-
-template<typename T>
-struct FuncSum : private FuncBase<T> {
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    using Cvt = typename FuncBase<T>::Cvt;
-
-    Cvt tmp_x{x};
-    tmp_x.vec += Cvt{y}.vec;
-
-    return tmp_x.data;
-  }
-  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
-  __device__ T operator()(const T x, const T y) const {
-    return x + y;
-  }
-};
-
-template<typename T>
-struct FuncProd : private FuncBase<T> {
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    using Cvt = typename FuncBase<T>::Cvt;
-
-    Cvt tmp_x{x};
-    tmp_x.vec *= Cvt{y}.vec;
-
-    return tmp_x.data;
-  }
-  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
-  __device__ T operator()(const T x, const T y) const {
-    return x * y;
-  }
-};
-
-template<typename T>
-struct FuncMax : private FuncBase<T> {
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    using Cvt = typename FuncBase<T>::Cvt;
-
-    Cvt tmp_x{x};
-    Cvt tmp_y{y};
-
-    for (auto i = 0u; i != FuncBase<T>::n; ++i) {
-        tmp_x.vec[i] = ncclMaxFunc(tmp_x.vec[i], tmp_y.vec[i]);
-    }
-
-    return tmp_x.data;
-  }
-  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
-  __device__ T operator()(const T x, const T y) const {
-    return (x < y) ? y : x;
-  }
-};
-
-template<typename T>
-struct FuncMin : private FuncBase<T> {
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    using Cvt = typename FuncBase<T>::Cvt;
-
-    Cvt tmp_x{x};
-    Cvt tmp_y{y};
-
-    for (auto i = 0u; i != FuncBase<T>::n; ++i) {
-        tmp_x.vec[i] = ncclMinFunc(tmp_x.vec[i], tmp_y.vec[i]);
-    }
-
-    return tmp_x.data;
-  }
-  template<typename U = T, typename std::enable_if<!std::is_same<T, U>{}>* = nullptr>
-  __device__ T operator()(const T x, const T y) const {
-    return (x < y) ? x : y;
-  }
-};
-
-template<>
-struct FuncSum<rccl_bfloat16> {
-  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    union converter { PackType storage; rccl_bfloat16 vec[n]; };
-    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
-    converter cx, cy, cr;
-    cx.storage = x;
-    cy.storage = y;
-    for (auto i = 0u; i != n; ++i) {
-      cr.vec[i] = cx.vec[i] + cy.vec[i];
-    }
-    return cr.storage;
-  }
-  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
-    return x + y;
-  }
-};
-
-template<>
-struct FuncProd<rccl_bfloat16> {
-  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    union converter { PackType storage; rccl_bfloat16 vec[n]; };
-    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
-    converter cx, cy, cr;
-    cx.storage = x;
-    cy.storage = y;
-    for (auto i = 0u; i != n; ++i) {
-      cr.vec[i] = cx.vec[i] * cy.vec[i];
-    }
-    return cr.storage;
-  }
-  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
-    return x * y;
-  }
-};
-
-template<>
-struct FuncMax<rccl_bfloat16> {
-  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    union converter { PackType storage; rccl_bfloat16 vec[n]; };
-    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
-    converter cx, cy, cr;
-    cx.storage = x;
-    cy.storage = y;
-    for (auto i = 0u; i != n; ++i) {
-      cr.vec[i] = cx.vec[i] < cy.vec[i] ? cy.vec[i] : cx.vec[i];
-    }
-    return cr.storage;
-  }
-  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
-    return x < y ? y : x;
-  }
-};
-
-template<>
-struct FuncMin<rccl_bfloat16> {
-  static constexpr auto n = sizeof(PackType) / sizeof(rccl_bfloat16);
-  __device__ PackType operator()(PackType x, PackType y) const
-  {
-    union converter { PackType storage; rccl_bfloat16 vec[n]; };
-    static_assert(sizeof(PackType) == sizeof(converter), "PackType must be the same size of converter.");
-    converter cx, cy, cr;
-    cx.storage = x;
-    cy.storage = y;
-    for (auto i = 0u; i != n; ++i) {
-      cr.vec[i] = cx.vec[i] < cy.vec[i] ? cx.vec[i] : cy.vec[i];
-    }
-    return cr.storage;
-  }
-  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
-    return x < y ? x : y;
-  }
-};
-
-#else
 
 template<typename T>
 struct FuncSum {
@@ -244,17 +48,29 @@ struct FuncMin {
   }
 };
 
-#define MASK0 0x00ff00ff
-#define MASK1 0xff00ff00
+template<typename Fn>
+struct FuncTraits { // generic implementation for FuncSum,Prod,Min,Max
+  static constexpr bool IsPreOpIdentity = true;
+  static constexpr bool IsPostOpIdentity = true;
+
+  __device__ static Fn make(int rankN) { return Fn(); }
+  template<typename T>
+  __device__ static T preOp(Fn, T x) { return x; }
+  template<typename T>
+  __device__ static T postOp(Fn, T x) { return x; }
+};
+
+#define NCCL_MASK0 0x00ff00ff
+#define NCCL_MASK1 0xff00ff00
 static __device__ uint32_t addChar4(const uint32_t x, const uint32_t y) {
   /* This can be used both for signed and unsigned 8-bit addition */
-  const uint32_t x0 = x & MASK0;
-  const uint32_t x1 = x & MASK1;
-  const uint32_t y0 = y & MASK0;
-  const uint32_t y1 = y & MASK1;
+  const uint32_t x0 = x & NCCL_MASK0;
+  const uint32_t x1 = x & NCCL_MASK1;
+  const uint32_t y0 = y & NCCL_MASK0;
+  const uint32_t y1 = y & NCCL_MASK1;
   const uint32_t r0 = (x0+y0);
   const uint32_t r1 = (x1+y1);
-  return (r0 & MASK0) | (r1 & MASK1);
+  return (r0 & NCCL_MASK0) | (r1 & NCCL_MASK1);
 }
 
 template<>
@@ -437,6 +253,19 @@ struct FuncSum<half> {
   }
 };
 
+#if defined(RCCL_BFLOAT16)
+template<>
+struct FuncSum<rccl_bfloat16> {
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+#if __CUDA_ARCH__ >= 800
+    return __hadd(x, y);
+#else
+    return x + y;
+#endif
+  }
+};
+#endif
+
 template<>
 struct FuncProd<half> {
   __device__ half2 operator()(const half2 x, const half2 y) const {
@@ -460,6 +289,19 @@ struct FuncProd<half> {
   }
 };
 
+#if defined(RCCL_BFLOAT16)
+template<>
+struct FuncProd<rccl_bfloat16> {
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+#if __CUDA_ARCH__ >= 800
+    return __hmul(x, y);
+#else
+    return x * y;
+#endif
+  }
+};
+#endif
+
 template<>
 struct FuncMax<half> {
   __device__ half2 operator()(const half2 x, const half2 y) const {
@@ -478,6 +320,19 @@ struct FuncMax<half> {
     return __float2half(fm);
   }
 };
+
+#if defined(RCCL_BFLOAT16)
+template<>
+struct FuncMax<rccl_bfloat16> {
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+#if __CUDA_ARCH__ >= 800
+    return __hmax(x, y);
+#else
+    return x < y ? y : x;
+#endif
+  }
+};
+#endif
 
 template<>
 struct FuncMin<half> {
@@ -498,6 +353,226 @@ struct FuncMin<half> {
   }
 };
 
-#endif // defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(RCCL_BFLOAT16)
+template<>
+struct FuncMin<rccl_bfloat16> {
+  __device__ rccl_bfloat16 operator()(const rccl_bfloat16 x, const rccl_bfloat16 y) const {
+#if __CUDA_ARCH__ >= 800
+    return __hmin(x, y);
+#else
+    return x < y ? x : y;
+#endif
+  }
+};
+#endif
+
+template<>
+struct FuncMax<float> {
+  __device__ float operator()(float x, float y) const {
+    return fmaxf(x, y);
+  }
+};
+template<>
+struct FuncMin<float> {
+  __device__ float operator()(float x, float y) const {
+    return fminf(x, y);
+  }
+};
+
+template<>
+struct FuncMax<double> {
+  __device__ double operator()(double x, double y) const {
+    return fmax(x, y);
+  }
+};
+template<>
+struct FuncMin<double> {
+  __device__ double operator()(double x, double y) const {
+    return fmin(x, y);
+  }
+};
+
+template<typename T>
+struct FuncAvg: FuncSum<T> {
+  static_assert(!std::is_floating_point<T>::value, "Uhoh");
+  static constexpr bool IsPreOpIdentity = true;
+  static constexpr bool IsPostOpIdentity = false;
+  int n;
+
+  template<typename ...Arg>
+  __device__ FuncAvg(int n): n(n) {}
+
+  __device__ T preOp(T x) const {
+    return x;
+  }
+  __device__ T postOp(T x) const {
+    return T(x/n);
+  }
+};
+
+template<>
+struct FuncAvg<double>: FuncSum<double> {
+  static constexpr bool IsPreOpIdentity = false;
+  static constexpr bool IsPostOpIdentity = true;
+  double rcp;
+  __device__ FuncAvg(int n) {
+    rcp = __drcp_rn(double(n));
+  }
+  // inherits FuncSum::operator()
+  __device__ double preOp(double x) const {
+    return IsPreOpIdentity ? x : x*rcp;
+  }
+  __device__ double postOp(double x) const {
+    return IsPostOpIdentity ? x : x*rcp;
+  }
+};
+
+template<>
+struct FuncAvg<float>: FuncSum<float> {
+  static constexpr bool IsPreOpIdentity = false;
+  static constexpr bool IsPostOpIdentity = true;
+  float rcp;
+  __device__ FuncAvg(int n) {
+    rcp = __frcp_rn(float(n));
+  }
+  // inherits FuncSum::operator()
+  __device__ float preOp(float x) const {
+    return IsPreOpIdentity ? x : x*rcp;
+  }
+  __device__ float postOp(float x) const {
+    return IsPostOpIdentity ? x : x*rcp;
+  }
+};
+
+template<>
+struct FuncAvg<half>: FuncSum<half> {
+  // Change these to switch between all prescale, all postscale, or both by sqrt(N).
+  // Obviously, the only invalid combination is both true. An improvement would be
+  // make this parameterized as a build time setting and passed here through
+  // preprocessor definitions.
+  static constexpr bool IsPreOpIdentity = false;
+  static constexpr bool IsPostOpIdentity = true;
+
+#if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
+  half2 scale;
+  __device__ FuncAvg(int n) {
+    if (!IsPreOpIdentity && !IsPostOpIdentity)
+      scale.x = __float2half(__frsqrt_rn(float(n)));
+    else
+      scale.x = __float2half(__frcp_rn(float(n)));
+    scale.y = scale.x;
+  }
+  // inherits FuncSum::operator()
+  __device__ half preOp(half x) const {
+    return IsPreOpIdentity ? x : __hmul(x, scale.x);
+  }
+  __device__ half2 preOp(half2 x) const {
+    return IsPreOpIdentity ? x : __hmul2(x, scale);
+  }
+  __device__ half postOp(half x) const {
+    return IsPostOpIdentity ? x : __hmul(x, scale.x);
+  }
+  __device__ half2 postOp(half2 x) const {
+    return IsPostOpIdentity ? x : __hmul2(x, scale);
+  }
+#else
+  float scale;
+  __device__ FuncAvg(int n) {
+    if (!IsPreOpIdentity && !IsPostOpIdentity)
+      scale = __frsqrt_rn(float(n));
+    else
+      scale = __frcp_rn(float(n));
+  }
+  // inherits FuncSum::operator()
+  __device__ half preOp(half x) const {
+    return IsPreOpIdentity ? x : __float2half(__half2float(x)*scale);
+  }
+  __device__ half2 preOp(half2 x) const {
+    if (IsPreOpIdentity)
+      return x;
+    else {
+      float2 a = __half22float2(x);
+      a.x *= scale;
+      a.y *= scale;
+      return __float22half2_rn(a);
+    }
+  }
+  __device__ half postOp(half x) const {
+    return IsPostOpIdentity ? x : __float2half(__half2float(x)*scale);
+  }
+  __device__ half2 postOp(half2 x) const {
+    if (IsPostOpIdentity)
+      return x;
+    else {
+      float2 a = __half22float2(x);
+      a.x *= scale;
+      a.y *= scale;
+      return __float22half2_rn(a);
+    }
+  }
+#endif
+};
+
+#if defined(RCCL_BFLOAT16)
+template<>
+struct FuncAvg<rccl_bfloat16>: FuncSum<rccl_bfloat16> {
+  // Change these to switch between all prescale, all postscale, or both by sqrt(N).
+  // Obviously, the only invalid combination is both true. An improvement would be
+  // make this parameterized as a build time setting and passed here through
+  // preprocessor definitions.
+  static constexpr bool IsPreOpIdentity = true;
+  static constexpr bool IsPostOpIdentity = false;
+
+#if __CUDA_ARCH__ >= 800
+  __device__ FuncAvg(int n) {
+    if (!IsPreOpIdentity && !IsPostOpIdentity)
+      scale.x = __float2bfloat16(__frsqrt_rn(float(n)));
+    else
+      scale.x = __float2bfloat16(__frcp_rn(float(n)));
+    scale.y = scale.x;
+  }
+  // inherits FuncSum::operator()
+  __device__ rccl_bfloat16 preOp(rccl_bfloat16 x) const {
+    return IsPreOpIdentity ? x : __hmul(x, scale.x);
+  }
+  __device__ rccl_bfloat16 postOp(rccl_bfloat16 x) const {
+    return IsPostOpIdentity ? x : __hmul(x, scale.x);
+  }
+#else
+  float scale;
+  __device__ FuncAvg(int n) {
+    if (!IsPreOpIdentity && !IsPostOpIdentity)
+      scale = __frsqrt_rn(float(n));
+    else
+      scale = __frcp_rn(float(n));
+  }
+  // inherits FuncSum::operator()
+  __device__ rccl_bfloat16 preOp(rccl_bfloat16 x) const {
+    return IsPreOpIdentity ? x : (rccl_bfloat16)(x*scale);
+  }
+  __device__ rccl_bfloat16 postOp(rccl_bfloat16 x) const {
+    return IsPostOpIdentity ? x : (rccl_bfloat16)(x*scale);
+  }
+#endif
+};
+#endif
+
+template<typename T>
+struct FuncTraits<FuncAvg<T>> {
+  static constexpr bool IsPreOpIdentity = FuncAvg<T>::IsPreOpIdentity;
+  static constexpr bool IsPostOpIdentity = FuncAvg<T>::IsPostOpIdentity;
+
+  __device__ static FuncAvg<T> make(int rankN) {
+    return FuncAvg<T>(rankN);
+  }
+  template<typename U>
+  __device__ static U preOp(FuncAvg<T> fn, U x) {
+    return fn.preOp(x);
+  }
+  template<typename U>
+  __device__ static U postOp(FuncAvg<T> fn, U x) {
+    return fn.postOp(x);
+  }
+};
 
 #endif // REDUCE_KERNEL_H_
