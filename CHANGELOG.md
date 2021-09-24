@@ -2,18 +2,15 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## [Unreleased]
+## RCCL-2.9.9 for ROCm 4.5.0
 ### Changed
 - Packaging split into a runtime package called rccl and a development package called rccl-devel. The development package depends on runtime. The runtime package suggests the development package for all supported OSes except CentOS 7 to aid in the transition. The suggests feature in packaging is introduced as a deprecated feature and will be removed in a future rocm release.
-
-## [RCCL-2.9.9 for ROCm 4.4.0]
 ### Added
 - Compatibility with NCCL 2.9.9
-
 ### Known issues
 - Managed memory is not currently supported for clique-based kernels
 
-## [RCCL-2.8.4 for ROCm 4.3.0]
+## RCCL-2.8.4 for ROCm 4.3.0
 ### Added
 - Ability to select the number of channels to use for clique-based all reduce (RCCL_CLIQUE_ALLREDUCE_NCHANNELS).  This can be adjusted to tune for performance when computation kernels are being executed in parallel.
 ### Optimizations
@@ -28,10 +25,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Known issues
 - Managed memory is not currently supported for clique-based kernels
 
-## [RCCL-2.8.4 for ROCm 4.2.0]
+## RCCL-2.8.4 for ROCm 4.2.0
 ### Added
 - Compatibility with NCCL 2.8.4
-
 ### Optimizations
 - Additional tuning for clique-based kernels
 - Enabling GPU direct RDMA read from GPU
@@ -40,7 +36,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Known issues
 - None
 
-## [RCCL-2.7.8 for ROCm 4.1.0]
+## RCCL-2.7.8 for ROCm 4.1.0
 ### Added
 - Experimental support for clique-based kernels (opt in with RCCL_ENABLE_CLIQUE=1)
 - Clique-based kernels may offer better performance for smaller input sizes
@@ -52,8 +48,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - Clique-based kernels may hang if there are differences between environment variables set across ranks.
 - Clique-based kernels may fail if the input / output device pointers are not the base device pointers returned by hipMalloc.
 
-
-## [RCCL-2.7.8 for ROCm 3.9.0]
+## RCCL-2.7.8 for ROCm 3.9.0
 ### Added
 - Adding support for alltoallv RCCL kernel
 ### Optimizations
@@ -61,22 +56,22 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Known issues
 - None
 
-## [RCCL-2.7.6 for ROCm 3.8.0]
+## RCCL-2.7.6 for ROCm 3.8.0
 ### Added
 - Support for static library builds
 ### Known issues
 - None
 
-## [RCCL-2.7.6 for ROCm 3.7.0]
+## RCCL-2.7.6 for ROCm 3.7.0
 ### Added
 - Updated to RCCL API version of 2.7.6
 - Added gather, scatter and all-to-all collectives
 
-## [RCCL-2.7.0 for ROCm 3.6.0]
+## RCCL-2.7.0 for ROCm 3.6.0
 ### Added
 - Updated to RCCL API version of 2.6.4
 
-## [RCCL-2.7.0 for ROCm 3.5.0]
+## RCCL-2.7.0 for ROCm 3.5.0
 ### Added
 - Compatibility with NCCL 2.6
 - Network interface improvements with API v3
