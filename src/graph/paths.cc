@@ -510,8 +510,22 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     }
     if (ret) {
       system->type |= RCCL_TOPO_GDR_ALL;
-      remove = 0;
-      INFO(NCCL_GRAPH, "GDR is available on all GPUs");
+      bool allXgmi = true;
+      // don't trim NICs unless all GPUs are connected by XGMI
+      for (int i = 0; i < system->nodes[GPU].count && allXgmi; i++) {
+        int cudaDev1 = system->nodes[GPU].nodes[i].gpu.dev;
+        for (int j = 0; j < system->nodes[GPU].count && allXgmi; j++) {
+          if (i == j) continue;
+          int cudaDev2 = system->nodes[GPU].nodes[j].gpu.dev;
+          bool isXGMI;
+          NCCLCHECK(ncclTopoGetLinkType(comm->topo, cudaDev1, cudaDev2, &isXGMI));
+          allXgmi &= isXGMI;
+        }
+      }
+      if (!allXgmi) {
+        remove = 0;
+        INFO(NCCL_GRAPH, "GDR is available on all GPUs");
+      }
     }
   }
   comm->localRanks = system->nodes[GPU].count;
