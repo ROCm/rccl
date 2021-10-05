@@ -1046,8 +1046,7 @@ ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, str
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, int cudaDev2, bool* isXGMI, bool direct_only, int nInter, int *inter) {
-  #define MAX_XGMI_INTER_GPUS 4
+ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, int cudaDev2, bool* isXGMI, int maxInter, int nInter, int *inter) {
   int interGpus[MAX_XGMI_INTER_GPUS+1];
   int ngpus = system->nodes[GPU].count;
   *isXGMI = false;
@@ -1067,18 +1066,18 @@ ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, in
       }
     }
   }
-  if (direct_only) return ncclSuccess;
+  if (maxInter == 0) return ncclSuccess;
   // check if there are intermediate GPUs that are connected to both
   bool res1, res2, res3;
   int j;
   for (j=0; j<nInter; j++) {
     bool res1;
-    ncclTopoGetLinkType(system, inter[j], inter[j+1], &res1, true);
+    ncclTopoGetLinkType(system, inter[j], inter[j+1], &res1, 0);
     if (!res1) break;
   }
   if (j<nInter) return ncclSuccess;
   if (nInter > 0 && inter != nullptr) {
-    ncclTopoGetLinkType(system, inter[nInter], cudaDev2, &res2, true);
+    ncclTopoGetLinkType(system, inter[nInter], cudaDev2, &res2, 0);
     if (res2) {
       *isXGMI = true;
       return ncclSuccess;
@@ -1088,7 +1087,7 @@ ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, in
   interGpus[0] = cudaDev1;
   // add one more intermediate GPU recursively util reaching max depth
   nInter++;
-  if (nInter+2 > ngpus || nInter > MAX_XGMI_INTER_GPUS) return ncclSuccess;
+  if (nInter+2 > ngpus || nInter > MAX_XGMI_INTER_GPUS || nInter > maxInter) return ncclSuccess;
   for (int i=0; i<ngpus; i++) {
     int dev = system->nodes[GPU].nodes[i].gpu.dev;
     // skip duplicated GPU
@@ -1098,7 +1097,7 @@ ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, in
     if (j<nInter) continue;
     // check connectivity with intermediate GPUs
     interGpus[nInter] = dev;
-    ncclTopoGetLinkType(system, cudaDev1, cudaDev2, &res3, false, nInter, interGpus);
+    ncclTopoGetLinkType(system, cudaDev1, cudaDev2, &res3, maxInter, nInter, interGpus);
     if (res3) {
       *isXGMI = true;
       return ncclSuccess;

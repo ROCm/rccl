@@ -576,7 +576,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   bool allXgmi = true;
   { // [RCCL] Check if clique-based kernels can be enabled and initialize CliqueManager
     //CliqueManager::cliqueMode_t cliqueMode = CliqueManager::CLIQUE_DISABLED;
-    if (comm->localRanks == comm->nRanks)
+    if (comm->localRanks == comm->nRanks && comm->topo->nodes[GPU].nodes[0].gpu.gcn != 910)
     {
       // Check that all the GPUs have peer access to one another and are XGMI connected
       bool hasPeerAccess = true;
@@ -595,7 +595,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
           //}
 
           bool isXGMI;
-          NCCLCHECK(ncclTopoGetLinkType(comm->topo, i, j, &isXGMI));
+          NCCLCHECK(ncclTopoGetLinkType(comm->topo, i, j, &isXGMI, 1));
           allXgmi &= isXGMI;
         }
       }
