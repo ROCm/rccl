@@ -532,6 +532,33 @@ void GenerateConfigFile(char const* cfgFile, int numBlocks)
     }
   fprintf(fp, "\n\n");
 
+  // All single-hop XGMI links
+  int numSingleHopXgmiLinks = 0;
+  for (int i = 0; i < numGpuDevices; i++)
+    for (int j = 0; j < numGpuDevices; j++)
+    {
+      if (i == j) continue;
+      uint32_t linkType, hopCount;
+      HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
+      if (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI && hopCount == 1) numSingleHopXgmiLinks++;
+    }
+  if (numSingleHopXgmiLinks > 0)
+  {
+    fprintf(fp, "# All single-hop links\n");
+    fprintf(fp, "%d %d", numSingleHopXgmiLinks, numBlocks);
+    for (int i = 0; i < numGpuDevices; i++)
+      for (int j = 0; j < numGpuDevices; j++)
+      {
+        if (i == j) continue;
+        uint32_t linkType, hopCount;
+        HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
+        if (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI && hopCount == 1)
+        {
+          fprintf(fp, " (G%d G%d F%d)", i, i, j);
+        }
+      }
+    fprintf(fp, "\n\n");
+  }
   fclose(fp);
 }
 
@@ -653,7 +680,7 @@ void ParseMemType(std::string const& token, int const numCpus, int const numGpus
 void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
 {
   // Replace any round brackets or '->' with spaces,
-  for (int i = 0; line[i]; i++)
+  for (int i = 1; line[i]; i++)
     if (line[i] == '(' || line[i] == ')' || line[i] == '-' || line[i] == '>' ) line[i] = ' ';
 
   links.clear();
@@ -664,7 +691,7 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
   iss.str(line);
   iss >> numLinks;
   if (iss.fail()) return;
-
+  printf("NumLinks = %d\n", numLinks);
   std::string exeMem;
   std::string srcMem;
   std::string dstMem;
@@ -693,7 +720,8 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
       links[i].numBlocksToUse = numBlocksToUse;
       if (links[i].exeMemType != MEM_CPU && links[i].exeMemType != MEM_GPU)
       {
-        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G')\n");
+        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G'), (from (%s->%s->%s %d))\n",
+               srcMem.c_str(), exeMem.c_str(), dstMem.c_str(), links[i].numBlocksToUse);
         exit(1);
       }
     }
@@ -715,9 +743,10 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
       ParseMemType(srcMem, numCpus, numGpus, &links[i].srcMemType, &links[i].srcIndex);
       ParseMemType(exeMem, numCpus, numGpus, &links[i].exeMemType, &links[i].exeIndex);
       ParseMemType(dstMem, numCpus, numGpus, &links[i].dstMemType, &links[i].dstIndex);
-      if (links[i].exeMemType != MEM_CPU || links[i].exeMemType != MEM_GPU)
+      if (links[i].exeMemType != MEM_CPU && links[i].exeMemType != MEM_GPU)
       {
-        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G')\n");
+        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G'), (from (%s->%s->%s %d))\n"
+,               srcMem.c_str(), exeMem.c_str(), dstMem.c_str(), links[i].numBlocksToUse);
         exit(1);
       }
 
