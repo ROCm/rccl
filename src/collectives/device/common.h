@@ -65,16 +65,30 @@
   NCCL_FUNCS3B(func, Sum)
 
 // [RCCL] Adding clique-based kernels for AllReduce, in-place of unused RingLL28 kernels
+#if defined(BUILD_ALLREDUCE_ONLY)
+#define NCCL_FUNC5B(func, algo, redop, type) \
+  NCCL_FUNC_NAME(func, algo, SIMPLE, redop, type)
+#else
 #define NCCL_FUNC5B(func, algo, redop, type) \
   NCCL_FUNC_NAME(func, algo, LL,     redop, type), \
   NCCL_FUNC_NAME(func, algo, LL128,  redop, type), \
   NCCL_FUNC_NAME(func, algo, SIMPLE, redop, type)
+#endif
 
+#if defined(BUILD_ALLREDUCE_ONLY)
+#define NCCL_FUNC4B(func, redop, type) \
+  NCCL_FUNC5B(func, RING,    redop, type)
+#else
 #define NCCL_FUNC4B(func, redop, type) \
   NCCL_FUNC5(func, TREE,    redop, type), \
   NCCL_FUNC5B(func, RING,    redop, type), \
   NCCL_FUNC5(func, COLLNET, redop, type)
+#endif
 
+#if defined(BUILD_ALLREDUCE_ONLY)
+#define NCCL_FUNCS3C(func, redop) \
+    NCCL_FUNC4B(func, redop, float)
+#else
 #define NCCL_FUNCS3C(func, redop) \
   NCCL_FUNC4B(func, redop, int8_t), \
   NCCL_FUNC4B(func, redop, uint8_t), \
@@ -86,13 +100,19 @@
   NCCL_FUNC4B(func, redop, float), \
   NCCL_FUNC4B(func, redop, double), \
   NCCL_FUNC4B(func, redop, rccl_bfloat16)
+#endif
 
+#if defined(BUILD_ALLREDUCE_ONLY)
+#define NCCL_FUNCS2C(func) \
+    NCCL_FUNCS3C(func, Sum )
+#else
 #define NCCL_FUNCS2C(func) \
   NCCL_FUNCS3C(func, Sum ), \
   NCCL_FUNCS3C(func, Prod), \
   NCCL_FUNCS3C(func, Max ), \
   NCCL_FUNCS3C(func, Min ), \
   NCCL_FUNCS3C(func, Avg)
+#endif
 
 // Must be consistent with ncclFunc_t
 #define NCCL_FUNCS() { \
@@ -112,12 +132,16 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 // variable. There is no host pointer to a device-side function, which
 // confuses clang. This will be fixed in the next clang release.
 #if defined(__HIP_DEVICE_COMPILE__)
+#if defined(BUILD_ALLREDUCE_ONLY)
+  NCCL_FUNCS2C(AllReduce),
+#else
   NCCL_FUNCS2B(Broadcast),
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2C(AllReduce),
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
+#endif
 #endif
 };
 

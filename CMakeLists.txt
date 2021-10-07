@@ -47,6 +47,7 @@ set(AMDGPU_TARGETS "${DEFAULT_AMDGPU_TARGETS}" CACHE STRING "List of specific ma
 option(BUILD_TESTS "Build test programs" OFF)
 option(INSTALL_DEPENDENCIES "Force install dependencies" OFF)
 option(BUILD_ADDRESS_SANITIZER "Build with address sanitizer enabled" OFF)
+option(BUILD_ALLREDUCE_ONLY "Build AllReduce + sum + float kernel only" OFF)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
@@ -201,6 +202,10 @@ endif()
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
 if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
+endif()
+
+if (BUILD_ALLREDUCE_ONLY)
+  add_compile_definitions(BUILD_ALLREDUCE_ONLY)
 endif()
 
 foreach(target ${AMDGPU_TARGETS})
