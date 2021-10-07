@@ -691,7 +691,7 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
   iss.str(line);
   iss >> numLinks;
   if (iss.fail()) return;
-  printf("NumLinks = %d\n", numLinks);
+
   std::string exeMem;
   std::string srcMem;
   std::string dstMem;
@@ -749,7 +749,6 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
 ,               srcMem.c_str(), exeMem.c_str(), dstMem.c_str(), links[i].numBlocksToUse);
         exit(1);
       }
-
     }
   }
 }
