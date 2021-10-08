@@ -13,6 +13,7 @@ Welcome to RCCL's documentation!
    library
    api
    allapi
+   attributions
 
 Indices and tables
 ==================
