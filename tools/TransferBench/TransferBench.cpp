@@ -73,7 +73,18 @@ int main(int argc, char **argv)
   // If a non-zero number of bytes is specified, use it
   // Otherwise generate array of bytes values to execute over
   std::vector<size_t> valuesOfN;
-  size_t const numBytesPerLink = argc > 2 ? atoll(argv[2]) : DEFAULT_BYTES_PER_LINK;
+  size_t numBytesPerLink = argc > 2 ? atoll(argv[2]) : DEFAULT_BYTES_PER_LINK;
+  if (argc > 2)
+  {
+    // Adjust bytes if unit specified
+    char units = argv[2][strlen(argv[2])-1];
+    switch (units)
+    {
+    case 'K': case 'k': numBytesPerLink *= 1024; break;
+    case 'M': case 'm': numBytesPerLink *= 1024*1024; break;
+    case 'G': case 'g': numBytesPerLink *= 1024*1024*1024; break;
+    }
+  }
   PopulateTestSizes(numBytesPerLink, ev.samplingFactor, valuesOfN);
 
   // Find the largest N to be used - memory will only be allocated once per link config
@@ -370,6 +381,7 @@ void DisplayUsage(char const* cmdName)
   printf("              If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
   printf("              If 0 is specified, a range of Ns will be benchmarked\n");
   printf("              If a negative number is specified, a configFile gets generated with this number as default number of CUs per link\n");
+  printf("              May append a suffix ('K', 'M', 'G') for kilobytes / megabytes / gigabytes\n");
   printf("\n");
   printf("Configfile Format:\n");
   printf("==================\n");
