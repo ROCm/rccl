@@ -1015,7 +1015,7 @@ void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link)
       hipExtLaunchKernelGGL(ev.useMemset ? GpuMemsetKernel : GpuCopyKernel,
                             dim3(link.numBlocksToUse, 1, 1),
                             dim3(BLOCKSIZE, 1, 1),
-                            0, link.stream,
+                            ev.sharedMemBytes, link.stream,
                             (ev.combineTiming && recordStart) ? link.startEvent : NULL,
                             (ev.combineTiming && recordStop)  ? link.stopEvent : NULL,
                             0, link.blockParam);
