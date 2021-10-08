@@ -138,6 +138,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_SIMPLE) (nNodes == 2) ? busBw *= 0.33 : busBw *= 0.11;
         if (a == NCCL_ALGO_TREE && (p == NCCL_PROTO_LL || p == NCCL_PROTO_LL128)) busBw *= 0.04;
         if (gcn == 910 && p == NCCL_PROTO_LL && nNodes == 1 && nRanks == 16) busBw *= 5.9;
+        if (gcn == 910 && a == NCCL_ALGO_TREE && p == NCCL_PROTO_SIMPLE && nNodes == 2 && nRanks == 32) busBw *= 3.2;
 #else
         if (compCap80) busBw = std::min(busBw, 235.0f);
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL) { busBw = std::min(llMaxBw, busBw * ((nNodes > 1 || coll == ncclFuncAllReduce || coll == ncclFuncReduce) ? 1.0/4.0 : 1.0/3.0)); }
@@ -281,16 +282,16 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
 // Trees are not perfectly sticking to the model for medium sizes. Applying a static correction
 // factor is not ideal but works quite well. Powers of two, 64 B to 128MB.
-static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][22] = {
-  { 0.7, 0.7, 0.7, 0.6, 0.6, 0.3, 0.9, 0.5, 0.5, 0.6, 0.5, 0.5, 0.8, 0.9, 0.8, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9, 1.0, },
-  { 0.7, 0.7, 0.7, 0.6, 0.6, 0.3, 0.9, 0.5, 0.5, 0.6, 0.5, 0.5, 0.8, 0.9, 0.8, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9, 1.0, },
-  { 0.4, 0.4, 0.3, 0.3, 0.2, 0.5, 0.5, 0.7, 0.2, 0.2, 0.3, 0.6, 0.7, 1.0, 1.3, 1.0, 1.2, 1.2, 1.1, 1.1, 1.2, 1.2, },
+static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][25] = {
+  { 0.7, 0.7, 0.7, 0.6, 0.6, 0.3, 0.9, 0.5, 0.5, 0.6, 0.5, 0.5, 0.8, 0.9, 0.8, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9, 1.0, 1.0, 1.0, 1.0, },
+  { 0.7, 0.7, 0.7, 0.6, 0.6, 0.3, 0.9, 0.5, 0.5, 0.6, 0.5, 0.5, 0.8, 0.9, 0.8, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9, 1.0, 1.0, 1.0, 1.0, },
+  { 0.4, 0.4, 0.3, 0.3, 0.2, 0.5, 0.5, 0.7, 0.2, 0.2, 0.3, 0.6, 0.7, 1.0, 1.3, 1.0, 1.2, 1.2, 1.1, 1.1, 1.2, 1.2, 1.5, 1.7, 2.4, },
 };
 
-static float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][22] = {
-  { 0.4, 0.6, 0.6, 0.3, 0.2, 0.2, 0.2, 0.2, 0.4, 0.6, 0.7, 0.9, 1.4, 1.5, 1.0, 0.8, 0.7, 0.8, 0.8, 0.9, 0.9, 0.9, },
-  { 0.4, 0.6, 0.6, 0.3, 0.2, 0.2, 0.2, 0.2, 0.4, 0.6, 0.7, 0.9, 1.4, 1.5, 1.0, 0.8, 0.7, 0.8, 0.8, 0.9, 0.9, 0.9, },
-  { 0.6, 0.4, 0.4, 0.4, 0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.6, 0.8, 0.9, },
+static float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][25] = {
+  { 0.4, 0.6, 0.6, 0.3, 0.2, 0.2, 0.2, 0.2, 0.4, 0.6, 0.7, 0.9, 1.4, 1.5, 1.0, 0.8, 0.7, 0.8, 0.8, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, },
+  { 0.4, 0.6, 0.6, 0.3, 0.2, 0.2, 0.2, 0.2, 0.4, 0.6, 0.7, 0.9, 1.4, 1.5, 1.0, 0.8, 0.7, 0.8, 0.8, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, },
+  { 0.6, 0.4, 0.4, 0.4, 0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.6, 0.8, 0.9, 1.1, 2.0, 2.9, },
 };
 
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, int numPipeOps, float* time) {
@@ -302,8 +303,8 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
   int logSize = log2i(info->nBytes>>6);
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  if (algorithm == NCCL_ALGO_TREE && logSize < 22) bw *= treeCorrectionFactor[protocol][logSize];
-  else if (algorithm == NCCL_ALGO_RING && logSize < 22) bw *= ringCorrectionFactor[protocol][logSize];
+  if (algorithm == NCCL_ALGO_TREE && logSize < 25) bw *= treeCorrectionFactor[protocol][logSize];
+  else if (algorithm == NCCL_ALGO_RING && logSize < 25) bw *= ringCorrectionFactor[protocol][logSize];
 #else
   if (algorithm == NCCL_ALGO_TREE && logSize < 23) bw *= treeCorrectionFactor[protocol][logSize];
   if (info->nChannels != 0) bw = bw / info->comm->nChannels * info->nChannels;
