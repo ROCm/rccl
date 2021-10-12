@@ -191,7 +191,7 @@
         </pci>
         <pci busid="0000:8c:00.0" class="0x020700" vendor="0x15b3" device="0x101b" subsystem_vendor="0x15b3" subsystem_device="0x0007" link_speed="16.0 GT/s PCIe" link_width="16">
           <nic>
-            <net name="mlx5_7" dev="7" speed="200000" port="1" guid="0x8c40bb0003f6ceb8" maxconn="262144" gdr="1"/>
+            <net name="mlx5_7" dev="6" speed="200000" port="1" guid="0x8c40bb0003f6ceb8" maxconn="262144" gdr="1"/>
           </nic>
         </pci>
       </pci>
@@ -217,15 +217,10 @@
         </pci>
         <pci busid="0000:9b:00.0" class="0x020700" vendor="0x15b3" device="0x101b" subsystem_vendor="0x15b3" subsystem_device="0x0007" link_speed="16.0 GT/s PCIe" link_width="16">
           <nic>
-            <net name="mlx5_8" dev="8" speed="200000" port="1" guid="0x6c40bb0003f6ceb8" maxconn="262144" gdr="1"/>
+            <net name="mlx5_8" dev="7" speed="200000" port="1" guid="0x6c40bb0003f6ceb8" maxconn="262144" gdr="1"/>
           </nic>
         </pci>
       </pci>
-    </pci>
-    <pci busid="0000:b1:00.0" class="0x020000" vendor="0x15b3" device="0x1015" subsystem_vendor="0x15b3" subsystem_device="0x0190" link_speed="8.0 GT/s PCIe" link_width="8">
-      <nic>
-        <net name="mlx5_6" dev="6" speed="40000" port="1" guid="0x100fe0b7312aea4" maxconn="262144" gdr="1"/>
-      </nic>
     </pci>
   </cpu>
 </system>
