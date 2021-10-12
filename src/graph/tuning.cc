@@ -303,8 +303,14 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
   int logSize = log2i(info->nBytes>>6);
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  if (algorithm == NCCL_ALGO_TREE && logSize < 25) bw *= treeCorrectionFactor[protocol][logSize];
-  else if (algorithm == NCCL_ALGO_RING && logSize < 25) bw *= ringCorrectionFactor[protocol][logSize];
+  if (algorithm == NCCL_ALGO_TREE) {
+    if (logSize < 25) bw *= treeCorrectionFactor[protocol][logSize];
+    else bw *= treeCorrectionFactor[protocol][24];
+  }
+  else if (algorithm == NCCL_ALGO_RING) {
+    if(logSize < 25) bw *= ringCorrectionFactor[protocol][logSize];
+    else bw *= ringCorrectionFactor[protocol][24];
+  }
 #else
   if (algorithm == NCCL_ALGO_TREE && logSize < 23) bw *= treeCorrectionFactor[protocol][logSize];
   if (info->nChannels != 0) bw = bw / info->comm->nChannels * info->nChannels;
