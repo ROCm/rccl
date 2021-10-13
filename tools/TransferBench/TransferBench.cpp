@@ -114,6 +114,10 @@ int main(int argc, char **argv)
   char line[2048];
   while(fgets(line, 2048, fp))
   {
+    // Check if line is a comment
+    if (!ev.outputToCsv && line[0] == '#' && line[1] == '#')
+      printf("%s", line);
+
     // Parse links from configuration file
     std::vector<Link> links;
     ParseLinks(line, numCpuDevices, numGpuDevices, links);
@@ -424,6 +428,7 @@ void DisplayUsage(char const* cmdName)
   printf("-2 (G0 G0 G1 4) (G1 G1 G0 2) Runs 2 Links in parallel.  GPU 0 - > GPU 1 using four CUs, and GPU1 -> GPU 0 using two CUs\n");
   printf("\n");
   printf("Round brackets and arrows' ->' may be included for human clarity, but will be ignored and are unnecessary\n");
+  printf("Lines starting with # will be ignored. Lines starting with ## will be echoed to output\n");
   printf("\n");
 
   EnvVars::DisplayUsage();
