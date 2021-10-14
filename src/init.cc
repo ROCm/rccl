@@ -312,7 +312,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 #ifdef ENABLE_PROFILING
   struct ncclProf* prof = (struct ncclProf*)malloc(sizeof(struct ncclProf));
   CUDACHECK(hipMemcpy(prof, comm->hostDevComm.devProf, sizeof(struct ncclProf), hipMemcpyDeviceToHost));
-  uint64_t total_cycle = 0, wait_cycle = 0, send_cycle = 0, directSend_cycle = 0, recv_cycle = 0, \
+  uint64_t total_cycle = 0, wait_cycle = 0, wait_send_cycle = 0, wait_recv_cycle = 0, send_cycle = 0, directSend_cycle = 0, recv_cycle = 0, \
     directRecv_cycle = 0, copySend_cycle = 0, directCopySend_cycle = 0, recvCopySend_cycle = 0, directRecvCopySend_cycle = 0, \
     recvReduceCopy_cycle = 0, recvReduceSend_cycle = 0, recvReduceCopySend_cycle = 0, directRecvReduceCopySend_cycle = 0, \
     send_byte = 0, directSend_byte = 0, recv_byte = 0, directRecv_byte = 0, copySend_byte = 0, directCopySend_byte = 0, \
@@ -321,6 +321,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
   for (int chan=0; chan<comm->nChannels; chan++) {
     total_cycle += prof->elems[chan].total_cycle;
     wait_cycle += prof->elems[chan].wait_cycle;
+    wait_send_cycle += prof->elems[chan].wait_send_cycle;
+    wait_recv_cycle += prof->elems[chan].wait_recv_cycle;
     send_cycle += prof->elems[chan].send_cycle;
     directSend_cycle += prof->elems[chan].directSend_cycle;
     recv_cycle += prof->elems[chan].recv_cycle;
@@ -348,12 +350,14 @@ static ncclResult_t commFree(ncclComm_t comm) {
   }
   #define VEGA_GPU_RTC_FREQUENCY 2.5E7
   if (comm->rank == 0) {
-    INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "Rank", "total", "  wait", "send", "rcRdS", "dRcRdCS", "dRcCS", "dRc", "cS", "rc", "rcCS");
-    INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "", "(s)", "(s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)");
+    INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "Rank", "total", "  wait", "w_send", "w_recv", "send", "rcRdS", "dRcRdCS", "dRcCS", "dRc", "cS", "rc", "rcCS");
+    INFO(NCCL_INIT, "# %4s %6s %6s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "", "(s)", "(s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)");
   }
-  INFO(NCCL_INIT, "# %4d %6.4f %6.4f %6.2f %6.2f %7.2f %6.2f %6.2f %6.2f %6.2f %6.2f",
+  INFO(NCCL_INIT, "# %4d %6.4f %6.4f %6.4f %6.4f %6.2f %6.2f %7.2f %6.2f %6.2f %6.2f %6.2f %6.2f",
     comm->rank, (double)total_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
     (double)wait_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
+    (double)wait_send_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
+    (double)wait_recv_cycle/VEGA_GPU_RTC_FREQUENCY/comm->nChannels,
     (send_cycle) ? (double)send_byte*comm->nChannels/((double)send_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
     (recvReduceSend_cycle) ? (double)recvReduceSend_byte*comm->nChannels/((double)recvReduceSend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
     (directRecvReduceCopySend_cycle) ? (double)directRecvReduceCopySend_byte*comm->nChannels/((double)directRecvReduceCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
