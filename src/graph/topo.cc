@@ -379,7 +379,7 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
 }
 
 struct kvDict kvDictPciClass[] = { { "0x060400", PCI }, { "0x068000", NVS }, { "0x068001", CPU }, { "0x030200", GPU }, { "0x030000", GPU }, { "0x038000", GPU }, { "0x020700", NIC }, { "0x020000", NIC }, { NULL, PCI /* Default fallback value */ } };
-struct kvDict kvDictPciGen[] = { { "2.5 GT/s", 15 }, { "5 GT/s", 30 }, { "8 GT/s", 60 }, { "16 GT/s", 120 }, { NULL, 60 /* Default fallback */ } }; // x100 Mbps per lane
+struct kvDict kvDictPciGen[] = { { "2.5 GT/s", 15 }, { "5 GT/s", 30 }, { "8 GT/s", 60 }, { "16 GT/s", 120 }, { "32 GT/s", 240 }, { "8.0 GT/s", 60 }, { "16.0 GT/s", 120 }, { "32.0 GT/s", 240 }, { NULL, 60 /* Default fallback */ } }; // x100 Mbps per lane
 ncclResult_t ncclTopoAddPci(struct ncclXmlNode* xmlPci, struct ncclTopoSystem* system, struct ncclTopoNode* parent) {
   const char* str;
 

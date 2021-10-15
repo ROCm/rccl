@@ -86,6 +86,9 @@ class Primitives<
   inline __device__ void waitPeer(intptr_t dstIx, intptr_t remoteOutIx, int offset, int nelts) {
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
       bool const isSendNotRecv = (Send && Recv) ? (flags & RoleWaitSend) : Send;
+#ifdef ENABLE_PROFILING
+      uint64_t t0 = __builtin_amdgcn_s_memrealtime();
+#endif
       int spins = 0;
       while (connStepCache + (isSendNotRecv ? NCCL_STEPS : 0) < step + StepPerSlice) {
         __builtin_amdgcn_s_sleep(8);
@@ -107,6 +110,12 @@ class Primitives<
       else
         ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*stepSize;
       step += StepPerSlice;
+#ifdef ENABLE_PROFILING
+      if (isSendNotRecv)
+        ncclShmem->comm.devProf->elems[blockIdx.x].wait_send_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+      else
+        ncclShmem->comm.devProf->elems[blockIdx.x].wait_recv_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+#endif
     }
   }
 
