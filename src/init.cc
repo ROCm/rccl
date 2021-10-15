@@ -310,6 +310,40 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(comm->asyncOps);
 
 #ifdef ENABLE_PROFILING
+#ifdef ENABLE_TIMING_PROFILE
+  struct ncclProf* prof = (struct ncclProf*)malloc(sizeof(struct ncclProf));
+  CUDACHECK(hipMemcpy(prof, comm->hostDevComm.devProf, sizeof(struct ncclProf), hipMemcpyDeviceToHost));
+  #define VEGA_GPU_RTC_FREQUENCY 2.5E7
+  if (comm->rank == 0) {
+    INFO(NCCL_INIT, "# %8s %7s %7s %7s %7s %7s %7s %7s %7s %7s", "Rank:Ch", "total", "send", "rcRdS", "dRcRdCS", "dRcCS", "dRc", "cS", "rc", "rcCS");
+    INFO(NCCL_INIT, "# %8s %7s %7s %7s %7s %7s %7s %7s %7s %7s", "", "(ms)", "(ms)", "(ms)", "(ms)", "(ms)", "(ms)", "(ms)", "(ms)", "(ms)");
+  }
+  for (int chan=0; chan<comm->nChannels; chan++) {
+    INFO(NCCL_INIT, "# [%03d:%02d] %7.3f %7.3f %7.3f %7.3f %7.3f %7.3f %7.3f %7.3f %7.3f",
+      comm->rank, chan, (double)prof->elems[chan].total_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].send_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].recvReduceSend_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].directRecvReduceCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].directRecvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].directRecv_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].copySend_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].recv_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0,
+      (double)prof->elems[chan].recvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1000.0);
+  }
+  free(prof);
+  CUDACHECK(hipFree(comm->hostDevComm.devProf));
+
+  for (int channel=0; channel<std::max(comm->nChannels, comm->p2pnChannels); channel++) {
+    if (comm->channels[channel].send_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Send %7.3f ms (%ld bytes %d measurements)",
+      comm->rank, channel, (comm->channels[channel].bw_count) ?
+      (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
+      comm->channels[channel].send_byte, comm->channels[channel].bw_count);
+    if (comm->channels[channel].recv_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Recv %7.3f ms (%ld bytes %d measurements)",
+      comm->rank, channel, (comm->channels[channel].bw_count) ?
+      (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
+      comm->channels[channel].recv_byte, comm->channels[channel].bw_count);
+  }
+#else
   struct ncclProf* prof = (struct ncclProf*)malloc(sizeof(struct ncclProf));
   CUDACHECK(hipMemcpy(prof, comm->hostDevComm.devProf, sizeof(struct ncclProf), hipMemcpyDeviceToHost));
   uint64_t total_cycle = 0, wait_cycle = 0, wait_send_cycle = 0, wait_recv_cycle = 0, send_cycle = 0, directSend_cycle = 0, recv_cycle = 0, \
@@ -379,6 +413,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
       (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
       comm->channels[channel].recv_byte, comm->channels[channel].bw_count);
   }
+#endif
 #endif
 
 #ifdef ENABLE_COLLTRACE
