@@ -10,6 +10,7 @@ if(BUILD_TESTS)
   if(BUILD_ALLREDUCE_ONLY)
     set(TEST_SOURCES_SINGLE_PROCESS
       test_AllReduce.cpp
+      test_AllReduceAbort.cpp
       test_AllReduceGroup.cpp
     )
   else()

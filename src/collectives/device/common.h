@@ -162,11 +162,17 @@ struct Caller<f, f + 1>{
   void call(struct ncclWorkElem* const c) noexcept { ncclFuncs[f](c); }
 };
 
+#if defined(BUILD_ALLREDUCE_ONLY)
+static_assert(FUNC_INDEX_P2P == 1, "Wrong P2P function index");
+#else
 static_assert(FUNC_INDEX_P2P == 2250, "Wrong P2P function index");
-
+#endif
 inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
+#if defined(BUILD_ALLREDUCE_ONLY)
+  Caller<0, 1>::call(c);
+#else
   if (c->funcIndex < 450) {
     if (c->funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
     else if (c->funcIndex % 9 == 1) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
@@ -192,6 +198,7 @@ void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
   }
   else if (c->funcIndex < 2250) Caller<1350, 2250>::call(c);
   else ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
+#endif
 }
 
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>

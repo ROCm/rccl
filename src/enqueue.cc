@@ -979,11 +979,14 @@ void HIPRT_CB ncclEnqueueHostSetup(void* arg) {
   struct ncclQueueElem* eqElem = eqInfo->elemList->begin();
   while (eqElem != NULL) {
     if (eqElem->work.funcIndex == FUNC_INDEX_P2P) {
+      printf("****In P2P\n");
       NCCLCHECKGOTO(ncclEnqueueP2pKernel(comm, eqElem), ret, cb_end);
     } else if (eqInfo->elemList->count() > 1) {
+      printf("****More than 1 op, aggregating\n");
       // We have more than one operation, hence aggregating
       NCCLCHECKGOTO(ncclEnqueueAsyncKernel(comm, eqElem), ret, cb_end);
     } else {
+      printf("****In Else, aggregating\n");
       NCCLCHECKGOTO(ncclEnqueueCollKernel(comm, eqElem), ret, cb_end);
     }
     eqElem = eqInfo->elemList->getNext();
