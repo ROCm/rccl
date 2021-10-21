@@ -63,11 +63,11 @@ static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { { 12.0
 // Tree/Simple is the latency a 256kB chunk, which is ~ base lat + 256k/12GB/s (+ 256k/12GB/s for the network).
 static float hwLat [3][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] =
 { /* NVLINK */
-  { /* Tree (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* Ring (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* CollNet (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 } },
+  { /* Tree (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* Ring (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* CollNet (LL/LL128/Simple)*/ { 1.2, 1.2, 3.8 } },
   /* PCI */
   { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNet (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 } },
   /* NET */
-  { /* Tree (LL/LL128/Simple)*/ { 40.0, 40.0, 50.0 }, /* Ring (LL/LL128/Simple)*/ { 4.0, 4.0, 25.0 }, /* CollNet (LL/LL128/Simple)*/ { 40.0, 40.0, 50.0 } }
+  { /* Tree (LL/LL128/Simple)*/ { 40.0, 40.0, 50.0 }, /* Ring (LL/LL128/Simple)*/ { 4.0, 4.0, 25.0 }, /* CollNet (LL/LL128/Simple)*/ { 9.8, 9.8, 19.5 } }
 };
 
 // LL128 max BW per channel
