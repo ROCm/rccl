@@ -50,24 +50,8 @@ int main(int argc, char **argv)
     exit(0);
   }
 
-  // Check that Link configuration file can be opened
-  FILE* fp = fopen(argv[1], "r");
-  if (!fp)
-  {
-    printf("[ERROR] Unable to open link configuration file: [%s]\n", argv[1]);
-    exit(1);
-  }
-
-  // Check for NUMA library support
-  if (numa_available() == -1)
-  {
-    printf("[ERROR] NUMA library not supported. Check to see if libnuma has been installed on this system\n");
-    exit(1);
-  }
-
   // Collect environment variables / display current run configuration
   EnvVars ev;
-  ev.DisplayEnvVars();
 
   // Determine number of bytes to run per Link
   // If a non-zero number of bytes is specified, use it
@@ -91,6 +75,30 @@ int main(int argc, char **argv)
   size_t maxN = valuesOfN[0];
   for (auto N : valuesOfN)
     maxN = std::max(maxN, N);
+
+  // Execute only peer to peer benchmark mode, similar to rocm-bandwidth-test
+  if (!strcmp(argv[1], "p2p"))
+  {
+    // Execute peer to peer benchmark mode
+    RunPeerToPeerBenchmarks(ev, numBytesPerLink / sizeof(float));
+    exit(0);
+  }
+
+  // Check that Link configuration file can be opened
+  FILE* fp = fopen(argv[1], "r");
+  if (!fp)
+  {
+    printf("[ERROR] Unable to open link configuration file: [%s]\n", argv[1]);
+    exit(1);
+  }
+
+  // Check for NUMA library support
+  if (numa_available() == -1)
+  {
+    printf("[ERROR] NUMA library not supported. Check to see if libnuma has been installed on this system\n");
+    exit(1);
+  }
+  ev.DisplayEnvVars();
 
   int const initOffset = ev.byteOffset / sizeof(float);
   std::stack<std::thread> threads;
@@ -1085,4 +1093,171 @@ void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link)
     if (iteration >= 0)
       link.totalTime += (std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count() * 1000.0);
   }
+}
+
+void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N)
+{
+  // Collect the number of available CPUs/GPUs on this machine
+  int numGpus;
+  HIP_CALL(hipGetDeviceCount(&numGpus));
+  int const numCpus = numa_num_configured_nodes();
+  int const numDevices = numCpus + numGpus;
+
+  // Enable peer to peer for each GPU
+  for (int i = 0; i < numGpus; i++)
+    for (int j = 0; j < numGpus; j++)
+      if (i != j) EnablePeerAccess(i, j);
+
+  printf("Performing copies in each direction of %lu bytes\n", N * sizeof(float));
+  printf("Using %d threads per NUMA node for CPU copies\n", ev.numCpuPerLink);
+
+  // Perform unidirectional / bidirectional
+  for (int isBidirectional = 0; isBidirectional <= 1; isBidirectional++)
+  {
+    // Print header
+    printf("%sdirectional copy peak bandwidth GB/s\n", isBidirectional ? "Bi" : "Uni");
+    printf("%10s", "D/D");
+    for (int i = 0; i < numCpus; i++)
+      printf("%8s%02d", "CPU", i);
+    for (int i = 0; i < numGpus; i++)
+      printf("%8s%02d", "GPU", i);
+    printf("\n");
+
+    // Loop over all possible src/dst pairs
+    for (int src = 0; src < numDevices; src++)
+    {
+      MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
+      int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
+      printf("%8s%02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
+
+      for (int dst = 0; dst < numDevices; dst++)
+      {
+        MemType const& dstMemType = (dst < numCpus ? MEM_CPU : MEM_GPU);
+        int dstIndex = (dstMemType == MEM_CPU ? dst : dst - numCpus);
+
+        double bandwidth = GetPeakBandwidth(ev, N, isBidirectional, srcMemType, srcIndex, dstMemType, dstIndex);
+        if (bandwidth == 0)
+          printf("%10s", "N/A");
+        else
+          printf("%10.3f", bandwidth);
+        fflush(stdout);
+      }
+      printf("\n");
+    }
+    printf("\n");
+  }
+}
+
+double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
+                        MemType srcMemType, int srcIndex,
+                        MemType dstMemType, int dstIndex)
+{
+  Link links[2];
+  int const initOffset = ev.byteOffset / sizeof(float);
+
+  // Prepare Links
+  links[0].srcMemType = links[0].exeMemType = links[1].dstMemType = srcMemType;
+  links[0].srcIndex   = links[0].exeIndex   = links[1].dstIndex   = srcIndex;
+  links[0].dstMemType = links[1].exeMemType = links[1].srcMemType = dstMemType;
+  links[0].dstIndex   = links[1].exeIndex   = links[1].srcIndex   = dstIndex;
+  for (int i = 0; i <= isBidirectional; i++)
+  {
+    AllocateMemory(links[i].srcMemType, links[i].srcIndex, N * sizeof(float) + ev.byteOffset, &links[i].srcMem);
+    AllocateMemory(links[i].dstMemType, links[i].dstIndex, N * sizeof(float) + ev.byteOffset, &links[i].dstMem);
+    links[i].totalTime = 0.0;
+
+    CheckOrFill(MODE_FILL, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].srcMem + initOffset);
+    if (links[i].exeMemType == MEM_GPU)
+    {
+      HIP_CALL(hipDeviceGetAttribute(&links[i].numBlocksToUse, hipDeviceAttributeMultiprocessorCount, links[i].exeIndex));
+      HIP_CALL(hipSetDevice(links[i].exeIndex));
+      HIP_CALL(hipEventCreate(&links[i].startEvent));
+      HIP_CALL(hipEventCreate(&links[i].stopEvent));
+      HIP_CALL(hipMalloc((void**)&links[i].blockParam, sizeof(BlockParam) * links[i].numBlocksToUse));
+      HIP_CALL(hipStreamCreate(&links[i].stream));
+
+      size_t assigned = 0;
+      int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)links[i].numBlocksToUse);
+      for (int j = 0; j < links[i].numBlocksToUse; j++)
+      {
+        BlockParam param;
+        int blocksLeft = std::max(0, maxNumBlocksToUse - j);
+        size_t leftover = N - assigned;
+        size_t roundedN = (leftover + 31) / 32;
+        param.N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+        param.src = links[i].srcMem + assigned + initOffset;
+        param.dst = links[i].dstMem + assigned + initOffset;
+        assigned += param.N;
+
+        HIP_CALL(hipMemcpy(&links[i].blockParam[j], &param, sizeof(BlockParam), hipMemcpyHostToDevice));
+      }
+    }
+    else
+    {
+      links[i].blockParam = (BlockParam*)malloc(ev.numCpuPerLink * sizeof(BlockParam));
+      // For CPU-based copy, divded based on the number of child threads
+      size_t assigned = 0;
+      int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)ev.numCpuPerLink);
+      for (int j = 0; j < ev.numCpuPerLink; j++)
+      {
+        int blocksLeft = std::max(0, maxNumBlocksToUse - j);
+        size_t leftover = N - assigned;
+        size_t roundedN = (leftover + 31) / 32;
+        links[i].blockParam[j].N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+        links[i].blockParam[j].src = links[i].srcMem + assigned + initOffset;
+        links[i].blockParam[j].dst = links[i].dstMem + assigned + initOffset;
+        assigned += links[i].blockParam[j].N;
+      }
+    }
+  }
+
+  std::stack<std::thread> threads;
+
+  // Perform iteration
+  for (int iteration = -ev.numWarmups; iteration < ev.numIterations; iteration++)
+  {
+    // Perform timed iterations
+    for (int i = 0; i <= isBidirectional; i++)
+      threads.push(std::thread(RunLink, std::ref(ev), N, iteration, std::ref(links[i])));
+
+    // Wait for all threads to finish
+    for (int i = 0; i <= isBidirectional; i++)
+    {
+      threads.top().join();
+      threads.pop();
+    }
+  }
+
+  // Validate that each link has transferred correctly
+  for (int i = 0; i <= isBidirectional; i++)
+    CheckOrFill(MODE_CHECK, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].dstMem + initOffset);
+
+  // Collect aggregate bandwidth
+  double totalBandwidth = 0;
+  for (int i = 0; i <= isBidirectional; i++)
+  {
+    double linkDurationMsec = links[i].totalTime / (1.0 * ev.numIterations);
+    double linkBandwidthGbs = (N * sizeof(float) / 1.0E9) / linkDurationMsec * 1000.0f;
+    totalBandwidth += linkBandwidthGbs;
+  }
+
+  // Release GPU memory
+  for (int i = 0; i <= isBidirectional; i++)
+  {
+    DeallocateMemory(links[i].srcMemType, links[i].srcIndex, links[i].srcMem);
+    DeallocateMemory(links[i].dstMemType, links[i].dstIndex, links[i].dstMem);
+
+    if (links[i].exeMemType == MEM_GPU)
+      {
+        HIP_CALL(hipEventDestroy(links[i].startEvent));
+        HIP_CALL(hipEventDestroy(links[i].stopEvent));
+        HIP_CALL(hipStreamDestroy(links[i].stream));
+        HIP_CALL(hipFree(links[i].blockParam));
+      }
+      else if (links[i].exeMemType == MEM_CPU)
+      {
+        free(links[i].blockParam);
+      }
+  }
+  return totalBandwidth;
 }
