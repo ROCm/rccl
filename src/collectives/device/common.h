@@ -16,6 +16,7 @@
 
 #define __syncwarp()
 
+#if !defined(BUILD_ALLREDUCE_ONLY)
 #define NCCL_FUNC5(func, algo, redop, type) \
   NCCL_FUNC_NAME(func, algo, LL,     redop, type), \
   NCCL_FUNC_NAME(func, algo, LL,     redop, type), \
@@ -63,6 +64,7 @@
   NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum)
+#endif
 
 // [RCCL] Adding clique-based kernels for AllReduce, in-place of unused RingLL28 kernels
 #if defined(BUILD_ALLREDUCE_ONLY)
@@ -162,11 +164,8 @@ struct Caller<f, f + 1>{
   void call(struct ncclWorkElem* const c) noexcept { ncclFuncs[f](c); }
 };
 
-#if defined(BUILD_ALLREDUCE_ONLY)
-static_assert(FUNC_INDEX_P2P == 1, "Wrong P2P function index");
-#else
 static_assert(FUNC_INDEX_P2P == 2250, "Wrong P2P function index");
-#endif
+
 inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
