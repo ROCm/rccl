@@ -40,7 +40,7 @@ public:
 
     useHipCall      = GetEnvVar("USE_HIP_CALL"     , 0);
     useMemset       = GetEnvVar("USE_MEMSET"       , 0);
-    useSingleSync   = GetEnvVar("USE_SINGLE_SYNC"  , 0);
+    useSingleSync   = GetEnvVar("USE_SINGLE_SYNC"  , 1);
     useInteractive  = GetEnvVar("USE_INTERACTIVE"  , 0);
     combineTiming   = GetEnvVar("COMBINE_TIMING"   , 0);
     showAddr        = GetEnvVar("SHOW_ADDR"        , 0);
