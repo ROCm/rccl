@@ -1119,9 +1119,9 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N)
     printf("%sdirectional copy peak bandwidth GB/s\n", isBidirectional ? "Bi" : "Uni");
     printf("%10s", "D/D");
     for (int i = 0; i < numCpus; i++)
-      printf("%8s%02d", "CPU", i);
+      printf("%7s %02d", "CPU", i);
     for (int i = 0; i < numGpus; i++)
-      printf("%8s%02d", "GPU", i);
+      printf("%7s %02d", "GPU", i);
     printf("\n");
 
     // Loop over all possible src/dst pairs
@@ -1129,7 +1129,7 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N)
     {
       MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
       int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
-      printf("%8s%02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
+      printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
 
       for (int dst = 0; dst < numDevices; dst++)
       {
@@ -1140,7 +1140,7 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N)
         if (bandwidth == 0)
           printf("%10s", "N/A");
         else
-          printf("%10.3f", bandwidth);
+          printf("%10.2f", bandwidth);
         fflush(stdout);
       }
       printf("\n");
@@ -1156,6 +1156,9 @@ double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
   Link links[2];
   int const initOffset = ev.byteOffset / sizeof(float);
 
+  // Skip bidirectional on same device
+  if (isBidirectional && srcMemType == dstMemType && srcIndex == dstIndex) return 0.0f;
+  
   // Prepare Links
   links[0].srcMemType = links[0].exeMemType = links[1].dstMemType = srcMemType;
   links[0].srcIndex   = links[0].exeIndex   = links[1].dstIndex   = srcIndex;
