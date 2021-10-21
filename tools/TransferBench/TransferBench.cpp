@@ -389,6 +389,7 @@ void DisplayUsage(char const* cmdName)
   printf("Usage: %s configFile <N>\n", cmdName);
 
   printf("  configFile: File containing Links to execute (see below for format)\n");
+  printf("              Specifying \"p2p\" as the configFile will execute a peer to peer benchmark\n");
   printf("  N         : (Optional) Number of bytes to transfer per link.\n");
   printf("              If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
   printf("              If 0 is specified, a range of Ns will be benchmarked\n");
@@ -888,8 +889,8 @@ void CheckPages(char* array, size_t numBytes, int targetId)
   if (mistakeCount > 0)
   {
     printf("[ERROR] %lu out of %lu pages for memory allocation were not on NUMA node %d\n", mistakeCount, numPages, targetId);
-    // NOTE: Some older versions of HIP do not properly respect NUMA policy so avoid failing for now
-    // exit(1);
+    printf("[ERROR] Ensure up-to-date ROCm is installed\n");
+    exit(1);
   }
 }
 
