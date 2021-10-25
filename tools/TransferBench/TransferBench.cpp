@@ -202,21 +202,23 @@ int main(int argc, char **argv)
         // Initialize source memory with patterned data
         CheckOrFill(MODE_FILL, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].srcMem + initOffset);
 
+
         // Each block needs to know src/dst pointers and how many elements to transfer
         // Figure out the sub-array each block does for this Link
-        // - Partition N as evenly as posible, but try to keep blocks as multiples of 32,
+        // - Partition N as evenly as posible, but try to keep blocks as multiples of BLOCK_BYTES bytes,
         //   except the very last one, for alignment reasons
+        int targetMultiple = ev.blockBytes / sizeof(float);
         if (links[i].exeMemType == MEM_GPU)
         {
           size_t assigned = 0;
-          int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)links[i].numBlocksToUse);
+          int maxNumBlocksToUse = std::min((N + targetMultiple - 1) / targetMultiple, (size_t)links[i].numBlocksToUse);
           for (int j = 0; j < links[i].numBlocksToUse; j++)
           {
             BlockParam param;
             int blocksLeft = std::max(0, maxNumBlocksToUse - j);
             size_t leftover = N - assigned;
-            size_t roundedN = (leftover + 31) / 32;
-            param.N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+            size_t roundedN = (leftover + targetMultiple - 1) / targetMultiple;
+            param.N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * targetMultiple)) : 0;
             param.src = links[i].srcMem + assigned + initOffset;
             param.dst = links[i].dstMem + assigned + initOffset;
             assigned += param.N;
@@ -228,13 +230,13 @@ int main(int argc, char **argv)
         {
           // For CPU-based copy, divded based on the number of child threads
           size_t assigned = 0;
-          int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)ev.numCpuPerLink);
+          int maxNumBlocksToUse = std::min((N + targetMultiple - 1) / targetMultiple, (size_t)ev.numCpuPerLink);
           for (int j = 0; j < ev.numCpuPerLink; j++)
           {
             int blocksLeft = std::max(0, maxNumBlocksToUse - j);
             size_t leftover = N - assigned;
-            size_t roundedN = (leftover + 31) / 32;
-            links[i].blockParam[j].N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+            size_t roundedN = (leftover + targetMultiple - 1) / targetMultiple;
+            links[i].blockParam[j].N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * targetMultiple)) : 0;
             links[i].blockParam[j].src = links[i].srcMem + assigned + initOffset;
             links[i].blockParam[j].dst = links[i].dstMem + assigned + initOffset;
             assigned += links[i].blockParam[j].N;
@@ -1158,7 +1160,7 @@ double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
 
   // Skip bidirectional on same device
   if (isBidirectional && srcMemType == dstMemType && srcIndex == dstIndex) return 0.0f;
-  
+
   // Prepare Links
   links[0].srcMemType = links[0].exeMemType = links[1].dstMemType = srcMemType;
   links[0].srcIndex   = links[0].exeIndex   = links[1].dstIndex   = srcIndex;
