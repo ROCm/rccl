@@ -170,7 +170,8 @@ inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
 #if defined(BUILD_ALLREDUCE_ONLY)
-  Caller<0, 1>::call(c);
+  assert(c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE));
+  ncclFunction_AllReduce_RING_SIMPLE_Sum_float(c);
 #else
   if (c->funcIndex < 450) {
     if (c->funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);

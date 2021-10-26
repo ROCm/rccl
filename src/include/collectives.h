@@ -9,11 +9,8 @@
 #define NCCL_COLLECTIVES_H_
 
 #define FUNC_INDEX_P2P (NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumOps)
-#if defined(BUILD_ALLREDUCE_ONLY)
-#define FUNC_INDEX(func, redop, ncclType, al, pr) (0)
-#else
 #define FUNC_INDEX(func, redop, ncclType, al, pr) ((((((func)*ncclNumOps + (redop))*ncclNumTypes) + (ncclType))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr))
-#endif
+
 #define NCCL_FUNC_NAME(func, algo, proto, redop, type) \
   ncclFunction_##func##_##algo##_##proto##_##redop##_##type
 
