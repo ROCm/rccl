@@ -112,12 +112,16 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 // variable. There is no host pointer to a device-side function, which
 // confuses clang. This will be fixed in the next clang release.
 #if defined(__HIP_DEVICE_COMPILE__)
+#if defined(BUILD_ALLREDUCE_ONLY)
+  NCCL_FUNC_NAME(AllReduce, RING, SIMPLE, Sum, float)
+#else
   NCCL_FUNCS2B(Broadcast),
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2C(AllReduce),
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
+#endif
 #endif
 };
 
@@ -143,6 +147,10 @@ static_assert(FUNC_INDEX_P2P == 2250, "Wrong P2P function index");
 inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
+#if defined(BUILD_ALLREDUCE_ONLY)
+  assert(c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE));
+  ncclFunction_AllReduce_RING_SIMPLE_Sum_float(c);
+#else
   if (c->funcIndex < 450) {
     if (c->funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
     else if (c->funcIndex % 9 == 1) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
@@ -168,6 +176,7 @@ void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
   }
   else if (c->funcIndex < 2250) Caller<1350, 2250>::call(c);
   else ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
+#endif
 }
 
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>

@@ -12,38 +12,51 @@ if(BUILD_TESTS)
 
   include_directories(${GTEST_INCLUDE_DIRS})
 
-  # Collect source files for tests
-  set(TEST_SOURCES_SINGLE_PROCESS
-    test_AllGather.cpp
-    test_AllReduce.cpp
-    test_AllReduceGroup.cpp
-    test_Broadcast.cpp
-    test_Reduce.cpp
-    test_ReduceScatter.cpp
-    test_GroupCalls.cpp
-    test_CombinedCalls.cpp
-    test_AllReduceAbort.cpp
-    test_BroadcastAbort.cpp
-    test_Scatter.cpp
-    test_Gather.cpp
-    test_AllToAll.cpp
-    test_AllToAllv.cpp
-  )
-
-  set(TEST_SOURCES_MULTI_PROCESS
-    test_AllGatherMultiProcess.cpp
-    test_AllReduceMultiProcess.cpp
-    test_AllReduceGroupMultiProcess.cpp
-    test_AllToAllMultiProcess.cpp
-    test_BroadcastMultiProcess.cpp
-    test_CombinedCallsMultiProcess.cpp
-    test_GatherMultiProcess.cpp
-    test_GroupCallsMultiProcess.cpp
-    test_ReduceMultiProcess.cpp
-    test_ReduceScatterMultiProcess.cpp
-    test_ScatterMultiProcess.cpp
-  )
-
+  if(BUILD_ALLREDUCE_ONLY)
+    set(TEST_SOURCES_SINGLE_PROCESS
+      test_AllReduce.cpp
+      test_AllReduceAbort.cpp
+      test_AllReduceGroup.cpp
+    )
+  else()
+    # Collect source files for tests
+    set(TEST_SOURCES_SINGLE_PROCESS
+      test_AllGather.cpp
+      test_AllReduce.cpp
+      test_AllReduceGroup.cpp
+      test_Broadcast.cpp
+      test_Reduce.cpp
+      test_ReduceScatter.cpp
+      test_GroupCalls.cpp
+      test_CombinedCalls.cpp
+      test_AllReduceAbort.cpp
+      test_BroadcastAbort.cpp
+      test_Scatter.cpp
+      test_Gather.cpp
+      test_AllToAll.cpp
+      test_AllToAllv.cpp
+    )
+  endif()
+  if(BUILD_ALLREDUCE_ONLY)
+    set(TEST_SOURCES_MULTI_PROCESS
+      test_AllReduceMultiProcess.cpp
+      test_AllReduceGroupMultiProcess.cpp
+    )
+  else()
+    set(TEST_SOURCES_MULTI_PROCESS
+      test_AllGatherMultiProcess.cpp
+      test_AllReduceMultiProcess.cpp
+      test_AllReduceGroupMultiProcess.cpp
+      test_AllToAllMultiProcess.cpp
+      test_BroadcastMultiProcess.cpp
+      test_CombinedCallsMultiProcess.cpp
+      test_GatherMultiProcess.cpp
+      test_GroupCallsMultiProcess.cpp
+      test_ReduceMultiProcess.cpp
+      test_ReduceScatterMultiProcess.cpp
+      test_ScatterMultiProcess.cpp
+    )
+  endif()
   add_executable(UnitTests ${TEST_SOURCES_SINGLE_PROCESS})
   target_include_directories(UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
   target_link_libraries(UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
