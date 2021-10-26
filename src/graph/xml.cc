@@ -671,8 +671,8 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
     for (int i=0; i<deviceCnt; i++) {
       if (i != dev) {
         RSMI_IO_LINK_TYPE rsmi_type;
-        int hops, bw;
-        if (rocm_smi_getLinkInfo(dev, i, &rsmi_type, &hops, &bw) == ncclSuccess) {
+        int hops, count;
+        if (rocm_smi_getLinkInfo(dev, i, &rsmi_type, &hops, &count) == ncclSuccess) {
           if (rsmi_type == RSMI_IOLINK_TYPE_XGMI && hops == 1) {
             char busIdStr[] = "00000000:00:00.0";
             CUDACHECK(hipDeviceGetPCIBusId(busIdStr, sizeof(busIdStr), i));
@@ -685,7 +685,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
             if (nvlNode == NULL) {
               NCCLCHECK(xmlAddNode(xml, gpuNode, "xgmi", &nvlNode));
               NCCLCHECK(xmlSetAttr(nvlNode, "target", lowerId));
-              NCCLCHECK(xmlSetAttrInt(nvlNode, "count", 1));
+              NCCLCHECK(xmlSetAttrInt(nvlNode, "count", count));
             }
           }
         }

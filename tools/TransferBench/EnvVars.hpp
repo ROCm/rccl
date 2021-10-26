@@ -27,14 +27,21 @@ public:
   int numIterations;   // Number of timed iterations to perform
   int samplingFactor;  // Affects how many different values of N are generated (when N set to 0)
   int numCpuPerLink;   // Number of CPU child threads to use per CPU link
+  int sharedMemBytes;  // Amount of shared memory to use per threadblock
+  int blockBytes;      // Each CU, except the last, gets a multiple of this many bytes to copy
+
   std::vector<float> fillPattern; // Pattern of floats used to fill source data
 
   // Constructor that collects values
   EnvVars()
   {
+    int maxSharedMemBytes = 0;
+    hipDeviceGetAttribute(&maxSharedMemBytes,
+                          hipDeviceAttributeMaxSharedMemoryPerMultiprocessor, 0);
+
     useHipCall      = GetEnvVar("USE_HIP_CALL"     , 0);
     useMemset       = GetEnvVar("USE_MEMSET"       , 0);
-    useSingleSync   = GetEnvVar("USE_SINGLE_SYNC"  , 0);
+    useSingleSync   = GetEnvVar("USE_SINGLE_SYNC"  , 1);
     useInteractive  = GetEnvVar("USE_INTERACTIVE"  , 0);
     combineTiming   = GetEnvVar("COMBINE_TIMING"   , 0);
     showAddr        = GetEnvVar("SHOW_ADDR"        , 0);
@@ -44,6 +51,8 @@ public:
     numIterations   = GetEnvVar("NUM_ITERATIONS"   , DEFAULT_NUM_ITERATIONS);
     samplingFactor  = GetEnvVar("SAMPLING_FACTOR"  , DEFAULT_SAMPLING_FACTOR);
     numCpuPerLink   = GetEnvVar("NUM_CPU_PER_LINK" , DEFAULT_NUM_CPU_PER_LINK);
+    sharedMemBytes  = GetEnvVar("SHARED_MEM_BYTES" , maxSharedMemBytes / 2 + 1);
+    blockBytes      = GetEnvVar("BLOCK_BYTES"      , 256);
 
     // Check for fill pattern
     char* pattern = getenv("FILL_PATTERN");
@@ -129,6 +138,16 @@ public:
       printf("[ERROR] NUM_CPU_PER_LINK must be greater or equal to 1\n");
       exit(1);
     }
+    if (sharedMemBytes < 0 || sharedMemBytes > maxSharedMemBytes)
+    {
+      printf("[ERROR] SHARED_MEM_BYTES must be between 0 and %d\n", maxSharedMemBytes);
+      exit(1);
+    }
+    if (blockBytes <= 0 || blockBytes % 4)
+    {
+      printf("[ERROR] BLOCK_BYTES must be a positive multiple of 4\n");
+      exit(1);
+    }
   }
 
   // Display info on the env vars that can be used
@@ -149,6 +168,8 @@ public:
     printf(" SAMPLING_FACTOR=F  - Add F samples (when possible) between powers of 2 when auto-generating data sizes\n");
     printf(" NUM_CPU_PER_LINK=C - Use C threads per Link for CPU-executed copies\n");
     printf(" FILL_PATTERN=STR   - Fill input buffer with pattern specified in hex digits (0-9,a-f,A-F).  Must be even number of digits, (byte-level big-endian)\n");
+    printf(" SHARED_MEM_BYTES=X - Use X shared mem bytes per threadblock, potentially to avoid multiple threadblocks per CU\n");
+    printf(" BLOCK_BYTES=B      - Each CU (except the last) receives a multiple of BLOCK_BYTES to copy\n");
   }
 
   // Display env var settings
@@ -182,7 +203,7 @@ public:
       printf("%-20s = %12d : Running %d warmup iteration(s) per topology\n", "NUM_WARMUPS", numWarmups, numWarmups);
       printf("%-20s = %12d : Running %d timed iteration(s) per topology\n", "NUM_ITERATIONS", numIterations, numIterations);
       printf("%-20s = %12d : Using %d CPU thread(s) per CPU-based-copy Link\n", "NUM_CPU_PER_LINK", numCpuPerLink, numCpuPerLink);
-      printf("%-20s = %12s : ", "FILL_PATTERN", getenv("FILL_PATTERN") ? "(specified)" : "(unspecified)");
+      printf("%-20s = %12s : ", "FILL_PATTERN", getenv("FILL_PATTERN") ? "(specified)" : "(unset)");
       if (fillPattern.size())
       {
         printf("Pattern: %s", getenv("FILL_PATTERN"));
@@ -191,6 +212,10 @@ public:
       {
         printf("Pseudo-random: (Element i = i modulo 383 + 31)");
       }
+      printf("\n");
+      printf("%-20s = %12s : Using %d shared mem per threadblock\n", "SHARED_MEM_BYTES",
+             getenv("SHARED_MEM_BYTES") ? "(specified)" : "(unset)", sharedMemBytes);
+      printf("%-20s = %12d : Each CU gets a multiple of %d bytes to copy\n", "BLOCK_BYTES", blockBytes, blockBytes);
       printf("\n");
     }
   };
