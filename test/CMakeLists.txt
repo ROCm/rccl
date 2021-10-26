@@ -60,6 +60,17 @@ if(BUILD_TESTS)
     target_link_libraries(UnitTests PRIVATE rccl)
     target_link_libraries(UnitTestsMultiProcess PRIVATE rt rccl)
   endif()
+  # HIPCC adds /opt/rocm/lib as RPATH, even though the install process is supposed to
+  # remove RPATH.  It also occurs before any user-specified rpath, which effectively overrides the user rpath.
+  #  As a work-around, set the correct RPATH for the unit test executable as a post-install step
+  if (CMAKE_INSTALL_PREFIX STREQUAL "/opt/rocm")
+    # install_prefix/CMAKE_INSTALL_PREFIX was not explicitly specified, so look in build/release
+    add_custom_command( TARGET UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:/opt/rocm/lib ${CMAKE_BINARY_DIR}/test/UnitTests)
+    add_custom_command( TARGET UnitTestsMultiProcess POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:/opt/rocm/lib ${CMAKE_BINARY_DIR}/test/UnitTestsMultiProcess)
+  else()
+    add_custom_command( TARGET UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_INSTALL_PREFIX}/lib:/opt/rocm/lib ${CMAKE_INSTALL_PREFIX}/test/UnitTests)
+    add_custom_command( TARGET UnitTestsMultiProcess POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_INSTALL_PREFIX}/lib:/opt/rocm/lib ${CMAKE_INSTALL_PREFIX}/test/UnitTestsMultiProcess)
+  endif()
 else()
   message("Not building unit tests")
 endif()
