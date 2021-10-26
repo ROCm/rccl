@@ -74,7 +74,7 @@ ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* d
   }
 }
 
-ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *bw) {
+ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *count) {
   char srcStr[] = "00000000:00:00.0", dstStr[] = "00000000:00:00.0";
   uint32_t srcIndex, dstIndex;
 
@@ -86,9 +86,19 @@ ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsm
   uint64_t rsmi_hops, rsmi_weight;
   ROCMSMICHECK(rsmi_topo_get_link_type(srcIndex, dstIndex, &rsmi_hops, rsmi_type));
   ROCMSMICHECK(rsmi_topo_get_link_weight(srcIndex, dstIndex, &rsmi_weight));
-
   *hops = 2;
-  *bw = 0;
-  if (*rsmi_type == RSMI_IOLINK_TYPE_XGMI && rsmi_weight == 15) *hops = 1;
+  *count = 1;
+  if (*rsmi_type == RSMI_IOLINK_TYPE_XGMI && rsmi_weight == 15) {
+    *hops = 1;
+#if rocm_smi_VERSION_MAJOR >= 5
+    uint64_t min_bw = 0, max_bw = 0;
+    rsmi_version_t version;
+    ROCMSMICHECK(rsmi_version_get(&version));
+    if (version.major >= 5)
+      ROCMSMICHECK(rsmi_minmax_bandwidth_get(srcIndex, dstIndex, &min_bw, &max_bw));
+    if (max_bw && min_bw)
+      *count = max_bw/min_bw;
+#endif
+  }
   return ncclSuccess;
 }

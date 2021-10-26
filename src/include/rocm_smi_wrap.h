@@ -24,10 +24,11 @@ THE SOFTWARE.
 #define ROCM_SMI_WRAP_H_
 
 #include "rocm_smi/rocm_smi.h"
+#include "rocm_smi/rocm_smi64Config.h"
 #include "nccl.h"
 
 ncclResult_t rocm_smi_init();
 ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* deviceIndex);
-ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *bw);
+ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *count);
 
 #endif
