@@ -211,7 +211,7 @@ if("${HIP_COMPILER}" MATCHES "clang")
     target_compile_options(rccl PRIVATE -fgpu-rdc)
   endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
-  target_include_directories(rccl PRIVATE ${ROCM_PATH}/hsa/include)
+  target_include_directories(rccl PRIVATE ${ROCM_PATH}/include)
   find_program( hipcc_executable hipcc )
   execute_process(COMMAND bash "-c" "${hipcc_executable} -help | grep 'parallel-jobs'" OUTPUT_VARIABLE hipcc_parallel_jobs)
   if("${hipcc_parallel_jobs}" MATCHES "parallel-jobs")
@@ -247,15 +247,12 @@ rocm_set_soversion(rccl "1.0")
 
 rocm_install_targets(TARGETS
                      rccl
-                     PREFIX
-                     rccl)
+                     )
 install(FILES ${PROJECT_BINARY_DIR}/rccl.h
-        DESTINATION rccl/${CMAKE_INSTALL_INCLUDEDIR})
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 rocm_export_targets(NAMESPACE
                     roc::
-                    PREFIX
-                    rccl
                     TARGETS
                     rccl
                     DEPENDS
@@ -304,8 +301,6 @@ rocm_create_package(
   MAINTAINER
   "RCCL Maintainer <rccl-maintainer@amd.com>"
   LDCONFIG)
-
-rocm_install_symlink_subdir(rccl)
 
 if(BUILD_TESTS)
   add_subdirectory(test)
