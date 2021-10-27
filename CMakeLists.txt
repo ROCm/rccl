@@ -208,6 +208,11 @@ if (BUILD_ALLREDUCE_ONLY)
   add_definitions(-DBUILD_ALLREDUCE_ONLY)
 endif()
 
+CHECK_INCLUDE_FILE_CXX("${ROCM_PATH}/rocm_smi/include/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
+IF(HAVE_ROCM_SMI64CONFIG)
+  add_definitions(-DUSE_ROCM_SMI64CONFIG)
+ENDIF()
+
 foreach(target ${AMDGPU_TARGETS})
   target_link_libraries(rccl PRIVATE --amdgpu-target=${target})
 endforeach()
