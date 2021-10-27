@@ -431,7 +431,11 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
               gettimeofday(&tv, NULL);
               float delta = (tv.tv_sec - sub->channel->tvs.tv_sec)*1E6 + tv.tv_usec - sub->channel->tvs.tv_usec;
               if (delta) {
+#ifdef ENABLE_TIMING_PROFILE
+                sub->channel->bw_cumulative += (float)delta/1E3;
+#else
                 sub->channel->bw_cumulative += (float)sub->channel->sizes/delta/1E3;
+#endif
                 sub->channel->bw_count ++;
               }
             }
@@ -526,7 +530,11 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
               gettimeofday(&tv, NULL);
               float delta = (tv.tv_sec - sub->channel->tvs.tv_sec)*1E6 + tv.tv_usec - sub->channel->tvs.tv_usec;
               if (delta) {
+#ifdef ENABLE_TIMING_PROFILE
+                sub->channel->bw_cumulative += (float)delta/1E3;
+#else
                 sub->channel->bw_cumulative += (float)sub->channel->sizes/delta/1E3;
+#endif
                 sub->channel->bw_count ++;
               }
             }

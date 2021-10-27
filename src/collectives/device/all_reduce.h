@@ -110,7 +110,7 @@ namespace {
       ACCUMULATE_COUNTER(directRecv);
     }
 #ifdef ENABLE_PROFILING
-    if (tid == 0) devProf->elems[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
+    if (tid == 0 && args->op.opCount) devProf->elems[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
 #endif
   }
 

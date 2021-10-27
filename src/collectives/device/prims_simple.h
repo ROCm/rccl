@@ -46,6 +46,7 @@ class Primitives<
   uint64_t* barriers;
   uint64_t* barrier_next;
   const int connIndex;
+  const uint64_t opCount;
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
@@ -86,7 +87,7 @@ class Primitives<
   inline __device__ void waitPeer(intptr_t dstIx, intptr_t remoteOutIx, int offset, int nelts) {
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
       bool const isSendNotRecv = (Send && Recv) ? (flags & RoleWaitSend) : Send;
-#ifdef ENABLE_PROFILING
+#if defined(ENABLE_PROFILING) && !defined(ENABLE_TIMING_PROFILE)
       uint64_t t0 = __builtin_amdgcn_s_memrealtime();
 #endif
       int spins = 0;
@@ -110,11 +111,13 @@ class Primitives<
       else
         ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*stepSize;
       step += StepPerSlice;
-#ifdef ENABLE_PROFILING
-      if (isSendNotRecv)
-        ncclShmem->comm.devProf->elems[blockIdx.x].wait_send_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
-      else
-        ncclShmem->comm.devProf->elems[blockIdx.x].wait_recv_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+#if defined(ENABLE_PROFILING) && !defined(ENABLE_TIMING_PROFILE)
+      if (opCount) {
+        if (isSendNotRecv)
+          ncclShmem->comm.devProf->elems[blockIdx.x].wait_send_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+        else
+          ncclShmem->comm.devProf->elems[blockIdx.x].wait_recv_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+      }
 #endif
     }
   }
@@ -180,7 +183,7 @@ class Primitives<
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(dstIx, remoteOutIx, offset, sliceSize);
         subBarrier();
 #ifdef ENABLE_PROFILING
-        if (tid == 0) ncclShmem->comm.devProf->elems[blockIdx.x].wait_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+        if (tid == 0 && opCount) ncclShmem->comm.devProf->elems[blockIdx.x].wait_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
 #endif
         if (DirectRecv && ncclShmem->groups[group].srcs[0] == ncclShmem->groups[group].dsts[0]) {
           // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
@@ -341,7 +344,8 @@ class Primitives<
     stepSize(ncclShmem->comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T)),
     redOp(FuncTraits<RedOp>::make(ncclShmem->comm.nRanks)),
     connIndex((NCCL_MAX_DIRECT_ARITY==Fan::MaxSend || NCCL_MAX_DIRECT_ARITY==Fan::MaxRecv)?(group/2):connIndex),
-    barriers(&ncclShmem->groups[group].barrier), barrier_next(ncclShmem->groups[group].barrier_next) {
+    barriers(&ncclShmem->groups[group].barrier), barrier_next(ncclShmem->groups[group].barrier_next),
+    opCount(ncclShmem->work.elems[0].op.opCount) {
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     this->nthreads = nthreads;

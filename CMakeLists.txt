@@ -199,6 +199,11 @@ if(PROFILE)
   add_definitions(-DENABLE_PROFILING)
 endif()
 
+if(TIMING_PROFILE)
+  add_definitions(-DENABLE_PROFILING)
+  add_definitions(-DENABLE_TIMING_PROFILE)
+endif()
+
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
 if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)

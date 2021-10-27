@@ -157,13 +157,20 @@ struct PrimitivesWithoutDirect {
 #include "prims_ll128.h"
 
 #ifdef ENABLE_PROFILING
+#ifdef ENABLE_TIMING_PROFILE
+#define INIT_COUNTER \
+  if (tid == 0) { t0 = __builtin_amdgcn_s_memrealtime(); }
+#define ACCUMULATE_COUNTER(prim) \
+  if (tid == 0 && args->op.opCount) { devProf->elems[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0); \
+    devProf->elems[blockIdx.x].prim##_byte += nelem * sizeof(T); }
+#else
 #define INIT_COUNTER \
   if (tid == 0) { t0 = __builtin_amdgcn_s_memrealtime(); ws = devProf->elems[blockIdx.x].wait_cycle; }
-
 #define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0) { devProf->elems[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
+  if (tid == 0 && args->op.opCount) { devProf->elems[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
     + ws - devProf->elems[blockIdx.x].wait_cycle); \
     devProf->elems[blockIdx.x].prim##_byte += nelem * sizeof(T); }
+#endif
 #else
 #define INIT_COUNTER
 #define ACCUMULATE_COUNTER(prim)
