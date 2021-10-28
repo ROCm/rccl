@@ -24,7 +24,9 @@ THE SOFTWARE.
 #define ROCM_SMI_WRAP_H_
 
 #include "rocm_smi/rocm_smi.h"
+#ifdef USE_ROCM_SMI64CONFIG
 #include "rocm_smi/rocm_smi64Config.h"
+#endif
 #include "nccl.h"
 
 ncclResult_t rocm_smi_init();

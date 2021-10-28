@@ -90,7 +90,7 @@ ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsm
   *count = 1;
   if (*rsmi_type == RSMI_IOLINK_TYPE_XGMI && rsmi_weight == 15) {
     *hops = 1;
-#if rocm_smi_VERSION_MAJOR >= 5
+#if defined USE_ROCM_SMI64CONFIG && rocm_smi_VERSION_MAJOR >= 5
     uint64_t min_bw = 0, max_bw = 0;
     rsmi_version_t version;
     ROCMSMICHECK(rsmi_version_get(&version));
