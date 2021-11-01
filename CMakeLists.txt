@@ -132,6 +132,7 @@ else()
       src/collectives/device/reduce.cu
       src/collectives/device/broadcast.cu
       src/collectives/device/reduce_scatter.cu
+      src/collectives/device/sendrecv.cu
       src/collectives/device/functions.cu)
 endif()
 
