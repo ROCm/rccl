@@ -113,7 +113,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 // confuses clang. This will be fixed in the next clang release.
 #if defined(__HIP_DEVICE_COMPILE__)
 #if defined(BUILD_ALLREDUCE_ONLY)
-  NCCL_FUNC_NAME(AllReduce, RING, SIMPLE, Sum, float)
+  NCCL_FUNC4B(AllReduce, Sum, float),
 #else
   NCCL_FUNCS2B(Broadcast),
   NCCL_FUNCS2A(Reduce),
@@ -148,8 +148,22 @@ inline
 __device__
 void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
 #if defined(BUILD_ALLREDUCE_ONLY)
-  assert(c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE));
-  ncclFunction_AllReduce_RING_SIMPLE_Sum_float(c);
+  if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE))
+    ncclFunction_AllReduce_RING_SIMPLE_Sum_float(c);
+  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_LL))
+    ncclFunction_AllReduce_RING_LL_Sum_float(c);
+  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_LL128))
+    ncclFunction_AllReduce_RING_LL128_Sum_float(c);
+  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE))
+    ncclFunction_AllReduce_TREE_SIMPLE_Sum_float(c);
+  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_TREE, NCCL_PROTO_LL))
+    ncclFunction_AllReduce_TREE_LL_Sum_float(c);
+  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_COLLNET, NCCL_PROTO_SIMPLE))
+    ncclFunction_AllReduce_COLLNET_SIMPLE_Sum_float(c);
+  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_COLLNET, NCCL_PROTO_LL))
+    ncclFunction_AllReduce_COLLNET_LL_Sum_float(c);
+  else
+    assert("Unsupported function index");
 #else
   if (c->funcIndex < 450) {
     if (c->funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
