@@ -119,14 +119,22 @@ include_directories(src/include)
 include_directories(src/collectives)
 include_directories(src/collectives/device)
 
-set(CU_SOURCES
-    src/collectives/device/all_reduce.cu
-    src/collectives/device/all_gather.cu
-    src/collectives/device/reduce.cu
-    src/collectives/device/broadcast.cu
-    src/collectives/device/reduce_scatter.cu
-    src/collectives/device/sendrecv.cu
-    src/collectives/device/functions.cu)
+if (BUILD_ALLREDUCE_ONLY)
+  add_definitions(-DBUILD_ALLREDUCE_ONLY)
+  set(CU_SOURCES
+      src/collectives/device/all_reduce.cu
+      src/collectives/device/sendrecv.cu
+      src/collectives/device/functions.cu)
+else()
+  set(CU_SOURCES
+      src/collectives/device/all_reduce.cu
+      src/collectives/device/all_gather.cu
+      src/collectives/device/reduce.cu
+      src/collectives/device/broadcast.cu
+      src/collectives/device/reduce_scatter.cu
+      src/collectives/device/sendrecv.cu
+      src/collectives/device/functions.cu)
+endif()
 
 set(CPP_SOURCES)
 foreach(filename ${CU_SOURCES})
@@ -207,10 +215,6 @@ endif()
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
 if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
-endif()
-
-if (BUILD_ALLREDUCE_ONLY)
-  add_definitions(-DBUILD_ALLREDUCE_ONLY)
 endif()
 
 CHECK_INCLUDE_FILE_CXX("${ROCM_PATH}/rocm_smi/include/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
