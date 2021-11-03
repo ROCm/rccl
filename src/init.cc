@@ -335,12 +335,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
   for (int channel=0; channel<std::max(comm->nChannels, comm->p2pnChannels); channel++) {
     if (comm->channels[channel].send_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Send %7.3f ms (%ld bytes %d measurements)",
-      comm->rank, channel, (comm->channels[channel].bw_count) ?
-      (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
+      comm->rank, channel, (float)comm->channels[channel].bw_cumulative,
       comm->channels[channel].send_byte, comm->channels[channel].bw_count);
     if (comm->channels[channel].recv_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Recv %7.3f ms (%ld bytes %d measurements)",
-      comm->rank, channel, (comm->channels[channel].bw_count) ?
-      (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
+      comm->rank, channel, (float)comm->channels[channel].bw_cumulative,
       comm->channels[channel].recv_byte, comm->channels[channel].bw_count);
   }
 #else
