@@ -78,10 +78,11 @@ void dumpData(struct ncclConnect* data, int ndata) {
 }
 
 ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex) {
+#if CUDART_VERSION >= 11030
   // Stream used during transport setup; need for P2P pre-connect + CUDA Graph
   hipStream_t transportSetupStream;
   CUDACHECK(hipStreamCreateWithFlags(&transportSetupStream, hipStreamNonBlocking));
-
+#endif
   struct ncclConnect data[2*MAXCHANNELS];
   for (int i=1; i<comm->nRanks; i++) {
     int bootstrapTag = (i<<8) + (graph ? graph->id+1 : 0);
@@ -123,7 +124,11 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[sendPeer].send + connIndex;
         NCCLCHECK(conn->transportComm->connect(comm, sendData++, 1, comm->rank, conn));
         conn->connected = 1;
+#if CUDART_VERSION >= 11030
         CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[sendPeer].send+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, transportSetupStream));
+#else
+        CUDACHECK(hipMemcpy(comm->channels[c].devPeers[sendPeer].send+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice));
+#endif
       }
     }
     for (int c=0; c<MAXCHANNELS; c++) {
@@ -131,13 +136,19 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[recvPeer].recv + connIndex;
         NCCLCHECK(conn->transportComm->connect(comm, recvData++, 1, comm->rank, conn));
         conn->connected = 1;
+#if CUDART_VERSION >= 11030
         CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[recvPeer].recv+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, transportSetupStream));
+#else
+        CUDACHECK(hipMemcpy(comm->channels[c].devPeers[recvPeer].recv+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice));
+#endif
       }
     }
     comm->connectRecv[recvPeer+comm->nRanks*connIndex] = comm->connectSend[sendPeer+comm->nRanks*connIndex] = 0;
   }
+#if CUDART_VERSION >= 11030
   CUDACHECK(hipStreamSynchronize(transportSetupStream));
   CUDACHECK(hipStreamDestroy(transportSetupStream));
+#endif
   return ncclSuccess;
 }
 

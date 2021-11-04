@@ -56,16 +56,22 @@ extern struct allocationTracker allocTracker[];
 
 template <typename T>
 static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
+#if CUDART_VERSION >= 11030
   // Need async stream for P2P pre-connect + CUDA Graph
   hipStream_t stream;
   CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
+#endif
   if (isFineGrain)
     CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
   else
     CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
+#if CUDART_VERSION >= 11030
   CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
   CUDACHECK(hipStreamSynchronize(stream));
   CUDACHECK(hipStreamDestroy(stream));
+#else
+  CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
+#endif
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   int dev;
   CUDACHECK(hipGetDevice(&dev));
