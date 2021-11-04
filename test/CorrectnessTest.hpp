@@ -697,7 +697,7 @@ dropback:
                 for (int j = 0; j < dataset.NumBytes(ncclInputBuffer)/DataTypeToBytes(dataset.dataType); j++)
                 {
                     int    valueI = (i + j) % 6;
-                    float  valueF = (float)valueI;
+                    double  valueF = 1.0L/((double)valueI+1.0L);
 
                     switch (dataset.dataType)
                     {
