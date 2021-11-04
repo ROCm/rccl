@@ -133,6 +133,8 @@ NodeModelDesc model_descs[] = {
   {4, "topo_3p_pcie_1.xml",     "4 nodes 3P Alt. Model"},
   {1, "topo_8p_4nics.xml",      "single nodes 8P 4 NICs"},
   {4, "topo_8p_4nics.xml",      "4 nodes 8P 4 NICs"},
+  {1, "topo_16p1h_vm.xml",      "single node 16P1H VM"},
+  {4, "topo_16p1h_vm.xml",      "4 nodes 16P1H VM"},
 };
 
 int main(int argc,char* argv[])

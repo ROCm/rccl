@@ -136,6 +136,7 @@ struct ncclTopoSystem {
   float totalWidth;
   int type;
   int nRanks;
+  int netGdrLevel;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
