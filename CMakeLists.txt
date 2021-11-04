@@ -108,10 +108,10 @@ if(BUILD_ADDRESS_SANITIZER)
   add_link_options(-fuse-ld=lld)
 endif()
 
-configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/rccl.h)
-configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/nccl.h)
+configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/rccl.h)
+configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/nccl.h)
 
-include_directories(${PROJECT_BINARY_DIR}) # for generated rccl.h header
+include_directories(${PROJECT_BINARY_DIR}/include) # for generated rccl.h header
 include_directories(src)
 include_directories(src/include)
 include_directories(src/collectives)
@@ -248,8 +248,8 @@ rocm_set_soversion(rccl "1.0")
 rocm_install_targets(TARGETS
                      rccl
                      )
-install(FILES ${PROJECT_BINARY_DIR}/rccl.h
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
 
 rocm_export_targets(NAMESPACE
                     roc::
