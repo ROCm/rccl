@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include "xml.h"
 #include <math.h>
 #include <sys/time.h>
+#include <algorithm>
 #include "rome_models.h"
 
 struct rcclRomeModel {
@@ -40,6 +41,7 @@ struct rcclRomeModel {
   uint8_t gdrLevel[NCCL_TOPO_MAX_NODES*NCCL_TOPO_MAX_NODES];
   const char *pattern;
   const char *ringBase;
+  int netGdrLevel;
 };
 
 static struct rcclRomeModel rome_model_22 = {
@@ -52,6 +54,7 @@ static struct rcclRomeModel rome_model_22 = {
   .gdrLevel = { 6, 6, 6, 5, 6, 6, 5, 6, },
   .pattern = "10302120",
   .ringBase = "7 4 5 3 1 0 6 2|4 7 3 5 0 1 2 6",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_25 = {
@@ -64,6 +67,7 @@ static struct rcclRomeModel rome_model_25 = {
   .gdrLevel = { 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, },
   .pattern = "11303011",
   .ringBase = "2 1 0 3 6 7 5 4|7 6 4 5 1 2 3 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_27 = {
@@ -76,6 +80,7 @@ static struct rcclRomeModel rome_model_27 = {
   .gdrLevel = { 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, },
   .pattern = "11303011",
   .ringBase = "0 6 2 3 1 7 5 4|7 1 4 5 6 0 3 2",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_29 = {
@@ -88,6 +93,7 @@ static struct rcclRomeModel rome_model_29 = {
   .gdrLevel = { 6, 6, 6, 6, 5, 5, 6, 6, },
   .pattern = "10302120",
   .ringBase = "6 5 7 4 0 1 3 2|6 4 7 5 2 3 1 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_31 = {
@@ -100,6 +106,7 @@ static struct rcclRomeModel rome_model_31 = {
   .gdrLevel = { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, },
   .pattern = "0110201010200110",
   .ringBase = "1 2 3 0 6 4 5 7|4 6 7 5 2 1 0 3",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_33 = {
@@ -112,6 +119,7 @@ static struct rcclRomeModel rome_model_33 = {
   .gdrLevel = { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, },
   .pattern = "0110201010200110",
   .ringBase = "1 4 5 7 0 3 2 6|4 1 7 5 6 2 3 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_30 = {
@@ -124,6 +132,7 @@ static struct rcclRomeModel rome_model_30 = {
   .gdrLevel = { },
   .pattern = "0010201010200010",
   .ringBase = "3 0 1 2 6 7 5 4|2 1 0 3 7 6 4 5",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_32 = {
@@ -136,6 +145,7 @@ static struct rcclRomeModel rome_model_32 = {
   .gdrLevel = { },
   .pattern = "0010201010200010",
   .ringBase = "0 6 2 3 4 5 7 1|3 2 6 0 1 7 5 4",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_24 = {
@@ -148,6 +158,7 @@ static struct rcclRomeModel rome_model_24 = {
   .gdrLevel = { },
   .pattern = "10303010",
   .ringBase = "0 1 2 3 5 7 6 4|1 0 3 2 7 5 4 6",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_26 = {
@@ -160,6 +171,7 @@ static struct rcclRomeModel rome_model_26 = {
   .gdrLevel = { },
   .pattern = "10303010",
   .ringBase = "4 5 7 1 0 3 2 6|3 0 6 2 1 7 5 4",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_23 = {
@@ -172,6 +184,7 @@ static struct rcclRomeModel rome_model_23 = {
   .gdrLevel = { },
   .pattern = "10302020",
   .ringBase = "1 7 6 4 5 2 0 3|2 5 3 0 4 6 7 1",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_38 = {
@@ -184,6 +197,7 @@ static struct rcclRomeModel rome_model_38 = {
   .gdrLevel = { },
   .pattern = "10201000201010",
   .ringBase = "6 7 1 4 3 5 2 0|0 2 5 3 4 1 7 6",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_28 = {
@@ -196,6 +210,7 @@ static struct rcclRomeModel rome_model_28 = {
   .gdrLevel = { },
   .pattern = "10302020",
   .ringBase = "0 3 2 1 4 5 6 7|7 6 5 4 1 2 3 0|0 2 5 7 4 6 3 1|1 3 6 4 7 5 2 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_40 = {
@@ -208,6 +223,7 @@ static struct rcclRomeModel rome_model_40 = {
   .gdrLevel = { 6, 6, 6, 6, 5, 5, 6, 6, },
   .pattern = "10302120",
   .ringBase = "6 7 1 4 0 5 3 2|7 6 4 1 0 2 3 5",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_42 = {
@@ -220,6 +236,7 @@ static struct rcclRomeModel rome_model_42 = {
   .gdrLevel = { 6, 6, 6, 6, 6, 6, 6, 6, },
   .pattern = "10201001201010",
   .ringBase = "7 4 6 1 3 0 2 5|6 4 7 1 3 2 5 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_44 = {
@@ -232,6 +249,7 @@ static struct rcclRomeModel rome_model_44 = {
   .gdrLevel = { 6, 6, 6, 6, 5, 5, 6, 6, },
   .pattern = "20202120",
   .ringBase = "5 4 7 6 2 1 3 0|5 6 7 4 1 0 2 3",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_45 = {
@@ -244,6 +262,7 @@ static struct rcclRomeModel rome_model_45 = {
   .gdrLevel = { },
   .pattern = "10201000201010",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_46 = {
@@ -256,6 +275,7 @@ static struct rcclRomeModel rome_model_46 = {
   .gdrLevel = { 6, 6, 6, 6, 6, 6, 6, 6, },
   .pattern = "10201001201010",
   .ringBase = "6 5 7 4 1 2 3 0|7 4 6 5 1 0 3 2",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_48 = {
@@ -268,6 +288,7 @@ static struct rcclRomeModel rome_model_48 = {
   .gdrLevel = { },
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0|0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_49 = {
@@ -280,6 +301,7 @@ static struct rcclRomeModel rome_model_49 = {
   .gdrLevel = { 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, },
   .pattern = "21212121",
   .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_52 = {
@@ -292,6 +314,7 @@ static struct rcclRomeModel rome_model_52 = {
   .gdrLevel = { },
   .pattern = "80",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_53 = {
@@ -304,6 +327,7 @@ static struct rcclRomeModel rome_model_53 = {
   .gdrLevel = { 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, },
   .pattern = "21212121",
   .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_43 = {
@@ -316,6 +340,7 @@ static struct rcclRomeModel rome_model_43 = {
   .gdrLevel = { },
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_55 = {
@@ -328,6 +353,7 @@ static struct rcclRomeModel rome_model_55 = {
   .gdrLevel = { },
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0|2 3 0 1 6 7 4 5|5 4 7 6 1 0 3 2",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_56 = {
@@ -340,6 +366,7 @@ static struct rcclRomeModel rome_model_56 = {
   .gdrLevel = { },
   .pattern = "40404040",
   .ringBase = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_58 = {
@@ -352,6 +379,7 @@ static struct rcclRomeModel rome_model_58 = {
   .gdrLevel = { },
   .pattern = "402020",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_59 = {
@@ -364,6 +392,7 @@ static struct rcclRomeModel rome_model_59 = {
   .gdrLevel = { 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, },
   .pattern = "42424242",
   .ringBase = "N0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 N0|N1 3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 N1|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N3 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 N3|N4 8 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 N4|N5 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 N5|N6 12 13 5 4 0 1 3 2 6 7 15 14 10 11 9 8 N4|N7 14 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 N7|N3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 2 3 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N2 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 N2|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N7 15 14 5 4 0 1 2 3 7 6 13 12 8 9 10 11 N5|N0 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 N0|N6 13 12 8 9 11 10 14 15 7 6 2 3 1 0 4 5 N2|",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_62 = {
@@ -376,6 +405,7 @@ static struct rcclRomeModel rome_model_62 = {
   .gdrLevel = { },
   .pattern = "20202020",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
+  .netGdrLevel = -2,
 };
 
 static struct rcclRomeModel rome_model_63 = {
@@ -388,6 +418,20 @@ static struct rcclRomeModel rome_model_63 = {
   .gdrLevel = { 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, },
   .pattern = "21212121",
   .ringBase = "N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3",
+  .netGdrLevel = -2,
+};
+
+static struct rcclRomeModel rome_model_65 = {
+  .nGpus = 16, .nCpus = 4, .nNics = 8, .nLinks = 4,
+  .gpuIds = { 0x4e000, 0x51000, 0x56000, 0x59000, 0xe000, 0x11000, 0x16000, 0x19000, 0xcf000, 0xd2000, 0xd7000, 0xda000, 0x8f000, 0x92000, 0x97000, 0x9a000, },
+  .nicIds = { 0x4b000, 0x5a000, 0xb000, 0x1a000, 0xcc000, 0xdb000, 0x8c000, 0x9b000, },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, },
+  .nicNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
+  .connMatrix = { 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, },
+  .gdrLevel = { 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, },
+  .pattern = "42424242",
+  .ringBase = "N0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 N0|N1 3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 N1|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N3 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 N3|N4 8 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 N4|N5 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 N5|N6 12 13 5 4 0 1 3 2 6 7 15 14 10 11 9 8 N4|N7 14 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 N7|N3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 2 3 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N2 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 N2|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N7 15 14 5 4 0 1 2 3 7 6 13 12 8 9 10 11 N5|N0 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 N0|N6 13 12 8 9 11 10 14 15 7 6 2 3 1 0 4 5 N2|",
+  .netGdrLevel = 5,
 };
 
 static struct rcclRomeModel romeTopoModels[] = {
@@ -420,6 +464,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_59,
   rome_model_62,
   rome_model_63,
+  rome_model_65,
 };
 
 /* Parse user defined rings. Format is like :
@@ -774,6 +819,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     fprintf(file, "},\n");
     fprintf(file, "  .pattern = \"%s\",\n", pattern);
     fprintf(file, "  .ringBase = \"\",\n");
+    fprintf(file, "  .netGdrLevel = -2,\n");
     fprintf(file, "};\n");
     fclose(file);
   }
@@ -926,41 +972,19 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
   }
   INFO(NCCL_GRAPH, "%s", line);
+  system->netGdrLevel = romeTopoModels[i].netGdrLevel;
 
   // create 4P2H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL));
   return ncclSuccess;
 }
 
-static bool permuteGpuIdsForNuma(int *r, int *g, int n, int last, int ngpusPerNuma, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time) {
-  (*time) ++;
-  if (n == last) {
-    int i, j;
-    // match GPU numa
-    for (i = 0; i < ngpusPerNuma; i++)
-      if (ref->gpuNuma[r[i]] != topo->gpuNuma[g[i]]) break;
-    if (i < ngpusPerNuma) return false;
-    // match XGMI connection
-    for (i = 0; i < ngpusPerNuma; i++) {
-      for (j = 0; j < ngpusPerNuma; j++) {
-        if (ref->connMatrix[r[i]*ref->nGpus+r[j]] != topo->connMatrix[g[i]*ref->nGpus+g[j]]) break;
-        if ((ref->gpuIds[r[i]]-ref->gpuIds[r[j]])*(topo->gpuIds[g[i]]-topo->gpuIds[g[j]]) < 0) break;
-      }
-      if (j < ngpusPerNuma) break;
-    }
-    if (i < ngpusPerNuma) return false;
-    return true;
-  } else {
-    for (int i = n; i <= last; i++) {
-      std::swap(g[n], g[i]);
-      if (permuteGpuIdsForNuma(r, g, n+1, last, ngpusPerNuma, ref, topo, time)) return true;
-      std::swap(g[n], g[i]);
-    }
-  }
-  return false;
-}
-
 ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
+  #define NUMA_CPUS 4
+  #define NUMA_GPUS 4
+  #define NUMA_PERMUTE_COUNT 24
+  #define TOTAL_PERMUTE_COUNT (NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT)
+
   static char ringRemap[256];
   int i;
 
@@ -980,10 +1004,11 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern));
 
   // only match for system with 16 GPUs
-  if (ngpus != 16) return ncclSuccess;
+  if (ngpus != 16 || ncpus != NUMA_CPUS) return ncclSuccess;
 
-  int gcnt = 0, mcnt = 0;
-  int g16[NCCL_TOPO_MAX_NODES], n[NCCL_TOPO_MAX_NODES];
+  int gcnt = 0;
+  int *g16, n[NCCL_TOPO_MAX_NODES];
+  int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
@@ -991,60 +1016,79 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
       romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
     if (strcmp(romeTopoModels[i].pattern, pattern)) continue;
     int j, r[ngpus], g[ngpus];
-    // match GPUs for each CPU NUMA nodes
+    int numa_gpu_permutations[NUMA_CPUS][NUMA_PERMUTE_COUNT][NUMA_GPUS];
+    // permute GPUs for each CPU NUMA nodes
     for (j = 0; j < ncpus; j++) {
-      int ngpusPerNuma = 0, cnt = 0;
+      int ngpusPerNuma = 0, cnt = 0, npermute = 0;
       for (int k = 0; k < ngpus; k++) {
         if (romeTopoModels[i].gpuNuma[k] != j) continue;
         r[ngpusPerNuma++] = k;
       }
       if (ngpusPerNuma == 0) continue;
+      if (ngpusPerNuma != NUMA_GPUS) break;
       gcnt++;
       // init GPU mapping
       for (int k = 0; k < ngpus; k++) {
         if (romeTopo.gpuNuma[k] != j) continue;
         g[(2+cnt++)%ngpusPerNuma] = k;
       }
-      int time = 0;
-      if (permuteGpuIdsForNuma(r, g, 0, ngpusPerNuma-1, ngpusPerNuma, romeTopoModels+i, &romeTopo, &time)) {
-        //printf("g[%d] = ", j); for (int n = 0; n < ngpusPerNuma; n++) printf("%d ", g[n]); printf(" total %d\n", cnt16);
-        cnt = 0;
-        for (int k = 0; k < ngpus; k++) {
-          if (romeTopo.gpuNuma[k] != j) continue;
-          g16[k] = g[cnt++];
+      std::sort(g, g+ngpusPerNuma);
+      do {
+        for (int n = 0; n < ngpusPerNuma; n++)
+          numa_gpu_permutations[j][npermute][n] = g[n];
+        npermute++;
+      } while (std::next_permutation(g, g+ngpusPerNuma));
+      if (npermute != NUMA_PERMUTE_COUNT) break;
+    }
+    if (j < ncpus) continue;
+    // permute GPUs for all CPU NUMA nodes
+    for (int a = 0; a < NUMA_PERMUTE_COUNT; a++) {
+      for (int b = 0; b < NUMA_PERMUTE_COUNT; b++) {
+        for (int c = 0; c < NUMA_PERMUTE_COUNT; c++) {
+          for (int d = 0; d < NUMA_PERMUTE_COUNT; d++) {
+            uint64_t offset = ((a*NUMA_PERMUTE_COUNT+b)*NUMA_PERMUTE_COUNT+c)*NUMA_PERMUTE_COUNT+d;
+            //offset = (offset+TOTAL_PERMUTE_COUNT/2)%TOTAL_PERMUTE_COUNT;
+            offset *= (NUMA_CPUS*NUMA_GPUS);
+            memcpy(all_gpu_permutations+offset, &numa_gpu_permutations[0][a][0], NUMA_GPUS*sizeof(int));
+            memcpy(all_gpu_permutations+offset+NUMA_GPUS, &numa_gpu_permutations[1][b][0], NUMA_GPUS*sizeof(int));
+            memcpy(all_gpu_permutations+offset+NUMA_GPUS*2, &numa_gpu_permutations[2][c][0], NUMA_GPUS*sizeof(int));
+            memcpy(all_gpu_permutations+offset+NUMA_GPUS*3, &numa_gpu_permutations[3][d][0], NUMA_GPUS*sizeof(int));
+          }
         }
-        mcnt++;
       }
     }
-    if (gcnt && gcnt == mcnt) {
-      // final check to match all GPUs' XGMI connection
+    // match all GPUs' XGMI connection
+    int p;
+    for (p = 0; p < TOTAL_PERMUTE_COUNT; p++) {
+      g16 = all_gpu_permutations+p*NUMA_CPUS*NUMA_GPUS;
       int k;
       for (k = 0; k < romeTopoModels[i].nGpus; k++) {
         int m;
         for (m = 0; m < romeTopoModels[i].nGpus; m++) {
           if (romeTopoModels[i].connMatrix[k*romeTopoModels[i].nGpus+m] != romeTopo.connMatrix[g16[k]*romeTopoModels[i].nGpus+g16[m]]) break;
-          if ((romeTopoModels[i].gpuIds[k]-romeTopoModels[i].gpuIds[m])*(romeTopo.gpuIds[g16[k]]-romeTopo.gpuIds[g16[m]]) < 0) break;
         }
         if (m < romeTopoModels[i].nGpus) break;
       }
       if (k < romeTopoModels[i].nGpus) continue;
+      //printf("found match %d: ", p); for (int n = 0; n < NUMA_CPUS*NUMA_GPUS; n++) printf("%d ", g16[n]); printf("\n");
       if (nnets > 1) {
-      // permute NET IDs
-      int time = 0;
-      for (int m = 0; m < nnets; m++) n[m] = (m+2)%nnets;
-      if (permuteNetIds(n, g16, 0, nnets-1, romeTopoModels+i, &romeTopo, &time)) break;
+        // permute NET IDs
+        int time = 0;
+        for (int m = 0; m < nnets; m++) n[m] = (m+2)%nnets;
+        if (permuteNetIds(n, g16, 0, nnets-1, romeTopoModels+i, &romeTopo, &time)) break;
       } else break;
     }
+    if (p < TOTAL_PERMUTE_COUNT) break;
   }
   gettimeofday(&tve, NULL);
   float t = (tve.tv_sec - tvs.tv_sec)*1E3 + (tve.tv_usec - tvs.tv_usec)/1E3;
   if (i >= sizeof(romeTopoModels)/sizeof(romeTopoModels[0])) {
-    //printf("No solution in %.2fms (%d iter)\n", t, time);
+    //printf("No solution in %.2fms\n", t);
     return ncclSuccess;
   }
 
   char line[1024];
-  //sprintf(line, "Found matching Rome model index %d in %.2fms (%d iter) with GPU mapping: ", i, t, time);
+  //sprintf(line, "Found matching Rome model index %d in %.2fms with GPU mapping: ", i, t);
   sprintf(line, "Found matching Rome model index %d with GPU mapping: ", i);
   int offset = strlen(line);
   for (int k = 0; k < ngpus; k++) {
@@ -1061,8 +1105,11 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   }
   INFO(NCCL_GRAPH, "%s", line);
   system->type |= RCCL_TOPO_16P1H;
+  system->netGdrLevel = romeTopoModels[i].netGdrLevel;
 
   // create 16P1H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL));
+  // clean up
+  free(all_gpu_permutations);
   return ncclSuccess;
 }
