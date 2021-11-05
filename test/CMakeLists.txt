@@ -81,7 +81,7 @@ if(BUILD_TESTS)
   # HIPCC adds /opt/rocm/lib as RPATH, even though the install process is supposed to
   # remove RPATH.  It also occurs before any user-specified rpath, which effectively overrides the user rpath.
   #  As a work-around, set the correct RPATH for the unit test executable as a post-install step
-  if (CMAKE_INSTALL_PREFIX STREQUAL "/opt/rocm")
+  if (CMAKE_INSTALL_PREFIX MATCHES "/opt/rocm*")
     # install_prefix/CMAKE_INSTALL_PREFIX was not explicitly specified, so look in build/release
     add_custom_command( TARGET UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:/opt/rocm/lib ${CMAKE_BINARY_DIR}/test/UnitTests)
     add_custom_command( TARGET UnitTestsMultiProcess POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:/opt/rocm/lib ${CMAKE_BINARY_DIR}/test/UnitTestsMultiProcess)
