@@ -79,8 +79,14 @@ int main(int argc, char **argv)
   // Execute only peer to peer benchmark mode, similar to rocm-bandwidth-test
   if (!strcmp(argv[1], "p2p"))
   {
+    int numBlocksToUse = 0;
+    if (argc > 3)
+      numBlocksToUse = atoi(argv[3]);
+    else
+      HIP_CALL(hipDeviceGetAttribute(&numBlocksToUse, hipDeviceAttributeMultiprocessorCount, 0));
+
     // Execute peer to peer benchmark mode
-    RunPeerToPeerBenchmarks(ev, numBytesPerLink / sizeof(float));
+    RunPeerToPeerBenchmarks(ev, numBytesPerLink / sizeof(float), numBlocksToUse);
     exit(0);
   }
 
@@ -391,7 +397,7 @@ void DisplayUsage(char const* cmdName)
   printf("Usage: %s configFile <N>\n", cmdName);
 
   printf("  configFile: File containing Links to execute (see below for format)\n");
-  printf("              Specifying \"p2p\" as the configFile will execute a peer to peer benchmark\n");
+  printf("              Specifying \"p2p\" as the configFile will execute a peer to peer benchmark (3rd argument used as # CUs to use)\n");
   printf("  N         : (Optional) Number of bytes to transfer per link.\n");
   printf("              If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
   printf("              If 0 is specified, a range of Ns will be benchmarked\n");
@@ -1098,7 +1104,7 @@ void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link)
   }
 }
 
-void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N)
+void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse)
 {
   // Collect the number of available CPUs/GPUs on this machine
   int numGpus;
@@ -1113,47 +1119,52 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N)
 
   printf("Performing copies in each direction of %lu bytes\n", N * sizeof(float));
   printf("Using %d threads per NUMA node for CPU copies\n", ev.numCpuPerLink);
+  printf("Using %d CUs per transfer\n", numBlocksToUse);
 
   // Perform unidirectional / bidirectional
-  for (int isBidirectional = 0; isBidirectional <= 1; isBidirectional++)
+  for (int readMode = 0; readMode < 2; readMode++)
   {
-    // Print header
-    printf("%sdirectional copy peak bandwidth GB/s\n", isBidirectional ? "Bi" : "Uni");
-    printf("%10s", "D/D");
-    for (int i = 0; i < numCpus; i++)
-      printf("%7s %02d", "CPU", i);
-    for (int i = 0; i < numGpus; i++)
-      printf("%7s %02d", "GPU", i);
-    printf("\n");
-
-    // Loop over all possible src/dst pairs
-    for (int src = 0; src < numDevices; src++)
+    for (int isBidirectional = 0; isBidirectional <= 1; isBidirectional++)
     {
-      MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
-      int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
-      printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
+      // Print header
+      printf("%sdirectional copy peak bandwidth GB/s [%s read / %s write]\n", isBidirectional ? "Bi" : "Uni",
+             readMode == 0 ? "Local" : "Remote",
+             readMode == 0 ? "Remote" : "Local");
+      printf("%10s", "D/D");
+      for (int i = 0; i < numCpus; i++)
+        printf("%7s %02d", "CPU", i);
+      for (int i = 0; i < numGpus; i++)
+        printf("%7s %02d", "GPU", i);
+      printf("\n");
 
-      for (int dst = 0; dst < numDevices; dst++)
+      // Loop over all possible src/dst pairs
+      for (int src = 0; src < numDevices; src++)
       {
-        MemType const& dstMemType = (dst < numCpus ? MEM_CPU : MEM_GPU);
-        int dstIndex = (dstMemType == MEM_CPU ? dst : dst - numCpus);
-
-        double bandwidth = GetPeakBandwidth(ev, N, isBidirectional, srcMemType, srcIndex, dstMemType, dstIndex);
-        if (bandwidth == 0)
-          printf("%10s", "N/A");
-        else
-          printf("%10.2f", bandwidth);
-        fflush(stdout);
+        MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
+        int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
+        printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
+        for (int dst = 0; dst < numDevices; dst++)
+        {
+          MemType const& dstMemType = (dst < numCpus ? MEM_CPU : MEM_GPU);
+          int dstIndex = (dstMemType == MEM_CPU ? dst : dst - numCpus);
+          double bandwidth = GetPeakBandwidth(ev, N, isBidirectional, srcMemType, srcIndex, dstMemType, dstIndex, readMode);
+          if (bandwidth == 0)
+            printf("%10s", "N/A");
+          else
+            printf("%10.2f", bandwidth);
+          fflush(stdout);
+        }
+        printf("\n");
       }
       printf("\n");
     }
-    printf("\n");
   }
 }
 
 double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
                         MemType srcMemType, int srcIndex,
-                        MemType dstMemType, int dstIndex)
+                        MemType dstMemType, int dstIndex,
+                        int readMode)
 {
   Link links[2];
   int const initOffset = ev.byteOffset / sizeof(float);
@@ -1162,10 +1173,16 @@ double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
   if (isBidirectional && srcMemType == dstMemType && srcIndex == dstIndex) return 0.0f;
 
   // Prepare Links
-  links[0].srcMemType = links[0].exeMemType = links[1].dstMemType = srcMemType;
-  links[0].srcIndex   = links[0].exeIndex   = links[1].dstIndex   = srcIndex;
-  links[0].dstMemType = links[1].exeMemType = links[1].srcMemType = dstMemType;
-  links[0].dstIndex   = links[1].exeIndex   = links[1].srcIndex   = dstIndex;
+  links[0].srcMemType = links[1].dstMemType = srcMemType;
+  links[0].srcIndex   = links[1].dstIndex   = srcIndex;
+  links[0].dstMemType = links[1].srcMemType = dstMemType;
+  links[0].dstIndex   = links[1].srcIndex   = dstIndex;
+  // Either perform local read / remote write, or remote read / local write
+  links[0].exeMemType = (readMode == 0 ? srcMemType : dstMemType);
+  links[0].exeIndex   = (readMode == 0 ? srcIndex   : dstIndex);
+  links[1].exeMemType = (readMode == 0 ? dstMemType : srcMemType);
+  links[1].exeIndex   = (readMode == 0 ? dstIndex   : srcIndex);
+
   for (int i = 0; i <= isBidirectional; i++)
   {
     AllocateMemory(links[i].srcMemType, links[i].srcIndex, N * sizeof(float) + ev.byteOffset, &links[i].srcMem);
