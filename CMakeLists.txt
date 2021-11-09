@@ -90,7 +90,6 @@ rocm_setup_version(VERSION ${VERSION_STRING})
 
 list(APPEND CMAKE_PREFIX_PATH
             ${ROCM_PATH}
-            ${ROCM_PATH}/hip
             ${ROCM_PATH}/llvm
             ${ROCM_PATH}/hcc)
 
