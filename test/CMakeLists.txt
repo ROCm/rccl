@@ -67,6 +67,13 @@ if(BUILD_TESTS)
   target_link_libraries(UnitTestsMultiProcess PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(UnitTestsMultiProcess PRIVATE hip::host hip::device)
 
+  find_program( rocminfo_executable rocminfo )
+  execute_process(COMMAND bash "-c" "${rocminfo_executable} | grep 'Device Type' | grep GPU | wc -l | tr -d '\n'" OUTPUT_VARIABLE gtest_num_gpus)
+  if(${gtest_num_gpus} MATCHES "0" OR ${gtest_num_gpus} MATCHES "1")
+    set(gtest_num_gpus,"2")
+  endif()
+  target_compile_options(UnitTests PRIVATE -DGTESTS_NUM_GPUS=${gtest_num_gpus})
+
   # UnitTests using static library of rccl requires passing rccl
   # through -l and -L instead of command line input.
   if(BUILD_STATIC)
