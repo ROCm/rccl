@@ -24,7 +24,7 @@
 #include <gtest/gtest.h>
 #include <math.h>
 
-#include "rccl.h"
+#include "rccl/rccl.h"
 #include "../include/rccl_bfloat16.h"
 
 #include "TestChecks.hpp"
