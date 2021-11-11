@@ -20,7 +20,7 @@ struct ncclTransport ncclTransports[NTRANSPORTS] = {
 };
 
 template <int type>
-static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex) {
+static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex, int* transportType) {
   struct ncclPeerInfo* myInfo = comm->peerInfo+comm->rank;
   struct ncclPeerInfo* peerInfo = comm->peerInfo+peer;
   struct ncclConnector* connector = (type == 1) ? comm->channels[channelId].peers[peer].send + connIndex :
@@ -45,6 +45,7 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     if (ret) {
       connector->transportComm = transportComm;
       NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, connIndex));
+      if (transportType) *transportType = t;
       return ncclSuccess;
     }
   }
@@ -77,12 +78,14 @@ void dumpData(struct ncclConnect* data, int ndata) {
   }
 }
 
-ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex) {
+ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex, int* highestTransportType/*=NULL*/) {
 #if CUDART_VERSION >= 11030
   // Stream used during transport setup; need for P2P pre-connect + CUDA Graph
   hipStream_t transportSetupStream;
   CUDACHECK(hipStreamCreateWithFlags(&transportSetupStream, hipStreamNonBlocking));
 #endif
+  int highestType = TRANSPORT_P2P;  // track highest transport type
+
   struct ncclConnect data[2*MAXCHANNELS];
   for (int i=1; i<comm->nRanks; i++) {
     int bootstrapTag = (i<<8) + (graph ? graph->id+1 : 0);
@@ -93,15 +96,18 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
 
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
+    int type;
     for (int c=0; c<MAXCHANNELS; c++) {
       if (recvMask & (1<<c)) {
-        NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex));
+        NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex, &type));
+        if (type > highestType) highestType = type;
       }
     }
     struct ncclConnect* sendData = recvData+recvChannels;
     for (int c=0; c<MAXCHANNELS; c++) {
       if (sendMask & (1<<c)) {
-        NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex));
+        NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex, &type));
+        if (type > highestType) highestType = type;
       }
     }
 
@@ -149,6 +155,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
   CUDACHECK(hipStreamSynchronize(transportSetupStream));
   CUDACHECK(hipStreamDestroy(transportSetupStream));
 #endif
+  if (highestTransportType != NULL) *highestTransportType = highestType;
   return ncclSuccess;
 }
 
@@ -242,22 +249,18 @@ cleanup:
 }
 
 ncclResult_t ncclTransportCollNetCheck(struct ncclComm* comm, int collNetSetupFail) {
-  int rank = comm->rank;
-  int nranks = comm->nRanks;
   // AllGather collNet setup results
-  int* allGatherFailures;
-  NCCLCHECK(ncclCalloc(&allGatherFailures, nranks));
-  allGatherFailures[rank] = collNetSetupFail;
-  NCCLCHECK(bootstrapAllGather(comm->bootstrap, allGatherFailures, sizeof(int)));
-  for (int i=0; i<nranks; i++) {
+  int allGatherFailures[NCCL_MAX_INTRA_RANKS] = {0};
+  allGatherFailures[comm->intraNodeRank] = collNetSetupFail;
+  NCCLCHECK(bootstrapIntraNodeAllGather(comm->bootstrap, comm->intraNodeGlobalRanks, comm->intraNodeRank, comm->localRanks, allGatherFailures, sizeof(int)));
+  for (int i=0; i<comm->localRanks; i++) {
     if (allGatherFailures[i] != 0) {
       collNetSetupFail = 1;
       break;
     }
   }
-  free(allGatherFailures);
   if (collNetSetupFail) {
-    if (rank == 0) WARN("Cannot initialize CollNet, using point-to-point network instead");
+    if (comm->intraNodeRank == 0) WARN("Cannot initialize CollNet, using point-to-point network instead");
     return ncclSystemError;
   }
   return ncclSuccess;

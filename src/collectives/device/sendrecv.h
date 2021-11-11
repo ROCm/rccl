@@ -11,7 +11,7 @@
 
 template<typename T, typename RedOp>
 struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __attribute__((noinline)) void run(ncclWork *work) {
+  __device__ __forceinline__ void run(ncclWork *work) {
     int tid = threadIdx.x;
     int group = 0;
     const int rank = ncclShmem->comm.rank;
@@ -39,16 +39,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 
         if (delta == 0) {
           if (sendbuff != recvbuff) {
-            // local copy : ReduceOrCopyMulti takes an int as number of elements,
-            // so we split it in blocks of 1G elements.
-            int blockSize = 1<<30;
-            for (size_t offset=0; offset<sendCount; offset += blockSize) {
-              size_t remaining = sendCount - offset;
-              if (remaining < blockSize) blockSize = remaining;
-              ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1>(tid, nThreadsSegment, RedOp(), 0, false, 1, &sendbuff, 1, &recvbuff, blockSize);
-              sendbuff += blockSize;
-              recvbuff += blockSize;
-            }
+            ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1, 0>(tid, nThreadsSegment, nullptr, false, 1, &sendbuff, 1, &recvbuff, sendCount);
           }
         }
         else {
@@ -58,7 +49,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
             int const nt = nThreadsSplit;
             int const chunkSize = args->p2p.recvChunkSize/sizeof(T);
             Primitives<T, RedOp, FanAsymmetric<1, 0>, 0, Proto> prims
-              (tid-t0, nt, &peer, nullptr, nullptr, recvbuff, groupRecv, args->p2p.recvIdx);
+              (tid-t0, nt, &peer, nullptr, nullptr, recvbuff, /*redOpArg(ignored)=*/0, groupRecv | (args->p2p.recvIdx << 16));
             ssize_t offset = 0;
             do {
               int nelem = roundUp(chunkSize, nt*(sizeof(uint64_t)/sizeof(T)));
@@ -74,7 +65,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
             int const nt = nThreadsSegment - nThreadsSplit;
             int const chunkSize = args->p2p.sendChunkSize/sizeof(T);
             Primitives<T, RedOp, FanAsymmetric<0, 1>, 0, Proto> prims
-              (tid-t0, nt, nullptr, &peer, sendbuff, nullptr, groupSend, args->p2p.sendIdx);
+              (tid-t0, nt, nullptr, &peer, sendbuff, nullptr, /*redOpArg(ignored)=*/0, groupSend | (args->p2p.sendIdx << 16));
             ssize_t offset = 0;
             do {
               int nelem = roundUp(chunkSize, nt*(sizeof(uint64_t)/sizeof(T)));

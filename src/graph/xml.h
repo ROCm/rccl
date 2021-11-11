@@ -1,11 +1,17 @@
 /*************************************************************************
  * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
 #ifndef XML_H_
 #define XML_H_
+
+#include "nccl.h"
+#include "debug.h"
+#include "checks.h"
+#include <stdlib.h>
 
 // A few constraints to make the implementation easy
 #define MAX_STR_LEN 255

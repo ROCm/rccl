@@ -11,6 +11,7 @@
 #include "nccl.h"
 #include <stdint.h> // for standard [u]intX_t types
 #include <stdio.h>
+#include <stdlib.h>
 
 // These can be used if the GDR library isn't thread safe
 #include <pthread.h>

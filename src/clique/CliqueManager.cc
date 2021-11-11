@@ -274,9 +274,9 @@ bool CliqueManager::IsSupported(ncclFunc_t const coll,
 {
   if (m_cliqueMode == CLIQUE_DISABLED) return false;
 
-  // Filter based on total input size for each collective type
+  // Filter based on total input size for each collective type and ops sum/prod/min/max
   size_t totalBytes = count * ncclTypeSize(datatype);
-  if (coll == ncclFuncAllReduce && (totalBytes <= m_allReduceByteLimit)) return true;
+  if (coll == ncclFuncAllReduce && (totalBytes <= m_allReduceByteLimit) && op < ncclAvg) return true;
   return false;
 }
 

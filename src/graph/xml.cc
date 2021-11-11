@@ -660,7 +660,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
   NCCLCHECK(xmlGetAttrInt(gpuNode, "arch", &arch.value));
 
   struct ncclXmlNode* nvlNode = NULL;
-  NCCLCHECK(xmlGetSub(pciNode, "nvlink", &nvlNode));
+  NCCLCHECK(xmlGetSub(gpuNode, "nvlink", &nvlNode));
   if (nvlNode == NULL) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     const char* busId;
