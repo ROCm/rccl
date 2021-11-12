@@ -27,6 +27,8 @@ namespace CorrectnessTests
         ncclFuncs.push_back(ncclCollReduce);
         ncclFuncs.push_back(ncclCollReduceScatter);
 
+        // Adjust numElements to be multiple of numDevices
+        numElements = (numElements/numDevices)*numDevices;
         for (int i = 0; i < datasets.size(); i++)
         {
             datasets[i].Initialize(numDevices, numElements, dataType, inPlace, ncclFuncs[i]);

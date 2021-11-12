@@ -9,6 +9,8 @@ namespace CorrectnessTests
 {
     TEST_P(AllGatherCorrectnessTest, Correctness)
     {
+        // Adjust numElements to be multiple of numDevices
+        numElements = (numElements/numDevices)*numDevices;
         if (numDevices > numDevicesAvailable) return;
         if (numElements % numDevices != 0) return;
 
