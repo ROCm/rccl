@@ -10,12 +10,11 @@
 
 #include "graph.h"
 #include "core.h"
-#include <sched.h>
 
 #define LOC_WIDTH 5000.0
 #define SM60_NVLINK_WIDTH 18.0
-#define SM70_NVLINK_WIDTH 21.0
-#define SM80_NVLINK_WIDTH 21.0
+#define SM70_NVLINK_WIDTH 22.0
+#define SM80_NVLINK_WIDTH 22.0
 #define SM86_NVLINK_WIDTH 12.0
 #define PCI_WIDTH 12.0           // PCI Gen3 x16
 #define QPI_WIDTH 6.0
@@ -84,6 +83,7 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_CR8G      1
 #define RCCL_TOPO_4P2H_ROME 2
 #define RCCL_TOPO_GDR_ALL   4
+#define RCCL_TOPO_16P1H     8
 
 struct ncclTopoNode {
   int type;
@@ -136,6 +136,7 @@ struct ncclTopoSystem {
   float totalWidth;
   int type;
   int nRanks;
+  int netGdrLevel;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);

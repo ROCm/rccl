@@ -34,13 +34,12 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include <hip/hip_ext.h>
 #include <hsa/hsa_ext_amd.h>
-#include <hip/hcc_detail/hip_fp16.h>
 
 // Include common_kernel.h from RCCL for copy kernel
 // However define some variables to avoid extra includes / missing defines
 #define NCCL_DEVICE_H_   // Avoid loading devcomm.h
 #define WARP_SIZE 64
-
+typedef float half;  // TransferBench doesn't actually operate on half-precision floats
 typedef uint64_t PackType;
 typedef ulong2 Pack128;
 typedef struct
@@ -48,7 +47,7 @@ typedef struct
   uint16_t data;
 } rccl_bfloat16;
 
-#include "../../src/collectives/device/common_kernel.h"
+#include "common_kernel.h"
 #include "EnvVars.hpp"
 
 // Helper macro for catching HIP errors
@@ -123,7 +122,11 @@ void DeallocateMemory(MemType memType, int devIndex, float* memPtr);
 void CheckPages(char* byteArray, size_t numBytes, int targetId);
 void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, std::vector<float> const& fillPattern, float* ptr);
 void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link);
-
+void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse);
+double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
+                        MemType srcMemType, int srcIndex,
+                        MemType dstMemType, int dstIndex,
+                        int readMode);
 
 std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount);
 std::string GetDesc(MemType srcMemType, int srcIndex,

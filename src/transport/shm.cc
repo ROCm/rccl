@@ -74,7 +74,8 @@ ncclResult_t shmSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   TRACE(NCCL_SHM,"Open shmName %s shmSize %d", shmName, info.shmSize);
   NCCLCHECK(shmOpen(shmName, resources->shmSize, (void**)&resources->hostMem, (void**)&resources->devHostMem, 1));
 
-  INFO(NCCL_INIT|NCCL_SHM,"Channel %02d : %d[%lx] -> %d[%lx] via direct shared memory", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId);
+  INFO(NCCL_INIT|NCCL_SHM,"Channel %02d : %d[%lx] -> %d[%lx] via direct shared memory comm %p nRanks %02d", channelId, myInfo->rank, 
+		  myInfo->busId, peerInfo->rank, peerInfo->busId, comm, comm->nRanks);
   static_assert(sizeof(struct shmConnectInfo) <= sizeof(struct ncclConnect), "shm Connect Recv Info is too big");
   memcpy(connectInfo, &info, sizeof(struct shmConnectInfo));
   return ncclSuccess;

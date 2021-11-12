@@ -56,7 +56,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'RCCL'
-copyright = u'2015-2018, NVIDIA CORPORATION; Modifications Copyright 2019-2021 Advanced Micro Devices'
+copyright = u'Copyright 2019-2021 Advanced Micro Devices'
 author = u'Advanced Micro Devices'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -180,6 +180,3 @@ texinfo_documents = [
      author, 'RCCL', 'One line description of project.',
      'Miscellaneous'),
 ]
-
-
-

@@ -124,6 +124,17 @@ NodeModelDesc model_descs[] = {
   {1, "topo_8p_90a.xml",        "single node gfx90a"},
   {4, "topo_8p_rome_4n_1.xml",  "4 nodes node 8 gfx908 Rome 4 NICs NPS=4"},
   {4, "topo_collnet_n4.xml",    "4 nodes collnet 4 NICs for multiple SAT"},
+  {1, "topo_8p_rome_vm1.xml",   "single node 8 gfx908 Rome VM"},
+  {1, "topo_16p1h.xml",         "single node 16P1H"},
+  {4, "topo_8p_rome_4n_2.xml",  "4 nodes 8 gfx908 Rome 4 NICs NPS=4 Alt. Model"},
+  {1, "topo_8p_90a_1.xml",      "single node gfx90a Alt. Model"},
+  {4, "topo_16p1h.xml",         "4 nodes 16P1H"},
+  {4, "topo_3p_pcie.xml",       "4 nodes 3P"},
+  {4, "topo_3p_pcie_1.xml",     "4 nodes 3P Alt. Model"},
+  {1, "topo_8p_4nics.xml",      "single nodes 8P 4 NICs"},
+  {4, "topo_8p_4nics.xml",      "4 nodes 8P 4 NICs"},
+  {1, "topo_16p1h_vm.xml",      "single node 16P1H VM"},
+  {4, "topo_16p1h_vm.xml",      "4 nodes 16P1H VM"},
 };
 
 int main(int argc,char* argv[])
@@ -184,8 +195,8 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nranks; i++) {
     comm[i].rank = i;
     comm[i].nRanks = nranks;
-    NCCLCHECK(ncclCalloc(&comm[i].connectSend, comm->nRanks));
-    NCCLCHECK(ncclCalloc(&comm[i].connectRecv, comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].connectSend, NCCL_MAX_CONNS*comm->nRanks));
+    NCCLCHECK(ncclCalloc(&comm[i].connectRecv, NCCL_MAX_CONNS*comm->nRanks));
     comm[i].p2pSendCount = comm[i].p2pRecvCount = 0;
     NCCLCHECK(ncclCalloc(&comm[i].p2pSends, comm->nRanks));
     NCCLCHECK(ncclCalloc(&comm[i].p2pRecvs, comm->nRanks));

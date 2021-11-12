@@ -337,7 +337,7 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
   }
 
   // Check if we are close enough that it makes sense to enable GDR
-  int netGdrLevel = PATH_PXB;
+  int netGdrLevel = system->netGdrLevel == -2 ? PATH_PXB : system->netGdrLevel;
   NCCLCHECK(ncclGetLevel(&ncclTopoUserGdrLevel, NULL, "NCCL_NET_GDR_LEVEL"));
   if (ncclTopoUserGdrLevel != -2) netGdrLevel = ncclTopoUserGdrLevel;
   else {
@@ -405,7 +405,9 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclPeer
       struct ncclPeerInfo* srcInfo = peerInfos+system->nodes[GPU].nodes[p].gpu.rank;
       int shm;
       NCCLCHECK(ncclTransports[TRANSPORT_SHM].canConnect(&shm, system, NULL, srcInfo, dstInfo));
-      if (shm == 0) {
+      int p2p;
+      NCCLCHECK(ncclTransports[TRANSPORT_P2P].canConnect(&p2p, system, NULL, srcInfo, dstInfo));
+      if (shm == 0 && p2p == 0) {
         // Mark this peer as inaccessible. We'll trim it later.
         system->nodes[GPU].nodes[p].paths[GPU][g].count = 0;
       }
@@ -508,8 +510,22 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     }
     if (ret) {
       system->type |= RCCL_TOPO_GDR_ALL;
-      remove = 0;
-      INFO(NCCL_GRAPH, "GDR is available on all GPUs");
+      bool allXgmi = true;
+      // don't trim NICs unless all GPUs are connected by XGMI
+      for (int i = 0; i < system->nodes[GPU].count && allXgmi; i++) {
+        int cudaDev1 = system->nodes[GPU].nodes[i].gpu.dev;
+        for (int j = 0; j < system->nodes[GPU].count && allXgmi; j++) {
+          if (i == j) continue;
+          int cudaDev2 = system->nodes[GPU].nodes[j].gpu.dev;
+          bool isXGMI;
+          NCCLCHECK(ncclTopoGetLinkType(comm->topo, cudaDev1, cudaDev2, &isXGMI));
+          allXgmi &= isXGMI;
+        }
+      }
+      if (!allXgmi) {
+        remove = 0;
+        INFO(NCCL_GRAPH, "GDR is available on all GPUs");
+      }
     }
   }
   comm->localRanks = system->nodes[GPU].count;

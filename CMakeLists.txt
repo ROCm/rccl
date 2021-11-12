@@ -7,8 +7,6 @@ set( CMAKE_CXX_STANDARD 14 )
 # Without this line, it will add -std=gnu++14 instead, which has some issues.
 set( CMAKE_CXX_EXTENSIONS OFF )
 
-set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
-
 project(rccl CXX)
 
 include(cmake/Dependencies.cmake)
@@ -22,6 +20,14 @@ if( CMAKE_CXX_COMPILER MATCHES ".*/hipcc$" )
         ERROR_STRIP_TRAILING_WHITESPACE)
     string(REGEX MATCH ".mcode\-object\-version" TARGET_ID_SUPPORT ${CXX_OUTPUT})
 endif()
+
+if(NOT DEFINED ROCM_PATH)
+  get_filename_component(_real_path ${CMAKE_CXX_COMPILER} REALPATH)
+  get_filename_component(_new_path "${_real_path}" DIRECTORY)
+  get_filename_component(ROCM_PATH "${_new_path}/../.." REALPATH)
+endif()
+
+set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
 
 #Set the AMDGPU_TARGETS with backward compatiblity
 if(COMMAND rocm_check_target_ids)
@@ -41,6 +47,7 @@ set(AMDGPU_TARGETS "${DEFAULT_AMDGPU_TARGETS}" CACHE STRING "List of specific ma
 option(BUILD_TESTS "Build test programs" OFF)
 option(INSTALL_DEPENDENCIES "Force install dependencies" OFF)
 option(BUILD_ADDRESS_SANITIZER "Build with address sanitizer enabled" OFF)
+option(BUILD_ALLREDUCE_ONLY "Build AllReduce + sum + float kernel only" OFF)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
@@ -82,10 +89,10 @@ set(VERSION_STRING "${NCCL_MAJOR}.${NCCL_MINOR}.${NCCL_PATCH}")
 rocm_setup_version(VERSION ${VERSION_STRING})
 
 list(APPEND CMAKE_PREFIX_PATH
-            /opt/rocm
-            /opt/rocm/hip
-            /opt/rocm/llvm
-            /opt/rocm/hcc)
+            ${ROCM_PATH}
+            ${ROCM_PATH}/hip
+            ${ROCM_PATH}/llvm
+            ${ROCM_PATH}/hcc)
 
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
@@ -112,14 +119,22 @@ include_directories(src/include)
 include_directories(src/collectives)
 include_directories(src/collectives/device)
 
-set(CU_SOURCES
-    src/collectives/device/all_reduce.cu
-    src/collectives/device/all_gather.cu
-    src/collectives/device/reduce.cu
-    src/collectives/device/broadcast.cu
-    src/collectives/device/reduce_scatter.cu
-    src/collectives/device/sendrecv.cu
-    src/collectives/device/functions.cu)
+if (BUILD_ALLREDUCE_ONLY)
+  add_definitions(-DBUILD_ALLREDUCE_ONLY)
+  set(CU_SOURCES
+      src/collectives/device/all_reduce.cu
+      src/collectives/device/sendrecv.cu
+      src/collectives/device/functions.cu)
+else()
+  set(CU_SOURCES
+      src/collectives/device/all_reduce.cu
+      src/collectives/device/all_gather.cu
+      src/collectives/device/reduce.cu
+      src/collectives/device/broadcast.cu
+      src/collectives/device/reduce_scatter.cu
+      src/collectives/device/sendrecv.cu
+      src/collectives/device/functions.cu)
+endif()
 
 set(CPP_SOURCES)
 foreach(filename ${CU_SOURCES})
@@ -164,6 +179,7 @@ set(CC_SOURCES
     src/misc/utils.cc
     src/misc/ibvwrap.cc
     src/misc/nvmlwrap_stub.cc
+    src/misc/rocm_smi_wrap.cc
     src/transport/coll_net.cc
     src/transport/net.cc
     src/transport/net_ib.cc
@@ -191,22 +207,32 @@ if(PROFILE)
   add_definitions(-DENABLE_PROFILING)
 endif()
 
+if(TIMING_PROFILE)
+  add_definitions(-DENABLE_PROFILING)
+  add_definitions(-DENABLE_TIMING_PROFILE)
+endif()
+
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
 if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
 endif()
 
+CHECK_INCLUDE_FILE_CXX("${ROCM_PATH}/rocm_smi/include/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
+IF(HAVE_ROCM_SMI64CONFIG)
+  add_definitions(-DUSE_ROCM_SMI64CONFIG)
+ENDIF()
+
 foreach(target ${AMDGPU_TARGETS})
-target_link_libraries(rccl PRIVATE --cuda-gpu-arch=${target})
+  target_link_libraries(rccl PRIVATE --amdgpu-target=${target})
 endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
   target_compile_options(rccl PRIVATE -fvisibility=hidden)
   foreach(target ${AMDGPU_TARGETS})
-    target_compile_options(rccl PRIVATE --cuda-gpu-arch=${target} PRIVATE -fgpu-rdc)
+    target_compile_options(rccl PRIVATE -fgpu-rdc)
   endforeach()
   target_link_libraries(rccl PRIVATE -fgpu-rdc)
-  target_include_directories(rccl PRIVATE /opt/rocm/hsa/include)
+  target_include_directories(rccl PRIVATE ${ROCM_PATH}/hsa/include)
   find_program( hipcc_executable hipcc )
   execute_process(COMMAND bash "-c" "${hipcc_executable} -help | grep 'parallel-jobs'" OUTPUT_VARIABLE hipcc_parallel_jobs)
   if("${hipcc_parallel_jobs}" MATCHES "parallel-jobs")
@@ -234,7 +260,8 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-target_link_libraries(rccl PRIVATE hip::device dl)
+target_include_directories(rccl PRIVATE ${ROCM_PATH}/rocm_smi/include)
+target_link_libraries(rccl PRIVATE hip::device dl -lrocm_smi64 -L${ROCM_PATH}/rocm_smi/lib)
 target_link_libraries(rccl INTERFACE hip::host)
 
 #Setup librccl.so version
@@ -244,7 +271,7 @@ rocm_install_targets(TARGETS
                      rccl
                      PREFIX
                      rccl)
-install(FILES ${PROJECT_BINARY_DIR}/rccl.h
+rocm_install(FILES ${PROJECT_BINARY_DIR}/rccl.h
         DESTINATION rccl/${CMAKE_INSTALL_INCLUDEDIR})
 
 rocm_export_targets(NAMESPACE
@@ -257,9 +284,11 @@ rocm_export_targets(NAMESPACE
                     hip)
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-smi-lib (>= 4.0.0)")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
-set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/rocm")
+set(CPACK_RPM_PACKAGE_REQUIRES "rocm-smi-lib >= 4.0.0")
+set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "${ROCM_PATH}")
 
 find_file (DEBIAN debian_version debconf.conf PATHS /etc)
 if(DEBIAN)

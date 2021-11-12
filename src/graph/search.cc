@@ -333,7 +333,7 @@ ncclResult_t ncclTopoCompareGraphs(struct ncclTopoSystem* system, struct ncclTop
     return ncclSuccess;
   }
   // 3. Less hops (but not at the price of going cross NICs)
-  if (graph->crossNic == refGraph->crossNic && graph->nHops < refGraph->nHops) *copy = 1;
+  if (graph->pattern == refGraph->pattern && graph->crossNic == refGraph->crossNic && graph->nHops < refGraph->nHops) *copy = 1;
 
   // 4. Prefer graph with more XGMI connections
   if (graph->nChannels == refGraph->nChannels
@@ -758,11 +758,14 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
 }
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-float speedArray[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+float speedArrayIntra[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+float speedArrayInter[] = { 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #else
-float speedArray[] = { 42.0, 30.0, 24.0, 21.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+float speedArrayIntra[] = { 44.0, 30.0, 22.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0 };
+float speedArrayInter[] = { 48.0, 30.0, 24.0, 22.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #endif
-#define NSPEEDS (sizeof(speedArray)/sizeof(float))
+#define NSPEEDSINTRA (sizeof(speedArrayIntra)/sizeof(float))
+#define NSPEEDSINTER (sizeof(speedArrayInter)/sizeof(float))
 
 RCCL_PARAM(ModelMatchingDisable, "MODEL_MATCHING_DISABLE", 0);
 RCCL_PARAM(EnableMultipleSAT, "ENABLE_MULTIPLE_SAT", 0);
@@ -795,7 +798,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   str = getenv("NCCL_RINGS");
   if (str) {
     // user supplied topo
-    NCCLCHECK(parseGraph(str, system, graph, NULL));
+    NCCLCHECK(parseGraph(str, system, graph, NULL, NULL));
     if (graph->nChannels) {
       system->type |= RCCL_TOPO_4P2H_ROME;
     }
@@ -805,6 +808,9 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels) return ncclSuccess;
     // try to match Rome 4P2H
     NCCLCHECK(parseRome4P2H(system, graph));
+    if (graph->nChannels) return ncclSuccess;
+    // try to match 1H16P
+    NCCLCHECK(parse1H16P(system, graph));
   }
   if (graph->nChannels) return ncclSuccess;
 
@@ -816,23 +822,26 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     graph->maxChannels = 1;
   if (ngpus == 1) if (graph->pattern != NCCL_TOPO_PATTERN_RING) graph->pattern = NCCL_TOPO_PATTERN_TREE;
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  // TODO: benchmark balance tree vs split tree
-  //if (graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) graph->pattern = NCCL_TOPO_PATTERN_SPLIT_TREE;
-#else
   // SPLIT_TREE works better on older archs.
   int ccMin;
   NCCLCHECK(ncclTopoGetCompCap(system, &ccMin, NULL));
-  if (ccMin < 80 && graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE) graph->pattern = NCCL_TOPO_PATTERN_SPLIT_TREE;
-#endif
 
   struct ncclTopoGraph tmpGraph;
   memcpy(&tmpGraph, graph, sizeof(struct ncclTopoGraph));
 
   // First try crossnic, then decrease speed and finally increase speedIntra.
+  int nspeeds = 0;
+  float* speedArray = NULL;
+  if (system->nodes[NET].count == 0) {
+    nspeeds = NSPEEDSINTRA;
+    speedArray = speedArrayIntra;
+  } else {
+    nspeeds = NSPEEDSINTER;
+    speedArray = speedArrayInter;
+  }
   int pass = 1;
   int speedIndex = 0;
-  while (speedArray[speedIndex] > system->maxWidth && speedIndex < NSPEEDS-1) speedIndex++;
+  while (speedArray[speedIndex] > system->maxWidth && speedIndex < nspeeds-1) speedIndex++;
   tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
   int64_t globalTimeout = NCCL_SEARCH_GLOBAL_TIMEOUT;
 
@@ -899,12 +908,12 @@ search:
     tmpGraph.crossNic = 0;
 
     // Decrease speed until we find a solution
-    if ((speedIndex < NSPEEDS-1) && (graph->nChannels == 0 || (speedArray[speedIndex+1]/graph->speedInter > .49))) {
+    if ((speedIndex < nspeeds-1) && (graph->nChannels == 0 || (speedArray[speedIndex+1]/graph->speedInter > .49))) {
       tmpGraph.speedInter = tmpGraph.speedIntra = speedArray[++speedIndex];
       goto search;
     }
     speedIndex = 0;
-    while (speedArray[speedIndex] > system->maxWidth && speedIndex < NSPEEDS-1) speedIndex++;
+    while (speedArray[speedIndex] > system->maxWidth && speedIndex < nspeeds-1) speedIndex++;
     tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
 
   }
@@ -915,7 +924,7 @@ done:
     time = -1;
     memcpy(&tmpGraph, graph, sizeof(tmpGraph));
     speedIndex = 0;
-    while (speedArray[speedIndex] > graph->speedInter && speedIndex < NSPEEDS-1) speedIndex++;
+    while (speedArray[speedIndex] > graph->speedInter && speedIndex < nspeeds-1) speedIndex++;
     tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
     tmpGraph.minChannels = graph->nChannels;
     pass = 2;
@@ -1032,6 +1041,66 @@ ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, str
     }
     if (n1 >= 0 && n1 < nnets) {
       *dev = n1;
+    }
+  }
+  return ncclSuccess;
+}
+
+ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, int cudaDev2, bool* isXGMI, int maxInter, int nInter, int *inter) {
+  int interGpus[MAX_XGMI_INTER_GPUS+1];
+  int ngpus = system->nodes[GPU].count;
+  *isXGMI = false;
+  // check for direct XGMI connection
+  for (int i=0; i<ngpus; i++) {
+    if (system->nodes[GPU].nodes[i].gpu.dev == cudaDev1) {
+      struct ncclTopoNode *node = system->nodes[GPU].nodes+i;
+      for (int k = 0; k<system->nodes[GPU].count; k++) {
+        if (node->paths[GPU][k].count == 1) {
+          struct ncclTopoLink* link = node->paths[GPU][k].list[0];
+          struct ncclTopoNode* remNode = link->remNode;
+          if (remNode->gpu.dev == cudaDev2) {
+            *isXGMI = (link->type == LINK_NVL);
+            return ncclSuccess;
+          }
+        }
+      }
+    }
+  }
+  if (maxInter == 0) return ncclSuccess;
+  // check if there are intermediate GPUs that are connected to both
+  bool res1, res2, res3;
+  int j;
+  for (j=0; j<nInter; j++) {
+    bool res1;
+    ncclTopoGetLinkType(system, inter[j], inter[j+1], &res1, 0);
+    if (!res1) break;
+  }
+  if (j<nInter) return ncclSuccess;
+  if (nInter > 0 && inter != nullptr) {
+    ncclTopoGetLinkType(system, inter[nInter], cudaDev2, &res2, 0);
+    if (res2) {
+      *isXGMI = true;
+      return ncclSuccess;
+    }
+    memcpy(interGpus+1, inter+1, sizeof(int)*nInter);
+  }
+  interGpus[0] = cudaDev1;
+  // add one more intermediate GPU recursively util reaching max depth
+  nInter++;
+  if (nInter+2 > ngpus || nInter > MAX_XGMI_INTER_GPUS || nInter > maxInter) return ncclSuccess;
+  for (int i=0; i<ngpus; i++) {
+    int dev = system->nodes[GPU].nodes[i].gpu.dev;
+    // skip duplicated GPU
+    if (dev == cudaDev2) continue;
+    for (j=0; j<nInter; j++)
+      if (dev == interGpus[j]) break;
+    if (j<nInter) continue;
+    // check connectivity with intermediate GPUs
+    interGpus[nInter] = dev;
+    ncclTopoGetLinkType(system, cudaDev1, cudaDev2, &res3, maxInter, nInter, interGpus);
+    if (res3) {
+      *isXGMI = true;
+      return ncclSuccess;
     }
   }
   return ncclSuccess;

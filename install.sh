@@ -19,6 +19,7 @@ function display_help()
     echo "    [--hcc] Build library using deprecated hcc compiler (default:hip-clang)."
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
     echo "    [--address-sanitizer] Build with address sanitizer enabled"
+    echo "    [--build_allreduce_only] Build only AllReduce + sum + float kernel"
 }
 
 # #################################################
@@ -36,6 +37,7 @@ build_hip_clang=true
 clean_build=true
 install_dependencies=false
 build_static=false
+build_allreduce_only=false
 
 # #################################################
 # Parameter parsing
@@ -44,7 +46,7 @@ build_static=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer,build_allreduce_only --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -96,6 +98,9 @@ while true; do
         shift ;;
     --address-sanitizer)
         build_address_sanitizer=true
+        shift ;;
+    --build_allreduce_only)
+        build_allreduce_only=true
         shift ;;
     --prefix)
         install_prefix=${2}
@@ -194,6 +199,9 @@ if ($install_dependencies); then
     cmake_common_options="${cmake_common_options} -DINSTALL_DEPENDENCIES=ON"
 fi
 
+if ($build_allreduce_only); then
+    cmake_common_options="${cmake_common_options} -DBUILD_ALLREDUCE_ONLY=ON"
+fi
 check_exit_code "$?"
 
 if ($build_tests) || (($run_tests) && [[ ! -f ./test/UnitTests ]]); then

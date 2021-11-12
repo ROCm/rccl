@@ -9,9 +9,10 @@ def runCI =
     nodeDetails, jobName->
     
     def prj = new rocProject('rccl', 'Static Library PreCheckin')
-    prj.paths.build_command = './install.sh --static'
-    
 
+    prj.timeout.test = 1440
+    prj.paths.build_command = './install.sh -t --static'
+    
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
 
     def commonGroovy
@@ -31,17 +32,17 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project)
+        commonGroovy.runTestCommand(platform, project, "*sum_float32*")
     }
 
     def packageCommand =
     {
         platform, project->
 
-        commonGroovy.runPackageCommand(platform, project)
+        commonGroovy.runPackageCommand(platform, project, jobName)
     }
 
-    buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, null, null)
+    buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
 }
 
 ci: { 

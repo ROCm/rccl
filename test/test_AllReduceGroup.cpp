@@ -47,7 +47,23 @@ namespace CorrectnessTests
         dataset2.Release();
         dataset3.Release();
   }
-
+#if defined(BUILD_ALLREDUCE_ONLY)
+  INSTANTIATE_TEST_SUITE_P(AllReduceGroupCorrectnessSweep,
+                           AllReduceGroupCorrectnessTest,
+                           testing::Combine(
+                             // Reduction operator
+                             testing::Values(ncclSum),
+                             // Data types
+                             testing::Values(ncclFloat32),
+                             // Number of elements
+                             testing::Values(1024, 1048576),
+                             // Number of devices
+                             testing::Values(2,3,4,5,6,7,8),
+                             // In-place or not
+                             testing::Values(false, true),
+                             testing::Values("RCCL_ENABLE_CLIQUE=0", "RCCL_ENABLE_CLIQUE=1")),
+                           CorrectnessTest::PrintToStringParamName());
+#else
   INSTANTIATE_TEST_SUITE_P(AllReduceGroupCorrectnessSweep,
                            AllReduceGroupCorrectnessTest,
                            testing::Combine(
@@ -63,4 +79,5 @@ namespace CorrectnessTests
                              testing::Values(false, true),
                              testing::Values("RCCL_ENABLE_CLIQUE=0", "RCCL_ENABLE_CLIQUE=1")),
                            CorrectnessTest::PrintToStringParamName());
+#endif
 } // namespace

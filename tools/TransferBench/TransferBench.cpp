@@ -24,6 +24,7 @@ THE SOFTWARE.
 // on the same node
 
 #include "TransferBench.hpp"
+#include "GetClosestNumaNode.hpp"
 #include <numa.h>
 #include <numaif.h>
 #include <stack>
@@ -49,6 +50,46 @@ int main(int argc, char **argv)
     exit(0);
   }
 
+  // Collect environment variables / display current run configuration
+  EnvVars ev;
+
+  // Determine number of bytes to run per Link
+  // If a non-zero number of bytes is specified, use it
+  // Otherwise generate array of bytes values to execute over
+  std::vector<size_t> valuesOfN;
+  size_t numBytesPerLink = argc > 2 ? atoll(argv[2]) : DEFAULT_BYTES_PER_LINK;
+  if (argc > 2)
+  {
+    // Adjust bytes if unit specified
+    char units = argv[2][strlen(argv[2])-1];
+    switch (units)
+    {
+    case 'K': case 'k': numBytesPerLink *= 1024; break;
+    case 'M': case 'm': numBytesPerLink *= 1024*1024; break;
+    case 'G': case 'g': numBytesPerLink *= 1024*1024*1024; break;
+    }
+  }
+  PopulateTestSizes(numBytesPerLink, ev.samplingFactor, valuesOfN);
+
+  // Find the largest N to be used - memory will only be allocated once per link config
+  size_t maxN = valuesOfN[0];
+  for (auto N : valuesOfN)
+    maxN = std::max(maxN, N);
+
+  // Execute only peer to peer benchmark mode, similar to rocm-bandwidth-test
+  if (!strcmp(argv[1], "p2p"))
+  {
+    int numBlocksToUse = 0;
+    if (argc > 3)
+      numBlocksToUse = atoi(argv[3]);
+    else
+      HIP_CALL(hipDeviceGetAttribute(&numBlocksToUse, hipDeviceAttributeMultiprocessorCount, 0));
+
+    // Execute peer to peer benchmark mode
+    RunPeerToPeerBenchmarks(ev, numBytesPerLink / sizeof(float), numBlocksToUse);
+    exit(0);
+  }
+
   // Check that Link configuration file can be opened
   FILE* fp = fopen(argv[1], "r");
   if (!fp)
@@ -63,22 +104,7 @@ int main(int argc, char **argv)
     printf("[ERROR] NUMA library not supported. Check to see if libnuma has been installed on this system\n");
     exit(1);
   }
-
-  // Collect environment variables / display current run configuration
-  EnvVars ev;
   ev.DisplayEnvVars();
-
-  // Determine number of bytes to run per Link
-  // If a non-zero number of bytes is specified, use it
-  // Otherwise generate array of bytes values to execute over
-  std::vector<size_t> valuesOfN;
-  size_t const numBytesPerLink = argc > 2 ? atoll(argv[2]) : DEFAULT_BYTES_PER_LINK;
-  PopulateTestSizes(numBytesPerLink, ev.samplingFactor, valuesOfN);
-
-  // Find the largest N to be used - memory will only be allocated once per link config
-  size_t maxN = valuesOfN[0];
-  for (auto N : valuesOfN)
-    maxN = std::max(maxN, N);
 
   int const initOffset = ev.byteOffset / sizeof(float);
   std::stack<std::thread> threads;
@@ -94,7 +120,7 @@ int main(int argc, char **argv)
   // Print CSV header
   if (ev.outputToCsv)
   {
-    printf("Test,NumBytes,Executor,SrcMem,DstMem,CUs,BW(GB/s),Time(ms),LinkDesc,SrcAddr,DstAddr,ByteOffset,numWarmups,numIters,useHipCall,useMemSet,useSingleSync,combinedTiming\n");
+    printf("Test,NumBytes,SrcMem,Executor,DstMem,CUs,BW(GB/s),Time(ms),LinkDesc,SrcAddr,DstAddr,ByteOffset,numWarmups,numIters,useHipCall,useMemSet,useSingleSync,combinedTiming\n");
   }
 
   // Loop over each line in the Link configuration file
@@ -102,6 +128,10 @@ int main(int argc, char **argv)
   char line[2048];
   while(fgets(line, 2048, fp))
   {
+    // Check if line is a comment
+    if (!ev.outputToCsv && line[0] == '#' && line[1] == '#')
+      printf("%s", line);
+
     // Parse links from configuration file
     std::vector<Link> links;
     ParseLinks(line, numCpuDevices, numGpuDevices, links);
@@ -178,21 +208,23 @@ int main(int argc, char **argv)
         // Initialize source memory with patterned data
         CheckOrFill(MODE_FILL, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].srcMem + initOffset);
 
+
         // Each block needs to know src/dst pointers and how many elements to transfer
         // Figure out the sub-array each block does for this Link
-        // - Partition N as evenly as posible, but try to keep blocks as multiples of 32,
+        // - Partition N as evenly as posible, but try to keep blocks as multiples of BLOCK_BYTES bytes,
         //   except the very last one, for alignment reasons
+        int targetMultiple = ev.blockBytes / sizeof(float);
         if (links[i].exeMemType == MEM_GPU)
         {
           size_t assigned = 0;
-          int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)links[i].numBlocksToUse);
+          int maxNumBlocksToUse = std::min((N + targetMultiple - 1) / targetMultiple, (size_t)links[i].numBlocksToUse);
           for (int j = 0; j < links[i].numBlocksToUse; j++)
           {
             BlockParam param;
             int blocksLeft = std::max(0, maxNumBlocksToUse - j);
             size_t leftover = N - assigned;
-            size_t roundedN = (leftover + 31) / 32;
-            param.N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+            size_t roundedN = (leftover + targetMultiple - 1) / targetMultiple;
+            param.N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * targetMultiple)) : 0;
             param.src = links[i].srcMem + assigned + initOffset;
             param.dst = links[i].dstMem + assigned + initOffset;
             assigned += param.N;
@@ -204,13 +236,13 @@ int main(int argc, char **argv)
         {
           // For CPU-based copy, divded based on the number of child threads
           size_t assigned = 0;
-          int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)ev.numCpuPerLink);
+          int maxNumBlocksToUse = std::min((N + targetMultiple - 1) / targetMultiple, (size_t)ev.numCpuPerLink);
           for (int j = 0; j < ev.numCpuPerLink; j++)
           {
             int blocksLeft = std::max(0, maxNumBlocksToUse - j);
             size_t leftover = N - assigned;
-            size_t roundedN = (leftover + 31) / 32;
-            links[i].blockParam[j].N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+            size_t roundedN = (leftover + targetMultiple - 1) / targetMultiple;
+            links[i].blockParam[j].N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * targetMultiple)) : 0;
             links[i].blockParam[j].src = links[i].srcMem + assigned + initOffset;
             links[i].blockParam[j].dst = links[i].dstMem + assigned + initOffset;
             assigned += links[i].blockParam[j].N;
@@ -270,10 +302,12 @@ int main(int argc, char **argv)
       // Report timings
       totalCpuTime = totalCpuTime / (1.0 * ev.numIterations) * 1000;
       double totalBandwidthGbs = (numLinks * N * sizeof(float) / 1.0E6) / totalCpuTime;
+      double maxGpuTime = 0;
       for (int i = 0; i < numLinks; i++)
       {
         double linkDurationMsec = links[i].totalTime / (1.0 * ev.numIterations);
         double linkBandwidthGbs = (N * sizeof(float) / 1.0E9) / linkDurationMsec * 1000.0f;
+        maxGpuTime = std::max(maxGpuTime, linkDurationMsec);
         if (!ev.outputToCsv)
         {
           printf(" Link %02d: %c%02d -> [%cPU %02d:%02d] -> %c%02d | %9.3f GB/s | %8.3f ms | %-16s",
@@ -310,7 +344,8 @@ int main(int argc, char **argv)
       // Display aggregate statistics
       if (!ev.outputToCsv)
       {
-        printf(" Aggregate Bandwidth (CPU timed)    | %9.3f GB/s | %8.3f ms |\n", totalBandwidthGbs, totalCpuTime);
+        printf(" Aggregate Bandwidth (CPU timed)    | %9.3f GB/s | %8.3f ms | Overhead: %.3f ms\n", totalBandwidthGbs, totalCpuTime,
+               totalCpuTime - maxGpuTime);
       }
       else
       {
@@ -362,10 +397,12 @@ void DisplayUsage(char const* cmdName)
   printf("Usage: %s configFile <N>\n", cmdName);
 
   printf("  configFile: File containing Links to execute (see below for format)\n");
+  printf("              Specifying \"p2p\" as the configFile will execute a peer to peer benchmark (3rd argument used as # CUs to use)\n");
   printf("  N         : (Optional) Number of bytes to transfer per link.\n");
   printf("              If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
   printf("              If 0 is specified, a range of Ns will be benchmarked\n");
   printf("              If a negative number is specified, a configFile gets generated with this number as default number of CUs per link\n");
+  printf("              May append a suffix ('K', 'M', 'G') for kilobytes / megabytes / gigabytes\n");
   printf("\n");
   printf("Configfile Format:\n");
   printf("==================\n");
@@ -402,12 +439,13 @@ void DisplayUsage(char const* cmdName)
   printf("\n");
   printf("Examples:\n");
   printf("1 4 (G0->G0->G1)             Single Link that uses 4 CUs on GPU 0 that reads memory from GPU 0 and copies it to memory on GPU 1\n");
-  printf("1 4 (G1->C0->G0)             Single Link that uses 4 CUs on GPU 0 that reads memory from CPU 1 and copies it to memory on GPU 0\n");
+  printf("1 4 (G1->C0->G0)             Single Link that uses CPU 0 to read memory from GPU 1 and then copies it to memory on GPU 0\n");
   printf("1 4 (C0->G2->G2)             Single Link that uses 4 CUs on GPU 2 that reads memory from CPU 0 and copies it to memory on GPU 2\n");
   printf("2 4 G0->G0->G1 G1->G1->G0    Runs 2 Links in parallel.  GPU 0 - > GPU1, and GP1 -> GPU 0, each with 4 CUs\n");
   printf("-2 (G0 G0 G1 4) (G1 G1 G0 2) Runs 2 Links in parallel.  GPU 0 - > GPU 1 using four CUs, and GPU1 -> GPU 0 using two CUs\n");
   printf("\n");
   printf("Round brackets and arrows' ->' may be included for human clarity, but will be ignored and are unnecessary\n");
+  printf("Lines starting with # will be ignored. Lines starting with ## will be echoed to output\n");
   printf("\n");
 
   EnvVars::DisplayUsage();
@@ -514,7 +552,7 @@ void GenerateConfigFile(char const* cfgFile, int numBlocks)
   fprintf(fp, "# GPU 0 Gather\n");
   fprintf(fp, "%d %d", numGpuDevices-1, numBlocks);
   for (int i = 1; i < numGpuDevices; i++)
-    fprintf(fp, " (G%d->G%d->G%d)", 0, i, 0);
+    fprintf(fp, " (G%d->G%d->G%d)", i, 0, 0);
   fprintf(fp, "\n\n");
 
   // Full stress test
@@ -528,22 +566,48 @@ void GenerateConfigFile(char const* cfgFile, int numBlocks)
     }
   fprintf(fp, "\n\n");
 
+  // All single-hop XGMI links
+  int numSingleHopXgmiLinks = 0;
+  for (int i = 0; i < numGpuDevices; i++)
+    for (int j = 0; j < numGpuDevices; j++)
+    {
+      if (i == j) continue;
+      uint32_t linkType, hopCount;
+      HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
+      if (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI && hopCount == 1) numSingleHopXgmiLinks++;
+    }
+  if (numSingleHopXgmiLinks > 0)
+  {
+    fprintf(fp, "# All single-hop links\n");
+    fprintf(fp, "%d %d", numSingleHopXgmiLinks, numBlocks);
+    for (int i = 0; i < numGpuDevices; i++)
+      for (int j = 0; j < numGpuDevices; j++)
+      {
+        if (i == j) continue;
+        uint32_t linkType, hopCount;
+        HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
+        if (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI && hopCount == 1)
+        {
+          fprintf(fp, " (G%d G%d F%d)", i, i, j);
+        }
+      }
+    fprintf(fp, "\n\n");
+  }
   fclose(fp);
 }
 
 void DisplayTopology()
 {
-  printf("\nDetected topology:\n");
   int numGpuDevices;
   HIP_CALL(hipGetDeviceCount(&numGpuDevices));
-
+  printf("\nDetected topology: %d CPU NUMA node(s)   %d GPU device(s)\n", numa_num_configured_nodes(), numGpuDevices);
   printf("        |");
   for (int j = 0; j < numGpuDevices; j++)
     printf(" GPU %02d |", j);
-  printf(" PCIe Bus ID\n");
+  printf(" PCIe Bus ID  | Closest NUMA\n");
   for (int j = 0; j <= numGpuDevices; j++)
     printf("--------+");
-  printf("-------------\n");
+  printf("--------------+-------------\n");
 
   char pciBusId[20];
   for (int i = 0; i < numGpuDevices; i++)
@@ -567,7 +631,7 @@ void DisplayTopology()
       }
     }
     HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, i));
-    printf(" %s\n", pciBusId);
+    printf(" %11s |  %d  \n", pciBusId, GetClosestNumaNode(i));
   }
 }
 
@@ -650,7 +714,7 @@ void ParseMemType(std::string const& token, int const numCpus, int const numGpus
 void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
 {
   // Replace any round brackets or '->' with spaces,
-  for (int i = 0; line[i]; i++)
+  for (int i = 1; line[i]; i++)
     if (line[i] == '(' || line[i] == ')' || line[i] == '-' || line[i] == '>' ) line[i] = ' ';
 
   links.clear();
@@ -670,7 +734,7 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
     // Method 1: Take in triples (srcMem, exeMem, dstMem)
     int numBlocksToUse;
     iss >> numBlocksToUse;
-    if (numBlocksToUse <= 0)
+    if (numBlocksToUse <= 0 || iss.fail())
     {
       printf("Parsing error: Number of blocks to use (%d) must be greater than 0\n", numBlocksToUse);
       exit(1);
@@ -679,13 +743,19 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
     for (int i = 0; i < numLinks; i++)
     {
       iss >> srcMem >> exeMem >> dstMem;
+      if (iss.fail())
+      {
+        printf("Parsing error: Unable to read valid Link triplet (possibly missing a SRC or EXE or DST)\n");
+        exit(1);
+      }
       ParseMemType(srcMem, numCpus, numGpus, &links[i].srcMemType, &links[i].srcIndex);
       ParseMemType(exeMem, numCpus, numGpus, &links[i].exeMemType, &links[i].exeIndex);
       ParseMemType(dstMem, numCpus, numGpus, &links[i].dstMemType, &links[i].dstIndex);
       links[i].numBlocksToUse = numBlocksToUse;
       if (links[i].exeMemType != MEM_CPU && links[i].exeMemType != MEM_GPU)
       {
-        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G')\n");
+        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G'), (from (%s->%s->%s %d))\n",
+               srcMem.c_str(), exeMem.c_str(), dstMem.c_str(), links[i].numBlocksToUse);
         exit(1);
       }
     }
@@ -699,15 +769,20 @@ void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links)
     for (int i = 0; i < numLinks; i++)
     {
       iss >> srcMem >> exeMem >> dstMem >> links[i].numBlocksToUse;
+      if (iss.fail())
+      {
+        printf("Parsing error: Unable to read valid Link quadruple (possibly missing a SRC or EXE or DST or #CU)\n");
+        exit(1);
+      }
       ParseMemType(srcMem, numCpus, numGpus, &links[i].srcMemType, &links[i].srcIndex);
       ParseMemType(exeMem, numCpus, numGpus, &links[i].exeMemType, &links[i].exeIndex);
       ParseMemType(dstMem, numCpus, numGpus, &links[i].dstMemType, &links[i].dstIndex);
-      if (links[i].exeMemType != MEM_CPU || links[i].exeMemType != MEM_GPU)
+      if (links[i].exeMemType != MEM_CPU && links[i].exeMemType != MEM_GPU)
       {
-        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G')\n");
+        printf("[ERROR] Executor must either be CPU ('C') or GPU ('G'), (from (%s->%s->%s %d))\n"
+,               srcMem.c_str(), exeMem.c_str(), dstMem.c_str(), links[i].numBlocksToUse);
         exit(1);
       }
-
     }
   }
 }
@@ -822,8 +897,8 @@ void CheckPages(char* array, size_t numBytes, int targetId)
   if (mistakeCount > 0)
   {
     printf("[ERROR] %lu out of %lu pages for memory allocation were not on NUMA node %d\n", mistakeCount, numPages, targetId);
-    // NOTE: Some older versions of HIP do not properly respect NUMA policy so avoid failing for now
-    // exit(1);
+    printf("[ERROR] Ensure up-to-date ROCm is installed\n");
+    exit(1);
   }
 }
 
@@ -974,7 +1049,7 @@ void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link)
       hipExtLaunchKernelGGL(ev.useMemset ? GpuMemsetKernel : GpuCopyKernel,
                             dim3(link.numBlocksToUse, 1, 1),
                             dim3(BLOCKSIZE, 1, 1),
-                            0, link.stream,
+                            ev.sharedMemBytes, link.stream,
                             (ev.combineTiming && recordStart) ? link.startEvent : NULL,
                             (ev.combineTiming && recordStop)  ? link.stopEvent : NULL,
                             0, link.blockParam);
@@ -1027,4 +1102,185 @@ void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link)
     if (iteration >= 0)
       link.totalTime += (std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count() * 1000.0);
   }
+}
+
+void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse)
+{
+  // Collect the number of available CPUs/GPUs on this machine
+  int numGpus;
+  HIP_CALL(hipGetDeviceCount(&numGpus));
+  int const numCpus = numa_num_configured_nodes();
+  int const numDevices = numCpus + numGpus;
+
+  // Enable peer to peer for each GPU
+  for (int i = 0; i < numGpus; i++)
+    for (int j = 0; j < numGpus; j++)
+      if (i != j) EnablePeerAccess(i, j);
+
+  printf("Performing copies in each direction of %lu bytes\n", N * sizeof(float));
+  printf("Using %d threads per NUMA node for CPU copies\n", ev.numCpuPerLink);
+  printf("Using %d CUs per transfer\n", numBlocksToUse);
+
+  // Perform unidirectional / bidirectional
+  for (int readMode = 0; readMode < 2; readMode++)
+  {
+    for (int isBidirectional = 0; isBidirectional <= 1; isBidirectional++)
+    {
+      // Print header
+      printf("%sdirectional copy peak bandwidth GB/s [%s read / %s write]\n", isBidirectional ? "Bi" : "Uni",
+             readMode == 0 ? "Local" : "Remote",
+             readMode == 0 ? "Remote" : "Local");
+      printf("%10s", "D/D");
+      for (int i = 0; i < numCpus; i++)
+        printf("%7s %02d", "CPU", i);
+      for (int i = 0; i < numGpus; i++)
+        printf("%7s %02d", "GPU", i);
+      printf("\n");
+
+      // Loop over all possible src/dst pairs
+      for (int src = 0; src < numDevices; src++)
+      {
+        MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
+        int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
+        printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
+        for (int dst = 0; dst < numDevices; dst++)
+        {
+          MemType const& dstMemType = (dst < numCpus ? MEM_CPU : MEM_GPU);
+          int dstIndex = (dstMemType == MEM_CPU ? dst : dst - numCpus);
+          double bandwidth = GetPeakBandwidth(ev, N, isBidirectional, srcMemType, srcIndex, dstMemType, dstIndex, readMode);
+          if (bandwidth == 0)
+            printf("%10s", "N/A");
+          else
+            printf("%10.2f", bandwidth);
+          fflush(stdout);
+        }
+        printf("\n");
+      }
+      printf("\n");
+    }
+  }
+}
+
+double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
+                        MemType srcMemType, int srcIndex,
+                        MemType dstMemType, int dstIndex,
+                        int readMode)
+{
+  Link links[2];
+  int const initOffset = ev.byteOffset / sizeof(float);
+
+  // Skip bidirectional on same device
+  if (isBidirectional && srcMemType == dstMemType && srcIndex == dstIndex) return 0.0f;
+
+  // Prepare Links
+  links[0].srcMemType = links[1].dstMemType = srcMemType;
+  links[0].srcIndex   = links[1].dstIndex   = srcIndex;
+  links[0].dstMemType = links[1].srcMemType = dstMemType;
+  links[0].dstIndex   = links[1].srcIndex   = dstIndex;
+  // Either perform local read / remote write, or remote read / local write
+  links[0].exeMemType = (readMode == 0 ? srcMemType : dstMemType);
+  links[0].exeIndex   = (readMode == 0 ? srcIndex   : dstIndex);
+  links[1].exeMemType = (readMode == 0 ? dstMemType : srcMemType);
+  links[1].exeIndex   = (readMode == 0 ? dstIndex   : srcIndex);
+
+  for (int i = 0; i <= isBidirectional; i++)
+  {
+    AllocateMemory(links[i].srcMemType, links[i].srcIndex, N * sizeof(float) + ev.byteOffset, &links[i].srcMem);
+    AllocateMemory(links[i].dstMemType, links[i].dstIndex, N * sizeof(float) + ev.byteOffset, &links[i].dstMem);
+    links[i].totalTime = 0.0;
+
+    CheckOrFill(MODE_FILL, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].srcMem + initOffset);
+    if (links[i].exeMemType == MEM_GPU)
+    {
+      HIP_CALL(hipDeviceGetAttribute(&links[i].numBlocksToUse, hipDeviceAttributeMultiprocessorCount, links[i].exeIndex));
+      HIP_CALL(hipSetDevice(links[i].exeIndex));
+      HIP_CALL(hipEventCreate(&links[i].startEvent));
+      HIP_CALL(hipEventCreate(&links[i].stopEvent));
+      HIP_CALL(hipMalloc((void**)&links[i].blockParam, sizeof(BlockParam) * links[i].numBlocksToUse));
+      HIP_CALL(hipStreamCreate(&links[i].stream));
+
+      size_t assigned = 0;
+      int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)links[i].numBlocksToUse);
+      for (int j = 0; j < links[i].numBlocksToUse; j++)
+      {
+        BlockParam param;
+        int blocksLeft = std::max(0, maxNumBlocksToUse - j);
+        size_t leftover = N - assigned;
+        size_t roundedN = (leftover + 31) / 32;
+        param.N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+        param.src = links[i].srcMem + assigned + initOffset;
+        param.dst = links[i].dstMem + assigned + initOffset;
+        assigned += param.N;
+
+        HIP_CALL(hipMemcpy(&links[i].blockParam[j], &param, sizeof(BlockParam), hipMemcpyHostToDevice));
+      }
+    }
+    else
+    {
+      links[i].blockParam = (BlockParam*)malloc(ev.numCpuPerLink * sizeof(BlockParam));
+      // For CPU-based copy, divded based on the number of child threads
+      size_t assigned = 0;
+      int maxNumBlocksToUse = std::min((N + 31) / 32, (size_t)ev.numCpuPerLink);
+      for (int j = 0; j < ev.numCpuPerLink; j++)
+      {
+        int blocksLeft = std::max(0, maxNumBlocksToUse - j);
+        size_t leftover = N - assigned;
+        size_t roundedN = (leftover + 31) / 32;
+        links[i].blockParam[j].N = blocksLeft ? std::min(leftover, ((roundedN / blocksLeft) * 32)) : 0;
+        links[i].blockParam[j].src = links[i].srcMem + assigned + initOffset;
+        links[i].blockParam[j].dst = links[i].dstMem + assigned + initOffset;
+        assigned += links[i].blockParam[j].N;
+      }
+    }
+  }
+
+  std::stack<std::thread> threads;
+
+  // Perform iteration
+  for (int iteration = -ev.numWarmups; iteration < ev.numIterations; iteration++)
+  {
+    // Perform timed iterations
+    for (int i = 0; i <= isBidirectional; i++)
+      threads.push(std::thread(RunLink, std::ref(ev), N, iteration, std::ref(links[i])));
+
+    // Wait for all threads to finish
+    for (int i = 0; i <= isBidirectional; i++)
+    {
+      threads.top().join();
+      threads.pop();
+    }
+  }
+
+  // Validate that each link has transferred correctly
+  for (int i = 0; i <= isBidirectional; i++)
+    CheckOrFill(MODE_CHECK, N, ev.useMemset, ev.useHipCall, ev.fillPattern, links[i].dstMem + initOffset);
+
+  // Collect aggregate bandwidth
+  double totalBandwidth = 0;
+  for (int i = 0; i <= isBidirectional; i++)
+  {
+    double linkDurationMsec = links[i].totalTime / (1.0 * ev.numIterations);
+    double linkBandwidthGbs = (N * sizeof(float) / 1.0E9) / linkDurationMsec * 1000.0f;
+    totalBandwidth += linkBandwidthGbs;
+  }
+
+  // Release GPU memory
+  for (int i = 0; i <= isBidirectional; i++)
+  {
+    DeallocateMemory(links[i].srcMemType, links[i].srcIndex, links[i].srcMem);
+    DeallocateMemory(links[i].dstMemType, links[i].dstIndex, links[i].dstMem);
+
+    if (links[i].exeMemType == MEM_GPU)
+      {
+        HIP_CALL(hipEventDestroy(links[i].startEvent));
+        HIP_CALL(hipEventDestroy(links[i].stopEvent));
+        HIP_CALL(hipStreamDestroy(links[i].stream));
+        HIP_CALL(hipFree(links[i].blockParam));
+      }
+      else if (links[i].exeMemType == MEM_CPU)
+      {
+        free(links[i].blockParam);
+      }
+  }
+  return totalBandwidth;
 }

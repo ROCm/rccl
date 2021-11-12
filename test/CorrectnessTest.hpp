@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <math.h>
 
 #include "rccl.h"
 #include "../include/rccl_bfloat16.h"
@@ -558,7 +559,8 @@ dropback:
                 {ncclSum,  "sum"},
                 {ncclProd, "prod"},
                 {ncclMax,  "max"},
-                {ncclMin,  "min"}
+                {ncclMin,  "min"},
+                {ncclAvg,  "avg"}
             };
             std::map<ncclDataType_t, std::string> dataTypeStrings
             {
@@ -687,15 +689,15 @@ dropback:
             // NOTE: Currently half-precision float tests are unsupported due to half being supported
             //       on GPU only and not host
 
-            // Fills input  data[i][j] with (i + j) % 6
+            // Fills input  data[i][j] with (i + j) % 256
             // - Keeping range small to reduce likelihood of overflow
             // - Sticking with floating points values that are perfectly representable
             for (int i = 0; i < dataset.numDevices; i++)
             {
                 for (int j = 0; j < dataset.NumBytes(ncclInputBuffer)/DataTypeToBytes(dataset.dataType); j++)
                 {
-                    int    valueI = (i + j) % 6;
-                    float  valueF = (float)valueI;
+                    int    valueI = (i + j) % 256;
+                    double  valueF = 1.0L/((double)valueI+1.0L);
 
                     switch (dataset.dataType)
                     {
@@ -732,6 +734,36 @@ dropback:
             {
                 HIP_CALL(hipSetDevice(i));
                 HIP_CALL(hipStreamSynchronize(streams[i]));
+            }
+        }
+
+        static void Average(Dataset const& dataset, int8_t* resultI1)
+        {
+            uint8_t*  resultU1 = (uint8_t  *)resultI1;
+            int32_t*  resultI4 = (int32_t  *)resultI1;
+            uint32_t* resultU4 = (uint32_t *)resultI1;
+            int64_t*  resultI8 = (int64_t  *)resultI1;
+            uint64_t* resultU8 = (uint64_t *)resultI1;
+            float*    resultF4 = (float    *)resultI1;
+            double*   resultF8 = (double   *)resultI1;
+            rccl_bfloat16* resultB2 = (rccl_bfloat16 *)resultI1;
+            for (int j = 0; j < dataset.numElements; j++)
+            {
+                switch (dataset.dataType)
+                {
+                case ncclInt8:     resultI1[j] = resultI1[j]/dataset.numDevices; break;
+                case ncclUint8:    resultU1[j] = resultU1[j]/dataset.numDevices; break;
+                case ncclInt32:    resultI4[j] = resultI4[j]/dataset.numDevices; break;
+                case ncclUint32:   resultU4[j] = resultU4[j]/dataset.numDevices; break;
+                case ncclInt64:    resultI8[j] = resultI8[j]/dataset.numDevices; break;
+                case ncclUint64:   resultU8[j] = resultU8[j]/dataset.numDevices; break;
+                case ncclFloat32:  resultF4[j] = resultF4[j]/dataset.numDevices; break;
+                case ncclFloat64:  resultF8[j] = resultF8[j]/dataset.numDevices; break;
+                case ncclBfloat16: resultB2[j] = rccl_bfloat16((float)(resultB2[j])/dataset.numDevices); break;
+                default:
+                    fprintf(stderr, "[ERROR] Unsupported datatype\n");
+                    exit(0);
+                }
             }
         }
 
@@ -778,9 +810,9 @@ dropback:
                     case ncclUint32:  isMatch &= (outputU4[j] == expectedU4[j]); break;
                     case ncclInt64:   isMatch &= (outputI8[j] == expectedI8[j]); break;
                     case ncclUint64:  isMatch &= (outputU8[j] == expectedU8[j]); break;
-                    case ncclFloat32: isMatch &= (outputF4[j] == expectedF4[j]); break;
-                    case ncclFloat64: isMatch &= (outputF8[j] == expectedF8[j]); break;
-                    case ncclBfloat16: isMatch &= (outputB2[j] == expectedB2[j]); break;
+                    case ncclFloat32: isMatch &= (fabs(outputF4[j] - expectedF4[j]) < 1e-5); break;
+                    case ncclFloat64: isMatch &= (fabs(outputF8[j] - expectedF8[j]) < 1e-12); break;
+                    case ncclBfloat16: isMatch &= (fabs((float)outputB2[j] - (float)expectedB2[j]) < 5e-2); break;
                     default:
                         fprintf(stderr, "[ERROR] Unsupported datatype\n");
                         exit(0);

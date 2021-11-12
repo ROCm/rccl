@@ -8,10 +8,6 @@
 #include "comm.h"
 #include "graph.h"
 #include "utils.h"
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-#include <hsa/hsa.h>
-#include <hsa/hsa_ext_amd.h>
-#endif
 #include "bootstrap.h"
 
 struct p2pConnectInfo {
@@ -66,8 +62,8 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
   }
 #endif
 
-  // Rule out different nodes
-  if (info1->hostHash != info2->hostHash) {
+  // Rule out different nodes / isolated containers
+  if (info1->hostHash != info2->hostHash || info1->shmDev != info2->shmDev) {
     *ret = 0;
     return ncclSuccess;
   }
@@ -173,12 +169,12 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   NCCLCHECK(p2pGetInfo(comm->topo, myInfo, peerInfo, &useRead, &intermediateRank));
 
   resources->next_hdp_reg = 0;
-  uint32_t linktype, hops;
-  if (hipExtGetLinkTypeAndHopCount(myInfo->cudaDev, peerInfo->cudaDev, &linktype, &hops) != hipSuccess) {
+  bool isXGMI;
+  if (ncclTopoGetLinkType(comm->topo, myInfo->cudaDev, peerInfo->cudaDev, &isXGMI) != ncclSuccess) {
     INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", channelId, myInfo->rank, peerInfo->rank);
     return ncclInternalError;
   }
-  if (linktype != HSA_AMD_LINK_INFO_TYPE_XGMI) {
+  if (!isXGMI) {
     CUDACHECK(hipDeviceGetAttribute((int*)&resources->next_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
     TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", channelId, myInfo->rank, peerInfo->rank, resources->next_hdp_reg);
   }
@@ -200,19 +196,19 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     info.rank = myInfo->rank;
     if (myInfo->pidHash == peerInfo->pidHash) {
       if (info.read == 0) send->conn.direct |= NCCL_DIRECT_GPU;
-      INFO(NCCL_INIT|NCCL_P2P, "Channel %02d : %d[%lx] -> %d[%lx] via P2P/direct pointer%s",
-          channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr);
+      INFO(NCCL_INIT|NCCL_P2P, "Channel %02d : %d[%lx] -> %d[%lx] via P2P/direct pointer%s comm %p nRanks %02d",
+          channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, comm, comm->nRanks);
     } else {
       CUDACHECK(hipIpcGetMemHandle(&info.devIpc, info.directPtr));
-      INFO(NCCL_INIT|NCCL_P2P,"Channel %02d : %d[%lx] -> %d[%lx] via P2P/IPC%s",
-          channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr);
+      INFO(NCCL_INIT|NCCL_P2P,"Channel %02d : %d[%lx] -> %d[%lx] via P2P/IPC%s comm %p nRanks %02d",
+          channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, comm, comm->nRanks);
     }
   } else {
     NCCLCHECK(bootstrapRemAlloc(sendSize, intermediateRank, resources->bootstrap, &resources->remoteId, &info.devIpc, &info.directPtr));
     info.rank = intermediateRank;
-    INFO(NCCL_INIT|NCCL_P2P, "Channel %02d : %d[%lx] -> %d[%lx] via P2P/indirect/%d[%lx]%s",
+    INFO(NCCL_INIT|NCCL_P2P, "Channel %02d : %d[%lx] -> %d[%lx] via P2P/indirect/%d[%lx]%s comm %p nRanks %02d",
         channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, intermediateRank,
-	comm->peerInfo[intermediateRank].busId, useReadStr);
+	comm->peerInfo[intermediateRank].busId, useReadStr, comm, comm->nRanks);
   }
   resources->memRank = info.rank;
 
