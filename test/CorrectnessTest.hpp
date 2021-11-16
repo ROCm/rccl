@@ -812,7 +812,7 @@ dropback:
                     case ncclUint64:  isMatch &= (outputU8[j] == expectedU8[j]); break;
                     case ncclFloat32: isMatch &= (fabs(outputF4[j] - expectedF4[j]) < 1e-5); break;
                     case ncclFloat64: isMatch &= (fabs(outputF8[j] - expectedF8[j]) < 1e-12); break;
-                    case ncclBfloat16: isMatch &= (fabs((float)outputB2[j] - (float)expectedB2[j]) < 5e-2); break;
+                    case ncclBfloat16: isMatch &= (fabs((float)outputB2[j] - (float)expectedB2[j]) < 9e-2); break;
                     default:
                         fprintf(stderr, "[ERROR] Unsupported datatype\n");
                         exit(0);
