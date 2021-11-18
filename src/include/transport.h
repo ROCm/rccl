@@ -29,6 +29,7 @@ struct ncclPeerInfo {
   int rank;
   int cudaDev;
   int gdrSupport;
+  bool hasFineGrain;
   uint64_t hostHash;
   uint64_t pidHash;
   dev_t shmDev;
