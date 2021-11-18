@@ -205,9 +205,9 @@ fi
 check_exit_code "$?"
 
 if ($build_tests) || (($run_tests) && [[ ! -f ./test/UnitTests ]]); then
-    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$ROCM_PATH ../../.
+    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
 else
-    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$ROCM_PATH ../../.
+    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
 fi
 check_exit_code "$?"
 
