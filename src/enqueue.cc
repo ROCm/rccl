@@ -186,10 +186,6 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       // Except P2P or aggregation cases
       struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
       struct ncclWorkElem* elem = work->elems;
-      if (!usingCudaGraph) {
-        params->func = (void *)ncclKerns[0];
-        memcpy(&comm->args, elem, sizeof(struct ncclWorkElem));
-      }
       if (elem->funcIndex != FUNC_INDEX_P2P && eqInfo->elemList->count() == 1) elem->active = 0;
     }
 

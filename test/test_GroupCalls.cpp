@@ -26,6 +26,8 @@ namespace CorrectnessTests
         ncclFuncs.push_back(ncclCollReduce);
         ncclFuncs.push_back(ncclCollReduceScatter);
 
+        // Adjust numElements to be multiple of numDevices
+        numElements = (numElements/numDevices)*numDevices;
         for (int i = 0; i < datasets.size(); i++)
         {
             datasets[i].Initialize(numDevices, numElements, dataType, inPlace, ncclFuncs[i]);
@@ -120,7 +122,7 @@ namespace CorrectnessTests
                                 // Number of elements
                                 testing::Values(2520, 3026520),
                                 // Number of devices
-                                testing::Values(2,3,4,5,6,7,8),
+                                testing::Range(2,(GTESTS_NUM_GPUS+1)),
                                 // In-place or not
                                 testing::Values(false, true),
                                 testing::Values("RCCL_ENABLE_CLIQUE=0", "RCCL_ENABLE_CLIQUE=1")),
