@@ -407,8 +407,11 @@ ncclResult_t ncclTopoGetXmlFromCpu(struct ncclXmlNode* cpuNode, struct ncclXml* 
     union {
       struct {
         // CPUID 0 String register order
+        // cppcheck-suppress unusedStructMember
         uint32_t ebx;
+        // cppcheck-suppress unusedStructMember
         uint32_t edx;
+        // cppcheck-suppress unusedStructMember
         uint32_t ecx;
       };
       char vendor[12];
@@ -425,15 +428,20 @@ ncclResult_t ncclTopoGetXmlFromCpu(struct ncclXmlNode* cpuNode, struct ncclXml* 
   if (index == -1) {
     union {
       struct {
+        // cppcheck-suppress unusedStructMember
         unsigned steppingId:4;
         unsigned modelId:4;
         unsigned familyId:4;
+        // cppcheck-suppress unusedStructMember
         unsigned processorType:2;
+        // cppcheck-suppress unusedStructMember
         unsigned resv0:2;
         unsigned extModelId:4;
         unsigned extFamilyId:8;
+        // cppcheck-suppress unusedStructMember
         unsigned resv1:4;
       };
+      // cppcheck-suppress unusedStructMember
       uint32_t val;
     } cpuid1;
     asm volatile("cpuid" : "=a" (cpuid1.val) : "a" (1) : "memory");

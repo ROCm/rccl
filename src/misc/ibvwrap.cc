@@ -199,7 +199,7 @@ ncclResult_t wrap_ibv_get_device_list(struct ibv_device ***ret, int *num_devices
 ncclResult_t wrap_ibv_free_device_list(struct ibv_device **list) {
   IBV_PASSTHRU(ibv_internal_free_device_list, ibv_internal_free_device_list(list));
 }
-
+// cppcheck-suppress unusedFunction
 const char *wrap_ibv_get_device_name(struct ibv_device *device) {
   if (ibv_internal_get_device_name == NULL) {
     WARN("lib wrapper not initialized.");
@@ -235,7 +235,7 @@ ncclResult_t wrap_ibv_query_port(struct ibv_context *context, uint8_t port_num, 
 ncclResult_t wrap_ibv_query_gid(struct ibv_context *context, uint8_t port_num, int index, union ibv_gid *gid) {
   IBV_INT_CHECK_RET_ERRNO(ibv_internal_query_gid, ibv_internal_query_gid(context, port_num, index, gid), 0, "ibv_query_gid");
 }
-
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_ibv_query_qp(struct ibv_qp *qp, struct ibv_qp_attr *attr, int attr_mask, struct ibv_qp_init_attr *init_attr) {
   IBV_INT_CHECK_RET_ERRNO(ibv_internal_query_qp, ibv_internal_query_qp(qp, attr, attr_mask, init_attr), 0, "ibv_query_qp");
 }
@@ -252,6 +252,7 @@ ncclResult_t wrap_ibv_reg_mr(struct ibv_mr **ret, struct ibv_pd *pd, void *addr,
   IBV_PTR_CHECK(ibv_internal_reg_mr, ibv_internal_reg_mr(pd, addr, length, access), *ret, NULL, "ibv_reg_mr");
 }
 
+// cppcheck-suppress unusedFunction
 struct ibv_mr * wrap_direct_ibv_reg_mr(struct ibv_pd *pd, void *addr, size_t length, int access) {
   if (ibv_internal_reg_mr == NULL) {
     WARN("lib wrapper not initialized.");

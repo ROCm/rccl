@@ -242,6 +242,7 @@ ncclResult_t ncclSocketGetNsockNthread(int dev, int* ns, int* nt) {
       goto end;
     }
     char vendor[7];
+    // cppcheck-suppress terminateStrncpy
     strncpy(vendor, "0x0000", 7);
     int len;
     SYSCHECKVAL(read(fd, vendor, 6), "read", len);
@@ -428,10 +429,11 @@ ncclResult_t ncclSocketTest(void* request, int* done, int* size) {
     r->offset = 0;
     r->used = 2; // done exchanging size
     // divide into subtasks
-    int chunkOffset = 0, i = 0;
+    int i = 0;
     if (r->comm->nSocks > 0) {
       // each request can be divided up to nSocks tasks
       int taskSize = std::max(MIN_CHUNKSIZE, DIVUP(r->size, r->comm->nSocks));
+      int chunkOffset = 0;
       while (chunkOffset < r->size) {
         int chunkSize = std::min(taskSize, r->size-chunkOffset);
         NCCLCHECK(ncclSocketGetTask(r->comm, r->op, (char*)(r->data)+chunkOffset, chunkSize, r->tasks+i++));

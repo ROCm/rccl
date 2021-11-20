@@ -114,7 +114,7 @@ private:
 
     void updateHistory(const iterator& it)
     {
-        if (m_lruHistory.size() > 0)
+        if (!m_lruHistory.empty())
         {
             m_lruHistory.splice(m_lruHistory.end(), m_lruHistory, (it->second).second);
         }

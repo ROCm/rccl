@@ -68,6 +68,7 @@ ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* 
   return ncclSuccess;
 }
 
+/*
 void dumpData(struct ncclConnect* data, int ndata) {
   for (int n=0; n<ndata; n++) {
     printf("[%d] ", n);
@@ -76,6 +77,7 @@ void dumpData(struct ncclConnect* data, int ndata) {
     printf("\n");
   }
 }
+*/
 
 ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex) {
 #if CUDART_VERSION >= 11030
@@ -235,6 +237,7 @@ int ncclTransportCollNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collN
     TRACE(NCCL_INIT, "CollNet [recv] : rank %d collNetRank %d collNetNranks %d sent connect to rank %d", rank, rankInCollNet, nMasters, masterPeer);
   }
   if (support) fail = 0;
+// cppcheck-suppress unusedLabel
 cleanup:
   if (allConnects != NULL) free(allConnects);
   if (masterConnects != NULL) free(masterConnects);

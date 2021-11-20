@@ -96,6 +96,7 @@ uint64_t getHostHash(void) {
 
   if ((hostId = getenv("NCCL_HOSTID")) != NULL) {
     INFO(NCCL_ENV, "NCCL_HOSTID set by environment to %s", hostId);
+    // cppcheck-suppress terminateStrncpy
     strncpy(hostHash, hostId, sizeof(hostHash));
   } else {
     FILE *file = fopen(HOSTID_FILE, "r");
@@ -105,8 +106,8 @@ uint64_t getHostHash(void) {
         strncpy(hostHash+offset, p, sizeof(hostHash)-offset-1);
         free(p);
       }
+      fclose(file);
     }
-    fclose(file);
   }
 
   // Make sure the string is terminated

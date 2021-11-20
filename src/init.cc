@@ -237,7 +237,6 @@ void *ncclCommThreadMain(void *arg) {
       if (type == ncclCollTraceNotReady)
         break;
       char line[1024];
-      int offset = 0;
       uint16_t fIdx = td->funcIndex;
       #define VEGA_GPU_RTC_FREQUENCY 2.5E7
       if (type == ncclCollTraceDataType) {
@@ -247,7 +246,7 @@ void *ncclCommThreadMain(void *arg) {
       } else {
         sprintf(line, "## [%12.6f] [%02d:%02d] %06lx",
           (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid, td->opCount);
-        offset = strlen(line);
+        int offset = strlen(line);
         switch (type) {
           case ncclCollTraceKernelLaunchType:
             sprintf(line+offset, " KL HWID %8x %s ",
@@ -1086,7 +1085,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     struct ncclTree* tree = &comm->channels[c].tree;
     snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
-    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev, 
+    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
          comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
   }
   line[1023] = '\0';
@@ -1174,7 +1173,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 1), ret, collnet_cleanup);
     INFO(NCCL_INIT, "rank %d Connected CollNet comm %p nRanks %02d", rank, comm, comm->nRanks);
-
+// cppcheck-suppress unusedLabel
 collnet_cleanup:
     free(heads);
     if (ret != ncclSuccess) {
@@ -1226,6 +1225,7 @@ collnet_cleanup:
 
   // We should have allocated all buffers, collective fifos, ... we can
   // restore the affinity.
+// cppcheck-suppress unusedLabel
 affinity_restore:
   if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &affinitySave);
   if (ret != ncclSuccess) return ret;
@@ -1253,6 +1253,7 @@ ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId 
   INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx used %ld bytes - Init COMPLETE", *newcomm, myrank, nranks, (*newcomm)->cudaDev, (*newcomm)->busId, allocTracker[(*newcomm)->cudaDev].totalAllocSize);
 
   return ncclSuccess;
+// cppcheck-suppress unusedLabel
 cleanup:
   if ((*newcomm) && (*newcomm)->bootstrap) bootstrapAbort((*newcomm)->bootstrap);
   *newcomm = NULL;

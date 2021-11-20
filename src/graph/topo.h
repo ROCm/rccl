@@ -141,7 +141,7 @@ struct ncclTopoSystem {
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
 ncclResult_t ncclTopoCreateNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
-ncclResult_t ncclTopoRemoveNode(struct ncclTopoSystem* system, int type, int id);
+ncclResult_t ncclTopoRemoveNode(struct ncclTopoSystem* system, int type, int index);
 ncclResult_t ncclTopoConnectNodes(struct ncclTopoNode* node, struct ncclTopoNode* remNode, int type, float width);
 ncclResult_t ncclTopoPrintPaths(struct ncclTopoSystem* system);
 ncclResult_t ncclTopoLoadSystem(const char* xmlTopoFile, struct ncclTopoSystem* system);

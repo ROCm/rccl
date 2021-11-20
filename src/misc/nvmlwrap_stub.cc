@@ -28,10 +28,12 @@ ncclResult_t wrapNvmlDeviceGetIndex(nvmlDevice_t device, unsigned* index) {
   return ncclSuccess;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrapNvmlDeviceGetPciInfo(nvmlDevice_t device, nvmlPciInfo_t* pci) {
   return ncclSystemError;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrapNvmlDeviceGetMinorNumber(nvmlDevice_t device, unsigned int* minorNumber) {
   *minorNumber = 0;
   return ncclSuccess;

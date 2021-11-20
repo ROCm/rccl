@@ -81,7 +81,8 @@ static ncclResult_t allocateArgs(struct ncclComm* comm, struct ncclProxyArgs** a
 #define DEBUG_PROXY_PRINT(...)
 #endif
 
-#define OP_INDEX(op) ((op) ? (op)-state->pools->elems : -1)
+//#define OP_INDEX(op) ((op) ? (op)-state->pools->elems : -1)
+#define OP_INDEX(op) ((op)-state->pools->elems)
 #define OP_SEEN 0x100000
 ncclResult_t dumpProxyState(struct ncclProxyState* state) {
 #ifdef DEBUG_PROXY
@@ -91,7 +92,7 @@ ncclResult_t dumpProxyState(struct ncclProxyState* state) {
       WARN("Active list loop at element %ld", OP_INDEX(op));
     }
     op->idle |= OP_SEEN;
-    printf("[%ld(%ld/%d)]", OP_INDEX(op), op->opCount, op->nsubs);
+    printf("[%ld(%ld/%d)]", OP_INDEX2(op), op->opCount, op->nsubs);
     if (op->nextPeer) {
       printf("(%ld)", OP_INDEX(op->nextPeer));
       struct ncclProxyArgs* n = op->nextPeer;
@@ -158,7 +159,7 @@ static ncclResult_t ProxyAppend(struct ncclProxyState* state, struct ncclProxyAr
       }
       memcpy(proxyAppend->subs+proxyAppend->nsubs, args->subs, sizeof(struct ncclProxySubArgs));
       proxyAppend->nsubs++;
-      args->next = proxyAppend->next;
+      //args->next = proxyAppend->next;
       // Free args as we merged them
       args->next = state->poolFreed;
       state->poolFreed = args;

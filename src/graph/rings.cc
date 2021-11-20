@@ -12,8 +12,8 @@
 void dumpLine(int* values, int nranks, const char* prefix) {
   int prefixlen = strlen(prefix);
   char line[STRLENGTH+1];
-  line[STRLENGTH] = '\0';
   memset(line, ' ', STRLENGTH);
+  line[STRLENGTH] = '\0';
   strncpy(line, prefix, PREFIXLEN);
   for (int i=0; i<nranks && i<MAXWIDTH; i++) sprintf(line+prefixlen+4*i, " %3d", values[i]);
   INFO(NCCL_INIT,"%s", line);

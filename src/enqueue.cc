@@ -104,7 +104,7 @@ size_t ncclKernMaxLocalSize() {
     CUDACHECKGOTO(hipFuncGetAttributes(&attr, (const void*)(ncclKerns[i])), res, error);
     if (attr.localSizeBytes > max) max = attr.localSizeBytes;
   }
-
+// cppcheck-suppress unusedLabel
 error:
   return (res != ncclSuccess) ? 0 : max;
 }
@@ -413,7 +413,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     int ncSwitch = 16;
     bool flag = true;
     while (ncSwitch >= 1 && flag) {
-      while ((flag = info->nBytes < nc*nt*info->comm->channels[0].collTree.nHeads*threadThreshold) && nc > ncSwitch) {
+      while ((flag = (info->nBytes < nc*nt*info->comm->channels[0].collTree.nHeads*threadThreshold)) && nc > ncSwitch) {
         if (nc == ncSwitch+ncSwitch/2) threadThreshold /= 2;
         nc--;
       }
@@ -985,7 +985,7 @@ void HIPRT_CB ncclEnqueueHostSetup(void* arg) {
 
   NCCLCHECKGOTO(setupLaunch(eqInfo, USING_CUDA_GRAPH), ret, cb_end);
   NCCLCHECKGOTO(ncclLaunchProxy(eqInfo), ret, cb_end);
-
+// cppcheck-suppress unusedLabel
 cb_end:
   if (ret != ncclSuccess) {
     WARN("Failure in host setup : %s", ncclGetErrorString(ret));
@@ -1089,7 +1089,7 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     } else {
       NCCLCHECKGOTO(ncclSaveAsyncColl(info), ret, end);
     }
-
+// cppcheck-suppress unusedLabel
 end:
     if (savedDev != -1) CUDACHECK(hipSetDevice(savedDev));
     ncclAsyncErrCheck(ret);

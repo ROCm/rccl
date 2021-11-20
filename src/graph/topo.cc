@@ -34,6 +34,7 @@ const char* topoPathTypeStr[] = { "LOC", "NVL", "NVB", "PIX", "PXB", "PHB", "SYS
 /******************************************************************/
 
 // Get an int64 from a PCI path. For example, sys/class/pci0000:00/0000:00:02.0/0000:02:00.0/ will return 0x000002000.
+/*
 ncclResult_t pciPathToInt64(char* path, int offset, int minOffset, int64_t* id) {
   char* str = path+offset;
   // Remove trailing "/"
@@ -48,6 +49,7 @@ ncclResult_t pciPathToInt64(char* path, int offset, int minOffset, int64_t* id) 
   *id = numid;
   return ncclSuccess;
 }
+*/
 
 static ncclResult_t findLocalCpu(struct ncclTopoNode* node, struct ncclTopoNode** cpu) {
   *cpu = NULL;
@@ -699,7 +701,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
       NCCLCHECK(xmlInitAttrInt(netNode, "port", props.port));
       NCCLCHECK(xmlInitAttrUint64(netNode, "guid", props.guid));
       NCCLCHECK(xmlInitAttrInt(netNode, "maxconn", props.maxComms));
-      NCCLCHECK(xmlInitAttrInt(netNode, "gdr", props.ptrSupport & NCCL_PTR_CUDA ? 1 : 0));
+      NCCLCHECK(xmlInitAttrInt(netNode, "gdr", (props.ptrSupport & NCCL_PTR_CUDA) ? 1 : 0));
       NCCLCHECK(xmlInitAttrInt(netNode, "coll", 1));
     }
   }
@@ -717,7 +719,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
     NCCLCHECK(xmlInitAttrInt(netNode, "port", props.port));
     NCCLCHECK(xmlInitAttrUint64(netNode, "guid", props.guid));
     NCCLCHECK(xmlInitAttrInt(netNode, "maxconn", props.maxComms));
-    NCCLCHECK(xmlInitAttrInt(netNode, "gdr", props.ptrSupport & NCCL_PTR_CUDA ? 1 : 0));
+    NCCLCHECK(xmlInitAttrInt(netNode, "gdr", (props.ptrSupport & NCCL_PTR_CUDA) ? 1 : 0));
   }
 
   // Remove XML branches which don't have a node with keep="1" (typically when importing a topology)
@@ -833,10 +835,12 @@ ncclResult_t ncclTopoGetCpuAffinity(struct ncclTopoSystem* system, int rank, cpu
   return ncclSuccess;
 }
 
+/*
 ncclResult_t ncclTopoGetNetCount(struct ncclTopoSystem* system, int* count) {
   *count = system->nodes[NET].count;
   return ncclSuccess;
 }
+*/
 
 ncclResult_t ncclTopoGetCompCap(struct ncclTopoSystem* system, int* ccMin, int* ccMax) {
   if (system->nodes[GPU].count == 0) return ncclInternalError;

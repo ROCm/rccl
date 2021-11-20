@@ -28,7 +28,7 @@ THE SOFTWARE.
 #define MSG_SIZE 1
 #define MSG_QUEUE_TIMEOUT 60
 
-ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc)
+ncclResult_t MsgQueueGetId(std::string const& name, bool exclusive, mqd_t& mq_desc)
 {
   int flag = (exclusive == true ? O_CREAT | O_EXCL : O_CREAT);
   struct mq_attr attr;
@@ -83,7 +83,7 @@ ncclResult_t MsgQueueWaitUntilEmpty(mqd_t const& mq_desc)
   return ncclSuccess;
 }
 
-ncclResult_t MsgQueueClose(std::string name, mqd_t& mq_desc, bool unlink)
+ncclResult_t MsgQueueClose(std::string const& name, mqd_t& mq_desc, bool unlink)
 {
   if (unlink)
   {
@@ -93,7 +93,7 @@ ncclResult_t MsgQueueClose(std::string name, mqd_t& mq_desc, bool unlink)
   return ncclSuccess;
 }
 
-ncclResult_t MsgQueueUnlink(std::string name)
+ncclResult_t MsgQueueUnlink(std::string const& name)
 {
   std::string mq_name = "/" + name;
   SYSCHECK(mq_unlink(mq_name.c_str()), "mq_unlink");

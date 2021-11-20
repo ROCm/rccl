@@ -53,7 +53,7 @@ template <typename T>
 class ShmObject
 {
 public:
-ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid) :
+ShmObject(size_t size, std::string const& fileName, int rank, int numRanks, int projid) :
   m_shmSize(size),
     m_shmName(fileName),
     m_rank(rank),
@@ -62,7 +62,14 @@ ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid)
     m_alloc(false),
     m_shmPtr(nullptr) {}
 
-  ShmObject() {}
+ShmObject() :
+  m_shmSize(0),
+    m_shmName(""),
+    m_rank(0),
+    m_numRanks(0),
+    m_projid(0),
+    m_alloc(false),
+    m_shmPtr(nullptr) {}
 
   ~ShmObject() {}
 
@@ -82,7 +89,7 @@ ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid)
     return m_shmPtr;
   }
 protected:
-  ncclResult_t BroadcastMessage(mqd_t& mq_desc, bool pass)
+  ncclResult_t BroadcastMessage(mqd_t& mq_desc, bool pass) const
   {
     char msg_text[1];
     msg_text[0] = (pass == 0 ? 'F': 'P');
@@ -102,6 +109,7 @@ protected:
     NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, true));
     return ncclSuccess;
 
+// cppcheck-suppress unusedLabel
 dropback:
     WARN("Root rank unable to broadcast across message queue.  Closing message queue.");
     NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, true));
@@ -112,11 +120,11 @@ dropback:
       template<class U>
         struct OpenTag{};
 
-      ncclResult_t InitIfSemaphore(OpenTag<int> tag);
+      static ncclResult_t InitIfSemaphore(OpenTag<int> tag);
       ncclResult_t InitIfSemaphore(OpenTag<uint32_t> tag);
-      ncclResult_t InitIfSemaphore(OpenTag<hipIpcMemHandle_t> tag);
+      static ncclResult_t InitIfSemaphore(OpenTag<hipIpcMemHandle_t> tag);
       ncclResult_t InitIfSemaphore(OpenTag<sem_t> tag);
-      ncclResult_t InitIfSemaphore(OpenTag<std::pair<hipIpcMemHandle_t,size_t>> tag);
+      static ncclResult_t InitIfSemaphore(OpenTag<std::pair<hipIpcMemHandle_t,size_t>> tag);
 
       size_t      m_shmSize;
       std::string m_shmName;
@@ -134,8 +142,6 @@ ncclResult_t ShmObject<T>::Open()
   if (m_alloc == false)
   {
     int shmFd;
-    int protection = PROT_READ | PROT_WRITE;
-    int visibility = MAP_SHARED;
 
     INFO(NCCL_INIT, "Rank %d Initializing message queue for %s\n", m_rank, m_shmName.c_str());
 
@@ -197,6 +203,7 @@ ncclResult_t ShmObject<T>::Open()
   }
   return ncclSuccess;
 
+// cppcheck-suppress unusedLabel
 dropback:
   WARN("Rank %d failed ShmObject::Open().  Closing message queue.", m_rank);
   NCCLCHECK(MsgQueueClose(m_shmName, mq_desc, false));

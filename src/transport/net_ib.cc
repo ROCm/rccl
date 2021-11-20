@@ -114,6 +114,7 @@ static int ncclIbSpeed(int speed) {
 }
 
 ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
+  // cppcheck-suppress variableScope
   static int shownIbHcaEnv = 0;
   if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
   if (ncclParamIbDisable()) return ncclInternalError;

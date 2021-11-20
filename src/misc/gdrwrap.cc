@@ -48,7 +48,7 @@ pthread_mutex_t gdrLock = PTHREAD_MUTEX_INITIALIZER;
     }                                                    \
     *cast = tmp;                                         \
   } while (0)
-
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_symbols(void) {
   if (gdrState == gdrInitialized)
     return ncclSuccess;
@@ -105,7 +105,7 @@ teardown:
   return ncclSystemError;
 }
 
-
+// cppcheck-suppress unusedFunction
 gdr_t wrap_gdr_open(void) {
   if (gdr_internal_open == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -114,6 +114,7 @@ gdr_t wrap_gdr_open(void) {
   return gdr_internal_open();
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_close(gdr_t g) {
   if (gdr_internal_close == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -126,7 +127,7 @@ ncclResult_t wrap_gdr_close(gdr_t g) {
   }
   return ncclSuccess;
 }
-
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_pin_buffer(gdr_t g, unsigned long addr, size_t size, uint64_t p2p_token, uint32_t va_space, gdr_mh_t *handle) {
   if (gdr_internal_pin_buffer == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -140,7 +141,7 @@ ncclResult_t wrap_gdr_pin_buffer(gdr_t g, unsigned long addr, size_t size, uint6
   }
   return ncclSuccess;
 }
-
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_unpin_buffer(gdr_t g, gdr_mh_t handle) {
   if (gdr_internal_unpin_buffer == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -155,6 +156,7 @@ ncclResult_t wrap_gdr_unpin_buffer(gdr_t g, gdr_mh_t handle) {
   return ncclSuccess;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_get_info(gdr_t g, gdr_mh_t handle, gdr_info_t *info) {
   if (gdr_internal_get_info == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -169,6 +171,7 @@ ncclResult_t wrap_gdr_get_info(gdr_t g, gdr_mh_t handle, gdr_info_t *info) {
   return ncclSuccess;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_map(gdr_t g, gdr_mh_t handle, void **va, size_t size) {
   if (gdr_internal_map == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -182,7 +185,7 @@ ncclResult_t wrap_gdr_map(gdr_t g, gdr_mh_t handle, void **va, size_t size) {
   }
   return ncclSuccess;
 }
-
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_unmap(gdr_t g, gdr_mh_t handle, void *va, size_t size) {
   if (gdr_internal_unmap == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -196,7 +199,7 @@ ncclResult_t wrap_gdr_unmap(gdr_t g, gdr_mh_t handle, void *va, size_t size) {
   }
   return ncclSuccess;
 }
-
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_runtime_get_version(int *major, int *minor) {
   if (gdr_internal_runtime_get_version == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -206,6 +209,7 @@ ncclResult_t wrap_gdr_runtime_get_version(int *major, int *minor) {
   return ncclSuccess;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_driver_get_version(gdr_t g, int *major, int *minor) {
   if (gdr_internal_driver_get_version == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -215,6 +219,7 @@ ncclResult_t wrap_gdr_driver_get_version(gdr_t g, int *major, int *minor) {
   return ncclSuccess;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_copy_to_mapping(gdr_mh_t handle, void *map_d_ptr, const void *h_ptr, size_t size) {
   if (gdr_internal_copy_to_mapping == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");
@@ -229,6 +234,7 @@ ncclResult_t wrap_gdr_copy_to_mapping(gdr_mh_t handle, void *map_d_ptr, const vo
   return ncclSuccess;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrap_gdr_copy_from_mapping(gdr_mh_t handle, void *h_ptr, const void *map_d_ptr, size_t size) {
   if (gdr_internal_copy_from_mapping == NULL) {
     WARN("GDRCOPY lib wrapper not initialized.");

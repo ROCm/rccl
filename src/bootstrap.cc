@@ -301,7 +301,7 @@ void* ncclRemoteMemAllocationService(void* args) {
     if (pollfds[MAX_SEGMENTS].revents) {
       int s = 0;
       union socketAddress addr;
-      while (segments[s] != NULL && s < MAX_SEGMENTS) s++;
+      while (s < MAX_SEGMENTS && segments[s] != NULL) s++;
       if (bootstrapNetAccept(pollfds[MAX_SEGMENTS].fd, &pollfds[s].fd, &addr) != ncclSuccess) {
         pollfds[s].fd = -1;
       } else {
@@ -346,6 +346,7 @@ ncclResult_t bootstrapRemAlloc(size_t size, int rank, void* commState, int* id, 
   NCCLCHECKGOTO(socketRecv(fd, addr, ipc, sizeof(hipIpcMemHandle_t)), res, end);
   NCCLCHECKGOTO(socketRecv(fd, addr, ptr, sizeof(void*)), res, end);
   *id = fd;
+// cppcheck-suppress unusedLabel
 end:
   return res;
 }

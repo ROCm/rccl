@@ -33,7 +33,7 @@ THE SOFTWARE.
 class NcclIpcHandleShm : public ShmObject<std::pair<hipIpcMemHandle_t,size_t>>
 {
 public:
-    NcclIpcHandleShm(int rank, int numRanks, int projid, int numHandlesPerRank, int capacity, std::string suffix);
+    NcclIpcHandleShm(int rank, int numRanks, int projid, int numHandlesPerRank, int capacity, std::string const& suffix);
 
     NcclIpcHandleShm();
 

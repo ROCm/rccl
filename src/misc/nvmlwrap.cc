@@ -109,6 +109,7 @@ ncclResult_t wrapNvmlInit(void) {
   return ncclSuccess;
 }
 
+// cppcheck-suppress unusedFunction
 ncclResult_t wrapNvmlShutdown(void) {
   if (nvmlInternalShutdown == NULL) {
     WARN("lib wrapper not initialized.");

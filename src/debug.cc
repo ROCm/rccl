@@ -85,7 +85,7 @@ void ncclDebugInit() {
     int c = 0;
     char debugFn[PATH_MAX+1] = "";
     char *dfn = debugFn;
-    while (ncclDebugFileEnv[c] != '\0' && c < PATH_MAX) {
+    while (c < PATH_MAX && ncclDebugFileEnv[c] != '\0') {
       if (ncclDebugFileEnv[c++] != '%') {
         *dfn++ = ncclDebugFileEnv[c-1];
         continue;

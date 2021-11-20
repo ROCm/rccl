@@ -491,7 +491,6 @@ ncclResult_t ncclTopoSearchRecNet(struct ncclTopoSystem* system, struct ncclTopo
   for (int i=0; i<netcount; i++) {
     int n = nets[i];
     struct ncclTopoNode* net = system->nodes[NET].nodes+n;
-    struct ncclTopoNode* gpu;
     if (graph->collNet && net->net.collSupport == 0) continue;
     if (net->net.width < speed) continue;
     if (net->net.maxChannels == 0) continue;
@@ -552,7 +551,7 @@ ncclResult_t ncclTopoSearchRecNet(struct ncclTopoSystem* system, struct ncclTopo
         for (int tryGpuBidir=0; tryGpuBidir<2; tryGpuBidir++) {
           for (int g=0; g<system->nodes[GPU].count; g++) {
             if (paths[g].width == maxWidth && paths[g].count == minHops) {
-              gpu = system->nodes[GPU].nodes+g;
+              struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
               int gpuUsed = gpuPciWidth(gpu) > 0 ? 0 : 1;
               if (tryGpuBidir == gpuUsed) {
                 NCCLCHECK(ncclTopoSearchTryGpu(system, graph, saveGraph, 0, backToNet, backToFirstRank, 0, time, NET, n, g));
@@ -841,7 +840,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   }
   int pass = 1;
   int speedIndex = 0;
-  while (speedArray[speedIndex] > system->maxWidth && speedIndex < nspeeds-1) speedIndex++;
+  while (speedIndex < nspeeds-1 && speedArray[speedIndex] > system->maxWidth) speedIndex++;
   tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
   int64_t globalTimeout = NCCL_SEARCH_GLOBAL_TIMEOUT;
 
@@ -913,7 +912,7 @@ search:
       goto search;
     }
     speedIndex = 0;
-    while (speedArray[speedIndex] > system->maxWidth && speedIndex < nspeeds-1) speedIndex++;
+    while (speedIndex < nspeeds-1 && speedArray[speedIndex] > system->maxWidth) speedIndex++;
     tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
 
   }
@@ -924,7 +923,7 @@ done:
     time = -1;
     memcpy(&tmpGraph, graph, sizeof(tmpGraph));
     speedIndex = 0;
-    while (speedArray[speedIndex] > graph->speedInter && speedIndex < nspeeds-1) speedIndex++;
+    while (speedIndex < nspeeds-1 && speedArray[speedIndex] > graph->speedInter) speedIndex++;
     tmpGraph.speedIntra = tmpGraph.speedInter = speedArray[speedIndex];
     tmpGraph.minChannels = graph->nChannels;
     pass = 2;
