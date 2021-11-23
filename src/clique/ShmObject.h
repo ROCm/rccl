@@ -53,8 +53,8 @@ template <typename T>
 class ShmObject
 {
 public:
-ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid) :
-  m_shmSize(size),
+  ShmObject(size_t size, std::string const& fileName, int rank, int numRanks, int projid) :
+    m_shmSize(size),
     m_shmName(fileName),
     m_rank(rank),
     m_numRanks(numRanks),
@@ -62,7 +62,14 @@ ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid)
     m_alloc(false),
     m_shmPtr(nullptr) {}
 
-  ShmObject() {}
+  ShmObject() :
+    m_shmSize(0),
+    m_shmName(""),
+    m_rank(0),
+    m_numRanks(0),
+    m_projid(0),
+    m_alloc(false),
+    m_shmPtr(nullptr) {}
 
   ~ShmObject() {}
 
@@ -82,7 +89,7 @@ ShmObject(size_t size, std::string fileName, int rank, int numRanks, int projid)
     return m_shmPtr;
   }
 protected:
-  ncclResult_t BroadcastMessage(mqd_t& mq_desc, bool pass)
+  ncclResult_t BroadcastMessage(mqd_t& mq_desc, bool pass) const
   {
     char msg_text[1];
     msg_text[0] = (pass == 0 ? 'F': 'P');
@@ -110,13 +117,13 @@ dropback:
 
   // tag for dispatch
       template<class U>
-        struct OpenTag{};
+        b v  nm,         struct OpenTag{};
 
-      ncclResult_t InitIfSemaphore(OpenTag<int> tag);
+      static ncclResult_t InitIfSemaphore(OpenTag<int> tag);
       ncclResult_t InitIfSemaphore(OpenTag<uint32_t> tag);
-      ncclResult_t InitIfSemaphore(OpenTag<hipIpcMemHandle_t> tag);
+      static ncclResult_t InitIfSemaphore(OpenTag<hipIpcMemHandle_t> tag);
       ncclResult_t InitIfSemaphore(OpenTag<sem_t> tag);
-      ncclResult_t InitIfSemaphore(OpenTag<std::pair<hipIpcMemHandle_t,size_t>> tag);
+      static ncclResult_t InitIfSemaphore(OpenTag<std::pair<hipIpcMemHandle_t,size_t>> tag);
 
       size_t      m_shmSize;
       std::string m_shmName;
@@ -134,9 +141,6 @@ ncclResult_t ShmObject<T>::Open()
   if (m_alloc == false)
   {
     int shmFd;
-    int protection = PROT_READ | PROT_WRITE;
-    int visibility = MAP_SHARED;
-
     INFO(NCCL_INIT, "Rank %d Initializing message queue for %s\n", m_rank, m_shmName.c_str());
 
     NCCLCHECK(MsgQueueGetId(m_shmName, false, mq_desc));
