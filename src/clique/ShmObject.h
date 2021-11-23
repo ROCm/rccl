@@ -117,7 +117,7 @@ dropback:
 
   // tag for dispatch
       template<class U>
-        b v  nm,         struct OpenTag{};
+        struct OpenTag{};
 
       static ncclResult_t InitIfSemaphore(OpenTag<int> tag);
       ncclResult_t InitIfSemaphore(OpenTag<uint32_t> tag);
