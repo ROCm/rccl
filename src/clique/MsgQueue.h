@@ -29,11 +29,11 @@ THE SOFTWARE.
 #include "nccl.h"
 #include "core.h"
 
-ncclResult_t MsgQueueGetId(std::string name, bool exclusive, mqd_t& mq_desc);
+ncclResult_t MsgQueueGetId(std::string const& name, bool exclusive, mqd_t& mq_desc);
 ncclResult_t MsgQueueSend(mqd_t const& mq_desc, const char* msgp, size_t msgsz);
 ncclResult_t MsgQueueRecv(mqd_t const& mq_desc, char* msgp, size_t msgsz);
 ncclResult_t MsgQueueWaitUntilEmpty(mqd_t const& mq_desc);
-ncclResult_t MsgQueueClose(std::string name, mqd_t& mq_desc, bool unlink);
-ncclResult_t MsgQueueUnlink(std::string name);
+ncclResult_t MsgQueueClose(std::string const& name, mqd_t& mq_desc, bool unlink);
+ncclResult_t MsgQueueUnlink(std::string const& name);
 
 #endif
