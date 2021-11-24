@@ -28,7 +28,7 @@ THE SOFTWARE.
 #include "Hash.h"
 #include "shm.h"
 
-NcclIpcHandleShm::NcclIpcHandleShm(int rank, int numRanks, int projid, int numHandlesPerRank, int capacity, std::string suffix) :
+NcclIpcHandleShm::NcclIpcHandleShm(int rank, int numRanks, int projid, int numHandlesPerRank, int capacity, std::string const& suffix) :
   ShmObject<std::pair<hipIpcMemHandle_t,size_t>>(numRanks * numHandlesPerRank * capacity * sizeof(std::pair<hipIpcMemHandle_t,size_t>),
                                                  CliqueShmNames["IpcHandles"] + suffix,
                                                  rank,
@@ -39,7 +39,9 @@ NcclIpcHandleShm::NcclIpcHandleShm(int rank, int numRanks, int projid, int numHa
 {
 }
 
-NcclIpcHandleShm::NcclIpcHandleShm()
+NcclIpcHandleShm::NcclIpcHandleShm() :
+  m_numHandlesPerRank(0),
+  m_numHandlesPerOpCount(0)
 {
 }
 

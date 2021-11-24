@@ -56,14 +56,26 @@ CliqueManager::CliqueManager(int          const  rank,
                              cliqueMode_t const  cliqueMode) :
   m_rank(rank),
   m_numRanks(numRanks),
+  m_hash(0),
   m_cliqueMode(cliqueMode),
   m_opIndexHead(0),
   m_opIndexTail(0),
   m_init(false),
+  m_gcnArch(0),
+  m_allReduceByteLimit(0),
   m_pinnedCliquePtrs(NULL),
-  m_fineGrainBarrierMem(NULL)
-{
-}
+  m_gpuBarrierGlobalCount(NULL),
+  m_gpuBarrierGlobalSense(NULL),
+  m_gpuBarrierLocalSense(NULL),
+  m_cpuBarrierCount(NULL),
+  m_shmHandles(),
+  m_ipcHandleSendCache(),
+  m_ipcHandleRecvCache(),
+  m_sharedCpuMemory(),
+  m_sharedIpcHandle(),
+  m_fineGrainBarrierMem(NULL),
+  m_sharedBarrierCount(NULL)
+{}
 
 CliqueManager::~CliqueManager()
 {
@@ -126,11 +138,6 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   if (m_rank < 0 || m_rank >= m_numRanks)
   {
     WARN("Invalid rank specified.  Expected 0 <= %d < %d for CliqueManager", m_rank, m_numRanks);
-    return ncclInvalidUsage;
-  }
-  if (commId == NULL)
-  {
-    WARN("CommId should not be empty");
     return ncclInvalidUsage;
   }
 
@@ -350,7 +357,7 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
                                                 ncclDataType_t const datatype,
                                                 ncclRedOp_t const op,
                                                 int const totalNumChannels,
-                                                uint8_t* numChannelstoUse)
+                                                uint8_t* numChannelstoUse) const
 {
   size_t const totalBytes = count * ncclTypeSize(datatype);
   *numChannelstoUse = 1;
@@ -466,20 +473,6 @@ ncclResult_t CliqueManager::WaitForPointers(ncclWorkElem* args)
   }
   return ncclSuccess;
 }
-
-std::string HandleToString(hipIpcMemHandle_t handle)
-{
-  char mapping[17] = "0123456789ABCDEF";
-  std::string result;
-  for (int i = 0; i < 4; i++)
-  {
-    unsigned char val = (unsigned char)handle.reserved[i];
-    result += mapping[val / 16];
-    result += mapping[val % 16];
-  }
-  return result;
-}
-
 
 ncclResult_t CliqueManager::CheckCacheForPtr(void* devPtr,
                                              NcclIpcHandleSendCache* cache,
