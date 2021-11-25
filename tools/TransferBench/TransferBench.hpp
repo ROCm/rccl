@@ -122,7 +122,7 @@ void DeallocateMemory(MemType memType, int devIndex, float* memPtr);
 void CheckPages(char* byteArray, size_t numBytes, int targetId);
 void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, std::vector<float> const& fillPattern, float* ptr);
 void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link);
-void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse);
+void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse, int readMode, int skipCpu);
 double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
                         MemType srcMemType, int srcIndex,
                         MemType dstMemType, int dstIndex,
