@@ -137,7 +137,6 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         if (a == NCCL_ALGO_RING && (p == NCCL_PROTO_LL || p == NCCL_PROTO_LL128)) busBw *= 0.05;
         if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_SIMPLE) (nNodes == 2) ? busBw *= 0.33 : busBw *= 0.11;
         if (a == NCCL_ALGO_TREE && (p == NCCL_PROTO_LL || p == NCCL_PROTO_LL128)) busBw *= 0.04;
-        if (gcn == 910 && p == NCCL_PROTO_LL && nNodes == 1 && nRanks == 16) busBw *= 5.9;
         if (gcn == 910 && a == NCCL_ALGO_TREE && p == NCCL_PROTO_SIMPLE && nNodes == 2 && nRanks == 32) busBw *= 3.2;
 #else
         if (compCap80) busBw = std::min(busBw, 235.0f);

@@ -67,6 +67,13 @@ if(BUILD_TESTS)
   target_link_libraries(UnitTestsMultiProcess PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(UnitTestsMultiProcess PRIVATE hip::host hip::device)
 
+  find_program( rocminfo_executable rocminfo )
+  execute_process(COMMAND bash "-c" "${rocminfo_executable} | grep 'Device Type' | grep GPU | wc -l | tr -d '\n'" OUTPUT_VARIABLE gtest_num_gpus)
+  if(${gtest_num_gpus} MATCHES "0" OR ${gtest_num_gpus} MATCHES "1")
+    set(gtest_num_gpus "2")
+  endif()
+  target_compile_options(UnitTests PRIVATE -DGTESTS_NUM_GPUS=${gtest_num_gpus})
+
   # UnitTests using static library of rccl requires passing rccl
   # through -l and -L instead of command line input.
   if(BUILD_STATIC)
@@ -81,13 +88,13 @@ if(BUILD_TESTS)
   # HIPCC adds /opt/rocm/lib as RPATH, even though the install process is supposed to
   # remove RPATH.  It also occurs before any user-specified rpath, which effectively overrides the user rpath.
   #  As a work-around, set the correct RPATH for the unit test executable as a post-install step
-  if (CMAKE_INSTALL_PREFIX MATCHES "/opt/rocm*")
+  if (CMAKE_INSTALL_PREFIX MATCHES "${ROCM_PATH}")
     # install_prefix/CMAKE_INSTALL_PREFIX was not explicitly specified, so look in build/release
-    add_custom_command( TARGET UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:/opt/rocm/lib ${CMAKE_BINARY_DIR}/test/UnitTests)
-    add_custom_command( TARGET UnitTestsMultiProcess POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:/opt/rocm/lib ${CMAKE_BINARY_DIR}/test/UnitTestsMultiProcess)
+    add_custom_command( TARGET UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:${ROCM_PATH}/lib ${CMAKE_BINARY_DIR}/test/UnitTests)
+    add_custom_command( TARGET UnitTestsMultiProcess POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:${ROCM_PATH}/lib ${CMAKE_BINARY_DIR}/test/UnitTestsMultiProcess)
   else()
-    add_custom_command( TARGET UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_INSTALL_PREFIX}/lib:/opt/rocm/lib ${CMAKE_INSTALL_PREFIX}/test/UnitTests)
-    add_custom_command( TARGET UnitTestsMultiProcess POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_INSTALL_PREFIX}/lib:/opt/rocm/lib ${CMAKE_INSTALL_PREFIX}/test/UnitTestsMultiProcess)
+    add_custom_command( TARGET UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_INSTALL_PREFIX}/lib:${ROCM_PATH}/lib ${CMAKE_INSTALL_PREFIX}/test/UnitTests)
+    add_custom_command( TARGET UnitTestsMultiProcess POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_INSTALL_PREFIX}/lib:${ROCM_PATH}/lib ${CMAKE_INSTALL_PREFIX}/test/UnitTestsMultiProcess)
   endif()
 else()
   message("Not building unit tests")

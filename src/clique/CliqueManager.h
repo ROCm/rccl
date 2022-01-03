@@ -69,7 +69,7 @@ public:
                                    ncclDataType_t const datatype,
                                    ncclRedOp_t const op,
                                    int const totalNumChannels,
-                                   uint8_t* numChannelstoUse);
+                                   uint8_t* numChannelstoUse) const;
 
   // Blocking call that only returns the in-progress clique pointers are ready
   // This needs to be called in same order as DeclarePointers
@@ -79,14 +79,14 @@ public:
   static ncclResult_t BootstrapRootInit(int pid, unsigned long hash);
 
 protected:
-  ncclResult_t CheckCacheForPtr(void* devPtr,
-                                NcclIpcHandleSendCache* cache,
-                                int rank,
-                                std::pair<hipIpcMemHandle_t, size_t>* handlePair);
+  static ncclResult_t CheckCacheForPtr(void* devPtr,
+                                       NcclIpcHandleSendCache* cache,
+                                       int rank,
+                                       std::pair<hipIpcMemHandle_t, size_t>* handlePair);
 
-  ncclResult_t CheckCacheForHandle(std::pair<hipIpcMemHandle_t, size_t> const& handlePair,
-                                   NcclIpcHandleRecvCache* cache,
-                                   void** ptr);
+  static ncclResult_t CheckCacheForHandle(std::pair<hipIpcMemHandle_t, size_t> const& handlePair,
+                                          NcclIpcHandleRecvCache* cache,
+                                          void** ptr);
 
   int                          m_rank;                               // Associated rank
   int                          m_numRanks;                           // Total number of ranks

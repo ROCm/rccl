@@ -43,7 +43,6 @@ static ncclResult_t ncclGpuGdrSupport(int* gdrSupport) {
     NCCLCHECK(ncclNet->getProperties(dev, &props));
     if ((props.ptrSupport & NCCL_PTR_CUDA) == 0) continue;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    if (!hasFineGrainVramPcie()) continue;
     *gdrSupport = 1;
     break;
 #endif

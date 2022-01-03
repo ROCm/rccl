@@ -90,16 +90,6 @@ static ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
   return ncclSuccess;
 }
 
-static bool hasFineGrainVramPcie() {
-  int *ptr;
-  if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocFinegrained) == hipSuccess) {
-    CUDACHECK(hipFree(ptr));
-    return true;
-  }
-  else
-    return false;
-}
-
 // Allocate memory to be potentially ibv_reg_mr'd. This needs to be
 // allocated on separate pages as those pages will be marked DONTFORK
 // and if they are shared, that could cause a crash in a child process

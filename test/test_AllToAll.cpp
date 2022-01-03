@@ -59,7 +59,7 @@ namespace CorrectnessTests
                                 // Number of elements
                                 testing::Values(1024, 1048576),
                                 // Number of devices
-                                testing::Values(2,3,4,5,6,7,8),
+                                testing::Range(2,(GTESTS_NUM_GPUS+1)),
                                 // In-place or not
                                 testing::Values(false),
                                 testing::Values("")),

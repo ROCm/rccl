@@ -77,7 +77,8 @@ int main(int argc, char **argv)
     maxN = std::max(maxN, N);
 
   // Execute only peer to peer benchmark mode, similar to rocm-bandwidth-test
-  if (!strcmp(argv[1], "p2p"))
+  if (!strcmp(argv[1], "p2p") || !strcmp(argv[1], "p2p_rr") ||
+      !strcmp(argv[1], "g2g") || !strcmp(argv[1], "g2g_rr"))
   {
     int numBlocksToUse = 0;
     if (argc > 3)
@@ -85,8 +86,13 @@ int main(int argc, char **argv)
     else
       HIP_CALL(hipDeviceGetAttribute(&numBlocksToUse, hipDeviceAttributeMultiprocessorCount, 0));
 
+    // Perform either local read (+remote write) [EXE = SRC] or
+    // remote read (+local write)                [EXE = DST]
+    int readMode = (!strcmp(argv[1], "p2p_rr") || !strcmp(argv[1], "g2g_rr") ? 1 : 0);
+    int skipCpu = (!strcmp(argv[1], "g2g") || !strcmp(argv[1], "g2g_rr") ? 1 : 0);
+
     // Execute peer to peer benchmark mode
-    RunPeerToPeerBenchmarks(ev, numBytesPerLink / sizeof(float), numBlocksToUse);
+    RunPeerToPeerBenchmarks(ev, numBytesPerLink / sizeof(float), numBlocksToUse, readMode, skipCpu);
     exit(0);
   }
 
@@ -394,15 +400,20 @@ void DisplayUsage(char const* cmdName)
   HIP_CALL(hipGetDeviceCount(&numGpuDevices));
   int const numCpuDevices = numa_num_configured_nodes();
 
-  printf("Usage: %s configFile <N>\n", cmdName);
-
-  printf("  configFile: File containing Links to execute (see below for format)\n");
-  printf("              Specifying \"p2p\" as the configFile will execute a peer to peer benchmark (3rd argument used as # CUs to use)\n");
-  printf("  N         : (Optional) Number of bytes to transfer per link.\n");
-  printf("              If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
-  printf("              If 0 is specified, a range of Ns will be benchmarked\n");
-  printf("              If a negative number is specified, a configFile gets generated with this number as default number of CUs per link\n");
-  printf("              May append a suffix ('K', 'M', 'G') for kilobytes / megabytes / gigabytes\n");
+  printf("Usage: %s config <N>\n", cmdName);
+  printf("  config: Either:\n");
+  printf("          - Filename of configFile containing Links to execute (see below for format)\n");
+  printf("          - Name of preset benchmark:\n");
+  printf("              p2p    - All CPU/GPU pairs benchmark\n");
+  printf("              p2p_rr - All CPU/GPU pairs benchmark with remote reads\n");
+  printf("              g2g    - All GPU/GPU pairs benchmark\n");
+  printf("              g2g_rr - All GPU/GPU pairs benchmark with remote reads\n");
+  printf("            - 3rd optional argument will be used as # of CUs to use (uses all by default)\n");
+  printf("  N     : (Optional) Number of bytes to transfer per link.\n");
+  printf("          If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
+  printf("          If 0 is specified, a range of Ns will be benchmarked\n");
+  printf("          If a negative number is specified, a configFile gets generated with this number as default number of CUs per link\n");
+  printf("          May append a suffix ('K', 'M', 'G') for kilobytes / megabytes / gigabytes\n");
   printf("\n");
   printf("Configfile Format:\n");
   printf("==================\n");
@@ -1104,7 +1115,7 @@ void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link)
   }
 }
 
-void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse)
+void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse, int readMode, int skipCpu)
 {
   // Collect the number of available CPUs/GPUs on this machine
   int numGpus;
@@ -1122,42 +1133,44 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse)
   printf("Using %d CUs per transfer\n", numBlocksToUse);
 
   // Perform unidirectional / bidirectional
-  for (int readMode = 0; readMode < 2; readMode++)
+  for (int isBidirectional = 0; isBidirectional <= 1; isBidirectional++)
   {
-    for (int isBidirectional = 0; isBidirectional <= 1; isBidirectional++)
+    // Print header
+    printf("%sdirectional copy peak bandwidth GB/s [%s read / %s write]\n", isBidirectional ? "Bi" : "Uni",
+           readMode == 0 ? "Local" : "Remote",
+           readMode == 0 ? "Remote" : "Local");
+    printf("%10s", "D/D");
+    if (!skipCpu)
     {
-      // Print header
-      printf("%sdirectional copy peak bandwidth GB/s [%s read / %s write]\n", isBidirectional ? "Bi" : "Uni",
-             readMode == 0 ? "Local" : "Remote",
-             readMode == 0 ? "Remote" : "Local");
-      printf("%10s", "D/D");
       for (int i = 0; i < numCpus; i++)
         printf("%7s %02d", "CPU", i);
-      for (int i = 0; i < numGpus; i++)
-        printf("%7s %02d", "GPU", i);
-      printf("\n");
+    }
+    for (int i = 0; i < numGpus; i++)
+      printf("%7s %02d", "GPU", i);
+    printf("\n");
 
-      // Loop over all possible src/dst pairs
-      for (int src = 0; src < numDevices; src++)
+    // Loop over all possible src/dst pairs
+    for (int src = 0; src < numDevices; src++)
+    {
+      MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
+      if (skipCpu && srcMemType == MEM_CPU) continue;
+      int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
+      printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
+      for (int dst = 0; dst < numDevices; dst++)
       {
-        MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
-        int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
-        printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
-        for (int dst = 0; dst < numDevices; dst++)
-        {
-          MemType const& dstMemType = (dst < numCpus ? MEM_CPU : MEM_GPU);
-          int dstIndex = (dstMemType == MEM_CPU ? dst : dst - numCpus);
-          double bandwidth = GetPeakBandwidth(ev, N, isBidirectional, srcMemType, srcIndex, dstMemType, dstIndex, readMode);
-          if (bandwidth == 0)
-            printf("%10s", "N/A");
-          else
-            printf("%10.2f", bandwidth);
-          fflush(stdout);
-        }
-        printf("\n");
+        MemType const& dstMemType = (dst < numCpus ? MEM_CPU : MEM_GPU);
+        if (skipCpu && dstMemType == MEM_CPU) continue;
+        int dstIndex = (dstMemType == MEM_CPU ? dst : dst - numCpus);
+        double bandwidth = GetPeakBandwidth(ev, N, isBidirectional, srcMemType, srcIndex, dstMemType, dstIndex, readMode);
+        if (bandwidth == 0)
+          printf("%10s", "N/A");
+        else
+          printf("%10.2f", bandwidth);
+        fflush(stdout);
       }
       printf("\n");
     }
+    printf("\n");
   }
 }
 
