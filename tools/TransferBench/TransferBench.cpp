@@ -22,13 +22,14 @@ THE SOFTWARE.
 
 // This program measures simultaneous copy performance across multiple GPUs
 // on the same node
-
-#include "TransferBench.hpp"
-#include "GetClosestNumaNode.hpp"
 #include <numa.h>
 #include <numaif.h>
 #include <stack>
 #include <thread>
+
+#include "TransferBench.hpp"
+#include "GetClosestNumaNode.hpp"
+#include "Kernels.hpp"
 
 // Simple configuration parameters
 size_t const DEFAULT_BYTES_PER_LINK = (1<<26);  // Amount of data transferred per Link
