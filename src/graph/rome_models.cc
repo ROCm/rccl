@@ -434,6 +434,32 @@ static struct rcclRomeModel rome_model_65 = {
   .netGdrLevel = 5,
 };
 
+static struct rcclRomeModel rome_model_66 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 3,
+  .gpuIds = { 0x29000, 0x2c000, 0x2f000, 0x32000, 0xad000, 0xb0000, 0xb3000, 0xb6000, },
+  .nicIds = { },
+  .gpuNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, },
+  .gdrLevel = { },
+  .pattern = "4040",
+  .ringBase = "0 6 7 5 4 2 3 1|1 3 2 4 5 7 6 0|0 1 7 6 2 3 5 4|4 5 3 2 6 7 1 0",
+  .netGdrLevel = -2,
+};
+
+static struct rcclRomeModel rome_model_67 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3,
+  .gpuIds = { 0x29000, 0x2c000, 0x2f000, 0x32000, 0xad000, 0xb0000, 0xb3000, 0xb6000, },
+  .nicIds = { 0x1d000, 0x1e000, 0xa1000, 0xa2000, },
+  .gpuNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
+  .nicNuma = { 1, 1, 3, 3, },
+  .connMatrix = { 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, },
+  .gdrLevel = { 4, 4, 4, 4, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 6, 6, 6, 6, 4, 4, 4, 4, },
+  .pattern = "4242",
+  .ringBase = "N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N1 2 3 5 4 0 1 7 6 N3|N2 4 5 3 2 6 7 1 0 N0|N1 3 2 4 5 7 6 0 1 N0|N0 1 0 6 7 5 4 2 3 N1|N0 0 1 7 6 2 3 5 4 N2|N3 6 7 1 0 4 5 3 2 N1",
+  .netGdrLevel = -2,
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -465,6 +491,8 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_62,
   rome_model_63,
   rome_model_65,
+  rome_model_66,
+  rome_model_67,
 };
 
 /* Parse user defined rings. Format is like :
