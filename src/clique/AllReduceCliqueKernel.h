@@ -46,8 +46,6 @@ __device__ void AllReduceCliqueSplitKernel(struct ncclWorkElem* args)
   size_t const currBlockStop  = min(currBlockStart + perBlockN, N);
   size_t const blockN         = currBlockStop - currBlockStart;
 
-  FUNC redOp(FuncTraits<FUNC>().make(args->comm->nRanks));
-
   if (blockN > 0)
   {
     // Prepare input / output subarrays
@@ -65,8 +63,8 @@ __device__ void AllReduceCliqueSplitKernel(struct ncclWorkElem* args)
 
     // Perform the reduction
     #define ALL_REDUCE_CLIQUE_UNROLL 1
-    ReduceOrCopyMulti<ALL_REDUCE_CLIQUE_UNROLL, FUNC, T, NUM_RANKS, NUM_RANKS, NUM_RANKS, NUM_RANKS>(
-      threadIdx.x, blockDim.x, redOp, NUM_RANKS, true, NUM_RANKS, srcs, NUM_RANKS, dsts, blockN);
+    ReduceOrCopyMulti<ALL_REDUCE_CLIQUE_UNROLL, FUNC, T, NUM_RANKS, NUM_RANKS, NUM_RANKS, NUM_RANKS, 0>(
+      threadIdx.x, blockDim.x, nullptr, false, NUM_RANKS, srcs, NUM_RANKS, dsts, blockN);
   }
 
   // Even if there was nothing for this GPU to do, it must participate in a barrier
