@@ -6,7 +6,7 @@ endif
 HIPCC=$(HIP_PATH)/bin/hipcc
 
 EXE=TransferBench
-CXXFLAGS = -O3 -I../../src/include -I. -lnuma -L$(HIP_PATH)/../hsa/lib -lhsa-runtime64
+CXXFLAGS = -O3 -I. -lnuma -L$(HIP_PATH)/../hsa/lib -lhsa-runtime64
 
 all: $(EXE)
 

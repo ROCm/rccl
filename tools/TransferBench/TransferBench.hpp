@@ -35,19 +35,6 @@ THE SOFTWARE.
 #include <hip/hip_ext.h>
 #include <hsa/hsa_ext_amd.h>
 
-// Include common_kernel.h from RCCL for copy kernel
-// However define some variables to avoid extra includes / missing defines
-#define NCCL_DEVICE_H_   // Avoid loading devcomm.h
-#define WARP_SIZE 64
-typedef float half;  // TransferBench doesn't actually operate on half-precision floats
-typedef uint64_t PackType;
-typedef ulong2 Pack128;
-typedef struct
-{
-  uint16_t data;
-} rccl_bfloat16;
-
-#include "../../src/collectives/device/common_kernel.h"
 #include "EnvVars.hpp"
 
 // Helper macro for catching HIP errors
@@ -132,56 +119,3 @@ std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount);
 std::string GetDesc(MemType srcMemType, int srcIndex,
                     MemType dstMemType, int dstIndex);
 std::string GetLinkDesc(Link const& link);
-
-#define BLOCKSIZE 256
-#define COPY_UNROLL 4
-#define MEMSET_UNROLL 4
-
-// Dummy reduction function (not used because it's just a copy)
-struct FuncNull {
-  __device__ float operator()(const float x, const float y) const {
-    return 0;
-  }
-};
-
-// GPU copy kernel
-__global__ void __launch_bounds__(BLOCKSIZE)
-GpuCopyKernel(BlockParam* blockParams)
-{
-  // Collect the arguments for this block
-  int N = blockParams[blockIdx.x].N;
-  const float* src[1] = {(float* )blockParams[blockIdx.x].src};
-  float* dst[1] = {(float* )blockParams[blockIdx.x].dst};
-
-  ReduceOrCopyMulti<COPY_UNROLL, FuncNull, float, 1, 1, 1, 1>(
-    threadIdx.x, BLOCKSIZE, 1, src, 1, dst, N);
-}
-
-// GPU set kernel
-__global__ void __launch_bounds__(BLOCKSIZE)
-GpuMemsetKernel(BlockParam* blockParams)
-{
-  // Collect the arguments for this block
-  int N = blockParams[blockIdx.x].N;
-  float* __restrict__ dst = (float*)blockParams[blockIdx.x].dst;
-
-  // Use non-zero value
-  #pragma unroll MEMSET_UNROLL
-  for (int tid = threadIdx.x; tid < N; tid += BLOCKSIZE)
-  {
-    dst[tid] = 1234.0;
-  }
-}
-
-// CPU copy kernel
-void CpuCopyKernel(BlockParam const& blockParams)
-{
-  memcpy(blockParams.dst, blockParams.src, blockParams.N * sizeof(float));
-}
-
-// CPU memset kernel
-void CpuMemsetKernel(BlockParam const& blockParams)
-{
-  for (int i = 0; i < blockParams.N; i++)
-    blockParams.dst[i] = 1234.0;
-}
