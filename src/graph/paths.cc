@@ -509,7 +509,6 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
       }
     }
     if (ret) {
-      system->type |= RCCL_TOPO_GDR_ALL;
       bool allXgmi = true;
       // don't trim NICs unless all GPUs are connected by XGMI
       for (int i = 0; i < system->nodes[GPU].count && allXgmi; i++) {
@@ -524,6 +523,7 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
       }
       if (!allXgmi) {
         remove = 0;
+        system->type |= RCCL_TOPO_GDR_ALL;
         INFO(NCCL_GRAPH, "GDR is available on all GPUs");
       }
     }
