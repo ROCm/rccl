@@ -15,8 +15,6 @@
 // [/RCCL]
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  typedef void *cudaGraph_t;
-  typedef void *cudaGraphNode_t;
   #define HIPRT_CB
 #else
 #include "collectives.h"
@@ -216,7 +214,7 @@ struct ncclComm {
   struct ncclQueueInfo* enqueueInfo;
   int nQueueInfoCreated;
   int nQueueInfoDestroyed;
-  cudaGraphNode_t lastSetupNode;
+  hipGraphNode_t lastSetupNode;
   unsigned long long lastCudaGraphId;
   int driverVersion;
   pfn_cuMemGetAddressRange_t pfnCuMemGetAddressRange;

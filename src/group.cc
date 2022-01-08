@@ -174,7 +174,7 @@ ncclResult_t ncclGroupEnd() {
   for (int i=0; i<ncclGroupIndex; i++) doneArray[i] = 1;
   ncclResult_t ret = ncclGroupError;
   int usingCudaGraphAll = -1;
-  cudaGraph_t* graphs = NULL;
+  hipGraph_t* graphs = NULL;
   if (ret != ncclSuccess) goto group_cleanup;
 
   /* Launch async ncclCommInitRank */
