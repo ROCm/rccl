@@ -1101,7 +1101,7 @@ void* graphHelperFunc(void *args) {
   }
 }
 
-ncclResult_t ncclGetCudaGraph(ncclComm_t comm, cudaGraph_t* graph) {
+ncclResult_t ncclGetCudaGraph(ncclComm_t comm, hipGraph_t* graph) {
   comm->usingCudaGraph = 0;
 #if CUDART_VERSION >= 11030
   hipStreamCaptureStatus captureStatus;
@@ -1285,7 +1285,7 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
 
     // Check whether we are in cuda graph mode
-    cudaGraph_t graph;
+    hipGraph_t graph;
     ncclComm_t comm = info->comm;
     NCCLCHECKGOTO(ncclGetCudaGraph(comm, &graph), ret, end);
 
