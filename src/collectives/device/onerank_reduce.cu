@@ -12,7 +12,7 @@
 
 namespace {
   template<typename T, typename RedOp>
-  __device__ __forceinline__ void oneRankReduce() {
+  __device__ __attribute__((noinline)) void oneRankReduce() {
     ncclWork *w = &ncclShmem->work;
     int tid = threadIdx.x;
     int tn = blockDim.x;

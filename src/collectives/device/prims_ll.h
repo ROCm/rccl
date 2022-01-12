@@ -22,8 +22,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
   struct ncclConnInfo* recvConn = NULL;
   volatile uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
-  uint64_t* barriers;
-  uint64_t* barrier_next;
 
   struct ncclConnInfo* sendConn = NULL;
   volatile int* sendConnFifoPtr = NULL;
@@ -284,7 +282,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-  __device__ __forceinline__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+  __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
@@ -389,12 +387,11 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
  public:
   __device__  Primitives(
       const int tid, const int nthreads, int const *recvPeers, int const *sendPeers,
-      void const *inputBuf, void *outputBuf, uint64_t redOpArg, int group=0, int connIndex=0
+      void const *inputBuf, void *outputBuf, uint64_t redOpArg, int group=0
     ):
     redOp(redOpArg),
-    tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group),
-    stepLines(ncclShmem->comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)),
-    barriers(&ncclShmem->groups[group].barrier), barrier_next(ncclShmem->groups[group].barrier_next) {
+    tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group&(uint16_t)0xFFFF),
+    stepLines(ncclShmem->comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
 
     auto *channel = &ncclShmem->channel;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
