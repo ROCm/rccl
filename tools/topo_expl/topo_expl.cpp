@@ -209,6 +209,7 @@ int main(int argc,char* argv[])
     // Mark channels as non initialized.
     for (int c=0; c<MAXCHANNELS; c++) comm[i].channels[c].id = -1;
     NCCLCHECK(ncclCalloc((uint32_t**)&comm[i].p2pNet, 1));
+    NCCLCHECK(ncclCalloc(&comm[i].rankToIntraNodeRank, comm->nRanks));
   }
 
   struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;

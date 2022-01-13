@@ -200,18 +200,8 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
   return ncclSuccess;
 }
 
-static ncclResult_t connectedByXGMI(int* ret, struct ncclTopoSystem* system, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
-  *ret = 0;
-  if (info1->hostHash != info2->hostHash) return ncclSuccess;
-  int g1, g2;
-  NCCLCHECK(ncclTopoRankToIndex(system, info1->rank, &g1));
-  NCCLCHECK(ncclTopoRankToIndex(system, info2->rank, &g2));
-  if (system->nodes[GPU].nodes[g1].paths[GPU][g2].type == PATH_NVL) *ret = 1;
-  return ncclSuccess;
-}
-
 template <int type>
-static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex) {
+static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex, int* transportType) {
   struct ncclPeerInfo* myInfo = comm->peerInfo+comm->rank;
   struct ncclPeerInfo* peerInfo = comm->peerInfo+peer;
   struct ncclConnector* connector = (type == 1) ? comm->channels[channelId].peers[peer].send + connIndex :
@@ -224,8 +214,8 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, peer, graph, channelId, (type == 1) ? 0 : 1, &n2));
   }
 
-  int xgmi;
-  NCCLCHECK(connectedByXGMI(&xgmi, comm->topo, myInfo, peerInfo));
+  bool xgmi;
+  NCCLCHECK(ncclTopoGetLinkType(comm->topo, myInfo->cudaDev, peerInfo->cudaDev, &xgmi));
   for (int t=0; t<NTRANSPORTS; t++) {
     if (graph == NULL && connIndex == NCCL_CONN_IDX_P2P_NET && (t == TRANSPORT_SHM || (!xgmi && t == TRANSPORT_P2P))) continue;
     if (graph && n1 >= 0 && n2 >= 0 && t != TRANSPORT_NET) continue;
@@ -236,6 +226,7 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     if (ret) {
       connector->transportComm = transportComm;
       NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, connIndex));
+      if (transportType) *transportType = t;
       return ncclSuccess;
     }
   }
@@ -259,10 +250,13 @@ ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* 
   return ncclSuccess;
 }
 
-ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex) {
+ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex, int* highestTransportType/*=NULL*/) {
+#if CUDART_VERSION >= 11030
   // Stream used during transport setup; need for P2P pre-connect + CUDA Graph
-  //hipStream_t transportSetupStream;
-  //CUDACHECK(hipStreamCreateWithFlags(&transportSetupStream, hipStreamNonBlocking));
+  hipStream_t transportSetupStream;
+  CUDACHECK(hipStreamCreateWithFlags(&transportSetupStream, hipStreamNonBlocking));
+#endif
+  int highestType = TRANSPORT_P2P;  // track highest transport type
 
   struct ncclConnect data[2*MAXCHANNELS];
   for (int i=1; i<comm->nRanks; i++) {
@@ -274,15 +268,18 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
 
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
+    int type;
     for (int c=0; c<MAXCHANNELS; c++) {
       if (recvMask & (1<<c)) {
-        NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex));
+        NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex, &type));
+        if (type > highestType) highestType = type;
       }
     }
     struct ncclConnect* sendData = recvData+recvChannels;
     for (int c=0; c<MAXCHANNELS; c++) {
       if (sendMask & (1<<c)) {
-        NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex));
+        NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex, &type));
+        if (type > highestType) highestType = type;
       }
     }
 
@@ -305,7 +302,11 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[sendPeer].send + connIndex;
         //NCCLCHECK(conn->transportComm->connect(comm, sendData++, 1, comm->rank, conn));
         conn->connected = 1;
+#if CUDART_VERSION >= 11030
         //CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[sendPeer].send+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, transportSetupStream));
+#else
+        //CUDACHECK(hipMemcpy(comm->channels[c].devPeers[sendPeer].send+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice));
+#endif
       }
     }
     for (int c=0; c<MAXCHANNELS; c++) {
@@ -313,13 +314,20 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[recvPeer].recv + connIndex;
         //NCCLCHECK(conn->transportComm->connect(comm, recvData++, 1, comm->rank, conn));
         conn->connected = 1;
+#if CUDART_VERSION >= 11030
         //CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[recvPeer].recv+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, transportSetupStream));
+#else
+        //CUDACHECK(hipMemcpy(comm->channels[c].devPeers[recvPeer].recv+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice));
+#endif
       }
     }
-    comm->connectRecv[recvPeer] = comm->connectSend[sendPeer] = 0;
+    comm->connectRecv[recvPeer+comm->nRanks*connIndex] = comm->connectSend[sendPeer+comm->nRanks*connIndex] = 0;
   }
-  //CUDACHECK(hipStreamSynchronize(transportSetupStream));
-  //CUDACHECK(hipStreamDestroy(transportSetupStream));
+#if CUDART_VERSION >= 11030
+  CUDACHECK(hipStreamSynchronize(transportSetupStream));
+  CUDACHECK(hipStreamDestroy(transportSetupStream));
+#endif
+  if (highestTransportType != NULL) *highestTransportType = highestType;
   return ncclSuccess;
 }
 
@@ -413,22 +421,18 @@ cleanup:
 }
 
 ncclResult_t ncclTransportCollNetCheck(struct ncclComm* comm, int collNetSetupFail) {
-  int rank = comm->rank;
-  int nranks = comm->nRanks;
   // AllGather collNet setup results
-  int* allGatherFailures;
-  NCCLCHECK(ncclCalloc(&allGatherFailures, nranks));
-  allGatherFailures[rank] = collNetSetupFail;
-  //NCCLCHECK(bootstrapAllGather(comm->bootstrap, allGatherFailures, sizeof(int)));
-  for (int i=0; i<nranks; i++) {
+  int allGatherFailures[NCCL_MAX_INTRA_RANKS] = {0};
+  allGatherFailures[comm->intraNodeRank] = collNetSetupFail;
+  //NCCLCHECK(bootstrapIntraNodeAllGather(comm->bootstrap, comm->intraNodeGlobalRanks, comm->intraNodeRank, comm->localRanks, allGatherFailures, sizeof(int)));
+  for (int i=0; i<comm->localRanks; i++) {
     if (allGatherFailures[i] != 0) {
       collNetSetupFail = 1;
       break;
     }
   }
-  free(allGatherFailures);
   if (collNetSetupFail) {
-    if (rank == 0) WARN("Cannot initialize CollNet, using point-to-point network instead");
+    if (comm->intraNodeRank == 0) WARN("Cannot initialize CollNet, using point-to-point network instead");
     return ncclSystemError;
   }
   return ncclSuccess;
@@ -489,13 +493,14 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   int intraNodeRank0 = -1, intraNodeRank = -1, intraNodeRanks = 0;
   int myCompCap = allGather1Data[rank].cudaCompCap;
   int minCompCap = myCompCap, maxCompCap = myCompCap;
-  int intraNodeGlobalRanks[256];
   for (int i = 0; i < nranks; i++) {
     if (allGather1Data[i].peerInfo.hostHash == allGather1Data[rank].peerInfo.hostHash) {
       // Rank is on same node
       if (intraNodeRanks == 0) intraNodeRank0 = i;
       if (i == rank) intraNodeRank = intraNodeRanks;
-      intraNodeGlobalRanks[intraNodeRanks++] = i;
+      comm->intraNodeGlobalRanks[intraNodeRanks] = i;
+      comm->rankToIntraNodeRank[i] = intraNodeRanks;
+      intraNodeRanks++;
       if (allGather1Data[i].peerInfo.pidHash == allGather1Data[rank].peerInfo.pidHash) {
         // Rank is in same process
         if (intraProcRanks == 0) intraProcRank0 = i;
@@ -524,6 +529,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t
   }
   struct ncclComm* intraProcRank0Comm = allGather1Data[intraProcRank0].comm;
   uint64_t intraNodeRank0pidHash = allGather1Data[intraNodeRank0].peerInfo.pidHash;
+  comm->intraNodeRank = intraNodeRank;
 
   // AllGather1 - end
 
@@ -846,6 +852,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   // Check if we can setup CollNet
   if (comm->collNetSupport > 0) {
     int collNetSetupFail = 0;
+    int highestTypes[NCCL_MAX_INTRA_RANKS] = {TRANSPORT_P2P};
     // Find all head ranks
     int nHeads = collNetGraph.nChannels;
     int *heads;
@@ -871,16 +878,26 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     TRACE(NCCL_INIT, "rank %d Connected inter-node CollNet", rank);
 
     // Connect intra-node CollNet
+    int highestTransportType0, highestTransportType1;
     for (int c=0; c<comm->nChannels; c++) {
       struct ncclChannel* channelRecv = comm->channels+c;
       NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channelRecv, NCCL_MAX_DIRECT_ARITY, channelRecv->collTree.up, NCCL_MAX_DIRECT_ARITY, channelRecv->collTree.down, 0), ret, collnet_cleanup);
     }
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 0), ret, collnet_cleanup);
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 0, &highestTransportType0), ret, collnet_cleanup);
     for (int c=0; c<comm->nChannels; c++) {
       struct ncclChannel* channelSend = comm->channels+c;
       NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channelSend, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.down, NCCL_MAX_DIRECT_ARITY, channelSend->collTree.up, 1), ret, collnet_cleanup);
     }
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 1), ret, collnet_cleanup);
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &collNetGraph, 1, &highestTransportType1), ret, collnet_cleanup);
+
+    // Exchange highest intra-node transport type among ranks
+    // because we need to know whether all ranks can p2p each other to determine whether we can directly read/write registered user buffer
+    comm->intraHighestTransportType = highestTypes[comm->intraNodeRank] = highestTransportType0 > highestTransportType1 ? highestTransportType0 : highestTransportType1;
+    //NCCLCHECK(bootstrapIntraNodeAllGather(comm->bootstrap, comm->intraNodeGlobalRanks, comm->intraNodeRank, comm->localRanks, highestTypes, sizeof(int)));
+    //for (int i=0; i<comm->localRanks; i++) {
+      //if (highestTypes[i] > comm->intraHighestTransportType)
+        //comm->intraHighestTransportType = highestTypes[i];
+    //}
     INFO(NCCL_INIT, "rank %d Connected CollNet", rank);
 
 collnet_cleanup:
