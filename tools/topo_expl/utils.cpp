@@ -801,11 +801,10 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     struct ncclTree* tree = &comm->channels[c].tree;
     snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
-    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev, 
-         comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
+    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c, comm->channels[c].ring.prev, comm->rank, comm->channels[c].ring.next);
   }
   line[1023] = '\0';
-  INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
+  INFO(NCCL_INIT, "Trees%s", line);
 
   // Set Affinity to a CPU local the our GPU, so that all memory we allocate
   // on the host is local.
@@ -838,7 +837,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, NCCL_CONN_IDX_P2P_NET), ret, affinity_restore);
   }
   free(rings);
-  INFO(NCCL_INIT, "Connected all rings comm %p nRanks %02d busId %lx", comm, comm->nRanks, comm->busId);
+  INFO(NCCL_INIT, "Connected all rings");
 
   // Connect Trees
   for (int c=0; c<comm->nChannels; c++) {
@@ -848,7 +847,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->tree.up, NCCL_MAX_TREE_ARITY, channel->tree.down, 0), ret, affinity_restore);
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0), ret, affinity_restore);
-  INFO(NCCL_INIT, "Connected all trees comm %p nRanks %02d busId %lx", comm, comm->nRanks, comm->busId);
+  INFO(NCCL_INIT, "Connected all trees");
 
   // Check if we can setup CollNet
   if (comm->collNetSupport > 0) {
@@ -899,7 +898,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
       //if (highestTypes[i] > comm->intraHighestTransportType)
         //comm->intraHighestTransportType = highestTypes[i];
     //}
-    INFO(NCCL_INIT, "rank %d Connected CollNet comm %p nRanks %02d", rank, comm, comm->nRanks);
+    INFO(NCCL_INIT, "rank %d Connected CollNet", rank);
 
 collnet_cleanup:
     free(heads);
