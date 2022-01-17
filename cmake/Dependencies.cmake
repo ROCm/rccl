@@ -33,7 +33,7 @@
 include(cmake/DownloadProject.cmake)
 
 if(NOT INSTALL_DEPENDENCIES)
-    find_package(GTest 1.10)
+    find_package(GTest 1.11)
 endif()
 
 if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
@@ -59,7 +59,6 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
                      LOG_INSTALL         TRUE
                      UPDATE_DISCONNECTED TRUE
     )
-    find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
     set(GTEST_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/gtest/include CACHE PATH "")
     if(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib)
         set(GTEST_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest_main.a CACHE PATH "")
@@ -67,6 +66,7 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
         set(GTEST_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib64/libgtest.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib64/libgtest_main.a CACHE PATH "")
     else()
         message(FATAL_ERROR "Cannot find gtest library installation path.")
+    find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
     endif()
 endif()
 
@@ -99,7 +99,7 @@ if(NOT ROCM_FOUND)
       WORKING_DIRECTORY ${PROJECT_EXTERN_DIR}/rocm-cmake-${rocm_cmake_tag} )
     execute_process( COMMAND ${CMAKE_COMMAND} --build rocm-cmake-${rocm_cmake_tag} --target install
       WORKING_DIRECTORY ${PROJECT_EXTERN_DIR})
-  
+
     if(rocm_cmake_unpack_error_code)
         message(FATAL_ERROR "Error: unpacking ${CMAKE_CURRENT_BINARY_DIR}/rocm-cmake-${rocm_cmake_tag}.zip failed")
     endif()
