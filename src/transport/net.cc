@@ -61,8 +61,18 @@ struct netRecvResources {
   uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
 };
 
+NCCL_PARAM(NetDisableIntra, "NET_DISABLE_INTRA", -2);
+
 /* Determine if two peers can communicate with NET */
 ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
+  // Same host?
+  if (info1->hostHash == info2->hostHash) {
+    // User disabled NET for intra-node?
+    if (ncclParamNetDisableIntra() == 1) {
+      *ret = 0;
+      return ncclSuccess;
+    }
+  }
   *ret = 1;
   return ncclSuccess;
 }
