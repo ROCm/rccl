@@ -105,7 +105,7 @@ void ParseMemType(std::string const& token, int const numCpus, int const numGpus
 void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links);       // Parse Link information
 void EnablePeerAccess(int const deviceId, int const peerDeviceId);
 void AllocateMemory(MemType memType, int devIndex, size_t numBytes, float** memPtr);
-void DeallocateMemory(MemType memType, int devIndex, float* memPtr);
+void DeallocateMemory(MemType memType, float* memPtr);
 void CheckPages(char* byteArray, size_t numBytes, int targetId);
 void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, std::vector<float> const& fillPattern, float* ptr);
 void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link);
@@ -119,3 +119,4 @@ std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount);
 std::string GetDesc(MemType srcMemType, int srcIndex,
                     MemType dstMemType, int dstIndex);
 std::string GetLinkDesc(Link const& link);
+int RemappedIndex(int const origIdx, MemType const memType);

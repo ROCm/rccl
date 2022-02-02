@@ -152,12 +152,14 @@ int main(int argc, char **argv)
     {
       // Get some aliases to link variables
       MemType const& exeMemType  = links[i].exeMemType;
-      int     const& exeIndex    = links[i].exeIndex;
       MemType const& srcMemType  = links[i].srcMemType;
       MemType const& dstMemType  = links[i].dstMemType;
-      int     const& srcIndex    = links[i].srcIndex;
-      int     const& dstIndex    = links[i].dstIndex;
       int     const& blocksToUse = links[i].numBlocksToUse;
+
+      // Get potentially remapped device indices
+      int const srcIndex = RemappedIndex(links[i].srcIndex, srcMemType);
+      int const exeIndex = RemappedIndex(links[i].exeIndex, exeMemType);
+      int const dstIndex = RemappedIndex(links[i].dstIndex, dstMemType);
 
       // Enable peer-to-peer access if necessary (can only be called once per unique pair)
       if (exeMemType == MEM_GPU)
@@ -166,7 +168,7 @@ int main(int argc, char **argv)
         if ((srcMemType == MEM_GPU || srcMemType == MEM_GPU_FINE) && srcIndex != exeIndex)
         {
           auto exeSrcPair = std::make_pair(exeIndex, srcIndex);
-           if (!peerAccessTracker.count(exeSrcPair))
+          if (!peerAccessTracker.count(exeSrcPair))
           {
             EnablePeerAccess(exeIndex, srcIndex);
             peerAccessTracker.insert(exeSrcPair);
@@ -369,8 +371,8 @@ int main(int argc, char **argv)
     // Release GPU memory
     for (int i = 0; i < numLinks; i++)
     {
-      DeallocateMemory(links[i].srcMemType, links[i].srcIndex, links[i].srcMem);
-      DeallocateMemory(links[i].dstMemType, links[i].dstIndex, links[i].dstMem);
+      DeallocateMemory(links[i].srcMemType, links[i].srcMem);
+      DeallocateMemory(links[i].dstMemType, links[i].dstMem);
 
       if (links[i].exeMemType == MEM_GPU)
       {
@@ -608,6 +610,46 @@ void GenerateConfigFile(char const* cfgFile, int numBlocks)
   fclose(fp);
 }
 
+int RemappedIndex(int const origIdx, MemType const memType)
+{
+  static std::vector<int> remapping;
+
+  // No need to re-map CPU devices
+  if (memType == MEM_CPU) return origIdx;
+
+  // Build remapping on first use
+  if (remapping.empty())
+  {
+    int numGpuDevices;
+    HIP_CALL(hipGetDeviceCount(&numGpuDevices));
+    remapping.resize(numGpuDevices);
+
+    int const usePcieIndexing = getenv("USE_PCIE_INDEX") ? atoi(getenv("USE_PCIE_INDEX")) : 0;
+    if (!usePcieIndexing)
+    {
+      // For HIP-based indexing no remapping is necessary
+      for (int i = 0; i < numGpuDevices; ++i)
+        remapping[i] = i;
+    }
+    else
+    {
+      // Collect PCIe address for each GPU
+      std::vector<std::pair<std::string, int>> mapping;
+      char pciBusId[20];
+      for (int i = 0; i < numGpuDevices; ++i)
+      {
+        HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, i));
+        mapping.push_back(std::make_pair(pciBusId, i));
+      }
+      // Sort GPUs by PCIe address then use that as mapping
+      std::sort(mapping.begin(), mapping.end());
+      for (int i = 0; i < numGpuDevices; ++i)
+        remapping[i] = mapping[i].second;
+    }
+  }
+  return remapping[origIdx];
+}
+
 void DisplayTopology()
 {
   int numGpuDevices;
@@ -632,7 +674,9 @@ void DisplayTopology()
       else
       {
         uint32_t linkType, hopCount;
-        HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
+        HIP_CALL(hipExtGetLinkTypeAndHopCount(RemappedIndex(i, MEM_GPU),
+                                              RemappedIndex(j, MEM_GPU),
+                                              &linkType, &hopCount));
         printf(" %s-%d |",
                linkType == HSA_AMD_LINK_INFO_TYPE_HYPERTRANSPORT ? "  HT" :
                linkType == HSA_AMD_LINK_INFO_TYPE_QPI            ? " QPI" :
@@ -642,8 +686,8 @@ void DisplayTopology()
                hopCount);
       }
     }
-    HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, i));
-    printf(" %11s |  %d  \n", pciBusId, GetClosestNumaNode(i));
+    HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, RemappedIndex(i, MEM_GPU)));
+    printf(" %11s |  %d  \n", pciBusId, GetClosestNumaNode(RemappedIndex(i, MEM_GPU)));
   }
 }
 
@@ -863,7 +907,7 @@ void AllocateMemory(MemType memType, int devIndex, size_t numBytes, float** memP
   }
 }
 
-void DeallocateMemory(MemType memType, int devIndex, float* memPtr)
+void DeallocateMemory(MemType memType, float* memPtr)
 {
   if (memType == MEM_CPU)
   {
@@ -1008,7 +1052,9 @@ std::string GetDesc(MemType srcMemType, int srcIndex,
       else
       {
         uint32_t linkType, hopCount;
-        HIP_CALL(hipExtGetLinkTypeAndHopCount(srcIndex, dstIndex, &linkType, &hopCount));
+        HIP_CALL(hipExtGetLinkTypeAndHopCount(RemappedIndex(srcIndex, MEM_GPU),
+                                              RemappedIndex(dstIndex, MEM_GPU),
+                                              &linkType, &hopCount));
         return GetLinkTypeDesc(linkType, hopCount);
       }
     }
@@ -1032,7 +1078,7 @@ void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link)
   if (link.exeMemType == MEM_GPU)
   {
     // Switch to executing GPU
-    HIP_CALL(hipSetDevice(link.exeIndex));
+    HIP_CALL(hipSetDevice(RemappedIndex(link.exeIndex, MEM_GPU)));
 
     bool recordStart = (!ev.useSingleSync || iteration == 0);
     bool recordStop  = (!ev.useSingleSync || iteration == ev.numIterations - 1);
@@ -1188,14 +1234,14 @@ double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
 
   // Prepare Links
   links[0].srcMemType = links[1].dstMemType = srcMemType;
-  links[0].srcIndex   = links[1].dstIndex   = srcIndex;
+  links[0].srcIndex   = links[1].dstIndex   = RemappedIndex(srcIndex, srcMemType);
   links[0].dstMemType = links[1].srcMemType = dstMemType;
-  links[0].dstIndex   = links[1].srcIndex   = dstIndex;
+  links[0].dstIndex   = links[1].srcIndex   = RemappedIndex(dstIndex, dstMemType);
   // Either perform local read / remote write, or remote read / local write
   links[0].exeMemType = (readMode == 0 ? srcMemType : dstMemType);
-  links[0].exeIndex   = (readMode == 0 ? srcIndex   : dstIndex);
+  links[0].exeIndex   = RemappedIndex((readMode == 0 ? srcIndex   : dstIndex), links[0].exeMemType);
   links[1].exeMemType = (readMode == 0 ? dstMemType : srcMemType);
-  links[1].exeIndex   = (readMode == 0 ? dstIndex   : srcIndex);
+  links[1].exeIndex   = RemappedIndex((readMode == 0 ? dstIndex   : srcIndex), links[1].exeMemType);
 
   for (int i = 0; i <= isBidirectional; i++)
   {
@@ -1281,8 +1327,8 @@ double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
   // Release GPU memory
   for (int i = 0; i <= isBidirectional; i++)
   {
-    DeallocateMemory(links[i].srcMemType, links[i].srcIndex, links[i].srcMem);
-    DeallocateMemory(links[i].dstMemType, links[i].dstIndex, links[i].dstMem);
+    DeallocateMemory(links[i].srcMemType, links[i].srcMem);
+    DeallocateMemory(links[i].dstMemType, links[i].dstMem);
 
     if (links[i].exeMemType == MEM_GPU)
       {

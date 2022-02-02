@@ -51,6 +51,7 @@ public:
   int numCpuPerLink;   // Number of CPU child threads to use per CPU link
   int sharedMemBytes;  // Amount of shared memory to use per threadblock
   int blockBytes;      // Each CU, except the last, gets a multiple of this many bytes to copy
+  int usePcieIndexing; // Base GPU indexing on PCIe address instead of HIP device
 
   std::vector<float> fillPattern; // Pattern of floats used to fill source data
 
@@ -75,6 +76,7 @@ public:
     numCpuPerLink   = GetEnvVar("NUM_CPU_PER_LINK" , DEFAULT_NUM_CPU_PER_LINK);
     sharedMemBytes  = GetEnvVar("SHARED_MEM_BYTES" , maxSharedMemBytes / 2 + 1);
     blockBytes      = GetEnvVar("BLOCK_BYTES"      , 256);
+    usePcieIndexing = GetEnvVar("USE_PCIE_INDEX"   , 0);
 
     // Check for fill pattern
     char* pattern = getenv("FILL_PATTERN");
@@ -192,6 +194,7 @@ public:
     printf(" FILL_PATTERN=STR   - Fill input buffer with pattern specified in hex digits (0-9,a-f,A-F).  Must be even number of digits, (byte-level big-endian)\n");
     printf(" SHARED_MEM_BYTES=X - Use X shared mem bytes per threadblock, potentially to avoid multiple threadblocks per CU\n");
     printf(" BLOCK_BYTES=B      - Each CU (except the last) receives a multiple of BLOCK_BYTES to copy\n");
+    printf(" USE_PCIE_INDEX     - Index GPUs by PCIe address-ordering instead of HIP-provided indexing\n");
   }
 
   // Display env var settings
@@ -238,6 +241,7 @@ public:
       printf("%-20s = %12s : Using %d shared mem per threadblock\n", "SHARED_MEM_BYTES",
              getenv("SHARED_MEM_BYTES") ? "(specified)" : "(unset)", sharedMemBytes);
       printf("%-20s = %12d : Each CU gets a multiple of %d bytes to copy\n", "BLOCK_BYTES", blockBytes, blockBytes);
+      printf("%-20s = %12d : Using %s-based GPU indexing\n", "USE_PCIE_INDEX", usePcieIndexing, (usePcieIndexing ? "PCIe" : "HIP"));
       printf("\n");
     }
   };
