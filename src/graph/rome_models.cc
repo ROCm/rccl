@@ -460,6 +460,19 @@ static struct rcclRomeModel rome_model_67 = {
   .netGdrLevel = -2,
 };
 
+static struct rcclRomeModel rome_model_68 = {
+  .nGpus = 16, .nCpus = 1, .nNics = 16, .nLinks = 3,
+  .gpuIds = { 0xcf000, 0xd4000, 0xd5000, 0xd6000, 0xd0000, 0xd1000, 0xd2000, 0xd3000, 0xf0000, 0xf1000, 0xf2000, 0xf3000, 0xf4000, 0xf5000, 0xf6000, 0xf7000, },
+  .nicIds = { 0xcd000, 0xc8000, 0xc9000, 0xcb000, 0xcc000, 0xce000, 0xc7000, 0xca000, 0xe8000, 0xe9000, 0xea000, 0xeb000, 0xec000, 0xed000, 0xee000, 0xef000, },
+  .gpuNuma = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, },
+  .nicNuma = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, },
+  .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, },
+  .gdrLevel = { 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 3, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 3, },
+  .pattern = "@@",
+  .ringBase = "N0 0 1 2 3 N3 N4 4 5 6 7 N7 N8 8 9 10 11 N11 N12 12 13 14 15 N15|N15 15 14 13 12 N12 N11 11 10 9 8 N8 N7 7 6 5 4 N4 N3 3 2 1 0 N0|N1 1 3 0 2 N2 N5 5 7 4 6 N6 N9 9 11 8 10 N10 N13 13 15 12 14 N14|N14 14 12 15 13 N13 N10 10 8 11 9 N9 N6 6 4 7 5 N5 N2 2 0 3 1 N1|N0 0 1 2 3 N3 N4 4 5 6 7 N7 N8 8 9 10 11 N11 N12 12 13 14 15 N15|N15 15 14 13 12 N12 N11 11 10 9 8 N8 N7 7 6 5 4 N4 N3 3 2 1 0 N0|N1 1 3 0 2 N2 N5 5 7 4 6 N6 N9 9 11 8 10 N10 N13 13 15 12 14 N14|N14 14 12 15 13 N13 N10 10 8 11 9 N9 N6 6 4 7 5 N5 N2 2 0 3 1 N1",
+  .netGdrLevel = 3,
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -493,6 +506,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_65,
   rome_model_66,
   rome_model_67,
+  rome_model_68,
 };
 
 /* Parse user defined rings. Format is like :
@@ -1139,5 +1153,102 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL));
   // clean up
   free(all_gpu_permutations);
+  return ncclSuccess;
+}
+
+ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
+  #define NUM_HIVES 4
+  #define HIVE_GPUS 4
+
+  static char ringRemap[256];
+
+  int ngpus = system->nodes[GPU].count;
+  int nnets = system->nodes[NET].count;
+
+  // only valid on Rome
+  int arch, vendor, model;
+  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+  if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
+    return ncclSuccess;
+
+  // number of GPUs and NICs on each numa node is used as first screening pattern
+  struct rcclRomeModel romeTopo;
+  char pattern[256];
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern));
+
+  // only match for system with 16 GPUs
+  if (ngpus != NUM_HIVES*HIVE_GPUS || nnets != NUM_HIVES*HIVE_GPUS) return ncclSuccess;
+
+  int g_hives[ngpus], n_hives[nnets];
+  int ng_hives[NUM_HIVES];
+
+  // try to sort GPUs into hives
+  for (int i = 0; i < NUM_HIVES; i++)
+    ng_hives[i] = 0;
+  for (int i = 0; i < nnets; i++)
+    n_hives[i] = -1;
+  for (int i = 0; i < ngpus; i++)
+    g_hives[i] = -1;
+  for (int i = 0; i < ngpus; i++) {
+    int j, h;
+    for (j = 0; j < NUM_HIVES; j++) {
+      if (ng_hives[j]) {
+        if (romeTopo.connMatrix[i*ngpus+g_hives[j*HIVE_GPUS]]) {
+          g_hives[j*HIVE_GPUS+ng_hives[j]] = i;
+          ng_hives[j]++;
+          break;
+        }
+      }
+    }
+    if (j >= NUM_HIVES) {
+      for (h = 0; h < NUM_HIVES; h++) {
+        if (ng_hives[h] == 0) {
+          g_hives[h*HIVE_GPUS] = i;
+          ng_hives[h]++;
+          break;
+        }
+      }
+      if (h >= NUM_HIVES)
+        return ncclSuccess;
+    }
+  }
+  for (int i = 0; i < NUM_HIVES; i++)
+    if (ng_hives[i] != 4) return ncclSuccess;
+  // remap NET ids
+  for (int i = 0; i < nnets; i++) {
+    int j;
+    for (j = 0; j < ngpus; j++) {
+      if(romeTopo.gdrLevel[i*nnets+g_hives[j]] == 3) {
+        n_hives[j] = i;
+        break;
+      }
+    }
+    if (j >= ngpus) return ncclSuccess;
+  }
+  // validation
+  for (int i = 0; i < nnets; i++)
+    if (n_hives[i] == -1) return ncclSuccess;
+  for (int i = 0; i < ngpus; i++)
+    if (g_hives[i] == -1) return ncclSuccess;
+  char line[1024];
+  sprintf(line, "Found matching Rome model 4P4H with GPU mapping: ");
+  int offset = strlen(line);
+  for (int k = 0; k < ngpus; k++) {
+    sprintf(line+offset, "%d ", g_hives[k]);
+    offset = strlen(line);
+  }
+  if (nnets > 1) {
+    sprintf(line+offset, "NET mapping: ");
+    offset = strlen(line);
+    for (int k = 0; k < nnets; k++) {
+      sprintf(line+offset, "%d ", n_hives[k]);
+      offset = strlen(line);
+    }
+  }
+  INFO(NCCL_GRAPH, "%s", line);
+  system->type |= RCCL_TOPO_4P2H_ROME;
+  system->netGdrLevel = rome_model_68.netGdrLevel;
+  // create 4P4H based on reference and remapped ids
+  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives, n_hives));
   return ncclSuccess;
 }
