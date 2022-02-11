@@ -441,6 +441,7 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_COLLNET, NCCL_PROTO_LL, FUNC, T,
 
 #include "prims_ll128.h"
 // [RCCL] RingLL128 is re-purposed as clique-based kernel
+#include "clique/CliqueCommonKernel.h"
 template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_RING, NCCL_PROTO_CLIQUE, FUNC, T, UNROLL> {
 public:
