@@ -119,12 +119,6 @@ include_directories(src/collectives)
 include_directories(src/collectives/device)
 
 set(CU_SOURCES
-    src/collectives/device/all_reduce.cu
-    src/collectives/device/all_gather.cu
-    src/collectives/device/reduce.cu
-    src/collectives/device/broadcast.cu
-    src/collectives/device/reduce_scatter.cu
-    src/collectives/device/sendrecv.cu
     src/collectives/device/functions.cu)
 
 set(CPP_SOURCES)
@@ -208,10 +202,6 @@ endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
   target_compile_options(rccl PRIVATE -fvisibility=hidden)
-  foreach(target ${AMDGPU_TARGETS})
-    target_compile_options(rccl PRIVATE -fgpu-rdc)
-  endforeach()
-  target_link_libraries(rccl PRIVATE -fgpu-rdc)
   target_include_directories(rccl PRIVATE ${ROCM_PATH}/hsa/include)
   find_program( hipcc_executable hipcc )
   execute_process(COMMAND bash "-c" "${hipcc_executable} -help | grep 'parallel-jobs'" OUTPUT_VARIABLE hipcc_parallel_jobs)
@@ -220,7 +210,6 @@ if("${HIP_COMPILER}" MATCHES "clang")
     target_link_libraries(rccl PRIVATE -parallel-jobs=8)
   endif()
 
-  # RCCL static lib uses -fgpu-rdc which requires hipcc as the linker and archiver
   if(BUILD_STATIC)
     target_link_libraries(rccl PRIVATE --emit-static-lib)
     set(CMAKE_AR "${hipcc_executable}")

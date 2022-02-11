@@ -7,6 +7,9 @@
 
 #include "op128.h"
 
+#ifndef NCCL_PRIMITIVES__LL128_H_
+#define NCCL_PRIMITIVES__LL128_H_
+
 #define NCCL_LL128_FLAGTHREAD (NCCL_LL128_LINEELEMS-1)
 
 template <typename T, class FUNC, int NRECV, int NSEND>
@@ -434,3 +437,4 @@ class ncclLL128Primitives {
     saveSendSync();
   }
 };
+#endif

@@ -6,10 +6,23 @@
  ************************************************************************/
 
 #include "devcomm.h"
-#include "collectives.h"
+#include "all_gather.h"
+#include "all_reduce.h"
+#include "broadcast.h"
+#include "reduce.h"
+#include "reduce_scatter.h"
+#include "sendrecv.h"
 #include "common.h"
+#include "collectives.h"
 
 __device__ struct ncclShmemData* ncclShmem;
+
+IMPL_COLL_P(SendRecv);
+IMPL_COLL_C(AllGather);
+IMPL_COLL_CLIQUE(AllReduce);
+IMPL_COLL_C(Broadcast);
+IMPL_COLL_R(Reduce);
+IMPL_COLL_R(ReduceScatter);
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
