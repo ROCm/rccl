@@ -9,7 +9,7 @@
 #include "collectives.h"
 #include "primitives.h"
 
-namespace {
+namespace reduce {
   template<typename T, typename RedOp, typename Proto>
   __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
     const int tid = threadIdx.x;
@@ -73,20 +73,20 @@ template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
     using Proto = ProtoSimple<REDUCE_CHUNKSTEPS/REDUCE_SLICESTEPS, REDUCE_SLICESTEPS>;
-    runRing<T, RedOp, Proto>(args);
+    reduce::runRing<T, RedOp, Proto>(args);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL>(args);
+    reduce::runRing<T, RedOp, ProtoLL>(args);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL128>(args);
+    reduce::runRing<T, RedOp, ProtoLL128>(args);
   }
 };

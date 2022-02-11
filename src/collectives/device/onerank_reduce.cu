@@ -8,7 +8,16 @@
 #include "devcomm.h"
 #include "collectives.h"
 #include "reduce_kernel.h"
+#include "all_gather.h"
+#include "all_reduce.h"
+#include "broadcast.h"
+#include "reduce.h"
+#include "reduce_scatter.h"
+#include "sendrecv.h"
+#include "alltoall_pivot.h"
 #include "common.h"
+
+__device__ struct ncclShmemData* ncclShmem;
 
 namespace {
   template<typename T, typename RedOp>
@@ -59,3 +68,11 @@ INSTANTIATE(PreMulSum, rccl_bfloat16)
 #endif
 INSTANTIATE(PreMulSum, float)
 INSTANTIATE(PreMulSum, double)
+
+IMPL_COLL_P(SendRecv);
+IMPL_COLL_C(AllGather);
+IMPL_COLL_R(AllReduce);
+IMPL_COLL_C(Broadcast);
+IMPL_COLL_R(Reduce);
+IMPL_COLL_R(ReduceScatter);
+IMPL_COLL_ALLTOALL_PIVOT(AllToAllPivot);

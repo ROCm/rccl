@@ -9,7 +9,7 @@
 #include "collectives.h"
 #include "primitives.h"
 
-namespace {
+namespace all_gather {
   template<typename T, typename RedOp, typename Proto>
   __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
     const int tid = threadIdx.x;
@@ -81,20 +81,20 @@ template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
     using Proto = ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS>;
-    runRing<T, RedOp, Proto>(args);
+    all_gather::runRing<T, RedOp, Proto>(args);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL>(args);
+    all_gather::runRing<T, RedOp, ProtoLL>(args);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL128>(args);
+    all_gather::runRing<T, RedOp, ProtoLL128>(args);
   }
 };
