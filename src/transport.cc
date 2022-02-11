@@ -8,7 +8,7 @@
 #include "comm.h"
 #include "info.h"
 #include "bootstrap.h"
-#include "../graph/topo.h"
+#include "graph/topo.h"
 
 extern struct ncclTransport p2pTransport;
 extern struct ncclTransport shmTransport;
