@@ -311,9 +311,10 @@ class ncclPrimitives {
  public:
   __device__ __forceinline__
   ncclPrimitives(const int tid, const int nworkers, int* recvPeers, int* sendPeers, T* directBuff, int stepSize, struct ncclChannel* channel, struct ncclDevComm* comm, struct ncclShmemPtrs* ptrs, int group)
-    : comm(comm), tid(tid), nworkers(nworkers), stepSize(stepSize), srcs((const T**)ptrs[TO_GR(group)].srcs), dsts((T**)ptrs[TO_GR(group)].dsts),
-    group(TO_GR(group)), barriers(&ptrs[TO_GR(group)].barrier), barrier_next(ptrs[TO_GR(group)].barrier_next),
-    connIndex((NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? TO_GR(group)/2 : TO_IDX(group)) {
+    : tid(tid), nworkers(nworkers), stepSize(stepSize), group(TO_GR(group)), comm(comm),
+    connIndex((NSEND == NCCL_MAX_DIRECT_ARITY || NRECV == NCCL_MAX_DIRECT_ARITY) ? TO_GR(group)/2 : TO_IDX(group)),
+    srcs((const T**)ptrs[TO_GR(group)].srcs), dsts((T**)ptrs[TO_GR(group)].dsts),
+    barriers(&ptrs[TO_GR(group)].barrier), barrier_next(ptrs[TO_GR(group)].barrier_next) {
     nthreads = nworkers;
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     // int postThreads = NSEND && nworkers >= 64 ? WARP_SIZE : 0;
