@@ -423,7 +423,11 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     if (info->algorithm == NCCL_ALGO_COLLNET) nt += 3*WARP_SIZE;
   }
 #endif
-  info->nChannels = nc;
+  if (info->coll == ncclFuncAllToAllPivot) {
+    info->nChannels = 24;
+  } else {
+    info->nChannels = nc;
+  }
   info->nThreads = nt;
   return ncclSuccess;
 }
@@ -436,6 +440,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUp : ncclPatternPipelineTo; break;
     case ncclFuncReduceScatter:
     case ncclFuncAllGather:
+    case ncclFuncAllToAllPivot:
       info->pattern = ncclPatternRing; break;
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUpDown : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
@@ -760,7 +765,11 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
     int allCollNetSupport = comm->collNetSupport;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-      info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannels); // assign number of channels
+      if (info->coll == ncclFuncAllToAllPivot) {
+        info->nChannels = 24;
+      } else {
+        info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannels); // assign number of channels
+      }
       channelUsed += info->nChannels;
       // We can use fast path if all collectives are the same
       homogeneous &= info->coll == comm->asyncOps[0].coll &&

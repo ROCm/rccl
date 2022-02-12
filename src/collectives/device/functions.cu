@@ -111,7 +111,8 @@ __device__ ncclKern_t ncclFuncs[1+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedO
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
-  NCCL_FUNCS2A(AllReduce)
+  NCCL_FUNCS2A(AllReduce),
+  NCCL_FUNCS2B(AllToAllPivot)
 #endif
 };
 #endif

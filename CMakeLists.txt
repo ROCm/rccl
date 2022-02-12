@@ -129,6 +129,7 @@ else()
   set(CU_SOURCES
       src/collectives/device/all_reduce.cu
       src/collectives/device/all_gather.cu
+      src/collectives/device/alltoall_pivot.cu
       src/collectives/device/reduce.cu
       src/collectives/device/broadcast.cu
       src/collectives/device/reduce_scatter.cu
@@ -168,6 +169,7 @@ set(CC_SOURCES
     src/collectives/scatter_api.cc
     src/collectives/all_to_all_api.cc
     src/collectives/all_to_allv_api.cc
+    src/collectives/all_to_all_pivot_api.cc
     src/channel.cc
     src/clique/CliqueManager.cc     # RCCL
     src/clique/HandleCache.cc       # RCCL

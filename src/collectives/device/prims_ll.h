@@ -454,4 +454,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
   __device__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     return LLGenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
   }
+  __device__ void recvSend(int eltN) {
+    return LLGenericOp<1, 1, -1, -1>(-1, -1, eltN, false);
+  }
 };

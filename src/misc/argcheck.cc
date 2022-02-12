@@ -44,9 +44,9 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
     WARN("%s : invalid type %d", info->opName, info->datatype);
     return ncclInvalidArgument;
   }
-  // Type is OK, compute nbytes. Convert Allgather/Broadcast/P2P calls to chars.
+  // Type is OK, compute nbytes. Convert Allgather/Broadcast/P2P/AllToAllPivot calls to chars.
   info->nBytes = info->count * ncclTypeSize(info->datatype);
-  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast) {
+  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast || info->coll == ncclFuncAllToAllPivot) {
     info->count = info->nBytes;
     info->datatype = ncclInt8;
   }
