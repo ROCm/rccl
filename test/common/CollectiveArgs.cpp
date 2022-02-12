@@ -134,8 +134,20 @@ namespace RcclUnitTesting
 
   ErrCode CollectiveArgs::DeallocateMem()
   {
-    this->inputGpu.FreeGpuMem();
-    this->outputGpu.FreeGpuMem();
+    // If in-place, either only inputGpu or outputGpu was allocated
+    if (this->inPlace)
+    {
+      if (this->funcType == ncclCollGather)
+        this->outputGpu.FreeGpuMem();
+      else
+        this->inputGpu.FreeGpuMem();
+    }
+    else
+    {
+      this->inputGpu.FreeGpuMem();
+      this->outputGpu.FreeGpuMem();
+    }
+
     this->outputCpu.FreeCpuMem();
     this->expected.FreeCpuMem();
 
