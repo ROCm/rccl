@@ -467,7 +467,7 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
-RCCL_PARAM(IntraNetThreshold, "RCCL_INTRANET_THRESHOLD", 8388608);
+RCCL_PARAM(IntraNetThreshold, "INTRANET_THRESHOLD", 8388608);
 
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWorkElem* work, struct ncclProxyArgs* proxyArgs /* output */) {
   work->comm = info->comm->devComm;

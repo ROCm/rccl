@@ -811,6 +811,9 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels) return ncclSuccess;
     // try to match 1H16P
     NCCLCHECK(parse1H16P(system, graph));
+    if (graph->nChannels) return ncclSuccess;
+    // try to match 4H4P
+    NCCLCHECK(parse4H4P(system, graph));
   }
   if (graph->nChannels) return ncclSuccess;
 

@@ -156,7 +156,7 @@ static size_t getP2pChunkSize(size_t totalSize, int minChannels, int maxChannels
   return size;
 }
 
-RCCL_PARAM(P2pNetThreshold, "RCCL_P2P_NET_THRESHOLD", 131072);
+RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 
 NCCL_API(ncclResult_t, ncclGroupEnd);
 ncclResult_t ncclGroupEnd() {
