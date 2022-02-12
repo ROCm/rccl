@@ -27,7 +27,7 @@ namespace RcclUnitTesting
       if (this->localScalar.ptr != nullptr)
       {
         if (this->scalarMode == 0) this->localScalar.FreeGpuMem();
-        if (this->scalarMode == 1) this->localScalar.FreeCpuMem();
+        if (this->scalarMode == 1) hipHostFree(this->localScalar.ptr);
       }
     }
 
@@ -54,7 +54,7 @@ namespace RcclUnitTesting
       }
       else if (scalarMode == ncclScalarHostImmediate)
       {
-        CHECK_CALL(this->localScalar.AllocateCpuMem(numBytes));
+        CHECK_HIP(hipHostMalloc(&this->localScalar.ptr, numBytes, 0));
         memcpy(this->localScalar.ptr, scalarTransport.ptr + (globalRank * numBytes), numBytes);
       }
     }
@@ -142,7 +142,7 @@ namespace RcclUnitTesting
     if (this->localScalar.ptr != nullptr)
     {
       if (this->scalarMode == 0) this->localScalar.FreeGpuMem();
-      if (this->scalarMode == 1) this->localScalar.FreeCpuMem();
+      if (this->scalarMode == 1) CHECK_HIP(hipHostFree(this->localScalar.ptr));
     }
     return TEST_SUCCESS;
   }
