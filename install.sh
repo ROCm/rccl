@@ -229,7 +229,7 @@ if ($run_tests); then
         if ($run_tests_all); then
             ./test/UnitTests
         else
-            ./test/UnitTests --gtest_filter="BroadcastCorrectnessSweep*:*float32*"
+            ./test/UnitTests --gtest_filter="AllReduce.*"
         fi
     else
         echo "Unit tests have not been built yet; please re-run script with -t to build unit tests."
