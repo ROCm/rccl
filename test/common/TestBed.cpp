@@ -465,7 +465,6 @@ namespace RcclUnitTesting
                                                      inPlaceList[ipIdx], managedMemList[mmIdx]);
             ERROR("Incorrect output for %s\n", name.c_str());
           }
-
         }
         this->DeallocateMem();
       }

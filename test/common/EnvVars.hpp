@@ -23,7 +23,7 @@ namespace RcclUnitTesting
     int  maxGpus;     // Set the maximum number of GPUs to use  [UT_MAX_GPUS]
     int  processMask; // Filter single/multi process            [UT_PROCESS_MASK]
     bool verbose;     // Show verbose TestBed output for debug  [UT_VERBOSE]
-    bool printValues; // Print out arrays                       [UT_PRINT_VALUES]
+    int  printValues; // Print out input/output/expected arrays [UT_PRINT_VALUES]
 
     // Constructor that parses and collects environment variables
     EnvVars();

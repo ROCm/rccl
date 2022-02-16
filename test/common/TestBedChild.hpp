@@ -49,7 +49,7 @@ namespace RcclUnitTesting
     int   childId;
     pid_t pid;
     bool  verbose;
-    bool  printValues;
+    int   printValues;
 
     // Pipes used to communicate between parent process
     int parentWriteFd;
@@ -67,7 +67,7 @@ namespace RcclUnitTesting
     std::vector<std::vector<CollectiveArgs>> collArgs;  // Info for each collective for each rank
 
     // Constructor
-    TestBedChild(int const childId, bool const verbose, bool const printValues);
+    TestBedChild(int const childId, bool const verbose, int const printValues);
 
     // Prepare parent/child communication pipes - to be executed by parent process
     int InitPipes();

@@ -7,8 +7,9 @@
 #include "TestBedChild.hpp"
 #include <thread>
 
-#define CHILD_NCCL_CALL(cmd, msg) \
+#define CHILD_NCCL_CALL(cmd, msg)                                       \
   {                                                                     \
+    if (this->verbose) printf("[ NCCL CALL] " #cmd "\n");               \
     ncclResult_t status = cmd;                                          \
     if (status != ncclSuccess)                                          \
     {                                                                   \
@@ -22,7 +23,7 @@
 
 namespace RcclUnitTesting
 {
-  TestBedChild::TestBedChild(int const childId, bool const verbose, bool const printValues)
+  TestBedChild::TestBedChild(int const childId, bool const verbose, int const printValues)
   {
     this->childId = childId;
     this->verbose = verbose;
@@ -259,11 +260,13 @@ namespace RcclUnitTesting
     {
       if (collId == -1 || collId == collIdx)
       {
-        if (this->verbose) INFO("Rank %d on child %d allocates memory for collective %d (%s,%s)\n",
+        CHECK_CALL(this->collArgs[localRank][collIdx].AllocateMem(inPlace, useManagedMem));
+        if (this->verbose) INFO("Rank %d on child %d allocates memory for collective %d (%s,%s) Input: %p Output %p\n",
                                 globalRank, this->childId, collIdx,
                                 inPlace ? "in-place" : "out-of-place",
-                                useManagedMem ? "managed" : "unmanaged");
-        CHECK_CALL(this->collArgs[localRank][collIdx].AllocateMem(inPlace, useManagedMem));
+                                useManagedMem ? "managed" : "unmanaged",
+                                this->collArgs[localRank][collIdx].inputGpu.ptr,
+                                this->collArgs[localRank][collIdx].outputGpu.ptr);
       }
     }
 
@@ -324,18 +327,20 @@ namespace RcclUnitTesting
 
         if (this->printValues)
         {
+          int const numInputElementsToPrint = (this->printValues < 0 ? collArg.numInputElements : this->printValues);
           PtrUnion inputCpu;
-          size_t const numInputBytes = collArg.numInputElements * DataTypeToBytes(collArg.dataType);
+          size_t const numInputBytes = numInputElementsToPrint * DataTypeToBytes(collArg.dataType);
           inputCpu.AllocateCpuMem(numInputBytes);
           CHECK_HIP(hipMemcpy(inputCpu.ptr, collArg.inputGpu.ptr, numInputBytes, hipMemcpyDeviceToHost));
-          printf("Rank %02d Coll %d Input: %s\n", collArg.globalRank, collId,
-                 inputCpu.ToString(collArg.dataType, collArg.numInputElements).c_str());
+          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Input",
+                 inputCpu.ToString(collArg.dataType, numInputElementsToPrint).c_str());
           inputCpu.FreeCpuMem();
 
-          size_t const numOutputBytes = collArg.numOutputElements * DataTypeToBytes(collArg.dataType);
+          int const numOutputElementsToPrint = (this->printValues < 0 ? collArg.numOutputElements : this->printValues);
+          size_t const numOutputBytes = numOutputElementsToPrint * DataTypeToBytes(collArg.dataType);
           CHECK_HIP(hipMemcpy(collArg.outputCpu.ptr, collArg.outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
-          printf("Rank %02d Coll %d Pre-Output: %s\n", collArg.globalRank, collId,
-                 collArg.outputCpu.ToString(collArg.dataType, collArg.numOutputElements).c_str());
+          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Pre-Output",
+                 collArg.outputCpu.ToString(collArg.dataType, numOutputElementsToPrint).c_str());
         }
 
         switch (collArg.funcType)
@@ -461,13 +466,14 @@ namespace RcclUnitTesting
         {
           CollectiveArgs const& collArg = this->collArgs[localRank][collId];
 
-          size_t const numOutputBytes = collArg.numOutputElements * DataTypeToBytes(collArg.dataType);
+          int numOutputElementsToPrint = (this->printValues < 0 ? collArg.numOutputElements : this->printValues);
+          size_t const numOutputBytes = numOutputElementsToPrint * DataTypeToBytes(collArg.dataType);
           CHECK_HIP(hipMemcpy(collArg.outputCpu.ptr, collArg.outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
-          printf("Rank %02d Coll %d Output: %s\n", collArg.globalRank, collId,
-                 collArg.outputCpu.ToString(collArg.dataType, collArg.numOutputElements).c_str());
+          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Output",
+                 collArg.outputCpu.ToString(collArg.dataType, numOutputElementsToPrint).c_str());
 
-          printf("Rank %02d Coll %d Expected: %s\n", collArg.globalRank, collId,
-                 collArg.expected.ToString(collArg.dataType, collArg.numOutputElements).c_str());
+          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Expected",
+                 collArg.expected.ToString(collArg.dataType, numOutputElementsToPrint).c_str());
         }
     }
     if (this->verbose) INFO("Child %d finishes ExecuteCollectives()\n", this->childId);
@@ -530,13 +536,19 @@ namespace RcclUnitTesting
       CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
       if (collId == -1 || collId == collIdx)
       {
+        if (this->verbose)
+        {
+          INFO("Child %d release memory for collective %d (Input: %p Output %p\n",
+               this->childId, collIdx, collArg.inputGpu.ptr, collArg.outputGpu.ptr);
+        }
+
         CHECK_CALL(collArg.DeallocateMem());
       }
       if (collArg.scalarMode != -1)
       {
         CHILD_NCCL_CALL(ncclRedOpDestroy(collArg.redOp, this->comms[localRank]),
                         "ncclRedOpDestroy");
-        if (verbose) INFO("Child %d destroyscustom redop %d for collective %d\n",
+        if (verbose) INFO("Child %d destroys custom redop %d for collective %d\n",
                           this->childId, collArg.redOp, collIdx);
       }
     }

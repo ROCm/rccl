@@ -72,7 +72,7 @@ namespace RcclUnitTesting
       {
         if (!strcmp(s.c_str(), ncclDataTypeNames[i]))
         {
-#ifdef BUILD_ALL_REDUCE_ONLY
+#ifdef BUILD_ALLREDUCE_ONLY
           if (i == ncclFloat32)
 #endif
           {
@@ -143,7 +143,7 @@ namespace RcclUnitTesting
         std::make_pair("UT_VERBOSE"     , "Show verbose unit test output"),
         std::make_pair("UT_REDOPS"      , "List of reduction ops to test"),
         std::make_pair("UT_DATATYPES"   , "List of datatypes to test"),
-        std::make_pair("UT_PRINT_VALUES", "Print array values")
+        std::make_pair("UT_PRINT_VALUES", "Print array values (# of values to print, < 0 for all)")
       };
 
     printf("================================================================================\n");

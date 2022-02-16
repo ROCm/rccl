@@ -7,7 +7,7 @@
 
 namespace RcclUnitTesting
 {
-  TEST(AllReduce, GroupCall)
+  TEST(AllReduce, DISABLED_GroupCall)
   {
     TestBed testBed;
 

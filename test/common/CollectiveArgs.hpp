@@ -123,12 +123,16 @@ namespace RcclUnitTesting
     ErrCode AllocateMem(bool   const inPlace,
                         bool   const useManagedMem);
 
+    // Execute the provided data preparation function to fill input and compute expected results
     ErrCode PrepareData(CollFuncPtr const prepareDataFunc);
 
+    // Compare outputs to expected values
     ErrCode ValidateResults();
 
+    // Deallocate memory
     ErrCode DeallocateMem();
 
+    // Provide a description for the current collective arguments
     std::string GetDescription() const;
 
     // Returns the number of inputs/outputs based on collective function type

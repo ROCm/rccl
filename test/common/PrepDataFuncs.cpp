@@ -50,7 +50,7 @@ namespace RcclUnitTesting
 
   ErrCode DefaultPrepData_Broadcast(CollectiveArgs &collArgs)
   {
-    if (CheckAllocation(collArgs) != TEST_SUCCESS) return TEST_FAIL;
+    CHECK_CALL(CheckAllocation(collArgs));
     if (collArgs.numInputElements != collArgs.numOutputElements)
     {
       ERROR("Number of input elements must match number of output elements for Broadcast\n");
@@ -77,7 +77,7 @@ namespace RcclUnitTesting
 
   ErrCode DefaultPrepData_Reduce(CollectiveArgs &collArgs, bool const isAllReduce)
   {
-    if (CheckAllocation(collArgs) != TEST_SUCCESS) return TEST_FAIL;
+    CHECK_CALL(CheckAllocation(collArgs));
     if (collArgs.numInputElements != collArgs.numOutputElements)
     {
       ERROR("Number of input elements must match number of output elements for Reduce\n");
@@ -147,7 +147,7 @@ namespace RcclUnitTesting
 
   ErrCode DefaultPrepData_Gather(CollectiveArgs &collArgs, bool const isAllGather)
   {
-    if (CheckAllocation(collArgs) != TEST_SUCCESS) return TEST_FAIL;
+    CHECK_CALL(CheckAllocation(collArgs));
     if (collArgs.totalRanks * collArgs.numInputElements != collArgs.numOutputElements)
     {
       ERROR("# of output elements must be total ranks * # input elements for AllGather\n");
@@ -185,7 +185,7 @@ namespace RcclUnitTesting
 
   ErrCode DefaultPrepData_ReduceScatter(CollectiveArgs &collArgs)
   {
-    if (CheckAllocation(collArgs) != TEST_SUCCESS) return TEST_FAIL;
+    CHECK_CALL(CheckAllocation(collArgs));
     if (collArgs.numInputElements != collArgs.numOutputElements * collArgs.totalRanks)
     {
       ERROR("# of input elements must be total ranks * # output elements for ReduceScatter\n");
@@ -262,7 +262,7 @@ namespace RcclUnitTesting
 
   ErrCode DefaultPrepData_Scatter(CollectiveArgs &collArgs)
   {
-    if (CheckAllocation(collArgs) != TEST_SUCCESS) return TEST_FAIL;
+    CHECK_CALL(CheckAllocation(collArgs));
     if (collArgs.numInputElements != collArgs.numOutputElements * collArgs.totalRanks)
     {
       ERROR("# of input elements must be total ranks * # output elements for Scatter\n");
@@ -304,7 +304,7 @@ namespace RcclUnitTesting
 
   ErrCode DefaultPrepData_AllToAll(CollectiveArgs &collArgs)
   {
-    if (CheckAllocation(collArgs) != TEST_SUCCESS) return TEST_FAIL;
+    CHECK_CALL(CheckAllocation(collArgs));
     if (collArgs.numInputElements != collArgs.numOutputElements)
     {
       ERROR("Number of input elements must match number of output elements for AllToAll\n");
