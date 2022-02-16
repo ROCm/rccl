@@ -119,6 +119,9 @@ namespace RcclUnitTesting
                         std::vector<bool>           const& inPlaceList,
                         std::vector<bool>           const& managedMemList);
 
+    // Used to track total number of calls to ExecuteCollectives()
+    static int& NumTestsRun();
+
   protected:
     // Ends the specified child process
     void StopChild(int const childId);

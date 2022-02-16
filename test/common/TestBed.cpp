@@ -223,6 +223,8 @@ namespace RcclUnitTesting
   void TestBed::ExecuteCollectives()
   {
     int const cmd = TestBedChild::CHILD_EXECUTE_COLL;
+    ++TestBed::NumTestsRun();
+
     // Send ExecuteColl command to each active child process
     for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
@@ -470,6 +472,12 @@ namespace RcclUnitTesting
       }
       this->DestroyComms();
     }
+  }
+
+  int& TestBed::NumTestsRun()
+  {
+    static int numTestsRun = 0;
+    return numTestsRun;
   }
 }
 
