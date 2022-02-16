@@ -773,9 +773,6 @@ static ncclResult_t computeBuffSizes(struct ncclComm* comm) {
 
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     comm->buffSizes[p] = comm->hostDevComm.buffSizes[p] = envs[p] != -2 ? envs[p] : defaults[p];
-    if (comm->rank == 0) {
-      printf("buffSize %d: %d\n", p, (int)comm->hostDevComm.buffSizes[p]);
-    }
   }
   return ncclSuccess;
 }

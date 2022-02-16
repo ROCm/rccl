@@ -109,9 +109,6 @@ namespace {
       prims.directRecv(offset, nelem);
       ACCUMULATE_COUNTER(directRecv);
     }
-    if (blockIdx.x == 0 && threadIdx.x == 0) {
-      ((int*)args->recvbuff)[0] = int(Proto::calcBytePerStep());
-    }
 #ifdef ENABLE_PROFILING
     if (tid == 0 && args->coll.opCount) devProf->elems[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
 #endif

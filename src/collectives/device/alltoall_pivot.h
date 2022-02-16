@@ -50,23 +50,8 @@ namespace {
       if (num_hops == 0 && args->sendbuff != args->recvbuff) {
         const T* sendbuff = (const T*)args->sendbuff + send_offset;
         T* recvbuff = (T *)args->recvbuff + recv_offset;
-        // const T* sendbuff = (const T*)args->sendbuff + bid * 21800 * 1024;
-        // T* recvbuff = (T *)args->recvbuff + bid * 21800 * 1024;
-        // for (ssize_t i = threadIdx.x; i * sizeof(ulong2) < send_recv_size; i += blockDim.x) {
-        // for (ssize_t i = threadIdx.x; i * sizeof(ulong2) < 22369621; i += blockDim.x) {
-          // ((ulong2*)recvbuff)[i] = ((ulong2*)sendbuff)[i];
-        // }
         ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1, 0>(
             tid, nthreads, nullptr, false, 1, &sendbuff, 1, &recvbuff, send_recv_size);
-        // if (blockIdx.x == 0 && threadIdx.x == 0) {
-          // ((int*)args->recvbuff)[0] = send_offset;
-          // ((int*)args->recvbuff)[1] = recv_offset;
-          // ((int*)args->recvbuff)[2] = send_recv_size;
-        // } else if (blockIdx.x == 1 && threadIdx.x == 0) {
-          // ((int*)args->recvbuff)[3] = send_offset;
-          // ((int*)args->recvbuff)[4] = recv_offset;
-          // ((int*)args->recvbuff)[5] = send_recv_size;
-        // }
       } else {
         for (ssize_t prims_offset = 0; prims_offset < send_recv_size; prims_offset += prims_size) {
           const int prims_nelem = min(prims_size, send_recv_size - prims_offset);
@@ -81,17 +66,6 @@ namespace {
 
           // final step: recv
           prims.directRecv(recv_offset + prims_offset, prims_nelem);
-
-          // if (threadIdx.x == 0 && prims_offset < 4 * prims_size) {
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size] = send_offset + prims_offset;
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size + 1] = recv_offset + prims_offset;
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size + 2] = prims_nelem;
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size + 3] = int(Proto::calcBytePerStep());
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size + 4] = send_recv_size;
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size + 5] = ncclShmem->comm.buffSizes[0];
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size + 6] = ncclShmem->comm.buffSizes[1];
-          //   ((int*)args->recvbuff)[8 * prims_offset / prims_size + 7] = ncclShmem->comm.buffSizes[2];
-          // }
         }
       }
     }
