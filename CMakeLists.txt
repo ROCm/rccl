@@ -169,7 +169,6 @@ set(CC_SOURCES
     src/collectives/scatter_api.cc
     src/collectives/all_to_all_api.cc
     src/collectives/all_to_allv_api.cc
-    src/collectives/all_to_all_pivot_api.cc
     src/channel.cc
     src/clique/CliqueManager.cc     # RCCL
     src/clique/HandleCache.cc       # RCCL

@@ -137,6 +137,10 @@ struct ncclTopoSystem {
   int type;
   int nRanks;
   int netGdrLevel;
+
+  bool pivotA2AEnabled;
+  int pivotA2ANumBiRings;
+  int pivotA2ANumChannels;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);

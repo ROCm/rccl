@@ -26,9 +26,9 @@
 #endif
 
 
-#define NCCL_NUM_FUNCTIONS 6 // SendRecv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAllPivot, ncclFuncSendRecv, ncclNumFuncs} ncclFunc_t;
-extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1];
+#define NCCL_NUM_FUNCTIONS 5 // SendRecv and AllToAllPivot not included for now
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncAllToAllPivot, ncclNumFuncs} ncclFunc_t;
+extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2];
 
 #define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
@@ -202,7 +202,12 @@ struct ncclWorkElem {
   union {
     struct {
       size_t count;
-      size_t lastChunkSize;
+      union {
+        size_t lastChunkSize;
+        // Pivot A2A kernel computes chunk size itself.
+        // Instead, it needs the number of bidirectional rings.
+        size_t pivotA2ANumBiRings;
+      };
       uint64_t redOpArg;
       uint16_t root;
       uint8_t bid;

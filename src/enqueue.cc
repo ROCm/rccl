@@ -424,7 +424,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   }
 #endif
   if (info->coll == ncclFuncAllToAllPivot) {
-    info->nChannels = 24;
+    info->nChannels = comm->topo->pivotA2ANumChannels;
   } else {
     info->nChannels = nc;
   }
@@ -604,6 +604,12 @@ comp_next:
   TRACE(NCCL_COLL,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d chunksize %d comm %p",
       proxyArgs->opCount, sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, info->nBytes, info->protocol, info->nChannels, info->nThreads,
       nLoops, proxyArgs->subs[0].nsteps, chunkSize, info->comm);
+
+  // For Pivot A2A, lastChunkSize is not needed, set pivotA2ANumBiRings instead
+  if (info->coll == ncclFuncAllToAllPivot) {
+    work->coll.pivotA2ANumBiRings = info->comm->topo->pivotA2ANumBiRings;
+  }
+
   return ncclSuccess;
 }
 
@@ -766,7 +772,7 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
       if (info->coll == ncclFuncAllToAllPivot) {
-        info->nChannels = 24;
+        info->nChannels = comm->topo->pivotA2ANumChannels;
       } else {
         info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannels); // assign number of channels
       }

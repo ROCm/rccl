@@ -423,17 +423,6 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
     const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /// @endcond
 
-/*! @brief All-To-All Pivot
- *
- * @details All-To-All Pivot algorithm implementation.
- */
-ncclResult_t  ncclAllToAllPivot(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden
-ncclResult_t pncclAllToAllPivot(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
-/// @endcond
-
 /*
  * Group semantics
  *

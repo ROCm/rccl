@@ -367,7 +367,7 @@ static struct rcclRomeModel rome_model_56 = {
   .gdrLevel = { },
   .pattern = "40404040",
   .ringBase = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0",
-  .options = "",
+  .options = "pivotA2AEnabled=1,pivotA2ANumBiRings=3,pivotA2ANumChannels=24",
 };
 
 static struct rcclRomeModel rome_model_58 = {
@@ -640,6 +640,12 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
     for (int i = 0; i < numTokens/2; i++) {
       if (strcmp(tokens[i*2], "netGdrLevel") == 0) {
         system->netGdrLevel = atol(tokens[i*2+1]);
+      } else if (strcmp(tokens[i*2], "pivotA2AEnabled") == 0) {
+        system->pivotA2AEnabled = (bool)atol(tokens[i*2+1]);
+      } else if (strcmp(tokens[i*2], "pivotA2ANumBiRings") == 0) {
+        system->pivotA2ANumBiRings = atol(tokens[i*2+1]);
+      } else if (strcmp(tokens[i*2], "pivotA2ANumChannels") == 0) {
+        system->pivotA2ANumChannels = atol(tokens[i*2+1]);
       }
     }
     free(str_temp);

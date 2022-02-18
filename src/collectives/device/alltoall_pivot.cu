@@ -8,4 +8,4 @@
 #include "common.h"
 #include "collectives.h"
 
-IMPL_COLL_C(AllToAllPivot);
+IMPL_COLL_ALLTOALL_PIVOT(AllToAllPivot);
