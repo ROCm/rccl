@@ -629,7 +629,7 @@ end:
 
 static void parseOptions(struct ncclTopoSystem* system, const char *options) {
   if (strcmp(options, "")) {
-    char *str_temp = (char *)malloc(sizeof(options));
+    char *str_temp = (char *)malloc(strlen(options) + 1);
     strcpy(str_temp, options);
     char* tokens[MAX_OPT_TOKENS];
     int numTokens = 0;

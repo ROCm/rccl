@@ -361,7 +361,7 @@ static inline ncclResult_t getCollNetSupport(struct ncclInfo* info, int* collNet
 
 static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, int numPipeOps) {
   struct ncclComm* comm = info->comm;
-  if (comm->nRanks == 1) {
+  if (comm->nRanks == 1 || info->coll == ncclFuncAllToAllPivot) {
     info->algorithm = NCCL_ALGO_RING;
     info->protocol = NCCL_PROTO_SIMPLE;
   }
@@ -502,9 +502,11 @@ comp_next:
     // one-rank reduce index
     work->funcIndex = FUNC_INDEX_P2P - ncclNumTypes + int(info->datatype);
     return ncclSuccess;
+  } else if (info->coll == ncclFuncAllToAllPivot) {
+    work->funcIndex = FUNC_INDEX_ALLTOALL_PIVOT;
+  } else {
+    work->funcIndex = FUNC_INDEX(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
   }
-
-  work->funcIndex = FUNC_INDEX(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
 
   work->coll.connIndex = 0;
   proxyArgs->connIndex = 0;
