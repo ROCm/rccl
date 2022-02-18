@@ -8,7 +8,6 @@
 namespace RcclUnitTesting
 {
   // This tests using custom pre-mult scalars reductions
-  // NOTE: Currently disabled due to issues with > 4 GPUs
   TEST(AllReduce, PreMultScalar)
   {
     TestBed testBed;

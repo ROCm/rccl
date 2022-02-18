@@ -32,7 +32,7 @@ namespace RcclUnitTesting
     hsa_iterate_agents(CountGpus, &numDevicesAvailable);
     hsa_shut_down();
 
-    showNames   = GetEnvVar("UT_SHOW_NAMES"  , 0);
+    showNames   = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus     = GetEnvVar("UT_MIN_GPUS"    , 2);
     maxGpus     = GetEnvVar("UT_MAX_GPUS"    , numDevicesAvailable);
     processMask = GetEnvVar("UT_PROCESS_MASK", UT_SINGLE_PROCESS | UT_MULTI_PROCESS);

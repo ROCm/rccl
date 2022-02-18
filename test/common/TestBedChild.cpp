@@ -130,7 +130,7 @@ namespace RcclUnitTesting
     for (int localRank = 0; localRank < numGpus; ++localRank)
     {
       int const globalRank = this->rankOffset + localRank;
-      int const currGpu    = this->deviceIds[localRank];
+      int const currGpu = this->deviceIds[localRank];
 
       if (hipSetDevice(currGpu) != hipSuccess)
       {
@@ -201,6 +201,7 @@ namespace RcclUnitTesting
       return TEST_FAIL;
     }
     int const localRank = globalRank - rankOffset;
+    CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
     for (int collIdx = 0; collIdx < collArgs[localRank].size(); ++collIdx)
     {
@@ -255,6 +256,7 @@ namespace RcclUnitTesting
       return TEST_FAIL;
     }
     int const localRank = globalRank - rankOffset;
+    CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
     for (int collIdx = 0; collIdx < collArgs[localRank].size(); ++collIdx)
     {
@@ -293,7 +295,9 @@ namespace RcclUnitTesting
       ERROR("Child %d does not contain rank %d\n", this->childId, globalRank);
       return TEST_FAIL;
     }
+
     int const localRank = globalRank - rankOffset;
+    CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
     for (int collIdx = 0; collIdx < collArgs[localRank].size(); ++collIdx)
     {
@@ -332,14 +336,14 @@ namespace RcclUnitTesting
           size_t const numInputBytes = numInputElementsToPrint * DataTypeToBytes(collArg.dataType);
           inputCpu.AllocateCpuMem(numInputBytes);
           CHECK_HIP(hipMemcpy(inputCpu.ptr, collArg.inputGpu.ptr, numInputBytes, hipMemcpyDeviceToHost));
-          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Input",
+          printf("[ DEBUG    ] Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Input",
                  inputCpu.ToString(collArg.dataType, numInputElementsToPrint).c_str());
           inputCpu.FreeCpuMem();
 
           int const numOutputElementsToPrint = (this->printValues < 0 ? collArg.numOutputElements : this->printValues);
           size_t const numOutputBytes = numOutputElementsToPrint * DataTypeToBytes(collArg.dataType);
           CHECK_HIP(hipMemcpy(collArg.outputCpu.ptr, collArg.outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
-          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Pre-Output",
+          printf("[ DEBUG    ] Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Pre-Output",
                  collArg.outputCpu.ToString(collArg.dataType, numOutputElementsToPrint).c_str());
         }
 
@@ -469,10 +473,10 @@ namespace RcclUnitTesting
           int numOutputElementsToPrint = (this->printValues < 0 ? collArg.numOutputElements : this->printValues);
           size_t const numOutputBytes = numOutputElementsToPrint * DataTypeToBytes(collArg.dataType);
           CHECK_HIP(hipMemcpy(collArg.outputCpu.ptr, collArg.outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
-          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Output",
+          printf("[ DEBUG    ] Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Output",
                  collArg.outputCpu.ToString(collArg.dataType, numOutputElementsToPrint).c_str());
 
-          printf("Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Expected",
+          printf("[ DEBUG    ] Rank %02d Coll %d %-10s: %s\n", collArg.globalRank, collId, "Expected",
                  collArg.expected.ToString(collArg.dataType, numOutputElementsToPrint).c_str());
         }
     }
@@ -495,6 +499,7 @@ namespace RcclUnitTesting
       return TEST_FAIL;
     }
     int const localRank = globalRank - rankOffset;
+    CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
     ErrCode status = TEST_SUCCESS;
     for (int collIdx = 0; collIdx < collArgs[localRank].size(); ++collIdx)
@@ -530,6 +535,7 @@ namespace RcclUnitTesting
       return TEST_FAIL;
     }
     int const localRank = globalRank - rankOffset;
+    CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
     for (int collIdx = 0; collIdx < collArgs[localRank].size(); ++collIdx)
     {
