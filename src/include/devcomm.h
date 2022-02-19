@@ -61,7 +61,7 @@ union ncclLLFifoLine {
   int4 i4;
 };
 
-#if defined(__gfx1030__)
+#if defined(__gfx1011__) || defined(__gfx1030__)
 #define WARP_SIZE 32
 #else
 #define WARP_SIZE 64
