@@ -622,9 +622,8 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, dev
   IMPL_COLL_FUNC(func, RING, SIMPLE, Sum, int8_t); \
   IMPL_COLL_KERN(func, RING, SIMPLE, Sum, int8_t, FUNC_INDEX_P2P);
 
-// AllToAll Pivot primitive only has one function/kernel.
+// AllToAll Pivot primitive only has one function.
 #define IMPL_COLL_ALLTOALL_PIVOT(func) \
-  IMPL_COLL_FUNC(func, RING, SIMPLE, Sum, int8_t); \
-  IMPL_COLL_KERN(func, RING, SIMPLE, Sum, int8_t, FUNC_INDEX_ALLTOALL_PIVOT);
+  IMPL_COLL_FUNC(func, RING, SIMPLE, Sum, int8_t);
 
 #endif

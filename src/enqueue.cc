@@ -424,7 +424,8 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   }
 #endif
   if (info->coll == ncclFuncAllToAllPivot) {
-    info->nChannels = comm->topo->pivotA2ANumChannels;
+    int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
+    info->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
   } else {
     info->nChannels = nc;
   }
@@ -774,7 +775,8 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
       if (info->coll == ncclFuncAllToAllPivot) {
-        info->nChannels = comm->topo->pivotA2ANumChannels;
+        int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
+        info->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
       } else {
         info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannels); // assign number of channels
       }
