@@ -635,4 +635,8 @@ class Primitives<
   directGather(intptr_t outIx, int totalElem, int peerElem, int skip, int shift) {
     ScatterGatherOp<1, 0, 1, 0>(-1, outIx, totalElem, peerElem, skip, shift, /*postOp=*/false);
   }
+
+  __device__ __forceinline__ void recvSend(int eltN) {
+    genericOp<0, 0, 1, 1, -1, -1>(-1, -1, -1, eltN, /*postOp=*/false);
+  }
 };

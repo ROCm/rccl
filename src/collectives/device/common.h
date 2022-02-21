@@ -128,6 +128,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, rccl_bfloat16),
 #endif
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
+  NCCL_FUNC_NAME(AllToAllPivot, RING, SIMPLE, Sum, int8_t),
 #endif
 #endif
 };
@@ -150,6 +151,7 @@ struct Caller<f, f + 1>{
 };
 
 static_assert(FUNC_INDEX_P2P == 2710, "Wrong P2P function index");
+static_assert(FUNC_INDEX_ALLTOALL_PIVOT == 2711, "Wrong AllToAllPivot function index");
 
 inline
 __device__
@@ -231,6 +233,8 @@ void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
       case 10:
         ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
         break;
+      case 11:
+        ncclFunction_AllToAllPivot_RING_SIMPLE_Sum_int8_t(c);
       default:
         break;
     }
@@ -617,5 +621,9 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, dev
 #define IMPL_COLL_P(func) \
   IMPL_COLL_FUNC(func, RING, SIMPLE, Sum, int8_t); \
   IMPL_COLL_KERN(func, RING, SIMPLE, Sum, int8_t, FUNC_INDEX_P2P);
+
+// AllToAll Pivot primitive only has one function.
+#define IMPL_COLL_ALLTOALL_PIVOT(func) \
+  IMPL_COLL_FUNC(func, RING, SIMPLE, Sum, int8_t);
 
 #endif

@@ -89,12 +89,13 @@ __device__ struct ncclShmemData* ncclShmem;
   NCCL_FUNCS3B(func, Sum)
 
 // Must be consistent with the ncclFuncSet enum
-__device__ ncclKern_t ncclFuncs[1+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
+__device__ ncclKern_t ncclFuncs[2+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
 // Don't try to initialize the host shadow copy of this device-side global
 // variable. There is no host pointer to a device-side function, which
 // confuses clang. This will be fixed in the next clang release.
 #if __CUDA_ARCH__
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
+  NCCL_FUNC_NAME(AllToAllPivot, RING, SIMPLE, Sum, int8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, int32_t),

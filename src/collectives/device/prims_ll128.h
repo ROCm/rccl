@@ -424,4 +424,7 @@ public:
   __device__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     return GenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
   }
+  __device__ void recvSend(int eltN) {
+    return GenericOp<1, 1, -1, -1>(-1, -1, eltN, false);
+  }
 };

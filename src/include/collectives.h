@@ -20,6 +20,7 @@ struct ncclDevRedOpFull {
 };
 
 #define FUNC_INDEX_P2P (ncclNumTypes+NCCL_NUM_FUNCTIONS*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS*ncclNumTypes*ncclNumDevRedOps)
+#define FUNC_INDEX_ALLTOALL_PIVOT (FUNC_INDEX_P2P+1)
 #define FUNC_INDEX(func, devredop, ncclType, al, pr) ((((((func)*ncclNumDevRedOps + (devredop))*ncclNumTypes) + (ncclType))*NCCL_NUM_ALGORITHMS+(al))*NCCL_NUM_PROTOCOLS+(pr))
 
 #define NCCL_FUNC_NAME(func, algo, proto, devredop, type) \
@@ -93,6 +94,7 @@ DECL2(AllGather, Sum, /*undefForFloat=*/0)
 DECL(ReduceScatter)
 DECL(AllReduce)
 DECL5(SendRecv, RING, SIMPLE, Sum, int8_t)
+DECL5(AllToAllPivot, RING, SIMPLE, Sum, int8_t)
 
 extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t)(struct ncclWorkElem* args);
 extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t)(struct ncclWorkElem* args);
@@ -126,5 +128,7 @@ extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, double)(struct ncclWo
 #define REDUCE_CHUNKSTEPS 2
 #define SENDRECV_SLICEFACTOR 1
 #define NCCL_MAX_SLICE_PER_CHUNK 2  // max value for CHUNKSTEPS/SLICESTEPS, must accord with above
+#define ALLTOALL_PIVOT_SLICESTEPS 2
+#define ALLTOALL_PIVOT_CHUNKSTEPS 4
 
 #endif

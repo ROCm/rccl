@@ -47,7 +47,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+1] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "AllToAllPivot" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 const char* ncclDevRedOpStr[ncclNumDevRedOps] = { "Sum", "Prod", "Max", "Min", "PreMulSum", "SumPostDiv" };
@@ -870,6 +870,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   comm->topo->nRanks = comm->nRanks;
   // init netGdrLevel
   comm->topo->netGdrLevel = -2;
+  // init Pivot A2A related fields
+  comm->topo->pivotA2AEnabled = false;
+  comm->topo->pivotA2ANumBiRings = 0;
   // Compute paths between GPUs and NICs
   NCCLCHECK(ncclTopoComputePaths(comm->topo, comm->peerInfo));
   // Remove inaccessible GPUs and unused NICs
@@ -996,6 +999,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     struct ncclGraphInfo ring;
     struct ncclGraphInfo collNet;
     struct ncclTopoRanks topoRanks;
+    bool pivotA2AEnabled;
   } *allGather3Data;
 
   NCCLCHECK(ncclCalloc(&allGather3Data, nranks));
@@ -1036,6 +1040,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   allGather3Data[rank].collNet.typeIntra = collNetGraph.typeIntra;
   allGather3Data[rank].collNet.typeInter = collNetGraph.typeInter;
   allGather3Data[rank].collNetSupport = comm->collNetSupport;
+  allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled;
 
   comm->nChannels = (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count)
     ? std::min(treeGraph.nChannels, ringGraph.nChannels) : ringGraph.nChannels;
@@ -1089,6 +1094,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeIntra = std::min(allGather3Data[i].collNet.typeIntra, collNetGraph.typeIntra);
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
     comm->collNetSupport = std::min(allGather3Data[i].collNetSupport, comm->collNetSupport);
+    comm->topo->pivotA2AEnabled = comm->topo->pivotA2AEnabled && allGather3Data[i].pivotA2AEnabled;
   }
 
   comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =

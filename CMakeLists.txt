@@ -129,6 +129,7 @@ else()
   set(CU_SOURCES
       src/collectives/device/all_reduce.cu
       src/collectives/device/all_gather.cu
+      src/collectives/device/alltoall_pivot.cu
       src/collectives/device/reduce.cu
       src/collectives/device/broadcast.cu
       src/collectives/device/reduce_scatter.cu
