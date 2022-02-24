@@ -79,14 +79,14 @@ public:
   static ncclResult_t BootstrapRootInit(int pid, unsigned long hash);
 
 protected:
-  static ncclResult_t CheckCacheForPtr(void* devPtr,
-                                       NcclIpcHandleSendCache* cache,
-                                       int rank,
-                                       std::pair<hipIpcMemHandle_t, size_t>* handlePair);
+  ncclResult_t CheckCacheForPtr(void* devPtr,
+				NcclIpcHandleSendCache* cache,
+				int rank,
+				std::pair<hipIpcMemHandle_t, size_t>* handlePair);
 
-  static ncclResult_t CheckCacheForHandle(std::pair<hipIpcMemHandle_t, size_t> const& handlePair,
-                                          NcclIpcHandleRecvCache* cache,
-                                          void** ptr);
+  ncclResult_t CheckCacheForHandle(std::pair<hipIpcMemHandle_t, size_t> const& handlePair,
+				   NcclIpcHandleRecvCache* cache,
+				   void** ptr);
 
   int                          m_rank;                               // Associated rank
   int                          m_numRanks;                           // Total number of ranks

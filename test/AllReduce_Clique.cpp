@@ -7,8 +7,7 @@
 #include <cstdlib>
 namespace RcclUnitTesting
 {
-  // NOTE: Currently disabled due to bug with multi-process
-  TEST(AllReduce, DISABLED_Clique)
+  TEST(AllReduce, Clique)
   {
     // Set clique env var prior to TestBed
     setenv("RCCL_ENABLE_CLIQUE", "1", 1);
@@ -17,11 +16,10 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes      = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes      = {ncclInt}; // testBed.GetAllSupportedDataTypes();
+    std::vector<ncclDataType_t> const dataTypes      = testBed.GetAllSupportedDataTypes();
     std::vector<ncclRedOp_t>    const redOps         = testBed.GetAllSupportedRedOps();
     std::vector<int>            const roots          = {0};
-    std::vector<int>            const numElements    = {8};
-    //std::vector<int>            const numElements    = {1048576, 53327, 1024};
+    std::vector<int>            const numElements    = {1048576, 53327, 1024};
     std::vector<bool>           const inPlaceList    = {false, true};
     std::vector<bool>           const managedMemList = {false};
 

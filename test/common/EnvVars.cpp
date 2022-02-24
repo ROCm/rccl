@@ -123,11 +123,14 @@ namespace RcclUnitTesting
   std::vector<std::string> EnvVars::GetEnvVarsList(std::string const varname)
   {
     std::vector<std::string> result;
-    char* token = strtok(getenv(varname.c_str()), ",;");
-    while (token != NULL)
+    if (getenv(varname.c_str()))
     {
-      result.push_back(token);
-      token = strtok(NULL, ",;");
+      char* token = strtok(getenv(varname.c_str()), ",;");
+      while (token != NULL)
+      {
+        result.push_back(token);
+        token = strtok(NULL, ",;");
+      }
     }
     return result;
   }

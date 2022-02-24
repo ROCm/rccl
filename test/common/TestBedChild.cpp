@@ -262,13 +262,14 @@ namespace RcclUnitTesting
     {
       if (collId == -1 || collId == collIdx)
       {
-        CHECK_CALL(this->collArgs[localRank][collIdx].AllocateMem(inPlace, useManagedMem));
-        if (this->verbose) INFO("Rank %d on child %d allocates memory for collective %d (%s,%s) Input: %p Output %p\n",
-                                globalRank, this->childId, collIdx,
+	CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
+        CHECK_CALL(collArg.AllocateMem(inPlace, useManagedMem));
+        if (this->verbose) INFO("Rank %d on child %d allocates memory for collective %d on device %d (%s,%s) Input: %p Output %p\n",
+                                globalRank, this->childId, collIdx, this->deviceIds[localRank],
                                 inPlace ? "in-place" : "out-of-place",
                                 useManagedMem ? "managed" : "unmanaged",
-                                this->collArgs[localRank][collIdx].inputGpu.ptr,
-                                this->collArgs[localRank][collIdx].outputGpu.ptr);
+                                collArg.inputGpu.ptr,
+                                collArg.outputGpu.ptr);
       }
     }
 

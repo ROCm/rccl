@@ -96,6 +96,7 @@ void CliqueManager::CleanUp()
   if (m_cliqueMode == CLIQUE_SINGLE_NODE)
   {
     // Release caches
+    INFO(NCCL_COLL, "Rank %d deleting IPC caches", m_rank);
     if (m_ipcHandleSendCache) delete m_ipcHandleSendCache;
     if (m_ipcHandleRecvCache) delete m_ipcHandleRecvCache;
 
@@ -494,18 +495,24 @@ ncclResult_t CliqueManager::CheckCacheForPtr(void* devPtr,
   uint64_t realAddr = (uint64_t)devPtr;
   handlePair->second = realAddr - baseAddr;
 
+  CUDACHECK(hipIpcGetMemHandle(&handlePair->first, (void*)baseAddr));
+
+  /* Disabling cache until proper deallocation methods are available
   // IPC handles are only supported for base address pointers
   NcclIpcHandleSendCache::iterator it = cache->find(baseAddr);
 
    if (it == cache->end())
    {
+     INFO(NCCL_COLL, "Rank %d searching IPC handle cache for %p (not found)", rank, devPtr);
      CUDACHECK(hipIpcGetMemHandle(&handlePair->first, (void*)baseAddr));
      cache->insert(baseAddr, handlePair->first);
    }
    else
    {
+     INFO(NCCL_COLL, "Rank %d searching IPC handle cache for %p (found!)", rank, devPtr);
      handlePair->first = (it->second).first;
    }
+  */
    return ncclSuccess;
 }
 
@@ -513,10 +520,16 @@ ncclResult_t CliqueManager::CheckCacheForHandle(std::pair<hipIpcMemHandle_t, siz
                                                 NcclIpcHandleRecvCache* cache,
                                                 void** ptr)
 {
+  // Until proper deallocation hooks are implemented, receive cache can not be used
+  // Handles will need to be extract each time
+  void* baseAddr;
+  CUDACHECK(hipIpcOpenMemHandle(&baseAddr, handlePair.first, hipIpcMemLazyEnablePeerAccess));
+
+  /*
   NcclIpcHandleRecvCache::iterator it = cache->find(handlePair.first);
 
   // Get base address pointer from cache if it exists
-  void* baseAddr;
+
   if (it == cache->end())
   {
     CUDACHECK(hipIpcOpenMemHandle(&baseAddr, handlePair.first, hipIpcMemLazyEnablePeerAccess));
@@ -526,6 +539,7 @@ ncclResult_t CliqueManager::CheckCacheForHandle(std::pair<hipIpcMemHandle_t, siz
   {
     baseAddr = (it->second).first;
   }
+  */
 
   // Modify base address pointer with offset
   uint64_t realAddr = (uint64_t)baseAddr + handlePair.second;
