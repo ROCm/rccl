@@ -36,8 +36,8 @@ namespace RcclUnitTesting
         if (testBed.ev.showNames)
           INFO("%s process %2d-ranks AllReduce %d Grouped Calls (%s-%s)\n",
                isMultiProcess ? "Multi " : "Single",
-               numCollPerGroup,
-               totalRanks, ncclRedOpNames[redOps[redOpIdx]], ncclDataTypeNames[dataTypes[dataIdx]]);
+               totalRanks, numCollPerGroup,
+               ncclRedOpNames[redOps[redOpIdx]], ncclDataTypeNames[dataTypes[dataIdx]]);
 
         // Run all element sizes in parallel as single group
         for (int collIdx = 0; collIdx < numCollPerGroup; ++collIdx)
