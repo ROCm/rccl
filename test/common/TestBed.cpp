@@ -220,7 +220,7 @@ namespace RcclUnitTesting
     }
   }
 
-  void TestBed::ExecuteCollectives()
+  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks)
   {
     int const cmd = TestBedChild::CHILD_EXECUTE_COLL;
     ++TestBed::NumTestsRun();
@@ -229,6 +229,11 @@ namespace RcclUnitTesting
     for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
       PIPE_WRITE(childId, cmd);
+      int tempCurrentRanks = currentRanks.size();
+      PIPE_WRITE(childId, tempCurrentRanks);
+      for (int rank = 0; rank < currentRanks.size(); ++rank){
+        PIPE_WRITE(childId, currentRanks[rank]);
+      }
     }
 
     // Wait for child acknowledgement

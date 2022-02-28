@@ -85,6 +85,8 @@ if(BUILD_TESTS)
       Gather_InPlace.cpp
       Gather_ManagedMem.cpp
       Gather_OutOfPlace.cpp
+      #SendRecv
+      SendRecv_OutOfPlace.cpp
       )
   endif()
 

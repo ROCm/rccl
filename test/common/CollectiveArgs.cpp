@@ -175,7 +175,7 @@ namespace RcclUnitTesting
     case ncclCollScatter:       ss << "ncclScatter";       break;
     case ncclCollAllToAll:      ss << "ncclAllToAll";      break;
     case ncclCollSend:          ss << "ncclSend";          break;
-    case ncclCollRecv:          ss << "ncclRevv";          break;
+    case ncclCollRecv:          ss << "ncclRecv";          break;
     default:                    ss << "[Unknown]";         break;
     }
 
@@ -277,6 +277,7 @@ namespace RcclUnitTesting
     return (funcType == ncclCollBroadcast ||
             funcType == ncclCollReduce    ||
             funcType == ncclCollGather    ||
-            funcType == ncclCollScatter);
+            funcType == ncclCollScatter   ||
+            funcType == ncclCollSend); // this is incorrect but it works because in Send root is not root it is the peer
   }
 }

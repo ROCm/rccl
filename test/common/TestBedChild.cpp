@@ -315,6 +315,14 @@ namespace RcclUnitTesting
 
   ErrCode TestBedChild::ExecuteCollectives()
   {
+    int rankListSize, tempRank;
+    std::vector<int> rankList = {};
+    PIPE_READ(rankListSize);
+
+    for (int rank = 0; rank < rankListSize; ++rank){
+      PIPE_READ(tempRank);
+      rankList.push_back(tempRank);
+    }
     if (this->verbose) INFO("Child %d begins ExecuteCollectives()\n", this->childId);
 
     // Start group call
@@ -326,6 +334,8 @@ namespace RcclUnitTesting
       // Loop over all local ranks
       for (int localRank = 0; localRank < this->deviceIds.size(); ++localRank)
       {
+        if (rankList.size() != 0) && (std::count(rankList.begin(), rankList.end(), localRank) == 0) continue;
+
         CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
         CollectiveArgs const& collArg = this->collArgs[localRank][collId];
