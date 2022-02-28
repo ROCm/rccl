@@ -12,16 +12,16 @@ namespace RcclUnitTesting
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclFunc_t>     const  funcType        = {ncclCollSend, ncclCollRecv}; // akollias
+    std::vector<ncclFunc_t>     const  funcType        = {ncclCollSend, ncclCollRecv};
     std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32};
     std::vector<ncclRedOp_t>    const& redOps          = {ncclSum}; //Not important for send receive tests
-    std::vector<int>            const  numElements     = {1024}; // akollias, one test for now
+    std::vector<int>            const  numElements     = {1048576, 53327, 1024};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     int                         const  numCollPerGroup = numElements.size();
 
     bool isCorrect = true;
-    int totalRanks = testBed.ev.maxGpus; // akollias this to change on maxGpus
+    int totalRanks = testBed.ev.maxGpus;
     int const numProcesses = 1;
     int const isMultiProcess = 0;
     testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
@@ -34,7 +34,7 @@ namespace RcclUnitTesting
              numCollPerGroup,
              totalRanks, ncclDataTypeNames[dataTypes[dataIdx]]);
 
-      // Run all element sizes in parallel as single group // akollias for now this will only run for one test
+      // Run all element sizes in parallel as single group
       for (int root = 0; root < totalRanks; ++root)
       {
         testBed.SetCollectiveArgs(funcType[0],
@@ -48,7 +48,7 @@ namespace RcclUnitTesting
         testBed.AllocateMem(inPlace, useManagedMem, -1, root);
         testBed.PrepareData(-1, root);
         for (int currentRank = 0; currentRank < totalRanks; ++currentRank)
-        { // so root needs the recv number, and recv gpu needs the root rank
+        {
 
           if (currentRank != root)
           {
