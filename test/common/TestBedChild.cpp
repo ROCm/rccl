@@ -334,7 +334,7 @@ namespace RcclUnitTesting
       // Loop over all local ranks
       for (int localRank = 0; localRank < this->deviceIds.size(); ++localRank)
       {
-        if (rankList.size() != 0) && (std::count(rankList.begin(), rankList.end(), localRank) == 0) continue;
+        if (!rankList.empty() && (std::count(rankList.begin(), rankList.end(), localRank) == 0)) continue;
 
         CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
