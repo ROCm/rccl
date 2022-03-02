@@ -72,7 +72,7 @@ namespace RcclUnitTesting
 
     // Execute all collectives on all test children
     // Blocks until collective is completed
-    void ExecuteCollectives();
+    void ExecuteCollectives(std::vector<int> const &currentRanks = {});
 
     // Perform results validation - compare output to expected
     void ValidateResults(bool& isCorrect, int collId = -1, int const rank = -1);

@@ -23,7 +23,8 @@ namespace RcclUnitTesting
     case ncclCollGather:        return DefaultPrepData_Gather(collArgs, false);
     case ncclCollScatter:       return DefaultPrepData_Scatter(collArgs);
     case ncclCollAllToAll:      return DefaultPrepData_AllToAll(collArgs);
-      //case ncclCollSendRecv:      return DefaultPrepData_SendRecv(collArgs);
+    case ncclCollSend:          return DefaultPrepData_Send(collArgs);
+    case ncclCollRecv:          return DefaultPrepData_Recv(collArgs);
     default:
       ERROR("Unknown func type %d\n", collArgs.funcType);
       return TEST_FAIL;
@@ -338,5 +339,22 @@ namespace RcclUnitTesting
       memcpy(collArgs.expected.U1 + (numBytes * rank), tempInput.U1 + (numBytes * collArgs.globalRank), numBytes);
     }
     return TEST_SUCCESS;
+  }
+
+  ErrCode DefaultPrepData_Send(CollectiveArgs &collArgs)
+  {
+    CHECK_CALL(CheckAllocation(collArgs));
+    return collArgs.inputGpu.FillPattern(collArgs.dataType,
+                                               collArgs.numInputElements,
+                                               collArgs.globalRank, true);
+  }
+
+  ErrCode DefaultPrepData_Recv(CollectiveArgs &collArgs)
+  {
+    CHECK_CALL(CheckAllocation(collArgs));
+    return collArgs.expected.FillPattern(collArgs.dataType,
+                                         collArgs.numOutputElements,
+                                         collArgs.root,
+                                         false);
   }
 }
