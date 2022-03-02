@@ -353,7 +353,7 @@ namespace RcclUnitTesting
   {
     CHECK_CALL(CheckAllocation(collArgs));
     return collArgs.expected.FillPattern(collArgs.dataType,
-                                         collArgs.numInputElements,
+                                         collArgs.numOutputElements,
                                          collArgs.root,
                                          false);
   }

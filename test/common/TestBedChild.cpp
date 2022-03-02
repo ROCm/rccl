@@ -262,7 +262,7 @@ namespace RcclUnitTesting
     {
       if (collId == -1 || collId == collIdx)
       {
-	CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
+        CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
         CHECK_CALL(collArg.AllocateMem(inPlace, useManagedMem));
         if (this->verbose) INFO("Rank %d on child %d allocates memory for collective %d on device %d (%s,%s) Input: %p Output %p\n",
                                 globalRank, this->childId, collIdx, this->deviceIds[localRank],
@@ -315,13 +315,13 @@ namespace RcclUnitTesting
 
   ErrCode TestBedChild::ExecuteCollectives()
   {
-    int rankListSize, tempRank;
-    std::vector<int> rankList = {};
-    PIPE_READ(rankListSize);
+    int numRanksToExecute, tempRank;
+    std::vector<int> ranksToExecute = {};
+    PIPE_READ(numRanksToExecute);
 
-    for (int rank = 0; rank < rankListSize; ++rank){
+    for (int rank = 0; rank < numRanksToExecute; ++rank){
       PIPE_READ(tempRank);
-      rankList.push_back(tempRank);
+      ranksToExecute.push_back(tempRank - this->rankOffset);
     }
     if (this->verbose) INFO("Child %d begins ExecuteCollectives()\n", this->childId);
 
@@ -334,7 +334,8 @@ namespace RcclUnitTesting
       // Loop over all local ranks
       for (int localRank = 0; localRank < this->deviceIds.size(); ++localRank)
       {
-        if (!rankList.empty() && (std::count(rankList.begin(), rankList.end(), localRank) == 0)) continue;
+        // If ranks to execute is empty, execute all ranks belonging to child
+        if (!ranksToExecute.empty() && (std::count(ranksToExecute.begin(), ranksToExecute.end(), localRank) == 0)) continue;
 
         CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
