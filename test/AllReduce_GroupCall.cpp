@@ -26,6 +26,8 @@ namespace RcclUnitTesting
     for (int totalRanks = testBed.ev.minGpus; totalRanks <= testBed.ev.maxGpus && isCorrect; ++totalRanks)
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
     {
+      if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
+
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
