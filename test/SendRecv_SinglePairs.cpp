@@ -21,6 +21,8 @@ namespace RcclUnitTesting
     int totalRanks = testBed.ev.maxGpus;
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
     {
+      if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
+
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), 1);
 
@@ -32,7 +34,7 @@ namespace RcclUnitTesting
         {
           testBed.SetCollectiveArgs(ncclCollSend,
                                     dataTypes[dataIdx],
-                                    ncclSum, // This should be moved to optional variables struct
+                                    ncclSum,
                                     recvRank,
                                     numElements[numIdx],
                                     numElements[numIdx],
@@ -40,7 +42,6 @@ namespace RcclUnitTesting
                                     sendRank);
           if (recvRank == 0)
           {
-
             testBed.AllocateMem(inPlace, useManagedMem, 0, sendRank);
             testBed.PrepareData(0, sendRank);
           }
@@ -57,7 +58,7 @@ namespace RcclUnitTesting
 
             testBed.SetCollectiveArgs(ncclCollRecv,
                                       dataTypes[dataIdx],
-                                      ncclSum, // This should be moved to optional variables struct
+                                      ncclSum,
                                       sendRank,
                                       numElements[numIdx],
                                       numElements[numIdx],
