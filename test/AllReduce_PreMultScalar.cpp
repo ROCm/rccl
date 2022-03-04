@@ -48,8 +48,8 @@ namespace RcclUnitTesting
         for (int scalarMode = 0; scalarMode <= 1 && isCorrect; ++scalarMode)
         {
           if (testBed.ev.showNames)
-            INFO("%s process %2d-ranks AllReduce (custom-scalar Mode %d %s)\n",
-                 isMultiProcess ? "Multi " : "Single",
+            INFO("%s %d-ranks AllReduce (custom-scalar Mode %d %s)\n",
+                 isMultiProcess ? "MP" : "SP",
                  totalRanks, scalarMode, ncclDataTypeNames[dataType]);
 
           for (int i = 0; i < numElements.size() && isCorrect; ++i)

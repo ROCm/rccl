@@ -36,8 +36,8 @@ namespace RcclUnitTesting
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       {
         if (testBed.ev.showNames)
-          INFO("%s process %2d-ranks AllReduce %d Grouped Calls (%s-%s)\n",
-               isMultiProcess ? "Multi " : "Single",
+          INFO("%s %d-ranks AllReduce %d Grouped Calls (%s-%s)\n",
+               isMultiProcess ? "MP" : "SP",
                totalRanks, numCollPerGroup,
                ncclRedOpNames[redOps[redOpIdx]], ncclDataTypeNames[dataTypes[dataIdx]]);
 

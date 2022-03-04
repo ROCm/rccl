@@ -48,8 +48,8 @@ namespace RcclUnitTesting
           if (recvRank  != sendRank)
           {
             if (testBed.ev.showNames) // Show test names
-              INFO("%s process Datatype: %s SendReceive test Rank %d -> Rank %d for %d Elements\n",
-                  isMultiProcess ? "Multi " : "Single",
+              INFO("%s Datatype: %s SendReceive test Rank %d -> Rank %d for %d Elements\n",
+                  isMultiProcess ? "MP" : "SP",
                   ncclDataTypeNames[dataTypes[dataIdx]],
                   sendRank,
                   recvRank,

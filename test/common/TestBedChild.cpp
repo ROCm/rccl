@@ -69,6 +69,7 @@ namespace RcclUnitTesting
       ErrCode status = TEST_SUCCESS;
       switch(command)
       {
+      case CHILD_GET_UNIQUE_ID   : status = GetUniqueId();        break;
       case CHILD_INIT_COMMS      : status = InitComms();          break;
       case CHILD_SET_COLL_ARGS   : status = SetCollectiveArgs();  break;
       case CHILD_ALLOCATE_MEM    : status = AllocateMem();        break;
@@ -84,8 +85,13 @@ namespace RcclUnitTesting
       // Send back acknowledgement to parent
       if (status == TEST_FAIL)
         ERROR("Child %d failed on command [%s]:\n", this->childId, ChildCommandNames[command]);
-      write(childWriteFd, &status, sizeof(status));
+      if (write(childWriteFd, &status, sizeof(status)) < 0)
+      {
+        ERROR("Child %d write to parent failed: %s\n", this->childId, strerror(errno));
+        break;
+      }
     }
+    if (verbose) INFO("Child %d exiting execution loop\n", this->childId);
 
     // Close child ends of pipe
     close(this->childReadFd);
@@ -94,11 +100,26 @@ namespace RcclUnitTesting
     exit(0);
   }
 
+  ErrCode TestBedChild::GetUniqueId()
+  {
+    if (this->verbose) INFO("Child %d begins GetUniqueId()\n", this->childId);
+
+    // Get a unique ID and pass it back to parent process
+    ncclUniqueId id;
+    CHILD_NCCL_CALL(ncclGetUniqueId(&id), "ncclGetUniqueId");
+    write(childWriteFd, &id, sizeof(id));
+
+    if (this->verbose) INFO("Child %d finishes GetUniqueId()\n", this->childId);
+    return TEST_SUCCESS;
+  }
+
   ErrCode TestBedChild::InitComms()
   {
     if (this->verbose) INFO("Child %d begins InitComms()\n", this->childId);
 
     // Read values sent by parent [see TestBed::InitComms()]
+    ncclUniqueId id;
+    PIPE_READ(id);
     PIPE_READ(this->totalRanks);
     PIPE_READ(this->rankOffset);
     PIPE_READ(this->numCollectivesInGroup);
@@ -115,10 +136,6 @@ namespace RcclUnitTesting
       this->collArgs[i].clear();
       this->collArgs[i].resize(numCollectivesInGroup);
     }
-
-    // Collect uniqueId (specified by NCCL_COMM_ID env var)
-    ncclUniqueId id;
-    CHILD_NCCL_CALL(ncclGetUniqueId(&id), "ncclGetUniqueId");
 
     // Initialize communicators
     comms.clear();
