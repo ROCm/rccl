@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -8,26 +8,26 @@
 #include "devcomm.h"
 #include "collectives.h"
 #include "primitives.h"
-#include "clique/AllReduceCliqueKernel.h" // [RCCL] AllReduce Clique-based kernel support
+//#include "clique/AllReduceCliqueKernel.h" // [RCCL] AllReduce Clique-based kernel support
 
 namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
     const int tid = threadIdx.x;
-    const int nthreads = args->nThreads;
-    const int bid = args->coll.bid;
-    const int nChannels = args->coll.nChannels;
+    const int nthreads = args->header.nWarps*WARP_SIZE;
+    const int bid = args->bid;
+    const int nChannels = args->nChannels;
     ncclRing *ring = &ncclShmem->channel.ring;
     int ringIx = ring->index;
     const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? ALLREDUCE_CHUNKSTEPS : 1));
     const int nranks = ncclShmem->comm.nRanks;
     const ssize_t loopSize = nChannels*nranks*chunkSize;
-    const ssize_t size = args->coll.count;
 #ifdef ENABLE_PROFILING
     auto devProf = ncclShmem->comm.devProf;
     uint64_t clk, t0 = 0ULL, ws;
     if (tid == 0) clk = __builtin_amdgcn_s_memrealtime();
 #endif
+    const ssize_t size = args->count;
 
     int minChunkSize;
     if (Proto::Id == NCCL_PROTO_LL)
@@ -37,8 +37,8 @@ namespace {
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
 
-    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto> prims
-      (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->coll.redOpArg, args->coll.connIndex << 16);
+    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
+      (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg, args->connIndex << 16);
 
     for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
       ssize_t realChunkSize;
@@ -110,32 +110,35 @@ namespace {
       ACCUMULATE_COUNTER(directRecv);
     }
 #ifdef ENABLE_PROFILING
-    if (tid == 0 && args->coll.opCount) devProf->elems[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
+    if (tid == 0) {
+      struct ncclProfElem *elem = devProf.elems+args->opCount;
+      elem->elem[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
+    }
 #endif
   }
 
   template<typename T, typename RedOp, typename Proto>
   __device__ __attribute__((noinline)) void runTreeUpDown(ncclWorkElem *args) {
     const int tid = threadIdx.x;
-    const int nthreads = args->nThreads;
-    const int bid = args->coll.bid;
-    const int nChannels = args->coll.nChannels;
+    const int nthreads = args->header.nWarps*WARP_SIZE;
+    const int bid = args->bid;
+    const int nChannels = args->nChannels;
     ncclTree *tree = &ncclShmem->channel.tree;
     ssize_t chunkSize = int(
-      Proto::Id == NCCL_PROTO_SIMPLE ? args->coll.lastChunkSize
+      Proto::Id == NCCL_PROTO_SIMPLE ? args->lastChunkSize
                    /* LL & LL128 */  : Proto::calcBytePerStep()/sizeof(T));
     const ssize_t minChunkSize = int(
       Proto::Id == NCCL_PROTO_SIMPLE ? nthreads*8*(sizeof(uint64_t)/sizeof(T))
                    /* LL & LL128 */  : nthreads*(Proto::calcBytePerGrain()/sizeof(T)));
     const ssize_t loopSize = int(nChannels*chunkSize);
-    const ssize_t size = args->coll.count;
+    const ssize_t size = args->count;
 
     if (loopSize > size)
       chunkSize = divUp((int)size, int(nChannels*minChunkSize))*int(minChunkSize);
 
     { // Reduce : max number of recv is 3, max number of send is 1 (binary tree + local)
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto> prims
-        (tid, nthreads, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->coll.redOpArg);
+      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0> prims
+        (tid, nthreads, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->redOpArg);
       if (tree->up == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -160,8 +163,8 @@ namespace {
     }
 
     { // Broadcast : max number of recv is 1, max number of send is 3 (binary tree + local)
-      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto> prims
-        (tid, nthreads, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->coll.redOpArg);
+      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0> prims
+        (tid, nthreads, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->redOpArg);
       if (tree->up == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -189,19 +192,19 @@ namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __attribute__((noinline)) void runTreeSplit(ncclWorkElem *args) {
     const int tid = threadIdx.x;
-    const int nthreads = args->nThreads;
-    const int bid = args->coll.bid;
-    const int nChannels = args->coll.nChannels;
+    const int nthreads = args->header.nWarps*WARP_SIZE;
+    const int bid = args->bid;
+    const int nChannels = args->nChannels;
     ncclTree *tree = &ncclShmem->channel.tree;
     ssize_t chunkSize = int(
-      Proto::Id != NCCL_PROTO_LL ? args->coll.lastChunkSize
+      Proto::Id != NCCL_PROTO_LL ? args->lastChunkSize
                                  : Proto::calcBytePerStep()/sizeof(T));
     const ssize_t minChunkSize = int(
       Proto::Id == NCCL_PROTO_SIMPLE ? nthreads*8*(sizeof(uint64_t)/sizeof(T)) :
       Proto::Id == NCCL_PROTO_LL     ? nthreads*(Proto::calcBytePerGrain()/sizeof(T))
                    /* LL128 */       : nthreads*(Proto::calcBytePerGrain()/sizeof(T))/8);
     const ssize_t loopSize = int(nChannels*chunkSize);
-    const ssize_t size = args->coll.count;
+    const ssize_t size = args->count;
 
     int nthreadsSplit;
     if (Proto::Id == NCCL_PROTO_SIMPLE) {
@@ -218,8 +221,8 @@ namespace {
 
     if (tree->up == -1) {
       // Reduce and broadcast. Max number of recv is 3, max number of send is 3
-      Primitives<T, RedOp, FanSymmetric<NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto>
-        prims(tid, nthreads, tree->down, tree->down, args->sendbuff, args->recvbuff, args->coll.redOpArg);
+      Primitives<T, RedOp, FanSymmetric<NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0>
+        prims(tid, nthreads, tree->down, tree->down, args->sendbuff, args->recvbuff, args->redOpArg);
       for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
         ssize_t offset = gridOffset + bid*int(chunkSize);
         int nelem = min(chunkSize, size-offset);
@@ -235,8 +238,8 @@ namespace {
        * into DirectRecv and DirectSend capabilities, this ctor would have both=0,
        * but the ctor above for tree roots would be DirectRecv=0 DirectSend=1.
        */
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto>
-        prims(tid, nthreadsSplit, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->coll.redOpArg, 0*Proto::MaxGroupWidth);
+      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0>
+        prims(tid, nthreadsSplit, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->redOpArg, 0*Proto::MaxGroupWidth);
       if (tree->down[0] == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -254,8 +257,8 @@ namespace {
     }
     else {
       // Broadcast down. Max number of recv is 1, max number of send is 3 (binary tree + local)
-      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto>
-        prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->coll.redOpArg, 1*Proto::MaxGroupWidth);
+      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0>
+        prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->redOpArg, 1*Proto::MaxGroupWidth);
       if (tree->down[0] == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -294,11 +297,11 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
     static constexpr int COLLNET_COPY_THREADS = 64;
     const int tid = threadIdx.x;
-    const int bid = args->coll.bid;
-    const int nChannels = args->coll.nChannels;
+    const int bid = args->bid;
+    const int nChannels = args->nChannels;
     struct ncclDirect* tree = &ncclShmem->channel.collTree;
-    const ssize_t chunkSize = int(args->coll.lastChunkSize);
-    const ssize_t size = args->coll.count;
+    const ssize_t chunkSize = int(args->lastChunkSize);
+    const ssize_t size = args->count;
     const ssize_t loopSize = nChannels*tree->nHeads*chunkSize;
 
     const int hasUp = (tree->up[0] >= 0) ? 1 : 0;
@@ -306,7 +309,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
     const int nThreadsScatter = ((hasUp && hasDn) ? COLLNET_COPY_THREADS : hasUp ? 2*COLLNET_COPY_THREADS : 0);
     const int nThreadsGather  = ((hasUp && hasDn) ? COLLNET_COPY_THREADS : hasUp ? 1*COLLNET_COPY_THREADS : 0);
     const int nThreadsBcast   = ((hasUp && hasDn) ? COLLNET_COPY_THREADS : hasUp ? 0 : 1*COLLNET_COPY_THREADS);
-    const int nThreadsReduce = args->nThreads - nThreadsScatter - nThreadsGather - nThreadsBcast;
+    const int nThreadsReduce = args->header.nWarps*WARP_SIZE - nThreadsScatter - nThreadsGather - nThreadsBcast;
     const int tidStartBcast = nThreadsGather;
     const int tidStartScatter = tidStartBcast + nThreadsBcast;
     const int tidStartReduce = tidStartScatter + nThreadsScatter;
@@ -316,8 +319,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
     if (tid >= tidStartScatter && tid < tidStartReduce && hasUp) {
       // Scatter
       int group = (2*Proto::MaxGroupWidth) | (1<<16);
-      Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_DIRECT_ARITY>, /*Direct=*/0, Proto>
-        prims(tid-tidStartScatter, nThreadsScatter, NULL, tree->up, args->sendbuff, args->recvbuff, args->coll.redOpArg, group, args);
+      Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_DIRECT_ARITY>, /*Direct=*/0, Proto, 0>
+        prims(tid-tidStartScatter, nThreadsScatter, NULL, tree->up, args->sendbuff, args->recvbuff, args->redOpArg, group, args);
       for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
         ssize_t offset = gridOffset + bid*tree->nHeads*chunkSize;
         int nelem = min(tree->nHeads*chunkSize, size-offset);
@@ -331,8 +334,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
       int group = (3*Proto::MaxGroupWidth) | (1<<16);
       if (hasDn) {
         // Reduce, send to network
-        Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DIRECT_ARITY, 1>, /*Direct=*/0, Proto>
-          prims(tid-tidStartReduce, nThreadsReduce, tree->down, &tree->out, args->sendbuff, args->recvbuff, args->coll.redOpArg, group, args);
+        Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DIRECT_ARITY, 1>, /*Direct=*/0, Proto, 0>
+          prims(tid-tidStartReduce, nThreadsReduce, tree->down, &tree->out, args->sendbuff, args->recvbuff, args->redOpArg, group, args);
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + (bid*tree->nHeads+tree->headRank)*chunkSize;
           int nelem = min(chunkSize, size-offset);
@@ -344,8 +347,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
         }
       } else {
         // Directly send to network
-        Primitives<T, RedOp, FanAsymmetric<0, 1>, /*Direct=*/0, Proto>
-          prims(tid-tidStartReduce, nThreadsReduce, nullptr, &tree->out, args->sendbuff, args->recvbuff, args->coll.redOpArg, group);
+        Primitives<T, RedOp, FanAsymmetric<0, 1>, /*Direct=*/0, Proto, 0>
+          prims(tid-tidStartReduce, nThreadsReduce, nullptr, &tree->out, args->sendbuff, args->recvbuff, args->redOpArg, group);
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + (bid*tree->nHeads+tree->headRank)*chunkSize;
           int nelem = min(chunkSize, size-offset);
@@ -355,8 +358,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
     } else if (tid < tidStartBcast && hasUp) {
       // Gather
       int group = (0*Proto::MaxGroupWidth) | (0<<16);
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DIRECT_ARITY, 0>, /*Direct=*/0, Proto>
-        prims(tid, nThreadsGather, tree->up, NULL, args->sendbuff, args->recvbuff, args->coll.redOpArg, group, args);
+      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DIRECT_ARITY, 0>, /*Direct=*/0, Proto, 0>
+        prims(tid, nThreadsGather, tree->up, NULL, args->sendbuff, args->recvbuff, args->redOpArg, group, args);
       for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
         ssize_t offset = gridOffset + bid*tree->nHeads*chunkSize;
         int nelem = min(tree->nHeads*chunkSize, size-offset);
@@ -366,8 +369,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
       int group = (1*Proto::MaxGroupWidth) | (0<<16);
       if (hasDn) {
         // Recv from network, broadcast
-        Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DIRECT_ARITY>, /*Direct=*/0, Proto>
-          prims(tid-tidStartBcast, nThreadsBcast, &tree->out, tree->down, args->sendbuff, args->recvbuff, args->coll.redOpArg, group, args);
+        Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DIRECT_ARITY>, /*Direct=*/0, Proto, 0>
+          prims(tid-tidStartBcast, nThreadsBcast, &tree->out, tree->down, args->sendbuff, args->recvbuff, args->redOpArg, group, args);
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + (bid*tree->nHeads+tree->headRank)*chunkSize;
           int nelem = min(chunkSize, size-offset);
@@ -375,8 +378,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
         }
       } else {
         // Recv from network (no post thread needed)
-        Primitives<T, RedOp, FanAsymmetric<1, 0>, /*Direct=*/0, Proto>
-          prims(tid-tidStartBcast, nThreadsBcast, &tree->out, nullptr, args->sendbuff, args->recvbuff, args->coll.redOpArg, group);
+        Primitives<T, RedOp, FanAsymmetric<1, 0>, /*Direct=*/0, Proto, 0>
+          prims(tid-tidStartBcast, nThreadsBcast, &tree->out, nullptr, args->sendbuff, args->recvbuff, args->redOpArg, group);
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + (bid*tree->nHeads+tree->headRank)*chunkSize;
           int nelem = min(chunkSize, size-offset);
@@ -404,13 +407,15 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, args);
+    runRing<T, RedOp, ProtoLL128>(args);
+    //LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, args);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL128> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, args);
+    runTreeSplit<T, RedOp, ProtoLL128>(args);
+    //LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, args);
   }
 };

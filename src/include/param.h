@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2017-2019, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -39,6 +39,7 @@ static void setEnvFile(const char* fileName) {
     strncpy(envValue, line+s, 1023);
     envValue[1023]='\0';
     setenv(envVar, envValue, 0);
+    //printf("%s : %s->%s\n", fileName, envVar, envValue);
   }
   if (line) free(line);
   fclose(file);

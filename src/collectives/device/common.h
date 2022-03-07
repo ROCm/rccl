@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2017-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -10,6 +10,7 @@
 
 #include "collectives.h"
 #include "devcomm.h"
+#include "op128.h"
 
 #define COLL_UNROLL 2
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
@@ -67,40 +68,8 @@
   NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum)
 
-// [RCCL] Adding clique-based kernels for AllReduce, in-place of unused RingLL28 kernels
-#define NCCL_FUNC5B(func, algo, devredop, type, nullify) \
-  MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,     devredop, type)), \
-  MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL128,  devredop, type)), \
-  MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, SIMPLE, devredop, type))
-
-#define NCCL_FUNC4B(func, devredop, type, nullify) \
-  NCCL_FUNC5B(func, TREE,    devredop, type, nullify), \
-  NCCL_FUNC5B(func, RING,    devredop, type, nullify), \
-  NCCL_FUNC5B(func, COLLNET, devredop, type, nullify)
-
-#define NCCL_FUNCS3C(func, devredop, nullForFloat) \
-  NCCL_FUNC4B(func, devredop, int8_t, 0), \
-  NCCL_FUNC4B(func, devredop, uint8_t, 0), \
-  NCCL_FUNC4B(func, devredop, int32_t, 0), \
-  NCCL_FUNC4B(func, devredop, uint32_t, 0), \
-  NCCL_FUNC4B(func, devredop, int64_t, 0), \
-  NCCL_FUNC4B(func, devredop, uint64_t, 0), \
-  NCCL_FUNC4B(func, devredop, half, nullForFloat), \
-  NCCL_FUNC4B(func, devredop, float, nullForFloat), \
-  NCCL_FUNC4B(func, devredop, double, nullForFloat), \
-  NCCL_FUNC4B(func, devredop, rccl_bfloat16, nullForFloat)
-
-#define NCCL_FUNCS2C(func) \
-  NCCL_FUNCS3C(func, Sum,        /*nullForFloat=*/0), \
-  NCCL_FUNCS3C(func, Prod,       /*nullForFloat=*/0), \
-  NCCL_FUNCS3C(func, Max,        /*nullForFloat=*/0), \
-  NCCL_FUNCS3C(func, Min,        /*nullForFloat=*/0), \
-  NCCL_FUNCS3C(func, PreMulSum,  /*nullForFloat=*/0), \
-  NCCL_FUNCS3C(func, SumPostDiv, /*nullForFloat=*/1)
-
-
 // Must be consistent with the ncclFuncSet enum
-using ncclKernelFunc_t = void (*)(struct ncclWorkElem* args);
+using ncclKernelFunc_t = void (*)();
 
 static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 // Don't try to initialize the host shadow copy of this device-side global
@@ -108,13 +77,13 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 // confuses clang. This will be fixed in the next clang release.
 #if defined(__HIP_DEVICE_COMPILE__)
 #if defined(BUILD_ALLREDUCE_ONLY)
-  NCCL_FUNC4B(AllReduce, Sum, float, 0),
+  NCCL_FUNC4(AllReduce, Sum, float, 0),
 #else
   NCCL_FUNCS2B(Broadcast),
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
-  NCCL_FUNCS2C(AllReduce),
+  NCCL_FUNCS2A(AllReduce),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, int32_t),
@@ -136,18 +105,18 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 template<unsigned short f, unsigned short l>
 struct Caller {
   static __device__ __host__
-  void call(struct ncclWorkElem* const c) noexcept
+  void call(unsigned short funcIndex) noexcept
   {
     constexpr unsigned short m = f + (l - f) / 2;
 
-     return (c->funcIndex < m) ? Caller<f, m>::call(c) : Caller<m, l>::call(c);
+     return (funcIndex < m) ? Caller<f, m>::call(funcIndex) : Caller<m, l>::call(funcIndex);
   }
 };
 
 template<unsigned short f>
 struct Caller<f, f + 1>{
   static __device__ __host__
-  void call(struct ncclWorkElem* const c) noexcept { ncclFuncs[f](c); }
+  void call(unsigned short funcIndex) noexcept { ncclFuncs[f](); }
 };
 
 static_assert(FUNC_INDEX_P2P == 2710, "Wrong P2P function index");
@@ -155,86 +124,86 @@ static_assert(FUNC_INDEX_ALLTOALL_PIVOT == 2711, "Wrong AllToAllPivot function i
 
 inline
 __device__
-void NCCL_CALL_FUNCTIONS(struct ncclWorkElem* const c) noexcept {
+void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {
 #if defined(BUILD_ALLREDUCE_ONLY)
-  if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE))
-    ncclFunction_AllReduce_RING_SIMPLE_Sum_float(c);
-  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_LL))
-    ncclFunction_AllReduce_RING_LL_Sum_float(c);
-  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_LL128))
-    ncclFunction_AllReduce_RING_LL128_Sum_float(c);
-  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE))
-    ncclFunction_AllReduce_TREE_SIMPLE_Sum_float(c);
-  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_TREE, NCCL_PROTO_LL))
-    ncclFunction_AllReduce_TREE_LL_Sum_float(c);
-  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_COLLNET, NCCL_PROTO_SIMPLE))
-    ncclFunction_AllReduce_COLLNET_SIMPLE_Sum_float(c);
-  else if (c->funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_COLLNET, NCCL_PROTO_LL))
-    ncclFunction_AllReduce_COLLNET_LL_Sum_float(c);
+  if (funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE))
+    ncclFunction_AllReduce_RING_SIMPLE_Sum_float();
+  else if (funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_LL))
+    ncclFunction_AllReduce_RING_LL_Sum_float();
+  else if (funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_RING, NCCL_PROTO_LL128))
+    ncclFunction_AllReduce_RING_LL_Sum_float();
+  else if (funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE))
+    ncclFunction_AllReduce_TREE_SIMPLE_Sum_float();
+  else if (funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_TREE, NCCL_PROTO_LL))
+    ncclFunction_AllReduce_TREE_LL_Sum_float();
+  else if (funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_COLLNET, NCCL_PROTO_SIMPLE))
+    ncclFunction_AllReduce_COLLNET_SIMPLE_Sum_float();
+  else if (funcIndex == FUNC_INDEX(ncclFuncAllReduce, ncclSum, ncclFloat32, NCCL_ALGO_COLLNET, NCCL_PROTO_LL))
+    ncclFunction_AllReduce_COLLNET_LL_Sum_float();
   else
     assert("Unsupported function index");
 #else
-  if (c->funcIndex < 540) {
-    if (c->funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 1) ncclFunction_Broadcast_TREE_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 2) ncclFunction_Broadcast_TREE_SIMPLE_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 3) ncclFunction_Broadcast_RING_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 4) ncclFunction_Broadcast_RING_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 5) ncclFunction_Broadcast_RING_SIMPLE_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 6) ncclFunction_Broadcast_COLLNET_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 7) ncclFunction_Broadcast_COLLNET_LL_Sum_int8_t(c);
-    else ncclFunction_Broadcast_COLLNET_SIMPLE_Sum_int8_t(c);
+  if (funcIndex < 540) {
+    if (funcIndex % 9 == 0) ncclFunction_Broadcast_TREE_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 1) ncclFunction_Broadcast_TREE_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 2) ncclFunction_Broadcast_TREE_SIMPLE_Sum_int8_t();
+    else if (funcIndex % 9 == 3) ncclFunction_Broadcast_RING_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 4) ncclFunction_Broadcast_RING_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 5) ncclFunction_Broadcast_RING_SIMPLE_Sum_int8_t();
+    else if (funcIndex % 9 == 6) ncclFunction_Broadcast_COLLNET_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 7) ncclFunction_Broadcast_COLLNET_LL_Sum_int8_t();
+    else ncclFunction_Broadcast_COLLNET_SIMPLE_Sum_int8_t();
   }
-  else if (c->funcIndex < 1080) Caller<540, 1080>::call(c);
-  else if (c->funcIndex < 1620) {
-    if (c->funcIndex % 9 == 0) ncclFunction_AllGather_TREE_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 1) ncclFunction_AllGather_TREE_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 2) ncclFunction_AllGather_TREE_SIMPLE_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 3) ncclFunction_AllGather_RING_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 4) ncclFunction_AllGather_RING_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 5) ncclFunction_AllGather_RING_SIMPLE_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 6) ncclFunction_AllGather_COLLNET_LL_Sum_int8_t(c);
-    else if (c->funcIndex % 9 == 7) ncclFunction_AllGather_COLLNET_LL_Sum_int8_t(c);
-    else ncclFunction_AllGather_COLLNET_SIMPLE_Sum_int8_t(c);
+  else if (funcIndex < 1080) Caller<540, 1080>::call(funcIndex);
+  else if (funcIndex < 1620) {
+    if (funcIndex % 9 == 0) ncclFunction_AllGather_TREE_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 1) ncclFunction_AllGather_TREE_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 2) ncclFunction_AllGather_TREE_SIMPLE_Sum_int8_t();
+    else if (funcIndex % 9 == 3) ncclFunction_AllGather_RING_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 4) ncclFunction_AllGather_RING_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 5) ncclFunction_AllGather_RING_SIMPLE_Sum_int8_t();
+    else if (funcIndex % 9 == 6) ncclFunction_AllGather_COLLNET_LL_Sum_int8_t();
+    else if (funcIndex % 9 == 7) ncclFunction_AllGather_COLLNET_LL_Sum_int8_t();
+    else ncclFunction_AllGather_COLLNET_SIMPLE_Sum_int8_t();
   }
-  else if (c->funcIndex < 2700) Caller<1620, 2700>::call(c);
+  else if (funcIndex < 2700) Caller<1620, 2700>::call(funcIndex);
   else {
-    switch (c->funcIndex - 2700) {
+    switch (funcIndex - 2700) {
       case 0:
-        ncclFunction_OneRankReduce_PreMulSum_int8_t(c);
+        ncclFunction_OneRankReduce_PreMulSum_int8_t();
         break;
       case 1:
-        ncclFunction_OneRankReduce_PreMulSum_uint8_t(c);
+        ncclFunction_OneRankReduce_PreMulSum_uint8_t();
         break;
       case 2:
-        ncclFunction_OneRankReduce_PreMulSum_int32_t(c);
+        ncclFunction_OneRankReduce_PreMulSum_int32_t();
         break;
       case 3:
-        ncclFunction_OneRankReduce_PreMulSum_uint32_t(c);
+        ncclFunction_OneRankReduce_PreMulSum_uint32_t();
         break;
       case 4:
-        ncclFunction_OneRankReduce_PreMulSum_int64_t(c);
+        ncclFunction_OneRankReduce_PreMulSum_int64_t();
         break;
       case 5:
-        ncclFunction_OneRankReduce_PreMulSum_uint64_t(c);
+        ncclFunction_OneRankReduce_PreMulSum_uint64_t();
         break;
       case 6:
-        ncclFunction_OneRankReduce_PreMulSum_half(c);
+        ncclFunction_OneRankReduce_PreMulSum_half();
         break;
       case 7:
-        ncclFunction_OneRankReduce_PreMulSum_float(c);
+        ncclFunction_OneRankReduce_PreMulSum_float();
         break;
       case 8:
-        ncclFunction_OneRankReduce_PreMulSum_double(c);
+        ncclFunction_OneRankReduce_PreMulSum_double();
         break;
       case 9:
-        ncclFunction_OneRankReduce_PreMulSum_rccl_bfloat16(c);
+        ncclFunction_OneRankReduce_PreMulSum_rccl_bfloat16();
         break;
       case 10:
-        ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t(c);
+        ncclFunction_SendRecv_RING_SIMPLE_Sum_int8_t();
         break;
       case 11:
-        ncclFunction_AllToAllPivot_RING_SIMPLE_Sum_int8_t(c);
+        ncclFunction_AllToAllPivot_RING_SIMPLE_Sum_int8_t();
       default:
         break;
     }
@@ -249,43 +218,52 @@ class ncclFunction {
 };
 
 #ifdef ENABLE_COLLTRACE
-#define traceColl(fIdx)  \
+#define traceColl()  \
     uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
     shmem.comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
     shmem.comm.collTrace[pos].bid = bid; \
-    shmem.comm.collTrace[pos].funcIndex = fIdx; \
-    if (fIdx == FUNC_INDEX_P2P) { \
-      shmem.comm.collTrace[pos].opCount = elems[0].p2p.opCount; \
-      shmem.comm.collTrace[pos].p2p.nThreads = elems[0].p2p.nThreads; \
-      shmem.comm.collTrace[pos].p2p.delta = (uint16_t)(elems[0].p2p.delta); \
+    shmem.comm.collTrace[pos].funcIndex = ncclShmem->work.header.funcIndex; \
+    if (ncclShmem->work.header.funcIndex == FUNC_INDEX_P2P) { \
+      shmem.comm.collTrace[pos].p2p[0].connIndex = ncclShmem->work.p2pElems[0].connIndex; \
+	  shmem.comm.collTrace[pos].p2pOpCount[0] = ncclShmem->work.p2pElems[0].opCount; \
+      shmem.comm.collTrace[pos].p2p[0].ngroups = ncclShmem->work.p2pElems[0].ngroups; \
+      shmem.comm.collTrace[pos].p2p[0].nWarps = ncclShmem->work.p2pElems[0].nWarps; \
+      shmem.comm.collTrace[pos].p2p[0].warpStart = ncclShmem->work.p2pElems[0].warpStart; \
+      shmem.comm.collTrace[pos].p2p[0].peer = (uint16_t)(ncclShmem->work.p2pElems[0].peer); \
+	  shmem.comm.collTrace[pos].p2p[1].connIndex = ncclShmem->work.p2pElems[1].connIndex; \
+      shmem.comm.collTrace[pos].p2pOpCount[1] = ncclShmem->work.p2pElems[1].opCount; \
+      shmem.comm.collTrace[pos].p2p[1].ngroups = ncclShmem->work.p2pElems[1].ngroups; \
+      shmem.comm.collTrace[pos].p2p[1].nWarps = ncclShmem->work.p2pElems[1].nWarps; \
+      shmem.comm.collTrace[pos].p2p[1].warpStart = ncclShmem->work.p2pElems[1].warpStart; \
+      shmem.comm.collTrace[pos].p2p[1].peer = (uint16_t)(ncclShmem->work.p2pElems[1].peer); \
     } else { \
-      shmem.comm.collTrace[pos].opCount = elems[0].coll.opCount; \
-      shmem.comm.collTrace[pos].coll.nThreads = elems[0].nThreads; \
-      shmem.comm.collTrace[pos].coll.bid = elems[0].coll.bid; \
-      shmem.comm.collTrace[pos].coll.nChannels = elems[0].coll.nChannels; \
+      shmem.comm.collTrace[pos].opCount = ncclShmem->work.elems[0].opCount; \
+      shmem.comm.collTrace[pos].coll.nWarps = ncclShmem->work.elems[0].header.nWarps; \
+      shmem.comm.collTrace[pos].coll.bid = ncclShmem->work.elems[0].bid; \
+      shmem.comm.collTrace[pos].coll.nChannels = ncclShmem->work.elems[0].nChannels; \
     }
-#define traceKernelLaunch(fIdx)  { \
-    if (!(fIdx == FUNC_INDEX_P2P && elems[0].p2p.nThreads == 0)) { \
-      traceColl(fIdx); \
+#define traceKernelLaunch()  { \
+    if (!(ncclShmem->work.header.funcIndex == FUNC_INDEX_P2P && ncclShmem->work.p2pElems[0].nWarps == 0)) { \
+      traceColl(); \
       asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (shmem.comm.collTrace[pos].data_0)); \
       shmem.comm.collTrace[pos].type = ncclCollTraceKernelLaunchType; \
     } \
   }
-#define traceCollEnd(fIdx)  { \
-    if (!(fIdx == FUNC_INDEX_P2P && elems[0].p2p.nThreads == 0)) { \
-      traceColl(fIdx); \
+#define traceCollEnd()  { \
+    if (!(ncclShmem->work.header.funcIndex == FUNC_INDEX_P2P && ncclShmem->work.p2pElems[0].nWarps == 0)) { \
+      traceColl(); \
       shmem.comm.collTrace[pos].type = ncclCollTraceCollEndType; \
     } \
   }
-#define traceKernelEnd(fIdx)  { \
-    if (!(fIdx == FUNC_INDEX_P2P && elems[0].p2p.nThreads == 0)) { \
-      traceColl(fIdx); \
+#define traceKernelEnd()  { \
+    if (!(ncclShmem->work.header.funcIndex == FUNC_INDEX_P2P && ncclShmem->work.p2pElems[0].nWarps == 0)) { \
+      traceColl(); \
       shmem.comm.collTrace[pos].type = ncclCollTraceKernelEndType; \
     } \
   }
-#define traceAbort(fIdx)  { \
-    if (!(fIdx == FUNC_INDEX_P2P && elems[0].p2p.nThreads == 0)) { \
-      traceColl(fIdx); \
+#define traceAbort()  { \
+    if (!(ncclShmem->work.header.funcIndex == FUNC_INDEX_P2P && ncclShmem->work.p2pElems[0].nWarps == 0)) { \
+      traceColl(); \
       shmem.comm.collTrace[pos].type = ncclCollTraceAbortType; \
     } \
   }
@@ -301,9 +279,9 @@ class ncclFunction {
     ncclShmem->comm.collTrace[pos].type = ncclCollTraceDataType; \
   }
 #else
-#define traceKernelLaunch(fIdx)
-#define traceCollEnd(fIdx)
-#define traceAbort(fIdx)
+#define traceKernelLaunch()
+#define traceCollEnd()
+#define traceAbort()
 #define traceData(data2, data4, data8_0, data8_1)
 #endif
 
@@ -311,6 +289,28 @@ __device__ inline bool barrierReduceAny(int bit, uint32_t* abortCount) {
   if (bit) atomicAdd(abortCount, 1); \
   __syncthreads(); \
   return atomicAdd(abortCount, 0) != 0;
+}
+
+// Copy src to dst and fill extra size with zeroes
+template<typename Tdst, typename Tsrc>
+__device__ void copyToShmem(Tdst *dst, Tsrc const *src, int tid, int nthreads) {
+  static_assert(sizeof(Tdst)%(sizeof(uint32_t)) == 0 && sizeof(Tsrc)%(sizeof(uint32_t)) == 0,
+      "copyToShmem needs sizes which are multiple of 4B");
+  static_assert(sizeof(Tdst) >= sizeof(Tsrc), "Tdst size is too small");
+  static_assert(sizeof(Tdst) <= WARP_SIZE*2*sizeof(uint64_t), "copyToShmem limited to 512B to make sure it can always be done in one cycle");
+  uint64_t *d = reinterpret_cast<uint64_t*>(dst);
+  uint64_t const *s = reinterpret_cast<uint64_t const*>(src);
+  uint64_t *shmemPtr = d;
+  int offset = 2*tid;
+  uint64_t v0, v1;
+  if (offset >= sizeof(Tsrc)/sizeof(uint64_t)) {
+    v0 = v1 = 0ULL;
+  } else {
+    v0 = s[offset] ; v1 = s[offset+1];
+  }
+  if (offset < sizeof(Tdst)/sizeof(uint64_t)) {
+    shmemPtr[offset] = v0; shmemPtr[offset+1] = v1;
+  }
 }
 
 template<typename T>
@@ -352,47 +352,21 @@ struct RunWorkElement {
   }
 };
 
-#if CUDART_VERSION >= 11030
-__device__ constexpr int ncclWorkElemFactors[NCCL_NUM_ALGORITHMS] =
-#else
-static __device__ __constant__ int ncclWorkElemFactors[NCCL_NUM_ALGORITHMS] =
-#endif
-{/*Tree*/1, /*Ring and P2P*/1, /*CollNet*/NCCL_REG_ELEM_FACTOR};
-
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
 struct RunWork {
   // This __forceinline__ is necessary. The compiler was inserting a function call
   // here from the LL ncclKernel.
   __device__ __forceinline__ void run(ncclWork *w) {
-    int tid = threadIdx.x;
-    /* Some invariants that must hold:
-     * 1. All elems[] have same funcIndex.
-     * 2. All elems[] have same nThreads.
-     * 3. The thread-to-group relation (as in prims group numbers) is the same
-     *    for all elems[].
-     *
-     * If (1) isn't true then we might be in the wrong function since dispatch
-     * on ncclFuncs[w->funcIndex] is how we got here.
-     *
-     * If (2) or (3) aren't true, then threads from different work elements
-     * could race for barrier resources (barrier numbers 0...15) which is fatal.
-     *
-     * IMPORTANT!!! To ensure (3), implementations of
-     * `RunWorkElement<Fn,T,RedOp,Algo,Proto>::run()` may only use the following
-     * when deciding how to map threads to groups:
-     *    Fn, T, RedOp, Algo, Proto, nThreads
-     *
-     * This last one is difficult to enforce so I hope everyone reads this.
-     */
-    if (tid < w->elems[0].nThreads) {
-      #pragma unroll 1
-      for(int e=0; e < NCCL_MAX_WORK_ELEMENTS && w->elems[e].active != 0; e+=ncclWorkElemFactors[Algo])
+    int wid = threadIdx.x / WARP_SIZE;
+    int inc = w->header.type == ncclWorkTypeRegColl ? sizeof(ncclWorkElemReg) / sizeof(ncclWorkElem) : 1;
+    #pragma unroll 1
+    for(int e=0; e < NCCL_MAX_WORK_ELEMENTS && w->elems[e].header.type != ncclWorkTypeUnused; e += inc) {
+      if (wid < w->header.nWarps)
         RunWorkElement<Fn, T, RedOp, Algo, Proto>().run(&w->elems[e]);
     }
   }
 };
 
-#define MAXWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 struct ncclShmemGroup {
   ncclConnInfo *recvConns[NCCL_MAX_DIRECT_ARITY];
   ncclConnInfo *sendConns[NCCL_MAX_DIRECT_ARITY];
@@ -400,7 +374,7 @@ struct ncclShmemGroup {
   void* dsts[NCCL_MAX_DIRECT_ARITY+1];
   int totalSendSize[NCCL_MAX_SLICE_PER_CHUNK];
   uint64_t barrier;
-  uint64_t barrier_next[MAXWARPS];
+  uint64_t barrier_next[NCCL_MAX_GROUPS];
 };
 
 struct ncclShmemData {
@@ -408,18 +382,41 @@ struct ncclShmemData {
     uint64_t ll128warp[NCCL_MAX_GROUPS][NCCL_MAX_GROUPS];
     struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
   };
-  uint32_t sync[MAXWARPS];
+  uint32_t sync[NCCL_MAX_GROUPS];
   uint64_t redOpArgs[NCCL_MAX_DIRECT_ARITY+1];
-  ncclDevComm comm;
-  ncclChannel channel;
-  ncclWork work;
+  struct ncclDevComm comm;
+  struct ncclChannel channel;
+  uint64_t pad;
+  struct ncclWork work;
 };
+
+static __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
+  if (we->header.type != ncclWorkTypeUnused && we->redOpArgIsPtr) {
+    /* redOpArg is a pointer to the scalar value, so we'll dereference it
+     * here so that redOpArg holds the bits of the scalar going forward.
+     * The tricky thing is we don't know its type T since that's encoded in
+     * the funcIndex. Because it would be difficult to get sizeof(T) from
+     * funcIndex, we'll cheat and just dereference the largest possible size
+     * given the alignment of the pointer. We might be reading in more bytes
+     * than we need but that's harmless.
+     */
+    if (we->redOpArg%2 != 0)
+      we->redOpArg = *reinterpret_cast<uint8_t*>(we->redOpArg);
+    else if (we->redOpArg%4 != 0)
+      we->redOpArg = *reinterpret_cast<uint16_t*>(we->redOpArg);
+    else if (we->redOpArg%8 != 0)
+      we->redOpArg = *reinterpret_cast<uint32_t*>(we->redOpArg);
+    else
+      we->redOpArg = *reinterpret_cast<uint64_t*>(we->redOpArg);
+  }
+}
 
 extern __device__ struct ncclShmemData *ncclShmem;
 
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnIndex, bool COLLTRACE>
-__device__ void ncclKernel(ncclWorkElem first)  {
+__device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int tid = threadIdx.x;
+  int nthreads = blockDim.x;
   int bid = blockIdx.x;
   __shared__ struct ncclShmemData shmem;
   ncclShmem = &shmem;
@@ -428,90 +425,69 @@ __device__ void ncclKernel(ncclWorkElem first)  {
     abortCount = 0;
     for (auto i = 0; i < NCCL_MAX_GROUPS; i++) {
       shmem.groups[i].barrier = 0;
-      for (auto j = 0; j < MAXWARPS; j++) shmem.groups[i].barrier_next[j] = 0;
+      for (auto j = 0; j < NCCL_MAX_GROUPS; j++) shmem.groups[i].barrier_next[j] = 0;
     }
   }
   __syncthreads();
 
-  int turn = copyToShmem(&shmem.comm, first.comm);
+  int turn = copyToShmem(&ncclShmem->comm, comm);
   // get address of channel without incurring indirect load from ncclDevCom::channels
-  ncclChannel *channel = &((ncclDevCommAndChannels*)first.comm)->channels[bid];
-  turn = copyToShmem(&shmem.channel, channel, turn);
+  ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
+  turn = copyToShmem(&ncclShmem->channel, channel, turn);
 
   // To optimize for latency, (only) the first operation is passed as argument.
-  if (bid == 0 && first.active != 0) {
-    turn = copyToShmem(&shmem.work.elems[0], &first, turn);
-    if (1 <= tid && tid < NCCL_MAX_WORK_ELEMENTS && tid % ncclWorkElemFactors[Algo] == 0) {
-      shmem.work.elems[tid].active = 0;
-      shmem.work.elems[tid].redOpArgIsPtr = 0;
-    }
+  if (bid == 0 && first.header.type != ncclWorkTypeUnused) {
+    // Copy first elem to work and zero out the rest
+    copyToShmem(&ncclShmem->work, &first, tid, nthreads);
   }
-  struct ncclWorkElem* elems = shmem.work.elems;
-  __syncthreads(); // publish shmem
+  __syncthreads(); // publish ncclShmem
 
-  ncclWork *workFifoHost = shmem.channel.workFifo;
-  ncclWork *workFifoDev = shmem.channel.workFifoDev;
-  int workFifoIx = shmem.channel.index;
+  ncclWork *workFifoHost = ncclShmem->channel.workFifo;
+  ncclWork *workFifoDev = ncclShmem->channel.workFifoDev;
+  int workFifoIx = ncclShmem->channel.index;
 
   bool skipLoadWork = false, firstLaunch = true;
-  if (bid == 0 && first.active != 0)
+  if (bid == 0 && first.header.type != ncclWorkTypeUnused)
     skipLoadWork = true;
 
   while (true) {
     if (!skipLoadWork) {
-      copyToShmem(&shmem.work, &workFifoDev[workFifoIx]); // turn no longer helps
-      // Check whether the last operation was aborted and make sure all threads exit
-      int aborted = tid == 0 ? *shmem.comm.abortFlag : 0;
-      if (barrierReduceAny(aborted, &abortCount)) { // publish shmem.work
-        if (COLLTRACE && tid == 0) traceAbort(elems->funcIndex);
-        break;
+      copyToShmem(&ncclShmem->work, &workFifoDev[workFifoIx], tid, nthreads);
+      { // Check whether the last operation was aborted and make sure all threads exit
+        int aborted = tid == 0 ? *comm->abortFlag : 0;
+        if (barrierReduceAny(aborted, &abortCount)) { // publish ncclShmem->work
+          if (COLLTRACE && tid == 0) traceAbort();
+          break;
+        }
+        if (tid == 0)
+          workFifoHost[workFifoIx].header.type = ncclWorkTypeUnused;
+        if (COLLTRACE && tid == 0) {
+          if (firstLaunch) traceKernelLaunch();
+          if (!firstLaunch) traceCollEnd();
+          firstLaunch = false;
+        }
       }
-      if (tid == 0)
-        workFifoHost[workFifoIx].elems[0].active = 0;
-      if (COLLTRACE && tid == 0) {
-        if (firstLaunch) traceKernelLaunch(elems->funcIndex);
-        if (!firstLaunch) traceCollEnd(elems->funcIndex);
-        firstLaunch = false;
-      }
-    } else if (COLLTRACE && tid == 0) {
-        traceKernelLaunch(elems->funcIndex);
-        firstLaunch = false;
     }
 
     workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
     if (tid == 0)
       channel->index = workFifoIx; // write back to real channel, not shmem shadow
 
-    if (tid < NCCL_MAX_WORK_ELEMENTS && tid % ncclWorkElemFactors[Algo] == 0) {
-      ncclWorkElem *we = &shmem.work.elems[tid];
-      if (we->redOpArgIsPtr && we->active != 0) {
-        /* redOpArg is a pointer to the scalar value, so we'll dereference it
-         * here so that redOpArg holds the bits of the scalar going forward.
-         * The tricky thing is we don't know its type T since that's encoded in
-         * the funcIndex. Because it would be difficult to get sizeof(T) from
-         * funcIndex, we'll cheat and just dereference the largest possible size
-         * given the alignment of the pointer. We might be reading in more bytes
-         * than we need but that's harmless.
-         */
-        if (we->coll.redOpArg%2 != 0)
-          we->coll.redOpArg = *reinterpret_cast<uint8_t*>(we->coll.redOpArg);
-        else if (we->coll.redOpArg%4 != 0)
-          we->coll.redOpArg = *reinterpret_cast<uint16_t*>(we->coll.redOpArg);
-        else if (we->coll.redOpArg%8 != 0)
-          we->coll.redOpArg = *reinterpret_cast<uint32_t*>(we->coll.redOpArg);
-        else
-          we->coll.redOpArg = *reinterpret_cast<uint64_t*>(we->coll.redOpArg);
-      }
+    __syncwarp();
+    if (ncclShmem->work.header.type == ncclWorkTypeColl) {
+      if (tid < NCCL_MAX_WORK_ELEMENTS) ncclRedopPtrDeref(&ncclShmem->work.elems[tid]);
+    } else if (ncclShmem->work.header.type == ncclWorkTypeRegColl) {
+      if (tid < NCCL_MAX_WORK_ELEMENTS_REG) ncclRedopPtrDeref(&ncclShmem->work.regElems[tid].elem);
     }
     __syncthreads();
 
-    if (shmem.work.elems[0].funcIndex == FnIndex)
-      RunWork<Fn, T, RedOp, Algo, Proto>().run(&shmem.work);
+    if (ncclShmem->work.header.funcIndex == FnIndex)
+      RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem->work);
     else
-      NCCL_CALL_FUNCTIONS(&elems[0]);
+      NCCL_CALL_FUNCTIONS(ncclShmem->work.header.funcIndex);
 
-    if (shmem.work.elems[0].active == 2) {
-      if (COLLTRACE && tid == 0) traceKernelEnd(elems->funcIndex)
+    if (ncclShmem->work.header.isLast) {
+      if (COLLTRACE && tid == 0) traceKernelEnd()
       break;
     }
     __syncthreads();
@@ -521,17 +497,17 @@ __device__ void ncclKernel(ncclWorkElem first)  {
 
 #define IMPL_COLL_KERN(func, algo, proto, devredop, type, fIndex) \
 __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
-__global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(ncclWorkElem first) { \
-  if (first.comm->collTraceThread) \
-    ncclKernel<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, true>(first); \
+__global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, ncclWorkElem first) { \
+  if (comm->collTraceThread) \
+    ncclKernel<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, true>(comm, first); \
   else \
-    ncclKernel<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, false>(first); \
+    ncclKernel<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, false>(comm, first); \
 }
 
 // Examples :     AllReduce, RING, LL,    Sum,   uint8
 /* Functions for aggregation case */
 #define IMPL_COLL_FUNC(func, algo, proto, devredop, type) \
-__device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, devredop, type)(struct ncclWorkElem* args) { \
+__device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, devredop, type)() { \
   RunWork<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto>().run(&ncclShmem->work); \
 }
 
@@ -573,46 +549,6 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, dev
   IMPL_COLL2(func, Max) \
   IMPL_COLL2(func, PreMulSum) \
   IMPL_COLL2A(func, SumPostDiv)
-
-// [RCCL] Define clique-based implementations (repurposed LL128)
-#define IMPL_COLL4_CLIQUE(func, algo, devredop, type, ncclType) \
-  IMPL_COLL_FUNC(func, algo, LL,     devredop, type) \
-  IMPL_COLL_FUNC(func, algo, LL128,  devredop, type) \
-  IMPL_COLL_FUNC(func, algo, SIMPLE, devredop, type) \
-
-#define IMPL_COLL3_CLIQUE(func, devredop, type, ncclType) \
-  IMPL_COLL4_CLIQUE(func, TREE,    devredop, type, ncclType) \
-  IMPL_COLL4_CLIQUE(func, RING,    devredop, type, ncclType) \
-  IMPL_COLL4_CLIQUE(func, COLLNET, devredop, type, ncclType)
-
-#define IMPL_COLL2_CLIQUE(func, devredop) \
-  IMPL_COLL3_CLIQUE(func, devredop, int8_t,   ncclInt8) \
-  IMPL_COLL3_CLIQUE(func, devredop, uint8_t,  ncclUint8) \
-  IMPL_COLL3_CLIQUE(func, devredop, int32_t,  ncclInt32) \
-  IMPL_COLL3_CLIQUE(func, devredop, uint32_t, ncclUint32) \
-  IMPL_COLL3_CLIQUE(func, devredop, int64_t,  ncclInt64) \
-  IMPL_COLL3_CLIQUE(func, devredop, uint64_t, ncclUint64) \
-  IMPL_COLL3_CLIQUE(func, devredop, half,     ncclFloat16) \
-  IMPL_COLL3_CLIQUE(func, devredop, float,    ncclFloat32) \
-  IMPL_COLL3_CLIQUE(func, devredop, double,   ncclFloat64) \
-  IMPL_COLL3_CLIQUE(func, devredop, rccl_bfloat16, ncclBfloat16)
-
-#define IMPL_COLL2A_CLIQUE(func, devredop) \
-  IMPL_COLL3_CLIQUE(func, devredop, int8_t,   ncclInt8) \
-  IMPL_COLL3_CLIQUE(func, devredop, uint8_t,  ncclUint8) \
-  IMPL_COLL3_CLIQUE(func, devredop, int32_t,  ncclInt32) \
-  IMPL_COLL3_CLIQUE(func, devredop, uint32_t, ncclUint32) \
-  IMPL_COLL3_CLIQUE(func, devredop, int64_t,  ncclInt64) \
-  IMPL_COLL3_CLIQUE(func, devredop, uint64_t, ncclUint64)
-
-#define IMPL_COLL_CLIQUE(func) \
-  IMPL_COLL2_CLIQUE(func, Sum) \
-  IMPL_COLL2_CLIQUE(func, Prod) \
-  IMPL_COLL2_CLIQUE(func, Min) \
-  IMPL_COLL2_CLIQUE(func, Max) \
-  IMPL_COLL2_CLIQUE(func, PreMulSum) \
-  IMPL_COLL2A_CLIQUE(func, SumPostDiv)
-// [/RCCL]
 
 // Copy primitives only define one function for copy
 #define IMPL_COLL_C(func) IMPL_COLL3(func, Sum, int8_t, ncclInt8);

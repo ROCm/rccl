@@ -137,6 +137,7 @@ NodeModelDesc model_descs[] = {
   {4, "topo_16p1h_vm.xml",      "4 nodes 16P1H VM"},
   {1, "topo_8p1h.xml",          "single node 8P1H"},
   {4, "topo_8p1h.xml",          "4 nodes 8P1H"},
+  {1, "topo_4p4h.xml",          "single node gfx908 4P4H"},
 };
 
 int main(int argc,char* argv[])
@@ -188,11 +189,16 @@ int main(int argc,char* argv[])
 
   NCCLCHECK(ncclCalloc(&comm, nranks));
 
-  struct allGather1Data_t *allGather1Data;
-  NCCLCHECK(ncclCalloc(&allGather1Data, nranks));
+  struct ncclPeerInfo *peerInfo;
+  NCCLCHECK(ncclCalloc(&peerInfo, nranks+1)); // Extra rank to represent CollNet root
 
   struct allGather3Data_t *allGather3Data;
   NCCLCHECK(ncclCalloc(&allGather3Data, nranks));
+
+  struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;
+  NCCLCHECK(ncclCalloc(&treeGraph, nranks));
+  NCCLCHECK(ncclCalloc(&ringGraph, nranks));
+  NCCLCHECK(ncclCalloc(&collNetGraph, nranks));
 
   for (int i = 0; i < nranks; i++) {
     comm[i].rank = i;
@@ -204,22 +210,18 @@ int main(int argc,char* argv[])
     NCCLCHECK(ncclCalloc(&comm[i].p2pRecvs, comm->nRanks));
     node_model = network.GetNode(i);
     assert(node_model!=0);
+    comm[i].busId = node_model->getGpuBusId(i);
     comm[i].topo = node_model->getSystem(i);
-    bootstrapAllGather(&comm[i], allGather1Data);
+    comm[i].peerInfo = peerInfo;
     // Mark channels as non initialized.
     for (int c=0; c<MAXCHANNELS; c++) comm[i].channels[c].id = -1;
-    NCCLCHECK(ncclCalloc((uint32_t**)&comm[i].p2pNet, 1));
-    NCCLCHECK(ncclCalloc(&comm[i].rankToIntraNodeRank, comm->nRanks));
+    NCCLCHECK(fillInfo(&comm[i], comm[i].peerInfo+comm[i].rank, 0));
   }
 
-  struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;
-  NCCLCHECK(ncclCalloc(&treeGraph, nranks));
-  NCCLCHECK(ncclCalloc(&ringGraph, nranks));
-  NCCLCHECK(ncclCalloc(&collNetGraph, nranks));
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
-    initTransportsRank_1(&comm[i], allGather1Data, allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
+    initTransportsRank_1(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
   }
 
   for (int i = 0; i < nranks; i++) {
@@ -239,7 +241,7 @@ int main(int argc,char* argv[])
   free(ringGraph);
   free(collNetGraph);
   free(allGather3Data);
-  free(allGather1Data);
+  free(peerInfo);
 
   free(comm);
   printf("Done generating topology using %d: %s\n", model_id, desc->description);
