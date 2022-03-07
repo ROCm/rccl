@@ -10,11 +10,38 @@
 #define PIPE_WRITE(childId, val)                                        \
   ASSERT_EQ(write(childList[childId]->parentWriteFd, &val, sizeof(val)), sizeof(val))
 
-#define PIPE_CHECK(childId)                                             \
-  {                                                                     \
-    int response = 0;                                                   \
-    ASSERT_EQ(read(childList[childId]->parentReadFd, &response, sizeof(int)), sizeof(int)); \
-    ASSERT_EQ(response, TEST_SUCCESS);                                  \
+
+#define PIPE_READ(childId, val)                                                         \
+  {                                                                                     \
+    if (ev.verbose) INFO("Calling PIPE_READ to Child %d\n", childId); \
+    ssize_t retval = read(childList[childId]->parentReadFd, &val, sizeof(val)); \
+    if (ev.verbose) INFO("Got PIPE_READ %ld\n", retval); \
+    if (retval == -1)                                                                   \
+    {                                                                                   \
+      ERROR("Unable to read from child %d: Error %s\n", childId, strerror(errno));      \
+      FAIL();                                                                           \
+    }                                                                                   \
+    else if (retval == 0)                                                               \
+    {                                                                                   \
+      ERROR("Child %d pipe closed unexpectedly\n", childId);                            \
+      exit(1);                                                                          \
+    }                                                                                   \
+    else if (retval < sizeof(int))                                                      \
+    {                                                                                   \
+      ERROR("Child %d pipe read incomplete (%ld / %lu)\n", childId, retval, sizeof(val)); \
+      exit(1);                                                                          \
+    }                                                                                   \
+  }
+
+#define PIPE_CHECK(childId)                         \
+  {                                                 \
+    int response = 0;                               \
+    PIPE_READ(childId, response);                   \
+    if (response != TEST_SUCCESS)                   \
+    {                                               \
+      ERROR("Child %d reports failure\n", childId); \
+      FAIL();                                       \
+    }                                               \
   }
 
 namespace RcclUnitTesting
@@ -24,19 +51,6 @@ namespace RcclUnitTesting
     numActiveChildren(0),
     numActiveRanks(0)
   {
-    // Set NCCL_COMM_ID to use a local port to avoid passing ncclCommId
-    // Calling ncclGetUniqueId would initialize HIP, which should not be done prior to fork
-    std::string localPort = "55513";
-    if (!getenv("NCCL_COMM_ID"))
-    {
-      char hostname[HOST_NAME_MAX+1];
-      gethostname(hostname, HOST_NAME_MAX+1);
-      std::string hostnameString(hostname);
-      hostnameString.append(":55513");
-      setenv("NCCL_COMM_ID", hostnameString.c_str(), 0);
-      if (ev.verbose) INFO("NCCL_COMM_ID set to %s\n", hostnameString.c_str());
-    }
-
     // Collect the number of GPUs
     this->numDevicesAvailable = ev.maxGpus;
     if (ev.verbose) INFO("Detected %d GPUs\n", this->numDevicesAvailable);
@@ -90,12 +104,25 @@ namespace RcclUnitTesting
       }
     }
 
+    // Tell first rank to get ncclUniqueId
+    int getIdCmd = TestBedChild::CHILD_GET_UNIQUE_ID;
+    PIPE_WRITE(0, getIdCmd);
+
+    // Receive back unique ID from first rank
+    ncclUniqueId id;
+    PIPE_READ(0, id);
+    PIPE_CHECK(0);
+
     // Send InitComms command to each active child process
     int const cmd = TestBedChild::CHILD_INIT_COMMS;
     int rankOffset = 0;
     for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
+      if (ev.verbose) INFO("Sending InitComm event to child %d\n", childId);
       PIPE_WRITE(childId, cmd);
+
+      // Send unique ID to child process
+      PIPE_WRITE(childId, id);
 
       // Send total number of ranks to child process
       PIPE_WRITE(childId, this->numActiveRanks);
