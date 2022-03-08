@@ -5,7 +5,7 @@
  ************************************************************************/
 #include <unistd.h>
 #include "TestBed.hpp"
-#include <rccl.h>
+#include <rccl/rccl.h>
 
 #define PIPE_WRITE(childId, val)                                        \
   ASSERT_EQ(write(childList[childId]->parentWriteFd, &val, sizeof(val)), sizeof(val))
