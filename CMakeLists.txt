@@ -112,10 +112,11 @@ if(BUILD_ADDRESS_SANITIZER)
   add_link_options(-fuse-ld=lld)
 endif()
 
-configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/rccl.h)
-configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/nccl.h)
+configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/rccl.h)
+configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/nccl.h)
 
-include_directories(${PROJECT_BINARY_DIR}) # for generated rccl.h header
+include_directories(${PROJECT_BINARY_DIR}/include) # for generated rccl.h header
+include_directories(${PROJECT_BINARY_DIR}/include/rccl) # for generated rccl.h header
 include_directories(src)
 include_directories(src/include)
 include_directories(src/collectives)
@@ -274,7 +275,7 @@ rocm_set_soversion(rccl "1.0")
 rocm_install_targets(TARGETS
                      rccl
 		     )
-rocm_install(FILES ${PROJECT_BINARY_DIR}/rccl.h
+rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
 
 rocm_export_targets(NAMESPACE
@@ -285,7 +286,7 @@ rocm_export_targets(NAMESPACE
                     hip)
 if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
   #Create wrapper files
-  rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}"
+  rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}/include/rccl"
             PATTERNS "*.h"
             rccl.h
             GUARDS SYMLINK WRAPPER
