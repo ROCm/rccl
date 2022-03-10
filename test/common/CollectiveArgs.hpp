@@ -7,7 +7,7 @@ b
 #pragma once
 #include "PtrUnion.hpp"
 #include "PrepDataFuncs.hpp"
-#include "rccl.h"
+#include "rccl/rccl.h"
 
 namespace RcclUnitTesting
 {

@@ -20,6 +20,7 @@ function display_help()
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
     echo "    [--address-sanitizer] Build with address sanitizer enabled"
     echo "    [--build_allreduce_only] Build only AllReduce + sum + float kernel"
+    echo "    [--rm-legacy-include-dir] Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
 }
 
 # #################################################
@@ -38,6 +39,7 @@ clean_build=true
 install_dependencies=false
 build_static=false
 build_allreduce_only=false
+build_freorg_bkwdcomp=true
 
 # #################################################
 # Parameter parsing
@@ -46,7 +48,7 @@ build_allreduce_only=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer,build_allreduce_only --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer,build_allreduce_only,rm-legacy-include-dir --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -101,6 +103,9 @@ while true; do
         shift ;;
     --build_allreduce_only)
         build_allreduce_only=true
+        shift ;;
+    --rm-legacy-include-dir)
+        build_freorg_bkwdcomp=false
         shift ;;
     --prefix)
         install_prefix=${2}
@@ -181,6 +186,13 @@ fi
 # sanitizer
 if [[ "${build_address_sanitizer}" == true ]]; then
 cmake_common_options="${cmake_common_options} -DBUILD_ADDRESS_SANITIZER=ON"
+fi
+
+#Enable backward compatibility wrappers
+if [[ "${build_freorg_bkwdcomp}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=ON"
+else
+    cmake_common_options="${cmake_common_options} -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=OFF"
 fi
 
 compiler=hipcc
