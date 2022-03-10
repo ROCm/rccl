@@ -2,6 +2,12 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## RCCL-2.11.4 for ROCm 5.1.0
+### Added
+- Compatibility with NCCL 2.11.4
+### Known issues
+- Managed memory is not currently supported for clique-based kernels
+
 ## RCCL-2.10.3 for ROCm 5.0.0
 ### Added
 - Compatibility with NCCL 2.10.3
