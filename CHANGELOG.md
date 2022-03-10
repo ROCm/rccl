@@ -2,9 +2,20 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## (Unreleased) RCCL-2.10.4
+## (Unreleased) RCCL-2.12.10
 ### Added
+- Compatibility with NCCL 2.12.10
 - Packages for test and benchmark executables on all supported OSes using CPack.
+- Adding custom signal handler - opt-in with RCCL_ENABLE_SIGNALHANDLER=1
+  - Additional details provided if Binary File Descriptor library (BFD) is pre-installed
+### Removed
+- Removed experimental clique-based kernels
+
+## RCCL-2.11.4 for ROCm 5.1.0
+### Added
+- Compatibility with NCCL 2.11.4
+### Known issues
+- Managed memory is not currently supported for clique-based kernels
 
 ## RCCL-2.10.3 for ROCm 5.0.0
 ### Added

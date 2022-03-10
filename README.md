@@ -89,6 +89,6 @@ Please refer to the [Library documentation](https://rccl.readthedocs.io/) for cu
 
 ## Copyright
 
-All source code and accompanying documentation is copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
+All source code and accompanying documentation is copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
 
-All modifications are copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+All modifications are copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
