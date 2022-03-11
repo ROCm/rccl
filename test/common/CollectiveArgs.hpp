@@ -7,7 +7,7 @@ b
 #pragma once
 #include "PtrUnion.hpp"
 #include "PrepDataFuncs.hpp"
-#include "rccl/rccl.h"
+#include "rccl.h"
 
 namespace RcclUnitTesting
 {
@@ -22,6 +22,7 @@ namespace RcclUnitTesting
     ncclCollGather,
     ncclCollScatter,
     ncclCollAllToAll,
+    ncclCollAllToAllv,
     ncclCollSend,
     ncclCollRecv,
     ncclNumFuncs
@@ -37,6 +38,7 @@ namespace RcclUnitTesting
     "Gather",
     "Scatter",
     "AllToAll",
+    "AllToAllv",
     "Send",
     "Recv"
   };
@@ -72,6 +74,20 @@ namespace RcclUnitTesting
     char ptr[MAX_RANKS * sizeof(double)];
   };
 
+  struct OptionalColArgs
+  {
+    ncclRedOp_t redOp = ncclSum;
+    int         root = 0; // Used as "peer" for Send/Recv
+    PtrUnion    localScalar = {nullptr};
+    int         scalarMode = -1; // -1 if scalar not used
+    // allToAllv args
+    size_t      sendcounts[MAX_RANKS*MAX_RANKS];
+    size_t      sdispls[MAX_RANKS*MAX_RANKS];
+    size_t      recvcounts[MAX_RANKS*MAX_RANKS];
+    size_t      rdispls[MAX_RANKS*MAX_RANKS];
+  };
+
+
   // Function pointer for functions that operate on CollectiveArgs
   // e.g. For filling input / computing expected results
   typedef ErrCode (*CollFuncPtr)(CollectiveArgs &);
@@ -85,13 +101,10 @@ namespace RcclUnitTesting
     int             deviceId;
     ncclFunc_t      funcType;
     ncclDataType_t  dataType;
-    ncclRedOp_t     redOp;
-    int             root;              // Used as "peer" for Send/Recv
     size_t          numInputElements;
     size_t          numOutputElements;
     ScalarTransport scalarTransport;   // Used for custom reduction operators
-    PtrUnion        localScalar;
-    int             scalarMode;        // -1 if scalar not used
+    OptionalColArgs optionalArgs;
 
     // Data
     PtrUnion       inputGpu;
@@ -111,12 +124,10 @@ namespace RcclUnitTesting
                     int             const deviceId,
                     ncclFunc_t      const funcType,
                     ncclDataType_t  const dataType,
-                    ncclRedOp_t     const redOp,
-                    int             const root,
                     size_t          const numInputElements,
                     size_t          const numOutputElements,
                     ScalarTransport const scalarsPerRank,
-                    int             const scalarMode = -1);
+                    OptionalColArgs const &optionalArgs = {});
 
     // Allocates GPU memory for input/output and CPU memory for expected
     // When inPlace is true, input and output share the same memory

@@ -21,13 +21,12 @@ namespace RcclUnitTesting
     bool                        const  inPlace       = false;
     bool                        const  useManagedMem = false;
 
+    OptionalColArgs optsScalarMode;
     // Terminate the test as soon as first failure occurs
     bool isCorrect = true;
     for (int totalRanks = testBed.ev.minGpus; totalRanks <= testBed.ev.maxGpus && isCorrect; ++totalRanks)
     for (int isMultiProcess = 0; isMultiProcess <= 1; ++isMultiProcess)
     {
-      if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
-
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks));
 
@@ -48,15 +47,19 @@ namespace RcclUnitTesting
         for (int scalarMode = 0; scalarMode <= 1 && isCorrect; ++scalarMode)
         {
           if (testBed.ev.showNames)
-            INFO("%s %d-ranks AllReduce (custom-scalar Mode %d %s)\n",
-                 isMultiProcess ? "MP" : "SP",
+            INFO("%s process %2d-ranks AllReduce (custom-scalar Mode %d %s)\n",
+                 isMultiProcess ? "Multi " : "Single",
                  totalRanks, scalarMode, ncclDataTypeNames[dataType]);
 
           for (int i = 0; i < numElements.size() && isCorrect; ++i)
           {
-            testBed.SetCollectiveArgs(funcType, dataType, redOp, root,
-                                      numElements[i], numElements[i],
-                                      -1, -1, scalarsPerRank, scalarMode);
+            optsScalarMode.localScalar.Attach(scalarsPerRank);
+            optsScalarMode.scalarMode = scalarMode;
+            optsScalarMode.redOp = redOp;
+            optsScalarMode.root = root;
+            testBed.SetCollectiveArgs(funcType, dataType,
+                                      numElements[i], numElements[i], -1, -1,
+                                      optsScalarMode);
             // For performance, only allocate and prepare data on largest size
             if (i == 0)
             {

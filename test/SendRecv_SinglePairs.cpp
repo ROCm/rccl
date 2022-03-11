@@ -17,12 +17,12 @@ namespace RcclUnitTesting
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
 
+    OptionalColArgs sendRecvCounts;
+    int numCollPerGroup = 0;
     bool isCorrect = true;
     int totalRanks = testBed.ev.maxGpus;
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
     {
-      if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
-
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), 1);
 
@@ -32,46 +32,46 @@ namespace RcclUnitTesting
       {
         for (int recvRank = 0; recvRank  < totalRanks; ++recvRank)
         {
+          sendRecvCounts.root = recvRank;
           testBed.SetCollectiveArgs(ncclCollSend,
                                     dataTypes[dataIdx],
-                                    ncclSum,
-                                    recvRank,
                                     numElements[numIdx],
                                     numElements[numIdx],
                                     0,
-                                    sendRank);
+                                    sendRank,
+                                    sendRecvCounts);
           if (recvRank == 0)
           {
-            testBed.AllocateMem(inPlace, useManagedMem, 0, sendRank);
-            testBed.PrepareData(0, sendRank);
+
+            testBed.AllocateMem(inPlace, useManagedMem, -1, sendRank);
+            testBed.PrepareData(-1, sendRank);
           }
           if (recvRank  != sendRank)
           {
             if (testBed.ev.showNames) // Show test names
-              INFO("%s Datatype: %s SendReceive test Rank %d -> Rank %d for %d Elements\n",
-                  isMultiProcess ? "MP" : "SP",
+              INFO("%s process Datatype: %s SendReceive test Rank %d -> Rank %d for %d Elements\n",
+                  isMultiProcess ? "Multi " : "Single",
                   ncclDataTypeNames[dataTypes[dataIdx]],
                   sendRank,
                   recvRank,
                   numElements[numIdx]);
 
-
+            sendRecvCounts.root = sendRank;
             testBed.SetCollectiveArgs(ncclCollRecv,
                                       dataTypes[dataIdx],
-                                      ncclSum,
-                                      sendRank,
                                       numElements[numIdx],
                                       numElements[numIdx],
                                       0,
-                                      recvRank);
-            testBed.AllocateMem(inPlace, useManagedMem, 0, recvRank);
-            testBed.PrepareData(0, recvRank);
-            testBed.ExecuteCollectives({sendRank,recvRank });
-            testBed.ValidateResults(isCorrect, 0, recvRank);
-            testBed.DeallocateMem(0, recvRank);
+                                      recvRank,
+                                      sendRecvCounts);
+            testBed.AllocateMem(inPlace, useManagedMem, -1, recvRank);
+            testBed.PrepareData(-1, recvRank);
+            testBed.ExecuteCollectives({sendRank, recvRank});
+            testBed.ValidateResults(isCorrect, -1, recvRank);
+            testBed.DeallocateMem(-1, recvRank);
           }
         }
-        testBed.DeallocateMem(0, sendRank);
+        testBed.DeallocateMem(-1, sendRank);
       }
       testBed.DestroyComms();
     }

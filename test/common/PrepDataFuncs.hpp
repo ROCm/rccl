@@ -22,6 +22,7 @@ namespace RcclUnitTesting
   ErrCode DefaultPrepData_ReduceScatter(CollectiveArgs &collArgs);
   ErrCode DefaultPrepData_Scatter(CollectiveArgs &collArgs);
   ErrCode DefaultPrepData_AllToAll(CollectiveArgs &collArgs);
+  ErrCode DefaultPrepData_AllToAllv(CollectiveArgs &collArgs);
   ErrCode DefaultPrepData_Send(CollectiveArgs &collArgs);
   ErrCode DefaultPrepData_Recv(CollectiveArgs &collArgs);
 }

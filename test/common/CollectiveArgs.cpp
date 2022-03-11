@@ -14,20 +14,18 @@ namespace RcclUnitTesting
                                   int             const  deviceId,
                                   ncclFunc_t      const  funcType,
                                   ncclDataType_t  const  dataType,
-                                  ncclRedOp_t     const  redOp,
-                                  int             const  root,
                                   size_t          const  numInputElements,
                                   size_t          const  numOutputElements,
                                   ScalarTransport const  scalarTransport,
-                                  int             const  scalarMode)
+                                  OptionalColArgs const  &optionalColArgs)
   {
     // Free scalar based on previous scalarMode
-    if (scalarMode != -1)
+    if (optionalColArgs.scalarMode != -1)
     {
-      if (this->localScalar.ptr != nullptr)
+      if (this->optionalArgs.localScalar.ptr != nullptr)
       {
-        if (this->scalarMode == 0) this->localScalar.FreeGpuMem();
-        if (this->scalarMode == 1) hipHostFree(this->localScalar.ptr);
+        if (this->optionalArgs.scalarMode == 0) this->optionalArgs.localScalar.FreeGpuMem();
+        if (this->optionalArgs.scalarMode == 1) hipHostFree(this->optionalArgs.localScalar.ptr);
       }
     }
 
@@ -36,26 +34,24 @@ namespace RcclUnitTesting
     this->deviceId          = deviceId;
     this->funcType          = funcType;
     this->dataType          = dataType;
-    this->redOp             = redOp;
-    this->root              = root;
     this->numInputElements  = numInputElements;
     this->numOutputElements = numOutputElements;
     this->scalarTransport   = scalarTransport;
-    this->scalarMode        = scalarMode;
+    this->optionalArgs      = optionalColArgs;
 
-    if (scalarMode != -1)
+    if (this->optionalArgs.scalarMode != -1)
     {
       size_t const numBytes = DataTypeToBytes(dataType);
-      if (scalarMode == ncclScalarDevice)
+      if (this->optionalArgs.scalarMode == ncclScalarDevice)
       {
-        CHECK_CALL(this->localScalar.AllocateGpuMem(numBytes));
-        CHECK_HIP(hipMemcpy(this->localScalar.ptr, scalarTransport.ptr + (globalRank * numBytes),
+        CHECK_CALL(this->optionalArgs.localScalar.AllocateGpuMem(numBytes));
+        CHECK_HIP(hipMemcpy(this->optionalArgs.localScalar.ptr, scalarTransport.ptr + (globalRank * numBytes),
                             numBytes, hipMemcpyHostToDevice));
       }
-      else if (scalarMode == ncclScalarHostImmediate)
+      else if (this->optionalArgs.scalarMode == ncclScalarHostImmediate)
       {
-        CHECK_HIP(hipHostMalloc(&this->localScalar.ptr, numBytes, 0));
-        memcpy(this->localScalar.ptr, scalarTransport.ptr + (globalRank * numBytes), numBytes);
+        CHECK_HIP(hipHostMalloc(&this->optionalArgs.localScalar.ptr, numBytes, 0));
+        memcpy(this->optionalArgs.localScalar.ptr, scalarTransport.ptr + (globalRank * numBytes), numBytes);
       }
     }
     return TEST_SUCCESS;
@@ -116,7 +112,7 @@ namespace RcclUnitTesting
   ErrCode CollectiveArgs::ValidateResults()
   {
     // Ignore non-root outputs for collectives with a root
-    if (CollectiveArgs::UsesRoot(this->funcType) && this->root != this->globalRank) return TEST_SUCCESS;
+    if (CollectiveArgs::UsesRoot(this->funcType) && this->optionalArgs.root != this->globalRank) return TEST_SUCCESS;
 
     size_t const numOutputBytes = (this->numOutputElements * DataTypeToBytes(this->dataType));
 
@@ -151,10 +147,10 @@ namespace RcclUnitTesting
     this->outputCpu.FreeCpuMem();
     this->expected.FreeCpuMem();
 
-    if (this->localScalar.ptr != nullptr)
+    if (this->optionalArgs.localScalar.ptr != nullptr)
     {
-      if (this->scalarMode == 0) this->localScalar.FreeGpuMem();
-      if (this->scalarMode == 1) CHECK_HIP(hipHostFree(this->localScalar.ptr));
+      if (this->optionalArgs.scalarMode == 0) this->optionalArgs.localScalar.FreeGpuMem();
+      if (this->optionalArgs.scalarMode == 1) CHECK_HIP(hipHostFree(this->optionalArgs.localScalar.ptr));
     }
     return TEST_SUCCESS;
   }
@@ -174,6 +170,7 @@ namespace RcclUnitTesting
     case ncclCollGather:        ss << "ncclGather";        break;
     case ncclCollScatter:       ss << "ncclScatter";       break;
     case ncclCollAllToAll:      ss << "ncclAllToAll";      break;
+    case ncclCollAllToAllv:     ss << "ncclAllToAllv";     break;
     case ncclCollSend:          ss << "ncclSend";          break;
     case ncclCollRecv:          ss << "ncclRecv";          break;
     default:                    ss << "[Unknown]";         break;
@@ -184,9 +181,9 @@ namespace RcclUnitTesting
         this->funcType == ncclCollReduceScatter ||
         this->funcType == ncclCollAllReduce)
     {
-      if (this->redOp < ncclNumOps)
+      if (this->optionalArgs.redOp < ncclNumOps)
       {
-        ss << ncclRedOpNames[this->redOp] << " ";
+        ss << ncclRedOpNames[this->optionalArgs.redOp] << " ";
       }
       else
       {
@@ -215,13 +212,13 @@ namespace RcclUnitTesting
         this->funcType == ncclCollGather ||
         this->funcType == ncclCollScatter)
     {
-      ss << "Root " << this->root << " ";
+      ss << "Root " << this->optionalArgs.root << " ";
     }
 
     if (this->funcType == ncclCollSend ||
         this->funcType == ncclCollRecv)
     {
-      ss << "Peer " << this->root << " ";
+      ss << "Peer " << this->optionalArgs.root << " ";
     }
 
     ss << "#In: " << this->numInputElements;

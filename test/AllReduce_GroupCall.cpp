@@ -21,13 +21,12 @@ namespace RcclUnitTesting
     bool                        const  useManagedMem   = false;
     int                         const  numCollPerGroup = numElements.size();
 
+    OptionalColArgs OptionalArgsCollId;
     // This tests runs 3 collectives in the same group call
     bool isCorrect = true;
     for (int totalRanks = testBed.ev.minGpus; totalRanks <= testBed.ev.maxGpus && isCorrect; ++totalRanks)
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
     {
-      if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
-
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
@@ -36,21 +35,23 @@ namespace RcclUnitTesting
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       {
         if (testBed.ev.showNames)
-          INFO("%s %d-ranks AllReduce %d Grouped Calls (%s-%s)\n",
-               isMultiProcess ? "MP" : "SP",
+          INFO("%s process %2d-ranks AllReduce %d Grouped Calls (%s-%s)\n",
+               isMultiProcess ? "Multi " : "Single",
                totalRanks, numCollPerGroup,
                ncclRedOpNames[redOps[redOpIdx]], ncclDataTypeNames[dataTypes[dataIdx]]);
 
         // Run all element sizes in parallel as single group
         for (int collIdx = 0; collIdx < numCollPerGroup; ++collIdx)
         {
+          OptionalArgsCollId.redOp = redOps[redOpIdx];
+          OptionalArgsCollId.root = root;
           testBed.SetCollectiveArgs(funcType,
                                     dataTypes[dataIdx],
-                                    redOps[redOpIdx],
-                                    root,
                                     numElements[collIdx],
                                     numElements[collIdx],
-                                    collIdx);
+                                    collIdx,
+                                    -1,
+                                    OptionalArgsCollId);
         }
         testBed.AllocateMem(inPlace, useManagedMem);
         testBed.PrepareData();
