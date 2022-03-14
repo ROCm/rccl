@@ -346,8 +346,3 @@ rocm_create_package(
   MAINTAINER
   "RCCL Maintainer <rccl-maintainer@amd.com>"
   LDCONFIG)
-
-
-if(BUILD_TESTS)
-  add_subdirectory(test)
-endif()
