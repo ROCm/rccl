@@ -9,7 +9,7 @@
 #include <vector>
 #include <unistd.h>
 #include "CollectiveArgs.hpp"
-#include "rccl.h"
+#include "rccl/rccl.h"
 
 #define MAX_RANKS 32
 namespace RcclUnitTesting

@@ -7,7 +7,7 @@
 #pragma once
 #include <hsa/hsa.h>
 #include <vector>
-#include "rccl.h"
+#include "rccl/rccl.h"
 
 namespace RcclUnitTesting
 {
