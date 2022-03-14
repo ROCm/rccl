@@ -507,7 +507,7 @@ comp_next:
   work->root = info->root;
   work->count = info->count;
   work->nChannels = info->nChannels;
-  work->header.nWarps = info->nThreads / WARP_SIZE;
+  work->header.nWarps = info->nThreads / info->comm->WarpSize;
   work->redOpArg = info->opFull.scalarArg;
   work->redOpArgIsPtr = info->opFull.scalarArgIsPtr;
 
@@ -917,7 +917,7 @@ static int getSegment(enum ncclWorkElemType type, enum ncclWorkElemSubType subTy
 static ncclResult_t computeP2pWorkElem(struct ncclInfo* info /* input */, struct ncclWorkElemP2p* elem /* output */) {
   elem->header.type = ncclWorkTypeP2p;
   elem->header.funcIndex = FUNC_INDEX_P2P;
-  elem->header.nWarps = NCCL_MAX_NTHREADS/WARP_SIZE;
+  elem->header.nWarps = NCCL_MAX_NTHREADS/info->comm->WarpSize;
   elem->buff = info->recvbuff;
   elem->subType = info->coll == ncclFuncSend ? ncclWorkSubTypeSend : ncclWorkSubTypeRecv;
   elem->count = info->count;
@@ -949,7 +949,7 @@ static ncclResult_t enqueueSegOp(enum ncclWorkElemType type, struct ncclWork* el
     for (int i=0; i<ngroups; i++) {
       work->p2pElems[i].ngroups = ngroups;
       work->p2pElems[i].warpStart =
-        i*(NCCL_MAX_NTHREADS/WARP_SIZE)/ngroups;
+        i*(NCCL_MAX_NTHREADS/comm->WarpSize)/ngroups;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
       work->p2pElems[i].nWarps = nWarps;
 #else
@@ -1038,7 +1038,7 @@ ncclResult_t ncclSetupP2pKernel(struct ncclInfo* info) {
   int channelId = info->channelId;
   hipLaunchParams* params = comm->myParams;
   params->gridDim.x = std::max<unsigned>(params->gridDim.x, channelId+1);
-  params->blockDim.x = std::max<unsigned>(params->blockDim.x, eqElem->work.header.nWarps*WARP_SIZE);
+  params->blockDim.x = std::max<unsigned>(params->blockDim.x, eqElem->work.header.nWarps*info->comm->WarpSize);
   comm->enqueueInfo->maxChannels = params->gridDim.x;  // params may be varied by a second graph hence we need to capture it here
 
   // Record the first kernel to launch

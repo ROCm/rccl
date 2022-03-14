@@ -458,6 +458,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   // Mark channels as non initialized.
   for (int c=0; c<MAXCHANNELS; c++) comm->channels[c].id = -1;
 
+  CUDACHECK(hipDeviceGetAttribute(&comm->WarpSize, hipDeviceAttributeWarpSize, comm->cudaDev));
   *comret = comm;
   return ncclSuccess;
 }
