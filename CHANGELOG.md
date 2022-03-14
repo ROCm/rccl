@@ -8,6 +8,11 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - Packages for test and benchmark executables on all supported OSes using CPack.
 - Adding custom signal handler - opt-in with RCCL_ENABLE_SIGNALHANDLER=1
   - Additional details provided if Binary File Descriptor library (BFD) is pre-installed
+- Adding experimental support for using multiple ranks per device
+  - Requires using a new interface to create communicator (ncclCommInitRankMulti), please
+    refer to the interface documentation for details.
+  - To avoid potential deadlocks, user might have to set an environment variables increasing
+    the number of hardware queues (e.g. export GPU_MAX_HW_QUEUES=16)
 ### Removed
 - Removed experimental clique-based kernels
 

@@ -208,20 +208,23 @@ struct bootstrapState {
   int cudaDev;
   int rank;
   int nranks;
+  int virtualId;
   volatile uint32_t *abortFlag;
 };
 
 ncclResult_t bootstrapInit(ncclUniqueId * id, struct ncclComm* comm) {
   int rank = comm->rank;
   int nranks = comm->nRanks;
+  int virtualId = comm->virtualId;
   struct bootstrapState* state;
   NCCLCHECK(ncclCalloc(&state, 1));
   state->rank = rank;
   state->nranks = nranks;
   state->abortFlag = comm->abortFlag;
+  state->virtualId = virtualId;
   comm->bootstrap = state;
 
-  TRACE(NCCL_INIT, "rank %d nranks %d", rank, nranks);
+  TRACE(NCCL_INIT, "rank %d nranks %d virtualId %d", rank, nranks, virtualId);
 
   // [RCCL] Register custom signal handlers if requested
   RegisterSignalHandlers();

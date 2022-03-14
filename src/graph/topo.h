@@ -105,6 +105,7 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_16P1H     8
 #define RCCL_TOPO_FORCE_INTRA 16
 
+#define RCCL_TOPO_MAX_RANKS_PER_GPU 8
 struct ncclTopoNode {
   int type;
   int64_t id;
@@ -112,7 +113,8 @@ struct ncclTopoNode {
   union {
     struct {
       int dev; // NVML dev number
-      int rank;
+      int rank[RCCL_TOPO_MAX_RANKS_PER_GPU];
+      int nRanksPerGpu;
       int cudaCompCap;
       int gdrSupport;
       int gcn;
@@ -192,9 +194,11 @@ static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, i
 static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank, int* index) {
   *index = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
-    if (system->nodes[GPU].nodes[i].gpu.rank == rank) {
-      *index = i;
-      return ncclSuccess;
+    for (int j=0; j<system->nodes[GPU].nodes[i].gpu.nRanksPerGpu; j++ ) {
+      if (system->nodes[GPU].nodes[i].gpu.rank[j] == rank) {
+	*index = i;
+	return ncclSuccess;
+      }
     }
   }
   return ncclInternalError;

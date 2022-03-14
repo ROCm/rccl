@@ -92,9 +92,12 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
   int p2p;
   if (hipDeviceCanAccessPeer(&p2p, cudaDev1, cudaDev2) != hipSuccess) {
     INFO(NCCL_INIT|NCCL_P2P,"peer query failed between dev %d(=%lx) and dev %d(=%lx)",
-         cudaDev1, info1->busId, cudaDev2, info2->busId);
+	 cudaDev1, info1->busId, cudaDev2, info2->busId);
     *ret = 0;
     return ncclSuccess;
+  }
+  if (p2p == 0 && cudaDev1 == cudaDev2 && info1->busId == info2->busId) {
+    p2p = 1;
   }
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)

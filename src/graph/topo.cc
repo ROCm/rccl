@@ -117,7 +117,10 @@ ncclResult_t ncclTopoCreateNode(struct ncclTopoSystem* system, struct ncclTopoNo
     n->links[0].remNode = n;
     n->links[0].width = LOC_WIDTH;
     n->gpu.dev = NCCL_TOPO_UNDEF;
-    n->gpu.rank = NCCL_TOPO_UNDEF;
+    for (int i=0; i<RCCL_TOPO_MAX_RANKS_PER_GPU; i++) {
+      n->gpu.rank[i] = NCCL_TOPO_UNDEF;
+    }
+    n->gpu.nRanksPerGpu = NCCL_TOPO_UNDEF;
     n->gpu.cudaCompCap = NCCL_TOPO_UNDEF;
   } else if (type == CPU) {
     n->cpu.arch = NCCL_TOPO_UNDEF;
@@ -253,7 +256,15 @@ ncclResult_t ncclTopoConnectCpus(struct ncclTopoSystem* system) {
 
 static ncclResult_t ncclTopoPrintRec(struct ncclTopoNode* node, struct ncclTopoNode* prevNode, char* line, int offset) {
   if (node->type == GPU) {
-    sprintf(line+offset, "%s/%lX (%d)", topoNodeTypeStr[node->type], node->id, node->gpu.rank);
+    sprintf(line+offset, "%s/%lX (%d", topoNodeTypeStr[node->type], node->id, node->gpu.rank[0]);
+    int nextOffset;
+    int nextRank = 1;
+    while ( nextRank < node->gpu.nRanksPerGpu ) {
+      nextOffset = strlen(line);
+      sprintf(line+nextOffset, "/%d", node->gpu.rank[nextRank++]);
+    }
+    nextOffset = strlen(line);
+    sprintf(line+nextOffset, ")");
   } else if (node->type == CPU) {
     sprintf(line+offset, "%s/%lX (%d/%d/%d)", topoNodeTypeStr[node->type], node->id, node->cpu.arch, node->cpu.vendor, node->cpu.model);
   } else if (node->type == PCI) {
@@ -373,7 +384,17 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "arch", &arch.value));
   memcpy(&gpu->gpu.arch, &arch.arch, sizeof(hipDeviceArch_t));
-  NCCLCHECK(xmlGetAttrInt(xmlGpu, "rank", &gpu->gpu.rank));
+
+  //NCCLCHECK(xmlGetAttrInt(xmlGpu, "rank", &gpu->gpu.rank));
+  const char *rankStr;
+  NCCLCHECK(xmlGetAttrStr(xmlGpu, "rank", &rankStr));
+  char *tmpStr;
+  char *token = strtok_r ( (char *)rankStr, ",", &tmpStr);
+  gpu->gpu.nRanksPerGpu = 0;
+  while (token != NULL && gpu->gpu.nRanksPerGpu < RCCL_TOPO_MAX_RANKS_PER_GPU) {
+    gpu->gpu.rank[gpu->gpu.nRanksPerGpu++] = atoi(token);
+    token = strtok_r(NULL, ",", &tmpStr);
+  }
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "dev", &gpu->gpu.dev));
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "gdr", &gpu->gpu.gdrSupport));
   // Do not go any further, nvlinks will be added in a second pass
@@ -385,6 +406,7 @@ struct kvDict kvDictPciGen[] = {
   { "2.5 GT/s", 15 }, { "5 GT/s", 30 }, { "8 GT/s", 60 }, { "16 GT/s", 120 }, { "32 GT/s", 240 }, /* Kernel 5.6 and earlier */
   { "2.5 GT/s PCIe", 15 }, { "5.0 GT/s PCIe", 30 }, { "8.0 GT/s PCIe", 60 }, { "16.0 GT/s PCIe", 120 }, { "32.0 GT/s PCIe", 240 }, { "64.0 GT/s PCIe", 480 },
   { NULL, 60 /* Default fallback */ } }; // x100 Mbps per lane
+
 ncclResult_t ncclTopoAddPci(struct ncclXmlNode* xmlPci, struct ncclTopoSystem* system, struct ncclTopoNode* parent) {
   const char* str;
 
@@ -694,7 +716,8 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
       NCCLCHECK(ncclTopoFillGpu(xml, busId, &node));
       if (node == NULL) continue;
       NCCLCHECK(xmlSetAttrInt(node, "keep", 1));
-      NCCLCHECK(xmlSetAttrInt(node, "rank", r));
+      //NCCLCHECK(xmlSetAttrInt(node, "rank", r));
+      NCCLCHECK(xmlSetOrAppendAttrInt(node, "rank", r));
       NCCLCHECK(xmlInitAttrInt(node, "gdr", comm->peerInfo[r].gdrSupport));
     }
   }
@@ -795,18 +818,20 @@ NCCL_PARAM(IgnoreCpuAffinity, "IGNORE_CPU_AFFINITY", 0);
 ncclResult_t ncclTopoGetCpuAffinity(struct ncclTopoSystem* system, int rank, cpu_set_t* affinity) {
   struct ncclTopoNode* cpu = NULL, *gpu = NULL;
   for (int g=0; g<system->nodes[GPU].count; g++) {
-    if (system->nodes[GPU].nodes[g].gpu.rank == rank) {
-      gpu = system->nodes[GPU].nodes+g;
-      // Find closer CPU
-      int cpuIndex = -1, minHops = 0;
-      for (int c=0; c<system->nodes[CPU].count; c++) {
-        int nHops = system->nodes[GPU].nodes[g].paths[CPU][c].count;
-        if (cpuIndex == -1 || nHops < minHops) {
-          cpuIndex = c;
-          minHops = nHops;
-        }
+    for (int j=0; j<system->nodes[GPU].nodes[g].gpu.nRanksPerGpu; j++) {
+      if (system->nodes[GPU].nodes[g].gpu.rank[j] == rank) {
+	gpu = system->nodes[GPU].nodes+g;
+	// Find closer CPU
+	int cpuIndex = -1, minHops = 0;
+	for (int c=0; c<system->nodes[CPU].count; c++) {
+	  int nHops = system->nodes[GPU].nodes[g].paths[CPU][c].count;
+	  if (cpuIndex == -1 || nHops < minHops) {
+	    cpuIndex = c;
+	    minHops = nHops;
+	  }
+	}
+	cpu = system->nodes[CPU].nodes+cpuIndex;
       }
-      cpu = system->nodes[CPU].nodes+cpuIndex;
     }
   }
   if (cpu == NULL) {
@@ -876,9 +901,11 @@ ncclResult_t ncclTopoGetCompCap(struct ncclTopoSystem* system, int* ccMin, int* 
 
 ncclResult_t ncclTopoGetLocalRank(struct ncclTopoSystem* system, int rank, int* localRank) {
   for (int g=0; g<system->nodes[GPU].count; g++) {
-    if (system->nodes[GPU].nodes[g].gpu.rank == rank) {
-      *localRank = g;
-      return ncclSuccess;
+    for ( int j=0; j<system->nodes[GPU].nodes[g].gpu.nRanksPerGpu; j++ ){
+      if (system->nodes[GPU].nodes[g].gpu.rank[j] == rank) {
+	*localRank = g;
+	return ncclSuccess;
+      }
     }
   }
   WARN("Could not find local GPU with rank %d\n", rank);

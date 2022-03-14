@@ -22,6 +22,7 @@
 #define RCCL_BFLOAT16 1
 #define RCCL_GATHER_SCATTER 1
 #define RCCL_ALLTOALLV 1
+#define RCCL_MULTIRANKPERGPU 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,6 +87,28 @@ ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
 /// @cond include_hidden 
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 /// @endcond
+
+/*! @brief Creates a new communicator (multi thread/process version) allowing multiple ranks per device.
+
+    @details
+    rank must be between 0 and nranks-1 and unique within a communicator clique.
+    Each rank is associated to a HIP device, which has to be set before calling
+    ncclCommInitRankMulti.
+    Since this version of the function allows multiple ranks to utilize the same
+    HIP device, a unique virtualId per device has to be provided by each calling
+    rank.
+    ncclCommInitRankMulti implicitly syncronizes with other ranks, so it must be
+    called by different threads/processes or use ncclGroupStart/ncclGroupEnd.
+
+    @param[in]
+    comm        ncclComm_t*
+                communicator struct pointer
+    */
+  ncclResult_t  ncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
+/// @cond include_hidden
+  ncclResult_t pncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
+/// @endcond
+
 
 /*! @brief Creates a clique of communicators (single process version).
  *

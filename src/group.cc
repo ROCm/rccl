@@ -34,6 +34,7 @@ struct ncclInitArgs {
   int ndev;
   ncclUniqueId commId;
   int myrank;
+  int virtualId;
 };
 struct ncclCollArgs {
   ncclComm_t comm;
@@ -58,11 +59,12 @@ thread_local struct ncclAsyncArgs ncclGroupArgs[MAX_ASYNC_OPS];
 
 void* ncclAsyncThreadMain(void* args_) {
   struct ncclAsyncArgs* args = (struct ncclAsyncArgs*)args_;
-  NCCLCHECKTHREAD(args->init.func(args->init.newcomm, args->init.ndev, args->init.commId, args->init.myrank, args->init.cudaDev));
+  NCCLCHECKTHREAD(args->init.func(args->init.newcomm, args->init.ndev, args->init.commId, args->init.myrank,
+				  args->init.cudaDev, args->init.virtualId));
   return args;
 }
 
-ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev) {
+ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev, int virtualId) {
   if (ncclGroupIndex >= MAX_ASYNC_OPS) {
     WARN("Too many async operations in progress, max is %d", MAX_ASYNC_OPS);
     return ncclAsyncErrCheck(ncclInvalidUsage);
@@ -76,6 +78,7 @@ ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, n
   args->init.ndev = ndev;
   memcpy(&args->init.commId, &commId, sizeof(commId));
   args->init.myrank = myrank;
+  args->init.virtualId = virtualId;
   return ncclSuccess;
 }
 
