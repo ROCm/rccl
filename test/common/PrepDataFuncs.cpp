@@ -369,9 +369,9 @@ namespace RcclUnitTesting
     {
       tempInput.FillPattern(collArgs.dataType, maxNumElements, sendRank, false);
       size_t recvDspls = collArgs.options.rdispls[collArgs.globalRank*collArgs.totalRanks + sendRank] * DataTypeToBytes(collArgs.dataType);
-      size_t rankDspls = collArgs.options.sdispls[sendRank*collArgs.totalRanks + collArgs.globalRank] * DataTypeToBytes(collArgs.dataType);
+      size_t sendDspls = collArgs.options.sdispls[sendRank*collArgs.totalRanks + collArgs.globalRank] * DataTypeToBytes(collArgs.dataType);
       size_t numBytes = collArgs.options.recvcounts[collArgs.globalRank*collArgs.totalRanks + sendRank] * DataTypeToBytes(collArgs.dataType);
-      memcpy(collArgs.expected.U1 + recvDspls, tempInput.U1 + rankDspls, numBytes);
+      memcpy(collArgs.expected.U1 + recvDspls, tempInput.U1 + sendDspls, numBytes);
     }
     tempInput.FillPattern(collArgs.dataType, collArgs.numInputElements, collArgs.globalRank, false);
 
