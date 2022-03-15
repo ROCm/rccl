@@ -349,34 +349,29 @@ namespace RcclUnitTesting
     size_t const numInputBytes = collArgs.numInputElements * DataTypeToBytes(collArgs.dataType);
     size_t const numOutputBytes = collArgs.numOutputElements * DataTypeToBytes(collArgs.dataType);
 
-    // calculating maxBytes as the maximum number of input bytes out of all the ranks
-    size_t maxBytes = 0;
-    for (int baseRank = 0; baseRank < collArgs.totalRanks; ++baseRank)
-    for (int offsetRank = 0; offsetRank < collArgs.totalRanks; ++offsetRank)
+    // calculating maxNumElements  as the maximum number of input bytes out of all the ranks
+    size_t maxNumElements  = 0;
+    for (int sendRank = 0; sendRank < collArgs.totalRanks; ++sendRank)
+    for (int recvRank = 0; recvRank < collArgs.totalRanks; ++recvRank)
     {
-      size_t rankSendCount = collArgs.options.sdispls[(baseRank)*collArgs.totalRanks+offsetRank] + collArgs.options.sendcounts[(baseRank)*collArgs.totalRanks+offsetRank];
-      if (maxBytes < rankSendCount)
-        maxBytes = rankSendCount;
+      size_t rankSendCount = collArgs.options.sdispls[(sendRank)*collArgs.totalRanks+recvRank] + collArgs.options.sendcounts[(sendRank)*collArgs.totalRanks+recvRank];
+      maxNumElements = std::max(maxNumElements, rankSendCount);
     }
-    maxBytes = maxBytes*DataTypeToBytes(collArgs.dataType);
 
     // Clear outputs on all ranks (prior to input in case of in-place)
     collArgs.outputGpu.ClearGpuMem(numOutputBytes);
 
     // Generate input on root rank - each rank will receive a portion
     PtrUnion tempInput;
-    tempInput.AllocateCpuMem(maxBytes);
+    tempInput.AllocateCpuMem(maxNumElements*DataTypeToBytes(collArgs.dataType));
 
     for (int sendRank = 0; sendRank < collArgs.totalRanks; ++sendRank)
     {
-      tempInput.FillPattern(collArgs.dataType, maxBytes/DataTypeToBytes(collArgs.dataType), sendRank, false);
-
+      tempInput.FillPattern(collArgs.dataType, maxNumElements, sendRank, false);
       size_t recvDspls = collArgs.options.rdispls[collArgs.globalRank*collArgs.totalRanks + sendRank] * DataTypeToBytes(collArgs.dataType);
       size_t rankDspls = collArgs.options.sdispls[sendRank*collArgs.totalRanks + collArgs.globalRank] * DataTypeToBytes(collArgs.dataType);
       size_t numBytes = collArgs.options.recvcounts[collArgs.globalRank*collArgs.totalRanks + sendRank] * DataTypeToBytes(collArgs.dataType);
-
       memcpy(collArgs.expected.U1 + recvDspls, tempInput.U1 + rankDspls, numBytes);
-
     }
     tempInput.FillPattern(collArgs.dataType, collArgs.numInputElements, collArgs.globalRank, false);
 

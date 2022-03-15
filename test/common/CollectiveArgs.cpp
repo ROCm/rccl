@@ -111,7 +111,7 @@ namespace RcclUnitTesting
   {
     // Ignore non-root outputs for collectives with a root
     if (CollectiveArgs::UsesRoot(this->funcType) && this->options.root != this->globalRank) return TEST_SUCCESS;
-
+    if (this->funcType == ncclCollSend) return TEST_SUCCESS; // on the send receive pair only recv needs to be checked
     size_t const numOutputBytes = (this->numOutputElements * DataTypeToBytes(this->dataType));
 
     CHECK_HIP(hipMemcpy(this->outputCpu.ptr, this->outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
@@ -149,6 +149,7 @@ namespace RcclUnitTesting
     {
       if (this->options.scalarMode == 0) this->localScalar.FreeGpuMem();
       if (this->options.scalarMode == 1) CHECK_HIP(hipHostFree(this->localScalar.ptr));
+      this->localScalar.Attach(nullptr);
     }
     return TEST_SUCCESS;
   }
@@ -272,7 +273,6 @@ namespace RcclUnitTesting
     return (funcType == ncclCollBroadcast ||
             funcType == ncclCollReduce    ||
             funcType == ncclCollGather    ||
-            funcType == ncclCollScatter   ||
-            funcType == ncclCollSend); // this is incorrect but it works because in Send root is not root it is the peer
+            funcType == ncclCollScatter);
   }
 }

@@ -196,8 +196,6 @@ namespace RcclUnitTesting
     PIPE_READ(collId);
     PIPE_READ(funcType);
     PIPE_READ(dataType);
-    PIPE_READ(options.redOp);
-    PIPE_READ(options.root);
     PIPE_READ(numInputElements);
     PIPE_READ(numOutputElements);
     PIPE_READ(options);

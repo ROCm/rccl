@@ -8,7 +8,10 @@
 namespace RcclUnitTesting
 {
 
-  void sendRecvPrep(size_t numInputElementsArray[], size_t numOutputElementsArray[], OptionalColArgs &options, int totalRanks, int numElementsBase)
+  void sendRecvPrep(size_t numInputElementsArray[],
+                    size_t numOutputElementsArray[],
+                    OptionalColArgs &options,
+                    int totalRanks, int numElementsBase)
   {
     for (int sendRank = 0; sendRank < totalRanks; ++sendRank)
     for (int recvRank  = 0; recvRank   < totalRanks; ++recvRank )

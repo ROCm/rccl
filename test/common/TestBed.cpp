@@ -178,8 +178,6 @@ namespace RcclUnitTesting
       PIPE_WRITE(childId, collId);
       PIPE_WRITE(childId, funcType);
       PIPE_WRITE(childId, dataType);
-      PIPE_WRITE(childId, optionalArgs.redOp);
-      PIPE_WRITE(childId, optionalArgs.root);
       PIPE_WRITE(childId, numInputElements);
       PIPE_WRITE(childId, numOutputElements);
       PIPE_WRITE(childId, optionalArgs);
