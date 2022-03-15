@@ -27,8 +27,10 @@ namespace RcclUnitTesting
       options.rdispls[sendRank*totalRanks] = 0;
       for (int recvRank = 1; recvRank < totalRanks; ++recvRank )
       {
-        options.sdispls[sendRank*totalRanks+recvRank] = options.sdispls[sendRank*totalRanks+recvRank-1] + options.sendcounts[sendRank*totalRanks+recvRank-1];
-        options.rdispls[sendRank*totalRanks+recvRank] = options.rdispls[sendRank*totalRanks+recvRank-1] + options.recvcounts[sendRank*totalRanks+recvRank-1];
+        options.sdispls[sendRank*totalRanks+recvRank] =
+                        options.sdispls[sendRank*totalRanks+recvRank-1] + options.sendcounts[sendRank*totalRanks+recvRank-1];
+        options.rdispls[sendRank*totalRanks+recvRank] =
+                        options.rdispls[sendRank*totalRanks+recvRank-1] + options.recvcounts[sendRank*totalRanks+recvRank-1];
       }
       numInputElementsArray[sendRank] = options.sdispls[(sendRank+1)*totalRanks-1] + options.sendcounts[(sendRank+1)*totalRanks-1];
       numOutputElementsArray[sendRank] = options.rdispls[(sendRank+1)*totalRanks-1] + options.recvcounts[(sendRank+1)*totalRanks-1];
