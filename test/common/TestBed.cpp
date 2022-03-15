@@ -104,6 +104,12 @@ namespace RcclUnitTesting
       }
     }
 
+    //Determine number of unique GPUs being used.
+    std::set<int> unique_devices;
+    for (auto a:  this->rankToDeviceMap)
+      unique_devices.insert(a);
+    bool useMulti = unique_devices.size() < this->rankToDeviceMap.size() ? true : false;
+
     // Tell first rank to get ncclUniqueId
     int getIdCmd = TestBedChild::CHILD_GET_UNIQUE_ID;
     PIPE_WRITE(0, getIdCmd);
@@ -132,6 +138,9 @@ namespace RcclUnitTesting
 
       // Send the number of collectives to be run per group call
       PIPE_WRITE(childId, numCollectivesInGroup);
+
+      // Send whether to use MultiRank interfaces or not.
+      PIPE_WRITE(childId, useMulti);
 
       // Send the GPUs this child uses
       int const numGpus = deviceIdsPerProcess[childId].size();
@@ -357,11 +366,23 @@ namespace RcclUnitTesting
   }
 
   std::vector<std::vector<int>> TestBed::GetDeviceIdsList(int const numProcesses,
-                                                 int const numGpus)
+                                                          int const numGpus)
+  {
+    return GetDeviceIdsList(numProcesses, numGpus, 1);
+  }
+
+  std::vector<std::vector<int>> TestBed::GetDeviceIdsList(int const numProcesses,
+							  int const numGpus,
+							  int const ranksPerGpu)
   {
     std::vector<std::vector<int>> result(numProcesses);
-    for (int i = 0; i < numGpus; i++)
-      result[i % numProcesses].push_back(i);
+    int ntasks = numProcesses == 1 ? numGpus : 1;
+    int k=0;
+    for (int i = 0; i < numProcesses; i++)
+      for (int j = 0; j < ntasks * ranksPerGpu; j++) {
+	result[i].push_back(k%numGpus);
+	k++;
+      }
     return result;
   }
 
@@ -372,11 +393,17 @@ namespace RcclUnitTesting
                                        ncclRedOp_t    const redOp,
                                        int            const root,
                                        bool           const inPlace,
-                                       bool           const managedMem)
+                                       bool           const managedMem,
+				       int            const ranksPerProc)
   {
     std::stringstream ss;
     ss << (isMultiProcess ? "MP" : "SP") <<  " ";
-    ss << totalRanks << " ranks ";
+    ss << totalRanks;
+    if (ranksPerProc > 1)
+      ss << "(" << ranksPerProc << ") ";
+    else
+      ss << "    ";
+    ss << "ranks ";
     ss << ncclFuncNames[funcType] << " ";
     ss << "(" << (inPlace ? "IP" : "OP") << "," << (managedMem ? "MM" : "GM") << ") ";
     ss << ncclDataTypeNames[dataType] << " ";
@@ -430,14 +457,16 @@ namespace RcclUnitTesting
     bool isCorrect = true;
 
     // Sweep over the number of ranks
-    for (int totalRanks = ev.minGpus; totalRanks <= ev.maxGpus && isCorrect; ++totalRanks)
+    for (int ranksPerGpu=1; ranksPerGpu <= ev.maxRanksPerGpu; ranksPerGpu++)
+    for (int numGpus = ev.minGpus; numGpus <= ev.maxGpus && isCorrect; ++numGpus)
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
     {
       if (!(ev.processMask & (1 << isMultiProcess))) continue;
 
       // Test either single process all GPUs, or 1 process per GPU
-      int const numProcesses = isMultiProcess ? totalRanks : 1;
-      this->InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks));
+      int const numChildren = isMultiProcess ? numGpus : 1;
+      int const numRanks    = numGpus*ranksPerGpu;
+      this->InitComms(TestBed::GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
 
       for (int ftIdx = 0; ftIdx < funcTypes.size()      && isCorrect; ++ftIdx)
       for (int dtIdx = 0; dtIdx < dataTypes.size()      && isCorrect; ++dtIdx)
@@ -448,10 +477,11 @@ namespace RcclUnitTesting
       {
         if (ev.showNames)
         {
-          std::string name = this->GetTestCaseName(totalRanks, isMultiProcess,
+          std::string name = this->GetTestCaseName(numGpus, isMultiProcess,
                                                    funcTypes[ftIdx], dataTypes[dtIdx],
                                                    redOps[rdIdx], roots[rtIdx],
-                                                   inPlaceList[ipIdx], managedMemList[mmIdx]);
+                                                   inPlaceList[ipIdx], managedMemList[mmIdx],
+						   ranksPerGpu);
           INFO("%s\n", name.c_str());
         }
 
@@ -460,7 +490,7 @@ namespace RcclUnitTesting
           int numInputElements, numOutputElements;
           CollectiveArgs::GetNumElementsForFuncType(funcTypes[ftIdx],
                                                     sortedN[neIdx],
-                                                    totalRanks,
+                                                    numRanks,
                                                     &numInputElements,
                                                     &numOutputElements);
           optionalArgs.redOp = redOps[rdIdx];
@@ -486,10 +516,11 @@ namespace RcclUnitTesting
           this->ValidateResults(isCorrect);
           if (!isCorrect)
           {
-            std::string name = this->GetTestCaseName(totalRanks, isMultiProcess,
+            std::string name = this->GetTestCaseName(numGpus, isMultiProcess,
                                                      funcTypes[ftIdx], dataTypes[dtIdx],
                                                      redOps[rdIdx], roots[rtIdx],
-                                                     inPlaceList[ipIdx], managedMemList[mmIdx]);
+                                                     inPlaceList[ipIdx], managedMemList[mmIdx],
+						     ranksPerGpu);
             ERROR("Incorrect output for %s\n", name.c_str());
           }
         }

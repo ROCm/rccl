@@ -126,6 +126,8 @@ namespace RcclUnitTesting
     PIPE_READ(this->totalRanks);
     PIPE_READ(this->rankOffset);
     PIPE_READ(this->numCollectivesInGroup);
+    bool useMultiRankPerGpu;
+    PIPE_READ(useMultiRankPerGpu);
 
     // Read the GPUs this child uses and prepare storage for collective args / datasets
     int numGpus;
@@ -166,11 +168,23 @@ namespace RcclUnitTesting
         break;
       }
 
-      if (ncclCommInitRank(&this->comms[localRank], this->totalRanks, id, globalRank) != ncclSuccess)
+      if (useMultiRankPerGpu)
       {
-        ERROR("Rank %d on child %d unable to call ncclCommInitRank\n", globalRank, this->childId);
-        status = TEST_FAIL;
-        break;
+	if (ncclCommInitRankMulti(&this->comms[localRank], this->totalRanks, id, globalRank, globalRank) != ncclSuccess)
+        {
+	  ERROR("Rank %d on child %d unable to call ncclCommInitRankMulti\n", globalRank, this->childId);
+	  status = TEST_FAIL;
+	  break;
+	}
+      }
+      else
+      {
+	if (ncclCommInitRank(&this->comms[localRank], this->totalRanks, id, globalRank) != ncclSuccess)
+        {
+          ERROR("Rank %d on child %d unable to call ncclCommInitRank\n", globalRank, this->childId);
+          status = TEST_FAIL;
+          break;
+        }
       }
     }
     if (status == TEST_SUCCESS)
