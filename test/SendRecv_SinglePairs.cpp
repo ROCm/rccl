@@ -17,6 +17,7 @@ namespace RcclUnitTesting
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
 
+    OptionalColArgs options;
     bool isCorrect = true;
     int totalRanks = testBed.ev.maxGpus;
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
@@ -32,12 +33,12 @@ namespace RcclUnitTesting
       {
         for (int recvRank = 0; recvRank  < totalRanks; ++recvRank)
         {
+          options.root = recvRank;
           testBed.SetCollectiveArgs(ncclCollSend,
                                     dataTypes[dataIdx],
-                                    ncclSum,
-                                    recvRank,
                                     numElements[numIdx],
                                     numElements[numIdx],
+                                    options,
                                     0,
                                     sendRank);
           if (recvRank == 0)
@@ -55,18 +56,17 @@ namespace RcclUnitTesting
                   recvRank,
                   numElements[numIdx]);
 
-
+            options.root = sendRank;
             testBed.SetCollectiveArgs(ncclCollRecv,
                                       dataTypes[dataIdx],
-                                      ncclSum,
-                                      sendRank,
                                       numElements[numIdx],
                                       numElements[numIdx],
+                                      options,
                                       0,
                                       recvRank);
             testBed.AllocateMem(inPlace, useManagedMem, 0, recvRank);
             testBed.PrepareData(0, recvRank);
-            testBed.ExecuteCollectives({sendRank,recvRank });
+            testBed.ExecuteCollectives({sendRank, recvRank});
             testBed.ValidateResults(isCorrect, 0, recvRank);
             testBed.DeallocateMem(0, recvRank);
           }

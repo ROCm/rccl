@@ -17,10 +17,10 @@ namespace RcclUnitTesting
     std::vector<ncclDataType_t> const& dataTypes     = {ncclInt32, ncclFloat32, ncclFloat64};
     ncclRedOp_t                 const  redOp         = ncclSum;
     std::vector<int>            const  numElements   = {1048576, 1024};
-    int                         const  root          = 0;
     bool                        const  inPlace       = false;
     bool                        const  useManagedMem = false;
 
+    OptionalColArgs options;
     // Terminate the test as soon as first failure occurs
     bool isCorrect = true;
     for (int totalRanks = testBed.ev.minGpus; totalRanks <= testBed.ev.maxGpus && isCorrect; ++totalRanks)
@@ -43,6 +43,8 @@ namespace RcclUnitTesting
           double F = i;
           scalarsPerRank.Set(dataType, i, i, F);
         }
+        int const numBytes = totalRanks * DataTypeToBytes(dataType);
+        memcpy(options.scalarTransport.ptr, scalarsPerRank.ptr, numBytes);
 
         // Test various scalar residence modes
         for (int scalarMode = 0; scalarMode <= 1 && isCorrect; ++scalarMode)
@@ -54,9 +56,11 @@ namespace RcclUnitTesting
 
           for (int i = 0; i < numElements.size() && isCorrect; ++i)
           {
-            testBed.SetCollectiveArgs(funcType, dataType, redOp, root,
+            options.scalarMode = scalarMode;
+            options.redOp = redOp;
+            testBed.SetCollectiveArgs(funcType, dataType,
                                       numElements[i], numElements[i],
-                                      -1, -1, scalarsPerRank, scalarMode);
+                                      options);
             // For performance, only allocate and prepare data on largest size
             if (i == 0)
             {
