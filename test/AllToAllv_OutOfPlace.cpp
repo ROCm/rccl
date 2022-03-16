@@ -50,8 +50,7 @@ namespace RcclUnitTesting
     OptionalColArgs options;
     size_t numInputElementsArray[MAX_RANKS], numOutputElementsArray[MAX_RANKS];
     bool isCorrect = true;
-    int totalRanks = testBed.ev.maxGpus;
-
+    for (int totalRanks = testBed.ev.minGpus; totalRanks <= testBed.ev.maxGpus && isCorrect; ++totalRanks)
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
     {
       if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
