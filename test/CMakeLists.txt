@@ -65,6 +65,8 @@ if(BUILD_TESTS)
       #AllToAll
       AllToAll_OutOfPlace.cpp
       AllToAll_ManagedMem.cpp
+      #AllToAllv
+      AllToAllv_OutOfPlace.cpp
       #Broadcast
       Broadcast_InPlace.cpp
       Broadcast_ManagedMem.cpp

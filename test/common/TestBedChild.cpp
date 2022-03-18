@@ -188,29 +188,17 @@ namespace RcclUnitTesting
     int             collId;
     ncclFunc_t      funcType;
     ncclDataType_t  dataType;
-    ncclRedOp_t     redOp;
-    int             root;
     size_t          numInputElements;
     size_t          numOutputElements;
-    ScalarTransport scalarTransport;
-    int             scalarMode;
+    OptionalColArgs options;
 
     PIPE_READ(globalRank);
     PIPE_READ(collId);
     PIPE_READ(funcType);
     PIPE_READ(dataType);
-    PIPE_READ(redOp);
-    PIPE_READ(root);
     PIPE_READ(numInputElements);
     PIPE_READ(numOutputElements);
-    PIPE_READ(scalarMode);
-    PIPE_READ(scalarTransport);
-
-    for (int i = 0; i < this->totalRanks; i++)
-    {
-      PtrUnion scalarsPerRank;
-      scalarsPerRank.Attach(scalarTransport.ptr);
-    }
+    PIPE_READ(options);
 
     if (globalRank < this->rankOffset || (this->rankOffset + comms.size() <= globalRank))
     {
@@ -227,24 +215,24 @@ namespace RcclUnitTesting
         CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
         CHECK_CALL(collArg.SetArgs(globalRank, this->totalRanks,
                                    this->deviceIds[localRank],
-                                   funcType, dataType, redOp, root,
+                                   funcType, dataType,
                                    numInputElements, numOutputElements,
-                                   scalarTransport, scalarMode));
+                                   options));
         if (this->verbose) INFO("Rank %d on child %d sets collective %d [%s]\n",
                                 globalRank, this->childId, collIdx,
                                 collArg.GetDescription().c_str());
 
         // If pre-mult scalars are provided, then create a custom reduction operator
-        if (scalarMode >= 0)
+        if (options.scalarMode >= 0)
         {
-          CHILD_NCCL_CALL(ncclRedOpCreatePreMulSum(&collArg.redOp,
+          CHILD_NCCL_CALL(ncclRedOpCreatePreMulSum(&collArg.options.redOp,
                                                    collArg.localScalar.ptr,
                                                    dataType,
-                                                   (ncclScalarResidence_t)scalarMode,
+                                                   (ncclScalarResidence_t)options.scalarMode,
                                                    this->comms[localRank]),
                           "ncclRedOpCreatePreMulSum");
           if (verbose) INFO("Child %d created custom redop %d for collective %d\n",
-                            this->childId, collArg.redOp, collIdx);
+                            this->childId, collArg.options.redOp, collIdx);
         }
       }
     }
@@ -383,7 +371,7 @@ namespace RcclUnitTesting
                                         collArg.outputGpu.ptr,
                                         collArg.numInputElements,
                                         collArg.dataType,
-                                        collArg.root,
+                                        collArg.options.root,
                                         this->comms[localRank],
                                         this->streams[localRank]),
                           "ncclBroadcast");
@@ -393,8 +381,8 @@ namespace RcclUnitTesting
                                      collArg.outputGpu.ptr,
                                      collArg.numInputElements,
                                      collArg.dataType,
-                                     collArg.redOp,
-                                     collArg.root,
+                                     collArg.options.redOp,
+                                     collArg.options.root,
                                      this->comms[localRank],
                                      this->streams[localRank]),
                           "ncclReduce");
@@ -413,7 +401,7 @@ namespace RcclUnitTesting
                                             collArg.outputGpu.ptr,
                                             collArg.numOutputElements,
                                             collArg.dataType,
-                                            collArg.redOp,
+                                            collArg.options.redOp,
                                             this->comms[localRank],
                                             this->streams[localRank]),
                           "ncclReduceScatter");
@@ -423,7 +411,7 @@ namespace RcclUnitTesting
                                         collArg.outputGpu.ptr,
                                         collArg.numInputElements,
                                         collArg.dataType,
-                                        collArg.redOp,
+                                        collArg.options.redOp,
                                         this->comms[localRank],
                                         this->streams[localRank]),
                           "ncclAllReduce");
@@ -433,7 +421,7 @@ namespace RcclUnitTesting
                                      collArg.outputGpu.ptr,
                                      collArg.numInputElements,
                                      collArg.dataType,
-                                     collArg.root,
+                                     collArg.options.root,
                                      this->comms[localRank],
                                      this->streams[localRank]),
                           "ncclGather");
@@ -443,7 +431,7 @@ namespace RcclUnitTesting
                                       collArg.outputGpu.ptr,
                                       collArg.numOutputElements,
                                       collArg.dataType,
-                                      collArg.root,
+                                      collArg.options.root,
                                       this->comms[localRank],
                                       this->streams[localRank]),
                           "ncclScatter");
@@ -457,11 +445,23 @@ namespace RcclUnitTesting
                                        this->streams[localRank]),
                           "ncclAllToAll");
           break;
+        case ncclCollAllToAllv:
+          CHILD_NCCL_CALL(ncclAllToAllv(collArg.inputGpu.ptr,
+                                        collArg.options.sendcounts + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.options.sdispls + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.outputGpu.ptr,
+                                        collArg.options.recvcounts + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.options.rdispls + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.dataType,
+                                        this->comms[localRank],
+                                        this->streams[localRank]),
+                          "ncclAllToAllv");
+          break;
         case ncclCollSend:
           CHILD_NCCL_CALL(ncclSend(collArg.inputGpu.ptr,
                                    collArg.numInputElements,
                                    collArg.dataType,
-                                   collArg.root,
+                                   collArg.options.root,
                                    this->comms[localRank],
                                    this->streams[localRank]),
                           "ncclSend");
@@ -470,7 +470,7 @@ namespace RcclUnitTesting
           CHILD_NCCL_CALL(ncclRecv(collArg.outputGpu.ptr,
                                    collArg.numOutputElements,
                                    collArg.dataType,
-                                   collArg.root,
+                                   collArg.options.root,
                                    this->comms[localRank],
                                    this->streams[localRank]),
                           "ncclRecv");
@@ -579,12 +579,12 @@ namespace RcclUnitTesting
 
         CHECK_CALL(collArg.DeallocateMem());
       }
-      if (collArg.scalarMode != -1)
+      if (collArg.options.scalarMode != -1)
       {
-        CHILD_NCCL_CALL(ncclRedOpDestroy(collArg.redOp, this->comms[localRank]),
+        CHILD_NCCL_CALL(ncclRedOpDestroy(collArg.options.redOp, this->comms[localRank]),
                         "ncclRedOpDestroy");
         if (verbose) INFO("Child %d destroys custom redop %d for collective %d\n",
-                          this->childId, collArg.redOp, collIdx);
+                          this->childId, collArg.options.redOp, collIdx);
       }
     }
     if (this->verbose) INFO("Child %d finishes DeallocateMem\n", this->childId);

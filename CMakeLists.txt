@@ -48,7 +48,7 @@ option(BUILD_TESTS "Build test programs" OFF)
 option(INSTALL_DEPENDENCIES "Force install dependencies" OFF)
 option(BUILD_ADDRESS_SANITIZER "Build with address sanitizer enabled" OFF)
 option(BUILD_ALLREDUCE_ONLY "Build AllReduce + sum + float kernel only" OFF)
-#Set the header wrapper ON by default. 
+#Set the header wrapper ON by default.
 option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "Build with file/folder reorg with backward compatibility enabled" ON)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
@@ -292,7 +292,7 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
             GUARDS SYMLINK WRAPPER
 	    WRAPPER_LOCATIONS rccl )
   #install the wrapper header file to package
-  rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h" 
+  rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
 	        DESTINATION "./rccl/include/" )
 endif()
 
