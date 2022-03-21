@@ -392,7 +392,7 @@ static struct rcclRomeModel rome_model_59 = {
   .connMatrix = { 0, 4, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 4, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 2, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 4, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 4, 0, },
   .gdrLevel = { PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, },
   .pattern = "42424242",
-  .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|",
+  .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6",
   .options = "",
 };
 
@@ -431,7 +431,7 @@ static struct rcclRomeModel rome_model_65 = {
   .connMatrix = { 0, 4, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 4, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 2, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 4, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 4, 0, },
   .gdrLevel = { PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, },
   .pattern = "42424242",
-  .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|",
+  .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6",
   .options = "netGdrLevel=PHB",
 };
 
@@ -445,7 +445,7 @@ static struct rcclRomeModel rome_model_66 = {
   .gdrLevel = { },
   .pattern = "4040",
   .ringBase = "0 6 7 5 4 2 3 1|1 3 2 4 5 7 6 0|0 1 7 6 2 3 5 4|4 5 3 2 6 7 1 0",
-  .options = "",
+  .options = "disableNumaMatching=1",
 };
 
 static struct rcclRomeModel rome_model_67 = {
@@ -458,7 +458,7 @@ static struct rcclRomeModel rome_model_67 = {
   .gdrLevel = { PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, },
   .pattern = "4242",
   .ringBase = "N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N1 2 3 5 4 0 1 7 6 N3|N2 4 5 3 2 6 7 1 0 N0|N1 3 2 4 5 7 6 0 1 N0|N0 1 0 6 7 5 4 2 3 N1|N0 0 1 7 6 2 3 5 4 N2|N3 6 7 1 0 4 5 3 2 N1",
-  .options = "",
+  .options = "disableNumaMatching=1",
 };
 
 static struct rcclRomeModel rome_model_68 = {
@@ -474,32 +474,6 @@ static struct rcclRomeModel rome_model_68 = {
   .options = "netGdrLevel=PIX",
 };
 
-static struct rcclRomeModel rome_model_69 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 3,
-  .gpuIds = { 0x29000, 0x2c000, 0x2f000, 0x32000, 0xac000, 0xaf000, 0xb2000, 0xb5000, },
-  .nicIds = { },
-  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
-  .nicNuma = { },
-  .connMatrix = { 0, 4, 0, 0, 2, 0, 1, 0, 4, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 4, 1, 0, 2, 0, 0, 1, 4, 0, 0, 1, 0, 0, 2, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 1, 4, 0, 0, 1, 1, 0, 2, 0, 0, 0, 0, 4, 0, 1, 0, 0, 0, 1, 4, 0, },
-  .gdrLevel = { },
-  .pattern = "4040",
-  .ringBase = "0 6 7 5 4 2 3 1|1 3 2 4 5 7 6 0|0 1 7 6 2 3 5 4|4 5 3 2 6 7 1 0",
-  .options = "",
-};
-
-static struct rcclRomeModel rome_model_70 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3,
-  .gpuIds = { 0x29000, 0x2c000, 0x2f000, 0x32000, 0xac000, 0xaf000, 0xb2000, 0xb5000, },
-  .nicIds = { 0x1d000, 0x1e000, 0xa0000, 0xa1000, },
-  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
-  .nicNuma = { 0, 0, 1, 1, },
-  .connMatrix = { 0, 4, 0, 0, 2, 0, 1, 0, 4, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 4, 1, 0, 2, 0, 0, 1, 4, 0, 0, 1, 0, 0, 2, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 1, 4, 0, 0, 1, 1, 0, 2, 0, 0, 0, 0, 4, 0, 1, 0, 0, 0, 1, 4, 0, },
-  .gdrLevel = { PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, },
-  .pattern = "4242",
-  .ringBase = "N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N1 2 3 5 4 0 1 7 6 N3|N2 4 5 3 2 6 7 1 0 N0|N1 3 2 4 5 7 6 0 1 N0|N0 1 0 6 7 5 4 2 3 N1|N0 0 1 7 6 2 3 5 4 N2|N3 6 7 1 0 4 5 3 2 N1",
-  .options = "",
-};
-
 static struct rcclRomeModel rome_model_71 = {
   .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 3,
   .gpuIds = { 0x32000, 0x35000, 0x11000, 0x14000, 0xae000, 0xb3000, 0x8e000, 0x93000, },
@@ -510,7 +484,7 @@ static struct rcclRomeModel rome_model_71 = {
   .gdrLevel = { },
   .pattern = "4040",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 2 3 7 6|6 7 3 2 4 5 1 0",
-  .options = "",
+  .options = "disableNumaMatching=1",
 };
 
 static struct rcclRomeModel rome_model_72 = {
@@ -523,7 +497,7 @@ static struct rcclRomeModel rome_model_72 = {
   .gdrLevel = { PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, },
   .pattern = "4242",
   .ringBase = "N0 0 1 3 2 4 5 7 6 N3|N1 2 3 1 0 6 7 5 4 N2|N3 7 6 0 1 5 4 2 3 N1|N0 1 0 6 7 3 2 4 5 N2|N2 4 5 7 6 0 1 3 2 N1|N3 6 7 5 4 2 3 1 0 N0|N2 5 4 2 3 7 6 0 1 N0|N1 3 2 4 5 1 0 6 7 N3",
-  .options = "",
+  .options = "disableNumaMatching=1",
 };
 
 static struct rcclRomeModel romeTopoModels[] = {
@@ -560,8 +534,6 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_66,
   rome_model_67,
   rome_model_68,
-  rome_model_69,
-  rome_model_70,
   rome_model_71,
   rome_model_72,
 };
@@ -715,6 +687,26 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
     }
     free(str_temp);
   }
+}
+
+static bool disableNumaMatching(const char *options) {
+  if (strcmp(options, "")) {
+    char *str_temp = (char *)malloc(strlen(options) + 1);
+    strcpy(str_temp, options);
+    char* tokens[MAX_OPT_TOKENS];
+    int numTokens = 0;
+    tokens[numTokens] = strtok(str_temp, "=, ");
+    numTokens++;
+    while (tokens[numTokens-1] != NULL && numTokens < MAX_OPT_TOKENS)
+        tokens[numTokens++] = strtok(NULL, "=, ");
+    for (int i = 0; i < numTokens/2; i++) {
+      if (strcmp(tokens[i*2], "disableNumaMatching") == 0) {
+        return (bool)atol(tokens[i*2+1]);
+      }
+    }
+    free(str_temp);
+  }
+  return false;
 }
 
 ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
@@ -961,14 +953,16 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   return ncclSuccess;
 }
 
-static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time, bool nbio) {
+static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time, bool nbio, bool ignore_numa) {
   (*time) ++;
   if (n == last) {
     int i, j;
     // match GPU numa
-    for (i = 0; i < ref->nGpus; i++)
-      if (ref->gpuNuma[i] != topo->gpuNuma[g[i]]) break;
-    if (i < ref->nGpus) return false;
+    if (!ignore_numa) {
+      for (i = 0; i < ref->nGpus; i++)
+        if (ref->gpuNuma[i] != topo->gpuNuma[g[i]]) break;
+      if (i < ref->nGpus) return false;
+    }
     // match XGMI connection
     for (i = 0; i < ref->nGpus; i++) {
       for (j = 0; j < ref->nGpus; j++) {
@@ -996,22 +990,24 @@ static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, st
   } else {
     for (int i = n; i <= last; i++) {
       std::swap(g[n], g[i]);
-      if (permuteGpuIds(g, n+1, last, ref, topo, time, nbio)) return true;
+      if (permuteGpuIds(g, n+1, last, ref, topo, time, nbio, ignore_numa)) return true;
       std::swap(g[n], g[i]);
     }
   }
   return false;
 }
 
-static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time) {
+static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time, bool ignore_numa) {
   (*time) ++;
   if (s == last) {
     int i, j;
     // match NET numa
-    for (i = 0; i < ref->nNics; i++) {
-      if (ref->nicNuma[i] != topo->nicNuma[n[i]]) break;
+    if (!ignore_numa) {
+      for (i = 0; i < ref->nNics; i++) {
+        if (ref->nicNuma[i] != topo->nicNuma[n[i]]) break;
+      }
+      if (i < ref->nNics) return false;
     }
-    if (i < ref->nNics) return false;
     // match gdr level
     for (i = 0; i < ref->nNics; i++) {
       for (j = 0; j < ref->nGpus; j++) {
@@ -1024,7 +1020,7 @@ static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel*
   } else {
     for (int i = s; i <= last; i++) {
       std::swap(n[s], n[i]);
-      if (permuteNetIds(n, g, s+1, last, ref, topo, time)) return true;
+      if (permuteNetIds(n, g, s+1, last, ref, topo, time, ignore_numa)) return true;
       std::swap(n[s], n[i]);
     }
   }
@@ -1071,16 +1067,18 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   if (i < romeTopo.nGpus) match_nbio = false;
 
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
-    if (romeTopo.nCpus != romeTopoModels[i].nCpus || romeTopo.nGpus != romeTopoModels[i].nGpus ||
+    bool ignore_numa = disableNumaMatching(romeTopoModels[i].options);
+    if (!ignore_numa && romeTopo.nCpus != romeTopoModels[i].nCpus) continue;
+    if (romeTopo.nGpus != romeTopoModels[i].nGpus ||
       romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
-    if (strcmp(romeTopoModels[i].pattern, pattern)) continue;
+    if (!ignore_numa && strcmp(romeTopoModels[i].pattern, pattern)) continue;
     // permute GPU IDs
     for (int j = 0; j < ngpus; j++) g[j] = (j+2)%ngpus;
-    if (!permuteGpuIds(g, 0, ngpus-1, romeTopoModels+i, &romeTopo, &time, match_nbio)) continue;
+    if (!permuteGpuIds(g, 0, ngpus-1, romeTopoModels+i, &romeTopo, &time, match_nbio, ignore_numa)) continue;
     if (nnets > 1) {
       // permute NET IDs
       for (int j = 0; j < nnets; j++) n[j] = (j+2)%nnets;
-      if (permuteNetIds(n, g, 0, nnets-1, romeTopoModels+i, &romeTopo, &time)) break;
+      if (permuteNetIds(n, g, 0, nnets-1, romeTopoModels+i, &romeTopo, &time, ignore_numa)) break;
     } else break;
   }
   gettimeofday(&tve, NULL);
@@ -1210,7 +1208,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
         // permute NET IDs
         int time = 0;
         for (int m = 0; m < nnets; m++) n[m] = (m+2)%nnets;
-        if (permuteNetIds(n, g16, 0, nnets-1, romeTopoModels+i, &romeTopo, &time)) break;
+        if (permuteNetIds(n, g16, 0, nnets-1, romeTopoModels+i, &romeTopo, &time, false)) break;
       } else break;
     }
     if (p < TOTAL_PERMUTE_COUNT) break;
