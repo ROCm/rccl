@@ -296,11 +296,8 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
 	        DESTINATION "./rccl/include/" )
 endif()
 
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-smi-lib (>= 4.0.0)")
+rocm_package_add_dependencies(DEPENDS "hip-rocclr >= 3.5.0" "rocm-smi-lib >= 4.0.0")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
-set(CPACK_RPM_PACKAGE_REQUIRES "rocm-smi-lib >= 4.0.0")
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "${ROCM_PATH}")
 
 find_file (DEBIAN debian_version debconf.conf PATHS /etc)
@@ -333,6 +330,14 @@ License: See LICENSE.txt for license information\n")
   Optimized primitives for collective multi-GPU communication")
 endif()
 
+rocm_install_symlink_subdir(rccl)
+
+if(BUILD_TESTS)
+  rocm_package_setup_component(clients)
+  rocm_package_setup_client_component(tests)
+  add_subdirectory(test)
+endif()
+
 rocm_create_package(
   NAME
   rccl
@@ -341,8 +346,3 @@ rocm_create_package(
   MAINTAINER
   "RCCL Maintainer <rccl-maintainer@amd.com>"
   LDCONFIG)
-
-
-if(BUILD_TESTS)
-  add_subdirectory(test)
-endif()

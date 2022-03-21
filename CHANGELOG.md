@@ -2,6 +2,10 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## (Unreleased) RCCL-2.10.4
+### Added
+- Packages for test and benchmark executables on all supported OSes using CPack.
+
 ## RCCL-2.10.3 for ROCm 5.0.0
 ### Added
 - Compatibility with NCCL 2.10.3

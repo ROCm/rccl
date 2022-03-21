@@ -52,7 +52,7 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
                      GIT_REPOSITORY      https://github.com/google/googletest.git
                      GIT_TAG             release-1.11.0
                      INSTALL_DIR         ${GTEST_ROOT}
-                     CMAKE_ARGS          -DBUILD_GTEST=ON -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> ${COMPILER_OVERRIDE}
+                     CMAKE_ARGS          -DBUILD_GTEST=ON -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> ${COMPILER_OVERRIDE} -DBUILD_SHARED_LIBS=OFF
                      LOG_DOWNLOAD        TRUE
                      LOG_CONFIGURE       TRUE
                      LOG_BUILD           TRUE
@@ -73,7 +73,7 @@ endif()
 
 # Find or download/install rocm-cmake project
 set( PROJECT_EXTERN_DIR ${CMAKE_CURRENT_BINARY_DIR}/extern )
-find_package(ROCM 0.6 QUIET CONFIG PATHS /opt/rocm)
+find_package(ROCM 0.7.3 QUIET CONFIG PATHS /opt/rocm)
 if(NOT ROCM_FOUND)
     set(rocm_cmake_tag "master" CACHE STRING "rocm-cmake tag to download")
     file(
@@ -103,7 +103,7 @@ if(NOT ROCM_FOUND)
     if(rocm_cmake_unpack_error_code)
         message(FATAL_ERROR "Error: unpacking ${CMAKE_CURRENT_BINARY_DIR}/rocm-cmake-${rocm_cmake_tag}.zip failed")
     endif()
-    find_package( ROCM 0.6 REQUIRED CONFIG PATHS ${PROJECT_EXTERN_DIR}/rocm-cmake )
+    find_package( ROCM 0.7.3 REQUIRED CONFIG PATHS ${PROJECT_EXTERN_DIR}/rocm-cmake )
 endif()
 
 include(ROCMSetupVersion)
@@ -111,5 +111,6 @@ include(ROCMCreatePackage)
 include(ROCMInstallTargets)
 include(ROCMPackageConfigHelpers)
 include(ROCMInstallSymlinks)
+include(ROCMCheckTargetIds)
+include(ROCMClients)
 include( ROCMHeaderWrapper )
-include(ROCMCheckTargetIds OPTIONAL)
