@@ -884,7 +884,7 @@ void AllocateMemory(MemType memType, int devIndex, size_t numBytes, float** memP
     }
 
     // Allocate host-pinned memory (should respect NUMA mem policy)
-    HIP_CALL(hipHostMalloc((void **)memPtr, numBytes, hipHostMallocNumaUser));
+    HIP_CALL(hipHostMalloc((void **)memPtr, numBytes, hipHostMallocNumaUser | hipHostMallocNonCoherent));
 
     // Check that the allocated pages are actually on the correct NUMA node
     CheckPages((char*)*memPtr, numBytes, numaIdx);
