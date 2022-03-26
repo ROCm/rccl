@@ -426,6 +426,12 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   if (info->coll == ncclFuncAllToAllPivot) {
     int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
     info->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
+  } else if (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->nChannels == 32 && comm->nRanks/comm->nNodes == 16 && info->nBytes >= 268435456
+    && ((comm->nNodes > 2 && info->nBytes <= 2147483648) || (comm->nNodes == 2 && info->nBytes <= 1073741824))) {
+    // use ring simple with reduced channels on gfx90a for specific data sizes
+    info->protocol = NCCL_PROTO_SIMPLE;
+    info->algorithm = NCCL_ALGO_RING;
+    info->nChannels = nc/2;
   } else {
     info->nChannels = nc;
   }
