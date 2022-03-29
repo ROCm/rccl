@@ -9,7 +9,7 @@
 
 #define CHILD_NCCL_CALL(cmd, msg)                                       \
   {                                                                     \
-    if (this->verbose) printf("[ NCCL CALL] " #cmd "\n");               \
+    if (this->verbose) printf("[ NCCL CALL] " #cmd " childId %d\n", this->childId);               \
     ncclResult_t status = cmd;                                          \
     if (status != ncclSuccess)                                          \
     {                                                                   \
@@ -136,11 +136,11 @@ namespace RcclUnitTesting
       this->collArgs[i].clear();
       this->collArgs[i].resize(numCollectivesInGroup);
     }
-
+    if (this->verbose) INFO("Child %d begins comms.clear and resize()\n", this->childId);
     // Initialize communicators
     comms.clear();
     comms.resize(numGpus);
-
+    if (this->verbose) INFO("Child %d begins InitComms()\n", this->childId);
     // Initialize within a group call to avoid deadlock when using multiple ranks per child
     ErrCode status = TEST_SUCCESS;
     CHILD_NCCL_CALL(ncclGroupStart(), "ncclGroupStart");
