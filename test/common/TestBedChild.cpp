@@ -140,7 +140,7 @@ namespace RcclUnitTesting
     // Initialize communicators
     comms.clear();
     comms.resize(numGpus);
-    if (this->verbose) INFO("Child %d begins InitComms()\n", this->childId);
+    if (this->verbose) INFO("Child %d just before ncclGroupStart()\n", this->childId);
     // Initialize within a group call to avoid deadlock when using multiple ranks per child
     ErrCode status = TEST_SUCCESS;
     CHILD_NCCL_CALL(ncclGroupStart(), "ncclGroupStart");
