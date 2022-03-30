@@ -11,6 +11,7 @@
   {                                                                     \
     if (this->verbose) printf("[ NCCL CALL] " #cmd " childId %d\n", this->childId);               \
     ncclResult_t status = cmd;                                          \
+    if (this->verbose) printf("[ NCCL CALL exit] " #cmd "\n");               \
     if (status != ncclSuccess)                                          \
     {                                                                   \
       ERROR("Child process %d fails NCCL call %s with code %d\n", this->childId, msg, status); \
