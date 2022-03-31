@@ -224,6 +224,7 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
           ncclIbDevs[ncclNIbDevs].mrCache.slots = NULL;
 
           pthread_create(&ncclIbAsyncThread, NULL, ncclIbAsyncThreadMain, context);
+          pthread_detach(ncclIbAsyncThread); // will not be pthread_join()'d
           ncclSetThreadName(ncclIbAsyncThread, "NCCL IbAsync %2d", ncclNIbDevs);
           ncclNIbDevs++;
           nPorts++;
@@ -848,7 +849,7 @@ ncclResult_t ncclIbRegMr(void* comm, void* data, int size, int type, void** mhan
       else {
         NCCLCHECKGOTO(wrap_ibv_reg_mr(&mr, verbs->pd, (void*)addr, pages*pageSize, flags), res, returning);
       }
-      TRACE(NCCL_INIT,"regAddr %llx size %lld rkey %x", (unsigned long long)addr, (long long)pages*PageSize, mr->rkey);
+      TRACE(NCCL_INIT,"regAddr %llx size %lld rkey %x", (unsigned long long)addr, (long long)pages*pageSize, mr->rkey);
       cache->population += 1;
       cache->slots[slot].addr = addr;
       cache->slots[slot].pages = pages;
@@ -998,11 +999,16 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, int size, int tag, void* mh
     if (reqs[r] != NULL || slots[r].tag != tag) continue;
 
     // Sanity checks to catch user collective call count/size mismatches
-    // plus any potential programming errors
-    if (size > slots[r].size || slots[r].size < 0 || slots[r].addr == 0 || slots[r].rkey == 0) {
+    if (size > slots[r].size) {
       char line[SOCKET_NAME_MAXLEN+1];
-      WARN("NET/IB : req %d/%d tag %x peer %s collective mismatch error local size %d remote %d addr %lx rkey %x",
-          r, nreqs, tag, ncclSocketToString(&comm->sock.addr, line), size, slots[r].size, slots[r].addr, slots[r].rkey);
+      WARN("NET/IB : req %d/%d tag %x peer %s collective mismatch error, local size %d remote size %d",
+           r, nreqs, tag, ncclSocketToString(&comm->sock.addr, line), size, slots[r].size);
+      return ncclInvalidUsage;
+    } // plus any potential programming errors
+    else if (slots[r].size < 0 || slots[r].addr == 0 || slots[r].rkey == 0) {
+     char line[SOCKET_NAME_MAXLEN+1];
+     WARN("NET/IB : req %d/%d tag %x peer %s posted incorrect receive info: size %d addr %lx rkey %x",
+          r, nreqs, tag, ncclSocketToString(&comm->sock.addr, line), slots[r].size, slots[r].addr, slots[r].rkey);
       return ncclInternalError;
     }
     struct ncclIbRequest* req;
