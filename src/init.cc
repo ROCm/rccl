@@ -1113,7 +1113,7 @@ collnet_cleanup:
       minCompCap = std::min(comm->peerInfo[i].cudaCompCap, minCompCap);
       maxCompCap = std::max(comm->peerInfo[i].cudaCompCap, maxCompCap);
     }
-    NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph, comm->topo->nodes[GPU].nodes[0].gpu.gcn));
+    NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph));
   } while(0);
 
   // Compute nChannels per peer for p2p

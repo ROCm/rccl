@@ -21,7 +21,7 @@
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-for i in {0..68}
+for i in {0..72}
 do
 	if [[ $i -eq 50 ]] || [[ $i -eq 51 ]]
 	then

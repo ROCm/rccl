@@ -141,6 +141,7 @@ struct ncclTopoSystem {
   int type;
   int nRanks;
   int netGdrLevel;
+  int tuning;
 
   bool pivotA2AEnabled;
   int pivotA2ANumBiRings;

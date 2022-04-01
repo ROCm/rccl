@@ -98,7 +98,7 @@ void ncclDebugInit() {
 void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *filefunc, int line, const char *fmt, ...) {
   if (ncclDebugLevel == -1) ncclDebugInit();
   if (level == NCCL_LOG_TRACE && ncclDebugLevel != NCCL_LOG_TRACE) return;
-  if (ncclDebugLevel < level || ((flags & (NCCL_INIT|NCCL_GRAPH)) == 0)) return;
+  if (ncclDebugLevel < level || ((flags & (NCCL_INIT|NCCL_GRAPH|NCCL_TUNING)) == 0)) return;
 
   char buffer[1024];
   size_t len = 0;
@@ -911,7 +911,7 @@ collnet_cleanup:
       minCompCap = std::min(comm->peerInfo[i].cudaCompCap, minCompCap);
       maxCompCap = std::max(comm->peerInfo[i].cudaCompCap, maxCompCap);
     }
-    //NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph, comm->topo->nodes[GPU].nodes[0].gpu.gcn));
+    NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph));
   } while(0);
 
   // Compute nChannels per peer for p2p
