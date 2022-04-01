@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -52,12 +52,13 @@ THE SOFTWARE.
 // Different src/dst memory types supported
 typedef enum
 {
-  MEM_CPU      = 0,    // Pinned CPU memory
+  MEM_CPU      = 0,    // Coarse-grained pinned CPU memory
   MEM_GPU      = 1,    // Coarse-grained global GPU memory
-  MEM_GPU_FINE = 2     // Fine-grained global GPU memory
+  MEM_CPU_FINE = 2,    // Fine-grained pinned CPU memory
+  MEM_GPU_FINE = 3     // Fine-grained global GPU memory
 } MemType;
 
-char const MemTypeStr[4] = "CGF";
+char const MemTypeStr[5] = "CGBF";
 
 typedef enum
 {
@@ -68,52 +69,98 @@ typedef enum
 // Each threadblock copies N floats from src to dst
 struct BlockParam
 {
-    int N;
-    float* src;
-    float* dst;
+  int       N;
+  float*    src;
+  float*    dst;
+  long long startTime;
+  long long stopTime;
 };
 
-// Each Link is a uni-direction operation from a src memory to dst memory executed by a specific GPU
+// Each Link is a uni-direction operation from a src memory to dst memory
 struct Link
 {
+  int     linkIndex;           // Link identifier
+
   // Link config
-  MemType exeMemType;      // Link executor type (CPU or GPU)
-  int     exeIndex;        // Executor index (NUMA node for CPU / device ID for GPU)
-  MemType srcMemType;      // Source memory type
-  int     srcIndex;        // Source device index
-  MemType dstMemType;      // Destination memory type
-  int     dstIndex;        // Destination device index
-  int     numBlocksToUse;  // Number of threadblocks to use for this Link
+  MemType exeMemType;          // Link executor type (CPU or GPU)
+  int     exeIndex;            // Executor index (NUMA node for CPU / device ID for GPU)
+  MemType srcMemType;          // Source memory type
+  int     srcIndex;            // Source device index
+  MemType dstMemType;          // Destination memory type
+  int     dstIndex;            // Destination device index
+  int     numBlocksToUse;      // Number of threadblocks to use for this Link
 
-  // Link implementation
-  float*      srcMem;      // Source memory
-  float*      dstMem;      // Destination memory
+  // Memory
+  float*  srcMem;              // Source memory
+  float*  dstMem;              // Destination memory
 
-  hipEvent_t  startEvent;
-  hipEvent_t  stopEvent;
-  hipStream_t stream;
-  BlockParam* blockParam;
+  // How memory is split across threadblocks / CPU cores
+  std::vector<BlockParam> blockParam;
+  BlockParam* blockParamGpuPtr;
 
+  // Results
+  double  linkTime;
+
+  // Prepares src memory and how to divide N elements across threadblocks/threads
+  void PrepareBlockParams(EnvVars const& ev, size_t const N);
+};
+
+typedef std::pair<MemType, int> Executor;
+
+struct ExecutorInfo
+{
+  std::vector<Link> links;       // Links to execute
+
+  // For GPU-Executors
+  int                      totalBlocks;   // Total number of CUs/CPU threads to use
+  BlockParam*              blockParamGpu; // Copy of block parameters in GPU device memory
+  std::vector<hipStream_t> streams;
+  std::vector<hipEvent_t>  startEvents;
+  std::vector<hipEvent_t>  stopEvents;
+
+  // Results
   double totalTime;
 };
 
-void DisplayUsage(char const* cmdName);                      // Display usage instructions
-void GenerateConfigFile(char const* cfgFile, int numBlocks); // Generate a sample config file
-void DisplayTopology();                                      // Display GPU topology
-void PopulateTestSizes(size_t const numBytesPerLink, int const samplingFactor, std::vector<size_t>& valuesofN);
-void ParseMemType(std::string const& token, int const numCpus, int const numGpus, MemType* memType, int* memIndex);
-void ParseLinks(char* line, int numCpus, int numGpus, std::vector<Link>& links);       // Parse Link information
+typedef std::map<Executor, ExecutorInfo> LinkMap;
+
+// Display usage instructions
+void DisplayUsage(char const* cmdName);
+
+// Generate a sample config file customized for this machine
+void GenerateConfigFile(char const* cfgFile, int numBlocks);
+
+// Display detected GPU topology / CPU numa nodes
+void DisplayTopology();
+
+// Build array of test sizes based on sampling factor
+void PopulateTestSizes(size_t const numBytesPerLink, int const samplingFactor,
+                       std::vector<size_t>& valuesofN);
+
+void ParseMemType(std::string const& token, int const numCpus, int const numGpus,
+                  MemType* memType, int* memIndex);
+
+void ParseLinks(char* line, int numCpus, int numGpus,
+                LinkMap& linkMap);
+
 void EnablePeerAccess(int const deviceId, int const peerDeviceId);
-void AllocateMemory(MemType memType, int devIndex, size_t numBytes, float** memPtr);
-void DeallocateMemory(MemType memType, float* memPtr);
+void AllocateMemory(MemType memType, int devIndex, size_t numBytes, void** memPtr);
+void DeallocateMemory(MemType memType, void* memPtr);
 void CheckPages(char* byteArray, size_t numBytes, int targetId);
 void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, std::vector<float> const& fillPattern, float* ptr);
-void RunLink(EnvVars const& ev, size_t const N, int const iteration, Link& link);
+void RunLink(EnvVars const& ev, size_t const N, int const iteration, ExecutorInfo& exeInfo, int const linkIdx);
 void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse, int readMode, int skipCpu);
-double GetPeakBandwidth(EnvVars const& ev, size_t N, int isBidirectional,
-                        MemType srcMemType, int srcIndex,
-                        MemType dstMemType, int dstIndex,
-                        int readMode);
+
+// Return the maximum bandwidth measured for given (src/dst) pair
+double GetPeakBandwidth(EnvVars const& ev,
+                        size_t  const  N,
+                        int     const  isBidirectional,
+                        int     const  readMode,
+                        int     const  numBlocksToUse,
+                        MemType const  srcMemType,
+                        int     const  srcIndex,
+                        MemType const  dstMemType,
+                        int     const  dstIndex);
 
 std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount);
 std::string GetDesc(MemType srcMemType, int srcIndex,

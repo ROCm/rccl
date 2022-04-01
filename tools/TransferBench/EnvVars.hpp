@@ -52,6 +52,7 @@ public:
   int sharedMemBytes;  // Amount of shared memory to use per threadblock
   int blockBytes;      // Each CU, except the last, gets a multiple of this many bytes to copy
   int usePcieIndexing; // Base GPU indexing on PCIe address instead of HIP device
+  int useSingleStream; // Use a single stream per device instead of per Link. Can not be used with USE_HIP_CALL
 
   std::vector<float> fillPattern; // Pattern of floats used to fill source data
 
@@ -77,6 +78,7 @@ public:
     sharedMemBytes  = GetEnvVar("SHARED_MEM_BYTES" , maxSharedMemBytes / 2 + 1);
     blockBytes      = GetEnvVar("BLOCK_BYTES"      , 256);
     usePcieIndexing = GetEnvVar("USE_PCIE_INDEX"   , 0);
+    useSingleStream = GetEnvVar("USE_SINGLE_STREAM", 0);
 
     // Check for fill pattern
     char* pattern = getenv("FILL_PATTERN");
@@ -172,6 +174,11 @@ public:
       printf("[ERROR] BLOCK_BYTES must be a positive multiple of 4\n");
       exit(1);
     }
+    if (useSingleStream && useHipCall)
+    {
+      printf("[ERROR] Single stream mode cannot be used with HIP calls\n");
+      exit(1);
+    }
   }
 
   // Display info on the env vars that can be used
@@ -195,6 +202,7 @@ public:
     printf(" SHARED_MEM_BYTES=X - Use X shared mem bytes per threadblock, potentially to avoid multiple threadblocks per CU\n");
     printf(" BLOCK_BYTES=B      - Each CU (except the last) receives a multiple of BLOCK_BYTES to copy\n");
     printf(" USE_PCIE_INDEX     - Index GPUs by PCIe address-ordering instead of HIP-provided indexing\n");
+    printf(" USE_SINGLE_STREAM  - Use single stream per device instead of per link.  Cannot be used with USE_HIP_CALL\n");
   }
 
   // Display env var settings
@@ -242,6 +250,7 @@ public:
              getenv("SHARED_MEM_BYTES") ? "(specified)" : "(unset)", sharedMemBytes);
       printf("%-20s = %12d : Each CU gets a multiple of %d bytes to copy\n", "BLOCK_BYTES", blockBytes, blockBytes);
       printf("%-20s = %12d : Using %s-based GPU indexing\n", "USE_PCIE_INDEX", usePcieIndexing, (usePcieIndexing ? "PCIe" : "HIP"));
+      printf("%-20s = %12d : Using single stream per %s\n", "USE_SINGLE_STREAM", useSingleStream, (useSingleStream ? "device" : "Link"));
       printf("\n");
     }
   };
