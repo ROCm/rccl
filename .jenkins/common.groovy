@@ -21,6 +21,8 @@ def runTestCommand (platform, project, gfilter)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
+		${sudo} ulimit -l unlimited
+		ulimit -a
                 ${sudo} NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
             """
 
