@@ -6,6 +6,8 @@
 
 #include "TestBedChild.hpp"
 #include <thread>
+#include <signal.h>
+#include <execinfo.h>
 
 #define CHILD_NCCL_CALL(cmd, msg)                                       \
   {                                                                     \
@@ -20,6 +22,21 @@
 
 #define PIPE_READ(val) \
   if (read(childReadFd, &val, sizeof(val)) != sizeof(val)) return TEST_FAIL;
+
+#define BT_BUF_SIZE 1024
+
+void sig_handler(int signum){
+  printf("\nInside handler function signal is %d\n", signum);
+
+  void *buffer[BT_BUF_SIZE];
+  char **strings;
+  int nptrs = backtrace(buffer, BT_BUF_SIZE);
+  strings = backtrace_symbols(buffer, nptrs);
+  for (int j = 0; j < nptrs; j++)
+    printf("%s\n", strings[j]);
+  free (strings);
+}
+
 
 namespace RcclUnitTesting
 {
@@ -51,6 +68,14 @@ namespace RcclUnitTesting
     }
     this->parentReadFd = pipefd[0];
     this->childWriteFd = pipefd[1];
+
+    signal(SIGILL,sig_handler); 
+    signal(SIGBUS,sig_handler); 
+    signal(SIGFPE,sig_handler); 
+    signal(SIGSEGV,sig_handler); 
+    signal(SIGUSR1,sig_handler); 
+    signal(SIGUSR2,sig_handler); 
+
     return TEST_SUCCESS;
   }
 
