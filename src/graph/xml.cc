@@ -774,7 +774,9 @@ ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct nccl
   uint32_t devIndex;
   static int rocmsmiInit = 0;
   if (rocmsmiInit == 0) {
+    INFO(NCCL_INIT, "Before rocm_smi_init");
     rocmsmiInit = (rocm_smi_init() != ncclSuccess) ? 2 : 1;
+    INFO(NCCL_INIT, "After rocm_smi_init");
   }
   if (rocmsmiInit == 1) {
     if (rocm_smi_getDeviceIndexByPciBusId(busId, &devIndex) != ncclSuccess) devIndex = -1;

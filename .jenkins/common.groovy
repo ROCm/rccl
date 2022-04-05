@@ -20,17 +20,17 @@ def runTestCommand (platform, project, gfilter)
 
     def command = """#!/usr/bin/env bash
                 set -x
-                cd ${project.paths.project_build_prefix}/build/release/test
+                cd ${project.paths.project_build_prefix}/build/debug/test
                 ${sudo} NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)
-   junit "${project.paths.project_build_prefix}/build/release/test/*.xml"
+   junit "${project.paths.project_build_prefix}/build/debug/test/*.xml"
 }
 
 def runPackageCommand(platform, project, jobName)
 {
-    def packageHelper = platform.makePackage(platform.jenkinsLabel,"${project.paths.project_build_prefix}/build/release")
+    def packageHelper = platform.makePackage(platform.jenkinsLabel,"${project.paths.project_build_prefix}/build/debug")
 
     platform.runCommand(this, packageHelper[0])
     platform.archiveArtifacts(this, packageHelper[1])

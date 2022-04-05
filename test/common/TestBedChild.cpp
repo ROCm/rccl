@@ -35,6 +35,7 @@ void sig_handler(int signum){
   for (int j = 0; j < nptrs; j++)
     printf("%s\n", strings[j]);
   free (strings);
+  exit (-1);
 }
 
 

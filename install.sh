@@ -31,7 +31,7 @@ ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
 build_tests=false
 run_tests=false
 run_tests_all=false
-build_release=true
+build_release=false
 build_address_sanitizer=false
 install_library=false
 build_hip_clang=true
