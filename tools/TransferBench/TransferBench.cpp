@@ -39,15 +39,9 @@ int main(int argc, char **argv)
   // Display usage instructions and detected topology
   if (argc <= 1)
   {
-    DisplayUsage(argv[0]);
-    DisplayTopology();
-    exit(0);
-  }
-
-  // If a negative value is listed for N, generate a comprehensive config file for this node
-  if (argc > 2 && atoll(argv[2]) < 0)
-  {
-    GenerateConfigFile(argv[1], -1*atoi(argv[2]));
+    int const outputToCsv = EnvVars::GetEnvVar("OUTPUT_TO_CSV", 0);
+    if (!outputToCsv) DisplayUsage(argv[0]);
+    DisplayTopology(outputToCsv);
     exit(0);
   }
 
@@ -366,7 +360,7 @@ int main(int argc, char **argv)
           maxGpuTime = std::max(maxGpuTime, linkDurationMsec);
           if (!ev.outputToCsv)
           {
-            printf(" Link %02d: %c%02d -> [%cPU %02d:%02d] -> %c%02d | %9.3f GB/s | %8.3f ms | %-16s",
+            printf(" Link %02d: %c%02d -> [%cPU %02d:%02d] -> %c%02d | %9.3f GB/s | %8.3f ms | %-16s\n",
                    link->linkIndex,
                    MemTypeStr[link->srcMemType], link->srcIndex,
                    MemTypeStr[link->exeMemType], link->exeIndex,
@@ -374,12 +368,10 @@ int main(int argc, char **argv)
                    MemTypeStr[link->dstMemType], link->dstIndex,
                    linkBandwidthGbs, linkDurationMsec,
                    GetLinkDesc(*link).c_str());
-            if (ev.showAddr) printf(" %16p | %16p |", link->srcMem + initOffset, link->dstMem + initOffset);
-            printf("\n");
           }
           else
           {
-            printf("%d,%lu,%c%02d,%c%02d,%c%02d,%d,%9.3f,%8.3f,%s,%p,%p,%d,%d,%d\n",
+            printf("%d,%lu,%c%02d,%c%02d,%c%02d,%d,%.3f,%.3f,%s,%p,%p,%d,%d,%d\n",
                    testNum, N * sizeof(float),
                    MemTypeStr[link->srcMemType], link->srcIndex,
                    MemTypeStr[link->exeMemType], link->exeIndex,
@@ -402,7 +394,7 @@ int main(int argc, char **argv)
       }
       else
       {
-        printf("%d,%lu,ALL,ALL,ALL,ALL,%9.3f,%8.3f,ALL,ALL,ALL,%d,%d,%d\n",
+        printf("%d,%lu,ALL,ALL,ALL,ALL,%.3f,%.3f,ALL,ALL,ALL,%d,%d,%d\n",
                testNum, N * sizeof(float), totalBandwidthGbs, totalCpuTime, ev.byteOffset,
                ev.numWarmups, ev.numIterations);
       }
@@ -447,6 +439,9 @@ int main(int argc, char **argv)
 
 void DisplayUsage(char const* cmdName)
 {
+  printf("TransferBench v. %s\n", TB_VERSION);
+  printf("========================================\n");
+
   if (numa_available() == -1)
   {
     printf("[ERROR] NUMA library not supported. Check to see if libnuma has been installed on this system\n");
@@ -458,7 +453,7 @@ void DisplayUsage(char const* cmdName)
 
   printf("Usage: %s config <N>\n", cmdName);
   printf("  config: Either:\n");
-  printf("          - Filename of configFile containing Links to execute (see below for format)\n");
+  printf("          - Filename of configFile containing Links to execute (see example.cfg for format)\n");
   printf("          - Name of preset benchmark:\n");
   printf("              p2p    - All CPU/GPU pairs benchmark\n");
   printf("              p2p_rr - All CPU/GPU pairs benchmark with remote reads\n");
@@ -466,201 +461,13 @@ void DisplayUsage(char const* cmdName)
   printf("              g2g_rr - All GPU/GPU pairs benchmark with remote reads\n");
   printf("            - 3rd optional argument will be used as # of CUs to use (uses all by default)\n");
   printf("  N     : (Optional) Number of bytes to transfer per link.\n");
-  printf("          If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n", DEFAULT_BYTES_PER_LINK);
+  printf("          If not specified, defaults to %lu bytes. Must be a multiple of 4 bytes\n",
+         DEFAULT_BYTES_PER_LINK);
   printf("          If 0 is specified, a range of Ns will be benchmarked\n");
-  printf("          If a negative number is specified, a configFile gets generated with this number as default number of CUs per link\n");
   printf("          May append a suffix ('K', 'M', 'G') for kilobytes / megabytes / gigabytes\n");
-  printf("\n");
-  printf("Configfile Format:\n");
-  printf("==================\n");
-  printf("A Link is defined as a uni-directional transfer from src memory location to dst memory location executed by either CPU or GPU\n");
-  printf("Each single line in the configuration file defines a set of Links to run in parallel\n");
-  printf("\n");
-  printf("There are two ways to specify the configuration file:\n");
-  printf("\n");
-  printf("1) Basic\n");
-  printf("   The basic specification assumes the same number of threadblocks/CUs used per GPU-executed Link\n");
-  printf("   A positive number of Links is specified followed by that number of triplets describing each Link\n");
-  printf("\n");
-  printf("   #Links #CUs (srcMem1->Executor1->dstMem1) ... (srcMemL->ExecutorL->dstMemL)\n");
-  printf("\n");
-  printf("2) Advanced\n");
-  printf("   The advanced specification allows different number of threadblocks/CUs used per GPU-executed Link\n");
-  printf("   A negative number of links is specified, followed by quadruples describing each Link\n");
-  printf("   -#Links (srcMem1->Executor1->dstMem1 #CUs1) ... (srcMemL->ExecutorL->dstMemL #CUsL)\n");
-  printf("\n");
-  printf("Argument Details:\n");
-  printf("  #Links  :   Number of Links to be run in parallel\n");
-  printf("  #CUs    :   Number of threadblocks/CUs to use for a GPU-executed Link\n");
-  printf("  srcMemL :   Source memory location (Where the data is to be read from). Ignored in memset mode\n");
-  printf("  Executor:   Executor are specified by a character indicating executor type, followed by device index (0-indexed)\n");
-  printf("              - C: CPU-executed  (Indexed from 0 to %d)\n", numCpuDevices-1);
-  printf("              - G: GPU-executed  (Indexed from 0 to %d)\n", numGpuDevices-1);
-  printf("  dstMemL :   Destination memory location (Where the data is to be written to)\n");
-  printf("\n");
-  printf("              Memory locations are specified by a character indicating memory type, followed by device index (0-indexed)\n");
-  printf("              Supported memory locations are:\n");
-  printf("              - C:    Pinned host memory       (on NUMA node, indexed from 0 to %d)\n", numCpuDevices-1);
-  printf("              - G:    Global device memory     (on GPU device indexed from 0 to %d)\n", numGpuDevices-1);
-  printf("              - F:    Fine-grain device memory (on GPU device indexed from 0 to %d)\n", numGpuDevices-1);
-  printf("\n");
-  printf("Examples:\n");
-  printf("1 4 (G0->G0->G1)             Single Link that uses 4 CUs on GPU 0 that reads memory from GPU 0 and copies it to memory on GPU 1\n");
-  printf("1 4 (G1->C0->G0)             Single Link that uses CPU 0 to read memory from GPU 1 and then copies it to memory on GPU 0\n");
-  printf("1 4 (C0->G2->G2)             Single Link that uses 4 CUs on GPU 2 that reads memory from CPU 0 and copies it to memory on GPU 2\n");
-  printf("2 4 G0->G0->G1 G1->G1->G0    Runs 2 Links in parallel.  GPU 0 - > GPU1, and GP1 -> GPU 0, each with 4 CUs\n");
-  printf("-2 (G0 G0 G1 4) (G1 G1 G0 2) Runs 2 Links in parallel.  GPU 0 - > GPU 1 using four CUs, and GPU1 -> GPU 0 using two CUs\n");
-  printf("\n");
-  printf("Round brackets and arrows' ->' may be included for human clarity, but will be ignored and are unnecessary\n");
-  printf("Lines starting with # will be ignored. Lines starting with ## will be echoed to output\n");
   printf("\n");
 
   EnvVars::DisplayUsage();
-}
-
-void GenerateConfigFile(char const* cfgFile, int numBlocks)
-{
-  // Detect number of available GPUs and skip if less than 2
-  int numGpuDevices;
-  HIP_CALL(hipGetDeviceCount(&numGpuDevices));
-  printf("Generating configFile %s for %d device(s) / %d CUs per link\n", cfgFile, numGpuDevices, numBlocks);
-  if (numGpuDevices < 2)
-  {
-    printf("Skipping. (Less than 2 GPUs detected)\n");
-    exit(0);
-  }
-
-  // Check first to see if file exists, and issue warning
-  FILE* exists = fopen(cfgFile, "r");
-  if (exists)
-  {
-    fclose(exists);
-    printf("[WARN] File %s alreadys exists.  Enter 'Y' to confirm overwrite\n", cfgFile);
-    char ch;
-    scanf(" %c", &ch);
-    if (ch != 'Y' && ch != 'y')
-    {
-      printf("Aborting\n");
-      exit(0);
-    }
-  }
-
-  // Open config file for writing
-  FILE* fp = fopen(cfgFile, "w");
-  if (!fp)
-  {
-    printf("Unable to open [%s] for writing\n", cfgFile);
-    exit(1);
-  }
-
-  // CU testing
-  fprintf(fp, "# CU scaling tests\n");
-  for (int i = 1; i < 16; i++)
-    fprintf(fp, "1 %d (G0->G0->G1)\n", i);
-  fprintf(fp, "\n");
-
-  // Pinned memory testing
-  fprintf(fp, "# Pinned CPU memory read tests\n");
-  for (int i = 0; i < numGpuDevices; i++)
-    fprintf(fp, "1 %d (C0->G%d->G%d)\n", numBlocks, i, i);
-  fprintf(fp, "\n");
-
-  fprintf(fp, "# Pinned CPU memory write tests\n");
-  for (int i = 0; i < numGpuDevices; i++)
-    fprintf(fp, "1 %d (G%d->G%d->C0)\n", numBlocks, i, i);
-  fprintf(fp, "\n");
-
-  // Single link testing GPU testing
-  fprintf(fp, "# Unidirectional link GPU tests\n");
-  for (int i = 0; i < numGpuDevices; i++)
-    for (int j = 0; j < numGpuDevices; j++)
-    {
-      if (i == j) continue;
-      fprintf(fp, "1 %d (G%d->G%d->G%d)\n", numBlocks, i, i, j);
-    }
-  fprintf(fp, "\n");
-
-  // Bi-directional link testing
-  fprintf(fp, "# Bi-directional link tests\n");
-  for (int i = 0; i < numGpuDevices; i++)
-    for (int j = 0; j < numGpuDevices; j++)
-    {
-      if (i == j) continue;
-      fprintf(fp, "2 %d (G%d->G%d->G%d) (G%d->G%d->G%d)\n", numBlocks, i, i, j, j, j, i);
-    }
-  fprintf(fp, "\n");
-
-  // Simple uni-directional ring
-  fprintf(fp, "# Simple unidirectional ring\n");
-  fprintf(fp, "%d %d", numGpuDevices, numBlocks);
-  for (int i = 0; i < numGpuDevices; i++)
-  {
-    fprintf(fp, " (G%d->G%d->G%d)", i, i, (i+1)%numGpuDevices);
-  }
-  fprintf(fp, "\n\n");
-
-  // Simple bi-directional ring
-  fprintf(fp, "# Simple bi-directional ring\n");
-  fprintf(fp, "%d %d", numGpuDevices * 2, numBlocks);
-  for (int i = 0; i < numGpuDevices; i++)
-    fprintf(fp, " (G%d->G%d->G%d)", i, i, (i+1)%numGpuDevices);
-  for (int i = 0; i < numGpuDevices; i++)
-    fprintf(fp, " (G%d->G%d->G%d)", i, i, (i+numGpuDevices-1)%numGpuDevices);
-  fprintf(fp, "\n\n");
-
-  // Broadcast from GPU 0
-  fprintf(fp, "# GPU 0 Broadcast\n");
-  fprintf(fp, "%d %d", numGpuDevices-1, numBlocks);
-  for (int i = 1; i < numGpuDevices; i++)
-    fprintf(fp, " (G%d->G%d->G%d)", 0, 0, i);
-  fprintf(fp, "\n\n");
-
-  // Gather to GPU 0
-  fprintf(fp, "# GPU 0 Gather\n");
-  fprintf(fp, "%d %d", numGpuDevices-1, numBlocks);
-  for (int i = 1; i < numGpuDevices; i++)
-    fprintf(fp, " (G%d->G%d->G%d)", i, 0, 0);
-  fprintf(fp, "\n\n");
-
-  // Full stress test
-  fprintf(fp, "# Full stress test\n");
-  fprintf(fp, "%d %d", numGpuDevices * (numGpuDevices-1), numBlocks);
-  for (int i = 0; i < numGpuDevices; i++)
-    for (int j = 0; j < numGpuDevices; j++)
-    {
-      if (i == j) continue;
-      fprintf(fp, " (G%d->G%d->G%d)", i, i, j);
-    }
-  fprintf(fp, "\n\n");
-
-  // All single-hop XGMI links
-  int numSingleHopXgmiLinks = 0;
-  for (int i = 0; i < numGpuDevices; i++)
-    for (int j = 0; j < numGpuDevices; j++)
-    {
-      if (i == j) continue;
-      uint32_t linkType, hopCount;
-      HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
-      if (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI && hopCount == 1) numSingleHopXgmiLinks++;
-    }
-  if (numSingleHopXgmiLinks > 0)
-  {
-    fprintf(fp, "# All single-hop links\n");
-    fprintf(fp, "%d %d", numSingleHopXgmiLinks, numBlocks);
-    for (int i = 0; i < numGpuDevices; i++)
-      for (int j = 0; j < numGpuDevices; j++)
-      {
-        if (i == j) continue;
-        uint32_t linkType, hopCount;
-        HIP_CALL(hipExtGetLinkTypeAndHopCount(i, j, &linkType, &hopCount));
-        if (linkType == HSA_AMD_LINK_INFO_TYPE_XGMI && hopCount == 1)
-        {
-          fprintf(fp, " (G%d G%d F%d)", i, i, j);
-        }
-      }
-    fprintf(fp, "\n\n");
-  }
-  fclose(fp);
 }
 
 int RemappedIndex(int const origIdx, MemType const memType)
@@ -703,44 +510,67 @@ int RemappedIndex(int const origIdx, MemType const memType)
   return remapping[origIdx];
 }
 
-void DisplayTopology()
+void DisplayTopology(bool const outputToCsv)
 {
   int numGpuDevices;
   HIP_CALL(hipGetDeviceCount(&numGpuDevices));
-  printf("\nDetected topology: %d CPU NUMA node(s)   %d GPU device(s)\n", numa_num_configured_nodes(), numGpuDevices);
-  printf("        |");
-  for (int j = 0; j < numGpuDevices; j++)
-    printf(" GPU %02d |", j);
-  printf(" PCIe Bus ID  | Closest NUMA\n");
-  for (int j = 0; j <= numGpuDevices; j++)
-    printf("--------+");
-  printf("--------------+-------------\n");
+
+  if (outputToCsv)
+  {
+    printf("NumCpus,%d\n", numa_num_configured_nodes());
+    printf("NumGpus,%d\n", numGpuDevices);
+    printf("GPU");
+    for (int j = 0; j < numGpuDevices; j++)
+      printf(",GPU %02d", j);
+    printf(",PCIe Bus ID,ClosestNUMA\n");
+  }
+  else
+  {
+    printf("\nDetected topology: %d CPU NUMA node(s)   %d GPU device(s)\n", numa_num_configured_nodes(), numGpuDevices);
+    printf("        |");
+    for (int j = 0; j < numGpuDevices; j++)
+      printf(" GPU %02d |", j);
+    printf(" PCIe Bus ID  | Closest NUMA\n");
+    for (int j = 0; j <= numGpuDevices; j++)
+      printf("--------+");
+    printf("--------------+-------------\n");
+  }
 
   char pciBusId[20];
+
   for (int i = 0; i < numGpuDevices; i++)
   {
-    printf(" GPU %02d |", i);
+    printf("%sGPU %02d%s", outputToCsv ? "" : " ", i, outputToCsv ? "," : " |");
     for (int j = 0; j < numGpuDevices; j++)
     {
       if (i == j)
-        printf("    -   |");
+      {
+        if (outputToCsv)
+          printf("-,");
+        else
+          printf("    -   |");
+      }
       else
       {
         uint32_t linkType, hopCount;
         HIP_CALL(hipExtGetLinkTypeAndHopCount(RemappedIndex(i, MEM_GPU),
                                               RemappedIndex(j, MEM_GPU),
                                               &linkType, &hopCount));
-        printf(" %s-%d |",
+        printf("%s%s-%d%s",
+               outputToCsv ? "" : " ",
                linkType == HSA_AMD_LINK_INFO_TYPE_HYPERTRANSPORT ? "  HT" :
                linkType == HSA_AMD_LINK_INFO_TYPE_QPI            ? " QPI" :
                linkType == HSA_AMD_LINK_INFO_TYPE_PCIE           ? "PCIE" :
                linkType == HSA_AMD_LINK_INFO_TYPE_INFINBAND      ? "INFB" :
                linkType == HSA_AMD_LINK_INFO_TYPE_XGMI           ? "XGMI" : "????",
-               hopCount);
+               hopCount, outputToCsv ? "," : " |");
       }
     }
     HIP_CALL(hipDeviceGetPCIBusId(pciBusId, 20, RemappedIndex(i, MEM_GPU)));
-    printf(" %11s |  %d  \n", pciBusId, GetClosestNumaNode(RemappedIndex(i, MEM_GPU)));
+    if (outputToCsv)
+      printf("%s,%d\n", pciBusId, GetClosestNumaNode(RemappedIndex(i, MEM_GPU)));
+    else
+      printf(" %11s |  %d  \n", pciBusId, GetClosestNumaNode(RemappedIndex(i, MEM_GPU)));
   }
 }
 
@@ -783,7 +613,8 @@ void ParseMemType(std::string const& token, int const numCpus, int const numGpus
   char typeChar;
   if (sscanf(token.c_str(), " %c %d", &typeChar, memIndex) != 2)
   {
-    printf("[ERROR] Unable to parse memory type token %s - expecting either 'C' or 'G' or 'F' followed by an index\n", token.c_str());
+    printf("[ERROR] Unable to parse memory type token %s - expecting either 'B,C,G or F' followed by an index\n",
+           token.c_str());
     exit(1);
   }
 
@@ -791,15 +622,15 @@ void ParseMemType(std::string const& token, int const numCpus, int const numGpus
   {
   case 'C': case 'c': case 'B': case 'b':
     *memType = (typeChar == 'C' || typeChar == 'c') ? MEM_CPU : MEM_CPU_FINE;
-      if (*memIndex < 0 || *memIndex >= numCpus)
-      {
-        printf("[ERROR] CPU index must be between 0 and %d (instead of %d)\n", numCpus-1, *memIndex);
+    if (*memIndex < 0 || *memIndex >= numCpus)
+    {
+      printf("[ERROR] CPU index must be between 0 and %d (instead of %d)\n", numCpus-1, *memIndex);
       exit(1);
     }
     break;
   case 'G': case 'g': case 'F': case 'f':
     *memType = (typeChar == 'G' || typeChar == 'g') ? MEM_GPU : MEM_GPU_FINE;
-      if (*memIndex < 0 || *memIndex >= numGpus)
+    if (*memIndex < 0 || *memIndex >= numGpus)
     {
       printf("[ERROR] GPU index must be between 0 and %d (instead of %d)\n", numGpus-1, *memIndex);
       exit(1);
@@ -1105,9 +936,9 @@ std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount)
 std::string GetDesc(MemType srcMemType, int srcIndex,
                     MemType dstMemType, int dstIndex)
 {
-  if (srcMemType == MEM_CPU)
+  if (srcMemType == MEM_CPU || srcMemType == MEM_CPU_FINE)
   {
-    if (dstMemType == MEM_CPU)
+    if (dstMemType == MEM_CPU || dstMemType == MEM_CPU_FINE)
       return (srcIndex == dstIndex) ? "LOCAL" : "NUMA";
     else if (dstMemType == MEM_GPU || dstMemType == MEM_GPU_FINE)
       return "PCIE";
@@ -1116,7 +947,7 @@ std::string GetDesc(MemType srcMemType, int srcIndex,
   }
   else if (srcMemType == MEM_GPU || srcMemType == MEM_GPU_FINE)
   {
-    if (dstMemType == MEM_CPU)
+    if (dstMemType == MEM_CPU || dstMemType == MEM_CPU_FINE)
       return "PCIE";
     else if (dstMemType == MEM_GPU || dstMemType == MEM_GPU_FINE)
     {
@@ -1276,26 +1107,36 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse, in
     for (int j = 0; j < numGpus; j++)
       if (i != j) EnablePeerAccess(i, j);
 
-  printf("Performing copies in each direction of %lu bytes\n", N * sizeof(float));
-  printf("Using %d threads per NUMA node for CPU copies\n", ev.numCpuPerLink);
-  printf("Using %d CUs per transfer\n", numBlocksToUse);
+  if (!ev.outputToCsv)
+  {
+    printf("Performing copies in each direction of %lu bytes\n", N * sizeof(float));
+    printf("Using %d threads per NUMA node for CPU copies\n", ev.numCpuPerLink);
+    printf("Using %d CUs per transfer\n", numBlocksToUse);
+  }
+  else
+  {
+    printf("SRC,DST,Direction,ReadMode,BW(GB/s),Bytes\n");
+  }
 
   // Perform unidirectional / bidirectional
   for (int isBidirectional = 0; isBidirectional <= 1; isBidirectional++)
   {
     // Print header
-    printf("%sdirectional copy peak bandwidth GB/s [%s read / %s write]\n", isBidirectional ? "Bi" : "Uni",
-           readMode == 0 ? "Local" : "Remote",
-           readMode == 0 ? "Remote" : "Local");
-    printf("%10s", "D/D");
-    if (!skipCpu)
+    if (!ev.outputToCsv)
     {
-      for (int i = 0; i < numCpus; i++)
-        printf("%7s %02d", "CPU", i);
+      printf("%sdirectional copy peak bandwidth GB/s [%s read / %s write]\n", isBidirectional ? "Bi" : "Uni",
+             readMode == 0 ? "Local" : "Remote",
+             readMode == 0 ? "Remote" : "Local");
+      printf("%10s", "D/D");
+      if (!skipCpu)
+      {
+        for (int i = 0; i < numCpus; i++)
+          printf("%7s %02d", "CPU", i);
+      }
+      for (int i = 0; i < numGpus; i++)
+        printf("%7s %02d", "GPU", i);
+      printf("\n");
     }
-    for (int i = 0; i < numGpus; i++)
-      printf("%7s %02d", "GPU", i);
-    printf("\n");
 
     // Loop over all possible src/dst pairs
     for (int src = 0; src < numDevices; src++)
@@ -1303,7 +1144,8 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse, in
       MemType const& srcMemType = (src < numCpus ? MEM_CPU : MEM_GPU);
       if (skipCpu && srcMemType == MEM_CPU) continue;
       int srcIndex = (srcMemType == MEM_CPU ? src : src - numCpus);
-      printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
+      if (!ev.outputToCsv)
+        printf("%7s %02d", (srcMemType == MEM_CPU) ? "CPU" : "GPU", srcIndex);
       for (int dst = 0; dst < numDevices; dst++)
       {
         MemType const& dstMemType = (dst < numCpus ? MEM_CPU : MEM_GPU);
@@ -1311,15 +1153,30 @@ void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse, in
         int dstIndex = (dstMemType == MEM_CPU ? dst : dst - numCpus);
         double bandwidth = GetPeakBandwidth(ev, N, isBidirectional, readMode, numBlocksToUse,
                                             srcMemType, srcIndex, dstMemType, dstIndex);
-        if (bandwidth == 0)
-          printf("%10s", "N/A");
+        if (!ev.outputToCsv)
+        {
+          if (bandwidth == 0)
+            printf("%10s", "N/A");
+          else
+            printf("%10.2f", bandwidth);
+        }
         else
-          printf("%10.2f", bandwidth);
+        {
+          printf("%s %02d,%s %02d,%s,%s,%.2f,%lu\n",
+                 srcMemType == MEM_CPU ? "CPU" : "GPU",
+                 srcIndex,
+                 dstMemType == MEM_CPU ? "CPU" : "GPU",
+                 dstIndex,
+                 isBidirectional ? "bidirectional" : "unidirectional",
+                 readMode == 0 ? "Local" : "Remote",
+                 bandwidth,
+                 N * sizeof(float));
+        }
         fflush(stdout);
       }
-      printf("\n");
+      if (!ev.outputToCsv) printf("\n");
     }
-    printf("\n");
+    if (!ev.outputToCsv) printf("\n");
   }
 }
 

@@ -37,6 +37,8 @@ THE SOFTWARE.
 
 #include "EnvVars.hpp"
 
+#define TB_VERSION "1.01"
+
 // Helper macro for catching HIP errors
 #define HIP_CALL(cmd)                                                   \
     do {                                                                \
@@ -127,11 +129,8 @@ typedef std::map<Executor, ExecutorInfo> LinkMap;
 // Display usage instructions
 void DisplayUsage(char const* cmdName);
 
-// Generate a sample config file customized for this machine
-void GenerateConfigFile(char const* cfgFile, int numBlocks);
-
 // Display detected GPU topology / CPU numa nodes
-void DisplayTopology();
+void DisplayTopology(bool const outputToCsv);
 
 // Build array of test sizes based on sampling factor
 void PopulateTestSizes(size_t const numBytesPerLink, int const samplingFactor,

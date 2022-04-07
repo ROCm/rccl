@@ -42,7 +42,6 @@ public:
   int useInteractive;  // Pause for user-input before starting transfer loop
   int useSleep;        // Adds a 100ms sleep after each synchronization
   int combineTiming;   // Combines the timing with kernel launch
-  int showAddr;        // Print out memory addresses for each Link
   int outputToCsv;     // Output in CSV format
   int byteOffset;      // Byte-offset for memory allocations
   int numWarmups;      // Number of un-timed warmup iterations to perform
@@ -68,7 +67,6 @@ public:
     useSingleSync   = GetEnvVar("USE_SINGLE_SYNC"  , 1);
     useInteractive  = GetEnvVar("USE_INTERACTIVE"  , 0);
     combineTiming   = GetEnvVar("COMBINE_TIMING"   , 0);
-    showAddr        = GetEnvVar("SHOW_ADDR"        , 0);
     outputToCsv     = GetEnvVar("OUTPUT_TO_CSV"    , 0);
     byteOffset      = GetEnvVar("BYTE_OFFSET"      , 0);
     numWarmups      = GetEnvVar("NUM_WARMUPS"      , DEFAULT_NUM_WARMUPS);
@@ -228,8 +226,6 @@ public:
              useInteractive ? "interactive" : "non-interactive");
       printf("%-20s = %12d : %s\n", "COMBINE_TIMING", combineTiming,
              combineTiming ? "Using combined timing+launch" : "Using separate timing / launch");
-      printf("%-20s = %12d : %s\n", "SHOW_ADDR", showAddr,
-             showAddr ? "Displaying src/dst mem addresses" : "Not displaying src/dst mem addresses");
       printf("%-20s = %12d : Output to %s\n", "OUTPUT_TO_CSV", outputToCsv,
              outputToCsv ? "CSV" : "console");
       printf("%-20s = %12d : Using byte offset of %d\n", "BYTE_OFFSET", byteOffset, byteOffset);
@@ -255,9 +251,8 @@ public:
     }
   };
 
-private:
   // Helper function that gets parses environment variable or sets to default value
-  int GetEnvVar(std::string const varname, int defaultValue)
+  static int GetEnvVar(std::string const varname, int defaultValue)
   {
     if (getenv(varname.c_str()))
       return atoi(getenv(varname.c_str()));
