@@ -72,8 +72,8 @@ struct BlockParam
   int       N;
   float*    src;
   float*    dst;
-  long long startTime;
-  long long stopTime;
+  long long startCycle;
+  long long stopCycle;
 };
 
 // Each Link is a uni-direction operation from a src memory to dst memory
@@ -167,3 +167,4 @@ std::string GetDesc(MemType srcMemType, int srcIndex,
                     MemType dstMemType, int dstIndex);
 std::string GetLinkDesc(Link const& link);
 int RemappedIndex(int const origIdx, MemType const memType);
+int GetWallClockRate(int deviceId);
