@@ -1327,6 +1327,7 @@ void Link::PrepareBlockParams(EnvVars const& ev, size_t const N)
   this->linkTime = 0.0;
 }
 
+// NOTE: This is a stop-gap solution until HIP provides wallclock values 
 int GetWallClockRate(int deviceId)
 {
   static std::vector<int> wallClockPerDeviceMhz;
@@ -1344,7 +1345,7 @@ int GetWallClockRate(int deviceId)
       int value = 25000;
       switch (prop.gcnArch)
       {
-      case 906: value = 25000; break;
+      case 906: case 910: value = 25000; break;
       default:
         printf("Unrecognized GCN arch %d\n", prop.gcnArch);
       }
