@@ -294,8 +294,8 @@ __device__ inline bool barrierReduceAny(int bit, uint32_t* abortCount) {
 // Copy src to dst and fill extra size with zeroes
 template<typename Tdst, typename Tsrc>
 __device__ void copyToShmem(Tdst *dst, Tsrc const *src, int tid, int nthreads) {
-  static_assert(sizeof(Tdst)%(sizeof(uint32_t)) == 0 && sizeof(Tsrc)%(sizeof(uint32_t)) == 0,
-      "copyToShmem needs sizes which are multiple of 4B");
+  static_assert(sizeof(Tdst)%(2*sizeof(uint64_t)) == 0 && sizeof(Tsrc)%(2*sizeof(uint64_t)) == 0,
+      "copyToShmem needs sizes which are multiple of 16B");
   static_assert(sizeof(Tdst) >= sizeof(Tsrc), "Tdst size is too small");
   static_assert(sizeof(Tdst) <= WARP_SIZE*2*sizeof(uint64_t), "copyToShmem limited to 512B to make sure it can always be done in one cycle");
   uint64_t *d = reinterpret_cast<uint64_t*>(dst);
