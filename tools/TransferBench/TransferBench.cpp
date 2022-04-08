@@ -439,7 +439,7 @@ int main(int argc, char **argv)
 
 void DisplayUsage(char const* cmdName)
 {
-  printf("TransferBench v. %s\n", TB_VERSION);
+  printf("TransferBench v%s\n", TB_VERSION);
   printf("========================================\n");
 
   if (numa_available() == -1)

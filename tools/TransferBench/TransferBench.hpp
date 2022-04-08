@@ -37,8 +37,6 @@ THE SOFTWARE.
 
 #include "EnvVars.hpp"
 
-#define TB_VERSION "1.01"
-
 // Helper macro for catching HIP errors
 #define HIP_CALL(cmd)                                                   \
     do {                                                                \

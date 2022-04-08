@@ -25,6 +25,8 @@ THE SOFTWARE.
 
 #include <algorithm>
 
+#define TB_VERSION "1.01"
+
 // This class manages environment variable that affect TransferBench
 class EnvVars
 {
@@ -206,7 +208,7 @@ public:
   {
     if (!outputToCsv)
     {
-      printf("Run configuration\n");
+      printf("Run configuration (TransferBench v%s)\n", TB_VERSION);
       printf("=====================================================\n");
       printf("%-20s = %12d : Using %s for GPU-executed copies\n", "USE_HIP_CALL", useHipCall,
              useHipCall ? "HIP functions" : "custom kernels");
