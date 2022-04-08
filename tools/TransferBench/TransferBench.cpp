@@ -31,9 +31,6 @@ THE SOFTWARE.
 #include "GetClosestNumaNode.hpp"
 #include "Kernels.hpp"
 
-// Simple configuration parameters
-size_t const DEFAULT_BYTES_PER_LINK = (1<<26);  // Amount of data transferred per Link
-
 int main(int argc, char **argv)
 {
   // Display usage instructions and detected topology
@@ -345,9 +342,12 @@ int main(int argc, char **argv)
           }
           else
           {
-
-
-
+            printf("%d,%lu,ALL,%c%02d,ALL,ALL,%.3f,%.3f,ALL,ALL,ALL,%d,%d,%d\n",
+                   testNum, N * sizeof(float),
+                   MemTypeStr[exeMemType], exeIndex,
+                   exeBandwidthGbs, exeDurationMsec,
+                   ev.byteOffset,
+                   ev.numWarmups, ev.numIterations);
           }
         }
       }
@@ -1327,7 +1327,7 @@ void Link::PrepareBlockParams(EnvVars const& ev, size_t const N)
   this->linkTime = 0.0;
 }
 
-// NOTE: This is a stop-gap solution until HIP provides wallclock values 
+// NOTE: This is a stop-gap solution until HIP provides wallclock values
 int GetWallClockRate(int deviceId)
 {
   static std::vector<int> wallClockPerDeviceMhz;

@@ -1,12 +1,9 @@
-# Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
-HIP_PATH?= $(wildcard /opt/rocm/hip)
-ifeq (,$(HIP_PATH))
-HIP_PATH=../../..
-endif
-HIPCC=$(HIP_PATH)/bin/hipcc
+# Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ROCM_PATH ?= /opt/rocm
+HIPCC=$(ROCM_PATH)/bin/hipcc
 
 EXE=TransferBench
-CXXFLAGS = -O3 -I. -lnuma -L$(HIP_PATH)/../hsa/lib -lhsa-runtime64
+CXXFLAGS = -O3 -I. -lnuma -L$(ROCM_PATH)/hsa/lib -lhsa-runtime64
 
 all: $(EXE)
 

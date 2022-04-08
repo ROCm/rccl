@@ -40,7 +40,6 @@ public:
   int useMemset;       // Perform a memset instead of a copy (ignores source memory)
   int useSingleSync;   // Perform synchronization only once after all iterations instead of per iteration
   int useInteractive;  // Pause for user-input before starting transfer loop
-  int useSleep;        // Adds a 100ms sleep after each synchronization
   int combineTiming;   // Combines the timing with kernel launch
   int outputToCsv;     // Output in CSV format
   int byteOffset;      // Byte-offset for memory allocations
@@ -189,7 +188,6 @@ public:
     printf(" USE_SINGLE_SYNC    - Perform synchronization only once after all iterations instead of per iteration\n");
     printf(" USE_INTERACTIVE    - Pause for user-input before starting transfer loop\n");
     printf(" COMBINE_TIMING     - Combines timing with launch (potentially lower timing overhead)\n");
-    printf(" SHOW_ADDR          - Print out memory addresses for each Link\n");
     printf(" OUTPUT_TO_CSV      - Outputs to CSV format if set\n");
     printf(" BYTE_OFFSET        - Initial byte-offset for memory allocations.  Must be multiple of 4. Defaults to 0\n");
     printf(" NUM_WARMUPS=W      - Perform W untimed warmup iteration(s) per test\n");

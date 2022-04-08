@@ -51,6 +51,9 @@ THE SOFTWARE.
         }                                                               \
     } while (0)
 
+// Simple configuration parameters
+size_t const DEFAULT_BYTES_PER_LINK = (1<<26);  // Amount of data transferred per Link
+
 // Different src/dst memory types supported
 typedef enum
 {
