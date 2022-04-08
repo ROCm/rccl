@@ -772,6 +772,7 @@ void AllocateMemory(MemType memType, int devIndex, size_t numBytes, void** memPt
     }
 
     // Allocate host-pinned memory (should respect NUMA mem policy)
+
     if (memType == MEM_CPU_FINE)
     {
       HIP_CALL(hipHostMalloc((void **)memPtr, numBytes, hipHostMallocNumaUser));

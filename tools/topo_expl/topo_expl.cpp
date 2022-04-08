@@ -137,6 +137,11 @@ NodeModelDesc model_descs[] = {
   {4, "topo_16p1h_vm.xml",      "4 nodes 16P1H VM"},
   {1, "topo_8p1h.xml",          "single node 8P1H"},
   {4, "topo_8p1h.xml",          "4 nodes 8P1H"},
+  {1, "topo_4p4h.xml",          "single node gfx908 4P4H"},
+  {1, "topo_8p1h_n1.xml",       "single node 8P1H"},
+  {4, "topo_8p1h_n1.xml",       "4 nodes 8P1H"},
+  {1, "topo_8p1h_1.xml",        "single node 8P1H Alt."},
+  {4, "topo_8p1h_1.xml",        "4 nodes 8P1H Alt."},
 };
 
 int main(int argc,char* argv[])

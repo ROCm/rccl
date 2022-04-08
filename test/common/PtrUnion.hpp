@@ -1,6 +1,6 @@
 #pragma once
 #include "ErrCode.hpp"
-#include "rccl.h"
+#include "rccl/rccl.h"
 #include "rccl_bfloat16.h"
 
 namespace RcclUnitTesting

@@ -48,6 +48,8 @@ option(BUILD_TESTS "Build test programs" OFF)
 option(INSTALL_DEPENDENCIES "Force install dependencies" OFF)
 option(BUILD_ADDRESS_SANITIZER "Build with address sanitizer enabled" OFF)
 option(BUILD_ALLREDUCE_ONLY "Build AllReduce + sum + float kernel only" OFF)
+#Set the header wrapper ON by default.
+option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "Build with file/folder reorg with backward compatibility enabled" ON)
 
 # parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
 # NCCL_SUFFIX is optional NCCL_VERSION formatting is ((X) * 1000 + (Y) * 100 +
@@ -110,10 +112,11 @@ if(BUILD_ADDRESS_SANITIZER)
   add_link_options(-fuse-ld=lld)
 endif()
 
-configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/rccl.h)
-configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/nccl.h)
+configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/rccl.h)
+configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/nccl.h)
 
-include_directories(${PROJECT_BINARY_DIR}) # for generated rccl.h header
+include_directories(${PROJECT_BINARY_DIR}/include) # for generated rccl.h header
+include_directories(${PROJECT_BINARY_DIR}/include/rccl) # for generated rccl.h header
 include_directories(src)
 include_directories(src/include)
 include_directories(src/collectives)
@@ -271,25 +274,30 @@ rocm_set_soversion(rccl "1.0")
 
 rocm_install_targets(TARGETS
                      rccl
-                     PREFIX
-                     rccl)
-rocm_install(FILES ${PROJECT_BINARY_DIR}/rccl.h
-        DESTINATION rccl/${CMAKE_INSTALL_INCLUDEDIR})
+		     )
+rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
 
 rocm_export_targets(NAMESPACE
                     roc::
-                    PREFIX
-                    rccl
                     TARGETS
                     rccl
                     DEPENDS
                     hip)
+if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
+  #Create wrapper files
+  rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}/include/rccl"
+            PATTERNS "*.h"
+            rccl.h
+            GUARDS SYMLINK WRAPPER
+	    WRAPPER_LOCATIONS rccl )
+  #install the wrapper header file to package
+  rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
+	        DESTINATION "./rccl/include/" )
+endif()
 
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "hip-rocclr (>= 3.5.0)")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-smi-lib (>= 4.0.0)")
+rocm_package_add_dependencies(DEPENDS "hip-rocclr >= 3.5.0" "rocm-smi-lib >= 4.0.0")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-set(CPACK_RPM_PACKAGE_REQUIRES "hip-rocclr >= 3.5.0")
-set(CPACK_RPM_PACKAGE_REQUIRES "rocm-smi-lib >= 4.0.0")
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "${ROCM_PATH}")
 
 find_file (DEBIAN debian_version debconf.conf PATHS /etc)
@@ -322,6 +330,12 @@ License: See LICENSE.txt for license information\n")
   Optimized primitives for collective multi-GPU communication")
 endif()
 
+if(BUILD_TESTS)
+  rocm_package_setup_component(clients)
+  rocm_package_setup_client_component(tests)
+  add_subdirectory(test)
+endif()
+
 rocm_create_package(
   NAME
   rccl
@@ -330,9 +344,3 @@ rocm_create_package(
   MAINTAINER
   "RCCL Maintainer <rccl-maintainer@amd.com>"
   LDCONFIG)
-
-rocm_install_symlink_subdir(rccl)
-
-if(BUILD_TESTS)
-  add_subdirectory(test)
-endif()

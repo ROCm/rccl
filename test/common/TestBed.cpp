@@ -5,16 +5,43 @@
  ************************************************************************/
 #include <unistd.h>
 #include "TestBed.hpp"
-#include <rccl.h>
+#include <rccl/rccl.h>
 
 #define PIPE_WRITE(childId, val)                                        \
   ASSERT_EQ(write(childList[childId]->parentWriteFd, &val, sizeof(val)), sizeof(val))
 
-#define PIPE_CHECK(childId)                                             \
-  {                                                                     \
-    int response = 0;                                                   \
-    ASSERT_EQ(read(childList[childId]->parentReadFd, &response, sizeof(int)), sizeof(int)); \
-    ASSERT_EQ(response, TEST_SUCCESS);                                  \
+
+#define PIPE_READ(childId, val)                                                         \
+  {                                                                                     \
+    if (ev.verbose) INFO("Calling PIPE_READ to Child %d\n", childId); \
+    ssize_t retval = read(childList[childId]->parentReadFd, &val, sizeof(val)); \
+    if (ev.verbose) INFO("Got PIPE_READ %ld\n", retval); \
+    if (retval == -1)                                                                   \
+    {                                                                                   \
+      ERROR("Unable to read from child %d: Error %s\n", childId, strerror(errno));      \
+      FAIL();                                                                           \
+    }                                                                                   \
+    else if (retval == 0)                                                               \
+    {                                                                                   \
+      ERROR("Child %d pipe closed unexpectedly\n", childId);                            \
+      exit(1);                                                                          \
+    }                                                                                   \
+    else if (retval < sizeof(int))                                                      \
+    {                                                                                   \
+      ERROR("Child %d pipe read incomplete (%ld / %lu)\n", childId, retval, sizeof(val)); \
+      exit(1);                                                                          \
+    }                                                                                   \
+  }
+
+#define PIPE_CHECK(childId)                         \
+  {                                                 \
+    int response = 0;                               \
+    PIPE_READ(childId, response);                   \
+    if (response != TEST_SUCCESS)                   \
+    {                                               \
+      ERROR("Child %d reports failure\n", childId); \
+      FAIL();                                       \
+    }                                               \
   }
 
 namespace RcclUnitTesting
@@ -24,19 +51,6 @@ namespace RcclUnitTesting
     numActiveChildren(0),
     numActiveRanks(0)
   {
-    // Set NCCL_COMM_ID to use a local port to avoid passing ncclCommId
-    // Calling ncclGetUniqueId would initialize HIP, which should not be done prior to fork
-    std::string localPort = "55513";
-    if (!getenv("NCCL_COMM_ID"))
-    {
-      char hostname[HOST_NAME_MAX+1];
-      gethostname(hostname, HOST_NAME_MAX+1);
-      std::string hostnameString(hostname);
-      hostnameString.append(":55513");
-      setenv("NCCL_COMM_ID", hostnameString.c_str(), 0);
-      if (ev.verbose) INFO("NCCL_COMM_ID set to %s\n", hostnameString.c_str());
-    }
-
     // Collect the number of GPUs
     this->numDevicesAvailable = ev.maxGpus;
     if (ev.verbose) INFO("Detected %d GPUs\n", this->numDevicesAvailable);
@@ -90,12 +104,25 @@ namespace RcclUnitTesting
       }
     }
 
+    // Tell first rank to get ncclUniqueId
+    int getIdCmd = TestBedChild::CHILD_GET_UNIQUE_ID;
+    PIPE_WRITE(0, getIdCmd);
+
+    // Receive back unique ID from first rank
+    ncclUniqueId id;
+    PIPE_READ(0, id);
+    PIPE_CHECK(0);
+
     // Send InitComms command to each active child process
     int const cmd = TestBedChild::CHILD_INIT_COMMS;
     int rankOffset = 0;
     for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
+      if (ev.verbose) INFO("Sending InitComm event to child %d\n", childId);
       PIPE_WRITE(childId, cmd);
+
+      // Send unique ID to child process
+      PIPE_WRITE(childId, id);
 
       // Send total number of ranks to child process
       PIPE_WRITE(childId, this->numActiveRanks);
@@ -128,31 +155,18 @@ namespace RcclUnitTesting
     InitComms(TestBed::GetDeviceIdsList(1, numGpus), numCollectivesInGroup);
   }
 
-  void TestBed::SetCollectiveArgs(ncclFunc_t     const funcType,
-                                  ncclDataType_t const dataType,
-                                  ncclRedOp_t    const redOp,
-                                  int            const root,
-                                  size_t         const numInputElements,
-                                  size_t         const numOutputElements,
-                                  int            const collId,
-                                  int            const rank,
-                                  PtrUnion       const scalarsPerRank,
-                                  int            const scalarMode)
+  void TestBed::SetCollectiveArgs(ncclFunc_t      const funcType,
+                                  ncclDataType_t  const dataType,
+                                  size_t          const numInputElements,
+                                  size_t          const numOutputElements,
+                                  OptionalColArgs const &optionalArgs,
+                                  int             const collId,
+                                  int             const rank)
   {
     // Build list of ranks this applies to (-1 for rank means to set for all)
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
-
-    ScalarTransport scalarTransport;
-    if (scalarMode >= 0)
-    {
-      ASSERT_TRUE(scalarsPerRank.ptr != NULL);
-
-      // Capture scalars per rank in format to share with child processes
-      int const numBytes = this->numActiveRanks * DataTypeToBytes(dataType);
-      memcpy(scalarTransport.ptr, scalarsPerRank.ptr, numBytes);
-    }
 
     // Loop over all ranks and send CollectiveArgs to appropriate child process
     int const cmd = TestBedChild::CHILD_SET_COLL_ARGS;
@@ -164,12 +178,9 @@ namespace RcclUnitTesting
       PIPE_WRITE(childId, collId);
       PIPE_WRITE(childId, funcType);
       PIPE_WRITE(childId, dataType);
-      PIPE_WRITE(childId, redOp);
-      PIPE_WRITE(childId, root);
       PIPE_WRITE(childId, numInputElements);
       PIPE_WRITE(childId, numOutputElements);
-      PIPE_WRITE(childId, scalarMode);
-      PIPE_WRITE(childId, scalarTransport);
+      PIPE_WRITE(childId, optionalArgs);
       PIPE_CHECK(childId);
     }
   }
@@ -220,21 +231,35 @@ namespace RcclUnitTesting
     }
   }
 
-  void TestBed::ExecuteCollectives()
+  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks)
   {
     int const cmd = TestBedChild::CHILD_EXECUTE_COLL;
     ++TestBed::NumTestsRun();
 
+    std::vector<std::vector<int>> ranksPerChild(this->numActiveChildren);
+    for (int rank = 0; rank < currentRanks.size(); ++rank)
+    {
+      ranksPerChild[rankToChildMap[currentRanks[rank]]].push_back(rank);
+    }
+
     // Send ExecuteColl command to each active child process
     for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
-      PIPE_WRITE(childId, cmd);
+      if ((currentRanks.size() == 0) || (ranksPerChild[childId].size() > 0))
+      {
+        PIPE_WRITE(childId, cmd);
+        int tempCurrentRanks = currentRanks.size();
+        PIPE_WRITE(childId, tempCurrentRanks);
+        for (int rank = 0; rank < currentRanks.size(); ++rank){
+          PIPE_WRITE(childId, currentRanks[rank]);
+        }
+      }
     }
 
     // Wait for child acknowledgement
     for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
-      PIPE_CHECK(childId);
+      if ((currentRanks.size() == 0) || (ranksPerChild[childId].size() > 0)) PIPE_CHECK(childId);
     }
   }
 
@@ -371,7 +396,7 @@ namespace RcclUnitTesting
     // Sort numElements in descending order to cut down on # of allocations
     std::vector<int> sortedN = numElements;
     std::sort(sortedN.rbegin(), sortedN.rend());
-
+    OptionalColArgs optionalArgs;
     // Filter out any unsupported datatypes, in case only subset has been compiled for
     std::vector<ncclDataType_t> const& supportedDataTypes = this->GetAllSupportedDataTypes();
     std::vector<ncclDataType_t> dataTypes;
@@ -438,13 +463,13 @@ namespace RcclUnitTesting
                                                     totalRanks,
                                                     &numInputElements,
                                                     &numOutputElements);
-
+          optionalArgs.redOp = redOps[rdIdx];
+          optionalArgs.root = roots[rtIdx];
           this->SetCollectiveArgs(funcTypes[ftIdx],
                                   dataTypes[dtIdx],
-                                  redOps[rdIdx],
-                                  roots[rtIdx],
                                   numInputElements,
-                                  numOutputElements);
+                                  numOutputElements,
+                                  optionalArgs);
 
           // Only allocate once for largest size
           if (neIdx == 0) this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx]);

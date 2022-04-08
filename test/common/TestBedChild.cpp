@@ -69,6 +69,7 @@ namespace RcclUnitTesting
       ErrCode status = TEST_SUCCESS;
       switch(command)
       {
+      case CHILD_GET_UNIQUE_ID   : status = GetUniqueId();        break;
       case CHILD_INIT_COMMS      : status = InitComms();          break;
       case CHILD_SET_COLL_ARGS   : status = SetCollectiveArgs();  break;
       case CHILD_ALLOCATE_MEM    : status = AllocateMem();        break;
@@ -84,8 +85,13 @@ namespace RcclUnitTesting
       // Send back acknowledgement to parent
       if (status == TEST_FAIL)
         ERROR("Child %d failed on command [%s]:\n", this->childId, ChildCommandNames[command]);
-      write(childWriteFd, &status, sizeof(status));
+      if (write(childWriteFd, &status, sizeof(status)) < 0)
+      {
+        ERROR("Child %d write to parent failed: %s\n", this->childId, strerror(errno));
+        break;
+      }
     }
+    if (verbose) INFO("Child %d exiting execution loop\n", this->childId);
 
     // Close child ends of pipe
     close(this->childReadFd);
@@ -94,11 +100,26 @@ namespace RcclUnitTesting
     exit(0);
   }
 
+  ErrCode TestBedChild::GetUniqueId()
+  {
+    if (this->verbose) INFO("Child %d begins GetUniqueId()\n", this->childId);
+
+    // Get a unique ID and pass it back to parent process
+    ncclUniqueId id;
+    CHILD_NCCL_CALL(ncclGetUniqueId(&id), "ncclGetUniqueId");
+    write(childWriteFd, &id, sizeof(id));
+
+    if (this->verbose) INFO("Child %d finishes GetUniqueId()\n", this->childId);
+    return TEST_SUCCESS;
+  }
+
   ErrCode TestBedChild::InitComms()
   {
     if (this->verbose) INFO("Child %d begins InitComms()\n", this->childId);
 
     // Read values sent by parent [see TestBed::InitComms()]
+    ncclUniqueId id;
+    PIPE_READ(id);
     PIPE_READ(this->totalRanks);
     PIPE_READ(this->rankOffset);
     PIPE_READ(this->numCollectivesInGroup);
@@ -115,10 +136,6 @@ namespace RcclUnitTesting
       this->collArgs[i].clear();
       this->collArgs[i].resize(numCollectivesInGroup);
     }
-
-    // Collect uniqueId (specified by NCCL_COMM_ID env var)
-    ncclUniqueId id;
-    CHILD_NCCL_CALL(ncclGetUniqueId(&id), "ncclGetUniqueId");
 
     // Initialize communicators
     comms.clear();
@@ -171,29 +188,17 @@ namespace RcclUnitTesting
     int             collId;
     ncclFunc_t      funcType;
     ncclDataType_t  dataType;
-    ncclRedOp_t     redOp;
-    int             root;
     size_t          numInputElements;
     size_t          numOutputElements;
-    ScalarTransport scalarTransport;
-    int             scalarMode;
+    OptionalColArgs options;
 
     PIPE_READ(globalRank);
     PIPE_READ(collId);
     PIPE_READ(funcType);
     PIPE_READ(dataType);
-    PIPE_READ(redOp);
-    PIPE_READ(root);
     PIPE_READ(numInputElements);
     PIPE_READ(numOutputElements);
-    PIPE_READ(scalarMode);
-    PIPE_READ(scalarTransport);
-
-    for (int i = 0; i < this->totalRanks; i++)
-    {
-      PtrUnion scalarsPerRank;
-      scalarsPerRank.Attach(scalarTransport.ptr);
-    }
+    PIPE_READ(options);
 
     if (globalRank < this->rankOffset || (this->rankOffset + comms.size() <= globalRank))
     {
@@ -210,24 +215,24 @@ namespace RcclUnitTesting
         CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
         CHECK_CALL(collArg.SetArgs(globalRank, this->totalRanks,
                                    this->deviceIds[localRank],
-                                   funcType, dataType, redOp, root,
+                                   funcType, dataType,
                                    numInputElements, numOutputElements,
-                                   scalarTransport, scalarMode));
+                                   options));
         if (this->verbose) INFO("Rank %d on child %d sets collective %d [%s]\n",
                                 globalRank, this->childId, collIdx,
                                 collArg.GetDescription().c_str());
 
         // If pre-mult scalars are provided, then create a custom reduction operator
-        if (scalarMode >= 0)
+        if (options.scalarMode >= 0)
         {
-          CHILD_NCCL_CALL(ncclRedOpCreatePreMulSum(&collArg.redOp,
+          CHILD_NCCL_CALL(ncclRedOpCreatePreMulSum(&collArg.options.redOp,
                                                    collArg.localScalar.ptr,
                                                    dataType,
-                                                   (ncclScalarResidence_t)scalarMode,
+                                                   (ncclScalarResidence_t)options.scalarMode,
                                                    this->comms[localRank]),
                           "ncclRedOpCreatePreMulSum");
           if (verbose) INFO("Child %d created custom redop %d for collective %d\n",
-                            this->childId, collArg.redOp, collIdx);
+                            this->childId, collArg.options.redOp, collIdx);
         }
       }
     }
@@ -262,7 +267,7 @@ namespace RcclUnitTesting
     {
       if (collId == -1 || collId == collIdx)
       {
-	CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
+        CollectiveArgs& collArg = this->collArgs[localRank][collIdx];
         CHECK_CALL(collArg.AllocateMem(inPlace, useManagedMem));
         if (this->verbose) INFO("Rank %d on child %d allocates memory for collective %d on device %d (%s,%s) Input: %p Output %p\n",
                                 globalRank, this->childId, collIdx, this->deviceIds[localRank],
@@ -315,6 +320,14 @@ namespace RcclUnitTesting
 
   ErrCode TestBedChild::ExecuteCollectives()
   {
+    int numRanksToExecute, tempRank;
+    std::vector<int> ranksToExecute = {};
+    PIPE_READ(numRanksToExecute);
+
+    for (int rank = 0; rank < numRanksToExecute; ++rank){
+      PIPE_READ(tempRank);
+      ranksToExecute.push_back(tempRank - this->rankOffset);
+    }
     if (this->verbose) INFO("Child %d begins ExecuteCollectives()\n", this->childId);
 
     // Start group call
@@ -326,6 +339,9 @@ namespace RcclUnitTesting
       // Loop over all local ranks
       for (int localRank = 0; localRank < this->deviceIds.size(); ++localRank)
       {
+        // If ranks to execute is empty, execute all ranks belonging to child
+        if (!ranksToExecute.empty() && (std::count(ranksToExecute.begin(), ranksToExecute.end(), localRank) == 0)) continue;
+
         CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
 
         CollectiveArgs const& collArg = this->collArgs[localRank][collId];
@@ -355,7 +371,7 @@ namespace RcclUnitTesting
                                         collArg.outputGpu.ptr,
                                         collArg.numInputElements,
                                         collArg.dataType,
-                                        collArg.root,
+                                        collArg.options.root,
                                         this->comms[localRank],
                                         this->streams[localRank]),
                           "ncclBroadcast");
@@ -365,8 +381,8 @@ namespace RcclUnitTesting
                                      collArg.outputGpu.ptr,
                                      collArg.numInputElements,
                                      collArg.dataType,
-                                     collArg.redOp,
-                                     collArg.root,
+                                     collArg.options.redOp,
+                                     collArg.options.root,
                                      this->comms[localRank],
                                      this->streams[localRank]),
                           "ncclReduce");
@@ -385,7 +401,7 @@ namespace RcclUnitTesting
                                             collArg.outputGpu.ptr,
                                             collArg.numOutputElements,
                                             collArg.dataType,
-                                            collArg.redOp,
+                                            collArg.options.redOp,
                                             this->comms[localRank],
                                             this->streams[localRank]),
                           "ncclReduceScatter");
@@ -395,7 +411,7 @@ namespace RcclUnitTesting
                                         collArg.outputGpu.ptr,
                                         collArg.numInputElements,
                                         collArg.dataType,
-                                        collArg.redOp,
+                                        collArg.options.redOp,
                                         this->comms[localRank],
                                         this->streams[localRank]),
                           "ncclAllReduce");
@@ -405,7 +421,7 @@ namespace RcclUnitTesting
                                      collArg.outputGpu.ptr,
                                      collArg.numInputElements,
                                      collArg.dataType,
-                                     collArg.root,
+                                     collArg.options.root,
                                      this->comms[localRank],
                                      this->streams[localRank]),
                           "ncclGather");
@@ -415,7 +431,7 @@ namespace RcclUnitTesting
                                       collArg.outputGpu.ptr,
                                       collArg.numOutputElements,
                                       collArg.dataType,
-                                      collArg.root,
+                                      collArg.options.root,
                                       this->comms[localRank],
                                       this->streams[localRank]),
                           "ncclScatter");
@@ -429,11 +445,23 @@ namespace RcclUnitTesting
                                        this->streams[localRank]),
                           "ncclAllToAll");
           break;
+        case ncclCollAllToAllv:
+          CHILD_NCCL_CALL(ncclAllToAllv(collArg.inputGpu.ptr,
+                                        collArg.options.sendcounts + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.options.sdispls + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.outputGpu.ptr,
+                                        collArg.options.recvcounts + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.options.rdispls + (this->rankOffset + localRank)*this->totalRanks,
+                                        collArg.dataType,
+                                        this->comms[localRank],
+                                        this->streams[localRank]),
+                          "ncclAllToAllv");
+          break;
         case ncclCollSend:
           CHILD_NCCL_CALL(ncclSend(collArg.inputGpu.ptr,
                                    collArg.numInputElements,
                                    collArg.dataType,
-                                   collArg.root,
+                                   collArg.options.root,
                                    this->comms[localRank],
                                    this->streams[localRank]),
                           "ncclSend");
@@ -442,7 +470,7 @@ namespace RcclUnitTesting
           CHILD_NCCL_CALL(ncclRecv(collArg.outputGpu.ptr,
                                    collArg.numOutputElements,
                                    collArg.dataType,
-                                   collArg.root,
+                                   collArg.options.root,
                                    this->comms[localRank],
                                    this->streams[localRank]),
                           "ncclRecv");
@@ -551,12 +579,12 @@ namespace RcclUnitTesting
 
         CHECK_CALL(collArg.DeallocateMem());
       }
-      if (collArg.scalarMode != -1)
+      if (collArg.options.scalarMode != -1)
       {
-        CHILD_NCCL_CALL(ncclRedOpDestroy(collArg.redOp, this->comms[localRank]),
+        CHILD_NCCL_CALL(ncclRedOpDestroy(collArg.options.redOp, this->comms[localRank]),
                         "ncclRedOpDestroy");
         if (verbose) INFO("Child %d destroys custom redop %d for collective %d\n",
-                          this->childId, collArg.redOp, collIdx);
+                          this->childId, collArg.options.redOp, collIdx);
       }
     }
     if (this->verbose) INFO("Child %d finishes DeallocateMem\n", this->childId);

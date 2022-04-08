@@ -9,7 +9,7 @@
 #include <vector>
 #include <unistd.h>
 #include "CollectiveArgs.hpp"
-#include "rccl.h"
+#include "rccl/rccl.h"
 
 #define MAX_RANKS 32
 namespace RcclUnitTesting
@@ -20,20 +20,22 @@ namespace RcclUnitTesting
     // These are commands that can be given to the child process
     enum
     {
-      CHILD_INIT_COMMS       = 0,  // InitComms()
-      CHILD_SET_COLL_ARGS    = 1,  // SetCollectiveArgs()
-      CHILD_ALLOCATE_MEM     = 2,  // AllocateMem()
-      CHILD_PREPARE_DATA     = 3,  // PrepareData()
-      CHILD_EXECUTE_COLL     = 4,  // ExecuteCollectives()
-      CHILD_VALIDATE_RESULTS = 5,  // ValidateResults()
-      CHILD_DEALLOCATE_MEM   = 6,  // DeallocateMem()
-      CHILD_DESTROY_COMMS    = 7,  // DestroyComms()
-      CHILD_STOP             = 8,  // Stop()
-      NUM_CHILD_COMMANDS     = 9
+      CHILD_GET_UNIQUE_ID    = 0,  // GetUniqueId()
+      CHILD_INIT_COMMS       = 1,  // InitComms()
+      CHILD_SET_COLL_ARGS    = 2,  // SetCollectiveArgs()
+      CHILD_ALLOCATE_MEM     = 3,  // AllocateMem()
+      CHILD_PREPARE_DATA     = 4,  // PrepareData()
+      CHILD_EXECUTE_COLL     = 5,  // ExecuteCollectives()
+      CHILD_VALIDATE_RESULTS = 6,  // ValidateResults()
+      CHILD_DEALLOCATE_MEM   = 7,  // DeallocateMem()
+      CHILD_DESTROY_COMMS    = 8,  // DestroyComms()
+      CHILD_STOP             = 9,  // Stop()
+      NUM_CHILD_COMMANDS     = 10
     };
 
     char const ChildCommandNames[NUM_CHILD_COMMANDS][20] =
     {
+      "GET_UNIQUE_ID",
       "INIT_COMMS",
       "SET_COLL_ARGS",
       "ALLOCATE_MEM",
@@ -76,6 +78,9 @@ namespace RcclUnitTesting
     void StartExecutionLoop();
 
   protected:
+    // Calls ncclGetUniqueId and returns it to parent
+    ErrCode GetUniqueId();
+
     // Initialize RCCL communicators
     ErrCode InitComms();
 

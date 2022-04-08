@@ -345,10 +345,10 @@ ncclResult_t pncclSend(const void* sendbuff, size_t count, ncclDataType_t dataty
  * need to progress concurrently to complete, they must be fused within a ncclGroupStart/
  * ncclGroupEnd section.
  */
+ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
+    ncclComm_t comm, hipStream_t stream);
 /// @cond include_hidden 
 ncclResult_t pncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
-    ncclComm_t comm, hipStream_t stream);
-ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
 /// @endcond
 
