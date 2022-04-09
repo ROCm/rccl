@@ -287,13 +287,14 @@ rocm_export_targets(NAMESPACE
 if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
   #Create wrapper files
   rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}/include/rccl"
-            PATTERNS "*.h"
-            rccl.h
+            PATTERNS "rccl.h"
             GUARDS SYMLINK WRAPPER
-	    WRAPPER_LOCATIONS rccl )
+            WRAPPER_LOCATIONS include rccl/include)  
   #install the wrapper header file to package
   rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
 	        DESTINATION "./rccl/include/" )
+  rocm_install( FILES "${PROJECT_BINARY_DIR}/include/rccl.h"
+                DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" )
 endif()
 
 rocm_package_add_dependencies(DEPENDS "hip-rocclr >= 3.5.0" "rocm-smi-lib >= 4.0.0")
