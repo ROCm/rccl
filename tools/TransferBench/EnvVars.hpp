@@ -25,6 +25,8 @@ THE SOFTWARE.
 
 #include <algorithm>
 
+#define TB_VERSION "1.01"
+
 // This class manages environment variable that affect TransferBench
 class EnvVars
 {
@@ -40,9 +42,7 @@ public:
   int useMemset;       // Perform a memset instead of a copy (ignores source memory)
   int useSingleSync;   // Perform synchronization only once after all iterations instead of per iteration
   int useInteractive;  // Pause for user-input before starting transfer loop
-  int useSleep;        // Adds a 100ms sleep after each synchronization
   int combineTiming;   // Combines the timing with kernel launch
-  int showAddr;        // Print out memory addresses for each Link
   int outputToCsv;     // Output in CSV format
   int byteOffset;      // Byte-offset for memory allocations
   int numWarmups;      // Number of un-timed warmup iterations to perform
@@ -52,6 +52,7 @@ public:
   int sharedMemBytes;  // Amount of shared memory to use per threadblock
   int blockBytes;      // Each CU, except the last, gets a multiple of this many bytes to copy
   int usePcieIndexing; // Base GPU indexing on PCIe address instead of HIP device
+  int useSingleStream; // Use a single stream per device instead of per Link. Can not be used with USE_HIP_CALL
 
   std::vector<float> fillPattern; // Pattern of floats used to fill source data
 
@@ -67,7 +68,6 @@ public:
     useSingleSync   = GetEnvVar("USE_SINGLE_SYNC"  , 1);
     useInteractive  = GetEnvVar("USE_INTERACTIVE"  , 0);
     combineTiming   = GetEnvVar("COMBINE_TIMING"   , 0);
-    showAddr        = GetEnvVar("SHOW_ADDR"        , 0);
     outputToCsv     = GetEnvVar("OUTPUT_TO_CSV"    , 0);
     byteOffset      = GetEnvVar("BYTE_OFFSET"      , 0);
     numWarmups      = GetEnvVar("NUM_WARMUPS"      , DEFAULT_NUM_WARMUPS);
@@ -77,6 +77,7 @@ public:
     sharedMemBytes  = GetEnvVar("SHARED_MEM_BYTES" , maxSharedMemBytes / 2 + 1);
     blockBytes      = GetEnvVar("BLOCK_BYTES"      , 256);
     usePcieIndexing = GetEnvVar("USE_PCIE_INDEX"   , 0);
+    useSingleStream = GetEnvVar("USE_SINGLE_STREAM", 0);
 
     // Check for fill pattern
     char* pattern = getenv("FILL_PATTERN");
@@ -172,6 +173,11 @@ public:
       printf("[ERROR] BLOCK_BYTES must be a positive multiple of 4\n");
       exit(1);
     }
+    if (useSingleStream && useHipCall)
+    {
+      printf("[ERROR] Single stream mode cannot be used with HIP calls\n");
+      exit(1);
+    }
   }
 
   // Display info on the env vars that can be used
@@ -184,7 +190,6 @@ public:
     printf(" USE_SINGLE_SYNC    - Perform synchronization only once after all iterations instead of per iteration\n");
     printf(" USE_INTERACTIVE    - Pause for user-input before starting transfer loop\n");
     printf(" COMBINE_TIMING     - Combines timing with launch (potentially lower timing overhead)\n");
-    printf(" SHOW_ADDR          - Print out memory addresses for each Link\n");
     printf(" OUTPUT_TO_CSV      - Outputs to CSV format if set\n");
     printf(" BYTE_OFFSET        - Initial byte-offset for memory allocations.  Must be multiple of 4. Defaults to 0\n");
     printf(" NUM_WARMUPS=W      - Perform W untimed warmup iteration(s) per test\n");
@@ -195,6 +200,7 @@ public:
     printf(" SHARED_MEM_BYTES=X - Use X shared mem bytes per threadblock, potentially to avoid multiple threadblocks per CU\n");
     printf(" BLOCK_BYTES=B      - Each CU (except the last) receives a multiple of BLOCK_BYTES to copy\n");
     printf(" USE_PCIE_INDEX     - Index GPUs by PCIe address-ordering instead of HIP-provided indexing\n");
+    printf(" USE_SINGLE_STREAM  - Use single stream per device instead of per link.  Cannot be used with USE_HIP_CALL\n");
   }
 
   // Display env var settings
@@ -202,7 +208,7 @@ public:
   {
     if (!outputToCsv)
     {
-      printf("Run configuration\n");
+      printf("Run configuration (TransferBench v%s)\n", TB_VERSION);
       printf("=====================================================\n");
       printf("%-20s = %12d : Using %s for GPU-executed copies\n", "USE_HIP_CALL", useHipCall,
              useHipCall ? "HIP functions" : "custom kernels");
@@ -220,8 +226,6 @@ public:
              useInteractive ? "interactive" : "non-interactive");
       printf("%-20s = %12d : %s\n", "COMBINE_TIMING", combineTiming,
              combineTiming ? "Using combined timing+launch" : "Using separate timing / launch");
-      printf("%-20s = %12d : %s\n", "SHOW_ADDR", showAddr,
-             showAddr ? "Displaying src/dst mem addresses" : "Not displaying src/dst mem addresses");
       printf("%-20s = %12d : Output to %s\n", "OUTPUT_TO_CSV", outputToCsv,
              outputToCsv ? "CSV" : "console");
       printf("%-20s = %12d : Using byte offset of %d\n", "BYTE_OFFSET", byteOffset, byteOffset);
@@ -242,13 +246,13 @@ public:
              getenv("SHARED_MEM_BYTES") ? "(specified)" : "(unset)", sharedMemBytes);
       printf("%-20s = %12d : Each CU gets a multiple of %d bytes to copy\n", "BLOCK_BYTES", blockBytes, blockBytes);
       printf("%-20s = %12d : Using %s-based GPU indexing\n", "USE_PCIE_INDEX", usePcieIndexing, (usePcieIndexing ? "PCIe" : "HIP"));
+      printf("%-20s = %12d : Using single stream per %s\n", "USE_SINGLE_STREAM", useSingleStream, (useSingleStream ? "device" : "Link"));
       printf("\n");
     }
   };
 
-private:
   // Helper function that gets parses environment variable or sets to default value
-  int GetEnvVar(std::string const varname, int defaultValue)
+  static int GetEnvVar(std::string const varname, int defaultValue)
   {
     if (getenv(varname.c_str()))
       return atoi(getenv(varname.c_str()));

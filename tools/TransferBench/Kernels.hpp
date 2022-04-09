@@ -36,6 +36,7 @@ GpuCopyKernel(BlockParam* blockParams)
   int          Nrem = blockParams[blockIdx.x].N;
   float const* src  = blockParams[blockIdx.x].src;
   float*       dst  = blockParams[blockIdx.x].dst;
+  if (threadIdx.x == 0) blockParams[blockIdx.x].startCycle = __builtin_amdgcn_s_memrealtime();
 
   // Operate on wavefront granularity
   int numWaves = BLOCKSIZE   / WARP_SIZE; // Number of wavefronts per threadblock
@@ -68,30 +69,34 @@ GpuCopyKernel(BlockParam* blockParams)
     loop1Offset += loop1Inc;
   }
   Nrem -= loop1Nelem;
-  if (Nrem == 0) return;
-
-  // 2nd loop - Each thread operates on FLOATS_PER_PACK per iteration
-  int const loop2Npack  = Nrem / FLOATS_PER_PACK;
-  int const loop2Nelem  = loop2Npack * FLOATS_PER_PACK;
-  int const loop2Inc    = BLOCKSIZE;
-  int       loop2Offset = threadIdx.x;
-
-  packedSrc = (PackedFloat_t const*)(src + loop1Nelem);
-  packedDst = (PackedFloat_t      *)(dst + loop1Nelem);
-  while (loop2Offset < loop2Npack)
+  if (Nrem > 0)
   {
-    packedDst[loop2Offset] = packedSrc[loop2Offset];
-    loop2Offset += loop2Inc;
-  }
-  Nrem -= loop2Nelem;
-  if (Nrem == 0) return;
+    // 2nd loop - Each thread operates on FLOATS_PER_PACK per iteration
+    int const loop2Npack  = Nrem / FLOATS_PER_PACK;
+    int const loop2Nelem  = loop2Npack * FLOATS_PER_PACK;
+    int const loop2Inc    = BLOCKSIZE;
+    int       loop2Offset = threadIdx.x;
 
-  // Deal with leftovers less than FLOATS_PER_PACK)
-  if (threadIdx.x < Nrem)
-  {
-    int offset = loop1Nelem + loop2Nelem + threadIdx.x;
-    dst[offset] = src[offset];
+    packedSrc = (PackedFloat_t const*)(src + loop1Nelem);
+    packedDst = (PackedFloat_t      *)(dst + loop1Nelem);
+    while (loop2Offset < loop2Npack)
+    {
+      packedDst[loop2Offset] = packedSrc[loop2Offset];
+      loop2Offset += loop2Inc;
+    }
+    Nrem -= loop2Nelem;
+
+    // Deal with leftovers less than FLOATS_PER_PACK)
+    if (threadIdx.x < Nrem)
+    {
+      int offset = loop1Nelem + loop2Nelem + threadIdx.x;
+      dst[offset] = src[offset];
+    }
   }
+
+  __threadfence_system();
+  if (threadIdx.x == 0)
+    blockParams[blockIdx.x].stopCycle = __builtin_amdgcn_s_memrealtime();
 }
 
 #define MEMSET_UNROLL 8
