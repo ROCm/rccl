@@ -222,7 +222,7 @@ if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
 endif()
 
-CHECK_INCLUDE_FILE_CXX("${ROCM_PATH}/rocm_smi/include/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
+CHECK_INCLUDE_FILE_CXX("${ROCM_PATH}/include/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
 IF(HAVE_ROCM_SMI64CONFIG)
   add_definitions(-DUSE_ROCM_SMI64CONFIG)
 ENDIF()
@@ -265,8 +265,8 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-target_include_directories(rccl PRIVATE ${ROCM_PATH}/rocm_smi/include)
-target_link_libraries(rccl PRIVATE hip::device dl -lrocm_smi64 -L${ROCM_PATH}/rocm_smi/lib)
+target_include_directories(rccl PRIVATE ${ROCM_PATH}/include)
+target_link_libraries(rccl PRIVATE hip::device dl -lrocm_smi64 -L${ROCM_PATH}/lib)
 target_link_libraries(rccl INTERFACE hip::host)
 
 #Setup librccl.so version
