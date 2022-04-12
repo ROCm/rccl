@@ -500,6 +500,19 @@ static struct rcclRomeModel rome_model_72 = {
   .options = "disableNumaMatching=1,tuning=2",
 };
 
+static struct rcclRomeModel rome_model_73 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
+  .nicIds = { },
+  .gpuNuma = { 3, 3, 1, 1, 0, 0, 2, 2, },
+  .nicNuma = { },
+  .connMatrix = { 0, 4, 1, 0, 0, 0, 2, 0, 4, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 4, 2, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 4, 1, 0, 0, 1, 0, 0, 4, 0, 0, 1, 2, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 1, 0, 1, 4, 0, },
+  .gdrLevel = { },
+  .pattern = "20202020",
+  .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
+  .options = "",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -536,6 +549,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_68,
   rome_model_71,
   rome_model_72,
+  rome_model_73,
 };
 
 /* Parse user defined rings. Format is like :
