@@ -690,10 +690,11 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
     strcpy(str_temp, options);
     char* tokens[MAX_OPT_TOKENS];
     int numTokens = 0;
-    tokens[numTokens] = strtok(str_temp, "=, ");
+    char* state;
+    tokens[numTokens] = strtok_r(str_temp, "=, ", &state);
     numTokens++;
     while (tokens[numTokens-1] != NULL && numTokens < MAX_OPT_TOKENS)
-        tokens[numTokens++] = strtok(NULL, "=, ");
+        tokens[numTokens++] = strtok_r(NULL, "=, ", &state);
     for (int i = 0; i < numTokens/2; i++) {
       if (strcmp(tokens[i*2], "netGdrLevel") == 0) {
         int j;
@@ -725,10 +726,11 @@ static bool disableNumaMatching(const char *options) {
     strcpy(str_temp, options);
     char* tokens[MAX_OPT_TOKENS];
     int numTokens = 0;
-    tokens[numTokens] = strtok(str_temp, "=, ");
+    char* state;
+    tokens[numTokens] = strtok_r(str_temp, "=, ", &state);
     numTokens++;
     while (tokens[numTokens-1] != NULL && numTokens < MAX_OPT_TOKENS)
-        tokens[numTokens++] = strtok(NULL, "=, ");
+        tokens[numTokens++] = strtok_r(NULL, "=, ", &state);
     for (int i = 0; i < numTokens/2; i++) {
       if (strcmp(tokens[i*2], "disableNumaMatching") == 0) {
         return (bool)atol(tokens[i*2+1]);
