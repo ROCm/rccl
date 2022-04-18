@@ -451,8 +451,8 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   if (info->coll == ncclFuncAllToAllPivot) {
     int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
     info->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
-  } else if (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->nChannels == 32 && comm->nRanks/comm->nNodes == 16 && info->nBytes >= 268435456
-    && ((comm->nNodes > 2 && info->nBytes <= 2147483648) || (comm->nNodes == 2 && info->nBytes <= 1073741824))) {
+  } else if (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->topo->tuning == 4 &&
+    ((comm->nNodes == 2 && info->nBytes == 33554432) || (comm->nNodes <= 4 && info->nBytes == 67108864))) {
     static int userTuneInput = -2;
     if (userTuneInput == -2) {
       const char *protoStr = getenv("NCCL_PROTO");

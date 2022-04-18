@@ -188,11 +188,42 @@ static struct tuningModel tuning_model_3 {
   },
 };
 
+static struct tuningModel tuning_model_4 {
+  .hwLat = {
+    /* NVLINK */
+    { /* Tree (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* Ring (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* CollNet (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 } },
+    /* PCI */
+    { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNet (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 } },
+    /* NET */
+    { /* Tree (LL/LL128/Simple)*/ { 32.4, 32.4, 24.6 }, /* Ring (LL/LL128/Simple)*/ { 5.5, 5.5, 13.3 }, /* CollNet (LL/LL128/Simple)*/ { 32.4, 32.4, 24.6 } },
+  },
+
+  .bwRatio = {
+    /* 2 nodes */
+    { /* Tree (LL/LL128/Simple)*/ { 0.07, 1.00, 0.62 }, /* Ring (LL/LL128/Simple)*/ { 0.10, 1.00, 1.00 }, /* CollNet (LL/LL128/Simple)*/ { 1.00, 1.00, 1.00 } },
+    /* more than 2 nodes */
+    { /* Tree (LL/LL128/Simple)*/ { 0.07, 1.00, 0.31 }, /* Ring (LL/LL128/Simple)*/ { 0.10, 1.00, 1.00 }, /* CollNet (LL/LL128/Simple)*/ { 1.00, 1.00, 1.00 } },
+  },
+
+  .treeCorrectionFactor = {
+    { 0.1, 0.1, 0.1, 0.1, 0.8, 1.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.8, 1.0, 1.0, 1.0, 0.8, 0.6, 0.4, 0.3, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
+    { 0.1, 0.1, 0.1, 0.1, 0.8, 1.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.8, 1.0, 1.0, 1.0, 0.8, 0.6, 0.4, 0.3, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
+    { 0.2, 1.0, 0.9, 0.1, 0.6, 0.2, 0.6, 0.6, 0.4, 0.8, 1.0, 1.0, 1.0, 0.6, 0.5, 0.7, 1.0, 1.0, 1.0, 1.0, 0.6, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, },
+  },
+
+  .ringCorrectionFactor = {
+    { 1.0, 0.1, 0.2, 1.0, 1.0, 0.2, 1.0, 1.0, 1.0, 1.0, 0.7, 0.5, 0.6, 0.8, 0.8, 0.8, 0.6, 0.5, 0.6, 0.5, 0.3, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, },
+    { 1.0, 0.1, 0.2, 1.0, 1.0, 0.2, 1.0, 1.0, 1.0, 1.0, 0.7, 0.5, 0.6, 0.8, 0.8, 0.8, 0.6, 0.5, 0.6, 0.5, 0.3, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, },
+    { 0.1, 0.1, 1.0, 0.1, 0.1, 0.1, 0.5, 0.5, 0.4, 0.5, 0.3, 0.2, 0.3, 0.1, 0.1, 0.2, 0.4, 0.4, 0.6, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
+  },
+};
+
 static struct tuningModel rcclTuningModel[] = {
   tuning_model_0,
   tuning_model_1,
   tuning_model_2,
   tuning_model_3,
+  tuning_model_4,
 };
 
 // LL128 max BW per channel
@@ -422,9 +453,9 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
 #else
   if (algorithm == NCCL_ALGO_TREE && logSize < 23) bw *= treeCorrectionFactor[protocol][logSize];
   if (info->nChannels != 0) bw = bw / info->comm->nChannels * info->nChannels;
+#endif
   if (algorithm == NCCL_ALGO_RING && protocol == NCCL_PROTO_SIMPLE && info->comm->nNodes > 1
       && info->coll == ncclFuncAllReduce && info->nBytes >= info->comm->nRanks/16.0*65536) lat *= 1.9; // Plateau effect of ring
-#endif    
   // Tree pipelining saves latency in aggregation cases
   int latCount = algorithm == NCCL_ALGO_RING ? numPipeOps : DIVUP(numPipeOps, NCCL_MAX_WORK_ELEMENTS);
   *time = lat * latCount + (info->nBytes) / (1000 * bw);
