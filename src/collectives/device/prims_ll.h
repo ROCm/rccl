@@ -1,13 +1,13 @@
 /*************************************************************************
- * Copyright (c) 2016-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
-template<typename T, typename RedOp, typename Fan, int Direct>
-class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
-  public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL>> {
+template<typename T, typename RedOp, typename Fan, int Direct, int P2p>
+class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
+  public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>> {
 
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
   static constexpr int Input=0, Output=1;
@@ -45,7 +45,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     __syncthreads();
 #else
-    asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(1+group));
+    asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15-group));
 #endif
   }
 
@@ -123,7 +123,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
 
   template<int BeginIx>
   __device__ void readLLBeginAll(int offset, ncclLLFifoLine(&line)[MaxRecv]) {
-    #pragma unroll 1
+    #pragma unroll
     for (int i=BeginIx; i < MaxRecv; i++) {
       if (i < fan.nrecv()) {
         union ncclLLFifoLine* src = recvPtr(i) + offset;
@@ -290,14 +290,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
-#ifdef ENABLE_PROFILING
-    uint64_t t0;
-    if (tid == 0) t0 = __builtin_amdgcn_s_memrealtime();
-#endif
     if (SEND) waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
-#ifdef ENABLE_PROFILING
-    if (SEND && tid == 0) ncclShmem->comm.devProf->elems[blockIdx.x].wait_cycle = (__builtin_amdgcn_s_memrealtime() - t0);
-#endif
 
     nelem -= tid*EltPerLine;
     srcElts += tid*EltPerLine;
@@ -324,7 +317,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL>:
       }
       if (RECV) {
         data = !SRC ? peerData : MULTI<RedOp,T>()(redOp, peerData, data);
-        #pragma unroll 1
+        #pragma unroll MaxRecv
         for (int i=1; i < MaxRecv && i < fan.nrecv(); i++) {
           peerData = readLLFinish(offset, line, i);
           data = MULTI<RedOp,T>()(redOp, peerData, data);

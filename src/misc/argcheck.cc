@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,7 +12,7 @@ static ncclResult_t CudaPtrCheck(const void* pointer, struct ncclComm* comm, con
   hipPointerAttribute_t attr;
   hipError_t err = hipPointerGetAttributes(&attr, pointer);
   if (err != hipSuccess || attr.devicePointer == NULL) {
-    WARN("%s : %s is not a valid pointer", opname, ptrname);
+    WARN("%s : %s %p is not a valid pointer", opname, ptrname, pointer);
     return ncclInvalidArgument;
   }
 #if CUDART_VERSION >= 10000
@@ -64,12 +64,9 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
   }
 
   if (info->comm->checkPointers) {
-    if (info->coll == ncclFuncSendRecv) {
-      if (strcmp(info->opName, "Send") == 0) {
-        NCCLCHECK(CudaPtrCheck(info->sendbuff, info->comm, "sendbuff", "Send"));
-      } else {
-        NCCLCHECK(CudaPtrCheck(info->recvbuff, info->comm, "recvbuff", "Recv"));
-      }
+    if ((info->coll == ncclFuncSend || info->coll == ncclFuncRecv)) {
+      if (info->count >0)
+        NCCLCHECK(CudaPtrCheck(info->recvbuff, info->comm, "buff", info->opName));
     } else {
       // Check CUDA device pointers
       if (info->coll != ncclFuncBroadcast || info->comm->rank == info->root) {

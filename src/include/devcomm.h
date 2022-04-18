@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -13,7 +13,7 @@
 #include "align.h"
 #include <stdint.h>
 // [RCCL] Support for clique-based kernels
-#include "clique/CliqueCommon.h"
+//#include "clique/CliqueCommon.h"
 // [/RCCL]
 
 // Convert volatile access to atomic
@@ -27,7 +27,7 @@
 
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv and AllToAllPivot not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncAllToAllPivot, ncclNumFuncs} ncclFunc_t;
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncSend, ncclFuncRecv, ncclFuncAllToAllPivot, ncclNumFuncs} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2];
 
 #define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
@@ -114,7 +114,7 @@ struct ncclConnInfo {
   uint64_t* redOpArgExchange; // PreOp scaler exchange for direct pull case
 
   int *sizesFifo;     // Sizes fifo from GPU to proxy
-  void* *ptrsFifo;      // Buffer fifo from proxy to GPU
+  int *offsFifo;      // Buffer fifo from proxy to GPU
 
   uint64_t step;      // Keep where we are
   uint64_t llLastCleaning;
@@ -126,10 +126,16 @@ struct ncclConnInfo {
   uint32_t* curr_hdp_reg;  // Current GPU's HDP register
 };
 
+struct ncclProxyConnector {
+  int rank;
+  int localRank;
+  struct ncclProxyConnection* connection;
+  struct ncclComm* comm;
+};
+
 struct ncclConnector {
   int connected;
-  struct ncclProxyArgs *proxyAppend;
-  struct ncclProxyArgs **proxyAppendPtr;
+  struct ncclProxyConnector proxyConn;
   struct ncclTransportComm* transportComm;
   void* transportResources;
   struct ncclConnInfo conn;
@@ -180,89 +186,97 @@ struct ncclDevComm;
 
 #pragma pack(push)  /* push current alignment to stack */
 #pragma pack(8)     /* set alignment to 8 bytes boundary */
-#define NCCL_MAX_WORK_ELEMENTS 1
-#define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
-
 /* ncclWork is to be a power of two, currently 8x64 bytes, */
 /* to make sure reads to host from the CUDA kernel are aligned. */
 /* Make sure to adjust padding at the end of ncclWorkElem. */
-struct ncclWorkElem {
-  // Header
-  struct ncclDevComm* comm;
-  uint16_t nThreads;
+#define NCCL_WORK_SIZE 256
+
+enum ncclWorkElemType : uint8_t {
+   ncclWorkTypeUnused=0,
+   ncclWorkTypeColl=1,
+   ncclWorkTypeP2p=2,
+   ncclWorkTypeRegColl=3
+};
+enum ncclWorkElemSubType : uint8_t {
+  ncclWorkSubTypeUnused =0,
+  ncclWorkSubTypeSend,
+  ncclWorkSubTypeRecv
+};
+
+struct ncclWorkElemHeader {
   uint16_t funcIndex;
+  enum ncclWorkElemType type;
+  uint8_t nWarps:5;
+  uint8_t isLast:1;
+};
+
+struct ncclWorkElem {
+  struct ncclWorkElemHeader header;
   uint8_t regUsed;
   uint8_t direct;
-  uint8_t active, redOpArgIsPtr;
+  uint8_t redOpArgIsPtr;
+  uint8_t pad_0;
 
   const void * sendbuff;
   void * recvbuff;
 
-  // Op-specific fields.
+  size_t count;
   union {
-    struct {
-      size_t count;
-      union {
-        size_t lastChunkSize;
-        // Pivot A2A kernel computes chunk size itself.
-        // Instead, it needs the number of bidirectional rings.
-        size_t pivotA2ANumBiRings;
-      };
-      uint64_t redOpArg;
-      uint16_t root;
-      uint8_t bid;
-      uint8_t nChannels;
-      uint16_t connIndex;
-      uint16_t opCount;
-    } coll;
-    struct {
-      size_t sendCount;
-      size_t recvCount;
-      int sendChunkSize;
-      int recvChunkSize;
-      int32_t delta;
-      union {
-        struct {
-          uint16_t nThreads:12;
-          uint16_t sendIdx:2;
-          uint16_t recvIdx:2;
-        };
-        uint16_t padding;
-      };
-      uint16_t opCount;
-    } p2p;
-    // [RCCL] Clique-based arguments
-    //        NOTE: Follows same field structure as coll
-    //              because nChannels is accessed from "coll" struct.
-    struct {
-      size_t count;
-      cliqueDevicePtrs_t* ptrs;
-      uint64_t unused_1;
-      uint16_t unused_2;
-      uint8_t bid;
-      uint8_t nChannels;
-    } clique;
-    // [/RCCL]
-    uint64_t align[4];
+    size_t lastChunkSize;
+    // Pivot A2A kernel computes chunk size itself.
+    // Instead, it needs the number of bidirectional rings.
+    size_t pivotA2ANumBiRings;
   };
+  uint32_t root;
+  uint8_t bid;
+  uint8_t nChannels;
+  uint16_t connIndex;
+  uint64_t redOpArg;
+  uint64_t opCount;
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x10*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElem) == 0, "ncclWorkElem size must be a multiple of ncclWork size");
 
-struct ncclWorkRegElem {
+struct ncclWorkElemP2p {
+  struct ncclWorkElemHeader header;
+  int32_t peer;
+  void* buff;
+  size_t count;
+  int chunkSize;
+  uint8_t ngroups:4;
+  uint8_t warpStart:4;
+  uint8_t nWarps:4;
+  enum ncclWorkElemSubType subType:4;
+  uint16_t opCount:12;
+  uint16_t connIndex:4;
+};
+static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElemP2p) == 0, "ncclWorkElemP2p size must be a multiple of ncclWork size");
+
+struct ncclWorkElemReg {
   struct ncclWorkElem elem;
   void* dnInputs[NCCL_MAX_DIRECT_ARITY+1];
   void* dnOutputs[NCCL_MAX_DIRECT_ARITY+1];
   void* upOutputs[NCCL_MAX_DIRECT_ARITY+1];
 };
-#define NCCL_REG_ELEM_FACTOR 4
-static_assert(sizeof(struct ncclWorkRegElem) == (NCCL_REG_ELEM_FACTOR*sizeof(struct ncclWorkElem)), "ncclWorkRegElem size must be pow2 times ncclWorkElem size");
+static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElemReg) == 0, "ncclWork size must be a multiple of ncclWorkElemReg size");
+static_assert(sizeof(struct ncclWorkElemReg) % sizeof(struct ncclWorkElem) == 0, "ncclWorkElemReg size must be a multiple of ncclWorkElem size");
+
+#define NCCL_MAX_WORK_ELEMENTS 1
+#define NCCL_MAX_WORK_ELEMENTS_P2P 2
+#define NCCL_MAX_WORK_ELEMENTS_REG (NCCL_WORK_SIZE/sizeof(struct ncclWorkElemReg))
+// Number of named barriers supported by CUDA
+#define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 
 struct ncclWork {
   union {
+    char pad[NCCL_WORK_SIZE];
+    struct ncclWorkElemHeader header;
     struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
-    struct ncclWorkRegElem regElems[NCCL_MAX_WORK_ELEMENTS/NCCL_REG_ELEM_FACTOR];
+    struct ncclWorkElemP2p p2pElems[NCCL_MAX_WORK_ELEMENTS_P2P];
+    struct ncclWorkElemReg regElems[NCCL_MAX_WORK_ELEMENTS_REG];
   };
 };
+
+static_assert(sizeof(struct ncclWork) == NCCL_WORK_SIZE, "ncclWork size needs to be well aligned");
 
 struct ncclChannel {
   union {
@@ -309,10 +323,9 @@ static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must 
 struct ncclProfElem {
   union {
     struct {
+      uint64_t opCount;
       uint64_t total_cycle;
       uint64_t wait_cycle;      // total wait cycle
-      uint64_t wait_send_cycle;
-      uint64_t wait_recv_cycle;
       // primtive cycles
       uint64_t send_cycle;
       uint64_t directSend_cycle;
@@ -341,22 +354,26 @@ struct ncclProfElem {
       uint64_t directRecvReduceCopySend_byte;
     };
     int data[0x80];
-  };
+  } elem[MAXCHANNELS];
 };
 
 struct ncclProf {
-  struct ncclProfElem elems[MAXCHANNELS];
+  struct ncclProfElem* elems;
 };
+
+#define PROFILE_NUM_ITEMS 1024
 #endif
 
 #ifdef ENABLE_COLLTRACE
 typedef enum {
-  ncclCollTraceNotReady,
-  ncclCollTraceKernelLaunchType,
-  ncclCollTraceKernelEndType,
-  ncclCollTraceCollEndType,
-  ncclCollTraceAbortType,
-  ncclCollTraceDataType
+  ncclCollTraceNotReady = 0,
+  ncclCollTraceKernelLaunchType = 1,
+  ncclCollTraceKernelEndType = 2,
+  ncclCollTraceCollLaunchType = 3,
+  ncclCollTraceAbortType = 4,
+  ncclCollTraceDataType = 5,
+  ncclCollTraceCollElemType = (1<<4),
+  ncclCollTraceP2pElemType = (1<<5),
 } ncclCollTraceDataType_t;
 
 struct ncclCollTrace {
@@ -365,18 +382,24 @@ struct ncclCollTrace {
   int16_t funcIndex;
   uint32_t data_0;
   uint64_t timeStamp;
-  uint64_t opCount;
+  union {
+    uint64_t opCount;
+    uint32_t p2pOpCount[2];
+  };
   union {
     uint64_t data_1;
     struct {
-      uint16_t nThreads;
+      uint8_t nWarps;
       uint8_t bid;
       uint8_t nChannels;
     } coll;
     struct {
-      uint16_t nThreads;
-      uint16_t delta;
-    } p2p;
+      int16_t peer;
+      uint8_t ngroups:4;
+      uint8_t connIndex:4;
+      uint8_t warpStart:4;
+      uint8_t nWarps:4;
+    } p2p[2];
   };
 };
 static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must have a pow2 size");
@@ -397,7 +420,7 @@ struct ncclDevComm {
 
 #ifdef ENABLE_PROFILING
   // Profiling counters
-  struct ncclProf* devProf;
+  struct ncclProf devProf;
 #endif
 
 #ifdef ENABLE_COLLTRACE

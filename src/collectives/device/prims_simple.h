@@ -1,14 +1,14 @@
 /*************************************************************************
- * Copyright (c) 2016-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
 template<typename T, typename RedOp, typename Fan, int Direct,
-         int SlicePerChunk, int StepPerSlice, int Unroll>
+         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p>
 class Primitives<
-    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, Unroll>
+    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, Unroll>, P2p
   > {
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
   static constexpr int Input=0, Output=1;
@@ -19,7 +19,7 @@ class Primitives<
                        RolePostSend = 0x10,
                        RolePostRecv = 0x20,
                        Aborted = 0x40,
-                       PtrsFifoEnabled = 0x80,
+                       OffsFifoEnabled = 0x80,
                        SizesFifoEnabled = 0x100,
                        DirectWrite = 0x200,
                        DirectRead = 0x400,
@@ -33,10 +33,10 @@ class Primitives<
   int flags;
   int group;
   uint64_t step;
+  int *connOffsFifoPtr;   // (flags & OffsFifoEnabled)
   union {
-    void **connPtrsFifoPtr; // (flags & PtrsFifoEnabled)
     T *userBuff;            // (flags & (RoleInput|RoleOutput))
-    T *connEltsFifo;        // !(flags & (PtrsFifoEnabled|RoleInput|RoleOutput))
+    T *connEltsFifo;        // !(flags & (RoleInput|RoleOutput))
   };
   union {
     int volatile *connSizesFifoPtr; //  (flags & SizesFifoEnabled)
@@ -59,7 +59,7 @@ class Primitives<
     if (nthreads == WARP_SIZE)
       __syncwarp();
     else
-      asm volatile("bar.sync %0, %1;" :: "r"(group+1), "r"(nthreads));
+      asm volatile("bar.sync %0, %1;" :: "r"(15-group), "r"(nthreads));
 #endif
     flags |= ThreadsSynced;
   }
@@ -70,7 +70,7 @@ class Primitives<
     if (nworkers == nthreads)
       barrier();
     else
-      asm volatile("bar.sync %0, %1;" :: "r"(group+2), "r"(nworkers));
+      asm volatile("bar.sync %0, %1;" :: "r"(8-group), "r"(nworkers));
 #endif
   }
 
@@ -88,9 +88,6 @@ class Primitives<
     const bool isSendNotRecv = (Send && Recv) ? (flags & RoleWaitSend) : Send;
     const bool noRecvWait = DirectRecv && Src && (flags & DirectRead);        // no wait when directly reading from remote input
     const bool noSendWait = DirectSend && (flags & (DirectRead|DirectWrite)); // no wait in empty send (e.g. directScatter) or direct remote write
-#if defined(ENABLE_PROFILING) && !defined(ENABLE_TIMING_PROFILE)
-    uint64_t t0 = __builtin_amdgcn_s_memrealtime();
-#endif
     if (((flags & (Recv*RoleWaitRecv)) && !noRecvWait) ||
         ((flags & (Send*RoleWaitSend)) && !noSendWait)) {
       int spins = 0;
@@ -109,8 +106,8 @@ class Primitives<
 
       void **ptrs = isSendNotRecv ? (ncclShmem->groups[group].dsts + Dst)
                                   : (ncclShmem->groups[group].srcs + Src);
-      if (flags & PtrsFifoEnabled)
-        loadPtr(connPtrsFifoPtr + step%NCCL_STEPS, ptrs[index]);
+      if (flags & OffsFifoEnabled)
+        ptrs[index] = connEltsFifo + loadInt(connOffsFifoPtr + (step%NCCL_STEPS))/sizeof(T);
       else if (isSendNotRecv && DirectSend) {
         if (flags & DirectWrite) {
           ptrs[index] = directBuff + remoteIx + offset;
@@ -132,14 +129,6 @@ class Primitives<
         ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*stepSize;
       }
       step += StepPerSlice;
-#if defined(ENABLE_PROFILING) && !defined(ENABLE_TIMING_PROFILE)
-      if (opCount) {
-        if (isSendNotRecv)
-          ncclShmem->comm.devProf->elems[blockIdx.x].wait_send_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
-        else
-          ncclShmem->comm.devProf->elems[blockIdx.x].wait_recv_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
-      }
-#endif
     }
   }
 
@@ -204,7 +193,10 @@ class Primitives<
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(dstIx, remoteIx, offset, sliceSize);
         subBarrier();
 #ifdef ENABLE_PROFILING
-        if (tid == 0 && opCount) ncclShmem->comm.devProf->elems[blockIdx.x].wait_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+        if (tid == 0) {
+          struct ncclProfElem *elem = ncclShmem->comm.devProf.elems+opCount%PROFILE_NUM_ITEMS;
+          elem->elem[blockIdx.x].wait_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
+        }
 #endif
         if (DirectRecv && ncclShmem->groups[group].srcs[0] == ncclShmem->groups[group].dsts[0]) {
           // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
@@ -262,6 +254,8 @@ class Primitives<
   }
 
   // Scatter/Gather generic op
+  // skip: my own rank order in the buffer chunks
+  // shift: peer offset to avoid all ranks sending to or receiving from same peer
   template <int DirectRecv1, int DirectSend1, int Recv, int Send>
   __device__ __forceinline__ void
   ScatterGatherOp(intptr_t inpIx, intptr_t outIx, int totalElem, int peerElem, int skip, int shift, bool postOp) {
@@ -287,11 +281,13 @@ class Primitives<
           for (int j=0; j<fan.nsend(); j++) {
             int i = (j+shift)%fan.nsend();
             int peerOffset = i*peerElem;
+            // Skip the data I am responsible of reducing myself
             if (skip >= 0 && i >= skip) peerOffset += peerElem;
             const T* src0 = (T*)ncclShmem->groups[group].srcs[0] + peerOffset;
             int realPeerSize = min(realSize, totalElem-peerOffset);
             if (realPeerSize > 0 && ncclShmem->groups[group].dsts[i] != nullptr) {
               ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1, PreOpN>(tid, nworkers, ncclShmem->redOpArgs, false, 1, &src0, 1, (T**)ncclShmem->groups[group].dsts+i, realPeerSize);
+              // Mark for threadfence at the end
               if (tid == 0) ncclShmem->groups[group].totalSendSize[slice] += realPeerSize;
             }
           }
@@ -319,6 +315,7 @@ class Primitives<
         }
       }
       barrier();
+      // If we indeed send something, threadfence
       if (Send && (flags & RolePostSend) && ncclShmem->groups[group].totalSendSize[slice] > 0 && index == 0)
         __threadfence_system();
       __syncwarp();
@@ -340,18 +337,18 @@ class Primitives<
         ncclShmem->groups[group].recvConns[index] = conn; // WaitRecv role saves since that's who needs it in setDataPtrs()
         connStepPtr = conn->tail;
         connStepCache = LOAD(connStepPtr);
-        flags |= (conn->ptrsFifo != nullptr) ? PtrsFifoEnabled : 0;
+        flags |= (conn->offsFifo != nullptr) ? OffsFifoEnabled : 0;
         if (Direct) {
           // User buffers have been registered
           if ((conn->direct & (NCCL_IPC_READ|NCCL_IPC_WRITE)) && e != nullptr && e->regUsed) {
-            if (connIndex == 1) {
+            if (connIndex == 1 && P2p == 0) {
               flags |= DirectRead;  // scatter-reduce use direct pull
             } else {
               flags |= (e->direct & NCCL_DIRECT_WRITE) ? DirectWrite :
                        (e->direct & NCCL_DIRECT_READ)  ? DirectRead  : 0;
             }
           } else if (conn->direct & (NCCL_DIRECT_WRITE|NCCL_DIRECT_READ)) {
-            if (connIndex == 1) {
+            if (connIndex == 1 && P2p == 0) {
               flags |= DirectRead;  // scatter-reduce use direct pull
             } else {
               // direct read not allowed in non-register case
@@ -360,10 +357,9 @@ class Primitives<
             }
           }
         }
-        if (flags & PtrsFifoEnabled)
-          connPtrsFifoPtr = conn->ptrsFifo;
-        else
-          connEltsFifo = (T*)conn->buffs[NCCL_PROTO_SIMPLE];
+        if (flags & OffsFifoEnabled)
+          connOffsFifoPtr = conn->offsFifo;
+        connEltsFifo = (T*)conn->buffs[NCCL_PROTO_SIMPLE];
       }
     }
   }
@@ -380,11 +376,10 @@ class Primitives<
         ncclShmem->groups[group].sendConns[index] = conn; // WaitSend role saves since that's who needs it in setDataPtrs()
         connStepPtr = conn->head;
         connStepCache = LOAD(connStepPtr);
-        flags |= (conn->ptrsFifo != nullptr) ? PtrsFifoEnabled : 0;
-        if (flags & PtrsFifoEnabled)
-          connPtrsFifoPtr = conn->ptrsFifo;
-        else
-          connEltsFifo = (T*)conn->buffs[NCCL_PROTO_SIMPLE];
+        flags |= (conn->offsFifo != nullptr) ? OffsFifoEnabled : 0;
+        if (flags & OffsFifoEnabled)
+          connOffsFifoPtr = conn->offsFifo;
+        connEltsFifo = (T*)conn->buffs[NCCL_PROTO_SIMPLE];
 
         if (conn->sizesFifo != nullptr) {
           flags |= SizesFifoEnabled;
@@ -392,14 +387,14 @@ class Primitives<
         } else if (Direct) {
           // User buffers have been registered
           if ((conn->direct & (NCCL_IPC_READ|NCCL_IPC_WRITE)) && e != nullptr && e->regUsed) {
-            if (connIndex == 1) {
+            if (connIndex == 1 && P2p == 0) {
               flags |= DirectRead;  // scatter-reduce use direct pull
             } else {
               flags |= (e->direct & NCCL_DIRECT_WRITE) ? DirectWrite :
                        (e->direct & NCCL_DIRECT_READ)  ? DirectRead  : 0;
             }
           } else if (conn->direct & (NCCL_DIRECT_WRITE|NCCL_DIRECT_READ)) {
-            if (connIndex == 1) {
+            if (connIndex == 1 && P2p == 0) {
               flags |= DirectRead;  // scatter-reduce use direct pull
             } else {
               // direct read not allowed in non-register case
@@ -419,7 +414,7 @@ class Primitives<
     ):
     tid(tid),
     stepSize(ncclShmem->comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T)),
-    opCount(ncclShmem->work.elems[0].coll.opCount) {
+    opCount(ncclShmem->work.elems[0].opCount) {
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     this->nthreads = nthreads;
@@ -460,7 +455,7 @@ class Primitives<
     loadRecvConn(&ncclShmem->channel.devPeers[peer], connIndex, e);
     loadSendConn(&ncclShmem->channel.devPeers[peer], connIndex, e);
 
-    setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclWorkRegElem*)e);
+    setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclWorkElemReg*)e);
   }
 
   __device__ ~Primitives() {
@@ -477,7 +472,7 @@ class Primitives<
     barrier();
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, uint64_t redOpArg, struct ncclWorkRegElem* e) {
+  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, uint64_t redOpArg, struct ncclWorkElemReg* e) {
     if (flags & RoleInput) {
       userBuff = (T*)inputBuf;
       ncclShmem->redOpArgs[0] = redOpArg;  // scaler for local input
