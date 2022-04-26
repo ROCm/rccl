@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -17,9 +17,15 @@
 // Define min for ssize_t
 static __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 
-template <typename T>
-inline __device__ void loadPtr(void** ptr, T* &v) {
+inline __device__ int loadInt(int* ptr) {
+  int v;
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   v = LOAD(ptr);
+#else
+  asm volatile("ld.volatile.global.u32 %0, [%1];"
+      : "=r"(v) : "l"(ptr));
+#endif
+  return v;
 }
 
 typedef uint64_t PackType;
@@ -485,16 +491,16 @@ struct MULTI128 {
 
 inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  v.x = p->x;
-  v.y = p->y;
+  v.x = __builtin_nontemporal_load(&p->x);
+  v.y = __builtin_nontemporal_load(&p->y);
 #else
   asm volatile("ld.volatile.global.v2.u64 {%0,%1}, [%2];" : "=l"(v.x), "=l"(v.y) : "l"(p) : "memory");
 #endif
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  p->x = v.x;
-  p->y = v.y;
+  __builtin_nontemporal_store(v.x, &p->x);
+  __builtin_nontemporal_store(v.y, &p->y);
 #else
   asm volatile("st.volatile.global.v2.u64 [%0], {%1,%2};" :: "l"(p), "l"(v.x), "l"(v.y) : "memory");
 #endif

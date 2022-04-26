@@ -7,50 +7,50 @@
 
 #include "nvmlwrap.h"
 
-ncclResult_t wrapNvmlSymbols(void) {
+ncclResult_t ncclNvmlSymbols(void) {
   return ncclSuccess;
 }
 
-ncclResult_t wrapNvmlInit(void) {
+ncclResult_t ncclNvmlInit(void) {
   return ncclSuccess;
 }
 
-ncclResult_t wrapNvmlShutdown(void) {
+ncclResult_t ncclNvmlShutdown(void) {
   return ncclSuccess;
 }
 
-ncclResult_t wrapNvmlDeviceGetHandleByPciBusId(const char* pciBusId, nvmlDevice_t* device) {
+ncclResult_t ncclNvmlDeviceGetHandleByPciBusId(const char* pciBusId, nvmlDevice_t* device) {
   return ncclSystemError;
 }
 
-ncclResult_t wrapNvmlDeviceGetIndex(nvmlDevice_t device, unsigned* index) {
+ncclResult_t ncclNvmlDeviceGetIndex(nvmlDevice_t device, unsigned* index) {
   *index  = 0;
   return ncclSuccess;
 }
 
-ncclResult_t wrapNvmlDeviceGetPciInfo(nvmlDevice_t device, nvmlPciInfo_t* pci) {
+ncclResult_t ncclNvmlDeviceGetPciInfo(nvmlDevice_t device, nvmlPciInfo_t* pci) {
   return ncclSystemError;
 }
 
-ncclResult_t wrapNvmlDeviceGetMinorNumber(nvmlDevice_t device, unsigned int* minorNumber) {
+ncclResult_t ncclNvmlDeviceGetMinorNumber(nvmlDevice_t device, unsigned int* minorNumber) {
   *minorNumber = 0;
   return ncclSuccess;
 }
 
-ncclResult_t wrapNvmlDeviceGetNvLinkState(nvmlDevice_t device, unsigned int link, nvmlEnableState_t *isActive) {
+ncclResult_t ncclNvmlDeviceGetNvLinkState(nvmlDevice_t device, unsigned int link, nvmlEnableState_t *isActive) {
   return ncclSystemError;
 }
 
-ncclResult_t wrapNvmlDeviceGetNvLinkRemotePciInfo(nvmlDevice_t device, unsigned int link, nvmlPciInfo_t *pci) {
+ncclResult_t ncclNvmlDeviceGetNvLinkRemotePciInfo(nvmlDevice_t device, unsigned int link, nvmlPciInfo_t *pci) {
   return ncclSystemError;
 }
 
-ncclResult_t wrapNvmlDeviceGetNvLinkCapability(nvmlDevice_t device, unsigned int link,
+ncclResult_t ncclNvmlDeviceGetNvLinkCapability(nvmlDevice_t device, unsigned int link,
     nvmlNvLinkCapability_t capability, unsigned int *capResult) {
   return ncclSystemError;
 }
 
-ncclResult_t wrapNvmlDeviceGetCudaComputeCapability(nvmlDevice_t device, int* major, int* minor) {
+ncclResult_t ncclNvmlDeviceGetCudaComputeCapability(nvmlDevice_t device, int* major, int* minor) {
   *major = *minor = 1;
   return ncclSuccess;
 }
