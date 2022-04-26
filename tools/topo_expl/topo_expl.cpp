@@ -46,6 +46,7 @@ THE SOFTWARE.
 #include "model.h"
 #include "utils.h"
 #include "topo.h"
+#include "graph.h"
 
 NodeModel *node_model;
 
@@ -234,6 +235,34 @@ int main(int argc,char* argv[])
     node_model = network.GetNode(i);
     assert(node_model!=0);
     initTransportsRank_3(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
+  }
+
+  for (uint64_t len = 8; len <= 4294967296L; len *= 2) {
+    struct ncclInfo info;
+    float minTime = 3600000000.0;
+    info.comm = &comm[0];
+    info.coll = ncclFuncAllReduce;
+    info.nBytes = len;
+    // Find algorithm / protocol.
+    info.algorithm = -1;
+    info.protocol = -1;
+    int nAlgos = NCCL_NUM_ALGORITHMS;
+    for (int a=0; a<nAlgos; a++) {
+      for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+        float time;
+        NCCLCHECK(ncclTopoGetAlgoTime(&info, a, p, 1, &time));
+        if (time >= 0 && time < minTime) {
+          info.algorithm = a;
+          info.protocol = p;
+          minTime = time;
+        }
+      }
+    }
+    if (info.algorithm == -1 || info.protocol == -1) {
+      WARN("Error : no algorithm/protocol available");
+      return ncclInternalError;
+    }
+    INFO(NCCL_TUNING, "%10ld %s %s time %f", info.nBytes, ncclAlgoStr[info.algorithm], ncclProtoStr[info.protocol], minTime);
   }
 
   for (int i = 0; i < nranks; i++) {
