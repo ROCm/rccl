@@ -50,7 +50,7 @@ THE SOFTWARE.
     } while (0)
 
 // Simple configuration parameters
-size_t const DEFAULT_BYTES_PER_LINK = (1<<26);  // Amount of data transferred per Link
+size_t const DEFAULT_BYTES_PER_TRANSFER = (1<<26);  // Amount of data transferred per Transfer
 
 // Different src/dst memory types supported
 typedef enum
@@ -79,19 +79,19 @@ struct BlockParam
   long long stopCycle;
 };
 
-// Each Link is a uni-direction operation from a src memory to dst memory
-struct Link
+// Each Transfer is a uni-direction operation from a src memory to dst memory
+struct Transfer
 {
-  int     linkIndex;           // Link identifier
+  int     transferIndex;       // Transfer identifier
 
-  // Link config
-  MemType exeMemType;          // Link executor type (CPU or GPU)
+  // Transfer config
+  MemType exeMemType;          // Transfer executor type (CPU or GPU)
   int     exeIndex;            // Executor index (NUMA node for CPU / device ID for GPU)
   MemType srcMemType;          // Source memory type
   int     srcIndex;            // Source device index
   MemType dstMemType;          // Destination memory type
   int     dstIndex;            // Destination device index
-  int     numBlocksToUse;      // Number of threadblocks to use for this Link
+  int     numBlocksToUse;      // Number of threadblocks to use for this Transfer
 
   // Memory
   float*  srcMem;              // Source memory
@@ -102,7 +102,7 @@ struct Link
   BlockParam* blockParamGpuPtr;
 
   // Results
-  double  linkTime;
+  double  transferTime;
 
   // Prepares src memory and how to divide N elements across threadblocks/threads
   void PrepareBlockParams(EnvVars const& ev, size_t const N);
@@ -112,7 +112,7 @@ typedef std::pair<MemType, int> Executor;
 
 struct ExecutorInfo
 {
-  std::vector<Link> links;       // Links to execute
+  std::vector<Transfer>    transfers;     // Transfers to execute
 
   // For GPU-Executors
   int                      totalBlocks;   // Total number of CUs/CPU threads to use
@@ -125,7 +125,7 @@ struct ExecutorInfo
   double totalTime;
 };
 
-typedef std::map<Executor, ExecutorInfo> LinkMap;
+typedef std::map<Executor, ExecutorInfo> TransferMap;
 
 // Display usage instructions
 void DisplayUsage(char const* cmdName);
@@ -134,21 +134,21 @@ void DisplayUsage(char const* cmdName);
 void DisplayTopology(bool const outputToCsv);
 
 // Build array of test sizes based on sampling factor
-void PopulateTestSizes(size_t const numBytesPerLink, int const samplingFactor,
+void PopulateTestSizes(size_t const numBytesPerTransfer, int const samplingFactor,
                        std::vector<size_t>& valuesofN);
 
 void ParseMemType(std::string const& token, int const numCpus, int const numGpus,
                   MemType* memType, int* memIndex);
 
-void ParseLinks(char* line, int numCpus, int numGpus,
-                LinkMap& linkMap);
+void ParseTransfers(char* line, int numCpus, int numGpus,
+                TransferMap& transferMap);
 
 void EnablePeerAccess(int const deviceId, int const peerDeviceId);
 void AllocateMemory(MemType memType, int devIndex, size_t numBytes, void** memPtr);
 void DeallocateMemory(MemType memType, void* memPtr);
 void CheckPages(char* byteArray, size_t numBytes, int targetId);
 void CheckOrFill(ModeType mode, int N, bool isMemset, bool isHipCall, std::vector<float> const& fillPattern, float* ptr);
-void RunLink(EnvVars const& ev, size_t const N, int const iteration, ExecutorInfo& exeInfo, int const linkIdx);
+void RunTransfer(EnvVars const& ev, size_t const N, int const iteration, ExecutorInfo& exeInfo, int const transferIdx);
 void RunPeerToPeerBenchmarks(EnvVars const& ev, size_t N, int numBlocksToUse, int readMode, int skipCpu);
 
 // Return the maximum bandwidth measured for given (src/dst) pair
@@ -165,6 +165,6 @@ double GetPeakBandwidth(EnvVars const& ev,
 std::string GetLinkTypeDesc(uint32_t linkType, uint32_t hopCount);
 std::string GetDesc(MemType srcMemType, int srcIndex,
                     MemType dstMemType, int dstIndex);
-std::string GetLinkDesc(Link const& link);
+std::string GetTransferDesc(Transfer const& transfer);
 int RemappedIndex(int const origIdx, MemType const memType);
 int GetWallClockRate(int deviceId);
