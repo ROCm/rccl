@@ -21,6 +21,7 @@ function display_help()
     echo "    [--address-sanitizer] Build with address sanitizer enabled"
     echo "    [--build_allreduce_only] Build only AllReduce + sum + float kernel"
     echo "    [--rm-legacy-include-dir] Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
+    echo "    [--build-debug] Build in debug mode"
 }
 
 # #################################################
@@ -48,7 +49,7 @@ build_freorg_bkwdcomp=true
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer,build_allreduce_only,rm-legacy-include-dir --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer,build_allreduce_only,rm-legacy-include-dir,build-debug --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -71,8 +72,8 @@ while true; do
         install_library=true
         shift ;;
     -d|--dependencies)
-	install_dependencies=true
-	shift;;
+        install_dependencies=true
+        shift;;
     -p|--package_build)
         build_package=true
         shift ;;
@@ -106,6 +107,9 @@ while true; do
         shift ;;
     --rm-legacy-include-dir)
         build_freorg_bkwdcomp=false
+        shift ;;
+    --build-debug)
+        build_release=false
         shift ;;
     --prefix)
         install_prefix=${2}

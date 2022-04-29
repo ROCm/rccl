@@ -17,6 +17,7 @@ def runCI =
 
     prj.timeout.test = 1440
     prj.paths.build_command = './install.sh -t '
+    prj.paths.build_command_debug = './install.sh -t --build-debug '
 
     // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
