@@ -58,6 +58,17 @@ def runPackageCommand(platform, project, jobName)
 {
     def packageHelper = platform.makePackage(platform.jenkinsLabel,"${project.paths.project_build_prefix}/build/release")
 
+    if (env.BRANCH_NAME ==~ /PR-\d+/)
+    {
+        pullRequest.labels.each
+        {
+            if (it == "debugCI")
+            {
+                packageHelper = platform.makePackage(platform.jenkinsLabel,"${project.paths.project_build_prefix}/build/debug")
+            }
+        }
+    }
+
     platform.runCommand(this, packageHelper[0])
     platform.archiveArtifacts(this, packageHelper[1])
 }
