@@ -5,14 +5,14 @@ def runCompileCommand(platform, project, jobName)
 {
     project.paths.construct_build_prefix()
 
-    def build_command = ${project.paths.build_command}
+    def build_command = "${project.paths.build_command}"
     if (env.BRANCH_NAME ==~ /PR-\d+/)
     {
         pullRequest.labels.each
         {
             if (it == "debugCI")
             {
-                build_command = ${project.paths.build_command_debug}
+                build_command = "${project.paths.build_command} --build-debug"
             }
         }
     }
