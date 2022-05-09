@@ -86,7 +86,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
   inline __device__ void postRecv() {
     barrier();
-    if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) atomicExch_system((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
   }
 
   inline __device__ void incSend(int i, int offset) {
