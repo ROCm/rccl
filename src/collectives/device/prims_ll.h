@@ -41,9 +41,13 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   inline __device__ uint32_t recvFlag(int i) { return NCCL_LL_FLAG(recvStep[i]+1); }
   inline __device__ uint32_t sendFlag(int i) { return NCCL_LL_FLAG(sendStep[i]+1); }
 
+  uint64_t* barriers;
+  uint64_t* barrier_next;
+
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    __syncthreads();
+    if (nthreads != WARP_SIZE)
+      barrier_by_group();
 #else
     asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15-group));
 #endif
@@ -86,7 +90,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
   inline __device__ void postRecv() {
     barrier();
-    if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) atomicExch_system((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
   }
 
   inline __device__ void incSend(int i, int offset) {
@@ -385,6 +389,8 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     redOp(redOpArg),
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group&(uint16_t)0xFFFF),
     stepLines(ncclShmem->comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
+    barriers = &ncclShmem->groups[this->group].barrier;
+    barrier_next = ncclShmem->groups[this->group].barrier_next;
 
     auto *channel = &ncclShmem->channel;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
