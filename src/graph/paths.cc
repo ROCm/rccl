@@ -699,7 +699,7 @@ static ncclResult_t ncclTopoGetNchannels(struct ncclTopoSystem* system, int g /*
     // Local rank
     path = system->nodes[GPU].nodes[peer].paths[GPU]+g;
     if (path->type == PATH_NVL) {
-      float nvlWidth = ncclTopoNVLinkSpeed(system->nodes[GPU].nodes[g].gpu.cudaCompCap);
+      float nvlWidth = ncclTopoXGMISpeed(system->nodes[GPU].nodes[g].gpu.cudaCompCap);
       *nChannels = 2*std::max(1, (int)(path->width / nvlWidth));
     } else {
       *nChannels = 2;

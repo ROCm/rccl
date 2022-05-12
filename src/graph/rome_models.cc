@@ -903,7 +903,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
       }
       if (!link->remNode) continue;
       if (link->type != LINK_NVL) continue;
-      romeTopo->connMatrix[i*romeTopo->nGpus+n] = link->width/VEGA_XGMI_WIDTH;
+      romeTopo->connMatrix[i*romeTopo->nGpus+n] = link->width/ncclTopoXGMISpeed(node->gpu.gcn);
       count ++;
     }
     if (romeTopo->nLinks < count) romeTopo->nLinks = count;

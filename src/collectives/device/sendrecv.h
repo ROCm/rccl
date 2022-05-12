@@ -22,7 +22,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       ssize_t const count = args->count;
       int const chunkSize = args->chunkSize/sizeof(T);
       int const peer = args->peer;
-      Primitives<T, RedOp, FanAsymmetric<0, 1>, 1, Proto, 1> prims
+      Primitives<T, RedOp, FanAsymmetric<0, 1>, 0, Proto, 1> prims
         (tid, nthreads, nullptr, &peer, args->buff, nullptr, /*redOpArg(ignored)=*/0, group);
       ssize_t offset = 0;
       do {
@@ -39,7 +39,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       ssize_t const count = args->count;
       int const chunkSize = args->chunkSize/sizeof(T);
       int const peer = args->peer;
-      Primitives<T, RedOp, FanAsymmetric<1, 0>, 1, Proto, 1> prims
+      Primitives<T, RedOp, FanAsymmetric<1, 0>, 0, Proto, 1> prims
         (tid, nthreads, &peer, nullptr, nullptr, args->buff, /*redOpArg(ignored)=*/0, group);
       ssize_t offset = 0;
       do {
