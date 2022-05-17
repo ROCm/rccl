@@ -25,6 +25,7 @@
 #define ARM_WIDTH 6.0
 #define NET_WIDTH 12.0           // 100Gbit
 #define VEGA_XGMI_WIDTH 24.0
+#define MI200_XGMI_WIDTH 36.0
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, so GPU
 // to GPU traffic consumes more PCI bandwidth.
@@ -183,13 +184,8 @@ static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank,
   return ncclInternalError;
 }
 
-// Returns NVLink speed in GB/s
-static float ncclTopoNVLinkSpeed(int cudaCompCap) {
-  return
-    cudaCompCap == 86 ? SM86_NVLINK_WIDTH :
-    cudaCompCap >= 80 ? SM80_NVLINK_WIDTH :
-    cudaCompCap >= 70 ? SM70_NVLINK_WIDTH :
-    cudaCompCap >= 60 ? SM60_NVLINK_WIDTH :
-    SM80_NVLINK_WIDTH;
+// Returns XGMI speed in GB/s
+static float ncclTopoXGMISpeed(int gcn) {
+  return gcn == 910 ? MI200_XGMI_WIDTH : VEGA_XGMI_WIDTH;
 }
 #endif

@@ -543,7 +543,7 @@ ncclResult_t ncclTopoAddXGMI(struct ncclXmlNode* node, struct ncclTopoSystem* sy
       }
     }
     if (remote) {
-      int nvlSpeed = VEGA_XGMI_WIDTH;
+      float nvlSpeed = ncclTopoXGMISpeed(gpu->gpu.gcn);
       NCCLCHECK(ncclTopoConnectNodes(gpu, remote, LINK_NVL, count*nvlSpeed));
       if (remote->type != GPU) {
         NCCLCHECK(ncclTopoConnectNodes(remote, gpu, LINK_NVL, count*nvlSpeed));
