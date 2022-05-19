@@ -1,6 +1,8 @@
 # Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
 
 cmake_minimum_required(VERSION 3.5)
+INCLUDE(CheckIncludeFiles)
+INCLUDE(CheckSymbolExists)
 
 # We use C++14 features, this will add compile option: -std=c++14
 set( CMAKE_CXX_STANDARD 14 )
@@ -187,6 +189,7 @@ set(CC_SOURCES
     src/misc/rocm_smi_wrap.cc
     src/misc/profiler.cc
     src/misc/shmutils.cc
+    src/misc/signals.cc              # RCCL
     src/misc/socket.cc
     src/misc/param.cc
     src/transport/coll_net.cc
@@ -222,6 +225,44 @@ if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
 endif()
 
+enable_language(C)
+CHECK_INCLUDE_FILES(bfd.h HAVE_BFD)
+if (HAVE_BFD)
+  add_definitions(-DHAVE_BFD)
+  message ("-- Found BFD")
+  CHECK_SYMBOL_EXISTS(bfd_get_section_flags "bfd.h" HAVE_DECL_BFD_GET_SECTION_FLAGS)
+  if (HAVE_DECL_BFD_GET_SECTION_FLAGS)
+    add_definitions(-DHAVE_DECL_BFD_GET_SECTION_FLAGS)
+  endif()
+  CHECK_SYMBOL_EXISTS(bfd_get_section_vma "bfd.h" HAVE_DECL_BFD_GET_SECTION_VMA)
+  if (HAVE_DECL_BFD_GET_SECTION_VMA)
+    add_definitions(-DHAVE_DECL_BFD_GET_SECTION_VMA)
+  endif()
+  CHECK_CXX_SOURCE_COMPILES(
+    "#include <bfd.h>
+
+       int main (int argc, char **argv) {
+         bfd_size_type size;
+         bfd abfd;
+         asection sec;
+         size = bfd_section_size(&abfd, &sec);
+         return (int)(size);
+       }"
+    HAVE_TWO_ARG_BFD_SECTION_SIZE)
+  if (HAVE_TWO_ARG_BFD_SECTION_SIZE)
+    add_definitions(-DHAVE_TWO_ARG_BFD_SECTION_SIZE)
+  endif()
+  find_path(DEMANGLE_HEADER demangle.h PATHS /usr/include PATH_SUFFIXES libiberty)
+  if(NOT DEMANGLE_HEADER)
+    message("Could not find demangle.h ${DEMANGLE_HEADER}")
+  else()
+    add_definitions(-DHAVE_CPLUS_DEMANGLE)
+    message("Found demangle.h in ${DEMANGLE_HEADER}")
+    set (HAVE_CPLUS_DEMANGLE  1)
+    set (HAVE_DECL_BASENAME  "1")
+    INCLUDE_DIRECTORIES(${DEMANGLE_HEADER})
+  endif()
+endif()
 
 find_package(rocm_smi PATHS ${ROCM_PATH}/lib/cmake/rocm_smi)
 if (rocm_smi_FOUND)
@@ -280,6 +321,16 @@ target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
 target_link_libraries(rccl PRIVATE hip::device dl -l${ROCM_SMI_LIBRARIES} -L${ROCM_SMI_LIB_DIR})
 target_link_libraries(rccl INTERFACE hip::host)
 
+if(HAVE_BFD)
+  target_link_libraries(rccl PRIVATE bfd dl z)
+  find_library(HAVE_IBERTY iberty PATHS /usr/lib64 /usr/lib/
+    PATH_SUFFIXES x86_64-linux-gnu)
+  if(HAVE_IBERTY)
+    message("iberty found @  ${HAVE_IBERTY} ")
+    target_link_libraries(rccl PRIVATE iberty dl z)
+  endif()
+endif()
+
 #Setup librccl.so version
 rocm_set_soversion(rccl "1.0")
 
@@ -300,7 +351,7 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
   rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}/include/rccl"
             PATTERNS "rccl.h"
             GUARDS SYMLINK WRAPPER
-            WRAPPER_LOCATIONS include rccl/include)  
+            WRAPPER_LOCATIONS include rccl/include)
   #install the wrapper header file to package
   rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
 	        DESTINATION "./rccl/include/" )
