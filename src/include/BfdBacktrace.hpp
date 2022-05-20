@@ -9,15 +9,17 @@
  * using the BFD library (ucx/src/ucs/debug/debug.c).
  */
 
-
 #include <dirent.h>
 #include <link.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <bfd.h>
 #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 #ifdef HAVE_CPLUS_DEMANGLE
+#define HAVE_DECL_BASENAME 1
 #include <demangle.h>
 #endif
 

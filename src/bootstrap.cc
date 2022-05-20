@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include "proxy.h"
+#include "signals.h" // [RCCL]
 
 /* Init functions */
 static char bootstrapNetIfName[MAX_IF_NAME_SIZE+1];
@@ -221,6 +222,10 @@ ncclResult_t bootstrapInit(ncclUniqueId * id, struct ncclComm* comm) {
   comm->bootstrap = state;
 
   TRACE(NCCL_INIT, "rank %d nranks %d", rank, nranks);
+
+  // [RCCL] Register custom signal handlers if requested
+  RegisterSignalHandlers();
+  // [/RCCL]
 
   struct extInfo info = { 0 };
   info.rank = rank;

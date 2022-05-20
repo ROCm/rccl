@@ -1,7 +1,5 @@
 # Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
 cmake_minimum_required(VERSION 2.8.12)
-INCLUDE(CheckIncludeFiles)
-INCLUDE(CheckSymbolExists)
 
 if(BUILD_TESTS)
 
@@ -29,35 +27,6 @@ if(BUILD_TESTS)
   endif()
 
   include_directories(${GTEST_INCLUDE_DIRS} ./common)
-
-  enable_language(C)
-  CHECK_INCLUDE_FILES(bfd.h HAVE_BFD)
-  if (HAVE_BFD)
-    CHECK_SYMBOL_EXISTS(bfd_get_section_flags "bfd.h" HAVE_DECL_BFD_GET_SECTION_FLAGS)
-    CHECK_SYMBOL_EXISTS(bfd_get_section_vma "bfd.h" HAVE_DECL_BFD_GET_SECTION_VMA)
-    CHECK_CXX_SOURCE_COMPILES(
-      "#include <bfd.h>
-
-       int main (int argc, char **argv) {
-         bfd_size_type size;
-         bfd abfd;
-         asection sec;
-         size = bfd_section_size(&abfd, &sec);
-         return (int)(size);
-       }"
-      HAVE_TWO_ARG_BFD_SECTION_SIZE)
-
-    find_path(DEMANGLE_HEADER demangle.h PATHS /usr/include PATH_SUFFIXES libiberty)
-    if(NOT DEMANGLE_HEADER)
-      message("Could not find demangle.h ${DEMANGLE_HEADER}")
-    else()
-      message("Found demangle.h in ${DEMANGLE_HEADER}")
-      set (HAVE_CPLUS_DEMANGLE  1)
-      set (HAVE_DECL_BASENAME  "1")
-      INCLUDE_DIRECTORIES(${DEMANGLE_HEADER})
-    endif()
-  endif()
-  CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/common/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/common/config.h)
 
   # Collect testing framework source files
   set (COMMON_SOURCE_FILES
@@ -127,16 +96,6 @@ if(BUILD_TESTS)
   target_include_directories(UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
   target_link_libraries(UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
-
-  if(HAVE_BFD)
-    target_link_libraries(UnitTests PRIVATE bfd dl z)
-    find_library(HAVE_IBERTY iberty PATHS /usr/lib64 /usr/lib/
-                 PATH_SUFFIXES x86_64-linux-gnu) 
-    if(HAVE_IBERTY)
-      message("iberty found @  ${HAVE_IBERTY} ")
-      target_link_libraries(UnitTests PRIVATE iberty dl z)
-    endif()
-  endif()
 
   # UnitTests using static library of rccl requires passing rccl
   # through -l and -L instead of command line input.
