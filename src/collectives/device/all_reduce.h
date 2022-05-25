@@ -205,7 +205,6 @@ namespace {
                    /* LL128 */       : nthreads*(Proto::calcBytePerGrain()/sizeof(T))/8);
     const ssize_t loopSize = int(nChannels*chunkSize);
     const ssize_t size = args->count;
-
     int nthreadsSplit;
     if (Proto::Id == NCCL_PROTO_SIMPLE) {
       nthreadsSplit = nthreads/2;
@@ -400,7 +399,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    runTreeUpDown<T, RedOp, ProtoLL>(args);
+    if (args->pad_0 == 0) runTreeUpDown<T, RedOp, ProtoLL>(args);
+    else runTreeSplit<T, RedOp, ProtoLL>(args);
   }
 };
 

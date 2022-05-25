@@ -451,6 +451,31 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   if (info->coll == ncclFuncAllToAllPivot) {
     int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
     info->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
+   } else if (info->coll == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
+    static int userTuneInput = -2;
+    if (userTuneInput == -2) {
+      const char *protoStr = getenv("NCCL_PROTO");
+      const char *algoStr = getenv("NCCL_ALGO");
+      if (!protoStr && !algoStr)
+        userTuneInput = 0;
+      else
+        userTuneInput = 1;
+    }
+    info->nChannels = nc;
+    if (!userTuneInput) {
+      // always respect user settings
+      if (info->nBytes <= 196608) {
+        info->protocol = NCCL_PROTO_LL;
+        info->algorithm = NCCL_ALGO_TREE;
+        info->nChannels =  std::min(comm->nChannels, info->nBytes <= 65536? 4 : 12);
+      } else if (info->nBytes <= 1048576) {
+        info->protocol = NCCL_PROTO_LL;
+        info->algorithm = NCCL_ALGO_RING;
+      } else {
+        info->protocol = NCCL_PROTO_SIMPLE;
+        info->algorithm = NCCL_ALGO_RING;
+      }
+    }
   } else if (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->topo->tuning == 4 &&
     ((comm->nNodes == 2 && info->nBytes == 33554432) || (comm->nNodes <= 4 && info->nBytes == 67108864))) {
     static int userTuneInput = -2;
@@ -532,7 +557,7 @@ comp_next:
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
-
+  if (info->comm->topo->pivotA2ANumBiRings == 3 ) work->pad_0 = 1;
   work->opCount = info->opCount;
   work->header.type = ncclWorkTypeColl;
   work->sendbuff = info->sendbuff;
@@ -543,7 +568,6 @@ comp_next:
   work->header.nWarps = info->nThreads / info->comm->WarpSize;
   work->redOpArg = info->opFull.scalarArg;
   work->redOpArgIsPtr = info->opFull.scalarArgIsPtr;
-
   if (info->comm->nRanks == 1) {
     // one-rank reduce index
     work->header.funcIndex = FUNC_INDEX_P2P - ncclNumTypes + int(info->datatype);
