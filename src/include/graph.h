@@ -89,6 +89,7 @@ struct ncclTopoGraph {
   int inter[MAXCHANNELS*2];
   int nIntraChannels;
   int intraNets[MAXCHANNELS*NCCL_TOPO_MAX_NODES*2];
+  int treeBase[NCCL_TOPO_MAX_NODES][NCCL_TOPO_MAX_NODES];
 };
 ncclResult_t ncclTopoCompute(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 
@@ -111,6 +112,8 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
 
 ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns,
     struct ncclTopoRanks** allTopoRanks, int* rings, struct ncclTopoGraph* collNetGraph, int nc);
+
+ncclResult_t ncclTreeBasePostset(struct ncclComm* comm, struct ncclTopoGraph* treeGraph);
 
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph, struct ncclTopoGraph* collNetGraph);
 #include "info.h"
