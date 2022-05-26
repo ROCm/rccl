@@ -2,9 +2,19 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## (Unreleased) RCCL-2.10.4
+## RCCL-2.11.4 for ROCm 5.20
+### Changed
+- Unit testing framework rework
+- Minor bug fixes
+### Known issues
+- Managed memory is not currently supported for clique-based kernels 
+
+## RCCL-2.11.4 for ROCm 5.1.0
 ### Added
+- Compatibility with NCCL 2.11.4
 - Packages for test and benchmark executables on all supported OSes using CPack.
+### Known issues
+- Managed memory is not currently supported for clique-based kernels
 
 ## RCCL-2.10.3 for ROCm 5.0.0
 ### Added
