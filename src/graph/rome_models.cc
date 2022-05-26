@@ -564,6 +564,20 @@ static struct rcclRomeModel rome_model_74 = {
   .treeBase = "",
 };
 
+static struct rcclRomeModel rome_model_76 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 3,
+  .gpuIds = { 0x32000, 0x35000, 0x11000, 0x14000, 0xae000, 0xb3000, 0x8e000, 0x93000, },
+  .nicIds = { 0x26000, 0x2d000, 0x5000, 0xc000, 0xab000, 0xb4000, 0x8b000, 0x94000, },
+  .gpuNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
+  .nicNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
+  .connMatrix = { 0, 4, 1, 0, 0, 0, 2, 0, 4, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 4, 2, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 4, 1, 0, 0, 1, 0, 0, 4, 0, 0, 1, 2, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 1, 0, 1, 4, 0, },
+  .gdrLevel = { PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, },
+  .pattern = "4444",
+  .ringBase = "N4 4 5 7 6 0 1 3 2 N2|N2 2 3 1 0 6 7 5 4 N4|N7 7 6 0 1 5 4 2 3 N3|N1 1 0 6 7 3 2 4 5 N5|N3 3 2 4 5 7 6 0 1 N1|N5 5 4 2 3 1 0 6 7 N7|N0 0 1 5 4 2 3 7 6 N6|N6 6 7 3 2 4 5 1 0 N0",
+  .options = "tuning=3",
+  .treeBase = "",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -602,6 +616,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_72,
   rome_model_73,
   rome_model_74,
+  rome_model_76,
 };
 
 /* Parse user defined rings. Format is like :
