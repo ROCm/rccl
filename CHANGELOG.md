@@ -2,7 +2,7 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## RCCL-2.11.4 for ROCm 5.20
+## RCCL-2.11.4 for ROCm 5.2.0
 ### Changed
 - Unit testing framework rework
 - Minor bug fixes
