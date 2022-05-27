@@ -576,6 +576,8 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclPeer
   return ncclSuccess;
 }
 
+RCCL_PARAM(EnableIntranet, "ENABLE_INTRANET", 0);
+
 ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* comm) {
   int *domains;
   int64_t *ids;
@@ -662,7 +664,7 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
           allXgmi &= isXGMI;
         }
       }
-      if (!allXgmi) {
+      if (!allXgmi || rcclParamEnableIntranet()) {
         remove = 0;
         system->type |= RCCL_TOPO_GDR_ALL;
         INFO(NCCL_GRAPH, "GDR is available on all GPUs");
