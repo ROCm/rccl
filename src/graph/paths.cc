@@ -743,7 +743,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
   else {
     // Round to next pow2 nChannelsPerPeer and nChannels
     comm->p2pnChannelsPerPeer = nextPow2(minChannels);
-    comm->p2pnChannels = nextPow2(comm->p2pnChannels);
+    comm->p2pnChannels = std::min(comm->nRanks, nextPow2(comm->p2pnChannels));
   }
 
   // Init channels that weren't used so far
