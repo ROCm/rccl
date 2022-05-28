@@ -664,12 +664,16 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
           allXgmi &= isXGMI;
         }
       }
-      if (!allXgmi || rcclParamEnableIntranet()) {
+      if (!allXgmi) {
         remove = 0;
         system->type |= RCCL_TOPO_GDR_ALL;
         INFO(NCCL_GRAPH, "GDR is available on all GPUs");
       }
     }
+  }
+  if (rcclParamEnableIntranet()) {
+    remove = 0;
+    system->type |= RCCL_TOPO_FORCE_INTRA;
   }
   comm->localRanks = system->nodes[GPU].count;
   if (system->nodes[GPU].count == comm->nRanks && remove) {
@@ -743,7 +747,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
   else {
     // Round to next pow2 nChannelsPerPeer and nChannels
     comm->p2pnChannelsPerPeer = nextPow2(minChannels);
-    comm->p2pnChannels = std::min(comm->nRanks, nextPow2(comm->p2pnChannels));
+    comm->p2pnChannels = std::min(comm->topo->nodes[GPU].count == comm->topo->nRanks ? 2*comm->nRanks : comm->nRanks, nextPow2(comm->p2pnChannels));
   }
 
   // Init channels that weren't used so far
