@@ -751,14 +751,10 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
   int nets[NCCL_TOPO_MAX_NODES*2];
   int net_offset = 0, net_count = 0;
   int ngpus = system->nodes[GPU].count;
-  // int nnets = system->nodes[NET].count;
   int x=0, y=0;
-  // |
-  // from | to | x to y
   do {
     int digit = str[offset] - '0';
     if (digit >= 0 && digit <= 9) {
-      // offset++; // all the offsets
       switch (status) {
         case 0:
           gpus[gpu] = digit;
@@ -773,7 +769,7 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
         gpu++;
       }
       status = 0;
-      if (str[offset] == '|' || str[offset] == 0) { // bump y, and x and make x 0 after
+      if (str[offset] == '|' || str[offset] == 0) {
         for (int r=0; r<gpu; r++) {
           int g = gpus[r];
           // remap if needed
@@ -793,7 +789,6 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
         }
         y++;
         graph->treeBase[y][x] = -1;
-        // y=0;
         x++;
         gpu=0;
       }

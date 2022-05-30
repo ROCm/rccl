@@ -68,8 +68,6 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
-  // int rank = comm->rank;
-  // int localRanks = comm->topo->nodes[GPU].count;
   int nChannels = comm->nChannels;
   int ring[NCCL_TOPO_MAX_NODES][NCCL_TOPO_MAX_NODES];
   int xLimit = 0, yLimit = 0;
