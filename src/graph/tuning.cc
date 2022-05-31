@@ -281,7 +281,6 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       nNodes;
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
-      // if ((coll != ncclFuncAllReduce || nNodes == 1) && a != NCCL_ALGO_RING) continue;
       if ((coll != ncclFuncAllReduce) && a != NCCL_ALGO_RING) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
