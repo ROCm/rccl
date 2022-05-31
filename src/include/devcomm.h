@@ -327,6 +327,7 @@ struct ncclProfElem {
       uint64_t total_cycle;
       uint64_t wait_cycle;      // total wait cycle
       // primtive cycles
+      uint64_t prim_cycle;
       uint64_t send_cycle;
       uint64_t directSend_cycle;
       uint64_t recv_cycle;
