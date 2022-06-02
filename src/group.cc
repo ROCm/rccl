@@ -9,7 +9,7 @@
 #include "debug.h"
 #include "enqueue.h"
 #include "transport.h"
-#include <unistd.h>
+#include "channel.h"
 
 #define MAX_ASYNC_OPS 128
 thread_local pthread_t ncclGroupThreads[MAX_ASYNC_OPS];
@@ -105,20 +105,25 @@ ncclResult_t ncclGroupStart() {
   return ncclSuccess;
 }
 
-static ncclResult_t scheduleSend(struct ncclComm* comm, int peer, int channelId, size_t count, void* buff, uint64_t opCount, uint16_t connIndex) {
+static ncclResult_t scheduleSend(struct ncclComm* comm, int peer, int chunk, size_t count, void* buff, uint64_t opCount, uint16_t connIndex) {
   struct ncclInfo info = { ncclFuncSend, "Send",
     NULL, buff, count, ncclInt8, ncclSum, peer, comm, comm->userStream, /* Args */
     1, 1 };
+  int channelId;
+  NCCLCHECK(ncclChannelCompute(comm, peer, chunk%comm->p2pnChannelsPerPeer, ncclFuncSend, &channelId));
   info.channelId = channelId;
   info.opCount = opCount;
   info.connIndex = connIndex;
   NCCLCHECK(ncclSetupP2pKernel(&info));
   return ncclSuccess;
 }
-static ncclResult_t scheduleRecv(struct ncclComm* comm, int peer, int channelId, size_t count, void* buff, uint64_t opCount, uint16_t connIndex) {
+
+static ncclResult_t scheduleRecv(struct ncclComm* comm, int peer, int chunk, size_t count, void* buff, uint64_t opCount, uint16_t connIndex) {
   struct ncclInfo info = { ncclFuncRecv, "Recv",
     NULL, buff, count, ncclInt8, ncclSum, peer, comm, comm->userStream, /* Args */
     1, 1 };
+  int channelId;
+  NCCLCHECK(ncclChannelCompute(comm, peer, chunk%comm->p2pnChannelsPerPeer, ncclFuncRecv, &channelId));
   info.channelId = channelId;
   info.opCount = opCount;
   info.connIndex = connIndex;
@@ -296,7 +301,6 @@ sched_delta:
             int sendRemaining = 1, recvRemaining = 1;
             int chunk = 0;
             do {
-              int channelId = (delta+comm->p2pChannels[chunk%comm->p2pnChannelsPerPeer]) % comm->p2pnChannels;
               ssize_t recvbytes = totRecvBytes-recvOffset;
               ssize_t sendbytes = totSendBytes-sendOffset;
               if (recvbytes > recvChunkSize) { recvbytes = recvChunkSize; } else { recvRemaining = 0; }
@@ -306,10 +310,10 @@ sched_delta:
                 if (sendbytes < 0 || (sendbytes == 0 && totSendBytes != 0)) send = NULL;
                 if (recvbytes < 0 || (recvbytes == 0 && totRecvBytes != 0)) recv = NULL;
               if (recv) {
-                NCCLCHECKGOTO(scheduleRecv(comm, recvPeer, channelId, recvbytes, ((char*)(recv->buff))+recvOffset, recv->opCount, recvIdx), ret, group_cleanup);
+                NCCLCHECKGOTO(scheduleRecv(comm, recvPeer, chunk, recvbytes, ((char*)(recv->buff))+recvOffset, recv->opCount, recvIdx), ret, group_cleanup);
               }
               if (send) {
-                NCCLCHECKGOTO(scheduleSend(comm, sendPeer, channelId, sendbytes, ((char*)(send->buff))+sendOffset, send->opCount, sendIdx), ret, group_cleanup);
+                NCCLCHECKGOTO(scheduleSend(comm, sendPeer, chunk, sendbytes, ((char*)(send->buff))+sendOffset, send->opCount, sendIdx), ret, group_cleanup);
               }
               recvOffset += recvChunkSize;
               sendOffset += sendChunkSize;
