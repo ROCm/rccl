@@ -351,7 +351,7 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
   rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}/include/rccl"
             PATTERNS "rccl.h"
             GUARDS SYMLINK WRAPPER
-            WRAPPER_LOCATIONS include rccl/include)
+            WRAPPER_LOCATIONS ${CMAKE_INSTALL_INCLUDEDIR} rccl/${CMAKE_INSTALL_INCLUDEDIR})
   #install the wrapper header file to package
   rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
 	        DESTINATION "./rccl/include/" )
