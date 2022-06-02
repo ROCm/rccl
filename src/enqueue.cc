@@ -13,7 +13,7 @@
 #include <hip/hip_ext.h>
 #include "gdrwrap.h"
 #include "bootstrap.h"
-#include <cstring>
+#include "channel.h"
 
 #include <cstring> // std::memcpy
 
@@ -908,16 +908,14 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
   struct ncclComm* comm = info->comm;
   int peer = info->root;
   ssize_t nBytes = info->count*ncclTypeSize(info->datatype);
-  int p2pGroupSize = NCCL_MAX_WORK_ELEMENTS_P2P/2;
-  int peerNode = comm->rankToNode[peer];
-  int peerIndex = comm->rankToLocalRank[peer];
-  int nsteps = comm->maxLocalRanks;
-  int rankIndex = comm->rankToLocalRank[comm->rank];
+  int channelBaseId;
+  NCCLCHECK(ncclChannelComputeBase(comm, peer, info->coll, &channelBaseId));
   if (info->coll == ncclFuncSend) {
     if (peer != comm->rank) {
-      int delta = (comm->nRanks - (comm->rank-peer)) % comm->nRanks;
+      // Mark channels that need pre-connect
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
-        int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
+        int channelId;
+        NCCLCHECK(ncclChannelComputeFromBase(comm, channelBaseId, c, &channelId));
         if (comm->channels[channelId].peers[peer].send[1].connected == 0) { // P2P uses only 1 connector
           comm->connectSend[peer+comm->nRanks*1] |= (1<<channelId);
           comm->connect[1] = 1;
@@ -932,9 +930,10 @@ static ncclResult_t ncclSaveP2p(struct ncclInfo* info) {
     comm->p2pSendCount++;
   } else {
     if (peer != comm->rank) {
-      int delta = (comm->nRanks + (comm->rank-peer)) % comm->nRanks;
+      // Mark channels that need pre-connect
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
-        int channelId = (delta+comm->p2pChannels[c]) % comm->p2pnChannels;
+        int channelId;
+        NCCLCHECK(ncclChannelComputeFromBase(comm, channelBaseId, c, &channelId));
         if (comm->channels[channelId].peers[peer].recv[1].connected == 0) { // P2P uses only 1 connector
           comm->connectRecv[peer+comm->nRanks*1] |= (1<<channelId);
           comm->connect[1] = 1;
