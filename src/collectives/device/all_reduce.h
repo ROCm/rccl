@@ -37,8 +37,10 @@ namespace {
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
 
+    INIT_COUNTER;
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg, args->connIndex << 16);
+    ACCUMULATE_PRIM_COUNTER(prim);
 
     for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
       ssize_t realChunkSize;
