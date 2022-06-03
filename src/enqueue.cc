@@ -956,7 +956,7 @@ static int getSegment(enum ncclWorkElemType type, enum ncclWorkElemSubType subTy
   if (type == ncclWorkTypeP2p) {  // P2P
     int start = subType == ncclWorkSubTypeRecv ? 0 : 1;
     for (int s=start; s<NCCL_MAX_WORK_ELEMENTS_P2P && s<NCCL_MAX_NTHREADS/comm->WarpSize; s+=2) {
-      if (work->p2pElems[s].peer == -1) return s;
+      if (work->p2pElems[s].peer == -2) return s;
       // Do not aggregate multiple sends to the same peer (or receives from the same peer)
       if (work->p2pElems[s].peer == peer) return -1;
     }
@@ -1072,14 +1072,14 @@ ncclResult_t ncclEnqueueP2pKernel(struct ncclComm* comm, struct ncclQueueElem* e
   if (segment == -1) {
     NCCLCHECK(getNextOp(channel, &w, NULL));
     segment = workElem->subType == ncclWorkSubTypeRecv ? 0 : 1;
-    // Initialize work as P2P, set peer=-1 to designate the p2p elem is not used.
+    // Initialize work as P2P, set peer=-2 to designate the p2p elem is not used.
     w->header.type = ncclWorkTypeP2p;
-    for (int i=0; i<NCCL_MAX_WORK_ELEMENTS_P2P && i<NCCL_MAX_NTHREADS/comm->WarpSize; i++) w->p2pElems[i].peer = -1;
+    for (int i=0; i<NCCL_MAX_WORK_ELEMENTS_P2P && i<NCCL_MAX_NTHREADS/comm->WarpSize; i++) w->p2pElems[i].peer = -2;
   }
-  //printf("%s to %d -> Channel %d OpCount %ld Segment %d\n", workElem->subType == ncclWorkSubTypeRecv ? "Recv" : "Send", proxyOp->root, channel->id, channel->workFifoTail-1, segment);
+  //INFO(NCCL_COLL, "%s to %d -> Channel %d OpCount %ld Segment %d", workElem->subType == ncclWorkSubTypeRecv ? "Recv" : "Send", workElem->peer, channel->id, channel->workFifoTail-1, segment);
 
   // store work element into FIFO
-  NCCLCHECK(ncclProxySaveP2p(comm, proxyOp));
+  if (workElem->peer != -1) NCCLCHECK(ncclProxySaveP2p(comm, proxyOp));
   NCCLCHECK(enqueueSegOp(ncclWorkTypeP2p, &eqElem->work, w, segment, &eqElem->buffRegInfo, channel, comm));
   return ncclSuccess;
 }
