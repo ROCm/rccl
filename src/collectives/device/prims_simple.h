@@ -47,6 +47,7 @@ class Primitives<
   uint64_t* barriers;
   uint64_t* barrier_next;
   const uint64_t opCount;
+  uint32_t* next_hdp_reg;
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
@@ -96,6 +97,7 @@ class Primitives<
         connStepCache = LOAD(connStepPtr);
         if (checkAbort(spins)) break;
         //if (spins == 0) printf("r=%d b=%d t=%d SPUN OUT got=%d want=%d\n", ncclShmem->comm.rank, blockIdx.x, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
+        if (spins == 0) traceData(__LINE__, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
       }
       __asm__ __volatile__("s_wakeup");
     }
@@ -134,6 +136,9 @@ class Primitives<
 
   template<int Recv, int Send>
   inline __device__ void postPeer() {
+    if ((flags & Send*RolePostSend) && next_hdp_reg)
+      atomicExch_system(next_hdp_reg, 0x1);
+
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
       atomicExch_system((unsigned long long *)connStepPtr, step);
@@ -225,8 +230,10 @@ class Primitives<
              sliceSize);
         }
         barrier(); // This barrier has a counterpart in following loop
-        //if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
-        __syncwarp();
+#if defined(__gfx1030__)
+	if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
+#endif
+	__syncwarp();
         postPeer<Recv, Send>();
         offset += sliceSize;
         slice += 1;
@@ -245,7 +252,9 @@ class Primitives<
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(0, 0, 0, 0);
       }
       barrier(); // Has couterpart in preceding worker-only loop.
-      //if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
+#if defined(__gfx1030__)
+      if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
+#endif
       __syncwarp();
       postPeer<Recv, Send>();
       offset += sliceSize;
@@ -371,6 +380,7 @@ class Primitives<
       step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostSend) {
         connStepPtr = conn->tail;
+	next_hdp_reg = conn->next_hdp_reg;
       }
       if (flags & RoleWaitSend) {
         ncclShmem->groups[group].sendConns[index] = conn; // WaitSend role saves since that's who needs it in setDataPtrs()

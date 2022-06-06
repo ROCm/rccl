@@ -412,6 +412,8 @@ ncclResult_t ncclProxyComputeP2p(struct ncclInfo* info, struct ncclProxyOp* op) 
   info->chunkSize = stepSize;
   op->root = info->root;
   op->nbytes = info->count;
+  if (info->root == -1) return ncclSuccess;
+
   struct ncclPeer* peer = channel->peers + op->root;
 
   if (info->coll == ncclFuncSend) {
