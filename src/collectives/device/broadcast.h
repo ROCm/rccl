@@ -32,7 +32,8 @@ namespace {
     T *inputBuf = (T*)args->sendbuff;
     T *outputBuf = (T*)args->recvbuff;
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0>
-      prims(tid, nthreads, &ring->prev, &ring->next, inputBuf, outputBuf, args->redOpArg, args->connIndex << 16);
+      prims(tid, nthreads, &ring->prev, &ring->next, inputBuf, outputBuf, args->redOpArg,
+        (args->connIndex<<16) | ((rank == root ? noRecvRoundup : (nextRank == root ? noSendRoundup : 0))<<24));
 
     for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
       ssize_t realChunkSize;

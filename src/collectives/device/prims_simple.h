@@ -48,6 +48,7 @@ class Primitives<
   uint64_t* barrier_next;
   const uint64_t opCount;
   uint32_t* next_hdp_reg;
+  int roundup;
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
@@ -231,9 +232,9 @@ class Primitives<
         }
         barrier(); // This barrier has a counterpart in following loop
 #if defined(__gfx1030__)
-	if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
+        if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
 #endif
-	__syncwarp();
+        __syncwarp();
         postPeer<Recv, Send>();
         offset += sliceSize;
         slice += 1;
@@ -337,7 +338,7 @@ class Primitives<
     if (flags & (RoleWaitRecv|RolePostRecv)) {
       auto *conn = &peer->recv[connIndex].conn;
       step = conn->step;
-      step = roundUp(step, SlicePerChunk*StepPerSlice);
+      if(roundup != noRecvRoundup) step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostRecv) {
         connStepPtr = conn->head;
         STORE(connStepPtr, step); // Return credits in case we rounded up.
@@ -377,10 +378,10 @@ class Primitives<
     if (flags & (RoleWaitSend|RolePostSend)) {
       auto *conn = &peer->send[connIndex].conn;
       step = conn->step;
-      step = roundUp(step, SlicePerChunk*StepPerSlice);
+      if(roundup != noSendRoundup) step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostSend) {
         connStepPtr = conn->tail;
-	next_hdp_reg = conn->next_hdp_reg;
+        next_hdp_reg = conn->next_hdp_reg;
       }
       if (flags & RoleWaitSend) {
         ncclShmem->groups[group].sendConns[index] = conn; // WaitSend role saves since that's who needs it in setDataPtrs()
@@ -430,7 +431,8 @@ class Primitives<
     this->nthreads = nthreads;
     this->nworkers = nthreads;
     this->group = group & (uint16_t)0xFFFF;
-    int connIndex = group >> 16;
+    int connIndex = (group >> 16)&0xFF;
+    int roundup = (group >> 24)&0xFF;
     barriers = &ncclShmem->groups[this->group].barrier;
     barrier_next = ncclShmem->groups[this->group].barrier_next;
 

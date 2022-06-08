@@ -29,6 +29,9 @@
   } \
 } while (0)
 
+static constexpr int noRecvRoundup = 0x01,
+                     noSendRoundup = 0x02;
+
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral
  * enums (e.g. NCCL_PROTO_LL) because for SIMPLE we need to carry a few extra

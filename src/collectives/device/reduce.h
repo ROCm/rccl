@@ -27,7 +27,8 @@ namespace {
     const int root = args->root;
 
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0>
-      prims(tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg, args->connIndex << 16);
+      prims(tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg,
+        (args->connIndex<<16) | ((prevRank == root ? noRecvRoundup : (rank == root ? noSendRoundup : 0))<<24));
 
     auto calcChunkSize = [&]__device__(ssize_t gridOffset)->int {
       int realChunkSize;
