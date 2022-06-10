@@ -1,0 +1,13 @@
+#!/bin/bash
+export MPI_INSTALL_PATH=
+export RCCL_INSTALL_PATH=
+export ROCM_INSTALL_PATH=
+
+$MPI_INSTALL_PATH/bin/mpiCC -o rccl-allreduce-mpi-multirank rccl-allreduce-mpi-multirank.cc -I$ROCM_INSTALL_PATH/include -I$RCCL_INSTALL_PATH/include -D__HIP_PLATFORM_AMD__ -L$ROCM_INSTALL_PATH/lib -lamdhip64 -L$RCCL_INSTALL_PATH/lib -lrccl
+
+$MPI_INSTALL_PATH/bin/mpiCC -o rccl-reducescatter-mpi-multirank rccl-reducescatter-mpi-multirank.cc -I$ROCM_INSTALL_PATH/include -I$RCCL_INSTALL_PATH/include -D__HIP_PLATFORM_AMD__ -L$ROCM_INSTALL_PATH/lib -lamdhip64 -L$RCCL_INSTALL_PATH/lib -lrccl
+
+
+export GPU_MAX_HW_QUEUES=16
+$MPI_INSTALL_PATH/bin/mpirun --mca pml ucx -np 4 ./rccl-allreduce-mpi-multirank  0 0 2
+$MPI_INSTALL_PATH/bin/mpirun --mca pml ucx -np 4 ./rccl-reducescatter-mpi-multirank  0 0 2

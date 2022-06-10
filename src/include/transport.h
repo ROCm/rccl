@@ -40,6 +40,7 @@ struct ncclPeerInfo {
   int64_t busId;
   struct ncclComm* comm;
   int cudaCompCap;
+  int virtualId;
 };
 
 #define CONNECT_SIZE 128

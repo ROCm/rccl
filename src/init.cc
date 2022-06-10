@@ -380,7 +380,7 @@ NCCL_PARAM(AggChannelSize, "AGG_CHANNEL_SIZE", -2);
 NCCL_PARAM(DisableGraphHelper, "GRAPH_HELPER_DISABLE", 0);
 NCCL_PARAM(GraphRegister, "GRAPH_REGISTER", 0);
 
-static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
+static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtualId) {
   if (ndev < 1) {
     WARN("invalid device count (%d) requested", ndev);
     return ncclInvalidArgument;
@@ -402,6 +402,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
   comm->rank = comm->hostDevComm.rank = rank;
   comm->nRanks = comm->hostDevComm.nRanks = ndev;
+  comm->virtualId = virtualId;
   hipGetDevice(&comm->cudaDev);
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx", comm, rank, ndev, comm->cudaDev, comm->busId);
@@ -524,6 +525,7 @@ static void showVersion() {
 
 static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, uint64_t commHash) {
   info->rank = comm->rank;
+  info->virtualId = comm->virtualId;
   CUDACHECK(hipGetDevice(&info->cudaDev));
   info->hostHash=getHostHash()+commHash;
   info->pidHash=getPidHash()+commHash;
@@ -702,13 +704,30 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(fillInfo(comm, comm->peerInfo+rank, commHash));
   NCCLCHECK(bootstrapAllGather(comm->bootstrap, comm->peerInfo, sizeof(struct ncclPeerInfo)));
 
-  for (int i = 0; i < nranks; i++) {
-    if ((i != rank) && (comm->peerInfo[i].hostHash == comm->peerInfo[rank].hostHash) && (comm->peerInfo[i].busId == comm->peerInfo[rank].busId)) {
-      WARN("Duplicate GPU detected : rank %d and rank %d both on CUDA device %lx", rank, i, comm->peerInfo[rank].busId);
-      return ncclInvalidUsage;
+  //If virtualId == -1 multiRank support has not been requested by user, using original interface
+  if (comm->virtualId == -1) {
+    for (int i = 0; i < nranks; i++) {
+      if ((i != rank) && (comm->peerInfo[i].hostHash == comm->peerInfo[rank].hostHash) && (comm->peerInfo[i].busId == comm->peerInfo[rank].busId)) {
+	WARN("Duplicate GPU detected : rank %d and rank %d both on CUDA device %lx", rank, i, comm->peerInfo[rank].busId);
+	return ncclInvalidUsage;
+      }
     }
   }
-
+  else {
+    //Multiple ranks can use the same device, but need to have different virtualId's.
+    for (int i = 0; i < nranks; i++) {
+      for (int j=0; j < nranks; j++) {
+	if (j==i) continue;
+	if((comm->peerInfo[i].hostHash  == comm->peerInfo[j].hostHash)  &&
+	   (comm->peerInfo[i].busId     == comm->peerInfo[j].busId)     &&
+	   (comm->peerInfo[i].virtualId == comm->peerInfo[j].virtualId)) {
+	  WARN("Duplicate virtualId detected : rank %d and rank %d both on GPU device %lx virtualId %d",
+	       i, j, comm->peerInfo[rank].busId, comm->peerInfo[i].virtualId);
+	  return ncclInvalidUsage;
+	}
+      }
+    }
+  }
   // AllGather1 - end
 
   // Topo detection / System graph creation
@@ -1235,7 +1254,7 @@ affinity_restore:
 
 NCCL_PARAM(SetStackSize, "SET_STACK_SIZE", 0);
 
-ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev) {
+ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev, int virtualId) {
   ncclResult_t res;
 
   CUDACHECK(hipSetDevice(cudaDev));
@@ -1246,7 +1265,7 @@ ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId 
     //CUDACHECKIGNORE(hipDeviceSetLimit(hipLimitStackSize, maxLocalSizeBytes));
   }
   *newcomm = NULL;
-  NCCLCHECKGOTO(commAlloc(newcomm, nranks, myrank), res, cleanup);
+  NCCLCHECKGOTO(commAlloc(newcomm, nranks, myrank, virtualId), res, cleanup);
   NCCLCHECKGOTO(initTransportsRank(*newcomm, &commId), res, cleanup);
   NCCLCHECKGOTO(devCommSetup(*newcomm), res, cleanup);
 
@@ -1259,7 +1278,7 @@ cleanup:
   return res;
 }
 
-static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev) {
+static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int cudaDev, int virtualId) {
   ncclResult_t res;
   char* env = getenv("NCCL_COMM_ID");
   if (env && myrank == 0) {
@@ -1282,9 +1301,9 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUni
   }
 
   if (ncclAsyncMode()) {
-    NCCLCHECKGOTO(ncclAsyncInit(ncclCommInitRankSync, newcomm, nranks, commId, myrank, cudaDev), res, end);
+    NCCLCHECKGOTO(ncclAsyncInit(ncclCommInitRankSync, newcomm, nranks, commId, myrank, cudaDev, virtualId), res, end);
   } else {
-    NCCLCHECKGOTO(ncclCommInitRankSync(newcomm, nranks, commId, myrank, cudaDev), res, end);
+    NCCLCHECKGOTO(ncclCommInitRankSync(newcomm, nranks, commId, myrank, cudaDev, virtualId), res, end);
   }
 
 end:
@@ -1297,9 +1316,19 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   int cudaDev;
   CUDACHECK(hipGetDevice(&cudaDev));
-  NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev));
+  NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, -1));
   return ncclSuccess;
 }
+
+NCCL_API(ncclResult_t, ncclCommInitRankMulti, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int virtualId);
+ncclResult_t ncclCommInitRankMulti(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int virtualId) {
+  NVTX3_FUNC_RANGE_IN(nccl_domain);
+  int cudaDev;
+  CUDACHECK(hipGetDevice(&cudaDev));
+  NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, virtualId));
+  return ncclSuccess;
+}
+
 
 NCCL_API(ncclResult_t, ncclCommInitAll, ncclComm_t* comms, int ndev, const int* devlist);
 ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
@@ -1315,7 +1344,7 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
   NCCLCHECK(ncclGroupStart());
   for (int i=0; i<ndev; i++) {
     // Ignore return codes .. we need to call ncclGroupEnd to clean up anyway
-    ncclCommInitRankDev(comms+i, ndev, uniqueId, i, devlist ? devlist[i] : i);
+    ncclCommInitRankDev(comms+i, ndev, uniqueId, i, devlist ? devlist[i] : i, -1);
   }
   NCCLCHECK(ncclGroupEnd());
   return ncclSuccess;

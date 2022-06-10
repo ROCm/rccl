@@ -19,13 +19,15 @@ namespace RcclUnitTesting
 
     OptionalColArgs options;
     bool isCorrect = true;
-    int totalRanks = testBed.ev.maxGpus;
+    int numGpus = testBed.ev.maxGpus;
+    for (int rpg=0; rpg < 2 && isCorrect; ++rpg)
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
     {
       if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
-
-      int const numProcesses = isMultiProcess ? totalRanks : 1;
-      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), 1);
+      int ranksPerGpu = rpg == 0 ? 1 : testBed.ev.maxRanksPerGpu;
+      int totalRanks = numGpus * ranksPerGpu;
+      int const numProcesses = isMultiProcess ? numGpus : 1;
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu), 1);
 
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       for (int numIdx = 0; numIdx < numElements.size() && isCorrect; ++numIdx)

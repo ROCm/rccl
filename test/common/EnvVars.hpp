@@ -24,6 +24,7 @@ namespace RcclUnitTesting
     int  processMask; // Filter single/multi process            [UT_PROCESS_MASK]
     bool verbose;     // Show verbose TestBed output for debug  [UT_VERBOSE]
     int  printValues; // Print out input/output/expected arrays [UT_PRINT_VALUES]
+    int  maxRanksPerGpu; // Number of ranks using the same GPU  [UT_MAX_RANKS_PER_GPU]
 
     // Constructor that parses and collects environment variables
     EnvVars();

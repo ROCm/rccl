@@ -691,7 +691,7 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
               if (g == system->nodes[GPU].nodes[j].gpu.dev)
                 break;
             if (j < ngpus)
-              graph->intra[nChannels*ngpus+r] = system->nodes[GPU].nodes[j].gpu.rank;
+              graph->intra[nChannels*ngpus+r] = system->nodes[GPU].nodes[j].gpu.rank[0];
             else
               return ncclInternalError;
           }
@@ -781,7 +781,7 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
               break;
           if (j < ngpus)
           {
-            graph->treeBase[r][x] = system->nodes[GPU].nodes[j].gpu.rank;
+            graph->treeBase[r][x] = system->nodes[GPU].nodes[j].gpu.rank[0];
             y=r;
           }
           else
@@ -913,15 +913,15 @@ ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGrap
       // find the first unsed GPU that is closest to NIC
       int f, m;
       for (f = 0; f < ngpus; f++) {
-        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank) break;
+        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank[0]) break;
         if(j >= n) break;
       }
       for (int i = 0; i < ngpus; i++) {
-        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank) break;
+        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank[0]) break;
         if (j < n) continue;
         if (paths[i].count < paths[f].count) f = i;
       }
-      for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank) break;
+      for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank[0]) break;
       used[n] = graph->intra[n*ngpus+m];
       for (int i = 0; i < ngpus; i++) intra[i] = graph->intra[n*ngpus+((i+m)%ngpus)];
       for (int i = 0; i < ngpus; i++) graph->intra[n*ngpus+i] = intra[i];

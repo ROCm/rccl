@@ -112,6 +112,7 @@ struct ncclComm {
   int64_t busId;   // my PCI bus ID in int format
   cpu_set_t cpuAffinity; // CPU affinity of the GPU
   int WarpSize;
+  int virtualId;
 
   int node;
   int nNodes;

@@ -19,8 +19,11 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph,
     struct ncclTopoRanks* topoRanks) {
   int rank = comm->rank;
-  int localRanks = comm->topo->nodes[GPU].count;
   int nChannels = comm->nChannels;
+  int localRanks = 0;
+  for (int i=0; i<comm->topo->nodes[GPU].count; i++) {
+    localRanks += comm->topo->nodes[GPU].nodes[i].gpu.nRanksPerGpu;
+  }
 
   for (int c=0; c<nChannels; c++) {
     struct ncclChannel* channel = comm->channels+c;
