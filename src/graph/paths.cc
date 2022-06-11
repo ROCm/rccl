@@ -680,7 +680,8 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
         remove = 0;
         system->type |= RCCL_TOPO_GDR_ALL;
         INFO(NCCL_GRAPH, "GDR is available on all GPUs");
-      }
+      } else
+        system->type |= RCCL_TOPO_XGMI_ALL;
     }
   }
 
@@ -755,7 +756,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     }
   }
 
-  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_4P2H_ROME) && !(comm->topo->type & RCCL_TOPO_GDR_ALL) && (comm->topo->nodes[GPU].nodes[0].gpu.gcn != 910)) {
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_4P2H_ROME) && !(comm->topo->type & RCCL_TOPO_GDR_ALL) && !(comm->topo->type & RCCL_TOPO_XGMI_ALL)) {
     // Adjust P2P channels on Rome
     comm->p2pnChannelsPerPeer = 2;
     comm->p2pnChannels = 2;

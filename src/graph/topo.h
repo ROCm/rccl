@@ -104,6 +104,7 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_GDR_ALL   4
 #define RCCL_TOPO_16P1H     8
 #define RCCL_TOPO_FORCE_INTRA 16
+#define RCCL_TOPO_XGMI_ALL  32
 
 #define RCCL_TOPO_MAX_RANKS_PER_GPU 8
 struct ncclTopoNode {
