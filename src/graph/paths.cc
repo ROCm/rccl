@@ -707,7 +707,7 @@ void ncclTopoFree(struct ncclTopoSystem* system) {
   free(system);
 }
 
-NCCL_PARAM(NChannelsPerNetPeer, "NCHANNELS_PER_NET_PEER", 2);
+NCCL_PARAM(NChannelsPerNetPeer, "NCHANNELS_PER_NET_PEER", 1);
 
 static ncclResult_t ncclTopoGetNchannels(struct ncclTopoSystem* system, int g /*local gpu index*/, int peerRank, int* nChannels) {
   int peer;
