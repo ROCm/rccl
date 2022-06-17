@@ -11,6 +11,9 @@
 #include "nccl.h"
 #include "rccl_bfloat16.h"
 #include "align.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit_struct.h"
+#endif
 #include <stdint.h>
 // [RCCL] Support for clique-based kernels
 //#include "clique/CliqueCommon.h"
@@ -418,6 +421,11 @@ struct ncclDevComm {
 
   // Channels, device side
   struct ncclChannel* channels;
+
+#if defined(ENABLE_NPKIT)
+  NpKitEventCollectContext* npKitEventCollectContexts;
+  uint64_t* cpuTimestamp;
+#endif
 
 #ifdef ENABLE_PROFILING
   // Profiling counters
