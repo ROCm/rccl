@@ -70,12 +70,12 @@ To invoke the unit tests, go to the build folder, then the test subfolder, and e
 
 Unit test names are now of the format:
 
-    [CollectiveCall]CorrectnessSweep/[CollectiveCall]CorrectnessTest.[Type of test]/[ncclRedOp_t]_[datatype]_[number of elements]_[number of devices]_[in place/out of place]_[environment variables]
+    Collective.TestType
 
 This allows filtering of unit tests being run by their parameter values by passing the --gtest_filter command line flag, for example:
 
 ```shell
---gtest_filter="AllReduceCorrectnessSweep*float32*"
+--gtest_filter="Gather.*"
 ```
 will run only AllReduce correctness tests with float32 datatype. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
 
