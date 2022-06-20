@@ -188,6 +188,7 @@ set(CC_SOURCES
     src/misc/nvmlwrap_stub.cc
     src/misc/rocm_smi_wrap.cc
     src/misc/profiler.cc
+    src/misc/npkit.cc
     src/misc/shmutils.cc
     src/misc/signals.cc              # RCCL
     src/misc/socket.cc
@@ -218,6 +219,10 @@ endif()
 
 if(PROFILE)
   add_definitions(-DENABLE_PROFILING)
+endif()
+
+if(NPKIT_FLAGS)
+  add_definitions(${NPKIT_FLAGS})
 endif()
 
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
