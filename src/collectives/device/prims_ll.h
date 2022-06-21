@@ -99,9 +99,11 @@ private:
     if (sendConnHeadPtr) {
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
-        sendConnHeadCache = LOAD(sendConnHeadPtr);
+        __builtin_amdgcn_s_sleep(8);
+        sendConnHeadCache = atomicAdd_system((unsigned long long *)sendConnHeadPtr, 0);
         if (checkAbort(spins, 1)) break;
       }
+      __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
         STORE(sendConnFifoPtr+sendConnHead%NCCL_STEPS, size);
