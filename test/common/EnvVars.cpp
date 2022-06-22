@@ -38,7 +38,7 @@ namespace RcclUnitTesting
     processMask    = GetEnvVar("UT_PROCESS_MASK", UT_SINGLE_PROCESS | UT_MULTI_PROCESS);
     verbose        = GetEnvVar("UT_VERBOSE"     , 0);
     printValues    = GetEnvVar("UT_PRINT_VALUES", 0);
-    maxRanksPerGpu = GetEnvVar("UT_MAX_RANKS_PER_GPU", 2);
+    maxRanksPerGpu = GetEnvVar("UT_MAX_RANKS_PER_GPU", 1);
 
     // Limit number of supported reduction operators to just ncclSum if only allReduce is built
 #ifdef BUILD_ALLREDUCE_ONLY
