@@ -280,8 +280,8 @@ class ncclFunction {
 #endif
 
 __device__ inline bool barrierReduceAny(int bit, uint32_t* abortCount) {
-  if (bit) atomicAdd(abortCount, 1); \
-  __syncthreads(); \
+  if (bit) atomicAdd(abortCount, 1);
+  __syncthreads();
   return atomicAdd(abortCount, 0) != 0;
 }
 
