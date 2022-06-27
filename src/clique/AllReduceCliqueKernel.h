@@ -24,6 +24,7 @@ THE SOFTWARE.
 #define ALLREDUCECLIQUEKERNEL_H
 
 #include "CliqueCommon.h"
+#include "CliqueCommonKernel.h"
 #include "devcomm.h"
 #include "reduce_kernel.h"
 #include "common_kernel.h"

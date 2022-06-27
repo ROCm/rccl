@@ -29,8 +29,6 @@ THE SOFTWARE.
 
 #include "Hash.h"
 
-#include "AllReduceCliqueKernel.h"
-
 #include <hip/hip_runtime.h>
 #include <hsa/hsa_ext_amd.h>
 #include <stdio.h>
