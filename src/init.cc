@@ -33,6 +33,7 @@
 #include "graph/topo.h"
 
 // [RCCL]
+#include "git_version.h"
 //#include "clique/CliqueManager.h"
 //#include <hsa/hsa_ext_amd.h>
 // [/RCCL]
@@ -525,10 +526,10 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 static void showVersion() {
   static int shown = 0;
   if (shown == 0 && ncclDebugLevel >= NCCL_LOG_VERSION) {
-    printf("%s\n", VERSION_STRING);
+    printf("%s %s\n", VERSION_STRING, rcclGitHash);
     fflush(stdout);
     if (ncclDebugFile != stdout)
-      INFO(NCCL_ALL,"%s", VERSION_STRING); // Also log NCCL version in one of the files
+      INFO(NCCL_ALL,"%s %s", VERSION_STRING, rcclGitHash); // Also log NCCL version in one of the files
     shown = 1;
   }
 }
