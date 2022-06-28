@@ -722,6 +722,13 @@ newchannel:
 end:
   graph->nChannels = nChannels;
   graph->speedIntra = graph->speedInter = system->maxWidth;
+  if (graph->id == 1) {
+    for (int i=0; i<graph->nChannels; i++) {
+      int net;
+      ncclTopoGetLocalNet(system, graph->intra[i*ngpus+1], &net);
+      graph->inter[i*2+1] = net;
+    }
+  }
 #if 0
   for (int i=0; i<graph->nChannels; i++) {
     printf("%d: ", i);
