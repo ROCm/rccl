@@ -477,7 +477,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
       }
     }
   } else if (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->topo->tuning == 4 &&
-    ((comm->nNodes == 2 && info->nBytes == 33554432) || (comm->nNodes <= 4 && info->nBytes == 67108864))) {
+    comm->nNodes >= 4 && info->nBytes >= 4294967296) {
     static int userTuneInput = -2;
     if (userTuneInput == -2) {
       const char *protoStr = getenv("NCCL_PROTO");
@@ -487,14 +487,12 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
       else
         userTuneInput = 1;
     }
-    if (userTuneInput) {
+    info->nChannels = nc;
+    if (!userTuneInput) {
       // always respect user settings
-      info->nChannels = nc;
-    } else {
-      // use ring simple with reduced channels on gfx90a for specific data sizes
+      // use ring simple on gfx90a for specific data sizes
       info->protocol = NCCL_PROTO_SIMPLE;
       info->algorithm = NCCL_ALGO_RING;
-      info->nChannels = nc/2;
     }
   } else {
     info->nChannels = nc;
