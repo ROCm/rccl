@@ -25,6 +25,7 @@ THE SOFTWARE.
 
 #include "nccl.h"
 #include <cstdint>
+#include "CliqueCommon.h"
 
 #define MIN_CLIQUE_SIZE 2
 #define MAX_CLIQUE_SIZE 8
@@ -45,49 +46,5 @@ typedef struct
   // Barrier variable
   gpuBarrier_t barrier;
 } cliqueDevicePtrs_t;
-
-// Helper macro to launch an appropriate kernel by converting rank to a template argument
-#define LAUNCH_CLIQUE_KERNEL(kernelname, FUNC, T, args)  \
-  {                                                      \
-    switch (args->comm->nRanks){                         \
-    case 2: kernelname<FUNC, T, 2>(args); break;         \
-    case 3: kernelname<FUNC, T, 3>(args); break;         \
-    case 4: kernelname<FUNC, T, 4>(args); break;         \
-    case 5: kernelname<FUNC, T, 5>(args); break;         \
-    case 6: kernelname<FUNC, T, 6>(args); break;         \
-    case 7: kernelname<FUNC, T, 7>(args); break;         \
-    case 8: kernelname<FUNC, T, 8>(args); break;         \
-    }                                                    \
-  }
-
-// Multi-GPU (on same node) barrier.  One thread per grid per GPU updates barrier / waits
-template <int NUM_RANKS>
-__forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier)
-{
-  if (threadIdx.x == 0)
-  {
-    // Sense inversion barrier
-    *barrier.localSense = 1 - *barrier.localSense;
-    int localSense = *barrier.localSense;
-
-    int val = __atomic_add_fetch(barrier.globalCount, 1, __ATOMIC_SEQ_CST);
-    if (val == NUM_RANKS)
-    {
-      // Last arrival resets barrier
-      __atomic_store_n(barrier.globalCount, 0, __ATOMIC_SEQ_CST);
-      __atomic_store_n(barrier.globalSense, localSense, __ATOMIC_SEQ_CST);
-    }
-    else
-    {
-      // Wait for all ranks to reach barrier
-      while (__atomic_load_n(barrier.globalSense, __ATOMIC_SEQ_CST) != localSense);
-    }
-  }
-}
-
-__forceinline__ __host__ __device__ size_t RoundUp(size_t X, size_t Y)
-{
-  return (X+Y-1)/Y * Y;
-}
 
 #endif
