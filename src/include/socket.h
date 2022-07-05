@@ -51,7 +51,7 @@ int ncclFindInterfaces(char* ifNames, union ncclSocketAddress *ifAddrs, int ifNa
 // Create a listening socket. sock->addr can be pre-filled with IP & port info. sock->fd is set after a successful call
 ncclResult_t ncclSocketListen(struct ncclSocket* sock);
 // Connect to sock->addr. sock->fd is set after a successful call.
-ncclResult_t ncclSocketConnect(struct ncclSocket* sock);
+ncclResult_t ncclSocketConnect(struct ncclSocket* sock, int portReuse = 0);
 // Return socket connection state.
 ncclResult_t ncclGetSocketState(struct ncclSocket* sock, enum ncclSocketState* state);
 // Accept an incoming connection from listenSocket->fd and keep the file descriptor in sock->fd, with the remote side IP/port in sock->addr.

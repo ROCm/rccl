@@ -12,6 +12,11 @@
 #include <ifaddrs.h>
 #include <net/if.h>
 
+#include <vector>
+#include <utility>
+#include <unordered_set>
+static std::vector<std::pair<int, std::unordered_set<std::string>>> clientPortPool;
+
 /* Format a string representation of a (union ncclSocketAddress *) socket address using getnameinfo()
  *
  * Output: "IPv4/IPv6 address<port>"
@@ -388,7 +393,7 @@ ncclResult_t ncclGetSocketState(struct ncclSocket* sock, enum ncclSocketState* s
     return ncclSuccess;
 }
 
-ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
+ncclResult_t ncclSocketConnect(struct ncclSocket* sock, int portReuse) {
   char line[SOCKET_NAME_MAXLEN+1];
   /* IPv4/IPv6 support */
   int family = sock->addr.sa.sa_family;
@@ -417,6 +422,35 @@ ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
   /*  const int bufsize = 128*1024;
     SYSCHECK(setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char*)&bufsize, sizeof(int)), "setsockopt");
     SYSCHECK(setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)&bufsize, sizeof(int)), "setsockopt");*/
+
+  if (portReuse) {
+    // pre-define ports according to tid, to avoid extra lock for race condition
+    if (clientPortPool.size() == 0) {
+      for (int tid = syscall(SYS_gettid), i = 1; i < 5; i++) {
+        clientPortPool.push_back(std::make_pair(60000 + i * 1000 + tid % 1000, std::unordered_set<std::string>()));
+      }
+    }
+    // find a port without conflict (different remote peer) in best effort
+    int reused_port = -1;
+    std::string remote_peer(ncclSocketToString(&sock->addr, line));
+    for (auto& port : clientPortPool) {
+      if (port.second.find(remote_peer) == port.second.end()) {
+        reused_port = port.first;
+        port.second.insert(remote_peer);
+        break;
+      }
+    }
+    // bind the port in fd for connect system call
+    if (reused_port != -1) {
+      int opt = 1;
+      SYSCHECK(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)), "setsockopt");
+      struct sockaddr_in sin;
+      sin.sin_family = family;
+      sin.sin_addr.s_addr = htonl(INADDR_ANY);
+      sin.sin_port = htons(reused_port);
+      SYSCHECK(bind(fd, (struct sockaddr *)&sin, salen), "bind_client_port");
+    }
+  }
 
   TRACE(NCCL_INIT|NCCL_NET,"Connecting to socket %s", ncclSocketToString(&sock->addr, line));
 
