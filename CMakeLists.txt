@@ -124,6 +124,14 @@ include_directories(src/include)
 include_directories(src/collectives)
 include_directories(src/collectives/device)
 
+# Create git version file
+# _git_version.cpp is a dummy output to force re-run prior to build
+ADD_CUSTOM_COMMAND(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp
+           ${CMAKE_CURRENT_BINARY_DIR}/_git_version.cpp
+    COMMAND ${CMAKE_COMMAND} -P
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/git_version.cmake)
+
 if (BUILD_ALLREDUCE_ONLY)
   add_definitions(-DBUILD_ALLREDUCE_ONLY)
   set(CU_SOURCES
@@ -197,7 +205,9 @@ set(CC_SOURCES
     src/bootstrap.cc
     src/proxy.cc
     src/net.cc
-    src/enqueue.cc)
+    src/enqueue.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
+
 
 foreach(filename ${CC_SOURCES})
   list(APPEND CPP_SOURCES ${filename})
