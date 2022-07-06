@@ -358,7 +358,7 @@ rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h
 rocm_export_targets(NAMESPACE
                     roc::
                     TARGETS
-                    roc::rccl
+                    rccl
                     DEPENDS
                     hip)
 if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
