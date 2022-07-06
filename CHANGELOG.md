@@ -5,8 +5,6 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## (Unreleased) RCCL-2.12.10
 ### Added
 - Compatibility with NCCL 2.12.10
-- Changing CMake exported target name from rccl to roc::rccl. This aligns RCCL to other ROCm
-  components. Users may need to update their build systems. 
 - Packages for test and benchmark executables on all supported OSes using CPack.
 - Adding custom signal handler - opt-in with RCCL_ENABLE_SIGNALHANDLER=1
   - Additional details provided if Binary File Descriptor library (BFD) is pre-installed
