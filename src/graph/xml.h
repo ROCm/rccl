@@ -56,6 +56,8 @@ ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const cha
 /* Remove unneeded parts */
 ncclResult_t ncclTopoTrimXml(struct ncclXml* xml);
 
+ncclResult_t ncclTopoGetStrFromSys(const char* path, const char* fileName, char* strValue);
+
 /**************/
 /* XML Struct */
 /* Functions  */
