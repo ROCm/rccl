@@ -273,6 +273,7 @@ ncclResult_t ncclIbGdrSupport(int ibDev) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
     char strValue[MAX_STR_LEN];
+    NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
     if (strncmp("Hyper-V UEFI Release", strValue, 20) == 0) {
       int roMode = ncclParamIbPciRelaxedOrdering();
       NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
