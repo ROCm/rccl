@@ -83,6 +83,11 @@ NCCL_PARAM(IbTc, "IB_TC", 0);
 NCCL_PARAM(IbArThreshold, "IB_AR_THRESHOLD", 8192);
 NCCL_PARAM(IbPciRelaxedOrdering, "IB_PCI_RELAXED_ORDERING", 2);
 
+NCCL_PARAM(IbSockClientPortReuse, "IB_SOCK_CLIENT_PORT_REUSE", 0);
+NCCL_PARAM(IbSockServerPortReuse, "IB_SOCK_SERVER_PORT_REUSE", 0);
+static thread_local union ncclSocketAddress reusedAddr;
+static thread_local int reusedSockfd = -1;
+
 pthread_t ncclIbAsyncThread;
 static void* ncclIbAsyncThreadMain(void* args) {
   struct ibv_context* context = (struct ibv_context*)args;
@@ -555,7 +560,19 @@ ncclResult_t ncclIbListen(int dev, void* opaqueHandle, void** listenComm) {
   memset(handle, 0, sizeof(struct ncclIbHandle));
   comm->dev = dev;
   NCCLCHECK(GetSocketAddr(&comm->sock.addr));
-  NCCLCHECK(ncclSocketListen(&comm->sock));
+  if (ncclParamIbSockServerPortReuse()) {
+    // reuse the socket address and fd for listen system call
+    if (reusedSockfd == -1) {
+      NCCLCHECK(ncclSocketListen(&comm->sock));
+      memcpy(&reusedAddr, &comm->sock.addr, sizeof(union ncclSocketAddress));
+      reusedSockfd = comm->sock.fd;
+    } else {
+      memcpy(&comm->sock.addr, &reusedAddr, sizeof(union ncclSocketAddress));
+      comm->sock.fd = reusedSockfd;
+    }
+  } else {
+    NCCLCHECK(ncclSocketListen(&comm->sock));
+  }
   memcpy(&handle->connectAddr, &comm->sock.addr, sizeof(union ncclSocketAddress));
   *listenComm = comm;
   return ncclSuccess;
@@ -579,7 +596,7 @@ ncclResult_t ncclIbConnect(int dev, void* opaqueHandle, void** sendComm) {
   NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, NULL, 1));
   stage->comm = comm;
   stage->state = ncclIbCommStateConnect;
-  NCCLCHECK(ncclSocketConnect(&comm->sock));
+  NCCLCHECK(ncclSocketConnect(&comm->sock, ncclParamIbSockClientPortReuse()));
 
 ib_connect_check:
   /* since ncclSocketConnect is async, we must check if connection is complete */
@@ -1268,7 +1285,7 @@ ncclResult_t ncclIbCloseRecv(void* recvComm) {
 ncclResult_t ncclIbCloseListen(void* listenComm) {
   struct ncclIbListenComm* comm = (struct ncclIbListenComm*)listenComm;
   if (comm) {
-    close(comm->sock.fd);
+    if (!ncclParamIbSockServerPortReuse() || reusedSockfd != comm->sock.fd) close(comm->sock.fd);
     free(comm);
   }
   return ncclSuccess;
