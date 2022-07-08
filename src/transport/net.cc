@@ -198,11 +198,11 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   NCCLCHECK(ncclProxyCall(&send->proxyConn, ncclProxyMsgSetup, &req, sizeof(req), NULL, 0));
 
   if (proxyRank == myInfo->rank) {
-    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s%s HDP %p", channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), req.netDev,
-        req.useGdr ? "/GDRDMA" : "", req.shared ? "/Shared" : "", req.curr_hdp_reg);
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s%s", channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), req.netDev,
+        req.useGdr ? "/GDRDMA" : "", req.shared ? "/Shared" : "");
   } else {
-    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d(%d)%s%s HDP %p", channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), req.netDev,
-        proxyRank, req.useGdr ? "/GDRDMA" : "", req.shared ? "/Shared" : "", req.curr_hdp_reg);
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d(%d)%s%s", channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), req.netDev,
+        proxyRank, req.useGdr ? "/GDRDMA" : "", req.shared ? "/Shared" : "");
   }
   *((int*)connectInfo) = proxyRank;
   return ncclSuccess;
