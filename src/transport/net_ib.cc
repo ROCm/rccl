@@ -25,6 +25,7 @@
 #include "timer.h"
 
 #include "ibvwrap.h"
+#include "graph/xml.h"
 
 #define USE_RDMA_WRITE 1
 #define MAXNAMESIZE 64
@@ -276,6 +277,14 @@ ncclResult_t ncclIbGdrSupport(int ibDev) {
   if (moduleLoaded == -1) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
+    char strValue[MAX_STR_LEN];
+    NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
+    if (strncmp("Hyper-V UEFI Release", strValue, 20) == 0) {
+      int roMode = ncclParamIbPciRelaxedOrdering();
+      NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
+      if (strcmp(strValue, "1") == 0 && roMode == 0)
+        moduleLoaded = 0;
+    }
 #else
     // Check for the nv_peer_mem module being loaded
     moduleLoaded = ((access("/sys/kernel/mm/memory_peers/nv_mem/version", F_OK) == -1) &&
