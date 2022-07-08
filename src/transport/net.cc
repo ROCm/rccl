@@ -17,6 +17,8 @@
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
 #endif
+#include "graph.h"
+#include "../graph/topo.h"
 
 static_assert(sizeof(ncclNetHandle_t) <= CONNECT_SIZE, "NET Connect info is too large");
 
@@ -165,6 +167,7 @@ struct setupReq {
   int useGdr;
   int channelId;
   int connIndex;
+  uint32_t* curr_hdp_reg;
 };
 
 /* Determine if we will use this transport for this peer and return connect
@@ -176,12 +179,17 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   req.channelId = channelId;
   req.connIndex = connIndex;
   req.netDev = -1;
+  req.curr_hdp_reg = 0;
 
   int proxyRank = myInfo->rank;
   if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &req.netDev));
   if (req.netDev < 0) NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &req.netDev, &proxyRank));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, req.netDev, 1, &req.useGdr));
   send->conn.direct |= req.useGdr ? NCCL_DIRECT_NIC : 0;
+  if (req.useGdr && comm->topo->nodes[GPU].nodes[0].gpu.gcn != 910) {
+    CUDACHECK(hipDeviceGetAttribute((int*)&req.curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
+    send->conn.curr_hdp_reg = req.curr_hdp_reg;
+  }
 
   NCCLCHECK(ncclProxyConnect(comm, TRANSPORT_NET, 1, proxyRank, &send->proxyConn));
   req.rank = myInfo->rank;
@@ -457,6 +465,7 @@ static ncclResult_t sendProxySetup(struct ncclProxyConnection* connection, struc
   resources->useGdr = req->useGdr;
   resources->channelId = req->channelId;
   resources->connIndex = req->connIndex;
+  resources->curr_hdp_reg = req->curr_hdp_reg;
   ncclNetProperties_t props;
   NCCLCHECK(ncclNetGetProperties(req->netDev, &props));
   resources->maxRecvs = props.maxRecvs;

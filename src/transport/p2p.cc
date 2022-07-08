@@ -8,6 +8,8 @@
 #include "comm.h"
 #include "graph.h"
 #include "utils.h"
+#include "graph.h"
+#include "../graph/topo.h"
 
 struct ncclP2pBuff {
   void* directPtr;
@@ -193,7 +195,7 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", channelId, myInfo->rank, peerInfo->rank);
     return ncclInternalError;
   }
-  if (!isXGMI) {
+  if (!isXGMI && comm->topo->nodes[GPU].nodes[0].gpu.gcn != 910) {
     CUDACHECK(hipDeviceGetAttribute((int*)&resources->next_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
     TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", channelId, myInfo->rank, peerInfo->rank, resources->next_hdp_reg);
   }
