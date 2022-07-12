@@ -39,12 +39,12 @@ $ git clone https://github.com/ROCmSoftwarePlatform/rccl.git
 $ cd rccl
 $ mkdir build
 $ cd build
-$ CXX=/opt/rocm/bin/hipcc cmake ..
-$ make -j 8
+$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ ..
+$ make -j
 ```
 You may substitute an installation path of your own choosing by passing CMAKE_INSTALL_PREFIX. For example:
 ```shell
-$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
 ```
 Note: ensure rocm-cmake is installed, `apt install rocm-cmake`.
 
