@@ -462,28 +462,28 @@ private:
   }
 
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
-    recvBuff[i] = (union ncclLLFifoLine*)LOAD(conn->buffs+NCCL_PROTO_LL);
-    recvStep[i] = LOAD(&conn->step);
+    recvBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
+    recvStep[i] = conn->step;
     if (wid == i) recvConn = conn;
   }
   __device__ __forceinline__ void loadRecvSync() {
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv()) {
-      recvConnHeadPtr = LOAD(&recvConn->head);
-      recvConnHead = LOAD(&recvConn->step);
+      recvConnHeadPtr = recvConn->head;
+      recvConnHead = recvConn->step;
     }
   }
 
   __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
-    sendBuff[i] = (union ncclLLFifoLine*)LOAD(conn->buffs+NCCL_PROTO_LL);
-    sendStep[i] = LOAD(&conn->step);
+    sendBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
+    sendStep[i] = conn->step;
     if (wid == i) sendConn = conn;
   }
   __device__ __forceinline__ void loadSendSync() {
     if (tid < fan.nsend()) {
-      sendConnHeadPtr = LOAD(&sendConn->head);
-      sendConnHeadCache = LOAD(sendConnHeadPtr);
-      sendConnHead = LOAD(&sendConn->step);
-      sendConnFifoPtr = LOAD(&sendConn->sizesFifo);
+      sendConnHeadPtr = sendConn->head;
+      sendConnHeadCache = *sendConnHeadPtr;
+      sendConnHead = sendConn->step;
+      sendConnFifoPtr = sendConn->sizesFifo;
     }
   }
 
@@ -518,9 +518,9 @@ private:
   __device__ ~Primitives() {
     // Save steps for the next operation
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv())
-      STORE(&recvConn->step, recvConnHead);
+      recvConn->step = recvConnHead;
     if (tid < fan.nsend())
-      STORE(&sendConn->step, sendConnHead);
+      sendConn->step = sendConnHead;
     // Ensure all steps written back
     barrier();
   }
