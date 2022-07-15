@@ -58,6 +58,10 @@ void sig_handler(int signum)
   free (strings);
 #endif
 
+  if (signum == SIGUSR2) {
+    return;
+  }
+
   exit (-1);
 }
 
@@ -69,7 +73,7 @@ void RegisterSignalHandlers()
   {
     INFO(NCCL_INIT, "Enabling custom signal handler");
 
-    std::vector<int> signalsToCatch = {SIGILL, SIGBUS, SIGFPE, SIGSEGV};
+    std::vector<int> signalsToCatch = {SIGILL, SIGBUS, SIGFPE, SIGSEGV, SIGUSR2};
 
     for (auto signum : signalsToCatch)
     {
