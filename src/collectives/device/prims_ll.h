@@ -83,7 +83,7 @@ private:
   inline __device__ int checkAbort(int &spins, int send) {
     spins++;
     if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = LOAD(ncclShmem->comm.abortFlag);
+      abort = __atomic_load_n((ncclShmem->comm.abortFlag), __ATOMIC_SEQ_CST);
       spins = 0;
     }
     return abort;
@@ -106,7 +106,7 @@ private:
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        STORE(sendConnFifoPtr+sendConnHead%NCCL_STEPS, size);
+        __atomic_store_n((sendConnFifoPtr+sendConnHead%NCCL_STEPS), (size), __ATOMIC_SEQ_CST);
       }
       sendConnHead += 1;
     }
