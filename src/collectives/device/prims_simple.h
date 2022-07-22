@@ -117,7 +117,7 @@ private:
 
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
       if (isSendNotRecv && (flags & SizesFifoEnabled))
-        atomicExch_system((unsigned long long *)(connSizesFifoPtr+step%NCCL_STEPS), nelts*sizeof(T));
+        __atomic_store_n((connSizesFifoPtr+step%NCCL_STEPS), nelts*sizeof(T), __ATOMIC_SEQ_CST);
 
       void **ptrs = isSendNotRecv ? (ncclShmem->groups[group].dsts + Dst)
                                   : (ncclShmem->groups[group].srcs + Src);
