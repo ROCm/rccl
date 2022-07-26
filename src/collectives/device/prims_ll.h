@@ -83,7 +83,7 @@ private:
   inline __device__ int checkAbort(int &spins, int send) {
     spins++;
     if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = LOAD(ncclShmem->comm.abortFlag);
+      abort = __atomic_load_n((ncclShmem->comm.abortFlag), __ATOMIC_SEQ_CST);
       spins = 0;
     }
     return abort;
@@ -106,7 +106,7 @@ private:
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        STORE(sendConnFifoPtr+sendConnHead%NCCL_STEPS, size);
+        __atomic_store_n((sendConnFifoPtr+sendConnHead%NCCL_STEPS), (size), __ATOMIC_SEQ_CST);
       }
       sendConnHead += 1;
     }
@@ -462,28 +462,28 @@ private:
   }
 
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
-    recvBuff[i] = (union ncclLLFifoLine*)LOAD(conn->buffs+NCCL_PROTO_LL);
-    recvStep[i] = LOAD(&conn->step);
+    recvBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
+    recvStep[i] = conn->step;
     if (wid == i) recvConn = conn;
   }
   __device__ __forceinline__ void loadRecvSync() {
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv()) {
-      recvConnHeadPtr = LOAD(&recvConn->head);
-      recvConnHead = LOAD(&recvConn->step);
+      recvConnHeadPtr = recvConn->head;
+      recvConnHead = recvConn->step;
     }
   }
 
   __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
-    sendBuff[i] = (union ncclLLFifoLine*)LOAD(conn->buffs+NCCL_PROTO_LL);
-    sendStep[i] = LOAD(&conn->step);
+    sendBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
+    sendStep[i] = conn->step;
     if (wid == i) sendConn = conn;
   }
   __device__ __forceinline__ void loadSendSync() {
     if (tid < fan.nsend()) {
-      sendConnHeadPtr = LOAD(&sendConn->head);
-      sendConnHeadCache = LOAD(sendConnHeadPtr);
-      sendConnHead = LOAD(&sendConn->step);
-      sendConnFifoPtr = LOAD(&sendConn->sizesFifo);
+      sendConnHeadPtr = sendConn->head;
+      sendConnHeadCache = *sendConnHeadPtr;
+      sendConnHead = sendConn->step;
+      sendConnFifoPtr = sendConn->sizesFifo;
     }
   }
 
@@ -518,9 +518,9 @@ private:
   __device__ ~Primitives() {
     // Save steps for the next operation
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv())
-      STORE(&recvConn->step, recvConnHead);
+      recvConn->step = recvConnHead;
     if (tid < fan.nsend())
-      STORE(&sendConn->step, sendConnHead);
+      sendConn->step = sendConnHead;
     // Ensure all steps written back
     barrier();
   }

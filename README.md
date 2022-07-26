@@ -39,12 +39,12 @@ $ git clone https://github.com/ROCmSoftwarePlatform/rccl.git
 $ cd rccl
 $ mkdir build
 $ cd build
-$ CXX=/opt/rocm/bin/hipcc cmake ..
-$ make -j 8
+$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ ..
+$ make -j
 ```
 You may substitute an installation path of your own choosing by passing CMAKE_INSTALL_PREFIX. For example:
 ```shell
-$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
 ```
 Note: ensure rocm-cmake is installed, `apt install rocm-cmake`.
 
@@ -70,14 +70,14 @@ To invoke the unit tests, go to the build folder, then the test subfolder, and e
 
 Unit test names are now of the format:
 
-    [CollectiveCall]CorrectnessSweep/[CollectiveCall]CorrectnessTest.[Type of test]/[ncclRedOp_t]_[datatype]_[number of elements]_[number of devices]_[in place/out of place]_[environment variables]
+    CollectiveCall.[Type of test]
 
-This allows filtering of unit tests being run by their parameter values by passing the --gtest_filter command line flag, for example:
+Filtering of unit tests should be done with environment variable and by passing the --gtest_filter command line flag, for example:
 
 ```shell
---gtest_filter="AllReduceCorrectnessSweep*float32*"
+UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./UnitTests --gtest_filter="AllReduce.C*"
 ```
-will run only AllReduce correctness tests with float32 datatype. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
+will run only AllReduce correctness tests with float16 datatype. A list of available filtering environment variables appears at the top of every run. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
 
 
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCmSoftwarePlatform/rccl-tests.

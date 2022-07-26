@@ -117,7 +117,7 @@ private:
 
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
       if (isSendNotRecv && (flags & SizesFifoEnabled))
-        STORE(connSizesFifoPtr+step%NCCL_STEPS, nelts*sizeof(T));
+        __atomic_store_n((connSizesFifoPtr+step%NCCL_STEPS), nelts*sizeof(T), __ATOMIC_SEQ_CST);
 
       void **ptrs = isSendNotRecv ? (ncclShmem->groups[group].dsts + Dst)
                                   : (ncclShmem->groups[group].srcs + Src);
@@ -440,12 +440,12 @@ private:
       step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostRecv) {
         connStepPtr = conn->head;
-        STORE(connStepPtr, step); // Return credits in case we rounded up.
+        atomicExch_system((unsigned long long *)connStepPtr, step); // Return credits in case we rounded up.
       }
       if (flags & RoleWaitRecv) {
         ncclShmem->groups[group].recvConns[index] = conn; // WaitRecv role saves since that's who needs it in setDataPtrs()
         connStepPtr = conn->tail;
-        connStepCache = LOAD(connStepPtr);
+        connStepCache = atomicAdd_system((unsigned long long *)connStepPtr, 0);
         flags |= (conn->offsFifo != nullptr) ? OffsFifoEnabled : 0;
         if (Direct) {
           // User buffers have been registered
@@ -485,7 +485,7 @@ private:
       if (flags & RoleWaitSend) {
         ncclShmem->groups[group].sendConns[index] = conn; // WaitSend role saves since that's who needs it in setDataPtrs()
         connStepPtr = conn->head;
-        connStepCache = LOAD(connStepPtr);
+        connStepCache = atomicAdd_system((unsigned long long *)connStepPtr, 0);
         flags |= (conn->offsFifo != nullptr) ? OffsFifoEnabled : 0;
         if (flags & OffsFifoEnabled)
           connOffsFifoPtr = conn->offsFifo;
@@ -575,7 +575,7 @@ private:
     // Save steps for the next operation
     if (flags & (RolePostSend|RolePostRecv)) {
       auto *conns = (flags & RolePostSend) ? ncclShmem->groups[group].sendConns : ncclShmem->groups[group].recvConns;
-      STORE(&conns[index]->step, step);
+      conns[index]->step = step;
     }
     // Make sure all threads are done writing back conn->step and done using
     // ncclShmem->groups[group]
@@ -598,7 +598,7 @@ private:
       int spins = 0;
       void *volatile *slot = ncclShmem->groups[group].recvConns[index]->ptrExchange;
       // Wait for consumer to consume previous value before trampling it.
-      while (LOAD(slot) != nullptr && !checkAbort(spins));
+      while ((void *)atomicAdd_system((unsigned long long *) slot,0) != nullptr && !checkAbort(spins));
       directBuff = (T*)outputBuf;
       // Encode pointer by XOR'ing against some address they definitely wouldn't send
       // since we want to allow them sending us nullptr while not colliding with
@@ -610,7 +610,7 @@ private:
       void *volatile *slot = ncclShmem->groups[group].sendConns[index]->ptrExchange;
       void *ptr;
       while (true) {
-        ptr = LOAD(slot);
+        ptr = (void *)atomicAdd_system((unsigned long long *) slot,0);
         if (ptr != nullptr || checkAbort(spins)) break;
       }
       directBuff = regUsed ? (T*)(e->dnOutputs[index]) :
@@ -623,7 +623,7 @@ private:
       volatile uint64_t* argSlot0 = ncclShmem->groups[group].sendConns[index]->redOpArgExchange;
       volatile uint64_t* argSlot1 = ncclShmem->groups[group].sendConns[index]->redOpArgExchange+1;
       // Wait for consumer to consume previous value before trampling it.
-      while ((*slot != nullptr || *argSlot0 != 0 || *argSlot1 !=0) && !checkAbort(spins));
+      while (((void *)atomicAdd_system((unsigned long long *) slot,0) != nullptr || *argSlot0 != 0 || *argSlot1 !=0) && !checkAbort(spins));
       // If there is no recv, then we are directly pulling from input buffer (e.g. directScatter)
       // Otherwise, we are pulling from output buffer (e.g. recvCopyDirectSend)
       directBuff = MaxRecv == 0 ? (T*)inputBuf : (T*)outputBuf;
@@ -642,7 +642,7 @@ private:
       volatile uint64_t* argSlot1 = ncclShmem->groups[group].recvConns[index]->redOpArgExchange+1;
       void *ptr;
       while (true) {
-        ptr = *slot;
+        ptr = (void *)atomicAdd_system((unsigned long long *) slot,0);
         if (ptr != nullptr || checkAbort(spins)) break;
       }
       directBuff = regUsed ? (T*)(MaxSend == 0 ? e->upOutputs[index] : e->dnInputs[index]) :

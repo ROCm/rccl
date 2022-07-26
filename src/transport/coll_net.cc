@@ -157,8 +157,8 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   NCCLCHECK(ncclProxyConnect(comm, TRANSPORT_COLLNET, 1, myInfo->rank, &send->proxyConn));
   NCCLCHECK(ncclProxyCall(&send->proxyConn, ncclProxyMsgSetup, &req, sizeof(req), NULL, 0));
 
-  INFO(NCCL_INIT|NCCL_NET,"CollNet %02d : %d [send] via COLLNET/%s/%d%s", channelId, myInfo->rank, collNetName(), req.netDev,
-      req.useGdr ? "/GDRDMA" : "");
+  INFO(NCCL_INIT|NCCL_NET,"CollNet %02d : %d [send] via COLLNET/%s/%d%s comm %p nRanks %02d", channelId, myInfo->rank, collNetName(), req.netDev,
+      req.useGdr ? "/GDRDMA" : "", comm, comm->nRanks);
   return ncclSuccess;
 }
 
@@ -175,8 +175,8 @@ static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   struct collNetRecvConnectInfo* info = (struct collNetRecvConnectInfo*) connectInfo;
   NCCLCHECK(ncclProxyCall(&recv->proxyConn, ncclProxyMsgSetup, &req, sizeof(req), &info->collNetHandle, sizeof(collNetHandle_t)));
 
-  INFO(NCCL_INIT|NCCL_NET,"CollNet %02d : %d [receive] via COLLNET/%s/%d%s", channelId, myInfo->rank, collNetName(), req.netDev,
-      req.useGdr ? "/GDRDMA" : "");
+  INFO(NCCL_INIT|NCCL_NET,"CollNet %02d : %d [receive] via COLLNET/%s/%d%s comm %p nRanks %02d", channelId, myInfo->rank, collNetName(), req.netDev,
+      req.useGdr ? "/GDRDMA" : "", comm, comm->nRanks);
   return ncclSuccess;
 }
 
