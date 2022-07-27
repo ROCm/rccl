@@ -8,12 +8,6 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
-struct allGather1Data_t {
-  struct ncclPeerInfo peerInfo;
-  struct ncclComm* comm;
-  int cudaCompCap;
-};
-
 // AllGather3 - begin
 struct ncclGraphInfo {
   int pattern;
@@ -26,6 +20,7 @@ struct ncclGraphInfo {
 };
 
 struct allGather3Data_t{
+  int netDev;
   int collNetSupport;
   int nc;
   struct ncclGraphInfo tree;
@@ -40,9 +35,9 @@ ncclResult_t ncclTopoGetSystem(const char* xmlTopoFile, struct ncclTopoSystem** 
 
 ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem** topoSystem);
 
-ncclResult_t bootstrapAllGather(struct ncclComm* comm, struct allGather1Data_t * allGather1Data);
+ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, uint64_t commHash);
 
-ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather1Data_t *allGather1Data, struct allGather3Data_t *allGather3Data,
+ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather3Data_t *allGather3Data,
   struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph);
 
 ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t *allGather3Data,

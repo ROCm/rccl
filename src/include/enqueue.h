@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -16,6 +16,7 @@
 #define NCCL_AGG_CHANNEL_SIZE (1LL << 21) /* 2 MiB, ideal per-channel size to fully utilize bandwidth */
 
 size_t ncclKernMaxLocalSize();
+ncclResult_t ncclKernSetSharedMemoryCarveout(int carveOut);
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info);
 ncclResult_t ncclCpuBarrierIn(struct ncclComm* comm, int* isLast);
 ncclResult_t ncclCpuBarrierLast(struct ncclComm* comm);
@@ -32,17 +33,17 @@ ncclResult_t ncclGetCudaGraph(ncclComm_t comm, hipGraph_t* graph);
 ncclResult_t ncclCudaGraphHostSetup(ncclComm_t comm, hipGraph_t graph);
 
 struct ncclBuffRegInfo {
-  void* sendbuffsBase[NCCL_MAX_INTRA_RANKS];
-  void* recvbuffsBase[NCCL_MAX_INTRA_RANKS];
-  void* sendbuffs[NCCL_MAX_INTRA_RANKS];
-  void* recvbuffs[NCCL_MAX_INTRA_RANKS];
+  void* sendbuffsBase[NCCL_MAX_LOCAL_RANKS];
+  void* recvbuffsBase[NCCL_MAX_LOCAL_RANKS];
+  void* sendbuffs[NCCL_MAX_LOCAL_RANKS];
+  void* recvbuffs[NCCL_MAX_LOCAL_RANKS];
   int nBuffs;
 };
 
 // Enqueue information (for kernel and proxy) for each operation
 struct ncclQueueElem {
-  struct ncclWorkElem work;
-  struct ncclProxyArgs proxyArgs;
+  struct ncclWork work;
+  struct ncclProxyOp proxyOp;
   struct ncclBuffRegInfo buffRegInfo;
 };
 
@@ -88,7 +89,7 @@ static void ncclDestroyQueueInfo(void* ptr) {
   // but currently the destroy function of CUDA objects does not allow CUDA API calls
   while (eqElem != NULL) {
     for (int i=0; i<eqElem->buffRegInfo.nBuffs; i++) {
-      if (i == eqInfo->comm->intraNodeRank) continue;
+      if (i == eqInfo->comm->localRank) continue;
       CUDACHECKIGNORE(cudaIpcCloseMemHandle(eqElem->buffRegInfo.sendbuffsBase[i]));
       CUDACHECKIGNORE(cudaIpcCloseMemHandle(eqElem->buffRegInfo.recvbuffsBase[i]));
     }

@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -17,9 +17,15 @@
 // Define min for ssize_t
 static __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 
-template <typename T>
-inline __device__ void loadPtr(void** ptr, T* &v) {
+inline __device__ int loadInt(int* ptr) {
+  int v;
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   v = LOAD(ptr);
+#else
+  asm volatile("ld.volatile.global.u32 %0, [%1];"
+      : "=r"(v) : "l"(ptr));
+#endif
+  return v;
 }
 
 typedef uint64_t PackType;
@@ -419,12 +425,12 @@ struct MULTI<FUNC, int64_t> {
 
 template<typename T> inline __device__
 T vFetch(const volatile T* ptr) {
-  return *ptr;
+  return __builtin_nontemporal_load(ptr);
 }
 
 template<typename T> inline __device__
 void vStore(volatile T* ptr, const T val) {
-  *ptr = val;
+  __builtin_nontemporal_store(val, ptr);
 }
 
 #if CUDART_VERSION < 9000 && !(defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__))
@@ -443,25 +449,25 @@ void vStore<half>(volatile half* ptr, const half val) {
 template<> inline __device__
 half vFetch<half>(const volatile half* ptr) {
   half r;
-  r = ((half*)ptr)[0];
+  r = __builtin_nontemporal_load((uint16_t*)ptr);
   return r;
 }
 
 template<> inline __device__
 void vStore<half>(volatile half* ptr, const half val) {
-  ((half*)ptr)[0] = val;
+  __builtin_nontemporal_store(val, (uint16_t*)ptr);
 }
 
 template<> inline __device__
 rccl_bfloat16 vFetch<rccl_bfloat16>(const volatile rccl_bfloat16* ptr) {
   rccl_bfloat16 r;
-  r.data = ptr->data;
+  r.data = __builtin_nontemporal_load(&ptr->data);
   return r;
 }
 
 template<> inline __device__
 void vStore<rccl_bfloat16>(volatile rccl_bfloat16* ptr, const rccl_bfloat16 val) {
-  ptr->data = val.data;
+  __builtin_nontemporal_store(val.data, &ptr->data);
 }
 #endif
 
@@ -485,16 +491,16 @@ struct MULTI128 {
 
 inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  v.x = p->x;
-  v.y = p->y;
+  v.x = __builtin_nontemporal_load(&p->x);
+  v.y = __builtin_nontemporal_load(&p->y);
 #else
   asm volatile("ld.volatile.global.v2.u64 {%0,%1}, [%2];" : "=l"(v.x), "=l"(v.y) : "l"(p) : "memory");
 #endif
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  p->x = v.x;
-  p->y = v.y;
+  __builtin_nontemporal_store(v.x, &p->x);
+  __builtin_nontemporal_store(v.y, &p->y);
 #else
   asm volatile("st.volatile.global.v2.u64 [%0], {%1,%2};" :: "l"(p), "l"(v.x), "l"(v.y) : "memory");
 #endif

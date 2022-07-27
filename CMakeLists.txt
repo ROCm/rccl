@@ -1,6 +1,8 @@
 # Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
 
 cmake_minimum_required(VERSION 3.5)
+INCLUDE(CheckIncludeFiles)
+INCLUDE(CheckSymbolExists)
 
 # We use C++14 features, this will add compile option: -std=c++14
 set( CMAKE_CXX_STANDARD 14 )
@@ -122,6 +124,14 @@ include_directories(src/include)
 include_directories(src/collectives)
 include_directories(src/collectives/device)
 
+# Create git version file
+# _git_version.cpp is a dummy output to force re-run prior to build
+ADD_CUSTOM_COMMAND(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp
+           ${CMAKE_CURRENT_BINARY_DIR}/_git_version.cpp
+    COMMAND ${CMAKE_COMMAND} -P
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/git_version.cmake)
+
 if (BUILD_ALLREDUCE_ONLY)
   add_definitions(-DBUILD_ALLREDUCE_ONLY)
   set(CU_SOURCES
@@ -173,18 +183,24 @@ set(CC_SOURCES
     src/collectives/all_to_all_api.cc
     src/collectives/all_to_allv_api.cc
     src/channel.cc
-    src/clique/CliqueManager.cc     # RCCL
-    src/clique/HandleCache.cc       # RCCL
-    src/clique/HandleShm.cc         # RCCL
-    src/clique/Hash.cc              # RCCL
-    src/clique/MsgQueue.cc          # RCCL
-    src/clique/ShmObject.cc         # RCCL
+    #src/clique/CliqueManager.cc     # RCCL
+    #src/clique/HandleCache.cc       # RCCL
+    #src/clique/HandleShm.cc         # RCCL
+    #src/clique/Hash.cc              # RCCL
+    #src/clique/MsgQueue.cc          # RCCL
+    #src/clique/ShmObject.cc         # RCCL
     src/misc/argcheck.cc
     src/misc/nvmlwrap_stub.cc
     src/misc/utils.cc
     src/misc/ibvwrap.cc
     src/misc/nvmlwrap_stub.cc
     src/misc/rocm_smi_wrap.cc
+    src/misc/profiler.cc
+    src/misc/npkit.cc
+    src/misc/shmutils.cc
+    src/misc/signals.cc              # RCCL
+    src/misc/socket.cc
+    src/misc/param.cc
     src/transport/coll_net.cc
     src/transport/net.cc
     src/transport/net_ib.cc
@@ -196,7 +212,10 @@ set(CC_SOURCES
     src/group.cc
     src/bootstrap.cc
     src/proxy.cc
-    src/enqueue.cc)
+    src/net.cc
+    src/enqueue.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
+
 
 foreach(filename ${CC_SOURCES})
   list(APPEND CPP_SOURCES ${filename})
@@ -212,9 +231,8 @@ if(PROFILE)
   add_definitions(-DENABLE_PROFILING)
 endif()
 
-if(TIMING_PROFILE)
-  add_definitions(-DENABLE_PROFILING)
-  add_definitions(-DENABLE_TIMING_PROFILE)
+if(NPKIT_FLAGS)
+  add_definitions(${NPKIT_FLAGS})
 endif()
 
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
@@ -222,7 +240,56 @@ if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
 endif()
 
-CHECK_INCLUDE_FILE_CXX("${ROCM_PATH}/rocm_smi/include/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
+enable_language(C)
+CHECK_INCLUDE_FILES(bfd.h HAVE_BFD)
+if (HAVE_BFD)
+  add_definitions(-DHAVE_BFD)
+  message ("-- Found BFD")
+  CHECK_SYMBOL_EXISTS(bfd_get_section_flags "bfd.h" HAVE_DECL_BFD_GET_SECTION_FLAGS)
+  if (HAVE_DECL_BFD_GET_SECTION_FLAGS)
+    add_definitions(-DHAVE_DECL_BFD_GET_SECTION_FLAGS)
+  endif()
+  CHECK_SYMBOL_EXISTS(bfd_get_section_vma "bfd.h" HAVE_DECL_BFD_GET_SECTION_VMA)
+  if (HAVE_DECL_BFD_GET_SECTION_VMA)
+    add_definitions(-DHAVE_DECL_BFD_GET_SECTION_VMA)
+  endif()
+  CHECK_CXX_SOURCE_COMPILES(
+    "#include <bfd.h>
+
+       int main (int argc, char **argv) {
+         bfd_size_type size;
+         bfd abfd;
+         asection sec;
+         size = bfd_section_size(&abfd, &sec);
+         return (int)(size);
+       }"
+    HAVE_TWO_ARG_BFD_SECTION_SIZE)
+  if (HAVE_TWO_ARG_BFD_SECTION_SIZE)
+    add_definitions(-DHAVE_TWO_ARG_BFD_SECTION_SIZE)
+  endif()
+  find_path(DEMANGLE_HEADER demangle.h PATHS /usr/include PATH_SUFFIXES libiberty)
+  if(NOT DEMANGLE_HEADER)
+    message("Could not find demangle.h ${DEMANGLE_HEADER}")
+  else()
+    add_definitions(-DHAVE_CPLUS_DEMANGLE)
+    message("Found demangle.h in ${DEMANGLE_HEADER}")
+    set (HAVE_CPLUS_DEMANGLE  1)
+    set (HAVE_DECL_BASENAME  "1")
+    INCLUDE_DIRECTORIES(${DEMANGLE_HEADER})
+  endif()
+endif()
+
+find_package(rocm_smi PATHS ${ROCM_PATH}/lib/cmake/rocm_smi)
+if (rocm_smi_FOUND)
+  message ("-- Found rocm_smi at ${ROCM_SMI_INCLUDE_DIR}")
+  CHECK_INCLUDE_FILE_CXX("${ROCM_SMI_INCLUDE_DIR}/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
+else()
+  message ("-- Checking old include directory structure for rocm_smi")
+  set(ROCM_SMI_INCLUDE_DIR "${ROCM_PATH}/rocm_smi/include")
+  set(ROCM_SMI_LIB_DIR "${ROCM_PATH}/rocm_smi/lib")
+  set(ROCM_SMI_LIBRARIES rocm_smi64)
+  CHECK_INCLUDE_FILE_CXX("${ROCM_SMI_INCLUDE_DIR}/rocm_smi/rocm_smi64Config.h" HAVE_ROCM_SMI64CONFIG)
+endif()
 IF(HAVE_ROCM_SMI64CONFIG)
   add_definitions(-DUSE_ROCM_SMI64CONFIG)
 ENDIF()
@@ -265,9 +332,19 @@ if("${HIP_COMPILER}" MATCHES "hcc")
   endif()
 endif()
 
-target_include_directories(rccl PRIVATE ${ROCM_PATH}/rocm_smi/include)
-target_link_libraries(rccl PRIVATE hip::device dl -lrocm_smi64 -L${ROCM_PATH}/rocm_smi/lib)
+target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
+target_link_libraries(rccl PRIVATE hip::device dl -l${ROCM_SMI_LIBRARIES} -L${ROCM_SMI_LIB_DIR})
 target_link_libraries(rccl INTERFACE hip::host)
+
+if(HAVE_BFD)
+  target_link_libraries(rccl PRIVATE bfd dl z)
+  find_library(HAVE_IBERTY iberty PATHS /usr/lib64 /usr/lib/
+    PATH_SUFFIXES x86_64-linux-gnu)
+  if(HAVE_IBERTY)
+    message("iberty found @  ${HAVE_IBERTY} ")
+    target_link_libraries(rccl PRIVATE iberty dl z)
+  endif()
+endif()
 
 #Setup librccl.so version
 rocm_set_soversion(rccl "1.0")
@@ -289,10 +366,10 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
   rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}/include/rccl"
             PATTERNS "rccl.h"
             GUARDS SYMLINK WRAPPER
-            WRAPPER_LOCATIONS include rccl/include)  
+            WRAPPER_LOCATIONS ${CMAKE_INSTALL_INCLUDEDIR} rccl/${CMAKE_INSTALL_INCLUDEDIR})
   #install the wrapper header file to package
   rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
-	        DESTINATION "./rccl/include/" )
+	        DESTINATION "./rccl/${CMAKE_INSTALL_INCLUDEDIR}/" )
   rocm_install( FILES "${PROJECT_BINARY_DIR}/include/rccl.h"
                 DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" )
 endif()

@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2016-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -125,7 +125,7 @@ struct FanSymmetric {
 };
 
 // The primitives class. Specialized per protocol in the other headers.
-template<typename T, typename RedOp, typename Fan, int Direct, typename Proto>
+template<typename T, typename RedOp, typename Fan, int Direct, typename Proto, int P2p>
 class Primitives;
 
 // Used by LL & LL128 to implement direct members in the naive way.
@@ -157,23 +157,19 @@ struct PrimitivesWithoutDirect {
 #include "prims_ll128.h"
 
 #ifdef ENABLE_PROFILING
-#ifdef ENABLE_TIMING_PROFILE
 #define INIT_COUNTER \
-  if (tid == 0) { t0 = __builtin_amdgcn_s_memrealtime(); }
+  if (tid == 0) { struct ncclProfElem *elem = devProf.elems+args->opCount%PROFILE_NUM_ITEMS; t0 = __builtin_amdgcn_s_memrealtime(); ws = elem->elem[blockIdx.x].wait_cycle; }
 #define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0 && args->coll.opCount) { devProf->elems[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0); \
-    devProf->elems[blockIdx.x].prim##_byte += nelem * sizeof(T); }
-#else
-#define INIT_COUNTER \
-  if (tid == 0) { t0 = __builtin_amdgcn_s_memrealtime(); ws = devProf->elems[blockIdx.x].wait_cycle; }
-#define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0 && args->coll.opCount) { devProf->elems[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
-    + ws - devProf->elems[blockIdx.x].wait_cycle); \
-    devProf->elems[blockIdx.x].prim##_byte += nelem * sizeof(T); }
-#endif
+  if (tid == 0) { struct ncclProfElem *elem = devProf.elems+args->opCount%PROFILE_NUM_ITEMS; elem->elem[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
+    + ws - elem->elem[blockIdx.x].wait_cycle); \
+    elem->elem[blockIdx.x].prim##_byte += nelem * sizeof(T); elem->elem[blockIdx.x].opCount = args->opCount;}
+#define ACCUMULATE_PRIM_COUNTER(prim) \
+  if (tid == 0) { struct ncclProfElem *elem = devProf.elems+args->opCount%PROFILE_NUM_ITEMS; elem->elem[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
+    + ws - elem->elem[blockIdx.x].wait_cycle); elem->elem[blockIdx.x].opCount = args->opCount;}
 #else
 #define INIT_COUNTER
 #define ACCUMULATE_COUNTER(prim)
+#define ACCUMULATE_PRIM_COUNTER(prim)
 #endif
 
 #endif

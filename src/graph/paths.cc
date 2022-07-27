@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -170,20 +170,21 @@ static ncclResult_t getLocalCpu(struct ncclTopoSystem* system, int gpu, int* ret
   return ncclSuccess;
 }
 
-static ncclResult_t addCpuStep(struct ncclTopoSystem* system, int c, int t1, int i1, int t2, int i2) {
-  struct ncclTopoNode* cpuNode = system->nodes[CPU].nodes+c;
+static ncclResult_t addInterStep(struct ncclTopoSystem* system, int tx, int ix, int t1, int i1, int t2, int i2) {
+  struct ncclTopoNode* cpuNode = system->nodes[tx].nodes+ix;
   struct ncclTopoNode* srcNode = system->nodes[t1].nodes+i1;
 
   int l=0;
   // Node 1 -> CPU
-  for (int i=0; i<srcNode->paths[CPU][c].count; i++) srcNode->paths[t2][i2].list[l++] = srcNode->paths[CPU][c].list[i];
+  for (int i=0; i<srcNode->paths[tx][ix].count; i++) srcNode->paths[t2][i2].list[l++] = srcNode->paths[tx][ix].list[i];
   // CPU -> Node 2
   for (int i=0; i<cpuNode->paths[t2][i2].count; i++) srcNode->paths[t2][i2].list[l++] = cpuNode->paths[t2][i2].list[i];
 
   // Update path characteristics
   srcNode->paths[t2][i2].count = l;
-  srcNode->paths[t2][i2].type = std::max(srcNode->paths[CPU][c].type, cpuNode->paths[t2][i2].type);
-  srcNode->paths[t2][i2].width = std::min(srcNode->paths[CPU][c].width, cpuNode->paths[t2][i2].width);
+  srcNode->paths[t2][i2].type = std::max(srcNode->paths[tx][ix].type, cpuNode->paths[t2][i2].type);
+  if (tx == GPU) srcNode->paths[t2][i2].type = PATH_PXN;
+  srcNode->paths[t2][i2].width = std::min(srcNode->paths[tx][ix].width, cpuNode->paths[t2][i2].width);
   return ncclSuccess;
 }
 
@@ -226,6 +227,9 @@ ncclResult_t ncclGetLevel(int* level, const char* disableEnv, const char* levelE
           }
         }
         // Old style numbering
+        // levelsOldToNew to is an array with each index corresponding to the
+        // "old level" int, and each value mapping to the correct value defined in topo.h
+        // maxOldLevel is a quick check to handle out of bounds (based on the length of levelsOldToNew)
         if (l == -1 && str[0] >= '0' && str[0] <= '9') {
           int oldLevel = strtol(str, NULL, 0);
           const int maxOldLevel = sizeof(levelsOldToNew)/sizeof(int) - 1;
@@ -239,6 +243,8 @@ ncclResult_t ncclGetLevel(int* level, const char* disableEnv, const char* levelE
   }
   return ncclSuccess;
 }
+
+NCCL_PARAM(IgnoreDisabledP2p, "IGNORE_DISABLED_P2P", 0);
 
 int ncclTopoUserP2pLevel = -1;
 ncclResult_t ncclTopoCheckP2p(struct ncclTopoSystem* system, int64_t id1, int64_t id2, int* p2p, int *read, int* intermediateRank) {
@@ -255,13 +261,14 @@ ncclResult_t ncclTopoCheckP2p(struct ncclTopoSystem* system, int64_t id1, int64_
     return ncclSuccess;
   }
 
-
+  int intermediateIndex = -1;
   // Set intermediate GPU rank, if routing through an intermediate GPU.
   struct ncclTopoLinkList* path = gpu1->paths[GPU]+g2;
   if (path->count == 2) {
     struct ncclTopoNode* intermediateNode = path->list[0]->remNode;
-    if (intermediateNode->type == GPU && intermediateRank) {
-      *intermediateRank = intermediateNode->gpu.rank;
+    if (intermediateNode->type == GPU) {
+      intermediateIndex = intermediateNode - system->nodes[GPU].nodes;
+      if (intermediateRank) *intermediateRank = intermediateNode->gpu.rank[0];
     }
   }
 
@@ -290,6 +297,41 @@ ncclResult_t ncclTopoCheckP2p(struct ncclTopoSystem* system, int64_t id1, int64_
 compare:
   // Compute the PCI distance and compare with the p2pLevel.
   if (path->type <= p2pLevel) *p2p = 1;
+
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#else
+  if (*p2p == 1) {
+    // NCCL_IGNORE_DISABLED_P2P=2 is used by unit tests that don't want to
+    // validate against NVML at all since they are pretending to be on other hw.
+    if (g1 != g2 && ncclParamIgnoreDisabledP2p() != 2) {
+      int indexes[3] = {-1,-1,-1};
+      int verticeN = 0;
+      NCCLCHECK(ncclNvmlEnsureInitialized());
+
+      indexes[verticeN++] = system->nodes[GPU].nodes[g1].gpu.dev;
+      if (intermediateIndex != -1) indexes[verticeN++] = system->nodes[GPU].nodes[intermediateIndex].gpu.dev;
+      indexes[verticeN++] = system->nodes[GPU].nodes[g2].gpu.dev;
+
+      for (int i=1; i < verticeN; i++) {
+        nvmlGpuP2PStatus_t status;
+        status = ncclNvmlDevicePairs[indexes[i-1]][indexes[i-0]].p2pStatusRead;
+        bool good = status == NVML_P2P_STATUS_OK;
+        status = ncclNvmlDevicePairs[indexes[i-1]][indexes[i-0]].p2pStatusWrite;
+        good &= status == NVML_P2P_STATUS_OK;
+        if (!good) {
+          if (ncclParamIgnoreDisabledP2p()) {
+            *p2p = 0;
+          } else if (path->type <= PATH_NVB) {
+            WARN("P2P is disabled between NVLINK connected GPUs %d and %d. This should not be the case given their connectivity, and is probably due to a hardware issue. If you still want to proceed, you can set NCCL_IGNORE_DISABLED_P2P=1.", indexes[i-1], indexes[i-0]);
+            return ncclUnhandledCudaError;
+          } else if (path->type < PATH_SYS) {
+            INFO(NCCL_INIT, "P2P is disabled between connected GPUs %d and %d. You can repress this message with NCCL_IGNORE_DISABLED_P2P=1.", indexes[i-1], indexes[i-0]);
+          }
+        }
+      }
+    }
+  }
+#endif
 
   if (path->type == PATH_NVL) {
     struct ncclTopoNode* gpu2 = system->nodes[GPU].nodes+g2;
@@ -359,6 +401,14 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
   }
 
   int distance = gpu->paths[NET][n].type;
+  if (distance == PATH_PXN) {
+    // In case of PXN, use the intermediate GPU distance instead
+    int proxyRank, g;
+    NCCLCHECK(ncclTopoGetIntermediateRank(system, gpu->gpu.rank[0], netDev, &proxyRank));
+    NCCLCHECK(ncclTopoRankToIndex(system, proxyRank, &g));
+    struct ncclTopoNode* proxyGpu = system->nodes[GPU].nodes+g;
+    distance = proxyGpu->paths[NET][n].type;
+  }
   if (distance > netGdrLevel) {
     INFO(NCCL_NET,"GPU Direct RDMA Disabled for GPU %lx / HCA %d (distance %d > %d)", busId, netDev, distance, netGdrLevel);
     return ncclSuccess;
@@ -366,6 +416,77 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
 
   *useGdr = 1;
   INFO(NCCL_NET,"GPU Direct RDMA Enabled for GPU %lx / HCA %d (distance %d <= %d), read %d", busId, netDev, distance, netGdrLevel, read);
+  return ncclSuccess;
+}
+
+ncclResult_t ncclTopoGetIntermediateRank(struct ncclTopoSystem* system, int rank, int netDev, int* intermediateRank) {
+  // Get GPU and NET
+  int n, g;
+  NCCLCHECK(ncclTopoIdToIndex(system, NET, netDev, &n));
+  NCCLCHECK(ncclTopoRankToIndex(system, rank, &g));
+  struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
+  struct ncclTopoLinkList* path = gpu->paths[NET]+n;
+  if (path->type == PATH_PXN) {
+    struct ncclTopoNode* node;
+    int type = NVS;
+    for (int i=0; i<path->count && type == NVS; i++) {
+      node = path->list[i]->remNode;
+      type = node->type;
+    }
+    if (type != GPU) {
+      WARN("Could not find intermediate GPU between GPU rank %d and NIC %d\n", rank, netDev);
+      return ncclInternalError;
+    }
+    *intermediateRank = node->gpu.rank[0];
+  } else {
+    *intermediateRank = rank;
+  }
+  return ncclSuccess;
+}
+
+NCCL_PARAM(PxnDisable, "PXN_DISABLE", 1);
+
+// Net v4 plugins don't have non-blocking connect/accept. We can't therefore use
+// remote proxies without risking deadlocks
+int ncclPxnDisable() {
+  static int pxnDisable = -1;
+  if (pxnDisable == -1) {
+    if (ncclNetVersion() == 4) {
+      INFO(NCCL_INIT, "PXN Disabled as plugin is v4");
+      pxnDisable = 1;
+    } else {
+      pxnDisable = ncclParamPxnDisable();
+    }
+  }
+  return pxnDisable;
+}
+
+ncclResult_t ncclTopoGetPxnRanks(struct ncclComm* comm, int** intermediateRanks, int* nranks) {
+  struct ncclTopoSystem* system = comm->topo;
+  *nranks = 0;
+  *intermediateRanks = NULL;
+  if (system->nodes[NET].count == 0) return ncclSuccess;
+
+  int nr = 0;
+  int* ranks = NULL;
+  for (int rank=0; rank<comm->nRanks; rank++) {
+    int netDev, proxyRank;
+    NCCLCHECK(ncclTopoGetNetDev(comm, comm->rank, NULL, 0, rank, &netDev, &proxyRank));
+    if (proxyRank == comm->rank) continue;
+    int useGdr;
+    NCCLCHECK(ncclTopoCheckGdr(comm->topo, comm->busId, netDev, 1, &useGdr));
+    if (useGdr == 0) continue;
+    int found = 0;
+    for (int r=0; r<nr; r++) {
+      if (ranks[r] == proxyRank) found = 1;
+    }
+    if (!found) {
+      NCCLCHECK(ncclRealloc(&ranks, nr, nr+1));
+      ranks[nr++] = proxyRank;
+    }
+  }
+  *nranks = nr;
+  *intermediateRanks = ranks;
   return ncclSuccess;
 }
 
@@ -393,16 +514,16 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclPeer
         // Divert all traffic through the CPU
         int cpu;
         NCCLCHECK(getLocalCpu(system, g, &cpu));
-        NCCLCHECK(addCpuStep(system, cpu, GPU, p, GPU, g));
+        NCCLCHECK(addInterStep(system, CPU, cpu, GPU, p, GPU, g));
       }
     }
 
     if (peerInfos == NULL) continue;
     // Remove GPUs we can't talk to because of containers.
-    struct ncclPeerInfo* dstInfo = peerInfos+system->nodes[GPU].nodes[g].gpu.rank;
+    struct ncclPeerInfo* dstInfo = peerInfos+system->nodes[GPU].nodes[g].gpu.rank[0];
     for (int p=0; p<system->nodes[GPU].count; p++) {
       if (p == g) continue;
-      struct ncclPeerInfo* srcInfo = peerInfos+system->nodes[GPU].nodes[p].gpu.rank;
+      struct ncclPeerInfo* srcInfo = peerInfos+system->nodes[GPU].nodes[p].gpu.rank[0];
       int shm;
       NCCLCHECK(ncclTransports[TRANSPORT_SHM].canConnect(&shm, system, NULL, srcInfo, dstInfo));
       int p2p;
@@ -420,6 +541,33 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclPeer
     NCCLCHECK(ncclTopoSetPaths(netNode, system));
 
     for (int g=0; g<system->nodes[GPU].count; g++) {
+      // Check whether we can access the NIC through another NVLink-connected GPU (PXN)
+      struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
+      if (ncclPxnDisable() != 1 && gpu->paths[NET][n].type > PATH_PXB) {
+        int pxnGpu = -1;
+
+        for (int p=0; p<system->nodes[GPU].count; p++) {
+          if (p == g) continue;
+
+          // PXN = PCI + NVLink.
+          struct ncclTopoNode* peerNode = system->nodes[GPU].nodes+p;
+          if (peerNode->paths[NET][n].type > PATH_PXB || peerNode->paths[GPU][g].type > PATH_NVL) continue;
+
+          pxnGpu = p;
+
+          int netDev;
+
+          NCCLCHECK(ncclTopoGetLocalNet(system, peerNode->gpu.rank[0], &netDev));
+          // To ensure proper balancing, use preferably a local GPU which advertised that NIC as its preferred one.
+          if (netDev == netNode->id) break;
+        }
+        if (pxnGpu != -1) {
+          // We can use that GPU as relay to communicate with that NIC.
+          // Only enabling it in the GPU->NIC direction for now to favor
+          // receiving locally and sending remotely (consistent with net.cc)
+          NCCLCHECK(addInterStep(system, GPU, pxnGpu, GPU, g, NET, n));
+        }
+      }
       // Update path when we dont want to / can't use GPU Direct RDMA.
       int gdr;
       NCCLCHECK(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[g].id, netNode->id, 0, &gdr));
@@ -427,13 +575,15 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclPeer
         // We cannot use GPU Direct RDMA, divert all traffic through the CPU local to the GPU
         int localCpu;
         NCCLCHECK(getLocalCpu(system, g, &localCpu));
-        NCCLCHECK(addCpuStep(system, localCpu, NET, n, GPU, g));
-        NCCLCHECK(addCpuStep(system, localCpu, GPU, g, NET, n));
+        NCCLCHECK(addInterStep(system, CPU, localCpu, NET, n, GPU, g));
+        NCCLCHECK(addInterStep(system, CPU, localCpu, GPU, g, NET, n));
       }
     }
   }
   return ncclSuccess;
 }
+
+RCCL_PARAM(EnableIntranet, "ENABLE_INTRANET", 0);
 
 ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* comm) {
   int *domains;
@@ -450,7 +600,12 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
         domains[g] = std::min(domains[g], domains[p]);
       }
     }
-    if (gpu->gpu.rank == comm->rank) myDomain = domains[g];
+    for (int j=0; j<gpu->gpu.nRanksPerGpu; j++ ) {
+      if (gpu->gpu.rank[j] == comm->rank) {
+	myDomain = domains[g];
+	break;
+      }
+    }
   }
 
   int ngpus = system->nodes[GPU].count;
@@ -498,38 +653,42 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
   NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
   if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD
     && model == NCCL_TOPO_CPU_TYPE_ROME) {
-    int gdr, ret = 1;
-    int64_t net;
-    for (int g = 0; g < system->nodes[GPU].count; g++) {
-      NCCLCHECK(ncclTopoGetLocalNet(system, system->nodes[GPU].nodes[g].gpu.rank, &net, 0));
-      NCCLCHECK(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[g].id, net, 1, &gdr));
-      if (!gdr) {
-        ret = 0;
-        break;
+    int gdr = 1;
+    bool allXgmi = true;
+    // detect if all GPUs are connected by XGMI
+    for (int i = 0; i < system->nodes[GPU].count && allXgmi; i++) {
+      int cudaDev1 = system->nodes[GPU].nodes[i].gpu.dev;
+      for (int j = 0; j < system->nodes[GPU].count && allXgmi; j++) {
+        if (i == j) continue;
+        int cudaDev2 = system->nodes[GPU].nodes[j].gpu.dev;
+        bool isXGMI;
+        NCCLCHECK(ncclTopoGetLinkType(comm->topo, cudaDev1, cudaDev2, &isXGMI));
+        allXgmi &= isXGMI;
       }
     }
-    if (ret) {
-      bool allXgmi = true;
-      // don't trim NICs unless all GPUs are connected by XGMI
-      for (int i = 0; i < system->nodes[GPU].count && allXgmi; i++) {
-        int cudaDev1 = system->nodes[GPU].nodes[i].gpu.dev;
-        for (int j = 0; j < system->nodes[GPU].count && allXgmi; j++) {
-          if (i == j) continue;
-          int cudaDev2 = system->nodes[GPU].nodes[j].gpu.dev;
-          bool isXGMI;
-          NCCLCHECK(ncclTopoGetLinkType(comm->topo, cudaDev1, cudaDev2, &isXGMI));
-          allXgmi &= isXGMI;
-        }
-      }
-      if (!allXgmi) {
-        remove = 0;
-        system->type |= RCCL_TOPO_GDR_ALL;
-        INFO(NCCL_GRAPH, "GDR is available on all GPUs");
-      }
+    if (allXgmi) system->type |= RCCL_TOPO_XGMI_ALL;
+    for (int g = 0; g < system->nodes[GPU].count; g++) {
+      int net;
+      NCCLCHECK(ncclTopoGetLocalNet(system, system->nodes[GPU].nodes[g].gpu.rank[0], &net));
+      NCCLCHECK(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[g].id, net, 1, &gdr));
+      if (!gdr) break;
+    }
+    if (gdr && !allXgmi) {
+      remove = 0;
+      system->type |= RCCL_TOPO_GDR_ALL;
+      INFO(NCCL_GRAPH, "GDR is available on all GPUs");
     }
   }
-  comm->localRanks = system->nodes[GPU].count;
-  if (system->nodes[GPU].count == comm->nRanks && remove) {
+
+  if (rcclParamEnableIntranet()) {
+    remove = 0;
+    system->type |= RCCL_TOPO_FORCE_INTRA;
+  }
+  comm->localRanks = 0;
+  for (int n=0; n<system->nodes[GPU].count; n++ ) {
+    comm->localRanks += system->nodes[GPU].nodes[n].gpu.nRanksPerGpu;
+  }
+  if (comm->localRanks == comm->nRanks && remove) {
     for (int n=system->nodes[NET].count-1; n>=0; n--)
       NCCLCHECK(ncclTopoRemoveNode(system, NET, n));
   }
@@ -544,6 +703,8 @@ void ncclTopoFree(struct ncclTopoSystem* system) {
   free(system);
 }
 
+NCCL_PARAM(NChannelsPerNetPeer, "NCHANNELS_PER_NET_PEER", 1);
+
 static ncclResult_t ncclTopoGetNchannels(struct ncclTopoSystem* system, int g /*local gpu index*/, int peerRank, int* nChannels) {
   int peer;
   struct ncclTopoLinkList* path = NULL;
@@ -556,14 +717,14 @@ static ncclResult_t ncclTopoGetNchannels(struct ncclTopoSystem* system, int g /*
     // Local rank
     path = system->nodes[GPU].nodes[peer].paths[GPU]+g;
     if (path->type == PATH_NVL) {
-      float nvlWidth = ncclTopoNVLinkSpeed(system->nodes[GPU].nodes[g].gpu.cudaCompCap);
+      float nvlWidth = ncclTopoXGMISpeed(system->nodes[GPU].nodes[g].gpu.cudaCompCap);
       *nChannels = 2*std::max(1, (int)(path->width / nvlWidth));
     } else {
       *nChannels = 2;
     }
   } else {
     // Remote rank, use network
-    *nChannels = 1;
+    *nChannels = ncclParamNChannelsPerNetPeer();
   }
   return ncclSuccess;
 }
@@ -590,7 +751,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     }
   }
 
-  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_4P2H_ROME) && !(comm->topo->type & RCCL_TOPO_GDR_ALL) && (comm->topo->nodes[GPU].nodes[0].gpu.gcn != 910)) {
+  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_4P2H_ROME) && !(comm->topo->type & RCCL_TOPO_GDR_ALL) && !(comm->topo->type & RCCL_TOPO_XGMI_ALL)) {
     // Adjust P2P channels on Rome
     comm->p2pnChannelsPerPeer = 2;
     comm->p2pnChannels = 2;
@@ -598,7 +759,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
   else {
     // Round to next pow2 nChannelsPerPeer and nChannels
     comm->p2pnChannelsPerPeer = nextPow2(minChannels);
-    comm->p2pnChannels = nextPow2(comm->p2pnChannels);
+    comm->p2pnChannels = std::min(comm->topo->nodes[GPU].count == comm->topo->nRanks ? 2*comm->nRanks : comm->nRanks, nextPow2(comm->p2pnChannels));
   }
 
   // Init channels that weren't used so far
@@ -622,10 +783,14 @@ ncclResult_t ncclTopoGetNvbGpus(struct ncclTopoSystem* system, int rank, int* nr
   int nvbGpus = 0;
   for (int g=0; g<ngpus; g++) {
     struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
-    if (gpu->gpu.rank != rank) continue;
+    int j=0;
+    for ( ; j<gpu->gpu.nRanksPerGpu; j++ ){
+      if (gpu->gpu.rank[j] == rank) break;
+    }
+    if ( j == gpu->gpu.nRanksPerGpu ) continue;
     for (int p=0; p<ngpus; p++) {
       if (gpu->paths[GPU][p].type == PATH_NVB) {
-        (*ranks)[nvbGpus++] = system->nodes[GPU].nodes[p].gpu.rank;
+        (*ranks)[nvbGpus++] = system->nodes[GPU].nodes[p].gpu.rank[j];
       }
     }
   }
