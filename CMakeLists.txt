@@ -33,9 +33,13 @@ set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
 
 #Set the AMDGPU_TARGETS with backward compatiblity
 if(COMMAND rocm_check_target_ids)
-   rocm_check_target_ids(DEFAULT_AMDGPU_TARGETS
-       TARGETS "gfx803;gfx900:xnack-;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack-;gfx90a:xnack+;gfx1030"
-   )
+   if(BUILD_ADDRESS_SANITIZER)
+     rocm_check_target_ids(DEFAULT_AMDGPU_TARGETS
+       TARGETS "gfx90a:xnack+")
+   else()
+     rocm_check_target_ids(DEFAULT_AMDGPU_TARGETS
+       TARGETS "gfx803;gfx900:xnack-;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack-;gfx90a:xnack+;gfx1030")
+   endif()
 else()
     # Use target ID syntax if supported for AMDGPU_TARGETS
     if(TARGET_ID_SUPPORT)
@@ -110,8 +114,9 @@ endif()
 
 if(BUILD_ADDRESS_SANITIZER)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -shared-libasan")
+  set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -fuse-ld=lld")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -shared-libasan")
-  add_link_options(-fuse-ld=lld)
+  set(CMAKE_C_LINK_EXECUTABLE "${CMAKE_C_LINK_EXECUTABLE} -fuse-ld=lld")
 endif()
 
 configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/rccl.h)
