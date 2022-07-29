@@ -352,7 +352,7 @@ rocm_set_soversion(rccl "1.0")
 rocm_install_targets(TARGETS
                      rccl
 		     )
-rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h
+rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
 
 rocm_export_targets(NAMESPACE
@@ -368,9 +368,9 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
             GUARDS SYMLINK WRAPPER
             WRAPPER_LOCATIONS ${CMAKE_INSTALL_INCLUDEDIR} rccl/${CMAKE_INSTALL_INCLUDEDIR})
   #install the wrapper header file to package
-  rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
+  rocm_install( FILES ${PROJECT_BINARY_DIR}/rccl/include/rccl.h src/include/nccl_net.h
 	        DESTINATION "./rccl/${CMAKE_INSTALL_INCLUDEDIR}/" )
-  rocm_install( FILES "${PROJECT_BINARY_DIR}/include/rccl.h"
+  rocm_install( FILES ${PROJECT_BINARY_DIR}/include/rccl.h src/include/nccl_net.h
                 DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" )
 endif()
 
