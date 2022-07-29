@@ -467,7 +467,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
       if (info->nBytes <= 196608) {
         info->protocol = NCCL_PROTO_LL;
         info->algorithm = NCCL_ALGO_TREE;
-        info->nChannels =  std::min(comm->nChannels, info->nBytes <= 65536? 4 : 12);
+        info->nChannels =  std::min(comm->nChannels, info->nBytes <= 16384? 4 : 12);
       } else if (info->nBytes <= 1048576) {
         info->protocol = NCCL_PROTO_LL;
         info->algorithm = NCCL_ALGO_RING;
@@ -555,7 +555,6 @@ comp_next:
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
-  if (info->comm->topo->pivotA2ANumBiRings == 3 ) work->pad_0 = 1;
   work->opCount = info->opCount;
   work->header.type = ncclWorkTypeColl;
   work->sendbuff = info->sendbuff;
