@@ -95,6 +95,9 @@ namespace RcclUnitTesting
 
     // Helper function that splits up GPUs to the given number of processes
     static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
+                                                          int const numGpus,
+							  int const ranksPerGpu);
+    static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
                                                           int const numGpus);
 
     // Generate a test case name
@@ -105,7 +108,8 @@ namespace RcclUnitTesting
                                        ncclRedOp_t    const redOp,
                                        int            const root,
                                        bool           const inPlace,
-                                       bool           const managedMem);
+                                       bool           const managedMem,
+                                       int            const ranksPerProc=1);
 
     // Run a simple sweep
     void RunSimpleSweep(std::vector<ncclFunc_t>     const& funcTypes,

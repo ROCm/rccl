@@ -1,5 +1,15 @@
 # Changelog for TransferBench
 
+## v1.02
+### Added
+- Setting NUM_ITERATIONS to negative number indicates to run for -NUM_ITERATIONS seconds per Test
+### Changed
+- Copies are now refered to as Transfers instead of Links
+- Re-ordering how env vars are displayed (alphabetically now)
+### Removed
+- Combined timing is now always on for kernel-based GPU copies. COMBINED_TIMING env var has been removed
+- Use single sync is no longer supported to facility variable iterations. USE_SINGLE_SYNC env var has been removed
+
 ## v1.01
 ### Added
 - Adding USE_SINGLE_STREAM feature

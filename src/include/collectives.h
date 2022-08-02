@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2017-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -37,8 +37,8 @@ struct ncclDevRedOpFull {
 
 /* Declare all collective operations */
 #define DECL5(func, algo, proto, devredop, type) \
-  extern __device__ __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, devredop, type)(struct ncclWorkElem* args); \
-  extern __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(ncclWorkElem c); \
+  extern __device__ __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, devredop, type)(); \
+  extern __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, struct ncclWorkElem c); \
 
 #define CONCAT(a,b) a##b
 #define MACRO_IF(cond, t, f) CONCAT(MACRO_IF_, cond)(t, f)
@@ -96,38 +96,32 @@ DECL(AllReduce)
 DECL5(SendRecv, RING, SIMPLE, Sum, int8_t)
 DECL5(AllToAllPivot, RING, SIMPLE, Sum, int8_t)
 
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t)(struct ncclWorkElem* args);
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t)(struct ncclWorkElem* args);
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int32_t)(struct ncclWorkElem* args);
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint32_t)(struct ncclWorkElem* args);
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int64_t)(struct ncclWorkElem* args);
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint64_t)(struct ncclWorkElem* args);
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, half)(struct ncclWorkElem* args);
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t)();
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t)();
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int32_t)();
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint32_t)();
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int64_t)();
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint64_t)();
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, half)();
 #if defined(RCCL_BFLOAT16)
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, rccl_bfloat16)(struct ncclWorkElem* args);
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, rccl_bfloat16)();
 #endif
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, float)(struct ncclWorkElem* args);
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, double)(struct ncclWorkElem* args);
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, float)();
+extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, double)();
 
 // CHUNKSIZE must be a multiple of SLICESIZE
-//#define ALLREDUCE_SLICESTEPS (NCCL_STEPS/4)
-//#define ALLREDUCE_CHUNKSTEPS (NCCL_STEPS/2)
-//#define ALLGATHER_SLICESTEPS (NCCL_STEPS/4)
-//#define ALLGATHER_CHUNKSTEPS (NCCL_STEPS/2)
-//#define REDUCESCATTER_SLICESTEPS (NCCL_STEPS/4)
-//#define REDUCESCATTER_CHUNKSTEPS (NCCL_STEPS/2)
-#define ALLREDUCE_SLICESTEPS 2
-#define ALLREDUCE_CHUNKSTEPS 4
-#define ALLGATHER_SLICESTEPS 4
-#define ALLGATHER_CHUNKSTEPS 4
-#define REDUCESCATTER_SLICESTEPS 2
-#define REDUCESCATTER_CHUNKSTEPS 4
+#define ALLREDUCE_SLICESTEPS (NCCL_STEPS/4)
+#define ALLREDUCE_CHUNKSTEPS (NCCL_STEPS/2)
+#define ALLGATHER_SLICESTEPS (NCCL_STEPS/4)
+#define ALLGATHER_CHUNKSTEPS (NCCL_STEPS/2)
+#define REDUCESCATTER_SLICESTEPS (NCCL_STEPS/4)
+#define REDUCESCATTER_CHUNKSTEPS (NCCL_STEPS/2)
 #define BROADCAST_SLICESTEPS 1
-#define BROADCAST_CHUNKSTEPS 4
+#define BROADCAST_CHUNKSTEPS 1
 #define REDUCE_SLICESTEPS 1
-#define REDUCE_CHUNKSTEPS 4
-#define SENDRECV_SLICEFACTOR 1
-#define NCCL_MAX_SLICE_PER_CHUNK 4  // max value for CHUNKSTEPS/SLICESTEPS, must accord with above
+#define REDUCE_CHUNKSTEPS 1
+#define SENDRECV_SLICEFACTOR 4
+#define NCCL_MAX_SLICE_PER_CHUNK 2  // max value for CHUNKSTEPS/SLICESTEPS, must accord with above
 #define ALLTOALL_PIVOT_SLICESTEPS 2
 #define ALLTOALL_PIVOT_CHUNKSTEPS 4
 

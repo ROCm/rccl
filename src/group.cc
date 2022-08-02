@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,7 +9,7 @@
 #include "debug.h"
 #include "enqueue.h"
 #include "transport.h"
-#include <unistd.h>
+#include "channel.h"
 
 #define MAX_ASYNC_OPS 128
 thread_local pthread_t ncclGroupThreads[MAX_ASYNC_OPS];
@@ -34,6 +34,7 @@ struct ncclInitArgs {
   int ndev;
   ncclUniqueId commId;
   int myrank;
+  int virtualId;
 };
 struct ncclCollArgs {
   ncclComm_t comm;
@@ -56,28 +57,14 @@ struct ncclAsyncArgs {
 
 thread_local struct ncclAsyncArgs ncclGroupArgs[MAX_ASYNC_OPS];
 
-#define NCCLCHECKTHREAD(a) do { \
-  if ((args->ret = (a)) != ncclSuccess) { \
-    INFO(NCCL_INIT,"%s:%d -> %d [Async thread]", __FILE__, __LINE__, args->ret); \
-    return args; \
-  } \
-} while(0)
-
-#define CUDACHECKTHREAD(a) do { \
-  if ((a) != hipSuccess) { \
-    INFO(NCCL_INIT,"%s:%d -> %d [Async thread]", __FILE__, __LINE__, args->ret); \
-    args->ret = ncclUnhandledCudaError; \
-    return args; \
-  } \
-} while(0)
-
 void* ncclAsyncThreadMain(void* args_) {
   struct ncclAsyncArgs* args = (struct ncclAsyncArgs*)args_;
-  NCCLCHECKTHREAD(args->init.func(args->init.newcomm, args->init.ndev, args->init.commId, args->init.myrank, args->init.cudaDev));
+  NCCLCHECKTHREAD(args->init.func(args->init.newcomm, args->init.ndev, args->init.commId, args->init.myrank,
+				  args->init.cudaDev, args->init.virtualId));
   return args;
 }
 
-ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev) {
+ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev, int virtualId) {
   if (ncclGroupIndex >= MAX_ASYNC_OPS) {
     WARN("Too many async operations in progress, max is %d", MAX_ASYNC_OPS);
     return ncclAsyncErrCheck(ncclInvalidUsage);
@@ -91,6 +78,7 @@ ncclResult_t ncclAsyncInit(ncclInitFunc_t func, ncclComm_t* newcomm, int ndev, n
   args->init.ndev = ndev;
   memcpy(&args->init.commId, &commId, sizeof(commId));
   args->init.myrank = myrank;
+  args->init.virtualId = virtualId;
   return ncclSuccess;
 }
 
@@ -120,18 +108,24 @@ ncclResult_t ncclGroupStart() {
   return ncclSuccess;
 }
 
-static ncclResult_t scheduleSendRecv(struct ncclComm* comm, int delta, int channelId, ssize_t recvbytes,
-  void* recvbuff, ssize_t sendbytes, const void* sendbuff, uint16_t sendIdx, uint16_t recvIdx) {
-  struct ncclInfo info = { ncclFuncSendRecv, "SendRecv",
-    sendbuff, recvbuff, (size_t)std::max<ssize_t>(sendbytes,recvbytes), ncclInt8, ncclSum, -1, comm, comm->userStream, /* Args */
+static ncclResult_t scheduleSend(struct ncclComm* comm, int peer, int channelId, size_t count, void* buff, uint64_t opCount, uint16_t connIndex) {
+  struct ncclInfo info = { ncclFuncSend, "Send",
+    NULL, buff, count, ncclInt8, ncclSum, peer, comm, comm->userStream, /* Args */
     1, 1 };
-  info.delta = delta;
   info.channelId = channelId;
-  info.sendbytes = sendbytes;
-  info.recvbytes = recvbytes;
-  info.sendIdx = sendIdx;
-  info.recvIdx = recvIdx;
-  if (delta == 0 && sendbytes != recvbytes) return ncclInvalidUsage;
+  info.opCount = opCount;
+  info.connIndex = connIndex;
+  NCCLCHECK(ncclSetupP2pKernel(&info));
+  return ncclSuccess;
+}
+
+static ncclResult_t scheduleRecv(struct ncclComm* comm, int peer, int channelId, size_t count, void* buff, uint64_t opCount, uint16_t connIndex) {
+  struct ncclInfo info = { ncclFuncRecv, "Recv",
+    NULL, buff, count, ncclInt8, ncclSum, peer, comm, comm->userStream, /* Args */
+    1, 1 };
+  info.channelId = channelId;
+  info.opCount = opCount;
+  info.connIndex = connIndex;
   NCCLCHECK(ncclSetupP2pKernel(&info));
   return ncclSuccess;
 }
@@ -203,15 +197,15 @@ ncclResult_t ncclGroupEnd() {
 
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
-    if (args->funcType == ASYNC_FUNC_COLL && args->coll.comm->connect[0]) {
-      args->coll.connIndex = 0;
+    if (args->funcType == ASYNC_FUNC_COLL && args->coll.comm->connect[1]) {
+      args->coll.connIndex = 1;
       pthread_create(ncclGroupThreads+i, NULL, ncclAsyncThreadPreconnect, args);
     }
   }
 
   for (int i=0; i<ncclGroupIndex; i++) {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
-    if (args->funcType == ASYNC_FUNC_COLL && args->coll.comm->connect[0]) {
+    if (args->funcType == ASYNC_FUNC_COLL && args->coll.comm->connect[1]) {
       int err = pthread_join(ncclGroupThreads[i], NULL);
       if (err != 0) {
         WARN("Error waiting for pthread_join : %s", strerror(errno));
@@ -219,7 +213,7 @@ ncclResult_t ncclGroupEnd() {
       }
       INFO(NCCL_INIT, "comm %p rank %d total %ld bytes - P2P preconnect COMPLETE", args->coll.comm, args->coll.comm->rank, allocTracker[args->coll.comm->cudaDev].totalAllocSize);
       NCCLCHECKGOTO(args->ret, ret, end);
-      args->coll.comm->connect[0] = 0;
+      args->coll.comm->connect[1] = 0;
     }
   }
 
@@ -249,8 +243,9 @@ ncclResult_t ncclGroupEnd() {
     struct ncclAsyncArgs* args = ncclGroupArgs+i;
     if (args->funcType == ASYNC_FUNC_COLL) {
       struct ncclComm* comm = args->coll.comm;
-      int rank = comm->rank;
-      int nRanks = comm->nRanks;
+      int node = comm->node;
+      int nNodes = comm->nNodes;
+      int localRank = comm->localRank;
 
       // Compute how much to split operations
       // Natural step size matching buffer steps.
@@ -259,63 +254,90 @@ ncclResult_t ncclGroupEnd() {
       int nChannelsMax = comm->p2pnChannelsPerPeer;
       int nChannelsMin = nChannelsMax;
       // Try to use all channels, but one channel per operation.
-      while (nChannelsMin*comm->nRanks > std::max(comm->nChannels, comm->p2pnChannels) && nChannelsMin > 1) nChannelsMin /= 2;
+      //while (nChannelsMin*comm->nRanks > std::max(comm->nChannels, comm->p2pnChannels) && nChannelsMin > 1) nChannelsMin /= 2;
       // Avoid overloading channels with 8+ operations as we loose the sync warp, hence a bit of bandwidth.
-      while (nChannelsMax*comm->nRanks > std::max(comm->nChannels, comm->p2pnChannels)*4 && nChannelsMax > 1) nChannelsMax /= 2;
+      //while (nChannelsMax*comm->nRanks > std::max(comm->nChannels, comm->p2pnChannels)*4 && nChannelsMax > 1) nChannelsMax /= 2;
 
       while (comm->p2pSendCount > 0 || comm->p2pRecvCount > 0) {
         // schedule delta 0, +1, -1, +2, -2, ...
         // also make sure we don't do 0 twice, nor +n/2 and -n/2 if n is even.
-        for (int d=0; d<=nRanks/4; d++) {
-          int deltas[4] = { d, (nRanks-d)%nRanks, nRanks/2-d, (nRanks-(nRanks/2-d))%nRanks };
+        for (int d=0; d<=nNodes/4; d++) {
+          int deltas[4] = { d, (nNodes-d)%nNodes, nNodes/2-d, (nNodes-(nNodes/2-d))%nNodes };
           int index = 0;
           int delta = deltas[index];
 sched_delta:
-          uint32_t from = (rank+nRanks-delta)%nRanks;
-          uint32_t to = (rank+delta)%nRanks;
-          struct ncclP2Pinfo* recv = comm->p2pRecvs[from] ? comm->p2pRecvs[from]->getNext() : NULL;
-          struct ncclP2Pinfo* send = comm->p2pSends[to] ? comm->p2pSends[to]->getNext() : NULL;
-          if (recv != NULL || send != NULL) {
-            ssize_t totRecvBytes = -1, totSendBytes = -1;
-            if (recv != NULL) totRecvBytes = recv->nbytes;
-            if (send != NULL) totSendBytes = send->nbytes;
-            ssize_t recvChunkSize = getP2pChunkSize(totRecvBytes, nChannelsMin, nChannelsMax, stepSize, SENDRECV_SLICEFACTOR*stepSize);
-            ssize_t sendChunkSize = getP2pChunkSize(totSendBytes, nChannelsMin, nChannelsMax, stepSize, SENDRECV_SLICEFACTOR*stepSize);
-
-            uint16_t sendIdx = 0, recvIdx = 0;
-            if(comm->p2pNet && totSendBytes > rcclParamP2pNetThreshold())
-              sendIdx = NCCL_CONN_IDX_P2P_NET;
-            if(comm->p2pNet && totRecvBytes > rcclParamP2pNetThreshold())
-              recvIdx = NCCL_CONN_IDX_P2P_NET;
-
-            ssize_t sendOffset = 0;
-            ssize_t recvOffset = 0;
-            int sendRemaining = 1, recvRemaining = 1;
-            int chunk = 0;
-            do {
-              int channelId = (delta+comm->p2pChannels[chunk%comm->p2pnChannelsPerPeer]) % comm->p2pnChannels;
-              ssize_t recvbytes = totRecvBytes-recvOffset;
-              ssize_t sendbytes = totSendBytes-sendOffset;
-              if (recvbytes > recvChunkSize) { recvbytes = recvChunkSize; } else { recvRemaining = 0; }
-              if (sendbytes > sendChunkSize) { sendbytes = sendChunkSize; } else { sendRemaining = 0; }
-              // 0-bytes send/recv are considered as syncs. Make sure we only add syncs when requested
-              // (total size == 0), otherwise set size to -1 so that the kernel skips the operation.
-              if (sendbytes == 0 && totSendBytes != 0) sendbytes = -1;
-              if (recvbytes == 0 && totRecvBytes != 0) recvbytes = -1;
-              if (sendbytes >= 0 || recvbytes >= 0) {
-                NCCLCHECKGOTO(scheduleSendRecv(comm, delta, channelId,
-                      recvbytes, recv ? ((char*)(recv->buff)) + recvOffset : NULL,
-                      sendbytes, send ? ((const char*)(send->buff)) + sendOffset : NULL, sendIdx, recvIdx), ret, group_cleanup);
+          uint32_t recvNode = (node+nNodes-delta)%nNodes;
+          uint32_t sendNode = (node+delta)%nNodes;
+          int steps = comm->maxLocalRanks;
+          for (int s=0; s<steps; s++) {
+            int recvIndex = (localRank-s+steps)%steps;
+            int recvPeer = recvIndex<comm->nodeRanks[recvNode].localRanks ? comm->nodeRanks[recvNode].localRankToRank[recvIndex] : -1;
+            int sendIndex = (localRank+s)%steps;
+            int sendPeer = sendIndex<comm->nodeRanks[sendNode].localRanks ? comm->nodeRanks[sendNode].localRankToRank[sendIndex] : -1;
+            struct ncclP2Pinfo* recv = recvPeer != -1 && comm->p2pRecvs[recvPeer] ? comm->p2pRecvs[recvPeer]->getNext() : NULL;
+            struct ncclP2Pinfo* send = sendPeer != -1 && comm->p2pSends[sendPeer] ? comm->p2pSends[sendPeer]->getNext() : NULL;
+            if (recv != NULL || send != NULL) {
+              ssize_t totRecvBytes = -1, totSendBytes = -1;
+              if (recv != NULL) totRecvBytes = recv->nbytes;
+              if (send != NULL) totSendBytes = send->nbytes;
+              if (recv) comm->p2pRecvCount--;
+              if (send) comm->p2pSendCount--;
+              if (recvPeer == comm->rank) { // Check self send/recv
+                if (sendPeer != comm->rank) { WARN("Sendrecv schedule not aligned for self"); ret = ncclInternalError; goto group_cleanup; }
+                if (send && recv == NULL) { WARN("Trying to send to self without a matching recv"); ret = ncclInvalidUsage; goto group_cleanup; }
+                if (send == NULL && recv) { WARN("Trying to recv to self without a matching send"); ret = ncclInvalidUsage; goto group_cleanup; }
               }
-              recvOffset += recvChunkSize;
-              sendOffset += sendChunkSize;
-              chunk++;
-            } while (sendRemaining || recvRemaining);
-            if (recv) comm->p2pRecvCount--;
-            if (send) comm->p2pSendCount--;
+              void* recvBuff = recv ? recv->buff : NULL;
+              void* sendBuff = send ? send->buff : NULL;
+              // After we recycle p2pSend/Recv, we're no longer allowed to dereference send or recv, only use them as boolean NULL/not NULL.
+              if (recv && comm->p2pRecvs[recvPeer]->peakNext() == NULL) comm->p2pRecvs[recvPeer]->recycle();
+              if (send && comm->p2pSends[sendPeer]->peakNext() == NULL) comm->p2pSends[sendPeer]->recycle();
+
+              ssize_t recvChunkSize = getP2pChunkSize(totRecvBytes, nChannelsMin, nChannelsMax, stepSize, SENDRECV_SLICEFACTOR*stepSize);
+              ssize_t sendChunkSize = getP2pChunkSize(totSendBytes, nChannelsMin, nChannelsMax, stepSize, SENDRECV_SLICEFACTOR*stepSize);
+
+              uint16_t sendIdx = 1, recvIdx = 1;
+              if(comm->p2pNet && totSendBytes > rcclParamP2pNetThreshold())
+                sendIdx = NCCL_CONN_IDX_P2P_NET;
+              if(comm->p2pNet && totRecvBytes > rcclParamP2pNetThreshold())
+                recvIdx = NCCL_CONN_IDX_P2P_NET;
+
+              ssize_t sendOffset = 0;
+              ssize_t recvOffset = 0;
+              int sendRemaining = 1, recvRemaining = 1;
+              int chunk = 0;
+              do {
+                int channelId;
+                // Shuffle channels with s intra-node, and delta inter-node. Inter-node, make sure
+                // to use multiple channels to guarantee progress on all ranks from the same node.
+                ssize_t recvbytes = totRecvBytes-recvOffset;
+                ssize_t sendbytes = totSendBytes-sendOffset;
+                if (recvbytes > recvChunkSize) { recvbytes = recvChunkSize; } else { recvRemaining = 0; }
+                if (sendbytes > sendChunkSize) { sendbytes = sendChunkSize; } else { sendRemaining = 0; }
+                // 0-bytes send/recv are considered as syncs. Make sure we only add syncs when requested
+                // (total size == 0), otherwise set size to -1.
+                if (sendbytes < 0 || (sendbytes == 0 && totSendBytes != 0)) send = NULL;
+                if (recvbytes < 0 || (recvbytes == 0 && totRecvBytes != 0)) recv = NULL;
+                if (send || recv) {
+                  if (recv) {
+                    NCCLCHECK(ncclChannelCompute(comm, recvPeer, chunk%comm->p2pnChannelsPerPeer, ncclFuncRecv, &channelId));
+                  }
+                  else
+                    recvPeer = -1;
+                  if (send) {
+                    NCCLCHECK(ncclChannelCompute(comm, sendPeer, chunk%comm->p2pnChannelsPerPeer, ncclFuncSend, &channelId));
+                  }
+                  else
+                    sendPeer = -1;
+                  NCCLCHECKGOTO(scheduleRecv(comm, recvPeer, channelId, recvbytes, recv ? ((char*)recvBuff)+recvOffset : NULL, recv ? recv->opCount : 0, recvIdx), ret, group_cleanup);
+                  NCCLCHECKGOTO(scheduleSend(comm, sendPeer, channelId, sendbytes, send ? ((char*)sendBuff)+sendOffset : NULL, send ? send->opCount : 0, sendIdx), ret, group_cleanup);
+                }
+                recvOffset += recvChunkSize;
+                sendOffset += sendChunkSize;
+                chunk++;
+              } while (sendRemaining || recvRemaining);
+            }
           }
-          if (recv == NULL && comm->p2pRecvs[from]) comm->p2pRecvs[from]->recycle();
-          if (send == NULL && comm->p2pSends[to]) comm->p2pSends[to]->recycle();
           index++;
           if (index == 1 && deltas[1] == deltas[0]) index++;
           if (index == 2 && deltas[2] == deltas[0]) index++;
@@ -421,16 +443,6 @@ group_cleanup:
           }
           comm->p2pSendCount = comm->p2pRecvCount = 0;
         }
-        /* Free all proxy ops in state->nextOps */
-        struct ncclProxyState* state = &comm->proxyState;
-	pthread_mutex_lock(&state->poolMutex);
-	for (struct ncclProxyArgs *op = state->nextOps; op; op = op->next) {
-          op->next = state->pool;
-          state->pool = op;
-        }
-	pthread_mutex_unlock(&state->poolMutex);
-        state->nextOps = NULL;
-
         ncclLaunchReset(comm);
       }
     }

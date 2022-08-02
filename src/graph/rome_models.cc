@@ -43,6 +43,7 @@ struct rcclRomeModel {
   const char *pattern;
   const char *ringBase;
   const char *options;
+  const char *treeBase;
 };
 
 static struct rcclRomeModel rome_model_22 = {
@@ -56,6 +57,7 @@ static struct rcclRomeModel rome_model_22 = {
   .pattern = "10302120",
   .ringBase = "7 4 5 3 1 0 6 2|4 7 3 5 0 1 2 6",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_25 = {
@@ -69,6 +71,7 @@ static struct rcclRomeModel rome_model_25 = {
   .pattern = "11303011",
   .ringBase = "2 1 0 3 6 7 5 4|7 6 4 5 1 2 3 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_27 = {
@@ -82,6 +85,7 @@ static struct rcclRomeModel rome_model_27 = {
   .pattern = "11303011",
   .ringBase = "0 6 2 3 1 7 5 4|7 1 4 5 6 0 3 2",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_29 = {
@@ -95,6 +99,7 @@ static struct rcclRomeModel rome_model_29 = {
   .pattern = "10302120",
   .ringBase = "6 5 7 4 0 1 3 2|6 4 7 5 2 3 1 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_31 = {
@@ -108,6 +113,7 @@ static struct rcclRomeModel rome_model_31 = {
   .pattern = "0110201010200110",
   .ringBase = "1 2 3 0 6 4 5 7|4 6 7 5 2 1 0 3",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_33 = {
@@ -121,6 +127,7 @@ static struct rcclRomeModel rome_model_33 = {
   .pattern = "0110201010200110",
   .ringBase = "1 4 5 7 0 3 2 6|4 1 7 5 6 2 3 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_30 = {
@@ -134,6 +141,7 @@ static struct rcclRomeModel rome_model_30 = {
   .pattern = "0010201010200010",
   .ringBase = "3 0 1 2 6 7 5 4|2 1 0 3 7 6 4 5",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_32 = {
@@ -147,6 +155,7 @@ static struct rcclRomeModel rome_model_32 = {
   .pattern = "0010201010200010",
   .ringBase = "0 6 2 3 4 5 7 1|3 2 6 0 1 7 5 4",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_24 = {
@@ -160,6 +169,7 @@ static struct rcclRomeModel rome_model_24 = {
   .pattern = "10303010",
   .ringBase = "0 1 2 3 5 7 6 4|1 0 3 2 7 5 4 6",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_26 = {
@@ -173,6 +183,7 @@ static struct rcclRomeModel rome_model_26 = {
   .pattern = "10303010",
   .ringBase = "4 5 7 1 0 3 2 6|3 0 6 2 1 7 5 4",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_23 = {
@@ -186,6 +197,7 @@ static struct rcclRomeModel rome_model_23 = {
   .pattern = "10302020",
   .ringBase = "1 7 6 4 5 2 0 3|2 5 3 0 4 6 7 1",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_38 = {
@@ -199,6 +211,7 @@ static struct rcclRomeModel rome_model_38 = {
   .pattern = "10201000201010",
   .ringBase = "6 7 1 4 3 5 2 0|0 2 5 3 4 1 7 6",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_28 = {
@@ -212,6 +225,7 @@ static struct rcclRomeModel rome_model_28 = {
   .pattern = "10302020",
   .ringBase = "0 3 2 1 4 5 6 7|7 6 5 4 1 2 3 0|0 2 5 7 4 6 3 1|1 3 6 4 7 5 2 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_40 = {
@@ -225,6 +239,7 @@ static struct rcclRomeModel rome_model_40 = {
   .pattern = "10302120",
   .ringBase = "6 7 1 4 0 5 3 2|7 6 4 1 0 2 3 5",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_42 = {
@@ -238,6 +253,7 @@ static struct rcclRomeModel rome_model_42 = {
   .pattern = "10201001201010",
   .ringBase = "7 4 6 1 3 0 2 5|6 4 7 1 3 2 5 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_44 = {
@@ -251,6 +267,7 @@ static struct rcclRomeModel rome_model_44 = {
   .pattern = "20202120",
   .ringBase = "5 4 7 6 2 1 3 0|5 6 7 4 1 0 2 3",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_45 = {
@@ -264,6 +281,7 @@ static struct rcclRomeModel rome_model_45 = {
   .pattern = "10201000201010",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_46 = {
@@ -277,6 +295,7 @@ static struct rcclRomeModel rome_model_46 = {
   .pattern = "10201001201010",
   .ringBase = "6 5 7 4 1 2 3 0|7 4 6 5 1 0 3 2",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_48 = {
@@ -290,6 +309,7 @@ static struct rcclRomeModel rome_model_48 = {
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0|0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_49 = {
@@ -303,6 +323,7 @@ static struct rcclRomeModel rome_model_49 = {
   .pattern = "21212121",
   .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_52 = {
@@ -316,6 +337,7 @@ static struct rcclRomeModel rome_model_52 = {
   .pattern = "80",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_53 = {
@@ -329,6 +351,7 @@ static struct rcclRomeModel rome_model_53 = {
   .pattern = "21212121",
   .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_43 = {
@@ -342,6 +365,7 @@ static struct rcclRomeModel rome_model_43 = {
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_55 = {
@@ -355,6 +379,7 @@ static struct rcclRomeModel rome_model_55 = {
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0|2 3 0 1 6 7 4 5|5 4 7 6 1 0 3 2",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_56 = {
@@ -368,6 +393,7 @@ static struct rcclRomeModel rome_model_56 = {
   .pattern = "40404040",
   .ringBase = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0",
   .options = "pivotA2AEnabled=1,pivotA2ANumBiRings=3,tuning=1",
+  .treeBase = "10 11|14 15|6 7|2 3|0 1|4 5|12 13|8 9",
 };
 
 static struct rcclRomeModel rome_model_58 = {
@@ -381,6 +407,7 @@ static struct rcclRomeModel rome_model_58 = {
   .pattern = "402020",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_59 = {
@@ -393,7 +420,8 @@ static struct rcclRomeModel rome_model_59 = {
   .gdrLevel = { PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, },
   .pattern = "42424242",
   .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6",
-  .options = "tuning=1",
+  .options = "tuning=4",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_62 = {
@@ -407,6 +435,7 @@ static struct rcclRomeModel rome_model_62 = {
   .pattern = "20202020",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
   .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_63 = {
@@ -420,6 +449,7 @@ static struct rcclRomeModel rome_model_63 = {
   .pattern = "21212121",
   .ringBase = "N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3",
   .options = "tuning=3",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_65 = {
@@ -432,7 +462,8 @@ static struct rcclRomeModel rome_model_65 = {
   .gdrLevel = { PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, },
   .pattern = "42424242",
   .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6",
-  .options = "netGdrLevel=PHB,tuning=1",
+  .options = "tuning=4",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_66 = {
@@ -446,6 +477,7 @@ static struct rcclRomeModel rome_model_66 = {
   .pattern = "4040",
   .ringBase = "0 6 7 5 4 2 3 1|1 3 2 4 5 7 6 0|0 1 7 6 2 3 5 4|4 5 3 2 6 7 1 0",
   .options = "disableNumaMatching=1,tuning=2",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_67 = {
@@ -459,6 +491,7 @@ static struct rcclRomeModel rome_model_67 = {
   .pattern = "4242",
   .ringBase = "N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N1 2 3 5 4 0 1 7 6 N3|N2 4 5 3 2 6 7 1 0 N0|N1 3 2 4 5 7 6 0 1 N0|N0 1 0 6 7 5 4 2 3 N1|N0 0 1 7 6 2 3 5 4 N2|N3 6 7 1 0 4 5 3 2 N1",
   .options = "disableNumaMatching=1,tuning=2",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_68 = {
@@ -471,7 +504,8 @@ static struct rcclRomeModel rome_model_68 = {
   .gdrLevel = { PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PXB, PATH_PIX, },
   .pattern = "@@",
   .ringBase = "N0 0 1 2 3 N3 N4 4 5 6 7 N7 N8 8 9 10 11 N11 N12 12 13 14 15 N15|N15 15 14 13 12 N12 N11 11 10 9 8 N8 N7 7 6 5 4 N4 N3 3 2 1 0 N0|N1 1 3 0 2 N2 N5 5 7 4 6 N6 N9 9 11 8 10 N10 N13 13 15 12 14 N14|N14 14 12 15 13 N13 N10 10 8 11 9 N9 N6 6 4 7 5 N5 N2 2 0 3 1 N1|N0 0 1 2 3 N3 N4 4 5 6 7 N7 N8 8 9 10 11 N11 N12 12 13 14 15 N15|N15 15 14 13 12 N12 N11 11 10 9 8 N8 N7 7 6 5 4 N4 N3 3 2 1 0 N0|N1 1 3 0 2 N2 N5 5 7 4 6 N6 N9 9 11 8 10 N10 N13 13 15 12 14 N14|N14 14 12 15 13 N13 N10 10 8 11 9 N9 N6 6 4 7 5 N5 N2 2 0 3 1 N1",
-  .options = "netGdrLevel=PIX",
+  .options = "",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_71 = {
@@ -485,6 +519,7 @@ static struct rcclRomeModel rome_model_71 = {
   .pattern = "4040",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 2 3 7 6|6 7 3 2 4 5 1 0",
   .options = "disableNumaMatching=1,tuning=2",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_72 = {
@@ -498,6 +533,49 @@ static struct rcclRomeModel rome_model_72 = {
   .pattern = "4242",
   .ringBase = "N0 0 1 3 2 4 5 7 6 N3|N1 2 3 1 0 6 7 5 4 N2|N3 7 6 0 1 5 4 2 3 N1|N0 1 0 6 7 3 2 4 5 N2|N2 4 5 7 6 0 1 3 2 N1|N3 6 7 5 4 2 3 1 0 N0|N2 5 4 2 3 7 6 0 1 N0|N1 3 2 4 5 1 0 6 7 N3",
   .options = "disableNumaMatching=1,tuning=2",
+  .treeBase = "",
+};
+
+static struct rcclRomeModel rome_model_73 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
+  .nicIds = { },
+  .gpuNuma = { 3, 3, 1, 1, 0, 0, 2, 2, },
+  .nicNuma = { },
+  .connMatrix = { 0, 4, 1, 0, 0, 0, 2, 0, 4, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 4, 2, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 4, 1, 0, 0, 1, 0, 0, 4, 0, 0, 1, 2, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 1, 0, 1, 4, 0, },
+  .gdrLevel = { },
+  .pattern = "20202020",
+  .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
+  .options = "",
+  .treeBase = "",
+};
+
+static struct rcclRomeModel rome_model_74 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
+  .nicIds = { 0xc5000, 0xcd000, 0xd5000, 0xdd000, },
+  .gpuNuma = { 3, 3, 1, 1, 0, 0, 2, 2, },
+  .nicNuma = { 3, 1, 0, 2, },
+  .connMatrix = { 0, 4, 1, 0, 0, 0, 2, 0, 4, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 4, 2, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 4, 1, 0, 0, 1, 0, 0, 4, 0, 0, 1, 2, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 1, 0, 1, 4, 0, },
+  .gdrLevel = { PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, },
+  .pattern = "21212121",
+  .ringBase = "N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3",
+  .options = "tuning=3",
+  .treeBase = "",
+};
+
+static struct rcclRomeModel rome_model_76 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 3,
+  .gpuIds = { 0x32000, 0x35000, 0x11000, 0x14000, 0xae000, 0xb3000, 0x8e000, 0x93000, },
+  .nicIds = { 0x26000, 0x2d000, 0x5000, 0xc000, 0xab000, 0xb4000, 0x8b000, 0x94000, },
+  .gpuNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
+  .nicNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
+  .connMatrix = { 0, 4, 1, 0, 0, 0, 2, 0, 4, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 4, 2, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 4, 1, 0, 0, 1, 0, 0, 4, 0, 0, 1, 2, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 1, 0, 1, 4, 0, },
+  .gdrLevel = { PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PXB, },
+  .pattern = "4444",
+  .ringBase = "N0 0 1 3 2 4 5 7 6 N6|N2 2 3 1 0 6 7 5 4 N4|N5 5 4 2 3 7 6 0 1 N1|N1 1 0 6 7 3 2 4 5 N5|N4 4 5 7 6 0 1 3 2 N2|N2 2 3 1 0 6 7 5 4 N4|N0 0 1 5 4 2 3 7 6 N6|N3 3 2 4 5 1 0 6 7 N7|N4 4 5 7 6 0 1 3 2 N2|N6 6 7 5 4 2 3 1 0 N0|N7 7 6 0 1 5 4 2 3 N3|N6 6 7 3 2 4 5 1 0 N0|N3 3 2 0 1 5 4 6 7 N7|N1 1 0 2 3 7 6 4 5 N5|N5 5 4 6 7 3 2 0 1 N1|N7 7 6 4 5 1 0 2 3 N3",
+  .options = "disableNumaMatching=1,tuning=3",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel romeTopoModels[] = {
@@ -536,6 +614,9 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_68,
   rome_model_71,
   rome_model_72,
+  rome_model_73,
+  rome_model_74,
+  rome_model_76,
 };
 
 /* Parse user defined rings. Format is like :
@@ -610,7 +691,7 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
               if (g == system->nodes[GPU].nodes[j].gpu.dev)
                 break;
             if (j < ngpus)
-              graph->intra[nChannels*ngpus+r] = system->nodes[GPU].nodes[j].gpu.rank;
+              graph->intra[nChannels*ngpus+r] = system->nodes[GPU].nodes[j].gpu.rank[0];
             else
               return ncclInternalError;
           }
@@ -641,6 +722,13 @@ newchannel:
 end:
   graph->nChannels = nChannels;
   graph->speedIntra = graph->speedInter = system->maxWidth;
+  if (graph->id == 1) {
+    for (int i=0; i<graph->nChannels; i++) {
+      int net;
+      ncclTopoGetLocalNet(system, graph->intra[i*ngpus+1], &net);
+      graph->inter[i*2+1] = net;
+    }
+  }
 #if 0
   for (int i=0; i<graph->nChannels; i++) {
     printf("%d: ", i);
@@ -653,6 +741,70 @@ end:
   return ncclSuccess;
 }
 
+
+/* Parse user defined treeBase for complicated trees. Format is like :
+ * "10 11|14 15|6 7|2 3|0 1|4 5|12 13|8 9"
+ *
+ * Rings with a non-matching number of gpus are ignored so we can provide
+ * rings for multiple cases.
+ */
+ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map) {
+  int gpus[NCCL_TOPO_MAX_NODES];
+  int nChannels = 0;
+  int gpu = 0;
+  int offset = 0;
+  if (str[0] == 0) return ncclSuccess;
+  int status = 0; // 0 : between numbers, 1 : inside number, 2: start NET, 3: inside NET
+  int nets[NCCL_TOPO_MAX_NODES*2];
+  int net_offset = 0, net_count = 0;
+  int ngpus = system->nodes[GPU].count;
+  int x=0, y=0;
+  do {
+    int digit = str[offset] - '0';
+    if (digit >= 0 && digit <= 9) {
+      switch (status) {
+        case 0:
+          gpus[gpu] = digit;
+          status = 1;
+          break;
+        case 1:
+          gpus[gpu] = gpus[gpu]*10+digit;
+          break;
+      }
+    } else {
+      if (status == 1) {
+        gpu++;
+      }
+      status = 0;
+      if (str[offset] == '|' || str[offset] == 0) {
+        for (int r=0; r<gpu; r++) {
+          int g = gpus[r];
+          // remap if needed
+          if (gpu_map) g = gpu_map[g];
+          // Translate gpu numbers into ranks
+          int j = 0;
+          for (j = 0; j < ngpus; j++)
+            if (g == system->nodes[GPU].nodes[j].gpu.dev)
+              break;
+          if (j < ngpus)
+          {
+            graph->treeBase[r][x] = system->nodes[GPU].nodes[j].gpu.rank[0];
+            y=r;
+          }
+          else
+            return ncclInternalError;
+        }
+        y++;
+        graph->treeBase[y][x] = -1;
+        x++;
+        gpu=0;
+      }
+    }
+  } while (str[offset++] != 0);
+  graph->treeBase[0][x] = -1;
+  return ncclSuccess;
+}
+
 #define MAX_OPT_TOKENS 10
 extern const char* topoPathTypeStr[];
 
@@ -662,10 +814,11 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
     strcpy(str_temp, options);
     char* tokens[MAX_OPT_TOKENS];
     int numTokens = 0;
-    tokens[numTokens] = strtok(str_temp, "=, ");
+    char* state;
+    tokens[numTokens] = strtok_r(str_temp, "=, ", &state);
     numTokens++;
     while (tokens[numTokens-1] != NULL && numTokens < MAX_OPT_TOKENS)
-        tokens[numTokens++] = strtok(NULL, "=, ");
+        tokens[numTokens++] = strtok_r(NULL, "=, ", &state);
     for (int i = 0; i < numTokens/2; i++) {
       if (strcmp(tokens[i*2], "netGdrLevel") == 0) {
         int j;
@@ -697,10 +850,11 @@ static bool disableNumaMatching(const char *options) {
     strcpy(str_temp, options);
     char* tokens[MAX_OPT_TOKENS];
     int numTokens = 0;
-    tokens[numTokens] = strtok(str_temp, "=, ");
+    char* state;
+    tokens[numTokens] = strtok_r(str_temp, "=, ", &state);
     numTokens++;
     while (tokens[numTokens-1] != NULL && numTokens < MAX_OPT_TOKENS)
-        tokens[numTokens++] = strtok(NULL, "=, ");
+        tokens[numTokens++] = strtok_r(NULL, "=, ", &state);
     for (int i = 0; i < numTokens/2; i++) {
       if (strcmp(tokens[i*2], "disableNumaMatching") == 0) {
         return (bool)atol(tokens[i*2+1]);
@@ -766,15 +920,15 @@ ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGrap
       // find the first unsed GPU that is closest to NIC
       int f, m;
       for (f = 0; f < ngpus; f++) {
-        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank) break;
+        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[f].gpu.rank[0]) break;
         if(j >= n) break;
       }
       for (int i = 0; i < ngpus; i++) {
-        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank) break;
+        int j = 0; for (j = 0; j < n; j++) if(used[j] == system->nodes[GPU].nodes[i].gpu.rank[0]) break;
         if (j < n) continue;
         if (paths[i].count < paths[f].count) f = i;
       }
-      for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank) break;
+      for (m = 0; m<ngpus; m++) if (graph->intra[n*ngpus+m] == system->nodes[GPU].nodes[f].gpu.rank[0]) break;
       used[n] = graph->intra[n*ngpus+m];
       for (int i = 0; i < ngpus; i++) intra[i] = graph->intra[n*ngpus+((i+m)%ngpus)];
       for (int i = 0; i < ngpus; i++) graph->intra[n*ngpus+i] = intra[i];
@@ -873,7 +1027,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
       }
       if (!link->remNode) continue;
       if (link->type != LINK_NVL) continue;
-      romeTopo->connMatrix[i*romeTopo->nGpus+n] = link->width/VEGA_XGMI_WIDTH;
+      romeTopo->connMatrix[i*romeTopo->nGpus+n] = link->width/ncclTopoXGMISpeed(node->gpu.gcn);
       count ++;
     }
     if (romeTopo->nLinks < count) romeTopo->nLinks = count;
@@ -1244,6 +1398,8 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
 
   // create 16P1H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL));
+
+  NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
   // clean up
   free(all_gpu_permutations);
   return ncclSuccess;

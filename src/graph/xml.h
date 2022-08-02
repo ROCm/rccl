@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -56,6 +56,8 @@ ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const cha
 /* Remove unneeded parts */
 ncclResult_t ncclTopoTrimXml(struct ncclXml* xml);
 
+ncclResult_t ncclTopoGetStrFromSys(const char* path, const char* fileName, char* strValue);
+
 /**************/
 /* XML Struct */
 /* Functions  */
@@ -94,6 +96,14 @@ static ncclResult_t xmlGetAttrInt(struct ncclXmlNode* node, const char* attrName
   *value = strtol(str, NULL, 0);
   return ncclSuccess;
 }
+
+static ncclResult_t xmlGetAttrIntDefault(struct ncclXmlNode* node, const char* attrName, int* value, int defaultValue) {
+  const char* str;
+  NCCLCHECK(xmlGetAttr(node, attrName, &str));
+  *value = str ? strtol(str, NULL, 0) : defaultValue;
+  return ncclSuccess;
+}
+
 
 static ncclResult_t xmlGetAttrFloat(struct ncclXmlNode* node, const char* attrName, float* value) {
   const char* str;
@@ -167,6 +177,25 @@ static ncclResult_t xmlSetAttrInt(struct ncclXmlNode* node, const char* attrName
   node->attrs[index].value[MAX_STR_LEN] = '\0';
   return ncclSuccess;
 }
+
+static ncclResult_t xmlSetOrAppendAttrInt(struct ncclXmlNode* node, const char* attrName, const int value) {
+  int index;
+  NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));
+  if (index == -1) {
+    index = node->nAttrs++;
+    strncpy(node->attrs[index].key, attrName, MAX_STR_LEN);
+    node->attrs[index].key[MAX_STR_LEN] = '\0';
+    snprintf(node->attrs[index].value, MAX_STR_LEN, "%d", value);
+    node->attrs[index].value[MAX_STR_LEN] = '\0';
+    return ncclSuccess;
+  }
+  char *tmp = strdup(node->attrs[index].value);
+  snprintf(node->attrs[index].value, MAX_STR_LEN, "%s,%d", tmp, value);
+  node->attrs[index].value[MAX_STR_LEN] = '\0';
+  free (tmp);
+  return ncclSuccess;
+}
+
 
 static ncclResult_t xmlSetAttrFloat(struct ncclXmlNode* node, const char* attrName, const float value) {
   int index;

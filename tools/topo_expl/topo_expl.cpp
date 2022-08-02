@@ -46,6 +46,7 @@ THE SOFTWARE.
 #include "model.h"
 #include "utils.h"
 #include "topo.h"
+#include "graph.h"
 
 NodeModel *node_model;
 
@@ -142,6 +143,12 @@ NodeModelDesc model_descs[] = {
   {4, "topo_8p1h_n1.xml",       "4 nodes 8P1H"},
   {1, "topo_8p1h_1.xml",        "single node 8P1H Alt."},
   {4, "topo_8p1h_1.xml",        "4 nodes 8P1H Alt."},
+  {1, "topo_8p1h_2.xml",        "single node 8P1H Alt."},
+  {4, "topo_8p1h_3.xml",        "4 nodes 8P1H Alt."},
+  {1, "topo_8p1h_4.xml",        "Single node 8P1H Alt."},
+  {2, "topo_8p1h_4.xml",        "2 nodes 8P1H Alt."},
+  {1, "topo_8p1h_5.xml",        "Single node 8P1H Alt."},
+  {2, "topo_8p1h_5.xml",        "2 nodes 8P1H Alt."},
 };
 
 int main(int argc,char* argv[])
@@ -193,11 +200,16 @@ int main(int argc,char* argv[])
 
   NCCLCHECK(ncclCalloc(&comm, nranks));
 
-  struct allGather1Data_t *allGather1Data;
-  NCCLCHECK(ncclCalloc(&allGather1Data, nranks));
+  struct ncclPeerInfo *peerInfo;
+  NCCLCHECK(ncclCalloc(&peerInfo, nranks+1)); // Extra rank to represent CollNet root
 
   struct allGather3Data_t *allGather3Data;
   NCCLCHECK(ncclCalloc(&allGather3Data, nranks));
+
+  struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;
+  NCCLCHECK(ncclCalloc(&treeGraph, nranks));
+  NCCLCHECK(ncclCalloc(&ringGraph, nranks));
+  NCCLCHECK(ncclCalloc(&collNetGraph, nranks));
 
   for (int i = 0; i < nranks; i++) {
     comm[i].rank = i;
@@ -209,28 +221,52 @@ int main(int argc,char* argv[])
     NCCLCHECK(ncclCalloc(&comm[i].p2pRecvs, comm->nRanks));
     node_model = network.GetNode(i);
     assert(node_model!=0);
+    comm[i].busId = node_model->getGpuBusId(i);
     comm[i].topo = node_model->getSystem(i);
-    bootstrapAllGather(&comm[i], allGather1Data);
+    comm[i].peerInfo = peerInfo;
     // Mark channels as non initialized.
     for (int c=0; c<MAXCHANNELS; c++) comm[i].channels[c].id = -1;
-    NCCLCHECK(ncclCalloc((uint32_t**)&comm[i].p2pNet, 1));
-    NCCLCHECK(ncclCalloc(&comm[i].rankToIntraNodeRank, comm->nRanks));
+    NCCLCHECK(fillInfo(&comm[i], comm[i].peerInfo+comm[i].rank, 0));
   }
 
-  struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;
-  NCCLCHECK(ncclCalloc(&treeGraph, nranks));
-  NCCLCHECK(ncclCalloc(&ringGraph, nranks));
-  NCCLCHECK(ncclCalloc(&collNetGraph, nranks));
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
-    initTransportsRank_1(&comm[i], allGather1Data, allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
+    initTransportsRank_1(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
   }
 
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
     initTransportsRank_3(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
+  }
+
+  for (uint64_t len = 8; len <= 4294967296L; len *= 2) {
+    struct ncclInfo info;
+    float minTime = 3600000000.0;
+    info.comm = &comm[0];
+    info.coll = ncclFuncAllReduce;
+    info.nBytes = len;
+    // Find algorithm / protocol.
+    info.algorithm = -1;
+    info.protocol = -1;
+    int nAlgos = NCCL_NUM_ALGORITHMS;
+    for (int a=0; a<nAlgos; a++) {
+      for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+        float time;
+        NCCLCHECK(ncclTopoGetAlgoTime(&info, a, p, 1, &time));
+        if (time >= 0 && time < minTime) {
+          info.algorithm = a;
+          info.protocol = p;
+          minTime = time;
+        }
+      }
+    }
+    if (info.algorithm == -1 || info.protocol == -1) {
+      WARN("Error : no algorithm/protocol available");
+      return ncclInternalError;
+    }
+    INFO(NCCL_TUNING, "%10ld %s %s time %f", info.nBytes, ncclAlgoStr[info.algorithm], ncclProtoStr[info.protocol], minTime);
   }
 
   for (int i = 0; i < nranks; i++) {
@@ -244,7 +280,7 @@ int main(int argc,char* argv[])
   free(ringGraph);
   free(collNetGraph);
   free(allGather3Data);
-  free(allGather1Data);
+  free(peerInfo);
 
   free(comm);
   printf("Done generating topology using %d: %s\n", model_id, desc->description);

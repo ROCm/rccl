@@ -1,6 +1,6 @@
 /*************************************************************************
- * Copyright (c) 2016-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -25,6 +25,7 @@
 #define ARM_WIDTH 6.0
 #define NET_WIDTH 12.0           // 100Gbit
 #define VEGA_XGMI_WIDTH 24.0
+#define MI200_XGMI_WIDTH 36.0
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, so GPU
 // to GPU traffic consumes more PCI bandwidth.
@@ -45,18 +46,36 @@ extern const char* topoNodeTypeStr[];
 // Skipping 2 for PATH_NVB
 #define LINK_PCI 3
 // Skipping 4 for PATH_PXB
-// Skipping 5 for PATH_PHB
-#define LINK_SYS 6
-#define LINK_NET 7
+// Skipping 5 for PATH_PXN
+// Skipping 6 for PATH_PHB
+#define LINK_SYS 7
+#define LINK_NET 8
 extern const char* topoLinkTypeStr[];
 
+// Local (myself)
 #define PATH_LOC 0
+
+// Connection traversing NVLink
 #define PATH_NVL 1
+
+// Connection through NVLink using an intermediate GPU
 #define PATH_NVB 2
+
+// Connection traversing at most a single PCIe bridge
 #define PATH_PIX 3
+
+// Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
 #define PATH_PXB 4
-#define PATH_PHB 5
-#define PATH_SYS 6
+
+// Connection between a GPU and a NIC using an intermediate GPU. Used to enable rail-local, aggregated network send/recv operations.
+#define PATH_PXN 5
+
+// Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
+#define PATH_PHB 6
+
+// Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+#define PATH_SYS 7
+#define PATH_DIS 7
 extern const char* topoPathTypeStr[];
 
 struct ncclTopoNode;
@@ -84,7 +103,9 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_4P2H_ROME 2
 #define RCCL_TOPO_GDR_ALL   4
 #define RCCL_TOPO_16P1H     8
+#define RCCL_TOPO_FORCE_INTRA 16
 
+#define RCCL_TOPO_MAX_RANKS_PER_GPU 8
 struct ncclTopoNode {
   int type;
   int64_t id;
@@ -92,7 +113,8 @@ struct ncclTopoNode {
   union {
     struct {
       int dev; // NVML dev number
-      int rank;
+      int rank[RCCL_TOPO_MAX_RANKS_PER_GPU];
+      int nRanksPerGpu;
       int cudaCompCap;
       int gdrSupport;
       int gcn;
@@ -102,6 +124,7 @@ struct ncclTopoNode {
       uint64_t asic;
       int port;
       float width;
+      float latency;
       int gdrSupport;
       int collSupport;
       int maxChannels;
@@ -149,8 +172,7 @@ ncclResult_t ncclTopoRemoveNode(struct ncclTopoSystem* system, int type, int id)
 ncclResult_t ncclTopoConnectNodes(struct ncclTopoNode* node, struct ncclTopoNode* remNode, int type, float width);
 ncclResult_t ncclTopoPrintPaths(struct ncclTopoSystem* system);
 ncclResult_t ncclTopoLoadSystem(const char* xmlTopoFile, struct ncclTopoSystem* system);
-
-ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_t* id, int rr);
+ncclResult_t ncclTopoGetIntermediateRank(struct ncclTopoSystem* system, int rank, int netDev, int* intermediateRank);
 
 ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem** topoSystem);
 ncclResult_t ncclTopoGetGraphFromXml(struct ncclXmlNode *xmlGraphs, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* nChannels);
@@ -172,21 +194,18 @@ static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, i
 static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank, int* index) {
   *index = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
-    if (system->nodes[GPU].nodes[i].gpu.rank == rank) {
-      *index = i;
-      return ncclSuccess;
+    for (int j=0; j<system->nodes[GPU].nodes[i].gpu.nRanksPerGpu; j++ ) {
+      if (system->nodes[GPU].nodes[i].gpu.rank[j] == rank) {
+	*index = i;
+	return ncclSuccess;
+      }
     }
   }
   return ncclInternalError;
 }
 
-// Returns NVLink speed in GB/s
-static float ncclTopoNVLinkSpeed(int cudaCompCap) {
-  return
-    cudaCompCap == 86 ? SM86_NVLINK_WIDTH :
-    cudaCompCap >= 80 ? SM80_NVLINK_WIDTH :
-    cudaCompCap >= 70 ? SM70_NVLINK_WIDTH :
-    cudaCompCap >= 60 ? SM60_NVLINK_WIDTH :
-    SM80_NVLINK_WIDTH;
+// Returns XGMI speed in GB/s
+static float ncclTopoXGMISpeed(int gcn) {
+  return gcn == 910 ? MI200_XGMI_WIDTH : VEGA_XGMI_WIDTH;
 }
 #endif

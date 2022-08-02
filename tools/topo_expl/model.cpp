@@ -66,6 +66,10 @@ ncclNet_t ncclNetDummy = {
 
 ncclNet_t* ncclNet = &ncclNetDummy;
 
+int ncclNetVersion() {
+  return 4;
+}
+
 /* Convert a PCI busId string into a local cudaDev device index (cf. CUDA_VISIBLE_DEVICES) */
 int busIdToCudaDev(int64_t busId) {
   return node_model->busIdToCudaDev(busId);
@@ -142,6 +146,19 @@ struct ncclTransport shmTransport = {
   { shmRecvSetup, NULL, NULL, NULL }
 };
 
+NCCL_PARAM(NetSharedBuffers, "NET_SHARED_BUFFERS", -2);
+
+struct setupReq {
+  int rank;
+  int localRank;
+  int remoteRank;
+  int shared;
+  int netDev;
+  int useGdr;
+  int channelId;
+  int connIndex;
+};
+
 /* Determine if two peers can communicate with NET */
 ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
   *ret = node_model->netCanConnect(info1->rank, info2->rank);
@@ -149,38 +166,47 @@ ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 }
 
 ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
-  int netDev, useGdr = 0;
+  struct setupReq req;
 
-  netDev = -1;
-  if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &netDev));
-  if (netDev < 0) {
-    // Send/Receive: Round-robin NICs based on the receiver's CUDA device
-    int nicRR = comm->peerInfo[peerInfo->rank].cudaDev;
-    NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, nicRR, &netDev));
+  send->conn.shared = req.shared = graph ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
+  req.channelId = channelId;
+  req.connIndex = connIndex;
+  req.netDev = -1;
+
+  int proxyRank = myInfo->rank;
+  if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &req.netDev));
+  if (req.netDev < 0) NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &req.netDev, &proxyRank));
+  NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, req.netDev, 1, &req.useGdr));
+
+  if (proxyRank == myInfo->rank) {
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s%s", channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), req.netDev,
+        req.useGdr ? "/GDRDMA" : "", req.shared ? "/Shared" : "");
+  } else {
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d(%d)%s%s", channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), req.netDev,
+        proxyRank, req.useGdr ? "/GDRDMA" : "", req.shared ? "/Shared" : "");
   }
-  NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 1, &useGdr));
-
-  INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [send] via NET/%s/%d%s", channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, ncclNetName(), netDev,
-      useGdr ? "/GDRDMA" : "");
+  *((int*)connectInfo) = proxyRank;
   return ncclSuccess;
 }
 
 NCCL_PARAM(NetGdrLevel, "NET_GDR_LEVEL", PATH_PHB);
 
 ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
-  int netDev, useGdr = 0;
+ struct setupReq req;
 
-  netDev = -1;
-  if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &netDev));
-  if (netDev < 0) {
-    // Send/Receive: Round-robin NICs based on the receiver's CUDA device
-    int nicRR = comm->cudaDev;
-    NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, nicRR, &netDev));
-  }
-  NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 0, &useGdr));
+  recv->conn.shared = req.shared = graph ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
+  req.channelId = channelId;
+  req.connIndex = connIndex;
+  req.netDev = -1;
 
-  INFO(NCCL_INIT|NCCL_NET,"Ring %02d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s", channelId, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), netDev,
-      useGdr ? "/GDRDMA" : "");
+  // Use myInfo->rank as the receiver uses its own NIC
+  int proxyRank = myInfo->rank;
+  if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &req.netDev));
+  if (req.netDev < 0) NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, myInfo->rank, &req.netDev, &proxyRank));
+  NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, req.netDev, 0, &req.useGdr));
+
+  INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%lx] -> %d[%lx] [receive] via NET/%s/%d%s%s", channelId, connIndex, peerInfo->rank, peerInfo->busId, myInfo->rank, myInfo->busId, ncclNetName(), req.netDev,
+      req.useGdr ? "/GDRDMA" : "", req.shared ? "/Shared" : "");
   return ncclSuccess;
 }
 
@@ -198,9 +224,9 @@ ncclResult_t collNetCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncc
 }
 
 ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
-  int netDev, useGdr = 0;
+  int netDev, useGdr = 0, proxy;
 
-  NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &netDev));
+  NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &netDev, &proxy));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 1, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Coll %02d : %d [send] via COLLNET/%s/%d%s", channelId, myInfo->rank, "SHARP", netDev, useGdr ? "/GDRDMA" : "");
@@ -208,9 +234,9 @@ ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
 }
 
 ncclResult_t collNetRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
-  int netDev, useGdr = 0;
+  int netDev, useGdr = 0, proxy;
 
-  NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &netDev));
+  NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &netDev, &proxy));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 0, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Coll %02d : %d [receive] via COLLNET/%s/%d%s", channelId, myInfo->rank, "SHARP", netDev, useGdr ? "/GDRDMA" : "");
