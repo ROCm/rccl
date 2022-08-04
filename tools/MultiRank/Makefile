@@ -3,7 +3,7 @@
 # Set to where RCCL is installed
 RCCL_INSTALL=../../build/release
 
-HIP_PATH?= $(wildcard /opt/rocm/hip)
+HIP_PATH?= $(wildcard /opt/rocm)
 ifeq (,$(HIP_PATH))
 HIP_PATH=../../..
 endif
