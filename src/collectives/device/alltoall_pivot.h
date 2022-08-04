@@ -20,7 +20,7 @@ namespace {
     const int num_uni_rings = num_bi_rings * 2;
     const int num_chunks = args->nChannels / 2;
     const int chunk_id = (bid % num_bi_rings) + (bid / num_uni_rings * num_bi_rings);
-    const int elem_size = args->count % 256 ? 1 : 256;
+    const int elem_size = min(256, args->count & (~(args->count) + 1));
     const ssize_t num_elems = args->count / elem_size;
     const int num_padding_chunks = num_elems % num_chunks;
     const ssize_t chunk_offset = elem_size * (num_elems / num_chunks * chunk_id + (chunk_id < num_padding_chunks ? chunk_id : num_padding_chunks));
