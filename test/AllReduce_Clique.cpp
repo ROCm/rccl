@@ -7,7 +7,7 @@
 #include <cstdlib>
 namespace RcclUnitTesting
 {
-  TEST(AllReduce, Clique)
+  TEST(AllReduce, DISABLED_Clique)
   {
     // Set clique env var prior to TestBed
     setenv("RCCL_ENABLE_CLIQUE", "1", 1);
