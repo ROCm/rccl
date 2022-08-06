@@ -13,9 +13,11 @@ NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_
   ncclComm_t comm, hipStream_t stream);
 ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream) {
+  size_t rankOffset = count * ncclTypeSize(datatype);
+  size_t rankAlign = rankOffset & ((~rankOffset) + 1);
   // Determine Pivot A2A support now that we know number of channels
-  comm->topo->pivotA2AEnabled = comm->topo->pivotA2AEnabled && comm->nChannels >= comm->topo->pivotA2ANumBiRings * 2;
-  if (comm->topo->pivotA2AEnabled) {
+  if (comm->topo->pivotA2AEnabled && comm->nChannels >= comm->topo->pivotA2ANumBiRings * 2 &&
+      rankOffset >= 744 * 1024 && rankAlign != 4) {
     struct ncclInfo info = { ncclFuncAllToAllPivot, "AllToAllPivot",
       sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream, /* Args */
       ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS };
@@ -23,7 +25,6 @@ ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count, nc
   } else {
     int nRanks;
     NCCLCHECK(ncclCommCount(comm, &nRanks));
-    size_t rankOffset = count * ncclTypeSize(datatype);
     if (count == 0) return ncclSuccess;
     NCCLCHECK(ncclGroupStart());
     for (int r=0; r<nRanks; r++) {

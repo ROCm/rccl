@@ -379,7 +379,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
 RCCL_PARAM(CliqueIgnoreTopo, "CLIQUE_IGNORE_TOPO", 0);
 RCCL_PARAM(P2pNetDisable, "P2P_NET_DISABLE", 0);
-RCCL_PARAM(PivotAlltoallEnable, "PIVOT_ALLTOALL_ENABLE", 0);
+RCCL_PARAM(PivotAlltoallEnable, "PIVOT_ALLTOALL_ENABLE", 1);
 NCCL_PARAM(AggChannelSize, "AGG_CHANNEL_SIZE", -2);
 NCCL_PARAM(DisableGraphHelper, "GRAPH_HELPER_DISABLE", 0);
 NCCL_PARAM(GraphRegister, "GRAPH_REGISTER", 0);
