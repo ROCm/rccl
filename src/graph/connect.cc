@@ -74,6 +74,11 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
   int nChannels = comm->nChannels;
   int ring[NCCL_TOPO_MAX_NODES][NCCL_TOPO_MAX_NODES];
   int xLimit = 0, yLimit = 0;
+
+  //Assuming right now that the number of Ranks per Gpu is identical
+  //on all nodes.
+  int nRanksPerGpu = comm->topo->nodes[GPU].nodes[0].gpu.nRanksPerGpu;
+
   for (int j=0; j < NCCL_TOPO_MAX_NODES; j++) {
     if (treeGraph->treeBase[0][j]  == -1) {
       xLimit = j;
@@ -86,16 +91,31 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
       break;
     }
   }
+  /** Multi-rank expansion for the rings before the tree construction.
+   ** Before the expansion, using 2 ranks per GPU the treeBase is
+   ** treeBase[0][]= 20 28 12 4 0 8 24 16
+   ** treeBase[1][]= 22 30 14 6 2 10 26 18
+   **
+   ** We expand the rings to include all ranks, otherwise the tree is
+   ** incomplete. Hence, rings become
+   ** rings[0][]= 20 28 12 4 0 8 24 16
+   ** rings[1][]= 21 29 13 5 1 9 25 17
+   ** rings[2][]= 22 30 14 6 2 10 26 18
+   ** rings[3][]= 23 31 15 7 3 11 27 19
+   */
   for (int j=0; j < xLimit; j++) {
-    for (int k=0; k < yLimit; k++)
-      ring[k][j] = treeGraph->treeBase[k][j];
+    for (int l=0; l < nRanksPerGpu; l++)
+      for (int k=0; k < yLimit; k++)
+        ring[k*nRanksPerGpu+l][j] = treeGraph->treeBase[k][j]+l;
   }
+  yLimit *= nRanksPerGpu;
 
   //new tree
   for (int c=0; c<nChannels; c++) {
     struct ncclChannel* channel = comm->channels+c;
     int ringPrev, ringNext;
-    int treeRoot = c%comm->nRanks;
+    // Only the first rank on a GPU can be a treeRoot
+    int treeRoot = (c%(comm->nRanks/nRanksPerGpu)) * nRanksPerGpu;
     int curRank = comm->rank;
     int curRankNeighborUp, curRankNeighborDown;
     int rootRing, nextRing;
