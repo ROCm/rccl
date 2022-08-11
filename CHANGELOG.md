@@ -2,17 +2,12 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## RCCL-2.12.10 for ROCm 5.2.2
+## RCCL-2.12.10 for ROCm 5.2.3
 ### Added
 - Compatibility with NCCL 2.12.10
 - Packages for test and benchmark executables on all supported OSes using CPack.
 - Adding custom signal handler - opt-in with RCCL_ENABLE_SIGNALHANDLER=1
   - Additional details provided if Binary File Descriptor library (BFD) is pre-installed
-- Adding experimental support for using multiple ranks per device
-  - Requires using a new interface to create communicator (ncclCommInitRankMulti), please
-    refer to the interface documentation for details.
-  - To avoid potential deadlocks, user might have to set an environment variables increasing
-    the number of hardware queues (e.g. export GPU_MAX_HW_QUEUES=16)
 - Adding support for reusing ports in NET/IB channels
   - Opt-in with NCCL_IB_SOCK_CLIENT_PORT_REUSE=1 and NCCL_IB_SOCK_SERVER_PORT_REUSE=1
   - When "Call to bind failed : Address already in use" error happens in large-scale AlltoAll
