@@ -22,11 +22,6 @@ namespace {
     const ssize_t size = args->count;
     const int rank = ring->devUserRanks[0];
     const int nextRank = ring->devUserRanks[1];
-#ifdef ENABLE_PROFILING
-    auto devProf = ncclShmem->comm.devProf;
-    uint64_t clk, t0 = 0ULL, ws;
-    if (tid == 0) clk = __builtin_amdgcn_s_memrealtime();
-#endif
     const int root = args->root;
 
     T *inputBuf = (T*)args->sendbuff;
@@ -51,30 +46,16 @@ namespace {
 
       if (rank == root) {
         if (inputBuf == outputBuf) {
-          INIT_COUNTER;
           prims.send(offset, nelem);
-          ACCUMULATE_COUNTER(send);
         } else {
-          INIT_COUNTER;
           prims.copySend(offset, offset, nelem);
-          ACCUMULATE_COUNTER(copySend);
         }
       } else if (nextRank == root) {
-        INIT_COUNTER;
         prims.recv(offset, nelem);
-        ACCUMULATE_COUNTER(recv);
       } else {
-        INIT_COUNTER;
         prims.recvCopySend(offset, nelem);
-        ACCUMULATE_COUNTER(recvCopySend);
       }
     }
-#ifdef ENABLE_PROFILING
-    if (tid == 0) {
-      struct ncclProfElem *elem = devProf.elems+args->opCount;
-      elem->elem[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
-    }
-#endif
   }
 }
 

@@ -290,16 +290,6 @@ struct ncclChannel {
       int workCount;
       size_t totalSize;
       uint64_t workFifoTail; // Only used by CPU
-
-#ifdef ENABLE_PROFILING
-      struct timeval tvs;
-      uint64_t sizes;
-      int active_req;
-      uint64_t send_byte;
-      uint64_t recv_byte;
-      float bw_cumulative;
-      int bw_count;
-#endif
       uint16_t index;        // Only used by GPU
 
       // GDRCOPY support
@@ -314,49 +304,18 @@ static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must 
 #pragma pack(pop)   /* restore original alignment from stack */
 
 #ifdef ENABLE_PROFILING
-struct ncclProfElem {
-  union {
-    struct {
-      uint64_t opCount;
-      uint64_t total_cycle;
-      uint64_t wait_cycle;      // total wait cycle
-      // primtive cycles
-      uint64_t prim_cycle;
-      uint64_t send_cycle;
-      uint64_t directSend_cycle;
-      uint64_t recv_cycle;
-      uint64_t directRecv_cycle;
-      uint64_t copySend_cycle;
-      uint64_t directCopySend_cycle;
-      uint64_t recvCopySend_cycle;
-      uint64_t directRecvCopySend_cycle;
-      uint64_t recvReduceCopy_cycle;
-      uint64_t recvReduceSend_cycle;
-      uint64_t recvReduceCopySend_cycle;
-      uint64_t directRecvReduceCopySend_cycle;
-      // primitive bytes
-      uint64_t send_byte;
-      uint64_t directSend_byte;
-      uint64_t recv_byte;
-      uint64_t directRecv_byte;
-      uint64_t copySend_byte;
-      uint64_t directCopySend_byte;
-      uint64_t recvCopySend_byte;
-      uint64_t directRecvCopySend_byte;
-      uint64_t recvReduceCopy_byte;
-      uint64_t recvReduceSend_byte;
-      uint64_t recvReduceCopySend_byte;
-      uint64_t directRecvReduceCopySend_byte;
-    };
-    int data[0x80];
-  } elem[MAXCHANNELS];
-};
+#define PROFILE_NUM_ITEMS 31
+#define PROFILE_NUM_LAUNCHES 1024
 
 struct ncclProf {
-  struct ncclProfElem* elems;
+  uint32_t count;
+  uint32_t seq; // only entry from first launch is used
+  struct {
+    uint64_t line:16;
+    uint64_t timeStamp:48;
+  } elem[PROFILE_NUM_ITEMS];
 };
-
-#define PROFILE_NUM_ITEMS 1024
+static_assert(sizeof(struct ncclProf) == 256, "ncclProf must have size of 256");
 #endif
 
 #ifdef ENABLE_COLLTRACE
@@ -420,7 +379,7 @@ struct ncclDevComm {
 
 #ifdef ENABLE_PROFILING
   // Profiling counters
-  struct ncclProf devProf;
+  struct ncclProf* devProf;
 #endif
 
 #ifdef ENABLE_COLLTRACE
