@@ -39,7 +39,11 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
 
     int* ringIntra = ringGraph->intra+c*localRanks;
     int* treeIntra = treeGraph->intra+c*localRanks;
-
+    int buff = c%6 > 2 ? localRanks/2 : 0;
+    int tempArray[256]; // maybe just copy the whole thing
+    for (int ko=0; ko < localRanks; ko++){
+      tempArray[ko] = treeIntra[(ko+buff)%localRanks];
+    }
     for (int i=0; i<localRanks; i++) {
       if (ringIntra[i] == rank) {
         topoRanks->ringRecv[c] = ringIntra[0];
@@ -47,7 +51,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         channel->ring.prev = (i == 0) ? -1 : ringIntra[i-1];
         channel->ring.next = (i == localRanks-1) ? -1 : ringIntra[i+1];
       }
-      if (treeIntra[i] == rank) {
+      if (tempArray[i] == rank) {
         int parentIndex = 0;
         int child0Index = treeGraph->pattern == NCCL_TOPO_PATTERN_TREE ? 0 : 1;
         int child1Index = treeGraph->pattern == NCCL_TOPO_PATTERN_SPLIT_TREE ? 1 : 0;
@@ -55,8 +59,21 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         topoRanks->treeToParent[c] = treeIntra[parentIndex];
         topoRanks->treeToChild0[c] = treeIntra[child0Index];
         topoRanks->treeToChild1[c] = treeIntra[child1Index];
-        channel->tree.up         = i == 0 ? -1 : treeIntra[i-1];
-        channel->tree.down[0]    = i == localRanks-1 ? -1 : treeIntra[i+1];
+        if (i == 0) {
+          channel->tree.up = -1;
+          channel->tree.down[0] = tempArray[i+1];
+          channel->tree.down[1] = tempArray[localRanks-1];
+          channel->tree.down[2] = -1;
+        }
+        else {
+          channel->tree.up         = i > localRanks/2 ?  tempArray[(i+1)%localRanks] : tempArray[i-1];
+          channel->tree.down[0]    = i > localRanks/2 ?  tempArray[i-1] : tempArray[i+1];
+          if ((i == localRanks/2) || (i == (localRanks/2 + 1))) {
+            channel->tree.down[0]    = -1;
+          }
+          channel->tree.down[1]    = -1;
+          channel->tree.down[2] = -1;
+        }
       }
     }
     topoRanks->ringPrev[c] = channel->ring.prev;
