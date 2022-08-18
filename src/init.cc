@@ -233,7 +233,6 @@ void *ncclCommThreadMain(void *arg) {
 #endif
 
 #undef NCCL_NO_OPTIMIZE
-#define PROFILE_USE_TIME
 
 static ncclResult_t commFree(ncclComm_t comm) {
   if (comm == NULL)
@@ -255,67 +254,20 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(comm->asyncOps);
 
 #ifdef ENABLE_PROFILING
-  struct ncclProf prof;
-  prof.elems = (struct ncclProfElem*)malloc(sizeof(struct ncclProfElem)*PROFILE_NUM_ITEMS);
-  CUDACHECK(hipMemcpy(prof.elems, comm->hostDevComm.devProf.elems, sizeof(struct ncclProfElem)*PROFILE_NUM_ITEMS, hipMemcpyDeviceToHost));
+  struct ncclProf *prof, *prof_seq;
+  prof = (struct ncclProf*)malloc(sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES);
+  CUDACHECK(hipMemcpy(prof, comm->hostDevComm.devProf, sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES, hipMemcpyDeviceToHost));
   #define VEGA_GPU_RTC_FREQUENCY 2.5E7
-  if (comm->rank == 0) {
-    INFO(NCCL_INIT, "# %7s %4s %6s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "Rank:Ch", "opCt", "total", "  prim", "  wait", "send", "rcRdS", "dRcRdCS", "dRcCS", "dRc", "cS", "rc", "rcCS");
-#ifdef PROFILE_USE_TIME
-    INFO(NCCL_INIT, "# %7s %4s %6s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "", "", "  (us)", "  (us)", "  (us)", "  (us)", "  (us)", "  (us)", "  (us)", "  (us)", "  (us)", "  (us)", "  (us)");
-#else
-    INFO(NCCL_INIT, "# %7s %4s %6s %6s %6s %6s %7s %6s %6s %6s %6s %6s", "", "", "   (s)", "   (s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)", "(GB/s)");
-#endif
-  }
-  for (int i = 1; i < PROFILE_NUM_ITEMS; i++) {
-    int valid = 0;
-    for (int chan=0; chan<comm->nChannels; chan++) {
-      struct ncclProfElem *elem = prof.elems+i;
-      if (elem->elem[chan].opCount == 0)
-        continue;
-      valid++;
-#ifdef PROFILE_USE_TIME
-      INFO(NCCL_INIT, "# [%02d:%02d] %04d %6.2f %6.2f %6.2f %6.2f %6.2f %7.2f %6.2f %6.2f %6.2f %6.2f %6.2f",
-        comm->rank, chan, (uint32_t)elem->elem[chan].opCount, (double)elem->elem[chan].total_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6,
-        (double)elem->elem[chan].prim_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6, (double)elem->elem[chan].wait_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6,
-        (elem->elem[chan].send_cycle) ? ((double)elem->elem[chan].send_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0,
-        (elem->elem[chan].recvReduceSend_cycle) ? ((double)elem->elem[chan].recvReduceSend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0,
-        (elem->elem[chan].directRecvReduceCopySend_cycle) ? ((double)elem->elem[chan].directRecvReduceCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0,
-        (elem->elem[chan].directRecvCopySend_cycle) ? ((double)elem->elem[chan].directRecvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0,
-        (elem->elem[chan].directRecv_cycle) ? ((double)elem->elem[chan].directRecv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0,
-        (elem->elem[chan].copySend_cycle) ? ((double)elem->elem[chan].copySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0,
-        (elem->elem[chan].recv_cycle) ? ((double)elem->elem[chan].recv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0,
-        (elem->elem[chan].recvCopySend_cycle) ? ((double)elem->elem[chan].recvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E6) : 0);
-#else
-      INFO(NCCL_INIT, "# [%02d:%02d] %04d %6.4f %6.4f %6.2f %6.2f %7.2f %6.2f %6.2f %6.2f %6.2f %6.2f",
-        comm->rank, chan, (uint32_t)elem->elem[chan].opCount, (double)elem->elem[chan].total_cycle/VEGA_GPU_RTC_FREQUENCY,
-        (double)elem->elem[chan].wait_cycle/VEGA_GPU_RTC_FREQUENCY,
-        (elem->elem[chan].send_cycle) ? (double)elem->elem[chan].send_byte/((double)elem->elem[chan].send_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-        (elem->elem[chan].recvReduceSend_cycle) ? (double)elem->elem[chan].recvReduceSend_byte/((double)elem->elem[chan].recvReduceSend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-        (elem->elem[chan].directRecvReduceCopySend_cycle) ? (double)elem->elem[chan].directRecvReduceCopySend_byte/((double)elem->elem[chan].directRecvReduceCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-        (elem->elem[chan].directRecvCopySend_cycle) ? (double)elem->elem[chan].directRecvCopySend_byte/((double)elem->elem[chan].directRecvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-        (elem->elem[chan].directRecv_cycle) ? (double)elem->elem[chan].directRecv_byte/((double)elem->elem[chan].directRecv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-        (elem->elem[chan].copySend_cycle) ? (double)elem->elem[chan].copySend_byte/((double)elem->elem[chan].copySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-        (elem->elem[chan].recv_cycle) ? (double)elem->elem[chan].recv_byte/((double)elem->elem[chan].recv_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0,
-        (elem->elem[chan].recvCopySend_cycle) ? (double)elem->elem[chan].recvCopySend_byte/((double)elem->elem[chan].recvCopySend_cycle/VEGA_GPU_RTC_FREQUENCY*1.0E9) : 0);
-#endif
+  for (int i=0; i<comm->nChannels; i++) {
+    for (int s=0; s<prof[MAXCHANNELS*i].seq; s++) {
+      if (prof[MAXCHANNELS*s+i].count == 0) continue;
+      for (int j=0; j<prof[MAXCHANNELS*s+i].count; j++) {
+        INFO(NCCL_INIT, "# [%02d:%02d] %02d-%02d L:%04u %6.2fus", comm->rank, i, s, j, prof[MAXCHANNELS*s+i].elem[j].line, (prof[MAXCHANNELS*s+i].elem[j].timeStamp-prof[MAXCHANNELS*s+i].elem[0].timeStamp)/VEGA_GPU_RTC_FREQUENCY*1.0E6);
+      }
     }
-    if (valid == 0)
-      break;
   }
-  free(prof.elems);
-  CUDACHECK(hipFree(comm->hostDevComm.devProf.elems));
-
-  for (int channel=0; channel<std::max(comm->nChannels, comm->p2pnChannels); channel++) {
-    if (comm->channels[channel].send_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Send %6.2f GB/s (%ld bytes %d measurements)",
-      comm->rank, channel, (comm->channels[channel].bw_count) ?
-      (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
-      comm->channels[channel].send_byte, comm->channels[channel].bw_count);
-    if (comm->channels[channel].recv_byte) INFO(NCCL_INIT, "# [%03d:%02d] Proxy Recv %6.2f GB/s (%ld bytes %d measurements)",
-      comm->rank, channel, (comm->channels[channel].bw_count) ?
-      (float)comm->channels[channel].bw_cumulative/comm->channels[channel].bw_count : 0,
-      comm->channels[channel].recv_byte, comm->channels[channel].bw_count);
-  }
+  free(prof);
+  CUDACHECK(hipFree(comm->hostDevComm.devProf));
 #endif
 
 #ifdef ENABLE_COLLTRACE
@@ -432,7 +384,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
   comm->argsptrs[0] = &comm->devComm;
   comm->argsptrs[1] = &comm->args;
 #ifdef ENABLE_PROFILING
-  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.devProf.elems, PROFILE_NUM_ITEMS));
+  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES));
 #endif
 
 #ifdef ENABLE_COLLTRACE

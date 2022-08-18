@@ -26,11 +26,6 @@ namespace {
     const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? ALLREDUCE_CHUNKSTEPS : 1));
     const int nranks = ncclShmem->comm.nRanks;
     const ssize_t loopSize = nChannels*nranks*chunkSize;
-#ifdef ENABLE_PROFILING
-    auto devProf = ncclShmem->comm.devProf;
-    uint64_t clk, t0 = 0ULL, ws;
-    if (tid == 0) clk = __builtin_amdgcn_s_memrealtime();
-#endif
     const ssize_t size = args->count;
 
 #if defined(ENABLE_NPKIT)
@@ -67,10 +62,8 @@ namespace {
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
 
-    INIT_COUNTER;
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg, args->connIndex << 16);
-    ACCUMULATE_PRIM_COUNTER(prim);
 
 #if defined(ENABLE_NPKIT)
     if (tid == 0) {
@@ -115,9 +108,7 @@ namespace {
       }
 #endif
 
-      INIT_COUNTER;
       prims.send(offset, nelem);
-      ACCUMULATE_COUNTER(send);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_SEND_EXIT)
       if (tid == 0) {
@@ -140,9 +131,7 @@ namespace {
         chunk = modRanks(ringIx + nranks-j);
         offset = calcOffset(chunk);
         nelem = min(realChunkSize, size-offset);
-        INIT_COUNTER;
         prims.recvReduceSend(offset, nelem);
-        ACCUMULATE_COUNTER(recvReduceSend);
       }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_RECV_REDUCE_SEND_EXIT)
@@ -166,9 +155,7 @@ namespace {
       }
 #endif
 
-      INIT_COUNTER;
       prims.directRecvReduceCopySend(offset, offset, offset, nelem, /*postOp=*/true);
-      ACCUMULATE_COUNTER(directRecvReduceCopySend);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_REDUCE_COPY_SEND_EXIT)
       if (tid == 0) {
@@ -190,9 +177,7 @@ namespace {
         chunk = modRanks(ringIx + nranks-j);
         offset = calcOffset(chunk);
         nelem = min(realChunkSize, size-offset);
-        INIT_COUNTER;
         prims.directRecvCopySend(offset, offset, nelem);
-        ACCUMULATE_COUNTER(directRecvCopySend);
       }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_COPY_SEND_EXIT)
@@ -215,9 +200,7 @@ namespace {
       }
 #endif
 
-      INIT_COUNTER;
       prims.directRecv(offset, nelem);
-      ACCUMULATE_COUNTER(directRecv);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_EXIT)
       if (tid == 0) {
@@ -227,12 +210,6 @@ namespace {
 #endif
 
     }
-#ifdef ENABLE_PROFILING
-    if (tid == 0) {
-      struct ncclProfElem *elem = devProf.elems+args->opCount;
-      elem->elem[blockIdx.x].total_cycle += (__builtin_amdgcn_s_memrealtime() - clk);
-    }
-#endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_EXIT)
     if (tid == 0) {
@@ -597,6 +574,7 @@ template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>;
+    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     runRing<T, RedOp, Proto>(args);
   }
 };
@@ -604,6 +582,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SI
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(args);
   }
 };
@@ -709,6 +688,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     runRing<T, RedOp, ProtoLL>(args);
   }
 };
@@ -716,6 +696,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     if (args->pad_0 == 0) runTreeUpDown<T, RedOp, ProtoLL>(args);
     else runTreeSplit<T, RedOp, ProtoLL>(args);
   }
