@@ -39,11 +39,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
 
     int* ringIntra = ringGraph->intra+c*localRanks;
     int* treeIntra = treeGraph->intra+c*localRanks;
-    int buff = c%6 > 2 ? localRanks/2 : 0;
-    int tempArray[256]; // maybe just copy the whole thing
-    for (int ko=0; ko < localRanks; ko++){
-      tempArray[ko] = treeIntra[(ko+buff)%localRanks];
-    }
+
     for (int i=0; i<localRanks; i++) {
       if (ringIntra[i] == rank) {
         topoRanks->ringRecv[c] = ringIntra[0];
@@ -89,8 +85,6 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
       tempArray[ko] = treeIntra[(ko+buff)%localRanks];
     }
     struct ncclChannel* channel = comm->channels+c;
-
-
 
     int curRank = comm->rank;
     int arrayIndex;
