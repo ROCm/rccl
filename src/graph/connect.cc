@@ -51,7 +51,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         channel->ring.prev = (i == 0) ? -1 : ringIntra[i-1];
         channel->ring.next = (i == localRanks-1) ? -1 : ringIntra[i+1];
       }
-      if (tempArray[i] == rank) {
+      if (treeIntra[i] == rank) {
         int parentIndex = 0;
         int child0Index = treeGraph->pattern == NCCL_TOPO_PATTERN_TREE ? 0 : 1;
         int child1Index = treeGraph->pattern == NCCL_TOPO_PATTERN_SPLIT_TREE ? 1 : 0;
@@ -59,6 +59,44 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         topoRanks->treeToParent[c] = treeIntra[parentIndex];
         topoRanks->treeToChild0[c] = treeIntra[child0Index];
         topoRanks->treeToChild1[c] = treeIntra[child1Index];
+        channel->tree.up         = i == 0 ? -1 : treeIntra[i-1];
+        channel->tree.down[0]    = i == localRanks-1 ? -1 : treeIntra[i+1];
+      }
+    }
+    topoRanks->ringPrev[c] = channel->ring.prev;
+    topoRanks->ringNext[c] = channel->ring.next;
+  }
+  // Duplicate channels rings/trees
+  struct ncclChannel* channel0 = comm->channels;
+  struct ncclChannel* channel1 = (nChannels > MAXCHANNELS/2) ? 0 : channel0+nChannels;
+  if (channel1) memcpy(channel1, channel0, nChannels*sizeof(struct ncclChannel));
+  return ncclSuccess;
+}
+
+ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
+    struct ncclTopoGraph* treeGraph) {
+  int nChannels = comm->nChannels;
+  int localRanks = 0;
+  for (int i=0; i<comm->topo->nodes[GPU].count; i++) {
+    localRanks += comm->topo->nodes[GPU].nodes[i].gpu.nRanksPerGpu;
+  }
+  //new tree
+  for (int c=0; c<nChannels; c++) {
+    int* treeIntra = treeGraph->intra+c%6*localRanks;
+    int buff = c%6 > 2 ? localRanks/2 : 0;
+    int tempArray[256]; // maybe just copy the whole thing
+    for (int ko=0; ko < localRanks; ko++){
+      tempArray[ko] = treeIntra[(ko+buff)%localRanks];
+    }
+    struct ncclChannel* channel = comm->channels+c;
+
+
+
+    int curRank = comm->rank;
+    int arrayIndex;
+
+    for (int i=0; i<localRanks; i++) {
+      if (tempArray[i] == curRank) {
         if (i == 0) {
           channel->tree.up = -1;
           channel->tree.down[0] = tempArray[i+1];
@@ -76,93 +114,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         }
       }
     }
-    topoRanks->ringPrev[c] = channel->ring.prev;
-    topoRanks->ringNext[c] = channel->ring.next;
   }
-  // Duplicate channels rings/trees
-  struct ncclChannel* channel0 = comm->channels;
-  struct ncclChannel* channel1 = (nChannels > MAXCHANNELS/2) ? 0 : channel0+nChannels;
-  if (channel1) memcpy(channel1, channel0, nChannels*sizeof(struct ncclChannel));
-  return ncclSuccess;
-}
-
-ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
-    struct ncclTopoGraph* treeGraph) {
-  int nChannels = comm->nChannels;
-  int ring[NCCL_TOPO_MAX_NODES][NCCL_TOPO_MAX_NODES];
-  int xLimit = 0, yLimit = 0;
-  for (int j=0; j < NCCL_TOPO_MAX_NODES; j++) {
-    if (treeGraph->treeBase[0][j]  == -1) {
-      xLimit = j;
-      break;
-    }
-  }
-  for (int k=0; k < NCCL_TOPO_MAX_NODES; k++) {
-    if (treeGraph->treeBase[k][0]  == -1) {
-      yLimit = k;
-      break;
-    }
-  }
-  for (int j=0; j < xLimit; j++) {
-    for (int k=0; k < yLimit; k++)
-      ring[k][j] = treeGraph->treeBase[k][j];
-  }
-
-  //new tree
-  for (int c=0; c<nChannels; c++) {
-    struct ncclChannel* channel = comm->channels+c;
-    int ringPrev, ringNext;
-    int treeRoot = c%comm->nRanks;
-    int curRank = comm->rank;
-    int curRankNeighborUp, curRankNeighborDown;
-    int rootRing, nextRing;
-    int rootIndex = 0;
-    int arrayIndex;
-    for (int j=0; j < xLimit; j++) {
-      for (int k=0; k < yLimit; k++) {
-        if (treeRoot == ring[k][j]) {
-          rootRing = k;
-          rootIndex = j;
-        }
-        if (curRank == ring[k][j]) {
-          arrayIndex = j;
-          if (k > 0) curRankNeighborUp=ring[k-1][j];
-          else curRankNeighborUp=ring[yLimit-1][j];
-          if (k < yLimit-1) {
-            curRankNeighborDown=ring[k+1][j];
-            nextRing = k+1;
-          }
-          else {
-            curRankNeighborDown = ring[0][j];
-            nextRing = 0;
-          }
-        }
-      }
-    }
-
-    if ((curRank != ring[rootRing][arrayIndex])) {
-      channel->tree.up = curRankNeighborUp;
-      channel->tree.down[0] = nextRing==rootRing ? -1 : curRankNeighborDown;
-      channel->tree.down[1] = -1;
-    }
-    else {
-      if (arrayIndex > 0) ringPrev=ring[rootRing][arrayIndex-1];
-      else ringPrev=ring[rootRing][xLimit-1];
-      if (arrayIndex < xLimit-1) ringNext=ring[rootRing][arrayIndex+1];
-      else ringNext=ring[rootRing][0];
-      if ((c/2)%2 == 1) {
-        int temp = ringPrev;
-        ringPrev = ringNext;
-        ringNext = temp;
-      }
-      channel->tree.up = treeRoot == curRank ? -1 : ringPrev;
-      channel->tree.down[0] = curRankNeighborDown;
-      channel->tree.down[1] = ringNext == treeRoot ? -1 : ringNext;
-    }
-    channel->tree.down[2] = -1; // cleanup
-  }
-
-
   return ncclSuccess;
 }
 
