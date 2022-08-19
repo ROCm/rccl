@@ -124,14 +124,6 @@ include_directories(src/include)
 include_directories(src/collectives)
 include_directories(src/collectives/device)
 
-# Create git version file
-# _git_version.cpp is a dummy output to force re-run prior to build
-ADD_CUSTOM_COMMAND(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp
-           ${CMAKE_CURRENT_BINARY_DIR}/_git_version.cpp
-    COMMAND ${CMAKE_COMMAND} -P
-            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/git_version.cmake)
-
 if (BUILD_ALLREDUCE_ONLY)
   add_definitions(-DBUILD_ALLREDUCE_ONLY)
   set(CU_SOURCES
@@ -214,6 +206,20 @@ foreach(filename ${CC_SOURCES})
 endforeach(filename)
 
 add_library(rccl ${CPP_SOURCES})
+
+# Create a custom target that creates/updates git_version.cpp
+# that executes whenever rccl is built
+add_custom_target(git_version_check
+  COMMENT "Updating git_version.cpp if necessary"
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/git_version.cmake
+  VERBATIM
+)
+
+# Create a dummy git_version.cpp file in case it doesn't exist
+configure_file(src/nccl.h.in ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
+
+# Execute git_version_check whenever rccl library is built
+add_dependencies(rccl git_version_check)
 
 if(TRACE)
   add_definitions(-DENABLE_TRACE)
@@ -339,7 +345,7 @@ rocm_set_soversion(rccl "1.0")
 rocm_install_targets(TARGETS
                      rccl
 		     )
-rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h
+rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
 
 rocm_export_targets(NAMESPACE
@@ -355,9 +361,9 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
             GUARDS SYMLINK WRAPPER
             WRAPPER_LOCATIONS ${CMAKE_INSTALL_INCLUDEDIR} rccl/${CMAKE_INSTALL_INCLUDEDIR})
   #install the wrapper header file to package
-  rocm_install( FILES "${PROJECT_BINARY_DIR}/rccl/include/rccl.h"
+  rocm_install( FILES ${PROJECT_BINARY_DIR}/rccl/include/rccl.h src/include/nccl_net.h
 	        DESTINATION "./rccl/${CMAKE_INSTALL_INCLUDEDIR}/" )
-  rocm_install( FILES "${PROJECT_BINARY_DIR}/include/rccl.h"
+  rocm_install( FILES ${PROJECT_BINARY_DIR}/include/rccl.h src/include/nccl_net.h
                 DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" )
 endif()
 

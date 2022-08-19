@@ -156,20 +156,4 @@ struct PrimitivesWithoutDirect {
 #include "prims_ll.h"
 #include "prims_ll128.h"
 
-#ifdef ENABLE_PROFILING
-#define INIT_COUNTER \
-  if (tid == 0) { struct ncclProfElem *elem = devProf.elems+args->opCount%PROFILE_NUM_ITEMS; t0 = __builtin_amdgcn_s_memrealtime(); ws = elem->elem[blockIdx.x].wait_cycle; }
-#define ACCUMULATE_COUNTER(prim) \
-  if (tid == 0) { struct ncclProfElem *elem = devProf.elems+args->opCount%PROFILE_NUM_ITEMS; elem->elem[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
-    + ws - elem->elem[blockIdx.x].wait_cycle); \
-    elem->elem[blockIdx.x].prim##_byte += nelem * sizeof(T); elem->elem[blockIdx.x].opCount = args->opCount;}
-#define ACCUMULATE_PRIM_COUNTER(prim) \
-  if (tid == 0) { struct ncclProfElem *elem = devProf.elems+args->opCount%PROFILE_NUM_ITEMS; elem->elem[blockIdx.x].prim##_cycle += (__builtin_amdgcn_s_memrealtime() - t0 \
-    + ws - elem->elem[blockIdx.x].wait_cycle); elem->elem[blockIdx.x].opCount = args->opCount;}
-#else
-#define INIT_COUNTER
-#define ACCUMULATE_COUNTER(prim)
-#define ACCUMULATE_PRIM_COUNTER(prim)
-#endif
-
 #endif

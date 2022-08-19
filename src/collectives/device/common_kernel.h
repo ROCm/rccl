@@ -425,12 +425,12 @@ struct MULTI<FUNC, int64_t> {
 
 template<typename T> inline __device__
 T vFetch(const volatile T* ptr) {
-  return __builtin_nontemporal_load(ptr);
+  return *ptr;
 }
 
 template<typename T> inline __device__
 void vStore(volatile T* ptr, const T val) {
-  __builtin_nontemporal_store(val, ptr);
+  *ptr = val;
 }
 
 #if CUDART_VERSION < 9000 && !(defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__))
@@ -449,25 +449,25 @@ void vStore<half>(volatile half* ptr, const half val) {
 template<> inline __device__
 half vFetch<half>(const volatile half* ptr) {
   half r;
-  r = __builtin_nontemporal_load((uint16_t*)ptr);
+  r = ((half*)ptr)[0];
   return r;
 }
 
 template<> inline __device__
 void vStore<half>(volatile half* ptr, const half val) {
-  __builtin_nontemporal_store(val, (uint16_t*)ptr);
+  ((half*)ptr)[0] = val;
 }
 
 template<> inline __device__
 rccl_bfloat16 vFetch<rccl_bfloat16>(const volatile rccl_bfloat16* ptr) {
   rccl_bfloat16 r;
-  r.data = __builtin_nontemporal_load(&ptr->data);
+  r.data = ptr->data;
   return r;
 }
 
 template<> inline __device__
 void vStore<rccl_bfloat16>(volatile rccl_bfloat16* ptr, const rccl_bfloat16 val) {
-  __builtin_nontemporal_store(val.data, &ptr->data);
+  ptr->data = val.data;
 }
 #endif
 

@@ -279,6 +279,18 @@ class ncclFunction {
 #define traceData(data2, data4, data8_0, data8_1)
 #endif
 
+#ifdef ENABLE_PROFILING
+#define __insert_timestamp(line_num) do { \
+      if (ncclShmem->prof.count < PROFILE_NUM_ITEMS) { \
+        ncclShmem->prof.elem[ncclShmem->prof.count].line = line_num; \
+        ncclShmem->prof.elem[ncclShmem->prof.count].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+        ncclShmem->prof.count++; \
+      } \
+    } while(0);
+#else
+#define __insert_timestamp(line_num)
+#endif
+
 __device__ inline bool barrierReduceAny(int bit, uint32_t* abortCount) {
   if (bit) atomicAdd(abortCount, 1);
   __syncthreads();
@@ -382,6 +394,9 @@ struct ncclShmemData {
   struct ncclChannel channel;
   uint64_t pad;
   struct ncclWork work;
+#ifdef ENABLE_PROFILING
+  struct ncclProf prof;
+#endif
 };
 
 static __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
@@ -421,10 +436,17 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
       shmem.groups[i].barrier = 0;
       for (auto j = 0; j < NCCL_MAX_GROUPS; j++) shmem.groups[i].barrier_next[j] = 0;
     }
-  }
+ }
   __syncthreads();
 
   int turn = copyToShmem(&ncclShmem->comm, comm);
+#ifdef ENABLE_PROFILING
+  if (tid == 0) {
+    ncclShmem->prof.count = 0;
+    ncclShmem->prof.seq = ncclShmem->comm.devProf[bid].seq;
+  }
+#endif
+  if (tid == 0) __insert_timestamp(__LINE__);
   // get address of channel without incurring indirect load from ncclDevCom::channels
   ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
   turn = copyToShmem(&ncclShmem->channel, channel, turn);
@@ -435,6 +457,8 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     copyToShmem(&ncclShmem->work, &first, tid, nthreads);
   }
   __syncthreads(); // publish ncclShmem
+  if (tid == 0) __insert_timestamp(__LINE__);
+  if (tid == 0) __insert_timestamp(__LINE__);
 
   ncclWork *workFifoHost = ncclShmem->channel.workFifo;
   ncclWork *workFifoDev = ncclShmem->channel.workFifoDev;
@@ -447,6 +471,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   while (true) {
     if (!skipLoadWork) {
       copyToShmem(&ncclShmem->work, &workFifoDev[workFifoIx], tid, nthreads);
+      if (tid == 0) __insert_timestamp(__LINE__);
       { // Check whether the last operation was aborted and make sure all threads exit
         int aborted = tid == 0 ? *comm->abortFlag : 0;
         if (barrierReduceAny(aborted, &abortCount)) { // publish ncclShmem->work
@@ -457,6 +482,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
           workFifoHost[workFifoIx].header.type = ncclWorkTypeUnused;
       }
     }
+    if (tid == 0) __insert_timestamp(__LINE__);
 
     workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
     if (tid == 0)
@@ -478,6 +504,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
         traceColl(ncclShmem->work.elems[e], 0);
       }
     }
+    if (tid == 0) __insert_timestamp(__LINE__);
     if (ncclShmem->work.header.funcIndex == FnIndex)
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem->work);
     else
@@ -488,6 +515,12 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     skipLoadWork = false;
   }
   if (COLLTRACE && tid == 0) traceKernelEnd()
+#ifdef ENABLE_PROFILING
+  if (ncclShmem->comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
+    copyToShmem(ncclShmem->comm.devProf+MAXCHANNELS*ncclShmem->prof.seq+blockIdx.x, &ncclShmem->prof);
+    if (tid == 0) ncclShmem->comm.devProf[bid].seq++;
+  }
+#endif
 }
 
 #define IMPL_COLL_KERN(func, algo, proto, devredop, type, fIndex) \

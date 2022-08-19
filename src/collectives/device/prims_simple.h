@@ -204,18 +204,8 @@ private:
           ncclShmem->groups[group].srcs[0] = userBuff + srcIx + offset;
         if (Dst && (flags & (DstBuf==Input ? RoleInput : RoleOutput)))
           ncclShmem->groups[group].dsts[0] = userBuff + dstIx + offset;
-#ifdef ENABLE_PROFILING
-        uint64_t t0;
-        if (tid == 0) t0 = __builtin_amdgcn_s_memrealtime();
-#endif
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(dstIx, remoteIx, offset, sliceSize);
         subBarrier();
-#ifdef ENABLE_PROFILING
-        if (tid == 0) {
-          struct ncclProfElem *elem = ncclShmem->comm.devProf.elems+opCount%PROFILE_NUM_ITEMS;
-          elem->elem[blockIdx.x].wait_cycle += (__builtin_amdgcn_s_memrealtime() - t0);
-        }
-#endif
         if (DirectRecv && ncclShmem->groups[group].srcs[0] == ncclShmem->groups[group].dsts[0]) {
           // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
           if (Send) {
