@@ -78,9 +78,10 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
   }
   //new tree
   for (int c=0; c<nChannels; c++) {
-    int* treeIntra = treeGraph->intra+c%6*localRanks;
-    int buff = c%6 > 2 ? localRanks/2 : 0;
-    int tempArray[256]; // maybe just copy the whole thing
+    int* treeIntra = treeGraph->intra+c%3*localRanks;
+    int buff = ((c%6)*localRanks)/6 + ((localRanks/4)*(c/6));
+
+    int tempArray[256];
     for (int ko=0; ko < localRanks; ko++){
       tempArray[ko] = treeIntra[(ko+buff)%localRanks];
     }
@@ -98,12 +99,12 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
           channel->tree.down[2] = -1;
         }
         else {
-          channel->tree.up         = i > localRanks/2 ?  tempArray[(i+1)%localRanks] : tempArray[i-1];
-          channel->tree.down[0]    = i > localRanks/2 ?  tempArray[i-1] : tempArray[i+1];
+          channel->tree.up = i > localRanks/2 ?  tempArray[(i+1)%localRanks] : tempArray[i-1];
+          channel->tree.down[0] = i > localRanks/2 ?  tempArray[i-1] : tempArray[i+1];
           if ((i == localRanks/2) || (i == (localRanks/2 + 1))) {
-            channel->tree.down[0]    = -1;
+            channel->tree.down[0] = -1;
           }
-          channel->tree.down[1]    = -1;
+          channel->tree.down[1] = -1;
           channel->tree.down[2] = -1;
         }
       }
