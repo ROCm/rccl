@@ -464,13 +464,10 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     info->nChannels = nc;
     if (!userTuneInput) {
       // always respect user settings
-      if (info->nBytes <= 900000) {
+      if (info->nBytes <= 2200008) {
         info->protocol = NCCL_PROTO_LL;
         info->algorithm = NCCL_ALGO_TREE;
-        info->nChannels = std::min(comm->nChannels, info->nBytes <= 16384? 4 : 24);
-      } else if (info->nBytes <= 2200008) {
-        info->protocol = NCCL_PROTO_LL;
-        info->algorithm = NCCL_ALGO_RING;
+        info->nChannels = 24;
       } else {
         info->protocol = NCCL_PROTO_SIMPLE;
         info->algorithm = NCCL_ALGO_RING;
