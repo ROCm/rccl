@@ -277,6 +277,7 @@ struct ncclChannel {
     struct {
       struct ncclRing ring;
       struct ncclTree tree;
+      struct ncclTree binTree;
       struct ncclDirect collTree;
 
       int id;
