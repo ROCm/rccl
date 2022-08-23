@@ -95,8 +95,7 @@ namespace RcclUnitTesting
       dataTypes.push_back(ncclUint32);
       dataTypes.push_back(ncclInt64);
       dataTypes.push_back(ncclUint64);
-      // Half-precision floats disabled due to lack of host-side support
-      // dataTypes.push_back(ncclFloat16);
+      dataTypes.push_back(ncclFloat16);
       dataTypes.push_back(ncclFloat32);
       dataTypes.push_back(ncclFloat64);
       dataTypes.push_back(ncclBfloat16);

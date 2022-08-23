@@ -47,7 +47,7 @@ namespace RcclUnitTesting
   {
     TestBed testBed;
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat64};
+    std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat64, ncclFloat16};
     std::vector<int>            const  numElements     = {1048576, 53327, 1024};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
