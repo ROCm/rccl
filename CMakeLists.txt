@@ -241,6 +241,10 @@ if(NPKIT_FLAGS)
   add_definitions(${NPKIT_FLAGS})
 endif()
 
+if(LL128)
+  add_definitions(-DENABLE_LL128)
+endif()
+
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
 if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
