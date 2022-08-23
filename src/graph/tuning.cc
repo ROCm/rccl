@@ -191,30 +191,30 @@ static struct tuningModel tuning_model_3 {
 static struct tuningModel tuning_model_4 {
   .hwLat = {
     /* NVLINK */
-    { /* Tree (LL/LL128/Simple)*/ { 0.8, 0.0, 2.5 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 3.6 }, /* CollNet (LL/LL128/Simple)*/ { 0.8, 0.0, 2.5 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.8, 1.4, 2.5 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 2.2, 3.6 }, /* CollNet (LL/LL128/Simple)*/ { 0.8, 1.4, 2.5 } },
     /* PCI */
     { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNet (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 } },
     /* NET */
-    { /* Tree (LL/LL128/Simple)*/ { 45.8, 0.0, 105.0 }, /* Ring (LL/LL128/Simple)*/ { 19.2, 0.0, 51.0 }, /* CollNet (LL/LL128/Simple)*/ { 45.8, 0.0, 105.0 } },
+    { /* Tree (LL/LL128/Simple)*/ { 45.8, 62.5, 105.0 }, /* Ring (LL/LL128/Simple)*/ { 19.2, 44.6, 51.0 }, /* CollNet (LL/LL128/Simple)*/ { 45.8, 62.5, 105.0 } },
   },
 
   .bwRatio = {
     /* 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.12, 0.00, 1.41 }, /* Ring (LL/LL128/Simple)*/ { 0.12, 0.00, 1.00 }, /* CollNet (LL/LL128/Simple)*/ { 1.00, 1.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.12, 0.21, 1.41 }, /* Ring (LL/LL128/Simple)*/ { 0.12, 0.26, 1.00 }, /* CollNet (LL/LL128/Simple)*/ { 1.00, 1.00, 1.00 } },
     /* more than 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.12, 0.00, 1.05 }, /* Ring (LL/LL128/Simple)*/ { 0.12, 0.00, 1.00 }, /* CollNet (LL/LL128/Simple)*/ { 1.00, 1.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.12, 0.21, 1.05 }, /* Ring (LL/LL128/Simple)*/ { 0.12, 0.26, 1.00 }, /* CollNet (LL/LL128/Simple)*/ { 1.00, 1.00, 1.00 } },
   },
 
   .treeCorrectionFactor = {
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.4, 1.0, 0.5, 0.8, 0.4, 0.3, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, },
-    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.9, 0.8, 0.8, 0.8, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2, 0.1, 0.1, 0.1, 0.2, 0.3, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.1, 0.1, 0.2, 0.3, 0.4, 0.2, 0.3, 0.3, 0.4, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.1, 0.5, 0.1, 0.4, 0.1, 0.1, 0.2, 0.1, 1.0, 0.3, 0.1, 0.1, 0.1, 1.0, 0.6, 1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.7, 0.6, 0.7, 0.6, 0.8, 0.8, },
   },
 
   .ringCorrectionFactor = {
-    { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.6, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.2, 0.2, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, },
-    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
-    { 0.6, 0.4, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 1.0, 0.8, 1.0, 1.0, 1.0, 0.7, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, },
+    { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.4, 0.1, 0.3, 0.1, 0.1, 0.2, 0.2, 0.3, 0.1, 0.2, 0.3, 0.3, 0.2, 0.2, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.2, 0.4, 1.0, 1.0, 1.0, 0.8, 0.6, 0.2, 0.4, 0.6, 0.5, 0.5, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.2, 0.9, 0.9, 0.8, 1.0, 0.4, 0.6, 0.7, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
 };
 
@@ -362,9 +362,16 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     int pEnable = protoEnable[p];
     if (pEnable == 2 && p == NCCL_PROTO_LL128) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+      // Enable LL128 by default only on gfx90a with available tuning table
+      pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
+        (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->topo->ll128Enabled) ? 1 : 0;
+#else
       // Enable LL128 by default only on Volta/Ampere+NVLink. Other cases are not tested and may cause silent data corruption.
       pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
         ((minCompCap == 70 && maxCompCap == 70) || (minCompCap == 80 && maxCompCap == 80)) ? 1 : 0;
+#endif
+      if (comm->rank == 0 && c == 0 && a == 0) INFO(NCCL_INIT, "Using tuning table %d with LL128 %s", comm->topo->tuning, pEnable ? "enabled" : "disabled");
     }
     if (pEnable == 0) comm->bandwidths[c][a][p] = 0;
     // Only disable algo for Allreduce since others only have one

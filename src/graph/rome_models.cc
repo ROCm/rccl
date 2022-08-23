@@ -838,6 +838,8 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
         system->pivotA2ANumBiRings = atol(tokens[i*2+1]);
       } else if (strcmp(tokens[i*2], "tuning") == 0) {
         system->tuning = atol(tokens[i*2+1]);
+      } else if (strcmp(tokens[i*2], "ll128Enabled") == 0) {
+        system->ll128Enabled = (bool)atol(tokens[i*2+1]);
       }
     }
     free(str_temp);

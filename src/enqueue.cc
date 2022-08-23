@@ -68,10 +68,13 @@
   NCCL_FUNCS3B(func, Sum), /*PreMulSum*/ \
   NCCL_FUNCS3B(func, Sum)  /*SumPostDiv*/
 
-typedef void(*ncclKern_t)(struct ncclDevComm* comm, struct ncclWorkElem first);
+typedef void(*ncclKern_t)(struct ncclDevComm* comm);
 // Must be consistent with the ncclFuncSet enum
-static ncclKern_t const ncclKerns[1] = {
+static ncclKern_t const ncclKerns[4] = {
   NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
+  NCCL_KERN_NAME_DEBUG(SendRecv, RING, SIMPLE, Sum, int8_t),
+  NCCL_KERN_NAME_LL128(SendRecv, RING, SIMPLE, Sum, int8_t),
+  NCCL_KERN_NAME_LL128_DEBUG(SendRecv, RING, SIMPLE, Sum, int8_t),
 };
 
 // Determine the maximum kernel stack size of all CUDA kernels
@@ -88,6 +91,19 @@ size_t ncclKernMaxLocalSize() {
 error:
   return (res != ncclSuccess) ? 0 : max;
 }
+
+// Determine kernel stack size from index
+size_t ncclKernLocalSize(int i) {
+  ncclResult_t res = ncclSuccess;
+  int numNcclKerns = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
+  hipFuncAttributes attr = {0};
+  if (i < numNcclKerns)
+    CUDACHECKGOTO(hipFuncGetAttributes(&attr, (const void*)(ncclKerns[i])), res, error);
+
+error:
+  return (res != ncclSuccess) ? 0 : attr.localSizeBytes;
+}
+
 
 // Set shared memory carveout for the nccl kernels
 ncclResult_t ncclKernSetSharedMemoryCarveout(int carveOut) {
@@ -173,14 +189,6 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       w->header.nWarps = 0;
     }
     channel->workFifo[(channel->workFifoTail-1)%NCCL_MAX_OPS].header.isLast = 1;
-
-    if (c == 0) {
-      // As we inline the first coll directly, we can free it immediately.
-      // Except P2P or aggregation or registration cases
-      struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
-      if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1)
-        work->header.type = ncclWorkTypeUnused;
-    }
 
     if (channel->gdrMemDesc) {
       // GDRCOPY support
@@ -759,14 +767,7 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
 
   // Inline the first kernel
   if (params->func == NULL) {
-    params->func = (void *)ncclKerns[0];
-    if (work->header.type == ncclWorkTypeColl) {
-      // Copy the first operation to the inline argument. Type may be set later to
-      // ncclWorkTypeUnused if we have more than one coll element.
-      memcpy(&comm->args, work->elems, sizeof(struct ncclWorkElem));
-      comm->args.bid = 0;    // Only inline for channel 0
-      comm->args.header.isLast = 1; // I am so far the last element
-    }
+    params->func = (void *)ncclKerns[ncclGetKernelIndex(comm)];
   }
 
   // Register and exchange input and output buffers
@@ -778,9 +779,6 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
     NCCLCHECK(ncclRegBuffAndExchange(info, &eqElem->buffRegInfo));
     comm->enqueueInfo->nRegBuffs += eqElem->buffRegInfo.nBuffs;
     work->header.type = ncclWorkTypeRegColl;
-    // Disable inline argument because we need kernel to copy the entire ncclWork from workFifo
-    // because the registered addresses are in ncclWorkElemReg
-    comm->args.header.type = ncclWorkTypeUnused;
   }
 
   return ncclSuccess;
@@ -880,7 +878,6 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
       }
       NCCLCHECK(ncclSetupCollKernel(info));
     }
-    comm->args.header.type = ncclWorkTypeUnused;  // disable inline argument
   }
   // Reset counters
   comm->asyncOpCount = 0;
@@ -1103,9 +1100,8 @@ ncclResult_t ncclSetupP2pKernel(struct ncclInfo* info) {
   // Just for CUDA kernel to know this is a P2P operation
   // The CUDA kernel does not use the inlined first work element as fastpath argument
   if (params->func == NULL) {
-    params->func = (void *)ncclKerns[0];
+    params->func = (void *)ncclKerns[ncclGetKernelIndex(comm)];
     //params->func = ncclKerns[eqElem->work.header.funcIndex];
-    comm->args.header.type = ncclWorkTypeUnused;
   }
   return ncclSuccess;
 }

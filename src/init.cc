@@ -332,6 +332,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 RCCL_PARAM(CliqueIgnoreTopo, "CLIQUE_IGNORE_TOPO", 0);
 RCCL_PARAM(P2pNetDisable, "P2P_NET_DISABLE", 0);
 RCCL_PARAM(PivotAlltoallEnable, "PIVOT_ALLTOALL_ENABLE", 1);
+RCCL_PARAM(LL128ForceEnable, "LL128_FORCE_ENABLE", 0);
 NCCL_PARAM(AggChannelSize, "AGG_CHANNEL_SIZE", -2);
 NCCL_PARAM(DisableGraphHelper, "GRAPH_HELPER_DISABLE", 0);
 NCCL_PARAM(GraphRegister, "GRAPH_REGISTER", 0);
@@ -382,7 +383,6 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
   comm->p2pOpCount = 0;
 
   comm->argsptrs[0] = &comm->devComm;
-  comm->argsptrs[1] = &comm->args;
 #ifdef ENABLE_PROFILING
   NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES));
 #endif
@@ -702,6 +702,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // init Pivot A2A related fields
   comm->topo->pivotA2AEnabled = false;
   comm->topo->pivotA2ANumBiRings = 0;
+  // LL128
+  comm->topo->ll128Enabled = false;
   // Compute paths between GPUs and NICs
   NCCLCHECK(ncclTopoComputePaths(comm->topo, comm->peerInfo));
   // Remove inaccessible GPUs and unused NICs
@@ -844,6 +846,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     struct ncclGraphInfo collNet;
     struct ncclTopoRanks topoRanks;
     bool pivotA2AEnabled;
+    bool ll128Enabled;
   } *allGather3Data;
 
   NCCLCHECK(ncclCalloc(&allGather3Data, nranks));
@@ -892,6 +895,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   allGather3Data[rank].collNet.typeInter = collNetGraph.typeInter;
   allGather3Data[rank].collNetSupport = comm->collNetSupport;
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
+  comm->topo->ll128Enabled =  comm->topo->ll128Enabled || rcclParamLL128ForceEnable();
+  allGather3Data[rank].ll128Enabled = comm->topo->ll128Enabled;
 
   comm->nChannels = (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count)
     ? std::min(treeGraph.nChannels, ringGraph.nChannels) : ringGraph.nChannels;
@@ -978,6 +983,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeInter = std::max(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
     comm->collNetSupport = std::min(allGather3Data[i].collNetSupport, comm->collNetSupport);
     comm->topo->pivotA2AEnabled = comm->topo->pivotA2AEnabled && allGather3Data[i].pivotA2AEnabled;
+    comm->topo->ll128Enabled = comm->topo->ll128Enabled && allGather3Data[i].ll128Enabled;
   }
 
   comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =
@@ -1238,7 +1244,7 @@ ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId 
   NCCLCHECKGOTO(initTransportsRank(*newcomm, &commId), res, cleanup);
   NCCLCHECKGOTO(devCommSetup(*newcomm), res, cleanup);
 
-  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx localSize %ld used %ld bytes - Init COMPLETE", *newcomm, myrank, nranks, (*newcomm)->cudaDev, (*newcomm)->busId, maxLocalSizeBytes, allocTracker[(*newcomm)->cudaDev].totalAllocSize);
+  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx localSize %ld used %ld bytes - Init COMPLETE", *newcomm, myrank, nranks, (*newcomm)->cudaDev, (*newcomm)->busId, ncclKernLocalSize(ncclGetKernelIndex(*newcomm)), allocTracker[(*newcomm)->cudaDev].totalAllocSize);
 
   return ncclSuccess;
 cleanup:
