@@ -850,13 +850,19 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int idx;
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, comm->busId, &idx));
   allGather3Data[rank].nc = 2;
-  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 906 && allXgmi)
+  if ( ((comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->virtualId == -1)  ||
+	(comm->topo->nodes[GPU].count <= comm->topo->nRanks && comm->virtualId != -1)) &&
+       comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 906 && allXgmi)
     allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 908)
     allGather3Data[rank].nc = std::max(4/ringGraph.nChannels, 2);
-  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_CR8G))
+  if ( ((comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->virtualId == -1)  ||
+	(comm->topo->nodes[GPU].count <= comm->topo->nRanks && comm->virtualId != -1)) &&
+       (comm->topo->type & RCCL_TOPO_CR8G))
     allGather3Data[rank].nc = 4;
-  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
+  if (((comm->topo->nodes[GPU].count == comm->topo->nRanks && comm->virtualId == -1)  ||
+       (comm->topo->nodes[GPU].count <= comm->topo->nRanks && comm->virtualId != -1)) &&
+      comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
     allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph.nChannels);
