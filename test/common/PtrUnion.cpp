@@ -153,6 +153,7 @@ namespace RcclUnitTesting
     case ncclUint32:   U4[idx] = valueI; break;
     case ncclInt64:    I8[idx] = valueI; break;
     case ncclUint64:   U8[idx] = valueI; break;
+    case ncclFloat16:  F2[idx] = __float2half(static_cast<float>(valueF)); break;
     case ncclFloat32:  F4[idx] = valueF; break;
     case ncclFloat64:  F8[idx] = valueF; break;
     case ncclBfloat16: B2[idx] = rccl_bfloat16(static_cast<float>(valueF)); break;
@@ -173,6 +174,7 @@ namespace RcclUnitTesting
     case ncclUint32:   valueI = U4[idx]; break;
     case ncclInt64:    valueI = I8[idx]; break;
     case ncclUint64:   valueI = U8[idx]; break;
+    case ncclFloat16:  valueF = __half2float(F2[idx]); break;
     case ncclFloat32:  valueF = F4[idx]; break;
     case ncclFloat64:  valueF = F8[idx]; break;
     case ncclBfloat16: valueF = B2[idx]; break;
@@ -202,6 +204,7 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] *= scalarsPerRank.U4[rank]; break;
       case ncclInt64:    I8[idx] *= scalarsPerRank.I8[rank]; break;
       case ncclUint64:   U8[idx] *= scalarsPerRank.U8[rank]; break;
+      case ncclFloat16:  F2[idx]  = __float2half(__half2float(F2[idx]) * __half2float(scalarsPerRank.F2[rank])); break;
       case ncclFloat32:  F4[idx] *= scalarsPerRank.F4[rank]; break;
       case ncclFloat64:  F8[idx] *= scalarsPerRank.F8[rank]; break;
       case ncclBfloat16: B2[idx] *= scalarsPerRank.B2[rank]; break;
@@ -234,6 +237,7 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] = ReduceOp(op, U4[idx], inputCpu.U4[idx]); break;
       case ncclInt64:    I8[idx] = ReduceOp(op, I8[idx], inputCpu.I8[idx]); break;
       case ncclUint64:   U8[idx] = ReduceOp(op, U8[idx], inputCpu.U8[idx]); break;
+      case ncclFloat16:  F2[idx] = __float2half(ReduceOp(op, __half2float(F2[idx]), __half2float(inputCpu.F2[idx]))); break;
       case ncclFloat32:  F4[idx] = ReduceOp(op, F4[idx], inputCpu.F4[idx]); break;
       case ncclFloat64:  F8[idx] = ReduceOp(op, F8[idx], inputCpu.F8[idx]); break;
       case ncclBfloat16: B2[idx] = ReduceOp(op, B2[idx], inputCpu.B2[idx]); break;
@@ -260,6 +264,7 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] /= divisor; break;
       case ncclInt64:    I8[idx] /= divisor; break;
       case ncclUint64:   U8[idx] /= divisor; break;
+      case ncclFloat16:  F2[idx]  = __float2half(__half2float(F2[idx])/divisor); break;
       case ncclFloat32:  F4[idx] /= divisor; break;
       case ncclFloat64:  F8[idx] /= divisor; break;
       case ncclBfloat16: B2[idx] = (rccl_bfloat16((float)(B2[idx]) / divisor)); break;
@@ -289,6 +294,7 @@ namespace RcclUnitTesting
       case ncclUint32:  isMatch = (U4[idx] == expected.U4[idx]); break;
       case ncclInt64:   isMatch = (I8[idx] == expected.I8[idx]); break;
       case ncclUint64:  isMatch = (U8[idx] == expected.U8[idx]); break;
+      case ncclFloat16: isMatch = (fabs(__half2float(F2[idx]) - __half2float(expected.F2[idx])) < 9e-2); break;
       case ncclFloat32: isMatch = (fabs(F4[idx] - expected.F4[idx]) < 1e-5); break;
       case ncclFloat64: isMatch = (fabs(F8[idx] - expected.F8[idx]) < 1e-12); break;
       case ncclBfloat16: isMatch = (fabs((float)B2[idx] - (float)expected.B2[idx]) < 9e-2); break;
@@ -315,6 +321,8 @@ namespace RcclUnitTesting
         ERROR("Expected output: %ld.  Actual output: %ld at index %lu\n", expected.I8[idx], I8[idx], idx); break;
       case ncclUint64:
         ERROR("Expected output: %lu.  Actual output: %lu at index %lu\n", expected.U8[idx], U8[idx], idx); break;
+      case ncclFloat16:
+        ERROR("Expected output: %f.  Actual output: %f at index %lu\n", __half2float(expected.F2[idx]), __half2float(F2[idx]), idx); break;
       case ncclFloat32:
         ERROR("Expected output: %f.  Actual output: %f at index %lu\n", expected.F4[idx], F4[idx], idx); break;
       case ncclFloat64:
@@ -343,6 +351,7 @@ namespace RcclUnitTesting
       case ncclUint32:   ss << U4[i]; break;
       case ncclInt64:    ss << I8[i]; break;
       case ncclUint64:   ss << U8[i]; break;
+      case ncclFloat16:  ss << __half2float(F2[i]); break;
       case ncclFloat32:  ss << F4[i]; break;
       case ncclFloat64:  ss << F8[i]; break;
       case ncclBfloat16: ss << (float)B2[i]; break;
