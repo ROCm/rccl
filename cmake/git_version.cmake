@@ -5,7 +5,7 @@ execute_process(COMMAND git log --pretty=format:'%h' -n 1
 
 # Check if git information was found
 if ("${GIT_REV}" STREQUAL "")
-  set(GIT_VERSION "const char *rcclGitHash =\"Unknown \";")
+  set(CURR_GIT_VERSION "const char *rcclGitHash =\"Unknown \";")
 else()
   # Check for changes (denote with a '+') after hash
   execute_process(
@@ -38,5 +38,5 @@ if (EXISTS ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
   endif()
 else()
   # Create git_version.cpp if it doesn't exist yet
-  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "${GIT_VERSION}")
+  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "${CURR_GIT_VERSION}")
 endif()
