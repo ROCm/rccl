@@ -293,7 +293,10 @@ ncclResult_t ncclLaunchKernel(ncclComm_t comm) {
   if (comm->launchMode == ncclComm::GROUP) {
     NCCLCHECK(ncclCpuBarrierOut(comm));
   } else {
-    CUDACHECK(hipLaunchKernel(params->func, params->gridDim, params->blockDim, params->args, params->sharedMem, params->stream));
+    if (!comm->usingCudaGraph)
+      CUDACHECK(hipExtLaunchKernel(params->func, params->gridDim, params->blockDim, params->args, params->sharedMem, params->stream, NULL, comm->doneEvent, 0));
+    else
+      CUDACHECK(hipLaunchKernel(params->func, params->gridDim, params->blockDim, params->args, params->sharedMem, params->stream));
   }
 
   return ncclSuccess;
@@ -324,7 +327,8 @@ ncclResult_t ncclRecordEvents(ncclComm_t comm) {
   hipLaunchParams *params = comm->myParams;
 
   // Enqueue event after NCCL kernel (only in non-graph mode)
-  if (!comm->usingCudaGraph) CUDACHECK(hipEventRecord(comm->doneEvent, params->stream));
+  // [RCCL] move event record into hipExtLaunchKernel
+  // if (!comm->usingCudaGraph) CUDACHECK(hipEventRecord(comm->doneEvent, params->stream));
   // Use internal NCCL stream for CGMD/GROUP launch if required or if the user stream is NULL
   if (comm->launchMode == ncclComm::GROUP &&
       (comm->groupCudaStream ||
