@@ -27,6 +27,9 @@ void ncclLoadParam(char const* env, int64_t deftVal, int64_t uninitialized, int6
     return cache; \
   }
 
+#define RCCL_PARAM_DECLARE(name) \
+int64_t rcclParam##name()
+
 #define RCCL_PARAM(name, env, default_value) \
 pthread_mutex_t rcclParamMutex##name = PTHREAD_MUTEX_INITIALIZER; \
 int64_t rcclParam##name() { \
