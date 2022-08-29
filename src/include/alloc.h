@@ -83,7 +83,7 @@ static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr,
 #if HIP_VERSION >= 50322325
   // Need async stream for P2P pre-connect + CUDA Graph
   static bool streamCreated = false;
-  hipStream_t stream;
+  static hipStream_t stream;
   if (rcclParamEnableHipGraph() && !streamCreated)
   {
     // Create stream only once to avoid performance penalty
