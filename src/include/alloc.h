@@ -99,6 +99,7 @@ static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr,
   if (rcclParamEnableHipGraph()) {
     CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
     CUDACHECK(hipStreamSynchronize(stream));
+    // NOTE: Currently the re-used stream is not destroyed
     //CUDACHECK(hipStreamDestroy(stream));
   } else {
     CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
