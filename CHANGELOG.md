@@ -18,7 +18,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
   - When "Call to bind failed : Address already in use" error happens in large-scale AlltoAll
     (e.g., >=64 MI200 nodes), users are suggested to opt-in either one or both of the options
     to resolve the massive port usage issue
-  - Avoid using NCCL_IB_SOCK_SERVER_PORT_REUSE when NCCL_NCHANNELS_PER_NET_PEER is tuned >1
+- Avoid using NCCL_IB_SOCK_SERVER_PORT_REUSE when NCCL_NCHANNELS_PER_NET_PEER is tuned >1
+- Adding initial hipGraph support via opt-in environment variable RCCL_ENABLE_HIPGRAPH
+
 ### Removed
 - Removed experimental clique-based kernels
 

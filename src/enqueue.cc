@@ -14,7 +14,7 @@
 #include "gdrwrap.h"
 #include "bootstrap.h"
 #include "channel.h"
-
+#include "rccl_vars.h"
 #include <cstring> // std::memcpy
 
 // Only generate inline kernels for LL
@@ -1231,28 +1231,33 @@ void* graphHelperFunc(void *args) {
     }
   }
 }
+#if HIP_VERSION >= 50322325
+RCCL_PARAM(EnableHipGraph, "ENABLE_HIPGRAPH", 0);
+#endif
 
 // Check if we are in CUDA Graph capture mode
 ncclResult_t ncclGetCudaGraph(ncclComm_t comm, hipGraph_t* graph) {
   comm->usingCudaGraph = 0;
   // Feature requires CUDA 11.3/R465 or above
-#if CUDART_VERSION >= 11030
-  cudaStreamCaptureStatus captureStatus;
+#if HIP_VERSION >= 50322325
+  if (!rcclParamEnableHipGraph()) return ncclSuccess;
+
+  hipStreamCaptureStatus captureStatus;
   unsigned long long cudaGraphId;
   ncclResult_t ret = ncclSuccess;
-  if (comm->driverVersion < 11030) {
+  if (comm->driverVersion < 50322325) {
     // Runtime driver version older than compiler version
     // Enhanced compat fallback
     goto enh_compat_end;
   }
   // Get CUDA Graph handle
-  CUDACHECKGOTO(cudaStreamGetCaptureInfo_v2(comm->userStream, &captureStatus, &cudaGraphId, graph, NULL, NULL), ret, enh_compat_end);
-  if (captureStatus == cudaStreamCaptureStatusActive) {
+  CUDACHECKGOTO(hipStreamGetCaptureInfo_v2(comm->userStream, &captureStatus, &cudaGraphId, graph, NULL, NULL), ret, enh_compat_end);
+  if (captureStatus == hipStreamCaptureStatusActive) {
     if (cudaGraphId != comm->lastCudaGraphId) {
       INFO(NCCL_COLL, "stream is being captured by a new graph, id %llu", cudaGraphId);
       // We are in a new graph, hence need to forget the last setup node so that
       // the first setup node in the new graph will not have a dependency
-      comm->lastCudaGraphId = hipGraphId;
+      comm->lastCudaGraphId = cudaGraphId;
       comm->lastSetupNode = NULL;
     }
     if (comm->launchMode == ncclComm::GROUP) comm->launchMode = ncclComm::GROUP_GRAPH;
@@ -1276,9 +1281,9 @@ ncclResult_t ncclGetCudaGraph(ncclComm_t comm, hipGraph_t* graph) {
 
 enh_compat_end: // Enhanced compat fallback
   (void)ret;
-  CUDACHECK(cudaStreamIsCapturing(comm->userStream, &captureStatus));
-  if (captureStatus != cudaStreamCaptureStatusNone) {
-    WARN("The installed CUDA driver is older than the minimum version (R465) required for NCCL's CUDA Graphs support");
+  CUDACHECK(hipStreamIsCapturing(comm->userStream, &captureStatus));
+  if (captureStatus != hipStreamCaptureStatusNone) {
+    WARN("The installed ROCm driver is older than the minimum version (50322343) required for RCCL's HIP Graphs support");
     return ncclInvalidUsage;
   }
   // If we are not in capture mode, we can ignore the driver being lower
@@ -1288,7 +1293,12 @@ enh_compat_end: // Enhanced compat fallback
 
 // Create host setup node in CUDA Graph
 ncclResult_t ncclCudaGraphHostSetup(ncclComm_t comm, hipGraph_t graph) {
-#if CUDART_VERSION >= 11030
+#if HIP_VERSION >= 50322325
+  if (!rcclParamEnableHipGraph())
+  {
+    WARN("RCCL_ENABLE_HIPGRAPH must be set to non-zero to enable HIP graph feature");
+    return ncclInternalError;
+  }
   struct ncclQueueInfo* eqInfo = comm->enqueueInfo;
   // Create a CUDA object to wrap around the argument space
   // which CUDA graph would manage lifetime of
@@ -1309,7 +1319,7 @@ ncclResult_t ncclCudaGraphHostSetup(ncclComm_t comm, hipGraph_t graph) {
   comm->lastSetupNode = setupNode;
   return ncclSuccess;
 #else
-  WARN("NCCL does not support this CUDA version for CUDA graph feature");
+  WARN("RCCL does not support this ROCm version for HIP graph feature");
   return ncclInternalError;
 #endif
 }
