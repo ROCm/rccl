@@ -425,8 +425,6 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
     comm->graphHelperResources->comm = comm;
     if (comm->driverVersion >= 50322325)
       comm->pfnCuMemGetAddressRange = hipMemGetAddressRange;
-    // hipGetDriverEntryPoint requires R465 or above (enhanced compat need)
-    //CUDACHECK(hipGetDriverEntryPoint("cuMemGetAddressRange", (void**)&comm->pfnCuMemGetAddressRange, hipEnableDefault));
   }
 #endif
 
