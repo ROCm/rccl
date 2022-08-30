@@ -103,9 +103,11 @@ static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr,
     //CUDACHECK(hipStreamDestroy(stream));
   } else {
     CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
+    CUDACHECK(hipStreamSynchronize(NULL));
   }
 #else
   CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
+  CUDACHECK(hipStreamSynchronize(NULL));
 #endif
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   int dev;
