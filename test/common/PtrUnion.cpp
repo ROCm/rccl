@@ -99,6 +99,7 @@ namespace RcclUnitTesting
       ERROR("Unable to call hipMemset\n");
       return TEST_FAIL;
     }
+    hipStreamSynchronize(NULL);
     return TEST_SUCCESS;
   }
 
