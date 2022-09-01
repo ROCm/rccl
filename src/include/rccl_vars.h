@@ -25,8 +25,6 @@ THE SOFTWARE.
 
 #include "param.h"
 
-#if HIP_VERSION >= 50322325
 RCCL_PARAM_DECLARE(EnableHipGraph);  // Opt-in environment variable for enabling hipGraph
-#endif
 
 #endif

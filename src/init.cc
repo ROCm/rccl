@@ -418,15 +418,13 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
   comm->lastCudaGraphId = -1;
   comm->disableGraphHelper = ncclParamDisableGraphHelper();
   comm->graphRegister = ncclParamGraphRegister();
-#if HIP_VERSION >= 50322325
+
   if (rcclParamEnableHipGraph())
   {
     NCCLCHECK(ncclCalloc(&comm->graphHelperResources, 1));
     comm->graphHelperResources->comm = comm;
-    if (comm->driverVersion >= 50322325)
-      comm->pfnCuMemGetAddressRange = hipMemGetAddressRange;
+    comm->pfnCuMemGetAddressRange = hipMemGetAddressRange;
   }
-#endif
 
   static_assert(MAXCHANNELS <= sizeof(*comm->connectSend)*8, "comm->connectSend must have enough bits for all channels");
   static_assert(MAXCHANNELS <= sizeof(*comm->connectRecv)*8, "comm->connectRecv must have enough bits for all channels");
@@ -1361,10 +1359,10 @@ static ncclResult_t commDestroy(ncclComm_t comm) {
   CUDACHECK(hipStreamSynchronize(comm->groupStream));
 
   ncclDestroyQueueInfo(comm->enqueueInfo);
-#if HIP_VERSION >= 50322325
+
   if (rcclParamEnableHipGraph())
     NCCLCHECK(ncclGraphHelperDestroy(comm));
-#endif
+
   INFO(NCCL_COLL, "Created %d queue info, destroyed %d", comm->nQueueInfoCreated, comm->nQueueInfoDestroyed);
 
   NCCLCHECK(commFree(comm));

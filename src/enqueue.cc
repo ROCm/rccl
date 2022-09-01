@@ -293,7 +293,7 @@ ncclResult_t ncclLaunchKernel(ncclComm_t comm) {
   if (comm->launchMode == ncclComm::GROUP) {
     NCCLCHECK(ncclCpuBarrierOut(comm));
   } else {
-    if (!comm->usingCudaGraph)
+    if (!rcclParamEnableHipGraph() || !comm->usingCudaGraph)
       CUDACHECK(hipExtLaunchKernel(params->func, params->gridDim, params->blockDim, params->args, params->sharedMem, params->stream, NULL, comm->doneEvent, 0));
     else
       CUDACHECK(hipLaunchKernel(params->func, params->gridDim, params->blockDim, params->args, params->sharedMem, params->stream));
@@ -328,7 +328,10 @@ ncclResult_t ncclRecordEvents(ncclComm_t comm) {
 
   // Enqueue event after NCCL kernel (only in non-graph mode)
   // [RCCL] move event record into hipExtLaunchKernel
-  // if (!comm->usingCudaGraph) CUDACHECK(hipEventRecord(comm->doneEvent, params->stream));
+  if (rcclParamEnableHipGraph())
+  {
+    if (!comm->usingCudaGraph) CUDACHECK(hipEventRecord(comm->doneEvent, params->stream));
+  }
   // Use internal NCCL stream for CGMD/GROUP launch if required or if the user stream is NULL
   if (comm->launchMode == ncclComm::GROUP &&
       (comm->groupCudaStream ||
@@ -1231,21 +1234,19 @@ void* graphHelperFunc(void *args) {
     }
   }
 }
-#if HIP_VERSION >= 50322325
 RCCL_PARAM(EnableHipGraph, "ENABLE_HIPGRAPH", 0);
-#endif
 
 // Check if we are in CUDA Graph capture mode
 ncclResult_t ncclGetCudaGraph(ncclComm_t comm, hipGraph_t* graph) {
   comm->usingCudaGraph = 0;
   // Feature requires CUDA 11.3/R465 or above
-#if HIP_VERSION >= 50322325
+#if HIP_VERSION >= 50322000
   if (!rcclParamEnableHipGraph()) return ncclSuccess;
 
   hipStreamCaptureStatus captureStatus;
   unsigned long long cudaGraphId;
   ncclResult_t ret = ncclSuccess;
-  if (comm->driverVersion < 50322325) {
+  if (comm->driverVersion < 50322000) {
     // Runtime driver version older than compiler version
     // Enhanced compat fallback
     goto enh_compat_end;
@@ -1283,7 +1284,7 @@ enh_compat_end: // Enhanced compat fallback
   (void)ret;
   CUDACHECK(hipStreamIsCapturing(comm->userStream, &captureStatus));
   if (captureStatus != hipStreamCaptureStatusNone) {
-    WARN("The installed ROCm driver is older than the minimum version (50322343) required for RCCL's HIP Graphs support");
+    WARN("The installed ROCm driver is older than the minimum version (50322000) required for RCCL's HIP Graphs support");
     return ncclInvalidUsage;
   }
   // If we are not in capture mode, we can ignore the driver being lower
@@ -1293,7 +1294,7 @@ enh_compat_end: // Enhanced compat fallback
 
 // Create host setup node in CUDA Graph
 ncclResult_t ncclCudaGraphHostSetup(ncclComm_t comm, hipGraph_t graph) {
-#if HIP_VERSION >= 50322325
+#if HIP_VERSION >= 50322000
   if (!rcclParamEnableHipGraph())
   {
     WARN("RCCL_ENABLE_HIPGRAPH must be set to non-zero to enable HIP graph feature");

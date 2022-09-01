@@ -80,7 +80,6 @@ extern struct allocationTracker allocTracker[];
 template <typename T>
 static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
 
-#if HIP_VERSION >= 50322325
   // Need async stream for P2P pre-connect + CUDA Graph
   static bool streamCreated = false;
   static hipStream_t stream;
@@ -90,12 +89,12 @@ static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr,
     CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
     streamCreated = true;
   }
-#endif
+
   if (isFineGrain)
     CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
   else
     CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
-#if HIP_VERSION >= 50322325
+
   if (rcclParamEnableHipGraph()) {
     CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
     CUDACHECK(hipStreamSynchronize(stream));
@@ -105,10 +104,7 @@ static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr,
     CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
     CUDACHECK(hipStreamSynchronize(NULL));
   }
-#else
-  CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
-  CUDACHECK(hipStreamSynchronize(NULL));
-#endif
+
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   int dev;
   CUDACHECK(hipGetDevice(&dev));
