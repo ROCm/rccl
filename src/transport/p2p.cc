@@ -9,7 +9,7 @@
 #include "graph.h"
 #include "utils.h"
 #include "graph.h"
-#include "../graph/topo.h"
+#include "graph/topo.h"
 
 struct ncclP2pBuff {
   void* directPtr;

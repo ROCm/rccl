@@ -18,7 +18,7 @@
 #include "npkit/npkit.h"
 #endif
 #include "graph.h"
-#include "../graph/topo.h"
+#include "graph/topo.h"
 
 static_assert(sizeof(ncclNetHandle_t) <= CONNECT_SIZE, "NET Connect info is too large");
 
