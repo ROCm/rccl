@@ -574,7 +574,6 @@ template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>;
-    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     runRing<T, RedOp, Proto>(args);
   }
 };
@@ -582,7 +581,6 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SI
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(args);
   }
 };
@@ -688,7 +686,6 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     runRing<T, RedOp, ProtoLL>(args);
   }
 };
@@ -696,7 +693,6 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL> {
   __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
-    if (threadIdx.x == 0) __insert_timestamp(__LINE__);
     if (args->pad_0 == 0) runTreeUpDown<T, RedOp, ProtoLL>(args);
     else runTreeSplit<T, RedOp, ProtoLL>(args);
   }

@@ -321,48 +321,48 @@ class ncclFunction {
 
 #ifdef ENABLE_COLLTRACE
 #define traceColl(elem,launch_type) \
-    uint32_t pos = __atomic_fetch_add(ncclShmem->comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    ncclShmem->comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-    ncclShmem->comm.collTrace[pos].bid = blockIdx.x; \
-    ncclShmem->comm.collTrace[pos].funcIndex = ncclShmem->work.header.funcIndex; \
-    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (ncclShmem->comm.collTrace[pos].data_0)); \
+    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    shmem.comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    shmem.comm.collTrace[pos].bid = blockIdx.x; \
+    shmem.comm.collTrace[pos].funcIndex = shmem.work.header.funcIndex; \
+    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (shmem.comm.collTrace[pos].data_0)); \
     if (elem.header.type == ncclWorkTypeP2p) { \
       struct ncclWorkElemP2p *p2pElems = (struct ncclWorkElemP2p *)&elem; \
-      ncclShmem->comm.collTrace[pos].p2p[0].connIndex = p2pElems[0].connIndex; \
-	    ncclShmem->comm.collTrace[pos].p2pOpCount[0] = p2pElems[0].opCount; \
-      ncclShmem->comm.collTrace[pos].p2p[0].ngroups = p2pElems[0].ngroups; \
-      ncclShmem->comm.collTrace[pos].p2p[0].nWarps = p2pElems[0].nWarps; \
-      ncclShmem->comm.collTrace[pos].p2p[0].warpStart = p2pElems[0].warpStart; \
-      ncclShmem->comm.collTrace[pos].p2p[0].peer = (uint16_t)(p2pElems[0].peer); \
-	    ncclShmem->comm.collTrace[pos].p2p[1].connIndex = p2pElems[1].connIndex; \
-      ncclShmem->comm.collTrace[pos].p2pOpCount[1] = p2pElems[1].opCount; \
-      ncclShmem->comm.collTrace[pos].p2p[1].ngroups = p2pElems[1].ngroups; \
-      ncclShmem->comm.collTrace[pos].p2p[1].nWarps = p2pElems[1].nWarps; \
-      ncclShmem->comm.collTrace[pos].p2p[1].warpStart = p2pElems[1].warpStart; \
-      ncclShmem->comm.collTrace[pos].p2p[1].peer = (uint16_t)(p2pElems[1].peer); \
-      ncclShmem->comm.collTrace[pos].type = (ncclCollTraceP2pElemType|launch_type); \
+      shmem.comm.collTrace[pos].p2p[0].connIndex = p2pElems[0].connIndex; \
+	    shmem.comm.collTrace[pos].p2pOpCount[0] = p2pElems[0].opCount; \
+      shmem.comm.collTrace[pos].p2p[0].ngroups = p2pElems[0].ngroups; \
+      shmem.comm.collTrace[pos].p2p[0].nWarps = p2pElems[0].nWarps; \
+      shmem.comm.collTrace[pos].p2p[0].warpStart = p2pElems[0].warpStart; \
+      shmem.comm.collTrace[pos].p2p[0].peer = (uint16_t)(p2pElems[0].peer); \
+	    shmem.comm.collTrace[pos].p2p[1].connIndex = p2pElems[1].connIndex; \
+      shmem.comm.collTrace[pos].p2pOpCount[1] = p2pElems[1].opCount; \
+      shmem.comm.collTrace[pos].p2p[1].ngroups = p2pElems[1].ngroups; \
+      shmem.comm.collTrace[pos].p2p[1].nWarps = p2pElems[1].nWarps; \
+      shmem.comm.collTrace[pos].p2p[1].warpStart = p2pElems[1].warpStart; \
+      shmem.comm.collTrace[pos].p2p[1].peer = (uint16_t)(p2pElems[1].peer); \
+      shmem.comm.collTrace[pos].type = (ncclCollTraceP2pElemType|launch_type); \
     } else { \
-      ncclShmem->comm.collTrace[pos].opCount = elem.opCount; \
-      ncclShmem->comm.collTrace[pos].coll.nWarps = elem.header.nWarps; \
-      ncclShmem->comm.collTrace[pos].coll.bid = elem.bid; \
-      ncclShmem->comm.collTrace[pos].coll.nChannels = elem.nChannels; \
-      ncclShmem->comm.collTrace[pos].type = (ncclCollTraceCollElemType|launch_type); \
+      shmem.comm.collTrace[pos].opCount = elem.opCount; \
+      shmem.comm.collTrace[pos].coll.nWarps = elem.header.nWarps; \
+      shmem.comm.collTrace[pos].coll.bid = elem.bid; \
+      shmem.comm.collTrace[pos].coll.nChannels = elem.nChannels; \
+      shmem.comm.collTrace[pos].type = (ncclCollTraceCollElemType|launch_type); \
     }
 
 #define traceKernelLaunch(elem,firstLaunch)  { \
     traceColl(elem,(firstLaunch?ncclCollTraceKernelLaunchType:ncclCollTraceCollLaunchType)); \
   }
 #define traceKernelEnd()  { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem->comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    ncclShmem->comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-    ncclShmem->comm.collTrace[pos].bid = bid; \
-    ncclShmem->comm.collTrace[pos].type = ncclCollTraceKernelEndType; \
+    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    shmem.comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    shmem.comm.collTrace[pos].bid = bid; \
+    shmem.comm.collTrace[pos].type = ncclCollTraceKernelEndType; \
   }
 #define traceAbort()  { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem->comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    ncclShmem->comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-    ncclShmem->comm.collTrace[pos].bid = bid; \
-    ncclShmem->comm.collTrace[pos].type = ncclCollTraceAbortType; \
+    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    shmem.comm.collTrace[pos].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    shmem.comm.collTrace[pos].bid = bid; \
+    shmem.comm.collTrace[pos].type = ncclCollTraceAbortType; \
   }
 //  traceData(int16_t data2, uint32_t data4, uint64_t data8_0, uint64_t data8_1)
 #define traceData(data2, data4, data8_0, data8_1) { \
@@ -383,10 +383,10 @@ class ncclFunction {
 
 #ifdef ENABLE_PROFILING
 #define __insert_timestamp(line_num) do { \
-      if (ncclShmem->prof.count < PROFILE_NUM_ITEMS) { \
-        ncclShmem->prof.elem[ncclShmem->prof.count].line = line_num; \
-        ncclShmem->prof.elem[ncclShmem->prof.count].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-        ncclShmem->prof.count++; \
+      if (shmem.prof.count < PROFILE_NUM_ITEMS) { \
+        shmem.prof.elem[shmem.prof.count].line = line_num; \
+        shmem.prof.elem[shmem.prof.count].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+        shmem.prof.count++; \
       } \
     } while(0);
 #else
@@ -532,33 +532,33 @@ __device__ void ncclKernel(struct ncclDevComm* comm)  {
  }
   __syncthreads();
 
-  int turn = copyToShmem(&ncclShmem->comm, comm);
+  int turn = copyToShmem(&shmem.comm, comm);
 #ifdef ENABLE_PROFILING
   if (tid == 0) {
-    ncclShmem->prof.count = 0;
-    ncclShmem->prof.seq = ncclShmem->comm.devProf[bid].seq;
+    shmem.prof.count = 0;
+    shmem.prof.seq = shmem.comm.devProf[bid].seq;
   }
 #endif
   if (tid == 0) __insert_timestamp(__LINE__);
   // get address of channel without incurring indirect load from ncclDevCom::channels
   ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
-  turn = copyToShmem(&ncclShmem->channel, channel, turn);
+  turn = copyToShmem(&shmem.channel, channel, turn);
 
   __syncthreads(); // publish ncclShmem
   if (tid == 0) __insert_timestamp(__LINE__);
   if (tid == 0) __insert_timestamp(__LINE__);
 
-  ncclWork *workFifoHost = ncclShmem->channel.workFifo;
-  ncclWork *workFifoDev = ncclShmem->channel.workFifoDev;
-  int workFifoIx = ncclShmem->channel.index;
+  ncclWork *workFifoHost = shmem.channel.workFifo;
+  ncclWork *workFifoDev = shmem.channel.workFifoDev;
+  int workFifoIx = shmem.channel.index;
   bool firstLaunch = true;
 
   while (true) {
-    copyToShmem(&ncclShmem->work, &workFifoDev[workFifoIx], tid, nthreads);
+    copyToShmem(&shmem.work, &workFifoDev[workFifoIx], tid, nthreads);
     if (tid == 0) __insert_timestamp(__LINE__);
     { // Check whether the last operation was aborted and make sure all threads exit
       int aborted = tid == 0 ? *comm->abortFlag : 0;
-      if (__any(aborted)) { // publish ncclShmem->work
+      if (__any(aborted)) { // publish shmem.work
         if (COLLTRACE && tid == 0) traceAbort();
         break;
       }
@@ -572,36 +572,36 @@ __device__ void ncclKernel(struct ncclDevComm* comm)  {
       channel->index = workFifoIx; // write back to real channel, not shmem shadow
 
     __syncwarp();
-    if (ncclShmem->work.header.type == ncclWorkTypeColl) {
-      if (tid < NCCL_MAX_WORK_ELEMENTS) ncclRedopPtrDeref(&ncclShmem->work.elems[tid]);
-    } else if (ncclShmem->work.header.type == ncclWorkTypeRegColl) {
-      if (tid < NCCL_MAX_WORK_ELEMENTS_REG) ncclRedopPtrDeref(&ncclShmem->work.regElems[tid].elem);
+    if (shmem.work.header.type == ncclWorkTypeColl) {
+      if (tid < NCCL_MAX_WORK_ELEMENTS) ncclRedopPtrDeref(&shmem.work.elems[tid]);
+    } else if (shmem.work.header.type == ncclWorkTypeRegColl) {
+      if (tid < NCCL_MAX_WORK_ELEMENTS_REG) ncclRedopPtrDeref(&shmem.work.regElems[tid].elem);
     }
     __syncthreads();
 
     if (COLLTRACE && tid == 0) {
-      traceKernelLaunch(ncclShmem->work.elems[0],firstLaunch);
+      traceKernelLaunch(shmem.work.elems[0],firstLaunch);
       firstLaunch = false;
       #pragma unroll 1
-      for(int e=1; e < NCCL_MAX_WORK_ELEMENTS && ncclShmem->work.elems[e].header.type != ncclWorkTypeUnused; e ++) {
-        traceColl(ncclShmem->work.elems[e], 0);
+      for(int e=1; e < NCCL_MAX_WORK_ELEMENTS && shmem.work.elems[e].header.type != ncclWorkTypeUnused; e ++) {
+        traceColl(shmem.work.elems[e], 0);
       }
     }
     if (tid == 0) __insert_timestamp(__LINE__);
-    if (ncclShmem->work.header.funcIndex == FnIndex)
-      RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem->work);
+    if (shmem.work.header.funcIndex == FnIndex)
+      RunWork<Fn, T, RedOp, Algo, Proto>().run(&shmem.work);
     else
-      NCCL_CALL_FUNCTIONS<USING_LL128>(ncclShmem->work.header.funcIndex);
+      NCCL_CALL_FUNCTIONS<USING_LL128>(shmem.work.header.funcIndex);
 
-    if (ncclShmem->work.header.isLast) break;
+    if (shmem.work.header.isLast) break;
     __syncthreads();
   }
   if (COLLTRACE && tid == 0) traceKernelEnd()
 #ifdef ENABLE_PROFILING
-  if (ncclShmem->comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
+  if (shmem.comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
     __syncthreads();
-    copyToShmem(ncclShmem->comm.devProf+MAXCHANNELS*ncclShmem->prof.seq+blockIdx.x, &ncclShmem->prof);
-    if (tid == 0) ncclShmem->comm.devProf[bid].seq++;
+    copyToShmem(shmem.comm.devProf+MAXCHANNELS*shmem.prof.seq+blockIdx.x, &shmem.prof);
+    if (tid == 0) shmem.comm.devProf[bid].seq++;
   }
 #endif
 }
