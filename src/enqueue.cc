@@ -1241,8 +1241,6 @@ ncclResult_t ncclGetCudaGraph(ncclComm_t comm, hipGraph_t* graph) {
   comm->usingCudaGraph = 0;
   // Feature requires CUDA 11.3/R465 or above
 #if HIP_VERSION >= 50322000
-  if (!rcclParamEnableHipGraph()) return ncclSuccess;
-
   hipStreamCaptureStatus captureStatus;
   unsigned long long cudaGraphId;
   ncclResult_t ret = ncclSuccess;
@@ -1263,6 +1261,12 @@ ncclResult_t ncclGetCudaGraph(ncclComm_t comm, hipGraph_t* graph) {
     }
     if (comm->launchMode == ncclComm::GROUP) comm->launchMode = ncclComm::GROUP_GRAPH;
     comm->usingCudaGraph = 1;
+
+    if (!rcclParamEnableHipGraph())
+    {
+      WARN("RCCL_ENABLE_HIPGRAPH must be set to non-zero in order to support hipGraph usage");
+      return ncclInvalidUsage;
+    }
 
     // Create helper thread that closes IPC handles during graph destruction
     // Only create this thread when buffer registration is enabled
