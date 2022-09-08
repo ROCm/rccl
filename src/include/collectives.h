@@ -32,13 +32,25 @@ struct ncclDevRedOpFull {
 #define NCCL_KERN_NAME(func, algo, proto, devredop, type) \
   ncclKernel_##func##_##algo##_##proto##_##devredop##_##type
 
+#define NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type) \
+  ncclKernelDebug_##func##_##algo##_##proto##_##devredop##_##type
+
+#define NCCL_KERN_NAME_LL128(func, algo, proto, devredop, type) \
+  ncclKernelLL128_##func##_##algo##_##proto##_##devredop##_##type
+
+#define NCCL_KERN_NAME_LL128_DEBUG(func, algo, proto, devredop, type) \
+  ncclKernelLL128Debug_##func##_##algo##_##proto##_##devredop##_##type
+
 #define NCCL_IMPL_NAME(func, algo, proto) \
   nccl##func##algo##proto
 
 /* Declare all collective operations */
 #define DECL5(func, algo, proto, devredop, type) \
   extern __device__ __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, devredop, type)(); \
-  extern __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, struct ncclWorkElem c); \
+  extern __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm); \
+  extern __global__ void NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm); \
+  extern __global__ void NCCL_KERN_NAME_LL128(func, algo, proto, devredop, type)(struct ncclDevComm* comm); \
+  extern __global__ void NCCL_KERN_NAME_LL128_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm);
 
 #define CONCAT(a,b) a##b
 #define MACRO_IF(cond, t, f) CONCAT(MACRO_IF_, cond)(t, f)

@@ -76,18 +76,18 @@ union ncclLLFifoLine {
 // Make sure the clean mask will last for at least NCCL_NSTEPS
 static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK value");
 
-#define NCCL_LL128_LINESIZE 128
+#define NCCL_LL128_LINESIZE 64
 #define NCCL_LL128_LINEELEMS (NCCL_LL128_LINESIZE/sizeof(uint64_t))
 #define NCCL_LL128_DATAELEMS (NCCL_LL128_LINEELEMS-1)
 
 #define NCCL_LL128_MAX_NTHREADS 256
-#define NCCL_LL128_ELEMS_PER_THREAD 120
+#define NCCL_LL128_ELEMS_PER_THREAD 28
 
 // Receiving from up to 3 sources is more compute intensive than sending
 // to 3 dests. Use 70% for reduce and 30% for bcast.
 #define NCCL_LL128_SPLIT(nt) ((nt*7/(10*32))*32)
 
-#define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 2
+#define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 4
 #define NCCL_LL128_SHMEM_SIZE (NCCL_LL128_SHMEM_ELEMS_PER_THREAD*NCCL_LL128_MAX_NTHREADS)
 
 #define NCCL_DIRECT_WRITE 0x01

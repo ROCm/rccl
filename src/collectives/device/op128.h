@@ -9,25 +9,6 @@
 #define OP128_H_
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-inline __device__ uint64_t* shmemCvtPtr(volatile uint64_t* shmemGenericPtr) {
-  return 0;
-}
-
-inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {
-}
-
-inline __device__ void store128(uint64_t* ptr, uint64_t v0, uint64_t v1) {
-}
-
-inline __device__ void loadShmem128(uint64_t* shmemAsmPtr, uint64_t &v0, uint64_t &v1) {
-}
-
-inline __device__ void storeShmem128(uint64_t* shmemAsmPtr, uint64_t v0, uint64_t v1) {
-}
-
-template<typename T>
-inline __device__ void loadShmemMisaligned128(T *ptr, uint64_t &v0, uint64_t &v1) {
-}
 #else
 inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {
   asm volatile("ld.volatile.global.v2.u64 {%0,%1}, [%2];"
