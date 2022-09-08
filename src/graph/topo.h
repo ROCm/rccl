@@ -164,6 +164,7 @@ struct ncclTopoSystem {
 
   bool pivotA2AEnabled;
   int pivotA2ANumBiRings;
+  bool ll128Enabled;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
@@ -208,4 +209,8 @@ static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank,
 static float ncclTopoXGMISpeed(int gcn) {
   return gcn == 910 ? MI200_XGMI_WIDTH : VEGA_XGMI_WIDTH;
 }
+
+#define ncclGetKernelIndex(p_comm) \
+  (((p_comm)->topo->ll128Enabled ? 1 : 0)*2 + ((p_comm)->hostDevComm.collTraceThread ? 1 : 0))
+
 #endif
