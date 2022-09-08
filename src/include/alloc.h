@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include "rccl_vars.h"
 
 template <typename T>
 static ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
@@ -78,22 +79,32 @@ extern struct allocationTracker allocTracker[];
 
 template <typename T>
 static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
-#if CUDART_VERSION >= 11030
+
   // Need async stream for P2P pre-connect + CUDA Graph
-  hipStream_t stream;
-  CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
-#endif
+  static bool streamCreated = false;
+  static hipStream_t stream;
+  if (rcclParamEnableHipGraph() && !streamCreated)
+  {
+    // Create stream only once to avoid performance penalty
+    CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
+    streamCreated = true;
+  }
+
   if (isFineGrain)
     CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
   else
     CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
-#if CUDART_VERSION >= 11030
-  CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
-  CUDACHECK(hipStreamSynchronize(stream));
-  CUDACHECK(hipStreamDestroy(stream));
-#else
-  CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
-#endif
+
+  if (rcclParamEnableHipGraph()) {
+    CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
+    CUDACHECK(hipStreamSynchronize(stream));
+    // NOTE: Currently the re-used stream is not destroyed
+    //CUDACHECK(hipStreamDestroy(stream));
+  } else {
+    CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
+    CUDACHECK(hipStreamSynchronize(NULL));
+  }
+
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   int dev;
   CUDACHECK(hipGetDevice(&dev));

@@ -174,7 +174,7 @@ int main(int argc, char* argv[])
       HIPCHECK(hipMalloc(recvbuff+i, recvsize*sizeof(float)));
       h_recvbuff[i] = (float*) malloc (recvsize *sizeof(float));
       HIPCHECK(hipMemset(recvbuff[i], 0, recvsize*sizeof(float)));
-
+      HIPCHECK(hipStreamSynchronize(NULL));
       HIPCHECK(hipStreamCreate(s+i));
   }
 

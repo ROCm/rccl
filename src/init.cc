@@ -34,6 +34,7 @@
 
 // [RCCL]
 #include "git_version.h"
+#include "rccl_vars.h"
 //#include "clique/CliqueManager.h"
 //#include <hsa/hsa_ext_amd.h>
 // [/RCCL]
@@ -417,13 +418,13 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
   comm->lastCudaGraphId = -1;
   comm->disableGraphHelper = ncclParamDisableGraphHelper();
   comm->graphRegister = ncclParamGraphRegister();
-#if CUDART_VERSION >= 11030
-  NCCLCHECK(ncclCalloc(&comm->graphHelperResources, 1));
-  comm->graphHelperResources->comm = comm;
-  if (comm->driverVersion >= 11030)
-    // hipGetDriverEntryPoint requires R465 or above (enhanced compat need)
-    CUDACHECK(hipGetDriverEntryPoint("cuMemGetAddressRange", (void**)&comm->pfnCuMemGetAddressRange, hipEnableDefault));
-#endif
+
+  if (rcclParamEnableHipGraph())
+  {
+    NCCLCHECK(ncclCalloc(&comm->graphHelperResources, 1));
+    comm->graphHelperResources->comm = comm;
+    comm->pfnCuMemGetAddressRange = hipMemGetAddressRange;
+  }
 
   static_assert(MAXCHANNELS <= sizeof(*comm->connectSend)*8, "comm->connectSend must have enough bits for all channels");
   static_assert(MAXCHANNELS <= sizeof(*comm->connectRecv)*8, "comm->connectRecv must have enough bits for all channels");
@@ -1364,9 +1365,10 @@ static ncclResult_t commDestroy(ncclComm_t comm) {
   CUDACHECK(hipStreamSynchronize(comm->groupStream));
 
   ncclDestroyQueueInfo(comm->enqueueInfo);
-#if CUDART_VERSION >= 11030
-  NCCLCHECK(ncclGraphHelperDestroy(comm));
-#endif
+
+  if (rcclParamEnableHipGraph())
+    NCCLCHECK(ncclGraphHelperDestroy(comm));
+
   INFO(NCCL_COLL, "Created %d queue info, destroyed %d", comm->nQueueInfoCreated, comm->nQueueInfoDestroyed);
 
   NCCLCHECK(commFree(comm));

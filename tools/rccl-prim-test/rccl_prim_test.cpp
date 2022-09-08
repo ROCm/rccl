@@ -616,7 +616,7 @@ int main(int argc,char* argv[])
       HIPCHECK(hipStreamSynchronize(stream[i]));
       HIPCHECK(hipMemset(d_profiling_data[i], 0, sizeof(struct profiling_data_t)));
     }
-
+    HIPCHECK(hipStreamSynchronize(NULL));
     auto start = std::chrono::high_resolution_clock::now();
     for (int j = 0; j < iters; j ++) {
       for (int i = 0; i < nGpu; i ++) {
