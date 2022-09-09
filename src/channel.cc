@@ -18,11 +18,11 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelid) {
   channel->id = channelid;
 
   // Ring index to user rank table.
-  NCCLCHECK(ncclCudaCalloc(&channel->ring.devUserRanks, comm->nRanks));
+  NCCLCHECK(ncclCudaCalloc(&channel->ring.devUserRanks, comm->nRanks, comm->sideStream));
   NCCLCHECK(ncclCalloc(&channel->ring.userRanks, comm->nRanks));
 
   // Communication structures with peers.
-  NCCLCHECK(ncclCudaCalloc(&channel->devPeers, comm->nRanks+1)); // The extra one rank is for collnet root (i.e. network)
+  NCCLCHECK(ncclCudaCalloc(&channel->devPeers, comm->nRanks+1, comm->sideStream)); // The extra one rank is for collnet root (i.e. network)
   NCCLCHECK(ncclCalloc(&channel->peers, comm->nRanks+1));
   for (size_t i=0; i<comm->nRanks+1; ++i) {
     for (int b=0; b<NCCL_MAX_CONNS; b++) {
