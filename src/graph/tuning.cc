@@ -235,11 +235,11 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   int simpleDefaultThreads = (ringGraph->speedIntra*ringGraph->nChannels <= PCI_WIDTH) ? 256 : NCCL_SIMPLE_MAX_NTHREADS;
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] =
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*WARP_SIZE, NCCL_MAX_NTHREADS, simpleDefaultThreads);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, simpleDefaultThreads);
   comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = comm->maxThreads[NCCL_ALGO_COLLNET][NCCL_PROTO_SIMPLE] =
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*WARP_SIZE, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS);
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_LL] = comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_LL] = comm->maxThreads[NCCL_ALGO_COLLNET][NCCL_PROTO_LL] =
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*WARP_SIZE, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS);
 #else
     getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 2*WARP_SIZE, NCCL_SIMPLE_MAX_NTHREADS, simpleDefaultThreads);
   comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] =

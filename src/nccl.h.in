@@ -41,7 +41,8 @@ typedef enum { ncclSuccess                 =  0,
                ncclInternalError           =  3,
                ncclInvalidArgument         =  4,
                ncclInvalidUsage            =  5,
-               ncclNumResults              =  6 } ncclResult_t;
+               ncclRemoteError             =  6,
+               ncclNumResults              =  7 } ncclResult_t;
 
 /*! @brief Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
  *
@@ -135,11 +136,21 @@ ncclResult_t  ncclCommAbort(ncclComm_t comm);
 ncclResult_t pncclCommAbort(ncclComm_t comm);
 /// @endcond
 
-/*! @brief Returns a human-readable error message. */
+/*! @brief Returns a string for each error code. */
 const char*  ncclGetErrorString(ncclResult_t result);
+/// @cond include_hidden 
 const char* pncclGetErrorString(ncclResult_t result);
+/// @endcond
 
-/*! @brief Checks whether the comm has encountered any asynchronous errors */
+/*! @brief Returns a human-readable message of the last error that occurred.
+ * comm is currently unused and can be set to NULL
+ */
+const char*  ncclGetLastError(ncclComm_t comm);
+/// @cond include_hidden 
+const char* pncclGetError(ncclComm_t comm);
+/// @endcond
+
+/* Checks whether the comm has encountered any asynchronous errors */
 ncclResult_t  ncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
 /// @cond include_hidden 
 ncclResult_t pncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);

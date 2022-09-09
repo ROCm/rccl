@@ -50,7 +50,6 @@ class Primitives<
   uint64_t connStepCache; // Cache last seen value of (*connStepPtr)
   uint64_t* barriers;
   uint64_t* barrier_next;
-  const uint64_t opCount;
   uint32_t* next_hdp_reg;
 
 #if defined(ENABLE_NPKIT)
@@ -377,6 +376,7 @@ private:
           waitPeer<0, DirectSend, 0, 1, 1, 0>(0, inpIx, offset, realSize);
           subBarrier();
           #pragma unroll 1
+          // Loop over peers
           for (int j=0; j<fan.nsend(); j++) {
             int i = (j+shift)%fan.nsend();
             int peerOffset = i*peerElem;
@@ -423,9 +423,9 @@ private:
     }
   }
 
-  __device__ __forceinline__ void loadRecvConn(ncclPeer *peer, int connIndex, struct ncclWorkElem* e) {
+  __device__ __forceinline__ void loadRecvConn(ncclDevChannelPeer *peer, int connIndex, struct ncclWorkElem* e) {
     if (flags & (RoleWaitRecv|RolePostRecv)) {
-      auto *conn = &peer->recv[connIndex].conn;
+      auto *conn = &peer->recv[connIndex];
       step = conn->step;
       step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostRecv) {
@@ -463,14 +463,14 @@ private:
     }
   }
 
-  __device__ __forceinline__ void loadSendConn(ncclPeer *peer, int connIndex, struct ncclWorkElem* e) {
+  __device__ __forceinline__ void loadSendConn(ncclDevChannelPeer *peer, int connIndex, struct ncclWorkElem* e) {
     if (flags & (RoleWaitSend|RolePostSend)) {
-      auto *conn = &peer->send[connIndex].conn;
+      auto *conn = &peer->send[connIndex];
       step = conn->step;
       step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostSend) {
         connStepPtr = conn->tail;
-	next_hdp_reg = conn->next_hdp_reg;
+	    next_hdp_reg = conn->next_hdp_reg;
       }
       if (flags & RoleWaitSend) {
         ncclShmem->groups[group].sendConns[index] = conn; // WaitSend role saves since that's who needs it in setDataPtrs()
@@ -513,8 +513,7 @@ private:
       void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint32_t group=0, struct ncclWorkElem* e = nullptr
     ):
     tid(tid),
-    stepSize(ncclShmem->comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T)),
-    opCount(ncclShmem->work.elems[0].opCount) {
+    stepSize(ncclShmem->comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T)) {
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     this->nthreads = nthreads;
@@ -552,8 +551,8 @@ private:
     if (flags & (RoleWaitRecv|RolePostRecv)) peer = recvPeers[index];
     if (flags & (RoleWaitSend|RolePostSend)) peer = sendPeers[index];
 
-    loadRecvConn(&ncclShmem->channel.devPeers[peer], connIndex, e);
-    loadSendConn(&ncclShmem->channel.devPeers[peer], connIndex, e);
+    loadRecvConn(&ncclShmem->channel.peers[peer], connIndex, e);
+    loadSendConn(&ncclShmem->channel.peers[peer], connIndex, e);
 
     setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclWorkElemReg*)e);
   }

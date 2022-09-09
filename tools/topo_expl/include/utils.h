@@ -27,6 +27,7 @@ struct allGather3Data_t{
   struct ncclGraphInfo ring;
   struct ncclGraphInfo collNet;
   struct ncclTopoRanks topoRanks;
+  bool pivotA2AEnabled;
 };
 
 void initCollNet();

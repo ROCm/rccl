@@ -12,7 +12,7 @@ namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
     const int tid = threadIdx.x;
-    const int nthreads = args->header.nWarps*WARP_SIZE;
+    const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
     const int nranks = ncclShmem->comm.nRanks;
     const ncclRing *ring = &ncclShmem->channel.ring;
@@ -29,11 +29,11 @@ namespace {
     const ssize_t prims_size = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? ALLTOALL_PIVOT_CHUNKSTEPS : 1));
 
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
-      (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, /*redOpArg(ignored)=*/0, args->connIndex << 16);
+      (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, /*redOpArg(ignored)=*/0);
 
     for (int num_hops = 0; num_hops <= nranks / 2; num_hops++) {
-      const int src_rank = ring->devUserRanks[(nranks - num_hops) % nranks];
-      const int dst_rank = ring->devUserRanks[num_hops];
+      const int src_rank = ring->userRanks[(nranks - num_hops) % nranks];
+      const int dst_rank = ring->userRanks[num_hops];
       const ssize_t send_offset =
           dst_rank * num_elems * elem_size + chunk_offset +
           (src_rank == dst_rank ? pivot_direction * chunk_size / 2 : 0);

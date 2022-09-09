@@ -8,8 +8,8 @@
 
 #include "nvToolsExt.h"
 
-#include "cuda.h"
-#include "driver_types.h"
+#include "hip/hip_runtime.h"
+#include "hip/driver_types.h"
 
 #ifndef NVTOOLSEXT_CUDART_V3
 #define NVTOOLSEXT_CUDART_V3
@@ -44,8 +44,8 @@ extern "C" {
 typedef enum nvtxResourceCUDARTType_t
 {
     NVTX_RESOURCE_TYPE_CUDART_DEVICE = NVTX_RESOURCE_MAKE_TYPE(CUDART, 0), /* int device */
-    NVTX_RESOURCE_TYPE_CUDART_STREAM = NVTX_RESOURCE_MAKE_TYPE(CUDART, 1), /* cudaStream_t */
-    NVTX_RESOURCE_TYPE_CUDART_EVENT = NVTX_RESOURCE_MAKE_TYPE(CUDART, 2), /* cudaEvent_t */
+    NVTX_RESOURCE_TYPE_CUDART_STREAM = NVTX_RESOURCE_MAKE_TYPE(CUDART, 1), /* hipStream_t */
+    NVTX_RESOURCE_TYPE_CUDART_EVENT = NVTX_RESOURCE_MAKE_TYPE(CUDART, 2), /* hipEvent_t */
 } nvtxResourceCUDARTType_t;
 
 
@@ -73,8 +73,8 @@ NVTX_DECLSPEC void NVTX_API nvtxNameCudaDeviceW(int device, const wchar_t* name)
  *
  * \version \NVTX_VERSION_1
  * @{ */
-NVTX_DECLSPEC void NVTX_API nvtxNameCudaStreamA(cudaStream_t stream, const char* name);
-NVTX_DECLSPEC void NVTX_API nvtxNameCudaStreamW(cudaStream_t stream, const wchar_t* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCudaStreamA(hipStream_t stream, const char* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCudaStreamW(hipStream_t stream, const wchar_t* name);
 /** @} */
 
 /* ------------------------------------------------------------------------- */
@@ -87,8 +87,8 @@ NVTX_DECLSPEC void NVTX_API nvtxNameCudaStreamW(cudaStream_t stream, const wchar
  *
  * \version \NVTX_VERSION_1
  * @{ */
-NVTX_DECLSPEC void NVTX_API nvtxNameCudaEventA(cudaEvent_t event, const char* name);
-NVTX_DECLSPEC void NVTX_API nvtxNameCudaEventW(cudaEvent_t event, const wchar_t* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCudaEventA(hipEvent_t event, const char* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCudaEventW(hipEvent_t event, const wchar_t* name);
 /** @} */
 
 /** @} */ /* END RESOURCE_NAMING */

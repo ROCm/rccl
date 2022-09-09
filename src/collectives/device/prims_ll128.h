@@ -5,10 +5,11 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#include "op128.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit.h"
+#endif
 
 #define NCCL_LL128_FLAGTHREAD (NCCL_LL128_LINEELEMS-1)
-
 
 template<typename T, typename RedOp, typename Fan, int Direct, int P2p>
 class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p>:
@@ -52,6 +53,15 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p>:
 
   uint64_t* barriers;
   uint64_t* barrier_next;
+
+#if defined(ENABLE_NPKIT)
+public:
+  int npKitCtxIdx = 0;
+  uint64_t npKitDataProcessEntryTime = 0;
+  uint64_t npKitDataProcessExitTime = 0;
+  uint64_t npKitDataProcessTotalTime = 0;
+private:
+#endif
 
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
@@ -405,11 +415,11 @@ public:
     auto *channel = &ncclShmem->channel;
     int nrecv=0, nsend=0;
     while (nrecv < MaxRecv && recvPeers[nrecv] >= 0) {
-      loadRecvConn(&channel->devPeers[recvPeers[nrecv]].recv->conn, nrecv);
+      loadRecvConn(&channel->peers[recvPeers[nrecv]].recv[0], nrecv);
       nrecv++;
     }
     while (nsend < MaxSend && sendPeers[nsend] >= 0) {
-      loadSendConn(&channel->devPeers[sendPeers[nsend]].send->conn, nsend);
+      loadSendConn(&channel->peers[sendPeers[nsend]].send[0], nsend);
       nsend++;
     }
     this->fan = Fan(nrecv, nsend);
