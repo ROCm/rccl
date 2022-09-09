@@ -109,16 +109,17 @@ finish:
 #define ncclCudaMalloc(...) ncclCudaMallocDebug( __FILE__, __LINE__, __VA_ARGS__)
 
 template <typename T>
-ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
+ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t sideStream = nullptr, bool isFineGrain = false) {
   ncclResult_t result = ncclSuccess;
   uint64_t time0=0, time1=0, time2=0;
   hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
   *ptr = nullptr;
   CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
   // Need a side stream so as not to interfere with graph capture.
-  hipStream_t stream;
+  hipStream_t stream = sideStream;
   time0 = clockNano();
-  CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
+  if (stream == nullptr)
+    CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
   time1 = clockNano();
   if (isFineGrain)
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
@@ -127,7 +128,8 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   time2 = clockNano();
   CUDACHECKGOTO(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
   CUDACHECKGOTO(hipStreamSynchronize(stream), result, finish);
-  CUDACHECKGOTO(hipStreamDestroy(stream), result, finish);
+  if (sideStream == nullptr)
+    CUDACHECKGOTO(hipStreamDestroy(stream), result, finish);
   int dev;
   CUDACHECK(hipGetDevice(&dev));
   if (dev < MAX_ALLOC_TRACK_NGPU) {

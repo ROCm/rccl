@@ -277,6 +277,8 @@ struct ncclComm {
   int persistentRefs; // number of persistent plan-lists capturing this comm
   struct ncclTasks tasks;
 
+  hipStream_t sideStream; // [RCCL] Cached non-captured stream
+
   // user-created reduction ops
   int userRedOpCapacity, userRedOpFreeHead;
   ncclUserRedOp *userRedOps;

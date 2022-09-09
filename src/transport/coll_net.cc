@@ -351,7 +351,7 @@ static ncclResult_t sharedBuffersInit(struct ncclComm* comm, int cuda, char** gp
   *size = state->size;
 
   if (cuda && state->cudaBuff == NULL) {
-    NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, *size, cuda));
+    NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, *size, comm->sideStream, cuda));
   }
   if (!cuda && state->hostBuff == NULL) {
     NCCLCHECK(ncclCudaHostCalloc(&state->hostBuff, *size));

@@ -396,6 +396,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
     NCCLCHECK(dtor->fn(dtor));
     dtor = dtor->next;
   }
+  CUDACHECK(hipStreamDestroy(comm->sideStream));
 
   commPoison(comm); // Important that this does not interfere with anything used below.
 
@@ -480,6 +481,8 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx", comm, rank, ndev, comm->cudaDev, comm->busId);
 
+  // RCCL: create persistent stream for calloc
+  CUDACHECK(hipStreamCreateWithFlags(&comm->sideStream, hipStreamNonBlocking));
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
   comm->fatalError = ncclSuccess;
@@ -523,6 +526,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
 }
 
 static ncclResult_t devCommSetup(ncclComm_t comm) {
+
   NCCLCHECK(ncclStrongStreamAcquireUncaptured(&comm->deviceStream));
 
   int nRanks = comm->nRanks;
@@ -590,7 +594,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 #endif
 
 #ifdef ENABLE_PROFILING
-  NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES));
+  NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES), comm->sideStream);
 #endif
 
   NCCLCHECK(ncclCudaMemcpyAsync(devCommAndChans, &tmpCommAndChans, 1, comm->deviceStream.stream));

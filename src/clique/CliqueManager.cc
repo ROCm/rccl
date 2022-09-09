@@ -190,7 +190,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
       hipIpcMemHandle_t handle;
       // Allocate fine-grained device memory on rank 0 and get IPC handle for it
       // Re-usable barrier consists of (globalCount / globalSense) pair of integers
-      NCCLCHECKGOTO(ncclCudaCalloc(&m_fineGrainBarrierMem, NCCL_MAX_OPS * 2 * sizeof(int), true), res, dropback);
+      NCCLCHECKGOTO(ncclCudaCalloc(&m_fineGrainBarrierMem, NCCL_MAX_OPS * 2 * sizeof(int), nullptr, true), res, dropback);
       if (hipIpcGetMemHandle(&handle, m_fineGrainBarrierMem) != hipSuccess)
       {
         WARN("Unable to get IPC handle for barrier memory");
@@ -228,7 +228,7 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
     // First rank prepares fine-grained memory shared across ranks used for the two barrier variables
     if (m_rank == 0)
     {
-      NCCLCHECKGOTO(ncclCudaCalloc(&m_staticGpuBarrierMem, NCCL_MAX_OPS * 2 * sizeof(int), true), res, dropback);
+      NCCLCHECKGOTO(ncclCudaCalloc(&m_staticGpuBarrierMem, NCCL_MAX_OPS * 2 * sizeof(int), nullptr, true), res, dropback);
       // Prepare all barriers
       for (int opIndex = 0; opIndex < NCCL_MAX_OPS; opIndex++)
       {

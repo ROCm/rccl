@@ -210,7 +210,7 @@ static ncclResult_t shmSendProxyConnect(struct ncclProxyConnection* connection, 
   NCCLCHECK(ncclCalloc(&proxyInfo, 1));
   if (reqSize != sizeof(struct shmProxyInfo)) return ncclInternalError;
   memcpy(proxyInfo, reqBuff, reqSize);
-  NCCLCHECK(ncclCudaCalloc(&proxyInfo->devFifo, comm->buffSizes[NCCL_PROTO_SIMPLE]));
+  NCCLCHECK(ncclCudaCalloc(&proxyInfo->devFifo, comm->buffSizes[NCCL_PROTO_SIMPLE], comm->sideStream));
   NCCLCHECK(ncclCudaHostCalloc(&proxyInfo->ceRecvMem, 1));
   CUDACHECK(hipStreamCreateWithFlags(&proxyInfo->stream, hipStreamNonBlocking));
   for (int i=0; i<NCCL_STEPS; i++) {
@@ -228,7 +228,7 @@ static ncclResult_t shmRecvProxyConnect(struct ncclProxyConnection* connection, 
   NCCLCHECK(ncclCalloc(&proxyInfo, 1));
   if (reqSize != sizeof(struct shmProxyInfo)) return ncclInternalError;
   memcpy(proxyInfo, reqBuff, reqSize);
-  NCCLCHECK(ncclCudaCalloc(&proxyInfo->devFifo, comm->buffSizes[NCCL_PROTO_SIMPLE]));
+  NCCLCHECK(ncclCudaCalloc(&proxyInfo->devFifo, comm->buffSizes[NCCL_PROTO_SIMPLE], comm->sideStream));
   NCCLCHECK(ncclCudaHostCalloc(&proxyInfo->ceRecvMem, 1));
   CUDACHECK(hipStreamCreateWithFlags(&proxyInfo->stream, hipStreamNonBlocking));
   for (int i=0; i<NCCL_STEPS; i++) {

@@ -387,7 +387,7 @@ static ncclResult_t sharedBuffersInit(struct ncclComm* comm, int cuda, int local
   if (size) *size = state->size;
 
   if (cuda && state->cudaBuff == NULL) {
-    NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size, cuda));
+    NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size, comm->sideStream, cuda));
     if (sameProcess == 0) {
       CUDACHECK(hipIpcGetMemHandle(&state->ipc, state->cudaBuff));
     }
@@ -566,7 +566,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
       if (!map->sameProcess) {
         ALIGN_SIZE(map->mems[NCCL_NET_MAP_DEVMEM].size, CUDA_IPC_MIN);
       }
-      NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, resources->useGdr));
+      NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, comm->sideStream, resources->useGdr));
       map->mems[NCCL_NET_MAP_DEVMEM].cpuPtr = map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr;
     }
     if (!map->sameProcess) {
@@ -704,7 +704,7 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
 
   if (map->mems[NCCL_NET_MAP_DEVMEM].size) {
     if (resources->shared == 0) {
-      NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, resources->useGdr));
+      NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, comm->sideStream, resources->useGdr));
       map->mems[NCCL_NET_MAP_DEVMEM].cpuPtr = map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr;
     }
   }

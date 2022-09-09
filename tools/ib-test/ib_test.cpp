@@ -245,7 +245,7 @@ private:
     printf("GDR Read %s\n", use_gdr_read ? "enabled" : "disabled");
 
     if (use_gdr_read) {
-      NCCLCHECK(ncclCudaCalloc(&sendDevBuffer, sendBuffSize, 1));
+      NCCLCHECK(ncclCudaCalloc(&sendDevBuffer, sendBuffSize, nullptr, 1));
       printf("Allocated sendDevBuffer %p of %d bytes, sliceSteps %d\n",
                 sendDevBuffer, sendBuffSize, sliceSteps);
     }
@@ -397,7 +397,7 @@ private:
     printf("GDR Write %s\n", use_gdr_write ? "enabled" : "disabled");
 
     if (use_gdr_write) {
-      NCCLCHECK(ncclCudaCalloc(&recvDevBuffer, recvBuffSize, 1));
+      NCCLCHECK(ncclCudaCalloc(&recvDevBuffer, recvBuffSize, nullptr, 1));
       printf("Allocated recvDevBuffer %p of %d bytes, sliceSteps %d\n",
                 recvDevBuffer, recvBuffSize, sliceSteps);
     }
