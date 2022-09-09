@@ -1,4 +1,4 @@
-# Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
 
 # Set to where RCCL is installed
 RCCL_INSTALL=../../build/release
