@@ -81,9 +81,6 @@ void dumpData(struct ncclConnect* data, int ndata) {
 }
 
 ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex, int* highestTransportType/*=NULL*/) {
-  // Stream used during transport setup; need for P2P pre-connect + CUDA Graph
-  hipStream_t transportSetupStream;
-  CUDACHECK(hipStreamCreateWithFlags(&transportSetupStream, hipStreamNonBlocking));
   int highestType = TRANSPORT_P2P;  // track highest transport type
 
   struct ncclConnect data[2*MAXCHANNELS];
@@ -137,7 +134,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[sendPeer].send + connIndex;
         NCCLCHECK(conn->transportComm->connect(comm, sendData++, 1, comm->rank, conn));
         conn->connected = 1;
-        CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[sendPeer].send+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, transportSetupStream));
+        CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[sendPeer].send+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, comm->sideStream));
       }
     }
     TIME_STOP(3);
@@ -147,14 +144,13 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[recvPeer].recv + connIndex;
         NCCLCHECK(conn->transportComm->connect(comm, recvData++, 1, comm->rank, conn));
         conn->connected = 1;
-        CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[recvPeer].recv+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, transportSetupStream));
+        CUDACHECK(hipMemcpyAsync(comm->channels[c].devPeers[recvPeer].recv+connIndex, conn, sizeof(struct ncclConnector), hipMemcpyHostToDevice, comm->sideStream));
       }
     }
     TIME_STOP(4);
     comm->connectRecv[recvPeer+comm->nRanks*connIndex] = comm->connectSend[sendPeer+comm->nRanks*connIndex] = 0;
   }
-  CUDACHECK(hipStreamSynchronize(transportSetupStream));
-  CUDACHECK(hipStreamDestroy(transportSetupStream));
+  CUDACHECK(hipStreamSynchronize(comm->sideStream));
   if (highestTransportType != NULL) *highestTransportType = highestType;
   TIME_PRINT("P2P Setup/Connect");
   return ncclSuccess;
