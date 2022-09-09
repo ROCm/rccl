@@ -115,7 +115,7 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
     // Check that legacy IPC support is available (WSL WAR)
     char *dummy;
     hipIpcMemHandle_t ipc;
-    NCCLCHECK(ncclCudaCalloc(&dummy, CUDA_IPC_MIN));
+    CUDACHECK(hipMalloc(&dummy, CUDA_IPC_MIN));
     if (hipIpcGetMemHandle(&ipc, dummy) != hipSuccess) {
       INFO(NCCL_INIT|NCCL_P2P,"Legacy IPC not supported");
       *ret = 0;
@@ -347,7 +347,7 @@ static ncclResult_t p2pProxySetup(struct ncclProxyConnection* connection, struct
   int size = *((int*)reqBuff);
   if (respSize != sizeof(struct ncclP2pBuff)) return ncclInternalError;
   struct ncclP2pBuff* p2pBuff = (struct ncclP2pBuff*)respBuff;
-  NCCLCHECK(ncclCudaCalloc((char**)&p2pBuff->directPtr, size, true));
+  NCCLCHECK(ncclCudaCalloc((char**)&p2pBuff->directPtr, size, comm->sideStream, true));
   connection->transportResources = p2pBuff->directPtr;
   hipError_t res = hipIpcGetMemHandle(&p2pBuff->devIpc, p2pBuff->directPtr);
   if (res != hipSuccess) {

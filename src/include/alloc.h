@@ -78,17 +78,7 @@ static_assert(sizeof(struct allocationTracker) == 64, "allocationTracker must be
 extern struct allocationTracker allocTracker[];
 
 template <typename T>
-static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
-
-  // Need async stream for P2P pre-connect + CUDA Graph
-  static bool streamCreated = false;
-  static hipStream_t stream;
-  if (rcclParamEnableHipGraph() && !streamCreated)
-  {
-    // Create stream only once to avoid performance penalty
-    CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
-    streamCreated = true;
-  }
+static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t sideStream = nullptr, bool isFineGrain = false) {
 
   if (isFineGrain)
     CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
@@ -96,10 +86,14 @@ static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr,
     CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
 
   if (rcclParamEnableHipGraph()) {
+    hipStream_t stream = sideStream;
+    if (stream == nullptr)
+      CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
+
     CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
     CUDACHECK(hipStreamSynchronize(stream));
-    // NOTE: Currently the re-used stream is not destroyed
-    //CUDACHECK(hipStreamDestroy(stream));
+    if (sideStream == nullptr)
+      CUDACHECK(hipStreamDestroy(stream));
   } else {
     CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
     CUDACHECK(hipStreamSynchronize(NULL));
