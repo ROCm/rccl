@@ -303,6 +303,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
     CUDACHECK(hipStreamDestroy(comm->groupStream));
   }
 
+  CUDACHECK(hipStreamDestroy(comm->sideStream));
+
   // Last rank frees shared resources between threads
   int isLast;
   NCCLCHECK(ncclCpuBarrierIn(comm, &isLast));
@@ -365,6 +367,9 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx", comm, rank, ndev, comm->cudaDev, comm->busId);
 
+  // RCCL: create persistent stream for calloc
+  CUDACHECK(hipStreamCreateWithFlags(&comm->sideStream, hipStreamNonBlocking));
+
   comm->doneEvent = doneEvent;
   comm->intDoneEvent = intDoneEvent;
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
@@ -385,7 +390,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
 
   comm->argsptrs[0] = &comm->devComm;
 #ifdef ENABLE_PROFILING
-  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES));
+  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES, comm->sideStream));
 #endif
 
 #ifdef ENABLE_COLLTRACE
@@ -445,7 +450,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
 
 static ncclResult_t devCommSetup(ncclComm_t comm) {
   ncclDevCommAndChannels *devCommAndChans;
-  NCCLCHECK(ncclCudaCalloc(&devCommAndChans, 1));
+  NCCLCHECK(ncclCudaCalloc(&devCommAndChans, 1, comm->sideStream));
   comm->devComm = &devCommAndChans->comm;
   comm->hostDevComm.channels = devCommAndChans->channels;
 
