@@ -365,7 +365,8 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank, int virtua
   comm->virtualId = virtualId;
   hipGetDevice(&comm->cudaDev);
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
-  TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx", comm, rank, ndev, comm->cudaDev, comm->busId);
+  TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx", 
+		  comm, rank, ndev, comm->cudaDev, comm->busId);
 
   // RCCL: create persistent stream for calloc
   CUDACHECK(hipStreamCreateWithFlags(&comm->sideStream, hipStreamNonBlocking));
