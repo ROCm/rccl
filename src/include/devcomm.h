@@ -289,6 +289,7 @@ struct ncclDevChannelPeer {
   // instead of the full ncclConnector.
   struct ncclConnInfo send[NCCL_MAX_CONNS];
   struct ncclConnInfo recv[NCCL_MAX_CONNS];
+
 };
 #pragma pack(pop)   /* restore original alignment from stack */
 
@@ -354,6 +355,7 @@ struct alignas(16) ncclDevChannel {
   struct ncclDevChannelPeer *peers;
   struct ncclRing ring;
   struct ncclTree tree;
+  struct ncclTree binTree;
   struct ncclDirect collTree;
   uint32_t* workFifoDone; // Location of done counter, device writes index+1 of last work processed
 };

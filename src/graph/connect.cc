@@ -5,6 +5,25 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
+/*
+ * Code for binary tree based on the same function available in Open MPI
+ * File: ompi/mca/coll/base/coll_base_topo.c
+ * 
+ * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
+ *                         University Research and Technology
+ *                         Corporation.  All rights reserved.
+ * Copyright (c) 2004-2015 The University of Tennessee and The University
+ *                         of Tennessee Research Foundation.  All rights
+ *                         reserved.
+ * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+ *                         University of Stuttgart.  All rights reserved.
+ * Copyright (c) 2004-2005 The Regents of the University of California.
+ *                         All rights reserved.
+ * Copyright (c) 2015      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
+ */
+
+
 #include "comm.h"
 #include "graph.h"
 #include "trees.h"
@@ -68,6 +87,82 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
   if (channel1) memcpy(channel1, channel0, nChannels*sizeof(struct ncclChannel));
   return ncclSuccess;
 }
+
+static int calculate_level (int rank)
+{
+    int level, num;
+    if( rank < 0 ) return -1;
+    for( level = 0, num = 0; num <= rank; level++ ) {
+      num += 1<<level;
+    }
+    return level-1;
+}
+
+static int calculate_num_nodes_up_to_level (int level)
+{
+  return ((1<<level) - 1);
+}
+
+ncclResult_t ncclBinaryTreePostset(struct ncclComm* comm,
+    struct ncclTopoGraph* treeGraph) {
+  int nChannels = comm->nChannels;
+  int localRanks = 0;
+  for (int i=0; i<comm->topo->nodes[GPU].count; i++) {
+    localRanks += comm->topo->nodes[GPU].nodes[i].gpu.nRanksPerGpu;
+  }
+
+  for (int c=0; c<nChannels; c++) {
+    struct ncclChannel* channel = comm->channels+c;
+    // Only the first rank on a GPU can be a treeRoot
+    int treeRoot = comm->topo->nodes[GPU].nodes[c%comm->topo->nodes[GPU].count].gpu.rank[0];
+
+    channel->binTree.up      = -1;
+    channel->binTree.down[0] = -1;
+    channel->binTree.down[1] = -1;
+    channel->binTree.down[2] = -1;
+
+    /*
+     * Shift all ranks by root, so that the algorithm can be
+     * designed as if root would be always 0
+     * shiftedrank should be used in calculating distances
+     * and position in tree
+     */
+    int shiftedrank = comm->rank - treeRoot;
+    if (shiftedrank < 0 ) {
+      shiftedrank += localRanks;
+    }
+
+    /* calculate my level */
+    int level = calculate_level (shiftedrank);
+    int delta = 1<<level;
+
+    /* find my children */
+    for (int i = 0; i < 2; i++) {
+      int schild = shiftedrank + delta * (i+1);
+      if (schild < localRanks) {
+	channel->binTree.down[i] = (schild+treeRoot)%localRanks;
+      }
+    }
+
+    /* find my parent */
+    int slimit = calculate_num_nodes_up_to_level (level);
+    int sparent = shiftedrank;
+    if (sparent < 2) {
+      sparent = 0;
+    }
+    else {
+      while (sparent >= slimit) {
+	sparent -= delta/2;
+      }
+    }
+    if (comm->rank != treeRoot) {
+      channel->binTree.up = (sparent+treeRoot)%localRanks;
+    }
+  }
+
+  return ncclSuccess;
+}
+
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {

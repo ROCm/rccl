@@ -1039,7 +1039,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclCalloc(&rings, nranks*MAXCHANNELS));
   NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, &collNetGraph, nc));
 
-  if (comm->topo->pivotA2ANumBiRings == 3) NCCLCHECK(ncclTreeBasePostset(comm, &treeGraph));
+  if (comm->topo->pivotA2ANumBiRings == 3) {
+    NCCLCHECK(ncclTreeBasePostset(comm, &treeGraph));
+    NCCLCHECK(ncclBinaryTreePostset(comm, &treeGraph));
+  }
 
   free(allTopoRanks);
   free(nodesTreePatterns);
@@ -1050,17 +1053,23 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   TRACE(NCCL_INIT, "rank %d nranks %d - BUILT %d TREES/RINGS", rank, nranks, comm->nChannels);
 
-  char line[1024];
+  char line[1024], binline[1024];
   line[0]='\0';
+  binline[0]='\0';
   for (int c=0; c<comm->nChannels; c++) {
     struct ncclTree* tree = &comm->channels[c].tree;
+    struct ncclTree* binTree = &comm->channels[c].binTree;
     snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
+    snprintf(binline+strlen(binline), 1023-strlen(binline), " [%d] %d/%d/%d->%d->%d",
+        c, binTree->down[0], binTree->down[1], binTree->down[2], rank, binTree->up);
     INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
          comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
   }
   line[1023] = '\0';
+  binline[1023] = '\0';
   INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
+  INFO(NCCL_INIT, "BinTrees%s comm %p nRanks %02d busId %lx", binline, comm, comm->nRanks, comm->busId);
 
   NCCLCHECK(computeBuffSizes(comm));
 
@@ -1089,8 +1098,13 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   for (int c=0; c<comm->nChannels; c++) {
     struct ncclChannel* channel = comm->channels+c;
     if (comm->nRanks == 1) continue;
-    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, c, NCCL_MAX_TREE_ARITY, channel->tree.down, 1, &channel->tree.up, 0), ret, affinity_restore);
-    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, c, 1, &channel->tree.up, NCCL_MAX_TREE_ARITY, channel->tree.down, 0), ret, affinity_restore);
+    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, NCCL_MAX_TREE_ARITY, channel->tree.down, 1, &channel->tree.up, 0), ret, affinity_restore);
+    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->tree.up, NCCL_MAX_TREE_ARITY, channel->tree.down, 0), ret, affinity_restore);
+    // RCCL: need to connect binTree as well
+    if (comm->topo->pivotA2ANumBiRings == 3) {
+      NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, NCCL_MAX_TREE_ARITY, channel->binTree.down, 1, &channel->binTree.up, 0), ret, affinity_restore);
+      NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->binTree.up, NCCL_MAX_TREE_ARITY, channel->binTree.down, 0), ret, affinity_restore);
+    }
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0), ret, affinity_restore);
   INFO(NCCL_INIT, "Connected all trees comm %p nRanks %02d busId %lx", comm, comm->nRanks, comm->busId);

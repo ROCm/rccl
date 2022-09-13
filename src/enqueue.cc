@@ -1241,8 +1241,13 @@ comp_next:
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
-
-  if (info->comm->topo->pivotA2ANumBiRings == 3 ) work->pad_0 = 1;
+  if (info->comm->topo->pivotA2ANumBiRings == 3 ) {
+    if (ncclTypeSize(info->datatype)*info->count > 65536) {
+      work->pad_0 = 1;
+    } else {
+      work->pad_0 = 2;
+    }
+  }
   work->sendbuff = info->sendbuff;
   work->recvbuff = info->recvbuff;
   work->root = info->root;
