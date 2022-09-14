@@ -376,8 +376,7 @@ namespace {
     const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
     const int nChannels = args->nChannels;
-    ncclTree *tree = &ncclShmem->channel.tree;
-    //ncclTree *tree = (args->pad_0 == 2) ? &ncclShmem->channel.binTree : &ncclShmem->channel.tree;
+    ncclTree *tree = (args->pad_0 == 2) ? &ncclShmem->channel.binTree : &ncclShmem->channel.tree;
     ssize_t chunkSize = int(
       Proto::Id != NCCL_PROTO_LL ? args->lastChunkSize
                                  : Proto::calcBytePerStep()/sizeof(T));

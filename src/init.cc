@@ -572,6 +572,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     tmpCommAndChans.channels[c].ring = comm->channels[c].ring;
     tmpCommAndChans.channels[c].ring.userRanks = comm->channels[c].devRingUserRanks;
     tmpCommAndChans.channels[c].tree = comm->channels[c].tree;
+    tmpCommAndChans.channels[c].binTree = comm->channels[c].binTree;
     tmpCommAndChans.channels[c].collTree = comm->channels[c].collTree;
     tmpCommAndChans.channels[c].workFifoDone = &comm->workFifoDone[c];
 
@@ -1061,15 +1062,18 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     struct ncclTree* binTree = &comm->channels[c].binTree;
     snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
-    snprintf(binline+strlen(binline), 1023-strlen(binline), " [%d] %d/%d/%d->%d->%d",
-        c, binTree->down[0], binTree->down[1], binTree->down[2], rank, binTree->up);
+    if (comm->topo->pivotA2ANumBiRings == 3)
+      snprintf(binline+strlen(binline), 1023-strlen(binline), " [%d] %d/%d/%d->%d->%d",
+	       c, binTree->down[0], binTree->down[1], binTree->down[2], rank, binTree->up);
     INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
          comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
   }
   line[1023] = '\0';
-  binline[1023] = '\0';
   INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
-  INFO(NCCL_INIT, "BinTrees%s comm %p nRanks %02d busId %lx", binline, comm, comm->nRanks, comm->busId);
+  if (comm->topo->pivotA2ANumBiRings == 3) {
+    binline[1023] = '\0';
+    INFO(NCCL_INIT, "BinTrees%s comm %p nRanks %02d busId %lx", binline, comm, comm->nRanks, comm->busId);
+  }
 
   NCCLCHECK(computeBuffSizes(comm));
 
