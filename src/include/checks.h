@@ -10,7 +10,7 @@
 
 #include "debug.h"
 
-// Check CUDA calls
+// Check CUDA RT calls
 #define CUDACHECK(cmd) do {                                 \
     hipError_t err = cmd;                                    \
     if( err != hipSuccess ) {                                \
@@ -143,9 +143,9 @@
   if (tmpAbortFlag) NEQCHECKGOTO(*tmpAbortFlag, 0, res, label); \
 } while (!(cond));
 
-#define NCCLCHECKTHREAD(a) do { \
-  if ((args->ret = (a)) != ncclSuccess) { \
-    INFO(NCCL_INIT,"%s:%d -> %d [Async thread]", __FILE__, __LINE__, args->ret); \
+#define NCCLCHECKTHREAD(a, args) do { \
+  if (((args)->ret = (a)) != ncclSuccess) { \
+    INFO(NCCL_INIT,"%s:%d -> %d [Async thread]", __FILE__, __LINE__, (args)->ret); \
     return args; \
   } \
 } while(0)

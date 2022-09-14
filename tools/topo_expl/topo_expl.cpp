@@ -49,6 +49,8 @@ THE SOFTWARE.
 #include "graph.h"
 
 NodeModel *node_model;
+extern ncclNet_t* ncclNet;
+
 
 char* getCmdOption(char ** begin, char ** end, const std::string & option) {
     char ** itr = std::find(begin, end, option);
@@ -216,14 +218,12 @@ int main(int argc,char* argv[])
     comm[i].nRanks = nranks;
     NCCLCHECK(ncclCalloc(&comm[i].connectSend, NCCL_MAX_CONNS*comm->nRanks));
     NCCLCHECK(ncclCalloc(&comm[i].connectRecv, NCCL_MAX_CONNS*comm->nRanks));
-    comm[i].p2pSendCount = comm[i].p2pRecvCount = 0;
-    NCCLCHECK(ncclCalloc(&comm[i].p2pSends, comm->nRanks));
-    NCCLCHECK(ncclCalloc(&comm[i].p2pRecvs, comm->nRanks));
     node_model = network.GetNode(i);
     assert(node_model!=0);
     comm[i].busId = node_model->getGpuBusId(i);
     comm[i].topo = node_model->getSystem(i);
     comm[i].peerInfo = peerInfo;
+    comm[i].ncclNet = ncclNet;
     // Mark channels as non initialized.
     for (int c=0; c<MAXCHANNELS; c++) comm[i].channels[c].id = -1;
     NCCLCHECK(fillInfo(&comm[i], comm[i].peerInfo+comm[i].rank, 0));
@@ -272,8 +272,6 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nranks; i++) {
     free(comm[i].connectSend);
     free(comm[i].connectRecv);
-    free(comm[i].p2pSends);
-    free(comm[i].p2pRecvs);
   }
 
   free(treeGraph);

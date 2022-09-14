@@ -18,7 +18,7 @@
 /* ------ Dependency-free types binary-compatible with real types ------- */
 
 /* In order to avoid having the NVTX core API headers depend on non-NVTX
-*  headers like cuda.h, NVTX defines binary-compatible types to use for
+*  headers like hip/hip_runtime.h, NVTX defines binary-compatible types to use for
 *  safely making the initialization versions of all NVTX functions without
 *  needing to have definitions for the real types. */
 

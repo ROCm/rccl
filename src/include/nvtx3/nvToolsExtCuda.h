@@ -8,7 +8,7 @@
 
 #include "nvToolsExt.h"
 
-#include "cuda.h"
+#include "hip/hip_runtime.h"
 
 #ifndef NVTOOLSEXT_CUDA_V3
 #define NVTOOLSEXT_CUDA_V3
@@ -42,10 +42,10 @@ extern "C" {
 */
 typedef enum nvtxResourceCUDAType_t
 {
-    NVTX_RESOURCE_TYPE_CUDA_DEVICE = NVTX_RESOURCE_MAKE_TYPE(CUDA, 1), /* CUdevice */
-    NVTX_RESOURCE_TYPE_CUDA_CONTEXT = NVTX_RESOURCE_MAKE_TYPE(CUDA, 2), /* CUcontext */
-    NVTX_RESOURCE_TYPE_CUDA_STREAM = NVTX_RESOURCE_MAKE_TYPE(CUDA, 3), /* CUstream */
-    NVTX_RESOURCE_TYPE_CUDA_EVENT = NVTX_RESOURCE_MAKE_TYPE(CUDA, 4), /* CUevent */
+    NVTX_RESOURCE_TYPE_CUDA_DEVICE = NVTX_RESOURCE_MAKE_TYPE(CUDA, 1), /* hipDevice_t */
+    NVTX_RESOURCE_TYPE_CUDA_CONTEXT = NVTX_RESOURCE_MAKE_TYPE(CUDA, 2), /* hipCtx_t */
+    NVTX_RESOURCE_TYPE_CUDA_STREAM = NVTX_RESOURCE_MAKE_TYPE(CUDA, 3), /* hipStream_t */
+    NVTX_RESOURCE_TYPE_CUDA_EVENT = NVTX_RESOURCE_MAKE_TYPE(CUDA, 4), /* hipEvent_t */
 } nvtxResourceCUDAType_t;
 
 
@@ -59,8 +59,8 @@ typedef enum nvtxResourceCUDAType_t
  *
  * \version \NVTX_VERSION_1
  * @{ */
-NVTX_DECLSPEC void NVTX_API nvtxNameCuDeviceA(CUdevice device, const char* name);
-NVTX_DECLSPEC void NVTX_API nvtxNameCuDeviceW(CUdevice device, const wchar_t* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuDeviceA(hipDevice_t device, const char* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuDeviceW(hipDevice_t device, const wchar_t* name);
 /** @} */
 
 /* ------------------------------------------------------------------------- */
@@ -73,16 +73,16 @@ NVTX_DECLSPEC void NVTX_API nvtxNameCuDeviceW(CUdevice device, const wchar_t* na
  *
  * \par Example:
  * \code
- * CUresult status = cuCtxCreate( &cuContext, 0, cuDevice );
- * if ( CUDA_SUCCESS != status )
+ * hipError_t status = hipCtxCreate( &cuContext, 0, cuDevice );
+ * if ( hipSuccess != status )
  *     goto Error;
  * nvtxNameCuContext(cuContext, "CTX_NAME");
  * \endcode
  *
  * \version \NVTX_VERSION_1
  * @{ */
-NVTX_DECLSPEC void NVTX_API nvtxNameCuContextA(CUcontext context, const char* name);
-NVTX_DECLSPEC void NVTX_API nvtxNameCuContextW(CUcontext context, const wchar_t* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuContextA(hipCtx_t context, const char* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuContextW(hipCtx_t context, const wchar_t* name);
 /** @} */
 
 /* ------------------------------------------------------------------------- */
@@ -95,8 +95,8 @@ NVTX_DECLSPEC void NVTX_API nvtxNameCuContextW(CUcontext context, const wchar_t*
  *
  * \version \NVTX_VERSION_1
  * @{ */
-NVTX_DECLSPEC void NVTX_API nvtxNameCuStreamA(CUstream stream, const char* name);
-NVTX_DECLSPEC void NVTX_API nvtxNameCuStreamW(CUstream stream, const wchar_t* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuStreamA(hipStream_t stream, const char* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuStreamW(hipStream_t stream, const wchar_t* name);
 /** @} */
 
 /* ------------------------------------------------------------------------- */
@@ -109,8 +109,8 @@ NVTX_DECLSPEC void NVTX_API nvtxNameCuStreamW(CUstream stream, const wchar_t* na
  *
  * \version \NVTX_VERSION_1
  * @{ */
-NVTX_DECLSPEC void NVTX_API nvtxNameCuEventA(CUevent event, const char* name);
-NVTX_DECLSPEC void NVTX_API nvtxNameCuEventW(CUevent event, const wchar_t* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuEventA(hipEvent_t event, const char* name);
+NVTX_DECLSPEC void NVTX_API nvtxNameCuEventW(hipEvent_t event, const wchar_t* name);
 /** @} */
 
 /** @} */ /* END RESOURCE_NAMING */

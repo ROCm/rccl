@@ -26,18 +26,26 @@ struct ncclProxyOp {
   int channelId;
   int nsteps;
   ssize_t nbytes;
-  int root;
+  struct {
+    int root:30;
+    uint32_t connIndex:2;
+  };
   int next;
 
   uint64_t opCount;
   int sliceSteps;
   int chunkSteps;
   int chunkSize;
-  ncclDataType_t dtype;
-  ncclRedOp_t redOp;
-  ncclPattern_t pattern; // uint8_t
+  uint8_t /*ncclDataType_t*/ dtype;
+  uint8_t /*ncclDevRedOp_t*/ redOp;
+  uint8_t /*ncclPattern_t*/ pattern;
   uint8_t protocol;
-  uint16_t connIndex;
+
+  union {
+    uint64_t unused;
+    // For use by enqueue.cc
+    struct ncclProxyOp *enqNext;
+  };
 };
 static_assert(sizeof(struct ncclProxyOp) == 64, "Keep ProxyOp aligned with cache lines for effective prefetch");
 
@@ -73,9 +81,9 @@ struct ncclProxyArgs {
   int sliceSteps;
   int chunkSteps;
   int chunkSize;
-  ncclDataType_t dtype;
-  ncclRedOp_t redOp;
-  ncclPattern_t pattern;
+  uint8_t /*ncclDataType_t*/ dtype;
+  uint8_t /*ncclDevRedOp_t*/ redOp;
+  uint8_t /*ncclPattern_t*/ pattern;
   uint8_t protocol;
   int state;
   char* sharedBuff[NCCL_STEPS];
@@ -164,6 +172,7 @@ struct ncclProxyState {
   pthread_t thread;
   struct ncclSocket* listenSock;
   int stop;
+  hipCtx_t cudaCtx;
 
   // Used by main thread
   union ncclSocketAddress* peerAddresses;
@@ -193,9 +202,8 @@ enum proxyMode {
   proxyTo = 2
 };
 
-ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* proxyOp, int nranks);
+ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* proxyOp, bool *justInquire);
 ncclResult_t ncclProxyComputeP2p(struct ncclInfo* info, struct ncclProxyOp* proxyOp);
-ncclResult_t ncclProxySaveP2p(struct ncclComm* comm, struct ncclProxyOp* proxyOp);
 ncclResult_t ncclProxyStart(struct ncclComm* comm);
 ncclResult_t ncclProxyInit(struct ncclComm* comm, struct ncclSocket* sock, union ncclSocketAddress* peerAddresses);
 ncclResult_t ncclProxyCreate(struct ncclComm* comm);

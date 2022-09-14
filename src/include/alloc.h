@@ -11,28 +11,40 @@
 #include "nccl.h"
 #include "checks.h"
 #include "align.h"
+#include "utils.h"
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include "rccl_vars.h"
 
+uint64_t clockNano(); // from utils.h with which we have a circular dependency
+
 template <typename T>
-static ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
-  CUDACHECK(hipHostMalloc(ptr, nelem*sizeof(T), hipHostMallocMapped));
+ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
+  ncclResult_t result = ncclSuccess;
+  uint64_t time = 0;
+  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  *ptr = nullptr;
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  time = clockNano();
+  CUDACHECKGOTO(hipHostMalloc(ptr, nelem*sizeof(T), hipHostMallocMapped), result, finish);
+  time = clockNano() - time;
   memset(*ptr, 0, nelem*sizeof(T));
-  INFO(NCCL_ALLOC, "%s:%d Cuda Host Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
-  return ncclSuccess;
+  INFO(NCCL_ALLOC, "%s:%d Cuda Host Alloc Size %ld pointer %p seconds: hipHostAlloc=%g", filefunc, line, nelem*sizeof(T), *ptr, double(time)/1.e9);
+finish:
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  return result;
 }
 #define ncclCudaHostCalloc(...) ncclCudaHostCallocDebug(__VA_ARGS__, __FILE__, __LINE__)
 
-static inline ncclResult_t ncclCudaHostFree(void* ptr) {
+inline ncclResult_t ncclCudaHostFree(void* ptr) {
   CUDACHECK(hipHostFree(ptr));
   return ncclSuccess;
 }
 
 template <typename T>
-static ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
+ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
   void* p = malloc(nelem*sizeof(T));
   if (p == NULL) {
     WARN("Failed to malloc %ld bytes", nelem*sizeof(T));
@@ -46,7 +58,7 @@ static ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc,
 #define ncclCalloc(...) ncclCallocDebug(__VA_ARGS__, __FILE__, __LINE__)
 
 template <typename T>
-static ncclResult_t ncclRealloc(T** ptr, size_t oldNelem, size_t nelem) {
+ncclResult_t ncclRealloc(T** ptr, size_t oldNelem, size_t nelem) {
   if (nelem < oldNelem) return ncclInternalError;
   if (nelem == oldNelem) return ncclSuccess;
 
@@ -78,48 +90,128 @@ static_assert(sizeof(struct allocationTracker) == 64, "allocationTracker must be
 extern struct allocationTracker allocTracker[];
 
 template <typename T>
-static ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t sideStream = nullptr, bool isFineGrain = false) {
-
+ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
+  ncclResult_t result = ncclSuccess;
+  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  *ptr = nullptr;
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  uint64_t time = clockNano();
   if (isFineGrain)
-    CUDACHECK(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained));
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
   else
-    CUDACHECK(hipMalloc(ptr, nelem*sizeof(T)));
+    CUDACHECKGOTO(hipMalloc(ptr, nelem*sizeof(T)), result, finish);
+  time = clockNano() - time;
+finish:
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p seconds: hipMalloc=%g", filefunc, line, nelem*sizeof(T), *ptr, double(time)/1.e9);
+  return result;
+}
+#define ncclCudaMalloc(...) ncclCudaMallocDebug( __FILE__, __LINE__, __VA_ARGS__)
 
-  if (rcclParamEnableHipGraph()) {
-    hipStream_t stream = sideStream;
-    if (stream == nullptr)
-      CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
-
-    CUDACHECK(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
-    CUDACHECK(hipStreamSynchronize(stream));
-    if (sideStream == nullptr)
-      CUDACHECK(hipStreamDestroy(stream));
-  } else {
-    CUDACHECK(hipMemset(*ptr, 0, nelem*sizeof(T)));
-    CUDACHECK(hipStreamSynchronize(NULL));
-  }
-
-  INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
+template <typename T>
+ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t sideStream = nullptr, bool isFineGrain = false) {
+  ncclResult_t result = ncclSuccess;
+  uint64_t time0=0, time1=0, time2=0;
+  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  *ptr = nullptr;
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  // Need a side stream so as not to interfere with graph capture.
+  hipStream_t stream = sideStream;
+  time0 = clockNano();
+  if (stream == nullptr)
+    CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
+  time1 = clockNano();
+  if (isFineGrain)
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
+  else
+    CUDACHECKGOTO(hipMalloc(ptr, nelem*sizeof(T)), result, finish);
+  time2 = clockNano();
+  CUDACHECKGOTO(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
+  CUDACHECKGOTO(hipStreamSynchronize(stream), result, finish);
+  if (sideStream == nullptr)
+    CUDACHECKGOTO(hipStreamDestroy(stream), result, finish);
   int dev;
   CUDACHECK(hipGetDevice(&dev));
   if (dev < MAX_ALLOC_TRACK_NGPU) {
-    __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_SEQ_CST);
-    __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*sizeof(T), __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*sizeof(T), __ATOMIC_RELAXED);
   }
-  return ncclSuccess;
+  INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p seconds: hipStreamCreateWithFlags=%g hipMalloc=%g", filefunc, line, nelem*sizeof(T), *ptr, double(time1-time0)/1.e9, double(time2-time1)/1.e9);
+finish:
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  return result;
 }
 #define ncclCudaCalloc(...) ncclCudaCallocDebug(__FILE__, __LINE__, __VA_ARGS__)
 
 template <typename T>
-static ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
-  CUDACHECK(hipMemcpy(dst, src, nelem*sizeof(T), hipMemcpyDefault));
-  return ncclSuccess;
+ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t stream, bool isFineGrain = false) {
+  ncclResult_t result = ncclSuccess;
+  uint64_t time = 0;
+  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  *ptr = nullptr;
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  time = clockNano();
+  if (isFineGrain)
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
+  else
+    CUDACHECKGOTO(hipMalloc(ptr, nelem*sizeof(T)), result, finish);
+  time = clockNano() - time;
+  CUDACHECKGOTO(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
+  int dev;
+  CUDACHECK(hipGetDevice(&dev));
+  if (dev < MAX_ALLOC_TRACK_NGPU) {
+    __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*sizeof(T), __ATOMIC_RELAXED);
+  }
+  INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p seconds: hipMalloc=%g", filefunc, line, nelem*sizeof(T), *ptr, double(time)/1.e9);
+finish:
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  return result;
+}
+#define ncclCudaCallocAsync(...) ncclCudaCallocAsyncDebug(__FILE__, __LINE__, __VA_ARGS__)
+
+template <typename T>
+ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
+  ncclResult_t result = ncclSuccess;
+  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  // Need a side stream so as not to interfere with graph capture.
+  hipStream_t stream;
+  CUDACHECKGOTO(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking), result, finish);
+  NCCLCHECKGOTO(ncclCudaMemcpyAsync(dst, src, nelem, stream), result, finish);
+  CUDACHECKGOTO(hipStreamSynchronize(stream), result, finish);
+  CUDACHECKGOTO(hipStreamDestroy(stream), result, finish);
+finish:
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  return result;
+}
+
+template <typename T>
+ncclResult_t ncclCudaMemcpyAsync(T* dst, T* src, size_t nelem, hipStream_t stream) {
+  ncclResult_t result = ncclSuccess;
+  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECKGOTO(hipMemcpyAsync(dst, src, nelem*sizeof(T), hipMemcpyDefault, stream), result, finish);
+finish:
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  return result;
+}
+
+template <typename T>
+ncclResult_t ncclCudaFree(T* ptr) {
+  ncclResult_t result = ncclSuccess;
+  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECKGOTO(hipFree(ptr), result, finish);
+finish:
+  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  return result;
 }
 
 // Allocate memory to be potentially ibv_reg_mr'd. This needs to be
 // allocated on separate pages as those pages will be marked DONTFORK
 // and if they are shared, that could cause a crash in a child process
-static ncclResult_t ncclIbMallocDebug(void** ptr, size_t size, const char *filefunc, int line) {
+inline ncclResult_t ncclIbMallocDebug(void** ptr, size_t size, const char *filefunc, int line) {
   size_t page_size = sysconf(_SC_PAGESIZE);
   void* p;
   int size_aligned = ROUNDUP(size, page_size);

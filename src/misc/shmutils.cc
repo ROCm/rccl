@@ -59,15 +59,15 @@ ncclResult_t ncclShmOpen(char* shmPath, const int shmSize, void** shmPtr, void**
 
   NCCLCHECKGOTO(ncclShmSetup(shmPath, shmSize, &fd, &ptr, create), res, sysError);
   if (devShmPtr) {
-    CUDACHECKGOTO(hipHostRegister(ptr, shmSize, hipHostRegisterMapped), res, cudaError);
-    CUDACHECKGOTO(hipHostGetDevicePointer(devShmPtr, ptr, 0), res, cudaError);
+    CUDACHECKGOTO(hipHostRegister(ptr, shmSize, hipHostRegisterMapped), res, hipError_t);
+    CUDACHECKGOTO(hipHostGetDevicePointer(devShmPtr, ptr, 0), res, hipError_t);
   }
 
   *shmPtr = ptr;
   return ncclSuccess;
 sysError:
   WARN("Error while %s shared memory segment %s (size %d)", create ? "creating" : "attaching to", shmPath, shmSize);
-cudaError:
+hipError_t:
   if (fd != -1) close(fd);
   if (create) shm_unlink(shmPath);
   if (ptr != MAP_FAILED) munmap(ptr, shmSize);

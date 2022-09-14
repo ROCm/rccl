@@ -23,7 +23,7 @@ __device__ struct ncclShmemData* ncclShmem;
   NCCL_FUNC5(func, RING,    devredop, type, nullify), \
   NCCL_FUNC5(func, COLLNET, devredop, type, nullify)
 
-#if defined(RCCL_BFLOAT16)
+#if defined(__CUDA_BF16_TYPES_EXIST__)
 // Must be consistent with ncclDataType_t
 #define NCCL_FUNCS3A(func, devredop, nullForFloat) \
   NCCL_FUNC4(func, devredop, int8_t, 0), \
@@ -35,7 +35,7 @@ __device__ struct ncclShmemData* ncclShmem;
   NCCL_FUNC4(func, devredop, half, nullForFloat), \
   NCCL_FUNC4(func, devredop, float, nullForFloat), \
   NCCL_FUNC4(func, devredop, double, nullForFloat), \
-  NCCL_FUNC4(func, devredop, rccl_bfloat16, nullForFloat)
+  NCCL_FUNC4(func, devredop, __nv_bfloat16, nullForFloat)
 #define NCCL_FUNCS3B(func, devredop) \
   NCCL_FUNC4(func, devredop, int8_t, 0), \
   NCCL_FUNC4(func, devredop, int8_t, 0), \
@@ -89,13 +89,12 @@ __device__ struct ncclShmemData* ncclShmem;
   NCCL_FUNCS3B(func, Sum)
 
 // Must be consistent with the ncclFuncSet enum
-__device__ ncclKern_t ncclFuncs[2+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
+__device__ ncclKern_t ncclFuncs[1+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
 // Don't try to initialize the host shadow copy of this device-side global
 // variable. There is no host pointer to a device-side function, which
 // confuses clang. This will be fixed in the next clang release.
 #if __CUDA_ARCH__
   NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),
-  NCCL_FUNC_NAME(AllToAllPivot, RING, SIMPLE, Sum, int8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, int32_t),
@@ -105,8 +104,8 @@ __device__ ncclKern_t ncclFuncs[2+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedO
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, half),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, float),
   NCCL_ONERANK_REDUCE_NAME(PreMulSum, double),
-  #if defined(RCCL_BFLOAT16)
-    NCCL_ONERANK_REDUCE_NAME(PreMulSum, rccl_bfloat16),
+  #if defined(__CUDA_BF16_TYPES_EXIST__)
+    NCCL_ONERANK_REDUCE_NAME(PreMulSum, __nv_bfloat16),
   #endif
   NCCL_FUNCS2B(Broadcast),
   NCCL_FUNCS2A(Reduce),

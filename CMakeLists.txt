@@ -175,12 +175,6 @@ set(CC_SOURCES
     src/collectives/all_to_all_api.cc
     src/collectives/all_to_allv_api.cc
     src/channel.cc
-    #src/clique/CliqueManager.cc     # RCCL
-    #src/clique/HandleCache.cc       # RCCL
-    #src/clique/HandleShm.cc         # RCCL
-    #src/clique/Hash.cc              # RCCL
-    #src/clique/MsgQueue.cc          # RCCL
-    #src/clique/ShmObject.cc         # RCCL
     src/misc/argcheck.cc
     src/misc/nvmlwrap_stub.cc
     src/misc/utils.cc
@@ -193,6 +187,8 @@ set(CC_SOURCES
     src/misc/signals.cc              # RCCL
     src/misc/socket.cc
     src/misc/param.cc
+    src/misc/rocmwrap.cc
+    src/misc/strongstream.cc
     src/transport/coll_net.cc
     src/transport/net.cc
     src/transport/net_ib.cc
@@ -207,7 +203,6 @@ set(CC_SOURCES
     src/net.cc
     src/enqueue.cc
     ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
-
 
 foreach(filename ${CC_SOURCES})
   list(APPEND CPP_SOURCES ${filename})
