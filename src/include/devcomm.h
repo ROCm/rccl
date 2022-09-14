@@ -203,14 +203,15 @@ struct ncclWorkElem {
   union {
     uint8_t flagBits;
     struct {
-      uint8_t isUsed:1, redOpArgIsPtr:1, regUsed:1, pad_0:1, nWarps:4;
+      uint8_t isUsed:1, redOpArgIsPtr:1, regUsed:1, nWarps:5;
     };
   };
   uint8_t direct;
   uint8_t bid;
   uint8_t nChannels;
   struct {
-    uint32_t root:30;
+    uint32_t root:28;
+    uint32_t pad_0:2;
     uint32_t connIndex:2;
   };
 

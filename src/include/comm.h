@@ -107,6 +107,7 @@ struct ncclChannel {
   struct ncclRing ring;
   int* devRingUserRanks;
   struct ncclTree tree;
+  struct ncclTree binTree;
   struct ncclDirect collTree;
   int id; // index of this channel
   uint32_t workFifoSent; // last used work index+1
