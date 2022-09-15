@@ -14,8 +14,8 @@ namespace {
     const int tid = threadIdx.x;
     const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
-    const int nranks = ncclShmem->comm.nRanks;
-    const ncclRing *ring = &ncclShmem->channel.ring;
+    const int nranks = ncclShmem.comm.nRanks;
+    const ncclRing *ring = &ncclShmem.channel.ring;
     const int num_bi_rings = args->pivotA2ANumBiRings;
     const int num_uni_rings = num_bi_rings * 2;
     const int num_chunks = args->nChannels / 2;

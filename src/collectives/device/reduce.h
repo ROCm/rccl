@@ -16,13 +16,13 @@ namespace {
     const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
     const int nChannels = args->nChannels;
-    ncclRing *ring = &ncclShmem->channel.ring;
+    ncclRing *ring = &ncclShmem.channel.ring;
     const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? REDUCE_CHUNKSTEPS : 1));
     const ssize_t minChunkSizeLL128 = int(nthreads*(Proto::calcBytePerGrain()/sizeof(T)));
-    const int nranks = ncclShmem->comm.nRanks;
+    const int nranks = ncclShmem.comm.nRanks;
     const ssize_t loopSize = nChannels*chunkSize;
     const ssize_t size = args->count;
-    const int rank = ncclShmem->comm.rank;
+    const int rank = ncclShmem.comm.rank;
     const int prevRank = ring->userRanks[nranks-1];
     const int root = args->root;
 

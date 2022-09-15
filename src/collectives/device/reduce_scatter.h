@@ -16,12 +16,12 @@ namespace {
     const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
     const int nChannels = args->nChannels;
-    ncclRing *ring = &ncclShmem->channel.ring;
+    ncclRing *ring = &ncclShmem.channel.ring;
     int const *ringRanks = ring->userRanks;
     const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? REDUCESCATTER_CHUNKSTEPS : 1));
     // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
     const ssize_t minChunkSizeLL128 = int(nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2);
-    const int nranks = ncclShmem->comm.nRanks;
+    const int nranks = ncclShmem.comm.nRanks;
     const ssize_t loopSize = nChannels*chunkSize;
     const ssize_t size = args->count;
 

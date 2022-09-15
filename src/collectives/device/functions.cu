@@ -9,7 +9,7 @@
 #include "collectives.h"
 #include "common.h"
 
-__device__ struct ncclShmemData* ncclShmem;
+__shared__ ncclShmemData ncclShmem;
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
