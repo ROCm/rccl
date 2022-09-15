@@ -1156,7 +1156,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
       if (info->nBytes <= 2200008) {
         info->protocol = NCCL_PROTO_LL;
         info->algorithm = NCCL_ALGO_TREE;
-        info->nChannels = 24;
+        info->nChannels = std::min(24, comm->nChannels);
       } else {
         info->protocol = NCCL_PROTO_SIMPLE;
         info->algorithm = NCCL_ALGO_RING;
