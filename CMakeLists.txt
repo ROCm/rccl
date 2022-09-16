@@ -300,7 +300,7 @@ foreach(target ${AMDGPU_TARGETS})
 endforeach()
 
 if("${HIP_COMPILER}" MATCHES "clang")
-  target_compile_options(rccl PRIVATE -fvisibility=hidden)
+  target_compile_options(rccl PRIVATE -fvisibility=hidden --hipcc-func-supp)
   foreach(target ${AMDGPU_TARGETS})
     target_compile_options(rccl PRIVATE -fgpu-rdc)
   endforeach()
