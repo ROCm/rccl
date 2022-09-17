@@ -570,7 +570,7 @@ namespace {
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>;
     runRing<T, RedOp, Proto>(args);
   }
@@ -578,7 +578,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SI
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(args);
   }
 };
@@ -683,14 +683,14 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET, NCCL_PROTO
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     runRing<T, RedOp, ProtoLL>(args);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     if (args->pad_0 == 0) runTreeUpDown<T, RedOp, ProtoLL>(args);
     else runTreeSplit<T, RedOp, ProtoLL>(args);
   }
@@ -698,7 +698,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     runRing<T, RedOp, ProtoLL128>(args);
     //LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, args);
   }
@@ -706,7 +706,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL128> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     runTreeSplit<T, RedOp, ProtoLL128>(args);
     //LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, args);
   }

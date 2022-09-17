@@ -188,7 +188,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs_ll128[]{
 
 template<unsigned short f, unsigned short l, bool u>
 struct Caller {
-  static __device__ __host__
+  static __forceinline__ __device__ __host__
   void call(unsigned short funcIndex) noexcept
   {
     constexpr unsigned short m = f + (l - f) / 2;
@@ -199,7 +199,7 @@ struct Caller {
 
 template<unsigned short f, bool u>
 struct Caller<f, f + 1, u>{
-  static __device__ __host__
+  static __forceinline__ __device__ __host__
   void call(unsigned short funcIndex) noexcept { if (u) ncclFuncs_ll128[f](); else ncclFuncs[f](); }
 };
 
@@ -207,7 +207,7 @@ static_assert(FUNC_INDEX_P2P == 2710, "Wrong P2P function index");
 static_assert(FUNC_INDEX_ALLTOALL_PIVOT == 2711, "Wrong AllToAllPivot function index");
 
 template<bool USING_LL128>
-inline
+__forceinline__
 __device__
 void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {
 #if defined(BUILD_ALLREDUCE_ONLY)
@@ -459,7 +459,7 @@ struct RunWork {
   }
 };
 
-static __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
+static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
   if (we->isUsed && we->redOpArgIsPtr) {
     /* redOpArg is a pointer to the scalar value, so we'll dereference it
      * here so that redOpArg holds the bits of the scalar going forward.
@@ -483,7 +483,7 @@ static __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
 extern __shared__ ncclShmemData ncclShmem;
 
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnIndex, bool COLLTRACE, bool USING_LL128>
-__device__ void ncclKernel(
+__forceinline__ __device__ void ncclKernel(
     struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead
   )  {
   int tid = threadIdx.x;

@@ -173,7 +173,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     }
   }
 
-  __device__ __forceinline__ void run(ncclWork *work) {
+  __device__  __attribute__((noinline)) void run(ncclWork *work) {
     struct ncclWorkElemP2p* args = work->p2pElems;
     int ngroups = args->ngroups;
     int tid = threadIdx.x;

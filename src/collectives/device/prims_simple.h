@@ -508,7 +508,7 @@ private:
   }
 
  public:
-  __device__ Primitives(
+  __forceinline__ __device__ Primitives(
       int tid, int nthreads, int const *recvPeers, int const *sendPeers,
       void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint32_t group=0, struct ncclWorkElem* e = nullptr
     ):
@@ -557,7 +557,7 @@ private:
     setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclWorkElemReg*)e);
   }
 
-  __device__ ~Primitives() {
+  __forceinline__ __device__ ~Primitives() {
     // Ensure ncclShmem.groups[].send/recvConns are available
     if (!(flags & ThreadsSynced))
       barrier();
