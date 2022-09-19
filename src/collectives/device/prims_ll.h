@@ -83,7 +83,7 @@ private:
   inline __device__ int checkAbort(int &spins, int send) {
     spins++;
     if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
+      abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_ACQUIRE);
       spins = 0;
     }
     return abort;
@@ -100,13 +100,13 @@ private:
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
-        sendConnHeadCache = atomicAdd_system((unsigned long long *)sendConnHeadPtr, 0);
+        sendConnHeadCache = atomicAdd((unsigned long long *)sendConnHeadPtr, 0);
         if (checkAbort(spins, 1)) break;
       }
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        __atomic_store_n((sendConnFifoPtr+sendConnHead%NCCL_STEPS), (size), __ATOMIC_SEQ_CST);
+        __atomic_store_n((sendConnFifoPtr+sendConnHead%NCCL_STEPS), (size), __ATOMIC_RELEASE);
       }
       sendConnHead += 1;
     }
@@ -124,7 +124,7 @@ private:
   }
   inline __device__ void postRecv() {
     barrier();
-    if (recvConnHeadPtr) atomicExch_system((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) atomicExch((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
   }
 
   inline __device__ void incSend(int i, int offset) {

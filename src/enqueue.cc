@@ -720,7 +720,7 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredSent) {
       uint32_t* doneLive = comm->workFifoDone;
       uint32_t ackd[MAXCHANNELS];
       for (int c=0; c < MAXCHANNELS; c++) {
-        ackd[c] = __atomic_load_n(&doneLive[c], __ATOMIC_RELAXED);
+        ackd[c] = __atomic_load_n(&doneLive[c], __ATOMIC_ACQUIRE);
       }
       // Compiler-only fence to prevent fusion of loops to encourage dense loads.
       __atomic_signal_fence(__ATOMIC_SEQ_CST);
@@ -740,7 +740,7 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredSent) {
         // too far where they could get lost in 32-bit wraparound.
         if (ackd[c] == comm->channels[c].workFifoSent) {
           comm->channels[c].workFifoSent = ackdAll;
-          __atomic_store_n(&doneLive[c], ackdAll, __ATOMIC_RELAXED);
+          __atomic_store_n(&doneLive[c], ackdAll, __ATOMIC_RELEASE);
         }
       }
       comm->workFifoAckdMin = ackdAll;

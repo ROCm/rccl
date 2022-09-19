@@ -323,7 +323,7 @@ class ncclFunction {
 
 #ifdef ENABLE_COLLTRACE
 #define traceColl(launch_type) { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_ACQ_REL)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
     collTrace->bid = blockIdx.x; \
@@ -358,14 +358,14 @@ class ncclFunction {
     traceColl(firstLaunch?ncclCollTraceKernelLaunchType:ncclCollTraceCollLaunchType); \
   }
 #define traceKernelEnd()  { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_ACQ_REL)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
     collTrace->bid = blockIdx.x; \
     collTrace->type = ncclCollTraceKernelEndType; \
   }
 #define traceAbort()  { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_ACQ_REL)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
     collTrace->bid = blockIdx.x; \
@@ -373,7 +373,7 @@ class ncclFunction {
   }
 //  traceData(int16_t data2, uint32_t data4, uint64_t data8_0, uint64_t data8_1)
 #define traceData(data2, data4, data8_0, data8_1) { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_ACQ_REL)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->bid = blockIdx.x; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \

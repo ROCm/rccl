@@ -70,17 +70,17 @@ __forceinline__ __device__ void WaitForBarrier(gpuBarrier_t const& barrier)
     *barrier.localSense = 1 - *barrier.localSense;
     int localSense = *barrier.localSense;
 
-    int val = __atomic_add_fetch(barrier.globalCount, 1, __ATOMIC_SEQ_CST);
+    int val = __atomic_add_fetch(barrier.globalCount, 1, __ATOMIC_ACQ_REL);
     if (val == NUM_RANKS)
     {
       // Last arrival resets barrier
-      __atomic_store_n(barrier.globalCount, 0, __ATOMIC_SEQ_CST);
-      __atomic_store_n(barrier.globalSense, localSense, __ATOMIC_SEQ_CST);
+      __atomic_store_n(barrier.globalCount, 0, __ATOMIC_RELEASE);
+      __atomic_store_n(barrier.globalSense, localSense, __ATOMIC_RELEASE);
     }
     else
     {
       // Wait for all ranks to reach barrier
-      while (__atomic_load_n(barrier.globalSense, __ATOMIC_SEQ_CST) != localSense);
+      while (__atomic_load_n(barrier.globalSense, __ATOMIC_ACQUIRE) != localSense);
     }
   }
 }

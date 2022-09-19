@@ -90,7 +90,7 @@ private:
   inline __device__ bool checkAbort(int &spins) {
     spins++;
     if (!(flags & Aborted) && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      flags |= atomicAdd_system((unsigned int *)ncclShmem.comm.abortFlag, 0) ? Aborted : 0;
+      flags |= atomicAdd((unsigned int *)ncclShmem.comm.abortFlag, 0) ? Aborted : 0;
       spins = 0;
     }
     return flags & Aborted;
@@ -106,7 +106,7 @@ private:
       int spins = 0;
       while (connStepCache + (isSendNotRecv ? NCCL_STEPS : 0) < step + StepPerSlice) {
         __builtin_amdgcn_s_sleep(1);
-        connStepCache = atomicAdd_system((unsigned long long *)connStepPtr, 0);
+        connStepCache = atomicAdd((unsigned long long *)connStepPtr, 0);
         if (checkAbort(spins)) break;
         //if (spins == 0) printf("r=%d b=%d t=%d SPUN OUT got=%d want=%d\n", ncclShmem.comm.rank, blockIdx.x, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
         if (spins == 0) traceData(__LINE__, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
@@ -116,7 +116,7 @@ private:
 
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
       if (isSendNotRecv && (flags & SizesFifoEnabled))
-        __atomic_store_n((connSizesFifoPtr+step%NCCL_STEPS), nelts*sizeof(T), __ATOMIC_SEQ_CST);
+        __atomic_store_n((connSizesFifoPtr+step%NCCL_STEPS), nelts*sizeof(T), __ATOMIC_RELEASE);
 
       void **ptrs = isSendNotRecv ? (ncclShmem.groups[group].dsts + Dst)
                                   : (ncclShmem.groups[group].srcs + Src);
@@ -149,14 +149,14 @@ private:
   template<int Recv, int Send>
   inline __device__ void postPeer() {
     if ((flags & Send*RolePostSend) && next_hdp_reg)
-      atomicExch_system(next_hdp_reg, 0x1);
+      atomicExch(next_hdp_reg, 0x1);
 
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
 #if defined(__gfx90a__)
-      atomicExch_system((unsigned long long *)connStepPtr, step);
+      atomicExch((unsigned long long *)connStepPtr, step);
 #else
-      __atomic_store_n(connStepPtr, step, __ATOMIC_SEQ_CST);
+      __atomic_store_n(connStepPtr, step, __ATOMIC_RELEASE);
 #endif
     }
   }
@@ -323,9 +323,9 @@ private:
         }
         barrier(); // This barrier has a counterpart in following loop
 #if defined(__gfx90a__)
-        if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && index == 0) __threadfence_system();
+        if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && index == 0) __threadfence();
 #else
-        if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
+        if (Send && (flags & RolePostSend) && index == 0) __threadfence();
 #endif
 	__syncwarp();
         postPeer<Recv, Send>();
@@ -346,9 +346,9 @@ private:
       }
       barrier(); // Has couterpart in preceding worker-only loop.
 #if defined(__gfx90a__)
-      if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
+      if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence();
 #else
-      if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
+      if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence();
 #endif
       __syncwarp();
       postPeer<Recv, Send>();
@@ -419,7 +419,7 @@ private:
       barrier();
       // If we indeed send something, threadfence
       if (Send && (flags & RolePostSend) && ncclShmem.groups[group].totalSendSize[slice] > 0 && index == 0)
-        __threadfence_system();
+        __threadfence();
       __syncwarp();
       postPeer<Recv, Send>();
       offset += realSize;
@@ -433,12 +433,12 @@ private:
       step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostRecv) {
         connStepPtr = conn->head;
-        atomicExch_system((unsigned long long *)connStepPtr, step); // Return credits in case we rounded up.
+        atomicExch((unsigned long long *)connStepPtr, step); // Return credits in case we rounded up.
       }
       if (flags & RoleWaitRecv) {
         ncclShmem.groups[group].recvConns[index] = conn; // WaitRecv role saves since that's who needs it in setDataPtrs()
         connStepPtr = conn->tail;
-        connStepCache = atomicAdd_system((unsigned long long *)connStepPtr, 0);
+        connStepCache = atomicAdd((unsigned long long *)connStepPtr, 0);
         flags |= (conn->offsFifo != nullptr) ? OffsFifoEnabled : 0;
         if (Direct) {
           // User buffers have been registered
@@ -478,7 +478,7 @@ private:
       if (flags & RoleWaitSend) {
         ncclShmem.groups[group].sendConns[index] = conn; // WaitSend role saves since that's who needs it in setDataPtrs()
         connStepPtr = conn->head;
-        connStepCache = atomicAdd_system((unsigned long long *)connStepPtr, 0);
+        connStepCache = atomicAdd((unsigned long long *)connStepPtr, 0);
         flags |= (conn->offsFifo != nullptr) ? OffsFifoEnabled : 0;
         if (flags & OffsFifoEnabled)
           connOffsFifoPtr = conn->offsFifo;
@@ -590,7 +590,7 @@ private:
       int spins = 0;
       void *volatile *slot = ncclShmem.groups[group].recvConns[index]->ptrExchange;
       // Wait for consumer to consume previous value before trampling it.
-      while ((void *)atomicAdd_system((unsigned long long *) slot,0) != nullptr && !checkAbort(spins));
+      while ((void *)atomicAdd((unsigned long long *) slot,0) != nullptr && !checkAbort(spins));
       directBuff = (T*)outputBuf;
       // Encode pointer by XOR'ing against some address they definitely wouldn't send
       // since we want to allow them sending us nullptr while not colliding with
@@ -602,7 +602,7 @@ private:
       void *volatile *slot = ncclShmem.groups[group].sendConns[index]->ptrExchange;
       void *ptr;
       while (true) {
-        ptr = (void *)atomicAdd_system((unsigned long long *) slot,0);
+        ptr = (void *)atomicAdd((unsigned long long *) slot,0);
         if (ptr != nullptr || checkAbort(spins)) break;
       }
       directBuff = regUsed ? (T*)(e->dnOutputs[index]) :
@@ -615,7 +615,7 @@ private:
       volatile uint64_t* argSlot0 = ncclShmem.groups[group].sendConns[index]->redOpArgExchange;
       volatile uint64_t* argSlot1 = ncclShmem.groups[group].sendConns[index]->redOpArgExchange+1;
       // Wait for consumer to consume previous value before trampling it.
-      while (((void *)atomicAdd_system((unsigned long long *) slot,0) != nullptr || *argSlot0 != 0 || *argSlot1 !=0) && !checkAbort(spins));
+      while (((void *)atomicAdd((unsigned long long *) slot,0) != nullptr || *argSlot0 != 0 || *argSlot1 !=0) && !checkAbort(spins));
       // If there is no recv, then we are directly pulling from input buffer (e.g. directScatter)
       // Otherwise, we are pulling from output buffer (e.g. recvCopyDirectSend)
       directBuff = MaxRecv == 0 ? (T*)inputBuf : (T*)outputBuf;
@@ -634,7 +634,7 @@ private:
       volatile uint64_t* argSlot1 = ncclShmem.groups[group].recvConns[index]->redOpArgExchange+1;
       void *ptr;
       while (true) {
-        ptr = (void *)atomicAdd_system((unsigned long long *) slot,0);
+        ptr = (void *)atomicAdd((unsigned long long *) slot,0);
         if (ptr != nullptr || checkAbort(spins)) break;
       }
       directBuff = regUsed ? (T*)(MaxSend == 0 ? e->upOutputs[index] : e->dnInputs[index]) :

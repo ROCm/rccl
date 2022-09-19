@@ -78,7 +78,7 @@ private:
   inline __device__ int checkAbort(int &spins, int i, int send) {
     spins++;
     if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = __atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST);
+      abort = __atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_ACQUIRE);
       spins = 0;
     }
     return abort;
@@ -89,22 +89,22 @@ private:
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
-        sendConnHeadCache = atomicAdd_system((unsigned long long *)sendConnHeadPtr, 0);
+        sendConnHeadCache = atomicAdd((unsigned long long *)sendConnHeadPtr, 0);
         if (checkAbort(spins, wid, 1)) break;
       }
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
-        __atomic_store_n(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes, __ATOMIC_SEQ_CST);
+        __atomic_store_n(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes, __ATOMIC_RELEASE);
       }
       sendConnHead += 1;
     }
   }
 
   inline __device__ void postRecv() {
-    if (recvConnHeadPtr) atomicExch_system((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) atomicExch((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    if (sendConnTailPtr) { __threadfence(); atomicExch_system((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
+    if (sendConnTailPtr) { __threadfence(); atomicExch((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
   }
 
   template<int WordPerThread>

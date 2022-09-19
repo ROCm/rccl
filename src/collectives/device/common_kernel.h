@@ -20,7 +20,7 @@ static __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 inline __device__ int loadInt(int* ptr) {
   int v;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  v = atomicAdd_system((unsigned long long *)ptr, 0);
+  v = atomicAdd((unsigned long long *)ptr, 0);
 #else
   asm volatile("ld.volatile.global.u32 %0, [%1];"
       : "=r"(v) : "l"(ptr));
