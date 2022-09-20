@@ -13,7 +13,7 @@
 namespace {
   template<typename T, typename RedOp>
   __device__ __attribute__((noinline)) void oneRankReduce() {
-    ncclWork *w = &ncclShmem->work;
+    ncclWork *w = &ncclShmem.work;
     int tid = threadIdx.x;
     int tn = blockDim.x;
     #pragma unroll 1

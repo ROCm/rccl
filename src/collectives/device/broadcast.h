@@ -15,7 +15,7 @@ namespace {
     const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
     const int nChannels = args->nChannels;
-    ncclRing *ring = &ncclShmem->channel.ring;
+    ncclRing *ring = &ncclShmem.channel.ring;
     const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? BROADCAST_CHUNKSTEPS : 1));
     const ssize_t minChunkSizeLL128 = int(nthreads*(Proto::calcBytePerGrain()/sizeof(T)));
     const ssize_t loopSize = nChannels*chunkSize;
@@ -61,7 +61,7 @@ namespace {
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     using Proto = ProtoSimple<BROADCAST_CHUNKSTEPS/BROADCAST_SLICESTEPS, BROADCAST_SLICESTEPS>;
     runRing<T, RedOp, Proto>(args);
   }
@@ -69,14 +69,14 @@ struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SI
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     runRing<T, RedOp, ProtoLL>(args);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     runRing<T, RedOp, ProtoLL128>(args);
   }
 };

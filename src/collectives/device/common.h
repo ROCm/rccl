@@ -188,7 +188,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs_ll128[]{
 
 template<unsigned short f, unsigned short l, bool u>
 struct Caller {
-  static __device__ __host__
+  static __forceinline__ __device__ __host__
   void call(unsigned short funcIndex) noexcept
   {
     constexpr unsigned short m = f + (l - f) / 2;
@@ -199,7 +199,7 @@ struct Caller {
 
 template<unsigned short f, bool u>
 struct Caller<f, f + 1, u>{
-  static __device__ __host__
+  static __forceinline__ __device__ __host__
   void call(unsigned short funcIndex) noexcept { if (u) ncclFuncs_ll128[f](); else ncclFuncs[f](); }
 };
 
@@ -207,7 +207,7 @@ static_assert(FUNC_INDEX_P2P == 2710, "Wrong P2P function index");
 static_assert(FUNC_INDEX_ALLTOALL_PIVOT == 2711, "Wrong AllToAllPivot function index");
 
 template<bool USING_LL128>
-inline
+__forceinline__
 __device__
 void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {
 #if defined(BUILD_ALLREDUCE_ONLY)
@@ -320,14 +320,14 @@ class ncclFunction {
 
 #ifdef ENABLE_COLLTRACE
 #define traceColl(launch_type) { \
-    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = shmem.comm.collTrace+pos; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
     collTrace->bid = blockIdx.x; \
-    collTrace->funcIndex = shmem.work.header.funcIndex; \
+    collTrace->funcIndex = ncclShmem.work.header.funcIndex; \
     asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (collTrace->data_0)); \
-    if (shmem.work.header.type == ncclWorkTypeP2p) { \
-      struct ncclWorkElemP2p *p2pElems = shmem.work.p2pElems; \
+    if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
+      struct ncclWorkElemP2p *p2pElems = ncclShmem.work.p2pElems; \
       collTrace->p2p[0].connIndex = 0; \
 	    collTrace->p2pOpCount[0] = p2pElems[0].opCount; \
       collTrace->p2p[0].ngroups = p2pElems[0].ngroups; \
@@ -341,8 +341,8 @@ class ncclFunction {
       collTrace->p2p[1].warpStart = p2pElems[1].warpStart; \
       collTrace->p2p[1].peer = p2pElems[1].p2pType == ncclWorkP2pTypeSend ? (uint16_t)(p2pElems[1].peer) : -1; \
       collTrace->type = (launch_type) | ncclCollTraceP2pElemType; \
-    } else if (shmem.work.header.type == ncclWorkTypeColl) { \
-      struct ncclWorkElem *elems = shmem.work.elems; \
+    } else if (ncclShmem.work.header.type == ncclWorkTypeColl) { \
+      struct ncclWorkElem *elems = ncclShmem.work.elems; \
       collTrace->opCount = elems[0].opCount; \
       collTrace->coll.nWarps = elems[0].nWarps; \
       collTrace->coll.bid = elems[0].bid; \
@@ -355,23 +355,23 @@ class ncclFunction {
     traceColl(firstLaunch?ncclCollTraceKernelLaunchType:ncclCollTraceCollLaunchType); \
   }
 #define traceKernelEnd()  { \
-    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = shmem.comm.collTrace+pos; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
     collTrace->bid = blockIdx.x; \
     collTrace->type = ncclCollTraceKernelEndType; \
   }
 #define traceAbort()  { \
-    uint32_t pos = __atomic_fetch_add(shmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = shmem.comm.collTrace+pos; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
     collTrace->bid = blockIdx.x; \
     collTrace->type = ncclCollTraceAbortType; \
   }
 //  traceData(int16_t data2, uint32_t data4, uint64_t data8_0, uint64_t data8_1)
 #define traceData(data2, data4, data8_0, data8_1) { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem->comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem->comm.collTrace+pos; \
+    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->bid = blockIdx.x; \
     collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
     collTrace->funcIndex = data2; \
@@ -408,14 +408,14 @@ struct ncclShmemData {
   struct ncclProf prof;
 #endif
 };
-static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "shmem.work needs to be 16B aligned");
+static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "ncclShmem.work needs to be 16B aligned");
 
 #ifdef ENABLE_PROFILING
 #define __insert_timestamp(line_num) do { \
-      if (shmem.prof.count < PROFILE_NUM_ITEMS) { \
-        shmem.prof.elem[shmem.prof.count].line = line_num; \
-        shmem.prof.elem[shmem.prof.count].timeStamp = __builtin_amdgcn_s_memrealtime(); \
-        shmem.prof.count++; \
+      if (ncclShmem.prof.count < PROFILE_NUM_ITEMS) { \
+        ncclShmem.prof.elem[ncclShmem.prof.count].line = line_num; \
+        ncclShmem.prof.elem[ncclShmem.prof.count].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+        ncclShmem.prof.count++; \
       } \
     } while(0);
 #else
@@ -459,7 +459,7 @@ struct RunWork {
   }
 };
 
-static __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
+static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
   if (we->isUsed && we->redOpArgIsPtr) {
     /* redOpArg is a pointer to the scalar value, so we'll dereference it
      * here so that redOpArg holds the bits of the scalar going forward.
@@ -480,19 +480,17 @@ static __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we) {
   }
 }
 
-extern __device__ struct ncclShmemData *ncclShmem;
+extern __shared__ ncclShmemData ncclShmem;
 
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnIndex, bool COLLTRACE, bool USING_LL128>
-__device__ void ncclKernel(
+__forceinline__ __device__ void ncclKernel(
     struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead
   )  {
   int tid = threadIdx.x;
-  __shared__ struct ncclShmemData shmem;
-  ncclShmem = &shmem;
   if (tid == 0) {
     for (auto i = 0; i < NCCL_MAX_GROUPS; i++) {
-      shmem.groups[i].barrier = 0;
-      for (auto j = 0; j < NCCL_MAX_GROUPS; j++) shmem.groups[i].barrier_next[j] = 0;
+      ncclShmem.groups[i].barrier = 0;
+      for (auto j = 0; j < NCCL_MAX_GROUPS; j++) ncclShmem.groups[i].barrier_next[j] = 0;
     }
   }
   // To map blockId to channelId, we need the n'th set bit of channelMask which
@@ -501,18 +499,18 @@ __device__ void ncclKernel(
     int x = tid;
     if (channelMask & (1ull<<x)) {
       int y = __popcll(channelMask & ((1ull<<x)-1));
-      if (blockIdx.x == y) shmem.channelId = x;
+      if (blockIdx.x == y) ncclShmem.channelId = x;
     }
     if (32 < MAXCHANNELS) {
       x = 32 + tid;
       if (channelMask & (1ull<<x)) {
         int y = __popcll(channelMask & ((1ull<<x)-1));
-        if (blockIdx.x == y) shmem.channelId = x;
+        if (blockIdx.x == y) ncclShmem.channelId = x;
       }
     }
   }
-  __syncthreads(); // publish shmem.channelId
-  int channelId = shmem.channelId;
+  __syncthreads(); // publish ncclShmem.channelId
+  int channelId = ncclShmem.channelId;
 
   if (true) {
     void *dst, *src;
@@ -520,20 +518,20 @@ __device__ void ncclKernel(
     // Use first 3 warps to load comm, channel, and work into shmem
     switch (tid/WARP_SIZE) {
     case 0:
-      dst = &shmem.comm;
+      dst = &ncclShmem.comm;
       src = comm;
       bytes = sizeof(ncclDevComm);
       static_assert(sizeof(ncclDevComm) <= 16*WARP_SIZE, "ncclDevComm cannot be loaded by a single warp in one insn.");
       break;
     case 1:
       // Get address of channel without incurring indirect load from ncclDevComm::channels
-      dst = &shmem.channel;
+      dst = &ncclShmem.channel;
       src = &((ncclDevCommAndChannels*)comm)->channels[channelId];
       bytes = sizeof(ncclDevChannel);
       static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
       break;
     case 2:
-      dst = &shmem.work;
+      dst = &ncclShmem.work;
       src = workHead + blockIdx.x;
       bytes = sizeof(ncclWork);
       static_assert(sizeof(ncclWork) <= 16*WARP_SIZE, "ncclWork cannot be loaded by a single warp in one insn.");
@@ -547,8 +545,8 @@ __device__ void ncclKernel(
   __syncthreads(); // publish shmem
 #ifdef ENABLE_PROFILING
   if (tid == 0) {
-    shmem.prof.count = 0;
-    shmem.prof.seq = shmem.comm.devProf[blockIdx.x].seq;
+    ncclShmem.prof.count = 0;
+    ncclShmem.prof.seq = ncclShmem.comm.devProf[blockIdx.x].seq;
   }
 #endif
   if (tid == 0) __insert_timestamp(__LINE__);
@@ -557,34 +555,34 @@ __device__ void ncclKernel(
 
   while (true) {
     // Notify host that all fifo reads are complete.
-    if (tid == 0 && shmem.work.header.isLast && shmem.work.header.inFifo) {
-      *shmem.channel.workFifoDone = shmem.work.header.doneAcks;
+    if (tid == 0 && ncclShmem.work.header.isLast && ncclShmem.work.header.inFifo) {
+      *ncclShmem.channel.workFifoDone = ncclShmem.work.header.doneAcks;
     }
 
     __syncwarp();
-    if (shmem.work.header.type == ncclWorkTypeColl) {
-      if (tid < NCCL_MAX_WORK_ELEMENTS) ncclRedopPtrDeref(&shmem.work.elems[tid]);
-    } else if (shmem.work.header.type == ncclWorkTypeRegColl) {
-      if (tid < NCCL_MAX_WORK_ELEMENTS_REG) ncclRedopPtrDeref(&shmem.work.regElems[tid].elem);
+    if (ncclShmem.work.header.type == ncclWorkTypeColl) {
+      if (tid < NCCL_MAX_WORK_ELEMENTS) ncclRedopPtrDeref(&ncclShmem.work.elems[tid]);
+    } else if (ncclShmem.work.header.type == ncclWorkTypeRegColl) {
+      if (tid < NCCL_MAX_WORK_ELEMENTS_REG) ncclRedopPtrDeref(&ncclShmem.work.regElems[tid].elem);
     }
     __syncthreads();
 
     if (tid == 0) __insert_timestamp(__LINE__);
-    if (shmem.work.header.funcIndex == FnIndex) {
-      RunWork<Fn, T, RedOp, Algo, Proto>().run(&shmem.work);
+    if (ncclShmem.work.header.funcIndex == FnIndex) {
+      RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     } else {
-      NCCL_CALL_FUNCTIONS<USING_LL128>(shmem.work.header.funcIndex);
+      NCCL_CALL_FUNCTIONS<USING_LL128>(ncclShmem.work.header.funcIndex);
     }
 
-    int workIxNext = shmem.work.header.workNext;
+    int workIxNext = ncclShmem.work.header.workNext;
     __syncthreads();
-    if (shmem.work.header.isLast) break;
+    if (ncclShmem.work.header.isLast) break;
 
-    copyToShmem16(tid, &shmem.work, workHead + workIxNext, sizeof(ncclWork));
+    copyToShmem16(tid, &ncclShmem.work, workHead + workIxNext, sizeof(ncclWork));
 
     { // Check whether the last operation was aborted and make sure all threads exit
       int aborted = tid == 0 ? *comm->abortFlag : 0;
-      if (__any(aborted)) { // publish shmem.work
+      if (__any(aborted)) { // publish ncclShmem.work
         traceAbort();
         break;
       }
@@ -593,10 +591,10 @@ __device__ void ncclKernel(
   }
   if (COLLTRACE && tid == 0) traceKernelEnd();
 #ifdef ENABLE_PROFILING
-  if (shmem.comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
+  if (ncclShmem.comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
     __syncthreads();
-    copyToShmem16(tid, shmem.comm.devProf+MAXCHANNELS*shmem.prof.seq+blockIdx.x, &shmem.prof, sizeof(struct ncclProf));
-    if (tid == 0) shmem.comm.devProf[blockIdx.x].seq++;
+    copyToShmem16(tid, ncclShmem.comm.devProf+MAXCHANNELS*ncclShmem.prof.seq+blockIdx.x, &ncclShmem.prof, sizeof(struct ncclProf));
+    if (tid == 0) ncclShmem.comm.devProf[blockIdx.x].seq++;
   }
 #endif
 }
@@ -626,7 +624,7 @@ __global__ void NCCL_KERN_NAME_LL128_DEBUG(func, algo, proto, devredop, type)(st
 /* Functions for aggregation case */
 #define IMPL_COLL_FUNC(func, algo, proto, devredop, type) \
 __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, devredop, type)() { \
-  RunWork<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto>().run(&ncclShmem->work); \
+  RunWork<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto>().run(&ncclShmem.work); \
 }
 
 // Only generate inline kernels for LL

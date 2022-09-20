@@ -78,7 +78,7 @@ private:
   inline __device__ int checkAbort(int &spins, int i, int send) {
     spins++;
     if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = __atomic_load_n(ncclShmem->comm.abortFlag, __ATOMIC_SEQ_CST);
+      abort = __atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST);
       spins = 0;
     }
     return abort;
@@ -408,11 +408,11 @@ public:
     redOp(redOpArg),
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE),
     flagThread((tid%4)==3), group(group&(uint16_t)0xFFFF),
-    stepSize(ncclShmem->comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)) {
-    barriers = &ncclShmem->groups[this->group].barrier;
-    barrier_next = ncclShmem->groups[this->group].barrier_next;
+    stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)) {
+    barriers = &ncclShmem.groups[this->group].barrier;
+    barrier_next = ncclShmem.groups[this->group].barrier_next;
 
-    auto *channel = &ncclShmem->channel;
+    auto *channel = &ncclShmem.channel;
     int nrecv=0, nsend=0;
     while (nrecv < MaxRecv && recvPeers[nrecv] >= 0) {
       loadRecvConn(&channel->peers[recvPeers[nrecv]].recv[0], nrecv);

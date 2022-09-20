@@ -14,8 +14,8 @@ namespace {
     const int tid = threadIdx.x;
     const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
-    const int nranks = ncclShmem->comm.nRanks;
-    const ncclRing *ring = &ncclShmem->channel.ring;
+    const int nranks = ncclShmem.comm.nRanks;
+    const ncclRing *ring = &ncclShmem.channel.ring;
     const int num_bi_rings = args->pivotA2ANumBiRings;
     const int num_uni_rings = num_bi_rings * 2;
     const int num_chunks = args->nChannels / 2;
@@ -71,7 +71,7 @@ namespace {
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllToAllPivot, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __attribute__((noinline)) void run(ncclWorkElem *args) {
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
     using Proto = ProtoSimple<ALLTOALL_PIVOT_CHUNKSTEPS/ALLTOALL_PIVOT_SLICESTEPS, ALLTOALL_PIVOT_SLICESTEPS>;
     runRing<T, RedOp, Proto>(args);
   }
