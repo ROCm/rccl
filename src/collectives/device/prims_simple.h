@@ -319,9 +319,7 @@ private:
 
         }
         barrier(); // This barrier has a counterpart in following loop
-#if defined(__gfx1030__)
-	if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
-#endif
+	if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && index == 0) __threadfence_system();
 	__syncwarp();
         postPeer<Recv, Send>();
         offset += sliceSize;
@@ -341,9 +339,7 @@ private:
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(0, 0, 0, 0);
       }
       barrier(); // Has couterpart in preceding worker-only loop.
-#if defined(__gfx1030__)
-      if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
-#endif
+      if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
       __syncwarp();
       postPeer<Recv, Send>();
       offset += sliceSize;
