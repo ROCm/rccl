@@ -361,7 +361,7 @@ rocm_export_targets(NAMESPACE
                     rccl
                     DEPENDS
                     hip)
-if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
+if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY AND NOT WIN32)
   #Create wrapper files
   rocm_wrap_header_dir( "${PROJECT_BINARY_DIR}/include/rccl"
             PATTERNS "rccl.h"
