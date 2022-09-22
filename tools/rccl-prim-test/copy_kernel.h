@@ -172,7 +172,6 @@ __device__ void ReduceCopy128bMulti(const int w, const int nw, const int t,
       for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
       for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
     }
-    #pragma unroll 1
     for (int i=MINSRCS; i<MAXSRCS && i<nsrcs; i++) {
       Pack128 vals2[UNROLL];
       for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
@@ -183,7 +182,6 @@ __device__ void ReduceCopy128bMulti(const int w, const int nw, const int t,
     for (int i = 0; i < MINDSTS; i++) {
       for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
     }
-    #pragma unroll 1
     for (int i=MINDSTS; i<MAXDSTS; i++) {
       if (i<ndsts) {
         for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
