@@ -19,6 +19,14 @@
 #define __synclds() \
   asm volatile("s_waitcnt lgkmcnt(0) \n s_barrier");
 
+#if defined(__gfx90a__)
+#define STORE(DST, SRC) \
+  { __threadfence_block(); atomicExch((unsigned long long *)(DST), (SRC)); }
+#else
+#define STORE(DST, SRC) \
+  { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
+#endif
+
 #define NCCL_FUNC5(func, algo, devredop, type, nullify) \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,     devredop, type)), \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,  devredop, type)), \

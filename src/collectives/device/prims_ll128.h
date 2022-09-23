@@ -101,10 +101,10 @@ private:
   }
 
   inline __device__ void postRecv() {
-    if (recvConnHeadPtr) atomicExch_system((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    if (sendConnTailPtr) { __threadfence(); atomicExch_system((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
+    if (sendConnTailPtr) { __threadfence(); STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
   }
 
   template<int WordPerThread>
