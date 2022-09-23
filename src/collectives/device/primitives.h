@@ -23,7 +23,7 @@
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       atomicAdd((unsigned long long *)barriers, 1); \
-      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(8); \
+      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(1); \
       __asm__ __volatile__("s_wakeup"); \
     } \
   } \

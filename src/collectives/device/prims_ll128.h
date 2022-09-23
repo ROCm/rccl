@@ -88,7 +88,7 @@ private:
     if (sendConnHeadPtr) {
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
-        __builtin_amdgcn_s_sleep(8);
+        __builtin_amdgcn_s_sleep(1);
         sendConnHeadCache = atomicAdd_system((unsigned long long *)sendConnHeadPtr, 0);
         if (checkAbort(spins, wid, 1)) break;
       }
