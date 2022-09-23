@@ -19,6 +19,16 @@
 #define __synclds() \
   asm volatile("s_waitcnt lgkmcnt(0) \n s_barrier");
 
+#if defined(__gfx90a__)
+#define STORE(DST, SRC) __threadfence_block(); atomicExch((unsigned long long *)(DST), (SRC))
+#define STORE32(DST, SRC) __threadfence_block(); atomicExch((unsigned int *)(DST), (SRC))
+#define THREADFENCE_SYSTEM() __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0); buffer_wbinvl1_vol")
+#else
+#define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+#define STORE32(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+#define THREADFENCE_SYSTEM() __threadfence_system()
+#endif
+
 #define NCCL_FUNC5(func, algo, devredop, type, nullify) \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,     devredop, type)), \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,  devredop, type)), \

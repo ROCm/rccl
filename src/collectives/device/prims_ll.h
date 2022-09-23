@@ -106,7 +106,7 @@ private:
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        __atomic_store_n((sendConnFifoPtr+sendConnHead%NCCL_STEPS), (size), __ATOMIC_SEQ_CST);
+        STORE(sendConnFifoPtr+sendConnHead%NCCL_STEPS, (size));
       }
       sendConnHead += 1;
     }
@@ -124,7 +124,7 @@ private:
   }
   inline __device__ void postRecv() {
     barrier();
-    if (recvConnHeadPtr) atomicExch_system((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
 
   inline __device__ void incSend(int i, int offset) {

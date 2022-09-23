@@ -94,17 +94,17 @@ private:
       }
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
-        __atomic_store_n(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes, __ATOMIC_SEQ_CST);
+        STORE(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes);
       }
       sendConnHead += 1;
     }
   }
 
   inline __device__ void postRecv() {
-    if (recvConnHeadPtr) atomicExch_system((unsigned long long *)recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    if (sendConnTailPtr) { __threadfence(); atomicExch_system((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
+    if (sendConnTailPtr) { __threadfence(); STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
   }
 
   template<int WordPerThread>

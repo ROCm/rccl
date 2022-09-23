@@ -116,7 +116,7 @@ private:
 
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
       if (isSendNotRecv && (flags & SizesFifoEnabled))
-        __atomic_store_n((connSizesFifoPtr+step%NCCL_STEPS), nelts*sizeof(T), __ATOMIC_SEQ_CST);
+        STORE(connSizesFifoPtr+step%NCCL_STEPS, nelts*sizeof(T));
 
       void **ptrs = isSendNotRecv ? (ncclShmem.groups[group].dsts + Dst)
                                   : (ncclShmem.groups[group].srcs + Src);
@@ -149,15 +149,11 @@ private:
   template<int Recv, int Send>
   inline __device__ void postPeer() {
     if ((flags & Send*RolePostSend) && next_hdp_reg)
-      atomicExch_system(next_hdp_reg, 0x1);
+      STORE32(next_hdp_reg, 0x1);
 
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
-#if defined(__gfx90a__)
-      atomicExch_system((unsigned long long *)connStepPtr, step);
-#else
-      __atomic_store_n(connStepPtr, step, __ATOMIC_SEQ_CST);
-#endif
+      STORE(connStepPtr, step);
     }
   }
 
@@ -322,12 +318,8 @@ private:
 
         }
         barrier(); // This barrier has a counterpart in following loop
-#if defined(__gfx90a__)
-        if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && index == 0) __threadfence_system();
-#else
-        if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
-#endif
-	__syncwarp();
+        if (Send && (flags & RolePostSend) && index == 0) THREADFENCE_SYSTEM();
+        __syncwarp();
         postPeer<Recv, Send>();
         offset += sliceSize;
         slice += 1;
@@ -345,11 +337,7 @@ private:
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(0, 0, 0, 0);
       }
       barrier(); // Has couterpart in preceding worker-only loop.
-#if defined(__gfx90a__)
-      if ((MaxSend == 0 || MaxRecv == 0) && Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
-#else
-      if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
-#endif
+      if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) THREADFENCE_SYSTEM();
       __syncwarp();
       postPeer<Recv, Send>();
       offset += sliceSize;
@@ -419,7 +407,7 @@ private:
       barrier();
       // If we indeed send something, threadfence
       if (Send && (flags & RolePostSend) && ncclShmem.groups[group].totalSendSize[slice] > 0 && index == 0)
-        __threadfence_system();
+        THREADFENCE_SYSTEM();
       __syncwarp();
       postPeer<Recv, Send>();
       offset += realSize;
@@ -433,7 +421,7 @@ private:
       step = roundUp(step, SlicePerChunk*StepPerSlice);
       if (flags & RolePostRecv) {
         connStepPtr = conn->head;
-        atomicExch_system((unsigned long long *)connStepPtr, step); // Return credits in case we rounded up.
+        STORE(connStepPtr, step); // Return credits in case we rounded up.
       }
       if (flags & RoleWaitRecv) {
         ncclShmem.groups[group].recvConns[index] = conn; // WaitRecv role saves since that's who needs it in setDataPtrs()
