@@ -297,7 +297,7 @@ private:
       }
     }
 
-#if !defined(__gfx1030__)
+#if !defined(__gfx1030__) && !defined(__gfx1100__) && !defined(__gfx1101__) && !defined(__gfx1102__)
     if (tid == 0) __asm__ __volatile__("buffer_wbinvl1_vol");
 #endif
     /************************ Send **************************/
