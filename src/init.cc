@@ -1042,7 +1042,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   if (comm->topo->pivotA2ANumBiRings == 3) {
     NCCLCHECK(ncclTreeBasePostset(comm, &treeGraph));
-    NCCLCHECK(ncclBinaryTreePostset(comm, &treeGraph));
+    if (comm->virtualId == -1) {
+      NCCLCHECK(ncclBinaryTreeHayabusaPostset(comm, &treeGraph));
+    } else {
+      NCCLCHECK(ncclBinaryTreePostset(comm, &treeGraph));
+    }
   }
 
   free(allTopoRanks);

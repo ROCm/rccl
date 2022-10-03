@@ -163,6 +163,203 @@ ncclResult_t ncclBinaryTreePostset(struct ncclComm* comm,
   return ncclSuccess;
 }
 
+#define NUM_HAYABUSA_TREES 2
+static bool hayabusa_tree_matrix_is_init=false;
+static int hayabusa_tree_matrix[NUM_HAYABUSA_TREES][16][4];
+
+static void hayabusa_tree_matrix_init()
+{
+  if (hayabusa_tree_matrix_is_init)
+    return;
+
+  // index = rank of proc, child0, child1, child2, parent
+  // channel  0: root is 15
+  hayabusa_tree_matrix[0][0][0]  = 1;
+  hayabusa_tree_matrix[0][0][1]  = -1;
+  hayabusa_tree_matrix[0][0][2]  = -1;
+  hayabusa_tree_matrix[0][0][3]  = 4;
+
+  hayabusa_tree_matrix[0][1][0]  = -1;
+  hayabusa_tree_matrix[0][1][1]  = -1;
+  hayabusa_tree_matrix[0][1][2]  = -1;
+  hayabusa_tree_matrix[0][1][3]  = 0;
+
+  hayabusa_tree_matrix[0][2][0]  = 3;
+  hayabusa_tree_matrix[0][2][1]  = -1;
+  hayabusa_tree_matrix[0][2][2]  = -1;
+  hayabusa_tree_matrix[0][2][3]  = 6;
+
+  hayabusa_tree_matrix[0][3][0]  = -1;
+  hayabusa_tree_matrix[0][3][1]  = -1;
+  hayabusa_tree_matrix[0][3][2]  = -1;
+  hayabusa_tree_matrix[0][3][3]  = 2;
+
+  hayabusa_tree_matrix[0][4][0]  = 0;
+  hayabusa_tree_matrix[0][4][1]  = -1;
+  hayabusa_tree_matrix[0][4][2]  = -1;
+  hayabusa_tree_matrix[0][4][3]  = 5;
+
+  hayabusa_tree_matrix[0][5][0]  = 4;
+  hayabusa_tree_matrix[0][5][1]  = -1;
+  hayabusa_tree_matrix[0][5][2]  = -1;
+  hayabusa_tree_matrix[0][5][3]  = 14;
+
+  hayabusa_tree_matrix[0][6][0]  = 2;
+  hayabusa_tree_matrix[0][6][1]  = 7;
+  hayabusa_tree_matrix[0][6][2]  = -1;
+  hayabusa_tree_matrix[0][6][3]  = 14;
+
+  hayabusa_tree_matrix[0][7][0]  = -1;
+  hayabusa_tree_matrix[0][7][1]  = -1;
+  hayabusa_tree_matrix[0][7][2]  = -1;
+  hayabusa_tree_matrix[0][7][3]  = 6;
+
+  hayabusa_tree_matrix[0][8][0]  = -1;
+  hayabusa_tree_matrix[0][8][1]  = -1;
+  hayabusa_tree_matrix[0][8][2]  = -1;
+  hayabusa_tree_matrix[0][8][3]  = 9;
+
+  hayabusa_tree_matrix[0][9][0]  = 13;
+  hayabusa_tree_matrix[0][9][1]  = 8;
+  hayabusa_tree_matrix[0][9][2]  = -1;
+  hayabusa_tree_matrix[0][9][3]  = 11;
+
+  hayabusa_tree_matrix[0][10][0] = -1;
+  hayabusa_tree_matrix[0][10][1] = -1;
+  hayabusa_tree_matrix[0][10][2] = -1;
+  hayabusa_tree_matrix[0][10][3] = 11;
+
+  hayabusa_tree_matrix[0][11][0] = 9;
+  hayabusa_tree_matrix[0][11][1] = 10;
+  hayabusa_tree_matrix[0][11][2] = -1;
+  hayabusa_tree_matrix[0][11][3] = 15;
+
+  hayabusa_tree_matrix[0][12][0] = -1;
+  hayabusa_tree_matrix[0][12][1] = -1;
+  hayabusa_tree_matrix[0][12][2] = -1;
+  hayabusa_tree_matrix[0][12][3] = 13;
+
+  hayabusa_tree_matrix[0][13][0] = 12;
+  hayabusa_tree_matrix[0][13][1] = -1;
+  hayabusa_tree_matrix[0][13][2] = -1;
+  hayabusa_tree_matrix[0][13][3] = 9;
+
+  hayabusa_tree_matrix[0][14][0] = 5;
+  hayabusa_tree_matrix[0][14][1] = 6;
+  hayabusa_tree_matrix[0][14][2] = -1;
+  hayabusa_tree_matrix[0][14][3] = 15;
+
+  hayabusa_tree_matrix[0][15][0] = 14;
+  hayabusa_tree_matrix[0][15][1] = 11;
+  hayabusa_tree_matrix[0][15][2] = -1;
+  hayabusa_tree_matrix[0][15][3] = -1;
+
+  //Channel 1: root is 6
+  hayabusa_tree_matrix[1][0][0]  = -1;
+  hayabusa_tree_matrix[1][0][1]  = -1;
+  hayabusa_tree_matrix[1][0][2]  = -1;
+  hayabusa_tree_matrix[1][0][3]  = 1;
+
+  hayabusa_tree_matrix[1][1][0]  = 5;
+  hayabusa_tree_matrix[1][1][1]  = 0;
+  hayabusa_tree_matrix[1][1][2]  = -1;
+  hayabusa_tree_matrix[1][1][3]  = 3;
+
+  hayabusa_tree_matrix[1][2][0]  = -1;
+  hayabusa_tree_matrix[1][2][1]  = -1;
+  hayabusa_tree_matrix[1][2][2]  = -1;
+  hayabusa_tree_matrix[1][2][3]  = 3;
+
+  hayabusa_tree_matrix[1][3][0]  = 1;
+  hayabusa_tree_matrix[1][3][1]  = 2;
+  hayabusa_tree_matrix[1][3][2]  = -1;
+  hayabusa_tree_matrix[1][3][3]  = 7;
+
+  hayabusa_tree_matrix[1][4][0]  = -1;
+  hayabusa_tree_matrix[1][4][1]  = -1;
+  hayabusa_tree_matrix[1][4][2]  = -1;
+  hayabusa_tree_matrix[1][4][3]  = 5;
+
+  hayabusa_tree_matrix[1][5][0]  = 4;
+  hayabusa_tree_matrix[1][5][1]  = -1;
+  hayabusa_tree_matrix[1][5][2]  = -1;
+  hayabusa_tree_matrix[1][5][3]  = 1;
+
+  hayabusa_tree_matrix[1][6][0]  = 7;
+  hayabusa_tree_matrix[1][6][1]  = 13;
+  hayabusa_tree_matrix[1][6][2]  = -1;
+  hayabusa_tree_matrix[1][6][3]  = -1;
+
+  hayabusa_tree_matrix[1][7][0]  = 3;
+  hayabusa_tree_matrix[1][7][1]  = 15;
+  hayabusa_tree_matrix[1][7][2]  = -1;
+  hayabusa_tree_matrix[1][7][3]  = 6;
+
+  hayabusa_tree_matrix[1][8][0]  = 9;
+  hayabusa_tree_matrix[1][8][1]  = -1;
+  hayabusa_tree_matrix[1][8][2]  = -1;
+  hayabusa_tree_matrix[1][8][3]  = 12;
+
+  hayabusa_tree_matrix[1][9][0]  = -1;
+  hayabusa_tree_matrix[1][9][1]  = -1;
+  hayabusa_tree_matrix[1][9][2]  = -1;
+  hayabusa_tree_matrix[1][9][3]  = 8;
+
+  hayabusa_tree_matrix[1][10][0] = -1;
+  hayabusa_tree_matrix[1][10][1] = -1;
+  hayabusa_tree_matrix[1][10][2] = -1;
+  hayabusa_tree_matrix[1][10][3] = 11;
+
+  hayabusa_tree_matrix[1][11][0] = 10;
+  hayabusa_tree_matrix[1][11][1] = -1;
+  hayabusa_tree_matrix[1][11][2] = -1;
+  hayabusa_tree_matrix[1][11][3] = 15;
+
+  hayabusa_tree_matrix[1][12][0] = 8;
+  hayabusa_tree_matrix[1][12][1] = -1;
+  hayabusa_tree_matrix[1][12][2] = -1;
+  hayabusa_tree_matrix[1][12][3] = 13;
+
+  hayabusa_tree_matrix[1][13][0] = 12;
+  hayabusa_tree_matrix[1][13][1] = -1;
+  hayabusa_tree_matrix[1][13][2] = -1;
+  hayabusa_tree_matrix[1][13][3] = 6;
+
+  hayabusa_tree_matrix[1][14][0] = -1;
+  hayabusa_tree_matrix[1][14][1] = -1;
+  hayabusa_tree_matrix[1][14][2] = -1;
+  hayabusa_tree_matrix[1][14][3] = 15;
+
+  hayabusa_tree_matrix[1][15][0] = 11;
+  hayabusa_tree_matrix[1][15][1] = 14;
+  hayabusa_tree_matrix[1][15][2] = -1;
+  hayabusa_tree_matrix[1][15][3] = 7;
+
+  hayabusa_tree_matrix_is_init = true;
+}
+
+static void set_channel_info(int c, int rank, struct ncclChannel *channel)
+{
+  channel->binTree.down[0] = hayabusa_tree_matrix[c%NUM_HAYABUSA_TREES][rank][0];
+  channel->binTree.down[1] = hayabusa_tree_matrix[c%NUM_HAYABUSA_TREES][rank][1];
+  channel->binTree.down[2] = hayabusa_tree_matrix[c%NUM_HAYABUSA_TREES][rank][2];
+  channel->binTree.up      = hayabusa_tree_matrix[c%NUM_HAYABUSA_TREES][rank][3];
+}
+
+ncclResult_t ncclBinaryTreeHayabusaPostset(struct ncclComm* comm,
+    struct ncclTopoGraph* treeGraph) {
+  int nChannels = comm->nChannels;
+
+  hayabusa_tree_matrix_init();
+
+  for (int c=0; c<nChannels; c++) {
+    struct ncclChannel* channel = comm->channels+c;
+
+    set_channel_info(c, comm->localRank, channel);
+  }
+
+  return ncclSuccess;
+}
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
