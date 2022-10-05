@@ -1224,7 +1224,7 @@ comp_next:
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
   if (info->comm->topo->pivotA2ANumBiRings == 3 ) {
-    if (ncclTypeSize(info->datatype)*info->count > 65536) {
+    if (ncclTypeSize(info->datatype)*info->count > 131072) {
       work->pad_0 = 1;
     } else {
       work->pad_0 = 2;
