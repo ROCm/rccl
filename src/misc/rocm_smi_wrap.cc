@@ -42,6 +42,28 @@ ncclResult_t rocm_smi_init() {
   return ncclSuccess;
 }
 
+ncclResult_t rocm_smi_getNumDevice(uint32_t* num_devs) {
+  ROCMSMICHECK(rsmi_num_monitor_devices(num_devs));
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId, size_t len) {
+  uint64_t id;
+  ROCMSMICHECK(rsmi_dev_pci_id_get(deviceIndex, &id));
+  /** rocm_smi's bus ID format
+   *  | Name     | Field   |
+   *  ---------- | ------- |
+   *  | Domain   | [64:32] |
+   *  | Reserved | [31:16] |
+   *  | Bus      | [15: 8] |
+   *  | Device   | [ 7: 3] |
+   *  | Function | [ 2: 0] |
+   **/
+  snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id) >> 32, (id & 0xff00) >> 8, (id & 0xf0) >> 4, (id & 0x3));
+  return ncclSuccess;
+}
+
+
 ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* deviceIndex) {
   uint32_t i, num_devs = 0;
   int64_t busid;
@@ -74,15 +96,7 @@ ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* d
   }
 }
 
-ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *count) {
-  char srcStr[] = "00000000:00:00.0", dstStr[] = "00000000:00:00.0";
-  uint32_t srcIndex, dstIndex;
-
-  CUDACHECK(hipDeviceGetPCIBusId(srcStr, sizeof(srcStr), srcDev));
-  CUDACHECK(hipDeviceGetPCIBusId(dstStr, sizeof(dstStr), dstDev));
-  NCCLCHECK(rocm_smi_getDeviceIndexByPciBusId(srcStr, &srcIndex));
-  NCCLCHECK(rocm_smi_getDeviceIndexByPciBusId(dstStr, &dstIndex));
-
+ncclResult_t rocm_smi_getLinkInfo(int srcIndex, int dstIndex, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *count) {
   uint64_t rsmi_hops, rsmi_weight;
   ROCMSMICHECK(rsmi_topo_get_link_type(srcIndex, dstIndex, &rsmi_hops, rsmi_type));
   ROCMSMICHECK(rsmi_topo_get_link_weight(srcIndex, dstIndex, &rsmi_weight));
