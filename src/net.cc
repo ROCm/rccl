@@ -1,3 +1,10 @@
+/*************************************************************************
+ * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * See LICENSE.txt for license information
+ ************************************************************************/
+
 #include "net.h"
 #include "bootstrap.h"
 #include "checks.h"
