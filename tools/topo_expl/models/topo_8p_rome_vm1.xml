@@ -1,3 +1,7 @@
+<!-------------------------------------------------------------------------
+ - Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ - See LICENSE.txt for license information
+ ------------------------------------------------------------------------->
 <system version="2">
   <cpu numaid="0" affinity="000000,00000000,00000000,3fffffff" arch="x86_64" vendor="AuthenticAMD" familyid="143" modelid="49">
     <pci busid="0001:00:00.0" class="0x038000" vendor="0x1002" device="0x738c" subsystem_vendor="0x1002" subsystem_device="0x0c34" link_speed="16 GT/s" link_width="16">
