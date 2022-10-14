@@ -101,7 +101,7 @@ if(BUILD_TESTS)
   # through -l and -L instead of command line input.
   if(BUILD_STATIC)
     add_dependencies(UnitTests rccl)
-    target_link_libraries(UnitTests PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR} -lrocm_smi64 -L${ROCM_PATH}/rocm_smi/lib)
+    target_link_libraries(UnitTests PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR} -lrocm_smi64 -L${ROCM_PATH}/lib -L${ROCM_PATH}/rocm_smi/lib)
   else()
     target_link_libraries(UnitTests PRIVATE rccl)
   endif()
