@@ -1,3 +1,8 @@
+/*************************************************************************
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ ************************************************************************/
+
 #include <chrono>
 #include <fstream>
 #include <unistd.h>
@@ -53,6 +58,8 @@ ncclResult_t NpKit::Init(int rank) {
 
   // Init timestamp
   NCCLCHECK(ncclCudaHostCalloc(&cpu_timestamp_, 1));
+  volatile uint64_t* volatile_cpu_timestamp = cpu_timestamp_;
+  *volatile_cpu_timestamp = std::chrono::system_clock::now().time_since_epoch().count();
   cpu_timestamp_update_thread_should_stop_ = false;
   cpu_timestamp_update_thread_ = new std::thread(CpuTimestampUpdateThread);
 

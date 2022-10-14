@@ -15,6 +15,9 @@
 #include "profiler.h"
 #include "graph.h"
 #include "graph/topo.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit.h"
+#endif
 
 static_assert(sizeof(ncclNetHandle_t) <= CONNECT_SIZE, "NET Connect info is too large");
 
@@ -831,7 +834,16 @@ static ncclResult_t recvProxyFree(struct ncclProxyConnection* connection, struct
 
 static_assert(NCCL_STEPS <= NCCL_NET_MAX_REQUESTS, "Not enough net requests to cover for steps");
 
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+static int g_npkit_net_poll_cnt = 0;
+#endif
+
 static ncclResult_t sendProxyProgress(struct ncclComm* comm, struct ncclProxyArgs* args) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+  g_npkit_net_poll_cnt++;
+#endif
+
   if (args->state == ncclProxyOpReady) {
     for (int s=0; s<args->nsubs; s++) {
       struct ncclProxySubArgs* sub = args->subs+s;
@@ -885,6 +897,11 @@ static ncclResult_t sendProxyProgress(struct ncclComm* comm, struct ncclProxyArg
         if (sizesFifo[buffSlot] != -1 && ((*recvTail > (sub->base+sub->transmitted)) || p == NCCL_PROTO_LL)) {
           // We have something to receive, let's check if it's completely ready.
           int size = sizesFifo[buffSlot];
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
+          sub->npKitSizesFifo[buffSlot] = size;
+#endif
+
           char* buff = resources->shared ? localBuff+resources->recvMem->offsFifo[buffSlot] : localBuff+buffSlot*stepSize;
           int ready = 1;
           if (p == NCCL_PROTO_LL128) {
@@ -919,6 +936,22 @@ static ncclResult_t sendProxyProgress(struct ncclComm* comm, struct ncclProxyArg
             // Data is ready, try to send.
             NCCLCHECK(ncclNetIsend(comm, resources->netSendComm, buff, size, resources->rank, mhandle, sub->requests+buffSlot));
             if (sub->requests[buffSlot] != NULL) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
+              NpKit::CollectCpuEvent(
+                  NPKIT_EVENT_NET_SEND_ENTRY,
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+                  g_npkit_net_poll_cnt,
+#else
+                  size,
+#endif
+                  uint64_t(sub->requests+buffSlot)/sizeof(void*),
+                  *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+              g_npkit_net_poll_cnt = 0;
+#endif
+#endif
+
               TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
               sizesFifo[buffSlot] = -1;
               // Make sure size is reset to zero before we update the head.
@@ -937,6 +970,22 @@ static ncclResult_t sendProxyProgress(struct ncclComm* comm, struct ncclProxyArg
         int buffSlot = (sub->base+sub->done)%NCCL_STEPS;
         NCCLCHECK(ncclNetTest(comm, sub->requests[buffSlot], &done, NULL));
         if (done) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
+          NpKit::CollectCpuEvent(
+              NPKIT_EVENT_NET_SEND_EXIT,
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+              g_npkit_net_poll_cnt,
+#else
+              sub->npKitSizesFifo[buffSlot],
+#endif
+              uint64_t(sub->requests+buffSlot)/sizeof(void*),
+              *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+          g_npkit_net_poll_cnt = 0;
+#endif
+#endif
+
           TRACE(NCCL_NET, "sendProxy [%ld/%d] request %p done", sub->done, buffSlot, sub->requests[buffSlot]);
           sub->done += args->sliceSteps;
           for (uint64_t step=sub->done-args->sliceSteps; step<sub->done; step++) ncclProfilingRecord(args, s, step, ncclProxyProfileEnd);
@@ -962,6 +1011,11 @@ static ncclResult_t sendProxyProgress(struct ncclComm* comm, struct ncclProxyArg
 }
 
 static ncclResult_t recvProxyProgress(struct ncclComm* comm, struct ncclProxyArgs* args) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+  g_npkit_net_poll_cnt++;
+#endif
+
   if (args->state == ncclProxyOpReady) {
     // Initialize subs and group them by same recvComm.
     void* recvComm;
@@ -1043,6 +1097,22 @@ static ncclResult_t recvProxyProgress(struct ncclComm* comm, struct ncclProxyArg
         if (*requestPtr) {
           for (int i=0; i<subGroup->groupSize; i++) {
             struct ncclProxySubArgs* sub = subGroup+i;
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_RECV_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_RECV_EXIT)
+            NpKit::CollectCpuEvent(
+                NPKIT_EVENT_NET_RECV_ENTRY,
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+                g_npkit_net_poll_cnt,
+#else
+                sizes[i],
+#endif
+                uint64_t(sub->requests+(step%NCCL_STEPS))/sizeof(void*),
+                *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+            g_npkit_net_poll_cnt = 0;
+#endif
+#endif
+
             sub->posted += args->sliceSteps;
             for (uint64_t step=sub->posted-args->sliceSteps; step<sub->posted; step++) ncclProfilingRecord(args, s+i, step, ncclProxyProfileRecvWait);
           }
@@ -1068,6 +1138,22 @@ static ncclResult_t recvProxyProgress(struct ncclComm* comm, struct ncclProxyArg
           for (int i=0; i<NCCL_PROXY_MAX_SUBS; i++) totalSize += sizes[i];
           for (int i=0; i<subGroup->groupSize; i++) {
             struct ncclProxySubArgs* sub = subGroup + i;
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_RECV_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_RECV_EXIT)
+            NpKit::CollectCpuEvent(
+                NPKIT_EVENT_NET_RECV_EXIT,
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+                g_npkit_net_poll_cnt,
+#else
+                sizes[i],
+#endif
+                uint64_t(sub->requests+(step%NCCL_STEPS))/sizeof(void*),
+                *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+            g_npkit_net_poll_cnt = 0;
+#endif
+#endif
+
             sub->received += args->sliceSteps;
             for (uint64_t step=sub->received-args->sliceSteps; step<sub->received; step++) ncclProfilingRecord(args, s+i, step, ncclProxyProfileRecvFlushWait);
             if (step < sub->nsteps) {
