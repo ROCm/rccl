@@ -1,7 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
  *
-b
  * See LICENSE.txt for license information
  ************************************************************************/
 #pragma once
