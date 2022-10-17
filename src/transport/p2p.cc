@@ -121,7 +121,7 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
   int cudaDev1 = busIdToCudaDev(info1->busId);
   int cudaDev2 = busIdToCudaDev(info2->busId);
   if (cudaDev1 == -1 || cudaDev2 == -1) {
-#if CUDART_VERSION >= 10010
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__) || CUDART_VERSION >= 10010
     // CUDA 10.1 and later can use P2P with invisible devices.
     return ncclSuccess;
 #else
