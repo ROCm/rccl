@@ -1078,11 +1078,19 @@ ncclResult_t rocm_smi_init() {
   return ncclSuccess;
 }
 
+ncclResult_t rocm_smi_getNumDevice(uint32_t* num_devs) {
+  return ncclSuccess;
+}
+
+ncclResult_t rocm_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId, size_t len) {
+  return ncclSuccess;
+}
+
 ncclResult_t rocm_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* deviceIndex) {
   return ncclSuccess;
 }
 
-ncclResult_t rocm_smi_getLinkInfo(int srcDev, int dstDev, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *bw) {
+ncclResult_t rocm_smi_getLinkInfo(int srcIndex, int dstIndex, RSMI_IO_LINK_TYPE* rsmi_type, int *hops, int *count) {
   return ncclSuccess;
 }
 
