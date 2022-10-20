@@ -178,6 +178,7 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   req.channelId = channelId;
   req.connIndex = connIndex;
   req.curr_hdp_reg = 0;
+  req.netDev = -1;
 
   int proxyRank = myInfo->rank;
   if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &req.netDev));
@@ -218,6 +219,7 @@ static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   recv->conn.shared = req.shared = graph ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
   req.channelId = channelId;
   req.connIndex = connIndex;
+  req.netDev = -1;
 
   // Use myInfo->rank as the receiver uses its own NIC
   int proxyRank = myInfo->rank;
