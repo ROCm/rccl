@@ -117,6 +117,14 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
     return ncclSuccess;
   }
 
+  // Check if NET would work better
+  int useNet = 0;
+  NCCLCHECK(ncclTopoCheckNet(topo, info1->busId, info2->busId, &useNet));
+  if (useNet) {
+    *ret = 0;
+    return ncclSuccess;
+  }
+
   // Convert the peer's busId into a local cudaDev index (cf. CUDA_VISIBLE_DEVICES)
   int cudaDev1 = busIdToCudaDev(info1->busId);
   int cudaDev2 = busIdToCudaDev(info2->busId);
@@ -258,17 +266,17 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     info->rank = myInfo->rank;
     if (myInfo->pidHash == peerInfo->pidHash && useMemcpy == 0) {
       if (ncclParamP2pDirectDisable() == 0) send->conn.direct |= info->read ? NCCL_DIRECT_READ : NCCL_DIRECT_WRITE;
-      INFO(NCCL_INIT|NCCL_P2P, "Channel %02d : %d[%lx] -> %d[%lx] via P2P/direct pointer%s comm %p nRanks %02d",
-          channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, comm, comm->nRanks);
+      INFO(NCCL_INIT|NCCL_P2P, "Channel %02d/%01d : %d[%lx] -> %d[%lx] via P2P/direct pointer%s comm %p nRanks %02d",
+          channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, comm, comm->nRanks);
     } else {
       send->conn.direct |= info->read ? NCCL_IPC_READ : NCCL_IPC_WRITE;
-      INFO(NCCL_INIT|NCCL_P2P,"Channel %02d : %d[%lx] -> %d[%lx] via P2P/IPC%s%s comm %p nRanks %02d",
-          channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, useMemcpy ? "/CE" : "", comm, comm->nRanks);
+      INFO(NCCL_INIT|NCCL_P2P,"Channel %02d/%01d : %d[%lx] -> %d[%lx] via P2P/IPC%s%s comm %p nRanks %02d",
+          channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, useMemcpy ? "/CE" : "", comm, comm->nRanks);
     }
   } else {
     info->rank = intermediateRank;
-    INFO(NCCL_INIT|NCCL_P2P, "Channel %02d : %d[%lx] -> %d[%lx] via P2P/indirect/%d[%lx]%s comm %p nRanks %02d",
-        channelId, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, intermediateRank,
+    INFO(NCCL_INIT|NCCL_P2P, "Channel %02d/%01d : %d[%lx] -> %d[%lx] via P2P/indirect/%d[%lx]%s comm %p nRanks %02d",
+        channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, intermediateRank,
 	comm->peerInfo[intermediateRank].busId, useReadStr, comm, comm->nRanks);
   }
 
@@ -402,20 +410,24 @@ ncclResult_t p2pRecvConnect(struct ncclComm* comm, struct ncclConnect* connectIn
 
 ncclResult_t p2pSendFree(struct ncclConnector* send) {
   struct p2pSendResources* resources = (struct p2pSendResources*)send->transportResources;
-  if (resources->sendMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->sendMemIpc));
-  if (resources->recvMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->recvMemIpc));
-  free(resources);
+  if (resources) {
+    if (resources->sendMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->sendMemIpc));
+    if (resources->recvMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->recvMemIpc));
+    free(resources);
+  }
   return ncclSuccess;
 }
 
 ncclResult_t p2pRecvFree(struct ncclConnector* recv) {
   struct p2pRecvResources* resources = (struct p2pRecvResources*)recv->transportResources;
-  if (resources->sendMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->sendMemIpc));
-  if (resources->recvMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->recvMemIpc));
-  if (useMemcpy) {
-    NCCLCHECK(ncclShmClose(resources->shm, resources->devShm, resources->shmSize));
+  if (resources) {
+    if (resources->sendMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->sendMemIpc));
+    if (resources->recvMemIpc) CUDACHECK(hipIpcCloseMemHandle(resources->recvMemIpc));
+    if (useMemcpy) {
+      NCCLCHECK(ncclShmClose(resources->shm, resources->devShm, resources->shmSize));
+    }
+    free(resources);
   }
-  free(resources);
   return ncclSuccess;
 }
 
@@ -492,14 +504,16 @@ static ncclResult_t p2pSendProxyConnect(struct ncclProxyConnection* connection, 
 static ncclResult_t p2pSendProxyFree(struct ncclProxyConnection* connection, struct ncclComm* comm) {
   if (useMemcpy) {
     struct p2pProxyInfo* proxyInfo = (struct p2pProxyInfo*)connection->transportResources;
-    NCCLCHECK(ncclShmClose(proxyInfo->shm, proxyInfo->devShm, proxyInfo->shmSize));
-    NCCLCHECK(ncclCudaHostFree(proxyInfo->ceRecvMem));
-    CUDACHECK(hipFree(proxyInfo->ceDevBuff));
-    CUDACHECK(hipStreamDestroy(proxyInfo->stream));
-    for (int i=0; i<NCCL_STEPS; i++) {
-      CUDACHECK(hipEventDestroy(proxyInfo->events[i]));
+    if (proxyInfo) {
+      NCCLCHECK(ncclShmClose(proxyInfo->shm, proxyInfo->devShm, proxyInfo->shmSize));
+      NCCLCHECK(ncclCudaHostFree(proxyInfo->ceRecvMem));
+      CUDACHECK(hipFree(proxyInfo->ceDevBuff));
+      CUDACHECK(hipStreamDestroy(proxyInfo->stream));
+      for (int i=0; i<NCCL_STEPS; i++) {
+        CUDACHECK(hipEventDestroy(proxyInfo->events[i]));
+      }
+      free(proxyInfo);
     }
-    free(proxyInfo);
   } else {
     // Do not check return code as CUDA may have already shut down
     hipFree(connection->transportResources);

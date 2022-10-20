@@ -23,7 +23,8 @@ typedef enum : uint8_t {
   ncclPatternTreeUp,
   ncclPatternTreeDown,
   ncclPatternTreeUpDown,
-  ncclPatternCollTreeUpDown,
+  ncclPatternCollnetChain,
+  ncclPatternCollnetDirect,
   ncclPatternSend,
   ncclPatternRecv
 } ncclPattern_t;

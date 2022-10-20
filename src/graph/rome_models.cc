@@ -721,7 +721,7 @@ newchannel:
   } while (str[offset++] != 0);
 end:
   graph->nChannels = nChannels;
-  graph->speedIntra = graph->speedInter = system->maxWidth;
+  graph->bwIntra = graph->bwInter = system->maxBw;
   if (graph->id == 1) {
     for (int i=0; i<graph->nChannels; i++) {
       int net;
@@ -1031,7 +1031,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
       }
       if (!link->remNode) continue;
       if (link->type != LINK_NVL) continue;
-      romeTopo->connMatrix[i*romeTopo->nGpus+n] = link->width/ncclTopoXGMISpeed(node->gpu.gcn);
+      romeTopo->connMatrix[i*romeTopo->nGpus+n] = link->bw/ncclTopoXGMISpeed(node->gpu.gcn);
       count ++;
     }
     if (romeTopo->nLinks < count) romeTopo->nLinks = count;

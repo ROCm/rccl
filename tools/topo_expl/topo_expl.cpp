@@ -224,6 +224,7 @@ int main(int argc,char* argv[])
     comm[i].topo = node_model->getSystem(i);
     comm[i].peerInfo = peerInfo;
     comm[i].ncclNet = ncclNet;
+    comm[i].virtualId = -1;
     // Mark channels as non initialized.
     for (int c=0; c<MAXCHANNELS; c++) comm[i].channels[c].id = -1;
     NCCLCHECK(fillInfo(&comm[i], comm[i].peerInfo+comm[i].rank, 0));

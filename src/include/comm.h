@@ -107,8 +107,9 @@ struct ncclChannel {
   struct ncclRing ring;
   int* devRingUserRanks;
   struct ncclTree tree;
+  struct ncclTree collnetChain;
+  struct ncclDirect collnetDirect;
   struct ncclTree binTree;
-  struct ncclDirect collTree;
   int id; // index of this channel
   uint32_t workFifoSent; // last used work index+1
   uint64_t p2pOpCount;
@@ -134,6 +135,7 @@ struct ncclKernelPlan {
   struct ncclKernelPlan* next;
 
   bool persistent; // aka captured in a graph
+  bool kernelSpecialized;
   void *kernelFn;
   int channelUbound; // only channels c < channelUbound are present
   int channelCount; // number of channels present
@@ -209,8 +211,12 @@ struct ncclComm {
   int p2pnChannelsPerPeer;
   int p2pChannels[MAXCHANNELS];
 
+  // Should this comm allocate LL buffers for network P2P connections?
+  bool allocP2pNetLLBuffers;
+
   // Buffer sizes
   int buffSizes[NCCL_NUM_PROTOCOLS];
+  int p2pNetChunkSize;
 
   // Algorithm/Protocols thresholds
   ssize_t threadThresholds[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
@@ -218,8 +224,9 @@ struct ncclComm {
   float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   int maxThreads[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
 
-  // Whether there has been a fatal error in this communicator.
-  ncclResult_t fatalError;
+  /* This attribute can indicate the states of communicators and return code of
+   * asynchronous NCCL operations. */
+  ncclResult_t asyncResult;
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
@@ -301,12 +308,16 @@ struct ncclComm {
   pthread_t collTraceThread;
   volatile bool collTraceExit;
 #endif
-};
 
-// Set to true during an `atexit()` handler. We use this to intentionally leak
-// unfreed CUDA resources when cleaning up after return of `main()` to avoid
-// CUDA calls after CUDA runtime teardown.
-extern bool ncclMainExited;
+  // communicator mode
+  int blocking;
+  // initState is to more conveniently reclaim resources when errors happen.
+  ncclResult_t initState;
+  // flag to indicate if ncclCommFinalize() is called
+  bool finalizeCalled;
+  // shared structures for finalization
+  int finalizeRankCnt;
+};
 
 enum ncclLaunchMode {
   ncclLaunchModeInvalid=0,
@@ -320,13 +331,16 @@ void ncclCommPushCudaFree(struct ncclComm* comm, void* buf);
 void ncclCommPushCudaHostFree(struct ncclComm* comm, void* buf);
 void ncclCommPushCudaGdrFree(struct ncclComm* comm, void* handle);
 
-inline ncclResult_t ncclCommPollCallbacks(struct ncclComm* comm) {
-  struct ncclCommCallback* cb = ncclIntruQueueMpscDequeueAll(&comm->callbackQueue, /*waitSome=*/false);
+inline ncclResult_t ncclCommPollCallbacks(struct ncclComm* comm, bool waitSome) {
+  ncclResult_t result = ncclSuccess;
+  struct ncclCommCallback* cb = ncclIntruQueueMpscDequeueAll(&comm->callbackQueue, waitSome);
   while (cb != nullptr) {
     struct ncclCommCallback* next = cb->next;
-    NCCLCHECK(cb->fn(comm, cb)); // may reclaim memory of cb
+    ncclResult_t res1 = cb->fn(comm, cb); // may reclaim memory of cb
+    if (res1 != ncclSuccess) result = res1;
     cb = next;
   }
+  NCCLCHECK(result);
   return ncclSuccess;
 }
 
@@ -382,5 +396,8 @@ static inline ncclRedOp_t ncclUserRedOpMangle(ncclComm *comm, ncclRedOp_t op) {
   // Since builtin values are preserved, we also have to preserve their preimage.
   return op1 < int(ncclNumOps) ? op : ncclRedOp_t(op1);
 }
+
+ncclResult_t ncclCommEnsureReady(ncclComm_t comm);
+ncclResult_t ncclCommSetAsyncError(ncclComm_t comm, ncclResult_t nextState);
 
 #endif
