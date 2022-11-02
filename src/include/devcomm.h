@@ -21,10 +21,11 @@
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncSend, ncclFuncRecv, ncclFuncAllToAllPivot, ncclNumFuncs} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2];
 
-#define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
+#define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/CollNet*
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
-#define NCCL_ALGO_COLLNET 2
+#define NCCL_ALGO_COLLNET_DIRECT 2
+#define NCCL_ALGO_COLLNET_CHAIN 3
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
@@ -234,8 +235,9 @@ static_assert((NCCL_WORK_SIZE - alignUp(sizeof(ncclWorkHeader), alignof(ncclWork
 
 struct ncclWorkElemP2p {
   struct {
-    int32_t peer:30;
+    int32_t peer:28;
     uint32_t connIndex:2;
+    int32_t proto:2;
   };
   union {
     uint16_t flagBits;
@@ -356,8 +358,9 @@ struct alignas(16) ncclDevChannel {
   struct ncclDevChannelPeer *peers;
   struct ncclRing ring;
   struct ncclTree tree;
+  struct ncclTree collnetChain;
+  struct ncclDirect collnetDirect;
   struct ncclTree binTree;
-  struct ncclDirect collTree;
   uint32_t* workFifoDone; // Location of done counter, device writes index+1 of last work processed
 };
 

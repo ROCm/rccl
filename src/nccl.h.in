@@ -42,7 +42,28 @@ typedef enum { ncclSuccess                 =  0,
                ncclInvalidArgument         =  4,
                ncclInvalidUsage            =  5,
                ncclRemoteError             =  6,
-               ncclNumResults              =  7 } ncclResult_t;
+               ncclInProgress              =  7,
+               ncclNumResults              =  8 } ncclResult_t;
+
+/* Communicator configuration. Users can assign value to attributes to specify the
+ * behavior of a communicator. */
+typedef struct ncclConfig_v21400 {
+  /* attributes that users should never touch. */
+  size_t size;
+  unsigned int magic;
+  unsigned int version;
+  /* attributes that users are able to customize. */
+  int blocking;
+} ncclConfig_t;
+
+/* Config initializer must be assigned to initialize config structure when it is created.
+ * Not initialized config will result in NCCL error. */
+#define NCCL_CONFIG_INITIALIZER {                                       \
+  sizeof(ncclConfig_t), /* size */                                      \
+  0xcafebeef,           /* magic */                                     \
+  NCCL_VERSION(NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH), /* version */       \
+  1                     /* blocking */                                  \
+}
 
 /*! @brief Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
  *
@@ -50,7 +71,7 @@ typedef enum { ncclSuccess                 =  0,
  * NCCL library
  */
 ncclResult_t  ncclGetVersion(int *version);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclGetVersion(int *version);
 /// @endcond
 
@@ -67,8 +88,15 @@ ncclResult_t pncclGetVersion(int *version);
 
 */
 ncclResult_t  ncclGetUniqueId(ncclUniqueId* uniqueId);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
+/// @endcond
+
+/*! @brief Create a new communicator (multi thread/process version) with a configuration
+ * set by users. */
+ncclResult_t  ncclCommInitRankConfig(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, ncclConfig_t* config);
+/// @cond include_hidden
+ncclResult_t pncclCommInitRankConfig(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, ncclConfig_t* config);
 /// @endcond
 
 /*! @brief Creates a new communicator (multi thread/process version).
@@ -85,7 +113,7 @@ ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
                 communicator struct pointer
     */
 ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 /// @endcond
 
@@ -120,25 +148,38 @@ ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
  * Order of devlist defines user-order of processors within the communicator.
  * */
 ncclResult_t  ncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 /// @endcond
 
- /*! @brief Frees resources associated with communicator object, but waits for any operations that might still be running on the device */
+/*! @brief Finalize a communicator.
+ * @details ncclCommFinalize flushes all issued communications,
+ * and marks communicator state as ncclInProgress. The state will change to ncclSuccess
+ * when the communicator is globally quiescent and related resources are freed; then,
+ * calling ncclCommDestroy can locally free the rest of the resources (e.g. communicator
+ * itself) without blocking. */
+ncclResult_t  ncclCommFinalize(ncclComm_t comm);
+/// @cond include_hidden
+ncclResult_t pncclCommFinalize(ncclComm_t comm);
+/// @endcond
+
+/*! @brief Frees local resources associated with communicator object. */
+
 ncclResult_t  ncclCommDestroy(ncclComm_t comm);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommDestroy(ncclComm_t comm);
 /// @endcond
 
-/*! @brief Frees resources associated with communicator object and aborts any operations that might still be running on the device. */
+/*! @brief Frees resources associated with communicator object and aborts any operations
+ * that might still be running on the device. */
 ncclResult_t  ncclCommAbort(ncclComm_t comm);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommAbort(ncclComm_t comm);
 /// @endcond
 
 /*! @brief Returns a string for each error code. */
 const char*  ncclGetErrorString(ncclResult_t result);
-/// @cond include_hidden 
+/// @cond include_hidden
 const char* pncclGetErrorString(ncclResult_t result);
 /// @endcond
 
@@ -146,31 +187,31 @@ const char* pncclGetErrorString(ncclResult_t result);
  * comm is currently unused and can be set to NULL
  */
 const char*  ncclGetLastError(ncclComm_t comm);
-/// @cond include_hidden 
+/// @cond include_hidden
 const char* pncclGetError(ncclComm_t comm);
 /// @endcond
 
 /* Checks whether the comm has encountered any asynchronous errors */
 ncclResult_t  ncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
 /// @endcond
 
 /*! @brief Gets the number of ranks in the communicator clique. */
 ncclResult_t  ncclCommCount(const ncclComm_t comm, int* count);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommCount(const ncclComm_t comm, int* count);
 /// @endcond
 
 /*! @brief Returns the rocm device number associated with the communicator. */
 ncclResult_t  ncclCommCuDevice(const ncclComm_t comm, int* device);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
 /// @endcond
 
 /*! @brief Returns the user-ordered "rank" associated with the communicator. */
 ncclResult_t  ncclCommUserRank(const ncclComm_t comm, int* rank);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
 /// @endcond
 
@@ -207,7 +248,7 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
                ncclBfloat16   = 9,
                ncclNumTypes   = 10 } ncclDataType_t;
 
-/* ncclScalarResidence_t: Location and dereferencing logic for scalar arguments. */
+/*! @brief ncclScalarResidence_t: Location and dereferencing logic for scalar arguments. */
 typedef enum {
   /* ncclScalarDevice: The scalar is in device-visible memory and will be
    * dereferenced while the collective is running. */
@@ -218,9 +259,7 @@ typedef enum {
   ncclScalarHostImmediate = 1
 } ncclScalarResidence_t;
 
-/*
- * ncclRedOpCreatePreMulSum
- *
+/*! @brief ncclRedOpCreatePreMulSum
  * Creates a new reduction operator which pre-multiplies input values by a given
  * scalar locally before reducing them with peer values via summation. For use
  * only with collectives launched against *comm* and *datatype*. The
@@ -229,17 +268,19 @@ typedef enum {
  * is stored in *op*.
  */
 ncclResult_t  ncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
+/// @cond include_hidden
 ncclResult_t pncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
+/// @endcond
 
-/*
- * ncclRedOpDestroy
- *
- * Destroys the reduction operator *op*. The operator must have been created by
+/*! @brief ncclRedOpDestroy
+ * @details Destroys the reduction operator *op*. The operator must have been created by
  * ncclRedOpCreatePreMul with the matching communicator *comm*. An operator may be
  * destroyed as soon as the last NCCL function which is given that operator returns.
  */
 ncclResult_t ncclRedOpDestroy(ncclRedOp_t op, ncclComm_t comm);
+/// @cond include_hidden
 ncclResult_t pncclRedOpDestroy(ncclRedOp_t op, ncclComm_t comm);
+/// @endcond
 
 /*
  * Collective communication operations
@@ -267,7 +308,7 @@ ncclResult_t pncclRedOpDestroy(ncclRedOp_t op, ncclComm_t comm);
  */
 ncclResult_t  ncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
     ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
     ncclRedOp_t op, int root, ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -282,7 +323,7 @@ ncclResult_t pncclReduce(const void* sendbuff, void* recvbuff, size_t count, ncc
  */
 ncclResult_t  ncclBcast(void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclBcast(void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -297,7 +338,7 @@ ncclResult_t pncclBcast(void* buff, size_t count, ncclDataType_t datatype, int r
  */
 ncclResult_t  ncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -311,7 +352,7 @@ ncclResult_t pncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, 
  */
 ncclResult_t  ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -330,7 +371,7 @@ ncclResult_t pncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
 ncclResult_t  ncclReduceScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm,
     hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclReduceScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm,
     hipStream_t stream);
@@ -347,7 +388,7 @@ ncclResult_t pncclReduceScatter(const void* sendbuff, void* recvbuff,
  */
 ncclResult_t  ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -364,7 +405,7 @@ ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
  */
 ncclResult_t  ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -381,7 +422,7 @@ ncclResult_t pncclSend(const void* sendbuff, size_t count, ncclDataType_t dataty
  */
 ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -398,7 +439,7 @@ ncclResult_t pncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
  */
 ncclResult_t  ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -416,7 +457,7 @@ ncclResult_t pncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
 ncclResult_t  ncclScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, int root, ncclComm_t comm,
     hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclScatter(const void* sendbuff, void* recvbuff,
     size_t recvcount, ncclDataType_t datatype, int root, ncclComm_t comm,
     hipStream_t stream);
@@ -432,7 +473,7 @@ ncclResult_t pncclScatter(const void* sendbuff, void* recvbuff,
  */
 ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /// @endcond
@@ -451,7 +492,7 @@ ncclResult_t pncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
 ncclResult_t  ncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
     const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
     const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
     const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
     const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
@@ -486,7 +527,7 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
  * ncclGroupEnd.
  */
 ncclResult_t  ncclGroupStart();
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclGroupStart();
 /// @endcond
 
@@ -497,7 +538,7 @@ ncclResult_t pncclGroupStart();
  * need to be called after ncclGroupEnd.
  */
 ncclResult_t  ncclGroupEnd();
-/// @cond include_hidden 
+/// @cond include_hidden
 ncclResult_t pncclGroupEnd();
 /// @endcond
 

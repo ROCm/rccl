@@ -12,16 +12,17 @@
 #include <hip/hip_fp16.h>
 
 #define NCCL_MAJOR 2
-#define NCCL_MINOR 11
-#define NCCL_PATCH 4
+#define NCCL_MINOR 14
+#define NCCL_PATCH 3
 #define NCCL_SUFFIX ""
 
-#define NCCL_VERSION_CODE 21104
+#define NCCL_VERSION_CODE 21403
 #define NCCL_VERSION(X,Y,Z) (((X) <= 2 && (Y) <= 8) ? (X) * 1000 + (Y) * 100 + (Z) : (X) * 10000 + (Y) * 100 + (Z))
 
 #define RCCL_BFLOAT16 1
 #define RCCL_GATHER_SCATTER 1
 #define RCCL_ALLTOALLV 1
+#define RCCL_MULTIRANKPERGPU 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,7 +41,29 @@ typedef enum { ncclSuccess                 =  0,
                ncclInternalError           =  3,
                ncclInvalidArgument         =  4,
                ncclInvalidUsage            =  5,
-               ncclNumResults              =  6 } ncclResult_t;
+               ncclRemoteError             =  6,
+               ncclInProgress              =  7,
+               ncclNumResults              =  8 } ncclResult_t;
+
+/* Communicator configuration. Users can assign value to attributes to specify the
+ * behavior of a communicator. */
+typedef struct ncclConfig_v21400 {
+  /* attributes that users should never touch. */
+  size_t size;
+  unsigned int magic;
+  unsigned int version;
+  /* attributes that users are able to customize. */
+  int blocking;
+} ncclConfig_t;
+
+/* Config initializer must be assigned to initialize config structure when it is created.
+ * Not initialized config will result in NCCL error. */
+#define NCCL_CONFIG_INITIALIZER {                                       \
+  sizeof(ncclConfig_t), /* size */                                      \
+  0xcafebeef,           /* magic */                                     \
+  NCCL_VERSION(NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH), /* version */       \
+  1                     /* blocking */                                  \
+}
 
 /*! @brief Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
  *
@@ -69,6 +92,13 @@ ncclResult_t  ncclGetUniqueId(ncclUniqueId* uniqueId);
 ncclResult_t pncclGetUniqueId(ncclUniqueId* uniqueId);
 /// @endcond
 
+/*! @brief Create a new communicator (multi thread/process version) with a configuration
+ * set by users. */
+ncclResult_t  ncclCommInitRankConfig(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, ncclConfig_t* config);
+/// @cond include_hidden
+ncclResult_t pncclCommInitRankConfig(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, ncclConfig_t* config);
+/// @endcond
+
 /*! @brief Creates a new communicator (multi thread/process version).
 
     @details
@@ -87,6 +117,28 @@ ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 /// @endcond
 
+/*! @brief Creates a new communicator (multi thread/process version) allowing multiple ranks per device.
+
+    @details
+    rank must be between 0 and nranks-1 and unique within a communicator clique.
+    Each rank is associated to a HIP device, which has to be set before calling
+    ncclCommInitRankMulti.
+    Since this version of the function allows multiple ranks to utilize the same
+    HIP device, a unique virtualId per device has to be provided by each calling
+    rank.
+    ncclCommInitRankMulti implicitly syncronizes with other ranks, so it must be
+    called by different threads/processes or use ncclGroupStart/ncclGroupEnd.
+
+    @param[in]
+    comm        ncclComm_t*
+                communicator struct pointer
+    */
+  ncclResult_t  ncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
+/// @cond include_hidden
+  ncclResult_t pncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
+/// @endcond
+
+
 /*! @brief Creates a clique of communicators (single process version).
  *
  * @details This is a convenience function to create a single-process communicator clique.
@@ -100,23 +152,46 @@ ncclResult_t  ncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 ncclResult_t pncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 /// @endcond
 
- /*! @brief Frees resources associated with communicator object, but waits for any operations that might still be running on the device */
+/*! @brief Finalize a communicator.
+ * @details ncclCommFinalize flushes all issued communications,
+ * and marks communicator state as ncclInProgress. The state will change to ncclSuccess
+ * when the communicator is globally quiescent and related resources are freed; then,
+ * calling ncclCommDestroy can locally free the rest of the resources (e.g. communicator
+ * itself) without blocking. */
+ncclResult_t  ncclCommFinalize(ncclComm_t comm);
+/// @cond include_hidden
+ncclResult_t pncclCommFinalize(ncclComm_t comm);
+/// @endcond
+
+/*! @brief Frees local resources associated with communicator object. */
+
 ncclResult_t  ncclCommDestroy(ncclComm_t comm);
 /// @cond include_hidden
 ncclResult_t pncclCommDestroy(ncclComm_t comm);
 /// @endcond
 
-/*! @brief Frees resources associated with communicator object and aborts any operations that might still be running on the device. */
+/*! @brief Frees resources associated with communicator object and aborts any operations
+ * that might still be running on the device. */
 ncclResult_t  ncclCommAbort(ncclComm_t comm);
 /// @cond include_hidden
 ncclResult_t pncclCommAbort(ncclComm_t comm);
 /// @endcond
 
-/*! @brief Returns a human-readable error message. */
+/*! @brief Returns a string for each error code. */
 const char*  ncclGetErrorString(ncclResult_t result);
+/// @cond include_hidden
 const char* pncclGetErrorString(ncclResult_t result);
+/// @endcond
 
-/*! @brief Checks whether the comm has encountered any asynchronous errors */
+/*! @brief Returns a human-readable message of the last error that occurred.
+ * comm is currently unused and can be set to NULL
+ */
+const char*  ncclGetLastError(ncclComm_t comm);
+/// @cond include_hidden
+const char* pncclGetError(ncclComm_t comm);
+/// @endcond
+
+/* Checks whether the comm has encountered any asynchronous errors */
 ncclResult_t  ncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
 /// @cond include_hidden
 ncclResult_t pncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError);
@@ -173,7 +248,7 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
                ncclBfloat16   = 9,
                ncclNumTypes   = 10 } ncclDataType_t;
 
-/* ncclScalarResidence_t: Location and dereferencing logic for scalar arguments. */
+/*! @brief ncclScalarResidence_t: Location and dereferencing logic for scalar arguments. */
 typedef enum {
   /* ncclScalarDevice: The scalar is in device-visible memory and will be
    * dereferenced while the collective is running. */
@@ -184,9 +259,7 @@ typedef enum {
   ncclScalarHostImmediate = 1
 } ncclScalarResidence_t;
 
-/*
- * ncclRedOpCreatePreMulSum
- *
+/*! @brief ncclRedOpCreatePreMulSum
  * Creates a new reduction operator which pre-multiplies input values by a given
  * scalar locally before reducing them with peer values via summation. For use
  * only with collectives launched against *comm* and *datatype*. The
@@ -195,17 +268,19 @@ typedef enum {
  * is stored in *op*.
  */
 ncclResult_t  ncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
+/// @cond include_hidden
 ncclResult_t pncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
+/// @endcond
 
-/*
- * ncclRedOpDestroy
- *
- * Destroys the reduction operator *op*. The operator must have been created by
+/*! @brief ncclRedOpDestroy
+ * @details Destroys the reduction operator *op*. The operator must have been created by
  * ncclRedOpCreatePreMul with the matching communicator *comm*. An operator may be
  * destroyed as soon as the last NCCL function which is given that operator returns.
  */
 ncclResult_t ncclRedOpDestroy(ncclRedOp_t op, ncclComm_t comm);
+/// @cond include_hidden
 ncclResult_t pncclRedOpDestroy(ncclRedOp_t op, ncclComm_t comm);
+/// @endcond
 
 /*
  * Collective communication operations
@@ -345,10 +420,10 @@ ncclResult_t pncclSend(const void* sendbuff, size_t count, ncclDataType_t dataty
  * need to progress concurrently to complete, they must be fused within a ncclGroupStart/
  * ncclGroupEnd section.
  */
+ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
+    ncclComm_t comm, hipStream_t stream);
 /// @cond include_hidden
 ncclResult_t pncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
-    ncclComm_t comm, hipStream_t stream);
-ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, hipStream_t stream);
 /// @endcond
 

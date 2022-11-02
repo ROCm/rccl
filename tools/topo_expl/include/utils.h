@@ -13,8 +13,8 @@ struct ncclGraphInfo {
   int pattern;
   int nChannels;
   int sameChannels;
-  float speedIntra;
-  float speedInter;
+  float bwIntra;
+  float bwInter;
   int typeIntra;
   int typeInter;
 };
@@ -28,6 +28,7 @@ struct allGather3Data_t{
   struct ncclGraphInfo collNet;
   struct ncclTopoRanks topoRanks;
   bool pivotA2AEnabled;
+  bool ll128Enabled;
 };
 
 void initCollNet();

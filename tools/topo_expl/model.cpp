@@ -75,14 +75,39 @@ int busIdToCudaDev(int64_t busId) {
   return node_model->busIdToCudaDev(busId);
 }
 
+static int useMemcpy = 0;
+
 /* Determine if two peers can communicate with P2P */
 ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
-  // Rule out different nodes
-  *ret = 0;
-  if (info1->hostHash != info2->hostHash) return ncclSuccess;
-  int cudaDev1 = busIdToCudaDev(info1->busId);
-  int cudaDev2 = busIdToCudaDev(info2->busId);
-  *ret = node_model->p2pCanConnect(cudaDev1, cudaDev2);
+  if (!info1->hasFineGrain || !info2->hasFineGrain)  {
+    *ret = 0;
+    return ncclSuccess;
+  }
+
+  // Rule out different nodes / isolated containers
+  if (info1->hostHash != info2->hostHash || info1->shmDev != info2->shmDev) {
+    *ret = 0;
+    return ncclSuccess;
+  }
+
+  // Check topology / p2p level.
+  int intermediateRank;
+  NCCLCHECK(ncclTopoCheckP2p(topo, info1->busId, info2->busId, ret, NULL, &intermediateRank));
+  if (*ret == 0) return ncclSuccess;
+  if (intermediateRank != -1) {
+    if (useMemcpy) *ret = 0;
+    return ncclSuccess;
+  }
+
+  // Check if NET would work better
+  int useNet = 0;
+  NCCLCHECK(ncclTopoCheckNet(topo, info1->busId, info2->busId, &useNet));
+  if (useNet) {
+    *ret = 0;
+    return ncclSuccess;
+  }
+
+  *ret = 1;
   return ncclSuccess;
 }
 
@@ -118,14 +143,26 @@ struct ncclTransport p2pTransport = {
   { p2pRecvSetup, NULL, NULL, NULL }
 };
 
+NCCL_PARAM(ShmDisable, "SHM_DISABLE", 0);
+
 /* Determine if two peers can communicate with SHM */
 ncclResult_t shmCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
-  // Rule out different nodes
   *ret = 0;
+  if (ncclParamShmDisable() == 1) return ncclSuccess;
+
+  int useNet = 0;
+  NCCLCHECK(ncclTopoCheckNet(topo, info1->busId, info2->busId, &useNet));
+  if (useNet) return ncclSuccess;
+
+  // Same host?
+  TRACE(NCCL_INIT|NCCL_SHM, "peer1 hostHash %lx peer2 hostHash %lx", info1->hostHash, info2->hostHash);
   if (info1->hostHash != info2->hostHash) return ncclSuccess;
-  int cudaDev1 = busIdToCudaDev(info1->busId);
-  int cudaDev2 = busIdToCudaDev(info2->busId);
-  *ret = node_model->shmCanConnect(cudaDev1, cudaDev2);
+
+  // Common /dev/shm (between containers) ?
+  TRACE(NCCL_INIT|NCCL_SHM, "peer1 shmDev %lx peer2 shmDev %lx", info1->shmDev, info2->shmDev);
+  if (info1->shmDev != info2->shmDev) return ncclSuccess;
+
+  *ret = 1;
   return ncclSuccess;
 }
 
@@ -161,7 +198,7 @@ struct setupReq {
 
 /* Determine if two peers can communicate with NET */
 ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
-  *ret = node_model->netCanConnect(info1->rank, info2->rank);
+  *ret = 1;
   return ncclSuccess;
 }
 
