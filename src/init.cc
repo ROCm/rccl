@@ -540,7 +540,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
   int nRanks = comm->nRanks;
   struct ncclDevCommAndChannels *devCommAndChans, tmpCommAndChans;
-  NCCLCHECK(ncclCudaCallocAsync(&devCommAndChans, 1, comm->deviceStream.stream));
+  NCCLCHECK(ncclCudaCallocAsync(&devCommAndChans, 1, comm->deviceStream.cudaStream));
   ncclCommPushCudaFree(comm, devCommAndChans);
   comm->devComm = &devCommAndChans->comm;
   tmpCommAndChans.comm.rank = comm->rank;
@@ -587,7 +587,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     tmpCommAndChans.channels[c].workFifoDone = &comm->workFifoDone[c];
 
     if (comm->channels[c].ring.userRanks != nullptr) {
-      NCCLCHECK(ncclCudaMemcpyAsync(tmpCommAndChans.channels[c].ring.userRanks, comm->channels[c].ring.userRanks, nRanks, comm->deviceStream.stream));
+      NCCLCHECK(ncclCudaMemcpyAsync(tmpCommAndChans.channels[c].ring.userRanks, comm->channels[c].ring.userRanks, nRanks, comm->deviceStream.cudaStream));
     }
   }
 
@@ -608,10 +608,9 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES), comm->sideStream);
 #endif
 
-  NCCLCHECK(ncclCudaMemcpyAsync(devCommAndChans, &tmpCommAndChans, 1, comm->deviceStream.stream));
-  CUDACHECK(hipStreamSynchronize(comm->deviceStream.stream));
-  NCCLCHECK(ncclStrongStreamRelease(ncclCudaGraphNull(), &comm->deviceStream));
-
+  NCCLCHECK(ncclCudaMemcpyAsync(devCommAndChans, &tmpCommAndChans, 1, comm->deviceStream.cudaStream));
+  CUDACHECK(hipStreamSynchronize(comm->deviceStream.cudaStream));
+  NCCLCHECK(ncclStrongStreamRelease(ncclCudaGraphNone(), &comm->deviceStream));
   return ncclSuccess;
 }
 
@@ -942,7 +941,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   comm->nChannels = (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count)
     ? std::min(treeGraph.nChannels, ringGraph.nChannels) : ringGraph.nChannels;
-  NCCLCHECK(ncclTopoPreset(comm, &treeGraph, &ringGraph, &allGather3Data[rank].topoRanks));
+  NCCLCHECK(ncclTopoPreset(comm, &treeGraph, &ringGraph, &collNetGraph, &allGather3Data[rank].topoRanks));
 
   NCCLCHECK(bootstrapAllGather(comm->bootstrap, allGather3Data, sizeof(*allGather3Data)));
 
@@ -1288,13 +1287,13 @@ collnet_cleanup:
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         NCCLCHECK(ncclChannelCompute(comm, peer, c, ncclFuncSend, &channelId));
         if (comm->channels[channelId].peers[peer].send[1].connected == 0) {
-          comm->connectSend[peer] |= (1<<channelId);
+          comm->connectSend[peer] |= (1UL<<channelId);
         }
       }
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         NCCLCHECK(ncclChannelCompute(comm, peer, c, ncclFuncRecv, &channelId));
         if (comm->channels[channelId].peers[peer].recv[1].connected == 0) {
-          comm->connectRecv[peer] |= (1<<channelId);
+          comm->connectRecv[peer] |= (1UL<<channelId);
         }
       }
     }
@@ -1562,6 +1561,7 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
       gpuFlags[devlist[i]] = 1;
     }
     free(gpuFlags);
+    gpuFlags = nullptr;
   }
 
   ncclUniqueId uniqueId;
@@ -1573,11 +1573,9 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
   }
   NCCLCHECKGOTO(ncclGroupEnd(), ret, fail);
 
-exit:
-  return ret;
 fail:
-  if (gpuFlags) free(gpuFlags);
-  goto exit;
+  free(gpuFlags);
+  return ret;
 }
 
 ncclResult_t ncclCommSetAsyncError(ncclComm_t comm, ncclResult_t nextState) {
