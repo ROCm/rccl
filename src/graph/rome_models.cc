@@ -721,7 +721,7 @@ newchannel:
   } while (str[offset++] != 0);
 end:
   graph->nChannels = nChannels;
-  graph->bwIntra = graph->bwInter = system->maxBw;
+  graph->bwIntra = graph->bwInter = system->totalBw/nChannels;
   if (graph->id == 1) {
     for (int i=0; i<graph->nChannels; i++) {
       int net;
