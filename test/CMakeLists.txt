@@ -19,7 +19,7 @@ if(BUILD_TESTS)
     message("Looking for library files in ${ROCR_LIB_DIR}")
 
     # Search for ROCr header file in user defined locations
-    find_path(ROCR_HDR hsa.h PATHS ${ROCR_INC_DIR} "/opt/rocm" PATH_SUFFIXES include/hsa REQUIRED)
+    find_path(ROCR_HDR hsa/hsa.h PATHS ${ROCR_INC_DIR} "/opt/rocm" PATH_SUFFIXES include REQUIRED)
     INCLUDE_DIRECTORIES(${ROCR_HDR})
 
     # Search for ROCr library file in user defined locations
