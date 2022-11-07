@@ -41,7 +41,7 @@ struct ncclInfo {
   ncclRedOp_t op;
   int root; // peer for p2p operations
   ncclComm_t comm;
-  hipStream_t stream;
+  cudaStream_t stream;
   // Algorithm details
   int chunkSteps;
   int sliceSteps;
@@ -91,7 +91,7 @@ struct ncclTaskP2p {
 
 struct ncclCudaStreamList {
   struct ncclCudaStreamList *next;
-  hipStream_t stream;
+  cudaStream_t stream;
 };
 
 struct ncclTasks {
@@ -111,7 +111,7 @@ struct ncclTasks {
   // Keep track of the number of user streams
   int numStreams;
   // The most recent user stream. Ignored if streams==nullptr
-  hipStream_t streamRecent;
+  cudaStream_t streamRecent;
   // The graph capturing all user streams or invalid if none. Thus we restrict the
   // user that all streams must be captured in the same graph or not captured
   // at all. Technically we could probably relax this, but that would mean

@@ -42,11 +42,11 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, int* workFunc
 size_t ncclKernMaxLocalSize() {
   ncclResult_t res = ncclSuccess;
   int numNcclKerns = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
-  hipFuncAttributes attr = {0};
+  cudaFuncAttributes attr = {0};
   size_t max = 0;
   for (int i = 0; i < numNcclKerns; i++) {
     if (ncclKerns[i].kernelFn != nullptr) {
-      CUDACHECKGOTO(hipFuncGetAttributes(&attr, reinterpret_cast<const void*>(ncclKerns[i].kernelFn)), res, error);
+      CUDACHECKGOTO(cudaFuncGetAttributes(&attr, reinterpret_cast<const void*>(ncclKerns[i].kernelFn)), res, error);
       if (attr.localSizeBytes > max) max = attr.localSizeBytes;
     }
   }
@@ -59,9 +59,9 @@ error:
 size_t ncclKernLocalSize(int i) {
   ncclResult_t res = ncclSuccess;
   int numNcclKerns = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
-  hipFuncAttributes attr = {0};
+  cudaFuncAttributes attr = {0};
   if (i < numNcclKerns)
-    CUDACHECKGOTO(hipFuncGetAttributes(&attr, (const void*)(ncclKerns[i].kernelFn)), res, error);
+    CUDACHECKGOTO(cudaFuncGetAttributes(&attr, reinterpret_cast<const void*>(ncclKerns[i].kernelFn)), res, error);
 
 error:
   return (res != ncclSuccess) ? 0 : attr.localSizeBytes;
@@ -73,7 +73,7 @@ ncclResult_t ncclKernSetSharedMemoryCarveout(int carveOut) {
   ncclResult_t res = ncclSuccess;
   int numNcclKerns = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
   for (int i = 0; i < numNcclKerns; i++) {
-    CUDACHECKGOTO(hipFuncSetAttribute((const void *)ncclKerns[i].kernelFn, hipFuncAttributePreferredSharedMemoryCarveout, carveOut), res, error);
+    CUDACHECKGOTO(cudaFuncSetAttribute((const void *)ncclKerns[i].kernelFn, cudaFuncAttributePreferredSharedMemoryCarveout, carveOut), res, error);
   }
 
 error:
@@ -305,7 +305,7 @@ static ncclResult_t addP2pToPlan(
   struct ncclInfo info = {
     isSendNotRecv ? ncclFuncSend : ncclFuncRecv,
     isSendNotRecv ? "Send" : "Recv",
-    nullptr, addr, bytes, ncclInt8, ncclSum, peer, comm, (hipStream_t)0,
+    nullptr, addr, bytes, ncclInt8, ncclSum, peer, comm, (cudaStream_t)0,
     /*Args*/1, 1
   };
 
@@ -366,7 +366,7 @@ static void finishPlan(struct ncclKernelPlan* plan) {
   plan->channelCount = channelCount;
   plan->channelMask = channelMask;
   plan->hasProxyOps = hasProxyOps;
-  plan->threadPerBlock = std::max(plan->threadPerBlock, 4*plan->comm->WarpSize);
+  plan->threadPerBlock = std::max(plan->threadPerBlock, 3*plan->comm->WarpSize);
 }
 
 static ncclResult_t registerIntraNodeBuffers(
@@ -831,6 +831,7 @@ static ncclResult_t hostStreamPlanTask(struct ncclComm* comm, struct ncclKernelP
 }
 
 static void HIPRT_CB hostStreamPlanCallback(void *plan_) {
+  NVTX3_FUNC_RANGE_IN(nccl_domain);
   struct ncclKernelPlan* plan = (struct ncclKernelPlan*)plan_;
   ncclResult_t result = hostStreamPlanTask(plan->comm, plan);
   if (result != ncclSuccess) {
@@ -845,7 +846,7 @@ static ncclResult_t reclaimPlan(struct ncclComm* comm, struct ncclCommCallback* 
     NCCLCHECK(ncclCudaFree(plan->workHead));
     while (!ncclIntruQueueEmpty(&plan->ipcMemQueue)) {
       struct ncclPointerList* q = ncclIntruQueueDequeue(&plan->ipcMemQueue);
-      CUDACHECKIGNORE(hipIpcCloseMemHandle(q->ptr));
+      CUDACHECKIGNORE(cudaIpcCloseMemHandle(q->ptr));
       ncclMemoryPoolFree(&comm->memPool_ncclPointerList, q);
     }
   }
@@ -932,7 +933,7 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
     //   7. userStream[1...] each waits on deviceStream
     // The two-level fan-in fan-out is because ncclStrongStreamWaitStream() requires
     // at least one of the two streams to be strong-stream.
-    hipStream_t launchStream = tasks->streams->stream;
+    cudaStream_t launchStream = tasks->streams->stream;
     NCCLCHECKGOTO(ncclStrongStreamAcquire(tasks->capturingGraph, &comm->deviceStream), result, failure);
 
     if (tasks->numStreams != 1) {
@@ -1051,7 +1052,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     }
     #endif
     // Standard kernel launch
-    CUDACHECK(hipLaunchKernel(fn, grid, block, args, 0, launchStream));
+    CUDACHECK(cudaLaunchKernel(fn, grid, block, args, 0, launchStream));
   }
   return ncclSuccess;
 }
@@ -1078,7 +1079,7 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     // Reset queue to empty without destroying plans since those will be sent
     // back to us for reclaiming via callbackQueue.
     ncclIntruQueueConstruct(&comm->planQueue);
-    hipStream_t launchStream = tasks->streams->stream; // First user stream gets launch
+    cudaStream_t launchStream = tasks->streams->stream; // First user stream gets launch
     // Create dependency for deviceStream on launchStream.
     if (tasks->numStreams != 1) NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, &comm->deviceStream, launchStream), result, resume1);
   resume1:
@@ -1519,7 +1520,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo const* inf
     if (comm->nRanks == 1 && opFull.op < ncclDevPreMulSum) {
       if (info->sendbuff != info->recvbuff) {
         size_t bytes = info->count*ncclTypeSize(info->datatype);
-        CUDACHECK(hipMemcpyAsync(info->recvbuff, info->sendbuff, bytes, hipMemcpyDeviceToDevice, info->stream));
+        CUDACHECK(cudaMemcpyAsync(info->recvbuff, info->sendbuff, bytes, cudaMemcpyDeviceToDevice, info->stream));
       }
       return ncclSuccess;
     } else {
@@ -1579,8 +1580,8 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   NCCLCHECKGOTO(ncclCommEnsureReady(info->comm), ret, fail);
 
   if (info->comm->checkPointers) {
-    CUDACHECKGOTO(hipGetDevice(&devOld), ret, fail);
-    CUDACHECKGOTO(hipSetDevice(info->comm->cudaDev), ret, fail);
+    CUDACHECKGOTO(cudaGetDevice(&devOld), ret, fail);
+    CUDACHECKGOTO(cudaSetDevice(info->comm->cudaDev), ret, fail);
   }
   NCCLCHECKGOTO(ArgsCheck(info), ret, fail);
 
@@ -1592,7 +1593,7 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   NCCLCHECKGOTO(taskAppend(info->comm, info), ret, fail);
 
 exit:
-  if (devOld != -1) CUDACHECK(hipSetDevice(devOld));
+  if (devOld != -1) CUDACHECK(cudaSetDevice(devOld));
   ncclGroupErrCheck(ret);
   NCCLCHECK(ncclGroupEndInternal());
   /* if depth is 1, ncclGroupEndInternal() will trigger group ops. The state can change

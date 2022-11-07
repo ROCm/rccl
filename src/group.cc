@@ -117,7 +117,7 @@ struct ncclPreconnectJob {
 ncclResult_t ncclPreconnectFunc(struct ncclAsyncJob* job_) {
   struct ncclPreconnectJob* job = (struct ncclPreconnectJob*)job_;
   struct ncclComm* comm = job->comm;
-  CUDACHECK(hipSetDevice(comm->cudaDev));
+  CUDACHECK(cudaSetDevice(comm->cudaDev));
   if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
   NCCLCHECK(ncclTransportP2pSetup(comm, NULL, 1));
   if (comm->p2pNet) NCCLCHECK(ncclTransportP2pSetup(comm, NULL, NCCL_CONN_IDX_P2P_NET));
@@ -138,7 +138,7 @@ static ncclResult_t doLaunches(struct ncclComm* head) {
     bool capturingYes = false, capturingNo = false;
     do {
       (ncclCudaGraphValid(comm->tasks.capturingGraph) ? capturingYes : capturingNo) = true;
-      CUDACHECKGOTO(hipSetDevice(comm->cudaDev), result, failure);
+      CUDACHECKGOTO(cudaSetDevice(comm->cudaDev), result, failure);
       NCCLCHECKGOTO(ncclLaunchPrepare(comm), result, failure);
       if (useBarrier) ncclCommIntraBarrierIn(comm, 1);
       comm = comm->groupNext;
@@ -170,7 +170,7 @@ static ncclResult_t doLaunches(struct ncclComm* head) {
           struct ncclKernelPlan* plan = comm->unlaunchedPlansHead;
           if (plan != nullptr) {
             comm->unlaunchedPlansHead = plan->next;
-            CUDACHECKGOTO(hipSetDevice(comm->cudaDev), result, failure);
+            CUDACHECKGOTO(cudaSetDevice(comm->cudaDev), result, failure);
             NCCLCHECKGOTO(ncclLaunchKernelBefore_NoUncapturedCuda(comm, plan), result, failure);
             NCCLCHECKGOTO(ncclLaunchKernel(comm, plan), result, failure);
           }
@@ -180,7 +180,7 @@ static ncclResult_t doLaunches(struct ncclComm* head) {
             NCCLCHECKGOTO(ncclLaunchKernelAfter_NoCuda(comm, plan), result, failure);
           }
         } else { // Final round.
-          CUDACHECKGOTO(hipSetDevice(comm->cudaDev), result, failure);
+          CUDACHECKGOTO(cudaSetDevice(comm->cudaDev), result, failure);
           NCCLCHECKGOTO(ncclLaunchFinish(comm), result, failure);
         }
         comm = next;
@@ -276,7 +276,7 @@ static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) {
   struct ncclIntruQueue<struct ncclAsyncJob, &ncclAsyncJob::next> *asyncJobsMain = gjob->asyncJobsPtr;
   volatile bool *groupAbortFlag = gjob->abortFlagPtr;
 
-  CUDACHECKGOTO(hipGetDevice(&savedDev), ret, fail);
+  CUDACHECKGOTO(cudaGetDevice(&savedDev), ret, fail);
 
   if (groupCommPreconnectHeadMain != nullptr) {
     struct ncclComm* comm = groupCommPreconnectHeadMain;
@@ -368,7 +368,7 @@ static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) {
   *gjob->groupCommHeadPtr = nullptr;
   *gjob->groupCommPreconnectHeadPtr = nullptr;
 
-  CUDACHECK(hipSetDevice(savedDev));
+  CUDACHECK(cudaSetDevice(savedDev));
 
 exit:
   return ret;

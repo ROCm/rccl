@@ -661,7 +661,7 @@ void* ncclProxyProgress(void *comm_) {
   struct ncclComm* comm = (struct ncclComm*)comm_;
   if (ncclSetThreadContext(comm) != ncclSuccess) {
     WARN("[Proxy Progress] Failed to set CUDA context on device %d", comm->cudaDev);
-  } else if (hipSetDevice(comm->cudaDev) != hipSuccess) {
+  } else if (cudaSetDevice(comm->cudaDev) != cudaSuccess) {
     WARN("[Proxy Progress] Failed to set CUDA device %d", comm->cudaDev);
   }
   if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
@@ -1028,7 +1028,7 @@ void* ncclProxyService(void* _args) {
   if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
   if (ncclSetThreadContext(comm) != ncclSuccess) {
     WARN("[Proxy Service] Failed to set CUDA context on device %d", comm->cudaDev);
-  } else if (hipSetDevice(comm->cudaDev) != hipSuccess) {
+  } else if (cudaSetDevice(comm->cudaDev) != cudaSuccess) {
     WARN("[Proxy Service] Failed to set CUDA device %d", comm->cudaDev);
   }
   if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
@@ -1186,7 +1186,7 @@ ncclResult_t ncclProxyDestroy(struct ncclComm* comm) {
           NCCLCHECK(ncclShmClose(state->proxyOps[i].pool, NULL, sizeof(struct ncclProxyOpsPool)));
         }
         if (state->sharedDevMems[i]) {
-          CUDACHECK(hipIpcCloseMemHandle(state->sharedDevMems[i]));
+          CUDACHECK(cudaIpcCloseMemHandle(state->sharedDevMems[i]));
         }
         int type = ncclProxyMsgClose;
         if (*comm->abortFlag == 0) NCCLCHECK(ncclSocketSend(state->peerSocks+i, &type, sizeof(int)));

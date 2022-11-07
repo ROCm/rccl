@@ -1,6 +1,5 @@
 /*************************************************************************
  * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,16 +8,16 @@
 #include "comm.h"
 
 static ncclResult_t CudaPtrCheck(const void* pointer, struct ncclComm* comm, const char* ptrname, const char* opname) {
-  hipPointerAttribute_t attr;
-  hipError_t err = hipPointerGetAttributes(&attr, pointer);
-  if (err != hipSuccess || attr.devicePointer == NULL) {
+  cudaPointerAttributes attr;
+  cudaError_t err = cudaPointerGetAttributes(&attr, pointer);
+  if (err != cudaSuccess || attr.devicePointer == NULL) {
     WARN("%s : %s %p is not a valid pointer", opname, ptrname, pointer);
     return ncclInvalidArgument;
   }
 #if CUDART_VERSION >= 10000
-  if (attr.type == hipMemoryTypeDevice && attr.device != comm->cudaDev) {
+  if (attr.type == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
 #else
-  if (attr.memoryType == hipMemoryTypeDevice && attr.device != comm->cudaDev) {
+  if (attr.memoryType == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
 #endif
     WARN("%s : %s allocated on device %d mismatchs with NCCL device %d", opname, ptrname, attr.device, comm->cudaDev);
     return ncclInvalidArgument;
@@ -44,7 +43,7 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
     WARN("%s : invalid type %d", info->opName, info->datatype);
     return ncclInvalidArgument;
   }
-  // Type is OK, compute nbytes. Convert Allgather/Broadcast/P2P/AllToAllPivot calls to chars.
+  // Type is OK, compute nbytes. Convert Allgather/Broadcast/P2P calls to chars.
   NCCLCHECK(ncclInfoSetDerived(info, info->comm->nRanks));
 
   if (info->op < 0 || ncclMaxRedOp < info->op) {

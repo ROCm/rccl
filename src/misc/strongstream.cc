@@ -25,7 +25,7 @@ struct ncclStrongStreamGraph {
   // in the chain can be wider than a single node and thus need a list, so we
   // maintain a dynamically sized array of tip nodes.
   int tipCount, tipCapacity;
-  hipGraphNode_t* tipNodes;
+  cudaGraphNode_t* tipNodes;
 };
 
 static void ncclStrongStreamGraphDelete(struct ncclStrongStreamGraph* g) {
@@ -36,7 +36,7 @@ static void ncclStrongStreamGraphDelete(struct ncclStrongStreamGraph* g) {
 ////////////////////////////////////////////////////////////////////////////////
 
 ncclResult_t ncclCudaGetCapturingGraph(
-    struct ncclCudaGraph* graph, hipStream_t stream
+    struct ncclCudaGraph* graph, cudaStream_t stream
   ) {
   #if CUDART_VERSION >= 10000 // cudaStreamGetCaptureInfo
     int driver;
@@ -69,7 +69,7 @@ ncclResult_t ncclCudaGetCapturingGraph(
   return ncclSuccess;
 }
 
-ncclResult_t ncclCudaGraphAddDestructor(struct ncclCudaGraph graph, hipHostFn_t fn, void* arg) {
+ncclResult_t ncclCudaGraphAddDestructor(struct ncclCudaGraph graph, cudaHostFn_t fn, void* arg) {
   #if CUDART_VERSION >= 11030
     cudaUserObject_t object;
     CUDACHECK(cudaUserObjectCreate(
@@ -86,14 +86,14 @@ ncclResult_t ncclCudaGraphAddDestructor(struct ncclCudaGraph graph, hipHostFn_t 
 ////////////////////////////////////////////////////////////////////////////////
 
 ncclResult_t ncclStrongStreamConstruct(struct ncclStrongStream* ss) {
-  CUDACHECK(hipStreamCreateWithFlags(&ss->cudaStream, hipStreamNonBlocking));
+  CUDACHECK(cudaStreamCreateWithFlags(&ss->cudaStream, cudaStreamNonBlocking));
   #if CUDART_VERSION >= 11030
     CUDACHECK(cudaEventCreateWithFlags(&ss->serialEvent, cudaEventDisableTiming));
     ss->everCaptured = false;
     ss->serialEventNeedsRecord = false;
     ss->graphHead = nullptr;
   #else
-    CUDACHECK(hipEventCreateWithFlags(&ss->scratchEvent, hipEventDisableTiming));
+    CUDACHECK(cudaEventCreateWithFlags(&ss->scratchEvent, cudaEventDisableTiming));
   #endif
   return ncclSuccess;
 }
@@ -107,9 +107,9 @@ static void graphDestructor(void* arg) {
 }
 
 ncclResult_t ncclStrongStreamDestruct(struct ncclStrongStream* ss) {
-  CUDACHECK(hipStreamDestroy(ss->cudaStream));
+  CUDACHECK(cudaStreamDestroy(ss->cudaStream));
   #if CUDART_VERSION >= 11030
-    CUDACHECK(hipEventDestroy(ss->serialEvent));
+    CUDACHECK(cudaEventDestroy(ss->serialEvent));
     // Delete list of per-graph chains.
     struct ncclStrongStreamGraph* g = ss->graphHead;
     while (g != nullptr) {
@@ -121,7 +121,7 @@ ncclResult_t ncclStrongStreamDestruct(struct ncclStrongStream* ss) {
       g = next;
     }
   #else
-    CUDACHECK(hipEventDestroy(ss->scratchEvent));
+    CUDACHECK(cudaEventDestroy(ss->scratchEvent));
   #endif
   return ncclSuccess;
 }
@@ -130,7 +130,7 @@ NCCL_PARAM(GraphMixingSupport, "GRAPH_MIXING_SUPPORT", 1)
 
 static void ensureTips(struct ncclStrongStreamGraph* g, int n) {
   if (g->tipCapacity < n) {
-    g->tipNodes = (hipGraphNode_t*)realloc(g->tipNodes, n*sizeof(hipGraphNode_t));
+    g->tipNodes = (cudaGraphNode_t*)realloc(g->tipNodes, n*sizeof(cudaGraphNode_t));
     g->tipCapacity = n;
   }
 }
@@ -241,7 +241,7 @@ ncclResult_t ncclStrongStreamRelease(struct ncclCudaGraph graph, struct ncclStro
 }
 
 ncclResult_t ncclStrongStreamLaunchHost(
-    struct ncclCudaGraph graph, struct ncclStrongStream* ss, hipHostFn_t fn, void* arg
+    struct ncclCudaGraph graph, struct ncclStrongStream* ss, cudaHostFn_t fn, void* arg
   ) {
   #if CUDART_VERSION >= 11030
     if (graph.graph == nullptr) {
@@ -286,13 +286,13 @@ ncclResult_t ncclStrongStreamLaunchKernel(
     }
     ss->serialEventNeedsRecord = true;
   #else
-    CUDACHECK(hipLaunchKernel(fn, grid, block, args, sharedMemBytes, ss->cudaStream));
+    CUDACHECK(cudaLaunchKernel(fn, grid, block, args, sharedMemBytes, ss->cudaStream));
   #endif
   return ncclSuccess;
 }
 
 // Merge node list `b` into list `a` but don't add duplicates.
-static void mergeTips(struct ncclStrongStreamGraph* a, hipGraphNode_t const* bNodes, int bn) {
+static void mergeTips(struct ncclStrongStreamGraph* a, cudaGraphNode_t const* bNodes, int bn) {
   int an = a->tipCount;
   ensureTips(a, an + bn);
   for (int bi=0; bi < bn; bi++) {
@@ -323,14 +323,14 @@ ncclResult_t ncclStrongStreamWaitStream(
     }
     a->serialEventNeedsRecord = true;
   #else
-    CUDACHECK(hipEventRecord(b->scratchEvent, b->cudaStream));
-    CUDACHECK(hipStreamWaitEvent(a->cudaStream, b->scratchEvent, 0));
+    CUDACHECK(cudaEventRecord(b->scratchEvent, b->cudaStream));
+    CUDACHECK(cudaStreamWaitEvent(a->cudaStream, b->scratchEvent, 0));
   #endif
   return ncclSuccess;
 }
 
 ncclResult_t ncclStrongStreamWaitStream(
-    struct ncclCudaGraph graph, struct ncclStrongStream* a, hipStream_t b
+    struct ncclCudaGraph graph, struct ncclStrongStream* a, cudaStream_t b
   ) {
   #if CUDART_VERSION >= 11030
     if (graph.graph == nullptr) {
@@ -355,14 +355,14 @@ ncclResult_t ncclStrongStreamWaitStream(
     }
     a->serialEventNeedsRecord = true;
   #else
-    CUDACHECK(hipEventRecord(a->scratchEvent, b));
-    CUDACHECK(hipStreamWaitEvent(a->cudaStream, a->scratchEvent, 0));
+    CUDACHECK(cudaEventRecord(a->scratchEvent, b));
+    CUDACHECK(cudaStreamWaitEvent(a->cudaStream, a->scratchEvent, 0));
   #endif
   return ncclSuccess;
 }
 
 ncclResult_t ncclStrongStreamWaitStream(
-    struct ncclCudaGraph graph, hipStream_t a, struct ncclStrongStream* b
+    struct ncclCudaGraph graph, cudaStream_t a, struct ncclStrongStream* b
   ) {
   #if CUDART_VERSION >= 11030
     if (graph.graph == nullptr) {
@@ -377,8 +377,8 @@ ncclResult_t ncclStrongStreamWaitStream(
       CUDACHECK(cudaStreamUpdateCaptureDependencies(a, bg->tipNodes, bg->tipCount, cudaStreamAddCaptureDependencies));
     }
   #else
-    CUDACHECK(hipEventRecord(b->scratchEvent, b->cudaStream));
-    CUDACHECK(hipStreamWaitEvent(a, b->scratchEvent, 0));
+    CUDACHECK(cudaEventRecord(b->scratchEvent, b->cudaStream));
+    CUDACHECK(cudaStreamWaitEvent(a, b->scratchEvent, 0));
   #endif
   return ncclSuccess;
 }
@@ -388,6 +388,6 @@ ncclResult_t ncclStrongStreamSynchronize(struct ncclStrongStream* ss) {
     CUDACHECK(cudaStreamWaitEvent(ss->cudaStream, ss->serialEvent, 0));
     ss->serialEventNeedsRecord = false;
   #endif
-  CUDACHECK(hipStreamSynchronize(ss->cudaStream));
+  CUDACHECK(cudaStreamSynchronize(ss->cudaStream));
   return ncclSuccess;
 }

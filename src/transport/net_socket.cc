@@ -343,7 +343,7 @@ ncclResult_t ncclSocketConnect(int dev, void* opaqueHandle, void** sendComm) {
   comm->nSocks = handle->nSocks;
   comm->nThreads = handle->nThreads;
   comm->dev = dev;
-  CUDACHECK(hipGetDevice(&comm->cudaDev));
+  CUDACHECK(cudaGetDevice(&comm->cudaDev));
   for (; i<comm->nSocks+1; i++) {
     sock = i == comm->nSocks ? &comm->ctrlSock : comm->socks+i;
     NCCLCHECK(ncclSocketInit(sock, &handle->connectAddr, NULL, 1));
@@ -388,7 +388,7 @@ ncclResult_t ncclSocketAccept(void* listenComm, void** recvComm) {
   rComm->nSocks = lComm->nSocks;
   rComm->nThreads = lComm->nThreads;
   rComm->dev = lComm->dev;
-  CUDACHECK(hipGetDevice(&rComm->cudaDev));
+  CUDACHECK(cudaGetDevice(&rComm->cudaDev));
   lComm->sock.asyncFlag = 1;
   for (; i<rComm->nSocks+1; i++) {
     uint8_t sendSockIdx;

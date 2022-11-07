@@ -67,7 +67,7 @@ struct connectMapMem{
   int size;
   union {
     char shmPath[PATH_MAX];
-    hipIpcMemHandle_t ipc;
+    cudaIpcMemHandle_t ipc;
   };
 };
 
@@ -293,24 +293,24 @@ static ncclResult_t sendConnect(struct ncclComm* comm, struct ncclConnect* conne
   if (map->sameProcess) {
     if (map->cudaDev != comm->cudaDev) {
       // Enable P2P access
-      hipError_t err = hipDeviceEnablePeerAccess(map->cudaDev, 0);
-      if (err == hipErrorPeerAccessAlreadyEnabled) {
-        hipGetLastError();
-      } else if (err != hipSuccess) {
-        WARN("failed to peer with device %d: %d %s", map->cudaDev, err, hipGetErrorString(err));
+      cudaError_t err = cudaDeviceEnablePeerAccess(map->cudaDev, 0);
+      if (err == cudaErrorPeerAccessAlreadyEnabled) {
+        cudaGetLastError();
+      } else if (err != cudaSuccess) {
+        WARN("failed to peer with device %d: %d %s", map->cudaDev, err, cudaGetErrorString(err));
         return ncclInternalError;
       }
     }
   } else {
     NCCLCHECK(netMapShm(map->mems+NCCL_NET_MAP_HOSTMEM));
     if (map->mems[NCCL_NET_MAP_DEVMEM].size) {
-      CUDACHECK(hipIpcOpenMemHandle((void**)&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].ipc, hipIpcMemLazyEnablePeerAccess));
+      CUDACHECK(cudaIpcOpenMemHandle((void**)&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].ipc, cudaIpcMemLazyEnablePeerAccess));
       map->mems[NCCL_NET_MAP_DEVMEM].cpuPtr = NULL;
     }
     if (map->mems[NCCL_NET_MAP_SHARED_DEVMEM].size) {
       void** sharedDevMemPtr = comm->proxyState.sharedDevMems+send->proxyConn.localRank;
       if (*sharedDevMemPtr == NULL) {
-        CUDACHECK(hipIpcOpenMemHandle(sharedDevMemPtr, map->mems[NCCL_NET_MAP_SHARED_DEVMEM].ipc, hipIpcMemLazyEnablePeerAccess));
+        CUDACHECK(cudaIpcOpenMemHandle(sharedDevMemPtr, map->mems[NCCL_NET_MAP_SHARED_DEVMEM].ipc, cudaIpcMemLazyEnablePeerAccess));
       }
       map->mems[NCCL_NET_MAP_SHARED_DEVMEM].gpuPtr = (char*)(*sharedDevMemPtr);
       map->mems[NCCL_NET_MAP_SHARED_DEVMEM].cpuPtr = NULL;
@@ -362,7 +362,7 @@ static ncclResult_t sendFree(struct ncclConnector* send) {
     if (map->sameProcess == 0) {
       NCCLCHECK(ncclShmClose(map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, map->mems[NCCL_NET_MAP_HOSTMEM].gpuPtr, map->mems[NCCL_NET_MAP_HOSTMEM].size));
       if (map->mems[NCCL_NET_MAP_DEVMEM].size) {
-        CUDACHECK(hipIpcCloseMemHandle(map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr));
+        CUDACHECK(cudaIpcCloseMemHandle(map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr));
       }
     }
   }
@@ -376,7 +376,7 @@ static ncclResult_t recvFree(struct ncclConnector* recv) {
 
 #define NCCL_SHARED_STEPS 16
 static ncclResult_t sharedBuffersInit(struct ncclComm* comm, int cuda, int localRank, int type, int sameProcess,
-    int nChannels, char** gpuPtr, char** cpuPtr, int* size, hipIpcMemHandle_t* ipc) {
+    int nChannels, char** gpuPtr, char** cpuPtr, int* size, cudaIpcMemHandle_t* ipc) {
   if (cuda == 0 && sameProcess == 0) {
       WARN("PXN should not use host buffers for data");
       return ncclInternalError;
@@ -401,7 +401,7 @@ static ncclResult_t sharedBuffersInit(struct ncclComm* comm, int cuda, int local
   if (cuda && state->cudaBuff == NULL) {
     NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size, comm->sideStream, cuda));
     if (sameProcess == 0) {
-      CUDACHECK(hipIpcGetMemHandle(&state->ipc, state->cudaBuff));
+      CUDACHECK(cudaIpcGetMemHandle(&state->ipc, state->cudaBuff));
     }
   }
   if (!cuda && state->hostBuff == NULL) {
@@ -412,7 +412,7 @@ static ncclResult_t sharedBuffersInit(struct ncclComm* comm, int cuda, int local
     if (gpuPtr) *gpuPtr = *cpuPtr;
   } else {
     if (gpuPtr) *gpuPtr = NULL;
-    if (ipc) memcpy(ipc, &state->ipc, sizeof(hipIpcMemHandle_t));
+    if (ipc) memcpy(ipc, &state->ipc, sizeof(cudaIpcMemHandle_t));
   }
   return ncclSuccess;
 }
@@ -432,7 +432,7 @@ static ncclResult_t sharedBuffersDestroy(struct ncclComm* comm, int localRank, i
   if (state->size == 0) NCCLCHECK(ncclInternalError);
   state->refcount--;
   if (state->refcount == 0) {
-    if (state->cudaBuff) CUDACHECK(hipFree(state->cudaBuff));
+    if (state->cudaBuff) CUDACHECK(cudaFree(state->cudaBuff));
     if (state->hostBuff) NCCLCHECK(ncclCudaHostFree(state->hostBuff));
   }
   if (peer->send.refcount || peer->recv.refcount) return ncclSuccess;
@@ -556,7 +556,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   map->sameProcess =
     comm->peerInfo[resources->rank].pidHash == comm->peerInfo[comm->rank].pidHash ? 1 : 0;
   map->shared = resources->shared;
-  CUDACHECK(hipGetDevice(&map->cudaDev));
+  CUDACHECK(cudaGetDevice(&map->cudaDev));
 
   if (resources->shared == 0) { // Only allocate dedicated buffers for ring/tree, not for p2p
     for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
@@ -592,7 +592,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
       map->mems[NCCL_NET_MAP_DEVMEM].cpuPtr = map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr;
     }
     if (!map->sameProcess) {
-      CUDACHECK(hipIpcGetMemHandle(&map->mems[NCCL_NET_MAP_DEVMEM].ipc, map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr));
+      CUDACHECK(cudaIpcGetMemHandle(&map->mems[NCCL_NET_MAP_DEVMEM].ipc, map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr));
     }
   }
   if (map->sameProcess) {
@@ -807,7 +807,7 @@ static ncclResult_t sendProxyFree(struct ncclProxyConnection* connection, struct
   } else {
     NCCLCHECK(ncclShmClose(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, NULL, mems[NCCL_NET_MAP_HOSTMEM].size));
   }
-  CUDACHECK(hipFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
+  CUDACHECK(cudaFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
   if (mems[NCCL_NET_MAP_GDCMEM].cpuPtr) NCCLCHECK(ncclGdrCudaFree(resources->gdrDesc));
   if (resources->shared) {
     NCCLCHECK(sharedBuffersDestroy(comm, resources->localRank, 0));
@@ -838,7 +838,7 @@ static ncclResult_t recvProxyFree(struct ncclProxyConnection* connection, struct
   }
   struct connectMapMem* mems = resources->map.mems;
   NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr));
-  CUDACHECK(hipFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
+  CUDACHECK(cudaFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
   if (mems[NCCL_NET_MAP_GDCMEM].cpuPtr) NCCLCHECK(ncclGdrCudaFree(resources->gdrDesc));
   if (resources->shared) {
     NCCLCHECK(sharedBuffersDestroy(comm, resources->localRank, 1));

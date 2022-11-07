@@ -1,6 +1,5 @@
 /*************************************************************************
  * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -160,7 +159,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
 
   int cudaDev;
   if (!(level == NCCL_LOG_TRACE && flags == NCCL_CALL)) {
-    hipGetDevice(&cudaDev);
+    cudaGetDevice(&cudaDev);
   }
 
   char buffer[1024];

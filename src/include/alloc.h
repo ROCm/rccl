@@ -23,13 +23,13 @@ uint64_t clockNano(); // from utils.h with which we have a circular dependency
 template <typename T>
 ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
   ncclResult_t result = ncclSuccess;
-  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
-  CUDACHECKGOTO(hipHostMalloc(ptr, nelem*sizeof(T), hipHostMallocMapped), result, finish);
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECKGOTO(hipHostMalloc(ptr, nelem*sizeof(T), cudaHostAllocMapped), result, finish);
   memset(*ptr, 0, nelem*sizeof(T));
 finish:
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA host alloc %ld bytes", nelem*sizeof(T));
   INFO(NCCL_ALLOC, "%s:%d Cuda Host Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   return result;
@@ -37,7 +37,7 @@ finish:
 #define ncclCudaHostCalloc(...) ncclCudaHostCallocDebug(__VA_ARGS__, __FILE__, __LINE__)
 
 inline ncclResult_t ncclCudaHostFree(void* ptr) {
-  CUDACHECK(hipHostFree(ptr));
+  CUDACHECK(cudaFreeHost(ptr));
   return ncclSuccess;
 }
 
@@ -90,15 +90,15 @@ extern struct allocationTracker allocTracker[];
 template <typename T>
 ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
   ncclResult_t result = ncclSuccess;
-  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (isFineGrain)
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
   else
-    CUDACHECKGOTO(hipMalloc(ptr, nelem*sizeof(T)), result, finish);
+    CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
 finish:
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA malloc %ld bytes", nelem*sizeof(T));
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   return result;
@@ -106,23 +106,23 @@ finish:
 #define ncclCudaMalloc(...) ncclCudaMallocDebug( __FILE__, __LINE__, __VA_ARGS__)
 
 template <typename T>
-ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t sideStream = nullptr, bool isFineGrain = false) {
+ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, cudaStream_t sideStream = nullptr, bool isFineGrain = false) {
   ncclResult_t result = ncclSuccess;
-  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   // Need a side stream so as not to interfere with graph capture.
-  hipStream_t stream = sideStream;
+  cudaStream_t stream = sideStream;
   if (stream == nullptr)
-    CUDACHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
+    CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
   if (isFineGrain)
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
   else
-    CUDACHECKGOTO(hipMalloc(ptr, nelem*sizeof(T)), result, finish);
-  CUDACHECKGOTO(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
-  CUDACHECKGOTO(hipStreamSynchronize(stream), result, finish);
+    CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
+  CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
+  CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
   if (sideStream == nullptr)
-    CUDACHECKGOTO(hipStreamDestroy(stream), result, finish);
+    CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
   int dev;
   CUDACHECK(hipGetDevice(&dev));
   if (dev < MAX_ALLOC_TRACK_NGPU) {
@@ -130,8 +130,8 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
     __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*sizeof(T), __ATOMIC_RELAXED);
   }
 finish:
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA calloc %ld bytes", nelem*sizeof(T));
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   return result;
 }
@@ -140,14 +140,14 @@ finish:
 template <typename T>
 ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t stream, bool isFineGrain = false) {
   ncclResult_t result = ncclSuccess;
-  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (isFineGrain)
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
   else
-    CUDACHECKGOTO(hipMalloc(ptr, nelem*sizeof(T)), result, finish);
-  CUDACHECKGOTO(hipMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
+    CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
+  CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
   int dev;
   CUDACHECK(hipGetDevice(&dev));
   if (dev < MAX_ALLOC_TRACK_NGPU) {
@@ -155,7 +155,7 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
     __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*sizeof(T), __ATOMIC_RELAXED);
   }
 finish:
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA calloc async %ld bytes", nelem*sizeof(T));
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
   return result;
@@ -165,38 +165,38 @@ finish:
 template <typename T>
 ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
   ncclResult_t result = ncclSuccess;
-  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   // Need a side stream so as not to interfere with graph capture.
-  hipStream_t stream;
-  CUDACHECKGOTO(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking), result, finish);
+  cudaStream_t stream;
+  CUDACHECKGOTO(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), result, finish);
   NCCLCHECKGOTO(ncclCudaMemcpyAsync(dst, src, nelem, stream), result, finish);
-  CUDACHECKGOTO(hipStreamSynchronize(stream), result, finish);
-  CUDACHECKGOTO(hipStreamDestroy(stream), result, finish);
+  CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
+  CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
 finish:
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return result;
 }
 
 template <typename T>
-ncclResult_t ncclCudaMemcpyAsync(T* dst, T* src, size_t nelem, hipStream_t stream) {
+ncclResult_t ncclCudaMemcpyAsync(T* dst, T* src, size_t nelem, cudaStream_t stream) {
   ncclResult_t result = ncclSuccess;
-  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
-  CUDACHECKGOTO(hipMemcpyAsync(dst, src, nelem*sizeof(T), hipMemcpyDefault, stream), result, finish);
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECKGOTO(cudaMemcpyAsync(dst, src, nelem*sizeof(T), cudaMemcpyDefault, stream), result, finish);
 finish:
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return result;
 }
 
 template <typename T>
 ncclResult_t ncclCudaFree(T* ptr) {
   ncclResult_t result = ncclSuccess;
-  hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
-  CUDACHECKGOTO(hipFree(ptr), result, finish);
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECKGOTO(cudaFree(ptr), result, finish);
 finish:
-  CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return result;
 }
 

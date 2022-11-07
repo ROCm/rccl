@@ -60,15 +60,15 @@ ncclResult_t ncclShmOpen(char* shmPath, const int shmSize, void** shmPtr, void**
 
   NCCLCHECKGOTO(ncclShmSetup(shmPath, shmSize, &fd, &ptr, create), res, sysError);
   if (devShmPtr) {
-    CUDACHECKGOTO(hipHostRegister(ptr, shmSize, hipHostRegisterMapped), res, hipError_t);
-    CUDACHECKGOTO(hipHostGetDevicePointer(devShmPtr, ptr, 0), res, hipError_t);
+    CUDACHECKGOTO(cudaHostRegister(ptr, shmSize, cudaHostRegisterMapped), res, cudaError);
+    CUDACHECKGOTO(cudaHostGetDevicePointer(devShmPtr, ptr, 0), res, cudaError);
   }
 
   *shmPtr = ptr;
   return ncclSuccess;
 sysError:
   WARN("Error while %s shared memory segment %s (size %d)", create ? "creating" : "attaching to", shmPath, shmSize);
-hipError_t:
+cudaError:
   if (fd != -1) close(fd);
   if (create) shm_unlink(shmPath);
   if (ptr != MAP_FAILED) munmap(ptr, shmSize);
@@ -83,7 +83,7 @@ ncclResult_t ncclShmUnlink(const char* shmPath) {
 
 ncclResult_t ncclShmClose(void* shmPtr, void* devShmPtr, const int shmSize) {
   if (shmPtr) {
-    if (devShmPtr) CUDACHECK(hipHostUnregister(shmPtr));
+    if (devShmPtr) CUDACHECK(cudaHostUnregister(shmPtr));
     if (munmap(shmPtr, shmSize) != 0) {
       WARN("munmap of shared memory failed");
       return ncclSystemError;

@@ -126,7 +126,7 @@ struct ncclProxySharedP2p {
   int size;
   char* cudaBuff;
   char* hostBuff;
-  hipIpcMemHandle_t ipc;
+  cudaIpcMemHandle_t ipc;
   struct ncclProxyArgs* proxyAppend[MAXCHANNELS]; // Separate send and recv
 };
 
@@ -172,7 +172,7 @@ struct ncclProxyState {
   pthread_t thread;
   struct ncclSocket* listenSock;
   int stop;
-  hipCtx_t cudaCtx;
+  CUcontext cudaCtx;
   int safeAbortFlag;
 
   // Used by main thread

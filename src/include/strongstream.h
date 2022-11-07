@@ -47,8 +47,8 @@ inline bool ncclCudaGraphSame(struct ncclCudaGraph a, struct ncclCudaGraph b) {
   #endif
 }
 
-ncclResult_t ncclCudaGetCapturingGraph(struct ncclCudaGraph* graph, hipStream_t stream);
-ncclResult_t ncclCudaGraphAddDestructor(struct ncclCudaGraph graph, hipHostFn_t fn, void* arg);
+ncclResult_t ncclCudaGetCapturingGraph(struct ncclCudaGraph* graph, cudaStream_t stream);
+ncclResult_t ncclCudaGraphAddDestructor(struct ncclCudaGraph graph, cudaHostFn_t fn, void* arg);
 
 /* ncclStrongStream: An abstraction over CUDA streams that do not lose their
  * identity while being captured. Regular streams have the deficiency that the
@@ -89,7 +89,7 @@ ncclResult_t ncclStrongStreamRelease(struct ncclCudaGraph graph, struct ncclStro
 // Add a host launch to the stream.
 ncclResult_t ncclStrongStreamLaunchHost(
   struct ncclCudaGraph graph, struct ncclStrongStream* ss,
-  hipHostFn_t fn, void* arg
+  cudaHostFn_t fn, void* arg
 );
 // Add a kernel launch to the stream.
 ncclResult_t ncclStrongStreamLaunchKernel(
@@ -103,11 +103,11 @@ ncclResult_t ncclStrongStreamWaitStream(
 );
 // `b` must be capturing within `graph`.
 ncclResult_t ncclStrongStreamWaitStream(
-  struct ncclCudaGraph graph, struct ncclStrongStream* a, hipStream_t b
+  struct ncclCudaGraph graph, struct ncclStrongStream* a, cudaStream_t b
 );
 // `a` must be capturing within `graph`.
 ncclResult_t ncclStrongStreamWaitStream(
-  struct ncclCudaGraph graph, hipStream_t a, struct ncclStrongStream* b
+  struct ncclCudaGraph graph, cudaStream_t a, struct ncclStrongStream* b
 );
 
 // Synchrnoization does not need the strong stream to be acquired.
@@ -119,7 +119,7 @@ struct ncclStrongStreamGraph; // internal to ncclStrongStream
 
 struct ncclStrongStream {
   // Used when not graph capturing.
-  hipStream_t cudaStream;
+  cudaStream_t cudaStream;
 #if CUDART_VERSION >= 11030
   // The event used to establish order between graphs and streams. During acquire
   // this event is waited on, during release it is recorded to.
@@ -130,7 +130,7 @@ struct ncclStrongStream {
   bool serialEventNeedsRecord;
   struct ncclStrongStreamGraph* graphHead;
 #else
-  hipEvent_t scratchEvent;
+  cudaEvent_t scratchEvent;
 #endif
 };
 
