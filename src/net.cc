@@ -337,7 +337,7 @@ ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport) {
     NCCLCHECKGOTO(ncclNetListen(comm, dev, &handle, &lComm), ret, cleanup1);
     NCCLWAITGOTO(ncclNetConnect(comm, dev, &handle, &sComm), sComm != NULL, comm->abortFlag, ret, cleanup2);
     NCCLWAITGOTO(ncclNetAccept(comm, lComm, &rComm), rComm != NULL, comm->abortFlag, ret, cleanup3);
-    CUDACHECKGOTO(hipMalloc(&gpuPtr, GPU_BUF_SIZE), ret, cleanup4);
+    CUDACHECKGOTO(cudaMalloc(&gpuPtr, GPU_BUF_SIZE), ret, cleanup4);
     if (ncclNetRegMr(comm, sComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle) == ncclSuccess) {
       NCCLCHECK(ncclNetDeregMr(comm, sComm, mHandle));
       NCCLCHECK(ncclNetRegMr(comm, rComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle));
@@ -345,7 +345,7 @@ ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport) {
       *gdrSupport = 1;
     }
     ncclDebugNoWarn = 0;
-    CUDACHECK(hipFree(gpuPtr));
+    CUDACHECK(cudaFree(gpuPtr));
 cleanup4:
     NCCLCHECK(ncclNetCloseRecv(comm, rComm));
 cleanup3:

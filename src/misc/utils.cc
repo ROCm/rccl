@@ -1,6 +1,5 @@
 /*************************************************************************
  * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,17 +8,16 @@
 #include "core.h"
 
 #include "nvmlwrap.h"
-#include <hip/hip_runtime.h>
 
 #include <stdlib.h>
 
 // Get current Compute Capability
 int ncclCudaCompCap() {
   int cudaDev;
-  if (hipGetDevice(&cudaDev) != hipSuccess) return 0;
+  if (cudaGetDevice(&cudaDev) != cudaSuccess) return 0;
   int ccMajor, ccMinor;
-  if (hipDeviceGetAttribute(&ccMajor, hipDeviceAttributeComputeCapabilityMajor, cudaDev) != hipSuccess) return 0;
-  if (hipDeviceGetAttribute(&ccMinor, hipDeviceAttributeComputeCapabilityMinor, cudaDev) != hipSuccess) return 0;
+  if (cudaDeviceGetAttribute(&ccMajor, cudaDevAttrComputeCapabilityMajor, cudaDev) != cudaSuccess) return 0;
+  if (cudaDeviceGetAttribute(&ccMinor, cudaDevAttrComputeCapabilityMinor, cudaDev) != cudaSuccess) return 0;
   return ccMajor*10+ccMinor;
 }
 
@@ -51,7 +49,7 @@ ncclResult_t getBusId(int cudaDev, int64_t *busId) {
   // format. Still need to allocate proper space in case PCI domain goes
   // higher.
   char busIdStr[] = "00000000:00:00.0";
-  CUDACHECK(hipDeviceGetPCIBusId(busIdStr, sizeof(busIdStr), cudaDev));
+  CUDACHECK(cudaDeviceGetPCIBusId(busIdStr, sizeof(busIdStr), cudaDev));
   NCCLCHECK(busIdToInt64(busIdStr, busId));
   return ncclSuccess;
 }

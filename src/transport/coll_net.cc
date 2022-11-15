@@ -123,6 +123,7 @@ struct recvResources {
   int netDev;
   int useGdr;
   int useDmaBuf;
+  int needFlush;
   uint64_t* gdcSync;
   uint64_t* gdcFlush;
   void* gdrDesc;
@@ -142,6 +143,7 @@ static ncclResult_t canConnect(int* ret, struct ncclTopoSystem* topo, struct ncc
 struct setupReq {
   int netDev;
   int useGdr;
+  int needFlush;
 };
 
 
@@ -154,6 +156,8 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, -1, &req.netDev, &proxyRank));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, req.netDev, 1, &req.useGdr));
   send->conn.direct |= req.useGdr ? NCCL_DIRECT_NIC : 0;
+  // Determine whether we need to flush the GDR buffer on recv or not
+  if (req.useGdr) NCCLCHECK(ncclTopoNeedFlush(comm->topo, myInfo->busId, &req.needFlush));
 
   NCCLCHECK(ncclTopoGetLocalRank(comm->topo, myInfo->rank, &send->proxyConn.localRank));
   NCCLCHECK(ncclProxyConnect(comm, TRANSPORT_COLLNET, 1, myInfo->rank, &send->proxyConn));
@@ -377,7 +381,7 @@ static ncclResult_t sharedBuffersGet(struct ncclComm* comm, int type, int slot, 
 static ncclResult_t sharedBuffersDestroy(struct ncclComm* comm) {
   struct ncclProxySharedCollNet* state = &comm->proxyState.progressState.collNet;
   if (state->size == 0) return ncclSuccess;
-  CUDACHECK(hipFree(state->cudaBuff));
+  CUDACHECK(cudaFree(state->cudaBuff));
   NCCLCHECK(ncclCudaHostFree(state->hostBuff));
   // This will be called multiple times, with multiple channels and send/recv. Make sure we only do it once.
   state->size = 0;
@@ -395,6 +399,7 @@ static ncclResult_t recvProxySetup(struct ncclProxyConnection* connection, struc
 
   resources->netDev = req->netDev;
   resources->useGdr = req->useGdr;
+  resources->needFlush = req->needFlush;
   ncclNetProperties_t props;
   NCCLCHECK(collNetGetProperties(comm, req->netDev, &props));
   /* DMA-BUF support */
@@ -567,7 +572,7 @@ static ncclResult_t sendProxyFree(struct ncclProxyConnection* connection, struct
     }
     struct connectMapMem* mems = resources->map.mems;
     NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr));
-    CUDACHECK(hipFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
+    CUDACHECK(cudaFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
     if (mems[NCCL_NET_MAP_GDCMEM].cpuPtr) NCCLCHECK(ncclGdrCudaFree(resources->gdrDesc));
     NCCLCHECK(sharedBuffersDestroy(comm));
     NCCLCHECK(sharedFree(comm, resources->netDev));
@@ -587,7 +592,7 @@ static ncclResult_t recvProxyFree(struct ncclProxyConnection* connection, struct
     }
     struct connectMapMem* mems = resources->map.mems;
     NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr));
-    CUDACHECK(hipFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
+    CUDACHECK(cudaFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
     if (mems[NCCL_NET_MAP_GDCMEM].cpuPtr) NCCLCHECK(ncclGdrCudaFree(resources->gdrDesc));
     NCCLCHECK(sharedBuffersDestroy(comm));
     NCCLCHECK(sharedFree(comm, resources->netDev));
@@ -763,7 +768,7 @@ static ncclResult_t recvProxyProgress(struct ncclComm* comm, struct ncclProxyArg
           TRACE(NCCL_NET, "recvProxy [%lu/%d/%d] received, size %d", sub->received, group, buffSlot, totalSize);
           sub->received += args->sliceSteps;
           sub->requests[buffSlot] = NULL;
-          if (1 && reqFifo[group][buffSlot].size > 0 && resources->useGdr) {
+          if (reqFifo[group][buffSlot].size > 0 && resources->useGdr && resources->needFlush) {
             // GDRCOPY support
             if (resources->gdcFlush) {
 #if defined (__x86_64__)

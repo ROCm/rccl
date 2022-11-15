@@ -1,6 +1,5 @@
 /*************************************************************************
  * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,17 +11,17 @@
 
 // Check CUDA RT calls
 #define CUDACHECK(cmd) do {                                 \
-    hipError_t err = cmd;                                    \
-    if( err != hipSuccess ) {                                \
-        WARN("HIP failure '%s'", hipGetErrorString(err));   \
+    cudaError_t err = cmd;                                  \
+    if( err != cudaSuccess ) {                              \
+        WARN("Cuda failure '%s'", cudaGetErrorString(err)); \
         return ncclUnhandledCudaError;                      \
     }                                                       \
 } while(false)
 
 #define CUDACHECKGOTO(cmd, res, label) do {                 \
-    hipError_t err = cmd;                                    \
-    if( err != hipSuccess ) {                                \
-        WARN("HIP failure '%s'", hipGetErrorString(err));   \
+    cudaError_t err = cmd;                                  \
+    if( err != cudaSuccess ) {                              \
+        WARN("Cuda failure '%s'", cudaGetErrorString(err)); \
         res = ncclUnhandledCudaError;                       \
         goto label;                                         \
     }                                                       \
@@ -30,10 +29,10 @@
 
 // Report failure but clear error and continue
 #define CUDACHECKIGNORE(cmd) do {  \
-    hipError_t err = cmd;         \
-    if( err != hipSuccess ) {     \
-        INFO(NCCL_ALL,"%s:%d Cuda failure '%s'", __FILE__, __LINE__, hipGetErrorString(err)); \
-        (void) hipGetLastError(); \
+    cudaError_t err = cmd;         \
+    if( err != cudaSuccess ) {     \
+        INFO(NCCL_ALL,"%s:%d Cuda failure '%s'", __FILE__, __LINE__, cudaGetErrorString(err)); \
+        (void) cudaGetLastError(); \
     }                              \
 } while(false)
 
@@ -151,7 +150,7 @@
 } while(0)
 
 #define CUDACHECKTHREAD(a) do { \
-  if ((a) != hipSuccess) { \
+  if ((a) != cudaSuccess) { \
     INFO(NCCL_INIT,"%s:%d -> %d [Async thread]", __FILE__, __LINE__, args->ret); \
     args->ret = ncclUnhandledCudaError; \
     return args; \

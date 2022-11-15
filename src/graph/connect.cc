@@ -35,7 +35,7 @@
 /******************************************************************/
 
 ncclResult_t ncclTopoPreset(struct ncclComm* comm,
-    struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph,
+    struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph, struct ncclTopoGraph* collNetGraph,
     struct ncclTopoRanks* topoRanks) {
   int rank = comm->rank;
   int nChannels = comm->nChannels;
@@ -60,6 +60,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
 
     int* ringIntra = ringGraph->intra+c*localRanks;
     int* treeIntra = treeGraph->intra+c*localRanks;
+    int* collNetIntra = collNetGraph->intra+c*localRanks;
 
     for (int i=0; i<localRanks; i++) {
       if (ringIntra[i] == rank) {
@@ -78,8 +79,10 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
         topoRanks->treeToChild1[c] = treeIntra[child1Index];
         channel->tree.up         = i == 0 ? -1 : treeIntra[i-1];
         channel->tree.down[0]    = i == localRanks-1 ? -1 : treeIntra[i+1];
-        channel->collnetChain.up         = i == 0 ? comm->nRanks : treeIntra[i-1];
-        channel->collnetChain.down[0]    = i == localRanks-1 ? -1 : treeIntra[i+1];
+      }
+      if (collNetIntra[i] == rank) {
+        channel->collnetChain.up      = i == 0 ? comm->nRanks : collNetIntra[i-1];
+        channel->collnetChain.down[0] = i == localRanks-1 ? -1 : collNetIntra[i+1];
       }
     }
     topoRanks->ringPrev[c] = channel->ring.prev;

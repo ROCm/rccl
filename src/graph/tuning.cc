@@ -13,11 +13,11 @@
 NCCL_PARAM(Nthreads, "NTHREADS", -2);
 NCCL_PARAM(Ll128Nthreads, "LL128_NTHREADS", -2);
 
-static int getNthreads(const char* name, int env, int min, int max, int def) {
+static int getNthreads(const char* name, int env, int min, int max, int def, int WarpSize) {
   int nt = env;
   if (nt > 0) {
-    if (nt % WARP_SIZE != 0) {
-      WARN("Invalid %s %d (must be a multiple of %d)", name, nt, WARP_SIZE);
+    if (nt % WarpSize != 0) {
+      WARN("Invalid %s %d (must be a multiple of %d)", name, nt, WarpSize);
       nt = max;
     } else if (nt > max) {
       WARN("Invalid %s %d (maximum %d).", name, nt, max);
@@ -71,30 +71,30 @@ struct tuningModel {
 static struct tuningModel tuning_model_0 {
   .hwLat = {
     /* NVLINK */
-    { /* Tree (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* Ring (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 4.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 4.5 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.8, 1.4, 2.5 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 2.2, 3.6 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.8 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 1.4 } },
     /* PCI */
     { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 5.7 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 5.7 } },
     /* NET */
-    { /* Tree (LL/LL128/Simple)*/ { 28.3, 28.3, 45.4 }, /* Ring (LL/LL128/Simple)*/ { 2.0, 2.0, 24.1 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 45.4 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 45.4 } },
+    { /* Tree (LL/LL128/Simple)*/ { 11.8, 18.2, 20.8 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 19.8, 15.1 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 11.8 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 18.2 } },
   },
 
   .bwRatio = {
     /* 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.06, 1.00, 1.30 }, /* Ring (LL/LL128/Simple)*/ { 0.07, 1.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.04, 0.22, 0.91 }, /* Ring (LL/LL128/Simple)*/ { 0.04, 0.34, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
     /* more than 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.06, 1.00, 0.30 }, /* Ring (LL/LL128/Simple)*/ { 0.07, 1.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.04, 0.22, 0.95 }, /* Ring (LL/LL128/Simple)*/ { 0.04, 0.34, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
   },
 
   .treeCorrectionFactor = {
-    { 0.3, 0.9, 0.8, 0.7, 0.6, 0.3, 0.1, 0.4, 0.8, 0.8, 0.5, 0.3, 0.4, 0.3, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.3, 0.9, 0.8, 0.7, 0.6, 0.3, 0.1, 0.4, 0.8, 0.8, 0.5, 0.3, 0.4, 0.3, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.4, 1.0, 1.0, 0.8, 1.0, 1.0, 0.3, 1.0, 0.9, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.7, 0.4, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.1, 0.2, 0.1, 0.1, 0.9, 0.3, 0.4, 0.1, 0.2, 0.4, 0.2, 0.1, 0.3, 0.3, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
+    { 0.1, 0.3, 1.0, 0.1, 0.5, 1.0, 0.9, 1.0, 1.0, 1.0, 0.3, 0.1, 0.4, 0.5, 0.5, 0.4, 0.4, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.2, 1.0, 0.1, 0.1, 0.7, 0.2, 0.4, 0.1, 0.1, 0.3, 0.4, 0.3, 0.6, 0.8, 1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9, 0.9, },
   },
 
   .ringCorrectionFactor = {
-    { 0.2, 0.7, 0.7, 0.6, 0.6, 0.3, 0.2, 0.5, 1.0, 1.0, 0.8, 0.6, 0.8, 0.6, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.2, 0.7, 0.7, 0.6, 0.6, 0.3, 0.2, 0.5, 1.0, 1.0, 0.8, 0.6, 0.8, 0.6, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 1.0, 0.6, 0.9, 1.0, 0.7, 0.7, 1.0, 0.6, 0.8, 0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.5, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.2, 0.3, 0.5, 0.3, 0.1, 0.5, 0.5, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, 0.7, 0.5, 0.4, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, },
+    { 1.0, 0.8, 0.2, 1.0, 1.0, 0.3, 1.0, 0.1, 0.1, 0.2, 0.2, 0.1, 0.5, 1.0, 0.8, 0.8, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
 };
 
@@ -161,30 +161,30 @@ static struct tuningModel tuning_model_2 {
 static struct tuningModel tuning_model_3 {
   .hwLat = {
     /* NVLINK */
-    { /* Tree (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* Ring (LL/LL128/Simple)*/ { 1.5, 1.5, 4.5 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 4.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 4.5 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.8, 0.0, 2.5 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 3.6 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.8 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 } },
     /* PCI */
     { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 5.7 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 5.7 } },
     /* NET */
-    { /* Tree (LL/LL128/Simple)*/ { 17.4, 17.4, 40.3 }, /* Ring (LL/LL128/Simple)*/ { 4.1, 4.1, 40.6 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 40.3 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 40.3 } },
+    { /* Tree (LL/LL128/Simple)*/ { 12.5, 0.0, 22.4 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 0.0, 19.8 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 12.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 } },
   },
 
   .bwRatio = {
     /* 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.08, 1.00, 0.95 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 1.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.20, 0.00, 1.75 }, /* Ring (LL/LL128/Simple)*/ { 0.20, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
     /* more than 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.08, 1.00, 0.41 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 1.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.20, 0.00, 0.96 }, /* Ring (LL/LL128/Simple)*/ { 0.20, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
   },
 
   .treeCorrectionFactor = {
-    { 0.6, 1.0, 1.0, 1.0, 0.1, 0.2, 0.1, 0.2, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.9, 0.9, 0.8, 0.6, 0.4, 0.5, 0.4, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.6, 1.0, 1.0, 1.0, 0.1, 0.2, 0.1, 0.2, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.9, 0.9, 0.8, 0.6, 0.4, 0.5, 0.4, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 1.0, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 0.7, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.5, 0.6, 0.6, 0.6, 0.6, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 0.2, 1.0, 0.9, 1.0, 0.6, 0.4, 0.6, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
+    { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.1, 0.2, 1.0, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, 0.7, 0.8, 0.9, 0.7, 0.7, },
   },
 
   .ringCorrectionFactor = {
-    { 0.5, 0.2, 0.1, 0.1, 0.3, 0.3, 0.1, 0.3, 0.7, 0.8, 0.5, 0.4, 0.2, 0.1, 0.1, 0.1, 0.3, 0.5, 0.4, 0.4, 0.3, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.5, 0.2, 0.1, 0.1, 0.3, 0.3, 0.1, 0.3, 0.7, 0.8, 0.5, 0.4, 0.2, 0.1, 0.1, 0.1, 0.3, 0.5, 0.4, 0.4, 0.3, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.2, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.6, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.1, 0.2, 0.1, 0.4, 0.4, 0.2, 0.2, 0.3, 0.7, 0.5, 0.4, 0.3, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.5, 1.0, 0.1, 0.3, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.3, 0.4, 0.7, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
 };
 
@@ -226,22 +226,36 @@ static struct tuningModel rcclTuningModel[] = {
   tuning_model_4,
 };
 
+/* Array indexes used below */
+#define VOLTA_COMPCAP_IDX 0
+#define AMPERE_COMPCAP_IDX 1
+#define HOPPER_COMPCAP_IDX 2
+
 // LL128 max BW per channel
 static const double ll128MaxBwPerCh = 20.0;
-static const double llMaxBws[2][3] = { /* Volta-N1/Intel-N2/Intel-N4) */ {39.0, 39.0, 20.4}, /* Ampere-N1/AMD-N2/AMD-N4) */ {87.7, 22.5 /*avg of ring & tree*/, 19.0} };
-static const double perChMaxTreeBws[2][3] = { /* Volta (N1/N2/N4) */ {26.5, 18.5, 10.0}, /* Ampere (N1/N2/N4) */ {24.0, 23.6, 17.8} };
+static const double llMaxBws[3][3] = {
+  /* Volta-N1/Intel-N2/Intel-N4) */ {39.0, 39.0, 20.4},
+  /* Ampere-N1/AMD-N2/AMD-N4) */ {87.7, 22.5 /*avg of ring & tree*/, 19.0},
+  /* Hopper-N1/AMD-N2/AMD-N4) */ {87.7, 22.5 /*avg of ring & tree*/, 19.0}
+};
+
+static const double perChMaxTreeBws[3][3] = {
+  /* Volta (N1/N2/N4) */ {26.5, 18.5, 10.0},
+  /* Ampere (N1/N2/N4) */ {24.0, 23.6, 17.8},
+  /* Hopper (N1/N2/N4) */ {24.0, 23.6, 17.8},
+};
 
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph, struct ncclTopoGraph* collNetGraph) {
   int simpleDefaultThreads = (ringGraph->bwIntra*ringGraph->nChannels <= PCI_BW) ? 256 : NCCL_SIMPLE_MAX_NTHREADS;
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] =
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, simpleDefaultThreads);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, simpleDefaultThreads, comm->WarpSize);
   comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = comm->maxThreads[NCCL_ALGO_COLLNET_DIRECT][NCCL_PROTO_SIMPLE] =
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS, comm->WarpSize);
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_LL] = comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_LL] = comm->maxThreads[NCCL_ALGO_COLLNET_DIRECT][NCCL_PROTO_LL] =
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS, comm->WarpSize);
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_LL128] = comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_LL128] =
-    getNthreads("NCCL_LL128_NTHREADS", ncclParamLl128Nthreads(), 4*comm->WarpSize, NCCL_LL128_MAX_NTHREADS, NCCL_LL128_MAX_NTHREADS);
+    getNthreads("NCCL_LL128_NTHREADS", ncclParamLl128Nthreads(), 4*comm->WarpSize, NCCL_LL128_MAX_NTHREADS, NCCL_LL128_MAX_NTHREADS, comm->WarpSize);
 #else
     getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 2*WARP_SIZE, NCCL_SIMPLE_MAX_NTHREADS, simpleDefaultThreads);
   comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] =
@@ -258,14 +272,14 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   int nRanks = comm->nRanks;
   if (nRanks <= 1) return ncclSuccess;
 
-  int compCap80 = minCompCap == 80 && maxCompCap == 80 ? 1 : 0;
+  int compCapIndex = (minCompCap == 80 && maxCompCap == 80) ? AMPERE_COMPCAP_IDX : ((minCompCap == 90 && maxCompCap == 90) ? HOPPER_COMPCAP_IDX : VOLTA_COMPCAP_IDX);
   int cpuArch, cpuVendor, cpuModel;
   NCCLCHECK(ncclTopoCpuType(comm->topo, &cpuArch, &cpuVendor, &cpuModel));
   int index2 = nNodes <= 2 ? nNodes-1 : 2;
   // LL: for single node, we look at GPU type; for multi-node, we look at CPU type
-  int index1 = nNodes == 1 ? compCap80 : cpuVendor == NCCL_TOPO_CPU_VENDOR_AMD ? 1 : 0;
+  int index1 = nNodes == 1 ? compCapIndex : cpuVendor == NCCL_TOPO_CPU_VENDOR_AMD ? 1 : 0;
   double llMaxBw = llMaxBws[index1][index2];
-  double perChMaxTreeBw = perChMaxTreeBws[compCap80][index2];
+  double perChMaxTreeBw = perChMaxTreeBws[compCapIndex][index2];
   // De-penalize Tree/Simple latency on Power systems to favor Tree than Ring
   //if (cpuArch == NCCL_TOPO_CPU_ARCH_POWER) hwLat[NCCL_HW_PCI][NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = hwLat[NCCL_HW_PCI][NCCL_ALGO_RING][NCCL_PROTO_SIMPLE];
   float ppn = (float)nRanks / nNodes; // if ppn < 2, then we are sending/receiving at the same GPU through the NIC, apply some bw discount
@@ -290,6 +304,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         int collnet = (a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) ? 1 : 0;
         float bw = nNodes <= 2 || collnet ? graphs[a]->bwIntra : graphs[a]->bwInter;
         float busBw = comm->topo->baseBw != 0.0 ? comm->topo->baseBw : graphs[a]->nChannels * bw;
+        //INFO(NCCL_INIT, "algo %s proto %s busBw %f baseBw %f bw %f nChannels %d bwIntra %f bwInter %f", ncclAlgoStr[a], ncclProtoStr[p], busBw, comm->topo->baseBw, bw, graphs[a]->nChannels, graphs[a]->bwIntra, graphs[a]->bwInter);
 
         // Various model refinements
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
@@ -298,7 +313,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         else
           busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[1][a][p];
 #else
-        if (compCap80) busBw = std::min(busBw, 235.0f);
+        if (compCapIndex == AMPERE_COMPCAP_IDX) busBw = std::min(busBw, 235.0f);
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL) { busBw = std::min(llMaxBw, busBw * ((nNodes > 1 || coll == ncclFuncAllReduce || coll == ncclFuncReduce) ? 1.0/4.0 : 1.0/3.0)); }
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL128) busBw = std::min(busBw * (ppn < 2 ? 0.7 : 0.92 /*120.0/128.0*/), ll128MaxBwPerCh*graphs[a]->nChannels);
         if (a == NCCL_ALGO_TREE) busBw = std::min(busBw*.92, graphs[a]->nChannels*perChMaxTreeBw);
@@ -306,14 +321,14 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_LL128) busBw = std::min(busBw * (nNodes == 1 ? 7.0/9.0 : 120.0/128.0), ll128MaxBwPerCh*graphs[a]->nChannels);
         if (a == NCCL_ALGO_COLLNET_DIRECT && p != NCCL_PROTO_SIMPLE) busBw = 0;  // Not used
         if (a == NCCL_ALGO_COLLNET_CHAIN && p != NCCL_PROTO_SIMPLE) busBw = 0;  // Not used
-      	if (a == NCCL_ALGO_COLLNET_DIRECT && p == NCCL_PROTO_SIMPLE) {
-                // Collnet+Direct requires all GPUs to have a local NIC to work at full speed
-                float factor = ppn / (1.0*graphs[a]->nChannels); // GPU/NIC ratio
-      	  factor -= (factor-1)/2;
-                busBw /= factor;
-      	}
-      	if (a == NCCL_ALGO_COLLNET_CHAIN && p == NCCL_PROTO_SIMPLE) busBw *= .75;
+        if (a == NCCL_ALGO_COLLNET_DIRECT && p == NCCL_PROTO_SIMPLE) {
+          // Collnet+Direct requires all GPUs to have a local NIC to work at full speed
+          float factor = ppn / (1.0*graphs[a]->nChannels); // GPU/NIC ratio
+          factor -= (factor-1)/2;
+          busBw /= factor;
+        }
 #endif
+        if (a == NCCL_ALGO_COLLNET_CHAIN && p == NCCL_PROTO_SIMPLE) busBw *= .75;
 
         // Convert bus BW to algorithm BW
         float ratio = (a != NCCL_ALGO_RING) ? .5 : (1.0 * nRanks) / nsteps;
@@ -387,11 +402,18 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
         (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->topo->ll128Enabled) ? 1 : 0;
 #else
-      // Enable LL128 by default only on Volta/Ampere+NVLink. Other cases are not tested and may cause silent data corruption.
-      pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
-        ((minCompCap == 70 && maxCompCap == 70) || (minCompCap == 80 && maxCompCap == 80)) ? 1 : 0;
+      // Enable LL128 by default only on Volta/Ampere/Hopper+NVLink. Other cases are not tested and may cause silent data corruption.
+      pEnable = 1;
+      pEnable &= (graphs[a]->typeInter <= PATH_PXB);
+      pEnable &= (graphs[a]->typeIntra <= PATH_NVL);
+      pEnable &= (minCompCap == maxCompCap);
+      switch (minCompCap) {
+      case 70: pEnable &= 1; break;
+      case 80: pEnable &= 1; break;
+      case 90: pEnable &= !(CUDART_VERSION == 11080 && c == ncclFuncAllReduce && a == NCCL_ALGO_RING && comm->nRanks == 2); break;
+      default: pEnable &= 0; break;
+      }
 #endif
-      if (comm->rank == 0 && c == 0 && a == 0) INFO(NCCL_INIT, "Using tuning table %d with LL128 %s", comm->topo->tuning, pEnable ? "enabled" : "disabled");
     }
     if (pEnable == 0) comm->bandwidths[c][a][p] = 0;
     // Only disable algo for Allreduce since others only have one

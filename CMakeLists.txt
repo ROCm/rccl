@@ -100,6 +100,10 @@ list(APPEND CMAKE_PREFIX_PATH
 
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
+message(STATUS "HIP compiler: ${HIP_COMPILER} version ${HIP_CLANG_PATCH_LEVEL}")
+if (${HIP_CLANG_PATCH_LEVEL} LESS "22362")
+  message(FATAL_ERROR "RCCL requires ROCm 5.3 and above to compile")
+endif()
 message(STATUS "HIP runtime: ${HIP_RUNTIME}")
 
 if(BUILD_STATIC)
@@ -119,8 +123,8 @@ configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/nccl.h)
 
 include_directories(${PROJECT_BINARY_DIR}/include) # for generated rccl.h header
 include_directories(${PROJECT_BINARY_DIR}/include/rccl) # for generated rccl.h header
+include_directories(${PROJECT_BINARY_DIR}/src/include) # for hipified header files
 include_directories(src)
-include_directories(src/include)
 include_directories(src/collectives)
 include_directories(src/collectives/device)
 
@@ -153,6 +157,96 @@ foreach(filename ${CU_SOURCES})
   list(APPEND CPP_SOURCES ${cpp_filename})
 endforeach(filename)
 
+set(HEADER_SOURCES
+  src/include/collectives.h
+  src/include/align.h
+  src/include/profiler.h
+  src/include/alloc.h
+  src/include/ibvwrap.h
+  src/include/gdrwrap.h
+  src/include/utils.h
+  src/include/strongstream.h
+  src/include/comm.h
+  src/include/trees.h
+  src/include/rccl_vars.h
+  src/include/checks.h
+  src/include/p2p.h
+  src/include/timer.h
+  src/include/coll_net.h
+  src/include/signals.h
+  src/include/proxy.h
+  src/include/net.h
+  src/include/devcomm.h
+  src/include/enqueue.h
+  src/include/debug.h
+  src/include/argcheck.h
+  src/include/rocm_smi_wrap.h
+  src/include/bootstrap.h
+  src/include/BfdBacktrace.hpp
+  src/include/nccl_net.h
+  src/include/cudawrap.h
+  src/include/rccl_bfloat16.h
+  src/include/shm.h
+  src/include/transport.h
+  src/include/group.h
+  src/include/socket.h
+  src/include/cpuset.h
+  src/include/rocmwrap.h
+  src/include/graph.h
+  src/include/nvmlwrap.h
+  src/include/param.h
+  src/include/channel.h
+  src/include/nvtx_stub.h
+  src/include/core.h
+  src/include/info.h
+  src/include/git_version.h
+  src/include/npkit/npkit_event.h
+  src/include/npkit/npkit.h
+  src/include/npkit/npkit_struct.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCudaRt_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxTypes.h
+  src/include/nvtx3/nvtxDetail/nvtxImpl.h
+  src/include/nvtx3/nvtxDetail/nvtxImplSync_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxInitDecls.h
+  src/include/nvtx3/nvtxDetail/nvtxLinkOnce.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCore.h
+  src/include/nvtx3/nvtxDetail/nvtxInitDefs.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCuda_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxInit.h
+  src/include/nvtx3/nvtxDetail/nvtxImplOpenCL_v3.h
+  src/include/nvtx3/nvToolsExtSync.h
+  src/include/nvtx3/nvToolsExtCudaRt.h
+  src/include/nvtx3/nvToolsExtCuda.h
+  src/include/nvtx3/nvToolsExtOpenCL.h
+  src/graph/rings.h
+  src/graph/rome_models.h
+  src/graph/topo.h
+  src/graph/xml.h)
+foreach(filename ${HEADER_SOURCES})
+  configure_file(${PROJECT_SOURCE_DIR}/${filename} ${filename} COPYONLY)
+endforeach(filename)
+
+set(API_SOURCES
+    src/collectives/all_reduce.cc
+    src/collectives/all_gather.cc
+    src/collectives/all_to_all.cc
+    src/collectives/all_to_allv.cc
+    src/collectives/reduce.cc
+    src/collectives/broadcast.cc
+    src/collectives/reduce_scatter.cc
+    src/collectives/scatter.cc
+    src/collectives/gather.cc
+    src/collectives/sendrecv.cc
+    src/net.cc)
+foreach(filename ${API_SOURCES})
+  string(REPLACE ".cc"
+                 "_api.cpp"
+                 cpp_filename
+                 ${filename})
+  configure_file(${filename} ${cpp_filename} COPYONLY)
+  list(APPEND CPP_SOURCES ${cpp_filename})
+endforeach(filename)
+
 set(CC_SOURCES
     src/init.cc
     src/graph/trees.cc
@@ -164,16 +258,6 @@ set(CC_SOURCES
     src/graph/topo.cc
     src/graph/xml.cc
     src/graph/rome_models.cc
-    src/collectives/all_reduce_api.cc
-    src/collectives/all_gather_api.cc
-    src/collectives/reduce_api.cc
-    src/collectives/broadcast_api.cc
-    src/collectives/reduce_scatter_api.cc
-    src/collectives/sendrecv_api.cc
-    src/collectives/gather_api.cc
-    src/collectives/scatter_api.cc
-    src/collectives/all_to_all_api.cc
-    src/collectives/all_to_allv_api.cc
     src/channel.cc
     src/misc/argcheck.cc
     src/misc/nvmlwrap_stub.cc
@@ -200,15 +284,59 @@ set(CC_SOURCES
     src/group.cc
     src/bootstrap.cc
     src/proxy.cc
-    src/net.cc
-    src/enqueue.cc
-    ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
-
+    src/enqueue.cc)
 foreach(filename ${CC_SOURCES})
-  list(APPEND CPP_SOURCES ${filename})
+  string(REPLACE ".cc"
+                 ".cpp"
+                 cpp_filename
+                 ${filename})
+  configure_file(${filename} ${cpp_filename} COPYONLY)
+  list(APPEND CPP_SOURCES ${cpp_filename})
 endforeach(filename)
 
+list(APPEND CPP_SOURCES  ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 add_library(rccl ${CPP_SOURCES})
+
+message ("-- Hipifying source")
+set(HIPIFY_SOURCES
+    src/collectives/all_gather_api.cpp
+    src/collectives/all_reduce_api.cpp
+    src/collectives/all_to_all_api.cpp
+    src/collectives/all_to_allv_api.cpp
+    src/collectives/broadcast_api.cpp
+    src/collectives/gather_api.cpp
+    src/collectives/reduce_api.cpp
+    src/collectives/reduce_scatter_api.cpp
+    src/collectives/scatter_api.cpp
+    src/collectives/sendrecv_api.cpp
+    src/debug.cpp
+    src/enqueue.cpp
+    src/graph/xml.cpp
+    src/group.cpp
+    src/include/alloc.h
+    src/include/checks.h
+    src/include/info.h
+    src/include/proxy.h
+    src/include/strongstream.h
+    src/init.cpp
+    src/misc/argcheck.cpp
+    src/misc/shmutils.cpp
+    src/misc/strongstream.cpp
+    src/misc/utils.cpp
+    src/net_api.cpp
+    src/proxy.cpp
+    src/transport.cpp
+    src/transport/coll_net.cpp
+    src/transport/net.cpp
+    src/transport/net_socket.cpp
+    src/transport/p2p.cpp
+    src/transport/shm.cpp)
+find_program( hipify-perl_executable hipify-perl )
+foreach(filename ${HIPIFY_SOURCES})
+  message ("   ${filename}")
+  execute_process(COMMAND bash "-c" "${hipify-perl_executable} -inplace -quiet-warnings ${PROJECT_BINARY_DIR}/${filename}" OUTPUT_VARIABLE HIPIFY_OUTPUT ERROR_VARIABLE HIPIFY_OUTPUT)
+endforeach(filename)
+message ("-- Hipifying source - done")
 
 # Create a custom target that creates/updates git_version.cpp
 # that executes whenever rccl is built
