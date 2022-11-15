@@ -628,7 +628,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   if (index == -1) {
     int cudaMajor, cudaMinor;
     cudaDeviceProp devProp;
-    CUDACHECK(cudaGetDeviceProperties(&devProp, dev));
+    CUDACHECK(cudaGetDeviceProperties(&devProp, 0));
     cudaMajor = devProp.major; cudaMinor = devProp.minor;
     NCCLCHECK(xmlSetAttrInt(gpuNode, "sm", cudaMajor*10+cudaMinor));
   }
