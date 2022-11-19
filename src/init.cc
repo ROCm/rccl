@@ -189,14 +189,14 @@ void *ncclCommThreadMain(void *arg) {
       uint16_t fIdx = td->funcIndex;
       #define VEGA_GPU_RTC_FREQUENCY 2.5E7
       if (type == ncclCollTraceDataType) {
-        sprintf(line, "## [%12.6f] [%02d:%02d] L:%04d DT %08x %016lx %016lx",
+        sprintf(line, "## [%012.6f] [%02d:%02d] L:%04d DT %08x %016lx %016lx",
           (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid,
           fIdx, td->data_0, td->opCount, td->data_1);
       } else {
         if (fIdx == FUNC_INDEX_P2P || type == ncclCollTraceP2pElemType)
-          sprintf(line, "## [%12.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
+          sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
         else
-          sprintf(line, "## [%12.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid, td->opCount);
+          sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid, td->opCount);
         offset = strlen(line);
         if (type == ncclCollTraceCollElemType) {
           sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx, td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
