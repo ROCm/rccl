@@ -59,7 +59,7 @@ ncclResult_t rocm_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId,
    *  | Device   | [ 7: 3] |
    *  | Function | [ 2: 0] |
    **/
-  snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id) >> 32, (id & 0xff00) >> 8, (id & 0xf0) >> 4, (id & 0x3));
+  snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id) >> 32, (id & 0xff00) >> 8, (id & 0xf8) >> 3, (id & 0x7));
   return ncclSuccess;
 }
 
