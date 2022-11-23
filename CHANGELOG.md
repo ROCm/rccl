@@ -2,6 +2,15 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## RCCL-2.13.4 for ROCm 5.4.0
+### Changed
+- Compatibility with NCCL 2.13.4
+- Improvements to RCCL when running with hipGraphs
+- RCCL_ENABLE_HIPGRAPH environment variable is no longer necessary to enable hipGraph support
+- Minor latency improvements
+### Fixed
+- Resolved potential memory access error due to asynchronous memset
+
 ## RCCL-2.12.10 for ROCm 5.3.0
 ### Changed
 - Improvements to LL128 algorithms
@@ -29,7 +38,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - Unit testing framework rework
 - Minor bug fixes
 ### Known issues
-- Managed memory is not currently supported for clique-based kernels 
+- Managed memory is not currently supported for clique-based kernels
 
 ## RCCL-2.11.4 for ROCm 5.1.0
 ### Added
