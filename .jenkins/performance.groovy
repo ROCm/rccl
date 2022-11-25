@@ -40,7 +40,7 @@ def runCI =
 
                          cd ${project.paths.project_build_prefix}
                          export _HIP_HOME=/opt/rocm/hip
-                         export _RCCL_HOME=`pwd`/build/releasels
+                         export _RCCL_HOME=`pwd`/build/release
                          
                          git clone -b create_scripts_PTS https://github.com/ROCmSoftwarePlatform/rccl-tests.git
                          cd rccl-tests
@@ -53,11 +53,13 @@ def runCI =
     {
         platform, project->
 
+        String test_log_filename = "rccl_${platform.gpu}_benchmark.log"
+        String test_log_dir = "rccl_${platform.gpu}_Dataset"
+
         def command = """#!/usr/bin/env bash
                          set -ex
 
-                         sudo dmidecode | grep "Product Name"
-                         rocm-smi --showtopo
+                         
 
                          cd ${project.paths.project_build_prefix}
                          ls
@@ -65,27 +67,33 @@ def runCI =
 
                          ngpus=8
                          cd rccl-tests/build
-                         echo "Allreduce Test"
-                         ./all_reduce_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Broadcast Test"
-                         ./broadcast_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Reduce Test"
-                         ./reduce_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Reduce_scatter Test"
-                         ./reduce_scatter_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Allgather Test"
-                         ./all_gather_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Send_Recv Test"
-                         ./sendrecv_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Scatter Test"
-                         ./scatter_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Gather Test"
-                         ./gather_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Alltoall Test"
-                         ./alltoall_perf -b 8 -e 1G -f 2 -g \$ngpus
-                         echo "Alltoallv Test"
-                         ./alltoallv_perf -b 8 -e 1G -f 2 -g \$ngpus
+                         echo "Architecture name: ${platform.gpu}" > ${test_log_filename}
+                         sudo dmidecode | grep "Product Name" | tee -a ${test_log_filename}
+                         rocm-smi --showtopo | tee -a ${test_log_filename}
+                         echo "Allreduce Test" | tee -a ${test_log_filename}
+                         ./all_reduce_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         echo "Broadcast Test" | tee -a ${test_log_filename}
+                         ./broadcast_perf -b 8 -e 1G -f 2 -g $ngpus  | tee -a ${test_log_filename}
+                         echo "Reduce Test"  | tee -a ${test_log_filename}
+                         ./reduce_perf -b 8 -e 1G -f 2 -g $ngpus  | tee -a ${test_log_filename}
+                         echo "Reduce_scatter Test"  | tee -a ${test_log_filename}
+                         ./reduce_scatter_perf -b 8 -e 1G -f 2 -g $ngpus  | tee -a ${test_log_filename}
+                         echo "Allgather Test" | tee -a ${test_log_filename}
+                         ./all_gather_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         echo "Send_Recv Test" | tee -a ${test_log_filename}
+                         ./sendrecv_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         echo "Scatter Test" | tee -a ${test_log_filename}
+                         ./scatter_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         echo "Gather Test" | tee -a ${test_log_filename}
+                         ./gather_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         echo "Alltoall Test" | tee -a ${test_log_filename}
+                         ./alltoall_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         echo "Alltoallv Test" | tee -a ${test_log_filename}
+                         ./alltoallv_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
 
+                         cd ../../
+                         mkdir ${test_log_dir}
+                         mv rccl_tests/build/${test_log_filename} ${test_log_dir}
                       """
         platform.runCommand(this,command)
     }
