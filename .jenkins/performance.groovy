@@ -40,7 +40,7 @@ def runCI =
 
                          cd ${project.paths.project_build_prefix}
                          export _HIP_HOME=/opt/rocm/hip
-                         export _RCCL_HOME=`pwd`/build
+                         export _RCCL_HOME=`pwd`/build/releasels
                          
                          git clone -b create_scripts_PTS https://github.com/ROCmSoftwarePlatform/rccl-tests.git
                          cd rccl-tests
