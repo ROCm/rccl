@@ -71,25 +71,25 @@ def runCI =
                          sudo dmidecode | grep "Product Name" | tee -a ${test_log_filename}
                          rocm-smi --showtopo | tee -a ${test_log_filename}
                          echo "Allreduce Test" | tee -a ${test_log_filename}
-                         ./all_reduce_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         ./all_reduce_perf -b 8 -e 1G -f 2 -g \$ngpus | tee -a ${test_log_filename}
                          echo "Broadcast Test" | tee -a ${test_log_filename}
-                         ./broadcast_perf -b 8 -e 1G -f 2 -g $ngpus  | tee -a ${test_log_filename}
+                         ./broadcast_perf -b 8 -e 1G -f 2 -g \$ngpus  | tee -a ${test_log_filename}
                          echo "Reduce Test"  | tee -a ${test_log_filename}
-                         ./reduce_perf -b 8 -e 1G -f 2 -g $ngpus  | tee -a ${test_log_filename}
+                         ./reduce_perf -b 8 -e 1G -f 2 -g \$ngpus  | tee -a ${test_log_filename}
                          echo "Reduce_scatter Test"  | tee -a ${test_log_filename}
-                         ./reduce_scatter_perf -b 8 -e 1G -f 2 -g $ngpus  | tee -a ${test_log_filename}
+                         ./reduce_scatter_perf -b 8 -e 1G -f 2 -g \$ngpus  | tee -a ${test_log_filename}
                          echo "Allgather Test" | tee -a ${test_log_filename}
-                         ./all_gather_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         ./all_gather_perf -b 8 -e 1G -f 2 -g \$ngpus | tee -a ${test_log_filename}
                          echo "Send_Recv Test" | tee -a ${test_log_filename}
-                         ./sendrecv_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         ./sendrecv_perf -b 8 -e 1G -f 2 -g \$ngpus | tee -a ${test_log_filename}
                          echo "Scatter Test" | tee -a ${test_log_filename}
-                         ./scatter_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         ./scatter_perf -b 8 -e 1G -f 2 -g \$ngpus | tee -a ${test_log_filename}
                          echo "Gather Test" | tee -a ${test_log_filename}
-                         ./gather_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         ./gather_perf -b 8 -e 1G -f 2 -g \$ngpus | tee -a ${test_log_filename}
                          echo "Alltoall Test" | tee -a ${test_log_filename}
-                         ./alltoall_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         ./alltoall_perf -b 8 -e 1G -f 2 -g \$ngpus | tee -a ${test_log_filename}
                          echo "Alltoallv Test" | tee -a ${test_log_filename}
-                         ./alltoallv_perf -b 8 -e 1G -f 2 -g $ngpus | tee -a ${test_log_filename}
+                         ./alltoallv_perf -b 8 -e 1G -f 2 -g \$ngpus | tee -a ${test_log_filename}
 
                          cd ../../
                          mkdir ${test_log_dir}
