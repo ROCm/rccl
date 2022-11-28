@@ -93,7 +93,7 @@ def runCI =
 
                          cd ../../
                          mkdir ${test_log_dir}
-                         mv rccl_tests/build/${test_log_filename} ${test_log_dir}
+                         mv rccl-tests/build/${test_log_filename} ${test_log_dir}
                       """
         platform.runCommand(this,command)
     }
