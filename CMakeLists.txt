@@ -100,7 +100,6 @@ list(APPEND CMAKE_PREFIX_PATH
 
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
-message(STATUS "HIP compiler: ${HIP_COMPILER} version ${HIP_CLANG_PATCH_LEVEL}")
 message(STATUS "HIP runtime: ${HIP_RUNTIME}")
 
 if(BUILD_STATIC)
