@@ -100,10 +100,6 @@ list(APPEND CMAKE_PREFIX_PATH
 
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
-message(STATUS "HIP compiler: ${HIP_COMPILER} version ${HIP_CLANG_PATCH_LEVEL}")
-if (${HIP_CLANG_PATCH_LEVEL} LESS "22362")
-  message(FATAL_ERROR "RCCL requires ROCm 5.3 and above to compile")
-endif()
 message(STATUS "HIP runtime: ${HIP_RUNTIME}")
 
 if(BUILD_STATIC)
