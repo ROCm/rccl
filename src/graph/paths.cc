@@ -814,7 +814,13 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     }
   }
 
-  if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_4P2H_ROME) && !(comm->topo->type & RCCL_TOPO_GDR_ALL) && !(comm->topo->type & RCCL_TOPO_XGMI_ALL)) {
+  int arch, vendor, model;
+  NCCLCHECK(ncclTopoCpuType(comm->topo, &arch, &vendor, &model));
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 || vendor == NCCL_TOPO_CPU_VENDOR_INTEL) {
+    // Adjust P2P channels on Intel platform
+    comm->p2pnChannelsPerPeer = 1;
+    comm->p2pnChannels = 2;
+  } else if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (comm->topo->type & RCCL_TOPO_4P2H_ROME) && !(comm->topo->type & RCCL_TOPO_GDR_ALL) && !(comm->topo->type & RCCL_TOPO_XGMI_ALL)) {
     // Adjust P2P channels on Rome
     comm->p2pnChannelsPerPeer = 2;
     comm->p2pnChannels = 2;
