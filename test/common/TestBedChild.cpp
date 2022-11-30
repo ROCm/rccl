@@ -360,6 +360,7 @@ namespace RcclUnitTesting
       localRanksToExecute.push_back(localRank);
     }
 
+    numRanksToExecute = (int)localRanksToExecute.size();
     hipGraph_t graphs[numRanksToExecute];
     hipGraphExec_t graphExec[numRanksToExecute];
 
@@ -543,19 +544,6 @@ namespace RcclUnitTesting
 
         if (this->verbose) INFO("Instantiating executable graph for rank %d\n", localRank);
         CHECK_HIP(hipGraphInstantiate(&graphExec[localRank], graphs[localRank], NULL, NULL, 0));
-
-        if (this->verbose)
-        {
-          size_t numNodes;
-          hipGraphNode_t* nodes;
-          CHECK_HIP(hipGraphGetNodes(graphs[localRank], nodes, &numNodes));
-          INFO("Destroying graph for rank %d (%lu nodes)\n", localRank, numNodes);
-        }
-        CHECK_HIP(hipGraphDestroy(graphs[localRank]));
-        if (this->verbose)
-        {
-          INFO("Done destroying graph for rank %d\n", localRank);
-        }
       }
 
       for (int localRank : localRanksToExecute)
@@ -573,7 +561,7 @@ namespace RcclUnitTesting
     // Synchronize
     for (int localRank : localRanksToExecute)
     {
-      if (this->verbose) INFO("Starting synchronizationSynchronization for rank %d\n", localRank);
+      if (this->verbose) INFO("Starting synchronization for rank %d\n", localRank);
       CHECK_HIP(hipStreamSynchronize(this->streams[localRank]));
     }
 
@@ -583,6 +571,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Destroying graphs for rank %d\n", localRank);
+        CHECK_HIP(hipGraphDestroy(graphs[localRank]));
         CHECK_HIP(hipGraphExecDestroy(graphExec[localRank]));
       }
     }
