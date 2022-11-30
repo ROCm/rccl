@@ -96,11 +96,17 @@ ncclResult_t rocmLibraryInit(void) {
     //goto error;
   //}
 
-  pfn_hsa_amd_portable_export_dmabuf = (PFN_hsa_amd_portable_export_dmabuf) dlsym(hsaLib, "hsa_amd_portable_export_dmabuf");
-  if (pfn_hsa_amd_portable_export_dmabuf == NULL) {
-    WARN("Failed to load ROCr missing symbol hsa_amd_portable_export_dmabuf");
-    goto error;
+#if defined(QUERY_HSA_DMABUF)
+  bool supported;
+  res = pfn_hsa_system_get_info(HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED, &supported);
+  if (res == 0 && supported) {
+    pfn_hsa_amd_portable_export_dmabuf = (PFN_hsa_amd_portable_export_dmabuf) dlsym(hsaLib, "hsa_amd_portable_export_dmabuf");
+    if (pfn_hsa_amd_portable_export_dmabuf == NULL) {
+      WARN("Failed to load ROCr missing symbol hsa_amd_portable_export_dmabuf");
+      goto error;
+    }
   }
+#endif
   /*
    * Required to initialize the ROCr Driver.
    * Multiple calls of hsa_init() will return immediately
