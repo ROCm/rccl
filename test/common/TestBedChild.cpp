@@ -613,6 +613,15 @@ namespace RcclUnitTesting
     if (this->verbose) INFO("Child %d begins DestroyComms\n", this->childId);
 
     // Release comms
+    for (int i = 0; i < this->comms.size(); ++i) 
+    {
+      ncclResult_t status;
+      CHILD_NCCL_CALL(ncclCommFinalize(this->comms[i]), "ncclCommFinalize");
+      do 
+      {
+        ncclCommGetAsyncError(this->comms[i], &status);
+      } while(status != ncclSuccess);
+    }
     for (int i = 0; i < this->comms.size(); ++i)
     {
       CHILD_NCCL_CALL(ncclCommDestroy(this->comms[i]), "ncclCommDestroy");
