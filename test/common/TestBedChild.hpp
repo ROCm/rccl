@@ -63,6 +63,7 @@ namespace RcclUnitTesting
     int totalRanks;                                     // Total ranks
     int rankOffset;                                     // Global rank offset for this child
     int numCollectivesInGroup;                          // # of collectives to run per group call
+    bool blockingConf;                                  // RCCL communication with blocking or non-blocking option
     std::vector<ncclComm_t> comms;                      // RCCL communicators for each rank
     std::vector<int> deviceIds;                         // Device IDs for each rank
     std::vector<hipStream_t> streams;                   // Streams for executing collectives

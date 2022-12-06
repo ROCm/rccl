@@ -85,12 +85,13 @@ namespace RcclUnitTesting
   }
 
   void TestBed::InitComms(std::vector<std::vector<int>> const& deviceIdsPerProcess,
-                          int const numCollectivesInGroup)
+                          int const numCollectivesInGroup, bool const blockingConf)
   {
     // Count up the total number of GPUs to use and track child/deviceId per rank
     this->numActiveChildren = deviceIdsPerProcess.size();
     this->numActiveRanks = 0;
     this->numCollectivesInGroup = numCollectivesInGroup;
+    this->blockingConf = blockingConf;
     this->rankToChildMap.clear();
     this->rankToDeviceMap.clear();
     if (ev.verbose) INFO("Setting up %d active child processes\n", this->numActiveChildren);
@@ -139,6 +140,9 @@ namespace RcclUnitTesting
       // Send the number of collectives to be run per group call
       PIPE_WRITE(childId, numCollectivesInGroup);
 
+      // Send the RCCL communication with blocking or non-blocking option
+      PIPE_WRITE(childId, blockingConf);
+
       // Send whether to use MultiRank interfaces or not.
       PIPE_WRITE(childId, useMulti);
 
@@ -159,9 +163,9 @@ namespace RcclUnitTesting
     }
   }
 
-  void TestBed::InitComms(int const numGpus, int const numCollectivesInGroup)
+  void TestBed::InitComms(int const numGpus, int const numCollectivesInGroup, bool const blockingConf)
   {
-    InitComms(TestBed::GetDeviceIdsList(1, numGpus), numCollectivesInGroup);
+    InitComms(TestBed::GetDeviceIdsList(1, numGpus), numCollectivesInGroup, blockingConf);
   }
 
   void TestBed::SetCollectiveArgs(ncclFunc_t      const funcType,

@@ -126,6 +126,7 @@ namespace RcclUnitTesting
     PIPE_READ(this->totalRanks);
     PIPE_READ(this->rankOffset);
     PIPE_READ(this->numCollectivesInGroup);
+    PIPE_READ(this->blockingConf);
     bool useMultiRankPerGpu;
     PIPE_READ(useMultiRankPerGpu);
 
@@ -177,6 +178,29 @@ namespace RcclUnitTesting
 	  break;
 	}
       }
+      else if (this->blockingConf == false)
+      { 
+        // When non-blocking communicator is desired call ncclCommInitRankConfig with appropriate flag
+        ncclResult_t ncclAsyncErrInit;
+        ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
+        config.blocking = 0;
+        if (ncclCommInitRankConfig(&this->comms[localRank], this->totalRanks, id, globalRank, &config) != ncclSuccess)
+        { 
+          ERROR("Rank %d on child %d unable to call ncclCommInitRankConfig\n", globalRank, this->childId);
+          status = TEST_FAIL;
+          break;
+        } 
+        do 
+        {
+          ncclCommGetAsyncError(this->comms[localRank], &ncclAsyncErrInit);
+        } while(ncclAsyncErrInit != ncclSuccess);
+        if (ncclAsyncErrInit != ncclSuccess)
+        {
+          ERROR("Rank %d on child %d fails NCCL call %s with code %d\n", globalRank, this->childId, "ncclCommGetAsyncErrorInit", ncclAsyncErrInit);
+          status = TEST_FAIL;
+          break; 
+        }
+      }
       else
       {
 	if (ncclCommInitRank(&this->comms[localRank], this->totalRanks, id, globalRank) != ncclSuccess)
@@ -187,10 +211,38 @@ namespace RcclUnitTesting
         }
       }
     }
+
     if (status == TEST_SUCCESS)
-    {
-      CHILD_NCCL_CALL(ncclGroupEnd(), "ncclGroupStart");
+    { 
+      // Check if the communicator is non-blocking
+      if (this->blockingConf == false)
+      { 
+        // handle the ncclGroupEnd in case of non-blocking communication
+        ncclResult_t Group_End_state = ncclGroupEnd();
+        for (int localRank = 0; localRank < numGpus; ++localRank)
+        {
+          ncclResult_t ncclAsyncErrGroupEnd;
+          if (Group_End_state == ncclInProgress) 
+          {
+            do 
+            {
+              ncclCommGetAsyncError(this->comms[localRank], &ncclAsyncErrGroupEnd);
+            } while(ncclAsyncErrGroupEnd == ncclInProgress);
+          }
+          if (ncclAsyncErrGroupEnd != ncclSuccess)
+          {
+            ERROR("Child process %d fails NCCL call %s with code %d\n", this->childId, "ncclCommGetAsyncErrorGroupEnd", ncclAsyncErrGroupEnd);
+            return TEST_FAIL; 
+          }
+        }
+      }
+      else 
+      { 
+        // In case of blocking communication just call ncclGroupEnd
+        CHILD_NCCL_CALL(ncclGroupEnd(), "ncclGroupEnd");
+      }
     }
+    
     if (this->verbose) INFO("Child %d finishes InitComms() [%s]\n",
                             this->childId, status == TEST_SUCCESS ? "SUCCESS" : "FAIL");
     return status;
@@ -614,14 +666,30 @@ namespace RcclUnitTesting
 
     // Release comms
     for (int i = 0; i < this->comms.size(); ++i) 
-    {
-      ncclResult_t status;
-      CHILD_NCCL_CALL(ncclCommFinalize(this->comms[i]), "ncclCommFinalize");
-      do 
-      {
-        ncclCommGetAsyncError(this->comms[i], &status);
-      } while(status != ncclSuccess);
+    { 
+      // Check if the communicator is non-blocking
+      if (this->blockingConf == false) 
+      { 
+        // handle the non-blocking case
+        ncclResult_t ncclAsyncErr;
+        ncclCommFinalize(this->comms[i]);
+        do 
+        {
+          ncclCommGetAsyncError(this->comms[i], &ncclAsyncErr);
+        } while(ncclAsyncErr == ncclInProgress);
+        if (ncclAsyncErr != ncclSuccess)
+        {
+          ERROR("Child process %d fails NCCL call %s with code %d\n", this->childId, "ncclCommGetAsyncError", ncclAsyncErr);
+          return TEST_FAIL; 
+        }
+      }
+      else 
+      { 
+        // In case of blocking just call Finalize
+        CHILD_NCCL_CALL(ncclCommFinalize(this->comms[i]), "ncclCommFinalize");
+      }
     }
+
     for (int i = 0; i < this->comms.size(); ++i)
     {
       CHILD_NCCL_CALL(ncclCommDestroy(this->comms[i]), "ncclCommDestroy");
