@@ -254,6 +254,8 @@ ncclResult_t mscclEnqueueCheck(
     size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
     mscclFunc_t func, ncclComm_t comm, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
+  hipStreamCaptureStatus captureStatus;
+  unsigned long long pid;
 
   status.savedSchedulerParams.push_back({});
   NCCLCHECK(mscclSetSchedulerParam(
@@ -263,22 +265,27 @@ ncclResult_t mscclEnqueueCheck(
 
   switch (status.groupStatus) {
     case mscclNoGroup:
-      NCCLCHECK(mscclScheduler(&status.savedSchedulerParams.back()));
-      if (status.savedSchedulerParams.back().scheduled) {
-        NCCLCHECK(mscclRunSavedParams());
-      } else {
-        NCCLCHECK(mscclFallBackSavedParams());
+      CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
+      if (captureStatus == hipStreamCaptureStatusNone) {
+        NCCLCHECK(mscclScheduler(&status.savedSchedulerParams.back()));
+        if (status.savedSchedulerParams.back().scheduled) {
+          NCCLCHECK(mscclRunSavedParams());
+          break;
+        }
       }
+      NCCLCHECK(mscclFallBackSavedParams());
       break;
     case mscclGroupSupportedOp:
-      NCCLCHECK(mscclScheduler(&status.savedSchedulerParams.back()));
-      if (status.savedSchedulerParams.back().scheduled) {
-        // Only save counts and displs when there is suitable MSCCL algorithm for this
-        NCCLCHECK(mscclSaveCountsAndDispls(&status.savedSchedulerParams.back()));
-      } else {
-        status.groupStatus = mscclGroupUnsupportedOp;
-        NCCLCHECK(mscclFallBackSavedParams());
+      CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
+      if (captureStatus == hipStreamCaptureStatusNone) {
+        NCCLCHECK(mscclScheduler(&status.savedSchedulerParams.back()));
+        if (status.savedSchedulerParams.back().scheduled) {
+          // Only save counts and displs when there is suitable MSCCL algorithm for this
+          NCCLCHECK(mscclSaveCountsAndDispls(&status.savedSchedulerParams.back()));
+          break;
+        }
       }
+      NCCLCHECK(mscclFallBackSavedParams());
       break;
     case mscclGroupUnsupportedOp:
       NCCLCHECK(mscclFallBackSavedParams());
