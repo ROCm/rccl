@@ -15,14 +15,10 @@ NCCL_API(ncclResult_t, ncclScatter, const void* sendbuff, void* recvbuff, size_t
     ncclComm_t comm, hipStream_t stream);
 ncclResult_t ncclScatter(const void* sendbuff, void* recvbuff, size_t recvcount, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream) {
-    if (mscclEnabled()) {
-      bool mscclScheduled = false;
-      NCCLCHECK(mscclScheduler(
+    if (mscclAvailable() && !mscclIsCaller()) {
+      return mscclEnqueueCheck(
         sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
-        recvcount, datatype, root, 0, ncclSum, mscclFuncScatter, &mscclScheduled, comm, stream));
-      if (mscclScheduled) {
-        return ncclSuccess;
-      }
+        recvcount, datatype, root, 0, ncclSum, mscclFuncScatter, comm, stream);
     }
 
     int nRanks;

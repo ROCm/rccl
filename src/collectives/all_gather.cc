@@ -16,14 +16,10 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
-  if (mscclEnabled()) {
-    bool mscclScheduled = false;
-    NCCLCHECK(mscclScheduler(
+  if (mscclAvailable() && !mscclIsCaller()) {
+    return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
-      sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, &mscclScheduled, comm, stream));
-    if (mscclScheduled) {
-      return ncclSuccess;
-    }
+      sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
   }
 
   struct ncclInfo info = { ncclFuncAllGather, "AllGather",

@@ -165,23 +165,23 @@ __device__ __forceinline__ void mscclRunInterpreter(
   __synclds(); // publish shmem
 
   // Deference reduce args if required
-  if (mscclShmem.work.hasReduce && mscclShmem.work.redOpArgIsPtr) {
-    /* redOpArg is a pointer to the scalar value, so we'll dereference it
-     * here so that redOpArg holds the bits of the scalar going forward.
-     * The tricky thing is we don't know its type T since that's encoded in
-     * the funcIndex. Because it would be difficult to get sizeof(T) from
-     * funcIndex, we'll cheat and just dereference the largest possible size
-     * given the alignment of the pointer. We might be reading in more bytes
-     * than we need but that's harmless.
-     */
-    if (mscclShmem.work.redOpArg%2 != 0)
-      mscclShmem.work.redOpArg = *reinterpret_cast<uint8_t*>(mscclShmem.work.redOpArg);
-    else if (work.redOpArg%4 != 0)
-      mscclShmem.work.redOpArg = *reinterpret_cast<uint16_t*>(mscclShmem.work.redOpArg);
-    else if (work.redOpArg%8 != 0)
-      mscclShmem.work.redOpArg = *reinterpret_cast<uint32_t*>(mscclShmem.work.redOpArg);
-    else
-      mscclShmem.work.redOpArg = *reinterpret_cast<uint64_t*>(mscclShmem.work.redOpArg);
+  if (tid == 0 && mscclShmem.work.hasReduce && mscclShmem.work.redOpArgIsPtr) {
+    switch (sizeof(T)) {
+      case 1:
+        mscclShmem.work.redOpArg = *reinterpret_cast<uint8_t*>(mscclShmem.work.redOpArg);
+        break;
+      case 2:
+        mscclShmem.work.redOpArg = *reinterpret_cast<uint16_t*>(mscclShmem.work.redOpArg);
+        break;
+      case 4:
+        mscclShmem.work.redOpArg = *reinterpret_cast<uint32_t*>(mscclShmem.work.redOpArg);
+        break;
+      case 8:
+        mscclShmem.work.redOpArg = *reinterpret_cast<uint64_t*>(mscclShmem.work.redOpArg);
+        break;
+      default:
+        break;
+    }
   }
   __synclds(); // publish shmem
 

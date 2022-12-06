@@ -16,14 +16,10 @@ ncclResult_t ncclReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
-  if (mscclEnabled()) {
-    bool mscclScheduled = false;
-    NCCLCHECK(mscclScheduler(
+  if (mscclAvailable() && !mscclIsCaller()) {
+    return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
-      count, datatype, root, 0, op, mscclFuncReduce, &mscclScheduled, comm, stream));
-    if (mscclScheduled) {
-      return ncclSuccess;
-    }
+      count, datatype, root, 0, op, mscclFuncReduce, comm, stream);
   }
 
   struct ncclInfo info = { ncclFuncReduce, "Reduce",

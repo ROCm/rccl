@@ -612,7 +612,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 #endif
 
   if (mscclEnabled()) {
-    NCCLCHECK(mscclInit(comm->rank));
+    NCCLCHECK(mscclInit(comm));
   }
 
   NCCLCHECK(ncclCudaMemcpyAsync(devCommAndChans, &tmpCommAndChans, 1, comm->deviceStream.cudaStream));

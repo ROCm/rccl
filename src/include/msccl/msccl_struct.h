@@ -34,7 +34,6 @@
 #define MSCCL_RECV_REDUCE_COPY_SEND 5
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
-#define MSCCL_RES_ADD 8
 
 typedef enum { mscclFuncReduce             =  0,
                mscclFuncBroadcast          =  1,
@@ -106,6 +105,8 @@ struct mscclAlgo {
   int protocol;
   // number of channels needed by MSCCL algorithm
   int nChannels;
+  // number of ranks required by this algorithm
+  int nRanks;
   // number of necessary thread blocks
   int nBlocks;
   // number of scratch chunks that MSCCL will use
@@ -134,6 +135,35 @@ struct mscclAlgo {
   bool outOfPlace;
 };
 
+enum mscclGroupStatus {
+  mscclNoGroup,
+  mscclGroupSupportedOp,
+  mscclGroupUnsupportedOp
+};
+
+struct mscclSchedulerParam {
+  const void* sendBuff;
+  const size_t* sendCounts;
+  std::vector<size_t> savedSendCounts;
+  const size_t* sDisPls;
+  std::vector<size_t> savedSDisPls;
+  void* recvBuff;
+  const size_t* recvCounts;
+  std::vector<size_t> savedRecvCounts;
+  const size_t* rDisPls;
+  std::vector<size_t> savedRDisPls;
+  size_t count;
+  ncclDataType_t dataType;
+  int root;
+  int peer;
+  ncclRedOp_t op;
+  mscclFunc_t func;
+  bool scheduled;
+  mscclAlgoHandle_t handle;
+  ncclComm_t comm;
+  hipStream_t stream;
+};
+
 struct mscclStatus {
   std::vector<mscclAlgoHandle_t> freeAlgoHandles;
   std::map<mscclAlgoHandle_t, mscclAlgo *> hostAlgos;
@@ -151,6 +181,9 @@ struct mscclStatus {
   uint32_t workIndex;
   uint32_t maxAllowedCount;
   ncclDataType_t dataType;
+  mscclGroupStatus groupStatus;
+  int groupDepth;
+  std::vector<struct mscclSchedulerParam> savedSchedulerParams;
 };
 
 struct alignas(16) mscclWork {

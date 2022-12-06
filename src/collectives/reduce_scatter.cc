@@ -16,14 +16,10 @@ ncclResult_t ncclReduceScatter(const void* sendbuff, void* recvbuff, size_t recv
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
-  if (mscclEnabled()) {
-    bool mscclScheduled = false;
-    NCCLCHECK(mscclScheduler(
+  if (mscclAvailable() && !mscclIsCaller()) {
+    return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
-      recvcount, datatype, 0, 0, op, mscclFuncReduceScatter, &mscclScheduled, comm, stream));
-    if (mscclScheduled) {
-      return ncclSuccess;
-    }
+      recvcount, datatype, 0, 0, op, mscclFuncReduceScatter, comm, stream);
   }
 
   struct ncclInfo info = { ncclFuncReduceScatter, "ReduceScatter",

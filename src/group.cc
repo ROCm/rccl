@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -11,6 +12,8 @@
 #include "transport.h"
 #include "channel.h"
 #include <assert.h>
+
+#include "msccl/msccl_lifecycle.h"
 
 __thread int ncclGroupDepth = 0; // depth of ncclGroupStart nesting
 __thread ncclResult_t ncclGroupError = ncclSuccess;
@@ -98,6 +101,14 @@ ncclResult_t ncclGroupStart() {
 
 exit:
   return ret;
+}
+
+ncclResult_t ncclGroupStartInternal() {
+  ncclGroupDepth++;
+  if (mscclAvailable() && !mscclIsCaller()) {
+    NCCLCHECK(mscclGroupStart());
+  }
+  return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclGroupEnd);
@@ -384,6 +395,10 @@ ncclResult_t ncclGroupEndInternal() {
     WARN("ncclGroupEnd: not in a group call.");
     ret = ncclInvalidUsage;
     goto exit;
+  }
+
+  if (mscclAvailable() && !mscclIsCaller()) {
+    NCCLCHECK(mscclGroupEnd());
   }
 
   if ((--ncclGroupDepth) > 0) goto exit;

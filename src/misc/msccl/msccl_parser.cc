@@ -321,6 +321,7 @@ ncclResult_t mscclGetAlgoFromXmlFile(const char* str, struct mscclAlgo* algo, in
 
   int nGpus;
   NCCLCHECK(mscclXmlGetAttrInt(topNode, "ngpus", &nGpus));
+  algo->nRanks = nGpus;
 
   const char* protocol;
   NCCLCHECK(mscclXmlGetAttrStr(topNode, "proto", &protocol));
@@ -513,15 +514,18 @@ ncclResult_t mscclGetAlgoFromXmlFile(const char* str, struct mscclAlgo* algo, in
                   hasSend = 1;
                   hasRecv = 1;
                   checkSrc = 1;
+                  algo->hasReduce = true;
                 } else if (strcmp(type, "rrc") == 0) {
                   transferType = MSCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
+                  algo->hasReduce = true;
                 } else if (strcmp(type, "rrcs") == 0) {
                   transferType = MSCCL_RECV_REDUCE_COPY_SEND;
                   hasRecv = 1;
                   hasSend = 1;
                   checkSrc = 1;
                   checkDst = 1;
+                  algo->hasReduce = true;
                 } else if (strcmp(type, "cpy") == 0) {
                   transferType = MSCCL_LOCAL_COPY;
                   checkSrc = 1;
@@ -531,10 +535,6 @@ ncclResult_t mscclGetAlgoFromXmlFile(const char* str, struct mscclAlgo* algo, in
                   checkSrc = 1;
                   checkDst = 1;
                   algo->hasReduce = true;
-                } else if (strcmp(type, "ra") == 0) {
-                  transferType = MSCCL_RES_ADD;
-                  checkSrc = 1;
-                  checkDst = 1;
                 } else if (strcmp(type, "nop") == 0) {
                   transferType = -1;
                 } else {

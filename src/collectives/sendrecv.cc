@@ -17,14 +17,10 @@ ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatyp
     ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
-  if (mscclEnabled()) {
-    bool mscclScheduled = false;
-    NCCLCHECK(mscclScheduler(
+  if (mscclAvailable() && !mscclIsCaller()) {
+    return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, nullptr, nullptr, nullptr,
-      count, datatype, 0, peer, ncclSum, mscclFuncSend, &mscclScheduled, comm, stream));
-    if (mscclScheduled) {
-      return ncclSuccess;
-    }
+      count, datatype, 0, peer, ncclSum, mscclFuncSend, comm, stream);
   }
 
   struct ncclInfo info = { ncclFuncSend, "Send",
@@ -43,14 +39,10 @@ ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int
     ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
-  if (mscclEnabled()) {
-    bool mscclScheduled = false;
-    NCCLCHECK(mscclScheduler(
+  if (mscclAvailable() && !mscclIsCaller()) {
+    return mscclEnqueueCheck(
       nullptr, nullptr, nullptr, recvbuff, nullptr, nullptr,
-      count, datatype, 0, peer, ncclSum, mscclFuncRecv, &mscclScheduled, comm, stream));
-    if (mscclScheduled) {
-      return ncclSuccess;
-    }
+      count, datatype, 0, peer, ncclSum, mscclFuncRecv, comm, stream);
   }
 
   struct ncclInfo info = { ncclFuncRecv, "Recv",

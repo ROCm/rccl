@@ -12,14 +12,23 @@
 
 bool mscclEnabled();
 
-ncclResult_t mscclInit(int rank);
+void mscclSetIsCallerFlag();
+void mscclClearIsCallerFlag();
+bool mscclIsCaller();
 
-ncclResult_t mscclScheduler(
+bool mscclAvailable();
+
+ncclResult_t mscclInit(ncclComm_t comm);
+
+ncclResult_t mscclGroupStart();
+
+ncclResult_t mscclEnqueueCheck(
     const void* sendbuff, const size_t sendcounts[], const size_t sdispls[],
     void* recvbuff, const size_t recvcounts[], const size_t rdispls[],
     size_t count, ncclDataType_t datatype, int root, int peer, ncclRedOp_t op,
-    mscclFunc_t mscclFunc, bool* mscclScheduled,
-    ncclComm_t comm, hipStream_t stream);
+    mscclFunc_t mscclFunc, ncclComm_t comm, hipStream_t stream);
+
+ncclResult_t mscclGroupEnd();
 
 ncclResult_t mscclTeardown();
 

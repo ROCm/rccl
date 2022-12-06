@@ -17,14 +17,10 @@ NCCL_API(ncclResult_t, ncclAllToAllv, const void *sendbuff, const size_t sendcou
 ncclResult_t ncclAllToAllv(const void *sendbuff, const size_t sendcounts[], const size_t sdispls[],
     void *recvbuff, const size_t recvcounts[], const size_t rdispls[],
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream) {
-  if (mscclEnabled()) {
-    bool mscclScheduled = false;
-    NCCLCHECK(mscclScheduler(
+  if (mscclAvailable() && !mscclIsCaller()) {
+    return mscclEnqueueCheck(
       sendbuff, sendcounts, sdispls, recvbuff, recvcounts, rdispls,
-      0, datatype, 0, 0, ncclSum, mscclFuncAllToAllv, &mscclScheduled, comm, stream));
-    if (mscclScheduled) {
-      return ncclSuccess;
-    }
+      0, datatype, 0, 0, ncclSum, mscclFuncAllToAllv, comm, stream);
   }
 
   int nRanks;

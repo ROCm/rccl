@@ -8,23 +8,10 @@
 #include "proxy.h"
 #include "transport.h"
 
+#include "msccl/msccl_lifecycle.h"
 #include "msccl/msccl_kernel.h"
 #include "msccl/msccl_setup.h"
 #include "msccl/msccl_status.h"
-
-static bool mscclIsCallerFlag = false;
-
-static void mscclSetIsCallerFlag() {
-  mscclIsCallerFlag = true;
-}
-
-static void mscclClearIsCallerFlag() {
-  mscclIsCallerFlag = false;
-}
-
-bool mscclIsCaller() {
-  return mscclIsCallerFlag;
-}
 
 ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t count, ncclDataType_t dataType) {
   mscclStatus& status = mscclGetStatus();
