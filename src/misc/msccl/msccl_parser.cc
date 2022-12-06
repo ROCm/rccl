@@ -371,6 +371,22 @@ ncclResult_t mscclGetAlgoFromXmlFile(const char* str, struct mscclAlgo* algo, in
     return ncclInvalidUsage;
   }
 
+  int64_t minBytes;
+  NCCLCHECK(mscclXmlGetAttrInt64(topNode, "minBytes", &minBytes));
+  algo->minBytes = minBytes;
+
+  int64_t maxBytes;
+  NCCLCHECK(mscclXmlGetAttrInt64(topNode, "maxBytes", &maxBytes));
+  algo->maxBytes = maxBytes;
+
+  int inplace;
+  NCCLCHECK(mscclXmlGetAttrInt(topNode, "inplace", &inplace));
+  algo->inPlace = (bool)inplace;
+
+  int outofplace;
+  NCCLCHECK(mscclXmlGetAttrInt(topNode, "outofplace", &outofplace));
+  algo->outOfPlace = (bool)outofplace;
+
   algo->hasReduce = false;
 
   for (int s=0; s<topNode->nSubs; s++) {

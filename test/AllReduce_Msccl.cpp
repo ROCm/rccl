@@ -23,8 +23,8 @@ namespace RcclUnitTesting
     std::vector<ncclDataType_t> const dataTypes      = {ncclInt8, ncclInt32, ncclFloat32};
     std::vector<ncclRedOp_t>    const redOps         = {ncclSum, ncclProd};
     std::vector<int>            const roots          = {0};
-    std::vector<int>            const numElements    = {1048576, 32768, 1024};
-    std::vector<bool>           const inPlaceList    = {true};
+    std::vector<int>            const numElements    = {16777216, 1048576, 53327, 1024, 8};
+    std::vector<bool>           const inPlaceList    = {true, false};
     std::vector<bool>           const managedMemList = {true, false};
 
     testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements, inPlaceList, managedMemList);

@@ -41,7 +41,7 @@ ncclResult_t mscclScheduler(
   static bool mscclAlgoTriedLoad = false;
   static bool mscclAlgoAvailable = false;
   static mscclAlgoHandle_t mscclAlgoHandle;
-  static mscclFunc_t mscclAlgoFunc;
+  static mscclAlgo* mscclHostAlgo = nullptr;
 
   *mscclScheduled = false;
 
@@ -51,11 +51,34 @@ ncclResult_t mscclScheduler(
     if (mscclAlgoFilePath != nullptr) {
       NCCLCHECK(mscclLoadAlgo(mscclAlgoFilePath, &mscclAlgoHandle));
       mscclStatus& status = mscclGetStatus();
-      mscclAlgoFunc = status.hostAlgos[mscclAlgoHandle]->func;
+      mscclHostAlgo = status.hostAlgos[mscclAlgoHandle];
       mscclAlgoAvailable = true;
     }
   }
-  if (mscclAlgoAvailable && mscclAlgoFunc == mscclFunc) {
+
+  size_t nBytes = count * ncclTypeSize(dataType) * mscclHostAlgo->sizeMultiplier;
+  bool msgSizeIsValid =
+    count > 0 && (count % mscclHostAlgo->nChunksPerLoop) == 0 &&
+    nBytes >= mscclHostAlgo->minBytes &&
+    (mscclHostAlgo->maxBytes == 0 || nBytes <= mscclHostAlgo->maxBytes);
+
+  bool isInPlace = false;
+  if (mscclFunc == mscclFuncReduce ||
+      mscclFunc == mscclFuncBroadcast ||
+      mscclFunc == mscclFuncAllReduce ||
+      mscclFunc == mscclFuncAllToAll ||
+      mscclFunc == mscclFuncAllToAllv) {
+    isInPlace = sendBuff == recvBuff;
+  } else if (mscclFunc == mscclFuncAllGather ||
+             mscclFunc == mscclFuncGather) {
+    isInPlace = (char*)sendBuff == (char*)recvBuff + comm->rank * count * ncclTypeSize(dataType);
+  } else if (mscclFunc == mscclFuncReduceScatter ||
+             mscclFunc == mscclFuncScatter) {
+    isInPlace = (char*)recvBuff == (char*)sendBuff + comm->rank * count * ncclTypeSize(dataType);
+  }
+  bool inPlaceOutOfPlaceIsValid = isInPlace ? mscclHostAlgo->inPlace : mscclHostAlgo->outOfPlace;
+
+  if (mscclAlgoAvailable && mscclHostAlgo->func == mscclFunc && msgSizeIsValid && inPlaceOutOfPlaceIsValid) {
     NCCLCHECK(mscclRunAlgo(
       sendBuff, nullptr, nullptr,
       recvBuff, nullptr, nullptr,

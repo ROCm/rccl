@@ -124,6 +124,14 @@ struct mscclAlgo {
   bool hasReduce;
   // MSCCL function type
   mscclFunc_t func;
+  // Min message size allowed for this algorithm.
+  int64_t minBytes;
+  // Max message size allowed for this algorithm, 0 for no limit.
+  int64_t maxBytes;
+  // Whether this algorithm is suitable for in-place.
+  bool inPlace;
+  // Whether this algorithm is suitable for out-of-place.
+  bool outOfPlace;
 };
 
 struct mscclStatus {
