@@ -43,7 +43,7 @@ bool mscclAvailable() {
 ncclResult_t mscclInit(ncclComm_t comm) {
   if (comm->intraRanks > 1) {
     mscclInitialized.store(false, std::memory_order_release);
-    WARN("MSCCL doesn't support multiple GPUs in one process and is not available");
+    INFO(NCCL_INIT, "MSCCL doesn't support multiple GPUs in one process and is not available");
     return ncclSuccess;
   } else {
     mscclInitialized.store(true, std::memory_order_release);
