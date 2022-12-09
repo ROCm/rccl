@@ -25,16 +25,19 @@ namespace RcclUnitTesting
     int                        numActiveChildren;     // List of active children (with usable RCCL comms)
     int                        numActiveRanks;        // Current # of ranks in use
     int                        numCollectivesInGroup; // # of collectives to execute per group call
-
+    bool                       useBlocking;           // RCCL communication with blocking or non-blocking option
     EnvVars ev;                                       // Environment variables
 
     // Constructor - Creates one child process per detected GPU device that waits for further commands
     TestBed();
 
     // Prepare TestBed for use with GPUs across multiple child processes
-    void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild, int const numCollectivesInGroup = 1);
+    void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild,
+                   int const numCollectivesInGroup = 1, bool const useBlocking = true);
+
     // Prepare TestBed for use with GPUs on a single child process
-    void InitComms(int const numGpus, int const numCollectivesInGroup = 1);
+    void InitComms(int const numGpus, 
+                   int const numCollectivesInGroup = 1, bool const useBlocking = true);
 
     // Set collectives arguments for specified collective / rank
     // Setting scalarsPerRank to non-null will create custom reduction operator
