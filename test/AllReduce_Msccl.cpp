@@ -1,7 +1,10 @@
 /*************************************************************************
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
+ * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+ *
+ * See LICENSE.txt for license information
  ************************************************************************/
+
 #include <cstdlib>
 
 #include "TestBed.hpp"
