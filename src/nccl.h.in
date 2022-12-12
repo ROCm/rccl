@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -497,6 +498,44 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
     const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
     const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /// @endcond
+
+/*! @brief Opaque handle to MSCCL algorithm */
+typedef int mscclAlgoHandle_t;
+
+/*! @brief MSCCL Load Algorithm
+ *
+ * @details Load MSCCL algorithm file specified in mscclAlgoFilePath and return
+ * its handle via mscclAlgoHandle. This API is expected to be called by MSCCL
+ * scheduler instead of end users.
+ */
+ncclResult_t  mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle);
+ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle);
+
+/*! @brief MSCCL Run Algorithm
+ *
+ * @details Run MSCCL algorithm specified by mscclAlgoHandle. The parameter
+ * list merges all possible parameters required by different operations as this
+ * is a general-purposed API. This API is expected to be called by MSCCL
+ * scheduler instead of end users.
+ */
+ncclResult_t  mscclRunAlgo(
+    const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
+    void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
+    size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
+    mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream);
+ncclResult_t pmscclRunAlgo(
+    const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
+    void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
+    size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
+    mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream);
+
+/*! @brief MSCCL Load Algorithm
+ *
+ * @details Unload MSCCL algorithm previous loaded using its handle. This API
+ * is expected to be called by MSCCL scheduler instead of end users.
+ */
+ncclResult_t  mscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle);
+ncclResult_t pmscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle);
 
 /*
  * Group semantics
