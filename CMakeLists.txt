@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+# Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 cmake_minimum_required(VERSION 3.5)
 INCLUDE(CheckIncludeFiles)
@@ -138,7 +139,8 @@ if (BUILD_ALLREDUCE_ONLY)
   set(CU_SOURCES
       src/collectives/device/all_reduce.cu
       src/collectives/device/sendrecv.cu
-      src/collectives/device/functions.cu)
+      src/collectives/device/functions.cu
+      src/collectives/device/msccl_kernel.cu)
 else()
   set(CU_SOURCES
       src/collectives/device/all_reduce.cu
@@ -149,7 +151,8 @@ else()
       src/collectives/device/reduce_scatter.cu
       src/collectives/device/sendrecv.cu
       src/collectives/device/onerank_reduce.cu
-      src/collectives/device/functions.cu)
+      src/collectives/device/functions.cu
+      src/collectives/device/msccl_kernel.cu)
 endif()
 
 set(CPP_SOURCES)
@@ -223,6 +226,12 @@ set(HEADER_SOURCES
   src/include/nvtx3/nvToolsExtCudaRt.h
   src/include/nvtx3/nvToolsExtCuda.h
   src/include/nvtx3/nvToolsExtOpenCL.h
+  src/include/msccl/msccl_kernel.h
+  src/include/msccl/msccl_lifecycle.h
+  src/include/msccl/msccl_parser.h
+  src/include/msccl/msccl_setup.h
+  src/include/msccl/msccl_status.h
+  src/include/msccl/msccl_struct.h
   src/graph/rings.h
   src/graph/rome_models.h
   src/graph/topo.h
@@ -242,6 +251,7 @@ set(API_SOURCES
     src/collectives/scatter.cc
     src/collectives/gather.cc
     src/collectives/sendrecv.cc
+    src/collectives/msccl.cc
     src/net.cc)
 foreach(filename ${API_SOURCES})
   string(REPLACE ".cc"
@@ -278,6 +288,10 @@ set(CC_SOURCES
     src/misc/param.cc
     src/misc/rocmwrap.cc
     src/misc/strongstream.cc
+    src/misc/msccl/msccl_lifecycle.cc
+    src/misc/msccl/msccl_parser.cc
+    src/misc/msccl/msccl_setup.cc
+    src/misc/msccl/msccl_status.cc
     src/transport/coll_net.cc
     src/transport/net.cc
     src/transport/net_ib.cc
@@ -314,6 +328,7 @@ set(HIPIFY_SOURCES
     src/collectives/reduce_scatter_api.cpp
     src/collectives/scatter_api.cpp
     src/collectives/sendrecv_api.cpp
+    src/collectives/msccl_api.cpp
     src/debug.cpp
     src/enqueue.cpp
     src/graph/xml.cpp

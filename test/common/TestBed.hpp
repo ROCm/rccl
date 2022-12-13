@@ -32,9 +32,12 @@ namespace RcclUnitTesting
     TestBed();
 
     // Prepare TestBed for use with GPUs across multiple child processes
-    void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild, int const numCollectivesInGroup = 1, bool const useBlocking = true);
+    void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild,
+                   int const numCollectivesInGroup = 1, bool const useBlocking = true);
+                   
     // Prepare TestBed for use with GPUs on a single child process
-    void InitComms(int const numGpus, int const numCollectivesInGroup = 1, bool const useBlocking = true);
+    void InitComms(int const numGpus,
+                   int const numCollectivesInGroup = 1, bool const useBlocking = true);
 
     // Set collectives arguments for specified collective / rank
     // Setting scalarsPerRank to non-null will create custom reduction operator
@@ -69,7 +72,7 @@ namespace RcclUnitTesting
 
     // Execute all collectives on all test children
     // Blocks until collective is completed
-    void ExecuteCollectives(std::vector<int> const &currentRanks = {});
+    void ExecuteCollectives(std::vector<int> const &currentRanks = {}, bool const useHipGraph = false);
 
     // Perform results validation - compare output to expected
     void ValidateResults(bool& isCorrect, int collId = -1, int const rank = -1);
@@ -96,7 +99,7 @@ namespace RcclUnitTesting
     // Helper function that splits up GPUs to the given number of processes
     static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
                                                           int const numGpus,
-							  int const ranksPerGpu);
+                                                          int const ranksPerGpu);
     static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
                                                           int const numGpus);
 
@@ -109,6 +112,7 @@ namespace RcclUnitTesting
                                        int            const root,
                                        bool           const inPlace,
                                        bool           const managedMem,
+                                       bool           const useHipGraph,
                                        int            const ranksPerProc=1);
 
     // Run a simple sweep
@@ -118,7 +122,8 @@ namespace RcclUnitTesting
                         std::vector<int>            const& roots,
                         std::vector<int>            const& numElements,
                         std::vector<bool>           const& inPlaceList,
-                        std::vector<bool>           const& managedMemList);
+                        std::vector<bool>           const& managedMemList,
+                        std::vector<bool>           const& useHipGraphList);
 
     // Used to track total number of calls to ExecuteCollectives()
     static int& NumTestsRun();

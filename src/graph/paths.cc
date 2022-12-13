@@ -816,7 +816,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
 
   int arch, vendor, model;
   NCCLCHECK(ncclTopoCpuType(comm->topo, &arch, &vendor, &model));
-  if (arch == NCCL_TOPO_CPU_ARCH_X86 || vendor == NCCL_TOPO_CPU_VENDOR_INTEL) {
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_INTEL) {
     // Adjust P2P channels on Intel platform
     comm->p2pnChannelsPerPeer = 1;
     comm->p2pnChannels = 2;

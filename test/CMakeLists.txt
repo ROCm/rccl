@@ -1,4 +1,6 @@
 # Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+# Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+
 cmake_minimum_required(VERSION 2.8.12)
 
 if(BUILD_TESTS)
@@ -49,6 +51,7 @@ if(BUILD_TESTS)
       AllReduce_ManagedMem.cpp
       AllReduce_OutOfPlace.cpp
       AllReduce_PreMultScalar.cpp
+      AllReduce_Msccl.cpp
     )
   else()
     set(TEST_SOURCE_FILES
@@ -60,6 +63,7 @@ if(BUILD_TESTS)
       AllReduce_ManagedMem.cpp
       AllReduce_OutOfPlace.cpp
       AllReduce_PreMultScalar.cpp
+      AllReduce_Msccl.cpp
       #AllGather
       AllGather_InPlace.cpp
       AllGather_ManagedMem.cpp

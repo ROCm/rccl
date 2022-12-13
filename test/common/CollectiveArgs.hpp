@@ -76,9 +76,10 @@ namespace RcclUnitTesting
   struct OptionalColArgs
   {
     ncclRedOp_t     redOp = ncclSum;
-    int             root = 0; // Used as "peer" for Send/Recv
-    ScalarTransport scalarTransport;   // Used for custom reduction operators
-    int             scalarMode = -1; // -1 if scalar not used
+    int             root = 0;               // Used as "peer" for Send/Recv
+    ScalarTransport scalarTransport;        // Used for custom reduction operators
+    int             scalarMode = -1;        // -1 if scalar not used
+
     // allToAllv args
     size_t          sendcounts[MAX_RANKS*MAX_RANKS];
     size_t          sdispls[MAX_RANKS*MAX_RANKS];
