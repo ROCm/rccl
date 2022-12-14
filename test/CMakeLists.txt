@@ -46,7 +46,6 @@ if(BUILD_TESTS)
     set(TEST_SOURCE_FILES
       AllReduce_Clique.cpp
       AllReduce_GroupCall.cpp
-      AllReduce_NonBlockingConf.cpp
       AllReduce_InPlace.cpp
       AllReduce_ManagedMem.cpp
       AllReduce_OutOfPlace.cpp
@@ -58,7 +57,6 @@ if(BUILD_TESTS)
       #AllReduce
       AllReduce_Clique.cpp
       AllReduce_GroupCall.cpp
-      AllReduce_NonBlockingConf.cpp
       AllReduce_InPlace.cpp
       AllReduce_ManagedMem.cpp
       AllReduce_OutOfPlace.cpp
