@@ -258,7 +258,7 @@ ncclResult_t ncclStrongStreamLaunchHost(
     }
     ss->serialEventNeedsRecord = true;
   #else
-    CUDACHECK(hipStreamAddCallback(ss->cudaStream, (hipStreamCallback_t)fn, arg, 0));
+    CUDACHECK(cudaLaunchHostFunc(ss->cudaStream, fn, arg));
   #endif
   return ncclSuccess;
 }
