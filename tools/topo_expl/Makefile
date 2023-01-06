@@ -6,15 +6,24 @@ endif
 HIPCC = $(HIP_PATH)/bin/hipcc
 
 EXE = topo_expl
-CXXFLAGS = -g -O3 -Iinclude -I../../src -I../../src/include -I../../src/graph/ -I/opt/rocm/include/ -DTOPO_EXPL -DENABLE_TRACE
+CXXFLAGS = -g -O3 -Iinclude -Ihipify_rccl/include -Ihipify_rccl/graph -I/opt/rocm/include/ -DTOPO_EXPL -DENABLE_TRACE
 
-files = $(EXE).cpp model.cpp utils.cpp ../../src/graph/topo.cc ../../src/graph/rings.cc ../../src/graph/paths.cc ../../src/graph/trees.cc ../../src/misc/param.cc \
-	../../src/graph/search.cc ../../src/graph/connect.cc ../../src/graph/tuning.cc ../../src/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc ../../src/graph/rome_models.cc
+files = $(EXE).cpp model.cpp utils.cpp hipify_rccl/graph/topo.cc hipify_rccl/graph/rings.cc hipify_rccl/graph/paths.cc hipify_rccl/graph/trees.cc ../../src/misc/param.cc \
+	hipify_rccl/graph/search.cc hipify_rccl/graph/connect.cc hipify_rccl/graph/tuning.cc hipify_rccl/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc hipify_rccl/graph/rome_models.cc
 
-all: $(EXE)
+all: hipify $(EXE)
 
 $(EXE): $(files)
 	$(HIPCC) $(CXXFLAGS) $^ -o $@
 
+hipify:
+	mkdir -p hipify_rccl/include
+	mkdir -p hipify_rccl/graph
+	cp ../../src/include/*.h hipify_rccl/include/
+	cp ../../src/graph/* hipify_rccl/graph/
+	hipify-perl -inplace -quiet-warnings hipify_rccl/include/*.h
+	hipify-perl -inplace -quiet-warnings hipify_rccl/graph/*
+
 clean:
+	rm -rf hipify_rccl
 	rm -f *.o $(EXE)
