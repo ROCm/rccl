@@ -20,12 +20,12 @@ For ROCm installation instructions, see https://github.com/RadeonOpenCompute/ROC
 
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
 
-*  `./install.sh` -- builds library including unit tests
+*  `./install.sh` -- builds library including rccl unit tests
 *  `./install.sh -i` -- builds and installs the library to /opt/rocm/rccl; installation path can be changed with --prefix argument (see below.)
 *  `./install.sh -d` -- installs all necessary dependencies for RCCL.  Should be re-invoked if the build folder is removed.
 *  `./install.sh -h` -- shows help
-*  `./install.sh -t` -- builds library including unit tests
-*  `./install.sh -r` -- runs unit tests (must be already built)
+*  `./install.sh -t` -- builds library including rccl unit tests
+*  `./install.sh -r` -- runs rccl unit tests (must be already built)
 *  `./install.sh -p` -- builds RCCL package
 *  `./install.sh -s` -- builds RCCL as a static library (default: shared)
 *  `./install.sh -hcc` -- builds RCCL with hcc compiler; note that hcc is now deprecated. (default:hip-clang)
@@ -65,17 +65,17 @@ In order to enable peer-to-peer access on machines with PCIe-connected GPUs, the
 
 ## Tests
 
-There are unit tests implemented with the Googletest framework in RCCL.  The unit tests require Googletest 1.10 or higher to build and execute properly (installed with the -d option to install.sh).
-To invoke the unit tests, go to the build folder, then the test subfolder, and execute the appropriate unit test executable(s).
+There are rccl unit tests implemented with the Googletest framework in RCCL.  The rccl unit tests require Googletest 1.10 or higher to build and execute properly (installed with the -d option to install.sh).
+To invoke the rccl unit tests, go to the build folder, then the test subfolder, and execute the appropriate rccl unit test executable(s).
 
-Unit test names are now of the format:
+rccl unit test names are now of the format:
 
     CollectiveCall.[Type of test]
 
-Filtering of unit tests should be done with environment variable and by passing the --gtest_filter command line flag, for example:
+Filtering of rccl unit tests should be done with environment variable and by passing the --gtest_filter command line flag, for example:
 
 ```shell
-UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./UnitTests --gtest_filter="AllReduce.C*"
+UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./rccl-UnitTests --gtest_filter="AllReduce.C*"
 ```
 will run only AllReduce correctness tests with float16 datatype. A list of available filtering environment variables appears at the top of every run. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
 

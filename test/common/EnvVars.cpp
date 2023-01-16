@@ -7,30 +7,51 @@
 #include "EnvVars.hpp"
 #include "CollectiveArgs.hpp"
 #include <cstdlib>
+#include <unistd.h>
+#include <sys/wait.h>
 
 namespace RcclUnitTesting
 {
   int const UT_SINGLE_PROCESS = (1<<0);
   int const UT_MULTI_PROCESS  = (1<<1);
 
-  hsa_status_t CountGpus(hsa_agent_t agent, void* data)
+  int getDeviceCount(int *devices)
   {
-    int* currCount = (int*)data;
-    hsa_device_type_t device;
-    hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &device);
-    if (device == HSA_DEVICE_TYPE_GPU)
-      *currCount = *currCount + 1;
-    return HSA_STATUS_SUCCESS;
+    // Prepare parent->child pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1)
+    {
+      ERROR("Unable to create parent->child pipe for getting number of devices\n");
+      return TEST_FAIL;
+    }
+    pid_t pid = fork();
+    if (0 == pid)
+    {
+      int dev;
+      hipGetDeviceCount(&dev);
+      if (write(pipefd[1], &dev, sizeof(dev)) != sizeof(dev)) return TEST_FAIL;
+      close(pipefd[0]);
+      close(pipefd[1]);
+      exit(EXIT_SUCCESS);
+    }
+    else
+    {
+      int status;
+      if (read(pipefd[0], devices, sizeof(*devices)) != sizeof(*devices)) return TEST_FAIL;
+      waitpid(pid, &status, 0);
+      assert(!status);
+      close(pipefd[0]);
+      close(pipefd[1]);
+    }
+    return TEST_SUCCESS;
   }
 
   EnvVars::EnvVars()
   {
     // Collect number of GPUs available
-    // NOTE: Cannot use HIP call prior to launching child processes via fork so use HSA
+    // NOTE: Cannot use HIP call prior to launching unless it is inside another child process
     int numDevicesAvailable = 0;
-    hsa_init();
-    hsa_iterate_agents(CountGpus, &numDevicesAvailable);
-    hsa_shut_down();
+    getDeviceCount(&numDevicesAvailable);
 
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus        = GetEnvVar("UT_MIN_GPUS"    , 2);

@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -8,6 +9,8 @@
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
 #endif
+
+#include "msccl/msccl_struct.h"
 
 template<typename T, typename RedOp, typename Fan, int Direct,
          int SlicePerChunk, int StepPerSlice, int Unroll, int P2p>
@@ -363,6 +366,35 @@ private:
     }
   }
 
+  template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
+  __device__ __forceinline__ void mscclGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
+    nelem = nelem < 0 ? 0 : nelem;
+    if (tid < nworkers) {
+      if (REDUCE){
+        srcs[nsrcs] = dsts[0];
+        nsrcs++;
+        if (MULTISRCS){
+          ReduceOrCopyMulti<Unroll, RedOp, T, 3, MSCCL_MAX_REDUCE_FUSION, 1, 1, 0>
+            (tid, nworkers, ncclShmem.redOpArgs, false, nsrcs, (T const**)srcs, 1, (T**)dsts, nelem);
+        } else {
+          ReduceOrCopyMulti<Unroll, RedOp, T, 2, 2, 1, 1, 0>
+            (tid, nworkers, ncclShmem.redOpArgs, false, 2, (T const**)srcs, 1, (T**)dsts, nelem);
+        }
+      }
+      if (COPY){
+        ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1, 0>
+          (tid, nworkers, ncclShmem.redOpArgs, false, 1, (T const**)srcs, 1, (T**)dsts, nelem);
+        if (MULTISRCS) {
+          for (int i = 1; i < nsrcs; i++){
+            ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1, 0>
+              (tid, nworkers, ncclShmem.redOpArgs, false, 1, (T const**)&srcs[i], 1, (T**)&dsts[i], nelem);
+          }
+        }
+      }
+    }
+    barrier();
+  }
+
   // Scatter/Gather generic op
   // skip: my own rank order in the buffer chunks
   // shift: peer offset to avoid all ranks sending to or receiving from same peer
@@ -665,6 +697,12 @@ private:
       userBuff += delta;
   }
 
+  // Set MSCCL data pointers
+  __device__ __forceinline__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
+    if (flags & RoleInput) userBuff = (T*)inputBuf;
+    if (flags & RoleOutput) userBuff = (T*)outputBuf;
+  }
+
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
   }
@@ -741,5 +779,20 @@ private:
 
   __device__ __forceinline__ void recvSend(int eltN) {
     genericOp<0, 0, 1, 1, -1, -1>(-1, -1, -1, eltN, /*postOp=*/false);
+  }
+
+  // MSCCL primitives
+  __device__ __forceinline__ void sendWithBarrier(intptr_t inpIx, int eltN) {
+    send(inpIx, eltN);
+  }
+  __device__ __forceinline__ void localCopy(T* srcs, T* dsts, int eltN) {
+    return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+  }
+  __device__ __forceinline__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN) {
+    if (nsrcs == 1) {
+      return mscclGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
+    } else {
+      return mscclGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
+    }
   }
 };

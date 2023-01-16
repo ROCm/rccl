@@ -15,7 +15,7 @@
   {                                                                                     \
     if (ev.verbose) INFO("Calling PIPE_READ to Child %d\n", childId); \
     ssize_t retval = read(childList[childId]->parentReadFd, &val, sizeof(val)); \
-    if (ev.verbose) INFO("Got PIPE_READ %ld\n", retval); \
+    if (ev.verbose) INFO("Got PIPE_READ %ld from Child %d\n", retval, childId); \
     if (retval == -1)                                                                   \
     {                                                                                   \
       ERROR("Unable to read from child %d: Error %s\n", childId, strerror(errno));      \
@@ -105,7 +105,7 @@ namespace RcclUnitTesting
       }
     }
 
-    //Determine number of unique GPUs being used.
+    // Determine number of unique GPUs being used.
     std::set<int> unique_devices;
     for (auto a:  this->rankToDeviceMap)
       unique_devices.insert(a);
@@ -244,7 +244,7 @@ namespace RcclUnitTesting
     }
   }
 
-  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks)
+  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks, bool const useHipGraph)
   {
     int const cmd = TestBedChild::CHILD_EXECUTE_COLL;
     ++TestBed::NumTestsRun();
@@ -261,6 +261,7 @@ namespace RcclUnitTesting
       if ((currentRanks.size() == 0) || (ranksPerChild[childId].size() > 0))
       {
         PIPE_WRITE(childId, cmd);
+        PIPE_WRITE(childId, useHipGraph);
         int tempCurrentRanks = currentRanks.size();
         PIPE_WRITE(childId, tempCurrentRanks);
         for (int rank = 0; rank < currentRanks.size(); ++rank){
@@ -376,16 +377,16 @@ namespace RcclUnitTesting
   }
 
   std::vector<std::vector<int>> TestBed::GetDeviceIdsList(int const numProcesses,
-							  int const numGpus,
-							  int const ranksPerGpu)
+                                                          int const numGpus,
+                                                          int const ranksPerGpu)
   {
     std::vector<std::vector<int>> result(numProcesses);
     int ntasks = numProcesses == 1 ? numGpus : 1;
     int k=0;
     for (int i = 0; i < numProcesses; i++)
       for (int j = 0; j < ntasks * ranksPerGpu; j++) {
-	result[i].push_back(k%numGpus);
-	k++;
+        result[i].push_back(k%numGpus);
+        k++;
       }
     return result;
   }
@@ -398,7 +399,8 @@ namespace RcclUnitTesting
                                        int            const root,
                                        bool           const inPlace,
                                        bool           const managedMem,
-				       int            const ranksPerProc)
+                                       bool           const useHipGraph,
+                                       int            const ranksPerProc)
   {
     std::stringstream ss;
     ss << (isMultiProcess ? "MP" : "SP") <<  " ";
@@ -409,7 +411,9 @@ namespace RcclUnitTesting
       ss << "    ";
     ss << "ranks ";
     ss << ncclFuncNames[funcType] << " ";
-    ss << "(" << (inPlace ? "IP" : "OP") << "," << (managedMem ? "MM" : "GM") << ") ";
+    ss << "(" << (inPlace ? "IP" : "OP") << ","
+       << (managedMem ? "MM" : "GM") << ","
+       << (useHipGraph ? "GL" : "NL") <<") ";
     ss << ncclDataTypeNames[dataType] << " ";
     if (CollectiveArgs::UsesReduce(funcType)) ss << ncclRedOpNames[redOp] << " ";
     if (CollectiveArgs::UsesRoot(funcType)) ss << "Root " << root << " ";
@@ -422,7 +426,8 @@ namespace RcclUnitTesting
                                std::vector<int>            const& roots,
                                std::vector<int>            const& numElements,
                                std::vector<bool>           const& inPlaceList,
-                               std::vector<bool>           const& managedMemList)
+                               std::vector<bool>           const& managedMemList,
+                               std::vector<bool>           const& useHipGraphList)
   {
     // Sort numElements in descending order to cut down on # of allocations
     std::vector<int> sortedN = numElements;
@@ -479,16 +484,6 @@ namespace RcclUnitTesting
       for (int ipIdx = 0; ipIdx < inPlaceList.size()    && isCorrect; ++ipIdx)
       for (int mmIdx = 0; mmIdx < managedMemList.size() && isCorrect; ++mmIdx)
       {
-        if (ev.showNames)
-        {
-          std::string name = this->GetTestCaseName(numGpus, isMultiProcess,
-                                                   funcTypes[ftIdx], dataTypes[dtIdx],
-                                                   redOps[rdIdx], roots[rtIdx],
-                                                   inPlaceList[ipIdx], managedMemList[mmIdx],
-						   ranksPerGpu);
-          INFO("%s\n", name.c_str());
-        }
-
         for (int neIdx = 0; neIdx < numElements.size() && isCorrect; ++neIdx)
         {
           int numInputElements, numOutputElements;
@@ -508,24 +503,34 @@ namespace RcclUnitTesting
           // Only allocate once for largest size
           if (neIdx == 0) this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx]);
 
-          // There are some cases when data does not need to be re-prepared
-          // e.g. AllReduce subarray expected results are still valid
-          bool canSkip = (neIdx != 0 && !inPlaceList[ipIdx] &&
-                          (funcTypes[ftIdx] == ncclCollBroadcast ||
-                           funcTypes[ftIdx] == ncclCollReduce    ||
-                           funcTypes[ftIdx] == ncclCollAllReduce));
-          if (!canSkip) this->PrepareData();
-
-          this->ExecuteCollectives();
-          this->ValidateResults(isCorrect);
-          if (!isCorrect)
+          for (int hgIdx = 0; hgIdx < useHipGraphList.size() && isCorrect; ++hgIdx)
           {
+            // There are some cases when data does not need to be re-prepared
+            // e.g. AllReduce subarray expected results are still valid
+            bool canSkip = (neIdx != 0 && !inPlaceList[ipIdx] &&
+                            (funcTypes[ftIdx] == ncclCollBroadcast ||
+                             funcTypes[ftIdx] == ncclCollReduce    ||
+                             funcTypes[ftIdx] == ncclCollAllReduce));
+            if (!canSkip) this->PrepareData();
+
             std::string name = this->GetTestCaseName(numGpus, isMultiProcess,
                                                      funcTypes[ftIdx], dataTypes[dtIdx],
                                                      redOps[rdIdx], roots[rtIdx],
                                                      inPlaceList[ipIdx], managedMemList[mmIdx],
-						     ranksPerGpu);
-            ERROR("Incorrect output for %s\n", name.c_str());
+                                                     useHipGraphList[hgIdx], ranksPerGpu);
+
+            if (ev.showNames)
+            {
+              INFO("%s [%d elements]\n", name.c_str(), numInputElements);
+            }
+
+            std::vector<int> currentRanksEmpty = {};
+            this->ExecuteCollectives(currentRanksEmpty, useHipGraphList[hgIdx]);
+            this->ValidateResults(isCorrect);
+            if (!isCorrect)
+            {
+              ERROR("Incorrect output for %s\n", name.c_str());
+            }
           }
         }
         this->DeallocateMem();

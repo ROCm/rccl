@@ -71,7 +71,7 @@ namespace RcclUnitTesting
           std::string name = testBed.GetTestCaseName(totalRanks, isMultiProcess,
                                                      ncclCollAllToAllv, dataTypes[dataIdx],
                                                      ncclSum, -1,
-                                                     inPlace, useManagedMem);
+                                                     inPlace, useManagedMem, false);
           INFO("%s\n", name.c_str());
 
         }

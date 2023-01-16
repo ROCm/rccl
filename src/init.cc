@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -38,6 +39,8 @@
 //#include "clique/CliqueManager.h"
 //#include <hsa/hsa_ext_amd.h>
 // [/RCCL]
+
+#include "msccl/msccl_lifecycle.h"
 
 #define STR2(v) #v
 #define STR(v) STR2(v)
@@ -607,6 +610,10 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 #ifdef ENABLE_PROFILING
   NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES), comm->sideStream);
 #endif
+
+  if (mscclEnabled()) {
+    NCCLCHECK(mscclInit(comm));
+  }
 
   NCCLCHECK(ncclCudaMemcpyAsync(devCommAndChans, &tmpCommAndChans, 1, comm->deviceStream.cudaStream));
   CUDACHECK(cudaStreamSynchronize(comm->deviceStream.cudaStream));
@@ -1702,6 +1709,10 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
   }
   NCCLCHECK(NpKit::Shutdown());
 #endif
+
+  if (mscclEnabled()) {
+    NCCLCHECK(mscclTeardown());
+  }
 
   return ncclSuccess;
 }

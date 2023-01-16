@@ -121,7 +121,10 @@ int main(int argc, char **argv)
       if (usingGraphs)
       {
         for (int r = 0; r < nranks; ++r)
+        {
+          HIP_CALL(hipSetDevice(r));
           HIP_CALL(hipStreamBeginCapture(stream[r], hipStreamCaptureModeThreadLocal));
+        }
 
         NCCL_CALL(ncclGroupStart());
         for (int r = 0; r < nranks; ++r)
@@ -132,11 +135,17 @@ int main(int argc, char **argv)
         NCCL_CALL(ncclGroupEnd());
 
         for (int r = 0; r < nranks; ++r)
+        {
+          //HIP_CALL(hipSetDevice(r));
           HIP_CALL(hipStreamEndCapture(stream[r], &graphs[r]));
+        }
 
         // Instantiating graphs
         for (int r = 0; r < nranks; ++r)
+        {
+          HIP_CALL(hipSetDevice(r));
           HIP_CALL(hipGraphInstantiate(&graphExec[r], graphs[r], NULL, NULL, 0));
+        }
       }
       auto setupDelta = std::chrono::high_resolution_clock::now() - setupStart;
       double setupTime = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(setupDelta).count();
@@ -150,7 +159,10 @@ int main(int argc, char **argv)
         if (usingGraphs)
         {
           for (int r = 0; r < nranks; r++)
+          {
+            HIP_CALL(hipSetDevice(r));
             HIP_CALL(hipGraphLaunch(graphExec[r], stream[r]));
+          }
         }
         else
         {
@@ -162,6 +174,7 @@ int main(int argc, char **argv)
           }
           NCCL_CALL(ncclGroupEnd());
         }
+
         for (int r = 0; r < nranks; r++)
           HIP_CALL(hipStreamSynchronize(stream[r]));
 
@@ -194,6 +207,13 @@ int main(int argc, char **argv)
       }
       average[usingGraphs] /= numIterations;
       printf("%12.3f", average[usingGraphs]);
+
+      for (int r = 0; r < nranks; r++)
+      {
+        HIP_CALL(hipSetDevice(r));
+        HIP_CALL(hipGraphDestroy(graphs[r]));
+        HIP_CALL(hipGraphExecDestroy(graphExec[r]));
+      }
     }
     printf("%12.3f\n", average[0] / average[1]);
     fflush(stdout);

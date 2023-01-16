@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -224,4 +225,8 @@ enum ncclProxyMsgType {
 ncclResult_t ncclProxyCall(struct ncclProxyConnector* proxyConn, int type, void* reqBuff, int reqSize, void* respBuff, int respSize);
 ncclResult_t ncclProxyDestroy(struct ncclComm* comm);
 ncclResult_t ncclProxyShmUnlink(struct ncclComm* comm);
+
+enum { proxyRecv=0, proxySend=1 };
+ncclResult_t mscclSaveProxy(struct ncclChannel* channel, int type, int peer, struct ncclProxyOp* op, int connIndex);
+
 #endif

@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #pragma once
+#include <cstring>
 
 namespace RcclUnitTesting
 {
@@ -31,7 +32,8 @@ namespace RcclUnitTesting
     hipError_t error = (func);                                          \
     if (error != hipSuccess)                                            \
     {                                                                   \
-      fprintf(stderr, "\033[0;33" "[ ERROR    ] HIP error: %s\n" "\033[m", hipGetErrorString(error)); \
+      fprintf(stderr, "\033[0;31m" "[ ERROR    ] HIP error: %s File:%s Line:%d\n" "\033[m", \
+              hipGetErrorString(error), strrchr("/" __FILE__, '/') + 1, __LINE__); \
       return TEST_FAIL;                                                 \
     }                                                                   \
   }
