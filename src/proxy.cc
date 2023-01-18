@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -15,8 +16,6 @@
 #include "timer.h"
 
 #include <sys/syscall.h>
-
-enum { proxyRecv=0, proxySend=1 };
 
 static bool NeedProxy(int type, int pattern, int root, struct ncclRing* ring, int nranks) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice) return true;
@@ -368,6 +367,11 @@ static ncclResult_t SaveProxy(struct ncclChannel* channel, int type, int peer, s
   else {
     NCCLCHECK(ncclLocalOpAppend(connector->comm, &connector->proxyConn, op));
   }
+  return ncclSuccess;
+}
+
+ncclResult_t mscclSaveProxy(struct ncclChannel* channel, int type, int peer, struct ncclProxyOp* op, int connIndex) {
+  NCCLCHECK(SaveProxy(channel, type, peer, op, connIndex, nullptr));
   return ncclSuccess;
 }
 

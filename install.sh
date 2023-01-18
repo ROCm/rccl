@@ -12,10 +12,10 @@ function display_help()
     echo "    [-i|--install] install RCCL library (see --prefix argument below.)"
     echo "    [-d|--dependencies] install RCCL depdencencies."
     echo "    [-p|--package_build] Build RCCL package."
-    echo "    [-t|--tests_build] Build unit tests, but do not run."
-    echo "    [-r|--run_tests_quick] Run small subset of unit tests (must be built already.)"
+    echo "    [-t|--tests_build] Build rccl unit tests, but do not run."
+    echo "    [-r|--run_tests_quick] Run small subset of rccl unit tests (must be built already.)"
     echo "    [-s|--static] Build RCCL as a static library instead of shared library."
-    echo "    [--run_tests_all] Run all unit tests (must be built already.)"
+    echo "    [--run_tests_all] Run all rccl unit tests (must be built already.)"
     echo "    [--hcc] Build library using deprecated hcc compiler (default:hip-clang)."
     echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
     echo "    [--address-sanitizer] Build with address sanitizer enabled"
@@ -139,9 +139,9 @@ check_exit_code( )
 }
 
 if [[ "$build_release" == true ]]; then
-    unit_test_path="./build/release/test/UnitTests"
+    unit_test_path="./build/release/test/rccl-UnitTests"
 else
-    unit_test_path="./build/debug/test/UnitTests"
+    unit_test_path="./build/debug/test/rccl-UnitTests"
 fi
 
 if ($run_tests) && [[ -f $unit_test_path ]]; then
@@ -216,7 +216,7 @@ if ($build_allreduce_only); then
 fi
 check_exit_code "$?"
 
-if ($build_tests) || (($run_tests) && [[ ! -f ./test/UnitTests ]]); then
+if ($build_tests) || (($run_tests) && [[ ! -f ./test/rccl-UnitTests ]]); then
     CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
 else
     CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
@@ -237,14 +237,14 @@ fi
 
 # Optionally, run tests if they're enabled.
 if ($run_tests); then
-    if (test -f "./test/UnitTests"); then
+    if (test -f "./test/rccl-UnitTests"); then
         if ($run_tests_all); then
-            ./test/UnitTests
+            ./test/rccl-UnitTests
         else
-            ./test/UnitTests --gtest_filter="AllReduce.*"
+            ./test/rccl-UnitTests --gtest_filter="AllReduce.*"
         fi
     else
-        echo "Unit tests have not been built yet; please re-run script with -t to build unit tests."
+        echo "rccl unit tests have not been built yet; please re-run script with -t to build rccl unit tests."
         exit 1
     fi
 fi
