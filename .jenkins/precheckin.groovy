@@ -15,7 +15,7 @@ def runCI =
 
     def prj  = new rocProject('rccl', 'PreCheckin')
 
-    prj.timeout.test = 1440
+    prj.timeout.test = 300
     prj.paths.build_command = './install.sh -t '
 
     // Define test architectures, optional rocm version argument is available
