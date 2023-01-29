@@ -97,7 +97,6 @@ if(BUILD_TESTS)
   endif()
 
   add_executable(rccl-UnitTests ${COMMON_SOURCE_FILES} ${TEST_SOURCE_FILES})
-  configure_file(common/UnitTests UnitTests)
   target_include_directories(rccl-UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
   target_link_libraries(rccl-UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
