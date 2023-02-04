@@ -205,12 +205,15 @@ set(HEADER_SOURCES
   src/include/param.h
   src/include/channel.h
   src/include/nvtx_stub.h
+  src/include/nvtx3.hpp
   src/include/core.h
   src/include/info.h
   src/include/git_version.h
   src/include/npkit/npkit_event.h
   src/include/npkit/npkit.h
   src/include/npkit/npkit_struct.h
+  src/include/nvtx3/nvToolsExtPayload.h
+  src/include/nvtx3/nvToolsExt.h
   src/include/nvtx3/nvtxDetail/nvtxImplCudaRt_v3.h
   src/include/nvtx3/nvtxDetail/nvtxTypes.h
   src/include/nvtx3/nvtxDetail/nvtxImpl.h
@@ -223,6 +226,11 @@ set(HEADER_SOURCES
   src/include/nvtx3/nvtxDetail/nvtxInit.h
   src/include/nvtx3/nvtxDetail/nvtxImplOpenCL_v3.h
   src/include/nvtx3/nvToolsExtSync.h
+  src/include/nvtx3/nvtxExtDetail/nvtxExtPayloadTypeInfo.h
+  src/include/nvtx3/nvtxExtDetail/nvtxExtImplPayload_v1.h
+  src/include/nvtx3/nvtxExtDetail/nvtxExtTypes.h
+  src/include/nvtx3/nvtxExtDetail/nvtxExtInit.h
+  src/include/nvtx3/nvtxExtDetail/nvtxExtImpl.h
   src/include/nvtx3/nvToolsExtCudaRt.h
   src/include/nvtx3/nvToolsExtCuda.h
   src/include/nvtx3/nvToolsExtOpenCL.h
@@ -371,6 +379,8 @@ configure_file(src/nccl.h.in ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 
 # Execute git_version_check whenever rccl library is built
 add_dependencies(rccl git_version_check)
+
+add_definitions(-DNVTX_NO_IMPL)
 
 if(TRACE)
   add_definitions(-DENABLE_TRACE)
@@ -537,7 +547,7 @@ Source: https://github.com/ROCmSoftwarePlatform/rccl
 
 Files: *
 Copyright: (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
-Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Modifications Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
 License: See LICENSE.txt for license information\n")
   install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   # Write changelog file

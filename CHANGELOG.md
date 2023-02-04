@@ -4,6 +4,13 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased
 ### Changed
+- Compatibility with NCCL 2.16.2
+### Added
+### Fixed
+### Removed
+
+## Unreleased - RCCL 2.15.5 for ROCm 5.5.0
+### Changed
 - Compatibility with NCCL 2.15.5
 - Unit test executable renamed to rccl-UnitTests
 ### Added

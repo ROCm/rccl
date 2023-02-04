@@ -6,7 +6,7 @@ endif
 HIPCC = $(HIP_PATH)/bin/hipcc
 
 EXE = topo_expl
-CXXFLAGS = -g -O3 -Iinclude -Ihipify_rccl/include -Ihipify_rccl/graph -I/opt/rocm/include/ -DTOPO_EXPL -DENABLE_TRACE
+CXXFLAGS = -g -O3 -Iinclude -Ihipify_rccl/include -Ihipify_rccl/graph -I/opt/rocm/include/ -DTOPO_EXPL -DENABLE_TRACE -DNVTX_NO_IMPL
 
 files = $(EXE).cpp model.cpp utils.cpp hipify_rccl/graph/topo.cc hipify_rccl/graph/rings.cc hipify_rccl/graph/paths.cc hipify_rccl/graph/trees.cc ../../src/misc/param.cc \
 	hipify_rccl/graph/search.cc hipify_rccl/graph/connect.cc hipify_rccl/graph/tuning.cc hipify_rccl/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc hipify_rccl/graph/rome_models.cc
@@ -17,10 +17,9 @@ $(EXE): $(files)
 	$(HIPCC) $(CXXFLAGS) $^ -o $@
 
 hipify:
-	mkdir -p hipify_rccl/include
-	mkdir -p hipify_rccl/graph
-	cp ../../src/include/*.h hipify_rccl/include/
-	cp ../../src/graph/* hipify_rccl/graph/
+	mkdir -p hipify_rccl
+	cp -a ../../src/include/ hipify_rccl/
+	cp -a ../../src/graph/ hipify_rccl/
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/graph/*
 

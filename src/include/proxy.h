@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
  * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
@@ -13,6 +13,7 @@
 #include "info.h"
 #include "socket.h"
 #include <pthread.h>
+#include "shm.h"
 
 enum ncclProxyOpState { ncclProxyOpNone, ncclProxyOpReady, ncclProxyOpProgress };
 
@@ -116,6 +117,7 @@ struct ncclProxyOpsPool {
 
 struct ncclProxyOps {
   ncclProxyOpsPool* pool;
+  ncclShmHandle_t handle;
   int count;
   int freeOp;
   int nextOps;
@@ -155,6 +157,7 @@ struct ncclProxyPool;
 struct ncclProxyProgressState {
   // Used by main threads to send work to progress thread
   struct ncclProxyOpsPool* opsPool;
+  ncclShmHandle_t handle;
   char opsPoolShmSuffix[6];
 
   pthread_t thread;
@@ -174,7 +177,6 @@ struct ncclProxyState {
   struct ncclSocket* listenSock;
   int stop;
   CUcontext cudaCtx;
-  int safeAbortFlag;
 
   // Used by main thread
   union ncclSocketAddress* peerAddresses;
@@ -186,6 +188,15 @@ struct ncclProxyState {
   struct ncclProxyProgressState progressState;
 };
 
+enum proxyConnectState {
+  connUninitialized     = 0,
+  connInitialized       = 1,
+  connSharedInitialized = 2,
+  connSetupDone         = 3,
+  connConnected         = 4,
+  numConnStates         = 5
+};
+
 struct ncclProxyConnection {
   int send, transport, shared;
   int localRank;
@@ -194,7 +205,7 @@ struct ncclProxyConnection {
   struct ncclProxyArgs *proxyAppend;
   struct ncclProxyArgs **proxyAppendPtr;
   void* transportResources;
-  bool initFlag;
+  proxyConnectState state;
 };
 
 typedef ncclResult_t (*threadFunc_t)(struct ncclProxyArgs*);
