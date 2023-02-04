@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
  * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
@@ -189,7 +189,7 @@ const char* pncclGetErrorString(ncclResult_t result);
  */
 const char*  ncclGetLastError(ncclComm_t comm);
 /// @cond include_hidden
-const char* pncclGetError(ncclComm_t comm);
+const char* pncclGetLastError(ncclComm_t comm);
 /// @endcond
 
 /* Checks whether the comm has encountered any asynchronous errors */

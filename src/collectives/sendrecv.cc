@@ -11,11 +11,21 @@
 
 #include "msccl/msccl_lifecycle.h"
 
+struct NvtxParamsSendRecv {
+    size_t bytes;
+    int peer;
+};
+constexpr const nvtxPayloadSchemaEntry_t SendRecvSchema[] = {
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Bytes"},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Peer rank", nullptr, 0, offsetof(NvtxParamsSendRecv, peer)}
+};
+
 NCCL_API(ncclResult_t, ncclSend, const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
-  NVTX3_FUNC_RANGE_IN(nccl_domain);
+  NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
+  NVTX3_FUNC_WITH_PARAMS(Send, SendRecvSchema, payload)
 
   if (mscclAvailable() && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -37,7 +47,8 @@ NCCL_API(ncclResult_t, ncclRecv, void* recvbuff, size_t count, ncclDataType_t da
     ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
-  NVTX3_FUNC_RANGE_IN(nccl_domain);
+  NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
+  NVTX3_FUNC_WITH_PARAMS(Recv, SendRecvSchema, payload)
 
   if (mscclAvailable() && !mscclIsCaller()) {
     return mscclEnqueueCheck(

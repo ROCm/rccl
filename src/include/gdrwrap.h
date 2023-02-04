@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -159,20 +159,55 @@ typedef struct gdr_mem_desc {
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 static gdr_t ncclGdrInit() {
-  return NULL;
+  INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation");
+  return (gdr_t)0x12345678L;
 }
 
 template <typename T>
-static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** gdrHandle) {
+static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** gdrHandle, hipStream_t stream) {
+  gdr_info_t info;
+  size_t mapSize;
+  gdr_mh_t mh;
+  char *devMem;
+  void *gdrMap;
+
+  mapSize = sizeof(T)*nelem;
+
+  // GDRCOPY Pinned buffer has to be a minimum of a GPU_PAGE_SIZE
+  ALIGN_SIZE(mapSize, GPU_PAGE_SIZE);
+  // GDRCOPY Pinned buffer has to be GPU_PAGE_SIZE aligned too
+  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, stream, true));
+
+  gdr_mem_desc_t* md;
+  NCCLCHECK(ncclCalloc(&md, 1));
+  md->gdrDevMem = devMem;
+  md->gdrMap = NULL;
+  md->gdrMapSize = mapSize;
+  md->gdrOffset = 0;
+  md->gdrMh.h = 0;
+  *gdrHandle = md;
+
+  *ptr = (T *)(devMem);
+  if (devPtr) *devPtr = (T *)(devMem);
+
+  TRACE(NCCL_INIT, "GDRCOPY : allocated devMem %p gdrMap %p offset %lx mh %lx mapSize %zi at %p",
+       md->gdrDevMem, md->gdrMap, md->gdrOffset, md->gdrMh.h, md->gdrMapSize, *ptr);
+
   return ncclSuccess;
 }
 
 template <typename T>
 static ncclResult_t ncclGdrCudaCopy(void *gdrHandle, T* dst, T* src, size_t nelem) {
+  gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle;
+  memcpy(dst, src, nelem*sizeof(T));
   return ncclSuccess;
 }
 
 static ncclResult_t ncclGdrCudaFree(void* gdrHandle) {
+  gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle;
+  CUDACHECK(hipFree(md->gdrDevMem));
+  free(md);
+
   return ncclSuccess;
 }
 #else

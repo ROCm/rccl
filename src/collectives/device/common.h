@@ -1,6 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -490,6 +490,7 @@ struct ncclShmemData {
   };
   uint64_t redOpArgs[NCCL_MAX_DIRECT_ARITY+1];
   int channelId;
+  int aborted;
   alignas(16) struct ncclDevComm comm;
   alignas(16) struct ncclDevChannel channel;
   alignas(16) struct ncclWork work;
@@ -498,6 +499,8 @@ struct ncclShmemData {
 #endif
 };
 static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "ncclShmem.work needs to be 16B aligned");
+
+extern __shared__ ncclShmemData ncclShmem;
 
 #ifdef ENABLE_PROFILING
 #define __insert_timestamp(line_num) do { \
@@ -569,8 +572,6 @@ static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we
   }
 }
 
-extern __shared__ ncclShmemData ncclShmem;
-
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnIndex, bool COLLTRACE, bool USING_LL128>
 __forceinline__ __device__ void ncclKernel(
     struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead
@@ -600,6 +601,8 @@ __forceinline__ __device__ void ncclKernel(
   }
   __synclds(); // publish ncclShmem.channelId
   int channelId = ncclShmem.channelId;
+  /* set abort flag to 0 */
+  if (tid == 0) ncclShmem.aborted = 0;
 
   if (true) {
     void *dst, *src;
