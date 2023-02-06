@@ -1414,7 +1414,13 @@ fail:
   goto exit;
 }
 
+#ifdef USE_INDIRECT_FUNCTION_CALL
+NCCL_PARAM(SetStackSize, "SET_STACK_SIZE", 1);
+RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 8);
+#else
 NCCL_PARAM(SetStackSize, "SET_STACK_SIZE", 0);
+RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 0);
+#endif
 
 struct ncclCommInitRankAsyncJob {
   struct ncclAsyncJob base;
@@ -1440,14 +1446,17 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   int cudaDev = job->cudaDev;
   int virtualId = job->virtualId;
   ncclResult_t res = ncclSuccess;
+  int64_t stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
 
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);
   // Set the maximum kernel stack size of all kernels to avoid
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
-  if (maxLocalSizeBytes > 0 && ncclParamSetStackSize() == 1) {
-    TRACE(NCCL_INIT, "Setting cudaLimitStackSize to %zi", maxLocalSizeBytes);
-    //CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, maxLocalSizeBytes));
+#ifdef USE_INDIRECT_FUNCTION_CALL
+  if (stackSize > 0 && ncclParamSetStackSize() == 1) {
+    INFO(NCCL_INIT, "Setting cudaLimitStackSize to %zi maxLocalSizeBytes %zi", stackSize, maxLocalSizeBytes);
+    CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, stackSize));
   }
+#endif
   NCCLCHECKGOTO(commAlloc(newcomm, nranks, myrank, virtualId), res, fail);
   NCCLCHECKGOTO(initTransportsRank(*newcomm, &commId), res, fail);
 

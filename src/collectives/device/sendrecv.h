@@ -175,7 +175,11 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     }
   }
 
+#ifdef USE_INDIRECT_FUNCTION_CALL
+  __device__  void run(ncclWork *work) {
+#else
   __device__  __attribute__((noinline)) void run(ncclWork *work) {
+#endif
     struct ncclWorkElemP2p* args = work->p2pElems;
     int ngroups = args->ngroups;
     int tid = threadIdx.x;
