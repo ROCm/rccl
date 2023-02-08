@@ -197,10 +197,10 @@ namespace RcclUnitTesting
         }
       }
       else if (this->useBlocking == false)
-      { 
+      {
         // When non-blocking communicator is desired call ncclCommInitRankConfig with appropriate flag
         ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
-        config.blocking = 0; 
+        config.blocking = 0;
         ncclCommInitRankConfig(&this->comms[localRank], this->totalRanks, id, globalRank, &config);
         CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorInitRankConfig", localRank);
       }
@@ -216,27 +216,27 @@ namespace RcclUnitTesting
     }
 
     if (status == TEST_SUCCESS)
-    { 
+    {
       // Check if the communicator is non-blocking
       if (this->useBlocking == false)
-      { 
+      {
         // handle the ncclGroupEnd in case of non-blocking communication
         ncclResult_t Group_End_state = ncclGroupEnd();
-        if (Group_End_state != ncclSuccess) 
+        if (Group_End_state != ncclSuccess)
         {
-          for (int localRank = 0; localRank < numGpus; ++localRank) 
+          for (int localRank = 0; localRank < numGpus; ++localRank)
           {
             CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorGroupEnd", localRank);
-          } 
+          }
         }
       }
-      else 
-      { 
+      else
+      {
         // In case of blocking communication just call ncclGroupEnd
         CHILD_NCCL_CALL(ncclGroupEnd(), "ncclGroupEnd");
       }
     }
-    
+
     if (this->verbose) INFO("Child %d finishes InitComms() [%s]\n",
                             this->childId, status == TEST_SUCCESS ? "SUCCESS" : "FAIL");
     return status;
@@ -416,7 +416,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Capturing stream for rank %d\n", localRank);
-        CHECK_HIP(hipStreamBeginCapture(this->streams[localRank], hipStreamCaptureModeGlobal));
+        CHECK_HIP(hipStreamBeginCapture(this->streams[localRank], hipStreamCaptureModeRelaxed));
       }
     }
 
@@ -566,28 +566,28 @@ namespace RcclUnitTesting
           ERROR("Unknown func type %d\n", collArg.funcType);
           return TEST_FAIL;
         }
-        if (this->useBlocking == false) 
+        if (this->useBlocking == false)
         {
           CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorExecuteCollectives", localRank);
         }
       }
-      
+
     }
     // End group call
     if (this->useBlocking == false)
-    { 
+    {
       // handle the ncclGroupEnd in case of non-blocking communication
       ncclResult_t Group_End_state = ncclGroupEnd();
-      if (Group_End_state != ncclSuccess) 
+      if (Group_End_state != ncclSuccess)
       {
-        for (int localRank = 0; localRank < this->comms.size(); ++localRank) 
+        for (int localRank = 0; localRank < this->comms.size(); ++localRank)
         {
           CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorGroupEnd", localRank);
-        } 
+        }
       }
     }
-    else 
-    { 
+    else
+    {
       // In case of blocking communication just call ncclGroupEnd
       CHILD_NCCL_CALL(ncclGroupEnd(), "ncclGroupEnd");
     }
@@ -746,17 +746,17 @@ namespace RcclUnitTesting
     if (this->verbose) INFO("Child %d begins DestroyComms\n", this->childId);
 
     // Release comms
-    for (int i = 0; i < this->comms.size(); ++i) 
-    { 
+    for (int i = 0; i < this->comms.size(); ++i)
+    {
       // Check if the communicator is non-blocking
-      if (this->useBlocking == false) 
-      { 
+      if (this->useBlocking == false)
+      {
         // handle the non-blocking case
         ncclCommFinalize(this->comms[i]);
-        CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorCommFinalize", i);        
+        CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorCommFinalize", i);
       }
-      else 
-      { 
+      else
+      {
         // In case of blocking just call Finalize
         CHILD_NCCL_CALL(ncclCommFinalize(this->comms[i]), "ncclCommFinalize");
       }
