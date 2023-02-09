@@ -102,6 +102,10 @@ list(APPEND CMAKE_PREFIX_PATH
 find_package(hip REQUIRED)
 message(STATUS "HIP compiler: ${HIP_COMPILER}")
 message(STATUS "HIP runtime: ${HIP_RUNTIME}")
+check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVENT_DISABLE_FENCE)
+if(${HIP_EVENT_DISABLE_FENCE})
+  add_definitions(-DHIP_EVENT_DISABLE_FENCE)
+endif()
 
 find_package(hsa-runtime64 REQUIRED)
 get_target_property(HSA_INCLUDE_PATH hsa-runtime64::hsa-runtime64 INTERFACE_INCLUDE_DIRECTORIES)
