@@ -9,7 +9,8 @@ INCLUDE(CheckSymbolExists)
 set( CMAKE_CXX_STANDARD 14 )
 # Without this line, it will add -std=gnu++14 instead, which has some issues.
 set( CMAKE_CXX_EXTENSIONS OFF )
-
+#Adding pthread flag for linking
+set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 project(rccl CXX)
 
 include(cmake/Dependencies.cmake)
