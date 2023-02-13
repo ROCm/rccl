@@ -19,9 +19,9 @@
 #define __synclds() \
   asm volatile("s_waitcnt lgkmcnt(0) \n s_barrier");
 
-#if defined(__gfx90a__)
+#ifdef __GFX9__
 #define STORE(DST, SRC) \
-  { __threadfence_block(); atomicExch((unsigned long long *)(DST), (SRC)); }
+  { atomicExch((unsigned long long *)(DST), (SRC)); }
 #else
 #define STORE(DST, SRC) \
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
