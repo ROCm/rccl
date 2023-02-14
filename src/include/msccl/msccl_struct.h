@@ -36,6 +36,21 @@
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
 
+#define MSCCL_WORK_FIFO_DEPTH (64 << 10)
+
+typedef enum { mscclFuncReduce             =  0,
+               mscclFuncBroadcast          =  1,
+               mscclFuncAllReduce          =  2,
+               mscclFuncReduceScatter      =  3,
+               mscclFuncAllGather          =  4,
+               mscclFuncSend               =  5,
+               mscclFuncRecv               =  6,
+               mscclFuncGather             =  7,
+               mscclFuncScatter            =  8,
+               mscclFuncAllToAll           =  9,
+               mscclFuncAllToAllv          =  10,
+               mscclNumFuncs               =  11 } mscclFunc_t;
+
 struct mscclTransmission {
   int16_t dependencePointer; // index to the first dependence
   int16_t numDependencies; // dependencePointer+numDependencies indicate the last dependence
@@ -210,21 +225,35 @@ struct mscclStatus {
   bool graphEnabled;
   bool graphFirstKernel;
   bool needsProxy;
+  uint64_t workFifoDepth;
+  struct mscclWork* workFifo;
+  uint32_t* workFifoDone;
+  uint32_t workFifoSent;
+  uint32_t workFifoSentPerChannel[MAXCHANNELS];
+  uint32_t workFifoAckdMin;
 };
 
-struct alignas(16) mscclWork {
+#pragma pack(push)
+#pragma pack(8)
+
+struct mscclWork {
   volatile struct mscclFlag *syncFlags;
   void *scratchBuffer;
   const void *sendBuff;
   void *recvBuff;
-  size_t count;
+  uint32_t* workFifoDone;
+  size_t sizePerMscclChunk;
   uint64_t redOpArg;
   uint32_t workIndex;
-  int nChunksPerLoop;
   uint32_t maxAllowedCount;
+  uint32_t workFifoDoneAck;
   bool hasReduce;
   bool redOpArgIsPtr;
+  uint64_t pad[1];
 };
+static_assert(sizeof(struct mscclWork) % 16 == 0, "mscclWork needs to be 16B aligned");
+
+#pragma pack(pop)
 
 struct mscclShmemData {
   struct mscclThreadBlock mscclTB;

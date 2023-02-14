@@ -1,6 +1,10 @@
 /*************************************************************************
  * Copyright (c) Microsoft Corporation.
  * Licensed under the MIT License.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * See LICENSE.txt for license information
  ************************************************************************/
 
 #include "checks.h"
@@ -68,7 +72,7 @@ ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
   size_t sizeNeeded = (status.nBytes * (size_t)(hostAlgo->nScratchChunks)) / (size_t)(hostAlgo->nChunksPerLoop);
   if (sizeNeeded > status.scratchBufferSize){
     CUDACHECK(hipStreamSynchronize(stream));
-    CUDACHECK(hipFree(status.scratchBuffer));
+    NCCLCHECK(ncclCudaFree(status.scratchBuffer));
     NCCLCHECK(ncclCudaCalloc((char**)&status.scratchBuffer, sizeNeeded));
     status.scratchBufferSize = sizeNeeded;
   }
@@ -313,6 +317,57 @@ void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOC
 #endif
 };
 
+// Comparison of monotonic rolling counters.
+static inline bool rollingLess32(uint32_t a, uint32_t b) {
+  constexpr uint32_t PositiveMax = uint32_t(-1)>>1;
+  return a-b > PositiveMax;
+}
+
+static inline uint32_t rollingMin32(uint32_t a, uint32_t b) {
+  constexpr uint32_t PositiveMax = uint32_t(-1)>>1;
+  return (b-a <= PositiveMax) ? a : b;
+}
+
+static void mscclWaitWorkFifoAvailable(uint32_t desiredSent) {
+  mscclStatus& status = mscclGetStatus();
+  if (__builtin_expect(rollingLess32(status.workFifoAckdMin + status.workFifoDepth, desiredSent), false)) {
+    while (1) {
+      // We have to poll for notifications from device.
+      uint32_t* doneLive = status.workFifoDone;
+      uint32_t ackd[MAXCHANNELS];
+      for (int c=0; c < MAXCHANNELS; c++) {
+        ackd[c] = __atomic_load_n(&doneLive[c], __ATOMIC_RELAXED);
+      }
+      // Compiler-only fence to prevent fusion of loops to encourage dense loads.
+      __atomic_signal_fence(__ATOMIC_SEQ_CST);
+
+      uint32_t ackdAll = status.workFifoSent;
+      for (int c=0; c < MAXCHANNELS; c++) {
+        // ackdAll is min over all non-quiesced channels
+        if (ackd[c] != status.workFifoSentPerChannel[c])
+          ackdAll = rollingMin32(ackdAll, ackd[c]);
+      }
+
+      // Compiler only fence to prevent fusion of loops to encourage dense stores.
+      __atomic_signal_fence(__ATOMIC_SEQ_CST);
+
+      for (int c=0; c < MAXCHANNELS; c++) {
+        // Advance counter on quiesced channels so they don't lag behind
+        // too far where they could get lost in 32-bit wraparound.
+        if (ackd[c] == status.workFifoSentPerChannel[c]) {
+          status.workFifoSentPerChannel[c] = ackdAll;
+          __atomic_store_n(&doneLive[c], ackdAll, __ATOMIC_RELAXED);
+        }
+      }
+      status.workFifoAckdMin = ackdAll;
+
+      // See if that was enough.
+      if (!rollingLess32(status.workFifoAckdMin + status.workFifoDepth, desiredSent)) break;
+      sched_yield();
+    }
+  }
+}
+
 ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count,
     ncclDataType_t dataType, ncclRedOp_t op, struct mscclAlgo* hostAlgo, struct mscclAlgo* devAlgo,
     ncclComm_t comm, hipStream_t stream) {
@@ -329,7 +384,8 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
     CUDACHECK(hipStreamWaitEvent(stream, comm->doneEvent, 0));
   }
 
-  dim3 grid = {(uint32_t)hostAlgo->nBlocks, 1, 1};
+  uint32_t numBlocks = (uint32_t)hostAlgo->nBlocks;
+  dim3 grid = {numBlocks, 1, 1};
   dim3 block = {NCCL_MAX_NTHREADS, 1, 1};
   ncclDevRedOpFull opFull = {};
   NCCLCHECK(hostToDevRedOp(&opFull, op, dataType, comm));
@@ -339,16 +395,37 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.scratchBuffer = status.scratchBuffer;
   work.sendBuff = sendBuff;
   work.recvBuff = recvBuff;
-  work.count = count * hostAlgo->sizeMultiplier; // count is sum of all ranks in MSCCL kernel
+  work.sizePerMscclChunk = count * hostAlgo->sizeMultiplier / hostAlgo->nChunksPerLoop; // count is sum of all ranks in MSCCL kernel
   work.redOpArg = opFull.scalarArg;
   work.workIndex = status.workIndex;
-  work.nChunksPerLoop = hostAlgo->nChunksPerLoop;
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
   INFO(NCCL_INIT, "MSCCL: Setup Kernel finished");
   
-  void *args[3] = {&comm->devComm, &devAlgo, &work};
+  uint32_t workFifoIdxMask = status.workFifoDepth - 1;
+  uint32_t workFifoSent = status.workFifoSent;
+  // First work for a channel has to be at workHeap+blockIdx.x which means
+  // we cannot tolerate fifo wraparound. So round up to the wrap boundary
+  // if not doing so would incur crossing it.
+  if (((workFifoSent + numBlocks - 1) & workFifoIdxMask) < (workFifoSent & workFifoIdxMask)) {
+    workFifoSent = (workFifoSent + workFifoIdxMask) & ~workFifoIdxMask;
+    // Need to update workFifoSent so waitWorkFifoAvailable() knows we've
+    // skipped those elements. Consider if all the channels report quiesced,
+    // this way the skipped slots will be considered consumed as well.
+    status.workFifoSent = workFifoSent;
+  }
+  mscclWaitWorkFifoAvailable(workFifoSent + numBlocks);
+  for (int i = 0; i < numBlocks; i++) {
+    work.workFifoDoneAck = workFifoSent + i;
+    work.workFifoDone = status.workFifoDone + i;
+    status.workFifoSentPerChannel[i] = workFifoSent + i;
+    status.workFifo[(workFifoSent + i) & workFifoIdxMask] = work;
+  }
+  status.workFifoSent = workFifoSent + numBlocks;
+
+  struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
+  void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
   void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];
   if (enableDoneEvent) {
     CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));

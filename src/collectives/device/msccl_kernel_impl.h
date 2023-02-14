@@ -130,7 +130,7 @@ for (int r = 0; r < numloops; r++) { \
 
 template<typename T, typename RedOp, typename Proto>
 __device__ __forceinline__ void mscclRunInterpreter(
-  struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork work) {
+  struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) {
   const int tid = threadIdx.x;
   const int bid = blockIdx.x;
   const int nthreads = NCCL_MAX_NTHREADS;
@@ -173,7 +173,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
       break;
     case 2:
       dst = &mscclShmem.work;
-      src = &work;
+      src = work + blockIdx.x;
       bytes = sizeof(mscclWork);
       static_assert(sizeof(mscclWork) <= sizeof(uint64_t) * WARP_SIZE, "mscclWork cannot be loaded by a single warp in one insn.");
       break;
@@ -226,7 +226,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
     }
   }
   __synclds(); // publish shmem
-
+  
   // User pointers for primitives
   T* thisInput = (T*)mscclShmem.work.sendBuff;
   T* thisOutput = (T*)mscclShmem.work.recvBuff;
@@ -253,7 +253,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #endif
 
-  const ssize_t sizePerMscclChunk = mscclShmem.work.count / mscclShmem.work.nChunksPerLoop;
+  const ssize_t sizePerMscclChunk = mscclShmem.work.sizePerMscclChunk;
   uint32_t maxAllowedCount = mscclShmem.work.maxAllowedCount;
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RUN_ENTRY)
@@ -447,13 +447,13 @@ __device__ __forceinline__ void mscclRunInterpreter(
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type) \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork work) { \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
   mscclRunInterpreter<type, Func##devredop<type>, ProtoLL>(comm, algo, work); \
 } \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork work) { \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
   mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128>(comm, algo, work); \
 } \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork work) { \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
   mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>>(comm, algo, work); \
 }
 
