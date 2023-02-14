@@ -12,7 +12,11 @@
 
 namespace {
   template<typename T, typename RedOp>
+#ifdef USE_INDIRECT_FUNCTION_CALL
+  __device__ void oneRankReduce() {
+#else
   __device__ __attribute__((noinline)) void oneRankReduce() {
+#endif
     ncclWork *w = &ncclShmem.work;
     int tid = threadIdx.x;
     int tn = blockDim.x;
@@ -42,10 +46,17 @@ namespace {
   }
 }
 
+#ifdef USE_INDIRECT_FUNCTION_CALL
 #define INSTANTIATE(devredop, type) \
   __device__ void NCCL_ONERANK_REDUCE_NAME(devredop, type)() { \
     oneRankReduce<type, Func##devredop<type>>(); \
   }
+#else
+#define INSTANTIATE(devredop, type) \
+  __device__ __attribute__((noinline)) void NCCL_ONERANK_REDUCE_NAME(devredop, type)() { \
+    oneRankReduce<type, Func##devredop<type>>(); \
+  }
+#endif
 
 INSTANTIATE(PreMulSum, int8_t)
 INSTANTIATE(PreMulSum, uint8_t)

@@ -11,7 +11,11 @@
 
 namespace {
   template<typename T, typename RedOp, typename Proto>
+#ifdef USE_INDIRECT_FUNCTION_CALL
+  __device__ void runRing(ncclWorkElem *args) {
+#else
   __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
+#endif
     const int tid = threadIdx.x;
     const int nthreads = args->nWarps*WARP_SIZE;
     const int bid = args->bid;
