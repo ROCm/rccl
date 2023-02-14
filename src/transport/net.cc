@@ -71,7 +71,8 @@ struct connectMapMem{
     char shmPath[PATH_MAX];
     cudaIpcMemHandle_t ipc;
   };
-  ncclShmHandle_t handle;
+  ncclShmHandle_t attachHandle;
+  ncclShmHandle_t createHandle;
 };
 
 struct connectMap {
@@ -248,12 +249,12 @@ static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
 }
 
 static ncclResult_t netMapShm(struct connectMapMem* mem) {
-  NCCLCHECK(ncclShmOpen(mem->shmPath, mem->size, (void**)&mem->cpuPtr, (void**)&mem->gpuPtr, -1, &mem->handle));
+  NCCLCHECK(ncclShmOpen(mem->shmPath, mem->size, (void**)&mem->cpuPtr, (void**)&mem->gpuPtr, -1, &mem->attachHandle));
   return ncclSuccess;
 }
 static ncclResult_t netCreateShm(struct connectMapMem* mem) {
   mem->shmPath[0] = '\0'; // Let ncclShmOpen create a tmp file
-  NCCLCHECK(ncclShmOpen(mem->shmPath, mem->size, (void**)&mem->cpuPtr, NULL, 1, &mem->handle));
+  NCCLCHECK(ncclShmOpen(mem->shmPath, mem->size, (void**)&mem->cpuPtr, NULL, 1, &mem->createHandle));
   return ncclSuccess;
 }
 
@@ -362,17 +363,19 @@ static ncclResult_t sendFree(struct ncclConnector* send) {
   struct connectMap* map = (struct connectMap*)(send->transportResources);
   if (map) {
     if (map->sameProcess == 0) {
-      NCCLCHECK(ncclShmClose(map->mems[NCCL_NET_MAP_HOSTMEM].handle));
+      NCCLCHECK(ncclShmClose(map->mems[NCCL_NET_MAP_HOSTMEM].attachHandle));
       if (map->mems[NCCL_NET_MAP_DEVMEM].size) {
         CUDACHECK(cudaIpcCloseMemHandle(map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr));
       }
     }
+    free(map);
   }
 
   return ncclSuccess;
 }
 
 static ncclResult_t recvFree(struct ncclConnector* recv) {
+  if (recv->transportResources) free(recv->transportResources);
   return ncclSuccess;
 }
 
@@ -811,7 +814,7 @@ static ncclResult_t sendProxyFree(struct ncclProxyConnection* connection, struct
     if (resources->map.sameProcess) {
       NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr));
     } else {
-      NCCLCHECK(ncclShmClose(mems[NCCL_NET_MAP_HOSTMEM].handle));
+      NCCLCHECK(ncclShmClose(mems[NCCL_NET_MAP_HOSTMEM].createHandle));
     }
     CUDACHECK(cudaFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
     if (mems[NCCL_NET_MAP_GDCMEM].cpuPtr) NCCLCHECK(ncclGdrCudaFree(resources->gdrDesc));
@@ -829,7 +832,7 @@ static ncclResult_t sendProxyFree(struct ncclProxyConnection* connection, struct
     }
   }
 
-  if (connection->state == connSetupDone) free(resources);
+  if (resources) free(resources);
   return ncclSuccess;
 }
 
@@ -864,7 +867,7 @@ static ncclResult_t recvProxyFree(struct ncclProxyConnection* connection, struct
     }
   }
   
-  if (connection->state == connSetupDone) free(resources);
+  if (resources) free(resources);
   return ncclSuccess;
 }
 
