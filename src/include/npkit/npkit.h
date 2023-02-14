@@ -14,10 +14,10 @@
 #include "npkit/npkit_event.h"
 #include "npkit/npkit_struct.h"
 
-#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__)
-#define NPKIT_GET_GPU_TIMESTAMP clock64
-#else
+#ifdef __GFX9__ || __GFX10__
 #define NPKIT_GET_GPU_TIMESTAMP __builtin_amdgcn_s_memrealtime
+#else
+#define NPKIT_GET_GPU_TIMESTAMP clock64
 #endif
 
 class NpKit {
