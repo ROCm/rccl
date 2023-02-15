@@ -7,6 +7,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - Compatibility with NCCL 2.16.2
 ### Added
 ### Fixed
+- Remove workaround and use indirect function call
 ### Removed
 
 ## Unreleased - RCCL 2.15.5 for ROCm 5.5.0
