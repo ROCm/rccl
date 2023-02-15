@@ -40,6 +40,7 @@
     if (response != TEST_SUCCESS)                   \
     {                                               \
       ERROR("Child %d reports failure\n", childId); \
+      ASSERT_EQ(response, TEST_SUCCESS);            \
       FAIL();                                       \
     }                                               \
   }
@@ -476,6 +477,7 @@ namespace RcclUnitTesting
       int const numChildren = isMultiProcess ? numGpus : 1;
       int const numRanks    = numGpus*ranksPerGpu;
       this->InitComms(TestBed::GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
+      if (testing::Test::HasFailure()) continue;
 
       for (int ftIdx = 0; ftIdx < funcTypes.size()      && isCorrect; ++ftIdx)
       for (int dtIdx = 0; dtIdx < dataTypes.size()      && isCorrect; ++dtIdx)
@@ -499,9 +501,14 @@ namespace RcclUnitTesting
                                   numInputElements,
                                   numOutputElements,
                                   optionalArgs);
+          if (testing::Test::HasFailure()) continue;
 
           // Only allocate once for largest size
-          if (neIdx == 0) this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx]);
+          if (neIdx == 0)
+          {
+            this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx]);
+            if (testing::Test::HasFailure()) continue;
+          }
 
           for (int hgIdx = 0; hgIdx < useHipGraphList.size() && isCorrect; ++hgIdx)
           {
@@ -512,6 +519,7 @@ namespace RcclUnitTesting
                              funcTypes[ftIdx] == ncclCollReduce    ||
                              funcTypes[ftIdx] == ncclCollAllReduce));
             if (!canSkip) this->PrepareData();
+            if (testing::Test::HasFailure()) continue;
 
             std::string name = this->GetTestCaseName(numGpus, isMultiProcess,
                                                      funcTypes[ftIdx], dataTypes[dtIdx],
@@ -526,6 +534,7 @@ namespace RcclUnitTesting
 
             std::vector<int> currentRanksEmpty = {};
             this->ExecuteCollectives(currentRanksEmpty, useHipGraphList[hgIdx]);
+            if (testing::Test::HasFailure()) continue;
             this->ValidateResults(isCorrect);
             if (!isCorrect)
             {
