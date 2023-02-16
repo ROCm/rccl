@@ -194,7 +194,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.groupDepth = 0;
     status.lastStream = nullptr;
     status.workFifoDepth = MSCCL_WORK_FIFO_DEPTH;
-    NCCLCHECK(ncclCudaHostCalloc(&status.workFifo, status.workFifoDepth));
+    NCCLCHECK(ncclCudaCalloc(&status.workFifo, status.workFifoDepth, nullptr, true));
     NCCLCHECK(ncclCudaHostCalloc(&status.workFifoDone, MAXCHANNELS));
     status.workFifoSent = 0;
     for (int i = 0; i < MAXCHANNELS; i++) {
@@ -505,7 +505,7 @@ ncclResult_t mscclTeardown() {
     } else {
       NCCLCHECK(mscclInternalSchedulerTeardown());
     }
-    NCCLCHECK(ncclCudaHostFree(status.workFifo));
+    NCCLCHECK(ncclCudaFree(status.workFifo));
     NCCLCHECK(ncclCudaHostFree(status.workFifoDone));
     mscclInitialized.store(false, std::memory_order_release);
   }
