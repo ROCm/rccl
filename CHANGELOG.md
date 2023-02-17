@@ -10,7 +10,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - Remove workaround and use indirect function call
 ### Removed
 
-## Unreleased - RCCL 2.15.5 for ROCm 5.5.0
+## RCCL 2.15.5 for ROCm 5.5.0
 ### Changed
 - Compatibility with NCCL 2.15.5
 - Unit test executable renamed to rccl-UnitTests
