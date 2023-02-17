@@ -2,6 +2,22 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## RCCL 2.15.5 for ROCm 5.5.0
+### Changed
+- Compatibility with NCCL 2.15.5
+- Unit test executable renamed to rccl-UnitTests
+### Added
+- HW-topology aware binary tree implementation
+- Experimental support for MSCCL
+- New unit tests for hipGraph support
+- NPKit integration
+### Fixed
+- rocm-smi ID conversion
+- Support for HIP_VISIBLE_DEVICES for unit tests
+- Support for p2p transfers to non (HIP) visible devices
+### Removed
+- Removed TransferBench from tools.  Exists in standalone repo: https://github.com/ROCmSoftwarePlatform/TransferBench
+
 ## RCCL-2.13.4 for ROCm 5.4.0
 ### Changed
 - Compatibility with NCCL 2.13.4
