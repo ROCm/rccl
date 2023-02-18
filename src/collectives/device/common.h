@@ -21,7 +21,7 @@
 
 #ifdef __GFX9__
 #define STORE(DST, SRC) \
-  { atomicExch((unsigned long long *)(DST), (SRC)); }
+  { __threadfence(); atomicExch((unsigned long long *)(DST), (SRC)); }
 #else
 #define STORE(DST, SRC) \
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
