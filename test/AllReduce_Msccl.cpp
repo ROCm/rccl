@@ -23,7 +23,7 @@ namespace RcclUnitTesting
     std::vector<int>            const numElements     = {384 * 1024, 384};
     std::vector<bool>           const inPlaceList     = {true, false};
     std::vector<bool>           const managedMemList  = {true, false};
-    std::vector<bool>           const useHipGraphList = {true, false};
+    std::vector<bool>           const useHipGraphList = {false, true};
 
     testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements, inPlaceList, managedMemList, useHipGraphList);
     testBed.Finalize();
