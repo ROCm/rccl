@@ -14,7 +14,7 @@ namespace RcclUnitTesting
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollReduceScatter};
     std::vector<ncclDataType_t> const dataTypes       = {ncclUint8, ncclUint32, ncclUint64};
-    std::vector<ncclRedOp_t>    const redOps          = {ncclSum};
+    std::vector<ncclRedOp_t>    const redOps          = {ncclAvg};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {1048576, 53327, 1024};
     std::vector<bool>           const inPlaceList     = {false};
