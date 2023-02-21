@@ -645,8 +645,6 @@ static ncclResult_t scheduleP2pTasksToPlan(
               ncclIntruQueueDequeue(&peers[recvPeer].recvQueue);
               tasks->nTasksP2p -= 1;
             }
-          } else {
-            NCCLCHECK(addP2pToPlan(comm, plan, nWorkBudget, /*isSendNotRecv=*/false, recvPeer, 0, nullptr, 0, recvIdx));
           }
           if (sendChunkBytes != 0) {
             if (sendChunkBytes == -1) sendChunkBytes = 0;
@@ -660,8 +658,6 @@ static ncclResult_t scheduleP2pTasksToPlan(
               ncclIntruQueueDequeue(&peers[sendPeer].sendQueue);
               tasks->nTasksP2p -= 1;
             }
-          } else {
-            NCCLCHECK(addP2pToPlan(comm, plan, nWorkBudget, /*isSendNotRecv=*/true, sendPeer, 0, nullptr, 0, sendIdx));
           }
         } while (sendBytes != 0 || recvBytes != 0);
       }
