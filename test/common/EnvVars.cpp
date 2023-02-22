@@ -60,6 +60,7 @@ namespace RcclUnitTesting
     verbose        = GetEnvVar("UT_VERBOSE"     , 0);
     printValues    = GetEnvVar("UT_PRINT_VALUES", 0);
     maxRanksPerGpu = GetEnvVar("UT_MAX_RANKS_PER_GPU", 1);
+    showTiming     = GetEnvVar("UT_SHOW_TIMING",  1);
 
     // Limit number of supported reduction operators to just ncclSum if only allReduce is built
 #ifdef BUILD_ALLREDUCE_ONLY
@@ -168,7 +169,8 @@ namespace RcclUnitTesting
         std::make_pair("UT_REDOPS"           , "List of reduction ops to test"),
         std::make_pair("UT_DATATYPES"        , "List of datatypes to test"),
         std::make_pair("UT_MAX_RANKS_PER_GPU", "Maximum number of ranks using the same GPU"),
-        std::make_pair("UT_PRINT_VALUES"     , "Print array values (# of values to print, < 0 for all)")
+        std::make_pair("UT_PRINT_VALUES"     , "Print array values (# of values to print, < 0 for all)"),
+        std::make_pair("UT_SHOW_TIMING"      , "Show timing table")
       };
 
     printf("================================================================================\n");
