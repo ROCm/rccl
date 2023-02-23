@@ -52,6 +52,7 @@ if(BUILD_TESTS)
       AllReduce_OutOfPlace.cpp
       AllReduce_PreMultScalar.cpp
       AllReduce_Msccl.cpp
+      Multistream.cpp
     )
   else()
     set(TEST_SOURCE_FILES
@@ -95,6 +96,8 @@ if(BUILD_TESTS)
       Gather_OutOfPlace.cpp
       #SendRecv
       SendRecv_SinglePairs.cpp
+      #Misc
+      Multistream.cpp
       )
   endif()
 

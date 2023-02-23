@@ -26,6 +26,7 @@ namespace RcclUnitTesting
     int                        numActiveRanks;        // Current # of ranks in use
     int                        numCollectivesInGroup; // # of collectives to execute per group call
     bool                       useBlocking;           // RCCL communication with blocking or non-blocking option
+    int                        numStreamsPerGroup;    // # of different streams available per group call
     EnvVars                    ev;                    // Environment variables
 
     // Constructor - Creates one child process per detected GPU device that waits for further commands
@@ -33,24 +34,28 @@ namespace RcclUnitTesting
 
     // Prepare TestBed for use with GPUs across multiple child processes
     void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild,
-                   int const numCollectivesInGroup = 1, bool const useBlocking = true);
+                   int  const numCollectivesInGroup = 1,
+                   bool const useBlocking           = true,
+                   int  const numStreamsPerGroup    = 1);
 
     // Prepare TestBed for use with GPUs on a single child process
-    void InitComms(int const numGpus,
-                   int const numCollectivesInGroup = 1, bool const useBlocking = true);
+    void InitComms(int  const numGpus,
+                   int  const numCollectivesInGroup = 1,
+                   bool const useBlocking           = true,
+                   int  const numStreamsPerGroup    = 1);
 
     // Set collectives arguments for specified collective / rank
     // Setting scalarsPerRank to non-null will create custom reduction operator
     // Using collId = -1 (default) applies settings to all collectives in group
     // Using rank = -1 (default) applies settings to all ranks
-
     void SetCollectiveArgs(ncclFunc_t      const funcType,
                            ncclDataType_t  const dataType,
                            size_t          const numInputElements,
                            size_t          const numOutputElements,
                            OptionalColArgs const &optionalArgs = {},
-                           int             const collId = -1,
-                           int             const rank = -1);
+                           int             const collId        = -1,
+                           int             const rank          = -1,
+                           int             const streamIdx     = 0);
 
     // Allocate memory for specified collective / rank
     // - Requires SetCollectiveArgs to have been called already

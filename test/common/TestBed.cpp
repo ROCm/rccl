@@ -86,13 +86,16 @@ namespace RcclUnitTesting
   }
 
   void TestBed::InitComms(std::vector<std::vector<int>> const& deviceIdsPerProcess,
-                          int const numCollectivesInGroup, bool const useBlocking)
+                          int  const numCollectivesInGroup,
+                          bool const useBlocking,
+                          int  const numStreamsPerGroup)
   {
     // Count up the total number of GPUs to use and track child/deviceId per rank
     this->numActiveChildren = deviceIdsPerProcess.size();
     this->numActiveRanks = 0;
     this->numCollectivesInGroup = numCollectivesInGroup;
     this->useBlocking = useBlocking;
+    this->numStreamsPerGroup = numStreamsPerGroup;
     this->rankToChildMap.clear();
     this->rankToDeviceMap.clear();
     if (ev.verbose) INFO("Setting up %d active child processes\n", this->numActiveChildren);
@@ -147,6 +150,9 @@ namespace RcclUnitTesting
       // Send whether to use MultiRank interfaces or not.
       PIPE_WRITE(childId, useMulti);
 
+      // Send how many streams to use per group call
+      PIPE_WRITE(childId, numStreamsPerGroup);
+
       // Send the GPUs this child uses
       int const numGpus = deviceIdsPerProcess[childId].size();
       PIPE_WRITE(childId, numGpus);
@@ -164,9 +170,9 @@ namespace RcclUnitTesting
     }
   }
 
-  void TestBed::InitComms(int const numGpus, int const numCollectivesInGroup, bool const useBlocking)
+  void TestBed::InitComms(int const numGpus, int const numCollectivesInGroup, bool const useBlocking, int const numStreamsPerGroup)
   {
-    InitComms(TestBed::GetDeviceIdsList(1, numGpus), numCollectivesInGroup, useBlocking);
+    InitComms(TestBed::GetDeviceIdsList(1, numGpus), numCollectivesInGroup, useBlocking, numStreamsPerGroup);
   }
 
   void TestBed::SetCollectiveArgs(ncclFunc_t      const funcType,
@@ -175,12 +181,19 @@ namespace RcclUnitTesting
                                   size_t          const numOutputElements,
                                   OptionalColArgs const &optionalArgs,
                                   int             const collId,
-                                  int             const rank)
+                                  int             const rank,
+                                  int             const streamIdx)
   {
     // Build list of ranks this applies to (-1 for rank means to set for all)
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
+
+    if (streamIdx < 0 || streamIdx >= this->numStreamsPerGroup)
+    {
+      ERROR("StreamIdx for collective %d is out of bounds (%d/%d):\n",  collId, streamIdx, numStreamsPerGroup);
+      FAIL();
+    }
 
     // Loop over all ranks and send CollectiveArgs to appropriate child process
     int const cmd = TestBedChild::CHILD_SET_COLL_ARGS;
@@ -194,6 +207,7 @@ namespace RcclUnitTesting
       PIPE_WRITE(childId, dataType);
       PIPE_WRITE(childId, numInputElements);
       PIPE_WRITE(childId, numOutputElements);
+      PIPE_WRITE(childId, streamIdx);
       PIPE_WRITE(childId, optionalArgs);
       PIPE_CHECK(childId);
     }
