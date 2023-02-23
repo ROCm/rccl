@@ -18,7 +18,7 @@ namespace RcclUnitTesting
 
     OptionalColArgs options;
 
-    // This test runs 3 AllReduce collectives of different sizes in the same group call with different streams
+    // This test runs multiple AllReduce collectives on different streams within the same group call
     bool isCorrect = true;
     for (int totalRanks = testBed.ev.minGpus; totalRanks <= testBed.ev.maxGpus && isCorrect; ++totalRanks)
     for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
@@ -39,7 +39,7 @@ namespace RcclUnitTesting
           testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks),
                             numCollPerGroup, false, numStreamsPerGroup);
 
-          // Set up each collective in group in different stream (module numStreamsPerGroup)
+          // Set up each collective in group in different stream (modulo numStreamsPerGroup)
           options.redOp = ncclSum;
           for (int collIdx = 0; collIdx < numCollPerGroup; ++collIdx)
           {
