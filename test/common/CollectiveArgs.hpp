@@ -103,6 +103,7 @@ namespace RcclUnitTesting
     size_t          numInputElements;
     size_t          numOutputElements;
     PtrUnion        localScalar;
+    int             streamIdx;
     OptionalColArgs options;
 
     // Data
@@ -125,6 +126,7 @@ namespace RcclUnitTesting
                     ncclDataType_t  const dataType,
                     size_t          const numInputElements,
                     size_t          const numOutputElements,
+                    int             const streamIdx,
                     OptionalColArgs const &optionalArgs = {});
 
     // Allocates GPU memory for input/output and CPU memory for expected
