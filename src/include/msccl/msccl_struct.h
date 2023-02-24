@@ -11,8 +11,9 @@
 #include <set>
 #include <vector>
 #include "devcomm.h"
+#include "msccl/msccl_scheduler.h"
 
-#define MSCCL_MAX_NUM_STEPS 256
+#define MSCCL_MAX_NUM_STEPS 64
 #define MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 #define MSCCL_MAX_NUM_THREAD_BLOCKS (MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS)
 #define MSCCL_MAX_COUNT 72 // max concurrent number of msccl chunk transmission
@@ -34,19 +35,6 @@
 #define MSCCL_RECV_REDUCE_COPY_SEND 5
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
-
-typedef enum { mscclFuncReduce             =  0,
-               mscclFuncBroadcast          =  1,
-               mscclFuncAllReduce          =  2,
-               mscclFuncReduceScatter      =  3,
-               mscclFuncAllGather          =  4,
-               mscclFuncSend               =  5,
-               mscclFuncRecv               =  6,
-               mscclFuncGather             =  7,
-               mscclFuncScatter            =  8,
-               mscclFuncAllToAll           =  9,
-               mscclFuncAllToAllv          =  10,
-               mscclNumFuncs               =  11 } mscclFunc_t;
 
 struct mscclTransmission {
   int16_t dependencePointer; // index to the first dependence
@@ -141,25 +129,12 @@ enum mscclGroupStatus {
   mscclGroupUnsupportedOp
 };
 
-struct mscclSchedulerParam {
-  const void* sendBuff;
-  const size_t* sendCounts;
+struct mscclSavedSchedulerParam {
+  struct mscclSchedulerParam p;
   std::vector<size_t> savedSendCounts;
-  const size_t* sDisPls;
   std::vector<size_t> savedSDisPls;
-  void* recvBuff;
-  const size_t* recvCounts;
   std::vector<size_t> savedRecvCounts;
-  const size_t* rDisPls;
   std::vector<size_t> savedRDisPls;
-  size_t count;
-  ncclDataType_t dataType;
-  int root;
-  int peer;
-  ncclRedOp_t op;
-  mscclFunc_t func;
-  bool scheduled;
-  mscclAlgoHandle_t handle;
   ncclComm_t comm;
   hipStream_t stream;
 };
@@ -177,13 +152,17 @@ struct mscclStatus {
   int sliceSteps;
   int chunkSize;
   int chunkEffectiveSize;
-  int rank;
   uint32_t workIndex;
   uint32_t maxAllowedCount;
   ncclDataType_t dataType;
   mscclGroupStatus groupStatus;
   int groupDepth;
-  std::vector<struct mscclSchedulerParam> savedSchedulerParams;
+  std::vector<struct mscclSavedSchedulerParam> savedSchedulerParams;
+  std::map<ncclComm_t, std::set<mscclAlgoHandle_t>> connectedAlgos;
+  hipStream_t lastStream;
+  std::set<ncclComm_t> fallbackComms;
+  void* mscclSchedulerLib;
+  mscclSchedulerInterface* mscclSchedulerPtr;
 };
 
 struct alignas(16) mscclWork {

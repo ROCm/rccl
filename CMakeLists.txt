@@ -243,6 +243,7 @@ set(HEADER_SOURCES
   src/include/msccl/msccl_lifecycle.h
   src/include/msccl/msccl_parser.h
   src/include/msccl/msccl_setup.h
+  src/include/msccl/msccl_scheduler.h
   src/include/msccl/msccl_status.h
   src/include/msccl/msccl_struct.h
   src/graph/rings.h
