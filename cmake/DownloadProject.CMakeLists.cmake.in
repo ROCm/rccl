@@ -10,8 +10,5 @@ ExternalProject_Add(${DL_ARGS_PROJ}-download
                     ${DL_ARGS_UNPARSED_ARGUMENTS}
                     SOURCE_DIR          "${DL_ARGS_SOURCE_DIR}"
                     BUILD_IN_SOURCE     TRUE
-                    CONFIGURE_COMMAND   "${DL_ARGS_CONFIGURE_COMMAND}"
-                    BUILD_COMMAND       "${DL_ARGS_BUILD_COMMAND}"
-                    INSTALL_COMMAND     "${DL_ARGS_INSTALL_COMMAND}"
                     TEST_COMMAND        ""
 )

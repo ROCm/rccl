@@ -6,10 +6,10 @@ download_project(PROJ                msccl-scheduler
                  GIT_REPOSITORY      https://github.com/microsoft/msccl-scheduler.git
                  GIT_TAG             v0.1.0
                  SOURCE_DIR          ${CMAKE_CURRENT_BINARY_DIR}/msccl-scheduler-src
-                 CONFIGURE_COMMAND   ""
-                 BUILD_COMMAND       ""
-                 INSTALL_COMMAND     ""
-                 TEST_COMMAND        ""
+                 CONFIGURE_COMMAND   ":"
+                 BUILD_COMMAND       ":"
+                 INSTALL_COMMAND     ":"
+                 TEST_COMMAND        ":"
                  UPDATE_DISCONNECTED TRUE
 )
 
