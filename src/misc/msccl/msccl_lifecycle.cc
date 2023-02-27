@@ -18,7 +18,7 @@
 #include "msccl/msccl_setup.h"
 #include "msccl/msccl_status.h"
 
-RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 0);
+RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 static std::atomic<bool> mscclInitialized;
 static bool mscclSchedulerTriedLoadAlgo = false;
@@ -62,10 +62,18 @@ static bool mscclCommCompatible(ncclComm_t comm) {
   return true;
 }
 
+static const char* mscclSchedulerPathEnv = "MSCCL_SCHEDULER";
+static const char* mscclSchedulerDefaultPath = "/opt/rocm/lib/libmsccl-scheduler.so";
+
 ncclResult_t mscclSchedulerInit() {
   mscclStatus& status = mscclGetStatus();
 
-  status.mscclSchedulerLib = dlopen("libmsccl-scheduler.so", RTLD_NOW | RTLD_LOCAL);
+  const char* mscclSchedulerPath = getenv(mscclSchedulerPathEnv);
+  if (mscclSchedulerPath) {
+    status.mscclSchedulerLib = dlopen(mscclSchedulerPath, RTLD_NOW | RTLD_LOCAL);
+  } else {
+    status.mscclSchedulerLib = dlopen(mscclSchedulerDefaultPath, RTLD_NOW | RTLD_LOCAL);
+  }
   if (status.mscclSchedulerLib == nullptr) {
     if (errno == ENOENT) {
       INFO(NCCL_INIT, "MSCCL: No scheduler found, using internal implementation");

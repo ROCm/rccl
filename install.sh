@@ -40,6 +40,7 @@ install_dependencies=false
 build_static=false
 build_allreduce_only=false
 build_freorg_bkwdcomp=true
+build_msccl_scheduler=true
 
 # #################################################
 # Parameter parsing
@@ -106,6 +107,9 @@ while true; do
         shift ;;
     --rm-legacy-include-dir)
         build_freorg_bkwdcomp=false
+        shift ;;
+    --no-external-msccl-scheduler)
+        build_msccl_scheduler=false
         shift ;;
     --prefix)
         install_prefix=${2}
@@ -213,6 +217,10 @@ fi
 
 if ($build_allreduce_only); then
     cmake_common_options="${cmake_common_options} -DBUILD_ALLREDUCE_ONLY=ON"
+fi
+
+if ($build_msccl_scheduler); then
+    cmake_common_options="${cmake_common_options} -DBUILD_MSCCL_SCHEDULER=ON"
 fi
 check_exit_code "$?"
 

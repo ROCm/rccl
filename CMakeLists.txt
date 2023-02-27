@@ -400,6 +400,12 @@ if(NPKIT_FLAGS)
   add_definitions(${NPKIT_FLAGS})
 endif()
 
+# Build MSCCL scheduler after header generation
+option(BUILD_MSCCL_SCHEDULER "Build external MSCCL scheduler library" ON)
+if(BUILD_MSCCL_SCHEDULER)
+  include(cmake/msccl-scheduler.cmake)
+endif()
+
 set(COLLTRACE 1 CACHE BOOL "Collective Trace Option")
 if(COLLTRACE)
   add_definitions(-DENABLE_COLLTRACE)
@@ -562,6 +568,7 @@ Source: https://github.com/ROCmSoftwarePlatform/rccl
 Files: *
 Copyright: (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
 Modifications Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
+Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 License: See LICENSE.txt for license information\n")
   install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   # Write changelog file
