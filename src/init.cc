@@ -112,7 +112,7 @@ static ncclResult_t ncclInit() {
     char strValue[MAX_STR_LEN];
     NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
     if (strcmp(strValue, "1") == 0)
-      WARN("NUMA auto blancing enabled! Disable by \"sudo sysctl kernel.numa_balancing=0\"");
+      WARN("NUMA auto balancing enabled! Disable by \"sudo sysctl kernel.numa_balancing=0\"");
     NCCLCHECK(ncclTopoGetStrFromSys("/proc", "cmdline", strValue));
     if (strstr(strValue, "amd_iommu=on") == NULL)
       WARN("Missing \"amd_iommu=on\" from kernel command line!");
