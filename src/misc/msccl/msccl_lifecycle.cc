@@ -8,7 +8,10 @@
 #include <mutex>
 #include <set>
 
+#include <dirent.h>
 #include <dlfcn.h>
+#include <error.h>
+#include <link.h>
 
 #include "alloc.h"
 #include "checks.h"
@@ -63,10 +66,57 @@ static bool mscclCommCompatible(ncclComm_t comm) {
 }
 
 static const char* mscclSchedulerPathEnv = "MSCCL_SCHEDULER";
-static const char* mscclSchedulerDefaultPath = "/opt/rocm/lib/libmsccl-scheduler.so";
+static const char* mscclSchedulerDefaultPath = "libmsccl-scheduler.so";
+static const char* mscclAlgoDirEnv = "MSCCL_ALGO_DIR";
+static const char* mscclAlgoDefaultDir = "msccl-algorithms";
+extern "C" bool mscclUnitTestMode() __attribute__((__weak__));
+static const char* mscclUnitTestAlgoDefaultDir = "msccl-unit-test-algorithms";
+
+ncclResult_t mscclInternalSchedulerInit() {
+  mscclStatus& status = mscclGetStatus();
+  const char* mscclAlgoDir = getenv(mscclAlgoDirEnv);
+  std::string mscclAlgoDirStr;
+  if (mscclAlgoDir == nullptr) {
+    // Try to find default algorithm directory based on librccl.so path
+    Dl_info dl_info;
+    struct link_map *link_map_ptr = nullptr;
+    if (!dladdr1((void *)mscclInternalSchedulerInit, &dl_info, (void **)&link_map_ptr, RTLD_DL_LINKMAP)) {
+      fprintf(stderr, "MSCCL Internal Scheduler: dladdr1 failed\n");
+      return ncclInvalidUsage;
+    }
+    std::string selfLibPath = link_map_ptr->l_name;
+    mscclAlgoDirStr = selfLibPath.substr(0, selfLibPath.find_last_of("/\\") + 1);
+    mscclAlgoDirStr += (mscclUnitTestMode && mscclUnitTestMode()) ? mscclUnitTestAlgoDefaultDir : mscclAlgoDefaultDir;
+    mscclAlgoDir = mscclAlgoDirStr.c_str();
+  }
+  struct dirent *entry = nullptr;
+  DIR *dp = nullptr;
+  dp = opendir(mscclAlgoDir);
+  if (dp == nullptr) {
+    fprintf(stderr, "MSCCL Internal Scheduler: open algorithm directory %s failed\n", mscclAlgoDir);
+    return ncclInvalidUsage;
+  }
+  while ((entry = readdir(dp))) {
+    if (entry->d_type != DT_LNK && entry->d_type != DT_REG) {
+      continue;
+    }
+    status.algoMetas.emplace_back();
+    std::string fullPath = mscclAlgoDir;
+    fullPath += "/";
+    fullPath += entry->d_name;
+    NCCLCHECK(mscclGetAlgoMetaFromXmlFile(fullPath.c_str(), &(status.algoMetas.back())));
+  }
+  if (closedir(dp)) {
+    fprintf(stderr, "MSCCL Internal Scheduler: closedir failed, error %d\n", errno);
+    return ncclInvalidUsage;
+  }
+  status.rankToAlgoHandles.resize(status.algoMetas.size());
+  return ncclSuccess;
+}
 
 ncclResult_t mscclSchedulerInit() {
   mscclStatus& status = mscclGetStatus();
+  bool useInternalScheduler = false;
 
   const char* mscclSchedulerPath = getenv(mscclSchedulerPathEnv);
   if (mscclSchedulerPath) {
@@ -80,16 +130,19 @@ ncclResult_t mscclSchedulerInit() {
     } else {
       INFO(NCCL_INIT, "MSCCL: Scheduler load returned %d : %s. Using internal implementation", errno, dlerror());
     }
-    return ncclSuccess;
+    useInternalScheduler = true;
+  } else {
+    status.mscclSchedulerPtr = (mscclSchedulerInterface *)dlsym(status.mscclSchedulerLib, "mscclScheduler");
+    if (status.mscclSchedulerPtr == nullptr) {
+      INFO(NCCL_INIT, "MSCCL: Failed to find mscclScheduler symbol, using internal implementation");
+      useInternalScheduler = true;
+    }
   }
-
-  status.mscclSchedulerPtr = (mscclSchedulerInterface *)dlsym(status.mscclSchedulerLib, "mscclScheduler");
-  if (status.mscclSchedulerPtr == nullptr) {
-    INFO(NCCL_INIT, "MSCCL: Failed to find mscclScheduler symbol, using internal implementation");
-    return ncclSuccess;
+  if (useInternalScheduler) {
+    NCCLCHECK(mscclInternalSchedulerInit());
+  } else {
+    NCCLCHECK(status.mscclSchedulerPtr->init());
   }
-  NCCLCHECK(status.mscclSchedulerPtr->init());
-
   return ncclSuccess;
 }
 
@@ -134,52 +187,11 @@ ncclResult_t mscclGroupStart() {
   return ncclSuccess;
 }
 
-static ncclResult_t mscclExternalScheduler(struct mscclSavedSchedulerParam* param) {
+static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSavedSchedulerParam* param) {
   mscclStatus& status = mscclGetStatus();
-  NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
-  return ncclSuccess;
-}
-
-static ncclResult_t mscclInternalScheduler(struct mscclSavedSchedulerParam* param) {
-  static bool algoAvailable = false;
-  static mscclAlgoHandle_t loadedAlgoHandle;
-  static mscclAlgo* loadedHostAlgo = nullptr;
-
   param->p.scheduled = false;
 
-  if (!mscclSchedulerTriedLoadAlgo) {
-    mscclSchedulerTriedLoadAlgo = true;
-    const char* mscclAlgoFilePath = getenv(mscclAlgoFilePathEnv);
-    if (mscclAlgoFilePath != nullptr) {
-      NCCLCHECK(mscclLoadAlgo(mscclAlgoFilePath, &loadedAlgoHandle, param->p.rank));
-      mscclStatus& status = mscclGetStatus();
-      loadedHostAlgo = status.hostAlgos[loadedAlgoHandle];
-      algoAvailable = true;
-    }
-  }
-  if (!algoAvailable) {
-    return ncclSuccess;
-  }
-
-  bool mscclAlgoFuncIsValid = loadedHostAlgo->func == param->p.func;
-  if (!mscclAlgoFuncIsValid) {
-    return ncclSuccess;
-  }
-
-  bool numGpusIsValid = loadedHostAlgo->nRanks == param->p.nRanks;
-  if (!numGpusIsValid) {
-    return ncclSuccess;
-  }
-
-  size_t nBytes = param->p.count * ncclTypeSize(param->p.dataType) * loadedHostAlgo->sizeMultiplier;
-  bool msgSizeIsValid =
-    param->p.count > 0 && (param->p.count % loadedHostAlgo->nChunksPerLoop) == 0 &&
-    nBytes >= loadedHostAlgo->minBytes &&
-    (loadedHostAlgo->maxBytes == 0 || nBytes <= loadedHostAlgo->maxBytes);
-  if (!msgSizeIsValid) {
-    return ncclSuccess;
-  }
-
+  // Whether the algorithm is in-place
   bool isInPlace = false;
   if (param->p.func == mscclFuncReduce ||
       param->p.func == mscclFuncBroadcast ||
@@ -194,22 +206,39 @@ static ncclResult_t mscclInternalScheduler(struct mscclSavedSchedulerParam* para
              param->p.func == mscclFuncScatter) {
     isInPlace = (char*)param->p.recvBuff == (char*)param->p.sendBuff + param->p.rank * param->p.count * ncclTypeSize(param->p.dataType);
   }
-  bool inPlaceOutOfPlaceIsValid = isInPlace ? loadedHostAlgo->inPlace : loadedHostAlgo->outOfPlace;
-  if (!inPlaceOutOfPlaceIsValid) {
-    return ncclSuccess;
+
+  // Search suitable algorithms
+  for (size_t i = 0; i < status.algoMetas.size(); i++) {
+    auto &m = status.algoMetas[i];
+    size_t nBytes = param->p.count * ncclTypeSize(param->p.dataType) * m.sizeMultiplier;
+    bool msgSizeIsValid =
+      param->p.count > 0 && (param->p.count % m.nChunksPerLoop) == 0 &&
+      nBytes >= m.minBytes && (m.maxBytes == 0 || nBytes <= m.maxBytes);
+    if (msgSizeIsValid &&
+        m.nRanks == param->p.nRanks &&
+        m.func == param->p.func &&
+        (isInPlace ? m.inPlace : m.outOfPlace)) {
+      // If not loaded for current rank, load it
+      if (status.rankToAlgoHandles[i].find(param->p.rank) == status.rankToAlgoHandles[i].end()) {
+        mscclAlgoHandle_t algoHandle;
+        NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &algoHandle, param->p.rank));
+        status.rankToAlgoHandles[i][param->p.rank] = algoHandle;
+      }
+      param->p.handle = status.rankToAlgoHandles[i][param->p.rank];
+      param->p.scheduled = true;
+      return ncclSuccess;
+    }
   }
 
-  param->p.handle = loadedAlgoHandle;
-  param->p.scheduled = true;
   return ncclSuccess;
 }
 
-static ncclResult_t mscclCallScheduler(struct mscclSavedSchedulerParam* param) {
+static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* param) {
   mscclStatus& status = mscclGetStatus();
   if (status.mscclSchedulerPtr) {
-    NCCLCHECK(mscclExternalScheduler(param));
+    NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
-    NCCLCHECK(mscclInternalScheduler(param));
+    NCCLCHECK(mscclInternalSchedulerSelectAlgo(param));
   }
   return ncclSuccess;
 }
@@ -346,7 +375,7 @@ ncclResult_t mscclEnqueueCheck(
       if (status.fallbackComms.find(comm) == status.fallbackComms.end()) {
         CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
         if (captureStatus == hipStreamCaptureStatusNone) {
-          NCCLCHECK(mscclCallScheduler(&status.savedSchedulerParams.back()));
+          NCCLCHECK(mscclSchedulerSelectAlgo(&status.savedSchedulerParams.back()));
           if (status.savedSchedulerParams.back().p.scheduled) {
             NCCLCHECK(mscclRunSavedParams());
             break;
@@ -359,7 +388,7 @@ ncclResult_t mscclEnqueueCheck(
       if (status.fallbackComms.find(comm) == status.fallbackComms.end()) {
         CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
         if (captureStatus == hipStreamCaptureStatusNone) {
-          NCCLCHECK(mscclCallScheduler(&status.savedSchedulerParams.back()));
+          NCCLCHECK(mscclSchedulerSelectAlgo(&status.savedSchedulerParams.back()));
           if (status.savedSchedulerParams.back().p.scheduled) {
             // Only save counts and displs when there is suitable MSCCL algorithm for this
             NCCLCHECK(mscclSaveCountsAndDispls(&status.savedSchedulerParams.back()));
@@ -389,6 +418,22 @@ ncclResult_t mscclGroupEnd() {
   return ncclSuccess;
 }
 
+ncclResult_t mscclInternalSchedulerTeardown() {
+  ncclResult_t ret = ncclSuccess, tmpRet = ncclSuccess;
+  mscclStatus& status = mscclGetStatus();
+  for (auto &m : status.rankToAlgoHandles) {
+    for (auto &p : m) {
+      tmpRet = mscclUnloadAlgo(p.second);
+      if (ret == ncclSuccess) {
+        ret = tmpRet;
+      }
+    }
+  }
+  status.algoMetas.clear();
+  status.rankToAlgoHandles.clear();
+  return ret;
+}
+
 ncclResult_t mscclTeardown() {
   std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
   if (!mscclInitialized.load(std::memory_order_acquire)) {
@@ -413,10 +458,12 @@ ncclResult_t mscclTeardown() {
   status.connectedAlgos.clear();
   status.fallbackComms.clear();
   if (status.mscclSchedulerPtr) {
-    NCCLCHECK(status.mscclSchedulerPtr->tearDown());
+    NCCLCHECK(status.mscclSchedulerPtr->teardown());
     status.mscclSchedulerPtr = nullptr;
     dlclose(status.mscclSchedulerLib);
     status.mscclSchedulerLib = nullptr;
+  } else {
+    NCCLCHECK(mscclInternalSchedulerTeardown());
   }
   mscclInitialized.store(false, std::memory_order_release);
   return ncclSuccess;

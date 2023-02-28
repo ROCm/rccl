@@ -86,6 +86,27 @@ struct mscclChannelInfo {
   int nRecvPeers;
 };
 
+struct mscclAlgoMeta {
+  // Path to algorithm file
+  std::string filePath;
+  // number of chunks of input/output in each MSCCL algorithm loop
+  int nChunksPerLoop;
+  // number of ranks required by this algorithm
+  int nRanks;
+  // need to times nRanks for all-gather, reduce-scatter and all-to-all
+  int sizeMultiplier;
+  // MSCCL function type
+  mscclFunc_t func;
+  // Min message size allowed for this algorithm.
+  int64_t minBytes;
+  // Max message size allowed for this algorithm, 0 for no limit.
+  int64_t maxBytes;
+  // Whether this algorithm is suitable for in-place.
+  bool inPlace;
+  // Whether this algorithm is suitable for out-of-place.
+  bool outOfPlace;
+};
+
 struct mscclAlgo {
   // number of chunks of input/output in each MSCCL algorithm loop
   int nChunksPerLoop;
@@ -163,6 +184,8 @@ struct mscclStatus {
   std::set<ncclComm_t> fallbackComms;
   void* mscclSchedulerLib;
   mscclSchedulerInterface* mscclSchedulerPtr;
+  std::vector<mscclAlgoMeta> algoMetas;
+  std::vector<std::map<int, mscclAlgoHandle_t>> rankToAlgoHandles;
 };
 
 struct alignas(16) mscclWork {

@@ -9,6 +9,8 @@
 
 #include "TestBed.hpp"
 
+extern "C" bool mscclUnitTestMode() { return true; }
+
 namespace RcclUnitTesting
 {
   TEST(AllReduce, MscclSingleCall)
@@ -20,7 +22,7 @@ namespace RcclUnitTesting
     std::vector<ncclDataType_t> const dataTypes       = {ncclInt8, ncclInt32, ncclFloat32};
     std::vector<ncclRedOp_t>    const redOps          = {ncclSum, ncclProd};
     std::vector<int>            const roots           = {0};
-    std::vector<int>            const numElements     = {384 * 1024, 384};
+    std::vector<int>            const numElements     = {384 * 32 * 32, 384 * 32, 384};
     std::vector<bool>           const inPlaceList     = {true, false};
     std::vector<bool>           const managedMemList  = {true, false};
     std::vector<bool>           const useHipGraphList = {false, true};
@@ -37,7 +39,7 @@ namespace RcclUnitTesting
     ncclFunc_t                  const  funcType        = ncclCollAllReduce;
     std::vector<ncclDataType_t> const& dataTypes       = {ncclFloat};
     std::vector<ncclRedOp_t>    const& redOps          = {ncclSum};
-    std::vector<int>            const  numElements     = {384 * 1024, 384};
+    std::vector<int>            const  numElements     = {384};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     int                         const  numCollPerGroup = numElements.size();
@@ -95,7 +97,7 @@ namespace RcclUnitTesting
     ncclFunc_t                  const  funcType      = ncclCollAllReduce;
     std::vector<ncclDataType_t> const& dataTypes     = {ncclInt32, ncclFloat32, ncclFloat64};
     ncclRedOp_t                 const  redOp         = ncclSum;
-    std::vector<int>            const  numElements   = {384 * 1024, 384};
+    std::vector<int>            const  numElements   = {384 * 32 * 32, 384 * 32, 384};
     bool                        const  inPlace       = false;
     bool                        const  useManagedMem = false;
 

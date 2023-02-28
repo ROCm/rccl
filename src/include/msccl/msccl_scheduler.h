@@ -46,7 +46,7 @@ typedef struct {
   // Select an algorithm
   ncclResult_t (*selectAlgo)(struct mscclSchedulerParam* param);
   // Unload all algorithms
-  ncclResult_t (*tearDown)();
+  ncclResult_t (*teardown)();
 } mscclSchedulerInterface;
 
 #endif

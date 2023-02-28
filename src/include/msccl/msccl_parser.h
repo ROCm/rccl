@@ -100,4 +100,6 @@ static ncclResult_t mscclXmlFindTag(struct mscclXml* xml, const char* tagName, s
 
 ncclResult_t mscclGetAlgoFromXmlFile(const char* xmlGraphFile, struct mscclAlgo* algo, int rank);
 
+ncclResult_t mscclGetAlgoMetaFromXmlFile(const char* xmlGraphFile, struct mscclAlgoMeta* algoMeta);
+
 #endif

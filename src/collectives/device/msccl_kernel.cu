@@ -150,7 +150,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   int channelId = mscclShmem.mscclTB.channelId;
   {
     void *dst, *src;
-    int bytes;
+    int bytes = 0;
     // Use first 3 warps to load comm, channel, and work into shmem
     switch (tid/WARP_SIZE) {
     case 0:
@@ -172,8 +172,11 @@ __device__ __forceinline__ void mscclRunInterpreter(
       bytes = sizeof(mscclWork);
       static_assert(sizeof(mscclWork) <= sizeof(uint64_t) * WARP_SIZE, "mscclWork cannot be loaded by a single warp in one insn.");
       break;
+    case 3:
+      /* set abort flag to 0 */
+      if (tid == 3 * WARP_SIZE) ncclShmem.aborted = 0;
+      break;
     default:
-      bytes = 0;
       break;
     }
     copyToShmem8(tid%WARP_SIZE, dst, src, bytes);
