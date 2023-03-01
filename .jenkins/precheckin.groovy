@@ -33,6 +33,14 @@ def runCI =
         commonGroovy.runCompileCommand(platform, project, jobName)
     }
 
+    def npKitCompileCommand =
+    {
+        platform, project->
+
+        commonGroovy = load "${project.paths.project_src_prefix}/.jenkins/common.groovy"
+        commonGroovy.runNPKITCompileCommand(platform, project, jobName)
+    }
+
     def testCommand =
     {
         platform, project->
@@ -47,7 +55,7 @@ def runCI =
         commonGroovy.runPackageCommand(platform, project, jobName)
     }
 
-    buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
+    buildProject(prj, formatCheck, nodes.dockerArray, npKitCompileCommand, compileCommand, testCommand, packageCommand)
 }
 
 ci: {
