@@ -112,15 +112,15 @@ static ncclResult_t ncclInit() {
     char strValue[MAX_STR_LEN];
     NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
     if (strcmp(strValue, "1") == 0)
-      WARN("NUMA auto balancing enabled! Disable by \"sudo sysctl kernel.numa_balancing=0\"");
+      WARN("NUMA auto balancing enabled which can lead to variability in the RCCL performance! Disable by \"sudo sysctl kernel.numa_balancing=0\"");
     NCCLCHECK(ncclTopoGetStrFromSys("/proc", "cmdline", strValue));
     if (strstr(strValue, "amd_iommu=on") == NULL)
-      WARN("Missing \"amd_iommu=on\" from kernel command line!");
+      WARN("Missing \"amd_iommu=on\" from kernel command line which can lead to system instablity or hang!");
     if (strstr(strValue, "iommu=pt") == NULL)
-      WARN("Missing \"iommu=pt\" from kernel command line!");
+      WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
     char *env = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
     if (env == NULL || strcmp(env, "1") != 0)
-      WARN("Missing \"HSA_FORCE_FINE_GRAIN_PCIE=1\" from environment!");
+      WARN("Missing \"HSA_FORCE_FINE_GRAIN_PCIE=1\" from environment which can lead to low RCCL performance, system instablity or hang!");
 #ifndef NVTX_NO_IMPL
     initNvtxRegisteredEnums();
 #endif
