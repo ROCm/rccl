@@ -167,6 +167,7 @@ struct ncclTopoSystem {
   int pivotA2ANumBiRings;
   bool ll128Enabled;
   float baseBw;
+  bool mscclEnabled;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);

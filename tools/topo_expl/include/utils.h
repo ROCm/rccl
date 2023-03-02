@@ -29,6 +29,7 @@ struct allGather3Data_t{
   struct ncclTopoRanks topoRanks;
   bool pivotA2AEnabled;
   bool ll128Enabled;
+  bool mscclEnabled;
 };
 
 void initCollNet();

@@ -859,6 +859,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     int nc;
     bool pivotA2AEnabled;
     bool ll128Enabled;
+    bool mscclEnabled;
   };
 
   int nChannelsOrig;
@@ -951,6 +952,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   comm->topo->pivotA2ANumBiRings = 0;
   // LL128
   comm->topo->ll128Enabled = false;
+  // Topology hint for MSCCL internal scheduler about whether to enable MSCCL
+  comm->topo->mscclEnabled = false;
   // Compute paths between GPUs and NICs
   NCCLCHECKGOTO(ncclTopoComputePaths(comm->topo, comm), ret, fail);
   // Remove inaccessible GPUs and unused NICs
@@ -1096,6 +1099,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
   comm->topo->ll128Enabled =  comm->topo->ll128Enabled || rcclParamLL128ForceEnable();
   allGather3Data[rank].ll128Enabled = comm->topo->ll128Enabled;
+  allGather3Data[rank].mscclEnabled = comm->topo->mscclEnabled;
 
   comm->nChannels = (comm->topo->nodes[GPU].count != comm->topo->nRanks && comm->topo->nodes[NET].count)
     ? std::min(treeGraph.nChannels, ringGraph.nChannels) : ringGraph.nChannels;
@@ -1183,6 +1187,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     comm->collNetSupport = std::min(allGather3Data[i].collNetSupport, comm->collNetSupport);
     comm->topo->pivotA2AEnabled = comm->topo->pivotA2AEnabled && allGather3Data[i].pivotA2AEnabled;
     comm->topo->ll128Enabled = comm->topo->ll128Enabled && allGather3Data[i].ll128Enabled;
+    comm->topo->mscclEnabled = comm->topo->mscclEnabled && allGather3Data[i].mscclEnabled;
   }
 
   comm->nChannels = treeGraph.nChannels = ringGraph.nChannels =

@@ -15,6 +15,7 @@
 
 #include "alloc.h"
 #include "checks.h"
+#include "graph/topo.h"
 
 #include "msccl/msccl_lifecycle.h"
 #include "msccl/msccl_parser.h"
@@ -187,45 +188,45 @@ ncclResult_t mscclGroupStart() {
   return ncclSuccess;
 }
 
-static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSavedSchedulerParam* param) {
+static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam* param) {
   mscclStatus& status = mscclGetStatus();
-  param->p.scheduled = false;
+  param->scheduled = false;
 
   // Whether the algorithm is in-place
   bool isInPlace = false;
-  if (param->p.func == mscclFuncReduce ||
-      param->p.func == mscclFuncBroadcast ||
-      param->p.func == mscclFuncAllReduce ||
-      param->p.func == mscclFuncAllToAll ||
-      param->p.func == mscclFuncAllToAllv) {
-    isInPlace = param->p.sendBuff == param->p.recvBuff;
-  } else if (param->p.func == mscclFuncAllGather ||
-             param->p.func == mscclFuncGather) {
-    isInPlace = (char*)param->p.sendBuff == (char*)param->p.recvBuff + param->p.rank * param->p.count * ncclTypeSize(param->p.dataType);
-  } else if (param->p.func == mscclFuncReduceScatter ||
-             param->p.func == mscclFuncScatter) {
-    isInPlace = (char*)param->p.recvBuff == (char*)param->p.sendBuff + param->p.rank * param->p.count * ncclTypeSize(param->p.dataType);
+  if (param->func == mscclFuncReduce ||
+      param->func == mscclFuncBroadcast ||
+      param->func == mscclFuncAllReduce ||
+      param->func == mscclFuncAllToAll ||
+      param->func == mscclFuncAllToAllv) {
+    isInPlace = param->sendBuff == param->recvBuff;
+  } else if (param->func == mscclFuncAllGather ||
+             param->func == mscclFuncGather) {
+    isInPlace = (char*)param->sendBuff == (char*)param->recvBuff + param->rank * param->count * ncclTypeSize(param->dataType);
+  } else if (param->func == mscclFuncReduceScatter ||
+             param->func == mscclFuncScatter) {
+    isInPlace = (char*)param->recvBuff == (char*)param->sendBuff + param->rank * param->count * ncclTypeSize(param->dataType);
   }
 
   // Search suitable algorithms
   for (size_t i = 0; i < status.algoMetas.size(); i++) {
     auto &m = status.algoMetas[i];
-    size_t nBytes = param->p.count * ncclTypeSize(param->p.dataType) * m.sizeMultiplier;
+    size_t nBytes = param->count * ncclTypeSize(param->dataType) * m.sizeMultiplier;
     bool msgSizeIsValid =
-      param->p.count > 0 && (param->p.count % m.nChunksPerLoop) == 0 &&
+      param->count > 0 && (param->count % m.nChunksPerLoop) == 0 &&
       nBytes >= m.minBytes && (m.maxBytes == 0 || nBytes <= m.maxBytes);
     if (msgSizeIsValid &&
-        m.nRanks == param->p.nRanks &&
-        m.func == param->p.func &&
+        m.nRanks == param->nRanks &&
+        m.func == param->func &&
         (isInPlace ? m.inPlace : m.outOfPlace)) {
       // If not loaded for current rank, load it
-      if (status.rankToAlgoHandles[i].find(param->p.rank) == status.rankToAlgoHandles[i].end()) {
+      if (status.rankToAlgoHandles[i].find(param->rank) == status.rankToAlgoHandles[i].end()) {
         mscclAlgoHandle_t algoHandle;
-        NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &algoHandle, param->p.rank));
-        status.rankToAlgoHandles[i][param->p.rank] = algoHandle;
+        NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &algoHandle, param->rank));
+        status.rankToAlgoHandles[i][param->rank] = algoHandle;
       }
-      param->p.handle = status.rankToAlgoHandles[i][param->p.rank];
-      param->p.scheduled = true;
+      param->handle = status.rankToAlgoHandles[i][param->rank];
+      param->scheduled = true;
       return ncclSuccess;
     }
   }
@@ -238,7 +239,11 @@ static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* pa
   if (status.mscclSchedulerPtr) {
     NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
-    NCCLCHECK(mscclInternalSchedulerSelectAlgo(param));
+    if (param->comm->topo->mscclEnabled) {
+      NCCLCHECK(mscclInternalSchedulerSelectAlgo(&(param->p)));
+    } else {
+      param->p.scheduled = false;
+    }
   }
   return ncclSuccess;
 }
