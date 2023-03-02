@@ -9,3 +9,8 @@ mscclStatus& mscclGetStatus() {
   static mscclStatus status;
   return status;
 }
+
+mscclThreadLocalStatus& mscclGetThreadLocalStatus() {
+  static thread_local mscclThreadLocalStatus threadLocalStatus;
+  return threadLocalStatus;
+}

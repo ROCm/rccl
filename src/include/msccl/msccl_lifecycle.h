@@ -18,8 +18,6 @@ bool mscclIsCaller();
 
 bool mscclAvailable();
 
-ncclResult_t mscclSchedulerInit();
-
 ncclResult_t mscclInit(ncclComm_t comm);
 
 ncclResult_t mscclGroupStart();

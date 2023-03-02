@@ -160,6 +160,13 @@ struct mscclSavedSchedulerParam {
   hipStream_t stream;
 };
 
+struct mscclThreadLocalStatus {
+  bool mscclIsCallerFlag;
+  mscclGroupStatus groupStatus;
+  int groupDepth;
+  std::vector<struct mscclSavedSchedulerParam> savedSchedulerParams;
+};
+
 struct mscclStatus {
   std::vector<mscclAlgoHandle_t> freeAlgoHandles;
   std::map<mscclAlgoHandle_t, mscclAlgo *> hostAlgos;
@@ -176,12 +183,8 @@ struct mscclStatus {
   uint32_t workIndex;
   uint32_t maxAllowedCount;
   ncclDataType_t dataType;
-  mscclGroupStatus groupStatus;
-  int groupDepth;
-  std::vector<struct mscclSavedSchedulerParam> savedSchedulerParams;
   std::map<ncclComm_t, std::set<mscclAlgoHandle_t>> connectedAlgos;
   hipStream_t lastStream;
-  std::set<ncclComm_t> fallbackComms;
   void* mscclSchedulerLib;
   mscclSchedulerInterface* mscclSchedulerPtr;
   std::vector<mscclAlgoMeta> algoMetas;
