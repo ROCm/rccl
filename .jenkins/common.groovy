@@ -7,6 +7,11 @@ def runCompileCommand(platform, project, jobName)
 
     def command = """#!/usr/bin/env bash
                 set -x
+                mdkir ${project.paths.project_build_prefix}/build
+                cd ${project.paths.project_build_prefix}/build
+                CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ .. -DNPKIT_FLAGS="-DENABLE_NPKIT -DENABLE_NPKIT_EVENT_TIME_SYNC_CPU -DENABLE_NPKIT_EVENT_TIME_SYNC_GPU -DENABLE_NPKIT_EVENT_PRIM_LL128_DATA_PROCESS_ENTRY -DENABLE_NPKIT_EVENT_PRIM_LL128_DATA_PROCESS_EXIT -DENABLE_NPKIT_EVENT_NET_SEND_ENTRY -DENABLE_NPKIT_EVENT_NET_SEND_EXIT -DENABLE_NPKIT_EVENT_NET_RECV_ENTRY -DENABLE_NPKIT_EVENT_NET_RECV_EXIT"
+                make -j
+                rm -rf *
                 cd ${project.paths.project_build_prefix}
                 LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command}
             """
@@ -14,21 +19,21 @@ def runCompileCommand(platform, project, jobName)
     platform.runCommand(this,command)
 }
 
-def runNPKITCompileCommand(platform, project, jobName)
-{
-    project.paths.construct_build_prefix()
+// def runNPKITCompileCommand(platform, project, jobName)
+// {
+//     project.paths.construct_build_prefix()
 
-    def command = """#!/usr/bin/env bash
-                set -x
-                mdkir ${project.paths.project_build_prefix}/build
-                cd ${project.paths.project_build_prefix}/build
-                CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ .. -DNPKIT_FLAGS="-DENABLE_NPKIT -DENABLE_NPKIT_EVENT_TIME_SYNC_CPU -DENABLE_NPKIT_EVENT_TIME_SYNC_GPU -DENABLE_NPKIT_EVENT_PRIM_LL128_DATA_PROCESS_ENTRY -DENABLE_NPKIT_EVENT_PRIM_LL128_DATA_PROCESS_EXIT -DENABLE_NPKIT_EVENT_NET_SEND_ENTRY -DENABLE_NPKIT_EVENT_NET_SEND_EXIT -DENABLE_NPKIT_EVENT_NET_RECV_ENTRY -DENABLE_NPKIT_EVENT_NET_RECV_EXIT"
-                make -j
-                rm -rf *}
-            """
+//     def command = """#!/usr/bin/env bash
+//                 set -x
+//                 mdkir ${project.paths.project_build_prefix}/build
+//                 cd ${project.paths.project_build_prefix}/build
+//                 CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ .. -DNPKIT_FLAGS="-DENABLE_NPKIT -DENABLE_NPKIT_EVENT_TIME_SYNC_CPU -DENABLE_NPKIT_EVENT_TIME_SYNC_GPU -DENABLE_NPKIT_EVENT_PRIM_LL128_DATA_PROCESS_ENTRY -DENABLE_NPKIT_EVENT_PRIM_LL128_DATA_PROCESS_EXIT -DENABLE_NPKIT_EVENT_NET_SEND_ENTRY -DENABLE_NPKIT_EVENT_NET_SEND_EXIT -DENABLE_NPKIT_EVENT_NET_RECV_ENTRY -DENABLE_NPKIT_EVENT_NET_RECV_EXIT"
+//                 make -j
+//                 rm -rf *}
+//             """
 
-    platform.runCommand(this,command)
-}
+//     platform.runCommand(this,command)
+// }
 
 def runTestCommand (platform, project, gfilter)
 {
