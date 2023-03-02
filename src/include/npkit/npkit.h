@@ -17,8 +17,9 @@
 #if defined(__GFX9__) || defined(__GFX10__)
 #define NPKIT_GET_GPU_TIMESTAMP __builtin_amdgcn_s_memrealtime
 #else
-#define NPKIT_GET_GPU_TIMESTAMP clock64
+#define NPKIT_GET_GPU_TIMESTAMP __builtin_amdgcn_s_memrealtime
 #endif
+// #define NPKIT_GET_GPU_TIMESTAMP clock64
 
 class NpKit {
  public:
