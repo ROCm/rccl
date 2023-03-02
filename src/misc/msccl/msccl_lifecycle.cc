@@ -31,7 +31,7 @@ bool mscclEnabled() {
   return rcclParamMscclEnabled();
 }
 
-static bool mscclIsCallerFlag = false;
+static thread_local bool mscclIsCallerFlag = false;
 
 void mscclSetIsCallerFlag() {
   mscclIsCallerFlag = true;
