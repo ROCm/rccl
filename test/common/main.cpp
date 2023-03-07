@@ -19,7 +19,6 @@ int main(int argc, char **argv)
   if (ev.showTiming)
   {
     size_t totalTimeMsec = 0;
-
     fflush(stdout);
     printf("[ TIMING   ] %-20s: %-20s: %10s ms (%s)\n", "TEST SUITE", "TEST NAME", "TIME", "STATUS");
     auto unitTest = ::testing::UnitTest::GetInstance();
