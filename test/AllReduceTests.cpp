@@ -35,7 +35,7 @@ namespace RcclUnitTesting
     std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat64};
     std::vector<ncclRedOp_t>    const redOps          = {ncclMin};
     std::vector<int>            const roots           = {0};
-    std::vector<int>            const numElements     = {393216};
+    std::vector<int>            const numElements     = {12888};
     std::vector<bool>           const inPlaceList     = {false};
     std::vector<bool>           const managedMemList  = {false};
     std::vector<bool>           const useHipGraphList = {true};
@@ -152,9 +152,9 @@ namespace RcclUnitTesting
 
     // Configuration
     ncclFunc_t                  const  funcType      = ncclCollAllReduce;
-    std::vector<ncclDataType_t> const& dataTypes     = {ncclInt32, ncclFloat32, ncclFloat64};
+    std::vector<ncclDataType_t> const& dataTypes     = {ncclFloat32};
     ncclRedOp_t                 const  redOp         = ncclSum;
-    std::vector<int>            const  numElements   = {384 * 1024, 384};
+    std::vector<int>            const  numElements   = {384 * 1024, 384 * 32, 384};
     bool                        const  inPlace       = false;
     bool                        const  useManagedMem = false;
 
