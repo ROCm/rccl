@@ -557,7 +557,7 @@ namespace RcclUnitTesting
 
             if (ev.showNames)
             {
-              INFO("%s [%d elements]\n", name.c_str(), numInputElements);
+              INFO("%s [%9d elements]\n", name.c_str(), numInputElements);
             }
 
             std::vector<int> currentRanksEmpty = {};
