@@ -80,7 +80,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
     Dl_info dl_info;
     struct link_map *link_map_ptr = nullptr;
     if (!dladdr1((void *)mscclInternalSchedulerInit, &dl_info, (void **)&link_map_ptr, RTLD_DL_LINKMAP)) {
-      fprintf(stderr, "MSCCL Internal Scheduler: dladdr1 failed\n");
+      WARN("MSCCL Internal Scheduler: dladdr1 failed");
       return ncclInvalidUsage;
     }
     std::string selfLibPath = link_map_ptr->l_name;
@@ -92,7 +92,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
   DIR *dp = nullptr;
   dp = opendir(mscclAlgoDir);
   if (dp == nullptr) {
-    fprintf(stderr, "MSCCL Internal Scheduler: open algorithm directory %s failed\n", mscclAlgoDir);
+    WARN("MSCCL Internal Scheduler: open algorithm directory %s failed", mscclAlgoDir);
     return ncclInvalidUsage;
   }
   while ((entry = readdir(dp))) {
@@ -106,7 +106,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
     NCCLCHECK(mscclGetAlgoMetaFromXmlFile(fullPath.c_str(), &(status.algoMetas.back())));
   }
   if (closedir(dp)) {
-    fprintf(stderr, "MSCCL Internal Scheduler: closedir failed, error %d\n", errno);
+    WARN("MSCCL Internal Scheduler: closedir failed, error %d", errno);
     return ncclInvalidUsage;
   }
   status.rankToAlgoHandles.resize(status.algoMetas.size());
@@ -124,11 +124,7 @@ static ncclResult_t mscclSchedulerInit() {
     status.mscclSchedulerLib = dlopen(mscclSchedulerDefaultPath, RTLD_NOW | RTLD_LOCAL);
   }
   if (status.mscclSchedulerLib == nullptr) {
-    if (errno == ENOENT) {
-      INFO(NCCL_INIT, "MSCCL: No scheduler found, using internal implementation");
-    } else {
-      INFO(NCCL_INIT, "MSCCL: Scheduler load returned %d : %s. Using internal implementation", errno, dlerror());
-    }
+    INFO(NCCL_INIT, "MSCCL: No external scheduler found, using internal implementation");
     useInternalScheduler = true;
   } else {
     status.mscclSchedulerPtr = (mscclSchedulerInterface *)dlsym(status.mscclSchedulerLib, "mscclScheduler");
@@ -176,6 +172,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     mscclInitialized.store(true, std::memory_order_release);
   }
 
+  INFO(NCCL_INIT, "MSCCL: Initialization finished");
   return ncclSuccess;
 }
 
@@ -477,5 +474,6 @@ ncclResult_t mscclTeardown() {
     mscclInitialized.store(false, std::memory_order_release);
   }
 
+  INFO(NCCL_INIT, "MSCCL: Teardown finished");
   return ncclSuccess;
 }
