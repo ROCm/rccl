@@ -425,12 +425,12 @@ namespace RcclUnitTesting
     else
       ss << "    ";
     ss << "ranks ";
-    ss << ncclFuncNames[funcType] << " ";
+    ss << std::setfill(' ') << std::setw(20) << ncclFuncNames[funcType] << " ";
     ss << "(" << (inPlace ? "IP" : "OP") << ","
        << (managedMem ? "MM" : "GM") << ","
        << (useHipGraph ? "GL" : "NL") <<") ";
-    ss << ncclDataTypeNames[dataType] << " ";
-    if (CollectiveArgs::UsesReduce(funcType)) ss << ncclRedOpNames[redOp] << " ";
+    ss << std::setfill(' ') << std::setw(12) << ncclDataTypeNames[dataType] << " ";
+    if (CollectiveArgs::UsesReduce(funcType)) ss << std::setfill(' ') << std::setw(7) << ncclRedOpNames[redOp] << " ";
     if (CollectiveArgs::UsesRoot(funcType)) ss << "Root " << root << " ";
     return ss.str();
   }
@@ -481,17 +481,19 @@ namespace RcclUnitTesting
     bool isCorrect = true;
 
     // Sweep over the number of ranks
-    for (int ranksPerGpu=1; ranksPerGpu <= ev.maxRanksPerGpu; ranksPerGpu++)
-    for (int numGpus = ev.minGpus; numGpus <= ev.maxGpus && isCorrect; ++numGpus)
-    for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
+    for (int numGpus : ev.GetNumGpusList())
+    for (int isMultiProcess : ev.GetIsMultiProcessList())
+    for (int ranksPerGpu=1; ranksPerGpu <= ev.maxRanksPerGpu && isCorrect; ++ranksPerGpu)
     {
-      if (!(ev.processMask & (1 << isMultiProcess))) continue;
-
       // Test either single process all GPUs, or 1 process per GPU
       int const numChildren = isMultiProcess ? numGpus : 1;
       int const numRanks    = numGpus*ranksPerGpu;
       this->InitComms(TestBed::GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
-      if (testing::Test::HasFailure()) continue;
+      if (testing::Test::HasFailure())
+      {
+        isCorrect = false;
+        continue;
+      }
 
       for (int ftIdx = 0; ftIdx < funcTypes.size()      && isCorrect; ++ftIdx)
       for (int dtIdx = 0; dtIdx < dataTypes.size()      && isCorrect; ++dtIdx)
@@ -515,13 +517,21 @@ namespace RcclUnitTesting
                                   numInputElements,
                                   numOutputElements,
                                   optionalArgs);
-          if (testing::Test::HasFailure()) continue;
+          if (testing::Test::HasFailure())
+          {
+            isCorrect = false;
+            continue;
+          }
 
           // Only allocate once for largest size
           if (neIdx == 0)
           {
             this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx]);
-            if (testing::Test::HasFailure()) continue;
+            if (testing::Test::HasFailure())
+            {
+              isCorrect = false;
+              continue;
+            }
           }
 
           for (int hgIdx = 0; hgIdx < useHipGraphList.size() && isCorrect; ++hgIdx)
@@ -533,7 +543,11 @@ namespace RcclUnitTesting
                              funcTypes[ftIdx] == ncclCollReduce    ||
                              funcTypes[ftIdx] == ncclCollAllReduce));
             if (!canSkip) this->PrepareData();
-            if (testing::Test::HasFailure()) continue;
+            if (testing::Test::HasFailure())
+            {
+              isCorrect = false;
+              continue;
+            }
 
             std::string name = this->GetTestCaseName(numGpus, isMultiProcess,
                                                      funcTypes[ftIdx], dataTypes[dtIdx],
@@ -548,7 +562,11 @@ namespace RcclUnitTesting
 
             std::vector<int> currentRanksEmpty = {};
             this->ExecuteCollectives(currentRanksEmpty, useHipGraphList[hgIdx]);
-            if (testing::Test::HasFailure()) continue;
+            if (testing::Test::HasFailure())
+            {
+              isCorrect = false;
+              continue;
+            }
             this->ValidateResults(isCorrect);
             if (!isCorrect)
             {

@@ -99,7 +99,7 @@ namespace RcclUnitTesting
       case CHILD_VALIDATE_RESULTS: status = ValidateResults();    break;
       case CHILD_DEALLOCATE_MEM  : status = DeallocateMem();      break;
       case CHILD_DESTROY_COMMS   : status = DestroyComms();       break;
-      case CHILD_STOP            : status = Stop();               break;
+      case CHILD_STOP            : status = Stop(); goto stop;    break;
       default: exit(0);
       }
 
@@ -112,6 +112,7 @@ namespace RcclUnitTesting
         break;
       }
     }
+  stop:
     if (verbose) INFO("Child %d exiting execution loop\n", this->childId);
 
     // Close child ends of pipe

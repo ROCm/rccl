@@ -18,6 +18,7 @@ int main(int argc, char **argv)
   RcclUnitTesting::EnvVars ev;
   if (ev.showTiming)
   {
+    fflush(stdout);
     printf("[ TIMING   ] %-20s: %-20s: %10s ms (%s)\n", "TEST SUITE", "TEST NAME", "TIME", "STATUS");
     auto unitTest = ::testing::UnitTest::GetInstance();
     for (int i = 0; i < unitTest->total_test_suite_count(); i++)
@@ -32,9 +33,9 @@ int main(int argc, char **argv)
         auto testResult = testInfo->result();
         if (testResult->Skipped()) continue;
 
-        printf("[ TIMING   ] %-20s: %-20s: %10ld ms (%4s)\n", testInfo->test_suite_name(), testInfo->name(), testResult->elapsed_time(), testResult->Passed() ? "PASS" : "FAIL");
+        printf("[ TIMING   ] %-20s: %-20s: %10lld ms (%4s)\n", testInfo->test_suite_name(), testInfo->name(), testResult->elapsed_time(), testResult->Passed() ? "PASS" : "FAIL");
       }
-      printf("[ TIMING   ] %-20s: %-20s: %10ld ms (%4s)\n", suiteInfo->name(), "TOTAL", suiteInfo->elapsed_time(), suiteInfo->Passed() ? "PASS" : "FAIL");
+      printf("[ TIMING   ] %-20s: %-20s: %10lld ms (%4s)\n", suiteInfo->name(), "TOTAL", suiteInfo->elapsed_time(), suiteInfo->Passed() ? "PASS" : "FAIL");
     }
   }
 

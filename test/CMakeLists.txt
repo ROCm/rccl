@@ -44,60 +44,22 @@ if(BUILD_TESTS)
   # Collect source files for tests
   if(BUILD_ALLREDUCE_ONLY)
     set(TEST_SOURCE_FILES
-      AllReduce_Clique.cpp
-      AllReduce_GroupCall.cpp
-      AllReduce_NonBlockingConf.cpp
-      AllReduce_InPlace.cpp
-      AllReduce_ManagedMem.cpp
-      AllReduce_OutOfPlace.cpp
-      AllReduce_PreMultScalar.cpp
-      AllReduce_Msccl.cpp
-      Multistream.cpp
+      AllReduce_Tests.cpp
     )
   else()
     set(TEST_SOURCE_FILES
-      #AllReduce
-      AllReduce_Clique.cpp
-      AllReduce_GroupCall.cpp
-      AllReduce_NonBlockingConf.cpp
-      AllReduce_InPlace.cpp
-      AllReduce_ManagedMem.cpp
-      AllReduce_OutOfPlace.cpp
-      AllReduce_PreMultScalar.cpp
-      AllReduce_Msccl.cpp
-      #AllGather
-      AllGather_InPlace.cpp
-      AllGather_ManagedMem.cpp
-      AllGather_OutOfPlace.cpp
-      #AllToAll
-      AllToAll_OutOfPlace.cpp
-      AllToAll_ManagedMem.cpp
-      #AllToAllv
-      AllToAllv_OutOfPlace.cpp
-      #Broadcast
-      Broadcast_InPlace.cpp
-      Broadcast_ManagedMem.cpp
-      Broadcast_OutOfPlace.cpp
-      #Reduce
-      Reduce_InPlace.cpp
-      Reduce_ManagedMem.cpp
-      Reduce_OutOfPlace.cpp
-      #ReduceScatter
-      ReduceScatter_InPlace.cpp
-      ReduceScatter_ManagedMem.cpp
-      ReduceScatter_OutOfPlace.cpp
-      #Scatter
-      Scatter_InPlace.cpp
-      Scatter_ManagedMem.cpp
-      Scatter_OutOfPlace.cpp
-      #Gather
-      Gather_InPlace.cpp
-      Gather_ManagedMem.cpp
-      Gather_OutOfPlace.cpp
-      #SendRecv
-      SendRecv_SinglePairs.cpp
-      #Misc
-      Multistream.cpp
+      AllGatherTests.cpp
+      AllReduceTests.cpp
+      AllToAllTests.cpp
+      AllToAllVTests.cpp
+      BroadcastTests.cpp
+      GatherTests.cpp
+      GroupCallTests.cpp
+      NonBlockingTests.cpp
+      ReduceScatterTests.cpp
+      ReduceTests.cpp
+      ScatterTests.cpp
+      SendRecvTests.cpp
       )
   endif()
 
