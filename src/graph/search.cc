@@ -1187,7 +1187,7 @@ ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, in
           struct ncclTopoNode* remNode = link->remNode;
           if (remNode->gpu.dev == cudaDev2) {
             *isXGMI = (link->type == LINK_NVL);
-            return ncclSuccess;
+            if (*isXGMI) return ncclSuccess;
           }
         }
       }
