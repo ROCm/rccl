@@ -16,8 +16,6 @@ def runCompileCommand(platform, project, jobName)
 
 def runTestCommand (platform, project, gfilter)
 {
-    String sudo = auxiliary.sudo(platform.jenkinsLabel)
-
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
