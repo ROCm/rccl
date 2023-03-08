@@ -21,9 +21,9 @@ def runTestCommand (platform, project, gfilter)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}/build/release/test
-                ${sudo} ulimit -l unlimited
+                sudo ulimit -l unlimited
                 ulimit -a
-                ${sudo} RCCL_ENABLE_SIGNALHANDLER=0 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
+                RCCL_ENABLE_SIGNALHANDLER=0 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)
