@@ -1,0 +1,8 @@
+root: index
+subtrees:
+- entries:
+  - file: api
+  - file: allapi
+  - file: attributions
+
+
