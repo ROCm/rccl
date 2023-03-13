@@ -1,7 +1,6 @@
 root: index
 subtrees:
 - entries:
-  - file: library
   - file: api
   - file: allapi
   - file: attributions
