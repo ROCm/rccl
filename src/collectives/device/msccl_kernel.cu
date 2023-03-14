@@ -110,6 +110,19 @@ __device__ __forceinline__ static void threadBlockCopy(
   }
 }
 
+#define MSCCL_REDUCE_UNROLL_LOOP_A(numloops) \
+for (int r = 0; r < numloops; r++) { \
+  srcOffset = srcBaseOffset + (ssize_t)mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r] * sizePerMscclChunk; \
+  reduceInput = load(srcPointer + srcOffset); \
+  o = redFn(reduceInput, o); \
+}
+
+#define MSCCL_REDUCE_UNROLL_LOOP_B(numloops) \
+for (int r = 0; r < numloops; r++) { \
+  srcOffset = srcBaseOffset + (ssize_t)mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r] * sizePerMscclChunk; \
+  srcs[r] = srcPointer + srcOffset; \
+}
+
 template<typename T, typename RedOp, typename Proto>
 __device__ __forceinline__ void mscclRunInterpreter(
   struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork work) {
@@ -137,7 +150,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   int channelId = mscclShmem.mscclTB.channelId;
   {
     void *dst, *src;
-    int bytes;
+    int bytes = 0;
     // Use first 3 warps to load comm, channel, and work into shmem
     switch (tid/WARP_SIZE) {
     case 0:
@@ -159,8 +172,11 @@ __device__ __forceinline__ void mscclRunInterpreter(
       bytes = sizeof(mscclWork);
       static_assert(sizeof(mscclWork) <= sizeof(uint64_t) * WARP_SIZE, "mscclWork cannot be loaded by a single warp in one insn.");
       break;
+    case 3:
+      /* set abort flag to 0 */
+      if (tid == 3 * WARP_SIZE) ncclShmem.aborted = 0;
+      break;
     default:
-      bytes = 0;
       break;
     }
     copyToShmem8(tid%WARP_SIZE, dst, src, bytes);
@@ -264,11 +280,76 @@ __device__ __forceinline__ void mscclRunInterpreter(
             if (tid < thisNelem){
               dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
               T* dstIndex = dstPointer + dstOffset + tid;
+              T reduceInput;
               T o = load(dstIndex);
-              for (int r = 0; r < numReductions; r++){
-                srcOffset = gridOffset + (ssize_t) (mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r]+c) * sizePerMscclChunk;
-                T t = load(srcPointer + srcOffset + tid);
-                o = redFn(t,o);
+              ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + tid;
+              switch (numReductions) {
+                case 1:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(1);
+                  break;
+                case 2:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(2);
+                  break;
+                case 3:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(3);
+                  break;
+                case 4:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(4);
+                  break;
+                case 5:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(5);
+                  break;
+                case 6:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(6);
+                  break;
+                case 7:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(7);
+                  break;
+                case 8:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(8);
+                  break;
+                case 9:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(9);
+                  break;
+                case 10:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(10);
+                  break;
+                case 11:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(11);
+                  break;
+                case 12:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(12);
+                  break;
+                case 13:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(13);
+                  break;
+                case 14:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(14);
+                  break;
+                case 15:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(15);
+                  break;
+                case 16:
+                  #pragma unroll
+                  MSCCL_REDUCE_UNROLL_LOOP_A(16);
+                  break;
+                default:
+                  break;
               }
               store(dstIndex, o);
             }
@@ -277,9 +358,74 @@ __device__ __forceinline__ void mscclRunInterpreter(
             T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
             dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
             T* dst = dstPointer + dstOffset;
-            for (int r = 0; r < numReductions; r++) {
-              srcOffset = gridOffset + (ssize_t) (mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r]+c) * sizePerMscclChunk;
-              srcs[r] = srcPointer + srcOffset;
+            ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk;
+            switch (numReductions) {
+              case 1:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(1);
+                break;
+              case 2:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(2);
+                break;
+              case 3:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(3);
+                break;
+              case 4:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(4);
+                break;
+              case 5:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(5);
+                break;
+              case 6:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(6);
+                break;
+              case 7:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(7);
+                break;
+              case 8:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(8);
+                break;
+              case 9:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(9);
+                break;
+              case 10:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(10);
+                break;
+              case 11:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(11);
+                break;
+              case 12:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(12);
+                break;
+              case 13:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(13);
+                break;
+              case 14:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(14);
+                break;
+              case 15:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(15);
+                break;
+              case 16:
+                #pragma unroll
+                MSCCL_REDUCE_UNROLL_LOOP_B(16);
+                break;
+              default:
+                break;
             }
             prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
           }

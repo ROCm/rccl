@@ -258,6 +258,11 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
     ncclDataType_t dataType, ncclRedOp_t op, struct mscclAlgo* hostAlgo, struct mscclAlgo* devAlgo,
     ncclComm_t comm, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
+
+  if (status.lastStream != stream && status.lastStream != nullptr) {
+    CUDACHECK(hipStreamWaitEvent(stream, comm->doneEvent, 0));
+  }
+
   dim3 grid = {(uint32_t)hostAlgo->nBlocks, 1, 1};
   dim3 block = {NCCL_MAX_NTHREADS, 1, 1};
   ncclDevRedOpFull opFull;
@@ -278,7 +283,8 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   void *args[3] = {&comm->devComm, &devAlgo, &work};
   void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];
-  CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, NULL,0));
+  CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
   status.workIndex++;
+  status.lastStream = stream;
   return ncclSuccess;
 }

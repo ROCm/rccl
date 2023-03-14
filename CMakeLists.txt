@@ -243,6 +243,7 @@ set(HEADER_SOURCES
   src/include/msccl/msccl_lifecycle.h
   src/include/msccl/msccl_parser.h
   src/include/msccl/msccl_setup.h
+  src/include/msccl/msccl_scheduler.h
   src/include/msccl/msccl_status.h
   src/include/msccl/msccl_struct.h
   src/graph/rings.h
@@ -526,6 +527,10 @@ rocm_install_targets(TARGETS
 		     )
 rocm_install(FILES ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
+file(COPY tools/msccl-algorithms DESTINATION ${PROJECT_BINARY_DIR})
+file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
+install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-algorithms DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-unit-test-algorithms DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 rocm_export_targets(NAMESPACE
                     roc::
@@ -561,6 +566,7 @@ Source: https://github.com/ROCmSoftwarePlatform/rccl
 Files: *
 Copyright: (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
 Modifications Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
+Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 License: See LICENSE.txt for license information\n")
   install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   # Write changelog file

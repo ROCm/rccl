@@ -10,26 +10,26 @@
 #include <cstdio>
 #include <cstdlib>
 
-NCCL_API(ncclResult_t, mscclLoadAlgo, const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle);
-ncclResult_t mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle) {
+NCCL_API(ncclResult_t, mscclLoadAlgo, const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
+ncclResult_t mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank) {
   mscclStatus& status = mscclGetStatus();
 
   if (status.freeAlgoHandles.size() == 0) {
     WARN("MSCCL: MSCCL_MAX_NUM_ALGOS (%d) limit reached", MSCCL_MAX_NUM_ALGOS);
     return ncclInvalidUsage;
   }
-  mscclAlgoHandle_t handle = *status.freeAlgoHandles.rbegin();
+  *mscclAlgoHandle = *status.freeAlgoHandles.rbegin();
   status.freeAlgoHandles.pop_back();
 
   struct mscclAlgo* hostAlgo;
   NCCLCHECK(ncclCalloc(&hostAlgo, 1));
-  NCCLCHECK(mscclGetAlgoFromXmlFile(mscclAlgoFilePath, hostAlgo, status.rank));
-  status.hostAlgos[handle] = hostAlgo;
+  NCCLCHECK(mscclGetAlgoFromXmlFile(mscclAlgoFilePath, hostAlgo, rank));
+  status.hostAlgos[*mscclAlgoHandle] = hostAlgo;
 
   struct mscclAlgo* devAlgo;
   NCCLCHECK(ncclCudaCalloc(&devAlgo, 1));
   CUDACHECK(hipMemcpy(devAlgo, hostAlgo, sizeof(struct mscclAlgo), hipMemcpyHostToDevice));
-  status.devAlgos[handle] = devAlgo;
+  status.devAlgos[*mscclAlgoHandle] = devAlgo;
 
   return ncclSuccess;
 }
@@ -54,7 +54,10 @@ ncclResult_t mscclRunAlgo(
 
   NCCLCHECK(mscclSetupSyncFlags(stream));
 
-  NCCLCHECK(mscclSetupConnections(hostAlgo, comm));
+  if (status.connectedAlgos[comm].find(mscclAlgoHandle) == status.connectedAlgos[comm].end()) {
+    NCCLCHECK(mscclSetupConnections(hostAlgo, comm));
+    status.connectedAlgos[comm].insert(mscclAlgoHandle);
+  }
 
   NCCLCHECK(mscclSetupProxy(hostAlgo, comm));
 
@@ -74,6 +77,10 @@ ncclResult_t mscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle) {
   status.devAlgos.erase(mscclAlgoHandle);
 
   status.freeAlgoHandles.push_back(mscclAlgoHandle);
+
+  for (auto &s : status.connectedAlgos) {
+    s.second.erase(mscclAlgoHandle);
+  }
 
   return ncclSuccess;
 }

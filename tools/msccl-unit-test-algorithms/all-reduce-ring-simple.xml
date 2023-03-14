@@ -1,6 +1,6 @@
 <!-- Copyright (c) Microsoft Corporation. -->
 <!-- Licensed under the MIT License.      -->
-<algo name="allreduce_ring_mi200" proto="Simple" nchannels="24" nchunksperloop="384" ngpus="16" coll="allreduce" inplace="1" outofplace="1" maxcount="1" nthreadblocks="24" minBytes="0" maxBytes="0">
+<algo name="allreduce_ring_mi200" proto="Simple" nchannels="24" nchunksperloop="384" ngpus="16" coll="allreduce" inplace="1" outofplace="1" maxcount="1" nthreadblocks="24" minBytes="393216" maxBytes="0">
   <gpu id="0" i_chunks="384" o_chunks="384" s_chunks="0">
     <tb id="0" send="1" recv="4" chan="2">
       <step s="0" type="s" srcbuf="i" srcoff="32" dstbuf="o" dstoff="32" cnt="1" depid="-1" deps="-1" hasdep="0"/>

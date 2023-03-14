@@ -701,3 +701,88 @@ ncclResult_t mscclGetAlgoFromXmlFile(const char* str, struct mscclAlgo* algo, in
   free(xml);
   return ncclSuccess;
 }
+
+ncclResult_t mscclXmlLoadSingleNode(FILE* file, struct mscclXmlNode* node) {
+  memset(node, 0, sizeof(struct mscclXmlNode));
+  return mscclXmlGetNode(file, node);
+}
+
+ncclResult_t mscclAlgoMetaXmlLoad(const char* xmlFilePath, struct mscclXmlNode* node) {
+  ncclResult_t ret = ncclSuccess;
+  FILE* file = fopen(xmlFilePath, "r");
+  if (file == NULL) {
+    fprintf(stderr, "Could not open MSCCL XML algorithm file %s : %s", xmlFilePath, strerror(errno));
+    return ncclSystemError;
+  }
+  NCCLCHECK(mscclXmlLoadSingleNode(file, node));
+  fclose(file);
+  return ncclSuccess;
+}
+
+ncclResult_t mscclGetAlgoMetaFromXmlFile(const char* str, struct mscclAlgoMeta* algoMeta) {
+  ncclResult_t ret = ncclSuccess;
+  struct mscclXmlNode* node;
+  node = (struct mscclXmlNode *)malloc(sizeof(struct mscclXmlNode));
+  NCCLCHECK(mscclAlgoMetaXmlLoad(str, node));
+
+  algoMeta->filePath = str;
+
+  int nChunksPerLoop;
+  NCCLCHECK(mscclXmlGetAttrInt(node, "nchunksperloop", &nChunksPerLoop));
+  algoMeta->nChunksPerLoop  = nChunksPerLoop;
+
+  int nGpus;
+  NCCLCHECK(mscclXmlGetAttrInt(node, "ngpus", &nGpus));
+  algoMeta->nRanks = nGpus;
+
+  const char* coll;
+  NCCLCHECK(mscclXmlGetAttrStr(node, "coll", &coll));
+  algoMeta->sizeMultiplier = 1;
+  if (strcmp(coll, "reduce") == 0) {
+    algoMeta->func = mscclFuncReduce;
+  } else if (strcmp(coll, "broadcast") == 0) {
+    algoMeta->func = mscclFuncBroadcast;
+  } else if (strcmp(coll, "allreduce") == 0) {
+    algoMeta->func = mscclFuncAllReduce;
+  } else if (strcmp(coll, "reducescatter") == 0) {
+    algoMeta->sizeMultiplier = nGpus;
+    algoMeta->func = mscclFuncReduceScatter;
+  } else if (strcmp(coll, "allgather") == 0) {
+    algoMeta->sizeMultiplier = nGpus;
+    algoMeta->func = mscclFuncAllGather;
+  } else if (strcmp(coll, "send") == 0) {
+    algoMeta->func = mscclFuncSend;
+  } else if (strcmp(coll, "recv") == 0) {
+    algoMeta->func = mscclFuncRecv;
+  } else if (strcmp(coll, "gather") == 0) {
+    algoMeta->func = mscclFuncGather;
+  } else if (strcmp(coll, "scatter") == 0) {
+    algoMeta->func = mscclFuncScatter;
+  } else if (strcmp(coll, "alltoall") == 0) {
+    algoMeta->sizeMultiplier = nGpus;
+    algoMeta->func = mscclFuncAllToAll;
+  } else if (strcmp(coll, "alltoallv") == 0) {
+    algoMeta->func = mscclFuncAllToAllv;
+  } else {
+    return ncclInvalidUsage;
+  }
+
+  int64_t minBytes;
+  NCCLCHECK(mscclXmlGetAttrInt64(node, "minBytes", &minBytes));
+  algoMeta->minBytes = minBytes;
+
+  int64_t maxBytes;
+  NCCLCHECK(mscclXmlGetAttrInt64(node, "maxBytes", &maxBytes));
+  algoMeta->maxBytes = maxBytes;
+
+  int inplace;
+  NCCLCHECK(mscclXmlGetAttrInt(node, "inplace", &inplace));
+  algoMeta->inPlace = (bool)inplace;
+
+  int outofplace;
+  NCCLCHECK(mscclXmlGetAttrInt(node, "outofplace", &outofplace));
+  algoMeta->outOfPlace = (bool)outofplace;
+
+  free(node);
+  return ncclSuccess;
+}

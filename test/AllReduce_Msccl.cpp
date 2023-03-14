@@ -9,6 +9,8 @@
 
 #include "TestBed.hpp"
 
+extern "C" bool mscclUnitTestMode() { return true; }
+
 namespace RcclUnitTesting
 {
   TEST(AllReduce, MscclSingleCall)
@@ -20,7 +22,7 @@ namespace RcclUnitTesting
     std::vector<ncclDataType_t> const dataTypes       = {ncclInt8, ncclInt32, ncclFloat32};
     std::vector<ncclRedOp_t>    const redOps          = {ncclSum, ncclProd};
     std::vector<int>            const roots           = {0};
-    std::vector<int>            const numElements     = {384 * 1024, 384};
+    std::vector<int>            const numElements     = {384 * 32 * 32, 384 * 32, 384};
     std::vector<bool>           const inPlaceList     = {true, false};
     std::vector<bool>           const managedMemList  = {true, false};
     std::vector<bool>           const useHipGraphList = {false, true};
@@ -37,7 +39,7 @@ namespace RcclUnitTesting
     ncclFunc_t                  const  funcType        = ncclCollAllReduce;
     std::vector<ncclDataType_t> const& dataTypes       = {ncclFloat};
     std::vector<ncclRedOp_t>    const& redOps          = {ncclSum};
-    std::vector<int>            const  numElements     = {384 * 1024, 384};
+    std::vector<int>            const  numElements     = {384};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     int                         const  numCollPerGroup = numElements.size();
@@ -95,7 +97,7 @@ namespace RcclUnitTesting
     ncclFunc_t                  const  funcType      = ncclCollAllReduce;
     std::vector<ncclDataType_t> const& dataTypes     = {ncclInt32, ncclFloat32, ncclFloat64};
     ncclRedOp_t                 const  redOp         = ncclSum;
-    std::vector<int>            const  numElements   = {384 * 1024, 384};
+    std::vector<int>            const  numElements   = {384 * 32 * 32, 384 * 32, 384};
     bool                        const  inPlace       = false;
     bool                        const  useManagedMem = false;
 
@@ -153,6 +155,58 @@ namespace RcclUnitTesting
         }
       }
       testBed.DestroyComms();
+    }
+    testBed.Finalize();
+  }
+
+  TEST(AllReduce, MscclMultiStream)
+  {
+    TestBed testBed;
+
+    // Configuration
+    int  const  numElements        = 384 * 1024;
+    bool const  inPlace            = false;
+    bool const  useManagedMem      = false;
+
+    OptionalColArgs options;
+
+    // This test runs multiple AllReduce collectives on different streams within the same group call
+    bool isCorrect = true;
+    for (int totalRanks = testBed.ev.minGpus; totalRanks <= testBed.ev.maxGpus && isCorrect; ++totalRanks)
+    for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
+    {
+      if (!(testBed.ev.processMask & (1 << isMultiProcess))) continue;
+
+      // Test either single process all GPUs, or 1 process per GPU
+      int const numProcesses = isMultiProcess ? totalRanks : 1;
+
+      for (int numCollPerGroup = 2; numCollPerGroup <= 6; numCollPerGroup += 2)
+      {
+        for (int numStreamsPerGroup = numCollPerGroup; numStreamsPerGroup >= 2; numStreamsPerGroup -= 3)
+        {
+          if (testBed.ev.showNames)
+            INFO("%s %d-ranks Multistream %d-Group Calls across %d streams\n",
+                 isMultiProcess ? "MP" : "SP", totalRanks, numCollPerGroup, numStreamsPerGroup);
+
+          testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks),
+                            numCollPerGroup, false, numStreamsPerGroup);
+
+          // Set up each collective in group in different stream (modulo numStreamsPerGroup)
+          options.redOp = ncclSum;
+          for (int collIdx = 0; collIdx < numCollPerGroup; ++collIdx)
+          {
+            testBed.SetCollectiveArgs(ncclCollAllReduce, ncclFloat, numElements, numElements,
+                                      options, collIdx, -1, collIdx % numStreamsPerGroup);
+          }
+
+          testBed.AllocateMem(inPlace, useManagedMem);
+          testBed.PrepareData();
+          testBed.ExecuteCollectives();
+          testBed.ValidateResults(isCorrect);
+          testBed.DeallocateMem();
+          testBed.DestroyComms();
+        }
+      }
     }
     testBed.Finalize();
   }

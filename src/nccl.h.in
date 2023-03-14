@@ -508,8 +508,8 @@ typedef int mscclAlgoHandle_t;
  * its handle via mscclAlgoHandle. This API is expected to be called by MSCCL
  * scheduler instead of end users.
  */
-ncclResult_t  mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle);
-ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle);
+ncclResult_t  mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
+ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
 
 /*! @brief MSCCL Run Algorithm
  *

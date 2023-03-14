@@ -10,4 +10,6 @@
 
 mscclStatus& mscclGetStatus();
 
+mscclThreadLocalStatus& mscclGetThreadLocalStatus();
+
 #endif
