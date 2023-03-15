@@ -433,6 +433,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Capturing stream for rank %d\n", localRank);
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipStreamBeginCapture(this->streams[localRank][i], hipStreamCaptureModeRelaxed));
@@ -602,6 +603,7 @@ namespace RcclUnitTesting
       {
         for (int localRank = 0; localRank < this->comms.size(); ++localRank)
         {
+          CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
           CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorGroupEnd", localRank);
         }
       }
@@ -618,7 +620,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Ending stream capture for rank %d\n", localRank);
-
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipStreamEndCapture(this->streams[localRank][i], &graphs[localRank][i]));
@@ -642,6 +644,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Launch graph for rank %d\n", localRank);
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipGraphLaunch(graphExec[localRank][i], this->streams[localRank][i]));
@@ -658,6 +661,7 @@ namespace RcclUnitTesting
     for (int localRank : localRanksToExecute)
     {
       if (this->verbose) INFO("Starting synchronization for rank %d\n", localRank);
+      CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
       for (int i = 0; i < this->numStreamsPerGroup; i++)
         CHECK_HIP(hipStreamSynchronize(this->streams[localRank][i]));
     }
@@ -668,6 +672,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Destroying graphs for rank %d\n", localRank);
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipGraphDestroy(graphs[localRank][i]));
@@ -682,7 +687,7 @@ namespace RcclUnitTesting
         for (int localRank : localRanksToExecute)
         {
           CollectiveArgs const& collArg = this->collArgs[localRank][collId];
-
+          CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
           int numOutputElementsToPrint = (this->printValues < 0 ? collArg.numOutputElements : this->printValues);
           size_t const numOutputBytes = numOutputElementsToPrint * DataTypeToBytes(collArg.dataType);
           CHECK_HIP(hipMemcpy(collArg.outputCpu.ptr, collArg.outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
