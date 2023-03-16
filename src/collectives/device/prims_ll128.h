@@ -571,4 +571,7 @@ public:
       return mscclGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
     }
   }
+  __device__ void recvToNull() {
+    return GenericOp<1, 0, -1, -1>(-1, 0, 1, false);
+  }
 };

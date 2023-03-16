@@ -42,6 +42,11 @@ namespace {
       prims.npKitCtxIdx = npKitCtxIdx;
     }
 #endif
+    if (rank == root)
+      prims.send(0, 1);
+    else
+      prims.sendFromOutput(0, 1);
+    prims.recvToNull();
 
     for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
       ssize_t realChunkSize;

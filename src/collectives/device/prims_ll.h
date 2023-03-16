@@ -757,4 +757,7 @@ private:
       return mscclGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
     }
   }
+  __device__ void recvToNull() {
+    return LLGenericOp<1, 0, -1, -1>(-1, 0, 1, false);
+  }
 };
