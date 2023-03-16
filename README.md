@@ -110,6 +110,18 @@ To manually analyze NPKit dump results, please leverage [npkit_trace_generator.p
 
 Please refer to the [Library documentation](https://rccl.readthedocs.io/) for current documentation.
 
+### How to build documentation
+
+Run the steps below to build documentation locally.
+
+```
+cd docs
+
+pip3 install -r .sphinx/requirements.txt
+
+python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
+```
+
 ## Copyright
 
 All source code and accompanying documentation is copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
