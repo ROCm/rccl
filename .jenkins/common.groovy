@@ -8,7 +8,7 @@ def runCompileCommand(platform, project, jobName)
     def command = """#!/usr/bin/env bash
                 set -x
                 cd ${project.paths.project_build_prefix}
-                LD_LIBRARY_PATH=/opt/rocm/hcc/lib ${project.paths.build_command}
+                LD_LIBRARY_PATH=/opt/rocm/lib ${project.paths.build_command}
             """
 
     platform.runCommand(this,command)
