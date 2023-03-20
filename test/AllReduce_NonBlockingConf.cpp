@@ -16,7 +16,7 @@ namespace RcclUnitTesting
     std::vector<int>            const  numElements   = {1048576};
     bool                        const  inPlace       = false;
     bool                        const  useManagedMem = false;
-    bool                        const  useBlocking   = false;
+    bool                        const  useBlocking   = true;
     
     OptionalColArgs options;
     // Terminate the test as soon as first failure occurs

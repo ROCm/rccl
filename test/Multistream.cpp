@@ -37,7 +37,7 @@ namespace RcclUnitTesting
                  isMultiProcess ? "MP" : "SP", totalRanks, numCollPerGroup, numStreamsPerGroup);
 
           testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks),
-                            numCollPerGroup, false, numStreamsPerGroup);
+                            numCollPerGroup, true, numStreamsPerGroup);
 
           // Set up each collective in group in different stream (modulo numStreamsPerGroup)
           options.redOp = ncclSum;
