@@ -431,6 +431,7 @@ namespace RcclUnitTesting
     {
       for (int localRank : localRanksToExecute)
       {
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         if (this->verbose) INFO("Capturing stream for rank %d\n", localRank);
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
@@ -601,6 +602,7 @@ namespace RcclUnitTesting
       {
         for (int localRank = 0; localRank < this->comms.size(); ++localRank)
         {
+          CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
           CHILD_NCCL_CALL_NON_BLOCKING("ncclCommGetAsyncErrorGroupEnd", localRank);
         }
       }
@@ -617,7 +619,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Ending stream capture for rank %d\n", localRank);
-
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipStreamEndCapture(this->streams[localRank][i], &graphs[localRank][i]));
@@ -641,6 +643,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Launch graph for rank %d\n", localRank);
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipGraphLaunch(graphExec[localRank][i], this->streams[localRank][i]));
@@ -657,6 +660,7 @@ namespace RcclUnitTesting
     for (int localRank : localRanksToExecute)
     {
       if (this->verbose) INFO("Starting synchronization for rank %d\n", localRank);
+      CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
       for (int i = 0; i < this->numStreamsPerGroup; i++)
         CHECK_HIP(hipStreamSynchronize(this->streams[localRank][i]));
     }
@@ -667,6 +671,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         if (this->verbose) INFO("Destroying graphs for rank %d\n", localRank);
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipGraphDestroy(graphs[localRank][i]));
