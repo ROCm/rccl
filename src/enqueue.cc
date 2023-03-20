@@ -938,7 +938,7 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
         NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, &comm->deviceStream, l->stream), result, failure);
       }
       NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, launchStream, &comm->deviceStream), result, failure);
-    } else if (tasks->streams->stream != comm->lastStream) {
+    } else if (tasks->streams->stream != comm->lastStream && comm->lastStream != nullptr) {
       // Stream changed from last call, create dependency against last NCCL kernel launch
       CUDACHECK(hipStreamWaitEvent(tasks->streams->stream, comm->doneEvent, 0));
     }
