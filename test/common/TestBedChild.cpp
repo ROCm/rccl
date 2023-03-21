@@ -657,6 +657,7 @@ namespace RcclUnitTesting
     for (int localRank : localRanksToExecute)
     {
       if (this->verbose) INFO("Starting synchronization for rank %d\n", localRank);
+      CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
       for (int i = 0; i < this->numStreamsPerGroup; i++)
         CHECK_HIP(hipStreamSynchronize(this->streams[localRank][i]));
     }
