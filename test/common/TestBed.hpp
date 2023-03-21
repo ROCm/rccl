@@ -130,6 +130,9 @@ namespace RcclUnitTesting
                         std::vector<bool>           const& managedMemList,
                         std::vector<bool>           const& useHipGraphList);
 
+    // Wait for user-input if in interactive mode
+    void InteractiveWait(std::string message);
+
     // Used to track total number of calls to ExecuteCollectives()
     static int& NumTestsRun();
 
