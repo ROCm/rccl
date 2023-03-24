@@ -375,7 +375,11 @@ ncclResult_t mscclEnqueueCheck(
   switch (threadLocalStatus.groupStatus) {
     case mscclNoGroup:
       if (comm->mscclCompatible) {
-        CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
+        if (stream == (hipStream_t)0) {
+          captureStatus = hipStreamCaptureStatusNone;
+        } else {
+          CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
+        }
         if (captureStatus == hipStreamCaptureStatusNone) {
           NCCLCHECK(mscclSchedulerSelectAlgo(&threadLocalStatus.savedSchedulerParams.back()));
           if (threadLocalStatus.savedSchedulerParams.back().p.scheduled) {
@@ -388,7 +392,11 @@ ncclResult_t mscclEnqueueCheck(
       break;
     case mscclGroupSupportedOp:
       if (comm->mscclCompatible) {
-        CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
+        if (stream == (hipStream_t)0) {
+          captureStatus = hipStreamCaptureStatusNone;
+        } else {
+          CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
+        }
         if (captureStatus == hipStreamCaptureStatusNone) {
           NCCLCHECK(mscclSchedulerSelectAlgo(&threadLocalStatus.savedSchedulerParams.back()));
           if (threadLocalStatus.savedSchedulerParams.back().p.scheduled) {
