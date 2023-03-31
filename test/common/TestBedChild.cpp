@@ -432,6 +432,7 @@ namespace RcclUnitTesting
     {
       for (int localRank : localRanksToExecute)
       {
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         if (this->verbose) INFO("Capturing stream for rank %d\n", localRank);
         CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
