@@ -44,7 +44,7 @@ THE SOFTWARE.
 #define DOUBLECOPYLOCAL_UNROLL 2
 #define REDUCECOPY_UNROLL 2
 
-
+#define PRINT_GPU0_ONLY 1
 
 #define RST  "\x1B[0m"
 #define KBLU  "\x1B[34m"
@@ -52,11 +52,6 @@ THE SOFTWARE.
 #define BOLD(x) "\x1B[1m" x RST
 
 #define RTC_CLOCK_FREQ_VEGA20 2.5E7
-//Right now kept the Arcturus RTC frequency same as Vega20
-//as we are not aware of Arcturus frequency, once we we come to know about it
-//we will update it.
-#define RTC_CLOCK_FREQ_ARCTURUS 2.5E7
-#define RTC_CLOCK_FREQ_DEFAULT 2.7E7
 
 struct transfer_data_t {
   float *dest0[MAX_WORKGROUPS]; //remote fine grain
@@ -613,10 +608,9 @@ int main(int argc,char* argv[])
 
     for (int i = 0; i < nGpu; i ++) {
       HIPCHECK(hipSetDevice(i));
+      HIPCHECK(hipMemsetAsync(d_profiling_data[i], 0, sizeof(struct profiling_data_t), stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
-      HIPCHECK(hipMemset(d_profiling_data[i], 0, sizeof(struct profiling_data_t)));
     }
-    HIPCHECK(hipStreamSynchronize(NULL));
     auto start = std::chrono::high_resolution_clock::now();
     for (int j = 0; j < iters; j ++) {
       for (int i = 0; i < nGpu; i ++) {
@@ -676,38 +670,21 @@ int main(int argc,char* argv[])
         uint32_t hopcount;
         HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
 
-        if(prop.gcnArch == 906) {
-          write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
-          bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-                double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
-                fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-                  i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
-        } else if (prop.gcnArch == 908) {
-          write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
-          bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-                double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_ARCTURUS);
-                fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-                  i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
-        } else {
-          write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
-          bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-                double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_DEFAULT);
-                fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-                  i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
-        }
+        write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
+        bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+              double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
+              fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+                i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
       }
       print_table_summary_line();
       double total = 0;
-      if(prop.gcnArch == 906 ) {
-        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_VEGA20)/(double)workgroups;
-      }else if (prop.gcnArch == 908 ){
-        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_ARCTURUS)/(double)workgroups;
-      } else {
-        total = (double)write_cycle/((double)RTC_CLOCK_FREQ_DEFAULT)/(double)workgroups;
-      }
+      total = (double)write_cycle/((double)RTC_CLOCK_FREQ_VEGA20)/(double)workgroups;
       fprintf(stderr, " %-61s %-13.4f  %-20lu  %-.2f\n",
         "Total" , total, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
       print_table_summary_line();
+#ifdef PRINT_GPU0_ONLY
+      break;
+#endif
     }
     std::cout << BOLD(FBLU("[Application Level Transfer Profiling Data]"))<<std::endl;
     uint64_t total_bytes_transferred = profiling_data[0]->bytes_transferred[0] * workgroups ;
