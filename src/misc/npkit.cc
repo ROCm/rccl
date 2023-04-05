@@ -24,9 +24,9 @@ uint64_t NpKit::base_gpu_timestamp_cpu_ = 0;
 uint64_t NpKit::base_gpu_timestamp_gpu_ = 0;
 
 __global__ void TimeCalibrationKernel(uint64_t *gpu_timestamp, uint64_t *cpu_timestamp_in, uint64_t *cpu_timestamp_out) {
-  uint64_t gpu_timestamp_1 = NPKIT_GET_GPU_TIMESTAMP();
+ uint64_t gpu_timestamp_1 = 0;
   uint64_t cpu_timestamp = *cpu_timestamp_in;
-  uint64_t gpu_timestamp_2 = NPKIT_GET_GPU_TIMESTAMP();
+  uint64_t gpu_timestamp_2 = 1;
   *gpu_timestamp = gpu_timestamp_1 + (gpu_timestamp_2 - gpu_timestamp_1) / 2;
   *cpu_timestamp_out = cpu_timestamp;
 }
