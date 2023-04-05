@@ -30,6 +30,7 @@ The root of this repository has a helper script 'install.sh' to build and instal
 *  `./install.sh -s` -- builds RCCL as a static library (default: shared)
 *  `./install.sh -hcc` -- builds RCCL with hcc compiler; note that hcc is now deprecated. (default:hip-clang)
 *  `./install.sh --prefix` -- specify custom path to install RCCL to (default:/opt/rocm)
+*  `./install.sh  --npkit-enable` -- enable compilation of npkit profiler framework with all options
 
 ## Manual build
 ### To build the library :
