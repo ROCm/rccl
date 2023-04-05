@@ -55,34 +55,6 @@ namespace RcclUnitTesting
     // Collect the number of GPUs
     this->numDevicesAvailable = ev.maxGpus;
     if (ev.verbose) INFO("Detected %d GPUs\n", this->numDevicesAvailable);
-
-    // Create the maximum number of possible child processes (1 per GPU)
-    // Parent and child communicate via pipes
-    childList.resize(this->numDevicesAvailable);
-    for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
-    {
-      childList[childId] = new TestBedChild(childId, ev.verbose, ev.printValues);
-      if (childList[childId]->InitPipes() != TEST_SUCCESS)
-      {
-        ERROR("Unable to create pipes to child process\n");
-        return;
-      }
-
-      pid_t pid = fork();
-      if (pid == 0)
-      {
-        // Child process enters execution loop
-        childList[childId]->StartExecutionLoop();
-        return;
-      }
-      else
-      {
-        // Parent records child process ID and closes unused ends of pipe
-        childList[childId]->pid = pid;
-        close(childList[childId]->childWriteFd);
-        close(childList[childId]->childReadFd);
-      }
-    }
   }
 
   void TestBed::InitComms(std::vector<std::vector<int>> const& deviceIdsPerProcess,
@@ -109,6 +81,40 @@ namespace RcclUnitTesting
         this->rankToChildMap.push_back(childId);
         this->rankToDeviceMap.push_back(deviceIdsPerProcess[childId][i]);
         ++this->numActiveRanks;
+      }
+    }
+
+    // Check that no children currently exist
+    if (childList.size() > 0)
+    {
+      ERROR("DestroyComms must be called prior to subsequent call to InitComms\n");
+      return;
+    }
+
+    // Create child-processes
+    childList.resize(this->numDevicesAvailable);
+    for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
+    {
+      childList[childId] = new TestBedChild(childId, ev.verbose, ev.printValues);
+      if (childList[childId]->InitPipes() != TEST_SUCCESS)
+      {
+        ERROR("Unable to create pipes to child process\n");
+        return;
+      }
+
+      pid_t pid = fork();
+      if (pid == 0)
+      {
+        // Child process enters execution loop
+        childList[childId]->StartExecutionLoop();
+        return;
+      }
+      else
+      {
+        // Parent records child process ID and closes unused ends of pipe
+        childList[childId]->pid = pid;
+        close(childList[childId]->childWriteFd);
+        close(childList[childId]->childReadFd);
       }
     }
 
@@ -375,17 +381,19 @@ namespace RcclUnitTesting
       PIPE_CHECK(childId);
     }
 
-    // Reset bookkeeping
-    this->numActiveChildren = 0;
-    this->numActiveRanks = 0;
-    this->numCollectivesInGroup = 0;
+    // Close any open child processes
+    Finalize();
 
     InteractiveWait("Finishing DestroyComms");
   }
 
   void TestBed::Finalize()
   {
+    if (this->numActiveChildren == 0)
+      return;
+
     InteractiveWait("Starting Finalize");
+
     // Send Stop to all child processes
     int const cmd = TestBedChild::CHILD_STOP;
     for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
@@ -396,7 +404,25 @@ namespace RcclUnitTesting
       close(childList[childId]->parentWriteFd);
       close(childList[childId]->parentReadFd);
     }
-    this->numDevicesAvailable = 0;
+
+    // Wait for processes to stop
+    for (int childId = 0; childId < this->numActiveChildren; ++childId)
+    {
+      int returnVal = 0;
+      waitpid(childList[childId]->pid, &returnVal, 0);
+      if (returnVal != 0)
+      {
+        ERROR("Child process %d exited with code %d\n", childId, returnVal);
+      }
+    }
+
+    childList.clear();
+
+    // Reset bookkeeping
+    this->numActiveChildren = 0;
+    this->numActiveRanks = 0;
+    this->numCollectivesInGroup = 0;
+
     InteractiveWait("Finishing Finalize");
   }
 

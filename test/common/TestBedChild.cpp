@@ -99,7 +99,7 @@ namespace RcclUnitTesting
       case CHILD_VALIDATE_RESULTS: status = ValidateResults();    break;
       case CHILD_DEALLOCATE_MEM  : status = DeallocateMem();      break;
       case CHILD_DESTROY_COMMS   : status = DestroyComms();       break;
-      case CHILD_STOP            : status = Stop(); goto stop;    break;
+      case CHILD_STOP            : goto stop;
       default: exit(0);
       }
 
@@ -816,11 +816,6 @@ namespace RcclUnitTesting
     this->comms.clear();
     this->streams.clear();
     if (this->verbose) INFO("Child %d finishes DestroyComms\n", this->childId);
-    return TEST_SUCCESS;
-  }
-
-  ErrCode TestBedChild::Stop()
-  {
     return TEST_SUCCESS;
   }
 }

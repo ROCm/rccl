@@ -107,8 +107,5 @@ namespace RcclUnitTesting
 
     // Destroys RCCL communicators
     ErrCode DestroyComms();
-
-    // Stops this child process
-    ErrCode Stop();
   };
 }
