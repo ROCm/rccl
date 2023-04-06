@@ -37,7 +37,7 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project, "-*ManagedMem")
+        commonGroovy.runTestCommand(platform, project, "-*Graph", "UT_POW2_GPUS=1")
     }
 
     def packageCommand =

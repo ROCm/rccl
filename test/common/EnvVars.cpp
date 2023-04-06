@@ -56,6 +56,7 @@ namespace RcclUnitTesting
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus        = GetEnvVar("UT_MIN_GPUS"    , 2);
     maxGpus        = GetEnvVar("UT_MAX_GPUS"    , numDevicesAvailable);
+    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , false);
     processMask    = GetEnvVar("UT_PROCESS_MASK", UT_SINGLE_PROCESS | UT_MULTI_PROCESS);
     verbose        = GetEnvVar("UT_VERBOSE"     , 0);
     printValues    = GetEnvVar("UT_PRINT_VALUES", 0);
@@ -124,6 +125,17 @@ namespace RcclUnitTesting
       dataTypes.push_back(ncclBfloat16);
 #endif
     }
+
+    // Build list of possible # GPU ranks based on env vars
+    numGpusList.clear();
+    for (int i = minGpus; i <= maxGpus; i++)
+      if (!onlyPow2Gpus || ((i & (i-1)) == 0))
+        numGpusList.push_back(i);
+
+    // Build isMultiProcessList
+    isMultiProcessList.clear();
+    if (this->processMask & UT_SINGLE_PROCESS) isMultiProcessList.push_back(0);
+    if (this->processMask & UT_MULTI_PROCESS)  isMultiProcessList.push_back(1);
   }
 
   std::vector<ncclRedOp_t> const& EnvVars::GetAllSupportedRedOps()
@@ -134,6 +146,16 @@ namespace RcclUnitTesting
   std::vector<ncclDataType_t> const& EnvVars::GetAllSupportedDataTypes()
   {
     return dataTypes;
+  }
+
+  std::vector<int> const& EnvVars::GetNumGpusList()
+  {
+    return numGpusList;
+  }
+
+  std::vector<int> const& EnvVars::GetIsMultiProcessList()
+  {
+    return isMultiProcessList;
   }
 
   int EnvVars::GetEnvVar(std::string const varname, int defaultValue)
@@ -165,6 +187,7 @@ namespace RcclUnitTesting
         std::make_pair("UT_SHOW_NAMES"       , "Show test case names"),
         std::make_pair("UT_MIN_GPUS"         , "Minimum number of GPUs to use"),
         std::make_pair("UT_MAX_GPUS"         , "Maximum number of GPUs to use"),
+        std::make_pair("UT_POW2_GPUS"        , "Only allow power-of-2 # of GPUs"),
         std::make_pair("UT_PROCESS_MASK"     , "Whether to run single/multi process"),
         std::make_pair("UT_VERBOSE"          , "Show verbose unit test output"),
         std::make_pair("UT_REDOPS"           , "List of reduction ops to test"),

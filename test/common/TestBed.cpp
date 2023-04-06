@@ -55,34 +55,6 @@ namespace RcclUnitTesting
     // Collect the number of GPUs
     this->numDevicesAvailable = ev.maxGpus;
     if (ev.verbose) INFO("Detected %d GPUs\n", this->numDevicesAvailable);
-
-    // Create the maximum number of possible child processes (1 per GPU)
-    // Parent and child communicate via pipes
-    childList.resize(this->numDevicesAvailable);
-    for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
-    {
-      childList[childId] = new TestBedChild(childId, ev.verbose, ev.printValues);
-      if (childList[childId]->InitPipes() != TEST_SUCCESS)
-      {
-        ERROR("Unable to create pipes to child process\n");
-        return;
-      }
-
-      pid_t pid = fork();
-      if (pid == 0)
-      {
-        // Child process enters execution loop
-        childList[childId]->StartExecutionLoop();
-        return;
-      }
-      else
-      {
-        // Parent records child process ID and closes unused ends of pipe
-        childList[childId]->pid = pid;
-        close(childList[childId]->childWriteFd);
-        close(childList[childId]->childReadFd);
-      }
-    }
   }
 
   void TestBed::InitComms(std::vector<std::vector<int>> const& deviceIdsPerProcess,
@@ -109,6 +81,40 @@ namespace RcclUnitTesting
         this->rankToChildMap.push_back(childId);
         this->rankToDeviceMap.push_back(deviceIdsPerProcess[childId][i]);
         ++this->numActiveRanks;
+      }
+    }
+
+    // Check that no children currently exist
+    if (childList.size() > 0)
+    {
+      ERROR("DestroyComms must be called prior to subsequent call to InitComms\n");
+      return;
+    }
+
+    // Create child-processes
+    childList.resize(this->numDevicesAvailable);
+    for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
+    {
+      childList[childId] = new TestBedChild(childId, ev.verbose, ev.printValues);
+      if (childList[childId]->InitPipes() != TEST_SUCCESS)
+      {
+        ERROR("Unable to create pipes to child process\n");
+        return;
+      }
+
+      pid_t pid = fork();
+      if (pid == 0)
+      {
+        // Child process enters execution loop
+        childList[childId]->StartExecutionLoop();
+        return;
+      }
+      else
+      {
+        // Parent records child process ID and closes unused ends of pipe
+        childList[childId]->pid = pid;
+        close(childList[childId]->childWriteFd);
+        close(childList[childId]->childReadFd);
       }
     }
 
@@ -375,17 +381,19 @@ namespace RcclUnitTesting
       PIPE_CHECK(childId);
     }
 
-    // Reset bookkeeping
-    this->numActiveChildren = 0;
-    this->numActiveRanks = 0;
-    this->numCollectivesInGroup = 0;
+    // Close any open child processes
+    Finalize();
 
     InteractiveWait("Finishing DestroyComms");
   }
 
   void TestBed::Finalize()
   {
+    if (this->numActiveChildren == 0)
+      return;
+
     InteractiveWait("Starting Finalize");
+
     // Send Stop to all child processes
     int const cmd = TestBedChild::CHILD_STOP;
     for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
@@ -396,7 +404,25 @@ namespace RcclUnitTesting
       close(childList[childId]->parentWriteFd);
       close(childList[childId]->parentReadFd);
     }
-    this->numDevicesAvailable = 0;
+
+    // Wait for processes to stop
+    for (int childId = 0; childId < this->numActiveChildren; ++childId)
+    {
+      int returnVal = 0;
+      waitpid(childList[childId]->pid, &returnVal, 0);
+      if (returnVal != 0)
+      {
+        ERROR("Child process %d exited with code %d\n", childId, returnVal);
+      }
+    }
+
+    childList.clear();
+
+    // Reset bookkeeping
+    this->numActiveChildren = 0;
+    this->numActiveRanks = 0;
+    this->numCollectivesInGroup = 0;
+
     InteractiveWait("Finishing Finalize");
   }
 
@@ -455,12 +481,12 @@ namespace RcclUnitTesting
     else
       ss << "    ";
     ss << "ranks ";
-    ss << ncclFuncNames[funcType] << " ";
+    ss << std::setfill(' ') << std::setw(20) << ncclFuncNames[funcType] << " ";
     ss << "(" << (inPlace ? "IP" : "OP") << ","
        << (managedMem ? "MM" : "GM") << ","
        << (useHipGraph ? "GL" : "NL") <<") ";
-    ss << ncclDataTypeNames[dataType] << " ";
-    if (CollectiveArgs::UsesReduce(funcType)) ss << ncclRedOpNames[redOp] << " ";
+    ss << std::setfill(' ') << std::setw(12) << ncclDataTypeNames[dataType] << " ";
+    if (CollectiveArgs::UsesReduce(funcType)) ss << std::setfill(' ') << std::setw(7) << ncclRedOpNames[redOp] << " ";
     if (CollectiveArgs::UsesRoot(funcType)) ss << "Root " << root << " ";
     return ss.str();
   }
@@ -511,17 +537,19 @@ namespace RcclUnitTesting
     bool isCorrect = true;
 
     // Sweep over the number of ranks
-    for (int ranksPerGpu=1; ranksPerGpu <= ev.maxRanksPerGpu; ranksPerGpu++)
-    for (int numGpus = ev.minGpus; numGpus <= ev.maxGpus && isCorrect; ++numGpus)
-    for (int isMultiProcess = 0; isMultiProcess <= 1 && isCorrect; ++isMultiProcess)
+    for (int numGpus : ev.GetNumGpusList())
+    for (int isMultiProcess : ev.GetIsMultiProcessList())
+    for (int ranksPerGpu=1; ranksPerGpu <= ev.maxRanksPerGpu && isCorrect; ++ranksPerGpu)
     {
-      if (!(ev.processMask & (1 << isMultiProcess))) continue;
-
       // Test either single process all GPUs, or 1 process per GPU
       int const numChildren = isMultiProcess ? numGpus : 1;
       int const numRanks    = numGpus*ranksPerGpu;
       this->InitComms(TestBed::GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
-      if (testing::Test::HasFailure()) continue;
+      if (testing::Test::HasFailure())
+      {
+        isCorrect = false;
+        continue;
+      }
 
       for (int ftIdx = 0; ftIdx < funcTypes.size()      && isCorrect; ++ftIdx)
       for (int dtIdx = 0; dtIdx < dataTypes.size()      && isCorrect; ++dtIdx)
@@ -545,13 +573,21 @@ namespace RcclUnitTesting
                                   numInputElements,
                                   numOutputElements,
                                   optionalArgs);
-          if (testing::Test::HasFailure()) continue;
+          if (testing::Test::HasFailure())
+          {
+            isCorrect = false;
+            continue;
+          }
 
           // Only allocate once for largest size
           if (neIdx == 0)
           {
             this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx]);
-            if (testing::Test::HasFailure()) continue;
+            if (testing::Test::HasFailure())
+            {
+              isCorrect = false;
+              continue;
+            }
           }
 
           for (int hgIdx = 0; hgIdx < useHipGraphList.size() && isCorrect; ++hgIdx)
@@ -563,7 +599,11 @@ namespace RcclUnitTesting
                              funcTypes[ftIdx] == ncclCollReduce    ||
                              funcTypes[ftIdx] == ncclCollAllReduce));
             if (!canSkip) this->PrepareData();
-            if (testing::Test::HasFailure()) continue;
+            if (testing::Test::HasFailure())
+            {
+              isCorrect = false;
+              continue;
+            }
 
             std::string name = this->GetTestCaseName(numGpus, isMultiProcess,
                                                      funcTypes[ftIdx], dataTypes[dtIdx],
@@ -573,12 +613,16 @@ namespace RcclUnitTesting
 
             if (ev.showNames)
             {
-              INFO("%s [%d elements]\n", name.c_str(), numInputElements);
+              INFO("%s [%9d elements]\n", name.c_str(), numInputElements);
             }
 
             std::vector<int> currentRanksEmpty = {};
             this->ExecuteCollectives(currentRanksEmpty, useHipGraphList[hgIdx]);
-            if (testing::Test::HasFailure()) continue;
+            if (testing::Test::HasFailure())
+            {
+              isCorrect = false;
+              continue;
+            }
             this->ValidateResults(isCorrect);
             if (!isCorrect)
             {

@@ -14,7 +14,7 @@ def runCompileCommand(platform, project, jobName)
     platform.runCommand(this,command)
 }
 
-def runTestCommand (platform, project, gfilter)
+def runTestCommand (platform, project, gfilter, envars)
 {
     String sudo = auxiliary.sudo(platform.jenkinsLabel)
 
@@ -23,8 +23,8 @@ def runTestCommand (platform, project, gfilter)
                 cd ${project.paths.project_build_prefix}/build/release/test
                 ${sudo} ulimit -l unlimited
                 ulimit -a
-                ${sudo} UT_PROCESS_MASK=1 RCCL_ENABLE_SIGNALHANDLER=0 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
-                ${sudo} UT_PROCESS_MASK=2 RCCL_ENABLE_SIGNALHANDLER=0 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
+                ${sudo} ${envars} UT_PROCESS_MASK=1 RCCL_ENABLE_SIGNALHANDLER=0 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
+                ${sudo} ${envars} UT_PROCESS_MASK=2 RCCL_ENABLE_SIGNALHANDLER=0 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)

@@ -99,7 +99,7 @@ namespace RcclUnitTesting
       case CHILD_VALIDATE_RESULTS: status = ValidateResults();    break;
       case CHILD_DEALLOCATE_MEM  : status = DeallocateMem();      break;
       case CHILD_DESTROY_COMMS   : status = DestroyComms();       break;
-      case CHILD_STOP            : status = Stop();               break;
+      case CHILD_STOP            : goto stop;
       default: exit(0);
       }
 
@@ -112,6 +112,7 @@ namespace RcclUnitTesting
         break;
       }
     }
+  stop:
     if (verbose) INFO("Child %d exiting execution loop\n", this->childId);
 
     // Close child ends of pipe
@@ -433,6 +434,7 @@ namespace RcclUnitTesting
       {
         CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         if (this->verbose) INFO("Capturing stream for rank %d\n", localRank);
+        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
         {
           CHECK_HIP(hipStreamBeginCapture(this->streams[localRank][i], hipStreamCaptureModeRelaxed));
@@ -686,7 +688,7 @@ namespace RcclUnitTesting
         for (int localRank : localRanksToExecute)
         {
           CollectiveArgs const& collArg = this->collArgs[localRank][collId];
-
+          CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
           int numOutputElementsToPrint = (this->printValues < 0 ? collArg.numOutputElements : this->printValues);
           size_t const numOutputBytes = numOutputElementsToPrint * DataTypeToBytes(collArg.dataType);
           CHECK_HIP(hipMemcpy(collArg.outputCpu.ptr, collArg.outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
@@ -814,11 +816,6 @@ namespace RcclUnitTesting
     this->comms.clear();
     this->streams.clear();
     if (this->verbose) INFO("Child %d finishes DestroyComms\n", this->childId);
-    return TEST_SUCCESS;
-  }
-
-  ErrCode TestBedChild::Stop()
-  {
     return TEST_SUCCESS;
   }
 }
