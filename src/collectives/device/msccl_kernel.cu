@@ -143,7 +143,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   // initialize mscclShmem.mscclTB
   threadBlockCopy(
     (uint64_t *)&mscclShmem.mscclTB, (uint64_t *)(algo->mscclTBs + bid),
-    sizeof(struct mscclThreadBlock), tid, nthreads);
+    sizeof(struct mscclThreadBlock) / sizeof(uint64_t), tid, nthreads);
   __synclds(); // publish mscclShmem.mscclTB.channelId
 
   // initialize ncclShmem and mscclShmem.work
