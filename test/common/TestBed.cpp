@@ -92,8 +92,8 @@ namespace RcclUnitTesting
     }
 
     // Create child-processes
-    childList.resize(this->numDevicesAvailable);
-    for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
+    childList.resize(this->numActiveChildren);
+    for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
       childList[childId] = new TestBedChild(childId, ev.verbose, ev.printValues);
       if (childList[childId]->InitPipes() != TEST_SUCCESS)
@@ -396,7 +396,7 @@ namespace RcclUnitTesting
 
     // Send Stop to all child processes
     int const cmd = TestBedChild::CHILD_STOP;
-    for (int childId = 0; childId < this->numDevicesAvailable; ++childId)
+    for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
       PIPE_WRITE(childId, cmd);
 
