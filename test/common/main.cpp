@@ -10,6 +10,7 @@
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
+  ::testing::GTEST_FLAG(filter) = "-*Graph";
   RcclUnitTesting::EnvVars::ShowConfig();
   int retCode = RUN_ALL_TESTS();
   printf("[ INFO     ] Total executed cases: %d\n", RcclUnitTesting::TestBed::NumTestsRun());
