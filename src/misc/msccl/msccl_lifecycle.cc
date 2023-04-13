@@ -172,7 +172,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     mscclInitialized.store(true, std::memory_order_release);
   }
 
-  INFO(NCCL_INIT, "MSCCL: Initialization finished");
+  INFO(NCCL_INIT, "MSCCL: Initialization finished, localSize %ld", mscclKernMaxLocalSize());
   return ncclSuccess;
 }
 

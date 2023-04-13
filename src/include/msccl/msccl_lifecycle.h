@@ -32,4 +32,6 @@ ncclResult_t mscclGroupEnd();
 
 ncclResult_t mscclTeardown();
 
+size_t mscclKernMaxLocalSize();
+
 #endif
