@@ -85,6 +85,7 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
   NCCLCHECK(ncclTransportP2pSetup(comm, NULL, 0));
   mscclClearIsCallerFlag();
 
+  INFO(NCCL_INIT, "MSCCL: Setup connections finished, used %ld", allocTracker[comm->cudaDev].totalAllocSize);
   return ncclSuccess;
 }
 
@@ -287,4 +288,21 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   status.workIndex++;
   status.lastStream = stream;
   return ncclSuccess;
+}
+
+// Determine the maximum kernel stack size of all MSCCL kernels
+size_t mscclKernMaxLocalSize() {
+  ncclResult_t res = ncclSuccess;
+  int numMscclKerns = sizeof(mscclKernelEntries)/sizeof(void *);
+  hipFuncAttributes attr = {0};
+  size_t max = 0;
+  for (int i = 0; i < numMscclKerns; i++) {
+    if (mscclKernelEntries[i] != nullptr) {
+      CUDACHECKGOTO(hipFuncGetAttributes(&attr, reinterpret_cast<const void*>(mscclKernelEntries[i])), res, error);
+      if (attr.localSizeBytes > max) max = attr.localSizeBytes;
+    }
+  }
+
+error:
+  return (res != ncclSuccess) ? 0 : max;
 }
