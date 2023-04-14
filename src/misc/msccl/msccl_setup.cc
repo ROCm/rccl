@@ -293,7 +293,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 // Determine the maximum kernel stack size of all MSCCL kernels
 size_t mscclKernMaxLocalSize() {
   ncclResult_t res = ncclSuccess;
-  int numMscclKerns = ncclNumDevRedOps * ncclNumTypes * NCCL_NUM_PROTOCOLS;
+  int numMscclKerns = sizeof(mscclKernelEntries)/sizeof(void *);
   hipFuncAttributes attr = {0};
   size_t max = 0;
   for (int i = 0; i < numMscclKerns; i++) {
