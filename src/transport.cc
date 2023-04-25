@@ -10,6 +10,7 @@
 #include "bootstrap.h"
 #define ENABLE_TIMER 0
 #include "timer.h"
+#include <cstring>
 
 struct ncclTransport* ncclTransports[NTRANSPORTS] = {
   &p2pTransport,
@@ -131,8 +132,13 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[sendPeer].send + connIndex;
         NCCLCHECK(conn->transportComm->connect(comm, sendData++, 1, comm->rank, conn));
         conn->connected = 1;
-        CUDACHECK(cudaMemcpyAsync(&comm->channels[c].devPeers[sendPeer].send[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->sideStream));
-        CUDACHECK(cudaMemcpyAsync(&comm->channels[c].devPeers[sendPeer].send[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->sideStream));
+        do {
+          struct ncclConnInfo connInfo;
+          CUDACHECK(cudaMemcpyAsync(&comm->channels[c].devPeers[sendPeer].send[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->sideStream));
+          CUDACHECK(cudaMemcpyAsync(&connInfo, &comm->channels[c].devPeers[sendPeer].send[connIndex], sizeof(struct ncclConnInfo), cudaMemcpyDeviceToHost, comm->sideStream));
+          CUDACHECK(hipStreamSynchronize(comm->sideStream));
+          if (memcmp(&connInfo, &conn->conn, sizeof(struct ncclConnInfo)) == 0) break;
+        } while (true);
       }
     }
     TIME_STOP(3);
@@ -142,7 +148,13 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         struct ncclConnector* conn = comm->channels[c].peers[recvPeer].recv + connIndex;
         NCCLCHECK(conn->transportComm->connect(comm, recvData++, 1, comm->rank, conn));
         conn->connected = 1;
-        CUDACHECK(cudaMemcpyAsync(&comm->channels[c].devPeers[recvPeer].recv[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->sideStream));
+        do {
+          struct ncclConnInfo connInfo;
+          CUDACHECK(cudaMemcpyAsync(&comm->channels[c].devPeers[recvPeer].recv[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->sideStream));
+          CUDACHECK(cudaMemcpyAsync(&connInfo, &comm->channels[c].devPeers[recvPeer].recv[connIndex], sizeof(struct ncclConnInfo), cudaMemcpyDeviceToHost, comm->sideStream));
+          CUDACHECK(hipStreamSynchronize(comm->sideStream));
+          if (memcmp(&connInfo, &conn->conn, sizeof(struct ncclConnInfo)) == 0) break;
+        } while (true);
       }
     }
     TIME_STOP(4);
