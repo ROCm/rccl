@@ -210,9 +210,9 @@ set(HEADER_SOURCES
   src/include/param.h
   src/include/channel.h
   src/include/nvtx_stub.h
-  src/include/nvtx3.hpp
   src/include/core.h
   src/include/info.h
+  src/include/ipcsocket.h
   src/include/git_version.h
   src/include/npkit/npkit_event.h
   src/include/npkit/npkit.h
@@ -301,6 +301,7 @@ set(CC_SOURCES
     src/misc/socket.cc
     src/misc/param.cc
     src/misc/rocmwrap.cc
+    src/misc/ipcsocket.cc
     src/misc/strongstream.cc
     src/misc/msccl/msccl_lifecycle.cc
     src/misc/msccl/msccl_parser.cc
@@ -463,11 +464,12 @@ foreach(target ${AMDGPU_TARGETS})
   target_link_libraries(rccl PRIVATE --amdgpu-target=${target})
 endforeach()
 
+set(ENABLE_IFC 1 CACHE BOOL "Enable indirect function call")
 if("${HIP_COMPILER}" MATCHES "clang")
   find_program( hipcc_executable hipcc )
   execute_process(COMMAND bash "-c" "${hipcc_executable} --version | grep 'HIP version' | awk -F\" \" '{ printf $3}' | awk -F\"-\" '{ printf $1}'" OUTPUT_VARIABLE hipcc_version_string)
   message(STATUS "hipcc version: ${hipcc_version_string}")
-  if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.5.30201")
+  if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.5.30201" AND ENABLE_IFC)
     add_definitions(-DUSE_INDIRECT_FUNCTION_CALL)
     target_compile_options(rccl PRIVATE -fvisibility=hidden)
     message(STATUS "Indirect function call enabled")

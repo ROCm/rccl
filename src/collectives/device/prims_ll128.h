@@ -249,9 +249,9 @@ private:
       if (SrcBuf == Input) {
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          v[u] = MULTI<RedOp, T>().preOp(redOp, v[u]);
+          v[u] = applyPreOp(redOp, v[u]);
           if (!flagThread)
-            v[u+1] = MULTI<RedOp, T>().preOp(redOp, v[u+1]);
+            v[u+1] = applyPreOp(redOp, v[u+1]);
         }
       }
     }
@@ -262,8 +262,8 @@ private:
         uint64_t* ptr = recvPtr(0)+ll128Offset;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          v[u] = SRC ? MULTI<RedOp, T>()(redOp, vr[u], v[u]) : vr[u];
-          v[u+1] = SRC ? MULTI<RedOp, T>()(redOp, vr[u+1], v[u+1]) : vr[u+1];
+          v[u]   = SRC ? applyReduce(redOp, vr[u], v[u]) : vr[u];
+          v[u+1] = SRC ? applyReduce(redOp, vr[u+1], v[u+1]) : vr[u+1];
         }
       }
 
@@ -284,19 +284,23 @@ private:
         } while (__any(needReload));
 
         #pragma unroll
+        for (int u=0; u<ELEMS_PER_THREAD; u+=2)
+          load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
+
+        #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          v[u] = MULTI<RedOp, T>()(redOp, vr[u], v[u]);
-          v[u+1] = MULTI<RedOp, T>()(redOp, vr[u+1], v[u+1]);
+          v[u]   = applyReduce(redOp, vr[u], v[u]);
+          v[u+1] = applyReduce(redOp, vr[u+1], v[u+1]);
         }
       }
     }
     /********************** End Recv ************************/
 
-    if (postOp && !FuncTraits<RedOp>::IsPostOpIdentity) {
+    if (postOp) {
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-        v[u]   = MULTI<RedOp, T>().postOp(redOp, v[u]);
-        v[u+1] = MULTI<RedOp, T>().postOp(redOp, v[u+1]);
+        v[u]   = applyPostOp(redOp, v[u]);
+        v[u+1] = applyPostOp(redOp, v[u+1]);
       }
     }
 
@@ -332,14 +336,6 @@ private:
   __device__ __forceinline__ void GenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
-    static_assert(-1<=SrcBuf && SrcBuf < 2, "Uhoh");
-    static_assert(-1<=DstBuf && DstBuf < 2, "Uhoh");
-    static_assert(DstBuf!=Input, "Mistake?");
-    #if 0
-    assert((SrcBuf==-1) == (srcIx==-1));
-    assert((DstBuf==-1) == (dstIx==-1));
-    #endif
-
     T const *srcPtr = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
     T       *dstPtr = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
     int wireOffset = WireWordPerSlice*warp + 2*wid;
@@ -403,18 +399,18 @@ private:
         loadRegsFinish(regsD);
         #pragma unroll
         for (int u=0; u<NCCL_LL128_SHMEM_ELEMS_PER_THREAD; u+=2) {
-          regsD[u] = MULTI<RedOp, T>()(redOp, regs[u], regsD[u]);
+          regsD[u] = applyReduce(redOp, regs[u], regsD[u]);
           if (!flagThread)
-            regsD[u+1] = MULTI<RedOp, T>()(redOp, regs[u+1], regsD[u+1]);
+            regsD[u+1] = applyReduce(redOp, regs[u+1], regsD[u+1]);
         }
         if (MULTISRCS){
           for (int i = 1; i < nsrcs; i++){
             loadRegsBegin(regs, srcs[i], eltInSlice);
             loadRegsFinish(regs);
             for (int u=0; u<NCCL_LL128_SHMEM_ELEMS_PER_THREAD; u+=2) {
-              regsD[u] = MULTI<RedOp, T>()(redOp, regs[u], regsD[u]);
+              regsD[u] = applyReduce(redOp, regs[u], regsD[u]);
               if (!flagThread)
-                regsD[u+1] = MULTI<RedOp, T>()(redOp, regs[u+1], regsD[u+1]);
+                regsD[u+1] = applyReduce(redOp, regs[u+1], regsD[u+1]);
             }
           }
         }

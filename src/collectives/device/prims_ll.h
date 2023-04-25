@@ -77,11 +77,6 @@ private:
 #endif
   }
 
-  static inline __device__ uint32_t __funnelshift_r(uint32_t lo, uint32_t hi, uint32_t shift) {
-    uint64_t val64 = ((uint64_t)lo+((uint64_t)hi<<32))>>(shift&31);
-    return (uint32_t)val64;
-  }
-
   uint32_t abort = 0;
 
   inline __device__ int checkAbort(int &spins, int send) {
@@ -426,18 +421,18 @@ private:
       }
       if (SRC) {
         data = dl.loadFinish();
-        if (SrcBuf == Input) data = MULTI<RedOp, T>().preOp(redOp, data);
+        if (SrcBuf == Input) data = applyPreOp(redOp, data);
       }
       if (RECV) {
-        data = !SRC ? peerData : MULTI<RedOp,T>()(redOp, peerData, data);
-        #pragma unroll
+        data = !SRC ? peerData : applyReduce(redOp, peerData, data);
+        #pragma unroll MaxRecv
         for (int i=1; i < MaxRecv && i < fan.nrecv(); i++) {
           peerData = readLLFinish(offset, line, i);
-          data = MULTI<RedOp,T>()(redOp, peerData, data);
+          data = applyReduce(redOp, peerData, data);
         }
       }
 
-      if (postOp) data = MULTI<RedOp, T>().postOp(redOp, data);
+      if (postOp) data = applyPostOp(redOp, data);
 
       // Send : inter-node, then intra-node, then local
       if (SEND) {
@@ -511,13 +506,13 @@ private:
         uint64_t dataD;
         dl.loadBegin(dstElts, eltInLine);
         dataD = dl.loadFinish();
-        dataD = MULTI<RedOp,T>()(redOp, dataD, data);
+        dataD = applyReduce(redOp, dataD, data);
         if (MULTISRCS){
           for (int i = 1; i < nsrcs; i++){
             dl.loadBegin(srcs[i], eltInLine);
             srcs[i] += eltPerTrip;
             data = dl.loadFinish();
-            dataD = MULTI<RedOp,T>()(redOp, dataD, data);
+            dataD = applyReduce(redOp, dataD, data);
           }
         }
         mscclStoreData(dstElts, dataD, eltInLine);

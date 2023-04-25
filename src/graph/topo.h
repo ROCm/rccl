@@ -225,6 +225,6 @@ static float ncclTopoXGMISpeed(int gcn) {
 }
 
 #define ncclGetKernelIndex(p_comm) \
-  (((p_comm)->topo->ll128Enabled ? 1 : 0)*2 + ((p_comm)->collTraceThread ? 1 : 0))
+  ((p_comm)->collTraceThread ? 1 : 0)
 
 #endif
