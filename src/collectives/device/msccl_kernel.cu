@@ -114,7 +114,7 @@ __device__ __forceinline__ static void threadBlockCopy(
 for (int r = 0; r < numloops; r++) { \
   srcOffset = srcBaseOffset + (ssize_t)mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r] * sizePerMscclChunk; \
   reduceInput = load(srcPointer + srcOffset); \
-  o = redFn(reduceInput, o); \
+  o = applyReduce(redFn, reduceInput, o); \
 }
 
 #define MSCCL_REDUCE_UNROLL_LOOP_B(numloops) \

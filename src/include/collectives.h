@@ -35,12 +35,6 @@ struct ncclDevRedOpFull {
 #define NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type) \
   ncclKernelDebug_##func##_##algo##_##proto##_##devredop##_##type
 
-#define NCCL_KERN_NAME_LL128(func, algo, proto, devredop, type) \
-  ncclKernelLL128_##func##_##algo##_##proto##_##devredop##_##type
-
-#define NCCL_KERN_NAME_LL128_DEBUG(func, algo, proto, devredop, type) \
-  ncclKernelLL128Debug_##func##_##algo##_##proto##_##devredop##_##type
-
 #define NCCL_IMPL_NAME(func, algo, proto) \
   nccl##func##algo##proto
 
@@ -49,16 +43,12 @@ struct ncclDevRedOpFull {
 #define DECL5(func, algo, proto, devredop, type) \
   extern __device__ void NCCL_FUNC_NAME(func, algo, proto, devredop, type)(); \
   extern __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead); \
-  extern __global__ void NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead); \
-  extern __global__ void NCCL_KERN_NAME_LL128(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead); \
-  extern __global__ void NCCL_KERN_NAME_LL128_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
+  extern __global__ void NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
 #else
 #define DECL5(func, algo, proto, devredop, type) \
   extern __device__ __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, devredop, type)(); \
   extern __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead); \
-  extern __global__ void NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead); \
-  extern __global__ void NCCL_KERN_NAME_LL128(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead); \
-  extern __global__ void NCCL_KERN_NAME_LL128_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
+  extern __global__ void NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
 #endif
 
 #define SINGLE_ARG(...) __VA_ARGS__
@@ -76,7 +66,8 @@ struct ncclDevRedOpFull {
   DECL4(func, RING,    devredop, type, undef) \
   DECL4(func, TREE,    devredop, type, undef) \
   DECL4(func, COLLNET_DIRECT, devredop, type, undef) \
-  DECL4(func, COLLNET_CHAIN, devredop, type, undef)
+  DECL4(func, COLLNET_CHAIN, devredop, type, undef) \
+  DECL4(func, NVLS,    devredop, type, undef)
 
 #if defined(RCCL_BFLOAT16)
 #define DECL2(func, devredop, undefForFloat) \
@@ -146,5 +137,14 @@ extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, double)();
 #define NCCL_MAX_SLICE_PER_CHUNK 2  // max value for CHUNKSTEPS/SLICESTEPS, must accord with above
 #define ALLTOALL_PIVOT_SLICESTEPS 2
 #define ALLTOALL_PIVOT_CHUNKSTEPS 4
+
+// We can't use the enum identifiers like ncclSum, ncclFloat, etc since this
+// macro will be used in preprocessor conditionals where enums have no meaning.
+#define NCCL_NVLS_SUPPORTS(/*ncclDataType_t*/ type, /*ncclDevRedOp_t*/ red) \
+  (((type==2 || type==3) && (red==0 || red==2 || red==3)) || \
+   ((type==4 || type==5) && (red==0 || red==2 || red==3)) || \
+   ((type==6 || type==9) && (red==0 || red==2 || red==3)) || \
+   (type==7 && red==0) || \
+   (type==8 && red==0))
 
 #endif

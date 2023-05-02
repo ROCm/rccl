@@ -51,7 +51,7 @@ static ncclResult_t socketProgressOpt(int op, struct ncclSocket* sock, void* ptr
 
 static ncclResult_t socketProgress(int op, struct ncclSocket* sock, void* ptr, int size, int* offset) {
   int closed;
-  NCCLCHECK(socketProgressOpt(op, sock, ptr, size, offset, 0, &closed));
+  NCCLCHECK(socketProgressOpt(op, sock, ptr, size, offset, 0 /*block*/, &closed));
   if (closed) {
     char line[SOCKET_NAME_MAXLEN+1];
     WARN("socketProgress: Connection closed by remote peer %s", ncclSocketToString(&sock->addr, line, 0));
@@ -827,23 +827,47 @@ ncclResult_t ncclSocketRecv(struct ncclSocket* sock, void* ptr, int size) {
 }
 
 // Receive or detect connection closed
-ncclResult_t ncclSocketTryRecv(struct ncclSocket* sock, void* ptr, int size, int* closed) {
+ncclResult_t ncclSocketTryRecv(struct ncclSocket* sock, void* ptr, int size, int* closed, bool blocking) {
   int offset = 0;
   if (sock == NULL) {
     WARN("ncclSocketTryRecv: pass NULL socket");
     return ncclInvalidArgument;
   }
   *closed = 0;
-  while (offset < size) {
+  // Block until connection closes or nbytes received
+  if (blocking) {
+    while (offset < size) {
+      NCCLCHECK(socketProgressOpt(NCCL_SOCKET_RECV, sock, ptr, size, &offset, 0, closed));
+      if (*closed) return ncclSuccess;
+    }
+  } else {
     NCCLCHECK(socketProgressOpt(NCCL_SOCKET_RECV, sock, ptr, size, &offset, 0, closed));
     if (*closed) return ncclSuccess;
+
+    // If any bytes were received, block waiting for the rest
+    if (offset > 0) {
+      while (offset < size) {
+        NCCLCHECK(socketProgressOpt(NCCL_SOCKET_RECV, sock, ptr, size, &offset, 0, closed));
+        if (*closed) return ncclSuccess;
+      }
+    // No bytes were received, return ncclInProgress
+    } else {
+      return ncclInProgress;
+    }
   }
   return ncclSuccess;
 }
 
 ncclResult_t ncclSocketClose(struct ncclSocket* sock) {
   if (sock != NULL) {
-    if (sock->fd >= 0) close(sock->fd);
+    if (sock->fd >= 0) {
+      /* shutdown() is needed to send FIN packet to proxy thread; shutdown() is not affected
+       * by refcount of fd, but close() is. close() won't close a fd and send FIN packet if
+       * the fd is duplicated (e.g. fork()). So shutdown() guarantees the correct and graceful
+       * connection close here. */
+      shutdown(sock->fd, SHUT_RDWR);
+      close(sock->fd);
+    }
     sock->state = ncclSocketStateClosed;
     sock->fd = -1;
   }

@@ -24,8 +24,14 @@ static enum { hsaUninitialized, hsaInitializing, hsaInitialized, hsaError } hsaS
 
 static void *hsaLib;
 static uint16_t version_major, version_minor;
+bool ncclCudaLaunchBlocking = false;
 
 ncclResult_t rocmLibraryInit(void) {
+  do {
+    char* val = getenv("CUDA_LAUNCH_BLOCKING");
+    ncclCudaLaunchBlocking = val!=nullptr && val[0]!=0 && !(val[0]=='0' && val[1]==0);
+  } while (0);
+
   hsa_status_t res;
 
   if (hsaState == hsaInitialized)

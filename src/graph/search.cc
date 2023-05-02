@@ -896,7 +896,6 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   }
   if (ngpus == 1) if (graph->pattern != NCCL_TOPO_PATTERN_RING) graph->pattern = NCCL_TOPO_PATTERN_TREE;
 
-  // SPLIT_TREE works better on older archs.
   int ccMin;
   NCCLCHECK(ncclTopoGetCompCap(system, &ccMin, NULL));
 
@@ -1177,6 +1176,7 @@ ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, str
 ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, int cudaDev2, bool* isXGMI, int maxInter, int nInter, int *inter) {
   int interGpus[MAX_XGMI_INTER_GPUS+1];
   int ngpus = system->nodes[GPU].count;
+  *isXGMI = false;
   // check for direct XGMI connection
   for (int i=0; i<ngpus; i++) {
     if (system->nodes[GPU].nodes[i].gpu.dev == cudaDev1) {
@@ -1231,6 +1231,5 @@ ncclResult_t ncclTopoGetLinkType(struct ncclTopoSystem* system, int cudaDev1, in
       }
     }
   }
-  *isXGMI = false;
   return ncclSuccess;
 }

@@ -52,7 +52,7 @@ namespace {
         const T* sendbuff = (const T*)args->sendbuff + send_offset;
         T* recvbuff = (T *)args->recvbuff + recv_offset;
         ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1, 0>(
-            tid, nthreads, nullptr, false, 1, &sendbuff, 1, &recvbuff, send_recv_size);
+            tid, nthreads, 0, nullptr, false, 1, (void **)&sendbuff, 1, (void **)&recvbuff, send_recv_size);
       } else {
         for (ssize_t prims_offset = 0; prims_offset < send_recv_size; prims_offset += prims_size) {
           const int prims_nelem = min(prims_size, send_recv_size - prims_offset);

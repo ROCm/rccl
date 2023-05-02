@@ -10,6 +10,9 @@
 #include "common.h"
 
 __shared__ ncclShmemData ncclShmem;
+#if __CUDA_ARCH__ < 700
+  __shared__ ulong2 ncclShmemPerWarp[ncclShmemScratchWarpSize()*(NCCL_MAX_NTHREADS/WARP_SIZE)/sizeof(ulong2)];
+#endif
 
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #else
@@ -22,7 +25,8 @@ __shared__ ncclShmemData ncclShmem;
   NCCL_FUNC5(func, TREE,    devredop, type, nullify), \
   NCCL_FUNC5(func, RING,    devredop, type, nullify), \
   NCCL_FUNC5(func, COLLNET_DIRECT, devredop, type, nullify), \
-  NCCL_FUNC5(func, COLLNET_CHAIN, devredop, type, nullify)
+  NCCL_FUNC5(func, COLLNET_CHAIN,  devredop, type, nullify), \
+  NCCL_FUNC5(func, NVLS,           devredop, type, nullify)
 
 #if defined(__CUDA_BF16_TYPES_EXIST__)
 // Must be consistent with ncclDataType_t
