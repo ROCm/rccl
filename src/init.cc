@@ -373,7 +373,9 @@ static ncclResult_t commFree(ncclComm_t comm) {
     NCCLCHECK(ncclStrongStreamDestruct(&comm->deviceStream));
   }
 
+#if CUDART_VERSION >= 12010
   if (comm->nvlsSupport) NCCLCHECK(ncclNvlsFree(comm));
+#endif
 
   struct ncclDestructor* dtor = comm->destructorHead;
   while (dtor != nullptr) {
@@ -1268,7 +1270,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // Check if we can setup CollNet
   if (comm->collNetSupport > 0) collNetTrySetup(comm, &collNetGraph);
 
-  //NCCLCHECKGOTO(ncclNvlsSetup(comm), ret, fail);
+#if CUDART_VERSION >= 12010
+  NCCLCHECKGOTO(ncclNvlsSetup(comm), ret, fail);
+#endif
 
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
 
