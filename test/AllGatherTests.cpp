@@ -26,7 +26,7 @@ namespace RcclUnitTesting
     testBed.Finalize();
   }
 
-  TEST(AllGather, DISABLED_OutOfPlaceGraph)
+  TEST(AllGather, OutOfPlaceGraph)
   {
     TestBed testBed;
 
@@ -64,7 +64,7 @@ namespace RcclUnitTesting
     testBed.Finalize();
   }
 
-  TEST(AllGather, DISABLED_InPlaceGraph)
+  TEST(AllGather, InPlaceGraph)
   {
     TestBed testBed;
 
@@ -102,7 +102,7 @@ namespace RcclUnitTesting
     testBed.Finalize();
   }
 
-  TEST(AllGather, DISABLED_ManagedMemGraph)
+  TEST(AllGather, ManagedMemGraph)
   {
     TestBed testBed;
 

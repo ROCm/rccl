@@ -38,7 +38,7 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project, "-*Graph", "")
+        commonGroovy.runTestCommand(platform, project, "*", "")
     }
 
     def packageCommand =

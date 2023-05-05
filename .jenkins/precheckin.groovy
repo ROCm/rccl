@@ -39,7 +39,7 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project, "-*Graph", "UT_POW2_GPUS=1")
+        commonGroovy.runTestCommand(platform, project, "*", "UT_POW2_GPUS=1")
     }
 
     def packageCommand =
