@@ -63,6 +63,7 @@ def parse_cpu_event(event_bytes):
 def parse_gpu_event_file(npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, gpu_time_cpu, gpu_time_gpu, dictionary_of_stats):
     gpu_event_file_path = os.path.join(npkit_dump_dir, 'gpu_events_rank_%d_buf_%d' % (rank, buf_idx))
     stats_key = 'gpu_rank_%d' % (rank)
+    channel_stats = {}
     raw_event_size = 16
     cpu_base_time = gpu_time_cpu / cpu_clock_scale
     gpu_base_time = gpu_time_gpu / gpu_clock_scale
@@ -127,17 +128,23 @@ def parse_gpu_event_file(npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clo
                 delta_time = max(0.001, gpu_events[-1]['ts'] - event_start_ts) # delta needs to take the last begin
                 bandwidth = gpu_events[-1]['args']['size'] / delta_time / 1e3
 
-                if (current_id,parsed_gpu_event['size']) in dictionary_of_stats[stats_key]:
-                    temp_size = dictionary_of_stats[stats_key][(current_id,parsed_gpu_event['size'])][1]+1
-                    temp = dictionary_of_stats[stats_key][(current_id,parsed_gpu_event['size'])][0] * (temp_size - 1 )/ (temp_size)
-                    dictionary_of_stats[stats_key][(current_id,parsed_gpu_event['size'])][0] = bandwidth / (temp_size) + temp
-                    dictionary_of_stats[stats_key][(current_id,parsed_gpu_event['size'])][1] = temp_size
+                if (current_id,parsed_gpu_event['size']) in channel_stats:
+                    temp_size = channel_stats[(current_id,parsed_gpu_event['size'])][1]+1
+                    temp = channel_stats[(current_id,parsed_gpu_event['size'])][0] * (temp_size - 1 )/ (temp_size)
+                    channel_stats[(current_id,parsed_gpu_event['size'])][0] = bandwidth / (temp_size) + temp
+                    channel_stats[(current_id,parsed_gpu_event['size'])][1] = temp_size
                 else:
-                    dictionary_of_stats[stats_key][(current_id,parsed_gpu_event['size'])] = [bandwidth, 1]
+                    channel_stats[(current_id,parsed_gpu_event['size'])] = [bandwidth, 1]
                 gpu_events[-1]['args']['bw (GB/s)'] = bandwidth
 
             raw_content_idx += raw_event_size
-    # breakpoint()
+    # breakpoint() aggragate
+    for key in channel_stats:
+        if key in dictionary_of_stats[stats_key]:
+            dictionary_of_stats[stats_key][key][0] += channel_stats[key][0]
+            dictionary_of_stats[stats_key][key][1] += channel_stats[key][1]
+        else:
+            dictionary_of_stats[stats_key][key] = channel_stats[key]
     return gpu_events
 
 def parse_cpu_event_file(npkit_dump_dir, npkit_event_def, rank, channel, cpu_clock_scale, cpu_time_global, cpu_time_local):
