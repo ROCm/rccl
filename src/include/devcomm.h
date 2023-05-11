@@ -53,11 +53,7 @@ union ncclLLFifoLine {
   int4 i4;
 };
 
-#if defined(__GFX10__) || defined(__GFX11__)
-#define WARP_SIZE 32
-#else
-#define WARP_SIZE 64
-#endif
+#define WARP_SIZE warpSize
 #define MAXCHANNELS 32
 #define NCCL_MAX_NTHREADS 256
 #define NCCL_SIMPLE_MAX_NTHREADS NCCL_MAX_NTHREADS
