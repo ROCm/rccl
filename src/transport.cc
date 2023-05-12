@@ -10,7 +10,6 @@
 #include "bootstrap.h"
 #define ENABLE_TIMER 0
 #include "timer.h"
-#include <cstring>
 
 struct ncclTransport* ncclTransports[NTRANSPORTS] = {
   &p2pTransport,
@@ -161,13 +160,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
               NCCLCHECKGOTO(conn->transportComm->connect(comm, sendData[i] + sendDataOffset++, 1, comm->rank, conn), ret, fail);
               if (ret == ncclSuccess) {
                 conn->connected = 1;
-                do {
-                  struct ncclConnInfo connInfo;
-                  CUDACHECKGOTO(cudaMemcpyAsync(&comm->channels[c].devPeers[sendPeer].send[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->hostStream.cudaStream), ret, fail);
-                  CUDACHECKGOTO(cudaMemcpyAsync(&connInfo, &comm->channels[c].devPeers[sendPeer].send[connIndex], sizeof(struct ncclConnInfo), cudaMemcpyDeviceToHost, comm->hostStream.cudaStream), ret, fail);
-                  CUDACHECKGOTO(hipStreamSynchronize(comm->hostStream.cudaStream), ret, fail);
-                  if (memcmp(&connInfo, &conn->conn, sizeof(struct ncclConnInfo)) == 0) break;
-                } while (true);
+                CUDACHECKGOTO(cudaMemcpyAsync(&comm->channels[c].devPeers[sendPeer].send[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->hostStream.cudaStream), ret, fail);
               } else if (ret == ncclInProgress) {
                 allChannelsConnected = false;
               }
@@ -184,13 +177,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
               NCCLCHECKGOTO(conn->transportComm->connect(comm, recvData[i] + recvDataOffset++, 1, comm->rank, conn), ret, fail);
               if (ret == ncclSuccess) {
                 conn->connected = 1;
-                do {
-                  struct ncclConnInfo connInfo;
-                  CUDACHECKGOTO(cudaMemcpyAsync(&comm->channels[c].devPeers[recvPeer].recv[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->hostStream.cudaStream), ret, fail);
-                  CUDACHECKGOTO(cudaMemcpyAsync(&connInfo, &comm->channels[c].devPeers[recvPeer].recv[connIndex], sizeof(struct ncclConnInfo), cudaMemcpyDeviceToHost, comm->hostStream.cudaStream), ret, fail);
-                  CUDACHECKGOTO(hipStreamSynchronize(comm->hostStream.cudaStream), ret, fail);
-                  if (memcmp(&connInfo, &conn->conn, sizeof(struct ncclConnInfo)) == 0) break;
-                } while (true);
+                CUDACHECKGOTO(cudaMemcpyAsync(&comm->channels[c].devPeers[recvPeer].recv[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->hostStream.cudaStream), ret, fail);
               } else if (ret == ncclInProgress) {
                 allChannelsConnected = false;
               }
