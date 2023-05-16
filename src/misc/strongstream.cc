@@ -237,6 +237,8 @@ ncclResult_t ncclStrongStreamRelease(struct ncclCudaGraph graph, struct ncclStro
       }
     }
   #endif
+  CUDACHECK(cudaEventRecord(ss->scratchEvent, ss->cudaStream));
+  CUDACHECK(cudaStreamWaitEvent(ss->cudaStream, ss->scratchEvent, 0));
   return ncclSuccess;
 }
 
