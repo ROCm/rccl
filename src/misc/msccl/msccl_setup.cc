@@ -13,7 +13,9 @@
 #include "msccl/msccl_setup.h"
 #include "msccl/msccl_status.h"
 
-RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 0);
+#ifndef HIP_EVENT_DISABLE_FENCE
+RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 1);
+#endif
 
 ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t count, ncclDataType_t dataType) {
   mscclStatus& status = mscclGetStatus();
@@ -262,7 +264,12 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
     ncclComm_t comm, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
 
-  bool enableDoneEvent = (rcclParamMscclEnableDoneEvent() == 1);
+  bool enableDoneEvent =
+#ifndef HIP_EVENT_DISABLE_FENCE
+	  (rcclParamMscclEnableDoneEvent() == 1);
+#else
+          true;
+#endif
 
   if (enableDoneEvent && (status.lastStream != stream && status.lastStream != nullptr)) {
     CUDACHECK(hipStreamWaitEvent(stream, comm->doneEvent, 0));
