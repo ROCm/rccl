@@ -59,9 +59,6 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
               ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
         }
 #endif
-
-        ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1, /*PreOpSrcs=*/0>
-          (tid, nthreads, 0, nullptr, false, 1, &buff, 1, &recvBuff, count);
       }
     } else {
       int chunkSize = args->chunkSize/sizeof(T);
