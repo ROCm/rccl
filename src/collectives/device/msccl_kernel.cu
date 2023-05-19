@@ -288,67 +288,20 @@ __device__ __forceinline__ void mscclRunInterpreter(
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(1);
                   break;
-                case 2:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(2);
-                  break;
                 case 3:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(3);
-                  break;
-                case 4:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(4);
-                  break;
-                case 5:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(5);
-                  break;
-                case 6:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(6);
                   break;
                 case 7:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(7);
                   break;
-                case 8:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(8);
-                  break;
-                case 9:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(9);
-                  break;
-                case 10:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(10);
-                  break;
-                case 11:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(11);
-                  break;
-                case 12:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(12);
-                  break;
-                case 13:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(13);
-                  break;
-                case 14:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(14);
-                  break;
                 case 15:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(15);
                   break;
-                case 16:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(16);
-                  break;
                 default:
+                  MSCCL_REDUCE_UNROLL_LOOP_A(numReductions);
                   break;
               }
               store(dstIndex, o);
@@ -364,67 +317,20 @@ __device__ __forceinline__ void mscclRunInterpreter(
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(1);
                 break;
-              case 2:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(2);
-                break;
               case 3:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(3);
-                break;
-              case 4:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(4);
-                break;
-              case 5:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(5);
-                break;
-              case 6:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(6);
                 break;
               case 7:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(7);
                 break;
-              case 8:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(8);
-                break;
-              case 9:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(9);
-                break;
-              case 10:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(10);
-                break;
-              case 11:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(11);
-                break;
-              case 12:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(12);
-                break;
-              case 13:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(13);
-                break;
-              case 14:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(14);
-                break;
               case 15:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(15);
                 break;
-              case 16:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(16);
-                break;
               default:
+                MSCCL_REDUCE_UNROLL_LOOP_B(numReductions);
                 break;
             }
             prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
