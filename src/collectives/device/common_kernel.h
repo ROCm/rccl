@@ -188,7 +188,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(
   IntBytes nBytesBehind = 0;
   IntBytes nBytesAhead = nElts*sizeof(T);
   if (aligned) {
-    reduceCopyPacks<RedFn, T, Unroll*((MinSrcs == 1 && MinDsts == 1) ? 2 : 1), /*BytePerPack=*/16,
+    reduceCopyPacks<RedFn, T, Unroll, /*BytePerPack=*/16,
       MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs>
       (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
        nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
