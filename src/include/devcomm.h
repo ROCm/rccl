@@ -393,6 +393,7 @@ struct ncclDevComm {
 
 #if defined(ENABLE_NPKIT)
   NpKitEventCollectContext* npKitEventCollectContexts;
+  uint64_t* cpuTimestamp;
 #endif
 
 #ifdef ENABLE_COLLTRACE

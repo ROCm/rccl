@@ -622,6 +622,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   // Init NPKit
   NCCLCHECK(NpKit::Init(comm->rank));
   tmpCommAndChans.comm.npKitEventCollectContexts = NpKit::GetGpuEventCollectContexts();
+  tmpCommAndChans.comm.cpuTimestamp = NpKit::GetCpuTimestamp();
 #endif
 
 #ifdef ENABLE_PROFILING

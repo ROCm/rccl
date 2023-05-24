@@ -1022,7 +1022,7 @@ static ncclResult_t sendProxyProgress(struct ncclComm* comm, struct ncclProxyArg
                   size,
 #endif
                   uint64_t(sub->requests+buffSlot)/sizeof(void*),
-                  NpKit::GetCpuTimestamp(), sub->channelId);
+                  *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
 #if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
               g_npkit_net_poll_cnt = 0;
 #endif
@@ -1056,7 +1056,7 @@ static ncclResult_t sendProxyProgress(struct ncclComm* comm, struct ncclProxyArg
               sub->npKitSizesFifo[buffSlot],
 #endif
               uint64_t(sub->requests+buffSlot)/sizeof(void*),
-              NpKit::GetCpuTimestamp(), sub->channelId);
+              *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
 #if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
           g_npkit_net_poll_cnt = 0;
 #endif
@@ -1183,7 +1183,7 @@ static ncclResult_t recvProxyProgress(struct ncclComm* comm, struct ncclProxyArg
                 sizes[i],
 #endif
                 uint64_t(sub->requests+(step%NCCL_STEPS))/sizeof(void*),
-                NpKit::GetCpuTimestamp(), sub->channelId);
+                *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
 #if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
             g_npkit_net_poll_cnt = 0;
 #endif
@@ -1224,7 +1224,7 @@ static ncclResult_t recvProxyProgress(struct ncclComm* comm, struct ncclProxyArg
                 sizes[i],
 #endif
                 uint64_t(sub->requests+(step%NCCL_STEPS))/sizeof(void*),
-                NpKit::GetCpuTimestamp(), sub->channelId);
+                *(volatile uint64_t*)NpKit::GetCpuTimestamp(), sub->channelId);
 #if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
             g_npkit_net_poll_cnt = 0;
 #endif
