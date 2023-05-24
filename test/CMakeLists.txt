@@ -65,6 +65,8 @@ if(BUILD_TESTS)
 
   add_executable(rccl-UnitTests ${COMMON_SOURCE_FILES} ${TEST_SOURCE_FILES})
   target_include_directories(rccl-UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include) # for rccl_bfloat16.h
   target_link_libraries(rccl-UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
 
