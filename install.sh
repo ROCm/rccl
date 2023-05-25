@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
 
 # #################################################
 # helper functions
@@ -8,40 +8,48 @@ function display_help()
 {
     echo "RCCL build & installation helper script"
     echo "./install [-h|--help] "
-    echo "    [-h|--help] prints this help message."
-    echo "    [-i|--install] install RCCL library (see --prefix argument below.)"
-    echo "    [-d|--dependencies] install RCCL depdencencies."
-    echo "    [-p|--package_build] Build RCCL package."
-    echo "    [-t|--tests_build] Build rccl unit tests, but do not run."
-    echo "    [-r|--run_tests_quick] Run small subset of rccl unit tests (must be built already.)"
-    echo "    [-s|--static] Build RCCL as a static library instead of shared library."
-    echo "    [--run_tests_all] Run all rccl unit tests (must be built already.)"
-    echo "    [--hcc] Build library using deprecated hcc compiler (default:hip-clang)."
-    echo "    [--prefix] Specify custom directory to install RCCL to (default: /opt/rocm)."
-    echo "    [--address-sanitizer] Build with address sanitizer enabled"
-    echo "    [--build_allreduce_only] Build only AllReduce + sum + float kernel"
-    echo "    [--rm-legacy-include-dir] Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
-    echo "    [--npkit-enable] Compile with npkit enabled"
+    echo "       --address-sanitizer     Build with address sanitizer enabled"
+    echo "       --build_allreduce_only  Build only AllReduce + sum + float kernel"
+    echo "    -d|--dependencies          Install RCCL depdencencies"
+    echo "       --debug                 Build debug library"
+    echo "       --disable_backtrace     Build without custom backtrace support"
+    echo "       --fast                  Quick-build RCCL (local gpu arch only, no backtrace support)"
+    echo "    -h|--help                  Prints this help message"
+    echo "    -i|--install               Install RCCL library (see --prefix argument below)"
+    echo "       --local_gpu_only        Only compile for local GPU architecture"
+    echo "       --no_clean              Don't delete files if they already exist"
+    echo "       --npkit-enable          Compile with npkit enabled"
+    echo "    -p|--package_build         Build RCCL package"
+    echo "       --prefix                Specify custom directory to install RCCL to (default: /opt/rocm)"
+    echo "       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
+    echo "       --run_tests_all         Run all rccl unit tests (must be built already)"
+    echo "    -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)"
+    echo "       --static                Build RCCL as a static library instead of shared library"
+    echo "    -t|--tests_build           Build rccl unit tests, but do not run"
+    echo "       --verbose               Show compile commands"
 }
 
 # #################################################
 # global variables
 # #################################################
-build_package=false
 ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
-build_tests=false
+
+build_address_sanitizer=false
+build_allreduce_only=false
+install_dependencies=false
+build_release=true
+build_bfd=true
+install_library=false
+build_local_gpu_only=false
+clean_build=true
+npkit_enabled=false
+build_package=false
+build_freorg_bkwdcomp=true
 run_tests=false
 run_tests_all=false
-build_release=true
-build_address_sanitizer=false
-install_library=false
-build_hip_clang=true
-clean_build=true
-install_dependencies=false
 build_static=false
-build_allreduce_only=false
-build_freorg_bkwdcomp=true
-npkit_enabled=false
+build_tests=false
+build_verbose=0
 
 # #################################################
 # Parameter parsing
@@ -50,7 +58,7 @@ npkit_enabled=false
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions help,install,dependencies,package_build,tests_build,run_tests_quick,static,run_tests_all,hcc,hip-clang,no_clean,prefix:,address-sanitizer,build_allreduce_only,npkit-enable,rm-legacy-include-dir --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,fast,help,install,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,verbose --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -65,62 +73,31 @@ eval set -- "${GETOPT_PARSE}"
 
 while true; do
     case "${1}" in
-    -h|--help)
-        display_help
-        exit 0
-        ;;
-    -i|--install)
-        install_library=true
-        shift ;;
-    -d|--dependencies)
-	install_dependencies=true
-	shift;;
-    -p|--package_build)
-        build_package=true
-        shift ;;
-    -t|--tests_build)
-        build_tests=true
-        shift ;;
-    -r|--run_tests_quick)
-        run_tests=true
-        shift ;;
-    -s|--static)
-        build_static=true
-        shift ;;
-    --run_tests_all)
-        run_tests=true
-        run_tests_all=true
-        shift ;;
-    --hcc)
-        build_hip_clang=false
-        shift ;;
-    --hip-clang)
-        build_hip_clang=true
-        shift ;;
-    --no_clean)
-        clean_build=false
-        shift ;;
-    --address-sanitizer)
-        build_address_sanitizer=true
-        shift ;;
-    --build_allreduce_only)
-        build_allreduce_only=true
-        shift ;;
-    --rm-legacy-include-dir)
-        build_freorg_bkwdcomp=false
-        shift ;;
-    --npkit-enable)
-        npkit_enabled=true
-        shift ;;
-    --prefix)
-        install_prefix=${2}
-        shift 2 ;;
+         --address-sanitizer)        build_address_sanitizer=true;               shift ;;
+         --build_allreduce_only)     build_allreduce_only=true;                  shift ;;
+    -d | --dependencies)             install_dependencies=true;                  shift ;;
+         --debug)                    build_release=false;                        shift ;;
+         --disable_backtrace)        build_bfd=false;                            shift ;;
+         --fast)                     build_bfd=false; build_local_gpu_only=true; shift ;;
+    -h | --help)                     display_help;                               exit 0 ;;
+    -i | --install)                  install_library=true;                       shift ;;
+         --local_gpu_only)           build_local_gpu_only=true;                  shift ;;
+         --no_clean)                 clean_build=false;                          shift ;;
+         --npkit-enable)             npkit_enabled=true;                         shift ;;
+    -p | --package_build)            build_package=true;                         shift ;;
+         --prefix)                   install_prefix=${2}                         shift 2 ;;
+         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                shift ;;
+    -r | --run_tests_quick)          run_tests=true;                             shift ;;
+         --run_tests_all)            run_tests=true; run_tests_all=true;         shift ;;
+         --static)                   build_static=true;                          shift ;;
+    -t | --tests_build)              build_tests=true;                           shift ;;
+         --verbose)                  build_verbose=1;                            shift ;;
     --) shift ; break ;;
     *)  echo "Unexpected command line parameter received; aborting";
         exit 1
         ;;
     esac
-    done
+done
 
 ROCM_BIN_PATH=$ROCM_PATH/bin
 
@@ -183,42 +160,50 @@ else
     cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug"
 fi
 
-# shared vs static
-if [[ "${build_static}" == true ]]; then
-    cmake_common_options="${cmake_common_options} -DBUILD_STATIC=ON"
-fi
-
-# sanitizer
+# Address sanitizer
 if [[ "${build_address_sanitizer}" == true ]]; then
-cmake_common_options="${cmake_common_options} -DBUILD_ADDRESS_SANITIZER=ON"
+    cmake_common_options="${cmake_common_options} -DBUILD_ADDRESS_SANITIZER=ON"
 fi
 
-#Enable backward compatibility wrappers
+# AllReduce only
+if [[ "${build_allreduce_only}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DBUILD_ALLREDUCE_ONLY=ON"
+fi
+
+# Backtrace support
+if [[ "${build_bfd}" == false ]]; then
+    cmake_common_options="${cmake_common_options} -DBUILD_BFD=OFF"
+fi
+
+# Backward compatibility wrappers
 if [[ "${build_freorg_bkwdcomp}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=ON"
 else
     cmake_common_options="${cmake_common_options} -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=OFF"
 fi
 
-compiler=hipcc
-if [[ "${build_hip_clang}" == false ]]; then
-    compiler=hcc
+# Build local GPU arch only
+if [[ "$build_local_gpu_only" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DBUILD_LOCAL_GPU_TARGET_ONLY=ON"
+fi
+
+# shared vs static
+if [[ "${build_static}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DBUILD_SHARED_LIBS=OFF"
+fi
+
+
+# Install dependencies
+if ($install_dependencies); then
+    cmake_common_options="${cmake_common_options} -DINSTALL_DEPENDENCIES=ON"
 fi
 
 cmake_executable=cmake
 case "${OS_ID}" in
     centos|rhel)
-	cmake_executable=cmake3
-	;;
-    esac
-
-if ($install_dependencies); then
-    cmake_common_options="${cmake_common_options} -DINSTALL_DEPENDENCIES=ON"
-fi
-
-if ($build_allreduce_only); then
-    cmake_common_options="${cmake_common_options} -DBUILD_ALLREDUCE_ONLY=ON"
-fi
+    cmake_executable=cmake3
+  ;;
+esac
 
 npkit_options=""
 if ($npkit_enabled); then
@@ -307,16 +292,16 @@ fi
 check_exit_code "$?"
 
 if ($build_tests) || (($run_tests) && [[ ! -f ./test/rccl-UnitTests ]]); then
-    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
+    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
 else
-    CXX=$ROCM_BIN_PATH/$compiler $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
+    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH ../../.
 fi
 check_exit_code "$?"
 
 if ($install_library); then
-    make -j$(nproc) install
+    VERBOSE=${build_verbose} make -j$(nproc) install
 else
-    make -j$(nproc)
+    VERBOSE=${build_verbose} make -j$(nproc)
 fi
 check_exit_code "$?"
 

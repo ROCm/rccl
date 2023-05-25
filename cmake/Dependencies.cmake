@@ -106,6 +106,34 @@ if(NOT ROCM_FOUND)
     find_package( ROCM 0.7.3 REQUIRED CONFIG PATHS ${PROJECT_EXTERN_DIR}/rocm-cmake )
 endif()
 
+# Find available local ROCM targets
+# NOTE: This will eventually be part of ROCm-CMake and should be removed at that time
+function(rocm_local_targets VARIABLE)
+  set(${VARIABLE} "NOTFOUND" PARENT_SCOPE)
+  find_program(_rocm_agent_enumerator rocm_agent_enumerator HINTS /opt/rocm/bin ENV ROCM_PATH)
+  if(NOT _rocm_agent_enumerator STREQUAL "_rocm_agent_enumerator-NOTFOUND")
+    execute_process(
+      COMMAND "${_rocm_agent_enumerator}"
+      RESULT_VARIABLE _found_agents
+      OUTPUT_VARIABLE _rocm_agents
+      ERROR_QUIET
+      )
+    if (_found_agents EQUAL 0)
+      string(REPLACE "\n" ";" _rocm_agents "${_rocm_agents}")
+      unset(result)
+      foreach (agent IN LISTS _rocm_agents)
+        if (NOT agent STREQUAL "gfx000")
+          list(APPEND result "${agent}")
+        endif()
+      endforeach()
+      if(result)
+        list(REMOVE_DUPLICATES result)
+        set(${VARIABLE} "${result}" PARENT_SCOPE)
+      endif()
+    endif()
+  endif()
+endfunction()
+
 include(ROCMSetupVersion)
 include(ROCMCreatePackage)
 include(ROCMInstallTargets)
@@ -113,4 +141,4 @@ include(ROCMPackageConfigHelpers)
 include(ROCMInstallSymlinks)
 include(ROCMCheckTargetIds)
 include(ROCMClients)
-include( ROCMHeaderWrapper )
+include(ROCMHeaderWrapper)
