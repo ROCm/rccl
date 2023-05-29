@@ -31,8 +31,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/utsname.h>
+#include <fstream>
 #include "graph/topo.h"
 #include "graph/xml.h"
+#include "hsa/hsa.h"
 
 // [RCCL]
 #include "git_version.h"
@@ -422,21 +425,72 @@ NCCL_PARAM(DmaBufEnable, "DMABUF_ENABLE", 0);
 // Detect DMA-BUF support
 static ncclResult_t dmaBufSupported(struct ncclComm* comm) {
   if (ncclParamDmaBufEnable() == 0 || comm->ncclNet->regMrDmaBuf == NULL || rocmLibraryInit() != ncclSuccess) return ncclInternalError;
-#if CUDA_VERSION >= 11070
-  int flag = 0;
-  CUdevice dev;
-  int cudaDriverVersion;
-  CUDACHECK(cudaDriverGetVersion(&cudaDriverVersion));
-  if (CUPFN(cuDeviceGet) == NULL || cudaDriverVersion < 11070) return ncclInternalError;
-  CUCHECK(cuDeviceGet(&dev, comm->cudaDev));
-  // Query device to see if DMA-BUF support is available
-  (void) CUPFN(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_DMA_BUF_SUPPORTED, dev));
-  if (flag == 0) return ncclInternalError;
-  INFO(NCCL_INIT, "DMA-BUF is available on GPU device %d", comm->cudaDev);
-  return ncclSuccess;
-#else
-  return pfn_hsa_amd_portable_export_dmabuf != NULL ? ncclSuccess : ncclInternalError;
-#endif
+  #if CUDA_VERSION >= 11070
+    int flag = 0;
+    CUdevice dev;
+    int cudaDriverVersion;
+    CUDACHECK(cudaDriverGetVersion(&cudaDriverVersion));
+    if (CUPFN(cuDeviceGet) == NULL || cudaDriverVersion < 11070) return ncclInternalError;
+    CUCHECK(cuDeviceGet(&dev, comm->cudaDev));
+    // Query device to see if DMA-BUF support is available
+    (void) CUPFN(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_DMA_BUF_SUPPORTED, dev));
+    if (flag == 0) return ncclInternalError;
+    INFO(NCCL_INIT, "DMA-BUF is available on GPU device %d", comm->cudaDev);
+    return ncclSuccess;
+  #else
+    //Rocm support check
+    hsa_status_t status = hsa_init();
+    int rocmSupport, kernelSupport = 0;
+    bool value = false;
+
+    //look for HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED in hsa.h and check if it is supported
+    status = hsa_system_get_info((hsa_system_info_t) 0x204, &value);
+
+    if (status == HSA_STATUS_SUCCESS) {
+        if (value) rocmSupport = 1;
+        else INFO(NCCL_ALL, "Rocm: DMA_BUF Support Failed");
+    }
+    else if (status == HSA_STATUS_ERROR_NOT_INITIALIZED) INFO(NCCL_ALL, "DMA_BUF ERROR: The HSA runtime has not been initialized.");
+    else if (status == HSA_STATUS_ERROR_INVALID_ARGUMENT) INFO(NCCL_ALL, "DMA_BUF ERROR: Invalid argument. HSA attribute is an invalid system attribute, or value is NULL.");
+    
+    // OS Kernel support check
+    struct utsname utsname;
+    FILE *fp = NULL;
+    char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
+    char kernel_opt2[20] = "CONFIG_PCI_P2PDMA=y";
+    char kernel_conf_file[128];
+    char buf[256];
+    int found_opt1 = 0;
+    int found_opt2 = 0;
+    
+    //check for kernel name exists
+    if (uname(&utsname) == -1) INFO(NCCL_ALL,"Could not get kernel name");
+    //format and store the kernel conf file location
+    snprintf(kernel_conf_file, sizeof(kernel_conf_file), "/boot/config-%s", utsname.release);
+    fp = fopen(kernel_conf_file, "r");
+    if (fp == NULL) INFO(NCCL_ALL,"Could not open kernel conf file");
+    //look for kernel_opt1 and kernel_opt2 in the conf file and check
+    while (fgets(buf, sizeof(buf), fp) != NULL) {
+      if (strstr(buf, kernel_opt1) != NULL) {
+        found_opt1 = 1;
+        INFO(NCCL_ALL,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
+      }
+      if (strstr(buf, kernel_opt2) != NULL) {
+        found_opt2 = 1;
+        INFO(NCCL_ALL,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
+      }
+    }
+    if (found_opt1 && found_opt2) kernelSupport = 1;
+    else {
+      INFO(NCCL_ALL, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
+      INFO(NCCL_ALL, "DMA_BUF_SUPPORT Failed due to OS kernel support");
+    }
+    
+    if(rocmSupport == 1 && kernelSupport == 1) {
+      INFO(NCCL_ALL, "DMA_BUF Support Enabled");
+      return ncclSuccess;
+    }
+  #endif
   return ncclInternalError;
 }
 
