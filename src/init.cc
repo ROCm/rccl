@@ -439,19 +439,13 @@ static ncclResult_t dmaBufSupported(struct ncclComm* comm) {
     return ncclSuccess;
   #else
     //Rocm support check
-    hsa_status_t status = hsa_init();
-    int rocmSupport, kernelSupport = 0;
-    bool value = false;
+    hsa_status_t status;
+    bool dmaBufSupport = false;
 
     //look for HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED in hsa.h and check if it is supported
-    status = hsa_system_get_info((hsa_system_info_t) 0x204, &value);
+    status = hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
 
-    if (status == HSA_STATUS_SUCCESS) {
-        if (value) rocmSupport = 1;
-        else INFO(NCCL_ALL, "Rocm: DMA_BUF Support Failed");
-    }
-    else if (status == HSA_STATUS_ERROR_NOT_INITIALIZED) INFO(NCCL_ALL, "DMA_BUF ERROR: The HSA runtime has not been initialized.");
-    else if (status == HSA_STATUS_ERROR_INVALID_ARGUMENT) INFO(NCCL_ALL, "DMA_BUF ERROR: Invalid argument. HSA attribute is an invalid system attribute, or value is NULL.");
+    if (status != HSA_STATUS_SUCCESS || !dmaBufSupport) INFO(NCCL_ALL, "Current version of ROCm does not support dmabuf feature.");
     
     // OS Kernel support check
     struct utsname utsname;
@@ -480,13 +474,13 @@ static ncclResult_t dmaBufSupported(struct ncclComm* comm) {
         INFO(NCCL_ALL,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
       }
     }
-    if (found_opt1 && found_opt2) kernelSupport = 1;
-    else {
+    if (!found_opt1 || !found_opt2) {
+      dmaBufSupport = 0;
       INFO(NCCL_ALL, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
       INFO(NCCL_ALL, "DMA_BUF_SUPPORT Failed due to OS kernel support");
     }
     
-    if(rocmSupport == 1 && kernelSupport == 1) {
+    if(dmaBufSupport) {
       INFO(NCCL_ALL, "DMA_BUF Support Enabled");
       return ncclSuccess;
     }
