@@ -11,7 +11,7 @@
 #include "collectives.h"
 #include "devcomm.h"
 
-#define COLL_UNROLL 2
+#define COLL_UNROLL 4
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
 #define __syncwarp()
