@@ -16,12 +16,13 @@
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
 #define barrier_by_group() do { \
-  const int w = threadIdx.x/WARP_SIZE; \
-  const int wid = threadIdx.x%WARP_SIZE; \
-  __threadfence(); \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __syncthreads(); \
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup"); \
+    __builtin_amdgcn_s_barrier(); \
+    __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup"); \
   } else { \
+    const int w = threadIdx.x/WARP_SIZE; \
+    const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       atomicAdd((unsigned long long *)barriers, 1); \
