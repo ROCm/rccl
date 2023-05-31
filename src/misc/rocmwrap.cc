@@ -102,6 +102,18 @@ ncclResult_t rocmLibraryInit(void) {
     //goto error;
   //}
 
+  bool supported;
+  res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &supported);
+  if (res == HSA_STATUS_SUCCESS || supported) {
+    pfn_hsa_amd_portable_export_dmabuf = (PFN_hsa_amd_portable_export_dmabuf) dlsym(hsaLib, "hsa_amd_portable_export_dmabuf");
+    if (pfn_hsa_amd_portable_export_dmabuf == NULL) {
+      WARN("Failed to load ROCr missing symbol hsa_amd_portable_export_dmabuf");
+      goto error;
+    }
+  } else {
+    INFO(NCCL_ALL, "Current version of ROCm does not support dmabuf feature.");
+  }
+
   /*
    * Required to initialize the ROCr Driver.
    * Multiple calls of hsa_init() will return immediately

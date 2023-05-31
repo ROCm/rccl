@@ -439,13 +439,13 @@ static ncclResult_t dmaBufSupported(struct ncclComm* comm) {
   return ncclSuccess;
 #else
   //Rocm support check
-  hsa_status_t status;
+  //hsa_status_t status;
   bool dmaBufSupport = false;
 
   //look for HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED in hsa.h and check if it is supported
-  status = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
+  //status = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
 
-  if (status != HSA_STATUS_SUCCESS || !dmaBufSupport) INFO(NCCL_ALL, "Current version of ROCm does not support dmabuf feature.");
+  //if (status != HSA_STATUS_SUCCESS || !dmaBufSupport) INFO(NCCL_ALL, "Current version of ROCm does not support dmabuf feature.");
   
   // OS Kernel support check
   struct utsname utsname;
