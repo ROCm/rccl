@@ -17,9 +17,7 @@
 
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup"); \
-    __builtin_amdgcn_s_barrier(); \
-    __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup"); \
+    __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier\ns_waitcnt lgkmcnt(0)"); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
