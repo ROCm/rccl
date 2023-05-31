@@ -29,6 +29,8 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelId) {
   ncclCommPushCudaFree(comm, channel->devRingUserRanks);
 
   NCCLCHECK(ncclStrongStreamRelease(ncclCudaGraphNone(), &comm->deviceStream));
+  CUDACHECK(hipEventRecord(comm->deviceStream.scratchEvent, comm->deviceStream.cudaStream));
+  CUDACHECK(hipStreamWaitEvent(comm->deviceStream.cudaStream, comm->deviceStream.scratchEvent, 0));
 
   for (int r=0; r < nPeers; ++r) {
     for (int b=0; b < NCCL_MAX_CONNS; b++) {
