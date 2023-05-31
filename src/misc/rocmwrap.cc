@@ -104,6 +104,7 @@ ncclResult_t rocmLibraryInit(void) {
   //}
 
   /* DMA-BUF support */
+  //ROCm support
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
   if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) INFO(NCCL_ALL, "Current version of ROCm does not support dmabuf feature.");
   else {
@@ -113,6 +114,7 @@ ncclResult_t rocmLibraryInit(void) {
       goto error;
     } 
     else {
+      //check OS kernel support
       struct utsname utsname;
       FILE *fp = NULL;
       char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
