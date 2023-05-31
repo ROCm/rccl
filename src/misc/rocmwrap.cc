@@ -25,6 +25,7 @@ static enum { hsaUninitialized, hsaInitializing, hsaInitialized, hsaError } hsaS
 static void *hsaLib;
 static uint16_t version_major, version_minor;
 bool ncclCudaLaunchBlocking = false;
+bool dmaBufSupport = false;
 
 ncclResult_t rocmLibraryInit(void) {
   do {
@@ -102,59 +103,51 @@ ncclResult_t rocmLibraryInit(void) {
     //goto error;
   //}
 
-  //Rocm support check
-  bool dmaBufSupport = false;
-
-  //look for HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED in hsa.h and check if it is supported
+  /* DMA-BUF support */
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
-
   if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) INFO(NCCL_ALL, "Current version of ROCm does not support dmabuf feature.");
   else {
     pfn_hsa_amd_portable_export_dmabuf = (PFN_hsa_amd_portable_export_dmabuf) dlsym(hsaLib, "hsa_amd_portable_export_dmabuf");
     if (pfn_hsa_amd_portable_export_dmabuf == NULL) {
       WARN("Failed to load ROCr missing symbol hsa_amd_portable_export_dmabuf");
       goto error;
-    }
-  }
+    } 
+    else {
+      struct utsname utsname;
+      FILE *fp = NULL;
+      char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
+      char kernel_opt2[20] = "CONFIG_PCI_P2PDMA=y";
+      char kernel_conf_file[128];
+      char buf[256];
+      int found_opt1 = 0;
+      int found_opt2 = 0;
+      
+      //check for kernel name exists
+      if (uname(&utsname) == -1) INFO(NCCL_ALL,"Could not get kernel name");
+      //format and store the kernel conf file location
+      snprintf(kernel_conf_file, sizeof(kernel_conf_file), "/boot/config-%s", utsname.release);
+      fp = fopen(kernel_conf_file, "r");
+      if (fp == NULL) INFO(NCCL_ALL,"Could not open kernel conf file");
+      //look for kernel_opt1 and kernel_opt2 in the conf file and check
+      while (fgets(buf, sizeof(buf), fp) != NULL) {
+        if (strstr(buf, kernel_opt1) != NULL) {
+          found_opt1 = 1;
+          INFO(NCCL_ALL,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
+        }
+        if (strstr(buf, kernel_opt2) != NULL) {
+          found_opt2 = 1;
+          INFO(NCCL_ALL,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
+        }
+      }
+      if (!found_opt1 || !found_opt2) {
+        dmaBufSupport = 0;
+        INFO(NCCL_ALL, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
+        INFO(NCCL_ALL, "DMA_BUF_SUPPORT Failed due to OS kernel support");
+      }
 
-  // OS Kernel support check
-  struct utsname utsname;
-  FILE *fp = NULL;
-  char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
-  char kernel_opt2[20] = "CONFIG_PCI_P2PDMA=y";
-  char kernel_conf_file[128];
-  char buf[256];
-  int found_opt1 = 0;
-  int found_opt2 = 0;
-  
-  //check for kernel name exists
-  if (uname(&utsname) == -1) INFO(NCCL_ALL,"Could not get kernel name");
-  //format and store the kernel conf file location
-  snprintf(kernel_conf_file, sizeof(kernel_conf_file), "/boot/config-%s", utsname.release);
-  fp = fopen(kernel_conf_file, "r");
-  if (fp == NULL) INFO(NCCL_ALL,"Could not open kernel conf file");
-  //look for kernel_opt1 and kernel_opt2 in the conf file and check
-  while (fgets(buf, sizeof(buf), fp) != NULL) {
-    if (strstr(buf, kernel_opt1) != NULL) {
-      found_opt1 = 1;
-      INFO(NCCL_ALL,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
+      if(dmaBufSupport) INFO(NCCL_ALL, "DMA_BUF Support Enabled");
+      else goto error;
     }
-    if (strstr(buf, kernel_opt2) != NULL) {
-      found_opt2 = 1;
-      INFO(NCCL_ALL,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
-    }
-  }
-  if (!found_opt1 || !found_opt2) {
-    dmaBufSupport = 0;
-    INFO(NCCL_ALL, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
-    INFO(NCCL_ALL, "DMA_BUF_SUPPORT Failed due to OS kernel support");
-  }
-
-  if(dmaBufSupport) {
-    INFO(NCCL_ALL, "DMA_BUF Support Enabled");
-    //return ncclSuccess;
-  } else {
-    goto error;
   }
 
   /*
