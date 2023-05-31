@@ -31,11 +31,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <sys/utsname.h>
-#include <fstream>
 #include "graph/topo.h"
 #include "graph/xml.h"
-#include "hsa/hsa.h"
 
 // [RCCL]
 #include "git_version.h"
