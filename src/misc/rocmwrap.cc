@@ -106,7 +106,7 @@ ncclResult_t rocmLibraryInit(void) {
   /* DMA-BUF support */
   //ROCm support
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
-  if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) INFO(NCCL_ALL, "Current version of ROCm does not support dmabuf feature.");
+  if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
   else {
     pfn_hsa_amd_portable_export_dmabuf = (PFN_hsa_amd_portable_export_dmabuf) dlsym(hsaLib, "hsa_amd_portable_export_dmabuf");
     if (pfn_hsa_amd_portable_export_dmabuf == NULL) {
@@ -125,29 +125,29 @@ ncclResult_t rocmLibraryInit(void) {
       int found_opt2 = 0;
       
       //check for kernel name exists
-      if (uname(&utsname) == -1) INFO(NCCL_ALL,"Could not get kernel name");
+      if (uname(&utsname) == -1) INFO(NCCL_INIT,"Could not get kernel name");
       //format and store the kernel conf file location
       snprintf(kernel_conf_file, sizeof(kernel_conf_file), "/boot/config-%s", utsname.release);
       fp = fopen(kernel_conf_file, "r");
-      if (fp == NULL) INFO(NCCL_ALL,"Could not open kernel conf file");
+      if (fp == NULL) INFO(NCCL_INIT,"Could not open kernel conf file");
       //look for kernel_opt1 and kernel_opt2 in the conf file and check
       while (fgets(buf, sizeof(buf), fp) != NULL) {
         if (strstr(buf, kernel_opt1) != NULL) {
           found_opt1 = 1;
-          INFO(NCCL_ALL,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
+          INFO(NCCL_INIT,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
         }
         if (strstr(buf, kernel_opt2) != NULL) {
           found_opt2 = 1;
-          INFO(NCCL_ALL,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
+          INFO(NCCL_INIT,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
         }
       }
       if (!found_opt1 || !found_opt2) {
         dmaBufSupport = 0;
-        INFO(NCCL_ALL, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
-        INFO(NCCL_ALL, "DMA_BUF_SUPPORT Failed due to OS kernel support");
+        INFO(NCCL_INIT, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
+        INFO(NCCL_INIT, "DMA_BUF_SUPPORT Failed due to OS kernel support");
       }
 
-      if(dmaBufSupport) INFO(NCCL_ALL, "DMA_BUF Support Enabled");
+      if(dmaBufSupport) INFO(NCCL_INIT, "DMA_BUF Support Enabled");
       else goto error;
     }
   }
