@@ -8,8 +8,11 @@
 #include "nccl.h"
 #include "debug.h"
 #include "rocmwrap.h"
+#include "hsa/hsa.h"
 
 #include <dlfcn.h>
+#include <sys/utsname.h>
+#include <fstream>
 
 #define DECLARE_ROCM_PFN(symbol) PFN_##symbol pfn_##symbol = nullptr
 
