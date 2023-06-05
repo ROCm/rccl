@@ -17,6 +17,7 @@ $(EXE): $(files)
 	$(HIPCC) $(CXXFLAGS) $^ -o $@
 
 hipify:
+	rm -rf hipify_rccl
 	mkdir -p hipify_rccl
 	cp -a ../../src/include/ hipify_rccl/
 	cp -a ../../src/graph/ hipify_rccl/

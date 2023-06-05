@@ -943,35 +943,23 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
   NCCLCHECKGOTO(ncclCalloc(&rings, nranks*MAXCHANNELS), ret, fail);
   NCCLCHECKGOTO(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, &collNetGraph, nc), ret, fail);
 
-  if (comm->topo->pivotA2ANumBiRings == 3) {
-    NCCLCHECK(ncclTreeBasePostset(comm, &treeGraph));
-    NCCLCHECK(ncclBinaryTreePostset(comm, &treeGraph));
-  }
-
+  if (comm->topo->pivotA2ANumBiRings == 3) NCCLCHECK(ncclTreeBasePostset(comm, &treeGraph));
 
   // AllGather3 - end
 
   TRACE(NCCL_INIT, "rank %d nranks %d - BUILT %d TREES/RINGS", rank, nranks, comm->nChannels);
 
-  char line[1024], binline[1024];
+  char line[1024];
   line[0]='\0';
-  binline[0]='\0';
   for (int c=0; c<comm->nChannels; c++) {
     struct ncclTree* tree = &comm->channels[c].tree;
-    struct ncclTree* binTree = &comm->channels[c].binTree;
     snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
-    if (comm->topo->pivotA2ANumBiRings == 3)
-      snprintf(binline+strlen(binline), 1023-strlen(binline), " [%d] %d/%d/%d->%d->%d",
-	       c, binTree->down[0], binTree->down[1], binTree->down[2], rank, binTree->up);
-    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c, comm->channels[c].ring.prev, comm->rank, comm->channels[c].ring.next);
+    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
+         comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
   }
   line[1023] = '\0';
-  INFO(NCCL_INIT, "Trees%s", line);
-  if (comm->topo->pivotA2ANumBiRings == 3) {
-    binline[1023] = '\0';
-    INFO(NCCL_INIT, "BinTrees%s", binline);
-  }
+  INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
 
   //NCCLCHECKGOTO(computeBuffSizes(comm), ret, fail);
 
@@ -1023,6 +1011,9 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t
 
   // Compute nChannels per peer for p2p
   NCCLCHECKGOTO(ncclTopoComputeP2pChannels(comm), ret, fail);
+
+  INFO(NCCL_INIT, "%d coll channels, %d nvls channels, %d p2p channels, %d p2p channels per peer", comm->nChannels, comm->nvlsChannels, comm->p2pnChannels, comm->p2pnChannelsPerPeer);
+
 #if 0
   do { // Setup p2p structures in comm->tasks
     struct ncclTasks* tasks = &comm->tasks;
