@@ -12,6 +12,14 @@
 
 #define NCCL_LL128_FLAGTHREAD (NCCL_LL128_LINEELEMS-1)
 
+#ifndef RCCL_USE_WBINVL1_VOL
+#if defined(__GFX8__) || defined(__GFX9__)
+#define RCCL_USE_WBINVL1_VOL 1
+#else
+#define RCCL_USE_WBINVL1_VOL 0
+#endif
+#endif
+
 template<typename T, typename RedOp, typename Fan, int Direct, int P2p>
 class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p>:
   public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p>> {
@@ -304,7 +312,7 @@ private:
       }
     }
 
-#if !defined(__gfx1030__) && !defined(__gfx1100__) && !defined(__gfx1101__) && !defined(__gfx1102__)
+#if RCCL_USE_WBINVL1_VOL
     if (tid == 0) __asm__ __volatile__("buffer_wbinvl1_vol");
 #endif
     /************************ Send **************************/
