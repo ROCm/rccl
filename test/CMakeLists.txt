@@ -69,6 +69,7 @@ if(BUILD_TESTS)
   target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include) # for rccl_bfloat16.h
   target_link_libraries(rccl-UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
+  target_link_libraries(rccl-UnitTests PRIVATE Threads::Threads)
 
   # rccl-UnitTests using static library of rccl requires passing rccl
   # through -l and -L instead of command line input.
