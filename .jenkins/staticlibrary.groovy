@@ -1,4 +1,5 @@
 #!/usr/bin/env groovy
+// Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
 @Library('rocJenkins@pong') _
 import com.amd.project.*
 import com.amd.docker.*
@@ -7,18 +8,18 @@ import java.nio.file.Path;
 def runCI =
 {
     nodeDetails, jobName->
-    
+
     def prj = new rocProject('rccl', 'Static Library PreCheckin')
 
     prj.timeout.test = 1440
     prj.paths.build_command = './install.sh -t --static'
-    
+
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
 
     def commonGroovy
 
     boolean formatCheck = false
-     
+
     def compileCommand =
     {
         platform, project->
@@ -27,7 +28,7 @@ def runCI =
         commonGroovy.runCompileCommand(platform, project, jobName)
     }
 
-    
+
     def testCommand =
     {
         platform, project->
@@ -45,20 +46,20 @@ def runCI =
     buildProject(prj, formatCheck, nodes.dockerArray, compileCommand, testCommand, packageCommand)
 }
 
-ci: { 
+ci: {
     String urlJobName = auxiliary.getTopJobName(env.BUILD_URL)
 
-    def propertyList = ["compute-rocm-dkms-no-npi":[pipelineTriggers([cron('0 1 * * 0')])], 
+    def propertyList = ["compute-rocm-dkms-no-npi":[pipelineTriggers([cron('0 1 * * 0')])],
                         "compute-rocm-dkms-no-npi-hipclang":[pipelineTriggers([cron('0 1 * * 0')])],
                         "rocm-docker":[]]
     propertyList = auxiliary.appendPropertyList(propertyList)
 
-    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']]), 
-                       "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']]), 
+    def jobNameList = ["compute-rocm-dkms-no-npi":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']]),
+                       "compute-rocm-dkms-no-npi-hipclang":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']]),
                        "rocm-docker":([ubuntu16:['gfx900'],centos7:['gfx906'],sles15sp1:['gfx908']])]
     jobNameList = auxiliary.appendJobNameList(jobNameList)
 
-    propertyList.each 
+    propertyList.each
     {
         jobName, property->
         if (urlJobName == jobName)

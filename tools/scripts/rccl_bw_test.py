@@ -1,3 +1,6 @@
+# Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Licensed under the MIT License.
+
 #!/usr/bin/python3
 
 import numpy as np
@@ -50,7 +53,3 @@ for i in range (1, args.test_iteration):
     res = os.popen(cmd)
     output = res.read()
     print(output)
-
-
-
-

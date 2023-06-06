@@ -1,4 +1,6 @@
 #!/usr/bin/env groovy
+
+// Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
 // This shared library is available at https://github.com/ROCmSoftwarePlatform/rocJENKINS/
 @Library('rocJenkins@pong') _
 
