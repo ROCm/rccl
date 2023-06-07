@@ -32,6 +32,7 @@ The root of this repository has a helper script 'install.sh' to build and instal
 *  `./install.sh  --npkit-enable` -- enable compilation of npkit profiler framework with all options
 
 ## Manual build
+
 ### To build the library :
 
 ```shell
@@ -60,18 +61,8 @@ $ sudo dpkg -i *.deb
 
 RCCL package install requires sudo/root access because it creates a directory called "rccl" under /opt/rocm/. This is an optional step and RCCL can be used directly by including the path containing librccl.so.
 
-### How to build documentation
-Please follow the instructions below to build the documentation.
-```bash
-cd docs
-
-pip3 install -r .sphinx/requirements.txt
-
-python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
-```
-
-
 ## Enabling peer-to-peer transport
+
 In order to enable peer-to-peer access on machines with PCIe-connected GPUs, the HSA environment variable HSA_FORCE_FINE_GRAIN_PCIE=1 is required to be set, on top of requiring GPUs that support peer-to-peer access and proper large BAR addressing support.
 
 ## Tests
@@ -117,7 +108,7 @@ Run the steps below to build documentation locally.
 ```
 cd docs
 
-pip3 install -r .sphinx/requirements.txt
+pip3 install -r sphinx/requirements.txt
 
 python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 ```
