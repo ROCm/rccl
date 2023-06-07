@@ -268,75 +268,20 @@ class ncclFunction {
 #endif
 };
 
-#ifdef ENABLE_COLLTRACE
 #if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__)
-  #define traceColl(launch_type) { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x; \
-    collTrace->funcIndex = ncclShmem.work.header.funcIndex; \
-    if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
-      struct ncclWorkElemP2p *p2pElems = ncclShmem.work.p2pElems; \
-      collTrace->p2p[0].connIndex = 0; \
-	    collTrace->p2pOpCount[0] = p2pElems[0].opCount; \
-      collTrace->p2p[0].ngroups = p2pElems[0].ngroups; \
-      collTrace->p2p[0].nWarps = p2pElems[0].nWarps; \
-      collTrace->p2p[0].warpStart = p2pElems[0].warpStart; \
-      collTrace->p2p[0].peer = p2pElems[0].p2pType == ncclWorkP2pTypeRecv ? (uint16_t)(p2pElems[0].peer) : -1; \
-	    collTrace->p2p[1].connIndex = 0; \
-      collTrace->p2pOpCount[1] = p2pElems[1].opCount; \
-      collTrace->p2p[1].ngroups = p2pElems[1].ngroups; \
-      collTrace->p2p[1].nWarps = p2pElems[1].nWarps; \
-      collTrace->p2p[1].warpStart = p2pElems[1].warpStart; \
-      collTrace->p2p[1].peer = p2pElems[1].p2pType == ncclWorkP2pTypeSend ? (uint16_t)(p2pElems[1].peer) : -1; \
-      collTrace->type = (launch_type) | ncclCollTraceP2pElemType; \
-    } else if (ncclShmem.work.header.type == ncclWorkTypeColl) { \
-      struct ncclWorkElem *elems = ncclShmem.work.elems; \
-      collTrace->opCount = elems[0].opCount; \
-      collTrace->coll.nWarps = elems[0].nWarps; \
-      collTrace->coll.bid = elems[0].bid; \
-      collTrace->coll.nChannels = elems[0].nChannels; \
-      collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
-    } \
-  }
-
-  #define traceKernelLaunch(firstLaunch)  { \
-    traceColl(firstLaunch?ncclCollTraceKernelLaunchType:ncclCollTraceCollLaunchType); \
-  }
-  #define traceKernelEnd()  { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x; \
-    collTrace->type = ncclCollTraceKernelEndType; \
-  }
-  #define traceAbort()  { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x; \
-    collTrace->type = ncclCollTraceAbortType; \
-  }
-  #define traceData(data2, data4, data8_0, data8_1) { \
-    uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->bid = blockIdx.x; \
-    collTrace->timeStamp = wall_clock64(); \
-    collTrace->funcIndex = data2; \
-    collTrace->data_0 = data4; \
-    collTrace->opCount = data8_0; \
-    collTrace->data_1 = data8_1; \
-    collTrace->type = ncclCollTraceDataType; \
-  }
+#define __trace_hwreg()
 #else
+#define __trace_hwreg() \
+  asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (collTrace->data_0));
+#endif
+#ifdef ENABLE_COLLTRACE
   #define traceColl(launch_type) { \
     uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    collTrace->timeStamp = wall_clock64(); \
     collTrace->bid = blockIdx.x; \
     collTrace->funcIndex = ncclShmem.work.header.funcIndex; \
-    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (collTrace->data_0)); \
+    __trace_hwreg()\
     if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
       struct ncclWorkElemP2p *p2pElems = ncclShmem.work.p2pElems; \
       collTrace->p2p[0].connIndex = 0; \
@@ -361,20 +306,21 @@ class ncclFunction {
       collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
     } \
   }
+// #endif
   #define traceKernelLaunch(firstLaunch)  { \
     traceColl(firstLaunch?ncclCollTraceKernelLaunchType:ncclCollTraceCollLaunchType); \
   }
   #define traceKernelEnd()  { \
     uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    collTrace->timeStamp = wall_clock64(); \
     collTrace->bid = blockIdx.x; \
     collTrace->type = ncclCollTraceKernelEndType; \
   }
   #define traceAbort()  { \
     uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    collTrace->timeStamp = wall_clock64(); \
     collTrace->bid = blockIdx.x; \
     collTrace->type = ncclCollTraceAbortType; \
   }
@@ -382,14 +328,13 @@ class ncclFunction {
     uint32_t pos = __atomic_fetch_add(ncclShmem.comm.collTraceTail, 1, __ATOMIC_SEQ_CST)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
     collTrace->bid = blockIdx.x; \
-    collTrace->timeStamp = __builtin_amdgcn_s_memrealtime(); \
+    collTrace->timeStamp = wall_clock64(); \
     collTrace->funcIndex = data2; \
     collTrace->data_0 = data4; \
     collTrace->opCount = data8_0; \
     collTrace->data_1 = data8_1; \
     collTrace->type = ncclCollTraceDataType; \
   }
-#endif
 #else
 #define traceData(data2, data4, data8_0, data8_1)
 #endif
@@ -433,7 +378,7 @@ __device__ inline void* ncclScratchForWarp(int warp) {
 #define __insert_timestamp(line_num) do { \
       if (ncclShmem.prof.count < PROFILE_NUM_ITEMS) { \
         ncclShmem.prof.elem[ncclShmem.prof.count].line = line_num; \
-        ncclShmem.prof.elem[ncclShmem.prof.count].timeStamp = __builtin_amdgcn_s_memrealtime(); \
+        ncclShmem.prof.elem[ncclShmem.prof.count].timeStamp = wall_clock64(); \
         ncclShmem.prof.count++; \
       } \
     } while(0);

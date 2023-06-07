@@ -117,7 +117,7 @@ __global__ void flag_sync_kernel(struct transfer_data_t* transfer_data, struct p
   __syncthreads();
 
   if (tid == 0)
-    curr_time = __builtin_amdgcn_s_memrealtime();
+    curr_time = wall_clock64();
 
   if (op == OP_COPY) {
     srcs[0] = transfer_data->src0[bid];
