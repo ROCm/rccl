@@ -99,7 +99,7 @@ To manually analyze NPKit dump results, please leverage [npkit_trace_generator.p
 
 ## Library and API Documentation
 
-Please refer to the [Library documentation](https://rccl.readthedocs.io/) for current documentation.
+Please refer to the [RCCL Documentation Site](https://rocm.docs.amd.com/projects/rccl/en/latest/) for current documentation.
 
 ### How to build documentation
 
