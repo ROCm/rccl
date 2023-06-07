@@ -14,11 +14,7 @@
 #include "npkit/npkit_event.h"
 #include "npkit/npkit_struct.h"
 
-#if defined(__GFX9__) || defined(__GFX10__)
-#define NPKIT_GET_GPU_TIMESTAMP __builtin_amdgcn_s_memrealtime
-#else
-#define NPKIT_GET_GPU_TIMESTAMP clock64
-#endif
+#define NPKIT_GET_GPU_TIMESTAMP wall_clock64
 
 class NpKit {
  public:

@@ -85,7 +85,7 @@ __device__
 inline  __attribute((always_inline))
 long long int __rtc64() {
 #if __HIP__
-  return (long long int) __builtin_amdgcn_s_memrealtime();
+  return (long long int) wall_clock64();
 #else
   return (long long int) __clock_u64();
 #endif
