@@ -1,4 +1,5 @@
 #!/usr/bin/env groovy
+// Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
 // This shared library is available at https://github.com/ROCmSoftwarePlatform/rocJENKINS/
 @Library('rocJenkins@pong') _
 
@@ -14,7 +15,7 @@ def runCompileCommand(platform, project, jobName, boolean debug=false)
     project.paths.construct_build_prefix()
 }
 
-def runCI = 
+def runCI =
 {
     nodeDetails, jobName->
 
@@ -36,7 +37,7 @@ def runCI =
     buildProject(prj , formatCheck, nodes.dockerArray, compileCommand, null, null, staticAnalysis)
 }
 
-ci: { 
+ci: {
     String urlJobName = auxiliary.getTopJobName(env.BUILD_URL)
 
     properties(auxiliary.addCommonProperties([pipelineTriggers([cron('0 1 * * 6')])]))
