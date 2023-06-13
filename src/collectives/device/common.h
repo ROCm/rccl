@@ -594,37 +594,37 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, dev
 #endif
 
 // Only generate inline kernels for LL
-#define IMPL_COLL4(func, algo, devredop, type, ncclType) \
+#define IMPL_COLL4(func, algo, devredop, type) \
   IMPL_COLL_FUNC(func, algo, LL,     devredop, type) \
   IMPL_COLL_FUNC(func, algo, LL128,  devredop, type) \
   IMPL_COLL_FUNC(func, algo, SIMPLE, devredop, type)
 
-#define IMPL_COLL3(func, devredop, type, ncclType) \
-  IMPL_COLL4(func, TREE,    devredop, type, ncclType) \
-  IMPL_COLL4(func, RING,    devredop, type, ncclType) \
-  IMPL_COLL4(func, COLLNET_DIRECT, devredop, type, ncclType) \
-  IMPL_COLL4(func, COLLNET_CHAIN, devredop, type, ncclType) \
-  IMPL_COLL4(func, NVLS, devredop, type, ncclType)
+#define IMPL_COLL3(func, devredop, type) \
+  IMPL_COLL4(func, TREE,    devredop, type) \
+  IMPL_COLL4(func, RING,    devredop, type) \
+  IMPL_COLL4(func, COLLNET_DIRECT, devredop, type) \
+  IMPL_COLL4(func, COLLNET_CHAIN, devredop, type) \
+  IMPL_COLL4(func, NVLS, devredop, type)
 
 #define IMPL_COLL2(func, devredop) \
-  IMPL_COLL3(func, devredop, int8_t,   ncclInt8) \
-  IMPL_COLL3(func, devredop, uint8_t,  ncclUint8) \
-  IMPL_COLL3(func, devredop, int32_t,  ncclInt32) \
-  IMPL_COLL3(func, devredop, uint32_t, ncclUint32) \
-  IMPL_COLL3(func, devredop, int64_t,  ncclInt64) \
-  IMPL_COLL3(func, devredop, uint64_t, ncclUint64) \
-  IMPL_COLL3(func, devredop, half,     ncclFloat16) \
-  IMPL_COLL3(func, devredop, float,    ncclFloat32) \
-  IMPL_COLL3(func, devredop, double,   ncclFloat64) \
-  IMPL_COLL3(func, devredop, rccl_bfloat16, ncclBfloat16)
+  IMPL_COLL3(func, devredop, int8_t) \
+  IMPL_COLL3(func, devredop, uint8_t) \
+  IMPL_COLL3(func, devredop, int32_t) \
+  IMPL_COLL3(func, devredop, uint32_t) \
+  IMPL_COLL3(func, devredop, int64_t) \
+  IMPL_COLL3(func, devredop, uint64_t) \
+  IMPL_COLL3(func, devredop, half) \
+  IMPL_COLL3(func, devredop, float) \
+  IMPL_COLL3(func, devredop, double) \
+  IMPL_COLL3(func, devredop, rccl_bfloat16)
 
 #define IMPL_COLL2A(func, devredop) \
-  IMPL_COLL3(func, devredop, int8_t,   ncclInt8) \
-  IMPL_COLL3(func, devredop, uint8_t,  ncclUint8) \
-  IMPL_COLL3(func, devredop, int32_t,  ncclInt32) \
-  IMPL_COLL3(func, devredop, uint32_t, ncclUint32) \
-  IMPL_COLL3(func, devredop, int64_t,  ncclInt64) \
-  IMPL_COLL3(func, devredop, uint64_t, ncclUint64)
+  IMPL_COLL3(func, devredop, int8_t) \
+  IMPL_COLL3(func, devredop, uint8_t) \
+  IMPL_COLL3(func, devredop, int32_t) \
+  IMPL_COLL3(func, devredop, uint32_t) \
+  IMPL_COLL3(func, devredop, int64_t) \
+  IMPL_COLL3(func, devredop, uint64_t)
 
 // Reduction define all functions
 #define IMPL_COLL_R(func) \
@@ -636,7 +636,7 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, dev
   IMPL_COLL2A(func, SumPostDiv)
 
 // Copy primitives only define one function for copy
-#define IMPL_COLL_C(func) IMPL_COLL3(func, Sum, int8_t, ncclInt8);
+#define IMPL_COLL_C(func) IMPL_COLL3(func, Sum, int8_t);
 
 // Point-to-point primitives only have one function/kernel.
 #define IMPL_COLL_P(func) \

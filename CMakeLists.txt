@@ -273,6 +273,7 @@ set(SRC_FILES
   src/collectives/device/reduce_kernel.h
   src/collectives/device/reduce_scatter.h
   src/collectives/device/sendrecv.h
+  src/collectives/device/msccl_kernel_impl.h
   src/collectives/gather.cc
   src/collectives/msccl.cc
   src/collectives/reduce.cc
@@ -413,21 +414,22 @@ set(SRC_FILES
 if (BUILD_ALLREDUCE_ONLY)
   add_definitions(-DBUILD_ALLREDUCE_ONLY)
   set(CU_SOURCES
-      src/collectives/device/all_reduce.cu
+      # src/collectives/device/all_reduce.cu
       src/collectives/device/sendrecv.cu
       src/collectives/device/functions.cu
-      src/collectives/device/msccl_kernel.cu)
+      # src/collectives/device/msccl_kernel.cu
+      )
 else()
   set(CU_SOURCES
       src/collectives/device/all_gather.cu
-      src/collectives/device/all_reduce.cu
+      # src/collectives/device/all_reduce.cu
       src/collectives/device/alltoall_pivot.cu
       src/collectives/device/broadcast.cu
       src/collectives/device/functions.cu
-      src/collectives/device/msccl_kernel.cu
+      # src/collectives/device/msccl_kernel.cu
       src/collectives/device/onerank_reduce.cu
-      src/collectives/device/reduce.cu
-      src/collectives/device/reduce_scatter.cu
+      # src/collectives/device/reduce.cu
+      # src/collectives/device/reduce_scatter.cu
       src/collectives/device/sendrecv.cu)
 endif()
 list(APPEND SRC_FILES ${CU_SOURCES})
@@ -460,6 +462,11 @@ foreach(SRC_FILE ${SRC_FILES})
     COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
   )
 endforeach()
+
+expand_collectives("all_reduce" "AllReduce")
+expand_collectives("reduce" "Reduce")
+expand_collectives("reduce_scatter" "ReduceScatter")
+expand_collectives("msccl_kernel" "MscclKernel")
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
