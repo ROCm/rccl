@@ -70,6 +70,54 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
     endif()
 endif()
 
+set(DATATYPES_INT
+"int8_t"
+"uint8_t"
+"int32_t"
+"uint32_t"
+"int64_t"
+"uint64_t"
+  )
+set(DATATYPES_FLOAT
+  "half"
+  "float"
+  "double"
+  "rccl_bfloat16"
+  )
+
+function(expand_collectives FILE FUNC)
+  set(REDOP Sum Prod Min Max PreMulSum SumPostDiv)
+  if (FUNC STREQUAL "MscclKernel")
+    set(REDOP_FILTERED Sum Prod Min Max)
+  else()
+    set(REDOP_FILTERED ${REDOP})
+  endif()
+  foreach(REDOP_CURRENT IN LISTS REDOP_FILTERED)
+    foreach(DATA_TYPE ${DATATYPES_INT} ${DATATYPES_FLOAT})
+      if (REDOP_CURRENT STREQUAL "SumPostDiv" AND DATA_TYPE IN_LIST DATATYPES_FLOAT)
+        continue()  # Skip the iteration for DATATYPES_FLOAT when REDOP_CURRENT is SumPostDiv
+      endif()
+      set(FILE_NAME "${HIPIFY_DIR}/src/collectives/device/${FILE}_${REDOP_CURRENT}_${DATA_TYPE}.cpp")
+      message(STATUS "Generating ${FILE_NAME}")
+      if (FUNC STREQUAL "MscclKernel")
+        file(WRITE ${FILE_NAME}
+          "#include \"${FILE}_impl.h\"
+          #include \"primitives.h\"
+          #include \"collectives.h\"
+          #include \"devcomm.h\"
+          MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE});")
+      else()
+        file(WRITE ${FILE_NAME}
+          "#include \"${FILE}.h\"
+          #include \"common.h\"
+          #include \"collectives.h\"
+          IMPL_COLL3(${FUNC}, ${REDOP_CURRENT}, ${DATA_TYPE});")
+      endif()
+      list(APPEND HIP_SOURCES ${FILE_NAME})
+    endforeach()
+  endforeach()
+  set(HIP_SOURCES ${HIP_SOURCES} PARENT_SCOPE)
+endfunction()
 
 # Find or download/install rocm-cmake project
 set( PROJECT_EXTERN_DIR ${CMAKE_CURRENT_BINARY_DIR}/extern )

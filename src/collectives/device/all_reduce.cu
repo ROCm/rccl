@@ -3,9 +3,10 @@
  *
  * See LICENSE.txt for license information
  ************************************************************************/
+/*This file is now generated in CMake*/
 
-#include "all_reduce.h"
-#include "common.h"
-#include "collectives.h"
+// #include "all_reduce.h"
+// #include "common.h"
+// #include "collectives.h"
 
-IMPL_COLL_R(AllReduce);
+// IMPL_COLL_R(AllReduce);

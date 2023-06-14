@@ -5,6 +5,8 @@
  *
  * See LICENSE.txt for license information
  ************************************************************************/
+#ifndef MSSCLKERNELIMPL_H
+#define MSSCLKERNELIMPL_H
 
 #include "devcomm.h"
 #include "primitives.h"
@@ -13,7 +15,7 @@
 #include "msccl/msccl_struct.h"
 #include "msccl/msccl_kernel.h"
 
-__shared__ struct mscclShmemData mscclShmem;
+extern __shared__ struct mscclShmemData mscclShmem;
 
 #define MSCCL_MAX_ITER 65536
 
@@ -386,4 +388,4 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevCo
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min)
 
-MSCCL_IMPL_KERNEL_ENTRY_FUNC()
+#endif
