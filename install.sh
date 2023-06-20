@@ -16,8 +16,8 @@ function display_help()
     echo "       --fast                  Quick-build RCCL (local gpu arch only, no backtrace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
+    echo "    -l|--limit-nprocs          Limit the number of procs to 16 while building"
     echo "       --local_gpu_only        Only compile for local GPU architecture"
-    echo "       --max-jobs              Use nproc instead of default number of 16"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
     echo "    -p|--package_build         Build RCCL package"
@@ -53,7 +53,7 @@ build_static=false
 build_tests=false
 build_verbose=0
 time_trace=false
-enable_all_jobs=false
+enable_all_jobs=true
 enable_ninja=""
 
 # #################################################
@@ -63,7 +63,7 @@ enable_ninja=""
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,fast,help,install,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,max-jobs,verbose --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,fast,help,install,limit-nprocs,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -86,8 +86,8 @@ while true; do
          --fast)                     build_bfd=false; build_local_gpu_only=true; shift ;;
     -h | --help)                     display_help;                               exit 0 ;;
     -i | --install)                  install_library=true;                       shift ;;
+    -l | --limit-nprocs)             enable_all_jobs=false;                      shift ;;
          --local_gpu_only)           build_local_gpu_only=true;                  shift ;;
-         --max-jobs)                 enable_all_jobs=true;                       shift ;;
          --no_clean)                 clean_build=false;                          shift ;;
          --npkit-enable)             npkit_enabled=true;                         shift ;;
     -p | --package_build)            build_package=true;                         shift ;;
@@ -192,6 +192,7 @@ fi
 # Build local GPU arch only
 if [[ "$build_local_gpu_only" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_LOCAL_GPU_TARGET_ONLY=ON"
+    cmake_common_options="${cmake_common_options} -DCOLLTRACE=OFF"
 fi
 
 # shared vs static
@@ -344,9 +345,19 @@ if ($run_tests); then
     fi
 fi
 
-if ($time_trace) then
-    cd ../../tools/time-trace
-    chmod +x ./rccl-TimeTrace.sh
-    echo "Generating RCCL-compile-timeline.html..."
-    ./rccl-TimeTrace.sh
+if ($time_trace); then
+    search_dir="../../"
+    time_trace_dir=$(find "$search_dir" -type d -name "time-trace" -print -quit)
+
+    if [ "$time_trace_dir" ]; then
+        time_trace_script="$time_trace_dir/rccl-TimeTrace.sh"
+        if [ -x "$time_trace_script" ]; then
+            echo "Generating RCCL-compile-timeline.html..."
+            (cd "$time_trace_dir" && ./rccl-TimeTrace.sh)
+        else
+            echo "Error: Unable to execute $time_trace_script. Make sure the file has the correct permissions."
+        fi
+    else
+        echo "Error: time-trace folder not found in $search_dir."
+    fi
 fi
