@@ -38,6 +38,7 @@ ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
 
 build_address_sanitizer=false
 build_allreduce_only=false
+collective_trace=true
 install_dependencies=false
 build_release=true
 build_bfd=true
@@ -78,27 +79,27 @@ eval set -- "${GETOPT_PARSE}"
 
 while true; do
     case "${1}" in
-         --address-sanitizer)        build_address_sanitizer=true;               shift ;;
-         --build_allreduce_only)     build_allreduce_only=true;                  shift ;;
-    -d | --dependencies)             install_dependencies=true;                  shift ;;
-         --debug)                    build_release=false;                        shift ;;
-         --disable_backtrace)        build_bfd=false;                            shift ;;
-         --fast)                     build_bfd=false; build_local_gpu_only=true; shift ;;
-    -h | --help)                     display_help;                               exit 0 ;;
-    -i | --install)                  install_library=true;                       shift ;;
-    -l | --limit-nprocs)             enable_all_jobs=false;                      shift ;;
-         --local_gpu_only)           build_local_gpu_only=true;                  shift ;;
-         --no_clean)                 clean_build=false;                          shift ;;
-         --npkit-enable)             npkit_enabled=true;                         shift ;;
-    -p | --package_build)            build_package=true;                         shift ;;
-         --prefix)                   install_prefix=${2}                         shift 2 ;;
-         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                shift ;;
-    -r | --run_tests_quick)          run_tests=true;                             shift ;;
-         --run_tests_all)            run_tests=true; run_tests_all=true;         shift ;;
-         --static)                   build_static=true;                          shift ;;
-    -t | --tests_build)              build_tests=true;                           shift ;;
-         --time-trace)               time_trace=true;                            shift ;;
-         --verbose)                  build_verbose=1;                            shift ;;
+         --address-sanitizer)        build_address_sanitizer=true;                                       shift ;;
+         --build_allreduce_only)     build_allreduce_only=true;                                          shift ;;
+    -d | --dependencies)             install_dependencies=true;                                          shift ;;
+         --debug)                    build_release=false;                                                shift ;;
+         --disable_backtrace)        build_bfd=false;                                                    shift ;;
+         --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; shift ;;
+    -h | --help)                     display_help;                                                       exit 0 ;;
+    -i | --install)                  install_library=true;                                               shift ;;
+    -l | --limit-nprocs)             enable_all_jobs=false;                                              shift ;;
+         --local_gpu_only)           build_local_gpu_only=true;                                          shift ;;
+         --no_clean)                 clean_build=false;                                                  shift ;;
+         --npkit-enable)             npkit_enabled=true;                                                 shift ;;
+    -p | --package_build)            build_package=true;                                                 shift ;;
+         --prefix)                   install_prefix=${2}                                                 shift 2 ;;
+         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                        shift ;;
+    -r | --run_tests_quick)          run_tests=true;                                                     shift ;;
+         --run_tests_all)            run_tests=true; run_tests_all=true;                                 shift ;;
+         --static)                   build_static=true;                                                  shift ;;
+    -t | --tests_build)              build_tests=true;                                                   shift ;;
+         --time-trace)               time_trace=true;                                                    shift ;;
+         --verbose)                  build_verbose=1;                                                    shift ;;
     --) shift ; break ;;
     *)  echo "Unexpected command line parameter received; aborting";
         exit 1
@@ -192,7 +193,6 @@ fi
 # Build local GPU arch only
 if [[ "$build_local_gpu_only" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_LOCAL_GPU_TARGET_ONLY=ON"
-    cmake_common_options="${cmake_common_options} -DCOLLTRACE=OFF"
 fi
 
 # shared vs static
@@ -200,6 +200,10 @@ if [[ "${build_static}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_SHARED_LIBS=OFF"
 fi
 
+# Disable collective trace
+if [[ "${collective_trace}" == false ]]; then
+    cmake_common_options="${cmake_common_options} -DCOLLTRACE=OFF"
+fi
 
 # Install dependencies
 if ($install_dependencies); then
