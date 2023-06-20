@@ -160,12 +160,12 @@ NpKitEventCollectContext* NpKit::GetGpuEventCollectContexts() {
   return gpu_collect_contexts_;
 }
 
-void NpKit::CollectCpuEvent(uint8_t type, uint32_t size, uint32_t rsvd, uint64_t timestamp, int channel_id) {
+void NpKit::CollectCpuEvent(uint8_t type, int64_t size, uint32_t rsvd, uint64_t timestamp, int channel_id) {
   uint64_t event_buffer_head = cpu_collect_contexts_[channel_id].event_buffer_head;
   if (event_buffer_head < kMaxNumCpuEventsPerBuffer) {
     NpKitEvent& event = cpu_collect_contexts_[channel_id].event_buffer[event_buffer_head];
     event.fields.type = type;
-    event.fields.size = size;
+    event.fields.size = size < 0 ? 0 : size;
     event.fields.rsvd = rsvd;
     event.fields.timestamp = timestamp;
     cpu_collect_contexts_[channel_id].event_buffer_head++;

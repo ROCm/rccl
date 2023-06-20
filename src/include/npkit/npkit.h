@@ -30,20 +30,20 @@ class NpKit {
 
   static NpKitEventCollectContext* GetGpuEventCollectContexts();
 
-  static inline __device__ void CollectGpuEvent(uint8_t type, uint32_t size, uint32_t rsvd, uint64_t timestamp,
+  static inline __device__ void CollectGpuEvent(uint8_t type, int64_t size, uint32_t rsvd, uint64_t timestamp,
                                                 NpKitEventCollectContext* ctx) {
     uint64_t event_buffer_head = ctx->event_buffer_head;
     if (event_buffer_head < kMaxNumGpuEventsPerBuffer) {
       NpKitEvent& event = ctx->event_buffer[event_buffer_head];
       event.fields.type = type;
-      event.fields.size = size;
+      event.fields.size = size < 0 ? 0 : size;
       event.fields.rsvd = rsvd;
       event.fields.timestamp = timestamp;
       ctx->event_buffer_head++;
     }
   }
 
-  static void CollectCpuEvent(uint8_t type, uint32_t size, uint32_t rsvd, uint64_t timestamp, int channel_id);
+  static void CollectCpuEvent(uint8_t type, int64_t size, uint32_t rsvd, uint64_t timestamp, int channel_id);
 
   static uint64_t *GetCpuTimestamp();
 
