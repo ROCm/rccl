@@ -94,7 +94,11 @@ ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (isFineGrain)
+#if defined(HIP_UNCACHED_MEMORY)
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
+#else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
+#endif
   else
     CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
 finish:
@@ -116,7 +120,11 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   if (stream == nullptr)
     CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
   if (isFineGrain)
+#if defined(HIP_UNCACHED_MEMORY)
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
+#else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
+#endif
   else
     CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
@@ -144,7 +152,11 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (isFineGrain)
+#if defined(HIP_UNCACHED_MEMORY)
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
+#else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
+#endif
   else
     CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);

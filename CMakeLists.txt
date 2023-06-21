@@ -17,7 +17,7 @@ option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on 
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
-option(ENABLE_IFC                              "Enable indirect function call"                 ON)
+option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
@@ -32,6 +32,7 @@ set(DEFAULT_GPUS
       gfx908:xnack-
       gfx90a:xnack-
       gfx90a:xnack+
+      gfx940
       gfx1030
       gfx1100
       gfx1101
@@ -117,6 +118,9 @@ message(STATUS "hipcc version:    ${hipcc_version_string}")
 
 ### Check for hipEventDisableSystemFence support
 check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVENT_DISABLE_FENCE)
+
+### Check for hipDeviceMallocUncached support
+check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
 ### Check for indirect function call support
 if(ENABLE_IFC)
@@ -519,6 +523,9 @@ if(TRACE)
 endif()
 if(${HIP_EVENT_DISABLE_FENCE})
   target_compile_definitions(rccl PRIVATE HIP_EVENT_DISABLE_FENCE)
+endif()
+if(${HIP_UNCACHED_MEMORY})
+  target_compile_definitions(rccl PRIVATE HIP_UNCACHED_MEMORY)
 endif()
 if (BUILD_BFD)
   if (HAVE_BFD)

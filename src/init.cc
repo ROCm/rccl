@@ -677,7 +677,11 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
 
   // detect if fine grained memory is available on this GPU
   int *ptr;
+#if defined(HIP_UNCACHED_MEMORY)
+  if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocUncached) == hipSuccess) {
+#else
   if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocFinegrained) == hipSuccess) {
+#endif
     CUDACHECK(hipFree(ptr));
     info->hasFineGrain = true;
     NCCLCHECK(ncclGpuGdrSupport(comm, &info->gdrSupport));
