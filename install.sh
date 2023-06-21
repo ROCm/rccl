@@ -13,7 +13,8 @@ function display_help()
     echo "    -d|--dependencies          Install RCCL depdencencies"
     echo "       --debug                 Build debug library"
     echo "       --disable_backtrace     Build without custom backtrace support"
-    echo "       --fast                  Quick-build RCCL (local gpu arch only, no backtrace support)"
+    echo "       --disable-colltrace     Build without collective trace"
+    echo "       --fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
     echo "    -l|--limit-nprocs          Limit the number of procs to 16 while building"
@@ -64,7 +65,7 @@ enable_ninja=""
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,fast,help,install,limit-nprocs,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,disable-colltrace,fast,help,install,limit-nprocs,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -84,6 +85,7 @@ while true; do
     -d | --dependencies)             install_dependencies=true;                                          shift ;;
          --debug)                    build_release=false;                                                shift ;;
          --disable_backtrace)        build_bfd=false;                                                    shift ;;
+         --disable-colltrace)        collective_trace=false;                                             shift ;;
          --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; shift ;;
     -h | --help)                     display_help;                                                       exit 0 ;;
     -i | --install)                  install_library=true;                                               shift ;;

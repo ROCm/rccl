@@ -104,4 +104,9 @@ if __name__ == "__main__":
     parser.add_argument("--log_file_path", type=str, help="Location of the log file generated with --time-trace flag")
     args = parser.parse_args()
 
-    plotCompileTime(args.log_file_path, args.min_val)
+    if args.log_file_path is not None:
+        log_file_path = args.log_file_path
+    else:
+        log_file_path = '../../build/release/time_trace.log'
+
+    plotCompileTime(log_file_path, args.min_val)

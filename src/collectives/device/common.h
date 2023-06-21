@@ -341,11 +341,11 @@ class ncclFunction {
     collTrace->type = ncclCollTraceDataType; \
   }
 #else
-#define traceData(data2, data4, data8_0, data8_1)
+#define traceColl(launch_type)
 #define traceKernelLaunch(firstLaunch)
 #define traceKernelEnd()
 #define traceAbort()
-#define traceColl(launch_type)
+#define traceData(data2, data4, data8_0, data8_1)
 #endif
 
 struct ncclShmemGroup {
