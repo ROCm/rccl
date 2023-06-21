@@ -4,9 +4,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import argparse
 
-# Specify the path to the .log file
-log_file = '../../build/release/time_trace.log'
-
 def generateRandomColors(df, colorList):
 
     for _ in range(len(df)):
@@ -102,8 +99,14 @@ def plotCompileTime(log_file, minVal):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--min_val", nargs='?', default='5', type=int, help="Ignore any if it's less than the value provided.")
-    parser.add_argument("--include_linking", action='store_true', help="Include linking when plotting.")
+    parser.add_argument("--min_val", nargs='?', default='5', type=int, help="Ignore any if it's less than the value provided")
+    parser.add_argument("--include_linking", action='store_true', help="Include linking when plotting")
+    parser.add_argument("--log_file_path", type=str, help="Location of the log file generated with --time-trace flag")
     args = parser.parse_args()
-    
-    plotCompileTime(log_file, args.min_val)
+
+    if args.log_file_path is not None:
+        log_file_path = args.log_file_path
+    else:
+        log_file_path = '../../build/release/time_trace.log'
+
+    plotCompileTime(log_file_path, args.min_val)
