@@ -14,7 +14,7 @@ union NpKitEvent {
   uint64_t bits[2];
   struct {
     uint64_t type : 8;
-    uint64_t size : 32;
+    uint32_t size : 32;
     uint64_t rsvd : 24;
     uint64_t timestamp;
   } fields;
