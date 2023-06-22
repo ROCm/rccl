@@ -341,10 +341,6 @@ class ncclFunction {
     collTrace->type = ncclCollTraceDataType; \
   }
 #else
-#define traceColl(launch_type)
-#define traceKernelLaunch(firstLaunch)
-#define traceKernelEnd()
-#define traceAbort()
 #define traceData(data2, data4, data8_0, data8_1)
 #endif
 
@@ -523,6 +519,7 @@ __forceinline__ __device__ void ncclKernel(
   }
 #endif
   if (tid == 0) __insert_timestamp(__LINE__);
+
   if (COLLTRACE && tid == 0) traceKernelLaunch(true);
 
   while (true) {
@@ -566,7 +563,6 @@ __forceinline__ __device__ void ncclKernel(
     if (COLLTRACE && tid == 0) traceColl(false);
   }
   if (COLLTRACE && tid == 0) traceKernelEnd();
-
 #ifdef ENABLE_PROFILING
   if (ncclShmem.comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
     __synclds();
@@ -576,7 +572,6 @@ __forceinline__ __device__ void ncclKernel(
 #endif
 }
 
-#ifdef ENABLE_COLLTRACE
 #define IMPL_COLL_KERN(func, algo, proto, devredop, type, fIndex) \
 __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
 __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) { \
@@ -587,13 +582,6 @@ __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
 __global__ void NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) { \
   ncclKernel<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, true>(comm, channelMask, workHead); \
 }
-#else
-#define IMPL_COLL_KERN(func, algo, proto, devredop, type, fIndex) \
-__launch_bounds__(NCCL_MAX_NTHREADS, 1) \
-__global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) { \
-  ncclKernel<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto, fIndex, false>(comm, channelMask, workHead); \
-}
-#endif
 
 // Examples :     AllReduce, RING, LL,    Sum,   uint8
 /* Functions for aggregation case */

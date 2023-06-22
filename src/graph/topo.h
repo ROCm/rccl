@@ -224,10 +224,7 @@ static float ncclTopoXGMISpeed(int gcn) {
   return gcn == 910 ? MI200_XGMI_WIDTH : VEGA_XGMI_WIDTH;
 }
 
-#if ENABLE_COLLTRACE
-  #define ncclGetKernelIndex(p_comm) ((p_comm)->collTraceThread ? 1 : 0)
-#else
-  #define ncclGetKernelIndex(p_comm) (0)
-#endif
+#define ncclGetKernelIndex(p_comm) \
+  ((p_comm)->collTraceThread ? 1 : 0)
 
 #endif

@@ -28,18 +28,11 @@ struct ncclKernelMatch {
 };
 
 typedef void(*ncclKern_t)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
-
 // Must be consistent with the ncclFuncSet enum
-#ifdef ENABLE_COLLTRACE
 static ncclKernelMatch const ncclKerns[2] = {
   {(void *)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), true},
   {(void *)NCCL_KERN_NAME_DEBUG(SendRecv, RING, SIMPLE, Sum, int8_t), true},
 };
-#else
-static ncclKernelMatch const ncclKerns[1] = {
-  {(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), true}
-};
-#endif
 
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, int* workFuncIndex, struct ncclWorkElem* work, struct ncclProxyOp* proxyOp /* output */);
 

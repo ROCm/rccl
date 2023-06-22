@@ -17,7 +17,7 @@ def runCI =
     def prj  = new rocProject('rccl', 'Extended')
 
     prj.timeout.test = 600
-    prj.paths.build_command = './install.sh -t --npkit-enable --limit-nprocs'
+    prj.paths.build_command = './install.sh -t --npkit-enable '
 
     // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(nodeDetails, jobName, prj)

@@ -13,12 +13,11 @@ function display_help()
     echo "    -d|--dependencies          Install RCCL depdencencies"
     echo "       --debug                 Build debug library"
     echo "       --disable_backtrace     Build without custom backtrace support"
-    echo "       --disable-colltrace     Build without collective trace"
-    echo "       --fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
+    echo "       --fast                  Quick-build RCCL (local gpu arch only, no backtrace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
-    echo "    -l|--limit-nprocs          Limit the number of procs to 16 while building"
     echo "       --local_gpu_only        Only compile for local GPU architecture"
+    echo "       --max-jobs              Use nproc instead of default number of 16"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
     echo "    -p|--package_build         Build RCCL package"
@@ -39,7 +38,6 @@ ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
 
 build_address_sanitizer=false
 build_allreduce_only=false
-collective_trace=true
 install_dependencies=false
 build_release=true
 build_bfd=true
@@ -55,7 +53,7 @@ build_static=false
 build_tests=false
 build_verbose=0
 time_trace=false
-enable_all_jobs=true
+enable_all_jobs=false
 enable_ninja=""
 
 # #################################################
@@ -65,7 +63,7 @@ enable_ninja=""
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,disable-colltrace,fast,help,install,limit-nprocs,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,fast,help,install,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,max-jobs,verbose --options hidptrs -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -80,28 +78,27 @@ eval set -- "${GETOPT_PARSE}"
 
 while true; do
     case "${1}" in
-         --address-sanitizer)        build_address_sanitizer=true;                                       shift ;;
-         --build_allreduce_only)     build_allreduce_only=true;                                          shift ;;
-    -d | --dependencies)             install_dependencies=true;                                          shift ;;
-         --debug)                    build_release=false;                                                shift ;;
-         --disable_backtrace)        build_bfd=false;                                                    shift ;;
-         --disable-colltrace)        collective_trace=false;                                             shift ;;
-         --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; shift ;;
-    -h | --help)                     display_help;                                                       exit 0 ;;
-    -i | --install)                  install_library=true;                                               shift ;;
-    -l | --limit-nprocs)             enable_all_jobs=false;                                              shift ;;
-         --local_gpu_only)           build_local_gpu_only=true;                                          shift ;;
-         --no_clean)                 clean_build=false;                                                  shift ;;
-         --npkit-enable)             npkit_enabled=true;                                                 shift ;;
-    -p | --package_build)            build_package=true;                                                 shift ;;
-         --prefix)                   install_prefix=${2}                                                 shift 2 ;;
-         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                        shift ;;
-    -r | --run_tests_quick)          run_tests=true;                                                     shift ;;
-         --run_tests_all)            run_tests=true; run_tests_all=true;                                 shift ;;
-         --static)                   build_static=true;                                                  shift ;;
-    -t | --tests_build)              build_tests=true;                                                   shift ;;
-         --time-trace)               time_trace=true;                                                    shift ;;
-         --verbose)                  build_verbose=1;                                                    shift ;;
+         --address-sanitizer)        build_address_sanitizer=true;               shift ;;
+         --build_allreduce_only)     build_allreduce_only=true;                  shift ;;
+    -d | --dependencies)             install_dependencies=true;                  shift ;;
+         --debug)                    build_release=false;                        shift ;;
+         --disable_backtrace)        build_bfd=false;                            shift ;;
+         --fast)                     build_bfd=false; build_local_gpu_only=true; shift ;;
+    -h | --help)                     display_help;                               exit 0 ;;
+    -i | --install)                  install_library=true;                       shift ;;
+         --local_gpu_only)           build_local_gpu_only=true;                  shift ;;
+         --max-jobs)                 enable_all_jobs=true;                       shift ;;
+         --no_clean)                 clean_build=false;                          shift ;;
+         --npkit-enable)             npkit_enabled=true;                         shift ;;
+    -p | --package_build)            build_package=true;                         shift ;;
+         --prefix)                   install_prefix=${2}                         shift 2 ;;
+         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                shift ;;
+    -r | --run_tests_quick)          run_tests=true;                             shift ;;
+         --run_tests_all)            run_tests=true; run_tests_all=true;         shift ;;
+         --static)                   build_static=true;                          shift ;;
+    -t | --tests_build)              build_tests=true;                           shift ;;
+         --time-trace)               time_trace=true;                            shift ;;
+         --verbose)                  build_verbose=1;                            shift ;;
     --) shift ; break ;;
     *)  echo "Unexpected command line parameter received; aborting";
         exit 1
@@ -202,10 +199,6 @@ if [[ "${build_static}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_SHARED_LIBS=OFF"
 fi
 
-# Disable collective trace
-if [[ "${collective_trace}" == false ]]; then
-    cmake_common_options="${cmake_common_options} -DCOLLTRACE=OFF"
-fi
 
 # Install dependencies
 if ($install_dependencies); then
@@ -351,19 +344,9 @@ if ($run_tests); then
     fi
 fi
 
-if ($time_trace); then
-    search_dir="../../"
-    time_trace_dir=$(find "$search_dir" -type d -name "time-trace" -print -quit)
-
-    if [ "$time_trace_dir" ]; then
-        time_trace_script="$time_trace_dir/rccl-TimeTrace.sh"
-        if [ -x "$time_trace_script" ]; then
-            echo "Generating RCCL-compile-timeline.html..."
-            (cd "$time_trace_dir" && ./rccl-TimeTrace.sh)
-        else
-            echo "Error: Unable to execute $time_trace_script. Make sure the file has the correct permissions."
-        fi
-    else
-        echo "Error: time-trace folder not found in $search_dir."
-    fi
+if ($time_trace) then
+    cd ../../tools/time-trace
+    chmod +x ./rccl-TimeTrace.sh
+    echo "Generating RCCL-compile-timeline.html..."
+    ./rccl-TimeTrace.sh
 fi
