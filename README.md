@@ -20,16 +20,33 @@ For ROCm installation instructions, see https://github.com/RadeonOpenCompute/ROC
 
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
 
-*  `./install.sh` -- builds library including rccl unit tests
-*  `./install.sh -i` -- builds and installs the library to /opt/rocm/rccl; installation path can be changed with --prefix argument (see below.)
-*  `./install.sh -d` -- installs all necessary dependencies for RCCL.  Should be re-invoked if the build folder is removed.
-*  `./install.sh -h` -- shows help
-*  `./install.sh -t` -- builds library including rccl unit tests
-*  `./install.sh -r` -- runs rccl unit tests (must be already built)
-*  `./install.sh -p` -- builds RCCL package
-*  `./install.sh --static` -- builds RCCL as a static library (default: shared)
-*  `./install.sh --prefix` -- specify custom path to install RCCL to (default:/opt/rocm)
-*  `./install.sh  --npkit-enable` -- enable compilation of npkit profiler framework with all options
+```shell
+./install.sh --help
+
+ Options:
+       --address-sanitizer     Build with address sanitizer enabled
+       --build_allreduce_only  Build only AllReduce + sum + float kernel
+    -d|--dependencies          Install RCCL depdencencies
+       --debug                 Build debug library
+       --disable_backtrace     Build without custom backtrace support
+       --disable-colltrace     Build without collective trace
+    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
+    -h|--help                  Prints this help message
+    -i|--install               Install RCCL library (see --prefix argument below)
+    -j|--jobs                  Specify how many parallel compilation jobs to run (16 by default)
+    -l|--local_gpu_only        Only compile for local GPU architecture
+       --no_clean              Don't delete files if they already exist
+       --npkit-enable          Compile with npkit enabled
+    -p|--package_build         Build RCCL package
+       --prefix                Specify custom directory to install RCCL to (default: /opt/rocm)
+       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility
+       --run_tests_all         Run all rccl unit tests (must be built already)
+    -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)
+       --static                Build RCCL as a static library instead of shared library
+    -t|--tests_build           Build rccl unit tests, but do not run
+       --time-trace            Plot the build time of RCCL
+       --verbose               Show compile commands
+```
 
 ## Manual build
 
@@ -41,7 +58,7 @@ $ cd rccl
 $ mkdir build
 $ cd build
 $ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ ..
-$ make -j
+$ make -j 16      # Or some other suitable number of parallel jobs
 ```
 You may substitute an installation path of your own choosing by passing CMAKE_INSTALL_PREFIX. For example:
 ```shell
