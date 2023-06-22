@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -12,24 +13,25 @@
 #include <hip/hip_fp16.h>
 
 #define NCCL_MAJOR 2
-#define NCCL_MINOR 14
-#define NCCL_PATCH 3
+#define NCCL_MINOR 18
+#define NCCL_PATCH 1
 #define NCCL_SUFFIX ""
 
-#define NCCL_VERSION_CODE 21403
+#define NCCL_VERSION_CODE 21801
 #define NCCL_VERSION(X,Y,Z) (((X) <= 2 && (Y) <= 8) ? (X) * 1000 + (Y) * 100 + (Z) : (X) * 10000 + (Y) * 100 + (Z))
 
 #define RCCL_BFLOAT16 1
 #define RCCL_GATHER_SCATTER 1
 #define RCCL_ALLTOALLV 1
-#define RCCL_MULTIRANKPERGPU 1
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /*! @brief Opaque handle to communicator */
+#include <limits.h>
 typedef struct ncclComm* ncclComm_t;
+#define NCCL_COMM_NULL NULL
 
 #define NCCL_UNIQUE_ID_BYTES 128
 typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } ncclUniqueId;
@@ -45,15 +47,24 @@ typedef enum { ncclSuccess                 =  0,
                ncclInProgress              =  7,
                ncclNumResults              =  8 } ncclResult_t;
 
+#define NCCL_CONFIG_UNDEF_INT INT_MIN
+#define NCCL_CONFIG_UNDEF_PTR NULL
+#define NCCL_SPLIT_NOCOLOR -1
+
 /* Communicator configuration. Users can assign value to attributes to specify the
  * behavior of a communicator. */
-typedef struct ncclConfig_v21400 {
+typedef struct ncclConfig_v21700 {
   /* attributes that users should never touch. */
   size_t size;
   unsigned int magic;
   unsigned int version;
   /* attributes that users are able to customize. */
   int blocking;
+  int cgaClusterSize;
+  int minCTAs;
+  int maxCTAs;
+  const char *netName;
+  int splitShare;
 } ncclConfig_t;
 
 /* Config initializer must be assigned to initialize config structure when it is created.
@@ -62,7 +73,12 @@ typedef struct ncclConfig_v21400 {
   sizeof(ncclConfig_t), /* size */                                      \
   0xcafebeef,           /* magic */                                     \
   NCCL_VERSION(NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH), /* version */       \
-  1                     /* blocking */                                  \
+  NCCL_CONFIG_UNDEF_INT,                    /* blocking */              \
+  NCCL_CONFIG_UNDEF_INT,                    /* cgaClusterSize */        \
+  NCCL_CONFIG_UNDEF_INT,                    /* minCTAs */               \
+  NCCL_CONFIG_UNDEF_INT,                    /* maxCTAs */               \
+  NCCL_CONFIG_UNDEF_PTR,                    /* netName */               \
+  NCCL_CONFIG_UNDEF_INT                     /* splitShare */            \
 }
 
 /*! @brief Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
@@ -117,28 +133,6 @@ ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 /// @endcond
 
-/*! @brief Creates a new communicator (multi thread/process version) allowing multiple ranks per device.
-
-    @details
-    rank must be between 0 and nranks-1 and unique within a communicator clique.
-    Each rank is associated to a HIP device, which has to be set before calling
-    ncclCommInitRankMulti.
-    Since this version of the function allows multiple ranks to utilize the same
-    HIP device, a unique virtualId per device has to be provided by each calling
-    rank.
-    ncclCommInitRankMulti implicitly syncronizes with other ranks, so it must be
-    called by different threads/processes or use ncclGroupStart/ncclGroupEnd.
-
-    @param[in]
-    comm        ncclComm_t*
-                communicator struct pointer
-    */
-  ncclResult_t  ncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
-/// @cond include_hidden
-  ncclResult_t pncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
-/// @endcond
-
-
 /*! @brief Creates a clique of communicators (single process version).
  *
  * @details This is a convenience function to create a single-process communicator clique.
@@ -177,6 +171,19 @@ ncclResult_t  ncclCommAbort(ncclComm_t comm);
 ncclResult_t pncclCommAbort(ncclComm_t comm);
 /// @endcond
 
+/*! @brief Creates one or more communicators from an existing one.
+ * Ranks with the same color will end up in the same communicator.
+ * Within the new communicator, key will be used to order ranks.
+ * NCCL_SPLIT_NOCOLOR as color will indicate the rank will not be part of any group
+ * and will therefore return a NULL communicator.
+ * If config is NULL, the new communicator will inherit the original communicator's
+ * configuration*/
+ncclResult_t  ncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t* config);
+/// @cond include_hidden
+ncclResult_t pncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t* config);
+/// @endcond
+
+/* Returns a string for each error code. */
 /*! @brief Returns a string for each error code. */
 const char*  ncclGetErrorString(ncclResult_t result);
 /// @cond include_hidden
@@ -188,7 +195,7 @@ const char* pncclGetErrorString(ncclResult_t result);
  */
 const char*  ncclGetLastError(ncclComm_t comm);
 /// @cond include_hidden
-const char* pncclGetError(ncclComm_t comm);
+const char* pncclGetLastError(ncclComm_t comm);
 /// @endcond
 
 /* Checks whether the comm has encountered any asynchronous errors */
@@ -497,6 +504,44 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
     const size_t sdispls[], void *recvbuff, const size_t recvcounts[],
     const size_t rdispls[], ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /// @endcond
+
+/*! @brief Opaque handle to MSCCL algorithm */
+typedef int mscclAlgoHandle_t;
+
+/*! @brief MSCCL Load Algorithm
+ *
+ * @details Load MSCCL algorithm file specified in mscclAlgoFilePath and return
+ * its handle via mscclAlgoHandle. This API is expected to be called by MSCCL
+ * scheduler instead of end users.
+ */
+ncclResult_t  mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
+ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
+
+/*! @brief MSCCL Run Algorithm
+ *
+ * @details Run MSCCL algorithm specified by mscclAlgoHandle. The parameter
+ * list merges all possible parameters required by different operations as this
+ * is a general-purposed API. This API is expected to be called by MSCCL
+ * scheduler instead of end users.
+ */
+ncclResult_t  mscclRunAlgo(
+    const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
+    void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
+    size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
+    mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream);
+ncclResult_t pmscclRunAlgo(
+    const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
+    void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
+    size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
+    mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream);
+
+/*! @brief MSCCL Load Algorithm
+ *
+ * @details Unload MSCCL algorithm previous loaded using its handle. This API
+ * is expected to be called by MSCCL scheduler instead of end users.
+ */
+ncclResult_t  mscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle);
+ncclResult_t pmscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle);
 
 /*
  * Group semantics

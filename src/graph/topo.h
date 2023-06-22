@@ -13,12 +13,13 @@
 
 #define LOC_BW 5000.0
 #define SM60_NVLINK_BW 18.0
-#define SM70_NVLINK_BW 22.0
-#define SM80_NVLINK_BW 22.0
+#define SM70_NVLINK_BW 20.0
+#define SM80_NVLINK_BW 20.0
+#define SM90_NVLINK_BW 20.0
 #define SM86_NVLINK_BW 12.0
 #define PCI_BW 12.0           // PCI Gen3 x16
 #define QPI_BW 6.0
-#define SKL_QPI_BW 9.0
+#define SKL_QPI_BW 10.0
 #define ZPI_BW 6.0
 #define YONGFENG_ZPI_BW 9.0
 #define P9_BW 32.0
@@ -75,7 +76,12 @@ extern const char* topoLinkTypeStr[];
 
 // Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
 #define PATH_SYS 7
-#define PATH_DIS 7
+
+// Connection through the network
+#define PATH_NET 8
+
+// Disconnected
+#define PATH_DIS 9
 extern const char* topoPathTypeStr[];
 
 struct ncclTopoNode;
@@ -106,7 +112,6 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_FORCE_INTRA 16
 #define RCCL_TOPO_XGMI_ALL  32
 
-#define RCCL_TOPO_MAX_RANKS_PER_GPU 8
 struct ncclTopoNode {
   int type;
   int64_t id;
@@ -114,8 +119,7 @@ struct ncclTopoNode {
   union {
     struct {
       int dev; // NVML dev number
-      int rank[RCCL_TOPO_MAX_RANKS_PER_GPU];
-      int nRanksPerGpu;
+      int rank;
       int cudaCompCap;
       int gdrSupport;
       int gcn;
@@ -198,11 +202,9 @@ static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, i
 static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank, int* index) {
   *index = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
-    for (int j=0; j<system->nodes[GPU].nodes[i].gpu.nRanksPerGpu; j++ ) {
-      if (system->nodes[GPU].nodes[i].gpu.rank[j] == rank) {
-	    *index = i;
-	    return ncclSuccess;
-      }
+    if (system->nodes[GPU].nodes[i].gpu.rank == rank) {
+      *index = i;
+      return ncclSuccess;
     }
   }
   return ncclInternalError;
@@ -212,7 +214,7 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
   *rank = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
     if (system->nodes[GPU].nodes[i].gpu.dev == dev) {
-      *rank = system->nodes[GPU].nodes[i].gpu.rank[0];
+      *rank = system->nodes[GPU].nodes[i].gpu.rank;
       return ncclSuccess;
     }
   }

@@ -178,25 +178,6 @@ static ncclResult_t xmlSetAttrInt(struct ncclXmlNode* node, const char* attrName
   return ncclSuccess;
 }
 
-static ncclResult_t xmlSetOrAppendAttrInt(struct ncclXmlNode* node, const char* attrName, const int value) {
-  int index;
-  NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));
-  if (index == -1) {
-    index = node->nAttrs++;
-    strncpy(node->attrs[index].key, attrName, MAX_STR_LEN);
-    node->attrs[index].key[MAX_STR_LEN] = '\0';
-    snprintf(node->attrs[index].value, MAX_STR_LEN, "%d", value);
-    node->attrs[index].value[MAX_STR_LEN] = '\0';
-    return ncclSuccess;
-  }
-  char *tmp = strdup(node->attrs[index].value);
-  snprintf(node->attrs[index].value, MAX_STR_LEN, "%s,%d", tmp, value);
-  node->attrs[index].value[MAX_STR_LEN] = '\0';
-  free (tmp);
-  return ncclSuccess;
-}
-
-
 static ncclResult_t xmlSetAttrFloat(struct ncclXmlNode* node, const char* attrName, const float value) {
   int index;
   NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));

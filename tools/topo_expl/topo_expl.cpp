@@ -153,10 +153,15 @@ NodeModelDesc model_descs[] = {
   {2, "topo_8p1h_5.xml",        "2 nodes 8P1H Alt."},
 };
 
+NCCL_PARAM(MaxCTAs, "MAX_CTAS", MAXCHANNELS);
+NCCL_PARAM(MinCTAs, "MIN_CTAS", 1);
+
 int main(int argc,char* argv[])
 {
   struct ncclComm *comm;
   const int num_models = sizeof(model_descs) / sizeof(*model_descs);
+  int minCTAsEnv;
+  int maxCTAsEnv;
 
   if (!cmdOptionExists(argv, argv + argc, "-m")) {
     printf("Usage: ./topo_expl -m model_id\n");
@@ -200,18 +205,22 @@ int main(int argc,char* argv[])
       node_model->rankToCudaDev(i), node_model->getGpuBusId(i));
   }
 
+  minCTAsEnv = ncclParamMinCTAs();
+  maxCTAsEnv = ncclParamMaxCTAs();
+
   NCCLCHECK(ncclCalloc(&comm, nranks));
 
   struct ncclPeerInfo *peerInfo;
   NCCLCHECK(ncclCalloc(&peerInfo, nranks+1)); // Extra rank to represent CollNet root
 
-  struct allGather3Data_t *allGather3Data;
+  struct allGatherInfo* allGather3Data;
   NCCLCHECK(ncclCalloc(&allGather3Data, nranks));
 
-  struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph;
+  struct ncclTopoGraph *treeGraph, *ringGraph, *collNetGraph, *nvlsGraph;
   NCCLCHECK(ncclCalloc(&treeGraph, nranks));
   NCCLCHECK(ncclCalloc(&ringGraph, nranks));
   NCCLCHECK(ncclCalloc(&collNetGraph, nranks));
+  NCCLCHECK(ncclCalloc(&nvlsGraph, nranks));
 
   for (int i = 0; i < nranks; i++) {
     comm[i].rank = i;
@@ -224,8 +233,23 @@ int main(int argc,char* argv[])
     comm[i].topo = node_model->getSystem(i);
     comm[i].peerInfo = peerInfo;
     comm[i].ncclNet = ncclNet;
-    comm[i].virtualId = -1;
-    // Mark channels as non initialized.
+    comm[i].config.maxCTAs = maxCTAsEnv;
+    comm[i].config.minCTAs = minCTAsEnv;
+    if (comm[i].topParentRanks == NULL) {
+      NCCLCHECK(ncclCalloc(&comm[i].topParentRanks, comm->nRanks));
+      for (int j = 0; j < comm->nRanks; ++j)
+        comm[i].topParentRanks[j] = j;
+    }
+    struct ncclSharedResources* sharedRes = NULL;
+    NCCLCHECK(ncclCalloc(&sharedRes, 1));
+    /* most of attributes are assigned later in initTransportsRank(). */
+    sharedRes->owner = &comm[i];
+    sharedRes->tpNRanks = comm[i].nRanks;
+    NCCLCHECK(ncclCalloc(&sharedRes->tpRankToLocalRank, comm[i].nRanks));
+    comm[i].sharedRes = sharedRes;
+    sharedRes->refCount = 1;
+    ncclMemoryStackConstruct(&comm[i].memPermanent);
+   // Mark channels as non initialized.
     for (int c=0; c<MAXCHANNELS; c++) comm[i].channels[c].id = -1;
     NCCLCHECK(fillInfo(&comm[i], comm[i].peerInfo+comm[i].rank, 0));
   }
@@ -233,13 +257,13 @@ int main(int argc,char* argv[])
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
-    initTransportsRank_1(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
+    initTransportsRank_1(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i], nvlsGraph[i]);
   }
 
   for (int i = 0; i < nranks; i++) {
     node_model = network.GetNode(i);
     assert(node_model!=0);
-    initTransportsRank_3(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i]);
+    initTransportsRank_3(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i], nvlsGraph[i]);
   }
 
   for (uint64_t len = 8; len <= 4294967296L; len *= 2) {

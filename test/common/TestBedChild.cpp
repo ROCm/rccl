@@ -196,7 +196,7 @@ namespace RcclUnitTesting
 
       if (useMultiRankPerGpu)
       {
-        if (ncclCommInitRankMulti(&this->comms[localRank], this->totalRanks, id, globalRank, globalRank) != ncclSuccess)
+        //if (ncclCommInitRankMulti(&this->comms[localRank], this->totalRanks, id, globalRank, globalRank) != ncclSuccess)
         {
           ERROR("Rank %d on child %d unable to call ncclCommInitRankMulti\n", globalRank, this->childId);
           status = TEST_FAIL;

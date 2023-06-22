@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <utils.h>
 
 struct shmHandleInternal {
   int fd;
@@ -31,7 +32,7 @@ static void shmHandleInit(int fd, char* shmPath, size_t shmSize, size_t realShmS
   handle->devShmPtr = dptr;
   handle->shmSize = shmSize;
   handle->realShmSize = realShmSize;
-  handle->refcount = (int*)(hptr + shmSize);
+  handle->refcount = (hptr != NULL) ? (int*)(hptr + shmSize) : NULL;
   if (create) {
     int slen = strlen(shmPath);
     handle->shmPath = (char*)malloc(slen + 1);
@@ -80,22 +81,19 @@ ncclResult_t ncclShmOpen(char* shmPath, size_t shmSize, void** shmPtr, void** de
   if (hptr == MAP_FAILED) {
     WARN("Could not map %s size %zi, error: %s", shmPath, realShmSize, strerror(errno));
     ret = ncclSystemError;
+    hptr = NULL;
     goto fail;
   }
 
   if (create) {
     *(int*)(hptr + shmSize) = refcount;
   } else {
-    int remref = __atomic_sub_fetch((int*)(hptr + shmSize), 1, __ATOMIC_RELAXED);
+    int remref = ncclAtomicRefCountDecrement((int*)(hptr + shmSize));
     if (remref == 0) {
       /* the last peer has completed attachment, it should unlink the shm mem file. */
       if (unlink(shmPath) != 0) {
         WARN("unlink shared memory %s failed, error: %s", shmPath, strerror(errno));
       }
-    }
-
-    if (refcount != -1) {
-      WARN("attaching memory should only reduce refcount by 1 but %d is passed", refcount);
     }
   }
 
@@ -128,13 +126,13 @@ ncclResult_t ncclShmClose(ncclShmHandle_t handle) {
   if (tmphandle) {
     if (tmphandle->fd >= 0) {
       close(tmphandle->fd);
-      if (tmphandle->shmPath != NULL && *tmphandle->refcount > 0) {
+      if (tmphandle->shmPath != NULL && tmphandle->refcount != NULL && *tmphandle->refcount > 0) {
         if (unlink(tmphandle->shmPath) != 0) {
           WARN("unlink shared memory %s failed, error: %s", tmphandle->shmPath, strerror(errno));
           ret = ncclSystemError;
         }
-        free(tmphandle->shmPath);
       }
+      free(tmphandle->shmPath);
     }
 
     if (tmphandle->shmPtr) {

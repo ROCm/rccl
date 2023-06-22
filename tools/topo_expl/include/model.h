@@ -69,7 +69,7 @@ public:
 
   int rankToCudaDev(int rank) {
     for (int i=0; i<getNumGpus(); i++) {
-      if (rank == systems[0]->nodes[GPU].nodes[i].gpu.rank[0])
+      if (rank == systems[0]->nodes[GPU].nodes[i].gpu.rank)
         return systems[0]->nodes[GPU].nodes[i].gpu.dev;
     }
     return -1;
@@ -77,7 +77,7 @@ public:
 
   int64_t getGpuBusId(int rank) {
     for (int i=0; i<getNumGpus(); i++) {
-      if (rank == systems[0]->nodes[GPU].nodes[i].gpu.rank[0])
+      if (rank == systems[0]->nodes[GPU].nodes[i].gpu.rank)
         return systems[0]->nodes[GPU].nodes[i].id;
     }
     return -1;
@@ -93,7 +93,7 @@ public:
   void setRanks() {
     for (int r=0; r<getNumGpus(); r++)
       for (int i=0; i<getNumGpus(); i++)
-        systems[r]->nodes[GPU].nodes[i].gpu.rank[0] += firstRank;
+        systems[r]->nodes[GPU].nodes[i].gpu.rank += firstRank;
   }
 
   int p2pCanConnect(int device1, int device2) { return 1; }

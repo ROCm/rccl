@@ -419,7 +419,7 @@ static ncclResult_t socketTryAccept(struct ncclSocket* sock) {
   if (sock->fd != -1) {
     sock->state = ncclSocketStateAccepted;
   } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-    WARN("socketTryAccept: get errno %d that is not EAGAIN or EWOULDBLOCK", errno);
+    WARN("socketTryAccept: Accept failed: %s", strerror(errno));
     return ncclSystemError;
   }
   return ncclSuccess;
@@ -429,6 +429,9 @@ static ncclResult_t socketFinalizeAccept(struct ncclSocket* sock) {
   uint64_t magic;
   enum ncclSocketType type;
   int received = 0;
+  const int one = 1;
+  SYSCHECK(setsockopt(sock->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&one, sizeof(int)), "setsockopt");
+
   NCCLCHECK(ncclSocketProgress(NCCL_SOCKET_RECV, sock, &magic, sizeof(magic), &received));
   if (received == 0) return ncclSuccess;
   NCCLCHECK(socketWait(NCCL_SOCKET_RECV, sock, &magic, sizeof(magic), &received));
