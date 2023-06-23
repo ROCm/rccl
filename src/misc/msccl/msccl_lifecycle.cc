@@ -79,6 +79,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
   const char* mscclAlgoShareDir = nullptr;
   std::string mscclAlgoDirStr;
   std::string mscclAlgoShareDirStr;
+  const char *fullDirPath = nullptr;
   if (mscclAlgoDir == nullptr) {
     // Try to find default algorithm directory based on librccl.so path
     Dl_info dl_info;
@@ -106,13 +107,16 @@ static ncclResult_t mscclInternalSchedulerInit() {
       WARN("MSCCL Internal Scheduler: open algorithm in share directory %s failed", mscclAlgoShareDir);
       return ncclInvalidUsage;
     }
+    fullDirPath = mscclAlgoShareDir;
+  } else {
+    fullDirPath = mscclAlgoDir;
   }
   while ((entry = readdir(dp))) {
     if (entry->d_type != DT_LNK && entry->d_type != DT_REG) {
       continue;
     }
     status.algoMetas.emplace_back();
-    std::string fullPath = mscclAlgoDir;
+    std::string fullPath = fullDirPath;
     fullPath += "/";
     fullPath += entry->d_name;
     NCCLCHECK(mscclGetAlgoMetaFromXmlFile(fullPath.c_str(), &(status.algoMetas.back())));
