@@ -70,11 +70,16 @@ static const char* mscclAlgoDirEnv = "MSCCL_ALGO_DIR";
 static const char* mscclAlgoDefaultDir = "msccl-algorithms";
 extern "C" bool mscclUnitTestMode() __attribute__((__weak__));
 static const char* mscclUnitTestAlgoDefaultDir = "msccl-unit-test-algorithms";
+static const char* mscclAlgoShareDirPath = "share/rccl/msccl-algorithms";
+static const char* mscclUnitTestAlgoShareDirPath = "share/rccl/msccl-unit-test-algorithms";
 
 static ncclResult_t mscclInternalSchedulerInit() {
   mscclStatus& status = mscclGetStatus();
   const char* mscclAlgoDir = getenv(mscclAlgoDirEnv);
+  const char* mscclAlgoShareDir = nullptr;
   std::string mscclAlgoDirStr;
+  std::string mscclAlgoShareDirStr;
+  const char *fullDirPath = nullptr;
   if (mscclAlgoDir == nullptr) {
     // Try to find default algorithm directory based on librccl.so path
     Dl_info dl_info;
@@ -87,20 +92,31 @@ static ncclResult_t mscclInternalSchedulerInit() {
     mscclAlgoDirStr = selfLibPath.substr(0, selfLibPath.find_last_of("/\\") + 1);
     mscclAlgoDirStr += (mscclUnitTestMode && mscclUnitTestMode()) ? mscclUnitTestAlgoDefaultDir : mscclAlgoDefaultDir;
     mscclAlgoDir = mscclAlgoDirStr.c_str();
+    // Get share Directory Paths
+    mscclAlgoShareDirStr = selfLibPath.substr(0, selfLibPath.find_first_of("lib") );
+    mscclAlgoShareDirStr += (mscclUnitTestMode && mscclUnitTestMode()) ? mscclUnitTestAlgoShareDirPath : mscclAlgoShareDirPath;
+    mscclAlgoShareDir = mscclAlgoShareDirStr.c_str();
   }
   struct dirent *entry = nullptr;
   DIR *dp = nullptr;
   dp = opendir(mscclAlgoDir);
   if (dp == nullptr) {
-    WARN("MSCCL Internal Scheduler: open algorithm directory %s failed", mscclAlgoDir);
-    return ncclInvalidUsage;
+    //Try to find the algorithm directory under share folder based on librccl.so path
+    dp = opendir(mscclAlgoShareDir);
+    if (dp == nullptr) {
+      WARN("MSCCL Internal Scheduler: open algorithm in share directory %s failed", mscclAlgoShareDir);
+      return ncclInvalidUsage;
+    }
+    fullDirPath = mscclAlgoShareDir;
+  } else {
+    fullDirPath = mscclAlgoDir;
   }
   while ((entry = readdir(dp))) {
     if (entry->d_type != DT_LNK && entry->d_type != DT_REG) {
       continue;
     }
     status.algoMetas.emplace_back();
-    std::string fullPath = mscclAlgoDir;
+    std::string fullPath = fullDirPath;
     fullPath += "/";
     fullPath += entry->d_name;
     NCCLCHECK(mscclGetAlgoMetaFromXmlFile(fullPath.c_str(), &(status.algoMetas.back())));
