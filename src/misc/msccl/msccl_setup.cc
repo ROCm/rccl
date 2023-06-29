@@ -106,7 +106,7 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
   proxyOp.pattern = 0;
   proxyOp.root = 0;
   proxyOp.nbytes = status.stepSize*proxyOp.sliceSteps;
-  proxyOp.opCount = comm->collOpCount;
+  proxyOp.opCount = comm->sharedRes->collOpCount;
   int nLoops = (int)(DIVUP(status.nBytes, (size_t)((size_t)hostAlgo->nChunksPerLoop*(size_t)status.chunkEffectiveSize)));
   int nLoopsChunkSteps = nLoops * status.chunkSteps;
   for (int ch = 0; ch < hostAlgo->nChannels; ch++) {
@@ -123,7 +123,7 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
       }
       proxyOp.nsteps = nLoopsChunkSteps * nRecvs;
       if (proxyOp.nsteps > 0) {
-        NCCLCHECK(mscclSaveProxy(ncclChannel, proxyRecv, recvPeer->peer, &proxyOp, 0));
+        NCCLCHECK(mscclSaveProxy(comm, ncclChannel, proxyRecv, recvPeer->peer, &proxyOp, 0));
       }
     }
     for (int i=0; i<mscclChannel->nSendPeers; i++){
@@ -136,12 +136,12 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
       }
       proxyOp.nsteps = nLoopsChunkSteps * nSends;
       if (proxyOp.nsteps > 0) {
-        NCCLCHECK(mscclSaveProxy(ncclChannel, proxySend, sendPeer->peer, &proxyOp, 0));
+        NCCLCHECK(mscclSaveProxy(comm, ncclChannel, proxySend, sendPeer->peer, &proxyOp, 0));
       }
     }
   }
   NCCLCHECK(ncclProxyStart(comm));
-  comm->collOpCount++;
+  comm->sharedRes->collOpCount++;
   return ncclSuccess;
 }
 

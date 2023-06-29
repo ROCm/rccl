@@ -51,7 +51,7 @@ namespace {
       if (num_hops == 0 && args->sendbuff != args->recvbuff) {
         const T* sendbuff = (const T*)args->sendbuff + send_offset;
         T* recvbuff = (T *)args->recvbuff + recv_offset;
-        ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1, 0>(
+        reduceCopy<COLL_UNROLL, RedOp, T, 0,1, 1, 0, 1, 1, 0>(
             tid, nthreads, 0, nullptr, false, 1, (void **)&sendbuff, 1, (void **)&recvbuff, send_recv_size);
       } else {
         for (ssize_t prims_offset = 0; prims_offset < send_recv_size; prims_offset += prims_size) {

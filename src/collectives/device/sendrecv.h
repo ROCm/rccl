@@ -15,7 +15,7 @@
 template<typename T, typename RedOp>
 struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   template<typename Proto>
-  __device__ void runSend(const int tid, const int nthreads, const int group, struct ncclWorkElemP2p* args) {
+  __device__ void runSend(const int tid, const int nthreads, const uint8_t group, struct ncclWorkElemP2p* args) {
     void* buff = reinterpret_cast<void*>(uintptr_t(args->buffHi32)<<32 | args->buffLo32);
     ssize_t count = reinterpret_cast<size_t>(size_t(args->countHi32)<<32 | args->countLo32);
 
@@ -58,9 +58,8 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
         }
 #endif
 
-        ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1, /*PreOpSrcs=*/0>
+        reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
           (tid, nthreads, 0, nullptr, false, 1, &buff, 1, &recvBuff, count);
-
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT)
         if (isNpKitThread) {
           NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
@@ -80,7 +79,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       if (args->proto == NCCL_PROTO_LL) chunkSize /= 2;
       int const peer = args->peer;
       Primitives<T, RedOp, FanAsymmetric<0, 1>, 0, Proto, 1> prims
-        (tid, nthreads, nullptr, &peer, buff, nullptr, /*redOpArg(ignored)=*/0, group);
+        (tid, nthreads, nullptr, &peer, buff, nullptr, /*redOpArg(ignored)=*/0, group, args->connIndex, args->connIndex);
 
 #if defined(ENABLE_NPKIT)
       if (isNpKitThread) {
@@ -114,7 +113,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   }
 
   template<typename Proto>
-  __device__ void runRecv(const int tid, const int nthreads, const int group, struct ncclWorkElemP2p* args) {
+  __device__ void runRecv(const int tid, const int nthreads, const uint8_t group, struct ncclWorkElemP2p* args) {
 #if defined(ENABLE_NPKIT)
     bool isNpKitThread = (tid == 0);
     int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + 1;
@@ -142,7 +141,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       if (args->proto == NCCL_PROTO_LL) chunkSize /= 2; // This is to account for chunkEffectiveSize
       int const peer = args->peer;
       Primitives<T, RedOp, FanAsymmetric<1, 0>, 0, Proto, 1> prims
-        (tid, nthreads, &peer, nullptr, nullptr, buff, /*redOpArg(ignored)=*/0, group);
+        (tid, nthreads, &peer, nullptr, nullptr, buff, /*redOpArg(ignored)=*/0, group, args->connIndex, args->connIndex);
 
 #if defined(ENABLE_NPKIT)
       if (isNpKitThread) {
@@ -189,11 +188,10 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     // warpStarts were rounded thanks to int division, but for group number we need to round the other way around
     // So we mirror wid then mirror again the group.
     #define NWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
-    int group = ngroups-1- (NWARPS-1-wid) * ngroups / NWARPS;
+    uint8_t group = ngroups-1- (NWARPS-1-wid) * ngroups / NWARPS;
     args += group;
     tid -= args->warpStart * WARP_SIZE;
     int nthreads = args->nWarps * WARP_SIZE;
-    group |= (args->connIndex<<16); // Used to select connIndex 1
 
     if (args->p2pType == ncclWorkP2pTypeUnused) return;
     if (tid >= nthreads || args->peer == -1) return;

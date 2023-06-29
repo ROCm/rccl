@@ -101,19 +101,51 @@ struct ncclCommCallback {
   ncclResult_t(*fn)(struct ncclComm* comm, struct ncclCommCallback* cb);
 };
 
+struct ncclSharedResources {
+  int refCount;
+  struct ncclComm* owner; /* comm which creates this shared res. */
+  struct ncclChannelPeer* peers[MAXCHANNELS];
+  struct ncclDevChannelPeer* devPeers[MAXCHANNELS];
+  /* P2P operation counter, one per channel */
+  uint64_t p2pOpCount[MAXCHANNELS];
+  /* Collective operation counter */
+  uint64_t collOpCount;
+  int tpNRanks;
+  int tpNLocalRanks;
+  int tpNChannels;
+  int tpP2pNChannels;
+  int tpP2pChunkSize;
+  uint64_t magic;
+
+  // top parent rank to localRank translation table
+  int* tpRankToLocalRank;
+  // Internal streams
+  struct ncclStrongStream deviceStream, hostStream;
+
+  /* proxy related shared res */
+  struct ncclProxyState* proxyState;
+};
+
 struct ncclChannel {
-  struct ncclChannelPeer* peers;
-  struct ncclDevChannelPeer* devPeers;
+  struct ncclChannelPeer** peers;
+  struct ncclDevChannelPeer** devPeers;
   struct ncclRing ring;
   int* devRingUserRanks;
   struct ncclTree tree;
+
   struct ncclTree collnetChain;
   struct ncclDirect collnetDirect;
   struct ncclTree binTree;
   struct ncclNvls nvls;
+
   int id; // index of this channel
   uint32_t workFifoSent; // last used work index+1
-  uint64_t p2pOpCount;
+
+  /* comm split sharable resources */
+  struct ncclChannelPeer* collnetPeers;
+  struct ncclDevChannelPeer* collnetDevPeers;
+  struct ncclChannelPeer* nvlsPeers;
+  struct ncclDevChannelPeer* nvlsDevPeers;
 };
 
 struct ncclWorkList {
@@ -167,6 +199,10 @@ struct ncclComm {
   // List of destructors to run when comm is destructed
   struct ncclDestructor* destructorHead;
 
+  struct ncclSharedResources* sharedRes;
+  /* map to top parent ranks. */
+  int* topParentRanks;
+  int* topParentLocalRanks;
   struct ncclChannel channels[MAXCHANNELS];
   struct ncclPeerInfo* peerInfo;
   struct ncclTopoSystem* topo;
@@ -180,15 +216,16 @@ struct ncclComm {
 
   uint64_t magic; // Magic number for all network communication. Not a security key -- only goal is to detect mismatches.
 
+  uint64_t commHash;
   int rank;    // my rank in the communicator
   int nRanks;  // number of GPUs in communicator
   int cudaDev; // my cuda device index
+  //int nvmlDev; // my nvml device index
   int compCap; // compute capability of the GPU
-  int minCompCap; // min compute capability in the communicator
+  int minCompCap, maxCompCap; // min/max compute capability in the communicator
   int64_t busId;   // my PCI bus ID in int format
   cpu_set_t cpuAffinity; // CPU affinity of the GPU
   int WarpSize;
-  int virtualId;
   int cudaArch; // matches __CUDA_ARCH__ of device
 
   int node;
@@ -207,12 +244,11 @@ struct ncclComm {
 
   // Counter for tracking CUDA launches (P2P and collectives included)
   uint64_t opCount;
-  // Collective operation counter
-  uint64_t collOpCount;
 
   // Channels for collectives
   int nChannels;
   int nvlsChannels;
+  int collNetChannels;
   // Channels (per peer) for p2p
   int p2pnChannels;
   int p2pnChannelsPerPeer;
@@ -237,6 +273,8 @@ struct ncclComm {
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
+  volatile uint32_t *childAbortFlag;
+  uint32_t *abortFlagRefCount;
 
   // Flags for enable P2P NET
   uint32_t p2pNet;
@@ -268,20 +306,23 @@ struct ncclComm {
   char intraPad2[64 - sizeof(uint64_t)];
   uint64_t intraBarrierGate; // only used if this is intraComm0
 
-  struct ncclProxyState proxyState;
-
+  struct ncclProxyState* proxyState;
+  int proxyRefCountOld; /* store proxy post-atomic-sub refcount */
   // Whether this communicator uses collNet
   int collNetSupport;
+  uint8_t collNetSupportMatrix[4/*sum,prod,min,max*/][ncclNumTypes];
   int intraHighestTransportType;
+  int* collNetHeads;
+  int collNetHeadsNum;
+  /* sharable collNet proxy progress resource. */
+  struct ncclCollNetSharedRes* collNetSharedRes;
 
   // NVLink SHARP (NVLS) support
   int nvlsSupport;
-  void* nvlsResources;
+  /* sharable NVLS resource. */
+  struct ncclNvlsSharedRes* nvlsResources;
 
   size_t channelSize; // User requested work size (bytes) for channel partitions
-
-  // Internal streams
-  struct ncclStrongStream deviceStream, hostStream;
 
   // pools backed by comm->memPermanent
   struct ncclMemoryPool memPool_ncclProxyOp;
@@ -319,13 +360,7 @@ struct ncclComm {
   volatile bool collTraceExit;
 #endif
 
-  // communicator mode
-  int blocking;
-  // CGA cluster size
-  int cgaClusterSize;
-  int minCTAs, maxCTAs;
-  // network interface name
-  char *netName;
+  ncclConfig_t config;
   // initState is to more conveniently reclaim resources when errors happen.
   ncclResult_t initState;
   // flag to indicate if ncclCommFinalize() is called

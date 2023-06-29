@@ -21,12 +21,13 @@
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncSend, ncclFuncRecv, ncclFuncAllToAllPivot, ncclNumFuncs} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2];
 
-#define NCCL_NUM_ALGORITHMS 5 // Tree/Ring/CollNet*
+#define NCCL_NUM_ALGORITHMS 6 // Tree/Ring/CollNet*
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
 #define NCCL_ALGO_COLLNET_DIRECT 2
 #define NCCL_ALGO_COLLNET_CHAIN 3
 #define NCCL_ALGO_NVLS 4
+#define NCCL_ALGO_NVLS_TREE 5
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
@@ -112,10 +113,10 @@ struct ncclConnInfo {
 };
 
 struct ncclProxyConnector {
-  int rank;
-  int localRank;
+  int tpRank;
+  int tpLocalRank;
+  int sameProcess;
   struct ncclProxyConnection* connection;
-  struct ncclComm* comm;
 };
 
 struct ncclConnector {
@@ -124,7 +125,6 @@ struct ncclConnector {
   struct ncclTransportComm* transportComm;
   void* transportResources;
   struct ncclConnInfo conn;
-  struct ncclComm *comm;
 };
 
 struct ncclRing {
@@ -141,6 +141,9 @@ struct ncclRing {
 };
 
 
+// The root of each tree only has one node down (+1 intra-node).
+#define NCCL_MAX_TREE_ARITY_TOP 2
+// Nodes inside the binary tree can have to two nodes down (+1 intra-node).
 #define NCCL_MAX_TREE_ARITY 3
 struct ncclTree {
   int depth;
@@ -161,18 +164,24 @@ struct ncclDirect {
 
 #define NCCL_CONN_IDX_P2P_NET 2
 #define NCCL_MAX_NVLS_ARITY 8
+#define NCCL_MAX_NVLS_TREE_ARITY 3
 struct ncclNvls {
   int out;
   int nHeads;   // Number of parallel N<->1<->net operations we'll do in parallel; size of up/down
   int headRank; // Index in 0..nHeads-1 I am the head rank of. -1 if I'm not a head rank (no local NIC)
   int up[NCCL_MAX_NVLS_ARITY];
   int down;
+  int treeUp;
+  int treeDown[NCCL_MAX_NVLS_TREE_ARITY];
+  int node;
+  int nNodes;
 };
 
 #define NCCL_MAX_CONNS 3
 struct ncclChannelPeer {
   struct ncclConnector send[NCCL_MAX_CONNS];
   struct ncclConnector recv[NCCL_MAX_CONNS];
+  int refCount;
 };
 
 struct ncclDevComm;
@@ -362,7 +371,7 @@ static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must
 #endif
 
 struct alignas(16) ncclDevChannel {
-  struct ncclDevChannelPeer *peers;
+  struct ncclDevChannelPeer** peers;
   struct ncclRing ring;
   struct ncclTree tree;
   struct ncclTree collnetChain;

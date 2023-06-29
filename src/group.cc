@@ -45,13 +45,14 @@ ncclResult_t ncclAsyncLaunch(
     job->undo = undo;
     job->destructor = destructor;
     job->abortFlag = comm->abortFlag;
+    job->childAbortFlag = comm->childAbortFlag;
     job->state = ncclGroupJobRunning;
     job->comm = comm;
     /* check if there are blocking and nonblocking comms at the same time in group. */
     if (ncclGroupBlocking == -1) {
       /* first met communicator */
-      ncclGroupBlocking = comm->blocking;
-    } else if (ncclGroupBlocking != comm->blocking) {
+      ncclGroupBlocking = comm->config.blocking;
+    } else if (ncclGroupBlocking != comm->config.blocking) {
       WARN("Blocking and nonblocking communicators are not allowed in the same group.");
       ret = ncclInvalidArgument;
     }
@@ -87,23 +88,20 @@ ncclResult_t ncclGroupStart() {
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
-  /* if previous group launch does not complete, don't launch this one. */
-  if (ncclGroupJobMainPtr != NULL) {
-    if (__atomic_load_n(&ncclGroupJobMainPtr->doneFlag, __ATOMIC_ACQUIRE) == false) {
-      ret = ncclInvalidUsage;
-      goto exit;
-    } else {
-      NCCLCHECKGOTO(groupJobComplete(ncclGroupJobMainPtr), ret, exit);
-    }
-  }
   NCCLCHECK(ncclGroupStartInternal());
   TRACE_CALL("ncclGroupStart()");
-
-exit:
   return ret;
 }
 
-ncclResult_t ncclGroupStartInternal() {
+inline ncclResult_t ncclGroupStartInternal() {
+  /* if previous group launch does not complete, don't launch this one. */
+  if (ncclGroupJobMainPtr != NULL) {
+    if (__atomic_load_n(&ncclGroupJobMainPtr->doneFlag, __ATOMIC_ACQUIRE) == false) {
+      return ncclInvalidUsage;
+    } else {
+      NCCLCHECK(groupJobComplete(ncclGroupJobMainPtr));
+    }
+  }
   ncclGroupDepth++;
   if (mscclAvailable() && !mscclIsCaller()) {
     NCCLCHECK(mscclGroupStart());
@@ -204,13 +202,6 @@ failure:
   return result;
 }
 
-static inline void groupResetJobState() {
-  ncclGroupBlocking = -1;
-  ncclGroupJobMainPtr = NULL;
-  memset(&ncclGroupJobMain, 0, sizeof(struct ncclGroupJob));
-  return;
-}
-
 static void groupCleanup(struct ncclComm** groupCommHeadPtr, struct ncclComm** groupCommPreconnectHeadPtr, struct ncclIntruQueue<struct ncclAsyncJob, &ncclAsyncJob::next>* asyncJobsPtr, ncclResult_t* groupErrorPtr, ncclResult_t error) {
   struct ncclComm* comm = *groupCommHeadPtr;
 
@@ -255,7 +246,7 @@ static void groupCleanup(struct ncclComm** groupCommHeadPtr, struct ncclComm** g
       ncclIntruQueueConstruct(&comm->tasks.peers[i].recvQueue);
     }
 
-    if (!comm->blocking)
+    if (!comm->config.blocking)
       (void) ncclCommSetAsyncError(comm, error);
     comm = next;
   }
@@ -264,7 +255,7 @@ static void groupCleanup(struct ncclComm** groupCommHeadPtr, struct ncclComm** g
   while (!ncclIntruQueueEmpty(asyncJobsPtr)) {
     struct ncclAsyncJob* job = ncclIntruQueueDequeue(asyncJobsPtr);
     *job->abortFlag = 1;
-    if (job->comm && !job->comm->blocking)
+    if (job->comm && !job->comm->config.blocking)
       (void) ncclCommSetAsyncError(job->comm, error);
     if (job->undo) job->undo(job);
     if (job->destructor) job->destructor((void*)job);
@@ -339,6 +330,7 @@ static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) {
 
         if (*groupAbortFlag == true || errorJobAbortFlag == true) {
           *job->abortFlag = 1;
+          if (job->childAbortFlag) *job->childAbortFlag = 1;
         }
 
         job = job->next;
@@ -359,7 +351,7 @@ static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) {
 
   while (!ncclIntruQueueEmpty(asyncJobsMain)) {
     struct ncclAsyncJob* job = ncclIntruQueueDequeue(asyncJobsMain);
-    if (job->comm && !job->comm->blocking)
+    if (job->comm && !job->comm->config.blocking)
       (void) ncclCommSetAsyncError(job->comm, ret);
     if (job->destructor) job->destructor((void*)job);
   }
@@ -368,7 +360,7 @@ static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) {
     struct ncclComm* comm = groupCommHeadMain;
     struct ncclComm* next = comm->groupNext;
     (void) ncclGroupCommLeave(comm);
-    if (!comm->blocking) {
+    if (!comm->config.blocking) {
       (void) ncclCommSetAsyncError(comm, ret);
     }
     groupCommHeadMain = next;
@@ -447,15 +439,6 @@ fail:
   groupCleanup(&ncclGroupCommHead, &ncclGroupCommPreconnectHead, &ncclAsyncJobs, &ncclGroupError, ret);
   groupResetJobState();
   goto exit;
-}
-
-static ncclResult_t groupJobComplete(struct ncclGroupJob* job) {
-  ncclResult_t ret = ncclSuccess;
-  if (job) {
-    ret = ncclAsyncJobComplete(&job->base);
-    groupResetJobState();
-  }
-  return ret;
 }
 
 void ncclGroupJobAbort() {

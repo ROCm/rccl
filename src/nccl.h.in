@@ -23,7 +23,6 @@
 #define RCCL_BFLOAT16 1
 #define RCCL_GATHER_SCATTER 1
 #define RCCL_ALLTOALLV 1
-#define RCCL_MULTIRANKPERGPU 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,6 +49,7 @@ typedef enum { ncclSuccess                 =  0,
 
 #define NCCL_CONFIG_UNDEF_INT INT_MIN
 #define NCCL_CONFIG_UNDEF_PTR NULL
+#define NCCL_SPLIT_NOCOLOR -1
 
 /* Communicator configuration. Users can assign value to attributes to specify the
  * behavior of a communicator. */
@@ -64,6 +64,7 @@ typedef struct ncclConfig_v21700 {
   int minCTAs;
   int maxCTAs;
   const char *netName;
+  int splitShare;
 } ncclConfig_t;
 
 /* Config initializer must be assigned to initialize config structure when it is created.
@@ -76,7 +77,8 @@ typedef struct ncclConfig_v21700 {
   NCCL_CONFIG_UNDEF_INT,                    /* cgaClusterSize */        \
   NCCL_CONFIG_UNDEF_INT,                    /* minCTAs */               \
   NCCL_CONFIG_UNDEF_INT,                    /* maxCTAs */               \
-  NCCL_CONFIG_UNDEF_PTR                     /* netName */               \
+  NCCL_CONFIG_UNDEF_PTR,                    /* netName */               \
+  NCCL_CONFIG_UNDEF_INT                     /* splitShare */            \
 }
 
 /*! @brief Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
@@ -131,28 +133,6 @@ ncclResult_t  ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
 ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank);
 /// @endcond
 
-/*! @brief Creates a new communicator (multi thread/process version) allowing multiple ranks per device.
-
-    @details
-    rank must be between 0 and nranks-1 and unique within a communicator clique.
-    Each rank is associated to a HIP device, which has to be set before calling
-    ncclCommInitRankMulti.
-    Since this version of the function allows multiple ranks to utilize the same
-    HIP device, a unique virtualId per device has to be provided by each calling
-    rank.
-    ncclCommInitRankMulti implicitly syncronizes with other ranks, so it must be
-    called by different threads/processes or use ncclGroupStart/ncclGroupEnd.
-
-    @param[in]
-    comm        ncclComm_t*
-                communicator struct pointer
-    */
-  ncclResult_t  ncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
-/// @cond include_hidden
-  ncclResult_t pncclCommInitRankMulti(ncclComm_t* comm, int nranks, ncclUniqueId commId, int rank, int virtualId);
-/// @endcond
-
-
 /*! @brief Creates a clique of communicators (single process version).
  *
  * @details This is a convenience function to create a single-process communicator clique.
@@ -191,6 +171,19 @@ ncclResult_t  ncclCommAbort(ncclComm_t comm);
 ncclResult_t pncclCommAbort(ncclComm_t comm);
 /// @endcond
 
+/*! @brief Creates one or more communicators from an existing one.
+ * Ranks with the same color will end up in the same communicator.
+ * Within the new communicator, key will be used to order ranks.
+ * NCCL_SPLIT_NOCOLOR as color will indicate the rank will not be part of any group
+ * and will therefore return a NULL communicator.
+ * If config is NULL, the new communicator will inherit the original communicator's
+ * configuration*/
+ncclResult_t  ncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t* config);
+/// @cond include_hidden
+ncclResult_t pncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t* config);
+/// @endcond
+
+/* Returns a string for each error code. */
 /*! @brief Returns a string for each error code. */
 const char*  ncclGetErrorString(ncclResult_t result);
 /// @cond include_hidden

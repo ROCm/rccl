@@ -170,4 +170,6 @@ error:
   return ncclSystemError;
 }
 
-
+int ncclCuMemEnable() {
+  return 0;
+}

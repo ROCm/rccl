@@ -8,8 +8,7 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
-// AllGather3 - begin
-struct ncclGraphInfo {
+struct graphInfo {
   int pattern;
   int nChannels;
   int sameChannels;
@@ -19,14 +18,10 @@ struct ncclGraphInfo {
   int typeInter;
 };
 
-struct allGather3Data_t{
-  int netDev;
-  int collNetSupport;
-  int nc;
-  struct ncclGraphInfo tree;
-  struct ncclGraphInfo ring;
-  struct ncclGraphInfo collNet;
+struct allGatherInfo {
+  struct graphInfo graphInfo[NCCL_NUM_ALGORITHMS];
   struct ncclTopoRanks topoRanks;
+  int nc;
   bool pivotA2AEnabled;
   bool ll128Enabled;
   bool mscclEnabled;
@@ -40,11 +35,11 @@ ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem
 
 ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, uint64_t commHash);
 
-ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGather3Data_t *allGather3Data,
-  struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph);
+ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *allGather3Data,
+  struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph, struct ncclTopoGraph& nvlsGraph, struct ncclComm* parent = NULL);
 
-ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGather3Data_t *allGather3Data,
-  struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph);
+ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *allGather3Data,
+  struct ncclTopoGraph& treeGraph, struct ncclTopoGraph& ringGraph, struct ncclTopoGraph& collNetGraph, struct ncclTopoGraph& nvlsGraph);
 
 #define TIME_START(index)
 

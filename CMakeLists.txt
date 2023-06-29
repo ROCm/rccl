@@ -317,6 +317,8 @@ set(SRC_FILES
   src/include/git_version.h
   src/include/graph.h
   src/include/group.h
+  src/include/ibvcore.h
+  src/include/ibvsymbols.h
   src/include/ibvwrap.h
   src/include/info.h
   src/include/ipcsocket.h
@@ -379,6 +381,7 @@ set(SRC_FILES
   src/misc/argcheck.cc
 # src/misc/cudawrap.cc
 # src/misc/gdrwrap.cc
+  src/misc/ibvsymbols.cc
   src/misc/ibvwrap.cc
   src/misc/ipcsocket.cc
   src/misc/msccl/msccl_lifecycle.cc

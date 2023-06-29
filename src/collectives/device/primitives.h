@@ -37,13 +37,14 @@
  * to how that protocol operates with a consistent interface so that our
  * algorithm code can operate protocol parametrically.
  */
-template<int SlicePerChunk_1, int StepPerSlice_1, int Unroll_1 = COLL_UNROLL, bool NVLS_1 = false>
+template<int SlicePerChunk_1, int StepPerSlice_1, int Unroll_1 = COLL_UNROLL, int MultimemSrcs_1 = 0, int MultimemDsts_1 = 0>
 struct ProtoSimple {
   static constexpr int Id = NCCL_PROTO_SIMPLE;
   static constexpr int SlicePerChunk = SlicePerChunk_1;
   static constexpr int StepPerSlice = StepPerSlice_1;
   static constexpr int Unroll = Unroll_1;
-  static constexpr bool NVLS = NVLS_1;
+  static constexpr int MultimemSrcs = MultimemSrcs_1;
+  static constexpr int MultimemDsts = MultimemDsts_1;
 
   // Data bytes (no flags etc) in one step of the fifo queue.
   __device__ static int calcBytePerStep() {
@@ -55,9 +56,6 @@ struct ProtoSimple {
   }
   // Group width is how many consecutive group values a subchannel occupies.
   static constexpr int MaxGroupWidth = 1;
-  __device__ static int calcGroupWidth(bool send, int nthreads) {
-    return 1;
-  }
 };
 
 struct ProtoLL {
@@ -73,9 +71,6 @@ struct ProtoLL {
   }
   // Group width is how many consecutive group values a subchannel occupies.
   static constexpr int MaxGroupWidth = 1;
-  __device__ static int calcGroupWidth(bool send, int nthreads) {
-    return 1;
-  }
 };
 
 struct ProtoLL128 {
@@ -91,9 +86,6 @@ struct ProtoLL128 {
   }
   // Group width is how many consecutive group values a subchannel occupies.
   static constexpr int MaxGroupWidth = 1;
-  __device__ static int calcGroupWidth(bool send, int nthreads) {
-    return 1;
-  }
 };
 
 /* Fan (as in fan-in & fan-out) classes hold recv and send counts. The template
@@ -133,22 +125,22 @@ class Primitives;
 // Used by LL & LL128 to implement direct members in the naive way.
 template<typename RealPrimitives>
 struct PrimitivesWithoutDirect {
-  __device__ void directSend(intptr_t inpIx, intptr_t remoteOutIx, int eltN) {
+  __device__ void directSend(intptr_t inpIx, intptr_t outIx, int eltN) {
     static_cast<RealPrimitives*>(this)->send(inpIx, eltN);
   }
-  __device__ void directSendFromOutput(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
+  __device__ void directSendFromOutput(intptr_t outIx, int eltN) {
     static_cast<RealPrimitives*>(this)->sendFromOutput(outIx, eltN);
   }
   __device__ void directRecv(intptr_t outIx, int eltN) {
     static_cast<RealPrimitives*>(this)->recv(outIx, eltN, /*postOp=*/false);
   }
-  __device__ void directCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
+  __device__ void directCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     static_cast<RealPrimitives*>(this)->copySend(inpIx, outIx, eltN, postOp);
   }
-  __device__ void directRecvCopySend(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
+  __device__ void directRecvCopySend(intptr_t outIx, int eltN) {
     static_cast<RealPrimitives*>(this)->recvCopySend(outIx, eltN, /*postOp=*/false);
   }
-  __device__ void directRecvReduceCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
+  __device__ void directRecvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     // Direct is only for the send part
     static_cast<RealPrimitives*>(this)->recvReduceCopySend(inpIx, outIx, eltN, postOp);
   }
