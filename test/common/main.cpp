@@ -10,12 +10,13 @@
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  RcclUnitTesting::EnvVars::ShowConfig();
+  RcclUnitTesting::EnvVars ev;
+  ev.ShowConfig();
   int retCode = RUN_ALL_TESTS();
   printf("[ INFO     ] Total executed cases: %d\n", RcclUnitTesting::TestBed::NumTestsRun());
 
   // Show timing information
-  RcclUnitTesting::EnvVars ev;
+
   if (ev.showTiming)
   {
     size_t totalTimeMsec = 0;

@@ -50,12 +50,12 @@ namespace RcclUnitTesting
   {
     // Collect number of GPUs available
     // NOTE: Cannot use HIP call prior to launching unless it is inside another child process
-    int numDevicesAvailable = 0;
-    getDeviceCount(&numDevicesAvailable);
+    numDetectedGpus = 0;
+    getDeviceCount(&numDetectedGpus);
 
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus        = GetEnvVar("UT_MIN_GPUS"    , 2);
-    maxGpus        = GetEnvVar("UT_MAX_GPUS"    , numDevicesAvailable);
+    maxGpus        = GetEnvVar("UT_MAX_GPUS"    , numDetectedGpus);
     onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , false);
     processMask    = GetEnvVar("UT_PROCESS_MASK", UT_SINGLE_PROCESS | UT_MULTI_PROCESS);
     verbose        = GetEnvVar("UT_VERBOSE"     , 0);
@@ -182,28 +182,28 @@ namespace RcclUnitTesting
 
   void EnvVars::ShowConfig()
   {
-    std::vector<std::pair<std::string, std::string>> supported =
+    std::vector<std::tuple<std::string, int, std::string>> supported =
       {
-        std::make_pair("UT_SHOW_NAMES"       , "Show test case names"),
-        std::make_pair("UT_MIN_GPUS"         , "Minimum number of GPUs to use"),
-        std::make_pair("UT_MAX_GPUS"         , "Maximum number of GPUs to use"),
-        std::make_pair("UT_POW2_GPUS"        , "Only allow power-of-2 # of GPUs"),
-        std::make_pair("UT_PROCESS_MASK"     , "Whether to run single/multi process"),
-        std::make_pair("UT_VERBOSE"          , "Show verbose unit test output"),
-        std::make_pair("UT_REDOPS"           , "List of reduction ops to test"),
-        std::make_pair("UT_DATATYPES"        , "List of datatypes to test"),
-        std::make_pair("UT_MAX_RANKS_PER_GPU", "Maximum number of ranks using the same GPU"),
-        std::make_pair("UT_PRINT_VALUES"     , "Print array values (# of values to print, < 0 for all)"),
-        std::make_pair("UT_SHOW_TIMING"      , "Show timing table"),
-        std::make_pair("UT_INTERACTIVE"      , "Run in interactive mode")
+        std::make_tuple("UT_SHOW_NAMES"       , showNames     , "Show test case names"),
+        std::make_tuple("UT_MIN_GPUS"         , minGpus       , "Minimum number of GPUs to use"),
+        std::make_tuple("UT_MAX_GPUS"         , maxGpus       , "Maximum number of GPUs to use"),
+        std::make_tuple("UT_POW2_GPUS"        , onlyPow2Gpus  , "Only allow power-of-2 # of GPUs"),
+        std::make_tuple("UT_PROCESS_MASK"     , processMask   , "Whether to run single/multi process"),
+        std::make_tuple("UT_VERBOSE"          , verbose       , "Show verbose unit test output"),
+        std::make_tuple("UT_REDOPS"           , -1            , "List of reduction ops to test"),
+        std::make_tuple("UT_DATATYPES"        , -1            , "List of datatypes to test"),
+        std::make_tuple("UT_MAX_RANKS_PER_GPU", maxRanksPerGpu, "Maximum number of ranks using the same GPU"),
+        std::make_tuple("UT_PRINT_VALUES"     , printValues   , "Print array values (-1 for all)"),
+        std::make_tuple("UT_SHOW_TIMING"      , showTiming    , "Show timing table"),
+        std::make_tuple("UT_INTERACTIVE"      , useInteractive, "Run in interactive mode")
       };
 
     printf("================================================================================\n");
     printf(" Environment variables:\n");
     for (auto p : supported)
     {
-      printf(" - %-20s %-40s %s\n", p.first.c_str(), p.second.c_str(),
-             getenv(p.first.c_str()) ? getenv(p.first.c_str()) : "<unset>");
+      printf(" - %-20s %-42s (%3d) %s\n", std::get<0>(p).c_str(), std::get<2>(p).c_str(), std::get<1>(p),
+             getenv(std::get<0>(p).c_str()) ? getenv(std::get<0>(p).c_str()) : "<unset>");
     }
     printf("================================================================================\n");
   }
