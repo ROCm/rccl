@@ -18,7 +18,7 @@ def runCI =
     def prj  = new rocProject('rccl', 'PreCheckin')
 
     prj.timeout.test = 300
-    prj.paths.build_command = './install.sh -t --fast --limit-nprocs'
+    prj.paths.build_command = './install.sh -t --fast'
 
     // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
@@ -39,7 +39,7 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project, "-*Graph", "UT_POW2_GPUS=1")
+        commonGroovy.runTestCommand(platform, project, "*", "UT_POW2_GPUS=1")
     }
 
     def packageCommand =

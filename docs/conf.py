@@ -9,6 +9,8 @@ import subprocess
 from rocm_docs import ROCmDocs
 
 
+external_projects_current_project = "rccl"
+
 name = "RCCL"
 get_major = r'sed -n -e "s/^NCCL_MAJOR.*\([0-9]\+\).*/\1/p" ../makefiles/version.mk'
 get_minor = r'sed -n -e "s/^NCCL_MINOR.*\([0-9]\{2,\}\).*/\1/p" ../makefiles/version.mk'

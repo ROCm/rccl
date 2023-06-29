@@ -37,13 +37,14 @@ namespace RcclUnitTesting
 
     std::vector<int>            const& GetNumGpusList();
     std::vector<int>            const& GetIsMultiProcessList();
-    static void ShowConfig();
+    void ShowConfig();
 
   protected:
     std::vector<ncclRedOp_t>    redOps;             // Supported reduction ops [UT_REDOPS]
     std::vector<ncclDataType_t> dataTypes;          // Support datatypes       [UT_DATATYPES]
     std::vector<int>            numGpusList;        // List of # Gpus to use   [UT_MIN_GPUS/UT_MAX_GPUS/UT_POW2_GPUS]
     std::vector<int>            isMultiProcessList; // Single or multi process [UT_PROCESS_MASK]
+    int                         numDetectedGpus;
 
     // Helper functions to parse environment variables
     int GetEnvVar(std::string const varname, int defaultValue);

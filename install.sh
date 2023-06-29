@@ -2,23 +2,50 @@
 # Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
 
 # #################################################
+# global variables
+# #################################################
+ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
+
+# Default values
+build_address_sanitizer=false
+build_allreduce_only=false
+build_bfd=true
+build_freorg_bkwdcomp=true
+build_local_gpu_only=false
+build_package=false
+build_release=true
+build_static=false
+build_tests=false
+build_verbose=0
+clean_build=true
+collective_trace=true
+enable_ninja=""
+install_dependencies=false
+install_library=false
+num_parallel_jobs=16
+npkit_enabled=false
+run_tests=false
+run_tests_all=false
+time_trace=false
+
+# #################################################
 # helper functions
 # #################################################
 function display_help()
 {
     echo "RCCL build & installation helper script"
-    echo "./install [-h|--help] "
+    echo " Options:"
     echo "       --address-sanitizer     Build with address sanitizer enabled"
     echo "       --build_allreduce_only  Build only AllReduce + sum + float kernel"
     echo "    -d|--dependencies          Install RCCL depdencencies"
     echo "       --debug                 Build debug library"
     echo "       --disable_backtrace     Build without custom backtrace support"
     echo "       --disable-colltrace     Build without collective trace"
-    echo "       --fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
+    echo "    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
-    echo "    -l|--limit-nprocs          Limit the number of procs to 16 while building"
-    echo "       --local_gpu_only        Only compile for local GPU architecture"
+    echo "    -j|--jobs                  Specify how many parallel compilation jobs to run ($num_parallel_jobs by default)"
+    echo "    -l|--local_gpu_only        Only compile for local GPU architecture"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
     echo "    -p|--package_build         Build RCCL package"
@@ -33,39 +60,13 @@ function display_help()
 }
 
 # #################################################
-# global variables
-# #################################################
-ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
-
-build_address_sanitizer=false
-build_allreduce_only=false
-collective_trace=true
-install_dependencies=false
-build_release=true
-build_bfd=true
-install_library=false
-build_local_gpu_only=false
-clean_build=true
-npkit_enabled=false
-build_package=false
-build_freorg_bkwdcomp=true
-run_tests=false
-run_tests_all=false
-build_static=false
-build_tests=false
-build_verbose=0
-time_trace=false
-enable_all_jobs=true
-enable_ninja=""
-
-# #################################################
 # Parameter parsing
 # #################################################
 
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,disable-colltrace,fast,help,install,limit-nprocs,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose --options hidptrs -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,disable-colltrace,fast,help,install,jobs:,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -86,15 +87,15 @@ while true; do
          --debug)                    build_release=false;                                                shift ;;
          --disable_backtrace)        build_bfd=false;                                                    shift ;;
          --disable-colltrace)        collective_trace=false;                                             shift ;;
-         --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; shift ;;
+    -f | --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; shift ;;
     -h | --help)                     display_help;                                                       exit 0 ;;
     -i | --install)                  install_library=true;                                               shift ;;
-    -l | --limit-nprocs)             enable_all_jobs=false;                                              shift ;;
-         --local_gpu_only)           build_local_gpu_only=true;                                          shift ;;
+    -j | --jobs)                     num_parallel_jobs=${2};                                             shift 2 ;;
+    -l | --local_gpu_only)           build_local_gpu_only=true;                                          shift ;;
          --no_clean)                 clean_build=false;                                                  shift ;;
          --npkit-enable)             npkit_enabled=true;                                                 shift ;;
     -p | --package_build)            build_package=true;                                                 shift ;;
-         --prefix)                   install_prefix=${2}                                                 shift 2 ;;
+         --prefix)                   install_prefix=${2};                                                shift 2 ;;
          --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                        shift ;;
     -r | --run_tests_quick)          run_tests=true;                                                     shift ;;
          --run_tests_all)            run_tests=true; run_tests_all=true;                                 shift ;;
@@ -300,16 +301,18 @@ if ($npkit_enabled); then
     -DENABLE_NPKIT_EVENT_SEND_RECV_SEND_EXIT \
     -DENABLE_NPKIT_EVENT_SEND_RECV_RECV_ENTRY \
     -DENABLE_NPKIT_EVENT_SEND_RECV_RECV_EXIT \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_ENTRY \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_EXIT \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_SEND_ENTRY \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_SEND_EXIT \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_RECV_COPY_SEND_ENTRY \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_RECV_COPY_SEND_EXIT \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_DIRECT_RECV_ENTRY \
+    -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_DIRECT_RECV_EXIT \
     -DENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME"
 fi
 
 check_exit_code "$?"
-
-if ($enable_all_jobs); then
-    job_number=$(nproc)
-else
-    job_number=16
-fi
 
 if ($time_trace); then
     build_system="ninja"
@@ -326,9 +329,9 @@ fi
 check_exit_code "$?"
 
 if ($install_library); then
-    VERBOSE=${build_verbose} $build_system -j $job_number install
+    VERBOSE=${build_verbose} $build_system -j $num_parallel_jobs install
 else
-    VERBOSE=${build_verbose} $build_system -j $job_number
+    VERBOSE=${build_verbose} $build_system -j $num_parallel_jobs
 fi
 check_exit_code "$?"
 
