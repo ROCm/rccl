@@ -109,7 +109,7 @@ namespace RcclUnitTesting
   }
 
 
-  TEST(AllToAllv, DISABLED_OutOfPlaceGraph)
+  TEST(AllToAllv, OutOfPlaceGraph)
   {
     TestBed testBed;
 

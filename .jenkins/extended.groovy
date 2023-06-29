@@ -17,7 +17,7 @@ def runCI =
     def prj  = new rocProject('rccl', 'Extended')
 
     prj.timeout.test = 600
-    prj.paths.build_command = './install.sh -t --npkit-enable'
+    prj.paths.build_command = './install.sh -t'
 
     // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
@@ -38,7 +38,7 @@ def runCI =
     {
         platform, project->
 
-        commonGroovy.runTestCommand(platform, project, "-*Graph", "")
+        commonGroovy.runTestCommand(platform, project, "*", "")
     }
 
     def packageCommand =
