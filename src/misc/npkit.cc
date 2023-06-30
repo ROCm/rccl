@@ -123,7 +123,7 @@ ncclResult_t NpKit::Dump(const std::string& dump_dir) {
   hipDeviceProp_t devProp;
   int vega_gpu_rtc_freq_in_khz;
   CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (devProp.gcnArch == 940)
+  if (devProp.gcnArch/10 == 94)
     vega_gpu_rtc_freq_in_khz = 100000;
   else
     vega_gpu_rtc_freq_in_khz = 25000;

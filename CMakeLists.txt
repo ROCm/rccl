@@ -33,6 +33,8 @@ set(DEFAULT_GPUS
       gfx90a:xnack-
       gfx90a:xnack+
       gfx940
+      gfx941
+      gfx942
       gfx1030
       gfx1100
       gfx1101

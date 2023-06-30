@@ -226,6 +226,8 @@ static float ncclTopoXGMISpeed(int gcn) {
     case 910:
       return MI200_XGMI_WIDTH;
     case 940:
+    case 941:
+    case 942:
       return MI300_XGMI_WIDTH;
     default:
       return VEGA_XGMI_WIDTH;
