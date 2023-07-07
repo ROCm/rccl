@@ -214,10 +214,17 @@ __device__ __forceinline__ void reduceCopy(
     if (lane < nDsts) aligned &= 0 == cvta_to_global(dstPtrs[lane]) % (BigPackSize + !BigPackSize);
     aligned = !(__any(!aligned));
     if (aligned) {
+#if defined(__gfx90a__)
+      reduceCopyPacks<RedFn, T, ((MinSrcs > 1) ? 2 : Unroll), BigPackSize,
+        MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
+        (nThreads, thread, redArg, preOpArgs, postOp,
+         nSrcs, srcPtrs, nDsts, dstPtrs, nBytesBehind, nBytesAhead);
+#else
       reduceCopyPacks<RedFn, T, Unroll*((MinSrcs == 1 && MinDsts == 1) ? 2 : 1), BigPackSize,
         MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
         (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
          nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
+#endif
       if (nBytesAhead == 0) return;
 
       reduceCopyPacks<RedFn, T, /*Unroll=*/1, BigPackSize,
@@ -228,10 +235,24 @@ __device__ __forceinline__ void reduceCopy(
     }
   }
 
+#if defined(__gfx90a__)
+  if (MinSrcs > 1) {
+    reduceCopyPacks<RedFn, T, Unroll/2*(16/sizeof(T))/2, sizeof(T),
+    MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
+    (nThreads, thread, redArg, preOpArgs, postOp,
+     nSrcs, srcPtrs, nDsts, dstPtrs, nBytesBehind, nBytesAhead);
+  } else {
+    reduceCopyPacks<RedFn, T, Unroll*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
+    MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
+    (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
+     nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
+  }
+#else
   reduceCopyPacks<RedFn, T, Unroll*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
     MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
     (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
      nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
+#endif
   if (nBytesAhead == 0) return;
 
   reduceCopyPacks<RedFn, T, /*Unroll=*/1, /*BytePerPack=*/sizeof(T),
