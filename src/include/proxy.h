@@ -74,6 +74,7 @@ struct ncclProxySubArgs {
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
   int npKitSizesFifo[NCCL_STEPS];
+  uint64_t timestamp[NCCL_STEPS];
 #endif
 };
 
