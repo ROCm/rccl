@@ -1067,6 +1067,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
 #if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
               g_npkit_net_poll_cnt = 0;
 #endif
+              sub->timestamp[buffSlot] = 0;
 #endif
 
               TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
@@ -1085,12 +1086,43 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
       if (sub->done < sub->transmitted) {
         int done;
         int buffSlot = (sub->base+sub->done)%NCCL_STEPS;
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
+        if (sub->timestamp[buffSlot] == 0)
+          sub->timestamp[buffSlot] = *(volatile uint64_t*)NpKit::GetCpuTimestamp();
+#endif
         NCCLCHECK(proxyState->ncclNet->test(sub->requests[buffSlot], &done, NULL));
         if (done) {
-
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
           NpKit::CollectCpuEvent(
               NPKIT_EVENT_NET_SEND_EXIT,
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+              g_npkit_net_poll_cnt,
+#else
+              sub->npKitSizesFifo[buffSlot],
+#endif
+              uint64_t(sub->requests+buffSlot)/sizeof(void*),
+              sub->timestamp[buffSlot], sub->channelId);
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+          g_npkit_net_poll_cnt = 0;
+#endif
+#endif
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_TEST_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_TEST_EXIT)
+          NpKit::CollectCpuEvent(
+              NPKIT_EVENT_NET_TEST_ENTRY,
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+              g_npkit_net_poll_cnt,
+#else
+              sub->npKitSizesFifo[buffSlot],
+#endif
+              uint64_t(sub->requests+buffSlot)/sizeof(void*),
+              sub->timestamp[buffSlot], sub->channelId);
+#if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
+          g_npkit_net_poll_cnt = 0;
+#endif
+#endif
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_TEST_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_TEST_EXIT)
+          NpKit::CollectCpuEvent(
+              NPKIT_EVENT_NET_TEST_EXIT,
 #if defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
               g_npkit_net_poll_cnt,
 #else

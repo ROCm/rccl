@@ -109,5 +109,8 @@
 #define NPKIT_EVENT_ALL_GATHER_RING_DIRECT_RECV_ENTRY           0x56
 #define NPKIT_EVENT_ALL_GATHER_RING_DIRECT_RECV_EXIT            0x57
 
+#define NPKIT_EVENT_NET_TEST_ENTRY                              0x58
+#define NPKIT_EVENT_NET_TEST_EXIT                               0x59
+
 
 #endif
