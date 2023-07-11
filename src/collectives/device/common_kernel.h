@@ -188,10 +188,17 @@ __device__ __forceinline__ void ReduceOrCopyMulti(
   IntBytes nBytesBehind = 0;
   IntBytes nBytesAhead = nElts*sizeof(T);
   if (aligned) {
+#if defined(__gfx90a__)
+    reduceCopyPacks<RedFn, T, ((MinSrcs > 1) ? 2 : Unroll), /*BytePerPack=*/16,
+      MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs>
+      (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
+       nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
+#else
     reduceCopyPacks<RedFn, T, Unroll*((MinSrcs == 1 && MinDsts == 1) ? 2 : 1), /*BytePerPack=*/16,
       MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs>
       (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
        nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
+#endif
     if (nBytesAhead == 0) return;
 
     reduceCopyPacks<RedFn, T, /*Unroll=*/1, /*BytePerPack=*/16,
@@ -200,11 +207,24 @@ __device__ __forceinline__ void ReduceOrCopyMulti(
        nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
     if (nBytesAhead == 0) return;
   }
-
-  reduceCopyPacks<RedFn, T, Unroll*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
+#if defined(__gfx90a__)
+  if (MinSrcs > 1) {
+    reduceCopyPacks<RedFn, T, Unroll/2*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
     MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs>
     (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
      nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
+  } else {
+    reduceCopyPacks<RedFn, T, Unroll*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
+    MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs>
+    (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
+     nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);	
+  }
+#else
+    reduceCopyPacks<RedFn, T, Unroll*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
+    MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs>
+    (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
+     nSrcs, srcPtrs, nDsts, dstPtrs, /*&*/nBytesBehind, /*&*/nBytesAhead);
+#endif
   if (nBytesAhead == 0) return;
 
   reduceCopyPacks<RedFn, T, /*Unroll=*/1, /*BytePerPack=*/sizeof(T),
