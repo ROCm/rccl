@@ -51,8 +51,6 @@ THE SOFTWARE.
 #define FBLU(x) KBLU x RST
 #define BOLD(x) "\x1B[1m" x RST
 
-#define RTC_CLOCK_FREQ_VEGA20 2.5E7
-
 struct transfer_data_t {
   float *dest0[MAX_WORKGROUPS]; //remote fine grain
   float *src0[MAX_WORKGROUPS];  //local fine grain
@@ -657,11 +655,22 @@ int main(int argc,char* argv[])
                               stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
 
-      uint64_t write_cycle = 0;
+      uint64_t max_write_cycle = 0;
       uint64_t bytes_transferred = 0;
 
       hipDeviceProp_t prop;
       HIPCHECK(hipGetDeviceProperties(&prop, i));
+      double vega_gpu_rtc_freq, bw_std_dev = 0, mean_write_cycle = 0;
+      if (prop.gcnArch/10 == 94)
+        vega_gpu_rtc_freq = 1.0E8;
+      else
+        vega_gpu_rtc_freq = 2.5E7;
+      //find mean/max of write_cycle
+      for (int j = 0; j < workgroups; j++) {
+        max_write_cycle = std::max(max_write_cycle, profiling_data[i]->write_cycles[j]);
+        mean_write_cycle = mean_write_cycle + profiling_data[i]->write_cycles[j];
+      }
+      mean_write_cycle /= workgroups;
       for (int j = 0; j < workgroups; j++) {
         int next_gpu;
         next_gpu = findNextGpu(ring[j], i, nGpu);
@@ -670,17 +679,18 @@ int main(int argc,char* argv[])
         uint32_t hopcount;
         HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
 
-        write_cycle = write_cycle + profiling_data[i]->write_cycles[j];
         bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
-              double t0 = (double)profiling_data[i]->write_cycles[j]/((double)RTC_CLOCK_FREQ_VEGA20);
-              fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-                i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
+        double t0 = (double)profiling_data[i]->write_cycles[j]/vega_gpu_rtc_freq;
+        bw_std_dev += std::pow((double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9) - (double)profiling_data[i]->bytes_transferred[j]/(mean_write_cycle*1.0E9/vega_gpu_rtc_freq), 2);
+        fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
+          i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
       }
+      bw_std_dev = std::sqrt(bw_std_dev/workgroups);
       print_table_summary_line();
       double total = 0;
-      total = (double)write_cycle/((double)RTC_CLOCK_FREQ_VEGA20)/(double)workgroups;
-      fprintf(stderr, " %-61s %-13.4f  %-20lu  %-.2f\n",
-        "Total" , total, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
+      total = (double)max_write_cycle/vega_gpu_rtc_freq;
+      fprintf(stderr, " Throughput standard deviation %-31.3f %-13.4f  %-20lu  %-.2f\n",
+        bw_std_dev, total, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
       print_table_summary_line();
 #ifdef PRINT_GPU0_ONLY
       break;
