@@ -74,7 +74,7 @@ struct profiling_data_t {
 
 void print_table_header(void) {
   fprintf(stderr, "%120s","=================================================================================================================================\n");
-  fprintf(stderr, "%-20s %-13s %-13s %-13s %-13s %-20s %-20s\n","[Originating GPU]", "[Directions]", "[WorkGroup]", "[linktype]", "[time(sec)]" , "[bytes_transferred]",  "[kernel throughput(GB/s)]");
+  fprintf(stderr, "%-20s %-13s %-13s %-13s %-13s %-20s %-20s %-10s\n","[Originating GPU]", "[Directions]", "[WorkGroup]", "[linktype]", "[time(ms)]" , "[bytes_transferred]",  "[throughput(GB/s)]", "[StdDev]");
   fprintf(stderr, "%120s","=================================================================================================================================\n");
 }
 
@@ -390,7 +390,7 @@ int main(int argc,char* argv[])
   printf("Benchmarking using %ld bytes\n", nBytes);
   uint64_t N = nBytes/sizeof(float);
 
-  int sync = 1;
+  int sync = 0;
   char *s = getCmdOption(argv, argv + argc, "-s");
   if (s)
     sync = atol(s);
@@ -509,8 +509,8 @@ int main(int argc,char* argv[])
                     i, prop.pciBusID, prop.name);
     //create stream
     HIPCHECK(hipStreamCreate(&stream[i]));
-    profiling_data[i] = (struct profiling_data_t *)malloc(sizeof(struct profiling_data_t));
-    HIPCHECK(hipMalloc((void**) &d_profiling_data[i], sizeof(struct profiling_data_t)));
+    profiling_data[i] = (struct profiling_data_t *)malloc(sizeof(struct profiling_data_t)*iters);
+    HIPCHECK(hipMalloc((void**) &d_profiling_data[i], sizeof(struct profiling_data_t)*iters));
 
     HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), hipDeviceMallocFinegrained));
     for (int j = 0; j < workgroups; j++) {
@@ -598,7 +598,7 @@ int main(int argc,char* argv[])
             /*block dim x,y,z*/       dim3(THREADS, 1, 1),
             /*dynamic shared mem*/    0,
             /*stream*/                stream[i],
-            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+            /*kernel args*/           transfer_data[i], d_profiling_data[i]+j, opCount);
       }
 #endif
       opCount+=workgroups;
@@ -606,7 +606,7 @@ int main(int argc,char* argv[])
 
     for (int i = 0; i < nGpu; i ++) {
       HIPCHECK(hipSetDevice(i));
-      HIPCHECK(hipMemsetAsync(d_profiling_data[i], 0, sizeof(struct profiling_data_t), stream[i]));
+      HIPCHECK(hipMemsetAsync(d_profiling_data[i], 0, sizeof(struct profiling_data_t)*iters, stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
     }
     auto start = std::chrono::high_resolution_clock::now();
@@ -634,7 +634,7 @@ int main(int argc,char* argv[])
             /*block dim x,y,z*/       dim3(THREADS, 1, 1),
             /*dynamic shared mem*/    0,
             /*stream*/                stream[i],
-            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+            /*kernel args*/           transfer_data[i], d_profiling_data[i]+j, opCount);
       }
 #endif
       opCount+=workgroups;
@@ -651,7 +651,7 @@ int main(int argc,char* argv[])
     print_table_header();
     for (int i = 0; i < nGpu; i ++) {
       HIPCHECK(hipMemcpyAsync(profiling_data[i], d_profiling_data[i],
-                              sizeof(struct profiling_data_t), hipMemcpyDeviceToHost,
+                              sizeof(struct profiling_data_t)*iters, hipMemcpyDeviceToHost,
                               stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
 
@@ -665,12 +665,6 @@ int main(int argc,char* argv[])
         vega_gpu_rtc_freq = 1.0E8;
       else
         vega_gpu_rtc_freq = 2.5E7;
-      //find mean/max of write_cycle
-      for (int j = 0; j < workgroups; j++) {
-        max_write_cycle = std::max(max_write_cycle, profiling_data[i]->write_cycles[j]);
-        mean_write_cycle = mean_write_cycle + profiling_data[i]->write_cycles[j];
-      }
-      mean_write_cycle /= workgroups;
       for (int j = 0; j < workgroups; j++) {
         int next_gpu;
         next_gpu = findNextGpu(ring[j], i, nGpu);
@@ -679,18 +673,42 @@ int main(int argc,char* argv[])
         uint32_t hopcount;
         HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
 
-        bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+        //find mean/max/stddev of iterations
+        uint64_t iter_max_write_cycle = 0, iter_bytes_transferred = 0;
+        double iter_bw_std_dev = 0, iter_total_write_cycle = 0;
+        for (int k = 0; k < iters; k++) {
+          iter_max_write_cycle = std::max(iter_max_write_cycle, (profiling_data[i]+k)->write_cycles[j]);
+          iter_total_write_cycle = iter_total_write_cycle + (profiling_data[i]+k)->write_cycles[j];
+          iter_bytes_transferred = iter_bytes_transferred + (profiling_data[i]+k)->bytes_transferred[j];
+        }
+        bytes_transferred += iter_bytes_transferred;
+        double t1 = iter_total_write_cycle/vega_gpu_rtc_freq;
+        max_write_cycle = std::max(max_write_cycle, (uint64_t)iter_total_write_cycle);
+        mean_write_cycle = mean_write_cycle + iter_total_write_cycle;
+        for (int k = 0; k < iters; k++) {
+          double t0 = (double)(profiling_data[i]+k)->write_cycles[j]/vega_gpu_rtc_freq;
+          iter_bw_std_dev += std::pow((double)(profiling_data[i]+k)->bytes_transferred[j]/(t0*1.0E9) - (double)(profiling_data[i]+k)->bytes_transferred[j]*iters/(iter_total_write_cycle*1.0E9/vega_gpu_rtc_freq), 2);
+        }
+        iter_bw_std_dev = std::sqrt(iter_bw_std_dev/iters);
+
+        //store bytes_transferred and write_cycle from all itres into in first iter entry
+        profiling_data[i]->write_cycles[j] = (uint64_t)iter_total_write_cycle;
+        profiling_data[i]->bytes_transferred[j] = iter_bytes_transferred;
+        fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.3f  %-20lu  %-8.2f         %.3f\n",
+          i,i, next_gpu,j,link_type_name[linktype], t1*1000, iter_bytes_transferred, (double)(iter_bytes_transferred)/(t1*1.0E9), iter_bw_std_dev);
+      }
+      //calculate stddev for rings
+      mean_write_cycle /= workgroups;
+      for (int j = 0; j < workgroups; j++) {
         double t0 = (double)profiling_data[i]->write_cycles[j]/vega_gpu_rtc_freq;
         bw_std_dev += std::pow((double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9) - (double)profiling_data[i]->bytes_transferred[j]/(mean_write_cycle*1.0E9/vega_gpu_rtc_freq), 2);
-        fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-          i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
       }
       bw_std_dev = std::sqrt(bw_std_dev/workgroups);
       print_table_summary_line();
       double total = 0;
       total = (double)max_write_cycle/vega_gpu_rtc_freq;
-      fprintf(stderr, " Throughput standard deviation %-31.3f %-13.4f  %-20lu  %-.2f\n",
-        bw_std_dev, total, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
+      fprintf(stderr, " Workgroups throughput standard deviation %-20.3f %-13.3f  %-20lu  %-.2f\n",
+        bw_std_dev, total*1000, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
       print_table_summary_line();
 #ifdef PRINT_GPU0_ONLY
       break;
@@ -699,8 +717,8 @@ int main(int argc,char* argv[])
     std::cout << BOLD(FBLU("[Application Level Transfer Profiling Data]"))<<std::endl;
     uint64_t total_bytes_transferred = profiling_data[0]->bytes_transferred[0] * workgroups ;
     print_table_summary_line();
-    fprintf(stderr, " %-61s %-13.4f  %-20lu  %-.2f\n",
-      "Total" , deltaSec, total_bytes_transferred, (double)total_bytes_transferred/(deltaSec*1.0E9));
+    fprintf(stderr, " %-61s %-13.3f  %-20lu  %-.2f\n",
+      "Total" , deltaSec*1000, total_bytes_transferred, (double)total_bytes_transferred/(deltaSec*1.0E9));
     print_table_summary_line();
   }
 
