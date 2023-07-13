@@ -74,7 +74,7 @@ struct profiling_data_t {
 
 void print_table_header(void) {
   fprintf(stderr, "%120s","=================================================================================================================================\n");
-  fprintf(stderr, "%-20s %-13s %-13s %-13s %-13s %-20s %-20s\n","[Originating GPU]", "[Directions]", "[WorkGroup]", "[linktype]", "[time(sec)]" , "[bytes_transferred]",  "[kernel throughput(GB/s)]");
+  fprintf(stderr, "%-20s %-13s %-13s %-13s %-13s %-20s %-20s %-10s\n","[Originating GPU]", "[Directions]", "[WorkGroup]", "[linktype]", "[time(ms)]" , "[bytes_transferred]",  "[throughput(GB/s)]", "[StdDev]");
   fprintf(stderr, "%120s","=================================================================================================================================\n");
 }
 
@@ -390,7 +390,7 @@ int main(int argc,char* argv[])
   printf("Benchmarking using %ld bytes\n", nBytes);
   uint64_t N = nBytes/sizeof(float);
 
-  int sync = 1;
+  int sync = 0;
   char *s = getCmdOption(argv, argv + argc, "-s");
   if (s)
     sync = atol(s);
@@ -426,14 +426,23 @@ int main(int argc,char* argv[])
   static const char *ring_4p3l = "0 1 2 3|0 1 3 2|0 2 1 3|0 2 3 1|0 3 1 2|0 3 2 1";
   static const char *ring_8p1h = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0";
   static const char *ring_16p1h = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0";
+  static const char *ring_gfx940_8p = "0 1 2 3 4 5 6 7|0 1 2 3 4 5 7 6|0 2 4 1 3 6 5 7|0 2 4 6 1 7 3 5|0 3 1 5 2 7 4 6|0 3 5 1 6 2 7 4|0 4 1 7 3 6 2 5|7 6 5 4 3 2 1 0|6 7 5 4 3 2 1 0|7 5 6 3 1 4 2 0|5 3 7 1 6 4 2 0|6 4 7 2 5 1 3 0|4 7 2 6 1 5 3 0|5 2 6 3 7 1 4 0";
+
   setupPeers(connection_info, &is_xgmi);
   if (!r) {
     parseChordalRing(&cr8g);
     if (nGpu == 4 && is_xgmi) r = (char *)ring_4p3l;
     if (nGpu == 8 && cr8g) r = (char *)cr8g;
     if (nGpu == 8 && !cr8g) {
-      r = (char *)ring_8p1h;
-      if(!workgroups) workgroups = 16;
+      hipDeviceProp_t prop;
+      HIPCHECK(hipGetDeviceProperties(&prop, 0));
+      if (prop.gcnArch/10 == 94) {
+        r = (char *)ring_gfx940_8p;
+        if(!workgroups) workgroups = 28;
+      } else {
+        r = (char *)ring_8p1h;
+        if(!workgroups) workgroups = 16;
+      }
     }
     if (nGpu == 16) {
       r = (char *)ring_16p1h;
@@ -509,14 +518,14 @@ int main(int argc,char* argv[])
                     i, prop.pciBusID, prop.name);
     //create stream
     HIPCHECK(hipStreamCreate(&stream[i]));
-    profiling_data[i] = (struct profiling_data_t *)malloc(sizeof(struct profiling_data_t));
-    HIPCHECK(hipMalloc((void**) &d_profiling_data[i], sizeof(struct profiling_data_t)));
+    profiling_data[i] = (struct profiling_data_t *)malloc(sizeof(struct profiling_data_t)*iters);
+    HIPCHECK(hipMalloc((void**) &d_profiling_data[i], sizeof(struct profiling_data_t)*iters));
 
-    HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), hipDeviceMallocFinegrained));
+    HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
     for (int j = 0; j < workgroups; j++) {
-      HIPCHECK(hipExtMallocWithFlags((void**) &buff[i*MAX_WORKGROUPS+j], 2*N*sizeof(float), hipDeviceMallocFinegrained));
+      HIPCHECK(hipExtMallocWithFlags((void**) &buff[i*MAX_WORKGROUPS+j], 2*N*sizeof(float), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
       // additional fine grained buffer for local doublecopy, only need 1 buffer (not used by remote)
-      HIPCHECK(hipExtMallocWithFlags((void**) &buff_fine[i*MAX_WORKGROUPS+j], N*sizeof(float), hipDeviceMallocFinegrained));
+      HIPCHECK(hipExtMallocWithFlags((void**) &buff_fine[i*MAX_WORKGROUPS+j], N*sizeof(float), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
       HIPCHECK(hipMalloc((void**) &buff_coarse[i*MAX_WORKGROUPS+j], 2*N*sizeof(float)));
       //randomize test data
       hipLaunchKernelGGL(initTestDataKernel,
@@ -598,7 +607,7 @@ int main(int argc,char* argv[])
             /*block dim x,y,z*/       dim3(THREADS, 1, 1),
             /*dynamic shared mem*/    0,
             /*stream*/                stream[i],
-            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+            /*kernel args*/           transfer_data[i], d_profiling_data[i]+j, opCount);
       }
 #endif
       opCount+=workgroups;
@@ -606,7 +615,7 @@ int main(int argc,char* argv[])
 
     for (int i = 0; i < nGpu; i ++) {
       HIPCHECK(hipSetDevice(i));
-      HIPCHECK(hipMemsetAsync(d_profiling_data[i], 0, sizeof(struct profiling_data_t), stream[i]));
+      HIPCHECK(hipMemsetAsync(d_profiling_data[i], 0, sizeof(struct profiling_data_t)*iters, stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
     }
     auto start = std::chrono::high_resolution_clock::now();
@@ -634,7 +643,7 @@ int main(int argc,char* argv[])
             /*block dim x,y,z*/       dim3(THREADS, 1, 1),
             /*dynamic shared mem*/    0,
             /*stream*/                stream[i],
-            /*kernel args*/           transfer_data[i], d_profiling_data[i], opCount);
+            /*kernel args*/           transfer_data[i], d_profiling_data[i]+j, opCount);
       }
 #endif
       opCount+=workgroups;
@@ -651,7 +660,7 @@ int main(int argc,char* argv[])
     print_table_header();
     for (int i = 0; i < nGpu; i ++) {
       HIPCHECK(hipMemcpyAsync(profiling_data[i], d_profiling_data[i],
-                              sizeof(struct profiling_data_t), hipMemcpyDeviceToHost,
+                              sizeof(struct profiling_data_t)*iters, hipMemcpyDeviceToHost,
                               stream[i]));
       HIPCHECK(hipStreamSynchronize(stream[i]));
 
@@ -665,12 +674,6 @@ int main(int argc,char* argv[])
         vega_gpu_rtc_freq = 1.0E8;
       else
         vega_gpu_rtc_freq = 2.5E7;
-      //find mean/max of write_cycle
-      for (int j = 0; j < workgroups; j++) {
-        max_write_cycle = std::max(max_write_cycle, profiling_data[i]->write_cycles[j]);
-        mean_write_cycle = mean_write_cycle + profiling_data[i]->write_cycles[j];
-      }
-      mean_write_cycle /= workgroups;
       for (int j = 0; j < workgroups; j++) {
         int next_gpu;
         next_gpu = findNextGpu(ring[j], i, nGpu);
@@ -679,18 +682,42 @@ int main(int argc,char* argv[])
         uint32_t hopcount;
         HIPCHECK(hipExtGetLinkTypeAndHopCount(i, next_gpu , &linktype, &hopcount));
 
-        bytes_transferred = bytes_transferred + profiling_data[i]->bytes_transferred[j];
+        //find mean/max/stddev of iterations
+        uint64_t iter_max_write_cycle = 0, iter_bytes_transferred = 0;
+        double iter_bw_std_dev = 0, iter_total_write_cycle = 0;
+        for (int k = 0; k < iters; k++) {
+          iter_max_write_cycle = std::max(iter_max_write_cycle, (profiling_data[i]+k)->write_cycles[j]);
+          iter_total_write_cycle = iter_total_write_cycle + (profiling_data[i]+k)->write_cycles[j];
+          iter_bytes_transferred = iter_bytes_transferred + (profiling_data[i]+k)->bytes_transferred[j];
+        }
+        bytes_transferred += iter_bytes_transferred;
+        double t1 = iter_total_write_cycle/vega_gpu_rtc_freq;
+        max_write_cycle = std::max(max_write_cycle, (uint64_t)iter_total_write_cycle);
+        mean_write_cycle = mean_write_cycle + iter_total_write_cycle;
+        for (int k = 0; k < iters; k++) {
+          double t0 = (double)(profiling_data[i]+k)->write_cycles[j]/vega_gpu_rtc_freq;
+          iter_bw_std_dev += std::pow((double)(profiling_data[i]+k)->bytes_transferred[j]/(t0*1.0E9) - (double)(profiling_data[i]+k)->bytes_transferred[j]*iters/(iter_total_write_cycle*1.0E9/vega_gpu_rtc_freq), 2);
+        }
+        iter_bw_std_dev = std::sqrt(iter_bw_std_dev/iters);
+
+        //store bytes_transferred and write_cycle from all itres into in first iter entry
+        profiling_data[i]->write_cycles[j] = (uint64_t)iter_total_write_cycle;
+        profiling_data[i]->bytes_transferred[j] = iter_bytes_transferred;
+        fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.3f  %-20lu  %-8.2f         %.3f\n",
+          i,i, next_gpu,j,link_type_name[linktype], t1*1000, iter_bytes_transferred, (double)(iter_bytes_transferred)/(t1*1.0E9), iter_bw_std_dev);
+      }
+      //calculate stddev for rings
+      mean_write_cycle /= workgroups;
+      for (int j = 0; j < workgroups; j++) {
         double t0 = (double)profiling_data[i]->write_cycles[j]/vega_gpu_rtc_freq;
         bw_std_dev += std::pow((double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9) - (double)profiling_data[i]->bytes_transferred[j]/(mean_write_cycle*1.0E9/vega_gpu_rtc_freq), 2);
-        fprintf(stderr, "%-20d %-d->%-10d %-13d %-13s %-13.4f  %-20lu  %-.2f\n",
-          i,i, next_gpu,j,link_type_name[linktype],t0, profiling_data[i]->bytes_transferred[j], (double)profiling_data[i]->bytes_transferred[j]/(t0*1.0E9));
       }
       bw_std_dev = std::sqrt(bw_std_dev/workgroups);
       print_table_summary_line();
       double total = 0;
       total = (double)max_write_cycle/vega_gpu_rtc_freq;
-      fprintf(stderr, " Throughput standard deviation %-31.3f %-13.4f  %-20lu  %-.2f\n",
-        bw_std_dev, total, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
+      fprintf(stderr, " Workgroups throughput standard deviation %-20.3f %-13.3f  %-20lu  %-.2f\n",
+        bw_std_dev, total*1000, bytes_transferred, (double)bytes_transferred/(total*1.0E9));
       print_table_summary_line();
 #ifdef PRINT_GPU0_ONLY
       break;
@@ -699,8 +726,8 @@ int main(int argc,char* argv[])
     std::cout << BOLD(FBLU("[Application Level Transfer Profiling Data]"))<<std::endl;
     uint64_t total_bytes_transferred = profiling_data[0]->bytes_transferred[0] * workgroups ;
     print_table_summary_line();
-    fprintf(stderr, " %-61s %-13.4f  %-20lu  %-.2f\n",
-      "Total" , deltaSec, total_bytes_transferred, (double)total_bytes_transferred/(deltaSec*1.0E9));
+    fprintf(stderr, " %-61s %-13.3f  %-20lu  %-.2f\n",
+      "Total" , deltaSec*1000, total_bytes_transferred, (double)total_bytes_transferred/(deltaSec*1.0E9));
     print_table_summary_line();
   }
 
