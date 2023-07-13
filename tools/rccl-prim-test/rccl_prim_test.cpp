@@ -521,11 +521,11 @@ int main(int argc,char* argv[])
     profiling_data[i] = (struct profiling_data_t *)malloc(sizeof(struct profiling_data_t)*iters);
     HIPCHECK(hipMalloc((void**) &d_profiling_data[i], sizeof(struct profiling_data_t)*iters));
 
-    HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), hipDeviceMallocFinegrained));
+    HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
     for (int j = 0; j < workgroups; j++) {
-      HIPCHECK(hipExtMallocWithFlags((void**) &buff[i*MAX_WORKGROUPS+j], 2*N*sizeof(float), hipDeviceMallocFinegrained));
+      HIPCHECK(hipExtMallocWithFlags((void**) &buff[i*MAX_WORKGROUPS+j], 2*N*sizeof(float), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
       // additional fine grained buffer for local doublecopy, only need 1 buffer (not used by remote)
-      HIPCHECK(hipExtMallocWithFlags((void**) &buff_fine[i*MAX_WORKGROUPS+j], N*sizeof(float), hipDeviceMallocFinegrained));
+      HIPCHECK(hipExtMallocWithFlags((void**) &buff_fine[i*MAX_WORKGROUPS+j], N*sizeof(float), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
       HIPCHECK(hipMalloc((void**) &buff_coarse[i*MAX_WORKGROUPS+j], 2*N*sizeof(float)));
       //randomize test data
       hipLaunchKernelGGL(initTestDataKernel,
