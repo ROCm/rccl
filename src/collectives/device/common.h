@@ -28,10 +28,17 @@
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
 #endif
 
+#ifdef ENABLE_LL128
 #define NCCL_FUNC5(func, algo, devredop, type, nullify) \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,     devredop, type)), \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL128,  devredop, type)), \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, SIMPLE, devredop, type))
+#else
+#define NCCL_FUNC5(func, algo, devredop, type, nullify) \
+  MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,     devredop, type)), \
+  MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL,     devredop, type)), \
+  MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, SIMPLE, devredop, type))
+#endif
 
 #define NCCL_FUNC4(func, devredop, type, nullify) \
   NCCL_FUNC5(func, TREE,    devredop, type, nullify), \
@@ -542,7 +549,11 @@ __forceinline__ __device__ void ncclKernel(
 #ifdef USE_INDIRECT_FUNCTION_CALL
       ncclFuncs[ncclShmem.work.header.funcIndex]();
 #else
+#ifdef ENABLE_LL128
       NCCL_CALL_FUNCTIONS<1>(ncclShmem.work.header.funcIndex);
+#else
+      NCCL_CALL_FUNCTIONS<0>(ncclShmem.work.header.funcIndex);
+#endif
 #endif
     }
 
@@ -607,10 +618,16 @@ __device__  __attribute__((noinline)) void NCCL_FUNC_NAME(func, algo, proto, dev
 #endif
 
 // Only generate inline kernels for LL
+#ifdef ENABLE_LL128
 #define IMPL_COLL4(func, algo, devredop, type) \
   IMPL_COLL_FUNC(func, algo, LL,     devredop, type) \
   IMPL_COLL_FUNC(func, algo, LL128,  devredop, type) \
   IMPL_COLL_FUNC(func, algo, SIMPLE, devredop, type)
+#else
+#define IMPL_COLL4(func, algo, devredop, type) \
+  IMPL_COLL_FUNC(func, algo, LL,     devredop, type) \
+  IMPL_COLL_FUNC(func, algo, SIMPLE, devredop, type)
+#endif
 
 #define IMPL_COLL3(func, devredop, type) \
   IMPL_COLL4(func, TREE,    devredop, type) \
