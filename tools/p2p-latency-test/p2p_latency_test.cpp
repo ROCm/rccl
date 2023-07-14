@@ -13,42 +13,37 @@
 
 #define NUM_LOOPS_WARMUP 2000
 #define NUM_LOOPS_RUN 10000
-#define VEGA_GPU_RTC_FREQUENCY 2.5E7
 
 #define PING_MODE 0
 #define PONG_MODE 1
 
 __global__ void PingKernel(uint64_t* local_flag, uint64_t* remote_flag, uint64_t* time_delta) {
-  volatile uint16_t *volatile_local_flag = (volatile uint16_t *)local_flag;
-  volatile uint16_t *volatile_remote_flag = (volatile uint16_t *)remote_flag;
   #pragma unroll
-  for (uint16_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
-    *volatile_remote_flag = i;
-    while (*volatile_local_flag != i);
+  for (uint32_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
+    __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
+    while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
   }
   uint64_t start_time = wall_clock64();
   #pragma unroll
-  for (uint16_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
-    *volatile_remote_flag = i;
-    while (*volatile_local_flag != i);
+  for (uint32_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
+    __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
+    while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
   }
   uint64_t end_time = wall_clock64();
   *time_delta = end_time - start_time;
 }
 
 __global__ void PongKernel(uint64_t* local_flag, uint64_t* remote_flag, uint64_t* time_delta) {
-  volatile uint16_t *volatile_local_flag = (volatile uint16_t *)local_flag;
-  volatile uint16_t *volatile_remote_flag = (volatile uint16_t *)remote_flag;
   #pragma unroll
-  for (uint16_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
-    while (*volatile_local_flag != i);
-    *volatile_remote_flag = i;
+  for (uint32_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
+    while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
+    __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
   }
   uint64_t start_time = wall_clock64();
   #pragma unroll
-  for (uint16_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
-    while (*volatile_local_flag != i);
-    *volatile_remote_flag = i;
+  for (uint32_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
+    while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
+    __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
   }
   uint64_t end_time = wall_clock64();
   *time_delta = end_time - start_time;
@@ -63,12 +58,17 @@ int main(int argc, char** argv) {
     return -1;
   }
 
+  hipDeviceProp_t prop;
+  int device_id;
+  hipGetDevice(&device_id);
+  hipGetDeviceProperties(&prop, device_id);
+
   uint64_t *local_flag = nullptr;
   uint64_t *remote_flag = nullptr;
   uint64_t *time_delta = nullptr;
   hipStreamCreateWithFlags(&stream, hipStreamNonBlocking);
-  hipExtMallocWithFlags((void**)&local_flag, sizeof(uint64_t), hipDeviceMallocFinegrained);
-  hipExtMallocWithFlags((void**)&time_delta, sizeof(uint64_t), hipDeviceMallocFinegrained);
+  hipExtMallocWithFlags((void**)&local_flag, sizeof(uint64_t), prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
+  hipExtMallocWithFlags((void**)&time_delta, sizeof(uint64_t), prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
   hipMemsetAsync(local_flag, 0, sizeof(uint64_t), stream);
   hipMemsetAsync(time_delta, 0, sizeof(uint64_t), stream);
   hipStreamSynchronize(stream);
@@ -99,9 +99,10 @@ int main(int argc, char** argv) {
     } else {
       PongKernel<<<1, 1, 0, stream>>>(local_flag, remote_flag, time_delta);
     }
-    hipStreamSynchronize(stream);
+    err = hipStreamSynchronize(stream);
     if (self_mode == PING_MODE) {
-      printf("Ping-pong latency in us: %g\n", double(*time_delta) / NUM_LOOPS_RUN * 1e6 / VEGA_GPU_RTC_FREQUENCY);
+      double vega_gpu_rtc_freq = (prop.gcnArch / 10 == 94) ? 1.0E8 : 2.5E7;
+      fprintf(stdout, "One-way latency in us: %g\n", double(*time_delta) * 1e6 / NUM_LOOPS_RUN / vega_gpu_rtc_freq / 2);
     }
   } else {
     fprintf(stderr, "Invalid mode %d\n", self_mode);
