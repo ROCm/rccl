@@ -1,0 +1,20 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+HIP_PATH ?= $(wildcard /opt/rocm)
+ifeq (,$(HIP_PATH))
+HIP_PATH = ../../..
+endif
+HIPCC = $(HIP_PATH)/bin/hipcc
+
+EXE = p2p_latency_test
+CXXFLAGS = -g -O3
+
+files = $(EXE).cpp
+
+all: $(EXE)
+
+$(EXE): $(files)
+	$(HIPCC) $(CXXFLAGS) $^ -o $@
+
+clean:
+	rm -f *.o $(EXE)
