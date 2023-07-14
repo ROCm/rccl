@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <hip/hip_runtime.h>
 
+#define HIP_IPC_MEM_MIN_SIZE 2097152UL
+
 #define NUM_LOOPS_WARMUP 2000
 #define NUM_LOOPS_RUN 10000
 
@@ -67,10 +69,10 @@ int main(int argc, char** argv) {
   uint64_t *remote_flag = nullptr;
   uint64_t *time_delta = nullptr;
   hipStreamCreateWithFlags(&stream, hipStreamNonBlocking);
-  hipExtMallocWithFlags((void**)&local_flag, sizeof(uint64_t), prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
-  hipExtMallocWithFlags((void**)&time_delta, sizeof(uint64_t), prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
-  hipMemsetAsync(local_flag, 0, sizeof(uint64_t), stream);
-  hipMemsetAsync(time_delta, 0, sizeof(uint64_t), stream);
+  hipExtMallocWithFlags((void**)&local_flag, HIP_IPC_MEM_MIN_SIZE, prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
+  hipExtMallocWithFlags((void**)&time_delta, HIP_IPC_MEM_MIN_SIZE, prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
+  hipMemsetAsync(local_flag, 0, HIP_IPC_MEM_MIN_SIZE, stream);
+  hipMemsetAsync(time_delta, 0, HIP_IPC_MEM_MIN_SIZE, stream);
   hipStreamSynchronize(stream);
   hipIpcMemHandle_t local_handle;
   hipIpcMemHandle_t remote_handle;
@@ -91,7 +93,7 @@ int main(int argc, char** argv) {
     peer_file.close();
     err = hipIpcOpenMemHandle((void**)(&remote_flag), remote_handle, hipIpcMemLazyEnablePeerAccess);
     if (err != hipSuccess) {
-      fprintf(stderr, "HIP error %d\n", (int)err);
+      fprintf(stderr, "hipIpcOpenMemHandle error %d\n", (int)err);
       return -1;
     }
     if (self_mode == PING_MODE) {
@@ -100,6 +102,10 @@ int main(int argc, char** argv) {
       PongKernel<<<1, 1, 0, stream>>>(local_flag, remote_flag, time_delta);
     }
     err = hipStreamSynchronize(stream);
+    if (err != hipSuccess) {
+      fprintf(stderr, "hipStreamSynchronize error %d\n", (int)err);
+      return -1;
+    }
     if (self_mode == PING_MODE) {
       double vega_gpu_rtc_freq = (prop.gcnArch / 10 == 94) ? 1.0E8 : 2.5E7;
       fprintf(stdout, "One-way latency in us: %g\n", double(*time_delta) * 1e6 / NUM_LOOPS_RUN / vega_gpu_rtc_freq / 2);
