@@ -578,6 +578,32 @@ static struct rcclRomeModel rome_model_76 = {
   .treeBase = "",
 };
 
+static struct rcclRomeModel rome_model_79 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 7,
+  .gpuIds = { 0x1d000, 0x2e000, 0x3f000, 0x61000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
+  .nicIds = { },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { },
+  .connMatrix = { 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, },
+  .gdrLevel = { },
+  .pattern = "4040",
+  .ringBase = "0 1 2 3 4 5 6 7|0 1 2 3 4 5 7 6|0 2 4 1 3 6 5 7|0 2 4 6 1 7 3 5|0 3 1 5 2 7 4 6|0 3 5 1 6 2 7 4|0 4 1 7 3 6 2 5|7 6 5 4 3 2 1 0|6 7 5 4 3 2 1 0|7 5 6 3 1 4 2 0|5 3 7 1 6 4 2 0|6 4 7 2 5 1 3 0|4 7 2 6 1 5 3 0|5 2 6 3 7 1 4 0",
+  .options = "",
+};
+
+static struct rcclRomeModel rome_model_80 = {
+  .nGpus = 4, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .gpuIds = { 0x82000, 0xc2000, 0x2000, 0x42000, },
+  .nicIds = { 0x81000, 0xc1000, 0x1000, 0x41000, },
+  .gpuNuma = { 2, 3, 0, 1, },
+  .nicNuma = { 2, 3, 0, 1, },
+  .connMatrix = { 0, 2, 2, 2, 2, 0, 2, 2, 2, 2, 0, 2, 2, 2, 2, 0, },
+  .gdrLevel = { PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, },
+  .pattern = "11111111",
+  .ringBase = "N2 2 3 0 1 N1|N0 0 1 3 2 N2|N0 0 2 1 3 N3|N3 3 1 0 2 N2|N3 3 1 2 0 N0|N1 1 0 3 2 N2|N1 1 2 3 0 N0|N2 2 0 1 3 N3|N3 3 0 2 1 N1|N2 2 3 1 0 N0|N1 1 2 0 3 N3|N0 0 3 2 1 N1",
+  .options = "",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -617,6 +643,8 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_73,
   rome_model_74,
   rome_model_76,
+  rome_model_79,
+  rome_model_80,
 };
 
 /* Parse user defined rings. Format is like :
@@ -1202,8 +1230,8 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   // only valid on Rome
   int arch, vendor, model;
   NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-  if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
-    return ncclSuccess;
+  //if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
+    //return ncclSuccess;
 
   // number of GPUs and NICs on each numa node is used as first screening pattern
   struct rcclRomeModel romeTopo;
