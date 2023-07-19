@@ -171,6 +171,13 @@ RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
   int head = 0;
+  hipDeviceProp_t devProp;
+  double vega_gpu_rtc_freq;
+  hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
+  if (devProp.gcnArch/10 == 94 && status == hipSuccess)
+    vega_gpu_rtc_freq = 1.0E8;
+  else
+    vega_gpu_rtc_freq = 2.5E7;
   #define MAX_NAME_LENGTH 64
   char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+2));
   for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
@@ -213,16 +220,15 @@ void *ncclCommThreadMain(void *arg) {
       char line[1024];
       int offset = 0;
       uint16_t fIdx = td->funcIndex;
-      #define VEGA_GPU_RTC_FREQUENCY 2.5E7
       if (type == ncclCollTraceDataType) {
         sprintf(line, "## [%012.6f] [%02d:%02d] L:%04d DT %08x %016lx %016lx",
-          (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid,
+          (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
           fIdx, td->data_0, td->opCount, td->data_1);
       } else {
         if (fIdx == FUNC_INDEX_P2P || type == ncclCollTraceP2pElemType)
-          sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
+          sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
         else
-          sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/VEGA_GPU_RTC_FREQUENCY, comm->rank, td->bid, td->opCount);
+          sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);
         offset = strlen(line);
         if (type == ncclCollTraceCollElemType) {
           sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx, td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
@@ -705,7 +711,13 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
 
   // detect if fine grained memory is available on this GPU
   int *ptr;
+#if defined(HIP_UNCACHED_MEMORY)
+  hipDeviceProp_t prop;
+  CUDACHECK(hipGetDeviceProperties(&prop, 0));
+  if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained) == hipSuccess) {
+#else
   if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocFinegrained) == hipSuccess) {
+#endif
     CUDACHECK(hipFree(ptr));
     info->hasFineGrain = true;
     NCCLCHECK(ncclGpuGdrSupport(comm, &info->gdrSupport));
