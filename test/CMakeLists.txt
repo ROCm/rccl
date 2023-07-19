@@ -7,11 +7,6 @@ if(BUILD_TESTS)
 
   message("Building rccl unit tests (Installed in /test/rccl-UnitTests)")
 
-  find_program(CHRPATH chrpath)
-  if(NOT CHRPATH)
-      message(FATAL_ERROR "chrpath is required for rccl-UnitTests. Please install (e.g. sudo apt-get install chrpath)")
-  endif()
-
   find_package(hsa-runtime64 PATHS /opt/rocm )
   if(${hsa-runtime64_FOUND})
     message("hsa-runtime64 found @  ${hsa-runtime64_DIR} ")
@@ -79,15 +74,6 @@ if(BUILD_TESTS)
   else()
     target_link_libraries(rccl-UnitTests PRIVATE rccl)
   endif()
-  # HIPCC adds /opt/rocm/lib as RPATH, even though the install process is supposed to
-  # remove RPATH.  It also occurs before any user-specified rpath, which effectively overrides the user rpath.
-  #  As a work-around, set the correct RPATH for the rccl unit test executable as a post-install step
-  # if (CMAKE_INSTALL_PREFIX MATCHES "${ROCM_PATH}")
-  #   # install_prefix/CMAKE_INSTALL_PREFIX was not explicitly specified, so look in build/release
-  #   add_custom_command( TARGET rccl-UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_BINARY_DIR}:${ROCM_PATH}/lib ${CMAKE_BINARY_DIR}/test/rccl-UnitTests)
-  # else()
-  #   add_custom_command( TARGET rccl-UnitTests POST_BUILD COMMAND chrpath ARGS -r ${CMAKE_INSTALL_PREFIX}/lib:${ROCM_PATH}/lib ${CMAKE_INSTALL_PREFIX}/test/rccl-UnitTests)
-  # endif()
   set_property(TARGET rccl-UnitTests PROPERTY INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${ROCM_PATH}/lib;${CMAKE_BINARY_DIR}")
   set_property(TARGET rccl-UnitTests PROPERTY BUILD_RPATH "${CMAKE_BINARY_DIR};${ROCM_PATH}/lib")
   rocm_install(TARGETS rccl-UnitTests COMPONENT tests)
