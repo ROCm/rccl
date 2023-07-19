@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cstdarg>
 #include "xml.h"
 #include "coll_net.h"
 #include "model.h"
