@@ -163,6 +163,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
                 conn->connected = 1;
                 /* comm->channels[c].devPeers[sendPeer]->send[connIndex] is a device memory access. */
                 CUDACHECKGOTO(cudaMemcpyAsync(&addr, &comm->channels[c].devPeers[sendPeer], sizeof(struct ncclDevChannelPeer*), cudaMemcpyDeviceToHost, comm->sharedRes->hostStream.cudaStream), ret, fail);
+                CUDACHECKGOTO(cudaStreamSynchronize(comm->sharedRes->hostStream.cudaStream), ret, fail);
                 CUDACHECKGOTO(cudaMemcpyAsync(&addr->send[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->sharedRes->hostStream.cudaStream), ret, fail);
               } else if (ret == ncclInProgress) {
                 allChannelsConnected = false;
@@ -183,6 +184,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
                 conn->connected = 1;
                 /* comm->channels[c].devPeers[recvPeer]->recv[connIndex] is a device memory access. */
                 CUDACHECKGOTO(cudaMemcpyAsync(&addr, &comm->channels[c].devPeers[recvPeer], sizeof(struct ncclDevChannelPeer*), cudaMemcpyDeviceToHost, comm->sharedRes->hostStream.cudaStream), ret, fail);
+                CUDACHECKGOTO(cudaStreamSynchronize(comm->sharedRes->hostStream.cudaStream), ret, fail);
                 CUDACHECKGOTO(cudaMemcpyAsync(&addr->recv[connIndex], &conn->conn, sizeof(struct ncclConnInfo), cudaMemcpyHostToDevice, comm->sharedRes->hostStream.cudaStream), ret, fail);
               } else if (ret == ncclInProgress) {
                 allChannelsConnected = false;
