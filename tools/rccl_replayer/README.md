@@ -58,7 +58,7 @@ After successfully building the replayer, you can run it using the following com
     NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=COLL mpirun -np <numProcesses> ./rcclReplayer </path/to/logfile> <numGpusPerMpiRank>
 ```
 
-Replace <numProcesses> with the number of MPI processes you want to run during the replay, </path/to/logfile> with the path to the collective log file generated during your RCCL runs, and <numGpusPerMpiRank> with the number of GPUs per MPI rank used in your application.
+Replace 'numProcesses' with the number of MPI processes you want to run during the replay, </path/to/logfile> with the path to the collective log file generated during your RCCL runs, and 'numGpusPerMpiRank' with the number of GPUs per MPI rank used in your application.
 
 Depending on the MPI library you use, you may need to modify the mpirun command accordingly. The flag NCCL_DEBUG_SUBSYS=COLL ensures that only collective log information is printed to the terminal.
 
