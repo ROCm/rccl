@@ -23,6 +23,7 @@
 #include "msccl/msccl_status.h"
 
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
+RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 static std::atomic<bool> mscclInitialized;
 static bool mscclSchedulerTriedLoadAlgo = false;
@@ -257,7 +258,7 @@ static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* pa
   if (status.mscclSchedulerPtr) {
     NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
-    if (param->comm->topo->mscclEnabled) {
+    if (param->comm->topo->mscclEnabled || rcclParamMscclForceEnabled()) {
       NCCLCHECK(mscclInternalSchedulerSelectAlgo(&(param->p)));
     } else {
       param->p.scheduled = false;

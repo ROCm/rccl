@@ -165,9 +165,15 @@ ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  if (isFineGrain)
+  if (isFineGrain) {
+#if defined(HIP_UNCACHED_MEMORY)
+    hipDeviceProp_t prop;
+    CUDACHECK(hipGetDeviceProperties(&prop, 0));
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained), result, finish);
+#else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
-  else
+#endif
+  } else
     CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
@@ -187,9 +193,15 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   cudaStream_t stream = sideStream;
   if (stream == nullptr)
     CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
-  if (isFineGrain)
+  if (isFineGrain) {
+#if defined(HIP_UNCACHED_MEMORY)
+    hipDeviceProp_t prop;
+    CUDACHECK(hipGetDeviceProperties(&prop, 0));
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained), result, finish);
+#else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
-  else
+#endif
+  } else
     CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
   CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
@@ -215,9 +227,15 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  if (isFineGrain)
+  if (isFineGrain) {
+#if defined(HIP_UNCACHED_MEMORY)
+    hipDeviceProp_t prop;
+    CUDACHECK(hipGetDeviceProperties(&prop, 0));
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained), result, finish);
+#else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
-  else
+#endif
+  } else
     CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
   int dev;

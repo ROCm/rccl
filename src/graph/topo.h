@@ -27,6 +27,7 @@
 #define NET_BW 12.0           // 100Gbit
 #define VEGA_XGMI_WIDTH 24.0
 #define MI200_XGMI_WIDTH 36.0
+#define GFX94X_XGMI_WIDTH 48.0
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, so GPU
 // to GPU traffic consumes more PCI bandwidth.
@@ -223,7 +224,16 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
 
 // Returns XGMI speed in GB/s
 static float ncclTopoXGMISpeed(int gcn) {
-  return gcn == 910 ? MI200_XGMI_WIDTH : VEGA_XGMI_WIDTH;
+  switch (gcn) {
+    case 910:
+      return MI200_XGMI_WIDTH;
+    case 940:
+    case 941:
+    case 942:
+      return GFX94X_XGMI_WIDTH;
+    default:
+      return VEGA_XGMI_WIDTH;
+  }
 }
 
 #if ENABLE_COLLTRACE
