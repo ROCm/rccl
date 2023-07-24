@@ -190,9 +190,6 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
     status.needsProxy = false;
-    status.groupStatus = mscclNoGroup;
-    status.groupDepth = 0;
-    status.lastStream = nullptr;
     status.workFifoDepth = MSCCL_WORK_FIFO_DEPTH;
     NCCLCHECK(ncclCudaCalloc(&status.workFifo, status.workFifoDepth, nullptr, true));
     NCCLCHECK(ncclCudaHostCalloc(&status.workFifoDone, MAXCHANNELS));
