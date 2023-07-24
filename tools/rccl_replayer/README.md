@@ -22,6 +22,8 @@ Replayer is a dubugging tool designed to analyze and replay collective logs obta
 - Supports various MPI ranks and GPU configurations.
 - Supports multi-node environment. 
 
+*Note: RCCL Replayer executes collective calls with dummy data.*
+
 ## How It Works
 
 Replayer operates in the following steps:
@@ -38,14 +40,16 @@ Replayer operates in the following steps:
 
 ## Installation
 
-To build the replayer, go to the rccl_replayer directory and simply run 'make'.
+To build the replayer, follow these steps:
+1. Navigate to the rccl_replayer directory.
+2. Make sure 'MPI_DIR' is set to the path where your MPI installation is located.
 
 ```bash
     cd rccl/tools/rccl_replayer
     MPI_DIR=/path/to/mpi make
 ```
 
-Depending on the MPI library used and your installation path, you may need to edit the Makefile and set the MPI_DIR path accordingly.
+Depending on the MPI library used and your installation path, you may need to set the MPI_DIR path accordingly.
 
 
 ## Usage
@@ -58,7 +62,7 @@ After successfully building the replayer, you can run it using the following com
 
 Replace <numProcesses> with the number of MPI processes you want to run during the replay, </path/to/logfile> with the path to the collective log file generated during your RCCL runs, and <numGpusPerMpiRank> with the number of GPUs per MPI rank used in your application.
 
-Depending on the MPI library you use, you may need to modify the mpirun command accordingly. The flag NCCL_DEBUG_SUBSYS=COLL ensures that only collective log information is printed to the terminal.
+Depending on the MPI library you use, you may need to modify the mpirun command accordingly.
 
 ### Multi-Node Environment:
 
