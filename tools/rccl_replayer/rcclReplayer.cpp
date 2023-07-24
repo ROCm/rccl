@@ -130,7 +130,7 @@ void ParseCollectives(char const* logFilename, int const numGlobalRanks, std::ve
                 // rankVector<int> in arrivalCount represents the rank information
                 // Count the number of tasks that are going to be executed by each rank. This is to validate the group call later on.
                 // Nom-Send/Recv rank counts (rankVector<int> elements) should be equal at the end, and for Send/Recv, all the elements of rankVector<int> should be equal to 0
-                if (strcmp(ncclFuncNames[ti.funcType], "Recv") == 0) {
+                if (ti.funcType == ncclCollRecv) {
                     rankVector[ti.root]--;
                 } else {
                     rankVector[rd.first]++;
@@ -141,7 +141,10 @@ void ParseCollectives(char const* logFilename, int const numGlobalRanks, std::ve
         // Iterate through the map variable and report/validate the results
         for (const auto& e : arrivalCounter) {
             int maxVal;
-            bool validateRanks = true;
+            const char* funcName = std::get<0>(e.first);
+            size_t count = std::get<1>(e.first);
+            int datatype = std::get<2>(e.first);
+            int op = std::get<3>(e.first);
             
             bool isp2p = (strcmp(std::get<0>(e.first), "Send/Recv") == 0);
             if (!isp2p) maxVal = *std::max_element(e.second.begin(), e.second.end());
@@ -149,8 +152,8 @@ void ParseCollectives(char const* logFilename, int const numGlobalRanks, std::ve
             // Validate all the ranks have required amount of collective call (task)
             for (int i = 0; i < e.second.size(); i++) {
                 if (e.second[i] != (isp2p ? 0 : maxVal)) {
-                    std::string warning = (isp2p ? (e.second[i] > 0 ? "[WARN] Missing Recv" : "[WARN] Missing Send") : "[WARN] Missing " + std::string(std::get<0>(e.first)) ) 
-                            + " count=" + std::to_string(std::get<1>(e.first)) + " datatype=" + std::to_string(std::get<2>(e.first)) + " op=" + std::to_string(std::get<3>(e.first)) + " at rank [" + std::to_string(i) + "]";
+                    std::string warning = (isp2p ? (e.second[i] > 0 ? "[WARN] Missing Recv" : "[WARN] Missing Send") : "[WARN] Missing " + std::string(funcName)) 
+                            + " count=" + std::to_string(count) + " datatype=" + std::to_string(datatype) + " op=" + std::to_string(op) + " at rank [" + std::to_string(i) + "]";
                     if(mpiRank == 0) printf("%s\n", warning.c_str());
 
                     gc.isValid = false;
@@ -160,6 +163,7 @@ void ParseCollectives(char const* logFilename, int const numGlobalRanks, std::ve
     }
 }
 
+// GetSize will return a pair of bytes where first element in pair represents bytesSent and the second bytesRecv
 std::pair<size_t, size_t> GetSize(TaskInfo taskInfo, int numGlobalRanks) {
     size_t sendNumBytes;
     size_t recvNumBytes;
@@ -226,37 +230,41 @@ void ExecuteCollective(TaskInfo task, ncclComm_t comm, hipStream_t stream, const
 
 void ReplayRccl(GroupCall& groupCall, std::vector<ncclComm_t> comms, std::vector<hipStream_t> streams,
                                                                      int const localGpuOffset, int const numGpusPerMpiRank, int const firstGlobalRank, int const numGlobalRanks) {
-    std::vector<TaskInfo>& tasks = groupCall.rankData[localGpuOffset].tasks;
-
-    void* sendbuff[numGpusPerMpiRank];
-    void* recvbuff[numGpusPerMpiRank];
+    
+    std::vector<std::vector<void*>> sendbuff(numGpusPerMpiRank);
+    std::vector<std::vector<void*>> recvbuff(numGpusPerMpiRank);
 
     NCCLCHECK(ncclGroupStart());
-    for (auto rd : groupCall.rankData) {
-        for (int i = 0; i < numGpusPerMpiRank; i++) {
-	    int globalRank = firstGlobalRank + i;
-            if (globalRank == rd.first) {
-                for (auto task : rd.second.tasks) {
-                    // Each task has a size based on the type of collective (funcType)
-                    std::pair<size_t, size_t> numBytes = GetSize(task, numGlobalRanks);
+    for (int localIdx = 0; localIdx < numGpusPerMpiRank; localIdx++) {
+        int globalRank = firstGlobalRank + localIdx;
+        RankData& rankData = groupCall.rankData[globalRank];
+    
+        for (auto task : rankData.tasks) {
+            void* sendBuffer;
+            void* recvBuffer;
 
-                    if (task.inPlace) {
-                        numBytes.first = std::max(numBytes.first, numBytes.second);
-                        numBytes.second = numBytes.first;
-                    }
-                    
-                    // Set the device and allocate send/recv buffers
-                    HIPCALL(hipSetDevice(localGpuOffset + i));
-                    HIPCALL(hipMalloc(&(sendbuff[i]), numBytes.first));
-                    HIPCALL(hipMalloc(&(recvbuff[i]), numBytes.second));
-                    HIPCALL(hipMemset(sendbuff[i], 0, numBytes.first));
-                    HIPCALL(hipMemset(recvbuff[i], 0, numBytes.second));
-                    HIPCALL(hipDeviceSynchronize());
+            // Each task has a size based on the type of collective (funcType)
+            std::pair<size_t, size_t> numBytes = GetSize(task, numGlobalRanks);
 
-                    // Execute the collective call (task)
-                    ExecuteCollective(task, comms[i], streams[i], sendbuff[i], recvbuff[i]);
-                }
+            if (task.inPlace) {
+                numBytes.first = std::max(numBytes.first, numBytes.second);
+                numBytes.second = numBytes.first;
             }
+            
+            // Set the device and allocate send/recv buffers
+            HIPCALL(hipSetDevice(localGpuOffset + localIdx));
+            HIPCALL(hipMalloc(&sendBuffer, numBytes.first));
+            HIPCALL(hipMalloc(&recvBuffer, numBytes.second));
+            HIPCALL(hipMemset(sendBuffer, 0, numBytes.first));
+            HIPCALL(hipMemset(recvBuffer, 0, numBytes.second));
+            HIPCALL(hipDeviceSynchronize());
+
+            // Add the send and receive buffers to their respective vectors
+            sendbuff[localIdx].push_back(sendBuffer);
+            recvbuff[localIdx].push_back(recvBuffer);
+
+            // Execute the collective call (task)
+            ExecuteCollective(task, comms[localIdx], streams[localIdx], sendBuffer, recvBuffer);
         }
     }
     NCCLCHECK(ncclGroupEnd());
@@ -266,10 +274,10 @@ void ReplayRccl(GroupCall& groupCall, std::vector<ncclComm_t> comms, std::vector
         HIPCALL(hipStreamSynchronize(streams[i]));
     }
 
-    // Free device memory
+    // Free device memory for each task on each GPU
     for (int i = 0; i < numGpusPerMpiRank; i++) {
-        HIPCALL(hipFree(sendbuff[i]));
-        HIPCALL(hipFree(recvbuff[i]));
+        for (auto& sendBuffer : sendbuff[i]) HIPCALL(hipFree(sendBuffer));
+        for (auto& recvBuffer : recvbuff[i]) HIPCALL(hipFree(recvBuffer));
     }
 }
 
