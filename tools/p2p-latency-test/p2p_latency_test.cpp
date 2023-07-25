@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
   hipError_t err = hipSuccess;
 
   if (argc != 2) {
-    fprintf(stderr, "Usage: ./p2p_latency_test <flag>; flag=%d for ping mode, flag=%d for pong mode\n", PING_MODE, PONG_MODE);
+    fprintf(stderr, "Usage: ./ll_latency_test <flag>; flag=%d for ping mode, flag=%d for pong mode\n", PING_MODE, PONG_MODE);
     return -1;
   }
 
