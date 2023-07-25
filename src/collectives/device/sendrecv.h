@@ -202,13 +202,21 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       if (args->proto == NCCL_PROTO_LL) {
         runRecv<ProtoLL>(tid, nthreads, group, args);
       } else {
+#if defined(__gfx90a__)
+        runRecv<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
+#else
         runRecv<ProtoSimple<1,1>>(tid, nthreads, group, args);
+#endif
       }
     } else {
       if (args->proto == NCCL_PROTO_LL) {
         runSend<ProtoLL>(tid, nthreads, group, args);
       } else {
+#if defined(__gfx90a__)
+        runSend<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
+#else
         runSend<ProtoSimple<1,1>>(tid, nthreads, group, args);
+#endif
       }
     }
   }
