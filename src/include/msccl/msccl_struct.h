@@ -38,19 +38,6 @@
 
 #define MSCCL_WORK_FIFO_DEPTH (64 << 10)
 
-typedef enum { mscclFuncReduce             =  0,
-               mscclFuncBroadcast          =  1,
-               mscclFuncAllReduce          =  2,
-               mscclFuncReduceScatter      =  3,
-               mscclFuncAllGather          =  4,
-               mscclFuncSend               =  5,
-               mscclFuncRecv               =  6,
-               mscclFuncGather             =  7,
-               mscclFuncScatter            =  8,
-               mscclFuncAllToAll           =  9,
-               mscclFuncAllToAllv          =  10,
-               mscclNumFuncs               =  11 } mscclFunc_t;
-
 struct mscclTransmission {
   int16_t dependencePointer; // index to the first dependence
   int16_t numDependencies; // dependencePointer+numDependencies indicate the last dependence
