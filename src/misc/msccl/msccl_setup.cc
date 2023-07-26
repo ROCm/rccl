@@ -118,7 +118,7 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
       int nRecvs = 0;
       for (int j = 0; j < recvPeer->nExistingCounts; j++){
         int c = recvPeer->existingCounts[j];
-        int nStepsInCount = DIVUP(c+1, status.maxAllowedCount);
+        int nStepsInCount = DIVUP(c, status.maxAllowedCount);
         nRecvs += recvPeer->nTransmissionsOfCount[c] * nStepsInCount;
       }
       proxyOp.nsteps = nLoopsChunkSteps * nRecvs;
@@ -131,7 +131,7 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
       int nSends = 0;
       for (int j = 0; j < sendPeer->nExistingCounts; j++){
         int c = sendPeer->existingCounts[j];
-        int nStepsInCount = DIVUP(c+1, status.maxAllowedCount);
+        int nStepsInCount = DIVUP(c, status.maxAllowedCount);
         nSends += sendPeer->nTransmissionsOfCount[c] * nStepsInCount;
       }
       proxyOp.nsteps = nLoopsChunkSteps * nSends;
