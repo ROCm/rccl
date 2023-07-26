@@ -658,7 +658,7 @@ ncclResult_t mscclGetAlgoFromXmlFile(const char* str, struct mscclAlgo* algo, in
 
             // finish up mscclChannel calculation
 
-            for (int c = 0; c < MSCCL_MAX_COUNT; c++) {
+            for (int c = 1; c <= MSCCL_MAX_COUNT; c++) {
               struct mscclChannelPeerInfo* sendPeer = &mscclChannel->sendPeerInfo[mscclChannel->nSendPeers];
               if (sendPeer->nTransmissionsOfCount[c] > 0) {
                 sendPeer->existingCounts[sendPeer->nExistingCounts] = c;
