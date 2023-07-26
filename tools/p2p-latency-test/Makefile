@@ -6,14 +6,12 @@ HIP_PATH = ../../..
 endif
 HIPCC = $(HIP_PATH)/bin/hipcc
 
-EXE = p2p_latency_test
+all: p2p_latency_test ll_latency_test
+
 CXXFLAGS = -g -O3
-
-files = $(EXE).cpp
-
-all: $(EXE)
-
-$(EXE): $(files)
+p2p_latency_test: p2p_latency_test.cpp
+	$(HIPCC) $(CXXFLAGS) $^ -o $@
+ll_latency_test: ll_latency_test.cpp
 	$(HIPCC) $(CXXFLAGS) $^ -o $@
 
 clean:
