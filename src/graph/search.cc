@@ -825,7 +825,7 @@ static void ncclExpandMultiRank(ncclTopoSystem* system, struct ncclTopoGraph* gr
     }
   }
 }
-
+RCCL_PARAM(NChannels, "NCHANNELS", 0);
 ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
   graph->crossNic = ncclParamCrossNic();
@@ -1031,6 +1031,72 @@ done:
     graph->speedIntra /= DIVUP(dupChannels, graph->nChannels);
     graph->speedInter /= DIVUP(dupChannels, graph->nChannels);
     graph->nChannels = dupChannels;
+  }
+  int nc = rcclParamNChannels();
+  if (graph->nChannels > 0 && nc > 0 && nc <= MAXCHANNELS/2 && nc > graph->nChannels) {
+    int nChannels = nc - graph->nChannels;
+    int nnets = system->nodes[NET].count;
+    if (nnets <= 2) {
+      for (int i = 0; i < nChannels; i++) {
+        memcpy(graph->intra+graph->nChannels*ngpus, graph->intra, ngpus*sizeof(int));
+        memcpy(graph->inter+graph->nChannels*2, graph->inter, 2*sizeof(int));
+        memcpy(graph->intraNets+graph->nChannels*ngpus*2, graph->intraNets, 2*ngpus*sizeof(int));
+        graph->nChannels++;
+      }
+    } else {
+      typedef struct {
+        int id;
+        int used;
+      } Net;
+      Net nets[nnets];
+      memset(nets, 0, nnets*sizeof(Net));
+      for (int i = 0; i < nnets; i++) {
+        nets[i].id = system->nodes[NET].nodes[i].id;
+      }
+      for (int i = 0; i < graph->nChannels; i++) {
+        for (int j = 0; j < nnets; j++) {
+          if (nets[j].id == *(graph->inter+i*2) || nets[j].id == *(graph->inter+i*2+1)) {
+            nets[j].used++;
+          }
+        }
+      }
+      for (int i = 0; i < nChannels; i++) {
+        memcpy(graph->intra+graph->nChannels*ngpus, graph->intra, ngpus*sizeof(int));
+        qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+          return ((Net*)a)->used - ((Net*)b)->used;
+        });
+        *(graph->inter+graph->nChannels*2) = nets[0].id;
+        //printf("*(graph->inter[%d]) =nets[0].id=%d \n",graph->nChannels*2,nets[0].id);
+        nets[0].used++; 
+        qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+          return ((Net*)a)->used - ((Net*)b)->used;
+        });
+        if (graph->crossNic == 0 || graph->crossNic == 2) {
+          *(graph->inter+graph->nChannels*2+1) = nets[0].id;
+          //printf("*(graph->inter[%d]) =nets[0].id=%d \n",graph->nChannels*2+1,nets[0].id);
+          nets[0].used++; 
+          qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+          return ((Net*)a)->used - ((Net*)b)->used;
+        });
+        } else {
+          nets[0].used++; 
+          qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+            return ((Net*)a)->used - ((Net*)b)->used;
+          });
+          *(graph->inter+graph->nChannels*2+1) = nets[0].id;
+          //printf("*(graph->inter[%d]) =nets[0].id=%d \n",graph->nChannels*2+1,nets[0].id);
+          nets[0].used++;
+          qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+          return ((Net*)a)->used - ((Net*)b)->used;
+        });
+        }
+        //nets[0].used++;
+        memcpy(graph->intraNets+graph->nChannels*ngpus*2, graph->intraNets, 2*ngpus*sizeof(int));
+        graph->nChannels++;
+      }
+    }
+    graph->speedIntra /= DIVUP(nc, graph->nChannels);
+    graph->speedInter /= DIVUP(nc, graph->nChannels);
   }
   ncclExpandMultiRank(system, graph);
   return ncclSuccess;
