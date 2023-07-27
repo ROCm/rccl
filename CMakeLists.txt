@@ -593,7 +593,7 @@ endif()
 
 ## Set RCCL link options
 target_link_options(rccl PRIVATE -fgpu-rdc)               # Required when linking relocatable device code
-target_link_options(rccl PRIVATE -parallel-jobs=12)       # Use multiple threads to link
+target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link
 if(BUILD_ADDRESS_SANITIZER)
   target_link_options(rccl PRIVATE -fuse-ld=lld)
 endif()
