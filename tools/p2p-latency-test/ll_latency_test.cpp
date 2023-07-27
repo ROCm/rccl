@@ -90,8 +90,8 @@ __global__ void PingKernel(LLFifoLine* local_flag, LLFifoLine* remote_flag, uint
     storeLL(remote_flag+tid, i, i);
     while (readLL(local_flag+tid, i) != i);
   }
-  uint64_t end_time = wall_clock64();
   __syncthreads();
+  uint64_t end_time = wall_clock64();
   if (tid == 0) *time_delta = end_time - start_time;
 }
 
@@ -108,8 +108,8 @@ __global__ void PongKernel(LLFifoLine* local_flag, LLFifoLine* remote_flag, uint
     while (readLL(local_flag+tid, i) != i);
     storeLL(remote_flag+tid, i, i);
   }
-  uint64_t end_time = wall_clock64();
   __syncthreads();
+  uint64_t end_time = wall_clock64();
   if (tid == 0) *time_delta = end_time - start_time;
 }
 
