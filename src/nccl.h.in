@@ -84,7 +84,7 @@ typedef struct ncclConfig_v21700 {
 } ncclConfig_t;
 
 /* Config initializer must be assigned to initialize config structure when it is created.
- * Not initialized config will result in NCCL error. */
+ * Not initialized config will result in an error. */
 #define NCCL_CONFIG_INITIALIZER {                                        \
   sizeof(ncclConfig_t),                             /* size */           \
   0xcafebeef,                                       /* magic */          \
@@ -102,8 +102,8 @@ typedef struct ncclConfig_v21700 {
     @details    API call that returns RCCL version
     @{ */
 
-/*! @brief      Return the NCCL_VERSION_CODE of the NCCL library in the supplied integer.
-    @details    This integer is coded with the MAJOR, MINOR and PATCH level of the NCCL library.
+/*! @brief      Return the RCCL_VERSION_CODE of RCCL in the supplied integer.
+    @details    This integer is coded with the MAJOR, MINOR and PATCH level of RCCL.
     @return     Result code. See @ref rccl_result_code for more details.
 
     @param[out] version       Pointer to where version will be stored */
@@ -115,7 +115,6 @@ ncclResult_t pncclGetVersion(int *version);
 
 /*! @defgroup   rccl_api_communicator Communicator Initialization/Destruction
     @details    API calls that operate on communicators.
-
                 Communicators objects are used to launch collective communication
                 operations.  Unique ranks between 0 and N-1 must be assigned to
                 each HIP device participating in the same Communicator.
@@ -393,7 +392,7 @@ ncclResult_t pncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataTy
 /*! @brief      Destroy custom reduction operator
     @details    Destroys the reduction operator *op*. The operator must have been created by
                 ncclRedOpCreatePreMul with the matching communicator *comm*. An operator may be
-                destroyed as soon as the last NCCL function which is given that operator returns.
+                destroyed as soon as the last RCCL function which is given that operator returns.
     @return     Result code. See @ref rccl_result_code for more details.
 
     @param[in]  op            Custom reduction operator is to be destroyed
@@ -755,11 +754,11 @@ ncclResult_t pmscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle);
 
 
 /*! @defgroup   rccl_group_api Group semantics
-    @details    When managing multiple GPUs from a single thread, and since NCCL collective
+    @details    When managing multiple GPUs from a single thread, and since RCCL collective
                 calls may perform inter-CPU synchronization, we need to "group" calls for
                 different ranks/devices into a single call.
 
-                Grouping NCCL calls as being part of the same collective operation is done
+                Grouping RCCL calls as being part of the same collective operation is done
                 using ncclGroupStart and ncclGroupEnd. ncclGroupStart will enqueue all
                 collective calls until the ncclGroupEnd call, which will wait for all calls
                 to be complete. Note that for collective communication, ncclGroupEnd only
