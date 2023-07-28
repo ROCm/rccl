@@ -174,6 +174,7 @@ int main(int argc, char** argv) {
       double vega_gpu_rtc_freq = (prop.gcnArch / 10 == 94) ? 1.0E8 : 2.5E7;
       fprintf(stdout, "One-way latency in us: %g\n", double(*time_delta) * 1e6 / NUM_LOOPS_RUN / vega_gpu_rtc_freq / 2);
     }
+    std::remove(file_paths[self_mode]);
   } else {
     fprintf(stderr, "Invalid mode %d\n", self_mode);
     return -1;
