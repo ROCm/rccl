@@ -447,8 +447,8 @@ if (ENABLE_MSCCL_KERNEL)
     src/include/msccl/msccl_kernel.h
     src/collectives/msccl.cc
   )
+  list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
 endif()
-list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
   
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
