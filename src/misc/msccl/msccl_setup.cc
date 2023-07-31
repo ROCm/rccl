@@ -9,7 +9,7 @@
 #include "transport.h"
 
 #include "msccl/msccl_lifecycle.h"
-#ifdef COMPILE_MSCCL
+#ifdef COMPILE_MSCCL_KERNEL
 #include "msccl/msccl_kernel.h"
 #endif
 #include "msccl/msccl_setup.h"
@@ -245,7 +245,7 @@ static ncclResult_t hostToDevRedOp(
 
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
 void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
-#ifdef COMPILE_MSCCL
+#ifdef COMPILE_MSCCL_KERNEL
   MSCCL_KERNEL_ENTRY()
 #endif
 };
