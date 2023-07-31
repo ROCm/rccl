@@ -89,7 +89,7 @@ while true; do
          --debug)                    build_release=false;                                                                     shift ;;
          --disable_backtrace)        build_bfd=false;                                                                         shift ;;
          --disable-colltrace)        collective_trace=false;                                                                  shift ;;
-         --disable-msccl)            msccl_enabled;                                                                           shift ;;
+         --disable-msccl)            msccl_enabled=false;                                                                     shift ;;
     -f | --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; msccl_enabled=false; shift ;;
     -h | --help)                     display_help;                                                                            exit 0 ;;
     -i | --install)                  install_library=true;                                                                    shift ;;
