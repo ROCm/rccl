@@ -17,6 +17,7 @@ option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on 
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
+option(ENABLE_MSCCL                            "Enable MSCCL while compiling"                  ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
@@ -279,9 +280,7 @@ set(SRC_FILES
   src/collectives/device/reduce_kernel.h
   src/collectives/device/reduce_scatter.h
   src/collectives/device/sendrecv.h
-  src/collectives/device/msccl_kernel_impl.h
   src/collectives/gather.cc
-  src/collectives/msccl.cc
   src/collectives/reduce.cc
   src/collectives/reduce_scatter.cc
   src/collectives/scatter.cc
@@ -328,13 +327,6 @@ set(SRC_FILES
   src/include/ibvwrap.h
   src/include/info.h
   src/include/ipcsocket.h
-  src/include/msccl/msccl_kernel.h
-  src/include/msccl/msccl_lifecycle.h
-  src/include/msccl/msccl_parser.h
-  src/include/msccl/msccl_scheduler.h
-  src/include/msccl/msccl_setup.h
-  src/include/msccl/msccl_status.h
-  src/include/msccl/msccl_struct.h
   src/include/nccl_net.h
   src/include/net.h
   src/include/npkit/npkit_event.h
@@ -390,10 +382,6 @@ set(SRC_FILES
   src/misc/ibvsymbols.cc
   src/misc/ibvwrap.cc
   src/misc/ipcsocket.cc
-  src/misc/msccl/msccl_lifecycle.cc
-  src/misc/msccl/msccl_parser.cc
-  src/misc/msccl/msccl_setup.cc
-  src/misc/msccl/msccl_status.cc
   src/misc/npkit.cc
 # src/misc/nvmlwrap.cc
   src/misc/nvmlwrap_stub.cc
@@ -443,6 +431,39 @@ else()
 endif()
 list(APPEND SRC_FILES ${CU_SOURCES})
 
+if (ENABLE_MSCCL)
+  add_definitions(-DCOMPILE_MSCCL)
+  set(MSCCL_SOURCES
+    src/collectives/device/msccl_kernel_impl.h
+    src/include/msccl/msccl_kernel.h
+    src/include/msccl/msccl_lifecycle.h
+    src/include/msccl/msccl_parser.h
+    src/include/msccl/msccl_scheduler.h
+    src/include/msccl/msccl_setup.h
+    src/include/msccl/msccl_status.h
+    src/include/msccl/msccl_struct.h
+    src/misc/msccl/msccl_lifecycle.cc
+    src/misc/msccl/msccl_parser.cc
+    src/misc/msccl/msccl_setup.cc
+    src/misc/msccl/msccl_status.cc
+    src/collectives/msccl.cc
+  )
+else()
+  set(MSCCL_SOURCES
+    src/include/msccl/msccl_lifecycle.h
+    src/include/msccl/msccl_parser.h
+    src/include/msccl/msccl_scheduler.h
+    src/include/msccl/msccl_setup.h
+    src/include/msccl/msccl_status.h
+    src/include/msccl/msccl_struct.h
+    src/misc/msccl/msccl_lifecycle.cc
+    src/misc/msccl/msccl_parser.cc
+    src/misc/msccl/msccl_setup.cc
+    src/misc/msccl/msccl_status.cc
+  )
+endif()
+list(APPEND SRC_FILES ${MSCCL_SOURCES})
+  
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
 find_program(hipify-perl_executable hipify-perl)
@@ -475,7 +496,9 @@ endforeach()
 expand_collectives("all_reduce" "AllReduce")
 expand_collectives("reduce" "Reduce")
 expand_collectives("reduce_scatter" "ReduceScatter")
-expand_collectives("msccl_kernel" "MscclKernel")
+if(ENABLE_MSCCL)
+  expand_collectives("msccl_kernel" "MscclKernel")
+endif()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
@@ -513,6 +536,9 @@ endif()
 target_compile_definitions(rccl PRIVATE NVTX_NO_IMPL)                         # NVTX is not supported
 if(COLLTRACE)
   target_compile_definitions(rccl PRIVATE ENABLE_COLLTRACE)
+endif()
+if(ENABLE_MSCCL)
+  target_compile_definitions(rccl PRIVATE COMPILE_MSCCL)
 endif()
 if(HAVE_ROCM_SMI64CONFIG)
   target_compile_definitions(rccl PRIVATE USE_ROCM_SMI64CONFIG)
