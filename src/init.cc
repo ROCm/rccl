@@ -170,9 +170,11 @@ RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 #ifdef ENABLE_COLLTRACE
 void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
-  int head = 0;
+  int head[MAXCHANNELS];
   hipDeviceProp_t devProp;
   double vega_gpu_rtc_freq;
+
+  memset(head, 0, sizeof(int)*MAXCHANNELS);
   hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
   if (devProp.gcnArch/10 == 94 && status == hipSuccess)
     vega_gpu_rtc_freq = 1.0E8;
@@ -202,72 +204,74 @@ void *ncclCommThreadMain(void *arg) {
   line += MAX_NAME_LENGTH;
   sprintf(line, "AllToAllPivotRingSimpleSum_i8");
   do {
-    int tail = (*comm->collTraceTail)%COLLTRACE_NUM_ITEMS;
-    int count;
-    if (head <= tail)
-      count = tail - head;
-    else
-      count = COLLTRACE_NUM_ITEMS + head - tail;
-    if (!count) {
-      usleep(1000); //sleep 1ms
-      continue;
-    }
-    for (int i = 0; i < count; i++) {
-      volatile struct ncclCollTrace *td = comm->collTrace+head;
-      uint8_t type = td->type;
-      if (type == ncclCollTraceNotReady)
-        break;
-      char line[1024];
-      int offset = 0;
-      uint16_t fIdx = td->funcIndex;
-      if (type == ncclCollTraceDataType) {
-        sprintf(line, "## [%012.6f] [%02d:%02d] L:%04d DT %08x %016lx %016lx",
-          (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
-          fIdx, td->data_0, td->opCount, td->data_1);
-      } else {
-        if (fIdx == FUNC_INDEX_P2P || type == ncclCollTraceP2pElemType)
-          sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
-        else
-          sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);
-        offset = strlen(line);
-        if (type == ncclCollTraceCollElemType) {
-          sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx, td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
-        } else if (type == ncclCollTraceP2pElemType) {
-          sprintf(line+offset, " PE %s %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx,
-            td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
-            td->p2p[1].connIndex, td->p2p[1].nWarps, td->p2p[1].warpStart, td->p2p[1].ngroups, td->p2p[1].peer, comm->busId, comm->nRanks);
+    for (int channel = 0; channel < MAXCHANNELS; channel++) {
+      int tail = comm->collTraceTail[channel].tail%COLLTRACE_NUM_ITEMS;
+      int count;
+      if (head[channel] <= tail)
+        count = tail - head[channel];
+      else
+        count = COLLTRACE_NUM_ITEMS + head[channel] - tail;
+      if (!count) {
+        usleep(1000); //sleep 1ms
+        continue;
+      }
+      for (int i = 0; i < count; i++) {
+        volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel];
+        uint8_t type = td->type;
+        if (type == ncclCollTraceNotReady)
+          break;
+        char line[1024];
+        int offset = 0;
+        uint16_t fIdx = td->funcIndex;
+        if (type == ncclCollTraceDataType) {
+          sprintf(line, "## [%012.6f] [%02d:%02d] L:%04d DT %08x %016lx %016lx",
+            (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
+            fIdx, td->data_0, td->opCount, td->data_1);
         } else {
-          switch (type&0xf) {
-            case ncclCollTraceKernelLaunchType:
-            case ncclCollTraceCollLaunchType:
-              if ((type&0xf) == ncclCollTraceKernelLaunchType)
-                sprintf(line+offset, " KL HWID %8x %s", td->data_0, func_names+MAX_NAME_LENGTH*fIdx);
-              else if ((type&0xf) == ncclCollTraceCollLaunchType)
-                sprintf(line+offset, " CL %s", func_names+MAX_NAME_LENGTH*fIdx);
-              offset = strlen(line);
-              if ((type&0xf0) == ncclCollTraceCollElemType)
-                sprintf(line+offset, " nw %d bi %d nc %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
-              else if ((type&0xf0) == ncclCollTraceP2pElemType)
-                sprintf(line+offset, " %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d",
-                  td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
-                  td->p2p[1].connIndex, td->p2p[1].nWarps, td->p2p[1].warpStart, td->p2p[1].ngroups, td->p2p[1].peer, comm->busId, comm->nRanks);
-              break;
-            case ncclCollTraceKernelEndType:
-              sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);
-              break;
-            case ncclCollTraceAbortType:
-              sprintf(line+offset, " Abort");
-              break;
-            default:
-              sprintf(line+offset, " unknown collective trace data type");
-              break;
+          if (fIdx == FUNC_INDEX_P2P || type == ncclCollTraceP2pElemType)
+            sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
+          else
+            sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);
+          offset = strlen(line);
+          if (type == ncclCollTraceCollElemType) {
+            sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx, td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
+          } else if (type == ncclCollTraceP2pElemType) {
+            sprintf(line+offset, " PE %s %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx,
+              td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
+              td->p2p[1].connIndex, td->p2p[1].nWarps, td->p2p[1].warpStart, td->p2p[1].ngroups, td->p2p[1].peer, comm->busId, comm->nRanks);
+          } else {
+            switch (type&0xf) {
+              case ncclCollTraceKernelLaunchType:
+              case ncclCollTraceCollLaunchType:
+                if ((type&0xf) == ncclCollTraceKernelLaunchType)
+                  sprintf(line+offset, " KL HWID %8x %s", td->data_0, func_names+MAX_NAME_LENGTH*fIdx);
+                else if ((type&0xf) == ncclCollTraceCollLaunchType)
+                  sprintf(line+offset, " CL %s", func_names+MAX_NAME_LENGTH*fIdx);
+                offset = strlen(line);
+                if ((type&0xf0) == ncclCollTraceCollElemType)
+                  sprintf(line+offset, " nw %d bi %d nc %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
+                else if ((type&0xf0) == ncclCollTraceP2pElemType)
+                  sprintf(line+offset, " %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d",
+                    td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
+                    td->p2p[1].connIndex, td->p2p[1].nWarps, td->p2p[1].warpStart, td->p2p[1].ngroups, td->p2p[1].peer, comm->busId, comm->nRanks);
+                break;
+              case ncclCollTraceKernelEndType:
+                sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);
+                break;
+              case ncclCollTraceAbortType:
+                sprintf(line+offset, " Abort");
+                break;
+              default:
+                sprintf(line+offset, " unknown collective trace data type");
+                break;
+            }
           }
         }
+        INFO(NCCL_COLL, "%s", line);
+        td->type = ncclCollTraceNotReady;
+        head[channel] ++;
+        head[channel] %= COLLTRACE_NUM_ITEMS;
       }
-      INFO(NCCL_COLL, "%s", line);
-      td->type = ncclCollTraceNotReady;
-      head ++;
-      head %= COLLTRACE_NUM_ITEMS;
     }
   } while(!comm->collTraceExit);
   free(func_names);
@@ -533,10 +537,9 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
 
 #ifdef ENABLE_COLLTRACE
-  NCCLCHECK(ncclCudaHostCalloc((uint32_t **)&comm->collTraceTail, 1));
-  NCCLCHECK(ncclCudaHostCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS));
-  memset(comm->collTrace, 0, sizeof(struct ncclCollTrace) * COLLTRACE_NUM_ITEMS);
-  comm->collTraceExit = *comm->collTraceTail = 0;
+  NCCLCHECK(ncclCudaHostCalloc(&comm->collTraceTail, MAXCHANNELS));
+  NCCLCHECK(ncclCudaHostCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
+  comm->collTraceExit = 0;
   if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable())
     pthread_create(&comm->collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
   else
