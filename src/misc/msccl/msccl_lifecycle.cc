@@ -30,7 +30,11 @@ static bool mscclSchedulerTriedLoadAlgo = false;
 static std::mutex mscclLifecycleMutex;
 
 bool mscclEnabled() {
+#ifdef COMPILE_MSCCL_KERNEL
   return rcclParamMscclEnabled();
+#else
+  return false;
+#endif
 }
 
 void mscclSetIsCallerFlag() {

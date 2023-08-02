@@ -22,6 +22,7 @@ collective_trace=true
 enable_ninja=""
 install_dependencies=false
 install_library=false
+msccl_kernel_enabled=true
 num_parallel_jobs=16
 npkit_enabled=false
 run_tests=false
@@ -41,6 +42,7 @@ function display_help()
     echo "       --debug                 Build debug library"
     echo "       --disable_backtrace     Build without custom backtrace support"
     echo "       --disable-colltrace     Build without collective trace"
+    echo "       --disable-msccl-kernel  Build without MSCCL kernels"
     echo "    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
@@ -66,7 +68,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,disable-colltrace,fast,help,install,jobs:,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -81,28 +83,29 @@ eval set -- "${GETOPT_PARSE}"
 
 while true; do
     case "${1}" in
-         --address-sanitizer)        build_address_sanitizer=true;                                       shift ;;
-         --build_allreduce_only)     build_allreduce_only=true;                                          shift ;;
-    -d | --dependencies)             install_dependencies=true;                                          shift ;;
-         --debug)                    build_release=false;                                                shift ;;
-         --disable_backtrace)        build_bfd=false;                                                    shift ;;
-         --disable-colltrace)        collective_trace=false;                                             shift ;;
-    -f | --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; shift ;;
-    -h | --help)                     display_help;                                                       exit 0 ;;
-    -i | --install)                  install_library=true;                                               shift ;;
-    -j | --jobs)                     num_parallel_jobs=${2};                                             shift 2 ;;
-    -l | --local_gpu_only)           build_local_gpu_only=true;                                          shift ;;
-         --no_clean)                 clean_build=false;                                                  shift ;;
-         --npkit-enable)             npkit_enabled=true;                                                 shift ;;
-    -p | --package_build)            build_package=true;                                                 shift ;;
-         --prefix)                   install_prefix=${2};                                                shift 2 ;;
-         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                        shift ;;
-    -r | --run_tests_quick)          run_tests=true;                                                     shift ;;
-         --run_tests_all)            run_tests=true; run_tests_all=true;                                 shift ;;
-         --static)                   build_static=true;                                                  shift ;;
-    -t | --tests_build)              build_tests=true;                                                   shift ;;
-         --time-trace)               time_trace=true;                                                    shift ;;
-         --verbose)                  build_verbose=1;                                                    shift ;;
+         --address-sanitizer)        build_address_sanitizer=true;                                                                     shift ;;
+         --build_allreduce_only)     build_allreduce_only=true;                                                                        shift ;;
+    -d | --dependencies)             install_dependencies=true;                                                                        shift ;;
+         --debug)                    build_release=false;                                                                              shift ;;
+         --disable_backtrace)        build_bfd=false;                                                                                  shift ;;
+         --disable-colltrace)        collective_trace=false;                                                                           shift ;;
+         --disable-msccl-kernel)     msccl_kernel_enabled=false;                                                                       shift ;;
+    -f | --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;   shift ;;
+    -h | --help)                     display_help;                                                                                     exit 0 ;;
+    -i | --install)                  install_library=true;                                                                             shift ;;
+    -j | --jobs)                     num_parallel_jobs=${2};                                                                           shift 2 ;;
+    -l | --local_gpu_only)           build_local_gpu_only=true;                                                                        shift ;;
+         --no_clean)                 clean_build=false;                                                                                shift ;;
+         --npkit-enable)             npkit_enabled=true;                                                                               shift ;;
+    -p | --package_build)            build_package=true;                                                                               shift ;;
+         --prefix)                   install_prefix=${2};                                                                              shift 2 ;;
+         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                                                      shift ;;
+    -r | --run_tests_quick)          run_tests=true;                                                                                   shift ;;
+         --run_tests_all)            run_tests=true; run_tests_all=true;                                                               shift ;;
+         --static)                   build_static=true;                                                                                shift ;;
+    -t | --tests_build)              build_tests=true;                                                                                 shift ;;
+         --time-trace)               time_trace=true;                                                                                  shift ;;
+         --verbose)                  build_verbose=1;                                                                                  shift ;;
     --) shift ; break ;;
     *)  echo "Unexpected command line parameter received; aborting";
         exit 1
@@ -206,6 +209,10 @@ fi
 # Disable collective trace
 if [[ "${collective_trace}" == false ]]; then
     cmake_common_options="${cmake_common_options} -DCOLLTRACE=OFF"
+fi
+
+if [[ "${msccl_kernel_enabled}" == false ]]; then
+    cmake_common_options="${cmake_common_options} -DENABLE_MSCCL_KERNEL=OFF"
 fi
 
 # Install dependencies
