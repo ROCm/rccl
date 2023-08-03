@@ -242,8 +242,8 @@ private:
         needReload = false;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          vr[u] = __builtin_nontemporal_load(ptr+u*WARP_SIZE);
-          vr[u+1] = __builtin_nontemporal_load(ptr+u*WARP_SIZE+1);
+          vr[u] = __atomic_load_n(ptr+u*WARP_SIZE, __ATOMIC_CONSUME);
+          vr[u+1] = __atomic_load_n(ptr+u*WARP_SIZE+1, __ATOMIC_CONSUME);
           needReload |= flagThread && (vr[u+1] != flag);
         }
         needReload &= (0 == checkAbort(spins, 0, 0));
@@ -285,16 +285,12 @@ private:
           needReload = false;
           #pragma unroll
           for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-            vr[u] = __builtin_nontemporal_load(ptr+u*WARP_SIZE);
-            vr[u+1] = __builtin_nontemporal_load(ptr+u*WARP_SIZE+1);
+            vr[u] = __atomic_load_n(ptr+u*WARP_SIZE, __ATOMIC_CONSUME);
+            vr[u+1] = __atomic_load_n(ptr+u*WARP_SIZE+1, __ATOMIC_CONSUME);
             needReload |= flagThread && (vr[u+1] != flag);
           }
           needReload &= (0 == checkAbort(spins, i, 0));
         } while (__any(needReload));
-
-        #pragma unroll
-        for (int u=0; u<ELEMS_PER_THREAD; u+=2)
-          load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
 
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
@@ -314,7 +310,7 @@ private:
     }
 
 #if RCCL_USE_WBINVL1_VOL
-    if (tid == 0) __asm__ __volatile__("buffer_wbinvl1_vol");
+    if (tid == 0) __builtin_amdgcn_buffer_wbinvl1();
 #endif
     /************************ Send **************************/
     if (SEND) {
