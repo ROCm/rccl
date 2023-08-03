@@ -293,10 +293,6 @@ private:
         } while (__any(needReload));
 
         #pragma unroll
-        for (int u=0; u<ELEMS_PER_THREAD; u+=2)
-          load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
-
-        #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
           v[u]   = applyReduce(redOp, vr[u], v[u]);
           v[u+1] = applyReduce(redOp, vr[u+1], v[u+1]);
@@ -314,7 +310,7 @@ private:
     }
 
 #if RCCL_USE_WBINVL1_VOL
-    if (tid == 0) __asm__ __volatile__("buffer_wbinvl1_vol");
+    if (tid == 0) __builtin_amdgcn_buffer_wbinvl1();
 #endif
     /************************ Send **************************/
     if (SEND) {
