@@ -367,6 +367,11 @@ struct ncclCollTrace {
 };
 static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must have a pow2 size");
 
+union ncclCollTraceTail{
+  uint32_t tail;
+  char padding[4096];
+};
+
 #define COLLTRACE_NUM_ITEMS 8192
 #endif
 
@@ -403,7 +408,7 @@ struct ncclDevComm {
 
 #ifdef ENABLE_COLLTRACE
   struct ncclCollTrace* collTrace;
-  volatile uint32_t *collTraceTail;
+  union ncclCollTraceTail *collTraceTail;
   pthread_t collTraceThread;
 #endif
 

@@ -355,7 +355,7 @@ struct ncclComm {
 
 #ifdef ENABLE_COLLTRACE
   struct ncclCollTrace* collTrace;
-  volatile uint32_t *collTraceTail;
+  union ncclCollTraceTail *collTraceTail;
   pthread_t collTraceThread;
   volatile bool collTraceExit;
 #endif

@@ -284,11 +284,16 @@ class ncclFunction {
   asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (collTrace->data_0));
 #endif
 #ifdef ENABLE_COLLTRACE
-  #define traceColl(launch_type) { \
-    uint32_t pos = atomicAdd_system((uint32_t*)ncclShmem.comm.collTraceTail, (uint32_t)1)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
+  #define INC_COLL_TRACE \
+    uint32_t pos = atomicAdd(&ncclShmem.collTraceTail->tail, 1)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
     collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x; \
+    collTrace->bid = blockIdx.x;
+    // TODO: switch to atomicInc after llvm crash is fixed
+    // uint32_t pos = atomicInc(&ncclShmem.collTraceTail->tail, COLLTRACE_NUM_ITEMS)
+
+  #define traceKernelLaunch(launch_type) { \
+    INC_COLL_TRACE \
     collTrace->funcIndex = ncclShmem.work.header.funcIndex; \
     __trace_hwreg()\
     if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
@@ -315,29 +320,20 @@ class ncclFunction {
       collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
     } \
   }
-// #endif
-  #define traceKernelLaunch(firstLaunch)  { \
-    traceColl(firstLaunch?ncclCollTraceKernelLaunchType:ncclCollTraceCollLaunchType); \
-  }
-  #define traceKernelEnd()  { \
-    uint32_t pos = atomicAdd_system((uint32_t*)ncclShmem.comm.collTraceTail, (uint32_t)1)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x; \
-    collTrace->type = ncclCollTraceKernelEndType; \
-  }
-  #define traceAbort()  { \
-    uint32_t pos = atomicAdd_system((uint32_t*)ncclShmem.comm.collTraceTail, (uint32_t)1)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x; \
-    collTrace->type = ncclCollTraceAbortType; \
+  #define traceKernelEnd(end_type)  { \
+    INC_COLL_TRACE \
+    if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
+      struct ncclWorkElemP2p *p2pElems = ncclShmem.work.p2pElems; \
+      collTrace->p2pOpCount[0] = p2pElems[0].opCount; \
+      collTrace->p2pOpCount[1] = p2pElems[1].opCount; \
+    } else if (ncclShmem.work.header.type == ncclWorkTypeColl) { \
+      struct ncclWorkElem *elems = ncclShmem.work.elems; \
+      collTrace->opCount = elems[0].opCount; \
+    } \
+    collTrace->type = end_type; \
   }
   #define traceData(data2, data4, data8_0, data8_1) { \
-    uint32_t pos = atomicAdd_system((uint32_t*)ncclShmem.comm.collTraceTail, (uint32_t)1)%COLLTRACE_NUM_ITEMS; \
-    struct ncclCollTrace* collTrace = ncclShmem.comm.collTrace+pos; \
-    collTrace->bid = blockIdx.x; \
-    collTrace->timeStamp = wall_clock64(); \
+    INC_COLL_TRACE \
     collTrace->funcIndex = data2; \
     collTrace->data_0 = data4; \
     collTrace->opCount = data8_0; \
@@ -345,10 +341,8 @@ class ncclFunction {
     collTrace->type = ncclCollTraceDataType; \
   }
 #else
-#define traceColl(launch_type)
-#define traceKernelLaunch(firstLaunch)
-#define traceKernelEnd()
-#define traceAbort()
+#define traceKernelLaunch(launch_type)
+#define traceKernelEnd(end_type)
 #define traceData(data2, data4, data8_0, data8_1)
 #endif
 
@@ -369,6 +363,10 @@ struct ncclShmemData {
   alignas(16) struct ncclDevComm comm;
   alignas(16) struct ncclDevChannel channel;
   alignas(16) struct ncclWork work;
+#ifdef ENABLE_COLLTRACE
+  struct ncclCollTrace* collTrace;
+  union ncclCollTraceTail* collTraceTail;
+#endif
 #ifdef ENABLE_PROFILING
   struct ncclProf prof;
 #endif
@@ -518,6 +516,12 @@ __forceinline__ __device__ void ncclKernel(
     }
     copyToShmem16(tid%WARP_SIZE, dst, src, bytes);
   }
+#ifdef ENABLE_COLLTRACE
+  if (tid == 0) {
+    ncclShmem.collTrace = comm->collTrace + COLLTRACE_NUM_ITEMS*ncclShmem.channelId;
+    ncclShmem.collTraceTail = comm->collTraceTail + ncclShmem.channelId;
+  }
+#endif
   __synclds(); // publish shmem
 #ifdef ENABLE_PROFILING
   if (tid == 0) {
@@ -526,7 +530,7 @@ __forceinline__ __device__ void ncclKernel(
   }
 #endif
   if (tid == 0) __insert_timestamp(__LINE__);
-  if (COLLTRACE && tid == 0) traceKernelLaunch(true);
+  if (COLLTRACE && tid == 0) traceKernelLaunch(ncclCollTraceKernelLaunchType);
 
   while (true) {
     // Notify host that all fifo reads are complete.
@@ -566,13 +570,13 @@ __forceinline__ __device__ void ncclKernel(
     { // Check whether the last operation was aborted and make sure all threads exit
       int aborted = tid == 0 ? *comm->abortFlag : 0;
       if (__any(aborted)) { // publish ncclShmem.work
-        traceAbort();
+        traceKernelEnd(ncclCollTraceAbortType);
         break;
       }
     }
-    if (COLLTRACE && tid == 0) traceColl(false);
+    if (COLLTRACE && tid == 0) traceKernelLaunch(ncclCollTraceCollLaunchType);
   }
-  if (COLLTRACE && tid == 0) traceKernelEnd();
+  if (COLLTRACE && tid == 0) traceKernelEnd(ncclCollTraceKernelEndType);
 
 #ifdef ENABLE_PROFILING
   if (ncclShmem.comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
