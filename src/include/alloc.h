@@ -167,9 +167,7 @@ ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (isFineGrain) {
 #if defined(HIP_UNCACHED_MEMORY)
-    hipDeviceProp_t prop;
-    CUDACHECK(hipGetDeviceProperties(&prop, 0));
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained), result, finish);
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
 #else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
 #endif
@@ -195,9 +193,7 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
     CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
   if (isFineGrain) {
 #if defined(HIP_UNCACHED_MEMORY)
-    hipDeviceProp_t prop;
-    CUDACHECK(hipGetDeviceProperties(&prop, 0));
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained), result, finish);
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
 #else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
 #endif
@@ -229,9 +225,7 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (isFineGrain) {
 #if defined(HIP_UNCACHED_MEMORY)
-    hipDeviceProp_t prop;
-    CUDACHECK(hipGetDeviceProperties(&prop, 0));
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained), result, finish);
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
 #else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
 #endif
