@@ -112,5 +112,9 @@
 #define NPKIT_EVENT_NET_TEST_ENTRY                              0x58
 #define NPKIT_EVENT_NET_TEST_EXIT                               0x59
 
+#define NPKIT_EVENT_MSCCL_GENERIC_OP_ENTRY                      0x5A
+#define NPKIT_EVENT_MSCCL_GENERIC_OP_EXIT                       0x5B
+#define NPKIT_EVENT_MSCCL_REDUCE_ENTRY                          0x5C
+#define NPKIT_EVENT_MSCCL_REDUCE_EXIT                           0x5D
 
 #endif

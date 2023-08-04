@@ -185,6 +185,25 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
   __synclds(); // publish shmem
 
+#if defined(ENABLE_NPKIT)
+  int npKitCtxIdx = bid;
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
+  if (tid == 0) {
+    uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
+    NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
+        ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+  }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
+  if (tid == 0) {
+    NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, NPKIT_GET_GPU_TIMESTAMP(),
+        ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+  }
+#endif
+
   // Deference reduce args if required
   if (tid == 0 && mscclShmem.work.hasReduce && mscclShmem.work.redOpArgIsPtr) {
     switch (sizeof(T)) {
@@ -225,6 +244,12 @@ __device__ __forceinline__ void mscclRunInterpreter(
   RedOp redFn(mscclShmem.work.redOpArg);
   Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
     (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, mscclShmem.work.redOpArg);
+
+#if defined(ENABLE_NPKIT)
+  if (tid == 0) {
+    prims.npKitCtxIdx = npKitCtxIdx;
+  }
+#endif
 
   const ssize_t sizePerMscclChunk = mscclShmem.work.count / mscclShmem.work.nChunksPerLoop;
   uint32_t maxAllowedCount = mscclShmem.work.maxAllowedCount;
@@ -279,6 +304,13 @@ __device__ __forceinline__ void mscclRunInterpreter(
         else if (t->type == MSCCL_REDUCE) {
           int numReductions = t->numReductions;
           if (thisNelem < nthreads){
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_ENTRY)
+            if (tid == 0) {
+              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+            }
+#endif
+
             if (tid < thisNelem){
               dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
               T* dstIndex = dstPointer + dstOffset + tid;
@@ -308,6 +340,14 @@ __device__ __forceinline__ void mscclRunInterpreter(
               }
               store(dstIndex, o);
             }
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT)
+            if (tid == 0) {
+              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_REDUCE_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+            }
+#endif
+
             barrier(nthreads, mscclBarrierNext, mscclBarriers);
           } else {
             T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
