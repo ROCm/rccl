@@ -123,9 +123,11 @@ static ncclResult_t ncclInit() {
         if (strstr(strValue, "iommu=pt") == NULL)
           WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
       }
+#ifndef HIP_UNCACHED_MEMORY
       char *env = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
       if (env == NULL || strcmp(env, "1") != 0)
         WARN("Missing \"HSA_FORCE_FINE_GRAIN_PCIE=1\" from environment which can lead to low RCCL performance, system instablity or hang!");
+#endif
     }
 #ifndef NVTX_NO_IMPL
     initNvtxRegisteredEnums();
@@ -684,9 +686,7 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
   // detect if fine grained memory is available on this GPU
   int *ptr;
 #if defined(HIP_UNCACHED_MEMORY)
-  hipDeviceProp_t prop;
-  CUDACHECK(hipGetDeviceProperties(&prop, 0));
-  if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained) == hipSuccess) {
+  if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocUncached) == hipSuccess) {
 #else
   if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocFinegrained) == hipSuccess) {
 #endif
