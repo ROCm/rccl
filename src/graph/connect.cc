@@ -435,6 +435,50 @@ static int copyChannels(struct ncclComm* comm, int start, int end, int* ringPrev
   return c;
 }
 
+static ncclResult_t Rewriteinter(struct ncclTopoSystem* system,struct ncclTopoGraph* graph,int nChannels){
+  int nnets = system->nodes[NET].count;
+  int ngpus = system->nodes[GPU].count;
+  typedef struct {
+    int id;
+    int used;
+    } Net;
+  Net nets[nnets];
+  memset(nets, 0, nnets*sizeof(Net));
+  for (int i = 0; i < nnets; i++) {
+    nets[i].id = system->nodes[NET].nodes[i].id;
+  }
+  for (int i = 0; i < nChannels; i++){
+    memcpy(graph->intra+i*ngpus, graph->intra, ngpus*sizeof(int));
+    qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+    return ((Net*)a)->used - ((Net*)b)->used;
+    });
+    *(graph->inter+i*2) = nets[0].id;
+    nets[0].used++; 
+    qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+      return ((Net*)a)->used - ((Net*)b)->used;
+    });
+    if (graph->crossNic == 0 || graph->crossNic == 2) {
+      *(graph->inter+i*2+1) = nets[0].id;
+      nets[0].used++; 
+      qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+      return ((Net*)a)->used - ((Net*)b)->used;
+        });
+      } else {
+        nets[0].used++; 
+        qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+          return ((Net*)a)->used - ((Net*)b)->used;
+        });
+        *(graph->inter+i*2+1) = nets[0].id;
+        nets[0].used++;
+        qsort(nets, nnets, sizeof(Net), [](const void* a, const void* b)->int {
+        return ((Net*)a)->used - ((Net*)b)->used;
+      });
+      }
+      memcpy(graph->intraNets+i*ngpus*2, graph->intraNets, 2*ngpus*sizeof(int));
+  }
+  return ncclSuccess;
+}
+
 ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns, struct ncclTopoRanks** allTopoRanks, int* rings, struct ncclTopoGraph** graphs, int nc) {
   // Gather data from all ranks
   int *ringRecv, *ringSend, *ringPrev, *ringNext, *treeToParent, *treeToChild0, *treeToChild1, *nvlsHeads;
@@ -506,6 +550,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     nChannels = comm->nChannels = std::min(std::min(ncclMaxNchannels(), nChannels), comm->config.maxCTAs);
     nChannels = comm->nChannels = copyChannels(comm, nChannels, std::max(ncclMinNchannels(), std::max(nc, comm->config.minCTAs)), ringPrev, ringNext);
   }
+  NCCLCHECK(Rewriteinter(comm->topo,graphs[NCCL_ALGO_RING],nChannels));
 
   // Create rings array and check all is fine
   NCCLCHECK(ncclBuildRings(nChannels, rings, comm->rank, comm->nRanks, ringPrev, ringNext));
