@@ -265,6 +265,7 @@ set(SRC_FILES
   src/collectives/all_to_all.cc
   src/collectives/all_to_allv.cc
   src/collectives/broadcast.cc
+  src/collectives/msccl.cc
   src/collectives/device/all_gather.h
   src/collectives/device/all_reduce.h
   src/collectives/device/alltoall_pivot.h
@@ -445,7 +446,6 @@ if (ENABLE_MSCCL_KERNEL)
   set(MSCCL_KERNEL_SOURCES
     src/collectives/device/msccl_kernel_impl.h
     src/include/msccl/msccl_kernel.h
-    src/collectives/msccl.cc
   )
   list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
 endif()
