@@ -64,6 +64,8 @@ static_assert(sizeof(ncclNetHandle_t) <= CONNECT_SIZE, "NET Connect info is too 
     } \
 } while (0);
 
+__thread connectionMetaData_t connectionMetaData;
+
 struct connectMapMem{
   char* gpuPtr;
   char* cpuPtr;
@@ -583,6 +585,13 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   if (reqSize != sizeof(ncclNetHandle_t)) return ncclInternalError;
   ncclResult_t ret = ncclSuccess;
 
+  connectionMetaData.send = true;
+  connectionMetaData.tpRank = resources->tpRank;
+  connectionMetaData.tpLocalRank = resources->tpLocalRank;
+  connectionMetaData.tpRemoteRank = resources->tpRemoteRank;
+  connectionMetaData.channelId = resources->channelId;
+  connectionMetaData.connIndex = resources->connIndex;
+
   if (resources->shared) {
     // Shared buffers
     struct ncclProxyProgressState* progressState = &proxyState->progressState;
@@ -729,6 +738,13 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
   struct recvResources* resources = (struct recvResources*)(connection->transportResources);
   resources->tpRemoteProxyRank = *(int*)reqBuff;
   ncclResult_t ret = ncclSuccess;
+
+  connectionMetaData.send = false;
+  connectionMetaData.tpRank = resources->tpRank;
+  connectionMetaData.tpLocalRank = resources->tpLocalRank;
+  connectionMetaData.tpRemoteRank = resources->tpRemoteRank;
+  connectionMetaData.channelId = resources->channelId;
+  connectionMetaData.connIndex = resources->connIndex;
 
   // Finish connection establishment from remote peer
   if (resources->shared) {
