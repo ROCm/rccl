@@ -120,13 +120,11 @@ ncclResult_t NpKit::Dump(const std::string& dump_dir) {
   dump_file_path = dump_dir;
   dump_file_path += "/gpu_clock_rate_rank_";
   dump_file_path += std::to_string(rank_);
-  hipDeviceProp_t devProp;
   int vega_gpu_rtc_freq_in_khz;
-  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (devProp.gcnArch/10 == 94)
-    vega_gpu_rtc_freq_in_khz = 100000;
-  else
-    vega_gpu_rtc_freq_in_khz = 25000;
+  // get the rtc frequency directly from HIP itself.
+  HIP_CALL(hipDeviceGetAttribute(&vega_gpu_rtc_freq_in_khz, hipDeviceAttributeWallClockRate, 0));
+  if (vega_gpu_rtc_freq == 0)
+    vega_gpu_rtc_freq_in_khz = 100000; // TODO: remove me before merging PR.
   std::string clock_rate_str = std::to_string(vega_gpu_rtc_freq_in_khz);
   auto gpu_clock_rate_file = std::fstream(dump_file_path, std::ios::out);
   gpu_clock_rate_file.write(clock_rate_str.c_str(), clock_rate_str.length());
