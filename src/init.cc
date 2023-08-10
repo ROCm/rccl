@@ -177,11 +177,16 @@ void *ncclCommThreadMain(void *arg) {
   double vega_gpu_rtc_freq;
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
+  // Many AMD cards currently supported by RCCL have the same frequency; we're testing for the lone set of exceptions.
+  // So instead of using gcnArch to detect the model, we'll query the frequency directly via HIP.
   hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
-  if (devProp.gcnArch/10 == 94 && status == hipSuccess)
-    vega_gpu_rtc_freq = 1.0E8;
+  int vega_gpu_rtc_freq;
+  // don't be alarmed; this is the one that gives us the number we actually want, not hipDeviceAttributeClockRate
+  HIP_CALL(hipDeviceGetAttribute(&vega_gpu_rtc_freq, hipDeviceAttributeWallClockRate, comm->cudaDev));
+  if (vega_gpu_rtc_freq != 0)
+    vega_gpu_rtc_freq *= 1000; // convert from kilohertz to hertz
   else
-    vega_gpu_rtc_freq = 2.5E7;
+    vega_gpu_rtc_freq = 1.0E8; // TODO: remove me before merging PR
   #define MAX_NAME_LENGTH 64
   char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+2));
   for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
