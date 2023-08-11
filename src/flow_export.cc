@@ -190,6 +190,8 @@ ncclExportDone( struct ncclComm & comm ) {
          WARN( "flowExport_v1.exportDone() failed: code %d", result );
       }
    }
-   currCommHash[ tpLocalRank ] = 0;
+   if ( currCommHash ) {
+     currCommHash[ tpLocalRank ] = 0;
+   }
    return result;
 }
