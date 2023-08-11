@@ -101,7 +101,11 @@ private:
     #endif
     // volatile is faster than acquire but not as correct. Make sure ReduceOrCopyMulti
     // loads data using volatile so it doesn't see stale data in L1.
+#ifdef __GFX9__
     return atomicAdd((unsigned long long *)ptr, 0);
+#else
+    return __atomic_load_n(ptr, __ATOMIC_SEQ_CST);
+#endif
   }
 
   template <int DirectRecv, int DirectSend, int Recv, int Send, int Src, int Dst>
