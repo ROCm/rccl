@@ -604,6 +604,19 @@ static struct rcclRomeModel rome_model_80 = {
   .options = "",
 };
 
+static struct rcclRomeModel rome_model_81 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 7,
+  .gpuIds = { 0xc000, 0x22000, 0x38000, 0x5c000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
+  .nicIds = { 0x7000, 0x1d000, 0x33000, 0x57000, 0x9a000, 0xaa000, 0xba000, 0xda000, },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .connMatrix = { 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, },
+  .gdrLevel = { PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, },
+  .pattern = "4444",
+  .ringBase = "N0 0 1 2 3 4 5 6 7 N7|N1 1 0 2 4 3 5 7 6 N6|N2 2 5 0 3 6 1 7 4 N4|N3 3 7 0 4 2 1 6 5 N5|N4 4 6 2 7 3 0 5 1 N1|N5 5 4 7 1 3 2 6 0 N0|N6 6 3 1 4 0 7 5 2 N2|N7 7 2 0 6 4 1 5 3 N3",
+  .options = "noCpuCheck=1",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -645,6 +658,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_76,
   rome_model_79,
   rome_model_80,
+  rome_model_81,
 };
 
 /* Parse user defined rings. Format is like :
