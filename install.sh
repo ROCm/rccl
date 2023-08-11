@@ -10,7 +10,7 @@ ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
 build_address_sanitizer=false
 build_allreduce_only=false
 build_bfd=true
-build_freorg_bkwdcomp=true
+build_freorg_bkwdcomp=false
 build_local_gpu_only=false
 build_package=false
 build_release=true
