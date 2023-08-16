@@ -327,6 +327,7 @@ set(SRC_FILES
   src/graph/xml.cc
   src/graph/xml.h
   src/group.cc
+  src/include/archinfo.h
   src/include/align.h
   src/include/alloc.h
   src/include/argcheck.h
@@ -407,6 +408,7 @@ set(SRC_FILES
   src/include/utils.h
   src/init.cc
 #  src/init_nvtx.cc
+  src/misc/archinfo.cc
   src/misc/argcheck.cc
 # src/misc/cudawrap.cc
 # src/misc/gdrwrap.cc

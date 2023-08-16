@@ -9,6 +9,7 @@
 
 #include "alloc.h"
 #include "npkit/npkit.h"
+#include "archinfo.h"
 
 uint64_t NpKit::rank_ = 0;
 
@@ -120,11 +121,8 @@ ncclResult_t NpKit::Dump(const std::string& dump_dir) {
   dump_file_path = dump_dir;
   dump_file_path += "/gpu_clock_rate_rank_";
   dump_file_path += std::to_string(rank_);
-  int vega_gpu_rtc_freq_in_khz;
-  // get the rtc frequency directly from HIP itself.
-  hipDeviceGetAttribute(&vega_gpu_rtc_freq_in_khz, hipDeviceAttributeWallClockRate, 0);
-  if (vega_gpu_rtc_freq_in_khz == 0)
-    vega_gpu_rtc_freq_in_khz = 100000; // TODO: remove me before merging PR.
+  // get the rtc frequency directly from HIP itself (via a wrapper)
+  double vega_gpu_rtc_freq_in_khz = getDeviceWallClockRateInKhz(0);
   std::string clock_rate_str = std::to_string(vega_gpu_rtc_freq_in_khz);
   auto gpu_clock_rate_file = std::fstream(dump_file_path, std::ios::out);
   gpu_clock_rate_file.write(clock_rate_str.c_str(), clock_rate_str.length());
