@@ -47,6 +47,7 @@ if(BUILD_TESTS)
       AllReduceTests.cpp
       AllToAllTests.cpp
       AllToAllVTests.cpp
+      SplitCommsTest.cpp
       BroadcastTests.cpp
       GatherTests.cpp
       GroupCallTests.cpp
