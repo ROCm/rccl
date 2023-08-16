@@ -908,6 +908,12 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     // try to match 4H4P
     NCCLCHECK(parse4H4P(system, graph));
   }
+  str = getenv("NCCL_TREES");
+  if (str) {
+    // user supplied topo
+    NCCLCHECK(parseGraphLight(str, system, graph, NULL));
+    system->treeDefined=true;
+  }
   if (graph->nChannels) return ncclSuccess;
 
   if ((graph->pattern == NCCL_TOPO_PATTERN_RING) && (system->type & RCCL_TOPO_4P2H_ROME) && (ngpus == system->nRanks)) {

@@ -393,7 +393,7 @@ static struct rcclRomeModel rome_model_56 = {
   .pattern = "40404040",
   .ringBase = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0",
   .options = "pivotA2AEnabled=1,pivotA2ANumBiRings=3,tuning=1,mscclEnabled=1",
-  .treeBase = "10 11|14 15|6 7|2 3|0 1|4 5|12 13|8 9",
+  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_58 = {
@@ -617,6 +617,20 @@ static struct rcclRomeModel rome_model_81 = {
   .options = "noCpuCheck=1",
 };
 
+static struct rcclRomeModel rome_model_82 = {
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .gpuIds = { 0x63000, 0x43000, 0x27000, 0x3000, 0xe3000, 0xc3000, 0xa3000, 0x83000, },
+  .nicIds = { },
+  .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
+  .gdrLevel = { },
+  .pattern = "20202020",
+  .ringBase = "",
+  .options = "treeDefined=1",
+  .treeBase = "1 0 3 2 5 6 7 4|3 1 0 2 5 7 6 4|0 3 1 2 5 7 4 6|5 4 7 6 1 0 2 3|7 5 4 6 1 2 0 3|4 7 5 6 1 0 3 2|0 3 2 1 6 7 5 4|0 2 3 1 6 4 7 5|2 0 3 1 6 5 4 7|7 6 4 5 2 3 1 0|7 4 6 5 2 0 3 1|6 7 4 5 2 1 0 3",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -659,6 +673,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_79,
   rome_model_80,
   rome_model_81,
+  rome_model_82,
 };
 
 /* Parse user defined rings. Format is like :
@@ -830,20 +845,20 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
               break;
           if (j < ngpus)
           {
-            graph->treeBase[r][x] = system->nodes[GPU].nodes[j].gpu.rank;
+            graph->treeBase[x][r] = system->nodes[GPU].nodes[j].gpu.rank;
             y=r;
           }
           else
             return ncclInternalError;
         }
         y++;
-        graph->treeBase[y][x] = -1;
+        graph->treeBase[x][y] = -1;
         x++;
         gpu=0;
       }
     }
   } while (str[offset++] != 0);
-  graph->treeBase[0][x] = -1;
+  graph->treeBase[x][0] = -1;
   return ncclSuccess;
 }
 
@@ -886,6 +901,8 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
         system->baseBw = std::stof(tokens[i*2+1]);
       } else if (strcmp(tokens[i*2], "mscclEnabled") == 0) {
         system->mscclEnabled = (bool)atol(tokens[i*2+1]);
+      } else if (strcmp(tokens[i*2], "treeDefined") == 0) {
+        system->treeDefined = (bool)atol(tokens[i*2+1]);
       }
     }
     free(str_temp);
@@ -1448,7 +1465,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   // create 16P1H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL));
 
-  NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
+  // NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
   // clean up
   free(all_gpu_permutations);
   return ncclSuccess;
