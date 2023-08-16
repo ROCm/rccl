@@ -321,3 +321,21 @@ char* gcnArchConvertToGcnArchName(int gcnArch) {
   }
   return gcnArchName;
 }
+
+char *getGcnArchName(int deviceId) {
+  // this is a generic call in to get a consistent gcnArchName regardless of which version of rocm we're using.
+  // or which version of rocm we're using.
+  hipDeviceProp_t devProp;
+  hipError_t status = hipGetDeviceProperties(&devProp, deviceId);
+  if (status != hipSuccess) {
+    //std::cerr << "Encountered HIP error getting device properties: "
+    //          << hipGetErrorString(status) << "\n";
+    exit(-1);
+  }
+#ifdef HIP_NO_GCNARCHNAME
+  // we're using a HIP version past 3.7.
+  return gcnArchConvertToGcnArchName(devProp.gcnArch);
+#else
+  return gcnArchNameFormat(devProp.gcnArchName);
+#endif
+}

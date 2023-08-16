@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include "graph/topo.h"
 #include "graph/xml.h"
+#include "utils.h"
 
 // [RCCL]
 #include "git_version.h"
@@ -178,15 +179,21 @@ void *ncclCommThreadMain(void *arg) {
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
   // Many AMD cards currently supported by RCCL have the same frequency; we're testing for the lone set of exceptions.
-  // So instead of using gcnArch to detect the model, we'll query the frequency directly via HIP.
-  hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
-  double vega_gpu_rtc_freq;
-  // don't be alarmed; this is the one that gives us the number we actually want, not hipDeviceAttributeClockRate
-  hipDeviceGetAttribute(&vega_gpu_rtc_freq, hipDeviceAttributeWallClockRate, comm->cudaDev);
-  if (vega_gpu_rtc_freq != 0)
-    vega_gpu_rtc_freq *= 1000; // convert from kilohertz to hertz
-  else
-    vega_gpu_rtc_freq = 1.0E8; // TODO: remove me before merging PR
+  #ifdef HIP_NO_WALLCLOCKRATE // we're using an older version of ROCM/HIP and must try according to the name instead.
+    if (strncmp("gfx94", getGcnArchName(comm->CudaDev), 5) == 0)
+      vega_gpu_rtc_freq = 1.0E8;
+    else
+      vega_gpu_rtc_freq = 2.5E7;
+  #else
+    // So instead of using gcnArch to detect the model, we'll query the frequency directly via HIP.
+    hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
+    // don't be alarmed; this is the one that gives us the number we actually want, not hipDeviceAttributeClockRate
+    hipDeviceGetAttribute(&vega_gpu_rtc_freq, hipDeviceAttributeWallClockRate, comm->cudaDev);
+    if (vega_gpu_rtc_freq != 0)
+      vega_gpu_rtc_freq *= 1000; // convert from kilohertz to hertz
+    else
+      vega_gpu_rtc_freq = 1.0E8; // TODO: remove me before merging PR
+  #endif
   #define MAX_NAME_LENGTH 64
   char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+2));
   for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
