@@ -12,10 +12,10 @@
 class SplitCommsTest : public ::testing::Test {
 protected:
     std::vector<ncclComm_t> comms;
-    int numDevices = 3;
+    int numDevices;
 
     void SetUp() override {
-        //HIPCALL(hipGetDeviceCount(&numDevices));
+        HIPCALL(hipGetDeviceCount(&numDevices));
 
         if (numDevices < 2) {
             GTEST_SKIP() << "This test requires at least 2 GPUs.";
