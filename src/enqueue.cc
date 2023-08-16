@@ -1217,6 +1217,9 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
         info->protocol = NCCL_PROTO_LL;
         info->algorithm = NCCL_ALGO_TREE;
         info->nChannels = std::min(24, comm->nChannels);
+      } else if (comm->topo->treeDefined) {
+        info->protocol = NCCL_PROTO_SIMPLE;
+        info->algorithm = NCCL_ALGO_TREE;
       } else {
         info->protocol = NCCL_PROTO_SIMPLE;
         info->algorithm = NCCL_ALGO_RING;
