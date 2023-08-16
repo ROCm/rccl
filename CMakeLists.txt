@@ -125,11 +125,30 @@ check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVE
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
-### Check for gcnArchName; if not, we must support gcnArch (now deprecated)
-check_symbol_exists("hipDeviceAttributeGcnArchName", "hip/hip_runtime_api.h", USE_GCNARCHNAME)
+message(STATUS "HIP Library version: ${hip_VERSION_MINOR}")
+### Check the version of HIP; this will tell us what features we can and cannot use.
+if(hip_VERSION_MAJOR GREATER_EQUAL 5)
+  if (hip_VERSION_MINOR GREATER_EQUAL 4)
+    set(HIP_HAS_WALLCLOCKRATE ON)
+  else()
+    set(HIP_HAS_WALLCLOCKRATE OFF)
+  endif()
+else()
+  set(HIP_HAS_WALLCLOCKRATE OFF)
+endif()
 
-### Check for hipDeviceAttributeWallClockRate; use to get the frequency.
-check_symbol_exists("hipDeviceAttributeWallClockRate", "hip/hip_runtime_api.h", HIP_HAS_WALL_CLOCK_RATE)
+if(hip_VERSION_MAJOR GREATER_EQUAL 3)
+  if (hip_VERSION_MINOR GREATER_EQUAL 7)
+    set(HIP_HAS_GCNARCHNAME ON)
+  else()
+    set(HIP_HAS_GCNARCHNAME OFF)
+  endif()
+else()
+  set(HIP_HAS_GCNARCHNAME OFF)
+endif()
+
+### Check for gcnArchName; if not, we must support gcnArch (now deprecated)
+### check_symbol_exists("hipDeviceAttributeGcnArchName" "hip/hip_runtime_api.h" USE_GCNARCHNAME)
 
 ### Check for indirect function call support
 if(ENABLE_IFC)
@@ -553,10 +572,10 @@ if(${HIP_UNCACHED_MEMORY})
     message(STATUS "HIP_UNCACHED_MEMORY enabled")
   endif()
 endif()
-if(${USE_GCNARCHNAME})
-  target_compile_definitions(rccl PRIVATE USE_GCNARCHNAME)
+if(HIP_HAS_GCNARCHNAME)
+  target_compile_definitions(rccl PRIVATE HIP_HAS_GCNARCHNAME)
 endif()
-if(${HIP_HAS_WALL_CLOCK_RATE})
+if(HIP_HAS_WALLCLOCKRATE)
   target_compile_definitions(rccl PRIVATE HIP_HAS_WALL_CLOCK_RATE)
 endif()
 if (BUILD_BFD)
