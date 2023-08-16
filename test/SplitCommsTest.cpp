@@ -27,12 +27,7 @@ protected:
         NCCLCHECK(ncclGetUniqueId(&id));
 
         // Initialize the original comms
-        NCCLCHECK(ncclGroupStart());
-        for (int i = 0; i < numDevices; i++) {
-            HIPCALL(hipSetDevice(i));
-            NCCLCHECK(ncclCommInitRank(&comms[i], numDevices, id, i));
-        }
-        NCCLCHECK(ncclGroupEnd());
+        NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
     }
 
     void TearDown() override {
@@ -48,30 +43,23 @@ TEST_F(SplitCommsTest, RankCheck) {
     int numSubComms = 2;
 
     // Split the original comms into sub comms
+    std::map<int, int> mapCounter;
     NCCLCHECK(ncclGroupStart());
     for (int localRank = 0; localRank < numDevices; localRank++) {
         NCCLCHECK(ncclCommSplit(comms[localRank], localRank % numSubComms, localRank, &subComms[localRank], NULL));
+        mapCounter[localRank % numSubComms]++;
     }
     NCCLCHECK(ncclGroupEnd());
 
     // Validate results
     for (int i = 0; i < numDevices; i++) {
-        int originalRank, originalNRank;
-        NCCLCHECK(ncclCommUserRank(comms[i], &originalRank));
-        NCCLCHECK(ncclCommCount(comms[i], &originalNRank));
-
         int subCommRank, subCommNRank;
         NCCLCHECK(ncclCommUserRank(subComms[i], &subCommRank));
         NCCLCHECK(ncclCommCount(subComms[i], &subCommNRank));
 
-        // Calculate the expected sub-communication properties
-        int maxExpectedSubCommNRank = (comms.size() + numSubComms - 1) / numSubComms;
-        int minExpectedSubCommNRank = maxExpectedSubCommNRank - ((i % numSubComms == 0) ? 0 : 1);
-
         // Assert sub-communication properties
         ASSERT_EQ(subCommRank, i / numSubComms);
-        ASSERT_GE(subCommNRank, minExpectedSubCommNRank);
-        ASSERT_LE(subCommNRank, maxExpectedSubCommNRank);
+        ASSERT_EQ(subCommNRank, mapCounter[subCommRank]);
     }
 
     // Destroy the created sub comms
@@ -100,7 +88,7 @@ TEST_F(SplitCommsTest, OneColor) {
         NCCLCHECK(ncclCommUserRank(subComms[i], &subCommRank));
         NCCLCHECK(ncclCommCount(subComms[i], &subCommNRank));
         
-        ASSERT_EQ(originalNRank, subCommNRank);
+        ASSERT_EQ(originalRank, subCommRank);
         ASSERT_EQ(originalNRank, subCommNRank);
     }
 
@@ -122,17 +110,21 @@ TEST_F(SplitCommsTest, ReduceRanks) {
     NCCLCHECK(ncclGroupEnd());
 
     // Validate results
-    for (int i = 0; i < numReducedRanks; i++) {
+    for (int i = 0; i < numDevices; i++) {
         int originalRank, originalNRank;
         NCCLCHECK(ncclCommUserRank(comms[i], &originalRank));
         NCCLCHECK(ncclCommCount(comms[i], &originalNRank));
 
-        int subCommRank, subCommNRank;
-        NCCLCHECK(ncclCommUserRank(subComms[i], &subCommRank));
-        NCCLCHECK(ncclCommCount(subComms[i], &subCommNRank));
+        if (i < numReducedRanks) {
+            int subCommRank, subCommNRank;
+            NCCLCHECK(ncclCommUserRank(subComms[i], &subCommRank));
+            NCCLCHECK(ncclCommCount(subComms[i], &subCommNRank));
         
-        ASSERT_EQ(originalRank, subCommRank);
-        ASSERT_EQ(subCommNRank, numReducedRanks);
+            ASSERT_EQ(originalRank, subCommRank);
+            ASSERT_EQ(subCommNRank, numReducedRanks);
+        } else {
+            ASSERT_EQ(subComms[i], nullptr);
+        }
     }
 
     // Destroy subComms
