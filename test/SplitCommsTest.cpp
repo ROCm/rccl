@@ -21,10 +21,7 @@ protected:
             GTEST_SKIP() << "This test requires at least 2 GPUs.";
         }
 
-        ncclUniqueId id;
         comms.resize(numDevices);
-
-        NCCLCHECK(ncclGetUniqueId(&id));
 
         // Initialize the original comms
         NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
