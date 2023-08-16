@@ -128,6 +128,9 @@ check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACH
 ### Check for gcnArchName; if not, we must support gcnArch (now deprecated)
 check_symbol_exists("hipDeviceAttributeGcnArchName", "hip/hip_runtime_api.h", USE_GCNARCHNAME)
 
+### Check for hipDeviceAttributeWallClockRate; use to get the frequency.
+check_symbol_exists("hipDeviceAttributeWallClockRate", "hip/hip_runtime_api.h", HIP_HAS_WALL_CLOCK_RATE)
+
 ### Check for indirect function call support
 if(ENABLE_IFC)
   if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.5.30201")
@@ -552,6 +555,10 @@ if(${HIP_UNCACHED_MEMORY})
 endif()
 if(${USE_GCNARCHNAME})
   target_compile_definitions(rccl PRIVATE USE_GCNARCHNAME)
+endif()
+if(${HIP_HAS_WALL_CLOCK_RATE})
+  target_compile_definitions(rccl PRIVATE HIP_HAS_WALL_CLOCK_RATE)
+endif()
 if (BUILD_BFD)
   if (HAVE_BFD)
     target_compile_definitions(rccl PRIVATE HAVE_BFD)
