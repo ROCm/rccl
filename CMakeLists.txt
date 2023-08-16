@@ -125,6 +125,9 @@ check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVE
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
+### Check for gcnArchName; if not, we must support gcnArch (now deprecated)
+check_symbol_exists("hipDeviceAttributeGcnArchName", "hip/hip_runtime_api.h", USE_GCNARCHNAME)
+
 ### Check for indirect function call support
 if(ENABLE_IFC)
   if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.5.30201")
@@ -547,6 +550,8 @@ if(${HIP_UNCACHED_MEMORY})
     message(STATUS "HIP_UNCACHED_MEMORY enabled")
   endif()
 endif()
+if(${USE_GCNARCHNAME})
+  target_compile_definitions(rccl PRIVATE USE_GCNARCHNAME)
 if (BUILD_BFD)
   if (HAVE_BFD)
     target_compile_definitions(rccl PRIVATE HAVE_BFD)

@@ -180,9 +180,9 @@ void *ncclCommThreadMain(void *arg) {
   // Many AMD cards currently supported by RCCL have the same frequency; we're testing for the lone set of exceptions.
   // So instead of using gcnArch to detect the model, we'll query the frequency directly via HIP.
   hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
-  int vega_gpu_rtc_freq;
+  double vega_gpu_rtc_freq;
   // don't be alarmed; this is the one that gives us the number we actually want, not hipDeviceAttributeClockRate
-  HIP_CALL(hipDeviceGetAttribute(&vega_gpu_rtc_freq, hipDeviceAttributeWallClockRate, comm->cudaDev));
+  hipDeviceGetAttribute(&vega_gpu_rtc_freq, hipDeviceAttributeWallClockRate, comm->cudaDev);
   if (vega_gpu_rtc_freq != 0)
     vega_gpu_rtc_freq *= 1000; // convert from kilohertz to hertz
   else

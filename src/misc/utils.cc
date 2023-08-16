@@ -9,6 +9,7 @@
 
 #include "nvmlwrap.h"
 
+#include <string.h>
 #include <stdlib.h>
 
 // Get current Compute Capability
@@ -290,4 +291,33 @@ void ncclMemoryStackDestruct(struct ncclMemoryStack* me) {
     free(h);
     h = h1;
   }
+}
+
+char* gcnArchNameFormat(char* gcnArchName) {
+  // this function parses the char array from the device properties into something easier to handle.
+  // as the gcnArchName attribute looks something like: "gfx900:xnack+:blah-:etc-"
+  char *gcnArchNameToken = strtok(gcnArchName, ":");
+  return gcnArchNameToken;
+}
+
+char* gcnArchConvertToGcnArchName(int gcnArch) {
+  // gcnArch is deprecated and we should instead use gcnArchName; however, some data files still have
+  // the older gcnArch value.  There's only a handful of architectures that were coded prior to deprecation,
+  // so we handle those cases here.
+  char gcnArchName[256] = {0}; // why 256?  Because that's what gcnArchName gives us, so we're matching it.
+  switch (gcnArch) {
+    case 906:
+      strncpy(gcnArchName, "gfx906", 6);
+      break;
+    case 908:
+      strncpy(gcnArchName, "gfx908", 6);
+      break;
+    case 910:
+      // this is actually 90a
+      strncpy(gcnArchName, "gfx90a", 6);
+      break;
+    default:
+      // throw an error here or however we're handling these runtime exceptions.
+  }
+  return gcnArchName;
 }
