@@ -9,37 +9,25 @@
 
 #include "StandaloneUtils.hpp"
 
-class SplitCommsTest : public ::testing::Test {
-protected:
+TEST(Standalone, SplitComms) {
     std::vector<ncclComm_t> comms;
     int numDevices;
 
-    void SetUp() override {
-        HIPCALL(hipGetDeviceCount(&numDevices));
+    HIPCALL(hipGetDeviceCount(&numDevices));
 
-        if (numDevices < 2) {
-            GTEST_SKIP() << "This test requires at least 2 GPUs.";
-        }
-
-        comms.resize(numDevices);
-
-        // Initialize the original comms
-        NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
+    if (numDevices < 2) {
+        GTEST_SKIP() << "This test requires at least 2 devices.";
     }
 
-    void TearDown() override {
-        // Destroy the original comms after the test ends
-        for (auto& comm : comms) {
-            NCCLCHECK(ncclCommDestroy(comm));
-        }
-    }
-};
-
-TEST_F(SplitCommsTest, RankCheck) {
+    comms.resize(numDevices);
     std::vector<ncclComm_t> subComms(numDevices);
+
+    //Initialize the original comms
+    NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
+
+    /*==================== Rank check test ===================*/
     int numSubComms = 2;
 
-    // Split the original comms into sub comms
     std::map<int, int> mapCounter;
     NCCLCHECK(ncclGroupStart());
     for (int localRank = 0; localRank < numDevices; localRank++) {
@@ -48,7 +36,6 @@ TEST_F(SplitCommsTest, RankCheck) {
     }
     NCCLCHECK(ncclGroupEnd());
 
-    // Validate results
     for (int i = 0; i < numDevices; i++) {
         int subCommRank, subCommNRank;
         NCCLCHECK(ncclCommUserRank(subComms[i], &subCommRank));
@@ -56,19 +43,15 @@ TEST_F(SplitCommsTest, RankCheck) {
 
         // Assert sub-communication properties
         ASSERT_EQ(subCommRank, i / numSubComms);
-        ASSERT_EQ(subCommNRank, mapCounter[subCommRank]);
+        ASSERT_EQ(subCommNRank, mapCounter[i % numSubComms]);
     }
 
-    // Destroy the created sub comms
+    // Destroy sub-comms
     for (auto& subComm : subComms) {
         NCCLCHECK(ncclCommDestroy(subComm));
     }
-}
 
-// Test to duplicate the original comm
-TEST_F(SplitCommsTest, OneColor) {
-    std::vector<ncclComm_t> subComms(numDevices);
-
+    /*================== One color test ====================*/
     NCCLCHECK(ncclGroupStart());
     for (int localRank = 0; localRank < numDevices; localRank++) {
         NCCLCHECK(ncclCommSplit(comms[localRank], 0, localRank, &subComms[localRank], NULL));
@@ -89,14 +72,12 @@ TEST_F(SplitCommsTest, OneColor) {
         ASSERT_EQ(originalNRank, subCommNRank);
     }
 
+    // Destroy sub-comms
     for (auto& subComm : subComms) {
         NCCLCHECK(ncclCommDestroy(subComm));
     }
-}
 
-TEST_F(SplitCommsTest, ReduceRanks) {
-    std::vector<ncclComm_t> subComms(numDevices);
-
+    /*==================== Reduce ranks test =======================*/
     // Number of ranks to duplicate from the original comm
     int numReducedRanks = numDevices / 2;
 
@@ -124,8 +105,13 @@ TEST_F(SplitCommsTest, ReduceRanks) {
         }
     }
 
-    // Destroy subComms
+    // Destroy sub-comms
     for (auto& subComm : subComms) {
         NCCLCHECK(ncclCommDestroy(subComm));
+    }
+
+    // Destroy original comms
+    for (auto& comm : comms) {
+        NCCLCHECK(ncclCommDestroy(comm));
     }
 }
