@@ -1213,10 +1213,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     info->nChannels = nc;
     if (!userTuneInput) {
       // always respect user settings
-      if (comm->topo->treeDefined == 1 && comm->topo->pivotA2ANumBiRings != 3) {
-        info->protocol = NCCL_PROTO_SIMPLE;
-        info->algorithm = NCCL_ALGO_TREE;
-      } else if (info->nBytes <= 2200008) {
+      if (info->nBytes <= 2200008) {
         info->protocol = NCCL_PROTO_LL;
         info->algorithm = NCCL_ALGO_TREE;
         info->nChannels = std::min(24, comm->nChannels);
@@ -1225,6 +1222,9 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
         info->algorithm = NCCL_ALGO_RING;
       }
     }
+  }if (comm->topo->treeDefined == 1) {
+        info->algorithm = NCCL_ALGO_TREE;
+        info->nChannels =comm->nChannels;
   } else {
     info->nChannels = nc;
   }
