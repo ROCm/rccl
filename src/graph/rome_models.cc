@@ -57,7 +57,6 @@ static struct rcclRomeModel rome_model_22 = {
   .pattern = "10302120",
   .ringBase = "7 4 5 3 1 0 6 2|4 7 3 5 0 1 2 6",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_25 = {
@@ -71,7 +70,6 @@ static struct rcclRomeModel rome_model_25 = {
   .pattern = "11303011",
   .ringBase = "2 1 0 3 6 7 5 4|7 6 4 5 1 2 3 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_27 = {
@@ -85,7 +83,6 @@ static struct rcclRomeModel rome_model_27 = {
   .pattern = "11303011",
   .ringBase = "0 6 2 3 1 7 5 4|7 1 4 5 6 0 3 2",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_29 = {
@@ -99,7 +96,6 @@ static struct rcclRomeModel rome_model_29 = {
   .pattern = "10302120",
   .ringBase = "6 5 7 4 0 1 3 2|6 4 7 5 2 3 1 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_31 = {
@@ -113,7 +109,6 @@ static struct rcclRomeModel rome_model_31 = {
   .pattern = "0110201010200110",
   .ringBase = "1 2 3 0 6 4 5 7|4 6 7 5 2 1 0 3",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_33 = {
@@ -127,7 +122,6 @@ static struct rcclRomeModel rome_model_33 = {
   .pattern = "0110201010200110",
   .ringBase = "1 4 5 7 0 3 2 6|4 1 7 5 6 2 3 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_30 = {
@@ -141,7 +135,6 @@ static struct rcclRomeModel rome_model_30 = {
   .pattern = "0010201010200010",
   .ringBase = "3 0 1 2 6 7 5 4|2 1 0 3 7 6 4 5",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_32 = {
@@ -155,7 +148,6 @@ static struct rcclRomeModel rome_model_32 = {
   .pattern = "0010201010200010",
   .ringBase = "0 6 2 3 4 5 7 1|3 2 6 0 1 7 5 4",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_24 = {
@@ -169,7 +161,6 @@ static struct rcclRomeModel rome_model_24 = {
   .pattern = "10303010",
   .ringBase = "0 1 2 3 5 7 6 4|1 0 3 2 7 5 4 6",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_26 = {
@@ -183,7 +174,6 @@ static struct rcclRomeModel rome_model_26 = {
   .pattern = "10303010",
   .ringBase = "4 5 7 1 0 3 2 6|3 0 6 2 1 7 5 4",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_23 = {
@@ -197,7 +187,6 @@ static struct rcclRomeModel rome_model_23 = {
   .pattern = "10302020",
   .ringBase = "1 7 6 4 5 2 0 3|2 5 3 0 4 6 7 1",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_38 = {
@@ -211,7 +200,6 @@ static struct rcclRomeModel rome_model_38 = {
   .pattern = "10201000201010",
   .ringBase = "6 7 1 4 3 5 2 0|0 2 5 3 4 1 7 6",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_28 = {
@@ -225,7 +213,6 @@ static struct rcclRomeModel rome_model_28 = {
   .pattern = "10302020",
   .ringBase = "0 3 2 1 4 5 6 7|7 6 5 4 1 2 3 0|0 2 5 7 4 6 3 1|1 3 6 4 7 5 2 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_40 = {
@@ -239,7 +226,6 @@ static struct rcclRomeModel rome_model_40 = {
   .pattern = "10302120",
   .ringBase = "6 7 1 4 0 5 3 2|7 6 4 1 0 2 3 5",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_42 = {
@@ -253,7 +239,6 @@ static struct rcclRomeModel rome_model_42 = {
   .pattern = "10201001201010",
   .ringBase = "7 4 6 1 3 0 2 5|6 4 7 1 3 2 5 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_44 = {
@@ -267,7 +252,6 @@ static struct rcclRomeModel rome_model_44 = {
   .pattern = "20202120",
   .ringBase = "5 4 7 6 2 1 3 0|5 6 7 4 1 0 2 3",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_45 = {
@@ -281,7 +265,6 @@ static struct rcclRomeModel rome_model_45 = {
   .pattern = "10201000201010",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_46 = {
@@ -295,7 +278,6 @@ static struct rcclRomeModel rome_model_46 = {
   .pattern = "10201001201010",
   .ringBase = "6 5 7 4 1 2 3 0|7 4 6 5 1 0 3 2",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_48 = {
@@ -309,7 +291,6 @@ static struct rcclRomeModel rome_model_48 = {
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0|0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_49 = {
@@ -323,7 +304,6 @@ static struct rcclRomeModel rome_model_49 = {
   .pattern = "21212121",
   .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_52 = {
@@ -337,7 +317,6 @@ static struct rcclRomeModel rome_model_52 = {
   .pattern = "80",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_53 = {
@@ -351,7 +330,6 @@ static struct rcclRomeModel rome_model_53 = {
   .pattern = "21212121",
   .ringBase = "N0 0 1 2 3 4 5 6 7 N3|N3 7 6 5 4 3 2 1 0 N0|N1 2 3 0 1 6 7 4 5 N2|N2 5 4 7 6 1 0 3 2 N1",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_43 = {
@@ -364,8 +342,8 @@ static struct rcclRomeModel rome_model_43 = {
   .gdrLevel = { },
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
-  .options = "",
-  .treeBase = "",
+  .options = "treeDefined=1",
+  .treeBase = "1 0 3 2 5 6 7 4|3 1 0 2 5 7 6 4|0 3 1 2 5 7 4 6|5 4 7 6 1 0 2 3|7 5 4 6 1 2 0 3|4 7 5 6 1 0 3 2|0 3 2 1 6 7 5 4|0 2 3 1 6 4 7 5|2 0 3 1 6 5 4 7|7 6 4 5 2 3 1 0|7 4 6 5 2 0 3 1|6 7 4 5 2 1 0 3",
 };
 
 static struct rcclRomeModel rome_model_55 = {
@@ -379,7 +357,6 @@ static struct rcclRomeModel rome_model_55 = {
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|7 6 5 4 3 2 1 0|2 3 0 1 6 7 4 5|5 4 7 6 1 0 3 2",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_56 = {
@@ -392,8 +369,8 @@ static struct rcclRomeModel rome_model_56 = {
   .gdrLevel = { },
   .pattern = "40404040",
   .ringBase = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0",
-  .options = "pivotA2AEnabled=1,pivotA2ANumBiRings=3,tuning=1,mscclEnabled=1",
-  .treeBase = "10 11|14 15|6 7|2 3|0 1|4 5|12 13|8 9",
+  .options = "pivotA2AEnabled=1,pivotA2ANumBiRings=3,tuning=1,mscclEnabled=1,treeDefined=1",
+  .treeBase= "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|2 3 7 6 13 12 8 9 10 11 15 14 5 4 0 1|14 15 11 10 8 9 13 12 4 5 1 0 2 3 7 6|10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14|10 11 15 14 5 4 0 1 2 3 7 6 13 12 8 9|4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12|6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2|13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6|8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10|12 13 5 4 0 1 3 2 6 7 15 14 10 11 9 8|5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14|2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0",
 };
 
 static struct rcclRomeModel rome_model_58 = {
@@ -407,7 +384,6 @@ static struct rcclRomeModel rome_model_58 = {
   .pattern = "402020",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_59 = {
@@ -421,7 +397,6 @@ static struct rcclRomeModel rome_model_59 = {
   .pattern = "42424242",
   .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6",
   .options = "tuning=4,ll128Enabled=1,baseBw=161.4",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_62 = {
@@ -435,7 +410,6 @@ static struct rcclRomeModel rome_model_62 = {
   .pattern = "20202020",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_63 = {
@@ -449,7 +423,6 @@ static struct rcclRomeModel rome_model_63 = {
   .pattern = "21212121",
   .ringBase = "N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3",
   .options = "tuning=3",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_65 = {
@@ -463,7 +436,6 @@ static struct rcclRomeModel rome_model_65 = {
   .pattern = "42424242",
   .ringBase = "N4 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10 11 N5|N1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0 1 N0|N3 7 6 2 3 1 0 4 5 13 12 8 9 11 10 14 15 N7|N7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6 7 N3|N5 11 10 14 15 7 6 2 3 1 0 4 5 13 12 8 9 N4|N0 1 0 4 5 13 12 8 9 11 10 14 15 7 6 2 3 N1|N3 6 7 3 2 1 0 4 5 14 15 11 10 9 8 12 13 N6|N7 14 15 11 10 9 8 12 13 6 7 3 2 1 0 4 5 N2|N2 5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 N7|N6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 N3|N4 8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 N5|N5 10 11 15 14 6 7 3 2 0 1 5 4 12 13 9 8 N4|N6 12 13 9 8 10 11 15 14 6 7 3 2 0 1 5 4 N2|N2 4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 N6|N1 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 N0|N0 0 1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 N1|N5 10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 N7|N3 6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 N1|N1 2 3 1 0 4 5 13 12 8 9 11 10 14 15 7 6 N3|N7 14 15 7 6 2 3 1 0 4 5 13 12 8 9 11 10 N5|N0 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4 N2|N4 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13 12 N6|N3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2 3 N1|N1 3 2 1 0 4 5 14 15 11 10 9 8 12 13 6 7 N3|N6 12 13 6 7 3 2 1 0 4 5 14 15 11 10 9 8 N4|N2 4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0 N0|N0 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 N2|N6 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8 9 N4|N5 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14 15 N7|N2 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0 1 N0|N7 15 14 6 7 3 2 0 1 5 4 12 13 9 8 10 11 N5|N4 9 8 10 11 15 14 6 7 3 2 0 1 5 4 12 13 N6",
   .options = "tuning=4,ll128Enabled=1,baseBw=161.4",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_66 = {
@@ -477,7 +449,6 @@ static struct rcclRomeModel rome_model_66 = {
   .pattern = "4040",
   .ringBase = "0 6 7 5 4 2 3 1|1 3 2 4 5 7 6 0|0 1 7 6 2 3 5 4|4 5 3 2 6 7 1 0",
   .options = "disableNumaMatching=1,tuning=2",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_67 = {
@@ -491,7 +462,6 @@ static struct rcclRomeModel rome_model_67 = {
   .pattern = "4242",
   .ringBase = "N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N1 2 3 5 4 0 1 7 6 N3|N2 4 5 3 2 6 7 1 0 N0|N1 3 2 4 5 7 6 0 1 N0|N0 1 0 6 7 5 4 2 3 N1|N0 0 1 7 6 2 3 5 4 N2|N3 6 7 1 0 4 5 3 2 N1",
   .options = "disableNumaMatching=1,tuning=2",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_68 = {
@@ -505,7 +475,6 @@ static struct rcclRomeModel rome_model_68 = {
   .pattern = "@@",
   .ringBase = "N0 0 1 2 3 N3 N4 4 5 6 7 N7 N8 8 9 10 11 N11 N12 12 13 14 15 N15|N15 15 14 13 12 N12 N11 11 10 9 8 N8 N7 7 6 5 4 N4 N3 3 2 1 0 N0|N1 1 3 0 2 N2 N5 5 7 4 6 N6 N9 9 11 8 10 N10 N13 13 15 12 14 N14|N14 14 12 15 13 N13 N10 10 8 11 9 N9 N6 6 4 7 5 N5 N2 2 0 3 1 N1|N0 0 1 2 3 N3 N4 4 5 6 7 N7 N8 8 9 10 11 N11 N12 12 13 14 15 N15|N15 15 14 13 12 N12 N11 11 10 9 8 N8 N7 7 6 5 4 N4 N3 3 2 1 0 N0|N1 1 3 0 2 N2 N5 5 7 4 6 N6 N9 9 11 8 10 N10 N13 13 15 12 14 N14|N14 14 12 15 13 N13 N10 10 8 11 9 N9 N6 6 4 7 5 N5 N2 2 0 3 1 N1",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_71 = {
@@ -519,7 +488,6 @@ static struct rcclRomeModel rome_model_71 = {
   .pattern = "4040",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 2 3 7 6|6 7 3 2 4 5 1 0",
   .options = "disableNumaMatching=1,tuning=2",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_72 = {
@@ -533,7 +501,6 @@ static struct rcclRomeModel rome_model_72 = {
   .pattern = "4242",
   .ringBase = "N0 0 1 3 2 4 5 7 6 N3|N1 2 3 1 0 6 7 5 4 N2|N3 7 6 0 1 5 4 2 3 N1|N0 1 0 6 7 3 2 4 5 N2|N2 4 5 7 6 0 1 3 2 N1|N3 6 7 5 4 2 3 1 0 N0|N2 5 4 2 3 7 6 0 1 N0|N1 3 2 4 5 1 0 6 7 N3",
   .options = "disableNumaMatching=1,tuning=2",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_73 = {
@@ -547,7 +514,6 @@ static struct rcclRomeModel rome_model_73 = {
   .pattern = "20202020",
   .ringBase = "0 1 3 2 4 5 7 6|6 7 5 4 2 3 1 0|0 1 5 4 6 7 3 2|2 3 7 6 4 5 1 0",
   .options = "",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_74 = {
@@ -561,7 +527,6 @@ static struct rcclRomeModel rome_model_74 = {
   .pattern = "21212121",
   .ringBase = "N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3|N0 0 1 5 4 6 7 3 2 N1|N1 2 3 7 6 4 5 1 0 N0|N3 7 6 0 1 3 2 4 5 N2|N2 5 4 2 3 1 0 6 7 N3",
   .options = "tuning=3",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_76 = {
@@ -575,7 +540,6 @@ static struct rcclRomeModel rome_model_76 = {
   .pattern = "4444",
   .ringBase = "N0 0 1 3 2 4 5 7 6 N6|N2 2 3 1 0 6 7 5 4 N4|N5 5 4 2 3 7 6 0 1 N1|N1 1 0 6 7 3 2 4 5 N5|N4 4 5 7 6 0 1 3 2 N2|N2 2 3 1 0 6 7 5 4 N4|N0 0 1 5 4 2 3 7 6 N6|N3 3 2 4 5 1 0 6 7 N7|N4 4 5 7 6 0 1 3 2 N2|N6 6 7 5 4 2 3 1 0 N0|N7 7 6 0 1 5 4 2 3 N3|N6 6 7 3 2 4 5 1 0 N0|N3 3 2 0 1 5 4 6 7 N7|N1 1 0 2 3 7 6 4 5 N5|N5 5 4 6 7 3 2 0 1 N1|N7 7 6 4 5 1 0 2 3 N3",
   .options = "disableNumaMatching=1,tuning=3",
-  .treeBase = "",
 };
 
 static struct rcclRomeModel rome_model_79 = {
@@ -830,22 +794,26 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
               break;
           if (j < ngpus)
           {
-            graph->treeBase[r][x] = system->nodes[GPU].nodes[j].gpu.rank;
+            graph->treeBase[x][r] = system->nodes[GPU].nodes[j].gpu.rank;
             y=r;
           }
           else
             return ncclInternalError;
         }
         y++;
-        graph->treeBase[y][x] = -1;
+        graph->treeBase[x][y] = -1;
         x++;
         gpu=0;
       }
     }
   } while (str[offset++] != 0);
-  graph->treeBase[0][x] = -1;
+  graph->treeBase[x][0] = -1;
+
+
   return ncclSuccess;
 }
+
+
 
 #define MAX_OPT_TOKENS 10
 extern const char* topoPathTypeStr[];
@@ -886,6 +854,8 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
         system->baseBw = std::stof(tokens[i*2+1]);
       } else if (strcmp(tokens[i*2], "mscclEnabled") == 0) {
         system->mscclEnabled = (bool)atol(tokens[i*2+1]);
+      } else if (strcmp(tokens[i*2], "treeDefined") == 0) {
+        system->treeDefined = (bool)atol(tokens[i*2+1]);
       }
     }
     free(str_temp);
@@ -1314,6 +1284,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
   // create 4P2H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL));
+  NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, NULL));
   return ncclSuccess;
 }
 

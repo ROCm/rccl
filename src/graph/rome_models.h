@@ -23,6 +23,7 @@ THE SOFTWARE.
 #define RCCL_ROME_MODELS_H_
 
 ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int* net_map);
+ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map);
 ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);

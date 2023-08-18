@@ -75,17 +75,26 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm, struct ncclTopoGraph** graphs
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
+  int x=0, y=0;
+  for (int i=0;  treeGraph->treeBase[i][0]!=-1; i++)
+  {
+    x=i+1;
+  }
+  for (int i=0;  treeGraph->treeBase[0][i]!=-1; i++)
+  {
+    y=i+1;
+  }
+
   int nChannels = comm->nChannels;
   int localRanks = comm->topo->nodes[GPU].count;
   //new tree
   for (int c=0; c<nChannels; c++) {
-    int* treeIntra = treeGraph->intra+c%3*localRanks;
-    int buff = ((c%6)*localRanks)/6 + ((localRanks/4)*(c/6));
-
+    int buff = c%x;
     int tempArray[256];
     for (int ko=0; ko < localRanks; ko++){
-      tempArray[ko] = treeIntra[(ko+buff)%localRanks];
+      tempArray[ko] = treeGraph->treeBase[buff][(ko+localRanks/2)%localRanks];
     }
+
     struct ncclChannel* channel = comm->channels+c;
 
     int curRank = comm->rank;
