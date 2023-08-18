@@ -370,7 +370,7 @@ static struct rcclRomeModel rome_model_56 = {
   .pattern = "40404040",
   .ringBase = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0",
   .options = "pivotA2AEnabled=1,pivotA2ANumBiRings=3,tuning=1,mscclEnabled=1,treeDefined=1",
-  .treeBase= "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|2 3 7 6 13 12 8 9 10 11 15 14 5 4 0 1|14 15 11 10 8 9 13 12 4 5 1 0 2 3 7 6|10 11 9 8 12 13 5 4 0 1 3 2 6 7 15 14|10 11 15 14 5 4 0 1 2 3 7 6 13 12 8 9|4 5 1 0 2 3 7 6 14 15 11 10 8 9 13 12|6 7 15 14 10 11 9 8 12 13 5 4 0 1 3 2|13 12 8 9 10 11 15 14 5 4 0 1 2 3 7 6|8 9 13 12 4 5 1 0 2 3 7 6 14 15 11 10|12 13 5 4 0 1 3 2 6 7 15 14 10 11 9 8|5 4 0 1 2 3 7 6 13 12 8 9 10 11 15 14|2 3 7 6 14 15 11 10 8 9 13 12 4 5 1 0",
+  .treeBase= "11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10|11 15 14 5 4 0 1 2 3 7 6 13 12 8 9 10|5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4|1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0|3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2|15 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14|13 5 4 0 1 3 2 6 7 15 14 10 11 9 8 12|4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5|3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 2|7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6|12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13|9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8",
 };
 
 static struct rcclRomeModel rome_model_58 = {
@@ -759,7 +759,10 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
   int nChannels = 0;
   int gpu = 0;
   int offset = 0;
-  if (str[0] == 0) return ncclSuccess;
+  if (str[0] == 0) {
+    graph->treeBase[0][0] = -1;
+    return ncclSuccess;
+  }
   int status = 0; // 0 : between numbers, 1 : inside number, 2: start NET, 3: inside NET
   int nets[NCCL_TOPO_MAX_NODES*2];
   int net_offset = 0, net_count = 0;
@@ -1284,7 +1287,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
   // create 4P2H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL));
-  NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, NULL));
+  NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g));
   return ncclSuccess;
 }
 
