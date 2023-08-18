@@ -151,8 +151,8 @@ private:
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     union ncclLLFifoLine i4;
     do {
-      i4.v[0] = __builtin_nontemporal_load(src->v);
-      i4.v[1] = __builtin_nontemporal_load(src->v+1);
+      i4.v[0] = __atomic_load_n(src->v, __ATOMIC_RELAXED);
+      i4.v[1] = __atomic_load_n(src->v+1, __ATOMIC_RELAXED);
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
@@ -187,8 +187,8 @@ private:
       if (i < fan.nrecv()) {
         union ncclLLFifoLine* src = recvPtr(i) + offset;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-        line[i].v[0] = __builtin_nontemporal_load(src->v);
-        line[i].v[1] = __builtin_nontemporal_load(src->v+1);
+        line[i].v[0] = __atomic_load_n(src->v, __ATOMIC_RELAXED);
+        line[i].v[1] = __atomic_load_n(src->v+1, __ATOMIC_RELAXED);
 #else
         asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
 #endif
@@ -209,8 +209,8 @@ private:
 
     do {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-      line[i].v[0] = __builtin_nontemporal_load(src->v);
-      line[i].v[1] = __builtin_nontemporal_load(src->v+1);
+      line[i].v[0] = __atomic_load_n(src->v, __ATOMIC_RELAXED);
+      line[i].v[1] = __atomic_load_n(src->v+1, __ATOMIC_RELAXED);
 #else
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
 #endif
@@ -258,13 +258,13 @@ private:
     };
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
-      u1 = __builtin_nontemporal_load((uint8_t*)src);
+      u1 = __atomic_load_n((uint8_t*)src, __ATOMIC_RELAXED);
     else if(sizeof(U) == 2)
-      u2 = __builtin_nontemporal_load((uint16_t*)src);
+      u2 = __atomic_load_n((uint16_t*)src, __ATOMIC_RELAXED);
     else if(sizeof(U) == 4)
-      u4 = __builtin_nontemporal_load((uint32_t*)src);
+      u4 = __atomic_load_n((uint32_t*)src, __ATOMIC_RELAXED);
     else
-      u8 = __builtin_nontemporal_load((uint64_t*)src);
+      u8 = __atomic_load_n((uint64_t*)src, __ATOMIC_RELAXED);
 #else
     if(sizeof(U) == 1)
       asm("ld.volatile.global.b8 %0,[%1];" : "=r"(u4) : "l"(src));
