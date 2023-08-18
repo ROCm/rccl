@@ -343,7 +343,7 @@ socket_send:
     NCCLCHECK(ncclSocketProgress(NCCL_SOCKET_SEND, sock, &i, sizeof(uint8_t), &done));
     if (done == 0) return ncclSuccess;
   }
-  NCCLCHECK(ncclExportFlow(connectionMetaData, comm->ctrlSock, comm->socks, comm->nSocks));
+  NCCLCHECK(ncclExportSocketFlow(connectionMetaData, comm->ctrlSock, comm->socks, comm->nSocks));
   *sendComm = comm;
   return ncclSuccess;
 }
@@ -394,7 +394,7 @@ socket_recv:
   }
   *recvComm = rComm;
 
-  NCCLCHECK(ncclExportFlow(connectionMetaData, rComm->ctrlSock, rComm->socks, rComm->nSocks));
+  NCCLCHECK(ncclExportSocketFlow(connectionMetaData, rComm->ctrlSock, rComm->socks, rComm->nSocks));
 
   /* reset lComm state */
   stage->state = ncclNetSocketCommStateStart;

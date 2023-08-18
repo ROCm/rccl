@@ -14,10 +14,17 @@
 
 ncclResult_t ncclInitFlowExport();
 ncclResult_t ncclExitFlowExport();
-ncclResult_t ncclExportFlow( const connectionMetaData_t & cmd,
-                             struct ncclSocket & ctrlSock,
-                             struct ncclSocket socks[],
-                             int nSocks );
+ncclResult_t ncclExportSocketFlow( const connectionMetaData_t & cmd,
+                                   struct ncclSocket & ctrlSock,
+                                   struct ncclSocket socks[],
+                                   int nSocks );
+ncclResult_t ncclExportIbFlow( const connectionMetaData_t & cmd,
+                               const union ibv_gid & localGid,
+                               const union ibv_gid & remoteGid,
+                               struct ibv_qp ** srcQPairs,
+                               const uint32_t * dstQPairs,
+                               int nQPairs );
+
 ncclResult_t ncclExportComm( struct ncclComm & ncclComm );
 ncclResult_t ncclExportDone( struct ncclComm & ncclComm );
 
@@ -40,6 +47,14 @@ enum FlowTrafficType_v1 {
    ROCEv2,
 };
 
+struct IpGenAddr {
+   union {
+      struct in_addr ipv4Addr;
+      struct in6_addr ipv6Addr;
+   } addr;
+   bool isIpv4;
+};
+
 struct Flow_v1 {
    uint64_t commHash;
    FlowDirection_v1 direction;
@@ -49,11 +64,12 @@ struct Flow_v1 {
    uint32_t channel;
    FlowTopology_v1 topology;
    FlowTrafficType_v1 trafficType;
-   uint32_t srcIp;
-   uint32_t dstIp;
+   struct IpGenAddr srcIp;
+   struct IpGenAddr dstIp;
    uint16_t srcPort;
    uint16_t dstPort;
-   uint32_t qPair;
+   uint32_t srcQPair;
+   uint32_t dstQPair;
 };
 
 struct RingNode_v1 {

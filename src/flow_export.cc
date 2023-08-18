@@ -3,6 +3,7 @@
 
 #include "flow_export.h"
 
+#include "ibvwrap.h"
 #include "net.h"
 
 #include <atomic>
@@ -18,6 +19,43 @@ namespace {
 inline uint32_t
 tpRank( struct ncclComm & comm, int rank ) {
    return rank == -1 ? UINT32_MAX : comm.topParentRanks[ rank ];
+}
+
+inline void
+initFlowV1( const connectionMetaData_t & cmd, Flow_v1 & flow ) {
+   flow.commHash = currCommHash[ cmd.tpLocalRank ];
+   flow.direction = cmd.send ? SEND : RECEIVE;
+   flow.srcRank = cmd.tpRank;
+   flow.srcLocalRank = cmd.tpLocalRank;
+   flow.dstRank = cmd.tpRemoteRank;
+   flow.channel = cmd.channelId;
+   flow.topology = cmd.connIndex == 0 ? COLLECTIVE : P2P;
+}
+
+inline void
+gidToIpAddr( const union ibv_gid & gid, IpGenAddr & genAddr ) {
+   static const uint8_t ipv4Prefix[ 12 ] = {
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff
+   };
+   if ( gid.global.subnet_prefix == 0 && memcmp( gid.raw, ipv4Prefix, 12 ) == 0 ) {
+      // IPv4
+      genAddr.isIpv4 = true;
+      memcpy( &genAddr.addr.ipv4Addr.s_addr, gid.raw + 12, 4 );
+   } else {
+      // IPv6
+      genAddr.isIpv4 = false;
+      memcpy( genAddr.addr.ipv6Addr.s6_addr, gid.raw, 16 );
+   }
+}
+
+inline bool
+fdToIpAddr( int fd, struct sockaddr * addr, socklen_t len ) {
+   bzero( addr, len );
+   if ( getsockname( fd, addr, &len ) ) {
+      perror( "getsockname() failed" );
+      return false;
+   }
+   return true;
 }
 
 } // namespace
@@ -89,42 +127,56 @@ ncclExitFlowExport() {
 }
 
 ncclResult_t
-ncclExportFlow( const connectionMetaData_t & cmd,
-                struct ncclSocket & ctrlSock,
-                struct ncclSocket socks[],
-                int nSocks ) {
+ncclExportSocketFlow( const connectionMetaData_t & cmd,
+                      struct ncclSocket & ctrlSock,
+                      struct ncclSocket socks[],
+                      int nSocks ) {
    if ( !flowExport_v1 || !flowExport_v1->exportFlow ) {
       return ncclSuccess;
    }
 
    Flow_v1 flow;
+   initFlowV1( cmd, flow );
 
-   flow.commHash = currCommHash[ cmd.tpLocalRank ];
-   flow.direction = cmd.send ? SEND : RECEIVE;
-   flow.srcRank = cmd.tpRank;
-   flow.srcLocalRank = cmd.tpLocalRank;
-   flow.dstRank = cmd.tpRemoteRank;
-   flow.channel = cmd.channelId;
-   flow.topology = cmd.connIndex == 0 ? COLLECTIVE : P2P;
+   flow.trafficType = TCP;
+   flow.srcQPair = 0;
+   flow.dstQPair = 0;
 
    for ( int i = 0; i <= nSocks; ++i ) {
       struct ncclSocket & sock = ( i == nSocks ) ? ctrlSock : socks[ i ];
-      flow.trafficType = UDP; // TODO
-      flow.qPair = 0; // TODO
+      if ( sock.addr.sa.sa_family == AF_INET ) {
+         struct sockaddr_in srcAddr;
+         if ( !fdToIpAddr( sock.fd,
+                           reinterpret_cast< struct sockaddr * >( &srcAddr ),
+                           sizeof( srcAddr ) ) ) {
+            return ncclSystemError;
+         }
+         flow.srcIp.isIpv4 = true;
+         flow.srcIp.addr.ipv4Addr = srcAddr.sin_addr;
+         flow.srcPort = ntohs( srcAddr.sin_port );
 
-      // This assumes v4 :(
-      struct sockaddr_in srcAddr;
-      bzero( &srcAddr, sizeof( srcAddr ) );
-      socklen_t len = sizeof( srcAddr );
-      if ( getsockname(
-              sock.fd, reinterpret_cast< struct sockaddr * >( &srcAddr ), &len ) ) {
-         perror( "getsockname() failed" );
-         return ncclSystemError;
+         flow.dstIp.isIpv4 = true;
+         flow.dstIp.addr.ipv4Addr = sock.addr.sin.sin_addr;
+         flow.dstPort = ntohs( sock.addr.sin.sin_port );
+      } else if ( sock.addr.sa.sa_family == AF_INET6 ) {
+         struct sockaddr_in6 srcAddr;
+         if ( !fdToIpAddr( sock.fd,
+                           reinterpret_cast< struct sockaddr * >( &srcAddr ),
+                           sizeof( srcAddr ) ) ) {
+            return ncclSystemError;
+         }
+         flow.srcIp.isIpv4 = false;
+         flow.srcIp.addr.ipv6Addr = srcAddr.sin6_addr;
+         flow.srcPort = ntohs( srcAddr.sin6_port );
+
+         flow.dstIp.isIpv4 = false;
+         flow.dstIp.addr.ipv6Addr = sock.addr.sin6.sin6_addr;
+         flow.dstPort = ntohs( sock.addr.sin6.sin6_port );
+      } else {
+         WARN( "nclExportSocketFlow: socket of unknown address family %d",
+               sock.addr.sa.sa_family );
+         continue;
       }
-      flow.srcIp = ntohl( srcAddr.sin_addr.s_addr );
-      flow.srcPort = ntohs( srcAddr.sin_port );
-      flow.dstIp = ntohl( sock.addr.sin.sin_addr.s_addr );
-      flow.dstPort = ntohs( sock.addr.sin.sin_port );
 
       ncclResult_t result = flowExport_v1->exportFlow( &flow );
       if ( result != ncclSuccess ) {
@@ -133,6 +185,39 @@ ncclExportFlow( const connectionMetaData_t & cmd,
       }
    }
 
+   return ncclSuccess;
+}
+
+ncclResult_t
+ncclExportIbFlow( const connectionMetaData_t & cmd,
+                  const union ibv_gid & localGid,
+                  const union ibv_gid & remoteGid,
+                  struct ibv_qp ** srcQPairs,
+                  const uint32_t * dstQPairs,
+                  int nQPairs ) {
+   if ( !flowExport_v1 || !flowExport_v1->exportFlow ) {
+      return ncclSuccess;
+   }
+
+   Flow_v1 flow;
+   initFlowV1( cmd, flow );
+
+   flow.trafficType = ROCEv2;
+   gidToIpAddr( localGid, flow.srcIp );
+   gidToIpAddr( remoteGid, flow.dstIp );
+   flow.srcPort = 0;
+   flow.dstPort = 0;
+
+   for ( int i = 0; i < nQPairs; ++i ) {
+      flow.srcQPair = srcQPairs[ i ]->qp_num;
+      flow.dstQPair = dstQPairs[ i ];
+
+      ncclResult_t result = flowExport_v1->exportFlow( &flow );
+      if ( result != ncclSuccess ) {
+         WARN( "flowExport_v1.exportFlow() failed: code %d", result );
+         return result;
+      }
+   }
    return ncclSuccess;
 }
 
@@ -191,7 +276,7 @@ ncclExportDone( struct ncclComm & comm ) {
       }
    }
    if ( currCommHash ) {
-     currCommHash[ tpLocalRank ] = 0;
+      currCommHash[ tpLocalRank ] = 0;
    }
    return result;
 }
