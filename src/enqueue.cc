@@ -1200,7 +1200,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   if (info->coll == ncclFuncAllToAllPivot) {
     int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
     info->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
-   } else if (info->coll == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
+  } else if (info->coll == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
     static int userTuneInput = -2;
     if (userTuneInput == -2) {
       const char *protoStr = getenv("NCCL_PROTO");
@@ -1222,9 +1222,9 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
         info->algorithm = NCCL_ALGO_RING;
       }
     }
-  }if (comm->topo->treeDefined == 1) {
-        info->algorithm = NCCL_ALGO_TREE;
-        info->nChannels =comm->nChannels;
+  } else if (info->coll == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
+    info->algorithm = NCCL_ALGO_TREE;
+    info->nChannels = nc;
   } else {
     info->nChannels = nc;
   }

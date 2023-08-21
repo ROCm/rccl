@@ -341,7 +341,7 @@ static struct rcclRomeModel rome_model_43 = {
   .connMatrix = { 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, },
   .gdrLevel = { },
   .pattern = "20202020",
-  .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
+  .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1|0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1|0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
   .options = "treeDefined=1",
   .treeBase = "1 0 3 2 5 6 7 4|3 1 0 2 5 7 6 4|0 3 1 2 5 7 4 6|5 4 7 6 1 0 2 3|7 5 4 6 1 2 0 3|4 7 5 6 1 0 3 2|0 3 2 1 6 7 5 4|0 2 3 1 6 4 7 5|2 0 3 1 6 5 4 7|7 6 4 5 2 3 1 0|7 4 6 5 2 0 3 1|6 7 4 5 2 1 0 3",
 };
@@ -811,7 +811,6 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
     }
   } while (str[offset++] != 0);
   graph->treeBase[x][0] = -1;
-
 
   return ncclSuccess;
 }
@@ -1287,7 +1286,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
   // create 4P2H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL));
-  NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g));
+  if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g));
   return ncclSuccess;
 }
 
@@ -1422,7 +1421,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   // create 16P1H based on reference and remapped ids
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL));
 
-  NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
+  if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
   // clean up
   free(all_gpu_permutations);
   return ncclSuccess;
