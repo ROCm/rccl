@@ -64,7 +64,7 @@ struct mscclThreadBlock {
   int16_t channelId; // associated channel. -1 indicates a thread block with only local copies
 }; // 5384 bytes
 
-static_assert(sizeof(struct mscclThreadBlock) % sizeof(uint64_t) == 0, "Sanity check: sizeof(struct mscclThreadBlock) \% sizeof(uint64_t) != 0");
+static_assert(sizeof(struct mscclThreadBlock) % sizeof(uint64_t) == 0, "Sanity check: sizeof(struct mscclThreadBlock) % sizeof(uint64_t) != 0");
 
 struct mscclFlag {
   uint64_t flag;
