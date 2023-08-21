@@ -10,6 +10,8 @@
 #include <string>
 #include <unistd.h>
 #include <hip/hip_runtime.h>
+#include <iostream> //cerr
+#include <cstring>
 
 #define HIP_IPC_MEM_MIN_SIZE 2097152UL
 
@@ -51,70 +53,72 @@ __global__ void PongKernel(uint64_t* local_flag, uint64_t* remote_flag, uint64_t
   *time_delta = end_time - start_time;
 }
 
+#define HIPCHECK(cmd)                                                          \
+do {                                                                           \
+  hipError_t error = (cmd);                                                    \
+  if (error != hipSuccess)                                                     \
+  {                                                                            \
+    std::cerr << "Encountered HIP error (" << error << ") at line "            \
+              << __LINE__ << " in file " << __FILE__ << "\n";                  \
+    exit(-1);                                                                  \
+  }                                                                            \
+} while (0)
+
 int main(int argc, char** argv) {
-  hipStream_t stream;
+  hipStream_t stream[2];
   hipError_t err = hipSuccess;
+  int device_id[2];
+  hipDeviceProp_t prop[2];
 
-  if (argc != 2) {
-    fprintf(stderr, "Usage: ./ll_latency_test <flag>; flag=%d for ping mode, flag=%d for pong mode\n", PING_MODE, PONG_MODE);
+  if (argc != 3) {
+    fprintf(stderr, "Usage: ./p2p_latency_test ping_dev_id pong_dev_id\n");
     return -1;
   }
+  device_id[0] = atoi(argv[1]);
+  device_id[1] = atoi(argv[2]);
 
-  hipDeviceProp_t prop;
-  int device_id;
-  hipGetDevice(&device_id);
-  hipGetDeviceProperties(&prop, device_id);
+  fprintf(stdout, "Using devices %d %d\n", device_id[0], device_id[1]);
 
-  uint64_t *local_flag = nullptr;
-  uint64_t *remote_flag = nullptr;
-  uint64_t *time_delta = nullptr;
-  hipStreamCreateWithFlags(&stream, hipStreamNonBlocking);
-  hipExtMallocWithFlags((void**)&local_flag, HIP_IPC_MEM_MIN_SIZE, prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
-  hipExtMallocWithFlags((void**)&time_delta, HIP_IPC_MEM_MIN_SIZE, prop.gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
-  hipMemsetAsync(local_flag, 0, HIP_IPC_MEM_MIN_SIZE, stream);
-  hipMemsetAsync(time_delta, 0, HIP_IPC_MEM_MIN_SIZE, stream);
-  hipStreamSynchronize(stream);
-  hipIpcMemHandle_t local_handle;
-  hipIpcMemHandle_t remote_handle;
-  hipIpcGetMemHandle(&local_handle, local_flag);
+  uint64_t *flag[2];
+  uint64_t *time_delta[2];
 
-  const char* ping_file_path = "/tmp/ping_ipc_handle";
-  const char* pong_file_path = "/tmp/pong_ipc_handle";
-  const char* file_paths[2] = {ping_file_path, pong_file_path};
-  int self_mode = atoi(argv[1]);
-  if (self_mode == PING_MODE || self_mode == PONG_MODE) {
-    int peer_mode = 1 - self_mode;
-    auto self_file = std::fstream(file_paths[self_mode], std::ios::out | std::ios::binary);
-    self_file.write((char*)&local_handle, sizeof(local_handle));
-    self_file.close();
-    sleep(5);
-    auto peer_file = std::fstream(file_paths[peer_mode], std::ios::in | std::ios::binary);
-    peer_file.read((char*)&remote_handle, sizeof(remote_handle));
-    peer_file.close();
-    err = hipIpcOpenMemHandle((void**)(&remote_flag), remote_handle, hipIpcMemLazyEnablePeerAccess);
-    if (err != hipSuccess) {
-      fprintf(stderr, "hipIpcOpenMemHandle error %d\n", (int)err);
-      return -1;
-    }
-    if (self_mode == PING_MODE) {
-      PingKernel<<<1, 1, 0, stream>>>(local_flag, remote_flag, time_delta);
-    } else {
-      PongKernel<<<1, 1, 0, stream>>>(local_flag, remote_flag, time_delta);
-    }
-    err = hipStreamSynchronize(stream);
-    if (err != hipSuccess) {
-      fprintf(stderr, "hipStreamSynchronize error %d\n", (int)err);
-      return -1;
-    }
-    if (self_mode == PING_MODE) {
-      double vega_gpu_rtc_freq = (prop.gcnArch / 10 == 94) ? 1.0E8 : 2.5E7;
-      fprintf(stdout, "One-way latency in us: %g\n", double(*time_delta) * 1e6 / NUM_LOOPS_RUN / vega_gpu_rtc_freq / 2);
-    }
-    std::remove(file_paths[self_mode]);
-  } else {
-    fprintf(stderr, "Invalid mode %d\n", self_mode);
-    return -1;
-  }
+  HIPCHECK(hipSetDevice(device_id[0]));
+  HIPCHECK(hipStreamCreateWithFlags(&stream[0], hipStreamNonBlocking));
+  HIPCHECK(hipDeviceEnablePeerAccess(device_id[1], 0));
+  HIPCHECK(hipGetDeviceProperties(&prop[0], device_id[0]));
+  HIPCHECK(hipExtMallocWithFlags((void**)&flag[0], HIP_IPC_MEM_MIN_SIZE, prop[0].gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
+  HIPCHECK(hipMalloc((void**)&time_delta[0], HIP_IPC_MEM_MIN_SIZE));
+  HIPCHECK(hipMemsetAsync(flag[0], 0, HIP_IPC_MEM_MIN_SIZE, stream[0]));
+  HIPCHECK(hipStreamSynchronize(stream[0]));
 
+  HIPCHECK(hipSetDevice(device_id[1]));
+  HIPCHECK(hipStreamCreateWithFlags(&stream[1], hipStreamNonBlocking));
+  HIPCHECK(hipDeviceEnablePeerAccess(device_id[0], 0));
+  HIPCHECK(hipGetDeviceProperties(&prop[1], device_id[1]));
+  HIPCHECK(hipExtMallocWithFlags((void**)&flag[1], HIP_IPC_MEM_MIN_SIZE, prop[1].gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
+  HIPCHECK(hipMalloc((void**)&time_delta[1], HIP_IPC_MEM_MIN_SIZE));
+  HIPCHECK(hipMemsetAsync(flag[1], 0, HIP_IPC_MEM_MIN_SIZE, stream[1]));
+  HIPCHECK(hipStreamSynchronize(stream[1]));
+
+  HIPCHECK(hipSetDevice(device_id[0]));
+  PingKernel<<<1, 1, 0, stream[0]>>>(flag[0], flag[1], time_delta[0]);
+
+  HIPCHECK(hipSetDevice(device_id[1]));
+  PongKernel<<<1, 1, 0, stream[1]>>>(flag[1], flag[0], time_delta[1]);
+
+  double vega_gpu_rtc_freq;
+
+  HIPCHECK(hipStreamSynchronize(stream[0]));
+  vega_gpu_rtc_freq = (prop[0].gcnArch / 10 == 94) ? 1.0E8 : 2.5E7;
+  fprintf(stdout, "One-way latency in us: %g\n", double(*time_delta[0]) * 1e6 / NUM_LOOPS_RUN / vega_gpu_rtc_freq / 2);
+
+  HIPCHECK(hipStreamSynchronize(stream[1]));
+  vega_gpu_rtc_freq = (prop[1].gcnArch / 10 == 94) ? 1.0E8 : 2.5E7;
+  fprintf(stdout, "One-way latency in us: %g\n", double(*time_delta[1]) * 1e6 / NUM_LOOPS_RUN / vega_gpu_rtc_freq / 2);
+
+  HIPCHECK(hipFree(flag[0]));
+  HIPCHECK(hipFree(time_delta[0]));
+  HIPCHECK(hipFree(flag[1]));
+  HIPCHECK(hipFree(time_delta[1]));
   return 0;
 }
