@@ -635,15 +635,13 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   int sm;
   NCCLCHECK(xmlGetAttrInt(gpuNode, "sm", &sm));
 
-  int gcn;
+  char[256] gcn;
   NCCLCHECK(xmlGetAttrIndex(gpuNode, "gcn", &index));
   if (index == -1) {
-    hipDeviceProp_t devProp;
-    CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-    gcn = devProp.gcnArch;
-    NCCLCHECK(xmlSetAttrInt(gpuNode, "gcn", gcn));
+    gcn = getGcnArchName(0);
+    NCCLCHECK(xmlSetAttr(gpuNode, "gcn", gcn));
   }
-  NCCLCHECK(xmlGetAttrInt(gpuNode, "gcn", &gcn));
+  NCCLCHECK(xmlGetAttr(gpuNode, "gcn", &gcn));
 
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrIndex(gpuNode, "arch", &index));
