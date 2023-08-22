@@ -34,6 +34,11 @@ initFlowV1( const connectionMetaData_t & cmd, Flow_v1 & flow ) {
 
 inline void
 gidToIpAddr( const union ibv_gid & gid, IpGenAddr & genAddr ) {
+   // A gid.raw is 16 bytes, the size of an IPv6 address. If the address has a
+   // prefix of ::ffff:0:0/96 (i.e., the first 10 bytes are zero, followed by
+   // two 0xff bytes) bytes), then it actually represents an IPv4 address, which
+   // is held in the last 4 bytes.
+   // See: https://en.wikipedia.org/wiki/IPv6_address#Transition_from_IPv4
    static const uint8_t ipv4Prefix[ 12 ] = {
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff
    };
