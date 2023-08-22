@@ -449,13 +449,13 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     // Disable LL protocol on gfx11xx
-    int pEnable = (p == NCCL_PROTO_LL && comm->topo->nodes[GPU].nodes[0].gpu.gcn/100 == 11) ? 0 : protoEnable[p];
+    int pEnable = (p == NCCL_PROTO_LL && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx11", 5) == 0) ? 0 : protoEnable[p];
     if (pEnable == 2 && p == NCCL_PROTO_LL128) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
 #if defined(ENABLE_LL128)
       // Enable LL128 by default only on gfx90a with available tuning table
       pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
-        (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->topo->ll128Enabled) ? 1 : 0;
+        (strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx910", 6) == 0 && comm->topo->ll128Enabled) ? 1 : 0;
 #else
       pEnable = 0;
 #endif

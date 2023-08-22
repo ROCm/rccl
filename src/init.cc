@@ -1224,17 +1224,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, comm->busId, &idx));
   allGather3Data[rank].nc = 2;
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks &&
-       comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 906 && allXgmi)
+       strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx906", 6) == 0 && allXgmi)
     allGather3Data[rank].nc = 4;
-  if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 908)
+  if (strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx908", 6) == 0)
     allGather3Data[rank].nc = std::max(4/ringGraph.nChannels, 2);
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks &&
        (comm->topo->type & RCCL_TOPO_CR8G))
     allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks &&
-      comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
+      strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx910", 6) == 0)
     allGather3Data[rank].nc = 4;
-  if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
+  if (strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx910", 6) == 0)
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph.nChannels);
   if (ringGraph.nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;

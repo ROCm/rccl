@@ -123,7 +123,7 @@ struct ncclTopoNode {
       int rank;
       int cudaCompCap;
       int gdrSupport;
-      int gcn;
+      char[256] gcn;
       hipDeviceArch_t arch;
     }gpu;
     struct {
@@ -223,17 +223,13 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
 }
 
 // Returns XGMI speed in GB/s
-static float ncclTopoXGMISpeed(int gcn) {
-  switch (gcn) {
-    case 910:
-      return MI200_XGMI_WIDTH;
-    case 940:
-    case 941:
-    case 942:
-      return GFX94X_XGMI_WIDTH;
-    default:
-      return VEGA_XGMI_WIDTH;
-  }
+static float ncclTopoXGMISpeed(char* gcn) {
+  if (strncmp(gcn, "gfx910", 6) == 0)
+    return MI200_XGMI_WIDTH;
+  else if (strncmp(gcn, "gfx940", 6) == 0 || strncmp(gcn, "gfx941", 6) == 0 || strncmp(gcn, "gfx942", 6) == 0) // TODO check if we can just use strncmp(gcn, "gfx94", 5)
+    return GFX94X_XGMI_WIDTH;
+  else
+    return VEGA_XGMI_WIDTH;
 }
 
 #if ENABLE_COLLTRACE
