@@ -24,18 +24,18 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
 
-char* gcnArchNameFormat(char* gcnArchName) {
+void gcnArchNameFormat(char* gcnArchName, char* out) {
   // this function parses the char array from the device properties into something easier to handle.
   // as the gcnArchName attribute looks something like: "gfx900:xnack+:blah-:etc-"
   char *gcnArchNameToken = strtok(gcnArchName, ":");
-  return gcnArchNameToken;
+  strcpy(gcnArchNameToken, out);
 }
 
-char* gcnArchConvertToGcnArchName(int gcnArch) {
+void gcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
   // gcnArch is deprecated and we should instead use gcnArchName; however, some data files still have
   // the older gcnArch value.  There's only a handful of architectures that were coded prior to deprecation,
   // so we handle those cases here.
-  char gcnArchName[256] = {0}; // why 256?  Because that's what gcnArchName gives us, so we're matching it.
+  //char gcnArchName[256] = {0}; // why 256?  Because that's what gcnArchName gives us, so we're matching it.
   switch (gcnArch) {
     case 906:
       strncpy(gcnArchName, "gfx906", 6);
@@ -50,10 +50,9 @@ char* gcnArchConvertToGcnArchName(int gcnArch) {
     default:
       // throw an error here or however we're handling these runtime exceptions.
   }
-  return gcnArchName;
 }
 
-char *getGcnArchName(int deviceId) {
+int getGcnArchName(int deviceId, char* out) {
   // this is a generic call in to get a consistent gcnArchName regardless of which version of rocm we're using.
   // or which version of rocm we're using.
   hipDeviceProp_t devProp;
@@ -64,10 +63,12 @@ char *getGcnArchName(int deviceId) {
     exit(-1);
   }
 #ifdef HIP_NO_GCNARCHNAME
-  // we're using a HIP version past 3.7.
-  return gcnArchConvertToGcnArchName(devProp.gcnArch);
+  // we're using a HIP version before 3.7.
+  gcnArchConvertToGcnArchName(devProp.gcnArch, out);
+  return 1;
 #else
-  return gcnArchNameFormat(devProp.gcnArchName);
+  gcnArchNameFormat(devProp.gcnArchName, out);
+  return 0;
 #endif
 }
 

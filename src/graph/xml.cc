@@ -14,6 +14,7 @@
 #include "nvmlwrap.h"
 #include "xml.h"
 #include "rocm_smi_wrap.h"
+#include "archinfo.h"
 
 /*******************/
 /* XML File Parser */
@@ -635,12 +636,13 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   int sm;
   NCCLCHECK(xmlGetAttrInt(gpuNode, "sm", &sm));
 
-  char[256] gcn;
   NCCLCHECK(xmlGetAttrIndex(gpuNode, "gcn", &index));
   if (index == -1) {
-    gcn = getGcnArchName(0);
+    char gcn[256];
+    getGcnArchName(0, gcn);
     NCCLCHECK(xmlSetAttr(gpuNode, "gcn", gcn));
   }
+  const char* gcn;
   NCCLCHECK(xmlGetAttr(gpuNode, "gcn", &gcn));
 
   rcclHipDeviceArch_t arch;
