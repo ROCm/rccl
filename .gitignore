@@ -12,3 +12,5 @@ _templates/
 _toc.yml
 docBin/
 _doxygen/
+/tools/topo_expl/hipify_rccl/
+/tools/topo_expl/topo_expl
