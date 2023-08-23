@@ -94,7 +94,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
     mscclAlgoDirStr += (mscclUnitTestMode && mscclUnitTestMode()) ? mscclUnitTestAlgoDefaultDir : mscclAlgoDefaultDir;
     mscclAlgoDir = mscclAlgoDirStr.c_str();
     // Get share Directory Paths
-    mscclAlgoShareDirStr = selfLibPath.substr(0, selfLibPath.find("lib") );
+    mscclAlgoShareDirStr = selfLibPath.substr(0, selfLibPath.rfind("lib"));
     mscclAlgoShareDirStr += (mscclUnitTestMode && mscclUnitTestMode()) ? mscclUnitTestAlgoShareDirPath : mscclAlgoShareDirPath;
     mscclAlgoShareDir = mscclAlgoShareDirStr.c_str();
   }
