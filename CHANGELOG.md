@@ -2,7 +2,19 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased
+## RCCL 2.17.1-1 for ROCm 5.7.0
+### Changed
+- Compatibility with NCCL 2.17.1-1
+- Performance tuning for some collective operations
+### Added
+- Minor improvements to MSCCL codepath
+- NCCL_NCHANNELS_PER_PEER support
+- Improved compilation performance
+- Support for gfx94x
+### Fixed
+- Potential race-condition during ncclSocketClose()
+
+## RCCL 2.16.2 for ROCm 5.6.0
 ### Changed
 - Compatibility with NCCL 2.16.2
 ### Added
