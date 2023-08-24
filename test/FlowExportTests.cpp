@@ -4,6 +4,9 @@
 #include "TestBed.hpp"
 
 #include "flow_export.h"
+#include "proxy.h"
+
+#include <atomic>
 
 ncclResult_t
 testExportComm( const Comm_v1 * comm ) {
@@ -13,16 +16,28 @@ testExportComm( const Comm_v1 * comm ) {
 }
 
 extern FlowExport_v1 * flowExport_v1;
+extern std::atomic< uint64_t > * currCommHash;
 
 FlowExport_v1 testFlowExport{
    .exportComm = testExportComm,
 };
 
+void SetupMockFlowExport() {
+   // Fake the plugin setup without actually dynamically loading a shared lib.
+   flowExport_v1 = &testFlowExport;
+   currCommHash = new std::atomic< uint64_t >[ NCCL_MAX_LOCAL_RANKS ]();
+}
+
+void TeardownMockFlowExport() {
+   flowExport_v1 = nullptr;
+   delete[] currCommHash;
+   currCommHash = nullptr;
+}
+
 namespace RcclUnitTesting {
 
 TEST( FlowExport, CommExport ) {
-   // Fake the plugin setup without actually dynamically loading a shared lib.
-   flowExport_v1 = &testFlowExport;
+   SetupMockFlowExport();
 
    TestBed testBed;
 
@@ -46,7 +61,7 @@ TEST( FlowExport, CommExport ) {
                            useHipGraphList );
    testBed.Finalize();
 
-   flowExport_v1 = nullptr;
+   TeardownMockFlowExport();
 }
 
 } // namespace RcclUnitTesting

@@ -13,7 +13,7 @@ NCCL_PARAM( FlowExport, "FLOW_EXPORT", 0 );
 
 // Make visible for tests.
 __attribute__ ((visibility("default"))) FlowExport_v1 * flowExport_v1 = nullptr;
-std::atomic< uint64_t > * currCommHash = nullptr;
+__attribute__ ((visibility("default"))) std::atomic< uint64_t > * currCommHash = nullptr;
 
 namespace {
 
