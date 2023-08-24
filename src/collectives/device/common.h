@@ -11,7 +11,11 @@
 #include "collectives.h"
 #include "devcomm.h"
 
+#if defined(__gfx908__)
+#define COLL_UNROLL 2
+#else
 #define COLL_UNROLL 4
+#endif
 
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
