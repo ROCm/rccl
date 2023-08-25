@@ -887,7 +887,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   }
 
   str = getenv("NCCL_RINGS");
-  char* strTrees = getenv("NCCL_TREES");
+  char* strTrees = getenv("RCCL_TREES");
 
   if (str || strTrees) {
     // user supplied topo
