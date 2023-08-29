@@ -518,8 +518,8 @@ static ncclResult_t SaveProxy(struct ncclComm* comm, struct ncclChannel* channel
   return ncclSuccess;
 }
 
-ncclResult_t mscclSaveProxy(struct ncclComm* comm, struct ncclChannel* channel, int type, int peer, struct ncclProxyOp* op, int connIndex) {
-  NCCLCHECK(SaveProxy(comm, channel, type, peer, op, connIndex, nullptr));
+ncclResult_t mscclSaveProxy(struct ncclComm* comm, struct ncclChannel* channel, int type, int peer, struct ncclProxyOp* op, int connIndex, bool* justInquire) {
+  NCCLCHECK(SaveProxy(comm, channel, type, peer, op, connIndex, justInquire));
   return ncclSuccess;
 }
 

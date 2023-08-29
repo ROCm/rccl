@@ -10,6 +10,8 @@
 
 mscclStatus& mscclGetStatus();
 
+mscclSavedProxyArgs& mscclGetSavedProxyArgs();
+
 mscclThreadLocalStatus& mscclGetThreadLocalStatus();
 
 #endif

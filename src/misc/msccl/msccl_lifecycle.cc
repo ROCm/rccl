@@ -167,6 +167,8 @@ ncclResult_t mscclInit(ncclComm_t comm) {
   mscclThreadLocalStatus threadLocalStatus = mscclGetThreadLocalStatus();
   threadLocalStatus.groupStatus = mscclNoGroup;
   threadLocalStatus.groupDepth = 0;
+  threadLocalStatus.captureId = ULLONG_MAX;
+  threadLocalStatus.captureStatus = mscclNoCapture;
   comm->mscclCompatible = mscclCommCompatible(comm);
 
   {
@@ -186,6 +188,8 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     }
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
+    status.needsFence = false;
+    status.needsProxy = false;
     mscclSchedulerTriedLoadAlgo = false;
 
     NCCLCHECK(mscclSchedulerInit());
@@ -389,7 +393,7 @@ ncclResult_t mscclEnqueueCheck(
     size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
     mscclFunc_t func, ncclComm_t comm, hipStream_t stream) {
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
-  hipStreamCaptureStatus captureStatus;
+  cudaStreamCaptureStatus captureStatus;
   unsigned long long pid;
 
   threadLocalStatus.savedSchedulerParams.push_back({});
@@ -402,11 +406,11 @@ ncclResult_t mscclEnqueueCheck(
     case mscclNoGroup:
       if (comm->mscclCompatible) {
         if (stream == (hipStream_t)0) {
-          captureStatus = hipStreamCaptureStatusNone;
+          captureStatus = cudaStreamCaptureStatusNone;
         } else {
-          CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
+          CUDACHECK(cudaStreamGetCaptureInfo(stream, &captureStatus, &pid));
         }
-        if (captureStatus == hipStreamCaptureStatusNone) {
+        if (captureStatus == cudaStreamCaptureStatusNone) {
           NCCLCHECK(mscclSchedulerSelectAlgo(&threadLocalStatus.savedSchedulerParams.back()));
           if (threadLocalStatus.savedSchedulerParams.back().p.scheduled) {
             NCCLCHECK(mscclRunSavedParams());
@@ -419,11 +423,11 @@ ncclResult_t mscclEnqueueCheck(
     case mscclGroupSupportedOp:
       if (comm->mscclCompatible) {
         if (stream == (hipStream_t)0) {
-          captureStatus = hipStreamCaptureStatusNone;
+          captureStatus = cudaStreamCaptureStatusNone;
         } else {
           CUDACHECK(hipStreamGetCaptureInfo(stream, &captureStatus, &pid));
         }
-        if (captureStatus == hipStreamCaptureStatusNone) {
+        if (captureStatus == cudaStreamCaptureStatusNone) {
           NCCLCHECK(mscclSchedulerSelectAlgo(&threadLocalStatus.savedSchedulerParams.back()));
           if (threadLocalStatus.savedSchedulerParams.back().p.scheduled) {
             // Only save counts and displs when there is suitable MSCCL algorithm for this
