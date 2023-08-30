@@ -14,11 +14,7 @@ static ncclResult_t CudaPtrCheck(const void* pointer, struct ncclComm* comm, con
     WARN("%s : %s %p is not a valid pointer", opname, ptrname, pointer);
     return ncclInvalidArgument;
   }
-#if CUDART_VERSION >= 10000
   if (attr.type == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
-#else
-  if (attr.memoryType == cudaMemoryTypeDevice && attr.device != comm->cudaDev) {
-#endif
     WARN("%s : %s allocated on device %d mismatchs with NCCL device %d", opname, ptrname, attr.device, comm->cudaDev);
     return ncclInvalidArgument;
   }
