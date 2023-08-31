@@ -118,6 +118,7 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
   int highestTransportType = TRANSPORT_P2P;
   bool needsProxy = false;
   NCCLCHECK(ncclTransportP2pSetup(comm, NULL, 0, &highestTransportType, &needsProxy));
+  INFO(NCCL_INIT, "MSCCL: Setup p2p transport finished, highestTransportType %d status.needsProxy %d needsProxy %d", highestTransportType, status.needsProxy, needsProxy);
   status.needsFence |= highestTransportType > TRANSPORT_P2P;
   status.needsProxy |= needsProxy;
   mscclClearIsCallerFlag();
@@ -349,8 +350,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
   work.needsFence = status.needsFence;
-  // INFO(NCCL_INIT, "MSCCL: Setup Kernel finished, smem %ld needsFence %d", smem, status.needsFence);
-  INFO(NCCL_INIT, "MSCCL: Setup Kernel finished");
+  INFO(NCCL_INIT, "MSCCL: Setup Kernel finished, needsFence %d", status.needsFence);
   
   void *args[3] = {&comm->devComm, &devAlgo, &work};
   void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];
