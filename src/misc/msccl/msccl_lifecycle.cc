@@ -266,11 +266,11 @@ static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* pa
   if (status.mscclSchedulerPtr) {
     NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
-    // if (param->comm->topo->mscclEnabled || rcclParamMscclForceEnabled()) {
+    if (param->comm->topo->mscclEnabled || rcclParamMscclForceEnabled()) {
       NCCLCHECK(mscclInternalSchedulerSelectAlgo(&(param->p)));
-    // } else {
-    //   param->p.scheduled = false;
-    // }
+    } else {
+      param->p.scheduled = false;
+    }
   }
   return ncclSuccess;
 }
@@ -409,7 +409,6 @@ ncclResult_t mscclEnqueueCheck(
             break;
           }
         }
-      }
       NCCLCHECK(mscclFallBackSavedParams());
       break;
     case mscclGroupSupportedOp:
@@ -422,6 +421,7 @@ ncclResult_t mscclEnqueueCheck(
           }
         }
       threadLocalStatus.groupStatus = mscclGroupUnsupportedOp;
+      NCCLCHECK(mscclFallBackSavedParams());
     case mscclGroupUnsupportedOp:
       NCCLCHECK(mscclFallBackSavedParams());
       break;
