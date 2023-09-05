@@ -188,6 +188,13 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #if defined(ENABLE_NPKIT)
   int npKitCtxIdx = bid;
 #endif
+  
+#ifdef ENABLE_PROFILING
+  if (tid == 0) {
+    ncclShmem.prof.count = 0;
+    ncclShmem.prof.seq = ncclShmem.comm.devProf[blockIdx.x].seq;
+  }
+#endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
   if (tid == 0) {
@@ -297,10 +304,16 @@ __device__ __forceinline__ void mscclRunInterpreter(
         dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
         int thisCount = min(maxAllowedCount, count - c);
         int thisNelem = nelem * thisCount;
-        if (t->type == MSCCL_SEND)
+        if (t->type == MSCCL_SEND) {
+	  if (tid == 0) __insert_timestamp(__LINE__);
           prims.sendWithBarrier(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
-        else if (t->type == MSCCL_RECV)
+	  if (tid == 0) __insert_timestamp(__LINE__);
+	}
+        else if (t->type == MSCCL_RECV) {
+	  if (tid == 0) __insert_timestamp(__LINE__);
           prims.recv(dstOffset, thisNelem);
+	  if (tid == 0) __insert_timestamp(__LINE__);
+	}
         else if (t->type == MSCCL_REDUCE) {
           int numReductions = t->numReductions;
           if (thisNelem < nthreads){
@@ -397,6 +410,14 @@ __device__ __forceinline__ void mscclRunInterpreter(
       step++;
     }
   }
+#ifdef ENABLE_PROFILING
+        if (ncclShmem.comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
+                __synclds();
+                copyToShmem16(tid, ncclShmem.comm.devProf+MAXCHANNELS*ncclShmem.prof.seq+blockIdx.x, &ncclShmem.prof, sizeof(struct ncclProf));
+                if (tid == 0) ncclShmem.comm.devProf[blockIdx.x].seq++;
+        }
+#endif
+
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type) \

@@ -351,14 +351,23 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
 #ifdef ENABLE_PROFILING
   struct ncclProf *prof, *prof_seq;
+  hipDeviceProp_t devProp;
+  double vega_gpu_rtc_freq;
+
   prof = (struct ncclProf*)malloc(sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES);
   CUDACHECK(hipMemcpy(prof, comm->devComm->devProf, sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES, hipMemcpyDeviceToHost));
-  #define VEGA_GPU_RTC_FREQUENCY 2.5E7
+
+  hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
+  if (devProp.gcnArch/10 == 94 && status == hipSuccess)
+    vega_gpu_rtc_freq = 1.0E8;
+  else
+    vega_gpu_rtc_freq = 2.5E7;
+
   for (int i=0; i<comm->nChannels; i++) {
     for (int s=0; s<prof[MAXCHANNELS*i].seq; s++) {
       if (prof[MAXCHANNELS*s+i].count == 0) continue;
       for (int j=0; j<prof[MAXCHANNELS*s+i].count; j++) {
-        INFO(NCCL_INIT, "# [%02d:%02d] %02d-%02d L:%04u %6.2fus", comm->rank, i, s, j, prof[MAXCHANNELS*s+i].elem[j].line, (prof[MAXCHANNELS*s+i].elem[j].timeStamp-prof[MAXCHANNELS*s+i].elem[0].timeStamp)/VEGA_GPU_RTC_FREQUENCY*1.0E6);
+        INFO(NCCL_INIT, "# [%02d:%02d] %02d-%02d L:%04u %6.2fus", comm->rank, i, s, j, prof[MAXCHANNELS*s+i].elem[j].line, (prof[MAXCHANNELS*s+i].elem[j].timeStamp-prof[MAXCHANNELS*s+i].elem[0].timeStamp)/vega_gpu_rtc_freq*1.0E6);
       }
     }
   }
@@ -666,7 +675,8 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 #endif
 
 #ifdef ENABLE_PROFILING
-  NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES), comm->sideStream);
+  //NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES), comm->sideStream);
+  NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES));
 #endif
 
   if (mscclEnabled()) {
