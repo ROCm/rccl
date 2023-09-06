@@ -12,6 +12,7 @@
 #include "debug.h"
 #include "checks.h"
 #include <stdlib.h>
+#include "archinfo.h"
 
 // A few constraints to make the implementation easy
 #define MAX_STR_LEN 255

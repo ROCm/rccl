@@ -10,6 +10,7 @@
 
 #include "graph.h"
 #include "core.h"
+#include <string.h>
 
 #define LOC_BW 5000.0
 #define SM60_NVLINK_BW 18.0

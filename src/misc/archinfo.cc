@@ -36,6 +36,7 @@ void gcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
   // the older gcnArch value.  There's only a handful of architectures that were coded prior to deprecation,
   // so we handle those cases here.
   //char gcnArchName[256] = {0}; // why 256?  Because that's what gcnArchName gives us, so we're matching it.
+  gcnArchName[6] = 0;
   switch (gcnArch) {
     case 906:
       strncpy(gcnArchName, "gfx906", 6);

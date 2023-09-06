@@ -644,6 +644,14 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   }
   const char* gcn;
   NCCLCHECK(xmlGetAttr(gpuNode, "gcn", &gcn));
+  if (strcmp(gcn, "906") == 0) {
+    NCCLCHECK(xmlSetAttr(gpuNode, "gcn", "gfx906"));
+  } else if (strcmp(gcn, "908") == 0) {
+    NCCLCHECK(xmlSetAttr(gpuNode, "gcn", "gfx908"));
+  } else if (strcmp(gcn, "910") == 0) {
+    NCCLCHECK(xmlSetAttr(gpuNode, "gcn", "gfx90a"));
+  };
+  //NCCLCHECK(xmlGetAttr(gpuNode, "gcn", &gcn));
 
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrIndex(gpuNode, "arch", &index));
