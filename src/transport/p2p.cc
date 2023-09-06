@@ -354,7 +354,7 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     INFO(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d failed to get link type and hop count", channelId, myInfo->rank, peerInfo->rank);
     return ncclInternalError;
   }
-  if (!isXGMI && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx910", 6) != 0 && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94", 5) != 0) {
+  if (!isXGMI && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx90a", 6) != 0 && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94", 5) != 0) {
     CUDACHECK(hipDeviceGetAttribute((int*)&resources->next_hdp_reg, hipDeviceAttributeHdpMemFlushCntl,peerInfo->cudaDev));
     TRACE(NCCL_INIT|NCCL_P2P,"Ring %02d : %d -> %d HDP %p", channelId, myInfo->rank, peerInfo->rank, resources->next_hdp_reg);
   }

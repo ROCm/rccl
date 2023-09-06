@@ -651,7 +651,8 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   } else if (strcmp(gcn, "910") == 0) {
     NCCLCHECK(xmlSetAttr(gpuNode, "gcn", "gfx90a"));
   };
-  //NCCLCHECK(xmlGetAttr(gpuNode, "gcn", &gcn));
+  const char* gcnNew;
+  NCCLCHECK(xmlGetAttr(gpuNode, "gcn", &gcnNew));
 
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrIndex(gpuNode, "arch", &index));

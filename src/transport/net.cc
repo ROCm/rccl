@@ -190,7 +190,7 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   if (req.netDev < 0) NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &req.netDev, &proxyRank));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, req.netDev, 1, &req.useGdr));
   send->conn.flags |= req.useGdr ? NCCL_DIRECT_NIC : 0;
-  if (req.useGdr && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx910", 6) != 0 && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94", 5) != 0) {
+  if (req.useGdr && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx90a", 6) != 0 && strncmp(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94", 5) != 0) {
     CUDACHECK(hipDeviceGetAttribute((int*)&req.curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
     send->conn.curr_hdp_reg = req.curr_hdp_reg;
   }
