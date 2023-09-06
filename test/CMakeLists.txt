@@ -55,6 +55,7 @@ if(BUILD_TESTS)
       ReduceTests.cpp
       ScatterTests.cpp
       SendRecvTests.cpp
+      StandaloneTests.cpp
       )
   endif()
 

@@ -12,7 +12,7 @@ project(rccl CXX)
 option(BUILD_ADDRESS_SANITIZER                 "Enable address sanitizer"                      OFF)
 option(BUILD_ALLREDUCE_ONLY                    "AllReduce(sum,float) kernel only"              OFF)
 option(BUILD_BFD                               "Enable custom backtrace (if bfd.h exists)"     ON)
-option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "File/folder reorg with backward compatibility" ON)
+option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "File/folder reorg with backward compatibility" OFF)
 option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on this machine"  OFF)
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
@@ -290,6 +290,7 @@ set(SRC_FILES
   src/collectives/all_to_all.cc
   src/collectives/all_to_allv.cc
   src/collectives/broadcast.cc
+  src/collectives/msccl.cc
   src/collectives/device/all_gather.h
   src/collectives/device/all_reduce.h
   src/collectives/device/alltoall_pivot.h
@@ -472,7 +473,6 @@ if (ENABLE_MSCCL_KERNEL)
   set(MSCCL_KERNEL_SOURCES
     src/collectives/device/msccl_kernel_impl.h
     src/include/msccl/msccl_kernel.h
-    src/collectives/msccl.cc
   )
   list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
 endif()
@@ -568,10 +568,13 @@ endif()
 if(${HIP_EVENT_DISABLE_FENCE})
   target_compile_definitions(rccl PRIVATE HIP_EVENT_DISABLE_FENCE)
 endif()
-if(${HIP_UNCACHED_MEMORY})
-  if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.7.31920")
-    target_compile_definitions(rccl PRIVATE HIP_UNCACHED_MEMORY)
-    message(STATUS "HIP_UNCACHED_MEMORY enabled")
+if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.7.31920")
+  target_compile_definitions(rccl PRIVATE HIP_UNCACHED_MEMORY)
+  message(STATUS "HIP_UNCACHED_MEMORY enabled")
+else()
+  # keep --hipcc-func-supp on older HIP and compiler
+  if(NOT IFC_ENABLED)
+    target_compile_options(rccl PRIVATE --hipcc-func-supp)
   endif()
 endif()
 if(HIP_NO_GCNARCHNAME)
@@ -618,9 +621,6 @@ if(BUILD_ADDRESS_SANITIZER)
 endif()
 if(TIMETRACE)
   target_compile_options(rccl PRIVATE -ftime-trace)
-endif()
-if(NOT IFC_ENABLED)
-  target_compile_options(rccl PRIVATE --hipcc-func-supp)
 endif()
 
 ## Set RCCL linked library directories

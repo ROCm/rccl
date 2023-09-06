@@ -10,7 +10,7 @@ ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
 build_address_sanitizer=false
 build_allreduce_only=false
 build_bfd=true
-build_freorg_bkwdcomp=true
+build_freorg_bkwdcomp=false
 build_local_gpu_only=false
 build_package=false
 build_release=true
@@ -318,6 +318,10 @@ if ($npkit_enabled); then
     -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_RECV_COPY_SEND_EXIT \
     -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_DIRECT_RECV_ENTRY \
     -DENABLE_NPKIT_EVENT_ALL_GATHER_RING_DIRECT_RECV_EXIT \
+    -DENABLE_NPKIT_EVENT_MSCCL_GENERIC_OP_ENTRY \
+    -DENABLE_NPKIT_EVENT_MSCCL_GENERIC_OP_EXIT \
+    -DENABLE_NPKIT_EVENT_MSCCL_REDUCE_ENTRY \
+    -DENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT \
     -DENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME"
 fi
 

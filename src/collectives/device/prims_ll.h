@@ -10,6 +10,18 @@
 #include "npkit/npkit.h"
 #endif
 
+#ifdef __GFX11__
+#define LL_STORE(SRC, DST) \
+  __atomic_store_n((DST), (SRC), __ATOMIC_RELAXED)
+#define LL_LOAD(SRC) \
+  __atomic_load_n(SRC, __ATOMIC_RELAXED)
+#else
+#define LL_STORE(SRC, DST) \
+  __builtin_nontemporal_store((SRC), (DST))
+#define LL_LOAD(SRC) \
+  __builtin_nontemporal_load(SRC)
+#endif
+
 template<typename T, typename RedOp, typename Fan, int Direct, int P2p>
 class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>> {
@@ -151,8 +163,8 @@ private:
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     union ncclLLFifoLine i4;
     do {
-      i4.v[0] = __builtin_nontemporal_load(src->v);
-      i4.v[1] = __builtin_nontemporal_load(src->v+1);
+      i4.v[0] = LL_LOAD(src->v);
+      i4.v[1] = LL_LOAD(src->v+1);
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
@@ -187,8 +199,8 @@ private:
       if (i < fan.nrecv()) {
         union ncclLLFifoLine* src = recvPtr(i) + offset;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-        line[i].v[0] = __builtin_nontemporal_load(src->v);
-        line[i].v[1] = __builtin_nontemporal_load(src->v+1);
+        line[i].v[0] = LL_LOAD(src->v);
+        line[i].v[1] = LL_LOAD(src->v+1);
 #else
         asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
 #endif
@@ -209,8 +221,8 @@ private:
 
     do {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-      line[i].v[0] = __builtin_nontemporal_load(src->v);
-      line[i].v[1] = __builtin_nontemporal_load(src->v+1);
+      line[i].v[0] = LL_LOAD(src->v);
+      line[i].v[1] = LL_LOAD(src->v+1);
 #else
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
 #endif
@@ -238,8 +250,8 @@ private:
     i4.flag1 = flag;
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
-    __builtin_nontemporal_store(i4.v[0], dst->v);
-    __builtin_nontemporal_store(i4.v[1], dst->v+1);
+    LL_STORE(i4.v[0], dst->v);
+    LL_STORE(i4.v[1], dst->v+1);
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag));
 #endif
@@ -258,13 +270,13 @@ private:
     };
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
-      u1 = __builtin_nontemporal_load((uint8_t*)src);
+      u1 = LL_LOAD((uint8_t*)src);
     else if(sizeof(U) == 2)
-      u2 = __builtin_nontemporal_load((uint16_t*)src);
+      u2 = LL_LOAD((uint16_t*)src);
     else if(sizeof(U) == 4)
-      u4 = __builtin_nontemporal_load((uint32_t*)src);
+      u4 = LL_LOAD((uint32_t*)src);
     else
-      u8 = __builtin_nontemporal_load((uint64_t*)src);
+      u8 = LL_LOAD((uint64_t*)src);
 #else
     if(sizeof(U) == 1)
       asm("ld.volatile.global.b8 %0,[%1];" : "=r"(u4) : "l"(src));
@@ -290,13 +302,13 @@ private:
     elt = val;
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
-      __builtin_nontemporal_store(u1, (uint8_t*)dst);
+      LL_STORE(u1, (uint8_t*)dst);
     else if(sizeof(U) == 2)
-      __builtin_nontemporal_store(u2, (uint16_t*)dst);
+      LL_STORE(u2, (uint16_t*)dst);
     else if(sizeof(U) == 4)
-      __builtin_nontemporal_store(u4, (uint32_t*)dst);
+      LL_STORE(u4, (uint32_t*)dst);
     else
-      __builtin_nontemporal_store(u8, (uint64_t*)dst);
+      LL_STORE(u8, (uint64_t*)dst);
 #else
     if(sizeof(U) == 1)
       asm("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4));
@@ -476,6 +488,13 @@ private:
 
   template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
   __device__ __forceinline__ void mscclGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_GENERIC_OP_ENTRY)
+    if (tid == 0) {
+      NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_GENERIC_OP_ENTRY, nelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    }
+#endif
+
     nelem = nelem < 0 ? 0 : nelem;
     T *srcElts = srcs[0];
     T *dstElts = dsts[0];
@@ -534,6 +553,14 @@ private:
       nelem -= eltPerTrip;
       offset += nthreads;
     }
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_GENERIC_OP_EXIT)
+    if (tid == 0) {
+      NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_GENERIC_OP_EXIT, nelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    }
+#endif
+
     barrier();
   }
 

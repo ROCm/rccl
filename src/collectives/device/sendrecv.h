@@ -21,7 +21,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 
 #if defined(ENABLE_NPKIT)
     bool isNpKitThread = (tid == 0);
-    int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P;
+    int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + group;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -116,7 +116,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ void runRecv(const int tid, const int nthreads, const uint8_t group, struct ncclWorkElemP2p* args) {
 #if defined(ENABLE_NPKIT)
     bool isNpKitThread = (tid == 0);
-    int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + 1;
+    int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + group;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -204,6 +204,8 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       } else {
 #if defined(__gfx90a__)
         runRecv<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
+#elif defined(__gfx908__)
+        runRecv<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
 #else
         runRecv<ProtoSimple<1,1>>(tid, nthreads, group, args);
 #endif
@@ -214,6 +216,8 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       } else {
 #if defined(__gfx90a__)
         runSend<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
+#elif defined(__gfx908__)
+        runSend<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
 #else
         runSend<ProtoSimple<1,1>>(tid, nthreads, group, args);
 #endif
