@@ -86,7 +86,7 @@ double getDeviceWallClockRateInKhz(int deviceId) {
     int gpu_rtc_freq;
     // don't be alarmed; this is the one that gives us the number we actually want, not hipDeviceAttributeClockRate
     hipDeviceGetAttribute(&gpu_rtc_freq, hipDeviceAttributeWallClockRate, deviceId);
-    if (gpu_rtc_freq != 0) // hey, it worked!
+    if (gpu_rtc_freq != 0.0) // hey, it worked!
       return (double) gpu_rtc_freq;
     else
       return 1.0E5; // TODO: remove me before merging PR; current workaround for buggy return.

@@ -870,9 +870,9 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
        (comm->topo->type & RCCL_TOPO_CR8G))
     allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks &&
-      strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx910", 6) == 0)
+      strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx90a", 6) == 0)
     allGather3Data[rank].nc = 4;
-  if (strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx910", 6) == 0)
+  if (strncmp(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx90a", 6) == 0)
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph.nChannels);
   if (ringGraph.nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
