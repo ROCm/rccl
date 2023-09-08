@@ -74,7 +74,9 @@ int getGcnArchName(int deviceId, char* out) {
 }
 
 double getDeviceWallClockRateInKhz(int deviceId) {
-  if (strncmp("gfx94", getGcnArchName(deviceId), 5) == 0)
+  char* gcn;
+  getGcnArchName(deviceId, gcn);
+  if (strncmp("gfx94", gcn, 5) == 0)
     return 1.0E5;
   else
     return 2.5E4;

@@ -126,20 +126,12 @@ check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVE
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
 message(STATUS "HIP Library version: ${hip_VERSION_MINOR}")
-### Check the version of HIP; this will tell us what features we can and cannot use.
-
-if(hip_VERSION_MAJOR LESS_EQUAL 3)
-  if (hip_VERSION_MINOR LESS_EQUAL 7)
+### Check the version of HIP to see if we can use gcnArchName instead of gcnArch (deprecated)
+if(${hipcc_version_string} VERSION_LESS "5.7.31921")
     set(HIP_NO_GCNARCHNAME ON)
   else()
     set(HIP_NO_GCNARCHNAME OFF)
-  endif()
-else()
-  set(HIP_NO_GCNARCHNAME OFF)
 endif()
-
-### Check for gcnArchName; if not, we must support gcnArch (now deprecated)
-### check_symbol_exists("hipDeviceAttributeGcnArchName" "hip/hip_runtime_api.h" USE_GCNARCHNAME)
 
 ### Check for indirect function call support
 if(ENABLE_IFC)
