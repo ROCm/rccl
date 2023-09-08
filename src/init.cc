@@ -177,7 +177,6 @@ void *ncclCommThreadMain(void *arg) {
   double vega_gpu_rtc_freq;
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
-  // Many AMD cards currently supported by RCCL have the same frequency; we're testing for the lone set of exceptions.
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
   #define MAX_NAME_LENGTH 64
   char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+2));
