@@ -74,21 +74,8 @@ int getGcnArchName(int deviceId, char* out) {
 }
 
 double getDeviceWallClockRateInKhz(int deviceId) {
-  #ifdef HIP_NO_WALLCLOCKRATE // we're using an older version of ROCM/HIP and must try according to the name instead.
-    if (strncmp("gfx94", getGcnArchName(deviceId), 5) == 0)
-      return 1.0E5;
-    else
-      return 2.5E4;
-#else
-    // So instead of using gcnArch to detect the model, we'll query the frequency directly via HIP.
-    hipDeviceProp_t devProp;
-    hipError_t status = hipGetDeviceProperties(&devProp, deviceId);
-    int gpu_rtc_freq;
-    // don't be alarmed; this is the one that gives us the number we actually want, not hipDeviceAttributeClockRate
-    hipDeviceGetAttribute(&gpu_rtc_freq, hipDeviceAttributeWallClockRate, deviceId);
-    if (gpu_rtc_freq != 0.0) // hey, it worked!
-      return (double) gpu_rtc_freq;
-    else
-      return 1.0E5; // TODO: remove me before merging PR; current workaround for buggy return.
-  #endif
+  if (strncmp("gfx94", getGcnArchName(deviceId), 5) == 0)
+    return 1.0E5;
+  else
+    return 2.5E4;
 }
