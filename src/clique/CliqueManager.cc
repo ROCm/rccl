@@ -266,9 +266,9 @@ void CliqueManager::SetByteLimits()
   m_allReduceByteLimit = rcclParamAllReduceCliqueByteLimit();
   if (m_allReduceByteLimit == 0)
   {
-    if (strncmp(m_gcnArchName, "gfx906", 6) == 0)
-      m_allReduceByteLimit = 16777216; // TODO: do we really need this, since it's covered by the default?  Check if it's more of a documentation / assumption thing.
-    else if (strncmp(m_gcnArchName, "gfx908", 6) == 0)
+    if (IsArchMatch(m_gcnArchName, "gfx906"))
+      m_allReduceByteLimit = 16777216;
+    else if (IsArchMatch(m_gcnArchName, "gfx908"))
       m_allReduceByteLimit = 8388608;
     else
       m_allReduceByteLimit = 16777216;
@@ -368,15 +368,15 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
     {
       // NOTE: These are currently based on collected data and not necessarily ideal for all hardware
       int numChannels;
-      if (strncmp(m_gcnArchName, "gfx906", 6) == 0) {
+      if (ArchName(m_gcnArchName, "gfx906")) {
         if      (totalBytes <=   16384) numChannels =  1;
         else                            numChannels =  2;
-      } else if (strncmp(m_gcnArchName, "gfx908", 6) == 0) {
+      } else if (ArchName(m_gcnArchName, "gfx908")) {
         if      (totalBytes <=  131072) numChannels =  2;
         else if (totalBytes <=  524288) numChannels =  6;
         else if (totalBytes <= 1048576) numChannels = 13;
         else                            numChannels = 16;
-      } else if (strncmp(m_gcnArchName, "gfx90a", 6) == 0) {
+      } else if (ArchName(m_gcnArchName, "gfx90a")) {
         if      (totalBytes <=  262144) numChannels =  4;
         else                            numChannels =  8;
       } else {

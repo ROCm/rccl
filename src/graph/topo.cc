@@ -371,13 +371,10 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "sm", &gpu->gpu.cudaCompCap));
   NCCLCHECK(xmlGetAttr(xmlGpu, "gcn", &gpu->gpu.gcn));
   if (strcmp(gpu->gpu.gcn, "906") == 0) {
-    //NCCLCHECK(xmlSetAttr(gpu->gpu, "gcn", "gfx906"));
     gpu->gpu.gcn = "gfx906";
   } else if (strcmp(gpu->gpu.gcn, "908") == 0) {
-    //NCCLCHECK(xmlSetAttr(gpu->gpu, "gcn", "gfx908"));
     gpu->gpu.gcn = "gfx908";
   } else if (strcmp(gpu->gpu.gcn, "910") == 0) {
-    //NCCLCHECK(xmlSetAttr(gpu->gpu, "gcn", "gfx90a"));
     gpu->gpu.gcn = "gfx90a";
   }
   rcclHipDeviceArch_t arch;

@@ -122,7 +122,7 @@ ncclResult_t NpKit::Dump(const std::string& dump_dir) {
   dump_file_path += "/gpu_clock_rate_rank_";
   dump_file_path += std::to_string(rank_);
   // get the rtc frequency directly from HIP itself (via a wrapper)
-  double vega_gpu_rtc_freq_in_khz = getDeviceWallClockRateInKhz(0);
+  double vega_gpu_rtc_freq_in_khz = GetDeviceWallClockRateInKhz(0);
   std::string clock_rate_str = std::to_string(vega_gpu_rtc_freq_in_khz);
   auto gpu_clock_rate_file = std::fstream(dump_file_path, std::ios::out);
   gpu_clock_rate_file.write(clock_rate_str.c_str(), clock_rate_str.length());

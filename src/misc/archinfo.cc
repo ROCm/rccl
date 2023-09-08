@@ -24,14 +24,14 @@ THE SOFTWARE.
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
 
-void gcnArchNameFormat(char* gcnArchName, char* out) {
+void GcnArchNameFormat(char* gcnArchName, char* out) {
   // this function parses the char array from the device properties into something easier to handle.
   // as the gcnArchName attribute looks something like: "gfx900:xnack+:blah-:etc-"
   char *gcnArchNameToken = strtok(gcnArchName, ":");
   strcpy(gcnArchNameToken, out);
 }
 
-void gcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
+void GcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
   // gcnArch is deprecated and we should instead use gcnArchName; however, some data files still have
   // the older gcnArch value.  There's only a handful of architectures that were coded prior to deprecation,
   // so we handle those cases here.
@@ -51,7 +51,7 @@ void gcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
   }
 }
 
-int getGcnArchName(int deviceId, char* out) {
+int GetGcnArchName(int deviceId, char* out) {
   // this is a generic call in to get a consistent gcnArchName regardless of which version of rocm we're using.
   // or which version of rocm we're using.
   hipDeviceProp_t devProp;
@@ -63,19 +63,24 @@ int getGcnArchName(int deviceId, char* out) {
   }
 #ifdef HIP_NO_GCNARCHNAME
   // we're using a HIP version before 3.7.
-  gcnArchConvertToGcnArchName(devProp.gcnArch, out);
+  GcnArchConvertToGcnArchName(devProp.gcnArch, out);
   return 1;
 #else
-  gcnArchNameFormat(devProp.gcnArchName, out);
+  GcnArchNameFormat(devProp.gcnArchName, out);
   return 0;
 #endif
 }
 
-double getDeviceWallClockRateInKhz(int deviceId) {
+double GetDeviceWallClockRateInKhz(int deviceId) {
   char* gcn;
-  getGcnArchName(deviceId, gcn);
+  GetGcnArchName(deviceId, gcn);
   if (strncmp("gfx94", gcn, 5) == 0)
     return 1.0E5;
   else
     return 2.5E4;
+}
+
+bool IsArchMatch(char const* arch, char const* target) {
+  // helper function to reduce clutter in code elsewhere.  Returns true on match.
+  return (strncmp(arch, target, strlen(target)) == 0);
 }

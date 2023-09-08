@@ -10,6 +10,7 @@
 
 #include "graph.h"
 #include "core.h"
+#include "archinfo.h"
 #include <string.h>
 
 #define LOC_BW 5000.0
@@ -226,9 +227,9 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
 
 // Returns XGMI speed in GB/s
 static float ncclTopoXGMISpeed(const char* gcn) {
-  if (strncmp(gcn, "gfx90a", 6) == 0)
+  if (IsArchMatch(gcn, "gfx90a"))
     return MI200_XGMI_WIDTH;
-  else if (strncmp(gcn, "gfx940", 6) == 0 || strncmp(gcn, "gfx941", 6) == 0 || strncmp(gcn, "gfx942", 6) == 0) // TODO check if we can just use strncmp(gcn, "gfx94", 5)
+  else if (IsArchMatch(gcn, "gfx94"))
     return GFX94X_XGMI_WIDTH;
   else
     return VEGA_XGMI_WIDTH;
