@@ -116,5 +116,11 @@
 #define NPKIT_EVENT_MSCCL_GENERIC_OP_EXIT                       0x5B
 #define NPKIT_EVENT_MSCCL_REDUCE_ENTRY                          0x5C
 #define NPKIT_EVENT_MSCCL_REDUCE_EXIT                           0x5D
+#define NPKIT_EVENT_MSCCL_SEND_ENTRY                          	0x5E
+#define NPKIT_EVENT_MSCCL_SEND_EXIT                           	0x5F
+#define NPKIT_EVENT_MSCCL_RECV_ENTRY                            0x60
+#define NPKIT_EVENT_MSCCL_RECV_EXIT                             0x61
+#define NPKIT_EVENT_MSCCL_RUN_ENTRY                             0x62
+#define NPKIT_EVENT_MSCCL_RUN_EXIT                              0x63
 
 #endif
