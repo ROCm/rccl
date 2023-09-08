@@ -48,8 +48,6 @@ void gcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
       // this is actually 90a
       strncpy(gcnArchName, "gfx90a", 6);
       break;
-    default:
-      // throw an error here or however we're handling these runtime exceptions.
   }
 }
 
