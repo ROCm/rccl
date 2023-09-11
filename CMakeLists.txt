@@ -122,17 +122,6 @@ message(STATUS "hipcc version:    ${hipcc_version_string}")
 ### Check for hipEventDisableSystemFence support
 check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVENT_DISABLE_FENCE)
 
-### Check for hipDeviceMallocUncached support
-check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
-
-message(STATUS "HIP Library version: ${hip_VERSION_MINOR}")
-### Check the version of HIP to see if we can use gcnArchName instead of gcnArch (deprecated)
-if(${hipcc_version_string} VERSION_LESS "5.7.31921")
-    set(HIP_NO_GCNARCHNAME ON)
-  else()
-    set(HIP_NO_GCNARCHNAME OFF)
-endif()
-
 ### Check for indirect function call support
 if(ENABLE_IFC)
   if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.5.30201")
@@ -311,7 +300,6 @@ set(SRC_FILES
   src/graph/xml.cc
   src/graph/xml.h
   src/group.cc
-  src/include/archinfo.h
   src/include/align.h
   src/include/alloc.h
   src/include/argcheck.h
@@ -392,7 +380,6 @@ set(SRC_FILES
   src/include/utils.h
   src/init.cc
 #  src/init_nvtx.cc
-  src/misc/archinfo.cc
   src/misc/argcheck.cc
 # src/misc/cudawrap.cc
 # src/misc/gdrwrap.cc
@@ -559,9 +546,6 @@ else()
   if(NOT IFC_ENABLED)
     target_compile_options(rccl PRIVATE --hipcc-func-supp)
   endif()
-endif()
-if(HIP_NO_GCNARCHNAME)
-  target_compile_definitions(rccl PRIVATE HIP_NO_GCNARCHNAME)
 endif()
 if (BUILD_BFD)
   if (HAVE_BFD)

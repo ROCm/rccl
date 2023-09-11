@@ -9,7 +9,6 @@
 
 #include "nvmlwrap.h"
 
-#include <string.h>
 #include <stdlib.h>
 
 // Get current Compute Capability

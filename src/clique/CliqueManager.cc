@@ -61,7 +61,7 @@ CliqueManager::CliqueManager(int          const  rank,
   m_opIndexHead(0),
   m_opIndexTail(0),
   m_init(false),
-  m_gcnArchName(char[256]),
+  m_gcnArch(0),
   m_allReduceByteLimit(0),
   m_pinnedCliquePtrs(NULL),
   m_gpuBarrierGlobalCount(NULL),
@@ -243,13 +243,13 @@ ncclResult_t CliqueManager::Init(ncclUniqueId const* commId, int suffix)
   CUDACHECK(hipGetDevice(&deviceId));
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, deviceId));
-  m_gcnArchName = devProp.gcnArchName;
+  m_gcnArch = devProp.gcnArch;
 
   // Establish when to use clique-based kernels based on input size
   SetByteLimits();
 
   m_init = true;
-  INFO(NCCL_INIT, "Clique-based kernels enabled (mode %d) [GCN %d]", m_cliqueMode, m_gcnArchName);
+  INFO(NCCL_INIT, "Clique-based kernels enabled (mode %d) [GCN %d]", m_cliqueMode, m_gcnArch);
   return ncclSuccess;
 
 dropback:
@@ -266,12 +266,12 @@ void CliqueManager::SetByteLimits()
   m_allReduceByteLimit = rcclParamAllReduceCliqueByteLimit();
   if (m_allReduceByteLimit == 0)
   {
-    if (IsArchMatch(m_gcnArchName, "gfx906"))
-      m_allReduceByteLimit = 16777216;
-    else if (IsArchMatch(m_gcnArchName, "gfx908"))
-      m_allReduceByteLimit = 8388608;
-    else
-      m_allReduceByteLimit = 16777216;
+    switch (m_gcnArch)
+    {
+    case 906: m_allReduceByteLimit =  16777216; break;
+    case 908: m_allReduceByteLimit =   8388608; break;
+    default:  m_allReduceByteLimit =  16777216; break;
+    }
   }
 }
 
@@ -368,18 +368,23 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
     {
       // NOTE: These are currently based on collected data and not necessarily ideal for all hardware
       int numChannels;
-      if (ArchName(m_gcnArchName, "gfx906")) {
+      switch (m_gcnArch)
+      {
+      case 906:
         if      (totalBytes <=   16384) numChannels =  1;
         else                            numChannels =  2;
-      } else if (ArchName(m_gcnArchName, "gfx908")) {
+        break;
+      case 908:
         if      (totalBytes <=  131072) numChannels =  2;
         else if (totalBytes <=  524288) numChannels =  6;
         else if (totalBytes <= 1048576) numChannels = 13;
         else                            numChannels = 16;
-      } else if (ArchName(m_gcnArchName, "gfx90a")) {
+        break;
+      case 910:
         if      (totalBytes <=  262144) numChannels =  4;
         else                            numChannels =  8;
-      } else {
+        break;
+      default:
         if      (totalBytes <=   65536) numChannels =  1;
         else if (totalBytes <=  262144) numChannels =  2;
         else if (totalBytes <=  524288) numChannels =  4;

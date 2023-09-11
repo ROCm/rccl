@@ -10,8 +10,6 @@
 
 #include "graph.h"
 #include "core.h"
-#include "archinfo.h"
-#include <string.h>
 
 #define LOC_BW 5000.0
 #define SM60_NVLINK_BW 18.0
@@ -125,7 +123,7 @@ struct ncclTopoNode {
       int rank;
       int cudaCompCap;
       int gdrSupport;
-      const char* gcn;
+      int gcn;
       hipDeviceArch_t arch;
     }gpu;
     struct {
@@ -226,13 +224,17 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
 }
 
 // Returns XGMI speed in GB/s
-static float ncclTopoXGMISpeed(const char* gcn) {
-  if (IsArchMatch(gcn, "gfx90a"))
-    return MI200_XGMI_WIDTH;
-  else if (IsArchMatch(gcn, "gfx94"))
-    return GFX94X_XGMI_WIDTH;
-  else
-    return VEGA_XGMI_WIDTH;
+static float ncclTopoXGMISpeed(int gcn) {
+  switch (gcn) {
+    case 910:
+      return MI200_XGMI_WIDTH;
+    case 940:
+    case 941:
+    case 942:
+      return GFX94X_XGMI_WIDTH;
+    default:
+      return VEGA_XGMI_WIDTH;
+  }
 }
 
 #if ENABLE_COLLTRACE
