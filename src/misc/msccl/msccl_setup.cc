@@ -118,8 +118,6 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
   int highestTransportType = TRANSPORT_P2P;
   bool needsProxy = false;
   NCCLCHECK(ncclTransportP2pSetup(comm, NULL, 0, &highestTransportType, &needsProxy));
-  INFO(NCCL_INIT, "MSCCL: Setup p2p transport finished, highestTransportType %d status.needsProxy %d needsProxy %d", highestTransportType, status.needsProxy, needsProxy);
-  status.needsFence |= highestTransportType > TRANSPORT_P2P;
   status.needsProxy |= needsProxy;
   mscclClearIsCallerFlag();
 
@@ -127,7 +125,7 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
   return ncclSuccess;
 }
 
-static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t comm, bool* justInquire) {
+static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
   mscclStatus& status = mscclGetStatus();
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   struct ncclProxyOp proxyOp = {};
@@ -158,7 +156,7 @@ static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t c
       }
       proxyOp.nsteps = nLoopsChunkSteps * nRecvs;
       if (proxyOp.nsteps > 0) {
-        NCCLCHECK(mscclSaveProxy(comm, ncclChannel, proxyRecv, recvPeer->peer, &proxyOp, 0, justInquire));
+        NCCLCHECK(mscclSaveProxy(comm, ncclChannel, proxyRecv, recvPeer->peer, &proxyOp, 0));
       }
     }
     for (int i=0; i<mscclChannel->nSendPeers; i++){
@@ -171,7 +169,7 @@ static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t c
       }
       proxyOp.nsteps = nLoopsChunkSteps * nSends;
       if (proxyOp.nsteps > 0) {
-        NCCLCHECK(mscclSaveProxy(comm, ncclChannel, proxySend, sendPeer->peer, &proxyOp, 0, justInquire));
+        NCCLCHECK(mscclSaveProxy(comm, ncclChannel, proxySend, sendPeer->peer, &proxyOp, 0));
       }
     }
   }
@@ -184,7 +182,7 @@ static void HIPRT_CB mscclSetupProxyCallback(void *args) {
   std::vector<struct mscclProxyArg>* params = (std::vector<struct mscclProxyArg>*)args;
   INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
   for (auto &p : *params) {
-    mscclSetupProxyImpl(p.hostAlgo, p.comm, nullptr);
+    mscclSetupProxyImpl(p.hostAlgo, p.comm);
   }    
 }
 
@@ -194,7 +192,7 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStr
   mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
   if (threadLocalStatus.captureStatus == mscclNoCapture) {
     INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: no capture\n");
-    NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm, nullptr));
+    NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm));
   } else if (status.needsProxy) {
     INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: capture\n");
     if (savedProxyArgs[threadLocalStatus.captureId].size() == 0) {
@@ -207,7 +205,6 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStr
       p.userData = params;
       CUDACHECK(hipGraphAddHostNode(&callbackNode, threadLocalStatus.graph, nullptr, 0, &p));
     }
-    bool justInquire = false;
     mscclGetSavedProxyArgs()[threadLocalStatus.captureId].emplace_back(hostAlgo, comm);
   }
   return ncclSuccess;
@@ -334,7 +331,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   dim3 grid = {(uint32_t)hostAlgo->nBlocks, 1, 1};
   dim3 block = {NCCL_MAX_NTHREADS, 1, 1};
-  ncclDevRedOpFull opFull;
+  ncclDevRedOpFull opFull = {};
   NCCLCHECK(hostToDevRedOp(&opFull, op, dataType, comm));
 
   mscclWork work;
@@ -349,8 +346,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
-  work.needsFence = status.needsFence;
-  INFO(NCCL_INIT, "MSCCL: Setup Kernel finished, needsFence %d", status.needsFence);
+  INFO(NCCL_INIT, "MSCCL: Setup Kernel finished");
   
   void *args[3] = {&comm->devComm, &devAlgo, &work};
   void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];

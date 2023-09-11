@@ -398,9 +398,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
           return;
       }
       if (t->hasDependence && tid == nthreads-1){
-        if (mscclShmem.work.needsFence) {
-          __threadfence();
-        }
         mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, iter, step);
       }
       step++;

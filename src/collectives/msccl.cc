@@ -57,10 +57,10 @@ ncclResult_t mscclRunAlgo(
   NCCLCHECK(mscclSetupSyncFlags(stream));
 
   if (status.connectedAlgos[comm].find(mscclAlgoHandle) == status.connectedAlgos[comm].end()) {
-    cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
-    CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+    hipStreamCaptureMode mode = hipStreamCaptureModeRelaxed;
+    CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
     NCCLCHECK(mscclSetupConnections(hostAlgo, comm));
-    CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+    CUDACHECK(hipThreadExchangeStreamCaptureMode(&mode));
     status.connectedAlgos[comm].insert(mscclAlgoHandle);
   }
 

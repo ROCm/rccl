@@ -1574,7 +1574,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   if (mscclEnabled()) {
     NCCLCHECK(mscclInit(comm));
     mscclStatus& status = mscclGetStatus();
-    status.needsFence |= mscclHighestTransportType > TRANSPORT_P2P;
     status.needsProxy |= mscclNeedsProxy;
   }
 

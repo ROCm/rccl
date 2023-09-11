@@ -188,7 +188,6 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     }
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
-    status.needsFence = false;
     status.needsProxy = false;
     mscclSchedulerTriedLoadAlgo = false;
 
