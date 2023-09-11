@@ -95,7 +95,7 @@ protected:
   int32_t                      m_opIndexHead;                        // Track start of outstanding requests
   int32_t                      m_opIndexTail;                        // Track end of outstanding requests
   bool                         m_init;                               // Whether CliqueManager has been initialized
-  int                          m_gcnArch;                            // Device GCN arch value
+  char[256]                    m_gcnArchName;                        // Device GCN arch value
   size_t                       m_allReduceByteLimit;                 // Byte limit for AllReduce
   cliqueDevicePtrs_t*          m_pinnedCliquePtrs;                   // Pinned-host-memory (device accessible) containing device pointers
   int*                         m_gpuBarrierGlobalCount;              // Part of GPU barrier (count variable shared across ranks)

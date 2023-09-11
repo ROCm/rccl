@@ -14,6 +14,7 @@
 #include "nvmlwrap.h"
 #include "xml.h"
 #include "rocm_smi_wrap.h"
+#include "archinfo.h"
 
 /*******************/
 /* XML File Parser */

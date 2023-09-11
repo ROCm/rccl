@@ -455,7 +455,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 #if defined(ENABLE_LL128)
       // Enable LL128 by default only on gfx90a with available tuning table
       pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
-        (comm->topo->nodes[GPU].nodes[0].gpu.gcn == 910 && comm->topo->ll128Enabled) ? 1 : 0;
+        (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx90a") && comm->topo->ll128Enabled) ? 1 : 0;
 #else
       pEnable = 0;
 #endif

@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include "graph/topo.h"
 #include "graph/xml.h"
+#include "archinfo.h"
 
 // [RCCL]
 #include "git_version.h"
@@ -173,15 +174,10 @@ RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
   int head[MAXCHANNELS];
-  hipDeviceProp_t devProp;
   double vega_gpu_rtc_freq;
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
-  hipError_t status = hipGetDeviceProperties(&devProp, comm->cudaDev);
-  if (devProp.gcnArch/10 == 94 && status == hipSuccess)
-    vega_gpu_rtc_freq = 1.0E8;
-  else
-    vega_gpu_rtc_freq = 2.5E7;
+  vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
   #define MAX_NAME_LENGTH 64
   char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+2));
   for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
@@ -1229,17 +1225,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   NCCLCHECK(ncclTopoIdToIndex(comm->topo, GPU, comm->busId, &idx));
   allGather3Data[rank].nc = 2;
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks &&
-       comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 906 && allXgmi)
+       IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx906") && allXgmi)
     allGather3Data[rank].nc = 4;
-  if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 908)
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx908"))
     allGather3Data[rank].nc = std::max(4/ringGraph.nChannels, 2);
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks &&
        (comm->topo->type & RCCL_TOPO_CR8G))
     allGather3Data[rank].nc = 4;
   if (comm->topo->nodes[GPU].count == comm->topo->nRanks &&
-      comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
+      IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx90a"))
     allGather3Data[rank].nc = 4;
-  if (comm->topo->nodes[GPU].nodes[idx].gpu.gcn == 910)
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx90a"))
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph.nChannels);
   if (ringGraph.nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
