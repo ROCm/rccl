@@ -12,6 +12,6 @@ updates:
       interval: "daily"
     labels:
       - "dependencies"
-      - "noCI"
+      - "ci:docs-only"
     reviewers:
       - "samjwu"
