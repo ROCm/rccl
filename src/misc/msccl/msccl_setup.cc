@@ -19,6 +19,28 @@
 RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 1);
 #endif
 
+ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
+  mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
+  mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
+  cudaStreamCaptureStatus captureStatus;
+  unsigned long long captureId;
+  CUDACHECK(hipStreamGetCaptureInfo_v2(stream, &captureStatus, &captureId, &threadLocalStatus.graph, nullptr, nullptr));
+  if (captureStatus == cudaStreamCaptureStatusActive) {
+    if (savedProxyArgs.count(captureId) == 0) {
+      threadLocalStatus.captureStatus = mscclNewCapture;
+      savedProxyArgs[captureId] = std::vector<struct mscclProxyArg>();
+    } else {
+      INFO(NCCL_INIT|NCCL_NET,"mscclGetCaptureStatus: captureId %llu is same with the previous one\n", captureId);
+      threadLocalStatus.captureStatus = mscclExistingCapture;
+    }
+    threadLocalStatus.captureId = captureId;
+  } else {
+    threadLocalStatus.captureStatus = mscclNoCapture;
+  }
+  INFO(NCCL_INIT|NCCL_NET,"mscclGetCaptureStatus: %d, captureId: %llu, size: %lu\n", threadLocalStatus.captureStatus, threadLocalStatus.captureId, mscclGetSavedProxyArgs()[captureId].size());
+  return ncclSuccess;
+}
+
 ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t count, ncclDataType_t dataType) {
   mscclStatus& status = mscclGetStatus();
   status.stepSize = comm->buffSizes[hostAlgo->protocol] / NCCL_STEPS;
@@ -55,14 +77,19 @@ ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
 
 ncclResult_t mscclSetupSyncFlags(hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
-  if (status.workIndex > (1ULL << (8*sizeof(status.workIndex))) - 2 * NCCL_MAX_OPS - 1) {
+  mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
+  if (threadLocalStatus.captureStatus == mscclNewCapture ||
+      status.workIndex > (1ULL << (8*sizeof(status.workIndex))) - 2 * NCCL_MAX_OPS - 1) {
     CUDACHECK(hipMemsetAsync(status.syncFlags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS, stream));
     status.workIndex = 1; // setting the workIndex back to 1 for next iterations
+    status.graphFirstKernel = false;
   }
   return ncclSuccess;
 }
 
 ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
+  mscclStatus& status = mscclGetStatus();
+
   // Check whether there is enough channels
   if (hostAlgo->nChannels > comm->nChannels) {
     WARN("MSCCL: number of channels available (%d) less than required (%d)", comm->nChannels, hostAlgo->nChannels);
@@ -88,15 +115,19 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
 
   // Connect MSCCL connections
   mscclSetIsCallerFlag();
-  NCCLCHECK(ncclTransportP2pSetup(comm, NULL, 0));
+  int highestTransportType = TRANSPORT_P2P;
+  bool needsProxy = false;
+  NCCLCHECK(ncclTransportP2pSetup(comm, NULL, 0, &highestTransportType, &needsProxy));
+  status.needsProxy |= needsProxy;
   mscclClearIsCallerFlag();
 
   INFO(NCCL_INIT, "MSCCL: Setup connections finished, used %ld", allocTracker[comm->cudaDev].totalAllocSize);
   return ncclSuccess;
 }
 
-ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
+static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
   mscclStatus& status = mscclGetStatus();
+  mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   struct ncclProxyOp proxyOp = {};
   proxyOp.connIndex = 0;
   proxyOp.sliceSteps = status.sliceSteps;
@@ -144,6 +175,38 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
   }
   NCCLCHECK(ncclProxyStart(comm));
   comm->sharedRes->collOpCount++;
+  return ncclSuccess;
+}
+
+static void HIPRT_CB mscclSetupProxyCallback(void *args) {
+  std::vector<struct mscclProxyArg>* params = (std::vector<struct mscclProxyArg>*)args;
+  INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
+  for (auto &p : *params) {
+    mscclSetupProxyImpl(p.hostAlgo, p.comm);
+  }    
+}
+
+ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStream_t stream) {
+  mscclStatus& status = mscclGetStatus();
+  mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
+  mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
+  if (threadLocalStatus.captureStatus == mscclNoCapture) {
+    INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: no capture\n");
+    NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm));
+  } else if (status.needsProxy) {
+    INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: capture\n");
+    if (savedProxyArgs[threadLocalStatus.captureId].size() == 0) {
+      INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: adding callback\n");
+
+      hipGraphNode_t callbackNode;
+      hipHostNodeParams p;
+      p.fn = mscclSetupProxyCallback;
+      auto params = &savedProxyArgs[threadLocalStatus.captureId];
+      p.userData = params;
+      CUDACHECK(hipGraphAddHostNode(&callbackNode, threadLocalStatus.graph, nullptr, 0, &p));
+    }
+    mscclGetSavedProxyArgs()[threadLocalStatus.captureId].emplace_back(hostAlgo, comm);
+  }
   return ncclSuccess;
 }
 
@@ -268,7 +331,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   dim3 grid = {(uint32_t)hostAlgo->nBlocks, 1, 1};
   dim3 block = {NCCL_MAX_NTHREADS, 1, 1};
-  ncclDevRedOpFull opFull;
+  ncclDevRedOpFull opFull = {};
   NCCLCHECK(hostToDevRedOp(&opFull, op, dataType, comm));
 
   mscclWork work;
@@ -283,7 +346,8 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
-
+  INFO(NCCL_INIT, "MSCCL: Setup Kernel finished");
+  
   void *args[3] = {&comm->devComm, &devAlgo, &work};
   void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];
   if (enableDoneEvent) {

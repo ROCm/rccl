@@ -23,6 +23,9 @@ extern __shared__ struct mscclShmemData mscclShmem;
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
   MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * MSCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
+#define GET_WORKINDEX_FROM_FLAG(__FLAG__) \
+  (__FLAG__) / (MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS)
+
 // a copy of the volatile load/store from prims_ll
 template<typename U>
 __device__ static U load(U *src) {
@@ -293,7 +296,10 @@ __device__ __forceinline__ void mscclRunInterpreter(
           int8_t dependentBid = mscclShmem.mscclTB.dependentBid[dependentPointer+tid];
           int16_t dependentStep = mscclShmem.mscclTB.dependentStep[dependentPointer+tid];
           uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-          while ((mscclFlags + dependentBid)->flag < goalFlag);
+          while (true){
+            uint64_t curFlag = (mscclFlags + dependentBid)->flag;
+            if (curFlag >= goalFlag && GET_WORKINDEX_FROM_FLAG(curFlag) == workIndex) break;
+          }
         }
         step += numDependencies-1;
         barrier(nthreads, mscclBarrierNext, mscclBarriers);
