@@ -160,11 +160,29 @@ struct mscclSavedSchedulerParam {
   hipStream_t stream;
 };
 
+enum mscclCaptureStatus {
+  mscclNoCapture,
+  mscclNewCapture,
+  mscclExistingCapture
+};
+
+struct mscclProxyArg {
+  struct mscclAlgo* hostAlgo;
+  ncclComm_t comm;
+  mscclProxyArg(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
+    : hostAlgo(hostAlgo), comm(comm) {}
+};
+
+typedef std::map<unsigned long long, std::vector<struct mscclProxyArg>> mscclSavedProxyArgs;
+
 struct mscclThreadLocalStatus {
   bool mscclIsCallerFlag;
   mscclGroupStatus groupStatus;
   int groupDepth;
   std::vector<struct mscclSavedSchedulerParam> savedSchedulerParams;
+  unsigned long long captureId;
+  mscclCaptureStatus captureStatus;
+  hipGraph_t graph;
 };
 
 struct mscclStatus {
@@ -189,6 +207,9 @@ struct mscclStatus {
   mscclSchedulerInterface* mscclSchedulerPtr;
   std::vector<mscclAlgoMeta> algoMetas;
   std::vector<std::map<int, mscclAlgoHandle_t>> rankToAlgoHandles;
+  bool graphEnabled;
+  bool graphFirstKernel;
+  bool needsProxy;
 };
 
 struct alignas(16) mscclWork {
