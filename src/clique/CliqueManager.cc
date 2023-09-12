@@ -368,15 +368,15 @@ ncclResult_t CliqueManager::GetNumChannelsToUse(ncclFunc_t const coll,
     {
       // NOTE: These are currently based on collected data and not necessarily ideal for all hardware
       int numChannels;
-      if (ArchName(m_gcnArchName, "gfx906")) {
+      if (IsArchMatch(m_gcnArchName, "gfx906")) {
         if      (totalBytes <=   16384) numChannels =  1;
         else                            numChannels =  2;
-      } else if (ArchName(m_gcnArchName, "gfx908")) {
+      } else if (IsArchMatch(m_gcnArchName, "gfx908")) {
         if      (totalBytes <=  131072) numChannels =  2;
         else if (totalBytes <=  524288) numChannels =  6;
         else if (totalBytes <= 1048576) numChannels = 13;
         else                            numChannels = 16;
-      } else if (ArchName(m_gcnArchName, "gfx90a")) {
+      } else if (IsArchMatch(m_gcnArchName, "gfx90a")) {
         if      (totalBytes <=  262144) numChannels =  4;
         else                            numChannels =  8;
       } else {
