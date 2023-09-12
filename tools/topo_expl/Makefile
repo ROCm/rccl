@@ -9,7 +9,7 @@ EXE = topo_expl
 CXXFLAGS = -g -Iinclude -Ihipify_rccl/include -Ihipify_rccl/graph -I/opt/rocm/include/ -DTOPO_EXPL -DENABLE_TRACE -DNVTX_NO_IMPL
 
 files = $(EXE).cpp model.cpp utils.cpp hipify_rccl/graph/topo.cc hipify_rccl/graph/rings.cc hipify_rccl/graph/paths.cc hipify_rccl/graph/trees.cc ../../src/misc/param.cc \
-	hipify_rccl/graph/search.cc hipify_rccl/graph/connect.cc hipify_rccl/graph/tuning.cc hipify_rccl/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc hipify_rccl/graph/rome_models.cc
+	hipify_rccl/graph/search.cc hipify_rccl/graph/connect.cc hipify_rccl/graph/tuning.cc hipify_rccl/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc hipify_rccl/graph/rome_models.cc hipify_rccl/graph/archinfo.cc
 
 all: hipify $(EXE)
 
@@ -21,6 +21,7 @@ hipify:
 	mkdir -p hipify_rccl
 	cp -a ../../src/include/ hipify_rccl/
 	cp -a ../../src/graph/ hipify_rccl/
+	cp -ar ../../src/misc/archinfo.cc hipify_rccl/graph/
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/graph/*
 
