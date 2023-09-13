@@ -74,32 +74,32 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm, struct ncclTopoGraph** graphs
 }
 
 bool isRankHere(const char* s, int start, int end, int rank) {
-    if (end <= start || start < 0 || end < 0)
-        return false;
-    int num = 0;
-    while (start < end) {
-        char currChar = s[start];
-        if (isdigit(currChar)>-1)
-            num = num * 10 + (currChar - '0');
-        else if (currChar == '(' || currChar == ')') {
-            start++;
-            num = 0;
-            continue;
-        }
-        if (num == rank)
-            return true;
-        start++;
-    }
+  if (end <= start || start < 0 || end < 0)
     return false;
+  int num = 0;
+  while (start < end) {
+    char currChar = s[start];
+    if (isdigit(currChar))
+      num = num * 10 + (currChar - '0');
+    else if (currChar == '(' || currChar == ')') {
+      start++;
+      num = 0;
+      continue;
+    }
+    if (num == rank)
+      return true;
+    start++;
+  }
+  return false;
 }
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
   int x=0, y=0;
+  // printf("tree: akollias \n");
   for (int i=0;  treeGraph->treeBase[i][0]!=0; i++)
   {
     x=i+1;
-    printf("tree: %s", treeGraph->treeBase[i]);
   }
   // for (int i=0;  treeGraph->treeBase[0][i]!=0; i++)
   // {
@@ -109,86 +109,91 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
   int nChannels = comm->nChannels;
   int localRanks = comm->topo->nodes[GPU].count;
   //new tree
+
+  // printf("tree: akollias1 \n");
   for (int c=0; c<nChannels; c++) { // in here
     int buff = c%x;
     char tempString[NCCL_TOPO_MAX_NODES*4];
     int ko=0;
     while (treeGraph->treeBase[buff][ko] != 0) {
       tempString[ko] = treeGraph->treeBase[buff][ko];
+      ko++;
     }
+    tempString[ko]=0;
+    // if (num == 2) printf("tree: akollias3 \n");
+  // printf("tree: akollias 2\n");
     int start = 0;
     int curRank = comm->rank;
     struct ncclChannel* channel = comm->channels+c;
     int end = 0;
     while (tempString[end] != 0) end++;
     int parent = -1;
+    if (c == 0 && curRank == 3) printf("tree: %s %d\n", tempString, ko);
     // constructing a number from the continuous digits
     while (start < end) {
-      int num = 0;
+      int num = 0, num_found = 0;
       start++;
       while (start < end && tempString[start] != '('
          && tempString[start] != ')') {
+        num_found = 1;
         int num_here = (int)(tempString[start] - '0');
         num = num * 10 + num_here;
         start = start + 1;
       }
-      if (num == curRank) {
+      if (num_found != 0 && num == curRank) { //TODO HERE
         channel->tree.up = parent;
         int depth = 0;
         for (int childId = 0; childId < NCCL_MAX_TREE_ARITY; childId++) {
+          if (c == 0 && curRank == 2) printf("tree: temp num? akollias rank %d start %d  end %d parent(child) %d\n",curRank, start , end, parent);
+          int or_start = start;
           int child = -1;
-          if (start >= end) continue;
-          if (tempString[start] != '(') depth++;
-          start++;
-          // depth++;
-          while (tempString[start] != 0 && tempString[start] != '('
-             && tempString[start] != ')') {
-            int num_here = (int)(tempString[start] - '0');
+          channel->tree.down[childId] = -1;
+          if (or_start >= end -1) continue;
+          num=0;
+          // if (tempString[or_start] == '(') depth++;
+          or_start++;
+          while (tempString[or_start] != 0 && tempString[or_start] != '('
+             && tempString[or_start] != ')') {
+            int num_here = (int)(tempString[or_start] - '0');
             num = num * 10 + num_here;
-            start = start + 1;
+            or_start++;
           }
+          // if (c == 0 && curRank == 3) printf("tree: temp num? akollias char %c  %d %d num(child) %d\n", tempString[or_start], end, or_start, num);
           child = num;
-          // find next child star
+          // find next child start
           while (start < end) {
+            if (tempString[start] == '(' ) depth++;
+            else if(tempString[start] == ')') depth--;
             if (depth == 0) break; // next child
-            if (tempString[start] != '(' ) depth++;
-            else if(tempString[start] != ')') depth--;
             start++;
-            int num_here = (int)(tempString[start] - '0');
-            num = num * 10 + num_here;
-            start = start + 1;
+            // start = start + 1;
           }
+          start++;
           channel->tree.down[childId] = child;
           // get kids, update numbers, get out of this string
         }
         break;
       }
-      else {
+      else { //go to the next one
         parent = num;
-        num = 0;
         int start_c = start;
         int end_c = start_c;
-        while (true) {
-          int depth = 1;
-          end_c++;
+        while (end_c < end) {
+          int depth = 0;
           while (end_c < end) {
+            if (tempString[end_c] == '(' ) depth++;
+            else if(tempString[end_c] == ')') depth--;
             if (depth == 0) break; // next child
-            if (tempString[end_c] != '(' ) depth++;
-            else if(tempString[end_c] != ')') depth--;
-            // end_c++
-            if (isdigit(tempString[end_c]) && depth == 0) { //this is taking all of them.
-              int num_here = (int)(tempString[end_c] - '0');
-              num = num * 10 + num_here;
-            }
             end_c++;
           }
-          // fot each sub kid: is this kid right?
           if (isRankHere(tempString, start_c, end_c, curRank)) {
             start = start_c;
             end = end_c;
             break;
           }
           else {
+            // num=0;
+            end_c++;
             start_c = end_c;
           }
         }

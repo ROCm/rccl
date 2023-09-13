@@ -778,13 +778,10 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
     graph->treeBase[0][0] = 0;
     return ncclSuccess;
   }
-  int status = 0; // 0 : between numbers, 1 : inside number, 2: start NET, 3: inside NET
-  // int nets[NCCL_TOPO_MAX_NODES*2];
-  // int net_offset = 0, net_count = 0;
+  int status = 0; // 0 : between numbers, 1 : inside number
   int ngpus = system->nodes[GPU].count;
   int x=0, y=0;
   do {
-    start_offset = offset;
     int digit = str[offset] - '0';
     if (digit >= 0 && digit <= 9) {
       switch (status) {
@@ -837,15 +834,14 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
           }
 
         }
-        // y++;
         graph->treeBase[x][y] = 0;
         x++;
         gpu=0;
+        start_offset = offset + 1;
       }
     }
   } while (str[offset++] != 0);
   graph->treeBase[x][0] = 0;
-
   return ncclSuccess;
 }
 
