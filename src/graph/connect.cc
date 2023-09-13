@@ -96,21 +96,14 @@ bool isRankHere(const char* s, int start, int end, int rank) {
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
   int x=0, y=0;
-  // printf("tree: akollias \n");
   for (int i=0;  treeGraph->treeBase[i][0]!=0; i++)
   {
     x=i+1;
   }
-  // for (int i=0;  treeGraph->treeBase[0][i]!=0; i++)
-  // {
-  //   y=i+1;
-  // }
   if( treeGraph->treeBase[0][0] == 0) return ncclSuccess;
   int nChannels = comm->nChannels;
   int localRanks = comm->topo->nodes[GPU].count;
   //new tree
-
-  // printf("tree: akollias1 \n");
   for (int c=0; c<nChannels; c++) { // in here
     int buff = c%x;
     char tempString[NCCL_TOPO_MAX_NODES*4];
@@ -120,8 +113,6 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
       ko++;
     }
     tempString[ko]=0;
-    // if (num == 2) printf("tree: akollias3 \n");
-  // printf("tree: akollias 2\n");
     int start = 0;
     int curRank = comm->rank;
     struct ncclChannel* channel = comm->channels+c;
@@ -140,7 +131,7 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
         num = num * 10 + num_here;
         start = start + 1;
       }
-      if (num_found != 0 && num == curRank) { //TODO HERE
+      if (num_found != 0 && num == curRank) {
         channel->tree.up = parent;
         int depth = 0;
         for (int childId = 0; childId < NCCL_MAX_TREE_ARITY; childId++) {
@@ -150,7 +141,6 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
           channel->tree.down[childId] = -1;
           if (or_start >= end -1) continue;
           num=0;
-          // if (tempString[or_start] == '(') depth++;
           or_start++;
           while (tempString[or_start] != 0 && tempString[or_start] != '('
              && tempString[or_start] != ')') {
@@ -158,7 +148,6 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
             num = num * 10 + num_here;
             or_start++;
           }
-          // if (c == 0 && curRank == 3) printf("tree: temp num? akollias char %c  %d %d num(child) %d\n", tempString[or_start], end, or_start, num);
           child = num;
           // find next child start
           while (start < end) {
@@ -166,7 +155,6 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
             else if(tempString[start] == ')') depth--;
             if (depth == 0) break; // next child
             start++;
-            // start = start + 1;
           }
           start++;
           channel->tree.down[childId] = child;
@@ -192,7 +180,6 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
             break;
           }
           else {
-            // num=0;
             end_c++;
             start_c = end_c;
           }
