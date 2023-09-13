@@ -581,6 +581,19 @@ static struct rcclRomeModel rome_model_81 = {
   .options = "noCpuCheck=1",
 };
 
+static struct rcclRomeModel rome_model_82 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 7,
+  .gpuIds = { 0xc000, 0x22000, 0x38000, 0x5c000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
+  .nicIds = { },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel = { },
+  .pattern = "4040",
+  .ringBase = "0 1 2 3 4 5 6 7|0 1 2 3 4 5 7 6|0 2 4 1 3 6 5 7|0 2 4 6 1 7 3 5|0 3 1 5 2 7 4 6|0 3 5 1 6 2 7 4|0 4 1 7 3 6 2 5|7 6 5 4 3 2 1 0|6 7 5 4 3 2 1 0|7 5 6 3 1 4 2 0|5 3 7 1 6 4 2 0|6 4 7 2 5 1 3 0|4 7 2 6 1 5 3 0|5 2 6 3 7 1 4 0",
+  .options = "noCpuCheck=1,mscclEnabled=1",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -623,6 +636,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_79,
   rome_model_80,
   rome_model_81,
+  rome_model_82
 };
 
 /* Parse user defined rings. Format is like :
