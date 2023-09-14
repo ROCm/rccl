@@ -79,15 +79,19 @@ bool isRankHere(const char* s, int start, int end, int rank) {
   int num = 0;
   while (start < end) {
     char currChar = s[start];
-    if (isdigit(currChar))
+    if (isdigit(currChar)) {
       num = num * 10 + (currChar - '0');
+      if (isdigit(s[start+1])) {
+        start++;
+        continue;
+      }
+    }
     else if (currChar == '(' || currChar == ')') {
       start++;
       num = 0;
       continue;
     }
-    if (num == rank)
-      return true;
+    if (num == rank) return true;
     start++;
   }
   return false;
@@ -119,23 +123,21 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     int end = 0;
     while (tempString[end] != 0) end++;
     int parent = -1;
-    if (c == 0 && curRank == 3) printf("tree: %s %d\n", tempString, ko);
     // constructing a number from the continuous digits
     while (start < end) {
       int num = 0, num_found = 0;
       start++;
       while (start < end && tempString[start] != '('
          && tempString[start] != ')') {
-        num_found = 1;
         int num_here = (int)(tempString[start] - '0');
         num = num * 10 + num_here;
         start = start + 1;
+        if (tempString[start] == '(' || tempString[start] == ')' || start == end) num_found = 1;
       }
       if (num_found != 0 && num == curRank) {
         channel->tree.up = parent;
         int depth = 0;
         for (int childId = 0; childId < NCCL_MAX_TREE_ARITY; childId++) {
-          if (c == 0 && curRank == 2) printf("tree: temp num? akollias rank %d start %d  end %d parent(child) %d\n",curRank, start , end, parent);
           int or_start = start;
           int child = -1;
           channel->tree.down[childId] = -1;

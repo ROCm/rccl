@@ -825,9 +825,9 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
               int k=0;
               while (number_str[k] != 0) {
                 graph->treeBase[x][y]=number_str[k];
+                y++;
                 k++;
               }
-              y = y+k;
             }
             else
               return ncclInternalError;
