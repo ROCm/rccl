@@ -13,8 +13,10 @@
 
 #include "npkit/npkit_event.h"
 #include "npkit/npkit_struct.h"
+#include "common.h"
 
 #define NPKIT_GET_GPU_TIMESTAMP wall_clock64
+
 
 class NpKit {
  public:
@@ -40,6 +42,17 @@ class NpKit {
       event.fields.rsvd = rsvd;
       event.fields.timestamp = timestamp;
       ctx->event_buffer_head++;
+    }
+  }
+
+  static inline __device__ void CollectGpuEventLDS(uint8_t type, int64_t size, uint32_t rsvd, uint64_t timestamp) {
+    if (ncclShmem.event_buffer_head < LDS_NUM_EVENTS) {
+      NpKitEvent& event = ncclShmem.event_buffer[ncclShmem.event_buffer_head];
+      event.fields.type = type;
+      event.fields.size = size < 0 ? 0 : size;
+      event.fields.rsvd = rsvd;
+      event.fields.timestamp = timestamp;
+      ncclShmem.event_buffer_head++;
     }
   }
 
