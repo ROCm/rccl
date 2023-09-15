@@ -186,24 +186,23 @@ __device__ __forceinline__ void mscclRunInterpreter(
     }
     copyToShmem8(tid%WARP_SIZE, dst, src, bytes);
   }
-  __synclds(); // publish shmem
 
 #if defined(ENABLE_NPKIT)
   int npKitCtxIdx = bid;
+  if (tid == 0) ncclShmem.event_buffer_head = 0;
 #endif
+  __synclds(); // publish shmem
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
   if (tid == 0) {
     uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
-    NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
-        ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp);
   }
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
   if (tid == 0) {
-    NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, NPKIT_GET_GPU_TIMESTAMP(),
-        ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 
@@ -263,8 +262,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
     asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xcc_id));
 #endif
-    NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_RUN_ENTRY, mscclShmem.work.count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-        ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_ENTRY, mscclShmem.work.count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 
@@ -317,31 +315,27 @@ __device__ __forceinline__ void mscclRunInterpreter(
         if (t->type == MSCCL_SEND) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_ENTRY)
             if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_SEND_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif	
           prims.sendWithBarrier(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
             if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_SEND_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif						       
         }
         else if (t->type == MSCCL_RECV) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_ENTRY)
             if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_RECV_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif	
           prims.recv(dstOffset, thisNelem);
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_EXIT)
             if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_RECV_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif
         }
@@ -350,8 +344,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           if (thisNelem < nthreads){
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_ENTRY)
             if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif
 
@@ -387,8 +380,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT)
             if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_REDUCE_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif
 
@@ -443,9 +435,14 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RUN_EXIT)
   if (tid == 0) {
-    NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_RUN_EXIT, mscclShmem.work.count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-        ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_EXIT, mscclShmem.work.count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
   }
+#endif
+#if defined(ENABLE_NPKIT)
+  __synclds();
+  NpKitEventCollectContext* ctx = ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx;
+  copyToShmem16(tid, ctx->event_buffer+ctx->event_buffer_head, ncclShmem.event_buffer, sizeof(NpKitEvent)*ncclShmem.event_buffer_head);
+  if (tid == 0) ctx->event_buffer_head += ncclShmem.event_buffer_head;
 #endif
 }
 

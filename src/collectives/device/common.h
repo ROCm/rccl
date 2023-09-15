@@ -359,6 +359,8 @@ struct ncclShmemGroup {
   uint64_t barrier_next[NCCL_MAX_GROUPS];
 };
 
+#define LDS_NUM_EVENTS 64
+
 struct ncclShmemData {
   struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
   uint64_t redOpArgs[NCCL_MAX_NVLS_ARITY+1];
@@ -373,6 +375,10 @@ struct ncclShmemData {
 #endif
 #ifdef ENABLE_PROFILING
   struct ncclProf prof;
+#endif
+#if defined(ENABLE_NPKIT)
+  NpKitEvent event_buffer[LDS_NUM_EVENTS];
+  uint64_t event_buffer_head;
 #endif
 };
 static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "ncclShmem.work needs to be 16B aligned");
