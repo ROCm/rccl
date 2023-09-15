@@ -73,53 +73,122 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm, struct ncclTopoGraph** graphs
   return ncclSuccess;
 }
 
+bool isRankHere(const char* s, int start, int end, int rank) {
+  if (end <= start || start < 0 || end < 0)
+    return false;
+  int num = 0;
+  while (start < end) {
+    char currChar = s[start];
+    if (isdigit(currChar)) {
+      num = num * 10 + (currChar - '0');
+      if (isdigit(s[start+1])) {
+        start++;
+        continue;
+      }
+    }
+    else if (currChar == '(' || currChar == ')') {
+      start++;
+      num = 0;
+      continue;
+    }
+    if (num == rank) return true;
+    start++;
+  }
+  return false;
+}
+
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
   int x=0, y=0;
-  for (int i=0;  treeGraph->treeBase[i][0]!=-1; i++)
+  for (int i=0;  treeGraph->treeBase[i][0]!=0; i++)
   {
     x=i+1;
   }
-  for (int i=0;  treeGraph->treeBase[0][i]!=-1; i++)
-  {
-    y=i+1;
-  }
-  if( treeGraph->treeBase[0][0] == -1) return ncclSuccess;
+  if( treeGraph->treeBase[0][0] == 0) return ncclSuccess;
   int nChannels = comm->nChannels;
   int localRanks = comm->topo->nodes[GPU].count;
   //new tree
-  for (int c=0; c<nChannels; c++) {
+  for (int c=0; c<nChannels; c++) { // in here
     int buff = c%x;
-    int tempArray[256];
-    for (int ko=0; ko < localRanks; ko++){
-      tempArray[ko] = treeGraph->treeBase[buff][(ko+(localRanks-1)/2)%localRanks];
+    char tempString[NCCL_TOPO_MAX_NODES*4];
+    int ko=0;
+    while (treeGraph->treeBase[buff][ko] != 0) {
+      tempString[ko] = treeGraph->treeBase[buff][ko];
+      ko++;
     }
-
-
-    struct ncclChannel* channel = comm->channels+c;
-
+    tempString[ko]=0;
+    int start = 0;
     int curRank = comm->rank;
-    int arrayIndex;
-
-    for (int i=0; i<localRanks; i++) {
-      if (tempArray[i] == curRank) {
-        if (i == 0) {
-          channel->tree.up = -1;
-          channel->tree.down[0] = tempArray[i+1];
-          channel->tree.down[1] = tempArray[localRanks-1];
-          channel->tree.down[2] = -1;
-        }
-        else {
-          channel->tree.up = i > localRanks/2 ?  tempArray[(i+1)%localRanks] : tempArray[i-1];
-          channel->tree.down[0] = i > localRanks/2 ?  tempArray[i-1] : tempArray[i+1];
-          if ((i == localRanks/2) || (i == (localRanks/2 + 1))) {
-            channel->tree.down[0] = -1;
+    struct ncclChannel* channel = comm->channels+c;
+    int end = 0;
+    while (tempString[end] != 0) end++;
+    int parent = -1;
+    // constructing a number from the continuous digits
+    while (start < end) {
+      int num = 0, num_found = 0;
+      start++;
+      while (start < end && tempString[start] != '('
+         && tempString[start] != ')') {
+        int num_here = (int)(tempString[start] - '0');
+        num = num * 10 + num_here;
+        start = start + 1;
+        if (tempString[start] == '(' || tempString[start] == ')' || start == end) num_found = 1;
+      }
+      if (num_found != 0 && num == curRank) {
+        channel->tree.up = parent;
+        int depth = 0;
+        for (int childId = 0; childId < NCCL_MAX_TREE_ARITY; childId++) {
+          int or_start = start;
+          int child = -1;
+          channel->tree.down[childId] = -1;
+          if (or_start >= end -1) continue;
+          num=0;
+          or_start++;
+          while (tempString[or_start] != 0 && tempString[or_start] != '('
+             && tempString[or_start] != ')') {
+            int num_here = (int)(tempString[or_start] - '0');
+            num = num * 10 + num_here;
+            or_start++;
           }
-          channel->tree.down[1] = -1;
-          channel->tree.down[2] = -1;
+          child = num;
+          // find next child start
+          while (start < end) {
+            if (tempString[start] == '(' ) depth++;
+            else if(tempString[start] == ')') depth--;
+            if (depth == 0) break; // next child
+            start++;
+          }
+          start++;
+          channel->tree.down[childId] = child;
+          // get kids, update numbers, get out of this string
+        }
+        break;
+      }
+      else { //go to the next one
+        parent = num;
+        int start_c = start;
+        int end_c = start_c;
+        while (end_c < end) {
+          int depth = 0;
+          while (end_c < end) {
+            if (tempString[end_c] == '(' ) depth++;
+            else if(tempString[end_c] == ')') depth--;
+            if (depth == 0) break; // next child
+            end_c++;
+          }
+          if (isRankHere(tempString, start_c, end_c, curRank)) {
+            start = start_c;
+            end = end_c;
+            break;
+          }
+          else {
+            end_c++;
+            start_c = end_c;
+          }
         }
       }
     }
+
   }
   return ncclSuccess;
 }

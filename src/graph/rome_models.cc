@@ -343,7 +343,7 @@ static struct rcclRomeModel rome_model_43 = {
   .pattern = "20202020",
   .ringBase = "0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1|0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1|0 1 2 3 4 5 6 7|0 2 5 7 4 6 1 3|0 3 1 6 4 7 5 2|0 7 6 5 4 3 2 1",
   .options = "treeDefined=1",
-  .treeBase = "1 0 3 2 5 6 7 4|3 1 0 2 5 7 6 4|0 3 1 2 5 7 4 6|5 4 7 6 1 0 2 3|7 5 4 6 1 2 0 3|4 7 5 6 1 0 3 2|0 3 2 1 6 7 5 4|0 2 3 1 6 4 7 5|2 0 3 1 6 5 4 7|7 6 4 5 2 3 1 0|7 4 6 5 2 0 3 1|6 7 4 5 2 1 0 3",
+  .treeBase = "(2(5(6(7(4))))(3(0(1))))|(2(5(7(6(4))))(0(1(3))))|(2(5(7(4(6))))(1(3(0))))|(6(1(0(2(3))))(7(4(5))))|(6(1(2(0(3))))(4(5(7))))|(6(1(0(3(2))))(5(7(4))))|(1(6(7(5(4))))(2(3(0))))|(1(6(4(7(5))))(3(2(0))))|(1(6(5(4(7))))(3(0(2))))|(5(2(3(1(0))))(4(6(7))))|(5(2(0(3(1))))(6(4(7))))|(5(2(1(0(3))))(4(7(6))))",
 };
 
 static struct rcclRomeModel rome_model_55 = {
@@ -370,7 +370,7 @@ static struct rcclRomeModel rome_model_56 = {
   .pattern = "40404040",
   .ringBase = "0 1 3 2 6 7 15 14 10 11 9 8 12 13 5 4|0 1 2 3 7 6 13 12 8 9 10 11 15 14 5 4|0 2 3 7 6 14 15 11 10 8 9 13 12 4 5 1|4 5 13 12 8 9 11 10 14 15 7 6 2 3 1 0|4 5 14 15 11 10 9 8 12 13 6 7 3 2 1 0|1 5 4 12 13 9 8 10 11 15 14 6 7 3 2 0",
   .options = "pivotA2AEnabled=1,pivotA2ANumBiRings=3,tuning=1,mscclEnabled=1,treeDefined=1",
-  .treeBase= "11 9 8 12 13 5 4 0 1 3 2 6 7 15 14 10|11 15 14 5 4 0 1 2 3 7 6 13 12 8 9 10|5 1 0 2 3 7 6 14 15 11 10 8 9 13 12 4|1 3 2 6 7 15 14 10 11 9 8 12 13 5 4 0|3 7 6 13 12 8 9 10 11 15 14 5 4 0 1 2|15 11 10 8 9 13 12 4 5 1 0 2 3 7 6 14|13 5 4 0 1 3 2 6 7 15 14 10 11 9 8 12|4 0 1 2 3 7 6 13 12 8 9 10 11 15 14 5|3 7 6 14 15 11 10 8 9 13 12 4 5 1 0 2|7 15 14 10 11 9 8 12 13 5 4 0 1 3 2 6|12 8 9 10 11 15 14 5 4 0 1 2 3 7 6 13|9 13 12 4 5 1 0 2 3 7 6 14 15 11 10 8",
+  .treeBase= "(0(1(3(2(6(7(15(14(10))))))))(4(5(13(12(8(9(11))))))))|(2(3(7(6(13(12(8(9(10))))))))(1(0(4(5(14(15(11))))))))|(14(15(11(10(8(9(13(12(4))))))))(6(7(3(2(0(1(5))))))))|(10(11(9(8(12(13(5(4(0))))))))(14(15(7(6(2(3(1))))))))|(10(11(15(14(5(4(0(1(2))))))))(9(8(12(13(6(7(3))))))))|(4(5(1(0(2(3(7(6(14))))))))(12(13(9(8(10(11(15))))))))|(6(7(15(14(10(11(9(8(12))))))))(2(3(1(0(4(5(13))))))))|(13(12(8(9(10(11(15(14(5))))))))(6(7(3(2(1(0(4))))))))|(8(9(13(12(4(5(1(0(2))))))))(10(11(15(14(6(7(3))))))))|(12(13(5(4(0(1(3(2(6))))))))(8(9(11(10(14(15(7))))))))|(5(4(0(1(2(3(7(6(13))))))))(14(15(11(10(9(8(12))))))))|(2(3(7(6(14(15(11(10(8))))))))(0(1(5(4(12(13(9))))))))",
 };
 
 static struct rcclRomeModel rome_model_58 = {
@@ -763,23 +763,22 @@ end:
 
 
 /* Parse user defined treeBase for complicated trees. Format is like :
- * "10 11|14 15|6 7|2 3|0 1|4 5|12 13|8 9"
+ * "(4(2(3)(1))(6(5)))"
  *
  * Rings with a non-matching number of gpus are ignored so we can provide
  * rings for multiple cases.
  */
 ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map) {
-  int gpus[NCCL_TOPO_MAX_NODES];
+  int gpus[NCCL_TOPO_MAX_NODES]; //transcribe/change according to gpu_map
   int nChannels = 0;
   int gpu = 0;
   int offset = 0;
+  int start_offset = offset;
   if (str[0] == 0) {
-    graph->treeBase[0][0] = -1;
+    graph->treeBase[0][0] = 0;
     return ncclSuccess;
   }
-  int status = 0; // 0 : between numbers, 1 : inside number, 2: start NET, 3: inside NET
-  int nets[NCCL_TOPO_MAX_NODES*2];
-  int net_offset = 0, net_count = 0;
+  int status = 0; // 0 : between numbers, 1 : inside number
   int ngpus = system->nodes[GPU].count;
   int x=0, y=0;
   do {
@@ -800,32 +799,49 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
       }
       status = 0;
       if (str[offset] == '|' || str[offset] == 0) {
-        for (int r=0; r<gpu; r++) {
-          int g = gpus[r];
-          // remap if needed
-          if (gpu_map) g = gpu_map[g];
-          // Translate gpu numbers into ranks
-          int j = 0;
-          for (j = 0; j < ngpus; j++)
-            if (g == system->nodes[GPU].nodes[j].gpu.dev)
-              break;
-          if (j < ngpus)
-          {
-            graph->treeBase[x][r] = system->nodes[GPU].nodes[j].gpu.rank;
-            y=r;
+        int r = 0, y = 0;
+        while(start_offset < offset) {
+        // for (int r=0; r<gpu; r++) {
+          if (str[start_offset] == '(' || str[start_offset] == ')') {
+            graph->treeBase[x][y] = str[start_offset];
+            y++;
+            start_offset++;
           }
-          else
-            return ncclInternalError;
+          else {
+            int g = gpus[r];
+            // remap if needed
+            if (gpu_map) g = gpu_map[g];
+            r++;
+            int j = 0;
+            // Translate gpu numbers into ranks
+            for (j = 0; j < ngpus; j++)
+              if (g == system->nodes[GPU].nodes[j].gpu.dev)
+                break;
+            if (j < ngpus)
+            {
+              while (str[start_offset] != '(' && str[start_offset] != ')') start_offset++;
+              char number_str[10];
+              sprintf(number_str, "%d", g);
+              int k=0;
+              while (number_str[k] != 0) {
+                graph->treeBase[x][y]=number_str[k];
+                y++;
+                k++;
+              }
+            }
+            else
+              return ncclInternalError;
+          }
+
         }
-        y++;
-        graph->treeBase[x][y] = -1;
+        graph->treeBase[x][y] = 0;
         x++;
         gpu=0;
+        start_offset = offset + 1;
       }
     }
   } while (str[offset++] != 0);
-  graph->treeBase[x][0] = -1;
-
+  graph->treeBase[x][0] = 0;
   return ncclSuccess;
 }
 

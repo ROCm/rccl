@@ -96,7 +96,7 @@ struct ncclTopoGraph {
   int inter[MAXCHANNELS*2];
   int nIntraChannels;
   int intraNets[MAXCHANNELS*NCCL_TOPO_MAX_NODES*2];
-  int treeBase[NCCL_TOPO_MAX_NODES][NCCL_TOPO_MAX_NODES];
+  char treeBase[NCCL_TOPO_MAX_NODES][NCCL_TOPO_MAX_NODES*4];
 };
 ncclResult_t ncclTopoCompute(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 
