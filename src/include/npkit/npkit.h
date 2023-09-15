@@ -46,6 +46,7 @@ class NpKit {
   }
 
   static inline __device__ void CollectGpuEventLDS(uint8_t type, int64_t size, uint32_t rsvd, uint64_t timestamp) {
+#if defined(ENABLE_NPKIT)
     if (ncclShmem.event_buffer_head < LDS_NUM_EVENTS) {
       NpKitEvent& event = ncclShmem.event_buffer[ncclShmem.event_buffer_head];
       event.fields.type = type;
@@ -54,6 +55,7 @@ class NpKit {
       event.fields.timestamp = timestamp;
       ncclShmem.event_buffer_head++;
     }
+#endif
   }
 
   static void CollectCpuEvent(uint8_t type, int64_t size, uint32_t rsvd, uint64_t timestamp, int channel_id);
