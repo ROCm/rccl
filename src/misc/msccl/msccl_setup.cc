@@ -300,15 +300,28 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16)
 
+#define MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(devredop) \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint8_t), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int32_t), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint32_t), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int64_t), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint64_t), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL()
+
 #define MSCCL_KERNEL_ENTRY() \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Sum), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Prod), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Min), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Max), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Min)
+  MSCCL_KERNEL_ENTRY_DEVREDOP(PreMulSum), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(SumPostDiv)
 
-// Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
-void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
 #ifdef COMPILE_MSCCL_KERNEL
+void* mscclKernelEntries[ncclNumDevRedOps * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
   MSCCL_KERNEL_ENTRY()
 #endif
 };
