@@ -11,7 +11,7 @@ project(rccl CXX)
 #==================================================================================================
 option(BUILD_ADDRESS_SANITIZER                 "Enable address sanitizer"                      OFF)
 option(BUILD_ALLREDUCE_ONLY                    "AllReduce(sum,float) kernel only"              OFF)
-option(BUILD_BFD                               "Enable custom backtrace (if bfd.h exists)"     ON)
+option(BUILD_BFD                               "Enable custom backtrace (if bfd.h exists)"     OFF)
 option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "File/folder reorg with backward compatibility" OFF)
 option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on this machine"  OFF)
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)

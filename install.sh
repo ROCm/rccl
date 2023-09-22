@@ -9,7 +9,7 @@ ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
 # Default values
 build_address_sanitizer=false
 build_allreduce_only=false
-build_bfd=true
+build_bfd=false
 build_freorg_bkwdcomp=false
 build_local_gpu_only=false
 build_package=false
@@ -40,7 +40,7 @@ function display_help()
     echo "       --build_allreduce_only  Build only AllReduce + sum + float kernel"
     echo "    -d|--dependencies          Install RCCL depdencencies"
     echo "       --debug                 Build debug library"
-    echo "       --disable_backtrace     Build without custom backtrace support"
+    echo "       --enable_backtrace      Build with custom backtrace support"
     echo "       --disable-colltrace     Build without collective trace"
     echo "       --disable-msccl-kernel  Build without MSCCL kernels"
     echo "    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
@@ -68,7 +68,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,disable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -87,7 +87,7 @@ while true; do
          --build_allreduce_only)     build_allreduce_only=true;                                                                        shift ;;
     -d | --dependencies)             install_dependencies=true;                                                                        shift ;;
          --debug)                    build_release=false;                                                                              shift ;;
-         --disable_backtrace)        build_bfd=false;                                                                                  shift ;;
+         --enable_backtrace)         build_bfd=true;                                                                                  shift ;;
          --disable-colltrace)        collective_trace=false;                                                                           shift ;;
          --disable-msccl-kernel)     msccl_kernel_enabled=false;                                                                       shift ;;
     -f | --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;   shift ;;
@@ -185,8 +185,8 @@ if [[ "${build_allreduce_only}" == true ]]; then
 fi
 
 # Backtrace support
-if [[ "${build_bfd}" == false ]]; then
-    cmake_common_options="${cmake_common_options} -DBUILD_BFD=OFF"
+if [[ "${build_bfd}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DBUILD_BFD=ON"
 fi
 
 # Backward compatibility wrappers
