@@ -3,6 +3,9 @@
  *
  * See LICENSE.txt for license information
  ************************************************************************/
+
+ // Note: InPlace is not supported for All-To-All
+
 #include "TestBed.hpp"
 
 namespace RcclUnitTesting

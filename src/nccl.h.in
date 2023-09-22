@@ -639,7 +639,8 @@ ncclResult_t pncclScatter(const void* sendbuff, void* recvbuff,
     @details    Device (i) send (j)th block of data to device (j) and be placed as (i)th
                 block. Each block for sending/receiving has *count* elements, which means
                 that *recvbuff* and *sendbuff* should have a size of nranks*count elements.
-                In-place operation will happen if sendbuff == recvbuff.
+                In-place operation is NOT supported. It is the user's responsibility
+                to ensure that sendbuff and recvbuff are distinct.
     @return     Result code. See @ref rccl_result_code for more details.
 
     @param[in]  sendbuff      Data array to send (contains blocks for each other rank)
