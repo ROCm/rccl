@@ -160,17 +160,18 @@ private:
 
   template<int Recv, int Send>
   inline __device__ void postPeer(bool dataStored) {
+    if (Send && (flags & RolePostSend) && dataStored)
+#ifdef __GFX9__
+      __builtin_amdgcn_buffer_wbinvl1();
+#else
+      __threadfence_system();
+#endif
+
     if ((flags & Send*RolePostSend) && next_hdp_reg)
       STORE((unsigned int *)next_hdp_reg, 0x1);
 
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
-      if (Send && (flags & RolePostSend) && dataStored)
-#ifdef __GFX9__
-        __asm__ __volatile__("buffer_wbinvl1_vol");
-#else
-        __threadfence_system();
-#endif
       STORE(connStepPtr, step);
     }
   }
