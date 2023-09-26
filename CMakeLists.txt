@@ -607,20 +607,15 @@ endif()
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
 
 ## Set RCCL linked libraries
-target_link_libraries(rccl PRIVATE   Threads::Threads)
-target_link_libraries(rccl INTERFACE hip::host)
-target_link_libraries(rccl PRIVATE   hip::device)
-target_link_libraries(rccl PRIVATE   dl)
-target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
 if (HAS_BFD)
   target_link_libraries(rccl PRIVATE bfd)
   if(HAVE_IBERTY)
     target_link_libraries(rccl PRIVATE iberty z)
   endif()
 endif()
+target_link_libraries(rccl PRIVATE -fgpu-rdc)               # Required when linking relocatable device code
 
 ## Set RCCL link options
-target_link_options(rccl PRIVATE -fgpu-rdc)               # Required when linking relocatable device code
 target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link
 if(BUILD_ADDRESS_SANITIZER)
   target_link_options(rccl PRIVATE -fuse-ld=lld)
@@ -628,9 +623,10 @@ endif()
 if(TIMETRACE)
   target_link_options(rccl PRIVATE -ftime-trace)
 endif()
+
 if(NOT BUILD_SHARED_LIBS)
   message(STATUS "Building static RCCL library")
-  target_link_options(rccl PRIVATE --emit-static-lib)
+  target_link_libraries(rccl PRIVATE --emit-static-lib)
   set(CMAKE_AR "${hipcc_executable}")
   get_property(link_libraries TARGET rccl PROPERTY LINK_LIBRARIES)
   string (REPLACE ";" " " LINK_PROPS "${link_libraries}")
@@ -638,6 +634,12 @@ if(NOT BUILD_SHARED_LIBS)
 else()
   message(STATUS "Building shared RCCL library")
 endif()
+
+target_link_libraries(rccl PRIVATE   Threads::Threads)
+target_link_libraries(rccl INTERFACE hip::host)
+target_link_libraries(rccl PRIVATE   hip::device)
+target_link_libraries(rccl PRIVATE   dl)
+target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
 
 ## Track linking time
 set_property(TARGET rccl PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
