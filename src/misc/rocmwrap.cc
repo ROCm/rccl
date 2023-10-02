@@ -110,7 +110,7 @@ ncclResult_t rocmLibraryInit(void) {
   /* DMA-BUF support */
   //ROCm support
   if (ncclParamDmaBufEnable() == 0 ) {
-    INFO(NCCL_INIT, "Dmabuf feature disabled without RCCL_ENABLE_DMABUF_SUPPORT=1");
+    INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_ENABLE_DMABUF_SUPPORT=1");
     goto error;
   }
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
