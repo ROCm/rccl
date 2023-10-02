@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "rocmwrap.h"
 #include "hsa/hsa.h"
+#include "param.h"
 
 #include <dlfcn.h>
 #include <sys/utsname.h>
