@@ -320,6 +320,7 @@ ncclResult_t ncclIbDmaBufSupport(int dev) {
   static int dmaBufSupported = -1;
   if (dmaBufSupported == -1) {
     ncclResult_t res;
+    NCCLCHECKGOTO(rocmLibraryInit(), res, failure);
     struct ibv_pd* pd;
     struct ibv_context* ctx;
     ctx = ncclIbDevs[dev].context;
@@ -829,7 +830,7 @@ ib_recv:
   if (ncclParamIbUseInline()) rComm->remFifo.flags = IBV_SEND_INLINE;
 
   // Allocate Flush dummy buffer for GPU Direct RDMA
-  rComm->gpuFlush.enabled = ((ncclIbGdrSupport(lComm->dev) == ncclSuccess || ncclIbDmaBufSupport(lComm->dev) == ncclSuccess)
+  rComm->gpuFlush.enabled = ((ncclIbGdrSupport(lComm->dev) == ncclSuccess ||  (lComm->dev) == ncclSuccess)
                              && (ncclParamIbGdrFlushDisable() == 0)) ? 1 : 0;
   if (rComm->gpuFlush.enabled) {
     NCCLCHECK(wrap_ibv_reg_mr(&rComm->gpuFlush.hostMr, rComm->verbs.pd, &rComm->gpuFlush.hostMem, sizeof(int), IBV_ACCESS_LOCAL_WRITE));

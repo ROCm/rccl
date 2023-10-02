@@ -18,7 +18,7 @@
 #define DECLARE_ROCM_PFN(symbol) PFN_##symbol pfn_##symbol = nullptr
 
 DECLARE_ROCM_PFN(hsa_amd_portable_export_dmabuf); // DMA-BUF support
-RCCL_PARAM(EnableDmabufSupport, "ENABLE_DMABUF_SUPPORT", 0);
+NCCL_PARAM(DmaBufEnable, "DMABUF_ENABLE", 0);
 /* ROCr Driver functions loaded with dlsym() */
 DECLARE_ROCM_PFN(hsa_init);
 DECLARE_ROCM_PFN(hsa_system_get_info);
@@ -109,11 +109,11 @@ ncclResult_t rocmLibraryInit(void) {
 
   /* DMA-BUF support */
   //ROCm support
-  res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
-  if (!rcclParamEnableDmabufSupport()) {
+  if (ncclParamDmaBufEnable() == 0 ) {
     INFO(NCCL_INIT, "Dmabuf feature disabled without RCCL_ENABLE_DMABUF_SUPPORT=1");
     goto error;
   }
+  res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
   if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) {
     INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
     goto error;
