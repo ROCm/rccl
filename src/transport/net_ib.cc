@@ -320,6 +320,7 @@ ncclResult_t ncclIbDmaBufSupport(int dev) {
   static int dmaBufSupported = -1;
   if (dmaBufSupported == -1) {
     ncclResult_t res;
+    NCCLCHECKGOTO(rocmLibraryInit(), res, failure);
     struct ibv_pd* pd;
     struct ibv_context* ctx;
     ctx = ncclIbDevs[dev].context;
