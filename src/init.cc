@@ -1742,7 +1742,7 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
 NCCL_API(ncclResult_t, ncclCommInitRankMulti, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int virtualId);
 ncclResult_t ncclCommInitRankMulti(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int virtualId) {
   // Load the CUDA driver and dlsym hooks (can fail on old drivers)
-  if (ncclParamDmaBufEnable()) rocmLibraryInit();
+  rocmLibraryInit();
 
   int cudaDev;
   ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
