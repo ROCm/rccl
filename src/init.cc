@@ -425,11 +425,10 @@ NCCL_PARAM(GdrCopyFifoEnable, "GDRCOPY_FIFO_ENABLE", 1);
 NCCL_PARAM(WorkFifoDepth, "WORK_FIFO_DEPTH", 64<<10);
 enum ncclLaunchMode ncclParamLaunchMode;
 
-NCCL_PARAM(DmaBufEnable, "DMABUF_ENABLE", 0);
 
 // Detect DMA-BUF support
 static ncclResult_t dmaBufSupported(struct ncclComm* comm) {
-  if (ncclParamDmaBufEnable() == 0 || comm->ncclNet->regMrDmaBuf == NULL || rocmLibraryInit() != ncclSuccess) return ncclInternalError;
+  if (comm->ncclNet->regMrDmaBuf == NULL || rocmLibraryInit() != ncclSuccess) return ncclInternalError;
 #if CUDA_VERSION >= 11070
   int flag = 0;
   CUdevice dev;
@@ -1727,7 +1726,7 @@ constexpr nvtxPayloadSchemaEntry_t CommInitRankSchema[] = {
 NCCL_API(ncclResult_t, ncclCommInitRank, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank);
 ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank) {
   // Load the CUDA driver and dlsym hooks (can fail on old drivers)
-  if (ncclParamDmaBufEnable()) rocmLibraryInit();
+  rocmLibraryInit();
 
   int cudaDev;
   ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
@@ -1743,7 +1742,7 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
 NCCL_API(ncclResult_t, ncclCommInitRankMulti, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int virtualId);
 ncclResult_t ncclCommInitRankMulti(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank, int virtualId) {
   // Load the CUDA driver and dlsym hooks (can fail on old drivers)
-  if (ncclParamDmaBufEnable()) rocmLibraryInit();
+  rocmLibraryInit();
 
   int cudaDev;
   ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
@@ -1770,7 +1769,7 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
   NVTX3_FUNC_WITH_PARAMS(CommInitAll, CommInitAllSchema, ndev)
 
   // Load the CUDA driver and dlsym hooks (can fail on old drivers)
-  if (ncclParamDmaBufEnable()) (void) rocmLibraryInit();
+  rocmLibraryInit();
 
   NCCLCHECKGOTO(PtrCheck(comms, "CommInitAll", "comms"), ret, fail);
   if (ndev < 0) {
@@ -1834,7 +1833,7 @@ ncclResult_t ncclCommInitRankConfig(ncclComm_t *newcomm, int nranks, ncclUniqueI
   ncclConfig_t *internalConfigPtr = NULL;
   NCCLCHECK(ncclGroupStartInternal());
 
-  if (ncclParamDmaBufEnable()) (void) rocmLibraryInit();
+  rocmLibraryInit();
   CUDACHECKGOTO(cudaGetDevice(&cudaDev), ret, fail);
 
   if (config == NULL)
