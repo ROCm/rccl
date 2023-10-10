@@ -1,10 +1,6 @@
 /*************************************************************************
  * Copyright (c) Microsoft Corporation.
  * Licensed under the MIT License.
- * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
- *
- * See LICENSE.txt for license information
  ************************************************************************/
 
 #include "checks.h"
