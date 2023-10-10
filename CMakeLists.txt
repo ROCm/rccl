@@ -27,7 +27,19 @@ option(TRACE                                   "Enable additional tracing"      
 # Default GPU architectures to build
 #==================================================================================================
 set(DEFAULT_GPUS
-      gfx941)
+      gfx803
+      gfx900:xnack-
+      gfx906:xnack-
+      gfx908:xnack-
+      gfx90a:xnack-
+      gfx90a:xnack+
+      gfx940
+      gfx941
+      gfx942
+      gfx1030
+      gfx1100
+      gfx1101
+      gfx1102)
 
 # Load CMake modules
 #==================================================================================================
