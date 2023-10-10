@@ -578,6 +578,7 @@ endif()
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -fgpu-rdc)               # Generate relocatable device code (required for extern __shared__)
 target_compile_options(rccl PRIVATE -fvisibility=hidden)     # Set symbol visibility to hidden by default
+target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
 #foreach(target ${GPU_TARGETS})
@@ -609,7 +610,7 @@ endif()
 
 ## Set RCCL link options
 target_link_options(rccl PRIVATE -fgpu-rdc)               # Required when linking relocatable device code
-#target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link
+target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link
 if(BUILD_ADDRESS_SANITIZER)
   target_link_options(rccl PRIVATE -fuse-ld=lld)
 endif()
@@ -626,6 +627,7 @@ if(NOT BUILD_SHARED_LIBS)
 else()
   message(STATUS "Building shared RCCL library")
 endif()
+target_link_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
 
 ## Track linking time
 set_property(TARGET rccl PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
