@@ -20,8 +20,41 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#if defined(__NVCC__)
+
+#include <cuda_runtime.h>
+
+// Datatypes
+#define hipError_t                                         cudaError_t
+#define hipEvent_t                                         cudaEvent_t
+#define hipStream_t                                        cudaStream_t
+
+// Enumerations
+#define hipSuccess                                         cudaSuccess
+
+// Functions
+#define hipEventCreate                                     cudaEventCreate
+#define hipEventDestroy                                    cudaEventDestroy
+#define hipEventElapsedTime                                cudaEventElapsedTime
+#define hipGetErrorString                                  cudaGetErrorString
+#define hipEventRecord                                     cudaEventRecord
+#define hipStreamCreate                                    cudaStreamCreate
+#define hipStreamDestroy                                   cudaStreamDestroy
+#define hipStreamSynchronize                               cudaStreamSynchronize
+
+#else
+
+#include <hip/hip_ext.h>
 #include <hip/hip_runtime.h>
+#include <hsa/hsa_ext_amd.h>
+
+#endif
+
 #include <iostream>
+#include <chrono>
+#include <algorithm>
+#include <vector>
+#include <numeric>
 
 // Helper macro for catching HIP errors
 #define HIP_CALL(cmd)                                                                   \
@@ -37,6 +70,15 @@ THE SOFTWARE.
 
 
 __global__ void EmptyKernel(){};
+
+float calStdDev(const std::vector<float>& allDeltaMs, float mean)
+{
+  std::vector<float> diff(allDeltaMs.size());
+  std::transform(allDeltaMs.begin(), allDeltaMs.end(), diff.begin(), [mean](double x) { return x - mean; });
+  double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+  double stdev = std::sqrt(sq_sum / allDeltaMs.size());
+  return stdev;
+}
 
 int main(int argc, char **argv)
 {
@@ -59,6 +101,8 @@ int main(int argc, char **argv)
     EmptyKernel<<<gridSize, blockSize, 0, stream>>>();
   }
   HIP_CALL(hipStreamSynchronize(stream));
+  std::vector<float> allGpuDeltaMsec(numIterations);
+  std::vector<float> allCpuDeltaMsec(numIterations);
 
   // Launch empty kernel
   // NOTE: Timing is done per-iteration, instead of batching multiple iterations
@@ -83,6 +127,8 @@ int main(int argc, char **argv)
 
     // Report timing
     printf("Iteration %03d Kernel Launch Time (usec) %10.5f (CPU) %10.5f (GPU)\n", iteration, cpuDeltaMsec *1000.0, gpuDeltaMsec * 1000.0);
+    allGpuDeltaMsec[iteration] = gpuDeltaMsec * 1000.0;
+    allCpuDeltaMsec[iteration] = cpuDeltaMsec * 1000.0;
     cpuSum += cpuDeltaMsec * 1000.0;
     gpuSum += gpuDeltaMsec * 1000.0;
   }
@@ -91,8 +137,17 @@ int main(int argc, char **argv)
   // Report averages
   double avgCpuUsec = cpuSum / numIterations;
   double avgGpuUsec = gpuSum / numIterations;
-  printf("Average       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", avgCpuUsec, avgGpuUsec);
+  auto   minCpuUsec = std::min_element(std::begin(allCpuDeltaMsec), std::end(allCpuDeltaMsec));
+  auto   minGpuUsec = std::min_element(std::begin(allGpuDeltaMsec), std::end(allGpuDeltaMsec));
+  auto   maxCpuUsec = std::max_element(std::begin(allCpuDeltaMsec), std::end(allCpuDeltaMsec));
+  auto   maxGpuUsec = std::max_element(std::begin(allGpuDeltaMsec), std::end(allGpuDeltaMsec));
+  auto   varCpuUsec = calStdDev(allCpuDeltaMsec, avgCpuUsec);
+  auto   varGpuUsec = calStdDev(allGpuDeltaMsec, avgGpuUsec);
 
+  printf("Average       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", avgCpuUsec, avgGpuUsec);
+  printf("Minimum       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", *minCpuUsec, *minGpuUsec);
+  printf("Maximum       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", *maxCpuUsec, *maxGpuUsec);
+  printf("Stddev        Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", varCpuUsec, varGpuUsec);
   // Cleanup events and stream
   HIP_CALL(hipStreamDestroy(stream));
   HIP_CALL(hipEventDestroy(startEvent));
