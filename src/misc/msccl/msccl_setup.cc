@@ -320,8 +320,8 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP(PreMulSum), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(SumPostDiv)
 
-#ifdef COMPILE_MSCCL_KERNEL
 void* mscclKernelEntries[ncclNumDevRedOps * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
+#ifdef COMPILE_MSCCL_KERNEL
   MSCCL_KERNEL_ENTRY()
 #endif
 };
