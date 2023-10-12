@@ -201,6 +201,12 @@ if(BUILD_BFD)
   endif()
 endif()
 
+# Check for --amdgpu-kernarg-preload-count
+check_cxx_compiler_flag("-mllvm --amdgpu-kernarg-preload-count=16" HAVE_KERNARG_PRELOAD)
+if (HAVE_KERNARG_PRELOAD)
+  message(STATUS "Kernarg preloading to SGPR enabled")
+endif()
+
 # Determine version from makefiles/version.mk and fill in templates
 #==================================================================================================
 ## parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
@@ -590,7 +596,9 @@ target_compile_options(rccl PRIVATE -parallel-jobs=12)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -fgpu-rdc)               # Generate relocatable device code (required for extern __shared__)
 target_compile_options(rccl PRIVATE -fvisibility=hidden)     # Set symbol visibility to hidden by default
-target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+if (HAVE_KERNARG_PRELOAD)
+  target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+endif()
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
 #foreach(target ${GPU_TARGETS})
@@ -639,7 +647,9 @@ if(NOT BUILD_SHARED_LIBS)
 else()
   message(STATUS "Building shared RCCL library")
 endif()
-target_link_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+if (HAVE_KERNARG_PRELOAD)
+  target_link_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+endif()
 
 ## Track linking time
 set_property(TARGET rccl PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
