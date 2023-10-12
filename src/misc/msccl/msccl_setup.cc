@@ -394,6 +394,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.sizePerMscclChunk = count * hostAlgo->sizeMultiplier / hostAlgo->nChunksPerLoop; // count is sum of all ranks in MSCCL kernel
   work.redOpArg = opFull.scalarArg;
   work.workIndex = status.workIndex;
+  work.nChunksPerLoop = hostAlgo->nChunksPerLoop;
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;

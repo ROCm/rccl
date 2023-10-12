@@ -234,9 +234,10 @@ struct mscclWork {
   uint32_t workIndex;
   uint32_t maxAllowedCount;
   uint32_t workFifoDoneAck;
+  int nChunksPerLoop;
   bool hasReduce;
   bool redOpArgIsPtr;
-  uint64_t pad[1];
+  uint32_t pad[1];
 };
 static_assert(sizeof(struct mscclWork) % 16 == 0, "mscclWork needs to be 16B aligned");
 
