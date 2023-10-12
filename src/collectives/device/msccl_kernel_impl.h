@@ -192,6 +192,8 @@ __device__ __forceinline__ void mscclRunInterpreter(
   if (tid == 0) ncclShmem.event_buffer_head = 0;
 #endif
   __synclds(); // publish shmem
+  if (tid == 0)
+    *mscclShmem.work.workFifoDone = mscclShmem.work.workFifoDoneAck;
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
   if (tid == 0) {
