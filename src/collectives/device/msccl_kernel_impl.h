@@ -264,7 +264,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
     asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xcc_id));
 #endif
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_ENTRY, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, 0, NPKIT_GET_GPU_TIMESTAMP());
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_ENTRY, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 
