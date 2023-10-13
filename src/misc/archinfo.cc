@@ -28,7 +28,7 @@ void GcnArchNameFormat(char* gcnArchName, char* out) {
   // this function parses the char array from the device properties into something easier to handle.
   // as the gcnArchName attribute looks something like: "gfx900:xnack+:blah-:etc-"
   char *gcnArchNameToken = strtok(gcnArchName, ":");
-  strcpy(gcnArchNameToken, out);
+  strcpy(out, gcnArchNameToken);
 }
 
 void GcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
