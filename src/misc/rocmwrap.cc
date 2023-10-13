@@ -24,13 +24,15 @@ DECLARE_ROCM_PFN(hsa_init);
 DECLARE_ROCM_PFN(hsa_system_get_info);
 DECLARE_ROCM_PFN(hsa_status_string);
 
-static enum { hsaUninitialized, hsaInitializing, hsaInitialized, hsaError } hsaState = hsaUninitialized;
 
 static void *hsaLib;
 static uint16_t version_major, version_minor;
 bool ncclCudaLaunchBlocking = false;
 
-ncclResult_t rocmLibraryInit(void) {
+static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
+static ncclResult_t initResult;
+
+static void initOnceFunc() {
   do {
     char* val = getenv("CUDA_LAUNCH_BLOCKING");
     ncclCudaLaunchBlocking = val!=nullptr && val[0]!=0 && !(val[0]=='0' && val[1]==0);
@@ -38,17 +40,6 @@ ncclResult_t rocmLibraryInit(void) {
 
   bool dmaBufSupport = false;
   hsa_status_t res;
-
-  if (hsaState == hsaInitialized)
-    return ncclSuccess;
-  if (hsaState == hsaError)
-    return ncclSystemError;
-
-  if (__sync_bool_compare_and_swap(&hsaState, hsaUninitialized, hsaInitializing) == false) {
-    // Another thread raced in front of us. Wait for it to be done.
-    while (hsaState == hsaInitializing) sched_yield();
-    return (hsaState == hsaInitialized) ? ncclSuccess : ncclSystemError;
-  }
 
   /*
    * Load ROCr driver library
@@ -170,14 +161,17 @@ ncclResult_t rocmLibraryInit(void) {
    */
   pfn_hsa_init();
 
-  hsaState = hsaInitialized;
-  return ncclSuccess;
+  initResult = ncclSuccess;
 
 error:
-  hsaState = hsaError;
-  return ncclSystemError;
+  initResult = ncclSystemError;
 }
 
 int ncclCuMemEnable() {
   return 0;
+}
+
+ncclResult_t rocmLibraryInit() {
+  pthread_once(&initOnceControl, initOnceFunc);
+  return initResult;
 }
