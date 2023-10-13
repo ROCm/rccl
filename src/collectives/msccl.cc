@@ -78,7 +78,7 @@ ncclResult_t mscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle) {
   free(status.hostAlgos[mscclAlgoHandle]);
   status.hostAlgos.erase(mscclAlgoHandle);
 
-  CUDACHECK(hipFree(status.devAlgos[mscclAlgoHandle]));
+  NCCLCHECK(ncclCudaFree(status.devAlgos[mscclAlgoHandle]));
   status.devAlgos.erase(mscclAlgoHandle);
 
   status.freeAlgoHandles.push_back(mscclAlgoHandle);
