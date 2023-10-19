@@ -72,7 +72,7 @@ namespace RcclUnitTesting
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
     std::vector<ncclDataType_t> const dataTypes       = {ncclInt32};
     std::vector<ncclRedOp_t>    const redOps          = {ncclMax};
-    std::vector<int>            const roots           = {0, 1};
+    std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {393216};
     std::vector<bool>           const inPlaceList     = {true};
     std::vector<bool>           const managedMemList  = {false};
