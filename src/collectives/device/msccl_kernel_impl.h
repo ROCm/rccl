@@ -89,10 +89,10 @@ __device__ static void store(U *dst, U val) {
 #endif
 }
 
-inline __device__ static void barrier(int nthreads, uint64_t* barrier_next, uint64_t* barriers) {
+inline __device__ static void barrier(int nthreads) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  if (nthreads != WARP_SIZE)
-    barrier_by_group();
+  assert(nthreads == NCCL_MAX_NTHREADS);
+  __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier");
 #else
   asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15));
 #endif
@@ -134,16 +134,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
   const int tid = threadIdx.x;
   const int bid = blockIdx.x;
   const int nthreads = NCCL_MAX_NTHREADS;
-
-  // initialize barriers
-  if (tid == 0) {
-    for (auto i = 0; i < NCCL_MAX_GROUPS; i++) {
-      ncclShmem.groups[i].barrier = 0;
-      for (auto j = 0; j < NCCL_MAX_GROUPS; j++) ncclShmem.groups[i].barrier_next[j] = 0;
-    }
-  }
-  uint64_t* mscclBarrierNext = ncclShmem.groups[0].barrier_next;
-  uint64_t* mscclBarriers = &ncclShmem.groups[0].barrier;
 
   // initialize mscclShmem.mscclTB
   threadBlockCopy(
@@ -302,7 +292,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           }
         }
         step += numDependencies-1;
-        barrier(nthreads, mscclBarrierNext, mscclBarriers);
+        barrier(nthreads);
       }
 
       srcPointer = (t->srcBuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((t->srcBuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
@@ -386,7 +376,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
             }
 #endif
 
-            barrier(nthreads, mscclBarrierNext, mscclBarriers);
+            barrier(nthreads);
           } else {
             T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
             dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
