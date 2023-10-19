@@ -606,7 +606,7 @@ endif()
 #endforeach()
 
 if(BUILD_ADDRESS_SANITIZER)
-  target_compile_options(rccl PRIVATE "-fsanitize=address -shared-libasan")
+  target_compile_options(rccl PRIVATE -fsanitize=address -shared-libasan)
 endif()
 if(TIMETRACE)
   target_compile_options(rccl PRIVATE -ftime-trace)
