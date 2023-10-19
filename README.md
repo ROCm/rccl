@@ -28,8 +28,9 @@ The root of this repository has a helper script 'install.sh' to build and instal
        --build_allreduce_only  Build only AllReduce + sum + float kernel
     -d|--dependencies          Install RCCL depdencencies
        --debug                 Build debug library
-       --disable_backtrace     Build without custom backtrace support
+       --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
+       --disable-msccl-kernel  Build without MSCCL kernels
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)
