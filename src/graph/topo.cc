@@ -380,7 +380,10 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
     gpu->gpu.gcn = "gfx940";
   } else if (strcmp(gpu->gpu.gcn, "941") == 0) {
     gpu->gpu.gcn = "gfx941";
+  } else if (strcmp(gpu->gpu.gcn, "942") == 0) {
+    gpu->gpu.gcn = "gfx942";
   }
+
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "arch", &arch.value));
   memcpy(&gpu->gpu.arch, &arch.arch, sizeof(hipDeviceArch_t));
