@@ -30,14 +30,14 @@ ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
       threadLocalStatus.captureStatus = mscclNewCapture;
       savedProxyArgs[captureId] = std::vector<struct mscclProxyArg>();
     } else {
-      INFO(NCCL_INIT|NCCL_NET,"mscclGetCaptureStatus: captureId %llu is same with the previous one\n", captureId);
+      INFO(NCCL_NET,"mscclGetCaptureStatus: captureId %llu is same with the previous one\n", captureId);
       threadLocalStatus.captureStatus = mscclExistingCapture;
     }
     threadLocalStatus.captureId = captureId;
   } else {
     threadLocalStatus.captureStatus = mscclNoCapture;
   }
-  INFO(NCCL_INIT|NCCL_NET,"mscclGetCaptureStatus: %d, captureId: %llu, size: %lu\n", threadLocalStatus.captureStatus, threadLocalStatus.captureId, mscclGetSavedProxyArgs()[captureId].size());
+  INFO(NCCL_NET,"mscclGetCaptureStatus: %d, captureId: %llu, size: %lu\n", threadLocalStatus.captureStatus, threadLocalStatus.captureId, mscclGetSavedProxyArgs()[captureId].size());
   return ncclSuccess;
 }
 
@@ -180,7 +180,7 @@ static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t c
 
 static void HIPRT_CB mscclSetupProxyCallback(void *args) {
   std::vector<struct mscclProxyArg>* params = (std::vector<struct mscclProxyArg>*)args;
-  INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
+  INFO(NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
   for (auto &p : *params) {
     mscclSetupProxyImpl(p.hostAlgo, p.comm);
   }    
@@ -191,12 +191,12 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStr
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
   if (threadLocalStatus.captureStatus == mscclNoCapture) {
-    INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: no capture\n");
+    INFO(NCCL_NET,"mscclSetupProxy: no capture\n");
     NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm));
   } else if (status.needsProxy) {
-    INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: capture\n");
+    INFO(NCCL_NET,"mscclSetupProxy: capture\n");
     if (savedProxyArgs[threadLocalStatus.captureId].size() == 0) {
-      INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: adding callback\n");
+      INFO(NCCL_NET,"mscclSetupProxy: adding callback\n");
 
       hipGraphNode_t callbackNode;
       hipHostNodeParams p;
@@ -398,7 +398,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
-  INFO(NCCL_INIT, "MSCCL: Setup Kernel finished");
+  INFO(NCCL_COLL, "MSCCL: Setup Kernel finished");
   
   uint32_t workFifoIdxMask = status.workFifoDepth - 1;
   uint32_t workFifoSent = status.workFifoSent;
