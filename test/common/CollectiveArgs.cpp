@@ -116,14 +116,23 @@ namespace RcclUnitTesting
     if (this->funcType == ncclCollSend) return TEST_SUCCESS; // on the send receive pair only recv needs to be checked
     size_t const numOutputBytes = (this->numOutputElements * DataTypeToBytes(this->dataType));
 
-    CHECK_HIP(hipMemcpy(this->outputCpu.ptr, this->outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
+    if(this->useManagedMem == false) CHECK_HIP(hipMemcpy(this->outputCpu.ptr, this->outputGpu.ptr, numOutputBytes, hipMemcpyDeviceToHost));
 
     bool isMatch = true;
-    CHECK_CALL(this->outputCpu.IsEqual(this->dataType,
+    if(this->useManagedMem == false){
+      CHECK_CALL(this->outputGpu.IsEqual(this->dataType,
                                        this->numOutputElements,
                                        this->expected,
                                        true,
                                        isMatch));
+    }
+    else{
+      CHECK_CALL(this->outputCpu.IsEqual(this->dataType,
+                                       this->numOutputElements,
+                                       this->expected,
+                                       true,
+                                       isMatch));
+    }
     if (!isMatch) ERROR("Mismatch for %s\n", this->GetDescription().c_str());
     return isMatch ? TEST_SUCCESS : TEST_FAIL;
   }
