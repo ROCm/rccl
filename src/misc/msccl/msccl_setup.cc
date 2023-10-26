@@ -288,6 +288,9 @@ static ncclResult_t hostToDevRedOp(
   (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128), \
   (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)
 
+#define MSCCL_SPECIALIZED_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, type) \
+  (void *)MSCCL_SPECIALIZED_KERNEL_ENTRY_NAME(devredop, type, LL)
+
 #define MSCCL_KERNEL_ENTRY_DEVREDOP(devredop) \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint8_t), \
@@ -300,16 +303,25 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16)
 
+#define MSCCL_SPECIALIZED_KERNEL_ENTRY_DEVREDOP(devredop) \
+  MSCCL_SPECIALIZED_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, half), \
+  MSCCL_SPECIALIZED_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float)
+
 #define MSCCL_KERNEL_ENTRY() \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Sum), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Prod), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Max), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Min)
 
+#define MSCCL_SPECIALIZED_KERNEL_ENTRY() \
+  MSCCL_SPECIALIZED_KERNEL_ENTRY_DEVREDOP(Sum)
+
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
-void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
+void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS
+                         + 2 /* number of speciailized kernels */] = {
 #ifdef COMPILE_MSCCL_KERNEL
-  MSCCL_KERNEL_ENTRY()
+  MSCCL_KERNEL_ENTRY(),
+  MSCCL_SPECIALIZED_KERNEL_ENTRY()
 #endif
 };
 

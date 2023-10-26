@@ -449,6 +449,11 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevCo
   mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>>(comm, algo, work); \
 }
 
+#define MSCCL_SPECIALIZED_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type) \
+__global__ void MSCCL_SPECIALIZED_KERNEL_ENTRY_NAME(devredop, type, LL)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL>(comm, algo, work); \
+}
+
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint8_t) \
@@ -461,10 +466,17 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevCo
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, double) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, rccl_bfloat16)
 
+#define MSCCL_SPECIALIZED_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop) \
+  MSCCL_SPECIALIZED_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, half) \
+  MSCCL_SPECIALIZED_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, float)
+
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC() \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min)
+
+#define MSCCL_SPECIALIZED_IMPL_KERNEL_ENTRY_FUNC() \
+  MSCCL_SPECIALIZED_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum)
 
 #endif
