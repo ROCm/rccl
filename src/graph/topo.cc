@@ -369,21 +369,11 @@ ncclResult_t ncclTopoAddNic(struct ncclXmlNode* xmlNic, struct ncclTopoSystem* s
 
 ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* system, struct ncclTopoNode* gpu) {
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "sm", &gpu->gpu.cudaCompCap));
-  NCCLCHECK(xmlGetAttr(xmlGpu, "gcn", &gpu->gpu.gcn));
-  if (strcmp(gpu->gpu.gcn, "906") == 0) {
-    gpu->gpu.gcn = "gfx906";
-  } else if (strcmp(gpu->gpu.gcn, "908") == 0) {
-    gpu->gpu.gcn = "gfx908";
-  } else if (strcmp(gpu->gpu.gcn, "910") == 0) {
-    gpu->gpu.gcn = "gfx90a";
-  } else if (strcmp(gpu->gpu.gcn, "940") == 0) {
-    gpu->gpu.gcn = "gfx940";
-  } else if (strcmp(gpu->gpu.gcn, "941") == 0) {
-    gpu->gpu.gcn = "gfx941";
-  } else if (strcmp(gpu->gpu.gcn, "942") == 0) {
-    gpu->gpu.gcn = "gfx942";
-  }
-
+  const char* gcnArch;
+  const char* gcnArchName;
+  NCCLCHECK(xmlGetAttr(xmlGpu, "gcn", &gcnArch));
+  convertGcnArchToGcnArchName(gcnArch, gcnArchName);
+  gpu->gpu.gcn = strdup(gcnArchName);
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "arch", &arch.value));
   memcpy(&gpu->gpu.arch, &arch.arch, sizeof(hipDeviceArch_t));

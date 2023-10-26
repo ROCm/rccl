@@ -31,7 +31,7 @@ THE SOFTWARE.
 */
 
 void GcnArchNameFormat(char *gcnArchName, char* out);
-void GcnArchConvertToGcnArchName(int gcnArch, char* out);
+void convertGcnArchToGcnArchName(const char* gcnArch, const char* gcnArchName);
 int GetGcnArchName(int deviceId, char* out);
 double GetDeviceWallClockRateInKhz(int deviceId);
 bool IsArchMatch(char const* arch, char const* target);
