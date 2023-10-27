@@ -179,7 +179,13 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #if defined(ENABLE_NPKIT)
   int npKitCtxIdx = bid;
-  if (tid == 0) ncclShmem.event_buffer_head = 0;
+  int xcc_id = 0;
+  if (tid == 0) {
+    ncclShmem.event_buffer_head = 0;
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xcc_id));
+#endif
+  }
 #endif
   __synclds(); // publish shmem
   if (tid == 0)
@@ -188,13 +194,13 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
   if (tid == 0) {
     uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, xcc_id, *cpuTimestamp);
   }
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
   if (tid == 0) {
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, NPKIT_GET_GPU_TIMESTAMP());
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_GPU, 0, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 
@@ -250,10 +256,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RUN_ENTRY)
   if (tid == 0) {
-    int xcc_id = 0;
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
-    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xcc_id));
-#endif
     NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_ENTRY, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
@@ -427,7 +429,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RUN_EXIT)
   if (tid == 0) {
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_EXIT, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, 0, NPKIT_GET_GPU_TIMESTAMP());
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_EXIT, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 #if defined(ENABLE_NPKIT)
