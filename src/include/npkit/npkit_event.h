@@ -124,5 +124,7 @@
 #define NPKIT_EVENT_MSCCL_RUN_EXIT                              0x63
 #define NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY                0x64
 #define NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_EXIT                 0x65
+#define NPKIT_EVENT_MSCCL_INIT_ENTRY                            0x66
+#define NPKIT_EVENT_MSCCL_INIT_EXIT                             0x67
 
 #endif
