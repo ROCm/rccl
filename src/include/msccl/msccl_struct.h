@@ -15,7 +15,7 @@
 
 #define MSCCL_MAX_NUM_STEPS 64
 #define MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
-#define MSCCL_MAX_NUM_THREAD_BLOCKS (MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS)
+#define MSCCL_MAX_NUM_THREAD_BLOCKS 64
 #define MSCCL_MAX_COUNT 72 // max concurrent number of msccl chunk transmission
 #define MSCCL_MAX_REDUCE_FUSION 16
 #define MSCCL_MAX_NUM_ALGOS 1024
@@ -216,7 +216,7 @@ struct mscclStatus {
   struct mscclWork* workFifo;
   uint32_t* workFifoDone;
   uint32_t workFifoSent;
-  uint32_t workFifoSentPerChannel[MAXCHANNELS];
+  uint32_t workFifoSentPerThreadBlock[MSCCL_MAX_NUM_THREAD_BLOCKS];
   uint32_t workFifoAckdMin;
 };
 
