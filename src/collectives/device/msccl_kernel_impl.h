@@ -414,8 +414,19 @@ __device__ __forceinline__ void mscclRunInterpreter(
           prims.recvReduceSend(srcOffset, thisNelem);
         else if (t->type == MSCCL_RECV_REDUCE_COPY_SEND)
           prims.recvReduceCopySend(srcOffset, dstOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_COPY)
+        else if (t->type == MSCCL_RECV_REDUCE_COPY) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY)
+          if (tid == 0) {
+            NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
+          }
+#endif
           prims.recvReduceCopy(srcOffset, dstOffset, thisNelem);
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_EXIT)
+          if (tid == 0) {
+            NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
+          }
+#endif
+        }
         else if (t->type == MSCCL_LOCAL_COPY)
           prims.localCopy(srcPointer+srcOffset, dstPointer+dstOffset, thisNelem);
         else
