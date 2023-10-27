@@ -192,10 +192,10 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.needsProxy = false;
     status.workFifoDepth = MSCCL_WORK_FIFO_DEPTH;
     NCCLCHECK(ncclCudaCalloc(&status.workFifo, status.workFifoDepth, nullptr, true));
-    NCCLCHECK(ncclCudaHostCalloc(&status.workFifoDone, MAXCHANNELS));
+    NCCLCHECK(ncclCudaHostCalloc(&status.workFifoDone, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.workFifoSent = 0;
-    for (int i = 0; i < MAXCHANNELS; i++) {
-      status.workFifoSentPerChannel[i] = 0;
+    for (int i = 0; i < MSCCL_MAX_NUM_THREAD_BLOCKS; i++) {
+      status.workFifoSentPerThreadBlock[i] = 0;
     }
     status.workFifoAckdMin = 0;
     mscclSchedulerTriedLoadAlgo = false;

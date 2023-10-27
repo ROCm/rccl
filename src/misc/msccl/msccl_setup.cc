@@ -330,28 +330,28 @@ static void mscclWaitWorkFifoAvailable(uint32_t desiredSent) {
     while (1) {
       // We have to poll for notifications from device.
       uint32_t* doneLive = status.workFifoDone;
-      uint32_t ackd[MAXCHANNELS];
-      for (int c=0; c < MAXCHANNELS; c++) {
+      uint32_t ackd[MSCCL_MAX_NUM_THREAD_BLOCKS];
+      for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         ackd[c] = __atomic_load_n(&doneLive[c], __ATOMIC_RELAXED);
       }
       // Compiler-only fence to prevent fusion of loops to encourage dense loads.
       __atomic_signal_fence(__ATOMIC_SEQ_CST);
 
       uint32_t ackdAll = status.workFifoSent;
-      for (int c=0; c < MAXCHANNELS; c++) {
+      for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         // ackdAll is min over all non-quiesced channels
-        if (ackd[c] != status.workFifoSentPerChannel[c])
+        if (ackd[c] != status.workFifoSentPerThreadBlock[c])
           ackdAll = rollingMin32(ackdAll, ackd[c]);
       }
 
       // Compiler only fence to prevent fusion of loops to encourage dense stores.
       __atomic_signal_fence(__ATOMIC_SEQ_CST);
 
-      for (int c=0; c < MAXCHANNELS; c++) {
+      for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         // Advance counter on quiesced channels so they don't lag behind
         // too far where they could get lost in 32-bit wraparound.
-        if (ackd[c] == status.workFifoSentPerChannel[c]) {
-          status.workFifoSentPerChannel[c] = ackdAll;
+        if (ackd[c] == status.workFifoSentPerThreadBlock[c]) {
+          status.workFifoSentPerThreadBlock[c] = ackdAll;
           __atomic_store_n(&doneLive[c], ackdAll, __ATOMIC_RELAXED);
         }
       }
@@ -416,7 +416,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   for (int i = 0; i < numBlocks; i++) {
     work.workFifoDoneAck = workFifoSent + i;
     work.workFifoDone = status.workFifoDone + i;
-    status.workFifoSentPerChannel[i] = workFifoSent + i;
+    status.workFifoSentPerThreadBlock[i] = workFifoSent + i;
     status.workFifo[(workFifoSent + i) & workFifoIdxMask] = work;
   }
   status.workFifoSent = workFifoSent + numBlocks;
