@@ -32,24 +32,24 @@ void GcnArchNameFormat(char* gcnArchName, char* out) {
   strcpy(out, gcnArchNameToken);
 }
 
-void convertGcnArchToGcnArchName(const char* gcnArch, const char* gcnArchName) {
+void convertGcnArchToGcnArchName(const char* gcnArch, const char** gcnArchName) {
   // gcnArch is deprecated and we should instead use gcnArchName; however, some data files still have
   // the older gcnArch value.  There's only a handful of architectures that were coded prior to deprecation,
   // so we handle those cases here.
   if (strcmp(gcnArch, "906") == 0)
-    gcnArchName = "gfx906";
+    *gcnArchName = "gfx906";
   else if (strcmp(gcnArch, "908") == 0)
-    gcnArchName = "gfx908";
+    *gcnArchName = "gfx908";
   else if (strcmp(gcnArch, "910") == 0)
-    gcnArchName = "gfx90a";
+    *gcnArchName = "gfx90a";
   else if (strcmp(gcnArch, "940") == 0)
-    gcnArchName = "gfx940";
+    *gcnArchName = "gfx940";
   else if (strcmp(gcnArch, "941") == 0)
-    gcnArchName = "gfx941";
+    *gcnArchName = "gfx941";
   else if (strcmp(gcnArch, "942") == 0)
-    gcnArchName = "gfx942";
+    *gcnArchName = "gfx942";
   else
-    gcnArchName = gcnArch;
+    *gcnArchName = gcnArch;
 }
 
 int GetGcnArchName(int deviceId, char* out) {
