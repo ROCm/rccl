@@ -763,7 +763,7 @@ static ncclResult_t ncclTopoGetNchannels(struct ncclTopoSystem* system, int g /*
     if (path->type == PATH_NVL) {
       if (ncclParamNChannelsPerPeer() == -2) {
         float nvlBw = ncclTopoXGMISpeed(system->nodes[GPU].nodes[g].gpu.gcn);
-        *nChannels = 2*std::max(1, (int)(path->bw / nvlBw));
+        *nChannels = (IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? 4 : 2)*std::max(1, (int)(path->bw / nvlBw));
       } else {
         *nChannels = ncclParamNChannelsPerPeer();
       }
