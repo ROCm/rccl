@@ -210,25 +210,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #endif
 
-  // Deference reduce args if required
-  if (tid == 0 && mscclShmem.work.hasReduce && mscclShmem.work.redOpArgIsPtr) {
-    switch (sizeof(T)) {
-      case 1:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint8_t*>(mscclShmem.work.redOpArg);
-        break;
-      case 2:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint16_t*>(mscclShmem.work.redOpArg);
-        break;
-      case 4:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint32_t*>(mscclShmem.work.redOpArg);
-        break;
-      case 8:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint64_t*>(mscclShmem.work.redOpArg);
-        break;
-      default:
-        break;
-    }
-  }
   __synclds(); // publish shmem
   
   // User pointers for primitives
