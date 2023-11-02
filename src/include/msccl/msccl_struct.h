@@ -144,6 +144,8 @@ struct mscclAlgo {
   bool inPlace;
   // Whether this algorithm is suitable for out-of-place.
   bool outOfPlace;
+  // Keep a bit mask of used types
+  uint64_t typeMask;
 };
 
 enum mscclGroupStatus {

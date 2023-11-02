@@ -128,7 +128,7 @@ for (int r = 0; r < numloops; r++) { \
   srcs[r] = srcPointer + srcOffset; \
 }
 
-template<typename T, typename RedOp, typename Proto>
+template<typename T, typename RedOp, typename Proto, bool fullOps>
 __device__ __forceinline__ void mscclRunInterpreter(
   struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) {
   const int tid = threadIdx.x;
@@ -430,13 +430,13 @@ __device__ __forceinline__ void mscclRunInterpreter(
             prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
           }
           if (c == 0) step += (numReductions-1); // only advance step once!
-        } else if (t->type == MSCCL_RECV_COPY_SEND)
+        } else if (fullOps && t->type == MSCCL_RECV_COPY_SEND)
           prims.recvCopySend(dstOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_SEND)
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_SEND)
           prims.recvReduceSend(srcOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_COPY_SEND)
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_COPY_SEND)
           prims.recvReduceCopySend(srcOffset, dstOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_COPY) {
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_COPY) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY)
           if (tid == 0) {
             NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
@@ -449,7 +449,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           }
 #endif
         }
-        else if (t->type == MSCCL_LOCAL_COPY)
+        else if (fullOps && t->type == MSCCL_LOCAL_COPY)
           prims.localCopy(srcPointer+srcOffset, dstPointer+dstOffset, thisNelem);
         else
           return;
@@ -479,13 +479,22 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type) \
 __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL>(comm, algo, work); \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL, false>(comm, algo, work); \
 } \
 __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128>(comm, algo, work); \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128, false>(comm, algo, work); \
 } \
 __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>>(comm, algo, work); \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>, false>(comm, algo, work); \
+} \
+__global__ void MSCCL_KERNEL_ENTRY_NAME_FULL(devredop, type, LL)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL, true>(comm, algo, work); \
+} \
+__global__ void MSCCL_KERNEL_ENTRY_NAME_FULL(devredop, type, LL128)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128, true>(comm, algo, work); \
+} \
+__global__ void MSCCL_KERNEL_ENTRY_NAME_FULL(devredop, type, Simple)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>, true>(comm, algo, work); \
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop) \

@@ -7,6 +7,7 @@
 #define MSCCL_KERNEL_H_
 
 #define MSCCL_KERNEL_ENTRY_NAME(devredop, type, proto) mscclKernel_##devredop##_##type##_##proto
+#define MSCCL_KERNEL_ENTRY_NAME_FULL(devredop, type, proto) mscclKernel_full_##devredop##_##type##_##proto
 
 #define MSCCL_DECL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE_PROTO(devredop, type, proto) \
 __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, proto)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work);

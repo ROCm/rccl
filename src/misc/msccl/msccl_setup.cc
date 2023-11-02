@@ -398,7 +398,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
-  INFO(NCCL_COLL, "MSCCL: Setup Kernel finished");
+  INFO(NCCL_COLL, "MSCCL: typeMask %lx Setup Kernel finished", hostAlgo->typeMask);
   
   uint32_t workFifoIdxMask = status.workFifoDepth - 1;
   uint32_t workFifoSent = status.workFifoSent;
@@ -423,7 +423,9 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
-  void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];
+  uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol;
+  if (hostAlgo->typeMask & ~0x83) fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
+  void *func = mscclKernelEntries[fnIndex];
   if (enableDoneEvent) {
     CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
   } else {
