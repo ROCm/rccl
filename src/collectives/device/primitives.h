@@ -16,19 +16,7 @@
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
 #define barrier_by_group() do { \
-  if (nthreads == NCCL_MAX_NTHREADS) { \
-    __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier\ns_waitcnt lgkmcnt(0)"); \
-  } else { \
-    const int w = threadIdx.x/WARP_SIZE; \
-    const int wid = threadIdx.x%WARP_SIZE; \
-    __threadfence(); \
-    if (wid == 0) { \
-      barrier_next[w] += nthreads/WARP_SIZE; \
-      atomicAdd((unsigned long long *)barriers, 1); \
-      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(1); \
-      __asm__ __volatile__("s_wakeup"); \
-    } \
-  } \
+  __asm__ __volatile__("s_barrier"); \
 } while (0)
 
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128

@@ -82,7 +82,7 @@ private:
 
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    if (nthreads != WARP_SIZE)
+    //if (nthreads != WARP_SIZE)
       barrier_by_group();
 #else
     asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15-group));
@@ -121,7 +121,7 @@ private:
       }
       sendConnHead += 1;
     }
-    barrier();
+    // barrier();
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_WAIT_SEND_EXIT)
     if (tid == 0) {
       NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_WAIT_SEND_EXIT, nbytes, 0, NPKIT_GET_GPU_TIMESTAMP(),
@@ -133,8 +133,9 @@ private:
   inline __device__ void incRecv(int i) {
     recvStep[i] += 1;
   }
-  inline __device__ void postRecv() {
-    barrier();
+  inline __device__ void postRecv(bool skipBarrier=false) {
+    if (!skipBarrier)
+      barrier();
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
 
@@ -386,7 +387,7 @@ private:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-  __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+  __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp, bool skipBarrier=false) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
@@ -477,7 +478,7 @@ private:
 
     if (RECV) {
       for (int i=0; i < MaxRecv; i++) incRecv(i);
-      postRecv();
+      postRecv(skipBarrier);
     }
     if (SEND) {
       for (int i=1; i < MaxSend && i < fan.nsend(); i++)
@@ -625,8 +626,10 @@ private:
       recvConn->step = recvConnHead;
     if (tid < fan.nsend())
       sendConn->step = sendConnHead;
+#if 0
     // Ensure all steps written back
     barrier();
+#endif
   }
 
   __device__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
@@ -669,14 +672,14 @@ private:
     }
 #endif
   }
-  __device__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
+  __device__ void recv(intptr_t outIx, int eltN, bool postOp=false, bool skipBarrier=false) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_ENTRY)
     if (tid == 0) {
       NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
-    LLGenericOp<1, 0, -1, Output>(-1, outIx, eltN, postOp);
+    LLGenericOp<1, 0, -1, Output>(-1, outIx, eltN, postOp, skipBarrier);
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_EXIT)
     if (tid == 0) {
       NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
@@ -766,8 +769,6 @@ private:
   // MSCCL primitives
   __device__ void sendWithBarrier(intptr_t inpIx, int eltN) {
     send(inpIx, eltN);
-    // This is the only primitive.instruction where there is no barrier at the end, add it
-    barrier();
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);

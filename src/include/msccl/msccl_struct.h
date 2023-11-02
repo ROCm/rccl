@@ -13,7 +13,7 @@
 #include "devcomm.h"
 #include "msccl/msccl_scheduler.h"
 
-#define MSCCL_MAX_NUM_STEPS 64
+#define MSCCL_MAX_NUM_STEPS 32
 #define MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 #define MSCCL_MAX_NUM_THREAD_BLOCKS 64
 #define MSCCL_MAX_COUNT 72 // max concurrent number of msccl chunk transmission
@@ -171,7 +171,7 @@ enum mscclCaptureStatus {
 struct mscclProxyArg {
   struct mscclAlgo* hostAlgo;
   ncclComm_t comm;
-  mscclProxyArg(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
+  mscclProxyArg(struct mscclAlgo* hostAlgo, ncclComm_t comm)
     : hostAlgo(hostAlgo), comm(comm) {}
 };
 
@@ -244,8 +244,8 @@ static_assert(sizeof(struct mscclWork) % 16 == 0, "mscclWork needs to be 16B ali
 #pragma pack(pop)
 
 struct mscclShmemData {
-  struct mscclThreadBlock mscclTB;
   alignas(16) struct mscclWork work;
+  alignas(16) struct mscclThreadBlock mscclTB;
 };
 static_assert(offsetof(struct mscclShmemData, work) % 16 == 0, "mscclShmemData.work needs to be 16B aligned");
 
