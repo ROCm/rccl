@@ -492,6 +492,10 @@ __forceinline__ __device__ void ncclKernel(
     if (tid < 2*WARP_SIZE + NCCL_MAX_GROUPS*NCCL_MAX_GROUPS)
       ncclShmem.groups[(tid-2*WARP_SIZE)/NCCL_MAX_GROUPS].barrier_next[(tid-2*WARP_SIZE)%NCCL_MAX_GROUPS] = 0;
     break;
+  case 3:
+    /* set abort flag to 0 */
+    if (tid == 3*WARP_SIZE) ncclShmem.aborted = 0;
+    break;
   default:
     break;
   }
@@ -499,8 +503,6 @@ __forceinline__ __device__ void ncclKernel(
   // To map blockId to channelId, we need the n'th set bit of channelMask which
   // is the inverse of counting the number of set bits among the the first n.
   int channelId = ncclShmem.channelId;
-  /* set abort flag to 0 */
-  if (tid == 0) ncclShmem.aborted = 0;
 
   if (true) {
     void *dst, *src;
