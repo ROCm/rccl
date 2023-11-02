@@ -49,7 +49,6 @@ ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t
   status.chunkSize  = status.stepSize * status.chunkSteps;
   status.chunkEffectiveSize = status.chunkSize;
   if (hostAlgo->protocol == NCCL_PROTO_LL) status.chunkEffectiveSize /= 2;
-  if (hostAlgo->protocol == NCCL_PROTO_LL128) status.chunkEffectiveSize = (status.chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   status.dataType = dataType;
   status.nBytes = count * ncclTypeSize(status.dataType) * hostAlgo->sizeMultiplier;
   status.maxAllowedCount = std::max((uint32_t)1, (uint32_t)(status.chunkEffectiveSize / DIVUP(status.nBytes, (size_t)(hostAlgo->nChunksPerLoop))));
@@ -280,12 +279,10 @@ static ncclResult_t hostToDevRedOp(
 
 #define MSCCL_KERNEL_ENTRY_DEVREDOP_NULL() \
   nullptr, \
-  nullptr, \
   nullptr
 
 #define MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, type, fullOps) \
   (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL, fullOps), \
-  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128, fullOps), \
   (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)
 
 #define MSCCL_KERNEL_ENTRY_DEVREDOP(devredop, fullOps) \
@@ -311,7 +308,8 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP(Min, true)
 
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
-void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS * 2] = {
+// Reduce number of protocols after removing LL128
+void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * (NCCL_NUM_PROTOCOLS - 1)* 2] = {
 #ifdef COMPILE_MSCCL_KERNEL
   MSCCL_KERNEL_ENTRY()
 #endif
@@ -427,7 +425,8 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
-  uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol;
+  // after LL128 removal, simple becomes position 1
+  uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * (NCCL_NUM_PROTOCOLS - 1) + (hostAlgo->protocol == NCCL_PROTO_SIMPLE ? 1 : 0);
   uint8_t fullOpMask = (1<<MSCCL_RECV_COPY_SEND) |
                         (1<<MSCCL_RECV_REDUCE_SEND) |
                         (1<<MSCCL_RECV_REDUCE_COPY_SEND) |

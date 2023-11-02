@@ -223,10 +223,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
   int minChunkSize;
   if (Proto::Id == NCCL_PROTO_LL)
     minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T));
-  if (Proto::Id == NCCL_PROTO_LL128) {
-    // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
-    minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
-  }
 
   RedOp redFn(mscclShmem.work.redOpArg);
   Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
@@ -461,9 +457,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type, fullOps) \
 __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
   mscclRunInterpreter<type, Func##devredop<type>, ProtoLL, fullOps>(comm, algo, work); \
-} \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128, fullOps>(comm, algo, work); \
 } \
 __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
   mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>, fullOps>(comm, algo, work); \

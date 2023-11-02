@@ -290,8 +290,8 @@ ncclResult_t mscclCheckBufferBounds(int bufferType, int offset, int nInputChunks
 ncclResult_t mscclProtocolStrToId(const char *protocol, int *protocolId) {
   if (strcmp(protocol, "Simple") == 0) {
     *protocolId = NCCL_PROTO_SIMPLE;
-  } else if (strcmp(protocol, "LL128") == 0) {
-    *protocolId = NCCL_PROTO_LL128;
+  //} else if (strcmp(protocol, "LL128") == 0) {
+  //  *protocolId = NCCL_PROTO_LL128;
   } else if (strcmp(protocol, "LL") == 0) {
     *protocolId = NCCL_PROTO_LL;
   } else {
