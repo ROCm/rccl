@@ -424,7 +424,13 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
   uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol;
-  if (hostAlgo->typeMask & ~0x83) fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
+  uint64_t fullOpMask = (1<<MSCCL_RECV_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY) |
+                        (1<<MSCCL_LOCAL_COPY);
+  //check if need full ops msccl kernel
+  if (hostAlgo->typeMask & fullOpMask) fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
   void *func = mscclKernelEntries[fnIndex];
   if (enableDoneEvent) {
     CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
