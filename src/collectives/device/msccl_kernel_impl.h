@@ -467,7 +467,7 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevCo
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop) \
-
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, float) \
 
   // MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t) \
