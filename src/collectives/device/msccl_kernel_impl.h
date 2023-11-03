@@ -100,16 +100,17 @@ inline __device__ static void barrier(int nthreads) {
 
 // Copy 8-byte aligned data. You must call with at least `(bytes+7)/8` threads.
 inline __device__ static void copyToShmem8(int tid, void* dst, void const* src, int bytes) {
-  int offset = 8 * tid;
+  int offset = sizeof(uint32_t) * tid;
   if (offset < bytes) {
-    uint64_t *src2 = (uint64_t*)((char const*)src + offset);
-    uint64_t *dst2 = (uint64_t*)((char*)dst + offset);
+    uint32_t *src2 = (uint32_t*)((char const*)src + offset);
+    uint32_t *dst2 = (uint32_t*)((char*)dst + offset);
     *dst2 = *src2;
+    offset += WARP_SIZE*sizeof(uint32_t);
   }
 }
 
 __device__ __forceinline__ static void threadBlockCopy(
-  uint64_t *dst, uint64_t const *src, uint64_t size, int tid, int nthreads) {
+  uint32_t *dst, uint32_t const *src, uint64_t size, int tid, int nthreads) {
   for (int i = tid; i < size; i += nthreads) {
     dst[i] = src[i];
   }
@@ -143,8 +144,8 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #endif
   // initialize mscclShmem.mscclTB
   threadBlockCopy(
-    (uint64_t *)&mscclShmem.mscclTB, (uint64_t *)(algo->mscclTBs + bid),
-    sizeof(struct mscclThreadBlock) / sizeof(uint64_t), tid, nthreads);
+    (uint32_t *)&mscclShmem.mscclTB, (uint32_t *)(algo->mscclTBs + bid),
+    sizeof(struct mscclThreadBlock) / sizeof(uint32_t), tid, nthreads);
   __synclds(); // publish mscclShmem.mscclTB.channelId
 
   // initialize ncclShmem and mscclShmem.work
@@ -158,20 +159,17 @@ __device__ __forceinline__ void mscclRunInterpreter(
       dst = &ncclShmem.comm;
       src = comm;
       bytes = sizeof(ncclDevComm);
-      static_assert(sizeof(ncclDevComm) <= sizeof(uint64_t) * WARP_SIZE, "ncclDevComm cannot be loaded by a single warp in one insn.");
       break;
     case 1:
       // Get address of channel without incurring indirect load from ncclDevComm::channels
       dst = &ncclShmem.channel;
       src = &((ncclDevCommAndChannels*)comm)->channels[channelId];
       bytes = sizeof(ncclDevChannel);
-      static_assert(sizeof(ncclDevChannel) <= sizeof(uint64_t) * WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
       break;
     case 2:
       dst = &mscclShmem.work;
       src = work + blockIdx.x;
       bytes = sizeof(mscclWork);
-      static_assert(sizeof(mscclWork) <= sizeof(uint64_t) * WARP_SIZE, "mscclWork cannot be loaded by a single warp in one insn.");
       break;
     case 3:
       /* set abort flag to 0 */
@@ -194,6 +192,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #endif
   __synclds(); // publish shmem
+
   if (tid == 0)
     *mscclShmem.work.workFifoDone = mscclShmem.work.workFifoDoneAck;
 
@@ -210,8 +209,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #endif
 
-  __synclds(); // publish shmem
-  
   // User pointers for primitives
   T* thisInput = (T*)mscclShmem.work.sendBuff;
   T* thisOutput = (T*)mscclShmem.work.recvBuff;

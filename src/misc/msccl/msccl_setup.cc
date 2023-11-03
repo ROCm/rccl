@@ -368,6 +368,8 @@ static void mscclWaitWorkFifoAvailable(uint32_t desiredSent) {
   }
 }
 
+RCCL_PARAM(MscclForceFullOps, "MSCCL_FORCE_FULLOPS", 0);
+
 ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count,
     ncclDataType_t dataType, ncclRedOp_t op, struct mscclAlgo* hostAlgo, struct mscclAlgo* devAlgo,
     ncclComm_t comm, hipStream_t stream) {
@@ -434,7 +436,8 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
                         (1<<MSCCL_RECV_REDUCE_COPY) |
                         (1<<MSCCL_LOCAL_COPY);
   //check if need full ops msccl kernel
-  if (hostAlgo->typeMask & fullOpMask) fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
+  if ((hostAlgo->typeMask & fullOpMask) || rcclParamMscclForceFullOps())
+    fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
   void *func = mscclKernelEntries[fnIndex];
   if (enableDoneEvent) {
     CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
