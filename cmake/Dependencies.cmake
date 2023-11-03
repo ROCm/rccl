@@ -105,7 +105,8 @@ function(expand_collectives FILE FUNC)
           #include \"primitives.h\"
           #include \"collectives.h\"
           #include \"devcomm.h\"
-          MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE});")
+          MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, false);
+          MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, true);")
       else()
         file(WRITE ${FILE_NAME}
           "#include \"${FILE}.h\"

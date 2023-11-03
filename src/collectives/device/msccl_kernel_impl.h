@@ -128,7 +128,7 @@ for (int r = 0; r < numloops; r++) { \
   srcs[r] = srcPointer + srcOffset; \
 }
 
-template<typename T, typename RedOp, typename Proto>
+template<typename T, typename RedOp, typename Proto, bool fullOps>
 __device__ __forceinline__ void mscclRunInterpreter(
   struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) {
   const int tid = threadIdx.x;
@@ -411,13 +411,13 @@ __device__ __forceinline__ void mscclRunInterpreter(
             prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
           }
           if (c == 0) step += (numReductions-1); // only advance step once!
-        } else if (t->type == MSCCL_RECV_COPY_SEND)
+        } else if (fullOps && t->type == MSCCL_RECV_COPY_SEND)
           prims.recvCopySend(dstOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_SEND)
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_SEND)
           prims.recvReduceSend(srcOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_COPY_SEND)
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_COPY_SEND)
           prims.recvReduceCopySend(srcOffset, dstOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_COPY) {
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_COPY) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY)
           if (tid == 0) {
             NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
@@ -430,7 +430,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           }
 #endif
         }
-        else if (t->type == MSCCL_LOCAL_COPY)
+        else if (fullOps && t->type == MSCCL_LOCAL_COPY)
           prims.localCopy(srcPointer+srcOffset, dstPointer+dstOffset, thisNelem);
         else
           return;
@@ -458,33 +458,37 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #endif
 }
 
-#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type) \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL>(comm, algo, work); \
+#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type, fullOps) \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL, fullOps>(comm, algo, work); \
 } \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128>(comm, algo, work); \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128, fullOps>(comm, algo, work); \
 } \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>>(comm, algo, work); \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>, fullOps>(comm, algo, work); \
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint8_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int32_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint32_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int64_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint64_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, half) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, float) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, double) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, rccl_bfloat16)
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint8_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int32_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint32_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int64_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint64_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, half, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, float, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, double, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps)
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC() \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min)
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, true) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, true) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, true) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, true)
 
 #endif

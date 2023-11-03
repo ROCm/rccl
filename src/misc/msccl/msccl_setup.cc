@@ -283,31 +283,35 @@ static ncclResult_t hostToDevRedOp(
   nullptr, \
   nullptr
 
-#define MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, type) \
-  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL), \
-  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128), \
-  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)
+#define MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, type, fullOps) \
+  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL, fullOps), \
+  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128, fullOps), \
+  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)
 
-#define MSCCL_KERNEL_ENTRY_DEVREDOP(devredop) \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint8_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int32_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint32_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int64_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint64_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, half), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16)
+#define MSCCL_KERNEL_ENTRY_DEVREDOP(devredop, fullOps) \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint8_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int32_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint32_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int64_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint64_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, half, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps)
 
 #define MSCCL_KERNEL_ENTRY() \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Sum), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Prod), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Max), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Min)
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Max, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, true), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, true), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Max, true), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, true)
 
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
-void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
+void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS * 2] = {
 #ifdef COMPILE_MSCCL_KERNEL
   MSCCL_KERNEL_ENTRY()
 #endif
@@ -398,7 +402,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
-  INFO(NCCL_COLL, "MSCCL: Setup Kernel finished");
+  INFO(NCCL_COLL, "MSCCL: typeMask %x Setup Kernel finished", hostAlgo->typeMask);
   
   uint32_t workFifoIdxMask = status.workFifoDepth - 1;
   uint32_t workFifoSent = status.workFifoSent;
@@ -423,7 +427,15 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
-  void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];
+  uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol;
+  uint8_t fullOpMask = (1<<MSCCL_RECV_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY) |
+                        (1<<MSCCL_LOCAL_COPY);
+  //check if need full ops msccl kernel
+  if (hostAlgo->typeMask & fullOpMask) fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
+  void *func = mscclKernelEntries[fnIndex];
   if (enableDoneEvent) {
     CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
   } else {
