@@ -761,12 +761,8 @@ static ncclResult_t ncclTopoGetNchannels(struct ncclTopoSystem* system, int g /*
     // Local rank
     path = system->nodes[GPU].nodes[peer].paths[GPU]+g;
     if (path->type == PATH_NVL) {
-      if (ncclParamNChannelsPerPeer() == -2) {
-        float nvlBw = ncclTopoXGMISpeed(system->nodes[GPU].nodes[g].gpu.gcn);
-        *nChannels = 2*std::max(1, (int)(path->bw / nvlBw));
-      } else {
-        *nChannels = ncclParamNChannelsPerPeer();
-      }
+      float nvlBw = ncclTopoXGMISpeed(system->nodes[GPU].nodes[g].gpu.gcn);
+      *nChannels = (IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? 4 : 2)*std::max(1, (int)(path->bw / nvlBw));
     } else {
       *nChannels = 2;
     }
@@ -816,10 +812,9 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     // Adjust P2P channels on Rome
     comm->p2pnChannelsPerPeer = 2;
     comm->p2pnChannels = 2;
-  }
-  else {
+  } else {
     // Round to next pow2 nChannelsPerPeer and nChannels
-    comm->p2pnChannelsPerPeer = nextPow2(minChannels);
+    comm->p2pnChannelsPerPeer = (ncclParamNChannelsPerPeer() == -2 ? nextPow2(minChannels) : ncclParamNChannelsPerPeer());
     comm->p2pnChannels = nextPow2(comm->p2pnChannels);
   }
 
