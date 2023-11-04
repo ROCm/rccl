@@ -11,11 +11,11 @@ The collective operations are implemented using ring and tree algorithms and hav
 ## Requirements
 
 1. ROCm supported GPUs
-2. ROCm stack installed on the system (HIP runtime & HCC or HIP-Clang)
+2. ROCm stack installed on the system (HIP runtime & HIP-Clang)
 
 ## Quickstart RCCL Build
 
-RCCL directly depends on HIP runtime, plus the HCC C++ compiler or the HIP-Clang compiler which are part of the ROCm software stack.
+RCCL directly depends on HIP runtime plus the HIP-Clang compiler, which are part of the ROCm software stack.
 For ROCm installation instructions, see https://github.com/RadeonOpenCompute/ROCm.
 
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
