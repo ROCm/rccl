@@ -349,22 +349,16 @@ __device__ __forceinline__ void mscclRunInterpreter(
               T o = load(dstIndex);
               ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + tid;
               switch (numReductions) {
-                case 1:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(1);
-                  break;
-                case 3:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(3);
-                  break;
                 case 7:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(7);
                   break;
+#if defined(__gfx90a__)
                 case 15:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(15);
                   break;
+#endif
                 default:
                   MSCCL_REDUCE_UNROLL_LOOP_A(numReductions);
                   break;
@@ -385,22 +379,16 @@ __device__ __forceinline__ void mscclRunInterpreter(
             T* dst = dstPointer + dstOffset;
             ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk;
             switch (numReductions) {
-              case 1:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(1);
-                break;
-              case 3:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(3);
-                break;
               case 7:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(7);
                 break;
+#if defined(__gfx90a__)
               case 15:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(15);
                 break;
+#endif
               default:
                 MSCCL_REDUCE_UNROLL_LOOP_B(numReductions);
                 break;
