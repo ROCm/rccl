@@ -1,6 +1,6 @@
 ROCM_DIR = /opt/rocm
 HIPCC    = $(ROCM_DIR)/bin/hipcc
-CCFLAGS  = -lhsa-runtime64 -fopenmp
+CCFLAGS  = -lhsa-runtime64 -fopenmp -lnuma
 
 all: LaunchBench
 

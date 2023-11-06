@@ -26,11 +26,14 @@ THE SOFTWARE.
 #include "Common.hpp"
 #include <omp.h>
 #include <unistd.h>
+#include "Compatibility.hpp"
 
 struct SyncData
 {
   uint64_t cpuStart;
+  uint64_t gpuStart;
   uint64_t cpuStop;
+  uint64_t gpuStop;
   int32_t  xccId;
 };
 
@@ -40,21 +43,41 @@ __global__ void SyncKernel(volatile uint64_t* cpuTime,
 {
   // Collect timestamp upon kernel entry
   uint64_t cpuStart = *cpuTime;
+#if !defined(__NVCC__)
+  uint64_t gpuStart = wall_clock64();
+#endif
 
   // Wait for abort flag to be modified
   while (*abortFlag == 0);
 
   // Collect timestamps after abort flag
   uint64_t cpuStop = *cpuTime;
+#if !defined(__NVCC__)
+  uint64_t gpuStop = wall_clock64();
+#endif
 
   // Save timestamps
-  syncData[blockIdx.x].cpuStart = cpuStart;
-  syncData[blockIdx.x].cpuStop  = cpuStop;
-  GetXccId(syncData[blockIdx.x].xccId);
+  SyncData sd;
+  GetXccId(sd.xccId);
+  sd.cpuStart = cpuStart;
+  sd.cpuStop  = cpuStop;
+#if !defined(__NVCC__)
+  sd.gpuStart = gpuStart;
+  sd.gpuStop  = gpuStop;
+#endif
+  syncData[blockIdx.x] = sd;
 }
 
 void UpdateCpuTime(volatile uint64_t* cpuTimestamp, volatile bool& abortThread)
 {
+  /*
+  if (numa_run_on_node(numaId))
+  {
+    printf("[ERROR] Unable to migrate CPU update thread to NUMA node %d\n", numaId);
+    exit(1);
+  }
+  */
+
   while (!abortThread)
   {
     *cpuTimestamp = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -94,12 +117,14 @@ int main(int argc, char **argv)
   HIP_CALL(hipHostMalloc((void**)&abortFlag,    sizeof(uint32_t)));
 
   // Allocate device memory for collecting timestamps
-  std::vector<SyncData*> syncDataList(numGpus);
+  std::vector<SyncData*> syncDataGpu(numGpus);
+  std::vector<SyncData*> syncDataCpu(numGpus);
   std::vector<hipStream_t>streams(numGpus);
   for (int i = 0; i < numGpus; i++)
   {
     HIP_CALL(hipSetDevice(i));
-    HIP_CALL(hipMalloc((void**)&syncDataList[i], numIterations * numBlocks * sizeof(SyncData)));
+    HIP_CALL(hipMalloc((void**)&syncDataGpu[i], totalIterations * numBlocks * sizeof(SyncData)));
+    HIP_CALL(hipHostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData)));
     HIP_CALL(hipStreamCreate(&streams[i]));
   }
 
@@ -128,7 +153,7 @@ int main(int argc, char **argv)
       *abortFlag = 0;
 
       // Prepare for this iteration
-      SyncData* syncData = syncDataList[deviceId] + (iteration * numBlocks);
+      SyncData* syncData = syncDataGpu[deviceId] + (iteration * numBlocks);
 
       // Wait for all threads to arrive before launching all kernels
       #pragma omp barrier
@@ -162,6 +187,11 @@ int main(int argc, char **argv)
   abortThread = true;
   updateThread.join();
 
+  for (int i = 0; i < numGpus; i++)
+  {
+    HIP_CALL(hipMemcpy(syncDataCpu[i], syncDataGpu[i],totalIterations * numBlocks * sizeof(SyncData), hipMemcpyDeviceToHost));
+  }
+
   for (int iteration = 1; iteration <= numIterations; iteration++)
   {
     // Ignore warmup iterations
@@ -175,9 +205,9 @@ int main(int argc, char **argv)
       for (int block = 0; block < numBlocks; block++)
       {
         origin = std::min(origin, cpuStartList[gpu][iter]);
-        origin = std::min(origin, syncDataList[gpu][iter * numBlocks + block].cpuStart);
+        origin = std::min(origin, syncDataCpu[gpu][iter * numBlocks + block].cpuStart);
         origin = std::min(origin, cpuAbortTime[iter]);
-        origin = std::min(origin, syncDataList[gpu][iter * numBlocks + block].cpuStop);
+        origin = std::min(origin, syncDataCpu[gpu][iter * numBlocks + block].cpuStop);
         origin = std::min(origin, cpuStopList[gpu][iter]);
       }
     }
@@ -191,12 +221,12 @@ int main(int argc, char **argv)
     {
       for (int block = 0; block < numBlocks; block++)
       {
-        int    xccId     = syncDataList[gpu][iter * numBlocks + block].xccId;
+        int    xccId     = syncDataCpu[gpu][iter * numBlocks + block].xccId;
         double cpuStart  = (cpuStartList[gpu][iter] - origin) / 1000.0;
-        double gpuStart  = (syncDataList[gpu][iter * numBlocks + block].cpuStart - origin) / 1000.0;
+        double gpuStart  = (syncDataCpu[gpu][iter * numBlocks + block].cpuStart - origin) / 1000.0;
         double cpuReturn = (cpuReturnList[gpu][iter] - origin) / 1000.0;
         double cpuAbort  = (cpuAbortTime[iter] - origin) / 1000.0;
-        double gpuStop   = (syncDataList[gpu][iter * numBlocks + block].cpuStop - origin) / 1000.0;
+        double gpuStop   = (syncDataCpu[gpu][iter * numBlocks + block].cpuStop - origin) / 1000.0;
         double cpuStop   = (cpuStopList[gpu][iter] - origin) / 1000.0;
 
         minCpuStart  = ((gpu == 0 && block == 0) || (minCpuStart  > cpuStart))  ? cpuStart  : minCpuStart;
@@ -209,8 +239,8 @@ int main(int argc, char **argv)
         maxCpuAbort  = ((gpu == 0 && block == 0) || (maxCpuAbort  < cpuAbort))  ? cpuAbort  : maxCpuAbort;
         minGpuStop   = ((gpu == 0 && block == 0) || (minGpuStop   > gpuStop))   ? gpuStop   : minGpuStop;
         maxGpuStop   = ((gpu == 0 && block == 0) || (maxGpuStop   < gpuStop))   ? gpuStop   : maxGpuStop;
-        minCpuStop   = ((gpu == 0 && block == 0) || (minCpuStop   > gpuStop))   ? gpuStop   : minCpuStop;
-        maxCpuStop   = ((gpu == 0 && block == 0) || (maxCpuStop   < gpuStop))   ? gpuStop   : maxCpuStop;
+        minCpuStop   = ((gpu == 0 && block == 0) || (minCpuStop   > cpuStop))   ? cpuStop   : minCpuStop;
+        maxCpuStop   = ((gpu == 0 && block == 0) || (maxCpuStop   < cpuStop))   ? cpuStop   : maxCpuStop;
 
         printf("| %3d |  %3d  | %3d | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
                gpu, block, xccId, cpuStart, cpuReturn, gpuStart, cpuAbort, gpuStop, cpuStop);
