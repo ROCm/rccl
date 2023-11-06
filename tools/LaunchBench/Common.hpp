@@ -21,7 +21,6 @@ THE SOFTWARE.
 */
 
 #include <iostream>
-#include <hip/hip_runtime.h>
 
 #define HIP_CALL(cmd)                                                                   \
     do {                                                                                \

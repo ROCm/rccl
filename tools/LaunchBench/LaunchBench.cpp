@@ -22,6 +22,8 @@ THE SOFTWARE.
 
 #include <cstdio>
 #include <iostream>
+#include <chrono>
+#include <thread>
 #include <vector>
 #include "Common.hpp"
 #include <omp.h>
