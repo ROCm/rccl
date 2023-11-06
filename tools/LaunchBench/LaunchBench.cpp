@@ -154,7 +154,11 @@ int main(int argc, char **argv)
     int numaId = GetClosestNumaNode(i);
     HIP_CALL(hipSetDevice(i));
     SetNumaNode(numaId);
+#if !defined(__NVCC_)
     HIP_CALL(hipHostMalloc((void**)&cpuTimestamps[i], sizeof(uint64_t), hipHostMallocNumaUser));
+#else
+    HIP_CALL(hipHostMalloc((void**)&cpuTimestamps[i], sizeof(uint64_t)));
+#endif
 
     updateThreads.push_back(std::thread(UpdateCpuTime, numaId, cpuTimestamps[i], std::ref(abortUpdateThreads)));
   }
