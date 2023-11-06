@@ -126,7 +126,7 @@ int main(int argc, char **argv)
   int  numUpdateThreads = (argc > 3 ? atoi(argv[3]) :       1);
   int  numIterations    = (argc > 4 ? atoi(argv[4]) :      10);
   int  numWarmups       = (argc > 5 ? atoi(argv[5]) :    1000);
-  int  numSleepUsec     = (argc > 6 ? atoi(argv[6]) :      20);
+  int  numSleepUsec     = (argc > 6 ? atoi(argv[6]) :     100);
   int  totalIterations  = numWarmups + numIterations;
 
   // Print off configuration and machine information
