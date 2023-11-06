@@ -174,8 +174,13 @@ int main(int argc, char **argv)
     SetNumaNode(GetClosestNumaNode(i));
 
     HIP_CALL(    hipMalloc((void**)&syncDataGpu[i], totalIterations * numBlocks * sizeof(SyncData)));
+#if !defined(__NVCC_)
     HIP_CALL(hipHostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData), hipHostMallocNumaUser));
     HIP_CALL(hipHostMalloc((void**)&abortFlags[i],  sizeof(uint32_t),                               hipHostMallocNumaUser));
+#else
+    HIP_CALL(hipHostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData)));
+    HIP_CALL(hipHostMalloc((void**)&abortFlags[i],  sizeof(uint32_t)));
+#endif
     HIP_CALL(hipStreamCreate(&streams[i]));
   }
 
