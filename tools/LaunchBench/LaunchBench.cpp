@@ -151,11 +151,12 @@ int main(int argc, char **argv)
   std::vector<std::thread> updateThreads;
   for (int i = 0; i < numUpdateThreads; i++)
   {
+    int numaId = GetClosestNumaNode(i);
     HIP_CALL(hipSetDevice(i));
-    SetNumaNode(GetClosestNumaNode(i));
+    SetNumaNode(numaId);
     HIP_CALL(hipHostMalloc((void**)&cpuTimestamps[i], sizeof(uint64_t), hipHostMallocNumaUser));
 
-    updateThreads.push_back(std::thread(UpdateCpuTime, 0, cpuTimestamps[i], std::ref(abortUpdateThreads)));
+    updateThreads.push_back(std::thread(UpdateCpuTime, numaId, cpuTimestamps[i], std::ref(abortUpdateThreads)));
   }
 
   // Allocate per-GPU resources
