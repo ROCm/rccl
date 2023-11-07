@@ -41,21 +41,22 @@ struct SyncData
   int32_t  xccId;
 };
 
-__global__ void SyncKernel(volatile uint64_t* cpuTime,
-                           volatile uint32_t* abortFlag,
-                           SyncData* syncData)
+#define LOAD(VAR)       __atomic_load_n((VAR), __ATOMIC_SEQ_CST)
+#define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+
+__global__ void SyncKernel(uint64_t* cpuTime, uint32_t* abortFlag, SyncData* syncData)
 {
   // Only first thread in threadblock participates
   if (threadIdx.x != 0) return;
 
   // Collect timestamp upon kernel entry
-  uint64_t cpuStart = *cpuTime;
+  uint64_t cpuStart = LOAD(cpuTime);
 
   // Wait for abort flag to be modified
-  while (*abortFlag == 0);
+  while (!LOAD(abortFlag));
 
   // Collect timestamps after abort flag
-  uint64_t cpuStop = *cpuTime;
+  uint64_t cpuStop = LOAD(cpuTime);
 
   // Save timestamps
   SyncData sd;
@@ -79,16 +80,15 @@ void SetNumaNode(int numaId)
   numa_set_preferred(numaId);
 }
 
-
-void UpdateCpuTime(int const useNuma, int const numaId, volatile uint64_t* cpuTimestamp, volatile bool& abortThread)
+void UpdateCpuTime(int const useNuma, int const numaId, uint64_t* cpuTimestamp, bool* abortThread)
 {
   if (useNuma) SetNumaNode(numaId);
-  while (!abortThread)
+  while (!LOAD(abortThread))
   {
     // Unroll to increase update vs abort check ratio
     #pragma unroll
     for (int i = 0; i < 64; i++)
-      *cpuTimestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+      STORE(cpuTimestamp, std::chrono::steady_clock::now().time_since_epoch().count());
   }
 }
 
@@ -143,8 +143,8 @@ int main(int argc, char **argv)
          static_cast<double>(MicroSec::num)/MicroSec::den);
 
   // Allocate per-update-thread resources and start update threads
-  volatile bool abortUpdateThreads = false;
-  std::vector<volatile uint64_t*> cpuTimestamps(numUpdateThreads);
+  bool abortUpdateThreads = false;
+  std::vector<uint64_t*> cpuTimestamps(numUpdateThreads);
   std::vector<std::thread> updateThreads;
   for (int i = 0; i < numUpdateThreads; i++)
   {
@@ -155,14 +155,14 @@ int main(int argc, char **argv)
     HostMalloc((void**)&cpuTimestamps[i], 256);  // Allocate larger buffer to avoid multiple timestamps on same cacheline
 
     // Launch update thread
-    updateThreads.push_back(std::thread(UpdateCpuTime, useNuma, numaId, cpuTimestamps[i], std::ref(abortUpdateThreads)));
+    updateThreads.push_back(std::thread(UpdateCpuTime, useNuma, numaId, cpuTimestamps[i], &abortUpdateThreads));
   }
 
   // Allocate per-GPU resources
-  std::vector<SyncData*>          syncDataGpu(numGpus);
-  std::vector<SyncData*>          syncDataCpu(numGpus);
-  std::vector<volatile uint32_t*> abortFlags(numGpus);
-  std::vector<hipStream_t>        streams(numGpus);
+  std::vector<SyncData*>   syncDataGpu(numGpus);
+  std::vector<SyncData*>   syncDataCpu(numGpus);
+  std::vector<uint32_t*>   abortFlags(numGpus);
+  std::vector<hipStream_t> streams(numGpus);
   for (int i = 0; i < numGpus; i++)
   {
     HIP_CALL(hipSetDevice(i));
@@ -188,14 +188,14 @@ int main(int argc, char **argv)
     HIP_CALL(hipSetDevice(deviceId));
     if (useNuma) SetNumaNode(GetClosestNumaNode(deviceId));
 
-    volatile uint64_t* cpuTimestamp = cpuTimestamps[deviceId % numUpdateThreads];
-    volatile uint32_t* abortFlag    = abortFlags[deviceId];
+    uint64_t* cpuTimestamp = cpuTimestamps[deviceId % numUpdateThreads];
+    uint32_t* abortFlag    = abortFlags[deviceId];
 
     for (int iteration = 0; iteration < totalIterations; iteration++)
     {
       // Prepare for this iteration
       // Clear abort flag
-      *abortFlag = 0;
+      STORE(abortFlag, 0);
       SyncData* syncData = syncDataGpu[deviceId] + (iteration * numBlocks);
 
       // Wait for all threads to arrive before launching all kernels
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
 
       // Busy wait performs more accurately than usleep / sleep_for
       while (std::chrono::steady_clock::now().time_since_epoch().count() - cpuStart < numSleepUsec * 1000);
-      *abortFlag = 1;
+      STORE(abortFlag, 1);
       uint64_t cpuAbort = std::chrono::steady_clock::now().time_since_epoch().count();
 
       // Wait for kernel to finish
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
   }
 
   // Stop all the update threads
-  abortUpdateThreads = true;
+  STORE(&abortUpdateThreads, true);
   for (auto& t : updateThreads)
     t.join();
 
@@ -296,7 +296,6 @@ int main(int argc, char **argv)
 
       for (int block = 0; block < numBlocks; block++)
       {
-
         int    blockIdx  = iter * numBlocks + block;
         int    xccId     = syncDataCpu[gpu][blockIdx].xccId;
         double gpuStart  = (syncDataCpu[gpu][blockIdx].cpuStart - origin) / 1000.0;
