@@ -25,7 +25,6 @@ THE SOFTWARE.
 #include <iostream>
 #include <thread>
 #include <vector>
-
 #include <numa.h>
 #include <omp.h>
 #include <unistd.h>
@@ -40,11 +39,6 @@ struct SyncData
   uint64_t cpuStart;
   uint64_t cpuStop;
   int32_t  xccId;
-
-#if defined(ENABLE_GPU_WALLCLOCK)
-  uint64_t gpuStart;
-  uint64_t gpuStop;
-#endif
 };
 
 __global__ void SyncKernel(volatile uint64_t* cpuTime,
@@ -56,37 +50,24 @@ __global__ void SyncKernel(volatile uint64_t* cpuTime,
 
   // Collect timestamp upon kernel entry
   uint64_t cpuStart = *cpuTime;
-#if defined(ENABLE_GPU_WALLCLOCK)
-  uint64_t gpuStart = wall_clock64();
-#endif
 
   // Wait for abort flag to be modified
   while (*abortFlag == 0);
 
   // Collect timestamps after abort flag
   uint64_t cpuStop = *cpuTime;
-#if defined(ENABLE_GPU_WALLCLOCK)
-  uint64_t gpuStop = wall_clock64();
-#endif
 
   // Save timestamps
   SyncData sd;
   GetXccId(sd.xccId);
   sd.cpuStart = cpuStart;
   sd.cpuStop  = cpuStop;
-#if defined(ENABLE_GPU_WALLCLOCK)
-  sd.gpuStart = gpuStart;
-  sd.gpuStop  = gpuStop;
-#endif
 
   syncData[blockIdx.x] = sd;
 }
 
-int useNuma = 0;
 void SetNumaNode(int numaId)
 {
-  if (!useNuma) return;
-
   // Move CPU thread to targeted NUMA node
   if (numa_run_on_node(numaId))
   {
@@ -99,12 +80,12 @@ void SetNumaNode(int numaId)
 }
 
 
-void UpdateCpuTime(int const numaId, volatile uint64_t* cpuTimestamp, volatile bool& abortThread)
+void UpdateCpuTime(int const useNuma, int const numaId, volatile uint64_t* cpuTimestamp, volatile bool& abortThread)
 {
-  SetNumaNode(numaId);
-
+  if (useNuma) SetNumaNode(numaId);
   while (!abortThread)
   {
+    // Unroll to increase update vs abort check ratio
     #pragma unroll
     for (int i = 0; i < 64; i++)
       *cpuTimestamp = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -135,12 +116,14 @@ int main(int argc, char **argv)
   int  numBlocks        = (argc > 1 ? atoi(argv[1]) :       4);
   int  blockSize        = (argc > 2 ? atoi(argv[2]) :      32);
   int  numUpdateThreads = (argc > 3 ? atoi(argv[3]) :       1);
-       useNuma          = (argc > 4 ? atoi(argv[4]) :       0);
+  int  useNuma          = (argc > 4 ? atoi(argv[4]) :       0);
   int  numIterations    = (argc > 5 ? atoi(argv[5]) :      10);
   int  numWarmups       = (argc > 6 ? atoi(argv[6]) :    1000);
   int  numSleepUsec     = (argc > 7 ? atoi(argv[7]) :     100);
   int  totalIterations  = numWarmups + numIterations;
   int  verbose          = (getenv("VERBOSE") ? atoi(getenv("VERBOSE")) : 1);
+
+  if (numUpdateThreads == 0) numUpdateThreads = numGpus;
 
   // Print off configuration and machine information
   printf("%s %d %d %d %d %d %d %d\n", argv[0], numBlocks, blockSize, numUpdateThreads, useNuma, numIterations, numWarmups, numSleepUsec);
@@ -167,12 +150,12 @@ int main(int argc, char **argv)
   {
     int numaId = GetClosestNumaNode(i);
     HIP_CALL(hipSetDevice(i));
-    SetNumaNode(numaId);
+    if (useNuma) SetNumaNode(numaId);
 
-    // Allocate larger buffer to avoid multiple timestamps on same cacheline
-    HostMalloc((void**)&cpuTimestamps[i], 256);
+    HostMalloc((void**)&cpuTimestamps[i], 256);  // Allocate larger buffer to avoid multiple timestamps on same cacheline
 
-    updateThreads.push_back(std::thread(UpdateCpuTime, numaId, cpuTimestamps[i], std::ref(abortUpdateThreads)));
+    // Launch update thread
+    updateThreads.push_back(std::thread(UpdateCpuTime, useNuma, numaId, cpuTimestamps[i], std::ref(abortUpdateThreads)));
   }
 
   // Allocate per-GPU resources
@@ -183,12 +166,11 @@ int main(int argc, char **argv)
   for (int i = 0; i < numGpus; i++)
   {
     HIP_CALL(hipSetDevice(i));
-    SetNumaNode(GetClosestNumaNode(i));
+    if (useNuma) SetNumaNode(GetClosestNumaNode(i));
 
     HIP_CALL(hipMalloc((void**)&syncDataGpu[i], totalIterations * numBlocks * sizeof(SyncData)));
     HostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData));
-    // Allocate larger buffer to avoid multiple abort flags on same cacheline
-    HostMalloc((void**)&abortFlags[i], 256);
+    HostMalloc((void**)&abortFlags[i], 256); // Allocate larger buffer to avoid multiple abort flags on same cacheline
 
     HIP_CALL(hipStreamCreate(&streams[i]));
   }
@@ -204,7 +186,7 @@ int main(int argc, char **argv)
   {
     int deviceId = omp_get_thread_num();
     HIP_CALL(hipSetDevice(deviceId));
-    SetNumaNode(GetClosestNumaNode(deviceId));
+    if (useNuma) SetNumaNode(GetClosestNumaNode(deviceId));
 
     volatile uint64_t* cpuTimestamp = cpuTimestamps[deviceId % numUpdateThreads];
     volatile uint32_t* abortFlag    = abortFlags[deviceId];
