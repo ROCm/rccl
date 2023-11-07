@@ -21,6 +21,7 @@ THE SOFTWARE.
 */
 
 #include "archinfo.h"
+#include "checks.h"
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
 
@@ -31,44 +32,32 @@ void GcnArchNameFormat(char* gcnArchName, char* out) {
   strcpy(out, gcnArchNameToken);
 }
 
-void GcnArchConvertToGcnArchName(int gcnArch, char* gcnArchName) {
+void convertGcnArchToGcnArchName(const char* gcnArch, const char** gcnArchName) {
   // gcnArch is deprecated and we should instead use gcnArchName; however, some data files still have
   // the older gcnArch value.  There's only a handful of architectures that were coded prior to deprecation,
   // so we handle those cases here.
-  //char gcnArchName[256] = {0}; // why 256?  Because that's what gcnArchName gives us, so we're matching it.
-  gcnArchName[6] = 0;
-  switch (gcnArch) {
-    case 906:
-      strncpy(gcnArchName, "gfx906", 6);
-      break;
-    case 908:
-      strncpy(gcnArchName, "gfx908", 6);
-      break;
-    case 910:
-      // this is actually 90a
-      strncpy(gcnArchName, "gfx90a", 6);
-      break;
-  }
+  if (strcmp(gcnArch, "906") == 0)
+    *gcnArchName = "gfx906";
+  else if (strcmp(gcnArch, "908") == 0)
+    *gcnArchName = "gfx908";
+  else if (strcmp(gcnArch, "910") == 0)
+    *gcnArchName = "gfx90a";
+  else if (strcmp(gcnArch, "940") == 0)
+    *gcnArchName = "gfx940";
+  else if (strcmp(gcnArch, "941") == 0)
+    *gcnArchName = "gfx941";
+  else if (strcmp(gcnArch, "942") == 0)
+    *gcnArchName = "gfx942";
+  else
+    *gcnArchName = gcnArch;
 }
 
 int GetGcnArchName(int deviceId, char* out) {
-  // this is a generic call in to get a consistent gcnArchName regardless of which version of rocm we're using.
-  // or which version of rocm we're using.
+  // this is a generic call in to get a consistent gcnArchName
   hipDeviceProp_t devProp;
-  hipError_t status = hipGetDeviceProperties(&devProp, deviceId);
-  if (status != hipSuccess) {
-    //std::cerr << "Encountered HIP error getting device properties: "
-    //          << hipGetErrorString(status) << "\n";
-    exit(-1);
-  }
-#ifdef HIP_NO_GCNARCHNAME
-  // we're using a HIP version before 3.7.
-  GcnArchConvertToGcnArchName(devProp.gcnArch, out);
-  return 1;
-#else
+  CUDACHECK(hipGetDeviceProperties(&devProp, deviceId));
   GcnArchNameFormat(devProp.gcnArchName, out);
   return 0;
-#endif
 }
 
 double GetDeviceWallClockRateInKhz(int deviceId) {
