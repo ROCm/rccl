@@ -82,9 +82,10 @@ __global__ void SyncKernel(volatile uint64_t* cpuTime,
   syncData[blockIdx.x] = sd;
 }
 
+int useNuma = 0;
 void SetNumaNode(int numaId)
 {
-  if (getenv("IGNORE_NUMA")) return;
+  if (!useNuma) return;
 
   // Move CPU thread to targeted NUMA node
   if (numa_run_on_node(numaId))
@@ -104,10 +105,20 @@ void UpdateCpuTime(int const numaId, volatile uint64_t* cpuTimestamp, volatile b
 
   while (!abortThread)
   {
-    *cpuTimestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    #pragma unroll
+    for (int i = 0; i < 64; i++)
+      *cpuTimestamp = std::chrono::steady_clock::now().time_since_epoch().count();
   }
 }
 
+void HostMalloc(void** pinnedHostPtr, size_t size)
+{
+#if !defined(__NVCC__)
+  HIP_CALL(hipHostMalloc(pinnedHostPtr, size, hipHostMallocNumaUser));
+#else
+  HIP_CALL(hipHostMalloc(pinnedHostPtr, size));
+#endif
+}
 
 int main(int argc, char **argv)
 {
@@ -124,14 +135,17 @@ int main(int argc, char **argv)
   int  numBlocks        = (argc > 1 ? atoi(argv[1]) :       4);
   int  blockSize        = (argc > 2 ? atoi(argv[2]) :      32);
   int  numUpdateThreads = (argc > 3 ? atoi(argv[3]) :       1);
-  int  numIterations    = (argc > 4 ? atoi(argv[4]) :      10);
-  int  numWarmups       = (argc > 5 ? atoi(argv[5]) :    1000);
-  int  numSleepUsec     = (argc > 6 ? atoi(argv[6]) :     100);
+       useNuma          = (argc > 4 ? atoi(argv[4]) :       0);
+  int  numIterations    = (argc > 5 ? atoi(argv[5]) :      10);
+  int  numWarmups       = (argc > 6 ? atoi(argv[6]) :    1000);
+  int  numSleepUsec     = (argc > 7 ? atoi(argv[7]) :     100);
   int  totalIterations  = numWarmups + numIterations;
+  int  verbose          = (getenv("VERBOSE") ? atoi(getenv("VERBOSE")) : 1);
 
   // Print off configuration and machine information
-  printf("Running %d GPUs with %d block(s) each of size %d, %d update threads, %d timed iterations, %d warmup iterations, sleeping for %d usec\n",
-         numGpus, numBlocks, blockSize, numUpdateThreads, numIterations, numWarmups, numSleepUsec);
+  printf("%s %d %d %d %d %d %d %d\n", argv[0], numBlocks, blockSize, numUpdateThreads, useNuma, numIterations, numWarmups, numSleepUsec);
+  printf("Running %d GPUs with %d block(s) each of size %d, %d update threads, %s NUMA, %d timed iterations, %d warmup iterations, sleeping for %d usec\n",
+         numGpus, numBlocks, blockSize, numUpdateThreads, useNuma ? "manual" : "default", numIterations, numWarmups, numSleepUsec);
   char archName[100];
   for (int i = 0; i < numGpus; i++)
   {
@@ -154,11 +168,9 @@ int main(int argc, char **argv)
     int numaId = GetClosestNumaNode(i);
     HIP_CALL(hipSetDevice(i));
     SetNumaNode(numaId);
-#if !defined(__NVCC__)
-    HIP_CALL(hipHostMalloc((void**)&cpuTimestamps[i], sizeof(uint64_t), hipHostMallocNumaUser));
-#else
-    HIP_CALL(hipHostMalloc((void**)&cpuTimestamps[i], sizeof(uint64_t)));
-#endif
+
+    // Allocate larger buffer to avoid multiple timestamps on same cacheline
+    HostMalloc((void**)&cpuTimestamps[i], 256);
 
     updateThreads.push_back(std::thread(UpdateCpuTime, numaId, cpuTimestamps[i], std::ref(abortUpdateThreads)));
   }
@@ -173,14 +185,11 @@ int main(int argc, char **argv)
     HIP_CALL(hipSetDevice(i));
     SetNumaNode(GetClosestNumaNode(i));
 
-    HIP_CALL(    hipMalloc((void**)&syncDataGpu[i], totalIterations * numBlocks * sizeof(SyncData)));
-#if !defined(__NVCC__)
-    HIP_CALL(hipHostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData), hipHostMallocNumaUser));
-    HIP_CALL(hipHostMalloc((void**)&abortFlags[i],  sizeof(uint32_t),                               hipHostMallocNumaUser));
-#else
-    HIP_CALL(hipHostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData)));
-    HIP_CALL(hipHostMalloc((void**)&abortFlags[i],  sizeof(uint32_t)));
-#endif
+    HIP_CALL(hipMalloc((void**)&syncDataGpu[i], totalIterations * numBlocks * sizeof(SyncData)));
+    HostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData));
+    // Allocate larger buffer to avoid multiple abort flags on same cacheline
+    HostMalloc((void**)&abortFlags[i], 256);
+
     HIP_CALL(hipStreamCreate(&streams[i]));
   }
 
@@ -252,8 +261,11 @@ int main(int argc, char **argv)
   {
     // Ignore warmup iterations
     int iter = iteration + numWarmups - 1;
-    printf("---------------------------------------------------------------------------------------------------\n");
-    printf("Iteration %d: (All times in usec)\n", iteration);
+    if (verbose)
+    {
+      printf("---------------------------------------------------------------------------------------------------\n");
+      printf("Iteration %d: (All times in usec)\n", iteration);
+    }
 
     uint64_t origin = cpuStartList[0][iter];
     for (int gpu = 0; gpu < numGpus; gpu++)
@@ -268,7 +280,7 @@ int main(int argc, char **argv)
       }
     }
 
-    printf("| GPU | BLOCK | XCC | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) |\n");
+    if (verbose) printf("| GPU | BLOCK | XCC | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) |\n");
 
     double minCpuStart, minGpuStart, minCpuReturn, minCpuAbort, minGpuStop, minCpuStop;
     double maxCpuStart, maxGpuStart, maxCpuReturn, maxCpuAbort, maxGpuStop, maxCpuStop;
@@ -298,8 +310,11 @@ int main(int argc, char **argv)
         CHECK_MINMAX(gpuStart,  minGpuStart,  maxGpuStart);
         CHECK_MINMAX(gpuStop,   minGpuStop,   maxGpuStop);
 
-        printf("| %3d |  %3d  | %3d | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-               gpu, block, xccId, cpuStart, cpuReturn, gpuStart, cpuAbort, gpuStop, cpuStop);
+        if (verbose)
+        {
+          printf("| %3d |  %3d  | %3d | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
+                 gpu, block, xccId, cpuStart, cpuReturn, gpuStart, cpuAbort, gpuStop, cpuStop);
+        }
 
         TimelineData td;
         sprintf(buff, "Iteration %d GPU %02d Block %02d (CPU)", iteration, gpu, block); td.rowLabel = buff;
@@ -329,11 +344,6 @@ int main(int argc, char **argv)
         timelineData.push_back(td);
       }
     }
-    printf("---------------------------------------------------------------------------------------------------\n");
-    printf("|               MIN | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-           minCpuStart, minCpuReturn, minGpuStart, minCpuAbort, minGpuStop, minCpuStop);
-    printf("|               MAX | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-           maxCpuStart, maxCpuReturn, maxGpuStart, maxCpuAbort, maxGpuStop, maxCpuStop);
 
     double diffCpuStart  = maxCpuStart  - minCpuStart;
     double diffCpuReturn = maxCpuReturn - minCpuReturn;
@@ -342,8 +352,16 @@ int main(int argc, char **argv)
     double diffGpuStop   = maxGpuStop   - minGpuStop;
     double diffCpuStop   = maxCpuStop   - minCpuStop;
 
-    printf("|              DIFF | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-           diffCpuStart, diffCpuReturn, diffGpuStart, diffCpuAbort, diffGpuStop, diffCpuStop);
+    if (verbose)
+    {
+      printf("---------------------------------------------------------------------------------------------------\n");
+      printf("|               MIN | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
+             minCpuStart, minCpuReturn, minGpuStart, minCpuAbort, minGpuStop, minCpuStop);
+      printf("|               MAX | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
+             maxCpuStart, maxCpuReturn, maxGpuStart, maxCpuAbort, maxGpuStop, maxCpuStop);
+      printf("|              DIFF | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
+             diffCpuStart, diffCpuReturn, diffGpuStart, diffCpuAbort, diffGpuStop, diffCpuStop);
+    }
 
     #define CHECK_MINMAXDIFF(VAL, MINVAL, AVGVAL, MAXVAL)             \
         MINVAL = ((iteration == 1) || (MINVAL > VAL)) ? VAL : MINVAL; \
@@ -358,6 +376,8 @@ int main(int argc, char **argv)
     CHECK_MINMAXDIFF(diffCpuStop,   minDiffCpuStop,   avgDiffCpuStop,   maxDiffCpuStop);
   }
   printf("===================================================================================================\n");
+  printf("|           SUMMARY | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) |\n");
+  printf("===================================================================================================\n");
   printf("|          DIFF MIN | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
          minDiffCpuStart, minDiffCpuReturn, minDiffGpuStart, minDiffCpuAbort, minDiffGpuStop, minDiffCpuStop);
   printf("|          DIFF AVG | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
@@ -366,7 +386,7 @@ int main(int argc, char **argv)
   printf("|          DIFF MAX | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
          maxDiffCpuStart, maxDiffCpuReturn, maxDiffGpuStart, maxDiffCpuAbort, maxDiffGpuStop, maxDiffCpuStop);
 
-  sprintf(buff, "timeline_%dx%s_%dx%dblockSize_%dCUTs_Sleep%d.html", numGpus, archName, numBlocks, blockSize, numUpdateThreads, numSleepUsec);
+  sprintf(buff, "timeline_%dx%s_%dx%dblockSize_%dCUTs_Numa%d_Sleep%d.html", numGpus, archName, numBlocks, blockSize, numUpdateThreads, useNuma, numSleepUsec);
   printf("Timeline exported to %s\n", buff);
   ExportToTimeLine(buff, "Device", "Call", timelineData);
 
