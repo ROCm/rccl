@@ -233,9 +233,9 @@ int main(int argc, char **argv)
   for (int i = 0; i < numGpus; i++)
     HIP_CALL(hipMemcpy(syncDataCpu[i], syncDataGpu[i],totalIterations * numBlocks * sizeof(SyncData), hipMemcpyDeviceToHost));
 
-  double minDiffCpuStart, minDiffGpuStart, minDiffCpuReturn, minDiffCpuAbort, minDiffGpuStop, minDiffCpuStop;
-  double avgDiffCpuStart, avgDiffGpuStart, avgDiffCpuReturn, avgDiffCpuAbort, avgDiffGpuStop, avgDiffCpuStop;
-  double maxDiffCpuStart, maxDiffGpuStart, maxDiffCpuReturn, maxDiffCpuAbort, maxDiffGpuStop, maxDiffCpuStop;
+  double minDiffCpuStart = 0, minDiffGpuStart = 0, minDiffCpuReturn = 0, minDiffCpuAbort = 0, minDiffGpuStop = 0, minDiffCpuStop = 0;
+  double avgDiffCpuStart = 0, avgDiffGpuStart = 0, avgDiffCpuReturn = 0, avgDiffCpuAbort = 0, avgDiffGpuStop = 0, avgDiffCpuStop = 0;
+  double maxDiffCpuStart = 0, maxDiffGpuStart = 0, maxDiffCpuReturn = 0, maxDiffCpuAbort = 0, maxDiffGpuStop = 0, maxDiffCpuStop = 0;
 
   std::vector<TimelineData> timelineData;
   char buff[1000];
@@ -269,12 +269,33 @@ int main(int argc, char **argv)
 
     for (int gpu = 0; gpu < numGpus; gpu++)
     {
+      double cpuStart  = ( cpuStartList[gpu][iter] - origin) / 1000.0;
+      double cpuReturn = (cpuReturnList[gpu][iter] - origin) / 1000.0;
+      double cpuAbort  = ( cpuAbortTime[gpu][iter] - origin) / 1000.0;
+      double cpuStop   = (  cpuStopList[gpu][iter] - origin) / 1000.0;
+
+      TimelineData td;
+      sprintf(buff, "Iteration %d GPU %02d (CPU)", iteration, gpu); td.rowLabel = buff;
+      td.barLabel  = "Launch (";
+      sprintf(buff, "%.3f to %.3f", cpuStart, cpuReturn); td.toolTip = buff;
+      td.startTime = cpuStart;
+      td.stopTime  = cpuReturn;
+      timelineData.push_back(td);
+
+      td.barLabel  = "Pause";
+      sprintf(buff, "%.3f to %.3f", cpuReturn, cpuAbort); td.toolTip = buff;
+      td.startTime = cpuReturn;
+      td.stopTime  = cpuAbort;
+      timelineData.push_back(td);
+
+      td.barLabel  = "Sync";
+      sprintf(buff, "%.3f to %.3f", cpuAbort, cpuStop); td.toolTip = buff;
+      td.startTime = cpuAbort;
+      td.stopTime  = cpuStop;
+      timelineData.push_back(td);
+
       for (int block = 0; block < numBlocks; block++)
       {
-        double cpuStart  = ( cpuStartList[gpu][iter] - origin) / 1000.0;
-        double cpuReturn = (cpuReturnList[gpu][iter] - origin) / 1000.0;
-        double cpuAbort  = ( cpuAbortTime[gpu][iter] - origin) / 1000.0;
-        double cpuStop   = (  cpuStopList[gpu][iter] - origin) / 1000.0;
 
         int    blockIdx  = iter * numBlocks + block;
         int    xccId     = syncDataCpu[gpu][blockIdx].xccId;
@@ -298,28 +319,8 @@ int main(int argc, char **argv)
                  gpu, block, xccId, cpuStart, cpuReturn, gpuStart, cpuAbort, gpuStop, cpuStop);
         }
 
-        TimelineData td;
-        sprintf(buff, "Iteration %d GPU %02d Block %02d (CPU)", iteration, gpu, block); td.rowLabel = buff;
-        td.barLabel  = "Launch (";
-        sprintf(buff, "%.3f to %.3f", cpuStart, cpuReturn); td.toolTip = buff;
-        td.startTime = cpuStart;
-        td.stopTime  = cpuReturn;
-        timelineData.push_back(td);
-
-        td.barLabel  = "Pause";
-        sprintf(buff, "%.3f to %.3f", cpuReturn, cpuAbort); td.toolTip = buff;
-        td.startTime = cpuReturn;
-        td.stopTime  = cpuAbort;
-        timelineData.push_back(td);
-
-        td.barLabel  = "Sync";
-        sprintf(buff, "%.3f to %.3f", cpuAbort, cpuStop); td.toolTip = buff;
-        td.startTime = cpuAbort;
-        td.stopTime  = cpuStop;
-        timelineData.push_back(td);
-
-        sprintf(buff, "Iteration %d GPU %02d Block %02d (GPU)", iteration, gpu, block); td.rowLabel = buff;
-        td.barLabel  = "Kernel";
+        sprintf(buff, "Iteration %d GPU %02d (GPU)", iteration, gpu); td.rowLabel = buff;
+        sprintf(buff, "Block %02d", block); td.barLabel = buff;
         sprintf(buff, "%.3f to %.3f", gpuStart, gpuStop); td.toolTip = buff;
         td.startTime = gpuStart;
         td.stopTime  = gpuStop;
