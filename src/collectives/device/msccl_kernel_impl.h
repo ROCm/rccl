@@ -312,7 +312,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif	
-          prims.sendWithBarrier(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
+          prims.send(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
             if (tid == 0) {
