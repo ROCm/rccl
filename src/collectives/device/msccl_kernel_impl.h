@@ -26,6 +26,28 @@ extern __shared__ struct mscclShmemData mscclShmem;
 #define GET_WORKINDEX_FROM_FLAG(__FLAG__) \
   (__FLAG__) / (MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS)
 
+#ifdef ENABLE_COLLTRACE
+  #define INC_COLL_TRACE \
+    uint32_t pos = atomicAdd(&ncclShmem.collTraceTail->tail, 1)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
+    collTrace->timeStamp = wall_clock64(); \
+    collTrace->bid = blockIdx.x;
+    // TODO: switch to atomicInc after llvm crash is fixed
+    // uint32_t pos = atomicInc(&ncclShmem.collTraceTail->tail, COLLTRACE_NUM_ITEMS)
+
+  #define traceData(data2, data4, data8_0, data8_1) { \
+    INC_COLL_TRACE \
+    collTrace->funcIndex = data2; \
+    collTrace->data_0 = data4; \
+    collTrace->opCount = data8_0; \
+    collTrace->data_1 = data8_1; \
+    collTrace->type = ncclCollTraceDataType; \
+  }
+#else
+#define traceData(data2, data4, data8_0, data8_1)
+#endif
+
+
 // a copy of the volatile load/store from prims_ll
 template<typename U>
 __device__ static U load(U *src) {
@@ -173,7 +195,11 @@ __device__ __forceinline__ void mscclRunInterpreter(
       break;
     case 3:
       /* set abort flag to 0 */
-      if (tid == 3 * WARP_SIZE) ncclShmem.aborted = 0;
+      if (tid%WARP_SIZE == 0) ncclShmem.aborted = 0;
+#ifdef ENABLE_COLLTRACE
+      else if (tid%WARP_SIZE == 1) ncclShmem.collTrace = comm->collTrace + COLLTRACE_NUM_ITEMS*channelId;
+      else if (tid%WARP_SIZE == 2) ncclShmem.collTraceTail = comm->collTraceTail + channelId;
+#endif
       break;
     default:
       break;
@@ -192,6 +218,10 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #endif
   __synclds(); // publish shmem
+
+  if (fullOps && tid == 0) {
+    traceData(__LINE__, mscclShmem.work.fnIndex, (uint64_t)mscclShmem.work.sendBuff, 0);
+  }
 
   if (tid == 0)
     *mscclShmem.work.workFifoDone = mscclShmem.work.workFifoDoneAck;
@@ -300,6 +330,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
       srcPointer = (t->srcBuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((t->srcBuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
       dstPointer = (t->dstBuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((t->dstBuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
       prims.setDataPtrs(srcPointer, dstPointer);
+
       int count = t->count;
       for (int c = 0; c < count; c += maxAllowedCount) {
         srcOffset = gridOffset + (ssize_t) (t->srcOffset+c) * sizePerMscclChunk;
@@ -441,6 +472,10 @@ __device__ __forceinline__ void mscclRunInterpreter(
   copyToShmem16(tid, ctx->event_buffer+ctx->event_buffer_head, ncclShmem.event_buffer, sizeof(NpKitEvent)*ncclShmem.event_buffer_head);
   if (tid == 0) ctx->event_buffer_head += ncclShmem.event_buffer_head;
 #endif
+
+  if (fullOps && tid == 0) {
+    traceData(__LINE__, mscclShmem.work.fnIndex, (uint64_t)mscclShmem.work.sendBuff, 0);
+  }
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type, fullOps) \

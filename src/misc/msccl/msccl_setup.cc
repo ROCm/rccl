@@ -391,6 +391,16 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   ncclDevRedOpFull opFull = {};
   NCCLCHECK(hostToDevRedOp(&opFull, op, dataType, comm));
 
+  uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol;
+  uint8_t fullOpMask = (1<<MSCCL_RECV_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY) |
+                        (1<<MSCCL_LOCAL_COPY);
+  //check if need full ops msccl kernel
+  if ((hostAlgo->typeMask & fullOpMask) || rcclParamMscclForceFullOps())
+    fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
+
   mscclWork work;
   work.syncFlags = status.syncFlags;
   work.scratchBuffer = status.scratchBuffer;
@@ -403,7 +413,8 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
-  INFO(NCCL_COLL, "MSCCL: typeMask %x Setup Kernel finished", hostAlgo->typeMask);
+  work.fnIndex = fnIndex;
+  INFO(NCCL_COLL, "MSCCL: typeMask %x fnIndex %d Setup Kernel finished", hostAlgo->typeMask, fnIndex);
   
   uint32_t workFifoIdxMask = status.workFifoDepth - 1;
   uint32_t workFifoSent = status.workFifoSent;
@@ -428,15 +439,6 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
-  uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol;
-  uint8_t fullOpMask = (1<<MSCCL_RECV_COPY_SEND) |
-                        (1<<MSCCL_RECV_REDUCE_SEND) |
-                        (1<<MSCCL_RECV_REDUCE_COPY_SEND) |
-                        (1<<MSCCL_RECV_REDUCE_COPY) |
-                        (1<<MSCCL_LOCAL_COPY);
-  //check if need full ops msccl kernel
-  if ((hostAlgo->typeMask & fullOpMask) || rcclParamMscclForceFullOps())
-    fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
   void *func = mscclKernelEntries[fnIndex];
   if (enableDoneEvent) {
     CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));

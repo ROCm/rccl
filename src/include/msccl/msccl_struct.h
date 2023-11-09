@@ -239,7 +239,7 @@ struct mscclWork {
   int nChunksPerLoop;
   bool hasReduce;
   bool redOpArgIsPtr;
-  uint32_t pad[1];
+  uint32_t fnIndex;
 };
 static_assert(sizeof(struct mscclWork) % 16 == 0, "mscclWork needs to be 16B aligned");
 
