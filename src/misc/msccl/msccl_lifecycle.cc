@@ -305,6 +305,7 @@ static ncclResult_t mscclSetSavedSchedulerParam(
   param->p.nRanks = comm->nRanks;
   param->comm = comm;
   param->stream = stream;
+  param->p.opCount = comm->opCount;
   return ncclSuccess;
 }
 
@@ -322,9 +323,27 @@ static ncclResult_t mscclSaveCountsAndDispls(struct mscclSavedSchedulerParam* pa
   return ncclSuccess;
 }
 
+const char *mscclFuncNames[] = {
+            "mscclFuncReduce",
+            "mscclFuncBroadcast",
+            "mscclFuncAllReduce",
+            "mscclFuncReduceScatter",
+            "mscclFuncAllGather",
+            "mscclFuncSend",
+            "mscclFuncRecv",
+            "mscclFuncGather",
+            "mscclFuncScatter",
+            "mscclFuncAllToAll",
+            "mscclFuncAllToAllv",
+          };
+
 static ncclResult_t mscclRunSavedParams() {
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   for (auto& param : threadLocalStatus.savedSchedulerParams) {
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
+    mscclFuncNames[param.p.func], param.p.opCount, param.p.sendBuff, param.p.recvBuff, param.p.count,
+    param.p.dataType, param.p.op, param.p.root, param.comm, param.p.nRanks, param.stream);
+
     NCCLCHECK(mscclRunAlgo(
       param.p.sendBuff, param.p.sendCounts, param.p.sDisPls,
       param.p.recvBuff, param.p.recvCounts, param.p.rDisPls,

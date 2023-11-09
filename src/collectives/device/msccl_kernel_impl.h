@@ -26,6 +26,28 @@ extern __shared__ struct mscclShmemData mscclShmem;
 #define GET_WORKINDEX_FROM_FLAG(__FLAG__) \
   (__FLAG__) / (MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS)
 
+#ifdef ENABLE_COLLTRACE
+  #define INC_COLL_TRACE \
+    uint32_t pos = atomicAdd(&ncclShmem.collTraceTail->tail, 1)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
+    collTrace->timeStamp = wall_clock64(); \
+    collTrace->bid = blockIdx.x;
+    // TODO: switch to atomicInc after llvm crash is fixed
+    // uint32_t pos = atomicInc(&ncclShmem.collTraceTail->tail, COLLTRACE_NUM_ITEMS)
+
+  #define traceData(data2, data4, data8_0, data8_1) { \
+    INC_COLL_TRACE \
+    collTrace->funcIndex = data2; \
+    collTrace->data_0 = data4; \
+    collTrace->opCount = data8_0; \
+    collTrace->data_1 = data8_1; \
+    collTrace->type = ncclCollTraceDataType; \
+  }
+#else
+#define traceData(data2, data4, data8_0, data8_1)
+#endif
+
+
 // a copy of the volatile load/store from prims_ll
 template<typename U>
 __device__ static U load(U *src) {
@@ -100,16 +122,17 @@ inline __device__ static void barrier(int nthreads) {
 
 // Copy 8-byte aligned data. You must call with at least `(bytes+7)/8` threads.
 inline __device__ static void copyToShmem8(int tid, void* dst, void const* src, int bytes) {
-  int offset = 8 * tid;
+  int offset = sizeof(uint32_t) * tid;
   if (offset < bytes) {
-    uint64_t *src2 = (uint64_t*)((char const*)src + offset);
-    uint64_t *dst2 = (uint64_t*)((char*)dst + offset);
+    uint32_t *src2 = (uint32_t*)((char const*)src + offset);
+    uint32_t *dst2 = (uint32_t*)((char*)dst + offset);
     *dst2 = *src2;
+    offset += WARP_SIZE*sizeof(uint32_t);
   }
 }
 
 __device__ __forceinline__ static void threadBlockCopy(
-  uint64_t *dst, uint64_t const *src, uint64_t size, int tid, int nthreads) {
+  uint32_t *dst, uint32_t const *src, uint64_t size, int tid, int nthreads) {
   for (int i = tid; i < size; i += nthreads) {
     dst[i] = src[i];
   }
@@ -143,8 +166,8 @@ __device__ __forceinline__ void mscclRunInterpreter(
 #endif
   // initialize mscclShmem.mscclTB
   threadBlockCopy(
-    (uint64_t *)&mscclShmem.mscclTB, (uint64_t *)(algo->mscclTBs + bid),
-    sizeof(struct mscclThreadBlock) / sizeof(uint64_t), tid, nthreads);
+    (uint32_t *)&mscclShmem.mscclTB, (uint32_t *)(algo->mscclTBs + bid),
+    sizeof(struct mscclThreadBlock) / sizeof(uint32_t), tid, nthreads);
   __synclds(); // publish mscclShmem.mscclTB.channelId
 
   // initialize ncclShmem and mscclShmem.work
@@ -158,24 +181,25 @@ __device__ __forceinline__ void mscclRunInterpreter(
       dst = &ncclShmem.comm;
       src = comm;
       bytes = sizeof(ncclDevComm);
-      static_assert(sizeof(ncclDevComm) <= sizeof(uint64_t) * WARP_SIZE, "ncclDevComm cannot be loaded by a single warp in one insn.");
       break;
     case 1:
       // Get address of channel without incurring indirect load from ncclDevComm::channels
       dst = &ncclShmem.channel;
       src = &((ncclDevCommAndChannels*)comm)->channels[channelId];
       bytes = sizeof(ncclDevChannel);
-      static_assert(sizeof(ncclDevChannel) <= sizeof(uint64_t) * WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
       break;
     case 2:
       dst = &mscclShmem.work;
       src = work + blockIdx.x;
       bytes = sizeof(mscclWork);
-      static_assert(sizeof(mscclWork) <= sizeof(uint64_t) * WARP_SIZE, "mscclWork cannot be loaded by a single warp in one insn.");
       break;
     case 3:
       /* set abort flag to 0 */
-      if (tid == 3 * WARP_SIZE) ncclShmem.aborted = 0;
+      if (tid%WARP_SIZE == 0) ncclShmem.aborted = 0;
+#ifdef ENABLE_COLLTRACE
+      else if (tid%WARP_SIZE == 1) ncclShmem.collTrace = comm->collTrace + COLLTRACE_NUM_ITEMS*channelId;
+      else if (tid%WARP_SIZE == 2) ncclShmem.collTraceTail = comm->collTraceTail + channelId;
+#endif
       break;
     default:
       break;
@@ -194,6 +218,11 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #endif
   __synclds(); // publish shmem
+
+  if (fullOps && tid == 0) {
+    traceData(__LINE__, mscclShmem.work.fnIndex, (uint64_t)mscclShmem.work.sendBuff, 0);
+  }
+
   if (tid == 0)
     *mscclShmem.work.workFifoDone = mscclShmem.work.workFifoDoneAck;
 
@@ -210,8 +239,6 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 #endif
 
-  __synclds(); // publish shmem
-  
   // User pointers for primitives
   T* thisInput = (T*)mscclShmem.work.sendBuff;
   T* thisOutput = (T*)mscclShmem.work.recvBuff;
@@ -299,6 +326,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
       srcPointer = (t->srcBuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((t->srcBuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
       dstPointer = (t->dstBuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((t->dstBuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
       prims.setDataPtrs(srcPointer, dstPointer);
+
       int count = t->count;
       for (int c = 0; c < count; c += maxAllowedCount) {
         srcOffset = gridOffset + (ssize_t) (t->srcOffset+c) * sizePerMscclChunk;
@@ -311,7 +339,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif	
-          prims.sendWithBarrier(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
+          prims.send(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
             if (tid == 0) {
@@ -348,22 +376,16 @@ __device__ __forceinline__ void mscclRunInterpreter(
               T o = load(dstIndex);
               ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + tid;
               switch (numReductions) {
-                case 1:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(1);
-                  break;
-                case 3:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(3);
-                  break;
                 case 7:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(7);
                   break;
+#if defined(__gfx90a__)
                 case 15:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(15);
                   break;
+#endif
                 default:
                   MSCCL_REDUCE_UNROLL_LOOP_A(numReductions);
                   break;
@@ -384,22 +406,16 @@ __device__ __forceinline__ void mscclRunInterpreter(
             T* dst = dstPointer + dstOffset;
             ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk;
             switch (numReductions) {
-              case 1:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(1);
-                break;
-              case 3:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(3);
-                break;
               case 7:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(7);
                 break;
+#if defined(__gfx90a__)
               case 15:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(15);
                 break;
+#endif
               default:
                 MSCCL_REDUCE_UNROLL_LOOP_B(numReductions);
                 break;
@@ -452,6 +468,10 @@ __device__ __forceinline__ void mscclRunInterpreter(
   copyToShmem16(tid, ctx->event_buffer+ctx->event_buffer_head, ncclShmem.event_buffer, sizeof(NpKitEvent)*ncclShmem.event_buffer_head);
   if (tid == 0) ctx->event_buffer_head += ncclShmem.event_buffer_head;
 #endif
+
+  if (fullOps && tid == 0) {
+    traceData(__LINE__, mscclShmem.work.fnIndex, (uint64_t)mscclShmem.work.sendBuff, 0);
+  }
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type, fullOps) \
