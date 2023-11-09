@@ -39,31 +39,48 @@ struct SyncData
   uint64_t cpuStart;
   uint64_t cpuStop;
   int32_t  xccId;
+  uint64_t gpuStart;
+  uint64_t gpuStop;
 };
 
-#define LOAD(VAR)       __atomic_load_n((VAR), __ATOMIC_SEQ_CST)
-#define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+enum
+{
+  HOST_START_CPU      = 0,
+  HOST_RETURN_CPU     = 1,
+  HOST_ABORT_CPU      = 2,
+  HOST_STOP_CPU       = 3,
+  NUM_HOST_TIMESTAMPS = 4
+};
+
+enum
+{
+  DEV_START_CPU       = 0,
+  DEV_STOP_CPU        = 1,
+  NUM_DEV_TIMESTAMPS  = 2
+};
+
+#define LOAD(VAR)       __atomic_load_n((VAR),         __ATOMIC_ACQUIRE)
+#define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_RELEASE)
 
 __global__ void SyncKernel(uint64_t* cpuTime, uint32_t* abortFlag, SyncData* syncData)
 {
+  SyncData sd;
   // Only first thread in threadblock participates
   if (threadIdx.x != 0) return;
 
   // Collect timestamp upon kernel entry
-  uint64_t cpuStart = LOAD(cpuTime);
+  sd.cpuStart = LOAD(cpuTime);
+  sd.gpuStart = wall_clock64();
 
   // Wait for abort flag to be modified
   while (!LOAD(abortFlag));
 
   // Collect timestamps after abort flag
-  uint64_t cpuStop = LOAD(cpuTime);
+  sd.cpuStop = LOAD(cpuTime);
+  sd.gpuStop = wall_clock64();
 
   // Save timestamps
-  SyncData sd;
   GetXccId(sd.xccId);
-  sd.cpuStart = cpuStart;
-  sd.cpuStop  = cpuStop;
-
   syncData[blockIdx.x] = sd;
 }
 
@@ -99,6 +116,7 @@ void HostMalloc(void** pinnedHostPtr, size_t size)
 #else
   HIP_CALL(hipHostMalloc(pinnedHostPtr, size));
 #endif
+  memset(*pinnedHostPtr, 0, size);
 }
 
 int main(int argc, char **argv)
@@ -113,29 +131,43 @@ int main(int argc, char **argv)
   int numGpus;
   HIP_CALL(hipGetDeviceCount(&numGpus));
 
-  int  numBlocks        = (argc > 1 ? atoi(argv[1]) :       4);
-  int  blockSize        = (argc > 2 ? atoi(argv[2]) :      32);
-  int  numUpdateThreads = (argc > 3 ? atoi(argv[3]) :       1);
-  int  useNuma          = (argc > 4 ? atoi(argv[4]) :       0);
-  int  numIterations    = (argc > 5 ? atoi(argv[5]) :      10);
-  int  numWarmups       = (argc > 6 ? atoi(argv[6]) :    1000);
-  int  numSleepUsec     = (argc > 7 ? atoi(argv[7]) :     100);
+  #define GETARG(IDX, STR, DEFAULT) \
+    (argc > IDX ? atoi(argv[IDX]) : (getenv(STR) ? atoi(getenv(STR)) : DEFAULT))
+
+  int  numBlocks        = GETARG(1, "NUM_BLOCKS",        4);
+  int  blockSize        = GETARG(2, "BLOCKSIZE",        64);
+  int  numUpdateThreads = GETARG(3, "NUM_UPDATERS",      1);
+  int  useNuma          = GETARG(4, "USE_NUMA",          0);
+  int  numIterations    = GETARG(5, "NUM_ITERATIONS",   10);
+  int  numWarmups       = GETARG(6, "NUM_WARMUPS",    1000);
+  int  numSleepUsec     = GETARG(7, "SLEEP_USEC",      100);
   int  totalIterations  = numWarmups + numIterations;
-  int  verbose          = (getenv("VERBOSE") ? atoi(getenv("VERBOSE")) : 1);
+
+  int  verbose          = (getenv("VERBOSE"    ) ? atoi(getenv("VERBOSE"))     : 1);
+  int  launchMode       = (getenv("LAUNCH_MODE") ? atoi(getenv("LAUNCH_MODE")) : 1);
 
   if (numUpdateThreads == 0) numUpdateThreads = numGpus;
 
   // Print off configuration and machine information
-  printf("%s %d %d %d %d %d %d %d\n", argv[0], numBlocks, blockSize, numUpdateThreads, useNuma, numIterations, numWarmups, numSleepUsec);
-  printf("Running %d GPUs with %d block(s) each of size %d, %d update threads, %s NUMA, %d timed iterations, %d warmup iterations, sleeping for %d usec\n",
-         numGpus, numBlocks, blockSize, numUpdateThreads, useNuma ? "manual" : "default", numIterations, numWarmups, numSleepUsec);
+  printf("NUM_BLOCKS     = %8d\n", numBlocks);
+  printf("BLOCKSIZE      = %8d\n", blockSize);
+  printf("NUM_UPDATERS   = %8d\n", numUpdateThreads);
+  printf("USE_NUMA       = %8d\n", useNuma);
+  printf("NUM_ITERATIONS = %8d\n", numIterations);
+  printf("NUM_WARMUPS    = %8d\n", numWarmups);
+  printf("SLEEP_USEC     = %8d\n", numSleepUsec);
+
   char archName[100];
+  std::vector<double> uSecPerCycle(numGpus);
   for (int i = 0; i < numGpus; i++)
   {
     hipDeviceProp_t prop;
     HIP_CALL(hipGetDeviceProperties(&prop, i));
     sscanf(prop.gcnArchName, "%[^:]", archName);
-    printf("GPU %02d: %s: Closest NUMA: %d\n", i, archName, GetClosestNumaNode(i));
+    int wallClockMhz;
+    HIP_CALL(hipDeviceGetAttribute(&wallClockMhz, hipDeviceAttributeWallClockRate, i));
+    uSecPerCycle[i] = 1000.0 / wallClockMhz;
+    printf("GPU %02d: %s: Closest NUMA: %d usecPerWallClockCycle %g\n", i, archName, GetClosestNumaNode(i), uSecPerCycle[i]);
   }
 
   typedef typename std::ratio_multiply<std::chrono::steady_clock::period,std::mega>::type MicroSec;
@@ -176,10 +208,7 @@ int main(int argc, char **argv)
   }
 
   // Allocate per-iteration resources
-  std::vector<std::vector<uint64_t>>  cpuAbortTime(numGpus, std::vector<uint64_t>(totalIterations, 0));
-  std::vector<std::vector<uint64_t>>  cpuStartList(numGpus, std::vector<uint64_t>(totalIterations, 0));
-  std::vector<std::vector<uint64_t>> cpuReturnList(numGpus, std::vector<uint64_t>(totalIterations, 0));
-  std::vector<std::vector<uint64_t>>   cpuStopList(numGpus, std::vector<uint64_t>(totalIterations, 0));
+  std::vector<std::vector<std::vector<uint64_t>>> hostTimes(numGpus, std::vector<std::vector<uint64_t>>(totalIterations, std::vector<uint64_t>(NUM_HOST_TIMESTAMPS, 0)));
 
   // Launch one thread per GPU
   #pragma omp parallel num_threads(numGpus)
@@ -203,7 +232,14 @@ int main(int argc, char **argv)
 
       // Launch kernel
       uint64_t cpuStart = std::chrono::steady_clock::now().time_since_epoch().count();
-      SyncKernel<<<numBlocks, blockSize, 0, streams[deviceId]>>>(cpuTimestamp, abortFlag, syncData);
+      if (launchMode == 0)
+      {
+        SyncKernel<<<numBlocks, blockSize, 0, streams[deviceId]>>>(cpuTimestamp, abortFlag, syncData);
+      }
+      else
+      {
+        hipLaunchKernelGGL(SyncKernel, numBlocks, blockSize, 0, streams[deviceId], cpuTimestamp, abortFlag, syncData);
+      }
       uint64_t cpuReturn = std::chrono::steady_clock::now().time_since_epoch().count();
 
       // Busy wait performs more accurately than usleep / sleep_for
@@ -216,10 +252,10 @@ int main(int argc, char **argv)
       uint64_t cpuStop = std::chrono::steady_clock::now().time_since_epoch().count();
 
       // Store values (after all timings to avoid false sharing)
-      cpuStartList [deviceId][iteration] = cpuStart;
-      cpuReturnList[deviceId][iteration] = cpuReturn;
-      cpuAbortTime [deviceId][iteration] = cpuAbort;
-      cpuStopList  [deviceId][iteration] = cpuStop;
+      hostTimes[deviceId][iteration][HOST_START_CPU]  = cpuStart;
+      hostTimes[deviceId][iteration][HOST_RETURN_CPU] = cpuReturn;
+      hostTimes[deviceId][iteration][HOST_ABORT_CPU]  = cpuAbort;
+      hostTimes[deviceId][iteration][HOST_STOP_CPU]   = cpuStop;
 
       #pragma omp barrier
     }
@@ -233,9 +269,12 @@ int main(int argc, char **argv)
   for (int i = 0; i < numGpus; i++)
     HIP_CALL(hipMemcpy(syncDataCpu[i], syncDataGpu[i],totalIterations * numBlocks * sizeof(SyncData), hipMemcpyDeviceToHost));
 
-  double minDiffCpuStart = 0, minDiffGpuStart = 0, minDiffCpuReturn = 0, minDiffCpuAbort = 0, minDiffGpuStop = 0, minDiffCpuStop = 0;
-  double avgDiffCpuStart = 0, avgDiffGpuStart = 0, avgDiffCpuReturn = 0, avgDiffCpuAbort = 0, avgDiffGpuStop = 0, avgDiffCpuStop = 0;
-  double maxDiffCpuStart = 0, maxDiffGpuStart = 0, maxDiffCpuReturn = 0, maxDiffCpuAbort = 0, maxDiffGpuStop = 0, maxDiffCpuStop = 0;
+  std::vector<double> minDiffHost(NUM_HOST_TIMESTAMPS, 0);
+  std::vector<double> sumDiffHost(NUM_HOST_TIMESTAMPS, 0);
+  std::vector<double> maxDiffHost(NUM_HOST_TIMESTAMPS, 0);
+  std::vector<std::vector<double>> minDiffDev(numGpus, std::vector<double>(NUM_DEV_TIMESTAMPS, 0.0));
+  std::vector<std::vector<double>> sumDiffDev(numGpus, std::vector<double>(NUM_DEV_TIMESTAMPS, 0.0));
+  std::vector<std::vector<double>> maxDiffDev(numGpus, std::vector<double>(NUM_DEV_TIMESTAMPS, 0.0));
 
   std::vector<TimelineData> timelineData;
   char buff[1000];
@@ -249,73 +288,76 @@ int main(int argc, char **argv)
       printf("Iteration %d: (All times in usec)\n", iteration);
     }
 
-    uint64_t origin = cpuStartList[0][iter];
+    // Figure out which timestamp is "earliest" to use as origin for this iteration
+    uint64_t origin = hostTimes[0][iter][HOST_START_CPU];
+    for (int gpu = 1; gpu < numGpus; gpu++)
+      origin = std::min(origin, hostTimes[gpu][iter][HOST_START_CPU]);
+
+    if (verbose) printf("| GPU | BLOCK | XCC | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) | Kernel(CPU)| Kernel(GPU)|\n");
+
+    std::vector<double> minHostTimes(NUM_HOST_TIMESTAMPS, 0);
+    std::vector<double> maxHostTimes(NUM_HOST_TIMESTAMPS, 0);
+    std::vector<double> sumHostTimes(NUM_HOST_TIMESTAMPS, 0);
     for (int gpu = 0; gpu < numGpus; gpu++)
     {
-      for (int block = 0; block < numBlocks; block++)
+      std::vector<double> hTimes(NUM_HOST_TIMESTAMPS);
+      for (int i = 0; i < NUM_HOST_TIMESTAMPS; i++)
       {
-        origin = std::min(origin, cpuStartList[gpu][iter]);
-        origin = std::min(origin, syncDataCpu[gpu][iter * numBlocks + block].cpuStart);
-        origin = std::min(origin, cpuAbortTime[gpu][iter]);
-        origin = std::min(origin, syncDataCpu[gpu][iter * numBlocks + block].cpuStop);
-        origin = std::min(origin, cpuStopList[gpu][iter]);
+        hTimes[i] = (hostTimes[gpu][iter][i] - origin) / 1000.0;
+        minHostTimes[i] = (gpu == 0 || minHostTimes[i] > hTimes[i]) ? hTimes[i] : minHostTimes[i];
+        maxHostTimes[i] = (gpu == 0 || maxHostTimes[i] < hTimes[i]) ? hTimes[i] : maxHostTimes[i];
+        sumHostTimes[i] += hTimes[i];
       }
-    }
-
-    if (verbose) printf("| GPU | BLOCK | XCC | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) |\n");
-
-    double minCpuStart, minGpuStart, minCpuReturn, minCpuAbort, minGpuStop, minCpuStop;
-    double maxCpuStart, maxGpuStart, maxCpuReturn, maxCpuAbort, maxGpuStop, maxCpuStop;
-
-    for (int gpu = 0; gpu < numGpus; gpu++)
-    {
-      double cpuStart  = ( cpuStartList[gpu][iter] - origin) / 1000.0;
-      double cpuReturn = (cpuReturnList[gpu][iter] - origin) / 1000.0;
-      double cpuAbort  = ( cpuAbortTime[gpu][iter] - origin) / 1000.0;
-      double cpuStop   = (  cpuStopList[gpu][iter] - origin) / 1000.0;
 
       TimelineData td;
       sprintf(buff, "Iteration %d GPU %02d (CPU)", iteration, gpu); td.rowLabel = buff;
       td.barLabel  = "Launch (";
-      sprintf(buff, "%.3f to %.3f", cpuStart, cpuReturn); td.toolTip = buff;
-      td.startTime = cpuStart;
-      td.stopTime  = cpuReturn;
+      sprintf(buff, "%.3f to %.3f", hTimes[HOST_START_CPU], hTimes[HOST_RETURN_CPU]); td.toolTip = buff;
+      td.startTime = hTimes[HOST_START_CPU];
+      td.stopTime  = hTimes[HOST_RETURN_CPU];
       timelineData.push_back(td);
 
       td.barLabel  = "Pause";
-      sprintf(buff, "%.3f to %.3f", cpuReturn, cpuAbort); td.toolTip = buff;
-      td.startTime = cpuReturn;
-      td.stopTime  = cpuAbort;
+      sprintf(buff, "%.3f to %.3f", hTimes[HOST_RETURN_CPU], hTimes[HOST_ABORT_CPU]); td.toolTip = buff;
+      td.startTime = hTimes[HOST_RETURN_CPU];
+      td.stopTime  = hTimes[HOST_ABORT_CPU];
       timelineData.push_back(td);
 
       td.barLabel  = "Sync";
-      sprintf(buff, "%.3f to %.3f", cpuAbort, cpuStop); td.toolTip = buff;
-      td.startTime = cpuAbort;
-      td.stopTime  = cpuStop;
+      sprintf(buff, "%.3f to %.3f", hTimes[HOST_ABORT_CPU], hTimes[HOST_STOP_CPU]); td.toolTip = buff;
+      td.startTime = hTimes[HOST_ABORT_CPU];
+      td.stopTime  = hTimes[HOST_STOP_CPU];
       timelineData.push_back(td);
+
+      std::vector<double> minDevTimes(NUM_DEV_TIMESTAMPS);
+      std::vector<double> maxDevTimes(NUM_DEV_TIMESTAMPS);
+      std::vector<double> sumDevTimes(NUM_DEV_TIMESTAMPS);
 
       for (int block = 0; block < numBlocks; block++)
       {
+        std::vector<double> dTimes(NUM_DEV_TIMESTAMPS);
+
         int    blockIdx  = iter * numBlocks + block;
         int    xccId     = syncDataCpu[gpu][blockIdx].xccId;
-        double gpuStart  = (syncDataCpu[gpu][blockIdx].cpuStart - origin) / 1000.0;
-        double gpuStop   = (syncDataCpu[gpu][blockIdx].cpuStop  - origin) / 1000.0;
+        double gpuStart  = dTimes[DEV_START_CPU] = (syncDataCpu[gpu][blockIdx].cpuStart - origin) / 1000.0;
+        double gpuStop   = dTimes[DEV_STOP_CPU]  = (syncDataCpu[gpu][blockIdx].cpuStop  - origin) / 1000.0;
 
-        #define CHECK_MINMAX(VAL, MINVAL, MAXVAL) \
-        MINVAL = ((gpu == 0 && block == 0) || (MINVAL > VAL)) ? VAL : MINVAL; \
-        MAXVAL = ((gpu == 0 && block == 0) || (MAXVAL < VAL)) ? VAL : MAXVAL
+        double kernelTimeGpu = (syncDataCpu[gpu][blockIdx].gpuStop - syncDataCpu[gpu][blockIdx].gpuStart) * uSecPerCycle[gpu];
 
-        CHECK_MINMAX(cpuStart,  minCpuStart,  maxCpuStart);
-        CHECK_MINMAX(cpuReturn, minCpuReturn, maxCpuReturn);
-        CHECK_MINMAX(cpuAbort,  minCpuAbort,  maxCpuAbort);
-        CHECK_MINMAX(cpuStop,   minCpuStop,   maxCpuStop);
-        CHECK_MINMAX(gpuStart,  minGpuStart,  maxGpuStart);
-        CHECK_MINMAX(gpuStop,   minGpuStop,   maxGpuStop);
+        for (int i = 0; i < NUM_DEV_TIMESTAMPS; i++)
+        {
+          minDevTimes[i] = (block == 0 || minDevTimes[i] > dTimes[i]) ? dTimes[i] : minDevTimes[i];
+          maxDevTimes[i] = (block == 0 || maxDevTimes[i] < dTimes[i]) ? dTimes[i] : maxDevTimes[i];
+          sumDevTimes[i] += dTimes[i];
+        }
 
         if (verbose)
         {
-          printf("| %3d |  %3d  | %3d | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-                 gpu, block, xccId, cpuStart, cpuReturn, gpuStart, cpuAbort, gpuStop, cpuStop);
+          printf("| %3d |  %3d  | %3d | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
+                 gpu, block, xccId, hTimes[HOST_START_CPU], hTimes[HOST_RETURN_CPU], dTimes[DEV_START_CPU],
+                 hTimes[HOST_ABORT_CPU], dTimes[DEV_STOP_CPU], hTimes[HOST_STOP_CPU],
+                 dTimes[DEV_STOP_CPU] - dTimes[DEV_START_CPU],
+                 kernelTimeGpu);
         }
 
         sprintf(buff, "Iteration %d GPU %02d (GPU)", iteration, gpu); td.rowLabel = buff;
@@ -325,15 +367,12 @@ int main(int argc, char **argv)
         td.stopTime  = gpuStop;
         timelineData.push_back(td);
       }
+      if (verbose)
+      {
+        printf("\n");
+      }
     }
-
-    double diffCpuStart  = maxCpuStart  - minCpuStart;
-    double diffCpuReturn = maxCpuReturn - minCpuReturn;
-    double diffGpuStart  = maxGpuStart  - minGpuStart;
-    double diffCpuAbort  = maxCpuAbort  - minCpuAbort;
-    double diffGpuStop   = maxGpuStop   - minGpuStop;
-    double diffCpuStop   = maxCpuStop   - minCpuStop;
-
+/*
     if (verbose)
     {
       printf("---------------------------------------------------------------------------------------------------\n");
@@ -356,7 +395,9 @@ int main(int argc, char **argv)
     CHECK_MINMAXDIFF(diffCpuAbort,  minDiffCpuAbort,  avgDiffCpuAbort,  maxDiffCpuAbort);
     CHECK_MINMAXDIFF(diffGpuStop,   minDiffGpuStop,   avgDiffGpuStop,   maxDiffGpuStop);
     CHECK_MINMAXDIFF(diffCpuStop,   minDiffCpuStop,   avgDiffCpuStop,   maxDiffCpuStop);
+*/
   }
+  /*
   printf("===================================================================================================\n");
   printf("|           SUMMARY | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) |\n");
   printf("===================================================================================================\n");
@@ -371,6 +412,6 @@ int main(int argc, char **argv)
   sprintf(buff, "timeline_%dx%s_%dx%dblockSize_%dCUTs_Numa%d_Sleep%d.html", numGpus, archName, numBlocks, blockSize, numUpdateThreads, useNuma, numSleepUsec);
   printf("Timeline exported to %s\n", buff);
   ExportToTimeLine(buff, "Device", "Call", timelineData);
-
+  */
   return 0;
 }
