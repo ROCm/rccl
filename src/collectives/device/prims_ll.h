@@ -773,12 +773,10 @@ private:
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
   }
   __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN) {
-#if !defined(__gfx942__)
     if (nsrcs == 1) {
       return mscclGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
     } else {
       return mscclGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
     }
-#endif
   }
 };
