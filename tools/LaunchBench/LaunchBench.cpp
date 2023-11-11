@@ -45,18 +45,29 @@ struct SyncData
 
 enum
 {
-  HOST_START_CPU      = 0,
-  HOST_RETURN_CPU     = 1,
-  HOST_ABORT_CPU      = 2,
-  HOST_STOP_CPU       = 3,
-  NUM_HOST_TIMESTAMPS = 4
-};
+  HOST_START      = 0,
+  HOST_RETURN     = 1,
+  DEV_START       = 2,
+  HOST_ABORT      = 3,
+  DEV_STOP        = 4,
+  HOST_STOP       = 5,
+  KERNEL_CPUTIME  = 6,
+  KERNEL_GPUTIME  = 7,
+  KERNEL_TIMEDIFF = 8,
+  NUM_COLUMNS     = 9
+} Columns;
 
-enum
+bool printCol[NUM_COLUMNS] =
 {
-  DEV_START_CPU       = 0,
-  DEV_STOP_CPU        = 1,
-  NUM_DEV_TIMESTAMPS  = 2
+  false,
+  false,
+  true,
+  false,
+  true,
+  false,
+  true,
+  true,
+  true
 };
 
 #define LOAD(VAR)       __atomic_load_n((VAR),         __ATOMIC_ACQUIRE)
@@ -208,7 +219,10 @@ int main(int argc, char **argv)
   }
 
   // Allocate per-iteration resources
-  std::vector<std::vector<std::vector<uint64_t>>> hostTimes(numGpus, std::vector<std::vector<uint64_t>>(totalIterations, std::vector<uint64_t>(NUM_HOST_TIMESTAMPS, 0)));
+  std::vector<std::vector<uint64_t>>  hostStartTimes(numGpus, std::vector<uint64_t>(totalIterations));
+  std::vector<std::vector<uint64_t>> hostReturnTimes(numGpus, std::vector<uint64_t>(totalIterations));
+  std::vector<std::vector<uint64_t>>  hostAbortTimes(numGpus, std::vector<uint64_t>(totalIterations));
+  std::vector<std::vector<uint64_t>>   hostStopTimes(numGpus, std::vector<uint64_t>(totalIterations));
 
   // Launch one thread per GPU
   #pragma omp parallel num_threads(numGpus)
@@ -252,10 +266,10 @@ int main(int argc, char **argv)
       uint64_t cpuStop = std::chrono::steady_clock::now().time_since_epoch().count();
 
       // Store values (after all timings to avoid false sharing)
-      hostTimes[deviceId][iteration][HOST_START_CPU]  = cpuStart;
-      hostTimes[deviceId][iteration][HOST_RETURN_CPU] = cpuReturn;
-      hostTimes[deviceId][iteration][HOST_ABORT_CPU]  = cpuAbort;
-      hostTimes[deviceId][iteration][HOST_STOP_CPU]   = cpuStop;
+      hostStartTimes [deviceId][iteration] = cpuStart;
+      hostReturnTimes[deviceId][iteration] = cpuReturn;
+      hostAbortTimes [deviceId][iteration] = cpuAbort;
+      hostStopTimes  [deviceId][iteration] = cpuStop;
 
       #pragma omp barrier
     }
@@ -269,12 +283,12 @@ int main(int argc, char **argv)
   for (int i = 0; i < numGpus; i++)
     HIP_CALL(hipMemcpy(syncDataCpu[i], syncDataGpu[i],totalIterations * numBlocks * sizeof(SyncData), hipMemcpyDeviceToHost));
 
-  std::vector<double> minDiffHost(NUM_HOST_TIMESTAMPS, 0);
-  std::vector<double> sumDiffHost(NUM_HOST_TIMESTAMPS, 0);
-  std::vector<double> maxDiffHost(NUM_HOST_TIMESTAMPS, 0);
-  std::vector<std::vector<double>> minDiffDev(numGpus, std::vector<double>(NUM_DEV_TIMESTAMPS, 0.0));
-  std::vector<std::vector<double>> sumDiffDev(numGpus, std::vector<double>(NUM_DEV_TIMESTAMPS, 0.0));
-  std::vector<std::vector<double>> maxDiffDev(numGpus, std::vector<double>(NUM_DEV_TIMESTAMPS, 0.0));
+  std::vector<std::vector<double>> singleMinDiff(numGpus, std::vector<double>(NUM_COLUMNS, std::numeric_limits<double>::max()));
+  std::vector<std::vector<double>> singleSumDiff(numGpus, std::vector<double>(NUM_COLUMNS, 0));
+  std::vector<std::vector<double>> singleMaxDiff(numGpus, std::vector<double>(NUM_COLUMNS, std::numeric_limits<double>::min()));
+  std::vector<double> multiMinDiff(NUM_COLUMNS, std::numeric_limits<double>::max());
+  std::vector<double> multiSumDiff(NUM_COLUMNS, 0);
+  std::vector<double> multiMaxDiff(NUM_COLUMNS, std::numeric_limits<double>::min());
 
   std::vector<TimelineData> timelineData;
   char buff[1000];
@@ -282,136 +296,151 @@ int main(int argc, char **argv)
   {
     // Ignore warmup iterations
     int iter = iteration + numWarmups - 1;
-    if (verbose)
-    {
-      printf("---------------------------------------------------------------------------------------------------\n");
-      printf("Iteration %d: (All times in usec)\n", iteration);
-    }
 
     // Figure out which timestamp is "earliest" to use as origin for this iteration
-    uint64_t origin = hostTimes[0][iter][HOST_START_CPU];
+    uint64_t origin = hostStartTimes[0][iter];
     for (int gpu = 1; gpu < numGpus; gpu++)
-      origin = std::min(origin, hostTimes[gpu][iter][HOST_START_CPU]);
+      origin = std::min(origin, hostStartTimes[gpu][iter]);
 
-    if (verbose) printf("| GPU | BLOCK | XCC | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) | Kernel(CPU)| Kernel(GPU)|\n");
+    if (verbose)
+    {
+      printf("Iteration %d: (All times in usec)\n", iteration);
+      printf("------------------------------------------------------------------------------------------------------------------------------------------\n");
+      printf("| GPU | BLOCK | XCC | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) | Kernel(CPU)| Kernel(GPU)|   AbsDiff  |\n");
+    }
 
-    std::vector<double> minHostTimes(NUM_HOST_TIMESTAMPS, 0);
-    std::vector<double> maxHostTimes(NUM_HOST_TIMESTAMPS, 0);
-    std::vector<double> sumHostTimes(NUM_HOST_TIMESTAMPS, 0);
+    std::vector<double>  multiMinTime(NUM_COLUMNS, std::numeric_limits<double>::max());
+    std::vector<double>  multiMaxTime(NUM_COLUMNS, std::numeric_limits<double>::min());
+
     for (int gpu = 0; gpu < numGpus; gpu++)
     {
-      std::vector<double> hTimes(NUM_HOST_TIMESTAMPS);
-      for (int i = 0; i < NUM_HOST_TIMESTAMPS; i++)
-      {
-        hTimes[i] = (hostTimes[gpu][iter][i] - origin) / 1000.0;
-        minHostTimes[i] = (gpu == 0 || minHostTimes[i] > hTimes[i]) ? hTimes[i] : minHostTimes[i];
-        maxHostTimes[i] = (gpu == 0 || maxHostTimes[i] < hTimes[i]) ? hTimes[i] : maxHostTimes[i];
-        sumHostTimes[i] += hTimes[i];
-      }
+      std::vector<double> times(NUM_COLUMNS);
+      times[HOST_START]  = ( hostStartTimes[gpu][iter] - origin) / 1000.0;
+      times[HOST_RETURN] = (hostReturnTimes[gpu][iter] - origin) / 1000.0;
+      times[HOST_ABORT]  = ( hostAbortTimes[gpu][iter] - origin) / 1000.0;
+      times[HOST_STOP]   = (  hostStopTimes[gpu][iter] - origin) / 1000.0;
 
       TimelineData td;
       sprintf(buff, "Iteration %d GPU %02d (CPU)", iteration, gpu); td.rowLabel = buff;
       td.barLabel  = "Launch (";
-      sprintf(buff, "%.3f to %.3f", hTimes[HOST_START_CPU], hTimes[HOST_RETURN_CPU]); td.toolTip = buff;
-      td.startTime = hTimes[HOST_START_CPU];
-      td.stopTime  = hTimes[HOST_RETURN_CPU];
+      sprintf(buff, "%.3f to %.3f", times[HOST_START], times[HOST_RETURN]); td.toolTip = buff;
+      td.startTime = times[HOST_START];
+      td.stopTime  = times[HOST_RETURN];
       timelineData.push_back(td);
 
       td.barLabel  = "Pause";
-      sprintf(buff, "%.3f to %.3f", hTimes[HOST_RETURN_CPU], hTimes[HOST_ABORT_CPU]); td.toolTip = buff;
-      td.startTime = hTimes[HOST_RETURN_CPU];
-      td.stopTime  = hTimes[HOST_ABORT_CPU];
+      sprintf(buff, "%.3f to %.3f", times[HOST_RETURN], times[HOST_ABORT]); td.toolTip = buff;
+      td.startTime = times[HOST_RETURN];
+      td.stopTime  = times[HOST_ABORT];
       timelineData.push_back(td);
 
       td.barLabel  = "Sync";
-      sprintf(buff, "%.3f to %.3f", hTimes[HOST_ABORT_CPU], hTimes[HOST_STOP_CPU]); td.toolTip = buff;
-      td.startTime = hTimes[HOST_ABORT_CPU];
-      td.stopTime  = hTimes[HOST_STOP_CPU];
+      sprintf(buff, "%.3f to %.3f", times[HOST_ABORT], times[HOST_STOP]); td.toolTip = buff;
+      td.startTime = times[HOST_ABORT];
+      td.stopTime  = times[HOST_STOP];
       timelineData.push_back(td);
 
-      std::vector<double> minDevTimes(NUM_DEV_TIMESTAMPS);
-      std::vector<double> maxDevTimes(NUM_DEV_TIMESTAMPS);
-      std::vector<double> sumDevTimes(NUM_DEV_TIMESTAMPS);
-
+      std::vector<double> singleMinTime(NUM_COLUMNS, std::numeric_limits<double>::max());
+      std::vector<double> singleMaxTime(NUM_COLUMNS, std::numeric_limits<double>::min());
       for (int block = 0; block < numBlocks; block++)
       {
-        std::vector<double> dTimes(NUM_DEV_TIMESTAMPS);
+        int blockIdx = iter * numBlocks + block;
+        int xccId    = syncDataCpu[gpu][blockIdx].xccId;
 
-        int    blockIdx  = iter * numBlocks + block;
-        int    xccId     = syncDataCpu[gpu][blockIdx].xccId;
-        double gpuStart  = dTimes[DEV_START_CPU] = (syncDataCpu[gpu][blockIdx].cpuStart - origin) / 1000.0;
-        double gpuStop   = dTimes[DEV_STOP_CPU]  = (syncDataCpu[gpu][blockIdx].cpuStop  - origin) / 1000.0;
+        times[DEV_START]       = (syncDataCpu[gpu][blockIdx].cpuStart - origin) / 1000.0;
+        times[DEV_STOP]        = (syncDataCpu[gpu][blockIdx].cpuStop  - origin) / 1000.0;
+        times[KERNEL_CPUTIME]  = times[DEV_STOP] - times[DEV_START];
+        times[KERNEL_GPUTIME]  = (syncDataCpu[gpu][blockIdx].gpuStop - syncDataCpu[gpu][blockIdx].gpuStart) * uSecPerCycle[gpu];
+        times[KERNEL_TIMEDIFF] = fabs(times[KERNEL_CPUTIME] - times[KERNEL_GPUTIME]);
 
-        double kernelTimeGpu = (syncDataCpu[gpu][blockIdx].gpuStop - syncDataCpu[gpu][blockIdx].gpuStart) * uSecPerCycle[gpu];
-
-        for (int i = 0; i < NUM_DEV_TIMESTAMPS; i++)
+        for (int col = 0; col < NUM_COLUMNS; col++)
         {
-          minDevTimes[i] = (block == 0 || minDevTimes[i] > dTimes[i]) ? dTimes[i] : minDevTimes[i];
-          maxDevTimes[i] = (block == 0 || maxDevTimes[i] < dTimes[i]) ? dTimes[i] : maxDevTimes[i];
-          sumDevTimes[i] += dTimes[i];
+          singleMinTime[col] = std::min(singleMinTime[col], times[col]);
+          singleMaxTime[col] = std::max(singleMaxTime[col], times[col]);
+           multiMinTime[col] = std::min( multiMinTime[col], times[col]);
+           multiMaxTime[col] = std::max( multiMaxTime[col], times[col]);
         }
 
         if (verbose)
         {
-          printf("| %3d |  %3d  | %3d | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-                 gpu, block, xccId, hTimes[HOST_START_CPU], hTimes[HOST_RETURN_CPU], dTimes[DEV_START_CPU],
-                 hTimes[HOST_ABORT_CPU], dTimes[DEV_STOP_CPU], hTimes[HOST_STOP_CPU],
-                 dTimes[DEV_STOP_CPU] - dTimes[DEV_START_CPU],
-                 kernelTimeGpu);
+          printf("| %3d |  %3d  | %3d |", gpu, block, xccId);
+          for (auto x : times) printf(" %10.3f |", x);
+          printf("\n");
         }
 
         sprintf(buff, "Iteration %d GPU %02d (GPU)", iteration, gpu); td.rowLabel = buff;
         sprintf(buff, "Block %02d", block); td.barLabel = buff;
-        sprintf(buff, "%.3f to %.3f", gpuStart, gpuStop); td.toolTip = buff;
-        td.startTime = gpuStart;
-        td.stopTime  = gpuStop;
+        sprintf(buff, "%.3f to %.3f", times[DEV_START], times[DEV_STOP]); td.toolTip = buff;
+        td.startTime = times[DEV_START];
+        td.stopTime  = times[DEV_STOP];
         timelineData.push_back(td);
       }
+
+      for (int col = 0; col < NUM_COLUMNS; col++)
+      {
+        double const diff = singleMaxTime[col] - singleMinTime[col];
+        singleMinDiff[gpu][col] = std::min(singleMinDiff[gpu][col], diff);
+        singleSumDiff[gpu][col] += diff;
+        singleMaxDiff[gpu][col] = std::max(singleMaxDiff[gpu][col], diff);
+      }
+
       if (verbose)
       {
+        printf("| %3d | MAX ABS DIFF|", gpu);
+        for (int col = 0; col < NUM_COLUMNS; col++)
+          printCol[col] ? printf(" %10.3f |", singleMaxTime[col] - singleMinTime[col]) : printf("            |");
         printf("\n");
       }
     }
-/*
-    if (verbose)
+    for (int col = 0; col < NUM_COLUMNS; col++)
     {
-      printf("---------------------------------------------------------------------------------------------------\n");
-      printf("|               MIN | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-             minCpuStart, minCpuReturn, minGpuStart, minCpuAbort, minGpuStop, minCpuStop);
-      printf("|               MAX | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-             maxCpuStart, maxCpuReturn, maxGpuStart, maxCpuAbort, maxGpuStop, maxCpuStop);
-      printf("|              DIFF | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-             diffCpuStart, diffCpuReturn, diffGpuStart, diffCpuAbort, diffGpuStop, diffCpuStop);
+      double const diff = multiMaxTime[col] - multiMinTime[col];
+      multiMinDiff[col] = std::min(multiMinDiff[col], diff);
+      multiSumDiff[col] += diff;
+      multiMaxDiff[col] = std::max(multiMaxDiff[col], diff);
     }
 
-    #define CHECK_MINMAXDIFF(VAL, MINVAL, AVGVAL, MAXVAL)             \
-        MINVAL = ((iteration == 1) || (MINVAL > VAL)) ? VAL : MINVAL; \
-        AVGVAL += VAL;                                                \
-        MAXVAL = ((iteration == 1) || (MAXVAL < VAL)) ? VAL : MAXVAL
-
-    CHECK_MINMAXDIFF(diffCpuStart,  minDiffCpuStart,  avgDiffCpuStart,  maxDiffCpuStart);
-    CHECK_MINMAXDIFF(diffCpuReturn, minDiffCpuReturn, avgDiffCpuReturn, maxDiffCpuReturn);
-    CHECK_MINMAXDIFF(diffGpuStart,  minDiffGpuStart,  avgDiffGpuStart,  maxDiffGpuStart);
-    CHECK_MINMAXDIFF(diffCpuAbort,  minDiffCpuAbort,  avgDiffCpuAbort,  maxDiffCpuAbort);
-    CHECK_MINMAXDIFF(diffGpuStop,   minDiffGpuStop,   avgDiffGpuStop,   maxDiffGpuStop);
-    CHECK_MINMAXDIFF(diffCpuStop,   minDiffCpuStop,   avgDiffCpuStop,   maxDiffCpuStop);
-*/
+    if (verbose)
+    {
+      printf("------------------------------------------------------------------------------------------------------------------------------------------\n");
+      printf("| ALL |         MIN |"); for (auto x : multiMinTime) printf(" %10.3f |", x); printf("\n");
+      printf("| ALL |         MAX |"); for (auto x : multiMaxTime) printf(" %10.3f |", x); printf("\n");
+      printf("| ALL |        DIFF |"); for (int col = 0; col < NUM_COLUMNS; col++) printf(" %10.3f |", multiMaxTime[col] - multiMinTime[col]); printf("\n");
+    }
   }
-  /*
-  printf("===================================================================================================\n");
-  printf("|           SUMMARY | START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) |\n");
-  printf("===================================================================================================\n");
-  printf("|          DIFF MIN | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-         minDiffCpuStart, minDiffCpuReturn, minDiffGpuStart, minDiffCpuAbort, minDiffGpuStop, minDiffCpuStop);
-  printf("|          DIFF AVG | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-         avgDiffCpuStart / numIterations, avgDiffCpuReturn / numIterations, avgDiffGpuStart / numIterations,
-         avgDiffCpuAbort / numIterations, avgDiffGpuStop   / numIterations, avgDiffCpuStop  / numIterations);
-  printf("|          DIFF MAX | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f | %10.3f |\n",
-         maxDiffCpuStart, maxDiffCpuReturn, maxDiffGpuStart, maxDiffCpuAbort, maxDiffGpuStop, maxDiffCpuStop);
+
+  printf("==========================================================================================================================================\n");
+  printf("| SUMMARY (All iter)| START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) | Kernel(CPU)| Kernel(GPU)|   AbsDiff  |\n");
+  printf("==========================================================================================================================================\n");
+  for (int gpu = 0; gpu < numGpus; gpu++)
+  {
+    printf("|   GPU %02d DIFF MIN |", gpu);
+    for (int col = 0; col < NUM_COLUMNS; col++)
+      printCol[col] ? printf(" %10.3f |", singleMinDiff[gpu][col]) : printf("            |");
+    printf("\n");
+  }
+  for (int gpu = 0; gpu < numGpus; gpu++)
+  {
+    printf("|   GPU %02d DIFF AVG |", gpu);
+    for (int col = 0; col < NUM_COLUMNS; col++)
+      printCol[col] ? printf(" %10.3f |", singleSumDiff[gpu][col] / numIterations) : printf("            |");
+    printf("\n");
+  }
+  for (int gpu = 0; gpu < numGpus; gpu++)
+  {
+    printf("|   GPU %02d DIFF MAX |", gpu);
+    for (int col = 0; col < NUM_COLUMNS; col++)
+      printCol[col] ? printf(" %10.3f |", singleMaxDiff[gpu][col]) : printf("            |");
+    printf("\n");
+  }
+  printf("==========================================================================================================================================\n");
+  printf("| ALL GPUs DIFF MIN |"); for (auto x : multiMinDiff) printf(" %10.3f |", x); printf("\n");
+  printf("| ALL GPUs DIFF AVG |"); for (auto x : multiSumDiff) printf(" %10.3f |", x / numIterations); printf("\n");
+  printf("| ALL GPUs DIFF MAX |"); for (auto x : multiMaxDiff) printf(" %10.3f |", x); printf("\n");
 
   sprintf(buff, "timeline_%dx%s_%dx%dblockSize_%dCUTs_Numa%d_Sleep%d.html", numGpus, archName, numBlocks, blockSize, numUpdateThreads, useNuma, numSleepUsec);
   printf("Timeline exported to %s\n", buff);
   ExportToTimeLine(buff, "Device", "Call", timelineData);
-  */
+
   return 0;
 }
