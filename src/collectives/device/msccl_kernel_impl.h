@@ -366,19 +366,28 @@ __device__ __forceinline__ void mscclRunInterpreter(
         }
         else if (t->type == MSCCL_REDUCE) {
           int numReductions = t->numReductions;
-          if (thisNelem < nthreads){
+          int currIdx = tid;
+#if defined(__gfx942__)
+          if (Proto::Id == NCCL_PROTO_LL) {
+#else
+          if (thisNelem < nthreads) {
+#endif
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_ENTRY)
             if (tid == 0) {
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif
 
-            if (tid < thisNelem){
+#if defined(__gfx942__)
+            while (currIdx < thisNelem) {
+#else
+            if (currIdx < thisNelem) {
+#endif
               dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
-              T* dstIndex = dstPointer + dstOffset + tid;
+              T* dstIndex = dstPointer + dstOffset + currIdx;
               T reduceInput;
               T o = load(dstIndex);
-              ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + tid;
+              ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + currIdx;
               switch (numReductions) {
                 case 7:
                   #pragma unroll
@@ -395,6 +404,9 @@ __device__ __forceinline__ void mscclRunInterpreter(
                   break;
               }
               store(dstIndex, o);
+#if defined(__gfx942__)
+              currIdx += nthreads;
+#endif
             }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT)
