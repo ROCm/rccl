@@ -27,7 +27,7 @@ ncclResult_t mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *msc
   status.hostAlgos[*mscclAlgoHandle] = hostAlgo;
 
   struct mscclAlgo* devAlgo;
-  NCCLCHECK(ncclCudaCalloc(&devAlgo, 1));
+  NCCLCHECK(ncclCudaMalloc(&devAlgo, 1));
   CUDACHECK(hipMemcpy(devAlgo, hostAlgo, sizeof(struct mscclAlgo), hipMemcpyHostToDevice));
   status.devAlgos[*mscclAlgoHandle] = devAlgo;
 

@@ -19,7 +19,10 @@
 RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 1);
 #endif
 
+RCCL_PARAM(MscclWorkFifoDepth, "MSCCL_WORK_FIFO_DEPTH", 64<<10);
+
 ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
+  mscclStatus& status = mscclGetStatus();
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
   cudaStreamCaptureStatus captureStatus;
@@ -29,6 +32,7 @@ ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
     if (savedProxyArgs.count(captureId) == 0) {
       threadLocalStatus.captureStatus = mscclNewCapture;
       savedProxyArgs[captureId] = std::vector<struct mscclProxyArg>();
+      NCCLCHECK(mscclInitWorkFifoStatus(&(status.graphWorkFifoStatus[captureId])));
     } else {
       INFO(NCCL_NET,"mscclGetCaptureStatus: captureId %llu is same with the previous one\n", captureId);
       threadLocalStatus.captureStatus = mscclExistingCapture;
@@ -68,7 +72,7 @@ ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
   size_t sizeNeeded = (status.nBytes * (size_t)(hostAlgo->nScratchChunks)) / (size_t)(hostAlgo->nChunksPerLoop);
   if (sizeNeeded > status.scratchBufferSize){
     NCCLCHECK(ncclCudaFree(status.scratchBuffer));
-    NCCLCHECK(ncclCudaCalloc((char**)&status.scratchBuffer, sizeNeeded));
+    NCCLCHECK(ncclCudaMalloc((char**)&status.scratchBuffer, sizeNeeded));
     status.scratchBufferSize = sizeNeeded;
   }
   return ncclSuccess;
@@ -327,12 +331,11 @@ static inline uint32_t rollingMin32(uint32_t a, uint32_t b) {
   return (b-a <= PositiveMax) ? a : b;
 }
 
-static void mscclWaitWorkFifoAvailable(uint32_t desiredSent) {
-  mscclStatus& status = mscclGetStatus();
-  if (__builtin_expect(rollingLess32(status.workFifoAckdMin + status.workFifoDepth, desiredSent), false)) {
+static void mscclWaitWorkFifoAvailable(uint32_t desiredSent, mscclWorkFifoStatus* status) {
+  if (__builtin_expect(rollingLess32(status->workFifoAckdMin + status->workFifoDepth, desiredSent), false)) {
     while (1) {
       // We have to poll for notifications from device.
-      uint32_t* doneLive = status.workFifoDone;
+      uint32_t* doneLive = status->workFifoDone;
       uint32_t ackd[MSCCL_MAX_NUM_THREAD_BLOCKS];
       for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         ackd[c] = __atomic_load_n(&doneLive[c], __ATOMIC_RELAXED);
@@ -340,10 +343,10 @@ static void mscclWaitWorkFifoAvailable(uint32_t desiredSent) {
       // Compiler-only fence to prevent fusion of loops to encourage dense loads.
       __atomic_signal_fence(__ATOMIC_SEQ_CST);
 
-      uint32_t ackdAll = status.workFifoSent;
+      uint32_t ackdAll = status->workFifoSent;
       for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         // ackdAll is min over all non-quiesced channels
-        if (ackd[c] != status.workFifoSentPerThreadBlock[c])
+        if (ackd[c] != status->workFifoSentPerThreadBlock[c])
           ackdAll = rollingMin32(ackdAll, ackd[c]);
       }
 
@@ -353,15 +356,15 @@ static void mscclWaitWorkFifoAvailable(uint32_t desiredSent) {
       for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         // Advance counter on quiesced channels so they don't lag behind
         // too far where they could get lost in 32-bit wraparound.
-        if (ackd[c] == status.workFifoSentPerThreadBlock[c]) {
-          status.workFifoSentPerThreadBlock[c] = ackdAll;
+        if (ackd[c] == status->workFifoSentPerThreadBlock[c]) {
+          status->workFifoSentPerThreadBlock[c] = ackdAll;
           __atomic_store_n(&doneLive[c], ackdAll, __ATOMIC_RELAXED);
         }
       }
-      status.workFifoAckdMin = ackdAll;
+      status->workFifoAckdMin = ackdAll;
 
       // See if that was enough.
-      if (!rollingLess32(status.workFifoAckdMin + status.workFifoDepth, desiredSent)) break;
+      if (!rollingLess32(status->workFifoAckdMin + status->workFifoDepth, desiredSent)) break;
       sched_yield();
     }
   }
@@ -373,6 +376,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
     ncclDataType_t dataType, ncclRedOp_t op, struct mscclAlgo* hostAlgo, struct mscclAlgo* devAlgo,
     ncclComm_t comm, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
+  mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
 
   bool enableDoneEvent =
 #ifndef HIP_EVENT_DISABLE_FENCE
@@ -415,9 +419,22 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
   work.fnIndex = fnIndex;
   INFO(NCCL_COLL, "MSCCL: typeMask %x fnIndex %d Setup Kernel finished", hostAlgo->typeMask, fnIndex);
-  
-  uint32_t workFifoIdxMask = status.workFifoDepth - 1;
-  uint32_t workFifoSent = status.workFifoSent;
+
+  mscclWorkFifoStatus* workFifoStatus = nullptr;
+  if (threadLocalStatus.captureStatus == mscclNoCapture) {
+    workFifoStatus = &(status.defaultWorkFifoStatus);
+  } else {
+    workFifoStatus = &(status.graphWorkFifoStatus[threadLocalStatus.captureId]);
+  }
+
+  uint32_t workFifoIdxMask = workFifoStatus->workFifoDepth - 1;
+  uint32_t workFifoSent = workFifoStatus->workFifoSent;
+
+  if (threadLocalStatus.captureStatus != mscclNoCapture && workFifoSent + numBlocks > workFifoStatus->workFifoDepth) {
+    WARN("MSCCL: number of captured works (%u) > max limit (%lu)", workFifoSent + numBlocks, workFifoStatus->workFifoDepth);
+    return ncclInternalError;
+  }
+
   // First work for a channel has to be at workHeap+blockIdx.x which means
   // we cannot tolerate fifo wraparound. So round up to the wrap boundary
   // if not doing so would incur crossing it.
@@ -426,18 +443,19 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
     // Need to update workFifoSent so waitWorkFifoAvailable() knows we've
     // skipped those elements. Consider if all the channels report quiesced,
     // this way the skipped slots will be considered consumed as well.
-    status.workFifoSent = workFifoSent;
+    workFifoStatus->workFifoSent = workFifoSent;
   }
-  mscclWaitWorkFifoAvailable(workFifoSent + numBlocks);
+  mscclWaitWorkFifoAvailable(workFifoSent + numBlocks, workFifoStatus);
   for (int i = 0; i < numBlocks; i++) {
     work.workFifoDoneAck = workFifoSent + i;
-    work.workFifoDone = status.workFifoDone + i;
-    status.workFifoSentPerThreadBlock[i] = workFifoSent + i;
-    status.workFifo[(workFifoSent + i) & workFifoIdxMask] = work;
+    work.workFifoDone = workFifoStatus->workFifoDone + i;
+    workFifoStatus->workFifoSentPerThreadBlock[i] = workFifoSent + i;
+    workFifoStatus->workFifo[(workFifoSent + i) & workFifoIdxMask] = work;
   }
-  status.workFifoSent = workFifoSent + numBlocks;
 
-  struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
+  struct mscclWork *workPtr = workFifoStatus->workFifo + (workFifoSent & workFifoIdxMask);
+  workFifoStatus->workFifoSent = workFifoSent + numBlocks;
+
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
   void *func = mscclKernelEntries[fnIndex];
   if (enableDoneEvent) {
@@ -465,4 +483,22 @@ size_t mscclKernMaxLocalSize() {
 
 error:
   return (res != ncclSuccess) ? 0 : max;
+}
+
+ncclResult_t mscclInitWorkFifoStatus(mscclWorkFifoStatus* workFifoStatus) {
+  workFifoStatus->workFifoDepth = rcclParamMscclWorkFifoDepth();
+  NCCLCHECK(ncclCudaMalloc(&(workFifoStatus->workFifo), workFifoStatus->workFifoDepth, true));
+  NCCLCHECK(ncclCudaHostCalloc(&(workFifoStatus->workFifoDone), MSCCL_MAX_NUM_THREAD_BLOCKS));
+  workFifoStatus->workFifoSent = 0;
+  for (int i = 0; i < MSCCL_MAX_NUM_THREAD_BLOCKS; i++) {
+    workFifoStatus->workFifoSentPerThreadBlock[i] = 0;
+  }
+  workFifoStatus->workFifoAckdMin = 0;
+  return ncclSuccess;
+}
+
+ncclResult_t mscclDestroyWorkFifoStatus(mscclWorkFifoStatus* workFifoStatus) {
+  NCCLCHECK(ncclCudaFree(workFifoStatus->workFifo));
+  NCCLCHECK(ncclCudaHostFree(workFifoStatus->workFifoDone));
+  return ncclSuccess;
 }

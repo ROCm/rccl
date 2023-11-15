@@ -27,4 +27,8 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
     ncclDataType_t dataType, ncclRedOp_t op, struct mscclAlgo* hostAlgo, struct mscclAlgo* devAlgo,
     ncclComm_t comm, hipStream_t stream);
 
+ncclResult_t mscclInitWorkFifoStatus(mscclWorkFifoStatus* workFifoStatus);
+
+ncclResult_t mscclDestroyWorkFifoStatus(mscclWorkFifoStatus* workFifoStatus);
+
 #endif

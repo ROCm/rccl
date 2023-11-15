@@ -36,8 +36,6 @@
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
 
-#define MSCCL_WORK_FIFO_DEPTH (64 << 10)
-
 struct mscclTransmission {
   int16_t dependencePointer; // index to the first dependence
   int16_t numDependencies; // dependencePointer+numDependencies indicate the last dependence
@@ -189,6 +187,17 @@ struct mscclThreadLocalStatus {
   hipGraph_t graph;
 };
 
+struct mscclWorkFifoStatus {
+  uint64_t workFifoDepth;
+  struct mscclWork* workFifo;
+  uint32_t* workFifoDone;
+  uint32_t workFifoSent;
+  uint32_t workFifoSentPerThreadBlock[MSCCL_MAX_NUM_THREAD_BLOCKS];
+  uint32_t workFifoAckdMin;
+};
+
+typedef std::map<unsigned long long, mscclWorkFifoStatus> mscclSavedGraphWorkFifoStatus;
+
 struct mscclStatus {
   std::vector<mscclAlgoHandle_t> freeAlgoHandles;
   std::map<mscclAlgoHandle_t, mscclAlgo *> hostAlgos;
@@ -214,12 +223,8 @@ struct mscclStatus {
   bool graphEnabled;
   bool graphFirstKernel;
   bool needsProxy;
-  uint64_t workFifoDepth;
-  struct mscclWork* workFifo;
-  uint32_t* workFifoDone;
-  uint32_t workFifoSent;
-  uint32_t workFifoSentPerThreadBlock[MSCCL_MAX_NUM_THREAD_BLOCKS];
-  uint32_t workFifoAckdMin;
+  mscclWorkFifoStatus defaultWorkFifoStatus;
+  mscclSavedGraphWorkFifoStatus graphWorkFifoStatus;
 };
 
 #pragma pack(push)
