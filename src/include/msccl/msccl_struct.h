@@ -36,7 +36,7 @@
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
 
-#define MSCCL_WORK_FIFO_DEPTH (64 << 10)
+#define MSCCL_WORK_FIFO_DEPTH (64 << 18)
 
 struct mscclTransmission {
   int16_t dependencePointer; // index to the first dependence
