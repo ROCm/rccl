@@ -315,11 +315,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           int16_t dependentStep = mscclShmem.mscclTB.dependentStep[dependentPointer+tid];
           uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
           while (true){
-#if defined(__gfx942__)
-            uint64_t curFlag = __atomic_load_n(&(mscclFlags + dependentBid)->flag, __ATOMIC_ACQUIRE);
-#else
             uint64_t curFlag = __atomic_load_n(&(mscclFlags + dependentBid)->flag, __ATOMIC_RELAXED);
-#endif
             if (curFlag >= goalFlag && GET_WORKINDEX_FROM_FLAG(curFlag) == workIndex) break;
           }
         }
@@ -463,13 +459,8 @@ __device__ __forceinline__ void mscclRunInterpreter(
         else
           return;
       }
-      if (t->hasDependence && tid == nthreads-1){
-#if defined(__gfx942__)
-        __atomic_store_n(&mscclFlags[bid].flag, (uint64_t) COMPUTE_FLAG(workIndex, iter, step), __ATOMIC_RELEASE);
-#else
+      if (t->hasDependence && tid == nthreads-1)
         __atomic_store_n(&mscclFlags[bid].flag, (uint64_t) COMPUTE_FLAG(workIndex, iter, step), __ATOMIC_RELAXED);
-#endif
-      }
       step++;
     }
   }
