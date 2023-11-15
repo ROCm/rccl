@@ -119,6 +119,26 @@ execute_process(
   OUTPUT_VARIABLE hipcc_version_string)
 message(STATUS "hipcc version:    ${hipcc_version_string}")
 
+## Check for ROCm version
+execute_process(
+  COMMAND         bash "-c" "cat ${ROCM_PATH}/.info/version"
+  OUTPUT_VARIABLE rocm_version_string
+)
+string(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" rocm_version_matches ${rocm_version_string})
+if (rocm_version_matches)
+    set(ROCM_MAJOR_VERSION ${CMAKE_MATCH_1})
+    set(ROCM_MINOR_VERSION ${CMAKE_MATCH_2})
+    set(ROCM_PATCH_VERSION ${CMAKE_MATCH_3})
+
+    message(STATUS "ROCm version: ${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}")
+
+    # Convert the version components to int for comparison
+    math(EXPR ROCM_VERSION "(10000 * ${ROCM_MAJOR_VERSION}) + (100 * ${ROCM_MINOR_VERSION}) + ${ROCM_PATCH_VERSION}")
+    add_definitions("-DROCM_VERSION=${ROCM_VERSION}")
+else()
+    message(WARNING "Failed to extract ROCm version.")
+endif()
+
 ### Check for hipEventDisableSystemFence support
 check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVENT_DISABLE_FENCE)
 
