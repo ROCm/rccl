@@ -122,7 +122,7 @@ static ncclResult_t ncclInit() {
       if (strncmp("Hyper-V UEFI Release", strValue, 20) != 0) {
         FILE* file;
         if ((file = fopen("/proc/cmdline", "r")) != NULL) {
-          while (feof(file) == 0 && ferror(file) == 0) {
+          if (feof(file) == 0 && ferror(file) == 0) {
             int len = fread(strValue, 1, 1024, file);
             strValue[len] = '\0';
           }
