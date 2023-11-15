@@ -190,14 +190,6 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
     status.needsProxy = false;
-    status.workFifoDepth = MSCCL_WORK_FIFO_DEPTH;
-    NCCLCHECK(ncclCudaCalloc(&status.workFifo, status.workFifoDepth, nullptr, true));
-    NCCLCHECK(ncclCudaHostCalloc(&status.workFifoDone, MSCCL_MAX_NUM_THREAD_BLOCKS));
-    status.workFifoSent = 0;
-    for (int i = 0; i < MSCCL_MAX_NUM_THREAD_BLOCKS; i++) {
-      status.workFifoSentPerThreadBlock[i] = 0;
-    }
-    status.workFifoAckdMin = 0;
     mscclSchedulerTriedLoadAlgo = false;
 
     NCCLCHECK(mscclSchedulerInit());
@@ -521,8 +513,6 @@ ncclResult_t mscclTeardown() {
     } else {
       NCCLCHECK(mscclInternalSchedulerTeardown());
     }
-    NCCLCHECK(ncclCudaFree(status.workFifo));
-    NCCLCHECK(ncclCudaHostFree(status.workFifoDone));
     mscclInitialized.store(false, std::memory_order_release);
   }
 
