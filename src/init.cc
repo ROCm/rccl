@@ -105,7 +105,7 @@ static ncclResult_t ncclInit() {
     NCCLCHECK(bootstrapNetInit());
     NCCLCHECK(ncclNetPluginInit());
 
-    char strValue[MAX_STR_LEN];
+    char strValue[1024];
     NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
     if (strcmp(strValue, "1") == 0)
       WARN("NUMA auto balancing enabled which can lead to variability in the RCCL performance! Disable by \"sudo sysctl kernel.numa_balancing=0\"");
@@ -120,9 +120,14 @@ static ncclResult_t ncclInit() {
     if (strstr(verStr, "cray") == NULL) {
       NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
       if (strncmp("Hyper-V UEFI Release", strValue, 20) != 0) {
-        NCCLCHECK(ncclTopoGetStrFromSys("/proc", "cmdline", strValue));
-        if (strstr(strValue, "amd_iommu=on") == NULL)
-          WARN("Missing \"amd_iommu=on\" from kernel command line which can lead to system instablity or hang!");
+        FILE* file;
+        if ((file = fopen("/proc/cmdline", "r")) != NULL) {
+          if (feof(file) == 0 && ferror(file) == 0) {
+            int len = fread(strValue, 1, 1024, file);
+            strValue[len] = '\0';
+          }
+          fclose(file);
+        }
         if (strstr(strValue, "iommu=pt") == NULL)
           WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
       }
