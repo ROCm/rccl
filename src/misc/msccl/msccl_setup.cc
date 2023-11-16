@@ -73,7 +73,7 @@ ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
   size_t sizeNeeded = (status.nBytes * (size_t)(hostAlgo->nScratchChunks)) / (size_t)(hostAlgo->nChunksPerLoop);
   if (sizeNeeded > status.scratchBufferSize){
     NCCLCHECK(ncclCudaFree(status.scratchBuffer));
-    NCCLCHECK(ncclCudaMalloc((char**)&status.scratchBuffer, sizeNeeded));
+    NCCLCHECK(ncclCudaMalloc((char**)&status.scratchBuffer, sizeNeeded, true));
     status.scratchBufferSize = sizeNeeded;
   }
   return ncclSuccess;
