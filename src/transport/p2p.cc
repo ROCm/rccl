@@ -214,7 +214,7 @@ ncclResult_t ncclP2pAllocateShareableBuffer(size_t size, ncclIpcDesc *ipcDesc, v
 #endif
   } else {
     // Allocate a CUDA buffer and generate an IPC handle for it
-    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, nullptr, true));
+    NCCLCHECK(ncclCudaMalloc((char **)ptr, size, true));
     cudaError_t res = cudaIpcGetMemHandle(&ipcDesc->devIpc, *ptr);
     if (res != cudaSuccess) {
       WARN("cudaIpcGetMemHandle failed : %s", cudaGetErrorString(res));
@@ -586,7 +586,7 @@ static ncclResult_t p2pSendProxySetup(struct ncclProxyConnection* connection, st
     NCCLCHECK(ncclCalloc(&proxyInfo, 1));
     connection->transportResources = proxyInfo;
 
-    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], nullptr, true));
+    NCCLCHECK(ncclCudaMalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], true));
 
     char shmPath[PATH_MAX];
     shmPath[0] = '\0';
