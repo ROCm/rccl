@@ -97,7 +97,6 @@ list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for findin
             ${ROCM_PATH}
             ${ROCM_PATH}/hip
             ${ROCM_PATH}/llvm
-            ${ROCM_PATH}/hcc)
 
 # Check for required dependencies
 #==================================================================================================
