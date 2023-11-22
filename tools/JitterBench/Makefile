@@ -12,9 +12,9 @@ else
 MPIFLAGS =
 endif
 
-all: LaunchBench
+all: JitterBench
 
-LaunchBench: LaunchBench.cpp Common.hpp Timeline.hpp
+JitterBench: JitterBench.cpp Common.hpp Timeline.hpp
 ifeq ("$(shell test -e $(NVCC) && echo found)", "found")
 	$(NVCC) $(NVFLAGS) $(MPIFLAGS) $< -o $@
 else
@@ -22,4 +22,4 @@ else
 endif
 
 clean:
-	rm -f ./LaunchBench
+	rm -f ./JitterBench
