@@ -209,7 +209,7 @@ int main(int argc, char **argv)
     int wallClockMhz;
     HIP_CALL(hipDeviceGetAttribute(&wallClockMhz, hipDeviceAttributeWallClockRate, i));
     uSecPerCycle[i] = 1000.0 / wallClockMhz;
-    printf("GPU %02d: %s: Closest NUMA: %d usecPerWallClockCycle %g\n", i + rank, archName, GetClosestNumaNode(i + rank), uSecPerCycle[i]);
+    if (verbose) printf("GPU %02d: %s: Closest NUMA: %d usecPerWallClockCycle %g\n", i + rank, archName, GetClosestNumaNode(i + rank), uSecPerCycle[i]);
   }
 
   typedef typename std::ratio_multiply<std::chrono::steady_clock::period,std::mega>::type MicroSec;
