@@ -34,6 +34,10 @@ THE SOFTWARE.
 #include "GetClosestNumaNode.hpp"
 #include "Timeline.hpp"
 
+#ifdef MPI_SUPPORT
+#include <mpi.h>
+#endif
+
 struct SyncData
 {
   uint64_t cpuStart;
@@ -132,23 +136,47 @@ void HostMalloc(void** pinnedHostPtr, size_t size)
 
 int main(int argc, char **argv)
 {
-  // Check for NUMA library support
+  // Initialize MPI (if supported) and check for NUMA support
+#ifdef MPI_SUPPORT
+  MPI_Init(&argc, &argv);
+#endif
   if (numa_available() == -1)
   {
     printf("[ERROR] NUMA library not supported. Check to see if libnuma has been installed on this system\n");
     exit(1);
   }
 
-  int numGpus;
-  HIP_CALL(hipGetDeviceCount(&numGpus));
+  int numAvailableGpus;
+  HIP_CALL(hipGetDeviceCount(&numAvailableGpus));
 
+  // Figure out how many GPUs total / which GPU this process is responsible for
+  int numUsedGpus, numTotalGpus, rank;
+#ifdef MPI_SUPPORT
+  numUsedGpus = 1;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &numTotalGpus);
+  if (numTotalGpus > numAvailableGpus)
+  {
+    if (rank == 0) printf("[ERROR] Machine only has %d devices but %d ranks requested\n", numAvailableGpus, numTotalGpus);
+    MPI_Abort(MPI_COMM_WORLD, -1);
+  }
+  if (rank == 0)
+  {
+    printf("Running MPI version with %d ranks\n", numTotalGpus);
+  }
+#else
+  numUsedGpus = numTotalGpus = numAvailableGpus;
+  rank = 0;
+#endif
+
+  // Collect arguments from commandline or environment variable
   #define GETARG(IDX, STR, DEFAULT) \
     (argc > IDX ? atoi(argv[IDX]) : (getenv(STR) ? atoi(getenv(STR)) : DEFAULT))
 
   int  numBlocks        = GETARG(1, "NUM_BLOCKS",        4);
   int  blockSize        = GETARG(2, "BLOCKSIZE",        64);
-  int  numUpdateThreads = GETARG(3, "NUM_UPDATERS",      1);
-  int  useNuma          = GETARG(4, "USE_NUMA",          0);
+  int  numUpdateThreads = GETARG(3, "NUM_UPDATERS",      0);
+  int  useNuma          = GETARG(4, "USE_NUMA",          1);
   int  numIterations    = GETARG(5, "NUM_ITERATIONS",   10);
   int  numWarmups       = GETARG(6, "NUM_WARMUPS",    1000);
   int  numSleepUsec     = GETARG(7, "SLEEP_USEC",      100);
@@ -157,28 +185,31 @@ int main(int argc, char **argv)
   int  verbose          = (getenv("VERBOSE"    ) ? atoi(getenv("VERBOSE"))     : 1);
   int  launchMode       = (getenv("LAUNCH_MODE") ? atoi(getenv("LAUNCH_MODE")) : 1);
 
-  if (numUpdateThreads == 0) numUpdateThreads = numGpus;
+  if (numUpdateThreads == 0) numUpdateThreads = numUsedGpus;
 
   // Print off configuration and machine information
-  printf("NUM_BLOCKS     = %8d\n", numBlocks);
-  printf("BLOCKSIZE      = %8d\n", blockSize);
-  printf("NUM_UPDATERS   = %8d\n", numUpdateThreads);
-  printf("USE_NUMA       = %8d\n", useNuma);
-  printf("NUM_ITERATIONS = %8d\n", numIterations);
-  printf("NUM_WARMUPS    = %8d\n", numWarmups);
-  printf("SLEEP_USEC     = %8d\n", numSleepUsec);
+  if (rank == 0)
+  {
+    printf("NUM_BLOCKS     = %8d\n", numBlocks);
+    printf("BLOCKSIZE      = %8d\n", blockSize);
+    printf("NUM_UPDATERS   = %8d\n", numUpdateThreads);
+    printf("USE_NUMA       = %8d\n", useNuma);
+    printf("NUM_ITERATIONS = %8d\n", numIterations);
+    printf("NUM_WARMUPS    = %8d\n", numWarmups);
+    printf("SLEEP_USEC     = %8d\n", numSleepUsec);
+  }
 
   char archName[100];
-  std::vector<double> uSecPerCycle(numGpus);
-  for (int i = 0; i < numGpus; i++)
+  std::vector<double> uSecPerCycle(numUsedGpus);
+  for (int i = 0; i < numUsedGpus; i++)
   {
     hipDeviceProp_t prop;
-    HIP_CALL(hipGetDeviceProperties(&prop, i));
+    HIP_CALL(hipGetDeviceProperties(&prop, i + rank));
     sscanf(prop.gcnArchName, "%[^:]", archName);
     int wallClockMhz;
     HIP_CALL(hipDeviceGetAttribute(&wallClockMhz, hipDeviceAttributeWallClockRate, i));
     uSecPerCycle[i] = 1000.0 / wallClockMhz;
-    printf("GPU %02d: %s: Closest NUMA: %d usecPerWallClockCycle %g\n", i, archName, GetClosestNumaNode(i), uSecPerCycle[i]);
+    printf("GPU %02d: %s: Closest NUMA: %d usecPerWallClockCycle %g\n", i + rank, archName, GetClosestNumaNode(i + rank), uSecPerCycle[i]);
   }
 
   typedef typename std::ratio_multiply<std::chrono::steady_clock::period,std::mega>::type MicroSec;
@@ -191,8 +222,8 @@ int main(int argc, char **argv)
   std::vector<std::thread> updateThreads;
   for (int i = 0; i < numUpdateThreads; i++)
   {
-    int numaId = GetClosestNumaNode(i);
-    HIP_CALL(hipSetDevice(i));
+    int numaId = GetClosestNumaNode(i + rank);
+    HIP_CALL(hipSetDevice(i + rank));
     if (useNuma) SetNumaNode(numaId);
 
     HostMalloc((void**)&cpuTimestamps[i], 256);  // Allocate larger buffer to avoid multiple timestamps on same cacheline
@@ -202,57 +233,66 @@ int main(int argc, char **argv)
   }
 
   // Allocate per-GPU resources
-  std::vector<SyncData*>   syncDataGpu(numGpus);
-  std::vector<SyncData*>   syncDataCpu(numGpus);
-  std::vector<uint32_t*>   abortFlags(numGpus);
-  std::vector<hipStream_t> streams(numGpus);
-  for (int i = 0; i < numGpus; i++)
+  std::vector<SyncData*>   syncDataGpu(numUsedGpus);
+  std::vector<uint32_t*>   abortFlags(numUsedGpus);
+  std::vector<hipStream_t> streams(numUsedGpus);
+  for (int i = 0; i < numUsedGpus; i++)
   {
-    HIP_CALL(hipSetDevice(i));
-    if (useNuma) SetNumaNode(GetClosestNumaNode(i));
+    HIP_CALL(hipSetDevice(i + rank));
+    if (useNuma) SetNumaNode(GetClosestNumaNode(i + rank));
 
     HIP_CALL(hipMalloc((void**)&syncDataGpu[i], totalIterations * numBlocks * sizeof(SyncData)));
-    HostMalloc((void**)&syncDataCpu[i], totalIterations * numBlocks * sizeof(SyncData));
     HostMalloc((void**)&abortFlags[i], 256); // Allocate larger buffer to avoid multiple abort flags on same cacheline
 
     HIP_CALL(hipStreamCreate(&streams[i]));
   }
 
   // Allocate per-iteration resources
-  std::vector<std::vector<uint64_t>>  hostStartTimes(numGpus, std::vector<uint64_t>(totalIterations));
-  std::vector<std::vector<uint64_t>> hostReturnTimes(numGpus, std::vector<uint64_t>(totalIterations));
-  std::vector<std::vector<uint64_t>>  hostAbortTimes(numGpus, std::vector<uint64_t>(totalIterations));
-  std::vector<std::vector<uint64_t>>   hostStopTimes(numGpus, std::vector<uint64_t>(totalIterations));
+  std::vector<std::vector<uint64_t>>  hostStartTimes(numTotalGpus, std::vector<uint64_t>(totalIterations));
+  std::vector<std::vector<uint64_t>> hostReturnTimes(numTotalGpus, std::vector<uint64_t>(totalIterations));
+  std::vector<std::vector<uint64_t>>  hostAbortTimes(numTotalGpus, std::vector<uint64_t>(totalIterations));
+  std::vector<std::vector<uint64_t>>   hostStopTimes(numTotalGpus, std::vector<uint64_t>(totalIterations));
 
-  // Launch one thread per GPU
-  #pragma omp parallel num_threads(numGpus)
+#ifndef MPI_SUPPORT
+  #pragma omp parallel num_threads(numTotalGpus)
+#endif
   {
+#ifdef MPI_SUPPORT
+    int deviceId = rank;
+    int localIdx = 0;
+#else
     int deviceId = omp_get_thread_num();
+    int localIdx = deviceId;
+#endif
     HIP_CALL(hipSetDevice(deviceId));
     if (useNuma) SetNumaNode(GetClosestNumaNode(deviceId));
 
-    uint64_t* cpuTimestamp = cpuTimestamps[deviceId % numUpdateThreads];
-    uint32_t* abortFlag    = abortFlags[deviceId];
+    uint64_t* cpuTimestamp = cpuTimestamps[localIdx % numUpdateThreads];
+    uint32_t* abortFlag    = abortFlags[localIdx];
 
     for (int iteration = 0; iteration < totalIterations; iteration++)
     {
       // Prepare for this iteration
       // Clear abort flag
       STORE(abortFlag, 0);
-      SyncData* syncData = syncDataGpu[deviceId] + (iteration * numBlocks);
+      SyncData* syncData = syncDataGpu[localIdx] + (iteration * numBlocks);
 
       // Wait for all threads to arrive before launching all kernels
+#ifdef MPI_SUPPORT
+      MPI_Barrier(MPI_COMM_WORLD);
+#else
       #pragma omp barrier
+#endif
 
       // Launch kernel
       uint64_t cpuStart = std::chrono::steady_clock::now().time_since_epoch().count();
       if (launchMode == 0)
       {
-        SyncKernel<<<numBlocks, blockSize, 0, streams[deviceId]>>>(cpuTimestamp, abortFlag, syncData);
+        SyncKernel<<<numBlocks, blockSize, 0, streams[localIdx]>>>(cpuTimestamp, abortFlag, syncData);
       }
       else
       {
-        hipLaunchKernelGGL(SyncKernel, numBlocks, blockSize, 0, streams[deviceId], cpuTimestamp, abortFlag, syncData);
+        hipLaunchKernelGGL(SyncKernel, numBlocks, blockSize, 0, streams[localIdx], cpuTimestamp, abortFlag, syncData);
       }
       uint64_t cpuReturn = std::chrono::steady_clock::now().time_since_epoch().count();
 
@@ -262,7 +302,7 @@ int main(int argc, char **argv)
       uint64_t cpuAbort = std::chrono::steady_clock::now().time_since_epoch().count();
 
       // Wait for kernel to finish
-      HIP_CALL(hipStreamSynchronize(streams[deviceId]));
+      HIP_CALL(hipStreamSynchronize(streams[localIdx]));
       uint64_t cpuStop = std::chrono::steady_clock::now().time_since_epoch().count();
 
       // Store values (after all timings to avoid false sharing)
@@ -271,7 +311,11 @@ int main(int argc, char **argv)
       hostAbortTimes [deviceId][iteration] = cpuAbort;
       hostStopTimes  [deviceId][iteration] = cpuStop;
 
+#ifdef MPI_SUPPORT
+      MPI_Barrier(MPI_COMM_WORLD);
+#else
       #pragma omp barrier
+#endif
     }
   }
 
@@ -280,18 +324,45 @@ int main(int argc, char **argv)
   for (auto& t : updateThreads)
     t.join();
 
-  for (int i = 0; i < numGpus; i++)
-    HIP_CALL(hipMemcpy(syncDataCpu[i], syncDataGpu[i],totalIterations * numBlocks * sizeof(SyncData), hipMemcpyDeviceToHost));
+  std::vector<std::vector<SyncData>> syncDataCpu(numTotalGpus, std::vector<SyncData>(totalIterations * numBlocks));
+  for (int i = 0; i < numUsedGpus; i++)
+  {
+    HIP_CALL(hipMemcpy(syncDataCpu[i+rank].data(), syncDataGpu[i], totalIterations * numBlocks * sizeof(SyncData), hipMemcpyDeviceToHost));
+  }
 
-  std::vector<std::vector<double>> singleMinDiff(numGpus, std::vector<double>(NUM_COLUMNS, std::numeric_limits<double>::max()));
-  std::vector<std::vector<double>> singleSumDiff(numGpus, std::vector<double>(NUM_COLUMNS, 0));
-  std::vector<std::vector<double>> singleMaxDiff(numGpus, std::vector<double>(NUM_COLUMNS, std::numeric_limits<double>::min()));
+  std::vector<std::vector<double>> singleMinDiff(numTotalGpus, std::vector<double>(NUM_COLUMNS, std::numeric_limits<double>::max()));
+  std::vector<std::vector<double>> singleSumDiff(numTotalGpus, std::vector<double>(NUM_COLUMNS, 0));
+  std::vector<std::vector<double>> singleMaxDiff(numTotalGpus, std::vector<double>(NUM_COLUMNS, std::numeric_limits<double>::min()));
   std::vector<double> multiMinDiff(NUM_COLUMNS, std::numeric_limits<double>::max());
   std::vector<double> multiSumDiff(NUM_COLUMNS, 0);
   std::vector<double> multiMaxDiff(NUM_COLUMNS, std::numeric_limits<double>::min());
-
   std::vector<TimelineData> timelineData;
   char buff[1000];
+
+#ifdef MPI_SUPPORT
+  // Collect results from every rank
+  if (rank == 0)
+  {
+    for (int deviceId = 1; deviceId < numTotalGpus; deviceId++)
+    {
+      MPI_Recv( hostStartTimes[deviceId].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, deviceId, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(hostReturnTimes[deviceId].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, deviceId, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv( hostAbortTimes[deviceId].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, deviceId, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(  hostStopTimes[deviceId].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, deviceId, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(syncDataCpu[deviceId].data(), totalIterations * numBlocks * sizeof(SyncData), MPI_BYTE, deviceId, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+  }
+  else
+  {
+    MPI_Send( hostStartTimes[rank].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+    MPI_Send(hostReturnTimes[rank].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+    MPI_Send( hostAbortTimes[rank].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+    MPI_Send(  hostStopTimes[rank].data(), totalIterations * sizeof(uint64_t), MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+    MPI_Send(syncDataCpu[rank].data(), totalIterations * numBlocks * sizeof(SyncData), MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+    goto end;
+  }
+#endif
+
   for (int iteration = 1; iteration <= numIterations; iteration++)
   {
     // Ignore warmup iterations
@@ -299,7 +370,7 @@ int main(int argc, char **argv)
 
     // Figure out which timestamp is "earliest" to use as origin for this iteration
     uint64_t origin = hostStartTimes[0][iter];
-    for (int gpu = 1; gpu < numGpus; gpu++)
+    for (int gpu = 1; gpu < numTotalGpus; gpu++)
       origin = std::min(origin, hostStartTimes[gpu][iter]);
 
     if (verbose)
@@ -312,7 +383,7 @@ int main(int argc, char **argv)
     std::vector<double>  multiMinTime(NUM_COLUMNS, std::numeric_limits<double>::max());
     std::vector<double>  multiMaxTime(NUM_COLUMNS, std::numeric_limits<double>::min());
 
-    for (int gpu = 0; gpu < numGpus; gpu++)
+    for (int gpu = 0; gpu < numTotalGpus; gpu++)
     {
       std::vector<double> times(NUM_COLUMNS);
       times[HOST_START]  = ( hostStartTimes[gpu][iter] - origin) / 1000.0;
@@ -412,21 +483,21 @@ int main(int argc, char **argv)
   printf("==========================================================================================================================================\n");
   printf("| SUMMARY (All iter)| START(CPU) | RETURN(CPU)| START(GPU) | ABORT(CPU) | STOP (GPU) | STOP (CPU) | Kernel(CPU)| Kernel(GPU)|   AbsDiff  |\n");
   printf("==========================================================================================================================================\n");
-  for (int gpu = 0; gpu < numGpus; gpu++)
+  for (int gpu = 0; gpu < numTotalGpus; gpu++)
   {
     printf("|   GPU %02d DIFF MIN |", gpu);
     for (int col = 0; col < NUM_COLUMNS; col++)
       printCol[col] ? printf(" %10.3f |", singleMinDiff[gpu][col]) : printf("            |");
     printf("\n");
   }
-  for (int gpu = 0; gpu < numGpus; gpu++)
+  for (int gpu = 0; gpu < numTotalGpus; gpu++)
   {
     printf("|   GPU %02d DIFF AVG |", gpu);
     for (int col = 0; col < NUM_COLUMNS; col++)
       printCol[col] ? printf(" %10.3f |", singleSumDiff[gpu][col] / numIterations) : printf("            |");
     printf("\n");
   }
-  for (int gpu = 0; gpu < numGpus; gpu++)
+  for (int gpu = 0; gpu < numTotalGpus; gpu++)
   {
     printf("|   GPU %02d DIFF MAX |", gpu);
     for (int col = 0; col < NUM_COLUMNS; col++)
@@ -438,9 +509,14 @@ int main(int argc, char **argv)
   printf("| ALL GPUs DIFF AVG |"); for (auto x : multiSumDiff) printf(" %10.3f |", x / numIterations); printf("\n");
   printf("| ALL GPUs DIFF MAX |"); for (auto x : multiMaxDiff) printf(" %10.3f |", x); printf("\n");
 
-  sprintf(buff, "timeline_%dx%s_%dx%dblockSize_%dCUTs_Numa%d_Sleep%d.html", numGpus, archName, numBlocks, blockSize, numUpdateThreads, useNuma, numSleepUsec);
+  sprintf(buff, "timeline_%dx%s_%dx%dblockSize_%dCUTs_Numa%d_Sleep%d.html", numTotalGpus, archName, numBlocks, blockSize, numUpdateThreads, useNuma, numSleepUsec);
   printf("Timeline exported to %s\n", buff);
   ExportToTimeLine(buff, "Device", "Call", timelineData);
 
+#ifdef MPI_SUPPORT
+end:
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Finalize();
+#endif
   return 0;
 }
