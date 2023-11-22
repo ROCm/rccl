@@ -213,8 +213,7 @@ int main(int argc, char **argv)
   }
 
   typedef typename std::ratio_multiply<std::chrono::steady_clock::period,std::mega>::type MicroSec;
-  printf("std::chrono::steady_clock precision: %8.3f usec\n",
-         static_cast<double>(MicroSec::num)/MicroSec::den);
+  //printf("std::chrono::steady_clock precision: %8.3f usec\n", static_cast<double>(MicroSec::num)/MicroSec::den);
 
   // Allocate per-update-thread resources and start update threads
   bool abortUpdateThreads = false;
