@@ -166,6 +166,7 @@ int main(int argc, char **argv)
   }
 #else
   numUsedGpus = numTotalGpus = numAvailableGpus;
+  printf("Running OMP version with %d ranks\n", numTotalGpus);
   rank = 0;
 #endif
 
