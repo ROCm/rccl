@@ -11,6 +11,7 @@
 #include "comm.h"
 #include "net.h"
 #include "channel.h"
+#include "xml.h"
 
 // Pre-compute GPU->NIC, GPU->GPU and NIC->GPU paths
 
@@ -542,6 +543,30 @@ ncclResult_t ncclTopoGetPxnRanks(struct ncclComm* comm, int** intermediateRanks,
   return ncclSuccess;
 }
 
+static bool rcclPathOverride(struct ncclTopoSystem* system, uint64_t distance) {
+  int i, j;
+
+  for (i = 0; i < system->nodes[GPU].count; i++) {
+    for (j = 0; j < system->nodes[NET].count; j++) {
+      if (system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance)
+        break;
+    }
+    if (j >= system->nodes[NET].count)
+      break;
+  }
+  if (i >= system->nodes[GPU].count) {
+    for (i = 0; i < system->nodes[GPU].count; i++) {
+      for (j = 0; j < system->nodes[NET].count; j++) {
+        if (system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance)
+          system->nodes[GPU].nodes[i].paths[NET][j].type = PATH_PXB;
+      }
+    }
+    return true;
+  } else {
+    return false;
+  }
+}
+
 ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm* comm) {
   // Precompute paths between GPUs/NICs.
 
@@ -600,6 +625,26 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm
     }
   }
 
+  // Special handling of gfx94x
+
+#if !defined(TOPO_EXPL)
+  char strValue[1024];
+  NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
+  if (strncmp("Hyper-V UEFI Release", strValue, 20) == 0) {
+#endif
+    int arch, vendor, model;
+    NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+    if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_INTEL &&
+      IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") &&
+      ((system->nodes[GPU].count == 8 && system->nodes[NET].count == 8 && system->nodes[GPU].count == system->nRanks) ||
+      (system->nodes[GPU].count != system->nRanks))) {
+      if (!rcclPathOverride(system, 0x100000))
+        rcclPathOverride(system, 0x1000);
+    }
+#if !defined(TOPO_EXPL)
+  }
+#endif
+
   // Update paths for NICs (no GPU Direct, PXN, ...)
   for (int n=0; n<system->nodes[NET].count; n++) {
     struct ncclTopoNode* netNode = system->nodes[NET].nodes+n;
@@ -639,7 +684,7 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm
   return ncclSuccess;
 }
 
-RCCL_PARAM(EnableIntranet, "ENABLE_INTRANET", 0);
+RCCL_PARAM(EnableIntranet, "ENABLE_INTRANET", -2);
 
 ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* comm) {
   int *domains;
@@ -726,7 +771,10 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     INFO(NCCL_GRAPH, "GDR is available on all GPUs");
   }
 
-  if (rcclParamEnableIntranet()) {
+  // Special handling of gfx94x
+  if (rcclParamEnableIntranet() == 1 || (rcclParamEnableIntranet() == -2 &&
+    IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") &&
+    system->nodes[GPU].count == 8 && system->nodes[NET].count == 8)) {
     remove = 0;
     system->type |= RCCL_TOPO_FORCE_INTRA;
   }
