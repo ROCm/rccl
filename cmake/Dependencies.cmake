@@ -88,7 +88,7 @@ set(DATATYPES_FLOAT
 function(expand_collectives FILE FUNC)
   set(REDOP Sum Prod Min Max PreMulSum SumPostDiv)
   if (FUNC STREQUAL "MscclKernel")
-    set(REDOP_FILTERED Sum Prod Min Max)
+    set(REDOP_FILTERED Sum Prod Min Max PreMulSum SumPostDiv)
   else()
     set(REDOP_FILTERED ${REDOP})
   endif()
