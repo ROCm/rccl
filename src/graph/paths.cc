@@ -771,13 +771,6 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     INFO(NCCL_GRAPH, "GDR is available on all GPUs");
   }
 
-  // Special handling of gfx94x
-  if (rcclParamEnableIntranet() == 1 || (rcclParamEnableIntranet() == -2 &&
-    IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") &&
-    system->nodes[GPU].count == 8 && system->nodes[NET].count == 8)) {
-    remove = 0;
-    system->type |= RCCL_TOPO_FORCE_INTRA;
-  }
   comm->localRanks = system->nodes[GPU].count;
   if (system->nodes[GPU].count == comm->nRanks && remove) {
     for (int n=system->nodes[NET].count-1; n>=0; n--)

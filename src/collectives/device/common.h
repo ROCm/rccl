@@ -476,8 +476,8 @@ __forceinline__ __device__ void ncclKernel(
       int y = __popcll(channelMask & ((1ull<<x)-1));
       if (blockIdx.x == y) ncclShmem.channelId = x;
     }
-    if (32 < MAXCHANNELS) {
-      x = 32 + tid;
+    if (WARP_SIZE < MAXCHANNELS) {
+      x = WARP_SIZE + tid;
       if (channelMask & (1ull<<x)) {
         int y = __popcll(channelMask & ((1ull<<x)-1));
         if (blockIdx.x == y) ncclShmem.channelId = x;
