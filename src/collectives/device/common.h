@@ -468,17 +468,10 @@ template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnI
 __forceinline__ __device__ void ncclKernel(
     struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead
   )  {
-  int tid = threadIdx.x;
-  if (tid == 0) {
-    for (auto i = 0; i < NCCL_MAX_GROUPS; i++) {
-      ncclShmem.groups[i].barrier = 0;
-      for (auto j = 0; j < NCCL_MAX_GROUPS; j++) ncclShmem.groups[i].barrier_next[j] = 0;
-    }
-  }
-  // To map blockId to channelId, we need the n'th set bit of channelMask which
-  // is the inverse of counting the number of set bits among the the first n.
-  if (tid < WARP_SIZE) {
-    int x = tid;
+  const int tid = threadIdx.x;
+  int x = tid;
+  switch (tid/WARP_SIZE) {
+  case 0:
     if (channelMask & (1ull<<x)) {
       int y = __popcll(channelMask & ((1ull<<x)-1));
       if (blockIdx.x == y) ncclShmem.channelId = x;
@@ -490,11 +483,26 @@ __forceinline__ __device__ void ncclKernel(
         if (blockIdx.x == y) ncclShmem.channelId = x;
       }
     }
+    break;
+  case 1:
+    if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
+      ncclShmem.groups[tid-WARP_SIZE].barrier = 0;
+    break;
+  case 2:
+    if (tid < 2*WARP_SIZE + NCCL_MAX_GROUPS*NCCL_MAX_GROUPS)
+      ncclShmem.groups[(tid-2*WARP_SIZE)/NCCL_MAX_GROUPS].barrier_next[(tid-2*WARP_SIZE)%NCCL_MAX_GROUPS] = 0;
+    break;
+  case 3:
+    /* set abort flag to 0 */
+    if (tid == 3*WARP_SIZE) ncclShmem.aborted = 0;
+    break;
+  default:
+    break;
   }
   __synclds(); // publish ncclShmem.channelId
+  // To map blockId to channelId, we need the n'th set bit of channelMask which
+  // is the inverse of counting the number of set bits among the the first n.
   int channelId = ncclShmem.channelId;
-  /* set abort flag to 0 */
-  if (tid == 0) ncclShmem.aborted = 0;
 
   if (true) {
     void *dst, *src;

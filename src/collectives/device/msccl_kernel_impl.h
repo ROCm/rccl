@@ -26,6 +26,28 @@ extern __shared__ struct mscclShmemData mscclShmem;
 #define GET_WORKINDEX_FROM_FLAG(__FLAG__) \
   (__FLAG__) / (MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS)
 
+#ifdef ENABLE_COLLTRACE
+  #define INC_COLL_TRACE \
+    uint32_t pos = atomicAdd(&ncclShmem.collTraceTail->tail, 1)%COLLTRACE_NUM_ITEMS; \
+    struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
+    collTrace->timeStamp = wall_clock64(); \
+    collTrace->bid = blockIdx.x;
+    // TODO: switch to atomicInc after llvm crash is fixed
+    // uint32_t pos = atomicInc(&ncclShmem.collTraceTail->tail, COLLTRACE_NUM_ITEMS)
+
+  #define traceData(data2, data4, data8_0, data8_1) { \
+    INC_COLL_TRACE \
+    collTrace->funcIndex = data2; \
+    collTrace->data_0 = data4; \
+    collTrace->opCount = data8_0; \
+    collTrace->data_1 = data8_1; \
+    collTrace->type = ncclCollTraceDataType; \
+  }
+#else
+#define traceData(data2, data4, data8_0, data8_1)
+#endif
+
+
 // a copy of the volatile load/store from prims_ll
 template<typename U>
 __device__ static U load(U *src) {
@@ -89,10 +111,10 @@ __device__ static void store(U *dst, U val) {
 #endif
 }
 
-inline __device__ static void barrier(int nthreads, uint64_t* barrier_next, uint64_t* barriers) {
+inline __device__ static void barrier(int nthreads) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  if (nthreads != WARP_SIZE)
-    barrier_by_group();
+  assert(nthreads == NCCL_MAX_NTHREADS);
+  __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier");
 #else
   asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15));
 #endif
@@ -100,16 +122,17 @@ inline __device__ static void barrier(int nthreads, uint64_t* barrier_next, uint
 
 // Copy 8-byte aligned data. You must call with at least `(bytes+7)/8` threads.
 inline __device__ static void copyToShmem8(int tid, void* dst, void const* src, int bytes) {
-  int offset = 8 * tid;
+  int offset = sizeof(uint32_t) * tid;
   if (offset < bytes) {
-    uint64_t *src2 = (uint64_t*)((char const*)src + offset);
-    uint64_t *dst2 = (uint64_t*)((char*)dst + offset);
+    uint32_t *src2 = (uint32_t*)((char const*)src + offset);
+    uint32_t *dst2 = (uint32_t*)((char*)dst + offset);
     *dst2 = *src2;
+    offset += WARP_SIZE*sizeof(uint32_t);
   }
 }
 
 __device__ __forceinline__ static void threadBlockCopy(
-  uint64_t *dst, uint64_t const *src, uint64_t size, int tid, int nthreads) {
+  uint32_t *dst, uint32_t const *src, uint64_t size, int tid, int nthreads) {
   for (int i = tid; i < size; i += nthreads) {
     dst[i] = src[i];
   }
@@ -128,27 +151,23 @@ for (int r = 0; r < numloops; r++) { \
   srcs[r] = srcPointer + srcOffset; \
 }
 
-template<typename T, typename RedOp, typename Proto>
+template<typename T, typename RedOp, typename Proto, bool fullOps>
 __device__ __forceinline__ void mscclRunInterpreter(
   struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) {
   const int tid = threadIdx.x;
   const int bid = blockIdx.x;
   const int nthreads = NCCL_MAX_NTHREADS;
 
-  // initialize barriers
+#if defined(ENABLE_NPKIT)
+  uint64_t timestamp_entry = 0;
   if (tid == 0) {
-    for (auto i = 0; i < NCCL_MAX_GROUPS; i++) {
-      ncclShmem.groups[i].barrier = 0;
-      for (auto j = 0; j < NCCL_MAX_GROUPS; j++) ncclShmem.groups[i].barrier_next[j] = 0;
-    }
+     timestamp_entry = NPKIT_GET_GPU_TIMESTAMP();
   }
-  uint64_t* mscclBarrierNext = ncclShmem.groups[0].barrier_next;
-  uint64_t* mscclBarriers = &ncclShmem.groups[0].barrier;
-
+#endif
   // initialize mscclShmem.mscclTB
   threadBlockCopy(
-    (uint64_t *)&mscclShmem.mscclTB, (uint64_t *)(algo->mscclTBs + bid),
-    sizeof(struct mscclThreadBlock) / sizeof(uint64_t), tid, nthreads);
+    (uint32_t *)&mscclShmem.mscclTB, (uint32_t *)(algo->mscclTBs + bid),
+    sizeof(struct mscclThreadBlock) / sizeof(uint32_t), tid, nthreads);
   __synclds(); // publish mscclShmem.mscclTB.channelId
 
   // initialize ncclShmem and mscclShmem.work
@@ -162,24 +181,25 @@ __device__ __forceinline__ void mscclRunInterpreter(
       dst = &ncclShmem.comm;
       src = comm;
       bytes = sizeof(ncclDevComm);
-      static_assert(sizeof(ncclDevComm) <= sizeof(uint64_t) * WARP_SIZE, "ncclDevComm cannot be loaded by a single warp in one insn.");
       break;
     case 1:
       // Get address of channel without incurring indirect load from ncclDevComm::channels
       dst = &ncclShmem.channel;
       src = &((ncclDevCommAndChannels*)comm)->channels[channelId];
       bytes = sizeof(ncclDevChannel);
-      static_assert(sizeof(ncclDevChannel) <= sizeof(uint64_t) * WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
       break;
     case 2:
       dst = &mscclShmem.work;
       src = work + blockIdx.x;
       bytes = sizeof(mscclWork);
-      static_assert(sizeof(mscclWork) <= sizeof(uint64_t) * WARP_SIZE, "mscclWork cannot be loaded by a single warp in one insn.");
       break;
     case 3:
       /* set abort flag to 0 */
-      if (tid == 3 * WARP_SIZE) ncclShmem.aborted = 0;
+      if (tid%WARP_SIZE == 0) ncclShmem.aborted = 0;
+#ifdef ENABLE_COLLTRACE
+      else if (tid%WARP_SIZE == 1) ncclShmem.collTrace = comm->collTrace + COLLTRACE_NUM_ITEMS*channelId;
+      else if (tid%WARP_SIZE == 2) ncclShmem.collTraceTail = comm->collTraceTail + channelId;
+#endif
       break;
     default:
       break;
@@ -189,46 +209,36 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #if defined(ENABLE_NPKIT)
   int npKitCtxIdx = bid;
-  if (tid == 0) ncclShmem.event_buffer_head = 0;
+  int xcc_id = 0;
+  if (tid == 0) {
+    ncclShmem.event_buffer_head = 0;
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xcc_id));
+#endif
+  }
 #endif
   __synclds(); // publish shmem
+
+  if (fullOps && tid == 0) {
+    traceData(__LINE__, mscclShmem.work.fnIndex, (uint64_t)mscclShmem.work.sendBuff, 0);
+  }
+
   if (tid == 0)
     *mscclShmem.work.workFifoDone = mscclShmem.work.workFifoDoneAck;
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
   if (tid == 0) {
     uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, xcc_id, *cpuTimestamp);
   }
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
   if (tid == 0) {
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, NPKIT_GET_GPU_TIMESTAMP());
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_GPU, 0, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 
-  // Deference reduce args if required
-  if (tid == 0 && mscclShmem.work.hasReduce && mscclShmem.work.redOpArgIsPtr) {
-    switch (sizeof(T)) {
-      case 1:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint8_t*>(mscclShmem.work.redOpArg);
-        break;
-      case 2:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint16_t*>(mscclShmem.work.redOpArg);
-        break;
-      case 4:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint32_t*>(mscclShmem.work.redOpArg);
-        break;
-      case 8:
-        mscclShmem.work.redOpArg = *reinterpret_cast<uint64_t*>(mscclShmem.work.redOpArg);
-        break;
-      default:
-        break;
-    }
-  }
-  __synclds(); // publish shmem
-  
   // User pointers for primitives
   T* thisInput = (T*)mscclShmem.work.sendBuff;
   T* thisOutput = (T*)mscclShmem.work.recvBuff;
@@ -260,11 +270,19 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RUN_ENTRY)
   if (tid == 0) {
-    int xcc_id = 0;
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
-    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xcc_id));
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_ENTRY, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, xcc_id, timestamp_entry);
+  }
 #endif
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_ENTRY, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_INIT_ENTRY)
+  if (tid == 0) {
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_INIT_ENTRY, 0, xcc_id, timestamp_entry);
+  }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_INIT_EXIT)
+  if (tid == 0) {
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_INIT_EXIT, 0, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 
@@ -297,17 +315,18 @@ __device__ __forceinline__ void mscclRunInterpreter(
           int16_t dependentStep = mscclShmem.mscclTB.dependentStep[dependentPointer+tid];
           uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
           while (true){
-            uint64_t curFlag = (mscclFlags + dependentBid)->flag;
+            uint64_t curFlag = __atomic_load_n(&(mscclFlags + dependentBid)->flag, __ATOMIC_RELAXED);
             if (curFlag >= goalFlag && GET_WORKINDEX_FROM_FLAG(curFlag) == workIndex) break;
           }
         }
         step += numDependencies-1;
-        barrier(nthreads, mscclBarrierNext, mscclBarriers);
+        barrier(nthreads);
       }
 
       srcPointer = (t->srcBuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((t->srcBuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
       dstPointer = (t->dstBuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((t->dstBuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
       prims.setDataPtrs(srcPointer, dstPointer);
+
       int count = t->count;
       for (int c = 0; c < count; c += maxAllowedCount) {
         srcOffset = gridOffset + (ssize_t) (t->srcOffset+c) * sizePerMscclChunk;
@@ -320,7 +339,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif	
-          prims.sendWithBarrier(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
+          prims.send(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
             if (tid == 0) {
@@ -343,41 +362,47 @@ __device__ __forceinline__ void mscclRunInterpreter(
         }
         else if (t->type == MSCCL_REDUCE) {
           int numReductions = t->numReductions;
-          if (thisNelem < nthreads){
+          int currIdx = tid;
+#if defined(__gfx942__)
+          if (Proto::Id == NCCL_PROTO_LL) {
+#else
+          if (thisNelem < nthreads) {
+#endif
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_ENTRY)
             if (tid == 0) {
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif
 
-            if (tid < thisNelem){
+#if defined(__gfx942__)
+            while (currIdx < thisNelem) {
+#else
+            if (currIdx < thisNelem) {
+#endif
               dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
-              T* dstIndex = dstPointer + dstOffset + tid;
+              T* dstIndex = dstPointer + dstOffset + currIdx;
               T reduceInput;
               T o = load(dstIndex);
-              ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + tid;
+              ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + currIdx;
               switch (numReductions) {
-                case 1:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(1);
-                  break;
-                case 3:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(3);
-                  break;
                 case 7:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(7);
                   break;
+#if defined(__gfx90a__)
                 case 15:
                   #pragma unroll
                   MSCCL_REDUCE_UNROLL_LOOP_A(15);
                   break;
+#endif
                 default:
                   MSCCL_REDUCE_UNROLL_LOOP_A(numReductions);
                   break;
               }
               store(dstIndex, o);
+#if defined(__gfx942__)
+              currIdx += nthreads;
+#endif
             }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT)
@@ -386,29 +411,23 @@ __device__ __forceinline__ void mscclRunInterpreter(
             }
 #endif
 
-            barrier(nthreads, mscclBarrierNext, mscclBarriers);
+            barrier(nthreads);
           } else {
             T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
             dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
             T* dst = dstPointer + dstOffset;
             ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk;
             switch (numReductions) {
-              case 1:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(1);
-                break;
-              case 3:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(3);
-                break;
               case 7:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(7);
                 break;
+#if defined(__gfx90a__)
               case 15:
                 #pragma unroll
                 MSCCL_REDUCE_UNROLL_LOOP_B(15);
                 break;
+#endif
               default:
                 MSCCL_REDUCE_UNROLL_LOOP_B(numReductions);
                 break;
@@ -416,28 +435,38 @@ __device__ __forceinline__ void mscclRunInterpreter(
             prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
           }
           if (c == 0) step += (numReductions-1); // only advance step once!
-        } else if (t->type == MSCCL_RECV_COPY_SEND)
+        } else if (fullOps && t->type == MSCCL_RECV_COPY_SEND)
           prims.recvCopySend(dstOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_SEND)
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_SEND)
           prims.recvReduceSend(srcOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_COPY_SEND)
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_COPY_SEND)
           prims.recvReduceCopySend(srcOffset, dstOffset, thisNelem);
-        else if (t->type == MSCCL_RECV_REDUCE_COPY)
+        else if (fullOps && t->type == MSCCL_RECV_REDUCE_COPY) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY)
+          if (tid == 0) {
+            NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
+          }
+#endif
           prims.recvReduceCopy(srcOffset, dstOffset, thisNelem);
-        else if (t->type == MSCCL_LOCAL_COPY)
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_EXIT)
+          if (tid == 0) {
+            NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
+          }
+#endif
+        }
+        else if (fullOps && t->type == MSCCL_LOCAL_COPY)
           prims.localCopy(srcPointer+srcOffset, dstPointer+dstOffset, thisNelem);
         else
           return;
       }
-      if (t->hasDependence && tid == nthreads-1){
-        mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, iter, step);
-      }
+      if (t->hasDependence && tid == nthreads-1)
+        __atomic_store_n(&mscclFlags[bid].flag, (uint64_t) COMPUTE_FLAG(workIndex, iter, step), __ATOMIC_RELAXED);
       step++;
     }
   }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RUN_EXIT)
   if (tid == 0) {
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_EXIT, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, 0, NPKIT_GET_GPU_TIMESTAMP());
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RUN_EXIT, mscclShmem.work.sizePerMscclChunk*mscclShmem.work.nChunksPerLoop, xcc_id, NPKIT_GET_GPU_TIMESTAMP());
   }
 #endif
 #if defined(ENABLE_NPKIT)
@@ -446,35 +475,43 @@ __device__ __forceinline__ void mscclRunInterpreter(
   copyToShmem16(tid, ctx->event_buffer+ctx->event_buffer_head, ncclShmem.event_buffer, sizeof(NpKitEvent)*ncclShmem.event_buffer_head);
   if (tid == 0) ctx->event_buffer_head += ncclShmem.event_buffer_head;
 #endif
+
+  if (fullOps && tid == 0) {
+    traceData(__LINE__, mscclShmem.work.fnIndex, (uint64_t)mscclShmem.work.sendBuff, 0);
+  }
 }
 
-#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type) \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL>(comm, algo, work); \
+#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, type, fullOps) \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL, fullOps>(comm, algo, work); \
 } \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128>(comm, algo, work); \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoLL128, fullOps>(comm, algo, work); \
 } \
-__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
-  mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>>(comm, algo, work); \
+__global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) { \
+  mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>, fullOps>(comm, algo, work); \
 }
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint8_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int32_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint32_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int64_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint64_t) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, half) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, float) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, double) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, rccl_bfloat16)
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint8_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int32_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint32_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int64_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint64_t, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, half, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, float, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, double, fullOps) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps)
 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC() \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min)
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, true) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, true) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, true) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, true)
 
 #endif

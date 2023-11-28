@@ -573,7 +573,7 @@ ncclResult_t mscclGetAlgoFromXmlFile(const char* str, struct mscclAlgo* algo, in
                   mscclTran->srcOffset = srcOffset;
                   mscclTran->dstBuffer = dstBufferInt;
                   mscclTran->dstOffset = dstOffset;
-
+                  algo->typeMask |= (1<<transferType);
                   if (count < 0 || count >= MSCCL_MAX_COUNT){
                     WARN("MSCCL: count (%d) must be positive and less than %d", count, MSCCL_MAX_COUNT);
                     return ncclInternalError;

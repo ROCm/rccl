@@ -190,14 +190,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
     status.needsProxy = false;
-    status.workFifoDepth = MSCCL_WORK_FIFO_DEPTH;
-    NCCLCHECK(ncclCudaCalloc(&status.workFifo, status.workFifoDepth, nullptr, true));
-    NCCLCHECK(ncclCudaHostCalloc(&status.workFifoDone, MAXCHANNELS));
-    status.workFifoSent = 0;
-    for (int i = 0; i < MAXCHANNELS; i++) {
-      status.workFifoSentPerChannel[i] = 0;
-    }
-    status.workFifoAckdMin = 0;
+    NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
     mscclSchedulerTriedLoadAlgo = false;
 
     NCCLCHECK(mscclSchedulerInit());
@@ -305,6 +298,7 @@ static ncclResult_t mscclSetSavedSchedulerParam(
   param->p.nRanks = comm->nRanks;
   param->comm = comm;
   param->stream = stream;
+  param->p.opCount = comm->opCount;
   return ncclSuccess;
 }
 
@@ -322,9 +316,27 @@ static ncclResult_t mscclSaveCountsAndDispls(struct mscclSavedSchedulerParam* pa
   return ncclSuccess;
 }
 
+const char *mscclFuncNames[] = {
+            "mscclFuncReduce",
+            "mscclFuncBroadcast",
+            "mscclFuncAllReduce",
+            "mscclFuncReduceScatter",
+            "mscclFuncAllGather",
+            "mscclFuncSend",
+            "mscclFuncRecv",
+            "mscclFuncGather",
+            "mscclFuncScatter",
+            "mscclFuncAllToAll",
+            "mscclFuncAllToAllv",
+          };
+
 static ncclResult_t mscclRunSavedParams() {
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   for (auto& param : threadLocalStatus.savedSchedulerParams) {
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
+    mscclFuncNames[param.p.func], param.p.opCount, param.p.sendBuff, param.p.recvBuff, param.p.count,
+    param.p.dataType, param.p.op, param.p.root, param.comm, param.p.nRanks, param.stream);
+
     NCCLCHECK(mscclRunAlgo(
       param.p.sendBuff, param.p.sendCounts, param.p.sDisPls,
       param.p.recvBuff, param.p.recvCounts, param.p.rDisPls,
@@ -502,8 +514,10 @@ ncclResult_t mscclTeardown() {
     } else {
       NCCLCHECK(mscclInternalSchedulerTeardown());
     }
-    NCCLCHECK(ncclCudaFree(status.workFifo));
-    NCCLCHECK(ncclCudaHostFree(status.workFifoDone));
+    NCCLCHECK(mscclDestroyWorkFifoStatus(&(status.defaultWorkFifoStatus)));
+    for (auto &p : status.graphWorkFifoStatus) {
+      NCCLCHECK(mscclDestroyWorkFifoStatus(&(p.second)));
+    }
     mscclInitialized.store(false, std::memory_order_release);
   }
 

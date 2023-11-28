@@ -3,6 +3,7 @@
  * Licensed under the MIT License.
  ************************************************************************/
 
+#include "channel.h"
 #include "checks.h"
 #include "collectives.h"
 #include "proxy.h"
@@ -19,7 +20,10 @@
 RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 1);
 #endif
 
+RCCL_PARAM(MscclWorkFifoDepth, "MSCCL_WORK_FIFO_DEPTH", 64<<10);
+
 ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
+  mscclStatus& status = mscclGetStatus();
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
   cudaStreamCaptureStatus captureStatus;
@@ -29,15 +33,16 @@ ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
     if (savedProxyArgs.count(captureId) == 0) {
       threadLocalStatus.captureStatus = mscclNewCapture;
       savedProxyArgs[captureId] = std::vector<struct mscclProxyArg>();
+      NCCLCHECK(mscclInitWorkFifoStatus(&(status.graphWorkFifoStatus[captureId])));
     } else {
-      INFO(NCCL_INIT|NCCL_NET,"mscclGetCaptureStatus: captureId %llu is same with the previous one\n", captureId);
+      INFO(NCCL_NET,"mscclGetCaptureStatus: captureId %llu is same with the previous one\n", captureId);
       threadLocalStatus.captureStatus = mscclExistingCapture;
     }
     threadLocalStatus.captureId = captureId;
   } else {
     threadLocalStatus.captureStatus = mscclNoCapture;
   }
-  INFO(NCCL_INIT|NCCL_NET,"mscclGetCaptureStatus: %d, captureId: %llu, size: %lu\n", threadLocalStatus.captureStatus, threadLocalStatus.captureId, mscclGetSavedProxyArgs()[captureId].size());
+  INFO(NCCL_NET,"mscclGetCaptureStatus: %d, captureId: %llu, size: %lu\n", threadLocalStatus.captureStatus, threadLocalStatus.captureId, mscclGetSavedProxyArgs()[captureId].size());
   return ncclSuccess;
 }
 
@@ -67,9 +72,8 @@ ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
   size_t sizeNeeded = (status.nBytes * (size_t)(hostAlgo->nScratchChunks)) / (size_t)(hostAlgo->nChunksPerLoop);
   if (sizeNeeded > status.scratchBufferSize){
-    CUDACHECK(hipStreamSynchronize(stream));
     NCCLCHECK(ncclCudaFree(status.scratchBuffer));
-    NCCLCHECK(ncclCudaCalloc((char**)&status.scratchBuffer, sizeNeeded));
+    NCCLCHECK(ncclCudaMalloc((char**)&status.scratchBuffer, sizeNeeded, true));
     status.scratchBufferSize = sizeNeeded;
   }
   return ncclSuccess;
@@ -90,10 +94,15 @@ ncclResult_t mscclSetupSyncFlags(hipStream_t stream) {
 ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
   mscclStatus& status = mscclGetStatus();
 
-  // Check whether there is enough channels
-  if (hostAlgo->nChannels > comm->nChannels) {
-    WARN("MSCCL: number of channels available (%d) less than required (%d)", comm->nChannels, hostAlgo->nChannels);
+  // Check whether there are enough channels
+  if (hostAlgo->nChannels > MAXCHANNELS) {
+    WARN("MSCCL: max number of channels available (%d) less than required (%d)", MAXCHANNELS, hostAlgo->nChannels);
     return ncclInvalidUsage;
+  }
+  if (hostAlgo->nChannels > comm->nChannels) {
+    for (int channelId = comm->nChannels; channelId < hostAlgo->nChannels; channelId++) {
+      NCCLCHECK(initChannel(comm, channelId));
+    }
   }
 
   // Flag MSCCL connections
@@ -180,7 +189,7 @@ static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t c
 
 static void HIPRT_CB mscclSetupProxyCallback(void *args) {
   std::vector<struct mscclProxyArg>* params = (std::vector<struct mscclProxyArg>*)args;
-  INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
+  INFO(NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
   for (auto &p : *params) {
     mscclSetupProxyImpl(p.hostAlgo, p.comm);
   }    
@@ -191,12 +200,12 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStr
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
   if (threadLocalStatus.captureStatus == mscclNoCapture) {
-    INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: no capture\n");
+    INFO(NCCL_NET,"mscclSetupProxy: no capture\n");
     NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm));
   } else if (status.needsProxy) {
-    INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: capture\n");
+    INFO(NCCL_NET,"mscclSetupProxy: capture\n");
     if (savedProxyArgs[threadLocalStatus.captureId].size() == 0) {
-      INFO(NCCL_INIT|NCCL_NET,"mscclSetupProxy: adding callback\n");
+      INFO(NCCL_NET,"mscclSetupProxy: adding callback\n");
 
       hipGraphNode_t callbackNode;
       hipHostNodeParams p;
@@ -283,31 +292,35 @@ static ncclResult_t hostToDevRedOp(
   nullptr, \
   nullptr
 
-#define MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, type) \
-  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL), \
-  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128), \
-  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple)
+#define MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, type, fullOps) \
+  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL, fullOps), \
+  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, LL128, fullOps), \
+  (void *)MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)
 
-#define MSCCL_KERNEL_ENTRY_DEVREDOP(devredop) \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint8_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int32_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint32_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int64_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint64_t), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, half), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16)
+#define MSCCL_KERNEL_ENTRY_DEVREDOP(devredop, fullOps) \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint8_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int32_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint32_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int64_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint64_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, half, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps)
 
 #define MSCCL_KERNEL_ENTRY() \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Sum), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Prod), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Max), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Min)
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Max, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, true), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, true), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Max, true), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, true)
 
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
-void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
+void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS * 2] = {
 #ifdef COMPILE_MSCCL_KERNEL
   MSCCL_KERNEL_ENTRY()
 #endif
@@ -324,50 +337,52 @@ static inline uint32_t rollingMin32(uint32_t a, uint32_t b) {
   return (b-a <= PositiveMax) ? a : b;
 }
 
-static void mscclWaitWorkFifoAvailable(uint32_t desiredSent) {
-  mscclStatus& status = mscclGetStatus();
-  if (__builtin_expect(rollingLess32(status.workFifoAckdMin + status.workFifoDepth, desiredSent), false)) {
+static void mscclWaitWorkFifoAvailable(uint32_t desiredSent, mscclWorkFifoStatus* status) {
+  if (__builtin_expect(rollingLess32(status->workFifoAckdMin + status->workFifoDepth, desiredSent), false)) {
     while (1) {
       // We have to poll for notifications from device.
-      uint32_t* doneLive = status.workFifoDone;
-      uint32_t ackd[MAXCHANNELS];
-      for (int c=0; c < MAXCHANNELS; c++) {
+      uint32_t* doneLive = status->workFifoDone;
+      uint32_t ackd[MSCCL_MAX_NUM_THREAD_BLOCKS];
+      for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         ackd[c] = __atomic_load_n(&doneLive[c], __ATOMIC_RELAXED);
       }
       // Compiler-only fence to prevent fusion of loops to encourage dense loads.
       __atomic_signal_fence(__ATOMIC_SEQ_CST);
 
-      uint32_t ackdAll = status.workFifoSent;
-      for (int c=0; c < MAXCHANNELS; c++) {
+      uint32_t ackdAll = status->workFifoSent;
+      for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         // ackdAll is min over all non-quiesced channels
-        if (ackd[c] != status.workFifoSentPerChannel[c])
+        if (ackd[c] != status->workFifoSentPerThreadBlock[c])
           ackdAll = rollingMin32(ackdAll, ackd[c]);
       }
 
       // Compiler only fence to prevent fusion of loops to encourage dense stores.
       __atomic_signal_fence(__ATOMIC_SEQ_CST);
 
-      for (int c=0; c < MAXCHANNELS; c++) {
+      for (int c=0; c < MSCCL_MAX_NUM_THREAD_BLOCKS; c++) {
         // Advance counter on quiesced channels so they don't lag behind
         // too far where they could get lost in 32-bit wraparound.
-        if (ackd[c] == status.workFifoSentPerChannel[c]) {
-          status.workFifoSentPerChannel[c] = ackdAll;
+        if (ackd[c] == status->workFifoSentPerThreadBlock[c]) {
+          status->workFifoSentPerThreadBlock[c] = ackdAll;
           __atomic_store_n(&doneLive[c], ackdAll, __ATOMIC_RELAXED);
         }
       }
-      status.workFifoAckdMin = ackdAll;
+      status->workFifoAckdMin = ackdAll;
 
       // See if that was enough.
-      if (!rollingLess32(status.workFifoAckdMin + status.workFifoDepth, desiredSent)) break;
+      if (!rollingLess32(status->workFifoAckdMin + status->workFifoDepth, desiredSent)) break;
       sched_yield();
     }
   }
 }
 
+RCCL_PARAM(MscclForceFullOps, "MSCCL_FORCE_FULLOPS", 0);
+
 ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count,
     ncclDataType_t dataType, ncclRedOp_t op, struct mscclAlgo* hostAlgo, struct mscclAlgo* devAlgo,
     ncclComm_t comm, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
+  mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
 
   bool enableDoneEvent =
 #ifndef HIP_EVENT_DISABLE_FENCE
@@ -386,6 +401,16 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   ncclDevRedOpFull opFull = {};
   NCCLCHECK(hostToDevRedOp(&opFull, op, dataType, comm));
 
+  uint32_t fnIndex = (opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol;
+  uint8_t fullOpMask = (1<<MSCCL_RECV_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY_SEND) |
+                        (1<<MSCCL_RECV_REDUCE_COPY) |
+                        (1<<MSCCL_LOCAL_COPY);
+  //check if need full ops msccl kernel
+  if ((hostAlgo->typeMask & fullOpMask) || rcclParamMscclForceFullOps())
+    fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
+
   mscclWork work;
   work.syncFlags = status.syncFlags;
   work.scratchBuffer = status.scratchBuffer;
@@ -398,10 +423,24 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.maxAllowedCount = status.maxAllowedCount;
   work.hasReduce = hostAlgo->hasReduce;
   work.redOpArgIsPtr = opFull.scalarArgIsPtr;
-  INFO(NCCL_INIT, "MSCCL: Setup Kernel finished");
-  
-  uint32_t workFifoIdxMask = status.workFifoDepth - 1;
-  uint32_t workFifoSent = status.workFifoSent;
+  work.fnIndex = fnIndex;
+  INFO(NCCL_COLL, "MSCCL: typeMask %x fnIndex %d Setup Kernel finished", hostAlgo->typeMask, fnIndex);
+
+  mscclWorkFifoStatus* workFifoStatus = nullptr;
+  if (threadLocalStatus.captureStatus == mscclNoCapture) {
+    workFifoStatus = &(status.defaultWorkFifoStatus);
+  } else {
+    workFifoStatus = &(status.graphWorkFifoStatus[threadLocalStatus.captureId]);
+  }
+
+  uint32_t workFifoIdxMask = workFifoStatus->workFifoDepth - 1;
+  uint32_t workFifoSent = workFifoStatus->workFifoSent;
+
+  if (threadLocalStatus.captureStatus != mscclNoCapture && workFifoSent + numBlocks > workFifoStatus->workFifoDepth) {
+    WARN("MSCCL: number of captured works (%u) > max limit (%lu)", workFifoSent + numBlocks, workFifoStatus->workFifoDepth);
+    return ncclInternalError;
+  }
+
   // First work for a channel has to be at workHeap+blockIdx.x which means
   // we cannot tolerate fifo wraparound. So round up to the wrap boundary
   // if not doing so would incur crossing it.
@@ -410,20 +449,21 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
     // Need to update workFifoSent so waitWorkFifoAvailable() knows we've
     // skipped those elements. Consider if all the channels report quiesced,
     // this way the skipped slots will be considered consumed as well.
-    status.workFifoSent = workFifoSent;
+    workFifoStatus->workFifoSent = workFifoSent;
   }
-  mscclWaitWorkFifoAvailable(workFifoSent + numBlocks);
+  mscclWaitWorkFifoAvailable(workFifoSent + numBlocks, workFifoStatus);
   for (int i = 0; i < numBlocks; i++) {
     work.workFifoDoneAck = workFifoSent + i;
-    work.workFifoDone = status.workFifoDone + i;
-    status.workFifoSentPerChannel[i] = workFifoSent + i;
-    status.workFifo[(workFifoSent + i) & workFifoIdxMask] = work;
+    work.workFifoDone = workFifoStatus->workFifoDone + i;
+    workFifoStatus->workFifoSentPerThreadBlock[i] = workFifoSent + i;
+    workFifoStatus->workFifo[(workFifoSent + i) & workFifoIdxMask] = work;
   }
-  status.workFifoSent = workFifoSent + numBlocks;
 
-  struct mscclWork *workPtr = status.workFifo + (workFifoSent & workFifoIdxMask);
+  struct mscclWork *workPtr = workFifoStatus->workFifo + (workFifoSent & workFifoIdxMask);
+  workFifoStatus->workFifoSent = workFifoSent + numBlocks;
+
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
-  void *func = mscclKernelEntries[(opFull.op * ncclNumTypes + dataType) * NCCL_NUM_PROTOCOLS + hostAlgo->protocol];
+  void *func = mscclKernelEntries[fnIndex];
   if (enableDoneEvent) {
     CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
   } else {
@@ -449,4 +489,22 @@ size_t mscclKernMaxLocalSize() {
 
 error:
   return (res != ncclSuccess) ? 0 : max;
+}
+
+ncclResult_t mscclInitWorkFifoStatus(mscclWorkFifoStatus* workFifoStatus) {
+  workFifoStatus->workFifoDepth = rcclParamMscclWorkFifoDepth();
+  NCCLCHECK(ncclCudaMalloc(&(workFifoStatus->workFifo), workFifoStatus->workFifoDepth, true));
+  NCCLCHECK(ncclCudaHostCalloc(&(workFifoStatus->workFifoDone), MSCCL_MAX_NUM_THREAD_BLOCKS));
+  workFifoStatus->workFifoSent = 0;
+  for (int i = 0; i < MSCCL_MAX_NUM_THREAD_BLOCKS; i++) {
+    workFifoStatus->workFifoSentPerThreadBlock[i] = 0;
+  }
+  workFifoStatus->workFifoAckdMin = 0;
+  return ncclSuccess;
+}
+
+ncclResult_t mscclDestroyWorkFifoStatus(mscclWorkFifoStatus* workFifoStatus) {
+  NCCLCHECK(ncclCudaFree(workFifoStatus->workFifo));
+  NCCLCHECK(ncclCudaHostFree(workFifoStatus->workFifoDone));
+  return ncclSuccess;
 }

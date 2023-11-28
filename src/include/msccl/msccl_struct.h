@@ -15,7 +15,7 @@
 
 #define MSCCL_MAX_NUM_STEPS 64
 #define MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
-#define MSCCL_MAX_NUM_THREAD_BLOCKS (MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS)
+#define MSCCL_MAX_NUM_THREAD_BLOCKS 64
 #define MSCCL_MAX_COUNT 72 // max concurrent number of msccl chunk transmission
 #define MSCCL_MAX_REDUCE_FUSION 16
 #define MSCCL_MAX_NUM_ALGOS 1024
@@ -35,8 +35,6 @@
 #define MSCCL_RECV_REDUCE_COPY_SEND 5
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
-
-#define MSCCL_WORK_FIFO_DEPTH (64 << 10)
 
 struct mscclTransmission {
   int16_t dependencePointer; // index to the first dependence
@@ -144,6 +142,8 @@ struct mscclAlgo {
   bool inPlace;
   // Whether this algorithm is suitable for out-of-place.
   bool outOfPlace;
+  // Keep a bit mask of used types (max 8 at present)
+  uint8_t typeMask;
 };
 
 enum mscclGroupStatus {
@@ -187,6 +187,17 @@ struct mscclThreadLocalStatus {
   hipGraph_t graph;
 };
 
+struct mscclWorkFifoStatus {
+  uint64_t workFifoDepth;
+  struct mscclWork* workFifo;
+  uint32_t* workFifoDone;
+  uint32_t workFifoSent;
+  uint32_t workFifoSentPerThreadBlock[MSCCL_MAX_NUM_THREAD_BLOCKS];
+  uint32_t workFifoAckdMin;
+};
+
+typedef std::map<unsigned long long, mscclWorkFifoStatus> mscclSavedGraphWorkFifoStatus;
+
 struct mscclStatus {
   std::vector<mscclAlgoHandle_t> freeAlgoHandles;
   std::map<mscclAlgoHandle_t, mscclAlgo *> hostAlgos;
@@ -212,12 +223,8 @@ struct mscclStatus {
   bool graphEnabled;
   bool graphFirstKernel;
   bool needsProxy;
-  uint64_t workFifoDepth;
-  struct mscclWork* workFifo;
-  uint32_t* workFifoDone;
-  uint32_t workFifoSent;
-  uint32_t workFifoSentPerChannel[MAXCHANNELS];
-  uint32_t workFifoAckdMin;
+  mscclWorkFifoStatus defaultWorkFifoStatus;
+  mscclSavedGraphWorkFifoStatus graphWorkFifoStatus;
 };
 
 #pragma pack(push)
@@ -237,7 +244,7 @@ struct mscclWork {
   int nChunksPerLoop;
   bool hasReduce;
   bool redOpArgIsPtr;
-  uint32_t pad[1];
+  uint32_t fnIndex;
 };
 static_assert(sizeof(struct mscclWork) % 16 == 0, "mscclWork needs to be 16B aligned");
 

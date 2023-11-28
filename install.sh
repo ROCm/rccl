@@ -87,10 +87,10 @@ while true; do
          --build_allreduce_only)     build_allreduce_only=true;                                                                        shift ;;
     -d | --dependencies)             install_dependencies=true;                                                                        shift ;;
          --debug)                    build_release=false;                                                                              shift ;;
-         --enable_backtrace)         build_bfd=true;                                                                                  shift ;;
+         --enable_backtrace)         build_bfd=true;                                                                                   shift ;;
          --disable-colltrace)        collective_trace=false;                                                                           shift ;;
          --disable-msccl-kernel)     msccl_kernel_enabled=false;                                                                       shift ;;
-    -f | --fast)                     build_bfd=false; build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;   shift ;;
+    -f | --fast)                     build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;                    shift ;;
     -h | --help)                     display_help;                                                                                     exit 0 ;;
     -i | --install)                  install_library=true;                                                                             shift ;;
     -j | --jobs)                     num_parallel_jobs=${2};                                                                           shift 2 ;;
@@ -328,6 +328,10 @@ if ($npkit_enabled); then
     -DENABLE_NPKIT_EVENT_MSCCL_RECV_EXIT \
     -DENABLE_NPKIT_EVENT_MSCCL_RUN_ENTRY \
     -DENABLE_NPKIT_EVENT_MSCCL_RUN_EXIT \
+    -DENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_ENTRY \
+    -DENABLE_NPKIT_EVENT_MSCCL_RECV_REDUCE_COPY_EXIT \
+    -DENABLE_NPKIT_EVENT_MSCCL_INIT_ENTRY \
+    -DENABLE_NPKIT_EVENT_MSCCL_INIT_EXIT \
     -DENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME"
 fi
 

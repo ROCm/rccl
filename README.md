@@ -11,11 +11,11 @@ The collective operations are implemented using ring and tree algorithms and hav
 ## Requirements
 
 1. ROCm supported GPUs
-2. ROCm stack installed on the system (HIP runtime & HCC or HIP-Clang)
+2. ROCm stack installed on the system (HIP runtime & HIP-Clang)
 
 ## Quickstart RCCL Build
 
-RCCL directly depends on HIP runtime, plus the HCC C++ compiler or the HIP-Clang compiler which are part of the ROCm software stack.
+RCCL directly depends on HIP runtime plus the HIP-Clang compiler, which are part of the ROCm software stack.
 For ROCm installation instructions, see https://github.com/RadeonOpenCompute/ROCm.
 
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
@@ -28,8 +28,9 @@ The root of this repository has a helper script 'install.sh' to build and instal
        --build_allreduce_only  Build only AllReduce + sum + float kernel
     -d|--dependencies          Install RCCL depdencencies
        --debug                 Build debug library
-       --disable_backtrace     Build without custom backtrace support
+       --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
+       --disable-msccl-kernel  Build without MSCCL kernels
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)
