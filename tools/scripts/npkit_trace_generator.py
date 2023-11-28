@@ -55,7 +55,55 @@ def parse_cpu_event(event_bytes):
         'timestamp': int.from_bytes(event_bytes[8:16], byteorder='little', signed=False)
     }
 
-def parse_gpu_event_file(npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs=5):
+def parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs=5):
+    gpu_event_file_path = os.path.join(npkit_dump_dir, 'gpu_events_rank_%d_buf_%d' % (rank, buf_idx))
+    stats_key = 'gpu_rank_%d' % (rank)
+    channel_stats = {}
+    raw_event_size = 16
+    curr_cpu_base_time = None
+    curr_gpu_base_time = None
+    gpu_events = []
+    event_type_to_seq = {}
+    unfiltered_events = []
+    start_event_id = 0
+    with open(gpu_event_file_path, 'rb') as f:
+        raw_content = f.read()
+        raw_content_size = len(raw_content)
+        raw_content_idx = 0
+        if raw_content_size > 0 and stats_key not in dictionary_of_stats:
+            dictionary_of_stats[stats_key] = {}
+        warmup_raw_content_idx = 0
+        while warmup_runs != 0 and warmup_raw_content_idx < raw_content_size: #warmup run cleanup
+            parsed_gpu_event = parse_gpu_event(raw_content[warmup_raw_content_idx : warmup_raw_content_idx + raw_event_size])
+            unfiltered_events.insert(0, parsed_gpu_event)
+            if start_event_id == 0:
+                decoded_id = npkit_event_def['id_to_type'][parsed_gpu_event['id']]
+                if decoded_id == 'NPKIT_EVENT_TIME_SYNC_CPU' or decoded_id == 'NPKIT_EVENT_TIME_SYNC_GPU':
+                    warmup_raw_content_idx += raw_event_size
+                    continue
+                else:
+                    start_event_id = parsed_gpu_event['id']
+
+            warmup_raw_content_idx += raw_event_size
+            if parsed_gpu_event['id'] == (start_event_id + 1):
+                warmup_runs -= 1
+        raw_content_idx = warmup_raw_content_idx
+        while raw_content_idx < raw_content_size:
+            parsed_gpu_event = parse_gpu_event(raw_content[raw_content_idx : raw_content_idx + raw_event_size])
+            if npkit_event_def['id_to_type'][parsed_gpu_event['id']] in ['NPKIT_EVENT_TIME_SYNC_CPU']:
+                if ('cpu') in sync_dictionary:
+                    sync_dictionary['cpu'].append(parsed_gpu_event)
+                else:
+                    sync_dictionary['cpu'] = [parsed_gpu_event]
+            if npkit_event_def['id_to_type'][parsed_gpu_event['id']] in ['NPKIT_EVENT_TIME_SYNC_GPU']:
+                if ('gpu') in sync_dictionary:
+                    sync_dictionary['gpu'].append(parsed_gpu_event)
+                else:
+                    sync_dictionary['gpu'] = [parsed_gpu_event]
+            raw_content_idx += raw_event_size
+    return len(sync_dictionary)
+
+def parse_gpu_event_file(rank_cpu_time_xcid, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs=5):
     gpu_event_file_path = os.path.join(npkit_dump_dir, 'gpu_events_rank_%d_buf_%d' % (rank, buf_idx))
     stats_key = 'gpu_rank_%d' % (rank)
     channel_stats = {}
@@ -92,11 +140,13 @@ def parse_gpu_event_file(npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clo
             parsed_gpu_event = parse_gpu_event(raw_content[raw_content_idx : raw_content_idx + raw_event_size])
             unfiltered_events.insert(0, parsed_gpu_event)
             if npkit_event_def['id_to_type'][parsed_gpu_event['id']] == 'NPKIT_EVENT_TIME_SYNC_CPU':
-                curr_cpu_base_time = parsed_gpu_event['timestamp'] / cpu_clock_scale
+                # curr_cpu_base_time = parsed_gpu_event['timestamp'] / cpu_clock_scale
+                curr_cpu_base_time = rank_cpu_time_xcid['cpu'] / cpu_clock_scale
                 curr_gpu_base_time = None
             elif npkit_event_def['id_to_type'][parsed_gpu_event['id']] == 'NPKIT_EVENT_TIME_SYNC_GPU':
                 if curr_gpu_base_time is None:
-                    curr_gpu_base_time = parsed_gpu_event['timestamp'] / gpu_clock_scale
+                    # curr_gpu_base_time = parsed_gpu_event['timestamp'] / gpu_clock_scale
+                    curr_gpu_base_time = rank_cpu_time_xcid['gpu'] / gpu_clock_scale
             else:
                 if curr_gpu_base_time is None:
                     curr_gpu_base_time = parsed_gpu_event['timestamp'] / gpu_clock_scale
@@ -244,7 +294,6 @@ def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def, gpu
     ranks = list(set([int(x.split('_rank_')[1].split('_')[0]) for x in gpu_event_files]))
     buf_indices = list(set([int(x.split('_buf_')[1].split('_')[0]) for x in gpu_event_files]))
     channels = list(set([int(x.split('_channel_')[1].split('_')[0]) for x in cpu_event_files]))
-
     trace = {'traceEvents': []}
     dictionary_of_stats = {}
     for rank in ranks:
@@ -255,13 +304,27 @@ def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def, gpu
         gpu_clock_file_path = os.path.join(npkit_dump_dir, 'gpu_clock_rate_rank_%d' % rank)
         gpu_clock_scale = parse_gpu_clock_scale(gpu_clock_file_path)
 
+        sync_dictionary = {} # per rank
+        avg_time = {}
+        number_events=0
+        for buf_idx in buf_indices: # get the avg time
+            parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats)
+
+        for key in sync_dictionary:
+            avg_time[key] = 0
+            number_events=len(sync_dictionary[key])
+            for event in sync_dictionary[key]:
+                avg_time[key] = avg_time[key] + (event['timestamp']/number_events)
+
         for buf_idx in buf_indices:
-            gpu_events = parse_gpu_event_file(npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats)
+            gpu_events = parse_gpu_event_file(avg_time, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats)
             trace['traceEvents'].extend(gpu_events)
+
 
         for channel in channels:
             cpu_events = parse_cpu_event_file(npkit_dump_dir, npkit_event_def, rank, channel, cpu_clock_scale)
             trace['traceEvents'].extend(cpu_events)
+
 
     trace['traceEvents'].sort(key=lambda x : x['ts'])
     trace['displayTimeUnit'] = 'ns'
