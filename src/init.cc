@@ -18,6 +18,7 @@
 #include "enqueue.h"
 #include "graph.h"
 #include "argcheck.h"
+#include "devcomm.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
 #endif
@@ -54,7 +55,7 @@
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "AllToAllPivot" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "AllGather", "AllReduce", "AllToAllPivot", "Broadcast", "Reduce", "ReduceScatter", "SendRecv"};
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNetDirect", "CollNetChain", "NVLS", "NVLSTree" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 const char* ncclDevRedOpStr[ncclNumDevRedOps] = { "Sum", "Prod", "Max", "Min", "PreMulSum", "SumPostDiv" };
@@ -185,13 +186,13 @@ void *ncclCommThreadMain(void *arg) {
   memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
   #define MAX_NAME_LENGTH 64
-  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+2));
+  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(ncclFuncId_P2p()+2));
   for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
     for (int al = 0; al < NCCL_NUM_ALGORITHMS; al++) {
       for (int type = 0; type < ncclNumTypes; type++) {
         for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
           for (int devredop = 0; devredop < ncclNumDevRedOps; devredop++) {
-            char* line = func_names+MAX_NAME_LENGTH*FUNC_INDEX(func, devredop, type, al, pr);
+            char* line = func_names+MAX_NAME_LENGTH*ncclFuncId(func, devredop, type, al, pr);
             sprintf(line, "%s%s%s%s%s", ncclFuncStr[func], ncclAlgoStr[al], ncclProtoStr[pr],
               ncclDevRedOpStr[devredop], ncclTypeStr[type]);
           }
@@ -200,10 +201,10 @@ void *ncclCommThreadMain(void *arg) {
     }
   }
   for (int type = 0; type < ncclNumTypes; type++) {
-    char* line = func_names+MAX_NAME_LENGTH*(FUNC_INDEX_P2P-ncclNumTypes+type);
+    char* line = func_names+MAX_NAME_LENGTH*(ncclFuncId_P2p()-ncclNumTypes+type);
     sprintf(line, "OneRankReducePreMulSum%s", ncclTypeStr[type]);
   }
-  char* line = func_names+MAX_NAME_LENGTH*FUNC_INDEX_P2P;
+  char* line = func_names+MAX_NAME_LENGTH*ncclFuncId_P2p();
   sprintf(line, "SendRecvRingSimpleSum_i8");
   line += MAX_NAME_LENGTH;
   sprintf(line, "AllToAllPivotRingSimpleSum_i8");
@@ -232,7 +233,7 @@ void *ncclCommThreadMain(void *arg) {
             (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
             fIdx, td->data_0, td->opCount, td->data_1);
         } else {
-          if (fIdx == FUNC_INDEX_P2P || type == ncclCollTraceP2pElemType)
+          if (fIdx == ncclFuncId_P2p() || type == ncclCollTraceP2pElemType)
             sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
           else
             sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);

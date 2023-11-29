@@ -11,6 +11,7 @@
 #include "nccl.h"
 #include "rccl_bfloat16.h"
 #include "align.h"
+#include "collectives.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit_struct.h"
 #endif
@@ -482,5 +483,63 @@ __host__ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_C
 __host__ __device__ constexpr int ncclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH) {
   return cudaArch < 700 ? 0 : ncclShmemScratchWarpSize(cudaArch)*(NCCL_MAX_NTHREADS/WARP_SIZE);
 }
+
+// Map the rowIdx to funcIdx
+extern int const ncclFuncRowToId[];
+
+// `ncclFuncIndex()` needs to be in sync with 'ALL_COLLS' in Generate.cmake
+inline int ncclFuncId(int coll, int devRedOp, int type, int algo, int proto) {
+  int row = 0;
+
+  // RING / <all_protos> / Sum / int8_t
+  if (coll == ncclFuncAllGather) {
+    row += proto;
+    goto have_row;
+  }
+  row += NCCL_NUM_PROTOCOLS;
+
+  // <all_algos> / <all_protos> / <all_redops> / <all_types>
+  if (coll == ncclFuncAllReduce) {
+    row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * (algo * NCCL_NUM_PROTOCOLS + proto);
+    goto have_row;
+  }
+  row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+
+  // RING / SIMPLE / Sum / int8_t
+  if (coll == ncclFuncAllToAllPivot) goto have_row;
+  row += 1;
+
+  // RING / <all_protos> / Sum / int8_t
+  if (coll == ncclFuncBroadcast) {
+    row += proto;
+    goto have_row;
+  }
+  row += NCCL_NUM_PROTOCOLS;
+
+  // RING / <all_protos> / <all_redops> / <all_types>
+  if (coll == ncclFuncReduce) {
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto; 
+    goto have_row;
+  }
+  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+
+  // RING / <all_protos> / <all_redops> / <all_types>
+  if (coll == ncclFuncReduceScatter) {
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto;
+    goto have_row;
+  }
+  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+
+  // RING / SIMPLE / Sum / int8_t
+  if (coll == ncclFuncSendRecv) goto have_row;
+  row += 1;
+
+have_row:
+  return ncclFuncRowToId[row];
+}
+
+inline int ncclFuncId_P2p() { return ncclFuncRowToId[FUNC_INDEX_P2P]; }
+
+inline int ncclFuncId_AllToAllPivot() { return ncclFuncRowToId[FUNC_INDEX_ALLTOALL_PIVOT]; }
 
 #endif

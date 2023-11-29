@@ -37,10 +37,18 @@ if(BUILD_TESTS)
     )
 
   # Collect source files for tests
-  if(BUILD_ALLREDUCE_ONLY)
-    set(TEST_SOURCE_FILES
-      AllReduce_Tests.cpp
-    )
+  if(ONLY_FUNCS)
+    # Convert input string to a list
+    string(REPLACE "|" ";" CONFIG_LIST ${ONLY_FUNCS})
+
+    # For each config in config list
+    foreach(item ${CONFIG_LIST})
+      string(REPLACE " " ";" CONFIG_PARAMS ${item})
+      list(GET CONFIG_PARAMS 0 COLL)
+
+      set(TEST_FILE "${COLL}Tests.cpp")
+      list(APPEND TEST_SOURCE_FILES ${TEST_FILE})
+    endforeach()
   else()
     set(TEST_SOURCE_FILES
       AllGatherTests.cpp
