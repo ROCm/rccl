@@ -316,7 +316,6 @@ set(SRC_FILES
   src/collectives/scatter.cc
   src/collectives/sendrecv.cc
   src/debug.cc
-  src/enhcompat.cc
   src/enqueue.cc
   src/graph/connect.cc
   src/graph/paths.cc
