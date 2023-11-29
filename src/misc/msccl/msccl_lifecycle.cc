@@ -137,6 +137,8 @@ static ncclResult_t mscclInternalSchedulerInit() {
 }
 
 ncclResult_t mscclSchedulerInit() {
+  std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
+
   mscclStatus& status = mscclGetStatus();
   bool useInternalScheduler = false;
 
