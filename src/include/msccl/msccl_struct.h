@@ -91,6 +91,8 @@ struct mscclAlgoMeta {
   std::string filePath;
   // number of chunks of input/output in each MSCCL algorithm loop
   int nChunksPerLoop;
+  // number of channels needed by MSCCL algorithm
+  int nChannels;
   // number of ranks required by this algorithm
   int nRanks;
   // need to times nRanks for all-gather, reduce-scatter and all-to-all
@@ -225,6 +227,7 @@ struct mscclStatus {
   bool needsProxy;
   mscclWorkFifoStatus defaultWorkFifoStatus;
   mscclSavedGraphWorkFifoStatus graphWorkFifoStatus;
+  int numChannelsRequired;
 };
 
 #pragma pack(push)

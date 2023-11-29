@@ -26,7 +26,6 @@ RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 static std::atomic<bool> mscclInitialized;
-static bool mscclSchedulerTriedLoadAlgo = false;
 static std::mutex mscclLifecycleMutex;
 
 bool mscclEnabled() {
@@ -117,6 +116,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
     fullDirPath = mscclAlgoDir;
   }
   INFO(NCCL_INIT, "Using MSCCL files from %s", fullDirPath);
+  status.numChannelsRequired = 0;
   while ((entry = readdir(dp))) {
     if (entry->d_type != DT_LNK && entry->d_type != DT_REG) {
       continue;
@@ -126,6 +126,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
     fullPath += "/";
     fullPath += entry->d_name;
     NCCLCHECK(mscclGetAlgoMetaFromXmlFile(fullPath.c_str(), &(status.algoMetas.back())));
+    status.numChannelsRequired = std::max(status.numChannelsRequired, status.algoMetas.back().nChannels);
   }
   if (closedir(dp)) {
     WARN("MSCCL Internal Scheduler: closedir failed, error %d", errno);
@@ -135,7 +136,7 @@ static ncclResult_t mscclInternalSchedulerInit() {
   return ncclSuccess;
 }
 
-static ncclResult_t mscclSchedulerInit() {
+ncclResult_t mscclSchedulerInit() {
   mscclStatus& status = mscclGetStatus();
   bool useInternalScheduler = false;
 
@@ -159,7 +160,9 @@ static ncclResult_t mscclSchedulerInit() {
     NCCLCHECK(mscclInternalSchedulerInit());
   } else {
     NCCLCHECK(status.mscclSchedulerPtr->init());
+    status.numChannelsRequired = MAXCHANNELS;
   }
+
   return ncclSuccess;
 }
 
@@ -191,9 +194,28 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.lastStream = nullptr;
     status.needsProxy = false;
     NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
-    mscclSchedulerTriedLoadAlgo = false;
 
-    NCCLCHECK(mscclSchedulerInit());
+    // Pre-process all algorithms for internal scheduler.
+    // This is a temp fix to bypass the issue that stream cannot be synchronized during HIP graph capturing,
+    // should use dynamic loading approach after the issue is fixed.
+    if (!status.mscclSchedulerPtr) {
+      for (size_t i = 0; i < status.algoMetas.size(); i++) {
+        auto &m = status.algoMetas[i];
+        mscclAlgoHandle_t mscclAlgoHandle;
+        if (m.nRanks == comm->nRanks) {
+          // Load algorithms
+          if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()) {
+            NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &mscclAlgoHandle, comm->rank));
+            status.rankToAlgoHandles[i][comm->rank] = mscclAlgoHandle;
+          }
+          // Connect algorithms
+          if (status.connectedAlgos[comm].find(mscclAlgoHandle) == status.connectedAlgos[comm].end()) {
+            NCCLCHECK(mscclSetupConnections(status.hostAlgos[mscclAlgoHandle], comm));
+            status.connectedAlgos[comm].insert(mscclAlgoHandle);
+          }
+        }
+      }
+    }
 
     mscclInitialized.store(true, std::memory_order_release);
   }
@@ -248,12 +270,6 @@ static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam*
         m.nRanks == param->nRanks &&
         m.func == param->func &&
         (isInPlace ? m.inPlace : m.outOfPlace)) {
-      // If not loaded for current rank, load it
-      if (status.rankToAlgoHandles[i].find(param->rank) == status.rankToAlgoHandles[i].end()) {
-        mscclAlgoHandle_t algoHandle;
-        NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &algoHandle, param->rank));
-        status.rankToAlgoHandles[i][param->rank] = algoHandle;
-      }
       param->handle = status.rankToAlgoHandles[i][param->rank];
       param->scheduled = true;
       return ncclSuccess;

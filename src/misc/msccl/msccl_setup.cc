@@ -95,14 +95,9 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
   mscclStatus& status = mscclGetStatus();
 
   // Check whether there are enough channels
-  if (hostAlgo->nChannels > MAXCHANNELS) {
-    WARN("MSCCL: max number of channels available (%d) less than required (%d)", MAXCHANNELS, hostAlgo->nChannels);
-    return ncclInvalidUsage;
-  }
   if (hostAlgo->nChannels > comm->nChannels) {
-    for (int channelId = comm->nChannels; channelId < hostAlgo->nChannels; channelId++) {
-      NCCLCHECK(initChannel(comm, channelId));
-    }
+    WARN("MSCCL: number of channels available (%d) less than required (%d)", comm->nChannels, hostAlgo->nChannels);
+    return ncclInvalidUsage;
   }
 
   // Flag MSCCL connections

@@ -11,6 +11,9 @@
 #include "rings.h"
 #include "topo.h"
 
+#include "msccl/msccl_lifecycle.h"
+#include "msccl/msccl_status.h"
+
 /******************************************************************/
 /********************* Internode connection ***********************/
 /******************************************************************/
@@ -484,6 +487,15 @@ int ncclMinNchannels() {
   int minNchannels = 2;
   if (ncclParamMinNrings() != -2) minNchannels = ncclParamMinNrings();
   if (ncclParamMinNchannels() != -2) minNchannels = ncclParamMinNchannels();
+  static int mscclNumChannelsRequired = -1;
+  if (mscclEnabled()) {
+    if (mscclNumChannelsRequired == -1) {
+      mscclSchedulerInit();
+      mscclStatus& status = mscclGetStatus();
+      mscclNumChannelsRequired = status.numChannelsRequired;
+    }
+    minNchannels = std::max(minNchannels, mscclNumChannelsRequired);
+  }
   if (minNchannels > MAXCHANNELS) {
     WARN("User asked for a minimum of %d channels, limiting to %d", minNchannels, MAXCHANNELS);
     minNchannels = MAXCHANNELS;
