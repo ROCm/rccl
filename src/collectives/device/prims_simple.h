@@ -179,8 +179,8 @@ private:
   __device__ __forceinline__ void genericOp(
       intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp
     ) {
-    constexpr int DirectRecv = 1 && Direct && DirectRecv1;
-    constexpr int DirectSend = 1 && Direct && DirectSend1;
+    constexpr int DirectRecv = /*1 &&*/ Direct && DirectRecv1;
+    constexpr int DirectSend = /*1 &&*/ Direct && DirectSend1;
     constexpr int Src = SrcBuf != -1;
     constexpr int Dst = DstBuf != -1;
 
@@ -413,8 +413,8 @@ private:
   template <int DirectRecv1, int DirectSend1, int Recv, int Send>
   __device__ __forceinline__ void
   ScatterGatherOp(intptr_t inpIx, intptr_t outIx, int totalElem, int peerElem, int peerOffset, int skip, int shift, bool postOp) {
-    constexpr int DirectRecv = 1 && Direct && DirectRecv1;
-    constexpr int DirectSend = 1 && Direct && DirectSend1;
+    constexpr int DirectRecv = /*1 &&*/ Direct && DirectRecv1;
+    constexpr int DirectSend = /*1 &&*/ Direct && DirectSend1;
     int offset = 0; // slice offset
     int sliceSize = stepSize*StepPerSlice;
     int dataSize = max(DIVUP(peerElem, 16*SlicePerChunk)*16, sliceSize/32);  // per-peer slice size
