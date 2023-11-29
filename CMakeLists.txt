@@ -741,7 +741,7 @@ endif()
 
 if(BUILD_TESTS)
   rocm_package_setup_component(clients)
-  rocm_package_setup_client_component(tests)
+  rocm_package_setup_client_component(tests PACKAGE_NAME rccl-unitTests)
   add_subdirectory(test)
 endif()
 
