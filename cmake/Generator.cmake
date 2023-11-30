@@ -255,7 +255,7 @@ endfunction()
 ## Function to generate MSCCL Kernels
 ###########################################################################################################
 function(gen_msccl_kernels)
-  set(REDOP_FILTERED Sum Prod Min Max)
+  set(REDOP_FILTERED Sum Prod Min Max PreMulSum SumPostDiv)
   foreach(REDOP_CURRENT IN LISTS REDOP_FILTERED)
     foreach(DATA_TYPE ${ALL_TYPES})
       set(FILE_NAME "${HIPIFY_DIR}/src/collectives/device/msccl_kernel_${REDOP_CURRENT}_${DATA_TYPE}.cpp")
