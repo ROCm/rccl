@@ -731,6 +731,10 @@ ncclResult_t mscclGetAlgoMetaFromXmlFile(const char* str, struct mscclAlgoMeta* 
   NCCLCHECK(mscclXmlGetAttrInt(node, "nchunksperloop", &nChunksPerLoop));
   algoMeta->nChunksPerLoop  = nChunksPerLoop;
 
+  int nChannels;
+  NCCLCHECK(mscclXmlGetAttrInt(node, "nchannels", &nChannels));
+  algoMeta->nChannels = nChannels;
+
   int nGpus;
   NCCLCHECK(mscclXmlGetAttrInt(node, "ngpus", &nGpus));
   algoMeta->nRanks = nGpus;
