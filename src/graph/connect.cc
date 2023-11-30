@@ -12,7 +12,6 @@
 #include "topo.h"
 
 #include "msccl/msccl_lifecycle.h"
-#include "msccl/msccl_status.h"
 
 /******************************************************************/
 /********************* Internode connection ***********************/
