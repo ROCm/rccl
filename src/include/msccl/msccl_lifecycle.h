@@ -18,7 +18,7 @@ bool mscclIsCaller();
 
 bool mscclAvailable();
 
-ncclResult_t mscclSchedulerInit();
+ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired);
 
 ncclResult_t mscclInit(ncclComm_t comm);
 

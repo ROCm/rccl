@@ -227,7 +227,6 @@ struct mscclStatus {
   bool needsProxy;
   mscclWorkFifoStatus defaultWorkFifoStatus;
   mscclSavedGraphWorkFifoStatus graphWorkFifoStatus;
-  int numChannelsRequired;
 };
 
 #pragma pack(push)
