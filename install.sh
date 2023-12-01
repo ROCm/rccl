@@ -22,6 +22,7 @@ enable_ninja=""
 install_dependencies=false
 install_library=false
 msccl_kernel_enabled=true
+num_parallel_jobs=$(nproc)
 npkit_enabled=false
 run_tests=false
 run_tests_all=false
@@ -43,6 +44,7 @@ function display_help()
     echo "    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
+    echo "    -j|--jobs                  Specify how many parallel compilation jobs to run ($num_parallel_jobs by default)"
     echo "    -l|--local_gpu_only        Only compile for local GPU architecture"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
@@ -64,7 +66,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -88,6 +90,7 @@ while true; do
     -f | --fast)                     build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;                    shift ;;
     -h | --help)                     display_help;                                                                                     exit 0 ;;
     -i | --install)                  install_library=true;                                                                             shift ;;
+    -j | --jobs)                     num_parallel_jobs=${2};                                                                           shift 2 ;;
     -l | --local_gpu_only)           build_local_gpu_only=true;                                                                        shift ;;
          --no_clean)                 clean_build=false;                                                                                shift ;;
          --npkit-enable)             npkit_enabled=true;                                                                               shift ;;
@@ -341,9 +344,9 @@ fi
 check_exit_code "$?"
 
 if ($install_library); then
-    VERBOSE=${build_verbose} $build_system -j $(nproc) install
+    VERBOSE=${build_verbose} $build_system -j $num_parallel_jobs install
 else
-    VERBOSE=${build_verbose} $build_system -j $(nproc)
+    VERBOSE=${build_verbose} $build_system -j $num_parallel_jobs
 fi
 check_exit_code "$?"
 
