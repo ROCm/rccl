@@ -129,7 +129,6 @@ static ncclResult_t mscclInternalSchedulerInit(ncclComm_t comm, int* numChannels
     fullDirPath = mscclAlgoDir;
   }
   INFO(NCCL_INIT, "Using MSCCL files from %s", fullDirPath);
-
   while ((entry = readdir(dp))) {
     if (entry->d_type != DT_LNK && entry->d_type != DT_REG) {
       continue;
@@ -218,14 +217,13 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     if (comm->mscclCompatible && !status.mscclSchedulerPtr) {
       for (size_t i = 0; i < status.algoMetas.size(); i++) {
         auto &m = status.algoMetas[i];
-        mscclAlgoHandle_t mscclAlgoHandle;
         if (m.nRanks == comm->nRanks) {
           // Load algorithms
           if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()) {
-            NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &mscclAlgoHandle, comm->rank));
-            status.rankToAlgoHandles[i][comm->rank] = mscclAlgoHandle;
+            NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
           }
           // Connect algorithms
+	  mscclAlgoHandle_t mscclAlgoHandle = status.rankToAlgoHandles[i][comm->rank];
           if (status.connectedAlgos[comm].find(mscclAlgoHandle) == status.connectedAlgos[comm].end()) {
             NCCLCHECK(mscclSetupConnections(status.hostAlgos[mscclAlgoHandle], comm));
             status.connectedAlgos[comm].insert(mscclAlgoHandle);
