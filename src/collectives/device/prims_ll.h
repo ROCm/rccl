@@ -91,7 +91,7 @@ private:
 
   inline __device__ void msccl_barrier() {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    __asm__ __volatile__("s_barrier");
+    __builtin_amdgcn_s_barrier();
 #else
 #endif
   }
