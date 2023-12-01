@@ -82,7 +82,8 @@ private:
 
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-    barrier_by_group();
+    if (nthreads != WARP_SIZE)
+      barrier_by_group();
 #else
     asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15-group));
 #endif
