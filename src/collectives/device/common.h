@@ -130,7 +130,7 @@ static const __device__ constexpr ncclKernelFunc_t ncclFuncs[]{
 static_assert(FUNC_INDEX_P2P == 5410, "Wrong P2P function index");
 static_assert(FUNC_INDEX_ALLTOALL_PIVOT == 5411, "Wrong AllToAllPivot function index");
 
-#ifndef USE_INDIRECT_FUNCTION_CALL
+#if !defined(USE_INDIRECT_FUNCTION_CALL) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
 template<unsigned short f, unsigned short l, bool u>
 struct Caller {
   static __forceinline__ __device__ __host__
@@ -274,7 +274,7 @@ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
 class ncclFunction {
   public:
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
   __device__ __attribute__((noinline)) void run(struct ncclWorkElem* args) {}
 #else
   __device__ void run(struct ncclWorkElem* args) {}
@@ -568,7 +568,7 @@ __forceinline__ __device__ void ncclKernel(
     if (ncclShmem.work.header.funcIndex == FnIndex) {
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     } else {
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
       ncclFuncs[ncclShmem.work.header.funcIndex]();
 #else
 #ifdef ENABLE_LL128
@@ -627,7 +627,7 @@ __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDev
 // Examples :     AllReduce, RING, LL,    Sum,   uint8
 /* Functions for aggregation case */
 
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
 #define IMPL_COLL_FUNC(func, algo, proto, devredop, type) \
 __device__  void NCCL_FUNC_NAME(func, algo, proto, devredop, type)() { \
   RunWork<ncclFunc##func, type, Func##devredop<type>, NCCL_ALGO_##algo, NCCL_PROTO_##proto>().run(&ncclShmem.work); \

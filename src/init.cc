@@ -1688,6 +1688,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   int* parentRanks = NULL;
   int cudaArch;
   int64_t stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
+  hipDeviceProp_t devProp;
 
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);
   CUDACHECKGOTO(cudaDeviceGetAttribute(&archMajor, cudaDevAttrComputeCapabilityMajor, cudaDev), res, fail);
@@ -1698,7 +1699,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // Set the maximum kernel stack size of all kernels to avoid
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
-  if (stackSize > 0 && ncclParamSetStackSize() == 1) {
+  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
+  if (stackSize > 0 && ncclParamSetStackSize() == 1 && devProp.gcnArch != 940 && devProp.gcnArch != 941 && devProp.gcnArch != 942) {
     INFO(NCCL_INIT, "Setting cudaLimitStackSize to %zi maxLocalSizeBytes %zi", stackSize, maxLocalSizeBytes);
     CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, stackSize));
   }
