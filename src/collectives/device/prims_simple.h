@@ -710,6 +710,7 @@ private:
     if (flags & RoleOutput) userBuff = (T*)outputBuf;
   }
 
+  template<int MSCCL = 0>
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
@@ -723,6 +724,7 @@ private:
     genericOp<0, 1, 0, 1, Output, -1>(outIx, outIx, eltN, false);
   }
 
+  template<int MSCCL = 0>
   __device__ __forceinline__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
     genericOp<0, 0, 1, 0, -1, Output>(-1, outIx, eltN, postOp);
   }
