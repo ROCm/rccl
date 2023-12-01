@@ -257,6 +257,9 @@ endfunction()
 function(gen_msccl_kernels)
   foreach(REDOP_CURRENT IN LISTS ALL_REDOPS)
     foreach(DATA_TYPE ${ALL_TYPES})
+      if (REDOP_CURRENT STREQUAL "SumPostDiv" AND DATA_TYPE IN_LIST FLOATS_LIST)
+        continue()  # Skip the iteration for FLOATS_LIST when REDOP_CURRENT is SumPostDiv
+      endif()
       set(FILE_NAME "${HIPIFY_DIR}/src/collectives/device/msccl_kernel_${REDOP_CURRENT}_${DATA_TYPE}.cpp")
       message(STATUS "Generating ${FILE_NAME}")
       file(WRITE ${FILE_NAME}
