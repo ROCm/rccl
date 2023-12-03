@@ -18,7 +18,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
+option(ENABLE_IFC                              "Enable indirect function call"                 ON)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
