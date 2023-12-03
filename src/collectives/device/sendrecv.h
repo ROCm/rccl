@@ -174,7 +174,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     }
   }
 
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
   __device__  void run(ncclWork *work) {
 #else
   __device__  __attribute__((noinline)) void run(ncclWork *work) {

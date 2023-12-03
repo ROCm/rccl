@@ -10,7 +10,7 @@
 
 namespace {
   template<typename T, typename RedOp, typename Proto>
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
   __device__ void runRing(ncclWorkElem *args) {
 #else
   __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
