@@ -313,14 +313,10 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Max, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, true), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, true), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Max, true), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, true)
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, false)
 
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
-void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS * 2] = {
+void* mscclKernelEntries[(ncclNumDevRedOps - 2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
 #ifdef COMPILE_MSCCL_KERNEL
   MSCCL_KERNEL_ENTRY()
 #endif
@@ -408,8 +404,10 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
                         (1<<MSCCL_RECV_REDUCE_COPY) |
                         (1<<MSCCL_LOCAL_COPY);
   //check if need full ops msccl kernel
-  if ((hostAlgo->typeMask & fullOpMask) || rcclParamMscclForceFullOps())
-    fnIndex += sizeof(mscclKernelEntries)/sizeof(void *)/2;
+  if ((hostAlgo->typeMask & fullOpMask) || rcclParamMscclForceFullOps()) {
+    WARN("MSCCL: this version of MSCCL build doesn't support fill Ops");
+    return ncclInternalError;
+  }
 
   mscclWork work;
   work.syncFlags = status.syncFlags;
