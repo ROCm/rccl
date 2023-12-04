@@ -1700,7 +1700,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
   CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (stackSize > 0 && ncclParamSetStackSize() == 1 && devProp.gcnArch != 940 && devProp.gcnArch != 941 && devProp.gcnArch != 942) {
+  if (stackSize > 0 && ncclParamSetStackSize() == 1 && strcmp(devProp.gcnArchName,"gfx940") != 0 && strcmp(devProp.gcnArchName, "gfx941") != 0 && strcmp(devProp.gcnArchName, "gfx942") != 0) {
     INFO(NCCL_INIT, "Setting cudaLimitStackSize to %zi maxLocalSizeBytes %zi", stackSize, maxLocalSizeBytes);
     CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, stackSize));
   }
