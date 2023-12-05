@@ -74,12 +74,6 @@ ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t
 
 ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
-  size_t sizeNeeded = computeSizeNeeded(status.nBytes, hostAlgo->nScratchChunks, hostAlgo->nChunksPerLoop);
-  if (status.scratchBuffers.find(sizeNeeded) == status.scratchBuffers.end()) {
-    void *scratchBuffer = nullptr;
-    NCCLCHECK(ncclCudaMalloc((char**)&scratchBuffer, sizeNeeded, true));
-    status.scratchBuffers[sizeNeeded] = scratchBuffer;
-  }
   return ncclSuccess;
 }
 
@@ -427,6 +421,11 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   mscclWork work;
   work.syncFlags = status.syncFlags;
   size_t sizeNeeded = computeSizeNeeded(status.nBytes, hostAlgo->nScratchChunks, hostAlgo->nChunksPerLoop);
+  if (status.scratchBuffers.find(sizeNeeded) == status.scratchBuffers.end()) {
+    void *scratchBuffer = nullptr;
+    NCCLCHECK(ncclCudaMalloc((char**)&scratchBuffer, sizeNeeded, true));
+    status.scratchBuffers[sizeNeeded] = scratchBuffer;
+  }
   work.scratchBuffer = status.scratchBuffers[sizeNeeded];
   work.sendBuff = sendBuff;
   work.recvBuff = recvBuff;
