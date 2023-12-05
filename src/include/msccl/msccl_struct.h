@@ -205,8 +205,7 @@ struct mscclStatus {
   std::map<mscclAlgoHandle_t, mscclAlgo *> hostAlgos;
   std::map<mscclAlgoHandle_t, mscclAlgo *> devAlgos;
   struct mscclFlag* syncFlags;
-  void *scratchBuffer;
-  uint64_t scratchBufferSize;
+  std::map<size_t, void *> scratchBuffers;
   size_t nBytes;
   int stepSize;
   int chunkSteps;
