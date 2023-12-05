@@ -190,6 +190,7 @@ void generateFunctionName(char* func_names, int& funcIdx, const char* format, ..
     funcIdx++;
 }
 
+// Should be in sync with 'ALL_COLLS' in Generator.cmake
 void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
   int head[MAXCHANNELS];
@@ -197,7 +198,7 @@ void *ncclCommThreadMain(void *arg) {
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
-  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(ncclFuncId_P2p()+1));
+  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(ncclFuncId_P2p()+/*OneRankReduce*/11));
   int funcIdx = 0;
   // AllGather --> RING / <all_protos> / Sum / int8_t
   for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
@@ -240,6 +241,10 @@ void *ncclCommThreadMain(void *arg) {
   }
   // SendRecv --> RING / SIMPLE / Sum / int8_t
   generateFunctionName(func_names, funcIdx, "SendRecvRingSimpleSum_i8");
+  // OneRankReduce --> PreMulSum / <all_types>
+  for (int ty = 0; ty < ncclNumTypes; ty++) {
+    generateFunctionName(func_names, funcIdx, "OneRankReducePreMulSum%s", ncclTypeStr[ty]);
+  }
   do {
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
       int tail = comm->collTraceTail[channel].tail%COLLTRACE_NUM_ITEMS;
