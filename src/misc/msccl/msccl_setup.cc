@@ -22,6 +22,10 @@ RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 1);
 
 RCCL_PARAM(MscclWorkFifoDepth, "MSCCL_WORK_FIFO_DEPTH", 64<<10);
 
+static inline size_t computeSizeNeeded(size_t nBytes, int nScratchChunks, int nChunksPerLoop) {
+  return (nBytes * (size_t)nScratchChunks) / (size_t)nChunksPerLoop;
+}
+
 ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
@@ -70,12 +74,6 @@ ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t
 
 ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
   mscclStatus& status = mscclGetStatus();
-  size_t sizeNeeded = (status.nBytes * (size_t)(hostAlgo->nScratchChunks)) / (size_t)(hostAlgo->nChunksPerLoop);
-  if (sizeNeeded > status.scratchBufferSize){
-    NCCLCHECK(ncclCudaFree(status.scratchBuffer));
-    NCCLCHECK(ncclCudaMalloc((char**)&status.scratchBuffer, sizeNeeded, true));
-    status.scratchBufferSize = sizeNeeded;
-  }
   return ncclSuccess;
 }
 
@@ -422,7 +420,13 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   mscclWork work;
   work.syncFlags = status.syncFlags;
-  work.scratchBuffer = status.scratchBuffer;
+  size_t sizeNeeded = computeSizeNeeded(status.nBytes, hostAlgo->nScratchChunks, hostAlgo->nChunksPerLoop);
+  if (status.scratchBuffers.find(sizeNeeded) == status.scratchBuffers.end()) {
+    void *scratchBuffer = nullptr;
+    NCCLCHECK(ncclCudaMalloc((char**)&scratchBuffer, sizeNeeded, true));
+    status.scratchBuffers[sizeNeeded] = scratchBuffer;
+  }
+  work.scratchBuffer = status.scratchBuffers[sizeNeeded];
   work.sendBuff = sendBuff;
   work.recvBuff = recvBuff;
   work.sizePerMscclChunk = count * hostAlgo->sizeMultiplier / hostAlgo->nChunksPerLoop; // count is sum of all ranks in MSCCL kernel

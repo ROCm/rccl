@@ -236,8 +236,6 @@ ncclResult_t mscclInit(ncclComm_t comm) {
       return ncclSuccess;
     }
 
-    status.scratchBuffer = nullptr;
-    status.scratchBufferSize = 0;
     status.workIndex = 1;
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
@@ -542,13 +540,14 @@ ncclResult_t mscclTeardown() {
     for (auto &p : status.devAlgos) {
       CUDACHECK(hipFree(p.second));
     }
-    CUDACHECK(hipFree(status.scratchBuffer));
     CUDACHECK(hipFree(status.syncFlags));
     status.hostAlgos.clear();
     status.devAlgos.clear();
     status.freeAlgoHandles.clear();
-    status.scratchBuffer = nullptr;
-    status.scratchBufferSize = 0;
+    for (auto &p : status.scratchBuffers) {
+      CUDACHECK(hipFree(p.second));
+    }
+    status.scratchBuffers.clear();
     status.connectedAlgos.clear();
     if (status.mscclSchedulerPtr) {
       NCCLCHECK(status.mscclSchedulerPtr->teardown());
