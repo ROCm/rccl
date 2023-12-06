@@ -88,7 +88,7 @@ set(DATATYPES_FLOAT
 function(expand_collectives FILE FUNC)
   set(REDOP Sum Prod Min Max PreMulSum SumPostDiv)
   if (FUNC STREQUAL "MscclKernel")
-    set(REDOP_FILTERED Sum Prod Min Max)
+    set(REDOP_FILTERED Sum Prod Min Max PreMulSum SumPostDiv)
   else()
     set(REDOP_FILTERED ${REDOP})
   endif()
@@ -105,8 +105,7 @@ function(expand_collectives FILE FUNC)
           #include \"primitives.h\"
           #include \"collectives.h\"
           #include \"devcomm.h\"
-          MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, false);
-          MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, true);")
+          MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, false);")
       else()
         file(WRITE ${FILE_NAME}
           "#include \"${FILE}.h\"
