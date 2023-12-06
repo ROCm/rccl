@@ -548,7 +548,7 @@ static bool rcclPathOverride(struct ncclTopoSystem* system, uint64_t distance) {
 
   for (i = 0; i < system->nodes[GPU].count; i++) {
     for (j = 0; j < system->nodes[NET].count; j++) {
-      if (system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance)
+      if ((system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance) || (system->nodes[GPU].nodes[i].id - system->nodes[NET].nodes[j].net.busId == distance))
         break;
     }
     if (j >= system->nodes[NET].count)
@@ -557,7 +557,7 @@ static bool rcclPathOverride(struct ncclTopoSystem* system, uint64_t distance) {
   if (i >= system->nodes[GPU].count) {
     for (i = 0; i < system->nodes[GPU].count; i++) {
       for (j = 0; j < system->nodes[NET].count; j++) {
-        if (system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance)
+        if ((system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance) || (system->nodes[GPU].nodes[i].id - system->nodes[NET].nodes[j].net.busId == distance))
           system->nodes[GPU].nodes[i].paths[NET][j].type = PATH_PXB;
       }
     }
