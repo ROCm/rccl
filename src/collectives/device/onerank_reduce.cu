@@ -12,7 +12,7 @@
 
 namespace {
   template<typename T, typename RedOp>
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
   __device__ void oneRankReduce() {
 #else
   __device__ __attribute__((noinline)) void oneRankReduce() {
@@ -48,7 +48,7 @@ namespace {
   }
 }
 
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
 #define INSTANTIATE(devredop, type) \
   __device__ void NCCL_ONERANK_REDUCE_NAME(devredop, type)() { \
     oneRankReduce<type, Func##devredop<type>>(); \
