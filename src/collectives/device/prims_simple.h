@@ -159,8 +159,8 @@ private:
 
   template<int Recv, int Send>
   inline __device__ void postPeer(bool dataStored) {
-    if (Send && (flags & RolePostSend) && dataStored)
 #ifndef __GFX9__
+    if (Send && (flags & RolePostSend) && dataStored)
     __threadfence_system();
 #endif
 
