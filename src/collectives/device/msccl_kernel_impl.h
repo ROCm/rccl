@@ -492,7 +492,7 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct 
   mscclRunInterpreter<type, Func##devredop<type>, ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>, fullOps>(comm, algo, work); \
 }
 
-#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop) \
+#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(devredop, fullOps) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t, fullOps) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint8_t, fullOps) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int32_t, fullOps) \
@@ -504,7 +504,7 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct 
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, double, fullOps) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps)
 
-#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_NOFLOAT(devredop) \
+#define MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_NOFLOAT(devredop, fullOps) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int8_t, fullOps) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, uint8_t, fullOps) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(devredop, int32_t, fullOps) \
@@ -515,13 +515,9 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC() \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, false) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, false) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, false) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, false) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, true) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, true) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, true) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, true) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(PreMulSum, true) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_NOFLOAT(SumPostDiv, true)
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(PreMulSum, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_NOFLOAT(SumPostDiv, false)
 
 #endif
