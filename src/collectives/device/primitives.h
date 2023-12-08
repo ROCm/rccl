@@ -15,14 +15,13 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
-#ifdef __gfx90a__
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __threadfence(); __builtin_amdgcn_s_barrier(); \
+    __builtin_amdgcn_s_barrier(); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
-    __threadfence(); \
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       atomicAdd((unsigned long long *)barriers, 1); \
@@ -34,10 +33,11 @@
 #else
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __builtin_amdgcn_s_barrier(); \
+    __threadfence(); __builtin_amdgcn_s_barrier(); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
+    __threadfence(); \
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       atomicAdd((unsigned long long *)barriers, 1); \
