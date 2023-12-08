@@ -546,12 +546,14 @@ public:
     userBufs[Output] += delta;
   }
 
+  template<int MSCCL = 0>
   __device__ void send(intptr_t inpIx, int eltN) {
     return GenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
   __device__ void sendFromOutput(intptr_t outIx, int eltN) {
     return GenericOp<0, 1, Output, -1>(outIx, -1, eltN, false);
   }
+  template<int MSCCL = 0>
   __device__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
     return GenericOp<1, 0, -1, Output>(-1, outIx, eltN, postOp);
   }

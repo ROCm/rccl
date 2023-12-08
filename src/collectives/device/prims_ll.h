@@ -89,6 +89,13 @@ private:
 #endif
   }
 
+  inline __device__ void msccl_barrier() {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+    __builtin_amdgcn_s_barrier();
+#else
+#endif
+  }
+
   uint32_t abort = 0;
 
   inline __device__ int checkAbort(int &spins, int send) {
@@ -100,6 +107,7 @@ private:
     return abort;
   }
 
+  template<int MSCCL = 0>
   inline __device__ void waitSend(int nbytes) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_WAIT_SEND_ENTRY)
     if (tid == 0) {
@@ -121,7 +129,11 @@ private:
       }
       sendConnHead += 1;
     }
-    barrier();
+    if (MSCCL) {
+      msccl_barrier();
+    } else {
+      barrier();
+    }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_WAIT_SEND_EXIT)
     if (tid == 0) {
       NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_WAIT_SEND_EXIT, nbytes, 0, NPKIT_GET_GPU_TIMESTAMP(),
@@ -133,8 +145,13 @@ private:
   inline __device__ void incRecv(int i) {
     recvStep[i] += 1;
   }
+  template<int MSCCL = 0>
   inline __device__ void postRecv() {
-    barrier();
+    if (MSCCL) {
+      msccl_barrier();
+    } else {
+      barrier();
+    }
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
 
@@ -385,7 +402,7 @@ private:
     }
   }
 
-  template <int RECV, int SEND, int SrcBuf, int DstBuf>
+  template <int RECV, int SEND, int SrcBuf, int DstBuf, int MSCCL = 0>
   __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
@@ -394,7 +411,7 @@ private:
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
-    if (SEND) waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
+    if (SEND) waitSend<MSCCL>(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT)
     if (tid == 0) {
@@ -477,7 +494,7 @@ private:
 
     if (RECV) {
       for (int i=0; i < MaxRecv; i++) incRecv(i);
-      postRecv();
+      postRecv<MSCCL>();
     }
     if (SEND) {
       for (int i=1; i < MaxSend && i < fan.nsend(); i++)
@@ -639,6 +656,7 @@ private:
     userBufs[Output] += delta;
   }
 
+  template<int MSCCL = 0>
   __device__ void send(intptr_t inpIx, int eltN) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_ENTRY)
     if (tid == 0) {
@@ -646,7 +664,7 @@ private:
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
-    LLGenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
+    LLGenericOp<0, 1, Input, -1, MSCCL>(inpIx, -1, eltN, false);
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_EXIT)
     if (tid == 0) {
       NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
@@ -669,6 +687,7 @@ private:
     }
 #endif
   }
+  template<int MSCCL = 0>
   __device__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_ENTRY)
     if (tid == 0) {
@@ -676,7 +695,7 @@ private:
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
-    LLGenericOp<1, 0, -1, Output>(-1, outIx, eltN, postOp);
+    LLGenericOp<1, 0, -1, Output, MSCCL>(-1, outIx, eltN, postOp);
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_EXIT)
     if (tid == 0) {
       NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
