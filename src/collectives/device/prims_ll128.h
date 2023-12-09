@@ -114,7 +114,7 @@ private:
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    if (sendConnTailPtr) { __threadfence(); STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
+    if (sendConnTailPtr) { STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
   }
 
   template<int WordPerThread>

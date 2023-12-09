@@ -26,7 +26,7 @@
 
 #ifdef __GFX9__
 #define STORE(DST, SRC) \
-  { __threadfence(); __atomic_store_n((DST), (SRC), __ATOMIC_RELAXED); }
+  { __atomic_store_n((DST), (SRC), __ATOMIC_RELAXED); }
 #else
 #define STORE(DST, SRC) \
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
