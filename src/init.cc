@@ -647,8 +647,8 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     tmpCommAndChans.channels[c].binTree = comm->channels[c].binTree;
     tmpCommAndChans.channels[c].nvls = comm->channels[c].nvls;
     tmpCommAndChans.channels[c].workFifoDone = &comm->workFifoDone[c];
-    tmpCommAndChans.channels[c].prefXccId = rcclGetPreferredXcc(comm->cudaDev,
-                                                                comm->peerInfo[comm->channels[c].ring.next].cudaDev);
+    tmpCommAndChans.channels[c].prefXccId = rcclGetPreferredXcc(comm->busIdIdx,
+                                                                comm->peerInfo[comm->channels[c].ring.next].busIdIdx);
     if (comm->channels[c].ring.userRanks != nullptr) {
       NCCLCHECKGOTO(ncclCudaMemcpyAsync(tmpCommAndChans.channels[c].ring.userRanks, comm->channels[c].ring.userRanks, nRanks, comm->sharedRes->deviceStream.cudaStream), ret, fail);
     }
@@ -1053,11 +1053,26 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   NCCLCHECKGOTO(fillInfo(comm, comm->peerInfo+rank, comm->commHash), ret, fail);
   NCCLCHECKGOTO(bootstrapAllGather(comm->bootstrap, comm->peerInfo, sizeof(struct ncclPeerInfo)), ret, fail);
 
+  comm->busIdIdx = 0;
   for (int i = 0; i < nranks; i++) {
-    if ((i != rank) && (comm->peerInfo[i].hostHash == comm->peerInfo[rank].hostHash) && (comm->peerInfo[i].busId == comm->peerInfo[rank].busId)) {
-      WARN("Duplicate GPU detected : rank %d and rank %d both on CUDA device %lx", rank, i, comm->peerInfo[rank].busId);
-      ret = ncclInvalidUsage;
-      goto fail;
+    if ((i != rank) && (comm->peerInfo[i].hostHash == comm->peerInfo[rank].hostHash)) {
+      if (comm->peerInfo[i].busId == comm->peerInfo[rank].busId) {
+        WARN("Duplicate GPU detected : rank %d and rank %d both on CUDA device %lx", rank, i, comm->peerInfo[rank].busId);
+        ret = ncclInvalidUsage;
+        goto fail;
+      }
+      else if (comm->peerInfo[i].busId < comm->peerInfo[rank].busId) {
+        comm->busIdIdx++; // Count number of busId that are less than us
+      }
+    }
+
+    // Compute busIdIdx for each peer by counting # of busIds on same host that are smaller
+    comm->peerInfo[i].busIdIdx = 0;
+    for (int j = 0; j < nranks; j++) {
+      if (comm->peerInfo[j].hostHash == comm->peerInfo[i].hostHash &&
+          comm->peerInfo[j].busId < comm->peerInfo[i].busId) {
+        comm->peerInfo[i].busIdIdx++;
+      }
     }
   }
   // AllGather1 - end

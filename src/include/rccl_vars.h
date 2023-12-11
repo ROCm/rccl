@@ -28,34 +28,37 @@ THE SOFTWARE.
 RCCL_PARAM_DECLARE(EnableHipGraph);      // Opt-in environment variable for enabling hipGraph
 RCCL_PARAM_DECLARE(ExperimentalXccMode); // Opt-in environment variable for enabling experimental XCC filtering
 
-int32_t __inline__ rcclGetPreferredXcc(int src, int dst)
+int32_t __inline__ IsValidRcclXccModeStr()
 {
-  constexpr int32_t table1[8][8] = {{0,1,5,6,4,3,7,2},
-                                    {1,0,7,5,6,2,4,3},
-                                    {6,7,0,1,3,4,2,5},
-                                    {5,6,1,0,2,7,3,4},
-                                    {4,6,3,2,0,5,1,7},
-                                    {3,2,4,7,5,0,6,1},
-                                    {7,4,2,3,1,5,0,6},
-                                    {2,3,5,4,7,1,6,0}};
+  char* remapTable = getenv("RCCL_EXPERIMENTAL_XCC_MODE");
+  if (remapTable == NULL || strlen(remapTable) != 8 || strspn(remapTable, "01234567") != 8)
+    return 0;
 
-  constexpr int32_t table2[8][8] = {{0,1,4,6,2,7,3,5},
-                                    {1,0,4,6,2,5,3,7},
-                                    {4,6,0,1,5,2,7,3},
-                                    {6,7,1,0,4,2,5,3},
-                                    {2,3,4,5,0,6,1,7},
-                                    {6,4,2,3,7,0,5,1},
-                                    {2,3,6,4,1,7,0,5},
-                                    {4,6,2,3,5,1,7,0}};
+  for (int i = 0; i < 7; i++)
+    if (!strchr(remapTable, i + '0')) return 0;
 
-  if (src < 0 || src >= 8 || dst < 0 || dst >= 8) return -1;
+  return 1;
+}
 
-  switch(rcclParamExperimentalXccMode())
+int32_t __inline__ rcclGetPreferredXcc(int srcBusIdIdx, int dstBusIdIdx)
+{
+  constexpr int32_t table[8][8] = {{0,7,6,1,2,4,5,3},
+                                   {7,0,1,5,4,2,3,6},
+                                   {5,1,0,6,7,3,2,4},
+                                   {1,6,5,0,3,7,4,2},
+                                   {2,4,7,3,0,5,6,1},
+                                   {4,2,3,7,6,0,1,5},
+                                   {5,3,2,4,6,1,0,7},
+                                   {3,6,4,2,1,5,7,0}};
+
+  if (srcBusIdIdx < 0 || srcBusIdIdx >= 8 || dstBusIdIdx < 0 || dstBusIdIdx >= 8) return -1;
+
+  if (IsValidRcclXccModeStr())
   {
-  case 1: return table1[src][dst];
-  case 2: return table2[src][dst];
-  default: return -1;
+    char* remapTable = getenv("RCCL_EXPERIMENTAL_XCC_MODE");
+    return table[remapTable[srcBusIdIdx]-'0'][remapTable[dstBusIdIdx]-'0'];
   }
+  return -1;
 }
 
 #endif

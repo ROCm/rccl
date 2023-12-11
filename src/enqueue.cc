@@ -1001,13 +1001,11 @@ ncclResult_t ncclLaunchKernelBefore_NoUncapturedCuda(struct ncclComm* comm, stru
 NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 #endif
 
-RCCL_PARAM(ExperimentalXccMode, "EXPERIMENTAL_XCC_MODE", 0);
-
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   struct ncclTasks* tasks = &comm->tasks;
   void *fn = plan->kernelFn;
   cudaStream_t launchStream = tasks->streams->stream;
-  unsigned numBlocksX = rcclParamExperimentalXccMode() ? 8 : 1;
+  unsigned numBlocksX = IsValidRcclXccModeStr() ? 8 : 1;
   dim3 grid = {numBlocksX, (unsigned)plan->channelCount, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   size_t smem = ncclShmemDynamicSize(comm->cudaArch);
