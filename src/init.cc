@@ -1568,7 +1568,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   // Call devCommSetup before the last barrier, making sure we don't have a thread running in front and starting to
   // launch NCCL kernels before all cuda mem allocation is complete. That could cause a deadlock.
   NCCLCHECKGOTO(devCommSetup(comm), ret, fail);
-  if (mscclEnabled()) {
+
+  if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     NCCLCHECK(mscclInit(comm));
     mscclStatus& status = mscclGetStatus();
     status.needsProxy |= mscclNeedsProxy;
@@ -2164,7 +2165,7 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
   NCCLCHECK(NpKit::Shutdown());
 #endif
 
-  if (mscclEnabled()) {
+  if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     NCCLCHECK(mscclTeardown());
   }
 

@@ -579,7 +579,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   }
 
   int minNchannels = ncclMinNchannels();
-  // Disable MSCCL algorithms if machine type is not matching
+
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     int mscclNumChannelsRequired = 0;
     mscclSchedulerInit(comm, &mscclNumChannelsRequired);
