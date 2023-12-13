@@ -2142,6 +2142,7 @@ fail:
 static ncclResult_t commCleanup(ncclComm_t comm) {
   int savedDevice;
   int commDevice = comm->cudaDev;
+  bool mscclEnabledForTopo = comm->topo->mscclEnabled;
 
   CUDACHECK(cudaGetDevice(&savedDevice));
   if (savedDevice != commDevice) {
@@ -2165,7 +2166,7 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
   NCCLCHECK(NpKit::Shutdown());
 #endif
 
-  if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
+  if (mscclEnabled() && (mscclEnabledForTopo || mscclForceEnabled())) {
     NCCLCHECK(mscclTeardown());
   }
 
