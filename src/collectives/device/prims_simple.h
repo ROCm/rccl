@@ -81,7 +81,7 @@ private:
   inline __device__ bool checkAbort(int &spins) {
     spins++;
     if (!(flags & Aborted) && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      if (atomicAdd_system((unsigned int *)ncclShmem.comm.abortFlag, 0)) {
+      if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) {
         flags |= Aborted;
         ncclShmem.aborted = 1;
       }
@@ -100,11 +100,7 @@ private:
     #endif
     // volatile is faster than acquire but not as correct. Make sure reduceCopy
     // loads data using volatile so it doesn't see stale data in L1.
-#ifdef __GFX9__
-    return atomicAdd((unsigned long long *)ptr, 0);
-#else
-    return __atomic_load_n(ptr, __ATOMIC_SEQ_CST);
-#endif
+    return __atomic_load_n(ptr, __ATOMIC_RELAXED);
   }
 
   template <int DirectRecv, int DirectSend, int Recv, int Send, int Src, int Dst>
@@ -127,7 +123,7 @@ private:
 
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
       if (isSendNotRecv && (flags & SizesFifoEnabled))
-        __atomic_store_n(connSizesFifoPtr+step%NCCL_STEPS, nelts*sizeof(T), __ATOMIC_SEQ_CST);
+        __atomic_store_n(connSizesFifoPtr+step%NCCL_STEPS, nelts*sizeof(T), __ATOMIC_RELAXED);
 
       void **ptrs = isSendNotRecv ? (ncclShmem.groups[group].dsts + Dst)
                                   : (ncclShmem.groups[group].srcs + Src);
@@ -710,7 +706,6 @@ private:
     if (flags & RoleOutput) userBuff = (T*)outputBuf;
   }
 
-  template<int MSCCL = 0>
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
@@ -724,7 +719,6 @@ private:
     genericOp<0, 1, 0, 1, Output, -1>(outIx, outIx, eltN, false);
   }
 
-  template<int MSCCL = 0>
   __device__ __forceinline__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
     genericOp<0, 0, 1, 0, -1, Output>(-1, outIx, eltN, postOp);
   }
