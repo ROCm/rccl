@@ -454,7 +454,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           }
 #endif
         }
-        else if (fullOps && t->type == MSCCL_LOCAL_COPY)
+        else if (t->type == MSCCL_LOCAL_COPY)
           prims.localCopy(srcPointer+srcOffset, dstPointer+dstOffset, thisNelem);
         else
           return;
