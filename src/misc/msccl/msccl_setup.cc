@@ -185,7 +185,7 @@ static void HIPRT_CB mscclSetupProxyCallback(void *args) {
   INFO(NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
   for (auto &p : *params) {
     mscclSetupProxyImpl(p.hostAlgo, p.comm);
-  }    
+  }
 }
 
 ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStream_t stream) {
@@ -317,8 +317,8 @@ static ncclResult_t hostToDevRedOp(
 #define MSCCL_KERNEL_ENTRY() \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Max, false), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(PreMulSum, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(SumPostDiv, false)
 
