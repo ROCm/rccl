@@ -4,5 +4,7 @@ subtrees:
   - file: api
   - file: allapi
   - file: attributions
-
+- caption: About
+  entries:
+  - file: license
 
