@@ -714,7 +714,14 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
   // detect if fine grained memory is available on this GPU
   int *ptr;
 #if defined(HIP_UNCACHED_MEMORY)
-  if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocUncached) == hipSuccess) {
+    char arch[256];
+    GetGcnArchName(0,arch);
+    bool mallocResult;
+    if(IsArchMatch(arch, "gfx110"))
+      mallocResult = hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocFinegrained);
+    else
+      mallocResult = hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocUncached);
+    if (mallocResult == hipSuccess) {
 #else
   if (hipExtMallocWithFlags((void**)&ptr, sizeof(int), hipDeviceMallocFinegrained) == hipSuccess) {
 #endif

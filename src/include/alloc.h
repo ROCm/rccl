@@ -13,6 +13,7 @@
 #include "align.h"
 #include "utils.h"
 #include "p2p.h"
+#include "archinfo.h"
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -225,7 +226,12 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (isFineGrain) {
 #if defined(HIP_UNCACHED_MEMORY)
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
+    char arch[256];
+    GetGcnArchName(0,arch);
+    if(IsArchMatch(arch, "gfx110"))
+      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
+    else
+      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
 #else
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
 #endif
