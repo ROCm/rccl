@@ -408,11 +408,10 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   uint8_t fullOpMask = (1<<MSCCL_RECV_COPY_SEND) |
                         (1<<MSCCL_RECV_REDUCE_SEND) |
                         (1<<MSCCL_RECV_REDUCE_COPY_SEND) |
-                        (1<<MSCCL_RECV_REDUCE_COPY) |
-                        (1<<MSCCL_LOCAL_COPY);
+                        (1<<MSCCL_RECV_REDUCE_COPY);
   //check if need full ops msccl kernel
   if ((hostAlgo->typeMask & fullOpMask) || rcclParamMscclForceFullOps()) {
-    WARN("MSCCL: this version of MSCCL build doesn't support fill Ops");
+    WARN("MSCCL: this version of MSCCL build doesn't support full Ops");
     return ncclInternalError;
   }
 
