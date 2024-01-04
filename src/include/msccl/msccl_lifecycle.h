@@ -11,6 +11,7 @@
 #include "msccl/msccl_struct.h"
 
 bool mscclEnabled();
+bool mscclForceEnabled();
 
 void mscclSetIsCallerFlag();
 void mscclClearIsCallerFlag();

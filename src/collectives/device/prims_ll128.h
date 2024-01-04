@@ -99,12 +99,12 @@ private:
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
-        sendConnHeadCache = atomicAdd_system((unsigned long long *)sendConnHeadPtr, 0);
+        sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
         if (checkAbort(spins, wid, 1)) break;
       }
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
-        __atomic_store_n(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes, __ATOMIC_SEQ_CST);
+        __atomic_store_n(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes, __ATOMIC_RELAXED);
       }
       sendConnHead += 1;
     }
@@ -546,14 +546,12 @@ public:
     userBufs[Output] += delta;
   }
 
-  template<int MSCCL = 0>
   __device__ void send(intptr_t inpIx, int eltN) {
     return GenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
   __device__ void sendFromOutput(intptr_t outIx, int eltN) {
     return GenericOp<0, 1, Output, -1>(outIx, -1, eltN, false);
   }
-  template<int MSCCL = 0>
   __device__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
     return GenericOp<1, 0, -1, Output>(-1, outIx, eltN, postOp);
   }

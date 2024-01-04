@@ -36,6 +36,14 @@ bool mscclEnabled() {
 #endif
 }
 
+bool mscclForceEnabled() {
+#ifdef COMPILE_MSCCL_KERNEL
+  return rcclParamMscclForceEnabled();
+#else
+  return false;
+#endif
+}
+
 void mscclSetIsCallerFlag() {
   mscclGetThreadLocalStatus().mscclIsCallerFlag = true;
 }
@@ -309,7 +317,8 @@ static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* pa
   if (status.mscclSchedulerPtr) {
     NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
-    if (param->comm->topo->mscclEnabled || rcclParamMscclForceEnabled()) {
+    // Disable MSCCL algorithms if machine type is not matching
+    if (param->comm->topo->mscclEnabled || mscclForceEnabled()) {
       NCCLCHECK(mscclInternalSchedulerSelectAlgo(&(param->p)));
     } else {
       param->p.scheduled = false;

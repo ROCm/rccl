@@ -338,14 +338,15 @@ __device__ __forceinline__ void mscclRunInterpreter(
             if (tid == 0) {
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
+
 #endif	
-          prims.template send<1>(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
+          prims.send(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
             if (tid == 0) {
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
-#endif						       
+#endif
         }
         else if (t->type == MSCCL_RECV) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_ENTRY)
@@ -353,7 +354,8 @@ __device__ __forceinline__ void mscclRunInterpreter(
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 #endif	
-          prims.template recv<1>(dstOffset, thisNelem);
+          prims.recv(dstOffset, thisNelem);
+
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_EXIT)
             if (tid == 0) {
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
@@ -454,7 +456,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           }
 #endif
         }
-        else if (fullOps && t->type == MSCCL_LOCAL_COPY)
+        else if (t->type == MSCCL_LOCAL_COPY)
           prims.localCopy(srcPointer+srcOffset, dstPointer+dstOffset, thisNelem);
         else
           return;
@@ -515,8 +517,8 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC() \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, false) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, false) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, false) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Max, false) \
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Min, false) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(PreMulSum, false) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_NOFLOAT(SumPostDiv, false)
 
