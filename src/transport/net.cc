@@ -179,7 +179,7 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   struct setupReq req = { 0 };
   int localRank, tpProxyRank;
 
-  send->conn.shared = req.shared = (graph || mscclAvailable() && mscclIsCaller()) ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
+  send->conn.shared = req.shared = (graph || mscclIsCaller()) ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
   req.channelId = channelId;
   req.connIndex = connIndex;
   req.curr_hdp_reg = 0;
@@ -224,7 +224,7 @@ static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   struct setupReq req = { 0 };
   int localRank;
 
-  recv->conn.shared = req.shared = (graph || mscclAvailable() && mscclIsCaller()) ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
+  recv->conn.shared = req.shared = (graph || mscclIsCaller()) ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
   req.channelId = channelId;
   req.connIndex = connIndex;
   req.netDev = -1;

@@ -211,12 +211,13 @@ ncclResult_t mscclInit(ncclComm_t comm) {
 
     mscclStatus& status = mscclGetStatus();
 
-    // Free algorithm handles are initialized globally once and before algorithm pre-processing
+    // freeAlgoHandles and needsProxy are initialized globally once and before algorithm pre-processing and connection
     if (!mscclInitialized.load(std::memory_order_acquire)) {
       status.freeAlgoHandles.resize(MSCCL_MAX_NUM_ALGOS);
       for (int i = 0; i < MSCCL_MAX_NUM_ALGOS; i++) {
         status.freeAlgoHandles[i] = MSCCL_MAX_NUM_ALGOS - i - 1;
       }
+      status.needsProxy = false;
     }
 
     // Pre-process all algorithms for internal scheduler and for different comms.
@@ -231,7 +232,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
             NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
           }
           // Connect algorithms
-	  mscclAlgoHandle_t mscclAlgoHandle = status.rankToAlgoHandles[i][comm->rank];
+          mscclAlgoHandle_t mscclAlgoHandle = status.rankToAlgoHandles[i][comm->rank];
           if (status.connectedAlgos[comm].find(mscclAlgoHandle) == status.connectedAlgos[comm].end()) {
             NCCLCHECK(mscclSetupConnections(status.hostAlgos[mscclAlgoHandle], comm));
             status.connectedAlgos[comm].insert(mscclAlgoHandle);
@@ -247,7 +248,6 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.workIndex = 1;
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
-    status.needsProxy = false;
     NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
 
     mscclInitialized.store(true, std::memory_order_release);
