@@ -581,11 +581,4 @@ public:
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
   }
-  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN) {
-    if (nsrcs == 1) {
-      return mscclGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
-    } else {
-      return mscclGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
-    }
-  }
 };
