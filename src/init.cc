@@ -1602,11 +1602,11 @@ fail:
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
 NCCL_PARAM(SetStackSize, "SET_STACK_SIZE", 1);
-RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 512);
 #else
 NCCL_PARAM(SetStackSize, "SET_STACK_SIZE", 0);
-RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 0);
 #endif
+RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 0);
+
 NCCL_PARAM(CGAClusterSize, "CGA_CLUSTER_SIZE", NCCL_CONFIG_UNDEF_INT);
 // Match config max/minCTAs
 NCCL_PARAM(MaxCTAs, "MAX_CTAS", NCCL_CONFIG_UNDEF_INT);
@@ -1688,7 +1688,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   int cudaDev = job->cudaDev;
   int* parentRanks = NULL;
   int cudaArch;
-  int64_t stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
+  int64_t stackSize;
   hipDeviceProp_t devProp;
 
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);
@@ -1701,7 +1701,14 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
   CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (stackSize > 0 && ncclParamSetStackSize() == 1 && strcmp(devProp.gcnArchName,"gfx940") != 0 && strcmp(devProp.gcnArchName, "gfx941") != 0 && strcmp(devProp.gcnArchName, "gfx942") != 0) {
+  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx94")) {
+    stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
+    if (stackSize == 0) {
+      if (IsArchMatch(devProp.gcnArchName,"gfx906"))
+        stackSize = 1024;
+      else
+        stackSize = 512;
+    }
     INFO(NCCL_INIT, "Setting cudaLimitStackSize to %zi maxLocalSizeBytes %zi", stackSize, maxLocalSizeBytes);
     CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, stackSize));
   }
