@@ -166,7 +166,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
     cudaGetDevice(&cudaDev);
   }
 
-  char buffer[1024];
+  char buffer[2048];
   size_t len = 0;
   if (level == NCCL_LOG_WARN) {
     len = snprintf(buffer, sizeof(buffer), "\n%s:%d:%d [%d] %s:%d NCCL WARN ",
