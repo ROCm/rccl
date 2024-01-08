@@ -47,70 +47,6 @@ extern __shared__ struct mscclShmemData mscclShmem;
 #define traceData(data2, data4, data8_0, data8_1)
 #endif
 
-
-// a copy of the volatile load/store from prims_ll
-template<typename U>
-__device__ static U load(U *src) {
-  union {
-    U elt;
-    uint8_t u1;
-    uint16_t u2;
-    uint32_t u4;
-    uint64_t u8;
-  };
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  if(sizeof(U) == 1)
-    u1 = __builtin_nontemporal_load((uint8_t*)src);
-  else if(sizeof(U) == 2)
-    u2 = __builtin_nontemporal_load((uint16_t*)src);
-  else if(sizeof(U) == 4)
-    u4 = __builtin_nontemporal_load((uint32_t*)src);
-  else
-    u8 = __builtin_nontemporal_load((uint64_t*)src);
-#else
-  if(sizeof(U) == 1)
-    asm("ld.volatile.global.b8 %0,[%1];" : "=r"(u4) : "l"(src));
-  else if(sizeof(U) == 2)
-    asm("ld.volatile.global.b16 %0,[%1];" : "=h"(u2) : "l"(src));
-  else if(sizeof(U) == 4)
-    asm("ld.volatile.global.b32 %0,[%1];" : "=r"(u4) : "l"(src));
-  else
-    asm("ld.volatile.global.b64 %0,[%1];" : "=l"(u8) : "l"(src));
-#endif
-  return elt;
-}
-
-template<typename U>
-__device__ static void store(U *dst, U val) {
-  union {
-    U elt;
-    uint8_t u1;
-    uint16_t u2;
-    uint32_t u4;
-    uint64_t u8;
-  };
-  elt = val;
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
-  if(sizeof(U) == 1)
-    __builtin_nontemporal_store(u1, (uint8_t*)dst);
-  else if(sizeof(U) == 2)
-    __builtin_nontemporal_store(u2, (uint16_t*)dst);
-  else if(sizeof(U) == 4)
-    __builtin_nontemporal_store(u4, (uint32_t*)dst);
-  else
-    __builtin_nontemporal_store(u8, (uint64_t*)dst);
-#else
-  if(sizeof(U) == 1)
-    asm("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4));
-  else if(sizeof(U) == 2)
-    asm("st.volatile.global.b16 [%0],%1;" :: "l"(dst), "h"(u2));
-  else if(sizeof(U) == 4)
-    asm("st.volatile.global.b32 [%0],%1;" :: "l"(dst), "r"(u4));
-  else
-    asm("st.volatile.global.b64 [%0],%1;" :: "l"(dst), "l"(u8));
-#endif
-}
-
 inline __device__ static void barrier(int nthreads) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   assert(nthreads == NCCL_MAX_NTHREADS);
@@ -138,18 +74,39 @@ __device__ __forceinline__ static void threadBlockCopy(
   }
 }
 
-#define MSCCL_REDUCE_UNROLL_LOOP_A(numloops) \
-for (int r = 0; r < numloops; r++) { \
-  srcOffset = srcBaseOffset + (ssize_t)mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r] * sizePerMscclChunk; \
-  reduceInput = load(srcPointer + srcOffset); \
-  o = applyReduce(redFn, reduceInput, o); \
+#define MSCCL_REDUCE_UNROLL_LOOP_A(numloops, BytePerPack) \
+  for (int r = 0; r < numloops; r++) { \
+    srcOffset = srcBaseOffset + (ssize_t)mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r] * sizePerMscclChunk; \
+    reduceInput = ld_volatile_global<BytePerPack>((uintptr_t)(srcPointer + srcOffset)); \
+    o = applyReduce(redFn, reduceInput, o); \
+  }
+
+template<typename T, typename RedOp, int BytePerPack>
+__device__ __forceinline__ static void mscclReduce(int c, int numReductions, int currIdx, ssize_t sizePerMscclChunk, RedOp redFn,
+  struct mscclTransmission* t, ssize_t gridOffset, ssize_t &srcOffset, ssize_t dstOffset, T *srcPointer, T *dstPointer) {
+  const int elemsPerPack = BytePerPack/sizeof(T);
+  T* dstIndex = dstPointer + dstOffset + currIdx*elemsPerPack;
+  BytePack<BytePerPack> reduceInput;
+  BytePack<BytePerPack> o = ld_volatile_global<BytePerPack>((uintptr_t)dstIndex);
+  ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + currIdx*elemsPerPack;
+  switch (numReductions) {
+    case 7:
+      #pragma unroll
+      MSCCL_REDUCE_UNROLL_LOOP_A(7, BytePerPack);
+      break;
+#if defined(__gfx90a__)
+    case 15:
+      #pragma unroll
+      MSCCL_REDUCE_UNROLL_LOOP_A(15, BytePerPack);
+      break;
+#endif
+    default:
+      MSCCL_REDUCE_UNROLL_LOOP_A(numReductions, BytePerPack);
+      break;
+  }
+  st_global<BytePerPack>((uintptr_t)dstIndex, o);
 }
 
-#define MSCCL_REDUCE_UNROLL_LOOP_B(numloops) \
-for (int r = 0; r < numloops; r++) { \
-  srcOffset = srcBaseOffset + (ssize_t)mscclShmem.mscclTB.reductionSrcOffsets[t->reductionPointer+r] * sizePerMscclChunk; \
-  srcs[r] = srcPointer + srcOffset; \
-}
 
 template<typename T, typename RedOp, typename Proto, bool fullOps>
 __device__ __forceinline__ void mscclRunInterpreter(
@@ -365,79 +322,32 @@ __device__ __forceinline__ void mscclRunInterpreter(
         else if (t->type == MSCCL_REDUCE) {
           int numReductions = t->numReductions;
           int currIdx = tid;
-#if defined(__gfx942__)
-          if (Proto::Id == NCCL_PROTO_LL) {
-#else
-          if (thisNelem < nthreads) {
-#endif
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_ENTRY)
-            if (tid == 0) {
-              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
-            }
-#endif
-
-#if defined(__gfx942__)
-            while (currIdx < thisNelem) {
-#else
-            if (currIdx < thisNelem) {
-#endif
-              dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
-              T* dstIndex = dstPointer + dstOffset + currIdx;
-              T reduceInput;
-              T o = load(dstIndex);
-              ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk + currIdx;
-              switch (numReductions) {
-                case 7:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(7);
-                  break;
-#if defined(__gfx90a__)
-                case 15:
-                  #pragma unroll
-                  MSCCL_REDUCE_UNROLL_LOOP_A(15);
-                  break;
-#endif
-                default:
-                  MSCCL_REDUCE_UNROLL_LOOP_A(numReductions);
-                  break;
-              }
-              store(dstIndex, o);
-#if defined(__gfx942__)
-              currIdx += nthreads;
-#endif
-            }
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT)
-            if (tid == 0) {
-              NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
-            }
-#endif
-
-            barrier(nthreads);
-          } else {
-            T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
-            dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
-            T* dst = dstPointer + dstOffset;
-            ssize_t srcBaseOffset = gridOffset + (ssize_t)c * sizePerMscclChunk;
-            switch (numReductions) {
-              case 7:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(7);
-                break;
-#if defined(__gfx90a__)
-              case 15:
-                #pragma unroll
-                MSCCL_REDUCE_UNROLL_LOOP_B(15);
-                break;
-#endif
-              default:
-                MSCCL_REDUCE_UNROLL_LOOP_B(numReductions);
-                break;
-            }
-            prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
+          if (tid == 0) {
+            NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
           }
+#endif
+          dstOffset = gridOffset + (ssize_t) (t->dstOffset+c) * sizePerMscclChunk;
+          // process 16-byte packed elements
+          const int elemsPerPack = 16/sizeof(T);
+          while (currIdx < thisNelem/elemsPerPack) {
+            mscclReduce<T, RedOp, 16>(c, numReductions, currIdx, sizePerMscclChunk, redFn, t, gridOffset, srcOffset, dstOffset, srcPointer, dstPointer);
+            currIdx += nthreads;
+          }
+          // process remaining elements
+          currIdx = tid + (thisNelem/elemsPerPack)*elemsPerPack;
+          if (currIdx < thisNelem) {
+            mscclReduce<T, RedOp, sizeof(T)>(c, numReductions, currIdx, sizePerMscclChunk, redFn, t, gridOffset, srcOffset, dstOffset, srcPointer, dstPointer);
+          }
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT)
+          if (tid == 0) {
+            NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_REDUCE_EXIT, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
+          }
+#endif
+          barrier(nthreads);
           if (c == 0) step += (numReductions-1); // only advance step once!
-        } else if (fullOps && t->type == MSCCL_RECV_COPY_SEND)
+        }
+        else if (fullOps && t->type == MSCCL_RECV_COPY_SEND)
           prims.recvCopySend(dstOffset, thisNelem);
         else if (fullOps && t->type == MSCCL_RECV_REDUCE_SEND)
           prims.recvReduceSend(srcOffset, thisNelem);
