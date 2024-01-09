@@ -47,24 +47,26 @@ include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
 
-# Determine which GPU architectures to build for
+# Build only for local GPU architecture
 if (BUILD_LOCAL_GPU_TARGET_ONLY)
   message(STATUS "Building only for local GPU target")
   if (COMMAND rocm_local_targets)
     rocm_local_targets(DEFAULT_GPUS)
   else()
-    message(WARNING "Unable to determine local GPU targets.  Falling back to default GPUs")
+    message(WARNING "Unable to determine local GPU targets. Falling back to default GPUs.")
   endif()
 endif()
-if(COMMAND rocm_check_target_ids)
+
+# Determine which GPU architectures to build for
+set(AMDGPU_TARGETS "${DEFAULT_GPUS}" CACHE STRING "Target default GPUs if AMDGPU_TARGETS is not defined.")
+if (COMMAND rocm_check_target_ids)
   message(STATUS "Checking for ROCm support for GPU targets:")
-  rocm_check_target_ids(SUPPORTED_GPUS TARGETS ${DEFAULT_GPUS})
+  rocm_check_target_ids(SUPPORTED_GPUS TARGETS ${AMDGPU_TARGETS})
 else()
-  message(WARNING "Unable to check for supported GPU targets. Falling back to default GPUs")
+  message(WARNING "Unable to check for supported GPU targets. Falling back to default GPUs.")
   set(SUPPORTED_GPUS ${DEFAULT_GPUS})
 endif()
-set(AMDGPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "AMD GPU targets to compile for" FORCE)
-set(GPU_TARGETS "${AMDGPU_TARGETS}" CACHE STRING "GPU targets to compile for" FORCE)
+set(GPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
 message(STATUS "Compiling for ${GPU_TARGETS}")
 
 ## NOTE: Reload rocm-cmake in order to update GPU_TARGETS
