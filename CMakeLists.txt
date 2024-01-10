@@ -601,6 +601,10 @@ if(DEMANGLE_DIR)
   target_compile_definitions(rccl PRIVATE "HAVE_CPLUS_DEMANGLE=1")
   target_compile_definitions(rccl PRIVATE "HAVE_DECL_BASENAME=1")
 endif()
+if(${hipcc_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+	target_compile_definitions(rccl PRIVATE ENABLE_LL128)
+	message(STATUS "RCCL LL128 protocol enabled")
+endif()
 
 ## Set RCCL compile options
 target_compile_options(rccl PRIVATE -parallel-jobs=12)
