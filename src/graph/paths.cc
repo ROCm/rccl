@@ -638,8 +638,8 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm
       IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") &&
       ((system->nodes[GPU].count == 8 && system->nodes[NET].count == 8 && system->nodes[GPU].count == system->nRanks) ||
       (system->nodes[GPU].count != system->nRanks))) {
-      if (!rcclPathOverride(system, 0x100000))
-        rcclPathOverride(system, 0x1000);
+      if (!rcclPathOverride(system, 0x100000) && !rcclPathOverride(system, 0x1000))
+        rcclPathOverride(system, 0xff00000);
     }
 #if !defined(TOPO_EXPL)
   }
