@@ -15,9 +15,25 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier\ns_waitcnt lgkmcnt(0)"); \
+    __builtin_amdgcn_s_barrier(); \
+  } else { \
+    const int w = threadIdx.x/WARP_SIZE; \
+    const int wid = threadIdx.x%WARP_SIZE; \
+    if (wid == 0) { \
+      barrier_next[w] += nthreads/WARP_SIZE; \
+      atomicAdd((unsigned long long *)barriers, 1); \
+      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(1); \
+      __asm__ __volatile__("s_wakeup"); \
+    } \
+  } \
+} while (0)
+#else
+#define barrier_by_group() do { \
+  if (nthreads == NCCL_MAX_NTHREADS) { \
+    __threadfence(); __builtin_amdgcn_s_barrier(); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
@@ -30,6 +46,7 @@
     } \
   } \
 } while (0)
+#endif
 
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral

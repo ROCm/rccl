@@ -26,7 +26,7 @@
 
 #ifdef __GFX9__
 #define STORE(DST, SRC) \
-  { __threadfence(); __atomic_store_n((DST), (SRC), __ATOMIC_RELAXED); }
+  { __atomic_store_n((DST), (SRC), __ATOMIC_RELAXED); }
 #else
 #define STORE(DST, SRC) \
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
@@ -45,7 +45,7 @@ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept;
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
 class ncclFunction {
   public:
-#ifdef USE_INDIRECT_FUNCTION_CALL
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
   __device__ __attribute__((noinline)) void run(struct ncclWorkElem* args) {}
 #else
   __device__ void run(struct ncclWorkElem* args) {}
@@ -247,8 +247,8 @@ __forceinline__ __device__ void ncclKernel(
       int y = __popcll(channelMask & ((1ull<<x)-1));
       if (blockIdx.x == y) ncclShmem.channelId = x;
     }
-    if (32 < MAXCHANNELS) {
-      x = 32 + tid;
+    if (WARP_SIZE < MAXCHANNELS) {
+      x = WARP_SIZE + tid;
       if (channelMask & (1ull<<x)) {
         int y = __popcll(channelMask & ((1ull<<x)-1));
         if (blockIdx.x == y) ncclShmem.channelId = x;

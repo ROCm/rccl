@@ -11,12 +11,15 @@
 #include "msccl/msccl_struct.h"
 
 bool mscclEnabled();
+bool mscclForceEnabled();
 
 void mscclSetIsCallerFlag();
 void mscclClearIsCallerFlag();
 bool mscclIsCaller();
 
 bool mscclAvailable();
+
+ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired);
 
 ncclResult_t mscclInit(ncclComm_t comm);
 

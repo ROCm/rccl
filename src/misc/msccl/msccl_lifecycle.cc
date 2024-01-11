@@ -26,12 +26,19 @@ RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 static std::atomic<bool> mscclInitialized;
-static bool mscclSchedulerTriedLoadAlgo = false;
 static std::mutex mscclLifecycleMutex;
 
 bool mscclEnabled() {
 #ifdef COMPILE_MSCCL_KERNEL
   return rcclParamMscclEnabled();
+#else
+  return false;
+#endif
+}
+
+bool mscclForceEnabled() {
+#ifdef COMPILE_MSCCL_KERNEL
+  return rcclParamMscclForceEnabled();
 #else
   return false;
 #endif
@@ -78,8 +85,21 @@ static const char* mscclUnitTestAlgoDefaultDir = "msccl-unit-test-algorithms";
 static const char* mscclAlgoShareDirPath = "../share/rccl/msccl-algorithms";
 static const char* mscclUnitTestAlgoShareDirPath = "../share/rccl/msccl-unit-test-algorithms";
 
-static ncclResult_t mscclInternalSchedulerInit() {
+static ncclResult_t mscclInternalSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
+  static bool mscclAlgoMetaLoaded = false;
   mscclStatus& status = mscclGetStatus();
+
+  *numChannelsRequired = 0;
+  // Query numChannelsRequired from loaded algorithm metas
+  if (mscclAlgoMetaLoaded) {
+    for (auto& m : status.algoMetas) {
+      if (comm->nRanks == m.nRanks) {
+        *numChannelsRequired = std::max(*numChannelsRequired, m.nChannels);
+      }
+    }
+    return ncclSuccess;
+  }
+
   const char* mscclAlgoDir = getenv(mscclAlgoDirEnv);
   const char* mscclAlgoShareDir = nullptr;
   std::string mscclAlgoDirStr;
@@ -126,16 +146,28 @@ static ncclResult_t mscclInternalSchedulerInit() {
     fullPath += "/";
     fullPath += entry->d_name;
     NCCLCHECK(mscclGetAlgoMetaFromXmlFile(fullPath.c_str(), &(status.algoMetas.back())));
+    if (status.algoMetas.back().nRanks == comm->nRanks) {
+      *numChannelsRequired = std::max(*numChannelsRequired, status.algoMetas.back().nChannels);
+    }
   }
   if (closedir(dp)) {
     WARN("MSCCL Internal Scheduler: closedir failed, error %d", errno);
     return ncclInvalidUsage;
   }
   status.rankToAlgoHandles.resize(status.algoMetas.size());
+  mscclAlgoMetaLoaded = true;
   return ncclSuccess;
 }
 
-static ncclResult_t mscclSchedulerInit() {
+ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
+  *numChannelsRequired = 0;
+  comm->mscclCompatible = mscclCommCompatible(comm);
+  if (!comm->mscclCompatible) {
+    return ncclSuccess;
+  }
+
+  std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
+
   mscclStatus& status = mscclGetStatus();
   bool useInternalScheduler = false;
 
@@ -155,11 +187,14 @@ static ncclResult_t mscclSchedulerInit() {
       useInternalScheduler = true;
     }
   }
+
   if (useInternalScheduler) {
-    NCCLCHECK(mscclInternalSchedulerInit());
+    NCCLCHECK(mscclInternalSchedulerInit(comm, numChannelsRequired));
   } else {
     NCCLCHECK(status.mscclSchedulerPtr->init());
+    *numChannelsRequired = MAXCHANNELS;
   }
+
   return ncclSuccess;
 }
 
@@ -170,30 +205,50 @@ ncclResult_t mscclInit(ncclComm_t comm) {
   threadLocalStatus.groupDepth = 0;
   threadLocalStatus.captureId = ULLONG_MAX;
   threadLocalStatus.captureStatus = mscclNoCapture;
-  comm->mscclCompatible = mscclCommCompatible(comm);
 
   {
     std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
+
+    mscclStatus& status = mscclGetStatus();
+
+    // freeAlgoHandles and needsProxy are initialized globally once and before algorithm pre-processing and connection
+    if (!mscclInitialized.load(std::memory_order_acquire)) {
+      status.freeAlgoHandles.resize(MSCCL_MAX_NUM_ALGOS);
+      for (int i = 0; i < MSCCL_MAX_NUM_ALGOS; i++) {
+        status.freeAlgoHandles[i] = MSCCL_MAX_NUM_ALGOS - i - 1;
+      }
+      status.needsProxy = false;
+    }
+
+    // Pre-process all algorithms for internal scheduler and for different comms.
+    // This is a temp fix to bypass the issue that stream cannot be synchronized during HIP graph capturing,
+    // should use dynamic loading approach after the issue is fixed.
+    if (comm->mscclCompatible && !status.mscclSchedulerPtr) {
+      for (size_t i = 0; i < status.algoMetas.size(); i++) {
+        auto &m = status.algoMetas[i];
+        if (m.nRanks == comm->nRanks) {
+          // Load algorithms
+          if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()) {
+            NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
+          }
+          // Connect algorithms
+          mscclAlgoHandle_t mscclAlgoHandle = status.rankToAlgoHandles[i][comm->rank];
+          if (status.connectedAlgos[comm].find(mscclAlgoHandle) == status.connectedAlgos[comm].end()) {
+            NCCLCHECK(mscclSetupConnections(status.hostAlgos[mscclAlgoHandle], comm));
+            status.connectedAlgos[comm].insert(mscclAlgoHandle);
+          }
+        }
+      }
+    }
 
     if (mscclInitialized.load(std::memory_order_acquire)) {
       return ncclSuccess;
     }
 
-    mscclStatus& status = mscclGetStatus();
-    status.scratchBuffer = nullptr;
-    status.scratchBufferSize = 0;
     status.workIndex = 1;
-    status.freeAlgoHandles.resize(MSCCL_MAX_NUM_ALGOS);
-    for (int i = 0; i < MSCCL_MAX_NUM_ALGOS; i++) {
-      status.freeAlgoHandles[i] = MSCCL_MAX_NUM_ALGOS - i - 1;
-    }
     NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
     status.lastStream = nullptr;
-    status.needsProxy = false;
     NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
-    mscclSchedulerTriedLoadAlgo = false;
-
-    NCCLCHECK(mscclSchedulerInit());
 
     mscclInitialized.store(true, std::memory_order_release);
   }
@@ -215,7 +270,7 @@ static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam*
   mscclStatus& status = mscclGetStatus();
   param->scheduled = false;
 
-  
+
   /*// Current MSCCL doesn't support pre/post op
   if (param->op >= ncclAvg) {
     return ncclSuccess;
@@ -248,12 +303,6 @@ static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam*
         m.nRanks == param->nRanks &&
         m.func == param->func &&
         (isInPlace ? m.inPlace : m.outOfPlace)) {
-      // If not loaded for current rank, load it
-      if (status.rankToAlgoHandles[i].find(param->rank) == status.rankToAlgoHandles[i].end()) {
-        mscclAlgoHandle_t algoHandle;
-        NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &algoHandle, param->rank));
-        status.rankToAlgoHandles[i][param->rank] = algoHandle;
-      }
       param->handle = status.rankToAlgoHandles[i][param->rank];
       param->scheduled = true;
       return ncclSuccess;
@@ -268,7 +317,8 @@ static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* pa
   if (status.mscclSchedulerPtr) {
     NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
-    if (param->comm->topo->mscclEnabled || rcclParamMscclForceEnabled()) {
+    // Disable MSCCL algorithms if machine type is not matching
+    if (param->comm->topo->mscclEnabled || mscclForceEnabled()) {
       NCCLCHECK(mscclInternalSchedulerSelectAlgo(&(param->p)));
     } else {
       param->p.scheduled = false;
@@ -499,13 +549,14 @@ ncclResult_t mscclTeardown() {
     for (auto &p : status.devAlgos) {
       CUDACHECK(hipFree(p.second));
     }
-    CUDACHECK(hipFree(status.scratchBuffer));
     CUDACHECK(hipFree(status.syncFlags));
     status.hostAlgos.clear();
     status.devAlgos.clear();
     status.freeAlgoHandles.clear();
-    status.scratchBuffer = nullptr;
-    status.scratchBufferSize = 0;
+    for (auto &p : status.scratchBuffers) {
+      CUDACHECK(hipFree(p.second));
+    }
+    status.scratchBuffers.clear();
     status.connectedAlgos.clear();
     if (status.mscclSchedulerPtr) {
       NCCLCHECK(status.mscclSchedulerPtr->teardown());

@@ -17,7 +17,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
+option(ENABLE_IFC                              "Enable indirect function call"                 ON)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
@@ -47,24 +47,26 @@ include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
 include(cmake/Generator.cmake)    # Configure functions that goes into RCCL
 
-# Determine which GPU architectures to build for
+# Build only for local GPU architecture
 if (BUILD_LOCAL_GPU_TARGET_ONLY)
   message(STATUS "Building only for local GPU target")
   if (COMMAND rocm_local_targets)
     rocm_local_targets(DEFAULT_GPUS)
   else()
-    message(WARNING "Unable to determine local GPU targets.  Falling back to default GPUs")
+    message(WARNING "Unable to determine local GPU targets. Falling back to default GPUs.")
   endif()
 endif()
-if(COMMAND rocm_check_target_ids)
+
+# Determine which GPU architectures to build for
+set(AMDGPU_TARGETS "${DEFAULT_GPUS}" CACHE STRING "Target default GPUs if AMDGPU_TARGETS is not defined.")
+if (COMMAND rocm_check_target_ids)
   message(STATUS "Checking for ROCm support for GPU targets:")
-  rocm_check_target_ids(SUPPORTED_GPUS TARGETS ${DEFAULT_GPUS})
+  rocm_check_target_ids(SUPPORTED_GPUS TARGETS ${AMDGPU_TARGETS})
 else()
-  message(WARNING "Unable to check for supported GPU targets. Falling back to default GPUs")
+  message(WARNING "Unable to check for supported GPU targets. Falling back to default GPUs.")
   set(SUPPORTED_GPUS ${DEFAULT_GPUS})
 endif()
-set(AMDGPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "AMD GPU targets to compile for" FORCE)
-set(GPU_TARGETS "${AMDGPU_TARGETS}" CACHE STRING "GPU targets to compile for" FORCE)
+set(GPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
 message(STATUS "Compiling for ${GPU_TARGETS}")
 
 ## NOTE: Reload rocm-cmake in order to update GPU_TARGETS
@@ -576,6 +578,10 @@ if(DEMANGLE_DIR)
   target_compile_definitions(rccl PRIVATE "HAVE_CPLUS_DEMANGLE=1")
   target_compile_definitions(rccl PRIVATE "HAVE_DECL_BASENAME=1")
 endif()
+if(${hipcc_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+	target_compile_definitions(rccl PRIVATE ENABLE_LL128)
+	message(STATUS "RCCL LL128 protocol enabled")
+endif()
 
 ## Set RCCL compile options
 target_compile_options(rccl PRIVATE -parallel-jobs=12)
@@ -718,7 +724,7 @@ endif()
 
 if(BUILD_TESTS)
   rocm_package_setup_component(clients)
-  rocm_package_setup_client_component(tests PACKAGE_NAME rccl-unitTests)
+  rocm_package_setup_client_component(tests PACKAGE_NAME unittests)
   add_subdirectory(test)
 endif()
 

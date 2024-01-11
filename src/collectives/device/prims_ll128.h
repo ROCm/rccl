@@ -99,12 +99,12 @@ private:
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
-        sendConnHeadCache = atomicAdd_system((unsigned long long *)sendConnHeadPtr, 0);
+        sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
         if (checkAbort(spins, wid, 1)) break;
       }
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
-        __atomic_store_n(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes, __ATOMIC_SEQ_CST);
+        __atomic_store_n(sendConnFifoPtr+sendStep[wid]%NCCL_STEPS, nbytes, __ATOMIC_RELAXED);
       }
       sendConnHead += 1;
     }
@@ -114,7 +114,7 @@ private:
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    if (sendConnTailPtr) { __threadfence(); STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
+    if (sendConnTailPtr) { STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
   }
 
   template<int WordPerThread>
@@ -580,12 +580,5 @@ public:
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
-  }
-  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN) {
-    if (nsrcs == 1) {
-      return mscclGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
-    } else {
-      return mscclGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
-    }
   }
 };

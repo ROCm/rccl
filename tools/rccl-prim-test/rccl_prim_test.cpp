@@ -436,7 +436,7 @@ int main(int argc,char* argv[])
     if (nGpu == 8 && !cr8g) {
       hipDeviceProp_t prop;
       HIPCHECK(hipGetDeviceProperties(&prop, 0));
-      if (prop.gcnArch/10 == 94) {
+      if (strncmp(prop.gcnArchName, "gfx94", 5) == 0) {
         r = (char *)ring_gfx940_8p;
         if(!workgroups) workgroups = 28;
       } else {
@@ -521,11 +521,11 @@ int main(int argc,char* argv[])
     profiling_data[i] = (struct profiling_data_t *)malloc(sizeof(struct profiling_data_t)*iters);
     HIPCHECK(hipMalloc((void**) &d_profiling_data[i], sizeof(struct profiling_data_t)*iters));
 
-    HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
+    HIPCHECK(hipExtMallocWithFlags((void**) &transfer_data[i], sizeof(struct transfer_data_t), strncmp(prop.gcnArchName, "gfx94", 5) == 0 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
     for (int j = 0; j < workgroups; j++) {
-      HIPCHECK(hipExtMallocWithFlags((void**) &buff[i*MAX_WORKGROUPS+j], 2*N*sizeof(float), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
+      HIPCHECK(hipExtMallocWithFlags((void**) &buff[i*MAX_WORKGROUPS+j], 2*N*sizeof(float), strncmp(prop.gcnArchName, "gfx94", 5) == 0 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
       // additional fine grained buffer for local doublecopy, only need 1 buffer (not used by remote)
-      HIPCHECK(hipExtMallocWithFlags((void**) &buff_fine[i*MAX_WORKGROUPS+j], N*sizeof(float), prop.gcnArch/10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
+      HIPCHECK(hipExtMallocWithFlags((void**) &buff_fine[i*MAX_WORKGROUPS+j], N*sizeof(float), strncmp(prop.gcnArchName, "gfx94", 5) == 0 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained));
       HIPCHECK(hipMalloc((void**) &buff_coarse[i*MAX_WORKGROUPS+j], 2*N*sizeof(float)));
       //randomize test data
       hipLaunchKernelGGL(initTestDataKernel,
@@ -670,7 +670,7 @@ int main(int argc,char* argv[])
       hipDeviceProp_t prop;
       HIPCHECK(hipGetDeviceProperties(&prop, i));
       double vega_gpu_rtc_freq, bw_std_dev = 0, mean_write_cycle = 0;
-      if (prop.gcnArch/10 == 94)
+      if (strncmp(prop.gcnArchName, "gfx94", 5) == 0)
         vega_gpu_rtc_freq = 1.0E8;
       else
         vega_gpu_rtc_freq = 2.5E7;

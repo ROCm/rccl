@@ -11,6 +11,8 @@
 #include "rings.h"
 #include "topo.h"
 
+#include "msccl/msccl_lifecycle.h"
+
 /******************************************************************/
 /********************* Internode connection ***********************/
 /******************************************************************/
@@ -576,15 +578,23 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
      nChannels = comm->nChannels = copyChannels(comm, nChannels, 2*nChannels, ringPrev, ringNext);
   }
 
+  int minNchannels = ncclMinNchannels();
+
+  if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
+    int mscclNumChannelsRequired = 0;
+    mscclSchedulerInit(comm, &mscclNumChannelsRequired);
+    minNchannels = std::max(minNchannels, mscclNumChannelsRequired);
+  }
+
   // Honor NCCL_MIN_NRINGS/NCCL_MAX_NRINGS.
   // We permit combining max, then min, to only use the first channels, then duplicate them.
   if (comm->sharedRes->owner != comm) {
     /* child comm #channels cannot exceed top parent #channels. */
     nChannels = comm->nChannels = std::min(std::min(std::min(ncclMaxNchannels(), nChannels), comm->config.maxCTAs), comm->sharedRes->tpNChannels);
-    nChannels = comm->nChannels = copyChannels(comm, nChannels, std::min(std::max(ncclMinNchannels(), std::max(nc, comm->config.minCTAs)), comm->sharedRes->tpNChannels), ringPrev, ringNext);
+    nChannels = comm->nChannels = copyChannels(comm, nChannels, std::min(std::max(minNchannels, std::max(nc, comm->config.minCTAs)), comm->sharedRes->tpNChannels), ringPrev, ringNext);
   } else {
     nChannels = comm->nChannels = std::min(std::min(ncclMaxNchannels(), nChannels), comm->config.maxCTAs);
-    nChannels = comm->nChannels = copyChannels(comm, nChannels, std::max(ncclMinNchannels(), std::max(nc, comm->config.minCTAs)), ringPrev, ringNext);
+    nChannels = comm->nChannels = copyChannels(comm, nChannels, std::max(minNchannels, std::max(nc, comm->config.minCTAs)), ringPrev, ringNext);
   }
 
   // Create rings array and check all is fine

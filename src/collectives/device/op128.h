@@ -124,7 +124,7 @@ union alignas(16) BytePack<16> {
   uint32_t u32[4];
   uint64_t u64[2];
   ulong2 ul2, native;
-#ifndef USE_INDIRECT_FUNCTION_CALL
+#if !defined(USE_INDIRECT_FUNCTION_CALL) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
   inline __device__ BytePack<16>& operator=(BytePack<16> other) {
     u64[0] = other.u64[0];
     u64[1] = other.u64[1];
@@ -227,8 +227,8 @@ DEFINE_ld_st(8, uint64_t, b64, l, global, uintptr_t, l)
   } \
   template<> \
   __device__ __forceinline__ void st_##space<16>(addr_cxx_ty addr, BytePack<16> value) { \
-    *((uint64_t*)addr) = value.u64[0]; \
-    *((uint64_t*)addr+1) = value.u64[1]; \
+    __builtin_nontemporal_store(value.u64[0], (uint64_t*)addr); \
+    __builtin_nontemporal_store(value.u64[1], (uint64_t*)addr+1); \
   }
 DEFINE_ld_st_16(global, uintptr_t, l)
 //DEFINE_ld_st_16(shared, uint32_t, r)

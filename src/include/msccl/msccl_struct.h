@@ -64,7 +64,7 @@ struct mscclThreadBlock {
   int16_t channelId; // associated channel. -1 indicates a thread block with only local copies
 }; // 5384 bytes
 
-static_assert(sizeof(struct mscclThreadBlock) % sizeof(uint64_t) == 0, "Sanity check: sizeof(struct mscclThreadBlock) % sizeof(uint64_t) != 0");
+static_assert(sizeof(struct mscclThreadBlock) % sizeof(uint64_t) == 0, "Sanity check: sizeof(struct mscclThreadBlock) %% sizeof(uint64_t) != 0");
 
 struct mscclFlag {
   uint64_t flag;
@@ -91,6 +91,8 @@ struct mscclAlgoMeta {
   std::string filePath;
   // number of chunks of input/output in each MSCCL algorithm loop
   int nChunksPerLoop;
+  // number of channels needed by MSCCL algorithm
+  int nChannels;
   // number of ranks required by this algorithm
   int nRanks;
   // need to times nRanks for all-gather, reduce-scatter and all-to-all
@@ -203,8 +205,7 @@ struct mscclStatus {
   std::map<mscclAlgoHandle_t, mscclAlgo *> hostAlgos;
   std::map<mscclAlgoHandle_t, mscclAlgo *> devAlgos;
   struct mscclFlag* syncFlags;
-  void *scratchBuffer;
-  uint64_t scratchBufferSize;
+  std::map<size_t, void *> scratchBuffers;
   size_t nBytes;
   int stepSize;
   int chunkSteps;

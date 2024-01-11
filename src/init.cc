@@ -710,7 +710,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
   NCCLCHECKGOTO(ncclCudaMemcpyAsync(devCommAndChans, &tmpCommAndChans, 1, comm->sharedRes->deviceStream.cudaStream), ret, fail);
 exit:
-  CUDACHECK(cudaStreamSynchronize(comm->sharedRes->deviceStream.cudaStream));
+  NCCLCHECK(ncclStrongStreamSynchronize(&comm->sharedRes->deviceStream));
   NCCLCHECK(ncclStrongStreamRelease(ncclCudaGraphNone(), &comm->sharedRes->deviceStream));
   return ret;
 fail:
@@ -1409,16 +1409,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   TRACE(NCCL_INIT, "rank %d nranks %d - BUILT %d TREES/RINGS", rank, nranks, comm->nChannels);
 
-  char line[1024];
+  char line[2048];
   line[0]='\0';
   for (int c=0; c<comm->nChannels; c++) {
     struct ncclTree* tree = &comm->channels[c].tree;
-    snprintf(line+strlen(line), 1023-strlen(line), " [%d] %d/%d/%d->%d->%d",
+    snprintf(line+strlen(line), 2047-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
     INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
          comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
   }
-  line[1023] = '\0';
+  line[2047] = '\0';
   INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
 
   NCCLCHECKGOTO(computeBuffSizes(comm), ret, fail);
@@ -1606,7 +1606,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   // Call devCommSetup before the last barrier, making sure we don't have a thread running in front and starting to
   // launch NCCL kernels before all cuda mem allocation is complete. That could cause a deadlock.
   NCCLCHECKGOTO(devCommSetup(comm), ret, fail);
-  if (mscclEnabled()) {
+
+  if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     NCCLCHECK(mscclInit(comm));
     mscclStatus& status = mscclGetStatus();
     status.needsProxy |= mscclNeedsProxy;
@@ -1639,11 +1640,11 @@ fail:
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
 NCCL_PARAM(SetStackSize, "SET_STACK_SIZE", 1);
-RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 512);
 #else
 NCCL_PARAM(SetStackSize, "SET_STACK_SIZE", 0);
-RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 0);
 #endif
+RCCL_PARAM(StackSizeOverride, "STACK_SIZE_OVERRIDE", 0);
+
 NCCL_PARAM(CGAClusterSize, "CGA_CLUSTER_SIZE", NCCL_CONFIG_UNDEF_INT);
 // Match config max/minCTAs
 NCCL_PARAM(MaxCTAs, "MAX_CTAS", NCCL_CONFIG_UNDEF_INT);
@@ -1725,7 +1726,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   int cudaDev = job->cudaDev;
   int* parentRanks = NULL;
   int cudaArch;
-  int64_t stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
+  int64_t stackSize;
+  hipDeviceProp_t devProp;
 
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);
   CUDACHECKGOTO(cudaDeviceGetAttribute(&archMajor, cudaDevAttrComputeCapabilityMajor, cudaDev), res, fail);
@@ -1736,7 +1738,15 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // Set the maximum kernel stack size of all kernels to avoid
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
-  if (stackSize > 0 && ncclParamSetStackSize() == 1) {
+  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
+  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx94")) {
+    stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
+    if (stackSize == 0) {
+      if (IsArchMatch(devProp.gcnArchName,"gfx906"))
+        stackSize = 1024;
+      else
+        stackSize = 512;
+    }
     INFO(NCCL_INIT, "Setting cudaLimitStackSize to %zi maxLocalSizeBytes %zi", stackSize, maxLocalSizeBytes);
     CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, stackSize));
   }
@@ -2177,6 +2187,7 @@ fail:
 static ncclResult_t commCleanup(ncclComm_t comm) {
   int savedDevice;
   int commDevice = comm->cudaDev;
+  bool mscclEnabledForTopo = comm->topo->mscclEnabled;
 
   CUDACHECK(cudaGetDevice(&savedDevice));
   if (savedDevice != commDevice) {
@@ -2200,7 +2211,7 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
   NCCLCHECK(NpKit::Shutdown());
 #endif
 
-  if (mscclEnabled()) {
+  if (mscclEnabled() && (mscclEnabledForTopo || mscclForceEnabled())) {
     NCCLCHECK(mscclTeardown());
   }
 

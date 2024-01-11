@@ -548,7 +548,7 @@ static bool rcclPathOverride(struct ncclTopoSystem* system, uint64_t distance) {
 
   for (i = 0; i < system->nodes[GPU].count; i++) {
     for (j = 0; j < system->nodes[NET].count; j++) {
-      if (system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance)
+      if ((system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance) || (system->nodes[GPU].nodes[i].id - system->nodes[NET].nodes[j].net.busId == distance))
         break;
     }
     if (j >= system->nodes[NET].count)
@@ -557,7 +557,7 @@ static bool rcclPathOverride(struct ncclTopoSystem* system, uint64_t distance) {
   if (i >= system->nodes[GPU].count) {
     for (i = 0; i < system->nodes[GPU].count; i++) {
       for (j = 0; j < system->nodes[NET].count; j++) {
-        if (system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance)
+        if ((system->nodes[NET].nodes[j].net.busId - system->nodes[GPU].nodes[i].id == distance) || (system->nodes[GPU].nodes[i].id - system->nodes[NET].nodes[j].net.busId == distance))
           system->nodes[GPU].nodes[i].paths[NET][j].type = PATH_PXB;
       }
     }
@@ -638,8 +638,8 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm
       IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") &&
       ((system->nodes[GPU].count == 8 && system->nodes[NET].count == 8 && system->nodes[GPU].count == system->nRanks) ||
       (system->nodes[GPU].count != system->nRanks))) {
-      if (!rcclPathOverride(system, 0x100000))
-        rcclPathOverride(system, 0x1000);
+      if (!rcclPathOverride(system, 0x100000) && !rcclPathOverride(system, 0x1000))
+        rcclPathOverride(system, 0xff00000);
     }
 #if !defined(TOPO_EXPL)
   }
@@ -771,13 +771,6 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     INFO(NCCL_GRAPH, "GDR is available on all GPUs");
   }
 
-  // Special handling of gfx94x
-  if (rcclParamEnableIntranet() == 1 || (rcclParamEnableIntranet() == -2 &&
-    IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") &&
-    system->nodes[GPU].count == 8 && system->nodes[NET].count == 8)) {
-    remove = 0;
-    system->type |= RCCL_TOPO_FORCE_INTRA;
-  }
   comm->localRanks = system->nodes[GPU].count;
   if (system->nodes[GPU].count == comm->nRanks && remove) {
     for (int n=system->nodes[NET].count-1; n>=0; n--)
@@ -873,9 +866,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
   // fill the whole space of nChannels. To do so we mirror the bits in the
   // nChannels space.
   for (int c=0; c<comm->p2pnChannels; c++) {
-    int mirror = 0;
-    for (int b=1, mb=(comm->p2pnChannels>>1); b<comm->p2pnChannels; b<<=1, mb>>=1) if (c & b) mirror |= mb;
-    comm->p2pChannels[c] = mirror;
+    comm->p2pChannels[c] = mirrorBits(c, comm->p2pnChannels);
   }
   return ncclSuccess;
 }

@@ -117,7 +117,7 @@ private:
       __asm__ __volatile__("s_wakeup");
       if (sendConnFifoPtr) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        __atomic_store_n(sendConnFifoPtr+sendConnHead%NCCL_STEPS, (size), __ATOMIC_SEQ_CST);
+        __atomic_store_n(sendConnFifoPtr+sendConnHead%NCCL_STEPS, (size), __ATOMIC_RELAXED);
       }
       sendConnHead += 1;
     }
@@ -771,12 +771,5 @@ private:
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
-  }
-  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN) {
-    if (nsrcs == 1) {
-      return mscclGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
-    } else {
-      return mscclGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
-    }
   }
 };
