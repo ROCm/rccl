@@ -393,6 +393,9 @@ namespace RcclUnitTesting
 
   ErrCode TestBedChild::ExecuteCollectives()
   {
+    int timeoutMs = 0;
+    PIPE_READ(timeoutMs);
+
     bool useHipGraph = false;
     PIPE_READ(useHipGraph);
 
@@ -432,7 +435,6 @@ namespace RcclUnitTesting
     {
       for (int localRank : localRanksToExecute)
       {
-        CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         if (this->verbose) INFO("Capturing stream for rank %d\n", localRank);
         CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
         for (int i = 0; i < this->numStreamsPerGroup; i++)
@@ -659,10 +661,47 @@ namespace RcclUnitTesting
     }
 
     // Synchronize
+    std::vector<hipStream_t> streamsToComplete;
+    for (int localRank : localRanksToExecute)
+    {
+      for (int i = 0; i < this->numStreamsPerGroup; i++)
+        streamsToComplete.push_back(this->streams[localRank][i]);
+    }
+    int msElapsed = 0;
+    using namespace std::chrono;
+    using Clock = std::chrono::high_resolution_clock;
+    if (this->verbose) INFO("Starting sychronization and timing\n");
+    const auto start = Clock::now();
+    while (!streamsToComplete.empty() && msElapsed < timeoutMs)
+    {
+      for (int i = 0; i < streamsToComplete.size(); i++)
+      {
+        if (hipStreamQuery(streamsToComplete[i]) == hipSuccess)
+        {
+          streamsToComplete.erase(streamsToComplete.begin() + i);
+          i--;
+        }  
+      }
+      msElapsed = duration_cast<milliseconds>(Clock::now() - start).count();
+    }
+
+    // timed out
+    if (!streamsToComplete.empty())
+    {
+      if (this->verbose) INFO("Collective timed out, aborting\n");
+      for (int localRank : localRanksToExecute)
+      {
+        ncclCommAbort(this->comms[localRank]); 
+        timeoutMs = -1;
+      }
+    }
+
+    // extra sync to flush GPU cache for validation later
+    // TODO: remove this after figuring out & fixing the exact behavior 
+    // of fencing between kernels and at hipStreamQuery
     for (int localRank : localRanksToExecute)
     {
       if (this->verbose) INFO("Starting synchronization for rank %d\n", localRank);
-      CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
       for (int i = 0; i < this->numStreamsPerGroup; i++)
         CHECK_HIP(hipStreamSynchronize(this->streams[localRank][i]));
     }
@@ -699,6 +738,10 @@ namespace RcclUnitTesting
                  collArg.expected.ToString(collArg.dataType, numOutputElementsToPrint).c_str());
         }
     }
+
+    if (timeoutMs == -1)
+      return TEST_TIMEOUT;
+
     if (this->verbose) INFO("Child %d finishes ExecuteCollectives()\n", this->childId);
     return TEST_SUCCESS;
   }

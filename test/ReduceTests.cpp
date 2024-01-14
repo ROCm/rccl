@@ -7,7 +7,7 @@
 
 namespace RcclUnitTesting
 {
-    TEST(Reduce, OutOfPlace)
+  TEST(Reduce, OutOfPlace)
   {
     TestBed testBed;
 
