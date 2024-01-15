@@ -18,6 +18,7 @@
 #include "enqueue.h"
 #include "graph.h"
 #include "argcheck.h"
+#include "flow_export.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
 #endif
@@ -104,6 +105,7 @@ static ncclResult_t ncclInit() {
     // Always initialize bootstrap network
     NCCLCHECK(bootstrapNetInit());
     NCCLCHECK(ncclNetPluginInit());
+    NCCLCHECK(ncclInitFlowExport());
 
     char strValue[1024];
     NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
@@ -1415,6 +1417,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     if (comm->nRanks == 1) continue;
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, c, 1, &channel->ring.prev, 1, &channel->ring.next, 0), ret, fail);
   }
+  NCCLCHECK(ncclExportComm(*comm));
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0, &highestTransportType, &needsProxy), ret, fail);
   mscclNeedsProxy |= needsProxy;
   if (ringGraph.nIntraChannels && rcclParamP2pNetDisable() == 0) {
@@ -1438,6 +1441,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0, &highestTransportType, &needsProxy), ret, fail);
   mscclNeedsProxy |= needsProxy;
+  NCCLCHECK(ncclExportDone(*comm));
   INFO(NCCL_INIT, "Connected all trees");
 
   // Setup NVLS
@@ -2294,6 +2298,8 @@ static ncclResult_t commReclaim(ncclComm_t comm) {
           WARN("commReclaim: comm %p (rank = %d) destroys proxy resource error %d", curIntraComm, curRank, ret);
         }
       }
+
+      NCCLCHECK(ncclExitFlowExport());
 
       /* free local resources. */
       nextIntraComm = intracomm0;

@@ -12,6 +12,7 @@
 #include "graph.h"
 #include "utils.h"
 #include "param.h"
+#include "flow_export.h"
 
 #include <assert.h>
 #include <pthread.h>
@@ -742,6 +743,8 @@ ib_connect:
   stage->state = ncclIbCommStateConnected;
   stage->offset = 0;
 
+  NCCLCHECK(ncclExportIbFlow(connectionMetaData, comm->gidInfo.localGid, comm->gidInfo.remoteGid, comm->qps, remQpInfo.qpn, comm->nqps));
+
 ib_send_ready:
   NCCLCHECK(ncclSocketProgress(NCCL_SOCKET_SEND, &comm->sock, &comm->ready, sizeof(int), &stage->offset));
   if (stage->offset != sizeof(int)) return ncclSuccess;
@@ -864,6 +867,8 @@ ib_recv:
   if (stage->buffer) free(stage->buffer);
   NCCLCHECK(ncclIbMalloc((void**)&stage->buffer, sizeof(struct ncclIbQpInfo)));
   memcpy(stage->buffer, &qpInfo, sizeof(struct ncclIbQpInfo));
+
+  NCCLCHECK(ncclExportIbFlow(connectionMetaData, rComm->gidInfo.localGid, rComm->gidInfo.remoteGid, rComm->qps, remQpInfo.qpn, rComm->nqps));
 
 ib_send:
   NCCLCHECK(ncclSocketProgress(NCCL_SOCKET_SEND, &rComm->sock, stage->buffer, sizeof(struct ncclIbQpInfo), &stage->offset));

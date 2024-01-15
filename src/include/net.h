@@ -21,6 +21,16 @@ int ncclNetVersion(struct ncclComm* comm);
 // Test whether the current GPU support GPU Direct RDMA.
 ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport);
 
+struct connectionMetaData_t {
+   bool send;
+   int tpRank;
+   int tpLocalRank;
+   int tpRemoteRank;
+   int channelId;
+   int connIndex;
+};
+extern __thread connectionMetaData_t connectionMetaData;
+
 extern ncclNet_t ncclNetIb;
 extern ncclNet_t ncclNetSocket;
 

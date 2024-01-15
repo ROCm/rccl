@@ -317,6 +317,7 @@ set(SRC_FILES
   src/debug.cc
   src/enhcompat.cc
   src/enqueue.cc
+  src/flow_export.cc
   src/graph/connect.cc
   src/graph/paths.cc
   src/graph/rings.cc
@@ -348,6 +349,7 @@ set(SRC_FILES
   src/include/debug.h
   src/include/devcomm.h
   src/include/enqueue.h
+  src/include/flow_export.h
   src/include/gdrwrap.h
   src/include/git_version.h
   src/include/graph.h

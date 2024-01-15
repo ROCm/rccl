@@ -48,6 +48,7 @@ if(BUILD_TESTS)
       AllToAllTests.cpp
       AllToAllVTests.cpp
       BroadcastTests.cpp
+      FlowExportTests.cpp
       GatherTests.cpp
       GroupCallTests.cpp
       NonBlockingTests.cpp
@@ -73,7 +74,7 @@ if(BUILD_TESTS)
     add_dependencies(rccl-UnitTests rccl)
     target_link_libraries(rccl-UnitTests PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR} -lrocm_smi64 -L${ROCM_PATH}/lib -L${ROCM_PATH}/rocm_smi/lib)
   else()
-    target_link_libraries(rccl-UnitTests PRIVATE rccl)
+    target_link_libraries(rccl-UnitTests PRIVATE rccl dl)
   endif()
   set_property(TARGET rccl-UnitTests PROPERTY INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${ROCM_PATH}/lib;${CMAKE_BINARY_DIR}")
   set_property(TARGET rccl-UnitTests PROPERTY BUILD_RPATH "${CMAKE_BINARY_DIR};${ROCM_PATH}/lib")
