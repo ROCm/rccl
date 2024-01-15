@@ -221,12 +221,43 @@ static struct tuningModel tuning_model_4 {
   },
 };
 
+static struct tuningModel tuning_model_5 {
+  .hwLat = {
+    /* NVLINK */
+    { /* Tree (LL/LL128/Simple)*/ { 0.8, 0.0, 2.5 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 3.6 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.8 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+    /* PCI */
+    { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 5.7 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 5.7 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+    /* NET */
+    { /* Tree (LL/LL128/Simple)*/ { 12.5, 0.0, 22.4 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 0.0, 19.8 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 12.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+  },
+
+  .bwRatio = {
+    /* 2 nodes */
+    { /* Tree (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* Ring (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+    /* more than 2 nodes */
+    { /* Tree (LL/LL128/Simple)*/ { 0.41, 0.00, 0.86 }, /* Ring (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+  },
+
+  .treeCorrectionFactor = {
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 0.8, 0.1, 0.4, 0.5, 1.0, 0.6, 0.4, 0.6, 0.1, 0.3, 0.4, 0.4, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 0.4, 1.0, 1.0, 1.0, 0.2, 0.7, 1.0, 1.0, 1.0, 0.8, 0.7, 0.7, 0.8, 0.8, 0.8, 0.9, },
+  },
+
+  .ringCorrectionFactor = {
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.1, 0.2, 0.2, 0.1, 0.5, 0.8, 1.0, 0.2, 0.4, 0.5, 0.4, 0.4, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.7, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
+  },
+};
+
 static struct tuningModel rcclTuningModel[] = {
   tuning_model_0,
   tuning_model_1,
   tuning_model_2,
   tuning_model_3,
   tuning_model_4,
+  tuning_model_5,
 };
 
 /* Array indexes used below */

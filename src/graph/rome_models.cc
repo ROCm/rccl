@@ -552,7 +552,7 @@ static struct rcclRomeModel rome_model_79 = {
   .gdrLevel = { },
   .pattern = "4040",
   .ringBase = "0 1 2 3 4 5 6 7|0 1 2 3 4 5 7 6|0 2 4 1 3 6 5 7|0 2 4 6 1 7 3 5|0 3 1 5 2 7 4 6|0 3 5 1 6 2 7 4|0 4 1 7 3 6 2 5|7 6 5 4 3 2 1 0|6 7 5 4 3 2 1 0|7 5 6 3 1 4 2 0|5 3 7 1 6 4 2 0|6 4 7 2 5 1 3 0|4 7 2 6 1 5 3 0|5 2 6 3 7 1 4 0|0 1 2 3 4 5 6 7|0 1 2 3 4 5 7 6|0 2 4 1 3 6 5 7|0 2 4 6 1 7 3 5|0 3 1 5 2 7 4 6|0 3 5 1 6 2 7 4|0 4 1 7 3 6 2 5|7 6 5 4 3 2 1 0|6 7 5 4 3 2 1 0|7 5 6 3 1 4 2 0|5 3 7 1 6 4 2 0|6 4 7 2 5 1 3 0|4 7 2 6 1 5 3 0|5 2 6 3 7 1 4 0",
-  .options = "noCpuCheck=1,mscclEnabled=1",
+  .options = "noCpuCheck=1,mscclEnabled=1,tuning=5",
 };
 
 static struct rcclRomeModel rome_model_80 = {
@@ -578,7 +578,7 @@ static struct rcclRomeModel rome_model_81 = {
   .gdrLevel = { PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, },
   .pattern = "4444",
   .ringBase = "N0 0 1 2 3 4 5 6 7 N7|N1 1 0 2 4 3 5 7 6 N6|N2 2 5 0 3 7 1 6 4 N4|N3 3 6 1 5 2 7 4 0 N0|N4 4 7 0 6 5 1 3 2 N2|N5 5 4 6 3 0 7 2 1 N1|N6 6 2 0 4 1 7 5 3 N3|N7 7 3 1 4 2 6 0 5 N5|N0 0 1 2 3 4 5 6 7 N7|N1 1 0 2 4 3 5 7 6 N6|N2 2 5 0 3 7 1 6 4 N4|N3 3 6 1 5 2 7 4 0 N0|N4 4 7 0 6 5 1 3 2 N2|N5 5 4 6 3 0 7 2 1 N1|N6 6 2 0 4 1 7 5 3 N3|N7 7 3 1 4 2 6 0 5 N5",
-  .options = "noCpuCheck=1",
+  .options = "noCpuCheck=1,tuning=5",
 };
 
 static struct rcclRomeModel romeTopoModels[] = {
