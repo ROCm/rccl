@@ -296,7 +296,7 @@ namespace RcclUnitTesting
       {
         InteractiveWait("Starting ExecuteCollectives for child " + std::to_string(childId));
         PIPE_WRITE(childId, cmd);
-        PIPE_WRITE(childId, ev.timeoutMs);
+        PIPE_WRITE(childId, ev.timeoutUs);
         PIPE_WRITE(childId, useHipGraph);
         int tempCurrentRanks = currentRanks.size();
         PIPE_WRITE(childId, tempCurrentRanks);

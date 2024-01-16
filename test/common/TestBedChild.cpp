@@ -393,8 +393,8 @@ namespace RcclUnitTesting
 
   ErrCode TestBedChild::ExecuteCollectives()
   {
-    int timeoutMs = 0;
-    PIPE_READ(timeoutMs);
+    int timeoutUs = 0;
+    PIPE_READ(timeoutUs);
 
     bool useHipGraph = false;
     PIPE_READ(useHipGraph);
@@ -667,12 +667,12 @@ namespace RcclUnitTesting
       for (int i = 0; i < this->numStreamsPerGroup; i++)
         streamsToComplete.push_back(this->streams[localRank][i]);
     }
-    int msElapsed = 0;
+    int usElapsed = 0;
     using namespace std::chrono;
     using Clock = std::chrono::high_resolution_clock;
     if (this->verbose) INFO("Starting sychronization and timing\n");
     const auto start = Clock::now();
-    while (!streamsToComplete.empty() && msElapsed < timeoutMs)
+    while (!streamsToComplete.empty() && usElapsed < timeoutUs)
     {
       for (int i = 0; i < streamsToComplete.size(); i++)
       {
@@ -682,7 +682,7 @@ namespace RcclUnitTesting
           i--;
         }  
       }
-      msElapsed = duration_cast<milliseconds>(Clock::now() - start).count();
+      usElapsed = duration_cast<microseconds>(Clock::now() - start).count();
     }
 
     // timed out
@@ -692,7 +692,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         ncclCommAbort(this->comms[localRank]); 
-        timeoutMs = -1;
+        timeoutUs = -1;
       }
     }
 
@@ -739,7 +739,7 @@ namespace RcclUnitTesting
         }
     }
 
-    if (timeoutMs == -1)
+    if (timeoutUs == -1)
       return TEST_TIMEOUT;
 
     if (this->verbose) INFO("Child %d finishes ExecuteCollectives()\n", this->childId);
