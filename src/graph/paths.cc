@@ -771,6 +771,11 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     INFO(NCCL_GRAPH, "GDR is available on all GPUs");
   }
 
+  if (rcclParamEnableIntranet() == 1) {
+    remove = 0;
+    system->type |= RCCL_TOPO_FORCE_INTRA;
+  }
+
   comm->localRanks = system->nodes[GPU].count;
   if (system->nodes[GPU].count == comm->nRanks && remove) {
     for (int n=system->nodes[NET].count-1; n>=0; n--)
