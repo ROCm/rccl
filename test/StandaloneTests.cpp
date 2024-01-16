@@ -143,8 +143,10 @@ namespace RcclUnitTesting {
 
   TEST(Standalone, RegressionTiming)
   {
+    // timing
     using namespace std::chrono;
     using Clock = std::chrono::high_resolution_clock;
+    int usElapsed, iter = 20;
 
     // Check for 2 GPUs
     int numGpus;
@@ -156,63 +158,87 @@ namespace RcclUnitTesting {
     // Initialize RCCL
     int numRanks = 2;
     std::vector<ncclComm_t> comms(numRanks);
-    NCCLCHECK(ncclCommInitAll(comms.data(), numRanks, nullptr));
 
-    // Prepare CPU data arrays
-    int N = 1250;
-    std::vector<int> cpuInput(N);
-    std::vector<int> cpuExpected(N);
-    for (int i = 0; i < N; i++) {
-      cpuInput[i]    = i;
-      cpuExpected[i] = 2 * i;
+    char *proto = std::getenv("NCCL_PROTO");
+    const char* protocolList[3] = {"LL", "LL128", "Simple"};
+
+    for (auto p : protocolList)
+    {
+      usElapsed = 0;
+      setenv("NCCL_PROTO", p, 1);
+      NCCLCHECK(ncclCommInitAll(comms.data(), numRanks, nullptr));
+
+      // Prepare CPU data arrays
+      int N = 1250;
+      std::vector<int> cpuInput(N);
+      std::vector<int> cpuExpected(N);
+      for (int i = 0; i < N; i++) {
+        cpuInput[i]    = i;
+        cpuExpected[i] = 2 * i;
+      }
+
+      // Prepare GPU data arrays
+      int* gpuInput[numRanks];
+      int* gpuOutput[numRanks];
+      hipStream_t stream[numRanks];
+
+      for (int rank = 0; rank < numRanks; rank++) {
+        HIPCALL(hipSetDevice(rank));
+        HIPCALL(hipStreamCreate(&stream[rank]));
+        HIPCALL(hipMalloc((void**)&gpuInput[rank], N * sizeof(int)));
+        HIPCALL(hipMalloc((void**)&gpuOutput[rank], N * sizeof(int)));
+        HIPCALL(hipMemcpy(gpuInput[rank], cpuInput.data(), N * sizeof(int), hipMemcpyHostToDevice));
+        HIPCALL(hipMemset(gpuOutput[rank], 0, N * sizeof(int)));
+        HIPCALL(hipDeviceSynchronize());
+      }
+
+      for (int it = 0; it < iter; it++) {
+
+        for (int rank = 0; rank < numRanks; rank++) {
+          HIPCALL(hipSetDevice(rank));
+          HIPCALL(hipMemset(gpuOutput[rank], 0, N * sizeof(int)));
+          HIPCALL(hipDeviceSynchronize());
+	}
+
+        // Initiate the allreduce
+        NCCLCHECK(ncclGroupStart());
+        for (int rank = 0; rank < numRanks; rank++)
+          NCCLCHECK(ncclAllReduce(gpuInput[rank], gpuOutput[rank], N, ncclInt, ncclSum, comms[rank], stream[rank]));
+        NCCLCHECK(ncclGroupEnd());
+
+        const auto start = Clock::now();
+
+        // Wait for completion
+        for (int rank = 0; rank < numRanks; rank++) {
+          HIPCALL(hipStreamSynchronize(stream[rank]));
+        }
+
+	if (it > 4)
+          usElapsed += duration_cast<microseconds>(Clock::now() - start).count();
+
+        // Check results
+        std::vector<int> cpuOutput(N);
+        for (int rank = 0; rank < numRanks; rank++) {
+          HIPCALL(hipMemcpy(cpuOutput.data(), gpuOutput[rank], N * sizeof(int), hipMemcpyDeviceToHost));
+          HIPCALL(hipDeviceSynchronize());
+          for (int i = 0; i < N; i++)
+            ASSERT_EQ(cpuOutput[i], cpuExpected[i]);
+        }
+      }
+
+      EXPECT_LT(usElapsed/15.0, 5000);
+      printf("[ INFO     ] protocol: %s, average runtime: %f microseconds\n", p, usElapsed/15.0);
+      // Release resources
+      for (int rank = 0; rank < numRanks; rank++){
+        HIPCALL(hipFree(gpuInput[rank]));
+        HIPCALL(hipFree(gpuOutput[rank]));
+        HIPCALL(hipStreamDestroy(stream[rank]));
+        NCCLCHECK(ncclCommDestroy(comms[rank]));
+      }
     }
-
-    // Prepare GPU data arrays
-    int* gpuInput[numRanks];
-    int* gpuOutput[numRanks];
-    hipStream_t stream[numRanks];
-
-    for (int rank = 0; rank < numRanks; rank++) {
-      HIPCALL(hipSetDevice(rank));
-      HIPCALL(hipStreamCreate(&stream[rank]));
-      HIPCALL(hipMalloc((void**)&gpuInput[rank], N * sizeof(int)));
-      HIPCALL(hipMalloc((void**)&gpuOutput[rank], N * sizeof(int)));
-      HIPCALL(hipMemcpy(gpuInput[rank], cpuInput.data(), N * sizeof(int), hipMemcpyHostToDevice));
-      HIPCALL(hipMemset(gpuOutput[rank], 0, N * sizeof(int)));
-      HIPCALL(hipDeviceSynchronize());
-    }
-
-    // Initiate the allreduce
-    NCCLCHECK(ncclGroupStart());
-    for (int rank = 0; rank < numRanks; rank++)
-      NCCLCHECK(ncclAllReduce(gpuInput[rank], gpuOutput[rank], N, ncclInt, ncclSum, comms[rank], stream[rank]));
-    NCCLCHECK(ncclGroupEnd());
-
-    const auto start = Clock::now();
-
-    // Wait for completion
-    for (int rank = 0; rank < numRanks; rank++) {
-      HIPCALL(hipStreamSynchronize(stream[rank]));
-    }
-
-    int msElapsed = duration_cast<milliseconds>(Clock::now() - start).count();
-    EXPECT_LT(msElapsed, 5);
-
-    // Check results
-    std::vector<int> cpuOutput(N);
-    for (int rank = 0; rank < numRanks; rank++) {
-      HIPCALL(hipMemcpy(cpuOutput.data(), gpuOutput[rank], N * sizeof(int), hipMemcpyDeviceToHost));
-      HIPCALL(hipDeviceSynchronize());
-      for (int i = 0; i < N; i++)
-        ASSERT_EQ(cpuOutput[i], cpuExpected[i]);
-    }
-
-    // Release resources
-    for (int rank = 0; rank < numRanks; rank++){
-      HIPCALL(hipFree(gpuInput[rank]));
-      HIPCALL(hipFree(gpuOutput[rank]));
-      HIPCALL(hipStreamDestroy(stream[rank]));
-      NCCLCHECK(ncclCommDestroy(comms[rank]));
-    }
+    if (proto)
+      setenv("NCCL_PROTO", proto, 1);
+    else
+      unsetenv("NCCL_PROTO");
   }
 }
