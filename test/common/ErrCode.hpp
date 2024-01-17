@@ -11,7 +11,8 @@ namespace RcclUnitTesting
   typedef enum
   {
     TEST_SUCCESS = 0,
-    TEST_FAIL    = 1
+    TEST_FAIL    = 1,
+    TEST_TIMEOUT = 2
   } ErrCode;
 
 #define ERROR(...) printf("\033[0;31m" "[ ERROR    ] " "\033[0m" __VA_ARGS__)

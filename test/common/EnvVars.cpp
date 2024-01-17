@@ -63,6 +63,7 @@ namespace RcclUnitTesting
     maxRanksPerGpu = GetEnvVar("UT_MAX_RANKS_PER_GPU", 1);
     showTiming     = GetEnvVar("UT_SHOW_TIMING",  1);
     useInteractive = GetEnvVar("UT_INTERACTIVE",  0);
+    timeoutUs      = GetEnvVar("UT_TIMEOUT_US" ,  200000);
 
     // Limit number of supported reduction operators to just ncclSum if only allReduce is built
 #ifdef BUILD_ALLREDUCE_ONLY
@@ -195,7 +196,8 @@ namespace RcclUnitTesting
         std::make_tuple("UT_MAX_RANKS_PER_GPU", maxRanksPerGpu, "Maximum number of ranks using the same GPU"),
         std::make_tuple("UT_PRINT_VALUES"     , printValues   , "Print array values (-1 for all)"),
         std::make_tuple("UT_SHOW_TIMING"      , showTiming    , "Show timing table"),
-        std::make_tuple("UT_INTERACTIVE"      , useInteractive, "Run in interactive mode")
+        std::make_tuple("UT_INTERACTIVE"      , useInteractive, "Run in interactive mode"),
+        std::make_tuple("UT_TIMEOUT_US"       , timeoutUs     , "Timeout limit for collective calls in us")
       };
 
     printf("================================================================================\n");

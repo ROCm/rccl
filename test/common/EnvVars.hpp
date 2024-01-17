@@ -28,6 +28,7 @@ namespace RcclUnitTesting
     int  maxRanksPerGpu; // Number of ranks using the same GPU     [UT_MAX_RANKS_PER_GPU]
     bool showTiming;     // Show timing per case at end            [UT_SHOW_TIMING]
     bool useInteractive; // Run in interactive mode                [UT_INTERACTIVE]
+    int  timeoutUs;      // Set timeout for child in microseconds  [UT_TIMEOUT_US]
 
     // Constructor that parses and collects environment variables
     EnvVars();
