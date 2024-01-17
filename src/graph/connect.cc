@@ -260,7 +260,7 @@ static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* 
   int t0u, t0d0, t0d1, t0ChildType, t1u, t1d0, t1d1, t1ChildType;
   int* ttp, *ttc0, *ttc1;
   NCCLCHECK(ncclGetDtree(nNodes, node, &t0u, &t0d0, &t0d1, &t0ChildType, &t1u, &t1d0, &t1d1, &t1ChildType));
-  if (comm->nChannels <= MAXCHANNELS/2) {
+  if (comm->nChannels <= IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? (MAXCHANNELS/2) : (MAXCHANNELS/4)) {
     for (int c=0; c<nChannels; c++) {
        struct ncclChannel* channel0 = comm->channels+c;
        struct ncclChannel* channel1 = channel0+nChannels;
@@ -551,30 +551,34 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   NCCLCHECK(connectTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
   NCCLCHECK(connectNvls(comm, nvlsHeads, graphs[NCCL_ALGO_NVLS]));
 
+  // Only use full MAXCHANNELS for gfx94x
+  int maxChannels = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? MAXCHANNELS : (MAXCHANNELS/2);
+
   // Duplicate ringPrev/ringNext for ncclBuildRing
-  if (nChannels <= MAXCHANNELS/2) memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
-  if (nChannels <= MAXCHANNELS/2) memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
+  if (nChannels <= maxChannels/2) memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
+  if (nChannels <= maxChannels/2) memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
 
   // Get number of channels after duplication
-  nc = std::min((int)ncclMaxNchannels()/comm->nChannels, nc);
+  int maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
+  nc = std::min(maxNchannels/comm->nChannels, nc);
   nc *= comm->nChannels;
 
   // Duplication should be complete now
-  nChannels = comm->nChannels = std::min(MAXCHANNELS, (nChannels <= MAXCHANNELS/2) ? nChannels*2 : nChannels);
+  nChannels = comm->nChannels = std::min(maxChannels, (nChannels <= maxChannels/2) ? nChannels*2 : nChannels);
 
   // Setup CollNet
   if (comm->collNetSupport == 1) {
     struct ncclTopoGraph* collNetGraph = graphs[NCCL_ALGO_COLLNET_DIRECT];
     // Add more channels to saturate intra-node bandwidth, except the 1 PPN case
     if (collNetGraph->bwIntra > collNetGraph->bwInter && comm->nRanks > comm->nNodes) {
-      int collNetNchannels = std::min(MAXCHANNELS, nChannels+nChannels/2);
+      int collNetNchannels = std::min(maxChannels, nChannels+nChannels/2);
       nChannels = comm->nChannels = copyChannels(comm, nChannels, collNetNchannels, ringPrev, ringNext);
     }
     NCCLCHECK(connectCollNet(comm, collNetGraph));
   }
 
   // Use 4 compute channels per search channel to reach peak BW on <8 PPN
-  if (comm->minCompCap == 90 && comm->nNodes > 1 && graphs[NCCL_ALGO_RING]->bwIntra > 45.0 && 2*nChannels <= MAXCHANNELS) {
+  if (comm->minCompCap == 90 && comm->nNodes > 1 && graphs[NCCL_ALGO_RING]->bwIntra > 45.0 && 2*nChannels <= maxChannels) {
      nChannels = comm->nChannels = copyChannels(comm, nChannels, 2*nChannels, ringPrev, ringNext);
   }
 
