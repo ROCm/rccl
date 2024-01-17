@@ -204,7 +204,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
   if (level == NCCL_LOG_TRACE && ncclDebugLevel != NCCL_LOG_TRACE) return;
   if (ncclDebugLevel < level || ((flags & (NCCL_INIT|NCCL_GRAPH|NCCL_TUNING)) == 0)) return;
 
-  char buffer[1024];
+  char buffer[2048];
   size_t len = 0;
   if (node_model) len = snprintf(buffer, sizeof(buffer),
     "[%d:%d] ", node_model->nodeId, node_model->currRank);
@@ -1271,4 +1271,16 @@ ncclResult_t rocm_smi_getLinkInfo(int srcIndex, int dstIndex, RSMI_IO_LINK_TYPE*
 
 int ncclNetVersion(struct ncclComm* comm) {
   return 4;
+}
+
+bool mscclEnabled() {
+  return false;
+}
+
+bool mscclForceEnabled() {
+  return false;
+}
+
+ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
+  return ncclSuccess;
 }
