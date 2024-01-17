@@ -146,7 +146,7 @@ namespace RcclUnitTesting {
     // timing
     using namespace std::chrono;
     using Clock = std::chrono::high_resolution_clock;
-    int usElapsed, iter = 20;
+    int usElapsed, numIterations = 20, numWarmups = 5;
 
     // Check for 2 GPUs
     int numGpus;
@@ -192,7 +192,7 @@ namespace RcclUnitTesting {
         HIPCALL(hipDeviceSynchronize());
       }
 
-      for (int it = 0; it < iter; it++) {
+      for (int iter = -numWarmups; iter < numIterations; iter++) {
 
         for (int rank = 0; rank < numRanks; rank++) {
           HIPCALL(hipSetDevice(rank));
@@ -213,7 +213,7 @@ namespace RcclUnitTesting {
           HIPCALL(hipStreamSynchronize(stream[rank]));
         }
 
-	if (it > 4)
+	if (iter >= 0)
           usElapsed += duration_cast<microseconds>(Clock::now() - start).count();
 
         // Check results
@@ -226,8 +226,8 @@ namespace RcclUnitTesting {
         }
       }
 
-      EXPECT_LT(usElapsed/15.0, 5000);
-      printf("[ INFO     ] protocol: %s, average runtime: %f microseconds\n", p, usElapsed/15.0);
+      EXPECT_LT(usElapsed/(double)numIterations, 5000);
+      printf("[ INFO     ] protocol: %s, average runtime: %f microseconds\n", p, usElapsed/(double)numIterations);
       // Release resources
       for (int rank = 0; rank < numRanks; rank++){
         HIPCALL(hipFree(gpuInput[rank]));
