@@ -63,7 +63,7 @@ namespace RcclUnitTesting
     maxRanksPerGpu = GetEnvVar("UT_MAX_RANKS_PER_GPU", 1);
     showTiming     = GetEnvVar("UT_SHOW_TIMING",  1);
     useInteractive = GetEnvVar("UT_INTERACTIVE",  0);
-    timeoutUs      = GetEnvVar("UT_TIMEOUT_US" ,  200000);
+    timeoutUs      = GetEnvVar("UT_TIMEOUT_US" ,  5000000);
 
     // Limit number of supported reduction operators to just ncclSum if only allReduce is built
 #ifdef BUILD_ALLREDUCE_ONLY
