@@ -18,6 +18,7 @@
 #include "enqueue.h"
 #include "graph.h"
 #include "argcheck.h"
+#include "devcomm.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
 #endif
@@ -31,6 +32,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cstdarg>
 #include "graph/topo.h"
 #include "graph/xml.h"
 #include "archinfo.h"
@@ -54,7 +56,7 @@
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "AllToAllPivot" };
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "AllGather", "AllReduce", "AllToAllPivot", "Broadcast", "Reduce", "ReduceScatter", "SendRecv"};
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNetDirect", "CollNetChain", "NVLS", "NVLSTree" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 const char* ncclDevRedOpStr[ncclNumDevRedOps] = { "Sum", "Prod", "Max", "Min", "PreMulSum", "SumPostDiv" };
@@ -177,6 +179,18 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 
 #ifdef ENABLE_COLLTRACE
+#define MAX_NAME_LENGTH 64
+// Helper function to generate function names and update funcIdx
+void generateFunctionName(char* func_names, int& funcIdx, const char* format, ...) {
+    char* line = func_names + MAX_NAME_LENGTH * funcIdx;
+    va_list args;
+    va_start(args, format);
+    vsnprintf(line, MAX_NAME_LENGTH, format, args);
+    va_end(args);
+    funcIdx++;
+}
+
+// Should be in sync with 'ALL_COLLS' in Generator.cmake
 void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
   int head[MAXCHANNELS];
@@ -184,29 +198,53 @@ void *ncclCommThreadMain(void *arg) {
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
-  #define MAX_NAME_LENGTH 64
-  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(FUNC_INDEX_P2P+2));
-  for (int func = 0; func < NCCL_NUM_FUNCTIONS; func++) {
-    for (int al = 0; al < NCCL_NUM_ALGORITHMS; al++) {
-      for (int type = 0; type < ncclNumTypes; type++) {
-        for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-          for (int devredop = 0; devredop < ncclNumDevRedOps; devredop++) {
-            char* line = func_names+MAX_NAME_LENGTH*FUNC_INDEX(func, devredop, type, al, pr);
-            sprintf(line, "%s%s%s%s%s", ncclFuncStr[func], ncclAlgoStr[al], ncclProtoStr[pr],
-              ncclDevRedOpStr[devredop], ncclTypeStr[type]);
-          }
+  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(ncclFuncId_P2p()+/*OneRankReduce*/11));
+  int funcIdx = 0;
+  // AllGather --> RING / <all_protos> / Sum / int8_t
+  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
+    generateFunctionName(func_names, funcIdx, "AllGatherRing%sSum_i8", ncclProtoStr[pr]);
+  }
+  // AllReduce --> <all_algos> / <all_protos> / <all_redops> / <all_types>
+  for (int al = 0; al < NCCL_NUM_ALGORITHMS - 2; al++) {
+    for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
+      for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
+        for (int ty = 0; ty < ncclNumTypes; ty++) {
+          if (redop == 5 && ty > 5) continue;
+          generateFunctionName(func_names, funcIdx, "AllReduce%s%s%s%s", ncclAlgoStr[al], ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
         }
       }
     }
   }
-  for (int type = 0; type < ncclNumTypes; type++) {
-    char* line = func_names+MAX_NAME_LENGTH*(FUNC_INDEX_P2P-ncclNumTypes+type);
-    sprintf(line, "OneRankReducePreMulSum%s", ncclTypeStr[type]);
+  // AllToAllPivot --> RING / SIMPLE / Sum / int8_t
+  generateFunctionName(func_names, funcIdx, "AllToAllPivotRingSimpleSum_i8");
+  // Broadcast --> RING / <all_protos> / Sum / int8_t
+  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
+    generateFunctionName(func_names, funcIdx, "BroadcastRing%sSum_i8", ncclProtoStr[pr]);
   }
-  char* line = func_names+MAX_NAME_LENGTH*FUNC_INDEX_P2P;
-  sprintf(line, "SendRecvRingSimpleSum_i8");
-  line += MAX_NAME_LENGTH;
-  sprintf(line, "AllToAllPivotRingSimpleSum_i8");
+  // Reduce --> RING / <all_protos> / <all_redops> / <all_types>
+  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
+    for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
+      for (int ty = 0; ty < ncclNumTypes; ty++) {
+        if (redop == 5 && ty > 5) continue;
+        generateFunctionName(func_names, funcIdx, "ReduceRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
+      }
+    }
+  }
+  // ReduceScatter --> RING / <all_protos> / <all_redops> / <all_types>
+  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
+    for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
+      for (int ty = 0; ty < ncclNumTypes; ty++) {
+        if (redop == 5 && ty > 5) continue;
+        generateFunctionName(func_names, funcIdx, "ReduceScatterRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
+      }
+    }
+  }
+  // SendRecv --> RING / SIMPLE / Sum / int8_t
+  generateFunctionName(func_names, funcIdx, "SendRecvRingSimpleSum_i8");
+  // OneRankReduce --> PreMulSum / <all_types>
+  for (int ty = 0; ty < ncclNumTypes; ty++) {
+    generateFunctionName(func_names, funcIdx, "OneRankReducePreMulSum%s", ncclTypeStr[ty]);
+  }
   do {
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
       int tail = comm->collTraceTail[channel].tail%COLLTRACE_NUM_ITEMS;
@@ -232,7 +270,7 @@ void *ncclCommThreadMain(void *arg) {
             (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
             fIdx, td->data_0, td->opCount, td->data_1);
         } else {
-          if (fIdx == FUNC_INDEX_P2P || type == ncclCollTraceP2pElemType)
+          if (fIdx == ncclFuncId_P2p() || type == ncclCollTraceP2pElemType)
             sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
           else
             sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);

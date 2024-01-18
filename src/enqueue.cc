@@ -20,8 +20,6 @@
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
 
-static void* const ncclKernelGeneric = (void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t);
-
 struct ncclKernelMatch {
   void* kernelFn;
   bool specialized;
@@ -29,15 +27,18 @@ struct ncclKernelMatch {
 
 typedef void(*ncclKern_t)(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
 
+// Definition of rccl_main_kernel which is only used in here
+IMPL_MAIN_KERN();
+
 // Must be consistent with the ncclFuncSet enum
 #ifdef ENABLE_COLLTRACE
 static ncclKernelMatch const ncclKerns[2] = {
-  {(void *)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), true},
-  {(void *)NCCL_KERN_NAME_DEBUG(SendRecv, RING, SIMPLE, Sum, int8_t), true},
+  {(void *)rccl_main_kernel, true},
+  {(void *)rccl_main_kernel_debug, true},
 };
 #else
 static ncclKernelMatch const ncclKerns[1] = {
-  {(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), true}
+  {(void*)rccl_main_kernel, true}
 };
 #endif
 
@@ -169,7 +170,7 @@ static void appendWorkElemP2p(
     struct ncclComm* comm, struct ncclKernelPlan* plan, int channelId,
     struct ncclWorkElemP2p const *elem, bool fuseOk
   ) {
-  constexpr int funcIndex = FUNC_INDEX_P2P;
+  int funcIndex = ncclFuncId_P2p();
   struct ncclKernelPlan::Channel* chan = &plan->channels[channelId];
   struct ncclWorkList* q = ncclIntruQueueTail(&chan->workQueue);
   if (q && funcIndex == q->work.header.funcIndex) {
@@ -191,7 +192,7 @@ static void appendWorkElemP2p(
   }
   q = ncclMemoryStackAlloc<struct ncclWorkList>(&comm->memScoped);
   q->work.header.type = ncclWorkTypeP2p;
-  q->work.header.funcIndex = FUNC_INDEX_P2P;
+  q->work.header.funcIndex = ncclFuncId_P2p();
   chan->p2pTailElem[ncclWorkP2pTypeRecv-1] = 0;
   chan->p2pTailElem[ncclWorkP2pTypeSend-1] = 1;
   q->work.p2pElems[chan->p2pTailElem[elem->p2pType-1]] = *elem; // C++ struct assignment
@@ -1313,12 +1314,12 @@ comp_next:
 
   if (info->comm->nRanks == 1) {
     // one-rank reduce index
-    *workFuncIndex = FUNC_INDEX_P2P - ncclNumTypes + int(info->datatype);
+    *workFuncIndex = ncclFuncId_P2p() + int(info->datatype);
     return ncclSuccess;
   } else if (info->coll == ncclFuncAllToAllPivot) {
-    *workFuncIndex = FUNC_INDEX_ALLTOALL_PIVOT;
+    *workFuncIndex = ncclFuncId_AllToAllPivot();
   } else {
-    *workFuncIndex = FUNC_INDEX(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
+    *workFuncIndex = ncclFuncId(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
   }
 
   work->connIndex = 0;

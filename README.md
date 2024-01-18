@@ -25,7 +25,6 @@ The root of this repository has a helper script 'install.sh' to build and instal
 
  Options:
        --address-sanitizer     Build with address sanitizer enabled
-       --build_allreduce_only  Build only AllReduce + sum + float kernel
     -d|--dependencies          Install RCCL depdencencies
        --debug                 Build debug library
        --enable_backtrace      Build with custom backtrace support
@@ -34,7 +33,7 @@ The root of this repository has a helper script 'install.sh' to build and instal
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)
-    -j|--jobs                  Specify how many parallel compilation jobs to run (16 by default)
+    -j|--jobs                  Specify how many parallel compilation jobs to run (nproc by default)
     -l|--local_gpu_only        Only compile for local GPU architecture
        --no_clean              Don't delete files if they already exist
        --npkit-enable          Compile with npkit enabled

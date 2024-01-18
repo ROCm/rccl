@@ -12,7 +12,7 @@ def runCI =
     def prj = new rocProject('rccl', 'Static Library PreCheckin')
 
     prj.timeout.test = 1440
-    prj.paths.build_command = './install.sh -t --static'
+    prj.paths.build_command = './install.sh -tj 16 --static'
 
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
 

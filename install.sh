@@ -8,7 +8,6 @@ ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
 
 # Default values
 build_address_sanitizer=false
-build_allreduce_only=false
 build_bfd=false
 build_freorg_bkwdcomp=false
 build_local_gpu_only=false
@@ -24,7 +23,7 @@ enable_ninja=""
 install_dependencies=false
 install_library=false
 msccl_kernel_enabled=true
-num_parallel_jobs=16
+num_parallel_jobs=$(nproc)
 npkit_enabled=false
 run_tests=false
 run_tests_all=false
@@ -38,7 +37,6 @@ function display_help()
     echo "RCCL build & installation helper script"
     echo " Options:"
     echo "       --address-sanitizer     Build with address sanitizer enabled"
-    echo "       --build_allreduce_only  Build only AllReduce + sum + float kernel"
     echo "    -d|--dependencies          Install RCCL depdencencies"
     echo "       --debug                 Build debug library"
     echo "       --enable_backtrace      Build with custom backtrace support"
@@ -70,7 +68,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,build_allreduce_only,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -86,7 +84,6 @@ eval set -- "${GETOPT_PARSE}"
 while true; do
     case "${1}" in
          --address-sanitizer)        build_address_sanitizer=true;                                                                     shift ;;
-         --build_allreduce_only)     build_allreduce_only=true;                                                                        shift ;;
     -d | --dependencies)             install_dependencies=true;                                                                        shift ;;
          --debug)                    build_release=false;                                                                              shift ;;
          --enable_backtrace)         build_bfd=true;                                                                                   shift ;;
@@ -180,11 +177,6 @@ fi
 # Address sanitizer
 if [[ "${build_address_sanitizer}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_ADDRESS_SANITIZER=ON"
-fi
-
-# AllReduce only
-if [[ "${build_allreduce_only}" == true ]]; then
-    cmake_common_options="${cmake_common_options} -DBUILD_ALLREDUCE_ONLY=ON"
 fi
 
 # Backtrace support
@@ -353,9 +345,9 @@ else
 fi
 
 if ($build_tests) || (($run_tests) && [[ ! -f ./test/rccl-UnitTests ]]); then
-    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH $enable_ninja ../../.
+    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH -DONLY_FUNCS="$ONLY_FUNCS" $enable_ninja ../../.
 else
-    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH $enable_ninja ../../.
+    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH -DONLY_FUNCS="$ONLY_FUNCS" $enable_ninja ../../.
 fi
 check_exit_code "$?"
 

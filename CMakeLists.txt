@@ -10,7 +10,6 @@ project(rccl CXX)
 # Build options
 #==================================================================================================
 option(BUILD_ADDRESS_SANITIZER                 "Enable address sanitizer"                      OFF)
-option(BUILD_ALLREDUCE_ONLY                    "AllReduce(sum,float) kernel only"              OFF)
 option(BUILD_BFD                               "Enable custom backtrace (if bfd.h exists)"     OFF)
 option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "File/folder reorg with backward compatibility" OFF)
 option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on this machine"  OFF)
@@ -46,6 +45,7 @@ set(DEFAULT_GPUS
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
+include(cmake/Generator.cmake)    # Configure functions that goes into RCCL
 
 # Build only for local GPU architecture
 if (BUILD_LOCAL_GPU_TARGET_ONLY)
@@ -309,6 +309,7 @@ set(SRC_FILES
   src/collectives/device/reduce_kernel.h
   src/collectives/device/reduce_scatter.h
   src/collectives/device/sendrecv.h
+  src/collectives/device/onerank_reduce.cu
   src/collectives/gather.cc
   src/collectives/reduce.cc
   src/collectives/reduce_scatter.cc
@@ -447,31 +448,6 @@ set(SRC_FILES
   src/transport/shm.cc
 )
 
-## Add kernel files
-## E.g: find src -type f \( -name "*.u" \) | sort
-if (BUILD_ALLREDUCE_ONLY)
-  add_definitions(-DBUILD_ALLREDUCE_ONLY)
-  set(CU_SOURCES
-      # src/collectives/device/all_reduce.cu
-      src/collectives/device/sendrecv.cu
-      src/collectives/device/functions.cu
-      # src/collectives/device/msccl_kernel.cu
-      )
-else()
-  set(CU_SOURCES
-      src/collectives/device/all_gather.cu
-      # src/collectives/device/all_reduce.cu
-      src/collectives/device/alltoall_pivot.cu
-      src/collectives/device/broadcast.cu
-      src/collectives/device/functions.cu
-      # src/collectives/device/msccl_kernel.cu
-      src/collectives/device/onerank_reduce.cu
-      # src/collectives/device/reduce.cu
-      # src/collectives/device/reduce_scatter.cu
-      src/collectives/device/sendrecv.cu)
-endif()
-list(APPEND SRC_FILES ${CU_SOURCES})
-
 if (ENABLE_MSCCL_KERNEL)
   set(MSCCL_KERNEL_SOURCES
     src/collectives/device/msccl_kernel_impl.h
@@ -509,11 +485,12 @@ foreach(SRC_FILE ${SRC_FILES})
   )
 endforeach()
 
-expand_collectives("all_reduce" "AllReduce")
-expand_collectives("reduce" "Reduce")
-expand_collectives("reduce_scatter" "ReduceScatter")
-if(ENABLE_MSCCL_KERNEL)
-  expand_collectives("msccl_kernel" "MscclKernel")
+if(ONLY_FUNCS)
+  ## Generate only the specified functions
+  gen_functions(${ONLY_FUNCS})
+else()
+  # Generate all the functions
+  gen_functions("AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv")
 endif()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
@@ -637,7 +614,7 @@ if (HAS_BFD)
     target_link_libraries(rccl PRIVATE iberty z)
   endif()
 endif()
-target_link_libraries(rccl PRIVATE -fgpu-rdc)               # Required when linking relocatable device code
+target_link_libraries(rccl PRIVATE -fgpu-rdc)             # Required when linking relocatable device code
 
 ## Set RCCL link options
 target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link

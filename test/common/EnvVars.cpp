@@ -65,12 +65,9 @@ namespace RcclUnitTesting
     useInteractive = GetEnvVar("UT_INTERACTIVE",  0);
     timeoutUs      = GetEnvVar("UT_TIMEOUT_US" ,  5000000);
 
-    // Limit number of supported reduction operators to just ncclSum if only allReduce is built
-#ifdef BUILD_ALLREDUCE_ONLY
-    int numOps = 1;
-#else
+    // Total number of reduction ops
     int numOps = ncclNumOps;
-#endif
+
     std::vector<std::string> redOpStrings = GetEnvVarsList("UT_REDOPS");
     for (auto s : redOpStrings)
     {
@@ -98,12 +95,7 @@ namespace RcclUnitTesting
       {
         if (!strcmp(s.c_str(), ncclDataTypeNames[i]))
         {
-#ifdef BUILD_ALLREDUCE_ONLY
-          if (i == ncclFloat32)
-#endif
-          {
-            dataTypes.push_back((ncclDataType_t)i);
-          }
+          dataTypes.push_back((ncclDataType_t)i);
         }
       }
     }
@@ -112,8 +104,6 @@ namespace RcclUnitTesting
     if (dataTypes.empty())
     {
       dataTypes.push_back(ncclFloat32);
-      // Skip all but 32-bit floats if only AllReduce is being built
-#ifndef BUILD_ALLREDUCE_ONLY
       dataTypes.push_back(ncclInt8);
       dataTypes.push_back(ncclUint8);
       dataTypes.push_back(ncclInt32);
@@ -124,7 +114,6 @@ namespace RcclUnitTesting
       dataTypes.push_back(ncclFloat32);
       dataTypes.push_back(ncclFloat64);
       dataTypes.push_back(ncclBfloat16);
-#endif
     }
 
     // Build list of possible # GPU ranks based on env vars
