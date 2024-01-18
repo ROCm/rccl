@@ -384,6 +384,7 @@ struct alignas(16) ncclDevChannel {
   struct ncclTree binTree;
   struct ncclNvls nvls;
   uint32_t* workFifoDone; // Location of done counter, device writes index+1 of last work processed
+  int32_t prefXccId;      // (Experimental) Preferred XCC for this channel
 };
 
 struct ncclDevComm {

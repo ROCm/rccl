@@ -42,6 +42,7 @@ struct ncclPeerInfo {
   uint64_t pidHash;
   dev_t shmDev;
   int64_t busId;
+  int32_t busIdIdx;
   struct ncclComm* comm;
   int cudaCompCap;
 };

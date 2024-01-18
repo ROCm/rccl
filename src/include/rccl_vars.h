@@ -25,6 +25,40 @@ THE SOFTWARE.
 
 #include "param.h"
 
-RCCL_PARAM_DECLARE(EnableHipGraph);  // Opt-in environment variable for enabling hipGraph
+RCCL_PARAM_DECLARE(EnableHipGraph);      // Opt-in environment variable for enabling hipGraph
+RCCL_PARAM_DECLARE(ExperimentalXccMode); // Opt-in environment variable for enabling experimental XCC filtering
+
+int32_t __inline__ IsValidRcclXccModeStr()
+{
+  char* remapTable = getenv("RCCL_EXPERIMENTAL_XCC_MODE");
+  if (remapTable == NULL || strlen(remapTable) != 8 || strspn(remapTable, "01234567") != 8)
+    return 0;
+
+  for (int i = 0; i < 7; i++)
+    if (!strchr(remapTable, i + '0')) return 0;
+
+  return 1;
+}
+
+int32_t __inline__ rcclGetPreferredXcc(int srcBusIdIdx, int dstBusIdIdx)
+{
+  constexpr int32_t table[8][8] = {{0,7,6,1,2,4,5,3},
+                                   {7,0,1,5,4,2,3,6},
+                                   {5,1,0,6,7,3,2,4},
+                                   {1,6,5,0,3,7,4,2},
+                                   {2,4,7,3,0,5,6,1},
+                                   {4,2,3,7,6,0,1,5},
+                                   {5,3,2,4,6,1,0,7},
+                                   {3,6,4,2,1,5,7,0}};
+
+  if (srcBusIdIdx < 0 || srcBusIdIdx >= 8 || dstBusIdIdx < 0 || dstBusIdIdx >= 8) return -1;
+
+  if (IsValidRcclXccModeStr())
+  {
+    char* remapTable = getenv("RCCL_EXPERIMENTAL_XCC_MODE");
+    return table[remapTable[srcBusIdIdx]-'0'][remapTable[dstBusIdIdx]-'0'];
+  }
+  return -1;
+}
 
 #endif

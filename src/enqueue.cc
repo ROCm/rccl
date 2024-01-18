@@ -1005,7 +1005,8 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   struct ncclTasks* tasks = &comm->tasks;
   void *fn = plan->kernelFn;
   cudaStream_t launchStream = tasks->streams->stream;
-  dim3 grid = {(unsigned)plan->channelCount, 1, 1};
+  unsigned numBlocksX = IsValidRcclXccModeStr() ? 8 : 1;
+  dim3 grid = {numBlocksX, (unsigned)plan->channelCount, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   size_t smem = ncclShmemDynamicSize(comm->cudaArch);
   void *args[3] = {&comm->devComm, &plan->channelMask, &plan->workHead};
