@@ -667,7 +667,7 @@ namespace RcclUnitTesting
       for (int i = 0; i < this->numStreamsPerGroup; i++)
         streamsToComplete.push_back(this->streams[localRank][i]);
     }
-    int usElapsed = 0;
+    int usElapsed = 0, timedout = 0;
     using namespace std::chrono;
     using Clock = std::chrono::high_resolution_clock;
     if (this->verbose) INFO("Starting sychronization and timing\n");
@@ -692,7 +692,7 @@ namespace RcclUnitTesting
       for (int localRank : localRanksToExecute)
       {
         ncclCommAbort(this->comms[localRank]); 
-        timeoutUs = -1;
+        timedout = 1;
       }
     }
 
@@ -739,8 +739,11 @@ namespace RcclUnitTesting
         }
     }
 
-    if (timeoutUs == -1)
+    if (timedout)
+    {
+      ERROR("Child %d timed out and exceeded limit %d us in ExecuteCollectives()\n", this->childId, timeoutUs);
       return TEST_TIMEOUT;
+    }
 
     if (this->verbose) INFO("Child %d finishes ExecuteCollectives()\n", this->childId);
     return TEST_SUCCESS;
