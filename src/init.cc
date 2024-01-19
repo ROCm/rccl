@@ -19,6 +19,7 @@
 #include "graph.h"
 #include "argcheck.h"
 #include "devcomm.h"
+#include "collectives.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
 #endif
@@ -198,11 +199,11 @@ void *ncclCommThreadMain(void *arg) {
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
-  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(ncclFuncId_P2p()+/*OneRankReduce*/11));
+  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(ncclFuncRowToId[FUNC_INDEX_TOTAL]));
   int funcIdx = 0;
   // AllGather --> RING / <all_protos> / Sum / int8_t
   for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-    generateFunctionName(func_names, funcIdx, "AllGatherRing%sSum_i8", ncclProtoStr[pr]);
+    if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "AllGatherRing%sSum_i8", ncclProtoStr[pr]);
   }
   // AllReduce --> <all_algos> / <all_protos> / <all_redops> / <all_types>
   for (int al = 0; al < NCCL_NUM_ALGORITHMS - 2; al++) {
@@ -210,23 +211,23 @@ void *ncclCommThreadMain(void *arg) {
       for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
         for (int ty = 0; ty < ncclNumTypes; ty++) {
           if (redop == 5 && ty > 5) continue;
-          generateFunctionName(func_names, funcIdx, "AllReduce%s%s%s%s", ncclAlgoStr[al], ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
+          if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "AllReduce%s%s%s%s", ncclAlgoStr[al], ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
         }
       }
     }
   }
   // AllToAllPivot --> RING / SIMPLE / Sum / int8_t
-  generateFunctionName(func_names, funcIdx, "AllToAllPivotRingSimpleSum_i8");
+  if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "AllToAllPivotRingSimpleSum_i8");
   // Broadcast --> RING / <all_protos> / Sum / int8_t
   for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-    generateFunctionName(func_names, funcIdx, "BroadcastRing%sSum_i8", ncclProtoStr[pr]);
+    if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "BroadcastRing%sSum_i8", ncclProtoStr[pr]);
   }
   // Reduce --> RING / <all_protos> / <all_redops> / <all_types>
   for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
     for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
       for (int ty = 0; ty < ncclNumTypes; ty++) {
         if (redop == 5 && ty > 5) continue;
-        generateFunctionName(func_names, funcIdx, "ReduceRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
+        if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "ReduceRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
       }
     }
   }
@@ -235,12 +236,12 @@ void *ncclCommThreadMain(void *arg) {
     for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
       for (int ty = 0; ty < ncclNumTypes; ty++) {
         if (redop == 5 && ty > 5) continue;
-        generateFunctionName(func_names, funcIdx, "ReduceScatterRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
+        if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "ReduceScatterRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
       }
     }
   }
   // SendRecv --> RING / SIMPLE / Sum / int8_t
-  generateFunctionName(func_names, funcIdx, "SendRecvRingSimpleSum_i8");
+  if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "SendRecvRingSimpleSum_i8");
   // OneRankReduce --> PreMulSum / <all_types>
   for (int ty = 0; ty < ncclNumTypes; ty++) {
     generateFunctionName(func_names, funcIdx, "OneRankReducePreMulSum%s", ncclTypeStr[ty]);

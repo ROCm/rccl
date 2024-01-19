@@ -21,6 +21,7 @@ struct ncclDevRedOpFull {
 
 #define FUNC_INDEX_P2P 1015
 #define FUNC_INDEX_ALLTOALL_PIVOT 675
+#define FUNC_INDEX_TOTAL 1026  // Total number of functions that goes into librccl.so index in host_table.cc
 
 #define NCCL_FUNC_NAME(func, algo, proto, devredop, type) \
   ncclFunction_##func##_##algo##_##proto##_##devredop##_##type

@@ -271,7 +271,7 @@ function(gen_host_table)
     math(EXPR idx "${idx} + 1")
     math(EXPR fn_id "${fn_id} + 1")
   endforeach()
-  file(APPEND ${HOST_TABLE_FILE} "-1};\n\n")
+  file(APPEND ${HOST_TABLE_FILE} "${fn_id}};\n\n")
 
   ## Add the host_table file to HIP_SOURCES
   list(APPEND HIP_SOURCES ${HOST_TABLE_FILE})
