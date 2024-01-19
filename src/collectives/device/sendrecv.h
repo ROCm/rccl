@@ -58,8 +58,14 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
         }
 #endif
 
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+        reduceCopy<COLL_UNROLL*2, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
+          (tid, nthreads, 0, nullptr, false, 1, &buff, 1, &recvBuff, count);
+#else
         reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
           (tid, nthreads, 0, nullptr, false, 1, &buff, 1, &recvBuff, count);
+#endif
+
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT)
         if (isNpKitThread) {
           NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
@@ -204,7 +210,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       } else {
 #if defined(__gfx90a__)
         runRecv<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
-#elif defined(__gfx908__)
+#elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
         runRecv<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
 #else
         runRecv<ProtoSimple<1,1>>(tid, nthreads, group, args);
@@ -216,7 +222,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       } else {
 #if defined(__gfx90a__)
         runSend<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
-#elif defined(__gfx908__)
+#elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
         runSend<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
 #else
         runSend<ProtoSimple<1,1>>(tid, nthreads, group, args);
