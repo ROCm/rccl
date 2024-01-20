@@ -150,7 +150,7 @@ function(gen_device_table)
   message(STATUS "Generating ${DEVICE_TABLE_FILE}")
 
   ## Generate device table and list all the functions
-  file(WRITE ${DEVICE_TABLE_FILE} "#include \"common.h\"\n#include \"collectives.h\"\n\n")
+  file(WRITE ${DEVICE_TABLE_FILE} "#include \"common.h\"\n#include \"collectives.h\"\n#include \"devcomm.h\"\n\n")
 
   ## Declaration of device functions
   foreach(func IN LISTS FUNC_LIST)
@@ -216,6 +216,16 @@ function(gen_device_table)
     file(APPEND ${DEVICE_TABLE_FILE} "  }\n}\n")
   endif()
 
+  ## Function name table for collective trace
+  file(APPEND ${DEVICE_TABLE_FILE} "const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
+  foreach(func ${FUNC_LIST})
+    file(APPEND ${DEVICE_TABLE_FILE} "  \"${func}\",\n")
+  endforeach()
+  foreach(type IN LISTS ALL_TYPES)
+    file(APPEND ${DEVICE_TABLE_FILE} "  \"ncclFunction_OneRankReduce_PreMulSum_${type}\",\n")
+  endforeach()
+  file(APPEND ${DEVICE_TABLE_FILE} "};\n")
+
   ## Add the device_table file to HIP_SOURCES
   list(APPEND HIP_SOURCES ${DEVICE_TABLE_FILE})
   set(HIP_SOURCES ${HIP_SOURCES} PARENT_SCOPE)
@@ -252,6 +262,7 @@ function(gen_host_table)
 
             list(FIND FUNC_LIST "ncclFunction_${coll}_${algo}_${proto}_${redop}_${type}" fn_id)
             if(NOT ${fn_id} EQUAL -1)
+            set(last_valid_fn_id ${fn_id})
               file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${fn_id}, // ncclFunction_${coll}_${algo}_${proto}_${redop}_${type}\n")
             else()
               file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${fn_id},\n")
@@ -262,16 +273,16 @@ function(gen_host_table)
       endforeach()
     endforeach()
   endforeach()
-  math(EXPR fn_id "${fn_id} + 1")
+  math(EXPR last_valid_fn_id "${last_valid_fn_id} + 1")
   ## Add OneRankReduce function ids at the end
   foreach(type IN LISTS ALL_TYPES)
-    file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${fn_id}, // ncclFunction_OneRankReduce_PreMulSum_${type}\n")
+    file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${last_valid_fn_id}, // ncclFunction_OneRankReduce_PreMulSum_${type}\n")
 
     ## Increment the index and func id for each OneRankReduce
     math(EXPR idx "${idx} + 1")
-    math(EXPR fn_id "${fn_id} + 1")
+    math(EXPR last_valid_fn_id "${last_valid_fn_id} + 1")
   endforeach()
-  file(APPEND ${HOST_TABLE_FILE} "${fn_id}};\n\n")
+  file(APPEND ${HOST_TABLE_FILE} "${last_valid_fn_id}};\n\n")
 
   ## Add the host_table file to HIP_SOURCES
   list(APPEND HIP_SOURCES ${HOST_TABLE_FILE})

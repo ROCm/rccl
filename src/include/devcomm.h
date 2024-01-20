@@ -21,6 +21,7 @@
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv and AllToAllPivot not included for now
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncSend, ncclFuncRecv, ncclFuncAllToAllPivot, ncclNumFuncs} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2];
+extern const char* funcNames[FUNC_INDEX_TOTAL];
 
 #define NCCL_NUM_ALGORITHMS 6 // Tree/Ring/CollNet*
 #define NCCL_ALGO_TREE 0

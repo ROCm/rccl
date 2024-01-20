@@ -180,17 +180,6 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 
 #ifdef ENABLE_COLLTRACE
-#define MAX_NAME_LENGTH 64
-// Helper function to generate function names and update funcIdx
-void generateFunctionName(char* func_names, int& funcIdx, const char* format, ...) {
-    char* line = func_names + MAX_NAME_LENGTH * funcIdx;
-    va_list args;
-    va_start(args, format);
-    vsnprintf(line, MAX_NAME_LENGTH, format, args);
-    va_end(args);
-    funcIdx++;
-}
-
 // Should be in sync with 'ALL_COLLS' in Generator.cmake
 void *ncclCommThreadMain(void *arg) {
   ncclComm_t comm = (ncclComm_t)arg;
@@ -199,53 +188,6 @@ void *ncclCommThreadMain(void *arg) {
 
   memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
-  char* func_names = (char *)malloc(MAX_NAME_LENGTH*(ncclFuncRowToId[FUNC_INDEX_TOTAL]));
-  int funcIdx = 0;
-  // AllGather --> RING / <all_protos> / Sum / int8_t
-  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-    if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "AllGatherRing%sSum_i8", ncclProtoStr[pr]);
-  }
-  // AllReduce --> <all_algos> / <all_protos> / <all_redops> / <all_types>
-  for (int al = 0; al < NCCL_NUM_ALGORITHMS - 2; al++) {
-    for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-      for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
-        for (int ty = 0; ty < ncclNumTypes; ty++) {
-          if (redop == 5 && ty > 5) continue;
-          if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "AllReduce%s%s%s%s", ncclAlgoStr[al], ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
-        }
-      }
-    }
-  }
-  // AllToAllPivot --> RING / SIMPLE / Sum / int8_t
-  if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "AllToAllPivotRingSimpleSum_i8");
-  // Broadcast --> RING / <all_protos> / Sum / int8_t
-  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-    if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "BroadcastRing%sSum_i8", ncclProtoStr[pr]);
-  }
-  // Reduce --> RING / <all_protos> / <all_redops> / <all_types>
-  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-    for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
-      for (int ty = 0; ty < ncclNumTypes; ty++) {
-        if (redop == 5 && ty > 5) continue;
-        if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "ReduceRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
-      }
-    }
-  }
-  // ReduceScatter --> RING / <all_protos> / <all_redops> / <all_types>
-  for (int pr = 0; pr < NCCL_NUM_PROTOCOLS; pr++) {
-    for (int redop = 0; redop < ncclNumDevRedOps; redop++) {
-      for (int ty = 0; ty < ncclNumTypes; ty++) {
-        if (redop == 5 && ty > 5) continue;
-        if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "ReduceScatterRing%s%s%s", ncclProtoStr[pr], ncclDevRedOpStr[redop], ncclTypeStr[ty]);
-      }
-    }
-  }
-  // SendRecv --> RING / SIMPLE / Sum / int8_t
-  if (ncclFuncRowToId[funcIdx] != -1) generateFunctionName(func_names, funcIdx, "SendRecvRingSimpleSum_i8");
-  // OneRankReduce --> PreMulSum / <all_types>
-  for (int ty = 0; ty < ncclNumTypes; ty++) {
-    generateFunctionName(func_names, funcIdx, "OneRankReducePreMulSum%s", ncclTypeStr[ty]);
-  }
   do {
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
       int tail = comm->collTraceTail[channel].tail%COLLTRACE_NUM_ITEMS;
@@ -277,9 +219,9 @@ void *ncclCommThreadMain(void *arg) {
             sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);
           offset = strlen(line);
           if (type == ncclCollTraceCollElemType) {
-            sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx, td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
+            sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
           } else if (type == ncclCollTraceP2pElemType) {
-            sprintf(line+offset, " PE %s %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d", func_names+MAX_NAME_LENGTH*fIdx,
+            sprintf(line+offset, " PE %s %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d", funcNames[fIdx],
               td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
               td->p2p[1].connIndex, td->p2p[1].nWarps, td->p2p[1].warpStart, td->p2p[1].ngroups, td->p2p[1].peer, comm->busId, comm->nRanks);
           } else {
@@ -287,9 +229,9 @@ void *ncclCommThreadMain(void *arg) {
               case ncclCollTraceKernelLaunchType:
               case ncclCollTraceCollLaunchType:
                 if ((type&0xf) == ncclCollTraceKernelLaunchType)
-                  sprintf(line+offset, " KL HWID %8x %s", td->data_0, func_names+MAX_NAME_LENGTH*fIdx);
+                  sprintf(line+offset, " KL HWID %8x %s", td->data_0, funcNames[fIdx]);
                 else if ((type&0xf) == ncclCollTraceCollLaunchType)
-                  sprintf(line+offset, " CL %s", func_names+MAX_NAME_LENGTH*fIdx);
+                  sprintf(line+offset, " CL %s", funcNames[fIdx]);
                 offset = strlen(line);
                 if ((type&0xf0) == ncclCollTraceCollElemType)
                   sprintf(line+offset, " nw %d bi %d nc %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
@@ -317,7 +259,6 @@ void *ncclCommThreadMain(void *arg) {
       }
     }
   } while(!comm->collTraceExit);
-  free(func_names);
   pthread_exit(NULL);
 }
 #endif
