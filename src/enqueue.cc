@@ -944,14 +944,14 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
     cudaStream_t launchStream = tasks->streams->stream;
     NCCLCHECKGOTO(ncclStrongStreamAcquire(tasks->capturingGraph, &comm->sharedRes->deviceStream), result, failure);
 
-    if (tasks->numStreams != 1) {
+    if (tasks->numStreams != 1 || persistent) {
       // Create dependency for device stream on user streams. First from extra user
       // streams to deviceStream. Then deviceStream to first user stream.
       for (struct ncclCudaStreamList* l=tasks->streams->next; l != nullptr; l = l->next) {
         NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, &comm->sharedRes->deviceStream, l->stream), result, failure);
       }
       NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, launchStream, &comm->sharedRes->deviceStream), result, failure);
-    } else if (tasks->streams->stream != comm->lastStream && comm->lastStream != nullptr) {
+    } else if (tasks->streams->stream != comm->lastStream && comm->lastStream != nullptr && !persistent) {
       // Stream changed from last call, create dependency against last NCCL kernel launch
       CUDACHECK(hipStreamWaitEvent(tasks->streams->stream, comm->doneEvent, 0));
     }
@@ -971,7 +971,7 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
       }
       if (acquired) {
         // Make to-be-launched kernels dependent on just-launched host stream tasks.
-        if (tasks->numStreams != 1) NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, launchStream, &comm->sharedRes->hostStream), result, failure);
+        NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, launchStream, &comm->sharedRes->hostStream), result, failure);
         NCCLCHECKGOTO(ncclStrongStreamRelease(tasks->capturingGraph, &comm->sharedRes->hostStream), result, failure);
       }
     }
@@ -1010,7 +1010,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   size_t smem = ncclShmemDynamicSize(comm->cudaArch);
   void *args[3] = {&comm->devComm, &plan->channelMask, &plan->workHead};
-  if (tasks->numStreams == 1) {
+  if (tasks->numStreams == 1 && !plan->persistent) {
     CUDACHECK(hipExtLaunchKernel(plan->kernelFn, grid, block, args, 0, tasks->streams->stream, NULL, comm->doneEvent, 0));
     comm->lastStream = tasks->streams->stream;
     return ncclSuccess;
@@ -1079,6 +1079,7 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
 ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
   ncclResult_t result = ncclSuccess;
   struct ncclTasks* tasks = &comm->tasks;
+  bool persistent = ncclCudaGraphValid(tasks->capturingGraph);
   tasks->collBytesTotal = 0; // Just in case subtraction during scheduleCollTasksToPlan() doesn't get to 0
 
   // Deallocate ncclWork's. This frame exists so long as ncclLaunchPrepare
@@ -1093,14 +1094,14 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     // Create dependency for deviceStream on launchStream. We know that deviceStream
     // hasn't been modified since launchStream waited on it (in ncclLaunchPrepare),
     // so we can say that launchStream subsumes it.
-    if (tasks->numStreams != 1) NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, &comm->sharedRes->deviceStream, launchStream, /*b_subsumes_a=*/true), result, resume1);
+    if (persistent || tasks->numStreams != 1) NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, &comm->sharedRes->deviceStream, launchStream, /*b_subsumes_a=*/true), result, resume1);
   resume1:
     // Create dependency for other user streams (skip launch stream) on deviceStream.
     // Again, the user streams haven't been touched since deviceStream waited on them
     // so we can say they are subsumed by deviceStream.
     struct ncclCudaStreamList* sl = tasks->streams->next;
     tasks->streams = nullptr; // Reset comm->tasks.streams to empty.
-    while (sl != nullptr && tasks->numStreams != 1) {
+    while (sl != nullptr && (tasks->numStreams != 1 || persistent)) {
       NCCLCHECKGOTO(ncclStrongStreamWaitStream(tasks->capturingGraph, sl->stream, &comm->sharedRes->deviceStream, /*b_subsumes_a=*/true), result, resume2);
     resume2:
       sl = sl->next;

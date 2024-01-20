@@ -108,7 +108,7 @@ ncclResult_t ncclStrongStreamDestruct(struct ncclStrongStream* ss) {
   return ncclSuccess;
 }
 
-NCCL_PARAM(GraphMixingSupport, "GRAPH_MIXING_SUPPORT", 1)
+NCCL_PARAM(GraphMixingSupport, "GRAPH_MIXING_SUPPORT", 0)
 
 static void ensureTips(struct ncclStrongStreamGraph* g, int n) {
   if (g->tipCapacity < n) {
