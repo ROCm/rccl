@@ -16,7 +16,7 @@
  * easily.
  */
 struct ncclCudaGraph {
-#if CUDART_VERSION >= 11030
+#if ROCM_VERSION >= 60100
   cudaGraph_t graph;
   unsigned long long graphId;
 #endif
@@ -24,7 +24,7 @@ struct ncclCudaGraph {
 
 inline struct ncclCudaGraph ncclCudaGraphNone() {
   struct ncclCudaGraph tmp;
-  #if CUDART_VERSION >= 11030
+  #if ROCM_VERSION >= 60100
     tmp.graph = nullptr;
     tmp.graphId = ULLONG_MAX;
   #endif
@@ -32,7 +32,7 @@ inline struct ncclCudaGraph ncclCudaGraphNone() {
 }
 
 inline bool ncclCudaGraphValid(struct ncclCudaGraph graph) {
-  #if CUDART_VERSION >= 11030
+  #if ROCM_VERSION >= 60100
     return graph.graph != nullptr;
   #else
     return false;
@@ -40,7 +40,7 @@ inline bool ncclCudaGraphValid(struct ncclCudaGraph graph) {
 }
 
 inline bool ncclCudaGraphSame(struct ncclCudaGraph a, struct ncclCudaGraph b) {
-  #if CUDART_VERSION >= 11030
+  #if ROCM_VERSION >= 60100
     return a.graphId == b.graphId;
   #else
     return true;
@@ -123,7 +123,7 @@ struct ncclStrongStreamGraph; // internal to ncclStrongStream
 struct ncclStrongStream {
   // Used when not graph capturing.
   cudaStream_t cudaStream;
-#if CUDART_VERSION >= 11030
+#if ROCM_VERSION >= 60100
   // The event used to establish order between graphs and streams. During acquire
   // this event is waited on, during release it is recorded to.
   cudaEvent_t serialEvent;
