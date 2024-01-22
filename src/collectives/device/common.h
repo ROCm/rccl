@@ -33,12 +33,28 @@
 #endif
 
 // Must be consistent with the ncclFuncSet enum
-using ncclKernelFunc_t = void (*)();
-
 // Defined in device_table.cpp
+using ncclKernelFunc_t = void (*)();
 extern __device__ ncclKernelFunc_t const ncclFuncs[];
 
 #ifndef USE_INDIRECT_FUNCTION_CALL
+template<unsigned short f, unsigned short l>
+struct Caller {
+  static __forceinline__ __device__ __host__
+  void call(unsigned short funcIndex) noexcept
+  {
+    constexpr unsigned short m = f + (l - f) / 2;
+
+     return (funcIndex < m) ? Caller<f, m>::call(funcIndex) : Caller<m, l>::call(funcIndex);
+  }
+};
+
+template<unsigned short f>
+struct Caller<f, f + 1>{
+  static __forceinline__ __device__ __host__
+  void call(unsigned short funcIndex) noexcept { ncclFuncs[f](); }
+};
+
 __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept;
 #endif
 
