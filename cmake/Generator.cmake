@@ -297,11 +297,9 @@ endfunction()
 ## Function to generate MSCCL Kernels
 ###########################################################################################################
 function(gen_msccl_kernels)
-  foreach(REDOP_CURRENT IN LISTS ALL_REDOPS)
+  set(MSCCL_REDOP Sum Prod Max Min)
+  foreach(REDOP_CURRENT IN LISTS MSCCL_REDOP)
     foreach(DATA_TYPE ${ALL_TYPES})
-      if (REDOP_CURRENT STREQUAL "SumPostDiv" AND DATA_TYPE IN_LIST FLOATS_LIST)
-        continue()  # Skip the iteration for FLOATS_LIST when REDOP_CURRENT is SumPostDiv
-      endif()
       set(FILE_NAME "${HIPIFY_DIR}/src/collectives/device/msccl_kernel_${REDOP_CURRENT}_${DATA_TYPE}.cpp")
       message(STATUS "Generating ${FILE_NAME}")
       file(WRITE ${FILE_NAME}
@@ -309,8 +307,7 @@ function(gen_msccl_kernels)
         #include \"primitives.h\"
         #include \"collectives.h\"
         #include \"devcomm.h\"
-        MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, false);
-        MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, true);")
+        MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, false);")
       list(APPEND HIP_SOURCES ${FILE_NAME})
     endforeach()
   endforeach()
