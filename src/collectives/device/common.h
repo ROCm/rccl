@@ -10,6 +10,7 @@
 
 #include "collectives.h"
 #include "devcomm.h"
+#include "device_table.h"
 
 #if defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
 #define COLL_UNROLL 2
@@ -30,16 +31,6 @@
 #else
 #define STORE(DST, SRC) \
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
-#endif
-
-// Must be consistent with the ncclFuncSet enum
-using ncclKernelFunc_t = void (*)();
-
-// Defined in device_table.cpp
-extern __device__ ncclKernelFunc_t const ncclFuncs[];
-
-#ifndef USE_INDIRECT_FUNCTION_CALL
-__device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept;
 #endif
 
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
