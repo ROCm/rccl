@@ -146,84 +146,80 @@ endmacro()
 ## Function to generate device table
 #####################################################################################################
 function(gen_device_table)
-  set(DEVICE_TABLE_FILE "${HIPIFY_DIR}/src/collectives/device/device_table.cpp")
-  message(STATUS "Generating ${DEVICE_TABLE_FILE}")
-
   ## Generate device table and list all the functions
-  file(WRITE ${DEVICE_TABLE_FILE} "#include \"common.h\"\n#include \"collectives.h\"\n#include \"devcomm.h\"\n\n")
+  set(DEVICE_TABLE_H_FILE "${HIPIFY_DIR}/src/collectives/device/device_table.h")
+  message(STATUS "Generating ${DEVICE_TABLE_H_FILE}")
 
   ## Declaration of device functions
   foreach(func IN LISTS FUNC_LIST)
     string(FIND "${func}" "LL128" IS_LL128)
     if(NOT IS_LL128 EQUAL -1)
-      file(APPEND ${DEVICE_TABLE_FILE} "#if defined(__gfx90a__)\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "#if defined(__gfx90a__)\n")
     endif()
     if(ENABLE_IFC)
-      file(APPEND ${DEVICE_TABLE_FILE} "__device__ void ${func}();\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "__device__ void ${func}();\n")
     else()
-      file(APPEND ${DEVICE_TABLE_FILE} "__device__ __attribute__((noinline)) void ${func}();\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "__device__ __attribute__((noinline)) void ${func}();\n")
     endif()
     if(NOT IS_LL128 EQUAL -1)
-      file(APPEND ${DEVICE_TABLE_FILE} "#endif\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "#endif\n")
     endif()
   endforeach()
-  file(APPEND ${DEVICE_TABLE_FILE} "\n")
+  file(APPEND ${DEVICE_TABLE_H_FILE} "\n")
 
   ## Undirect function call
-  file(APPEND ${DEVICE_TABLE_FILE} "__device__ ncclKernelFunc_t const ncclFuncs[] = {\n")
+  file(APPEND ${DEVICE_TABLE_H_FILE} "using ncclKernelFunc_t = void (*)();\n\n")
+  file(APPEND ${DEVICE_TABLE_H_FILE} "__device__ ncclKernelFunc_t const ncclFuncs[] = {\n")
   foreach(func ${FUNC_LIST})
     string(FIND "${func}" "LL128" IS_LL128)
     if(NOT IS_LL128 EQUAL -1)
-      file(APPEND ${DEVICE_TABLE_FILE} "#if defined(__gfx90a__)\n")
-      file(APPEND ${DEVICE_TABLE_FILE} "  ${func},\n")
-      file(APPEND ${DEVICE_TABLE_FILE} "#else\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "#if defined(__gfx90a__)\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func},\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "#else\n")
       string(REPLACE "LL128" "LL" func "${func}")
-      file(APPEND ${DEVICE_TABLE_FILE} "  ${func},\n")
-      file(APPEND ${DEVICE_TABLE_FILE} "#endif\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func},\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "#endif\n")
     else()
-      file(APPEND ${DEVICE_TABLE_FILE} "  ${func},\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func},\n")
     endif()
   endforeach()
   ## Add OneRankReduce functions at the end
   foreach(type IN LISTS ALL_TYPES)
-    file(APPEND ${DEVICE_TABLE_FILE} "  ncclFunction_OneRankReduce_PreMulSum_${type},\n")
+    file(APPEND ${DEVICE_TABLE_H_FILE} "  ncclFunction_OneRankReduce_PreMulSum_${type},\n")
   endforeach()
-  file(APPEND ${DEVICE_TABLE_FILE} "nullptr};\n\n")
+  file(APPEND ${DEVICE_TABLE_H_FILE} "nullptr};\n\n")
 
   if(NOT ENABLE_IFC)
     ## Direct functions calls
-    file(APPEND ${DEVICE_TABLE_FILE} "__device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
-    set(prev_index 0)
+    file(APPEND ${DEVICE_TABLE_H_FILE}
+      "template<unsigned short f, unsigned short l>\n"
+      "struct Caller {\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call(unsigned short funcIndex) noexcept\n"
+      "  {\n"
+      "    constexpr unsigned short m = f + (l - f) / 2;\n"
+      "    return (funcIndex < m) ? Caller<f, m>::call(funcIndex) : Caller<m, l>::call(funcIndex);\n"
+      "  }\n"
+      "};\n"
+      "\n"
+      "template<unsigned short f>\n"
+      "struct Caller<f, f + 1>{\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call(unsigned short funcIndex) noexcept { ncclFuncs[f](); }\n"
+      "};\n"
+    )
+    file(APPEND ${DEVICE_TABLE_H_FILE} "__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
     list(LENGTH FUNC_LIST max_index)
-    math(EXPR max_index "${max_index} - 1")
-    foreach(func IN LISTS FUNC_LIST)
-      string(REPLACE "_" ";" func_params ${func})
-      list(GET func_params 1 coll)
-      list(FIND FUNC_LIST "${func}" index)
-      if((DEFINED prev_coll AND NOT "${coll}" STREQUAL "${prev_coll}") OR ${index} EQUAL ${max_index})
-        if(prev_index EQUAL 0)
-          file(APPEND ${DEVICE_TABLE_FILE} "  if")
-        else()
-          file(APPEND ${DEVICE_TABLE_FILE} "  else if")
-        endif()
-        file(APPEND ${DEVICE_TABLE_FILE} "(funcIndex < ${index}) Caller<${prev_index}, ${index}>::call(funcIndex); // ${prev_coll}\n")
-        set(prev_index ${index})
-      endif()
-      set(prev_coll "${coll}")
-    endforeach()
-    ## Add OneRankReduce at the end
-    math(EXPR index "${index} + 10")
-    if(prev_index EQUAL 0)
-      file(APPEND ${DEVICE_TABLE_FILE} "  if (funcIndex < ${index}) Caller<${prev_index}, ${index}>::call(funcIndex); // OneRankReduce\n")
-    else()
-      file(APPEND ${DEVICE_TABLE_FILE} "  else Caller<${prev_index}, ${index}>::call(funcIndex); // OneRankReduce\n")
-    endif()
-    file(APPEND ${DEVICE_TABLE_FILE} "}\n\n")
+    math(EXPR max_index "${max_index} + 9") ## Add onerankreduce functions
+    file(APPEND ${DEVICE_TABLE_H_FILE} "  Caller<0, ${max_index}>::call(funcIndex);\n}\n\n")
   endif()
 
   ## Function name table for collective trace
   if(COLLTRACE)
-    file(APPEND ${DEVICE_TABLE_FILE} "const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
+    set(DEVICE_TABLE_FILE "${HIPIFY_DIR}/src/collectives/device/device_table.cpp")
+    message(STATUS "Generating ${DEVICE_TABLE_FILE}")
+
+    file(APPEND ${DEVICE_TABLE_FILE} "#include \"collectives.h\"\n#include \"devcomm.h\"\n\n const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
     foreach(func ${FUNC_LIST})
       file(APPEND ${DEVICE_TABLE_FILE} "  \"${func}\",\n")
     endforeach()
@@ -233,7 +229,8 @@ function(gen_device_table)
     file(APPEND ${DEVICE_TABLE_FILE} "};\n")
   endif()
 
-  ## Add the device_table file to HIP_SOURCES
+  ## Add the device_table files to HIP_SOURCES
+  list(APPEND HIP_SOURCES ${DEVICE_TABLE_H_FILE})
   list(APPEND HIP_SOURCES ${DEVICE_TABLE_FILE})
   set(HIP_SOURCES ${HIP_SOURCES} PARENT_SCOPE)
 endfunction()
