@@ -8,53 +8,7 @@
 #ifndef NCCL_COLLECTIVES_H_
 #define NCCL_COLLECTIVES_H_
 
-enum ncclDevRedOp_t {
-  ncclDevSum, ncclDevProd, ncclDevMax, ncclDevMin,
-  ncclDevPreMulSum, ncclDevSumPostDiv,
-  ncclNumDevRedOps
-};
-struct ncclDevRedOpFull {
-  ncclDevRedOp_t op;
-  bool scalarArgIsPtr;
-  uint64_t scalarArg;
-};
-
-#define FUNC_INDEX_P2P 1015
-#define FUNC_INDEX_ALLTOALL_PIVOT 675
-#define FUNC_INDEX_TOTAL 1026  // Total number of functions that goes into librccl.so index in host_table.cc
-
-#define NCCL_FUNC_NAME(func, algo, proto, devredop, type) \
-  ncclFunction_##func##_##algo##_##proto##_##devredop##_##type
-
-#define NCCL_ONERANK_REDUCE_NAME(devredop, type) \
-  ncclFunction_OneRankReduce_##devredop##_##type
-
-#define NCCL_KERN_NAME(func, algo, proto, devredop, type) \
-  ncclKernel_##func##_##algo##_##proto##_##devredop##_##type
-
-#define NCCL_KERN_NAME_DEBUG(func, algo, proto, devredop, type) \
-  ncclKernelDebug_##func##_##algo##_##proto##_##devredop##_##type
-
-#define NCCL_IMPL_NAME(func, algo, proto) \
-  nccl##func##algo##proto
-
-// Declare rccl main/general kernel
-extern __global__ void rccl_main_kernel(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
-#ifdef ENABLE_COLLTRACE
-extern __global__ void rccl_main_kernel_debug(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
-#endif
-
-// Declare OneRankReduce
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int32_t)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint32_t)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int64_t)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint64_t)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, half)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, rccl_bfloat16)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, float)();
-extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, double)();
+#include "nccl.h"
 
 // CHUNKSIZE must be a multiple of SLICESIZE
 #define ALLREDUCE_SLICESTEPS (NCCL_STEPS/4)
@@ -71,13 +25,27 @@ extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, double)();
 #define ALLTOALL_PIVOT_SLICESTEPS 2
 #define ALLTOALL_PIVOT_CHUNKSTEPS 4
 
-// We can't use the enum identifiers like ncclSum, ncclFloat, etc since this
-// macro will be used in preprocessor conditionals where enums have no meaning.
-#define NCCL_NVLS_SUPPORTS(/*ncclDataType_t*/ type, /*ncclDevRedOp_t*/ red) \
-  (((type==2 || type==3) && (red==0 || red==2 || red==3)) || \
-   ((type==4 || type==5) && (red==0 || red==2 || red==3)) || \
-   ((type==6 || type==9) && (red==0 || red==2 || red==3)) || \
-   (type==7 && red==0) || \
-   (type==8 && red==0))
+inline int ncclTypeSize(ncclDataType_t type) {
+  switch (type) {
+  case ncclInt8:
+  case ncclUint8:
+    return 1;
+  case ncclFloat16:
+  #if defined(RCCL_BFLOAT16)
+  case ncclBfloat16:
+  #endif
+    return 2;
+  case ncclInt32:
+  case ncclUint32:
+  case ncclFloat32:
+    return 4;
+  case ncclInt64:
+  case ncclUint64:
+  case ncclFloat64:
+    return 8;
+  default:
+    return -1;
+  }
+}
 
 #endif

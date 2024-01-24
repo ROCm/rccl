@@ -15,7 +15,8 @@ ncclResult_t ncclGroupErrCheck(ncclResult_t ret);
 void ncclGroupCommJoin(struct ncclComm* comm);
 void ncclGroupCommPreconnect(struct ncclComm* comm);
 ncclResult_t ncclGroupCommLeave(struct ncclComm* comm);
-void ncclGroupJobAbort();
+ncclResult_t ncclGroupJobAbort(struct ncclGroupJob* groupJob);
+ncclResult_t ncclGroupJobComplete(struct ncclGroupJob *groupJob);
 
 typedef ncclResult_t(*ncclInitFunc_t)(ncclComm_t* newcomm, int ndev, ncclUniqueId commId, int myrank, int cudaDev);
 
@@ -53,8 +54,9 @@ struct ncclGroupJob {
   struct ncclComm **groupCommPreconnectHeadPtr;
   ncclResult_t *groupErrorPtr;
   volatile bool *abortFlagPtr;
+  int *groupBlockingPtr;
   struct ncclIntruQueue<struct ncclAsyncJob, &ncclAsyncJob::next> *asyncJobsPtr;
-  bool doneFlag;
+  bool initialized;
 };
 
 ncclResult_t ncclGroupStartInternal();

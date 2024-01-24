@@ -10,7 +10,7 @@
 #include <map>
 #include <set>
 #include <vector>
-#include "devcomm.h"
+#include "device.h"
 #include "msccl/msccl_scheduler.h"
 
 #define MSCCL_MAX_NUM_STEPS 64
