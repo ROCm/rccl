@@ -861,6 +861,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
   } else {
     // Round to next pow2 nChannelsPerPeer and nChannels
     comm->p2pnChannelsPerPeer = (ncclParamNChannelsPerPeer() == -2 ? nextPow2(minChannels) : ncclParamNChannelsPerPeer());
+    comm->p2pnChannelsPerPeer *= 2;
     comm->p2pnChannels = nextPow2(comm->p2pnChannels);
   }
 
