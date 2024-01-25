@@ -84,8 +84,8 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       int chunkSize = args->chunkSize/sizeof(T);
       if (args->proto == NCCL_PROTO_LL) chunkSize /= 2;
       int const peer = args->peer;
-      Primitives<T, RedOp, FanAsymmetric<0, 1>, 1, Proto, 1> prims
-        (tid, nthreads, nullptr, &peer, buff, nullptr, /*redOpArg(ignored)=*/0, group, 1, 1, nullptr, ncclShmem.comm.p2pChunkSize/sizeof(T));
+      Primitives<T, RedOp, FanAsymmetric<0, 1>, 0, Proto, 1> prims
+        (tid, nthreads, nullptr, &peer, buff, nullptr, /*redOpArg(ignored)=*/0, group, args->connIndex, args->connIndex, nullptr, ncclShmem.comm.p2pChunkSize/sizeof(T));
 
 #if defined(ENABLE_NPKIT)
       if (isNpKitThread) {
@@ -146,8 +146,8 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       int chunkSize = args->chunkSize/sizeof(T);
       if (args->proto == NCCL_PROTO_LL) chunkSize /= 2; // This is to account for chunkEffectiveSize
       int const peer = args->peer;
-      Primitives<T, RedOp, FanAsymmetric<1, 0>, 1, Proto, 1> prims
-        (tid, nthreads, &peer, nullptr, nullptr, buff, /*redOpArg(ignored)=*/0, group, 1, 1, nullptr, ncclShmem.comm.p2pChunkSize/sizeof(T));
+      Primitives<T, RedOp, FanAsymmetric<1, 0>, 0, Proto, 1> prims
+        (tid, nthreads, &peer, nullptr, nullptr, buff, /*redOpArg(ignored)=*/0, group, args->connIndex, args->connIndex, nullptr, ncclShmem.comm.p2pChunkSize/sizeof(T));
 
 #if defined(ENABLE_NPKIT)
       if (isNpKitThread) {
