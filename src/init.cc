@@ -198,7 +198,7 @@ void *ncclCommThreadMain(void *arg) {
       else
         count = COLLTRACE_NUM_ITEMS + head[channel] - tail;
       if (count == 0) {
-        numActiveChans --;
+        numActiveChans--;
         continue;
       }
       for (int i = 0; i < count; i++) {
