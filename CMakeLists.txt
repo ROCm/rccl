@@ -274,7 +274,6 @@ set(SRC_FILES
   src/channel.cc
   src/collectives.cc
   src/debug.cc
-  src/enhcompat.cc
   src/enqueue.cc
   src/group.cc
   src/init.cc
