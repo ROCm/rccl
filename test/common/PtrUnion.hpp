@@ -47,6 +47,8 @@ namespace RcclUnitTesting
     double*        F8; // ncclFloat64
     rccl_bfloat16* B2; // ncclBfloat16
 
+    constexpr PtrUnion() : ptr(nullptr) {}
+
     ErrCode Attach(void *ptr);
     ErrCode Attach(PtrUnion ptrUnion);
 
