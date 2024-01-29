@@ -249,7 +249,7 @@ template<> __device__ __forceinline__ void st_relaxed_gpu_global<0>(uintptr_t ad
 
 // Single-byte types use 4-byte registers since there is no 1-byte register
 // character for asm blocks. See https://docs.nvidia.com/cuda/inline-ptx-assembly/index.html#constraints
-DEFINE_ld_st__size(1, uint32_t, b8, r)
+DEFINE_ld_st__size(1, uint8_t, b8, r)
 DEFINE_ld_st__size(2, uint16_t, b16, h)
 DEFINE_ld_st__size(4, uint32_t, b32, r)
 DEFINE_ld_st__size(8, uint64_t, b64, l)
