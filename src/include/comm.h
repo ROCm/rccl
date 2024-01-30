@@ -305,7 +305,7 @@ struct ncclComm {
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
   volatile uint32_t *childAbortFlag;
-  volatile uint32_t *abortFlagRefCount;
+  uint32_t *abortFlagRefCount;
 
   // Flags for enable P2P NET
   uint32_t p2pNet;
@@ -353,8 +353,6 @@ struct ncclComm {
   int nvlsRegSupport;
   /* sharable NVLS resource. */
   struct ncclNvlsSharedRes* nvlsResources;
-  struct ncclShmemCollBuff nvlsShmem;
-  void *nvlsShmemHandle;
 
   ssize_t channelSize; // User requested work size (bytes) for channel partitions
 

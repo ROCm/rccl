@@ -206,7 +206,6 @@ struct ncclProxyRpcResponseHeader {
 };
 
 struct ncclProxyState {
-  int internalRefCount;
   int refCount;
   int tpRank;
   int tpnRanks;
@@ -221,11 +220,10 @@ struct ncclProxyState {
   ncclNet_t* ncclNet;
   ncclCollNet_t* ncclCollNet;
   volatile uint32_t* abortFlag;
-  volatile uint32_t* abortFlagRefCount;
   // Service thread
   pthread_t thread;
   struct ncclSocket* listenSock;
-  volatile int stop;
+  int stop;
   CUcontext cudaCtx;
   ncclResult_t asyncResult;
 
@@ -306,8 +304,7 @@ ncclResult_t ncclProxyClientGetFdBlocking(struct ncclComm* comm, struct ncclProx
 
 ncclResult_t ncclProxyStop(struct ncclComm* comm);
 ncclResult_t ncclProxyShmUnlink(struct ncclComm* comm);
-ncclResult_t ncclProxyDestroy(struct ncclProxyState *proxyState);
-ncclResult_t ncclProxyTryDetach(struct ncclProxyState *proxyState);
+ncclResult_t ncclProxyDestroy(struct ncclComm* comm);
 
 ncclResult_t mscclSaveProxy(struct ncclComm* comm, struct ncclChannel* channel, int type, int peer, struct ncclProxyOp* op, int connIndex);
 #endif
