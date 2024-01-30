@@ -10,7 +10,6 @@
 #include "comm.h"
 #include "group.h"
 #include "collectives.h"
-#include "common.h"
 #include "utils.h"
 
 #define NCCL_MIN_CHANNEL_SIZE (NCCL_LL_THREAD_THRESHOLD*64)
