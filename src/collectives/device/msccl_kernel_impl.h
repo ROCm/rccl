@@ -372,7 +372,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           return;
       }
       if (t->hasDependence && tid == nthreads-1)
-        __atomic_store_n(&mscclFlags[bid].flag, (uint64_t) COMPUTE_FLAG(workIndex, iter, step), t->type == MSCCL_REDUCE ? __ATOMIC_RELEASE : __ATOMIC_RELAXED);
+        __atomic_store_n(&mscclFlags[bid].flag, (uint64_t) COMPUTE_FLAG(workIndex, iter, step), (t->type == MSCCL_REDUCE || t->type == MSCCL_RECV) ? __ATOMIC_RELEASE : __ATOMIC_RELAXED);
       step++;
     }
   }
