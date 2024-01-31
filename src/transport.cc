@@ -108,8 +108,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int bootstrapTag = (i<<8) + (graph ? graph->id+1 : 0);
     int recvPeer = (comm->rank - i + comm->nRanks) % comm->nRanks;
     int sendPeer = (comm->rank + i) % comm->nRanks;
-    uint64_t recvMask = comm->connectRecv[recvPeer];
-    uint64_t sendMask = comm->connectSend[sendPeer];
+    uint64_t recvMask = comm->connectRecv[recvPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
+    uint64_t sendMask = comm->connectSend[sendPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
 
     // Data[i] contains all ncclConnect information for all send and receive connections with a given send and recv peer
     // This data is packed in the array based on the number of sendChannels and recvChannels connected with these peers
@@ -166,8 +166,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         for (int j=done+1; j<=i; j++) {
           int recvPeer = (comm->rank - j + comm->nRanks) % comm->nRanks;
           int sendPeer = (comm->rank + j) % comm->nRanks;
-          uint64_t recvMask = comm->connectRecv[recvPeer];
-          uint64_t sendMask = comm->connectSend[sendPeer];
+          uint64_t recvMask = comm->connectRecv[recvPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
+          uint64_t sendMask = comm->connectSend[sendPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
 
           int p = j-(done+1);
           int sendDataOffset = 0;
