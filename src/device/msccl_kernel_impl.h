@@ -372,7 +372,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
           return;
       }
       if (t->hasDependence && tid == nthreads-1)
-        __atomic_store_n(&mscclFlags[bid].flag, (uint64_t) COMPUTE_FLAG(workIndex, iter, step), t->type == MSCCL_REDUCE ? __ATOMIC_RELEASE : __ATOMIC_RELAXED);
+        __atomic_store_n(&mscclFlags[bid].flag, (uint64_t) COMPUTE_FLAG(workIndex, iter, step), (t->type == MSCCL_REDUCE || t->type == MSCCL_RECV) ? __ATOMIC_RELEASE : __ATOMIC_RELAXED);
       step++;
     }
   }
@@ -427,8 +427,6 @@ __global__ void MSCCL_KERNEL_ENTRY_NAME(devredop, type, Simple, fullOps)(struct 
 #define MSCCL_IMPL_KERNEL_ENTRY_FUNC() \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Sum, false) \
   MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(Prod, false) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(MinMax, false) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(PreMulSum, false) \
-  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_NOFLOAT(SumPostDiv, false)
+  MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP(MinMax, false)
 
 #endif

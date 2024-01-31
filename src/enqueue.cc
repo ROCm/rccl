@@ -18,6 +18,7 @@
 #include "rocmwrap.h"
 #include "rccl_vars.h"
 #include "transport.h"
+#include "common.h"
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
 

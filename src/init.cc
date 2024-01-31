@@ -191,6 +191,7 @@ void *ncclCommThreadMain(void *arg) {
   memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
   do {
+    int numActiveChans = MAXCHANNELS;
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
       int tail = comm->collTraceTail[channel].tail%COLLTRACE_NUM_ITEMS;
       int count;
@@ -198,8 +199,8 @@ void *ncclCommThreadMain(void *arg) {
         count = tail - head[channel];
       else
         count = COLLTRACE_NUM_ITEMS + head[channel] - tail;
-      if (!count) {
-        usleep(1000); //sleep 1ms
+      if (count == 0) {
+        numActiveChans--;
         continue;
       }
       for (int i = 0; i < count; i++) {
@@ -260,7 +261,10 @@ void *ncclCommThreadMain(void *arg) {
         head[channel] %= COLLTRACE_NUM_ITEMS;
       }
     }
-  } while(!comm->collTraceExit);
+    if (comm->collTraceExit && numActiveChans == 0)
+      break;
+    usleep(1000); //sleep 1ms
+  } while(true);
   pthread_exit(NULL);
 }
 #endif

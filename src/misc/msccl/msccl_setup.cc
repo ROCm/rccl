@@ -332,12 +332,10 @@ static ncclResult_t hostToDevRedOp(
 #define MSCCL_KERNEL_ENTRY() \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(MinMax, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(PreMulSum, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(SumPostDiv, false)
+  MSCCL_KERNEL_ENTRY_DEVREDOP(MinMax, false)
 
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
-void* mscclKernelEntries[ncclNumDevRedOps * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
+void* mscclKernelEntries[(ncclNumDevRedOps-2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {
 #ifdef COMPILE_MSCCL_KERNEL
   MSCCL_KERNEL_ENTRY()
 #endif
