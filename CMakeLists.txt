@@ -635,7 +635,7 @@ else()
   message(STATUS "Building shared RCCL library")
 endif()
 if (HAVE_KERNARG_PRELOAD)
-  target_link_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+  target_link_options(rccl PRIVATE -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16)
 endif()
 
 target_link_libraries(rccl PRIVATE   Threads::Threads)
