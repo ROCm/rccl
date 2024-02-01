@@ -34,7 +34,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <cstdarg>
 #include "graph/topo.h"
 #include "graph/xml.h"
 #include "archinfo.h"

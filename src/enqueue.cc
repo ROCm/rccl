@@ -1434,15 +1434,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, int* workFunc
   work->redOpArgIsPtr = info->opFull.scalarArgIsPtr;
   work->opCount = info->comm->opCount;
 
-  if (info->comm->nRanks == 1) {
-    // one-rank reduce index
-    *workFuncIndex = ncclDevFuncId_P2p() + int(info->datatype);
-    return ncclSuccess;
-  } else if (info->coll == ncclFuncAllToAllPivot) {
-    *workFuncIndex = ncclDevFuncId_AllToAllPivot();
-  } else {
-    *workFuncIndex = ncclDevFuncId(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
-  }
+  *workFuncIndex = ncclDevFuncId(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
 
   work->connIndex = 0;
   proxyOp->connIndex = 0;

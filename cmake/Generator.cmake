@@ -291,9 +291,7 @@ function(gen_msccl_kernels)
       message(STATUS "Generating ${FILE_NAME}")
       file(WRITE ${FILE_NAME}
         "#include \"msccl_kernel_impl.h\"
-        #include \"primitives.h\"
         #include \"nccl_common.h\"
-        #include \"device.h\"
         MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, false);")
       list(APPEND HIP_SOURCES ${FILE_NAME})
     endforeach()
@@ -359,7 +357,7 @@ function(gen_collectives)
     message(STATUS "Generating ${FILE_PATH}")
 
     ## Construct the file
-    file(WRITE ${FILE_PATH} "#include \"${COLL_LOWER}.h\"\n#include \"common.h\"\n#include \"collectives.h\"\n")
+    file(WRITE ${FILE_PATH} "#include \"${COLL_LOWER}.h\"\n#include \"common.h\"\n\n")
     string(FIND "${list_name}" "LL128" IS_LL128)
     if(NOT IS_LL128 EQUAL -1)
       file(APPEND ${FILE_PATH} "#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
