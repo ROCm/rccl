@@ -225,7 +225,7 @@ static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we
 }
 
 template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE>
-__device__ void ncclKernelMain(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) {
+__forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) {
   const int tid = threadIdx.x;
   int x = tid;
   switch (tid/WARP_SIZE) {
@@ -363,12 +363,6 @@ __device__ void ncclKernelMain(struct ncclDevComm* comm, uint64_t channelMask, s
 __global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
 #ifdef ENABLE_COLLTRACE
 __global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
-#endif
-
-#ifdef USE_INDIRECT_FUNCTION_CALL
-__device__ void ncclDevFunc_Nop();
-#else
-__device__ __attribute__((noinline)) void ncclDevFunc_Nop();
 #endif
 
 #ifdef ENABLE_COLLTRACE

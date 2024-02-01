@@ -17,13 +17,17 @@ struct RunWorkNop {
   __device__ void run(ncclWork *w) {}
 };
 
-__global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) {
+__launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) {
   ncclKernelMain<-1, RunWorkNop, false>(comm, channelMask, workHead);
 }
 #ifdef ENABLE_COLLTRACE
-__global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) {
+__launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) {
   ncclKernelMain<-1, RunWorkNop, true>(comm, channelMask, workHead);
 }
 #endif
 
-__device__ void ncclDevFunc_Nop() {}
+#ifdef USE_INDIRECT_FUNCTION_CALL
+__device__ void ncclDevFunc_Nop();
+#else
+__device__ __attribute__((noinline)) void ncclDevFunc_Nop();
+#endif
