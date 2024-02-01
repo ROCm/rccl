@@ -85,11 +85,6 @@ NCCL_PARAM(IbArThreshold, "IB_AR_THRESHOLD", 8192);
 NCCL_PARAM(IbPciRelaxedOrdering, "IB_PCI_RELAXED_ORDERING", 2);
 NCCL_PARAM(IbAdaptiveRouting, "IB_ADAPTIVE_ROUTING", -2);
 
-NCCL_PARAM(IbSockClientPortReuse, "IB_SOCK_CLIENT_PORT_REUSE", 0);
-NCCL_PARAM(IbSockServerPortReuse, "IB_SOCK_SERVER_PORT_REUSE", 0);
-static thread_local union ncclSocketAddress reusedAddr;
-static thread_local int reusedSockfd = -1;
-
 pthread_t ncclIbAsyncThread;
 static void* ncclIbAsyncThreadMain(void* args) {
   struct ibv_context* context = (struct ibv_context*)args;
@@ -631,19 +626,7 @@ ncclResult_t ncclIbListen(int dev, void* opaqueHandle, void** listenComm) {
   comm->dev = dev;
   handle->magic = NCCL_SOCKET_MAGIC;
   NCCLCHECK(ncclSocketInit(&comm->sock, &ncclIbIfAddr, handle->magic, ncclSocketTypeNetIb, NULL, 1));
-  if (ncclParamIbSockServerPortReuse()) {
-    // reuse the socket address and fd for listen system call
-    if (reusedSockfd == -1) {
-      NCCLCHECK(ncclSocketListen(&comm->sock));
-      memcpy(&reusedAddr, &comm->sock.addr, sizeof(union ncclSocketAddress));
-      reusedSockfd = comm->sock.fd;
-    } else {
-      memcpy(&comm->sock.addr, &reusedAddr, sizeof(union ncclSocketAddress));
-      comm->sock.fd = reusedSockfd;
-    }
-  } else {
-    NCCLCHECK(ncclSocketListen(&comm->sock));
-  }
+  NCCLCHECK(ncclSocketListen(&comm->sock));
   NCCLCHECK(ncclSocketGetAddr(&comm->sock, &handle->connectAddr));
   *listenComm = comm;
   return ncclSuccess;
@@ -669,7 +652,7 @@ ncclResult_t ncclIbConnect(int dev, void* opaqueHandle, void** sendComm, ncclNet
   NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, handle->magic, ncclSocketTypeNetIb, NULL, 1));
   stage->comm = comm;
   stage->state = ncclIbCommStateConnect;
-  NCCLCHECK(ncclSocketConnect(&comm->sock, ncclParamIbSockClientPortReuse()));
+  NCCLCHECK(ncclSocketConnect(&comm->sock));
 
 ib_connect_check:
   /* since ncclSocketConnect is async, we must check if connection is complete */
@@ -1413,7 +1396,7 @@ ncclResult_t ncclIbCloseSend(void* sendComm) {
 ncclResult_t ncclIbCloseRecv(void* recvComm) {
   struct ncclIbRecvComm* comm = (struct ncclIbRecvComm*)recvComm;
   if (comm) {
-    if (!ncclParamIbSockServerPortReuse() || reusedSockfd != comm->sock.fd) NCCLCHECK(ncclSocketClose(&comm->sock));
+    NCCLCHECK(ncclSocketClose(&comm->sock));
     for (int q=0; q<comm->nqps; q++)
       if (comm->qps[q] != NULL) NCCLCHECK(wrap_ibv_destroy_qp(comm->qps[q]));
     if (comm->gpuFlush.enabled) {
