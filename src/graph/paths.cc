@@ -862,7 +862,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     // Round to next pow2 nChannelsPerPeer and nChannels
     comm->p2pnChannelsPerPeer = (ncclParamNChannelsPerPeer() == -2 ? nextPow2(minChannels) : ncclParamNChannelsPerPeer());
     // Doubling P2P channels per peer on single node
-    if (comm->topo->nodes[GPU].count == comm->topo->nRanks) comm->p2pnChannelsPerPeer *= 2;
+    if (comm->topo->nodes[GPU].count == comm->topo->nRanks && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94")) comm->p2pnChannelsPerPeer *= 2;
     comm->p2pnChannels = nextPow2(comm->p2pnChannels);
   }
 
