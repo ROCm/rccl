@@ -412,7 +412,7 @@ set(SRC_FILES
   src/include/trees.h
   src/include/utils.h
   src/init.cc
-  # src/init_nvtx.cc
+  src/init_nvtx.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
 # src/misc/cudawrap.cc
