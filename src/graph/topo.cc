@@ -786,7 +786,13 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int ch
   int* localGpus;
   int localGpuCount;
   NCCLCHECK(ncclTopoGetLocal(system, NET, localNets[0], GPU, &localGpus, &localGpuCount, NULL));
-  int net = system->nodes[GPU].nodes[gpu].gpu.dev;
+  int net = 0;
+  for (int i = 0; i < localGpuCount; i++) {
+    if (gpu == localGpus[i]) {
+      net = i;
+      break;
+    }
+  }
   if (isPow2(localNetCount)) net = mirrorBits(net, localNetCount);
   if (localNetCount == 0) {
     *id = -1;
