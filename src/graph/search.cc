@@ -467,14 +467,6 @@ ncclResult_t ncclTopoSelectNets(struct ncclTopoSystem* system, int typeInter, in
       for (int n=0; n<system->nodes[NET].count; n++) {
         if (paths[n].type == t) localNets[localNetCount++] = n;
       }
-      if (localNetCount == 0) continue;
-      // Shuffle by gpu NVML device number so that GPUs on the same PCI switch
-      // with multiple NICs don't use the same one as first choice.
-      for (int r=0; r<system->nodes[GPU].nodes[g].gpu.dev % localNetCount; r++) {
-        int net0 = localNets[0];
-        for (int i=0; i<localNetCount-1; i++) localNets[i] = localNets[i+1];
-        localNets[localNetCount-1] = net0;
-      }
       // Append NICs to list
       for (int i=0; i<localNetCount; i++) {
         int n = localNets[i];

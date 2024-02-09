@@ -37,6 +37,10 @@
 #include "alloc.h"
 #include "utils.h"
 #include "param.h"
+#ifdef NVTX_NO_IMPL
 #include "nvtx_stub.h"
+#else
+#include "nvtx.h"
+#endif
 
 #endif // end include guard

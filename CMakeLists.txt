@@ -19,6 +19,7 @@ option(COLLTRACE                               "Collective Trace Option"        
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
+option(NVTX                                    "Enable NVTX"                                   OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
@@ -281,7 +282,7 @@ set(SRC_FILES
   src/msccl.cc
   src/proxy.cc
   src/transport.cc
-# src/init_nvtx.cc
+  src/init_nvtx.cc
 # src/clique/AllReduceCliqueKernel.h
 # src/clique/CliqueCommon.h
 # src/clique/CliqueManager.cc
@@ -413,6 +414,26 @@ set(SRC_FILES
   src/include/nvtx3/nvtxExtDetail/nvtxExtInit.h
   src/include/nvtx3/nvtxExtDetail/nvtxExtPayloadTypeInfo.h
   src/include/nvtx3/nvtxExtDetail/nvtxExtTypes.h
+  src/include/nvtx.h
+  src/include/nvtx_stub.h
+  src/include/p2p.h
+  src/include/param.h
+  src/include/profiler.h
+  src/include/proxy.h
+  src/include/rccl_bfloat16.h
+  src/include/rccl_vars.h
+  src/include/rocm_smi_wrap.h
+  src/include/rocmwrap.h
+  src/include/shm.h
+  src/include/signals.h
+  src/include/socket.h
+  src/include/strongstream.h
+  src/include/timer.h
+  src/include/transport.h
+  src/include/trees.h
+  src/include/utils.h
+  src/init.cc
+  src/init_nvtx.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
 # src/misc/cudawrap.cc
@@ -483,6 +504,8 @@ foreach(SRC_FILE ${SRC_FILES})
   )
 endforeach()
 
+# Generate device/host tables and all the collective functions that are going to be in librccl.so
+#==================================================================================================
 if(ONLY_FUNCS)
   ## Generate only the specified functions
   gen_functions(${ONLY_FUNCS})
@@ -524,7 +547,9 @@ if(DEMANGLE_DIR)
 endif()
 
 ## Set RCCL compile definitions
-target_compile_definitions(rccl PRIVATE NVTX_NO_IMPL)                         # NVTX is not supported
+if(NOT NVTX)
+  target_compile_definitions(rccl PRIVATE NVTX_NO_IMPL)
+endif()
 if(COLLTRACE)
   target_compile_definitions(rccl PRIVATE ENABLE_COLLTRACE)
 endif()
