@@ -9,7 +9,11 @@
 
 #include "StandaloneUtils.hpp"
 
-namespace RcclUnitTesting {
+namespace RcclUnitTesting 
+{
+  /**
+   * \brief Verify that each device is assigned to the right rank using ncclCommSplit API.
+   * ******************************************************************************************/
   TEST(Standalone, SplitComms_RankCheck)
   {
     // Check for multi-gpu
@@ -52,6 +56,9 @@ namespace RcclUnitTesting {
       NCCLCHECK(ncclCommDestroy(comm));
   }
 
+  /**
+   * \brief Creates a communicator for each device and gathers them all in one rank.
+   * ******************************************************************************************/
   TEST(Standalone, SplitComms_OneColor)
   {
     // Check for multi-gpu
@@ -93,6 +100,9 @@ namespace RcclUnitTesting {
       NCCLCHECK(ncclCommDestroy(comm));
   }
 
+  /**
+   * \brief Creates a communicator for each device and reduces them into (numDevices / 2) ranks.
+   * ******************************************************************************************/
   TEST(Standalone, SplitComms_Reduce)
   {
     // Check for multi-gpu
@@ -140,7 +150,10 @@ namespace RcclUnitTesting {
     for (auto& comm : comms)
       NCCLCHECK(ncclCommDestroy(comm));
   }
-
+  
+  /**
+   * \brief Verify there is no regression in timing for each protocol [LL, LL128, Simple]
+   * ******************************************************************************************/
   TEST(Standalone, RegressionTiming)
   {
     // timing
@@ -240,5 +253,43 @@ namespace RcclUnitTesting {
       setenv("NCCL_PROTO", proto, 1);
     else
       unsetenv("NCCL_PROTO");
+  }
+
+  /**
+   * \brief Verify rccl generic kernel stack size for each gfx architecture is less than the
+   * expected maxStackSize.
+   * ******************************************************************************************/
+  TEST(Standalone, StackSize) {
+    const char* mainKernel   = "rccl_main_kernel";
+    const int   maxStackSize = 112;
+
+    // Look for the .co files
+    std::vector<std::string> coFileList = splitString(executeCommand("find ../ -type f -name \"*.co\""), '\n');
+
+    // Check if the .co files exist in the build directory
+    if (coFileList.empty())
+      GTEST_SKIP() << "Skipping... Could not found required files in the build directory.";
+
+    for (const auto& file : coFileList) {
+      // Store the output in a list
+      std::string cmd = "llvm-readelf --notes " + file;
+      std::vector<std::string> metadata = splitString(executeCommand(cmd.c_str()), '\n');
+
+      // Skip if llvm is not installed
+      if (metadata.empty())
+        GTEST_SKIP() << "Skipping... llvm is not found.";
+
+      // Parse metadata from file and store it for each arch
+      ArchInfo archInfo = parseMetadata(metadata);
+
+      // iterate over each archs kernels
+      for (const auto& kernel : archInfo.kernels) {
+        if (kernel.name.find(mainKernel) != std::string::npos) {
+          // Kernel stack size should be less than or equal to the maxStackSize value
+          EXPECT_LE(kernel.privateSegmentFixedSize, maxStackSize);
+          printf("[ INFO     ] Arch: %s Kernel: %s Size: %d\n", archInfo.archName.c_str(), kernel.name.c_str(), kernel.privateSegmentFixedSize);
+        }
+      }
+    }
   }
 }

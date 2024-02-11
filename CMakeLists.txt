@@ -500,7 +500,7 @@ list(APPEND HIP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 # Create a custom target that updates git_version.cpp and executes whenever rccl is built
 add_custom_target(git_version_check
   COMMENT "Updating git_version.cpp if necessary"
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/git_version.cmake
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/git_version.cmake
   VERBATIM
 )
 
@@ -725,6 +725,12 @@ if(BUILD_TESTS)
   rocm_package_setup_component(clients)
   rocm_package_setup_client_component(tests PACKAGE_NAME unittests)
   add_subdirectory(test)
+
+  add_custom_command(TARGET rccl POST_BUILD
+    COMMENT "Extracting metadata from librccl.so"
+    COMMAND COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/extract_metadata.cmake
+    VERBATIM
+  )
 endif()
 
 rocm_create_package(
