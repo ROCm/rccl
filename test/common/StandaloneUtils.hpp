@@ -24,6 +24,12 @@
     }                                                           \
 } while(0)
 
+#ifdef ENABLE_LL128
+#define MAX_STACK_SIZE 288
+#else
+#define MAX_STACK_SIZE 112
+#endif
+
 struct KernelInfo {
     std::string name;
     int privateSegmentFixedSize = 0;

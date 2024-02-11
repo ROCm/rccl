@@ -257,11 +257,10 @@ namespace RcclUnitTesting
 
   /**
    * \brief Verify rccl generic kernel stack size for each gfx architecture is less than the
-   * expected maxStackSize.
+   * expected MAX_STACK_SIZE.
    * ******************************************************************************************/
   TEST(Standalone, StackSize) {
-    const char* mainKernel   = "rccl_main_kernel";
-    const int   maxStackSize = 112;
+    const char* mainKernel = "rccl_main_kernel";
 
     // Look for the .co files
     std::vector<std::string> coFileList = splitString(executeCommand("find ../ -type f -name \"*.co\""), '\n');
@@ -286,7 +285,7 @@ namespace RcclUnitTesting
       for (const auto& kernel : archInfo.kernels) {
         if (kernel.name.find(mainKernel) != std::string::npos) {
           // Kernel stack size should be less than or equal to the maxStackSize value
-          EXPECT_LE(kernel.privateSegmentFixedSize, maxStackSize);
+          EXPECT_LE(kernel.privateSegmentFixedSize, MAX_STACK_SIZE);
           printf("[ INFO     ] Arch: %s Kernel: %s Size: %d\n", archInfo.archName.c_str(), kernel.name.c_str(), kernel.privateSegmentFixedSize);
         }
       }
