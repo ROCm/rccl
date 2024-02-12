@@ -24,10 +24,12 @@
     }                                                           \
 } while(0)
 
-#ifdef ENABLE_LL128
-#define MAX_STACK_SIZE 288
-#else
 #define MAX_STACK_SIZE 112
+
+#ifdef ENABLE_LL128
+#define MAX_STACK_SIZE_gfx90a 288
+#else
+#define MAX_STACK_SIZE_gfx90a MAX_STACK_SIZE
 #endif
 
 struct KernelInfo {

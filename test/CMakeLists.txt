@@ -68,9 +68,18 @@ if(BUILD_TESTS)
   endif()
 
   add_executable(rccl-UnitTests ${COMMON_SOURCE_FILES} ${TEST_SOURCE_FILES})
+
+  ## Set rccl-UnitTests include directories
   target_include_directories(rccl-UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
-  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/include)            # for generated rccl.h header
   target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include) # for rccl_bfloat16.h
+
+  ## Set rccl-UnitTests compile definitions
+  if(LL128_ENABLED)
+    target_compile_definitions(rccl-UnitTests PRIVATE ENABLE_LL128)
+  endif()
+
+  ## Set rccl-UnitTests linked libraries
   target_link_libraries(rccl-UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
   target_link_libraries(rccl-UnitTests PRIVATE Threads::Threads)

@@ -285,8 +285,8 @@ namespace RcclUnitTesting
       for (const auto& kernel : archInfo.kernels) {
         if (kernel.name.find(mainKernel) != std::string::npos) {
           // Kernel stack size should be less than or equal to the maxStackSize value
-          EXPECT_LE(kernel.privateSegmentFixedSize, MAX_STACK_SIZE);
           printf("[ INFO     ] Arch: %s Kernel: %s Size: %d\n", archInfo.archName.c_str(), kernel.name.c_str(), kernel.privateSegmentFixedSize);
+          EXPECT_LE(kernel.privateSegmentFixedSize, archInfo.archName == "gfx90a" ? MAX_STACK_SIZE_gfx90a : MAX_STACK_SIZE);
         }
       }
     }
