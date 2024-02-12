@@ -78,6 +78,7 @@ if(BUILD_TESTS)
   if(LL128_ENABLED)
     target_compile_definitions(rccl-UnitTests PRIVATE ENABLE_LL128)
   endif()
+  target_compile_definitions(rccl-UnitTests PRIVATE ROCM_PATH="${ROCM_PATH}")
 
   ## Set rccl-UnitTests linked libraries
   target_link_libraries(rccl-UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})

@@ -271,7 +271,7 @@ namespace RcclUnitTesting
 
     for (const auto& file : coFileList) {
       // Store the output in a list
-      std::string cmd = "llvm-readelf --notes " + file;
+      std::string cmd = std::string(ROCM_PATH) + "/llvm/bin/llvm-readelf --notes " + file;
       std::vector<std::string> metadata = splitString(executeCommand(cmd.c_str()), '\n');
 
       // Skip if llvm is not installed
