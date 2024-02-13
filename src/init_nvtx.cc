@@ -11,6 +11,7 @@ static constexpr const nvtxPayloadEnum_t NvtxEnumRedSchema[] = {
 
 // Must be called before the first call to any reduction operation.
 void initNvtxRegisteredEnums() {
+#ifndef NVTX_NO_IMPL
   // Register schemas and strings
   constexpr const nvtxPayloadEnumAttr_t eAttr {
     .fieldMask = NVTX_PAYLOAD_ENUM_ATTR_ENTRIES | NVTX_PAYLOAD_ENUM_ATTR_NUM_ENTRIES |
@@ -23,4 +24,5 @@ void initNvtxRegisteredEnums() {
   };
 
   nvtxPayloadEnumRegister(nvtx3::domain::get<nccl_domain>(), &eAttr);
+#endif
 }
