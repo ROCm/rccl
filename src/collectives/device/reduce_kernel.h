@@ -224,25 +224,11 @@ struct Apply_Reduce<FuncSum<int8_t>, /*EltPerPack=*/4> {
     } \
   };
 
-#if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
   SPECIALIZE_REDUCE(FuncSum, half, 1, half, __hadd(x, y))
-  SPECIALIZE_REDUCE(FuncSum, half, 2, half2, __hadd2(x, y))
   SPECIALIZE_REDUCE(FuncProd, half, 1, half, __hmul(x, y))
-  SPECIALIZE_REDUCE(FuncProd, half, 2, half2, __hmul2(x, y))
-#else
-  SPECIALIZE_REDUCE(FuncSum, half, 1, half, __float2half(__half2float(x) + __half2float(y)))
-  SPECIALIZE_REDUCE(FuncProd, half, 1, half, __float2half(__half2float(x) * __half2float(y)))
-#endif
 
-#if __CUDA_ARCH__ >= 800
   SPECIALIZE_REDUCE(FuncMin, half, 1, half, __hmin(x, y))
-  SPECIALIZE_REDUCE(FuncMin, half, 2, half2, __hmin2(x, y))
   SPECIALIZE_REDUCE(FuncMax, half, 1, half, __hmax(x, y))
-  SPECIALIZE_REDUCE(FuncMax, half, 2, half2, __hmax2(x, y))
-#else
-  SPECIALIZE_REDUCE(FuncMin, half, 1, half, __float2half(fminf(__half2float(x), __half2float(y))))
-  SPECIALIZE_REDUCE(FuncMax, half, 1, half, __float2half(fmaxf(__half2float(x), __half2float(y))))
-#endif
 
 #if defined(RCCL_BFLOAT16)
 #if __CUDA_ARCH__ >= 800
@@ -365,7 +351,6 @@ struct FuncPreMulSum {
 template<>
 struct FuncPreMulSum<half> {
   using EltType = half;
-#if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
   half2 scalar;
   __device__ FuncPreMulSum(uint64_t opArg=0) {
     union { uint64_t u64; half val; };
@@ -373,14 +358,6 @@ struct FuncPreMulSum<half> {
     scalar.x = val;
     scalar.y = val;
   }
-#else
-  float scalar;
-  __device__ FuncPreMulSum(uint64_t opArg=0) {
-    union { uint64_t u64; half val; };
-    u64 = opArg;
-    scalar = __half2float(val);
-  }
-#endif
 };
 
 #if defined(RCCL_BFLOAT16)
@@ -430,11 +407,7 @@ template<>
 struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
   static constexpr bool IsIdentity = false;
   __device__ static BytePack<sizeof(half)> preOp(FuncPreMulSum<half> fn, BytePack<sizeof(half)> a) {
-    #if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
       return toPack<half>(__hmul(fromPack<half>(a), fn.scalar.x));
-    #else
-      return toPack<half>(__float2half(__half2float(fromPack<half>(a)) * fn.scalar));
-    #endif
   }
 };
 #if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
