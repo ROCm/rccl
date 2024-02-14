@@ -55,7 +55,7 @@ def parse_cpu_event(event_bytes):
         'timestamp': int.from_bytes(event_bytes[8:16], byteorder='little', signed=False)
     }
 
-def parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs=5):
+def parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs):
     gpu_event_file_path = os.path.join(npkit_dump_dir, 'gpu_events_rank_%d_buf_%d' % (rank, buf_idx))
     stats_key = 'gpu_rank_%d' % (rank)
     channel_stats = {}
