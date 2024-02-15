@@ -55,7 +55,7 @@ def parse_cpu_event(event_bytes):
         'timestamp': int.from_bytes(event_bytes[8:16], byteorder='little', signed=False)
     }
 
-def parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs=5):
+def parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs):
     gpu_event_file_path = os.path.join(npkit_dump_dir, 'gpu_events_rank_%d_buf_%d' % (rank, buf_idx))
     stats_key = 'gpu_rank_%d' % (rank)
     channel_stats = {}
@@ -286,7 +286,7 @@ def parse_cpu_event_file(npkit_dump_dir, npkit_event_def, rank, channel, cpu_clo
 
 
 
-def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def, gpu_statistics):
+def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def, gpu_statistics, warmup_runs=0):
     files_in_dump_dir = next(os.walk(npkit_dump_dir))[2]
     gpu_event_files = [x for x in files_in_dump_dir if x.startswith('gpu_events_rank_')]
     cpu_event_files = [x for x in files_in_dump_dir if x.startswith('cpu_events_rank_')]
@@ -308,7 +308,7 @@ def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def, gpu
         avg_time = {}
         number_events=0
         for buf_idx in buf_indices: # get the avg time
-            parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats)
+            parse_gpu_event_file_time(sync_dictionary, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs)
 
         for key in sync_dictionary:
             avg_time[key] = 0
@@ -317,7 +317,7 @@ def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def, gpu
                 avg_time[key] = avg_time[key] + (event['timestamp']/number_events)
 
         for buf_idx in buf_indices:
-            gpu_events = parse_gpu_event_file(avg_time, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats)
+            gpu_events = parse_gpu_event_file(avg_time, npkit_dump_dir, npkit_event_def, rank, buf_idx, gpu_clock_scale, cpu_clock_scale, dictionary_of_stats, warmup_runs)
             trace['traceEvents'].extend(gpu_events)
 
 
@@ -345,9 +345,10 @@ if __name__ == '__main__':
     parser.add_argument('--npkit_event_header_path', type=str, required=True, help='Path to npkit_event.h.')
     parser.add_argument('--output_dir', type=str, required=True, help='Path to output directory.')
     parser.add_argument('--gpu_run_stats', type=bool, nargs='?', const=True, default=False, help="print stats instead.")
+    parser.add_argument('--warmup_runs', type=int, required=False, default=0, help="amount of warmup_runs on rccl.")
     args = parser.parse_args()
     gpu_statistics = False
     if args.gpu_run_stats is not None:
         gpu_statistics = args.gpu_run_stats
     npkit_event_def = parse_npkit_event_header(args.npkit_event_header_path)
-    convert_npkit_dump_to_trace(args.npkit_dump_dir, args.output_dir, npkit_event_def, gpu_statistics)
+    convert_npkit_dump_to_trace(args.npkit_dump_dir, args.output_dir, npkit_event_def, gpu_statistics, args.warmup_runs)
