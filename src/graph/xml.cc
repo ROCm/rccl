@@ -599,7 +599,7 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
     for (int s=0; s<parent->nSubs; s++) {
       const char* busId;
       NCCLCHECK(xmlGetAttr(parent->subs[s], "busid", &busId));
-      if (busId != NULL strcmp(newBusId, busId) < 0) { subIndex = s; break; }
+      if (busId != NULL && strcmp(newBusId, busId) < 0) { subIndex = s; break; }
     }
     for (int s = parent->nSubs; s > subIndex; s--) parent->subs[s] = parent->subs[s-1];
     parent->subs[subIndex] = pciNode;
