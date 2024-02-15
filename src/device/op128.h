@@ -162,38 +162,22 @@ __device__ __forceinline__ T fromPack(typename BytePackOf<T>::Pack pack)  {
 // Load/store of BytePack<?> using integral addresses.
 
 template<int Size> __device__ BytePack<Size> ld_global(uintptr_t addr);
+// template<int Size> __device__ BytePack<Size> ld_shared(uint32_t addr);
 template<int Size> __device__ BytePack<Size> ld_volatile_global(uintptr_t addr);
-//template<int Size> __device__ BytePack<Size> ld_shared(uint32_t addr);
-//template<int Size> __device__ BytePack<Size> ld_volatile_shared(uint32_t addr);
+// template<int Size> __device__ BytePack<Size> ld_volatile_shared(uint32_t addr);
+// template<int Size> __device__ BytePack<Size> ld_relaxed_gpu_global(uintptr_t addr);
 template<int Size> __device__ void st_global(uintptr_t addr, BytePack<Size> value);
-//template<int Size> __device__ void st_shared(uint32_t addr, BytePack<Size> value);
+// template<int Size> __device__ void st_shared(uint32_t addr, BytePack<Size> value);
+// template<int Size> __device__ void st_relaxed_gpu_global(uintptr_t addr, BytePack<Size> value);
 
 template<> __device__ __forceinline__ BytePack<0> ld_global<0>(uintptr_t addr) { return {}; }
+// template<> __device__ __forceinline__ BytePack<0> ld_shared<0>(uint32_t addr) { return {}; }
 template<> __device__ __forceinline__ BytePack<0> ld_volatile_global<0>(uintptr_t addr) { return {}; }
-//template<> __device__ __forceinline__ BytePack<0> ld_shared<0>(uint32_t addr) { return {}; }
-//template<> __device__ __forceinline__ BytePack<0> ld_volatile_shared<0>(uint32_t addr) { return {}; }
+// template<> __device__ __forceinline__ BytePack<0> ld_volatile_shared<0>(uint32_t addr) { return {}; }
+// template<> __device__ __forceinline__ BytePack<0> ld_relaxed_gpu_global<0>(uintptr_t addr) { return {}; }
 template<> __device__ __forceinline__ void st_global<0>(uintptr_t addr, BytePack<0> value) {}
-//template<> __device__ __forceinline__ void st_shared<0>(uint32_t addr, BytePack<0> value) {}
-
-#ifdef NEED_CHECKING
-template<int Size> __device__ BytePack<Size> ld_global(uintptr_t addr);
-template<int Size> __device__ BytePack<Size> ld_shared(uint32_t addr);
-template<int Size> __device__ BytePack<Size> ld_volatile_global(uintptr_t addr);
-template<int Size> __device__ BytePack<Size> ld_volatile_shared(uint32_t addr);
-template<int Size> __device__ BytePack<Size> ld_relaxed_gpu_global(uintptr_t addr);
-template<int Size> __device__ void st_global(uintptr_t addr, BytePack<Size> value);
-template<int Size> __device__ void st_shared(uint32_t addr, BytePack<Size> value);
-template<int Size> __device__ void st_relaxed_gpu_global(uintptr_t addr, BytePack<Size> value);
-
-template<> __device__ __forceinline__ BytePack<0> ld_global<0>(uintptr_t addr) { return {}; }
-template<> __device__ __forceinline__ BytePack<0> ld_shared<0>(uint32_t addr) { return {}; }
-template<> __device__ __forceinline__ BytePack<0> ld_volatile_global<0>(uintptr_t addr) { return {}; }
-template<> __device__ __forceinline__ BytePack<0> ld_volatile_shared<0>(uint32_t addr) { return {}; }
-template<> __device__ __forceinline__ BytePack<0> ld_relaxed_gpu_global<0>(uintptr_t addr) { return {}; }
-template<> __device__ __forceinline__ void st_global<0>(uintptr_t addr, BytePack<0> value) {}
-template<> __device__ __forceinline__ void st_shared<0>(uint32_t addr, BytePack<0> value) {}
-template<> __device__ __forceinline__ void st_relaxed_gpu_global<0>(uintptr_t addr, BytePack<0> value) {}
-#endif
+// template<> __device__ __forceinline__ void st_shared<0>(uint32_t addr, BytePack<0> value) {}
+// template<> __device__ __forceinline__ void st_relaxed_gpu_global<0>(uintptr_t addr, BytePack<0> value) {}
 
 // Used to define implementations for above prototypes.
 #define DEFINE_ld_st__size_space(bytes, data_cxx_ty, data_ptx_ty, data_reg_ty, space, addr_cxx_ty, addr_reg_ty) \
@@ -219,28 +203,26 @@ template<> __device__ __forceinline__ void st_relaxed_gpu_global<0>(uintptr_t ad
     *((data_cxx_ty *)addr) = tmp; \
   }
 
-#ifdef NEED_CHECKING
-#if __CUDA_ARCH__ >= 700
-  #define PTX_relaxed_gpu "relaxed.gpu"
-#else
-  #define PTX_relaxed_gpu "volatile"
-#endif
+// #if __CUDA_ARCH__ >= 700
+//   #define PTX_relaxed_gpu "relaxed.gpu"
+// #else
+//   #define PTX_relaxed_gpu "volatile"
+// #endif
 
-#define DEFINE_ld_st_gpu_relaxed__size(bytes, data_cxx_ty, data_ptx_ty, data_reg_ty) \
-  template<> \
-  __device__ __forceinline__ BytePack<bytes> ld_relaxed_gpu_global<bytes>(uintptr_t addr) { \
-    data_cxx_ty tmp; \
-    asm("ld." PTX_relaxed_gpu ".global." #data_ptx_ty " %0, [%1];" : "="#data_reg_ty(tmp) : "l"(addr)); \
-    BytePack<bytes> ans; \
-    ans.native = tmp; \
-    return ans; \
-  } \
-  template<> \
-  __device__ __forceinline__ void st_relaxed_gpu_global<bytes>(uintptr_t addr, BytePack<bytes> value) { \
-    data_cxx_ty tmp = value.native; \
-    asm volatile("st." PTX_relaxed_gpu ".global." #data_ptx_ty " [%0], %1;" :: "l"(addr), #data_reg_ty(tmp) : "memory"); \
-  }
-#endif
+// #define DEFINE_ld_st_gpu_relaxed__size(bytes, data_cxx_ty, data_ptx_ty, data_reg_ty) \
+//   template<> \
+//   __device__ __forceinline__ BytePack<bytes> ld_relaxed_gpu_global<bytes>(uintptr_t addr) { \
+//     data_cxx_ty tmp; \
+//     asm("ld." PTX_relaxed_gpu ".global." #data_ptx_ty " %0, [%1];" : "="#data_reg_ty(tmp) : "l"(addr)); \
+//     BytePack<bytes> ans; \
+//     ans.native = tmp; \
+//     return ans; \
+//   } \
+//   template<> \
+//   __device__ __forceinline__ void st_relaxed_gpu_global<bytes>(uintptr_t addr, BytePack<bytes> value) { \
+//     data_cxx_ty tmp = value.native; \
+//     asm volatile("st." PTX_relaxed_gpu ".global." #data_ptx_ty " [%0], %1;" :: "l"(addr), #data_reg_ty(tmp) : "memory"); \
+//   }
 
 #define DEFINE_ld_st__size(bytes, data_cxx_ty, data_ptx_ty, data_reg_ty) \
   DEFINE_ld_st__size_space(bytes, data_cxx_ty, data_ptx_ty, data_reg_ty, global, uintptr_t, l)
@@ -282,20 +264,18 @@ DEFINE_ld_st_16__space(global, uintptr_t, l)
 // DEFINE_ld_st_16__space(shared, uint32_t, r)
 #undef DEFINE_ld_st_16
 
-#ifdef NEED_CHECKING
-template<>
-__device__ __forceinline__ BytePack<16> ld_relaxed_gpu_global<16>(uintptr_t addr) {
-  BytePack<16> ans;
-  asm("ld." PTX_relaxed_gpu ".global.v2.b64 {%0,%1}, [%2];" : "=l"(ans.u64[0]), "=l"(ans.u64[1]) : "l"(addr));
-  return ans;
-}
-template<>
-__device__ __forceinline__ void st_relaxed_gpu_global<16>(uintptr_t addr, BytePack<16> value) {
-  asm volatile("st." PTX_relaxed_gpu ".global.v2.b64 [%0], {%1,%2};" :: "l"(addr), "l"(value.u64[0]), "l"(value.u64[1]) : "memory");
-}
-
-#undef PTX_relaxed_gpu
-#endif
+// template<>
+// __device__ __forceinline__ BytePack<16> ld_relaxed_gpu_global<16>(uintptr_t addr) {
+//   BytePack<16> ans;
+//   asm("ld." PTX_relaxed_gpu ".global.v2.b64 {%0,%1}, [%2];" : "=l"(ans.u64[0]), "=l"(ans.u64[1]) : "l"(addr));
+//   return ans;
+// }
+// template<>
+// __device__ __forceinline__ void st_relaxed_gpu_global<16>(uintptr_t addr, BytePack<16> value) {
+//   asm volatile("st." PTX_relaxed_gpu ".global.v2.b64 [%0], {%1,%2};" :: "l"(addr), "l"(value.u64[0]), "l"(value.u64[1]) : "memory");
+// }
+//
+// #undef PTX_relaxed_gpu
 
 ////////////////////////////////////////////////////////////////////////////////
 // Atomic load/store using c++ pointers.
@@ -310,17 +290,17 @@ __device__ __forceinline__ uint64_t ld_relaxed_sys_global(uint64_t *ptr) {
   ans = __builtin_nontemporal_load(ptr);
   return ans;
 }
-#ifdef NEED_CHECKING
-__device__ __forceinline__ uint64_t ld_relaxed_gpu_global(uint64_t *ptr) {
-  uint64_t ans;
-  #if __CUDA_ARCH__ >= 700
-    asm("ld.relaxed.gpu.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)));
-  #else
-    asm("ld.volatile.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)));
-  #endif
-  return ans;
-}
-#endif
+
+// __device__ __forceinline__ uint64_t ld_relaxed_gpu_global(uint64_t *ptr) {
+//   uint64_t ans;
+//   #if __CUDA_ARCH__ >= 700
+//     asm("ld.relaxed.gpu.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)));
+//   #else
+//     asm("ld.volatile.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)));
+//   #endif
+//   return ans;
+// }
+
 __device__ __forceinline__ uint64_t ld_acquire_sys_global(uint64_t *ptr) {
   uint64_t ans;
   ans = __atomic_load_n(ptr ,__ATOMIC_SEQ_CST);

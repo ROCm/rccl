@@ -207,22 +207,20 @@ struct Apply_Reduce<FuncMinMax<uint8_t>, /*EltPerPack=*/4> {
   }
 };
 
-#ifdef NEED_CHECKING
-template<>
-struct Apply_Reduce<FuncProd<uint8_t>, /*EltPerPack=*/4> {
-  __device__ static BytePack<4> reduce(FuncProd<uint8_t> fn, BytePack<4> apack, BytePack<4> bpack) {
-    uint32_t a = apack.native;
-    uint32_t b = bpack.native;
-    uint32_t ab0 = (a*b) & 0xffu;
-    asm("mad.lo.u32 %0, %1, %2, %0;" : "+r"(ab0) : "r"(a&0xff00u), "r"(b&0xff00u));
-    uint32_t ab1;
-    asm("mul.hi.u32 %0, %1, %2;"     : "=r"(ab1) : "r"(a&0xff0000), "r"(b&0xff0000));
-    asm("mad.hi.u32 %0, %1, %2, %0;" : "+r"(ab1) : "r"(a&0xff000000u), "r"(b&0xff000000u));
-    apack.native = __byte_perm(ab0, ab1, 0x6420);
-    return apack;
-  }
-};
-#endif
+// template<>
+// struct Apply_Reduce<FuncProd<uint8_t>, /*EltPerPack=*/4> {
+//   __device__ static BytePack<4> reduce(FuncProd<uint8_t> fn, BytePack<4> apack, BytePack<4> bpack) {
+//     uint32_t a = apack.native;
+//     uint32_t b = bpack.native;
+//     uint32_t ab0 = (a*b) & 0xffu;
+//     asm("mad.lo.u32 %0, %1, %2, %0;" : "+r"(ab0) : "r"(a&0xff00u), "r"(b&0xff00u));
+//     uint32_t ab1;
+//     asm("mul.hi.u32 %0, %1, %2;"     : "=r"(ab1) : "r"(a&0xff0000), "r"(b&0xff0000));
+//     asm("mad.hi.u32 %0, %1, %2, %0;" : "+r"(ab1) : "r"(a&0xff000000u), "r"(b&0xff000000u));
+//     apack.native = __byte_perm(ab0, ab1, 0x6420);
+//     return apack;
+//   }
+// };
 
 #define SPECIALIZE_REDUCE(Fn, T, EltPerPack, Vec, expr_of_fn_x_y) \
   template<> \
