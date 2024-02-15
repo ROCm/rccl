@@ -522,7 +522,7 @@ list(APPEND HIP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 # Create a custom target that updates git_version.cpp and executes whenever rccl is built
 add_custom_target(git_version_check
   COMMENT "Updating git_version.cpp if necessary"
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/git_version.cmake
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/git_version.cmake
   VERBATIM
 )
 
@@ -602,6 +602,7 @@ if(DEMANGLE_DIR)
   target_compile_definitions(rccl PRIVATE "HAVE_DECL_BASENAME=1")
 endif()
 if(${hipcc_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+  set(LL128_ENABLED ON)
 	target_compile_definitions(rccl PRIVATE ENABLE_LL128)
 	message(STATUS "RCCL LL128 protocol enabled")
 endif()
@@ -749,6 +750,12 @@ if(BUILD_TESTS)
   rocm_package_setup_component(clients)
   rocm_package_setup_client_component(tests PACKAGE_NAME unittests)
   add_subdirectory(test)
+
+  add_custom_command(TARGET rccl POST_BUILD
+    COMMENT "Extracting metadata from librccl.so"
+    COMMAND COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/extract_metadata.cmake
+    VERBATIM
+  )
 endif()
 
 rocm_create_package(
