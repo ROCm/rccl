@@ -10,11 +10,15 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <float.h>
 #include "core.h"
 #include "nvmlwrap.h"
 #include "xml.h"
 #include "rocm_smi_wrap.h"
 #include "archinfo.h"
+#if defined(__x86_64__)
+#include <cpuid.h>
+#endif
 
 /*******************/
 /* XML File Parser */
@@ -257,13 +261,17 @@ ncclResult_t ncclTopoXmlLoadNvlink(FILE* file, struct ncclXml* xml, struct ncclX
   return ncclSuccess;
 }
 
+ncclResult_t ncclTopoXmlLoadC2c(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
+  NCCLCHECK(xmlLoadSub(file, xml, head, NULL, 0));
+  return ncclSuccess;
+}
 ncclResult_t ncclTopoXmlLoadGpu(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
 #if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
   struct xmlHandler handlers[] = { { "xgmi", ncclTopoXmlLoadNvlink } };
 #else
-  struct xmlHandler handlers[] = { { "nvlink", ncclTopoXmlLoadNvlink } };
+  struct xmlHandler handlers[] = { { "nvlink", ncclTopoXmlLoadNvlink }, { "c2c", ncclTopoXmlLoadC2c } };
 #endif
-  NCCLCHECK(xmlLoadSub(file, xml, head, handlers, 1));
+  NCCLCHECK(xmlLoadSub(file, xml, head, handlers, 2));
   return ncclSuccess;
 }
 
@@ -415,7 +423,8 @@ ncclResult_t ncclTopoGetXmlFromCpu(struct ncclXmlNode* cpuNode, struct ncclXml* 
       char vendor[12];
     } cpuid0;
 
-    asm volatile("cpuid" : "=b" (cpuid0.ebx), "=c" (cpuid0.ecx), "=d" (cpuid0.edx) : "a" (0) : "memory");
+    unsigned unused;
+    __cpuid(0, unused, cpuid0.ebx, cpuid0.ecx, cpuid0.edx);
     char vendor[13];
     strncpy(vendor, cpuid0.vendor, 12);
     vendor[12] = '\0';
@@ -437,7 +446,8 @@ ncclResult_t ncclTopoGetXmlFromCpu(struct ncclXmlNode* cpuNode, struct ncclXml* 
       };
       uint32_t val;
     } cpuid1;
-    asm volatile("cpuid" : "=a" (cpuid1.val) : "a" (1) : "memory");
+    unsigned unused;
+    __cpuid(1, cpuid1.val, unused, unused, unused);
     int familyId = cpuid1.familyId + (cpuid1.extFamilyId << 4);
     int modelId = cpuid1.modelId + (cpuid1.extModelId << 4);
     NCCLCHECK(xmlSetAttrInt(cpuNode, "familyid", familyId));
@@ -503,11 +513,11 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
   if (index == -1) {
     if (path) {
       char deviceSpeedStr[MAX_STR_LEN];
-      float deviceSpeed;
+      float deviceSpeed = FLT_MAX;
       NCCLCHECK(ncclTopoGetStrFromSys(path, "max_link_speed", deviceSpeedStr));
       sscanf(deviceSpeedStr, "%f GT/s", &deviceSpeed);
       char portSpeedStr[MAX_STR_LEN];
-      float portSpeed;
+      float portSpeed = FLT_MAX;
       NCCLCHECK(ncclTopoGetStrFromSys(path, "../max_link_speed", portSpeedStr));
       if (portSpeedStr[0])
         sscanf(portSpeedStr, "%f GT/s", &portSpeed);
@@ -762,6 +772,41 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
     }
 #endif
   }
+#if CUDART_VERSION >= 11080
+  struct ncclXmlNode* c2cNode = NULL;
+  NCCLCHECK(xmlGetSub(gpuNode, "c2c", &c2cNode));
+  if (c2cNode == NULL) {
+      if (sm >= 90) {
+        int c2cLinksCount = 0;
+        nvmlFieldValue_t fv;
+        fv.fieldId = NVML_FI_DEV_C2C_LINK_COUNT;
+        if ((ncclNvmlDeviceGetFieldValues(nvmlDev, 1, &fv) == ncclSuccess) && (fv.nvmlReturn == NVML_SUCCESS)) {
+          c2cLinksCount = fv.value.uiVal;
+          int bw = 0;
+	  int count = 0;
+          for (int l=0; l<c2cLinksCount; l++) {
+            nvmlFieldValue_t fvs[2];
+            fvs[0].fieldId = NVML_FI_DEV_C2C_LINK_GET_STATUS;
+            fvs[0].scopeId = l;
+            fvs[1].fieldId = NVML_FI_DEV_C2C_LINK_GET_MAX_BW;
+            fvs[1].scopeId = l;
+            if ((ncclNvmlDeviceGetFieldValues(nvmlDev, 2, fvs) == ncclSuccess) &&
+                (fvs[0].nvmlReturn == NVML_SUCCESS) &&
+                (fvs[0].value.uiVal == 1) &&
+                (fvs[1].nvmlReturn == NVML_SUCCESS)) {
+              bw = fvs[1].value.uiVal;
+	      count++;
+            }
+          }
+          if (count > 0) {
+            NCCLCHECK(xmlAddNode(xml, gpuNode, "c2c", &c2cNode));
+            NCCLCHECK(xmlSetAttrInt(c2cNode, "bw", bw));
+            NCCLCHECK(xmlSetAttrInt(c2cNode, "count", count));
+          }
+        }
+      }
+  }
+#endif
   // Fill target classes
   for (int s=0; s<gpuNode->nSubs; s++) {
     struct ncclXmlNode* sub = gpuNode->subs[s];

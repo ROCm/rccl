@@ -260,7 +260,7 @@ namespace RcclUnitTesting
    * expected MAX_STACK_SIZE.
    * ******************************************************************************************/
   TEST(Standalone, StackSize) {
-    const char* mainKernel = "rccl_main_kernel";
+    const char* mainKernel = "ncclDevKernel";
 
     // Look for the .co files
     std::vector<std::string> coFileList = splitString(executeCommand("find ../ -type f -name \"*.co\""), '\n');

@@ -11,14 +11,9 @@
 #include <unistd.h>
 #include <ifaddrs.h>
 #include <net/if.h>
-
-#include <vector>
-#include <utility>
-#include <unordered_set>
 #include <unistd.h>
 #include <sys/syscall.h>
-
-static std::vector<std::pair<int, std::unordered_set<std::string>>> clientPortPool;
+#include "param.h"
 
 static ncclResult_t socketProgressOpt(int op, struct ncclSocket* sock, void* ptr, int size, int* offset, int block, int* closed) {
   int bytes = 0;
@@ -92,7 +87,7 @@ static uint16_t socketToPort(union ncclSocketAddress *addr) {
 /* Allow the user to force the IPv4/IPv6 interface selection */
 static int envSocketFamily(void) {
   int family = -1; // Family selection is not forced, will use first one found
-  char* env = getenv("NCCL_SOCKET_FAMILY");
+  const char* env = ncclGetEnv("NCCL_SOCKET_FAMILY");
   if (env == NULL)
     return family;
 
@@ -333,7 +328,7 @@ int ncclFindInterfaces(char* ifNames, union ncclSocketAddress *ifAddrs, int ifNa
   // Allow user to force the INET socket family selection
   int sock_family = envSocketFamily();
   // User specified interface
-  char* env = getenv("NCCL_SOCKET_IFNAME");
+  const char* env = ncclGetEnv("NCCL_SOCKET_IFNAME");
   if (env && strlen(env) > 1) {
     INFO(NCCL_ENV, "NCCL_SOCKET_IFNAME set by environment to %s", env);
     // Specified by user : find or fail
@@ -345,10 +340,10 @@ int ncclFindInterfaces(char* ifNames, union ncclSocketAddress *ifAddrs, int ifNa
     nIfs = findInterfaces("ib", ifNames, ifAddrs, sock_family, ifNameMaxSize, maxIfs);
     // else see if we can get some hint from COMM ID
     if (nIfs == 0) {
-      char* commId = getenv("NCCL_COMM_ID");
+      const char* commId = ncclGetEnv("NCCL_COMM_ID");
       if (commId && strlen(commId) > 1) {
-	INFO(NCCL_ENV, "NCCL_COMM_ID set by environment to %s", commId);
-	// Try to find interface that is in the same subnet as the IP in comm id
+        INFO(NCCL_ENV, "NCCL_COMM_ID set by environment to %s", commId);
+        // Try to find interface that is in the same subnet as the IP in comm id
         union ncclSocketAddress idAddr;
         ncclSocketGetAddrFromString(&idAddr, commId);
         nIfs = ncclFindInterfaceMatchSubnet(ifNames, ifAddrs, &idAddr, ifNameMaxSize, maxIfs);
@@ -597,7 +592,7 @@ ncclResult_t ncclSocketReady(struct ncclSocket* sock, int *running) {
   return ncclSuccess;
 }
 
-ncclResult_t ncclSocketConnect(struct ncclSocket* sock, int portReuse) {
+ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
   char line[SOCKET_NAME_MAXLEN+1];
   const int one = 1;
 
@@ -618,42 +613,6 @@ ncclResult_t ncclSocketConnect(struct ncclSocket* sock, int portReuse) {
   TRACE(NCCL_INIT|NCCL_NET,"Connecting to socket %s", ncclSocketToString(&sock->addr, line));
 
   SYSCHECK(setsockopt(sock->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&one, sizeof(int)), "setsockopt");
-
-  if (portReuse) {
-    int family = sock->addr.sa.sa_family;
-    if (family != AF_INET && family != AF_INET6) {
-      WARN("Net : connecting to address %s with family %d is neither AF_INET(%d) nor AF_INET6(%d)",
-           ncclSocketToString(&sock->addr, line), family, AF_INET, AF_INET6);
-      return ncclInternalError;
-    }
-    int salen = (family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);    // pre-define ports according to tid, to avoid extra lock for race condition
-
-    if (clientPortPool.size() == 0) {
-      for (int tid = syscall(SYS_gettid), i = 1; i < 5; i++) {
-        clientPortPool.push_back(std::make_pair(60000 + i * 1000 + tid % 1000, std::unordered_set<std::string>()));
-      }
-    }
-    // find a port without conflict (different remote peer) in best effort
-    int reused_port = -1;
-    std::string remote_peer(ncclSocketToString(&sock->addr, line));
-    for (auto& port : clientPortPool) {
-      if (port.second.find(remote_peer) == port.second.end()) {
-        reused_port = port.first;
-        port.second.insert(remote_peer);
-        break;
-      }
-    }
-    // bind the port in fd for connect system call
-    if (reused_port != -1) {
-      int opt = 1;
-      SYSCHECK(setsockopt(sock->fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)), "setsockopt");
-      struct sockaddr_in sin;
-      sin.sin_family = family;
-      sin.sin_addr.s_addr = htonl(INADDR_ANY);
-      sin.sin_port = htons(reused_port);
-      SYSCHECK(bind(sock->fd, (struct sockaddr *)&sin, salen), "bind_client_port");
-    }
-  }
 
   sock->state = ncclSocketStateConnecting;
   do {

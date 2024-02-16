@@ -9,7 +9,7 @@
 #define NCCL_GRAPH_H_
 
 #include "nccl.h"
-#include "devcomm.h"
+#include "device.h"
 #include <limits.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -42,7 +42,6 @@ ncclResult_t ncclTopoNeedFlush(struct ncclTopoSystem* system, int64_t busId, int
 ncclResult_t ncclTopoCheckNet(struct ncclTopoSystem* system, int64_t id1, int64_t id2, int* net);
 int ncclPxnDisable(struct ncclComm* comm);
 ncclResult_t ncclTopoGetPxnRanks(struct ncclComm* comm, int** intermediateRanks, int* nranks);
-ncclResult_t ncclTopoGetLocalRank(struct ncclTopoSystem* system, int rank, int* localRank);
 
 // Find CPU affinity
 ncclResult_t ncclTopoGetCpuAffinity(struct ncclTopoSystem* system, int rank, cpu_set_t* affinity);
@@ -122,6 +121,6 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm, struct ncclTopoGraph* tr
 
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph** graphs);
 #include "info.h"
-ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, int numPipeOps, float* time);
+ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, int numPipeOps, float* time, bool* backup = NULL);
 
 #endif

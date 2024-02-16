@@ -273,6 +273,16 @@ configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/nccl.h)      # Used b
 set(SRC_FILES
   src/bootstrap.cc
   src/channel.cc
+  src/collectives.cc
+  src/debug.cc
+  src/enqueue.cc
+  src/group.cc
+  src/init.cc
+  src/net.cc
+  src/msccl.cc
+  src/proxy.cc
+  src/transport.cc
+  src/init_nvtx.cc
 # src/clique/AllReduceCliqueKernel.h
 # src/clique/CliqueCommon.h
 # src/clique/CliqueManager.cc
@@ -289,35 +299,25 @@ set(SRC_FILES
 # src/clique/SharedMemHelper.h
 # src/clique/ShmObject.cc
 # src/clique/ShmObject.h
-  src/collectives/all_gather.cc
-  src/collectives/all_reduce.cc
-  src/collectives/all_to_all.cc
-  src/collectives/all_to_allv.cc
-  src/collectives/broadcast.cc
-  src/collectives/msccl.cc
-  src/collectives/device/all_gather.h
-  src/collectives/device/all_reduce.h
-  src/collectives/device/alltoall_pivot.h
-  src/collectives/device/broadcast.h
-  src/collectives/device/common.h
-  src/collectives/device/common_kernel.h
-  src/collectives/device/op128.h
-  src/collectives/device/primitives.h
-  src/collectives/device/prims_ll128.h
-  src/collectives/device/prims_ll.h
-  src/collectives/device/prims_simple.h
-  src/collectives/device/reduce.h
-  src/collectives/device/reduce_kernel.h
-  src/collectives/device/reduce_scatter.h
-  src/collectives/device/sendrecv.h
-  src/collectives/device/onerank_reduce.cu
-  src/collectives/gather.cc
-  src/collectives/reduce.cc
-  src/collectives/reduce_scatter.cc
-  src/collectives/scatter.cc
-  src/collectives/sendrecv.cc
-  src/debug.cc
-  src/enqueue.cc
+  src/device/all_gather.h
+  src/device/all_reduce.h
+  src/device/alltoall_pivot.h
+  src/device/broadcast.h
+  src/device/common.h
+  src/device/common_kernel.h
+  src/device/op128.h
+  src/device/primitives.h
+  src/device/prims_ll128.h
+  src/device/prims_ll.h
+  src/device/prims_simple.h
+  src/device/reduce.h
+  src/device/reduce_kernel.h
+  src/device/reduce_scatter.h
+  src/device/sendrecv.h
+  src/device/common.cu
+  src/device/onerank.cu
+  src/device/network/unpack/unpack_defs.h
+  src/device/network/unpack/unpack.h
   src/graph/connect.cc
   src/graph/paths.cc
   src/graph/rings.cc
@@ -331,10 +331,9 @@ set(SRC_FILES
   src/graph/tuning.cc
   src/graph/xml.cc
   src/graph/xml.h
-  src/group.cc
-  src/include/archinfo.h
   src/include/align.h
   src/include/alloc.h
+  src/include/archinfo.h
   src/include/argcheck.h
   src/include/BfdBacktrace.hpp
   src/include/bootstrap.h
@@ -347,7 +346,7 @@ set(SRC_FILES
   src/include/cpuset.h
 # src/include/cudawrap.h
   src/include/debug.h
-  src/include/devcomm.h
+  src/include/device.h
   src/include/enqueue.h
   src/include/gdrwrap.h
   src/include/git_version.h
@@ -358,18 +357,40 @@ set(SRC_FILES
   src/include/ibvwrap.h
   src/include/info.h
   src/include/ipcsocket.h
+  src/include/nccl_common.h
+  src/include/nccl_net.h
+  src/include/nccl_tuner.h
+  src/include/net_device.h
+  src/include/net.h
+  src/include/nvmlwrap.h
+  src/include/nvtx.h
+  src/include/nvtx_stub.h
+  src/include/p2p.h
+  src/include/param.h
+  src/include/profiler.h
+  src/include/proxy.h
+  src/include/rccl_bfloat16.h
+  src/include/rccl_vars.h
+  src/include/rocm_smi_wrap.h
+  src/include/rocmwrap.h
+  src/include/shm.h
+  src/include/signals.h
+  src/include/socket.h
+  src/include/strongstream.h
+  src/include/timer.h
+  src/include/transport.h
+  src/include/trees.h
+  src/include/tuner.h
+  src/include/utils.h
   src/include/msccl/msccl_lifecycle.h
   src/include/msccl/msccl_parser.h
   src/include/msccl/msccl_scheduler.h
   src/include/msccl/msccl_setup.h
   src/include/msccl/msccl_status.h
   src/include/msccl/msccl_struct.h
-  src/include/nccl_net.h
-  src/include/net.h
-  src/include/npkit/npkit_event.h
   src/include/npkit/npkit.h
+  src/include/npkit/npkit_event.h
   src/include/npkit/npkit_struct.h
-  src/include/nvmlwrap.h
   src/include/nvtx3/nvToolsExtCuda.h
   src/include/nvtx3/nvToolsExtCudaRt.h
   src/include/nvtx3/nvToolsExt.h
@@ -420,10 +441,6 @@ set(SRC_FILES
   src/misc/ibvsymbols.cc
   src/misc/ibvwrap.cc
   src/misc/ipcsocket.cc
-  src/misc/msccl/msccl_lifecycle.cc
-  src/misc/msccl/msccl_parser.cc
-  src/misc/msccl/msccl_setup.cc
-  src/misc/msccl/msccl_status.cc
   src/misc/npkit.cc
 # src/misc/nvmlwrap.cc
   src/misc/nvmlwrap_stub.cc
@@ -435,10 +452,12 @@ set(SRC_FILES
   src/misc/signals.cc
   src/misc/socket.cc
   src/misc/strongstream.cc
+  src/misc/tuner.cc
   src/misc/utils.cc
-  src/net.cc
-  src/proxy.cc
-  src/transport.cc
+  src/misc/msccl/msccl_lifecycle.cc
+  src/misc/msccl/msccl_parser.cc
+  src/misc/msccl/msccl_setup.cc
+  src/misc/msccl/msccl_status.cc
   src/transport/coll_net.cc
   src/transport/net.cc
   src/transport/net_ib.cc
@@ -450,7 +469,7 @@ set(SRC_FILES
 
 if (ENABLE_MSCCL_KERNEL)
   set(MSCCL_KERNEL_SOURCES
-    src/collectives/device/msccl_kernel_impl.h
+    src/device/msccl_kernel_impl.h
     src/include/msccl/msccl_kernel.h
   )
   list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
@@ -519,8 +538,8 @@ add_dependencies(rccl git_version_check)                                      # 
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # for hipfied headers
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
-target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/collectives)
-target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/collectives/device)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
 target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
 if(DEMANGLE_DIR)

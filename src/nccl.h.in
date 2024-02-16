@@ -98,6 +98,15 @@ typedef struct ncclConfig_v21700 {
 }
 /*! @} */
 
+/* NCCL malloc and free function for all types of NCCL optimizations
+ * (e.g. user buffer registration). The actual allocated size might
+ * be larger than requested due to granularity requirement. */
+ncclResult_t  ncclMemAlloc(void** ptr, size_t size);
+ncclResult_t pncclMemAlloc(void** ptr, size_t size);
+
+ncclResult_t  ncclMemFree(void *ptr);
+ncclResult_t pncclMemFree(void *ptr);
+
 /*! @defgroup   rccl_api_version Version Information
     @details    API call that returns RCCL version
     @{ */
@@ -107,6 +116,7 @@ typedef struct ncclConfig_v21700 {
     @return     Result code. See @ref rccl_result_code for more details.
 
     @param[out] version       Pointer to where version will be stored */
+
 ncclResult_t  ncclGetVersion(int *version);
 /*! @cond       include_hidden */
 ncclResult_t pncclGetVersion(int *version);
@@ -794,6 +804,14 @@ ncclResult_t  ncclGroupEnd();
 ncclResult_t pncclGroupEnd();
 /*! @endcond */
 /*! @} */
+
+/* Register CUDA buffer for zero-copy operation */
+ncclResult_t  ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
+ncclResult_t pncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
+
+/* Deregister CUDA buffer */
+ncclResult_t  ncclCommDeregister(const ncclComm_t comm, void* handle);
+ncclResult_t pncclCommDeregister(const ncclComm_t comm, void* handle);
 
 #ifdef __cplusplus
 } // end extern "C"

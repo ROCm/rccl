@@ -232,11 +232,26 @@ static ncclResult_t hostToDevRedOp(
   };
   u64 = 0;
   opFull->scalarArgIsPtr = false;
+  opFull->proxyOp = op;
+
+  int nbits = 8*ncclTypeSize(datatype);
+  uint64_t allBits = uint64_t(-1)>>(64-nbits);
+  uint64_t signBit = allBits^(allBits>>1);
+
   switch (int(op)) {
   case ncclSum:  opFull->op = ncclDevSum;  break;
   case ncclProd: opFull->op = ncclDevProd; break;
-  case ncclMax:  opFull->op = ncclDevMax;  break;
-  case ncclMin:  opFull->op = ncclDevMin;  break;
+  case ncclMin:
+  case ncclMax:
+    opFull->op = ncclDevMinMax;
+    opFull->scalarArg = 0;
+    // The xormask used by ncclFuncMinMax<[u]int> is the XOR of the sign bit
+    // for signed (opposed to unsigned) types and all the bits for max (opposed to min).
+    if (datatype==ncclInt8 || datatype==ncclInt32 || datatype==ncclInt64) {
+      opFull->scalarArg ^= signBit;
+    }
+    opFull->scalarArg ^= (op == ncclMax) ? allBits : 0;
+    break;
   case ncclAvg:
     switch ((int)datatype) {
     case ncclInt8:  case ncclInt32:  case ncclInt64:
@@ -317,8 +332,7 @@ static ncclResult_t hostToDevRedOp(
 #define MSCCL_KERNEL_ENTRY() \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Sum, false), \
   MSCCL_KERNEL_ENTRY_DEVREDOP(Prod, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Max, false), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP(Min, false)
+  MSCCL_KERNEL_ENTRY_DEVREDOP(MinMax, false)
 
 // Except for ncclDevPreMulSum and ncclDevSumPostDiv required by ncclAvg
 void* mscclKernelEntries[(ncclNumDevRedOps-2) * ncclNumTypes * NCCL_NUM_PROTOCOLS] = {

@@ -24,7 +24,7 @@ set(ALL_PARAMS "ALL_COLLS" "ALL_ALGOS" "ALL_PROTOS" "ALL_REDOPS" "ALL_TYPES")
 set(ALL_COLLS "AllGather" "AllReduce" "AllToAllPivot" "Broadcast" "Reduce" "ReduceScatter" "SendRecv")
 set(ALL_ALGOS "TREE" "RING" "COLLNET_DIRECT" "COLLNET_CHAIN")
 set(ALL_PROTOS "LL" "LL128" "SIMPLE")
-set(ALL_REDOPS "Sum" "Prod" "Max" "Min" "PreMulSum" "SumPostDiv")
+set(ALL_REDOPS "Sum" "Prod" "MinMax" "PreMulSum" "SumPostDiv")
 set(ALL_TYPES "int8_t" "uint8_t" "int32_t" "uint32_t" "int64_t" "uint64_t" "half" "float" "double" "rccl_bfloat16")
 
 set(FLOATS_LIST "half" "float" "double" "rccl_bfloat16")
@@ -134,8 +134,8 @@ macro(filter_functions FUNCTION_PARAMS current_idx)
     set(COLL_LIST ${COLL_LIST} PARENT_SCOPE)
 
     ## Append the newly formed function/kernel to list
-    list(APPEND FUNC_LIST "ncclFunction_${COLL}_${ALGO}_${PROTO}_${REDOP}_${TYPE}")
-    list(APPEND KERN_LIST "ncclKernel_${COLL}_${ALGO}_${PROTO}_${REDOP}_${TYPE}")
+    list(APPEND FUNC_LIST "ncclDevFunc_${COLL}_${ALGO}_${PROTO}_${REDOP}_${TYPE}")
+    list(APPEND KERN_LIST "ncclDevKernel_${COLL}_${ALGO}_${PROTO}_${REDOP}_${TYPE}")
     set(FUNC_LIST ${FUNC_LIST} PARENT_SCOPE)
     set(KERN_LIST ${KERN_LIST} PARENT_SCOPE)
   endif()
@@ -146,7 +146,7 @@ endmacro()
 #####################################################################################################
 function(gen_device_table)
   ## Generate device table and list all the functions
-  set(DEVICE_TABLE_H_FILE "${HIPIFY_DIR}/src/collectives/device/device_table.h")
+  set(DEVICE_TABLE_H_FILE "${HIPIFY_DIR}/src/device/device_table.h")
   message(STATUS "Generating ${DEVICE_TABLE_H_FILE}")
 
   ## Declaration of device functions
@@ -167,8 +167,8 @@ function(gen_device_table)
   file(APPEND ${DEVICE_TABLE_H_FILE} "\n")
 
   ## Undirect function call
-  file(APPEND ${DEVICE_TABLE_H_FILE} "using ncclKernelFunc_t = void (*)();\n\n")
-  file(APPEND ${DEVICE_TABLE_H_FILE} "__device__ ncclKernelFunc_t const ncclFuncs[] = {\n")
+  file(APPEND ${DEVICE_TABLE_H_FILE} "typedef void(*ncclDevFuncPtr_t)();\n\n")
+  file(APPEND ${DEVICE_TABLE_H_FILE} "__device__ ncclDevFuncPtr_t const ncclDevFuncTable[] = {\n")
   foreach(func ${FUNC_LIST})
     string(FIND "${func}" "LL128" IS_LL128)
     if(NOT IS_LL128 EQUAL -1)
@@ -181,10 +181,6 @@ function(gen_device_table)
     else()
       file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func},\n")
     endif()
-  endforeach()
-  ## Add OneRankReduce functions at the end
-  foreach(type IN LISTS ALL_TYPES)
-    file(APPEND ${DEVICE_TABLE_H_FILE} "  ncclFunction_OneRankReduce_PreMulSum_${type},\n")
   endforeach()
   file(APPEND ${DEVICE_TABLE_H_FILE} "nullptr};\n\n")
 
@@ -204,26 +200,25 @@ function(gen_device_table)
       "template<unsigned short f>\n"
       "struct Caller<f, f + 1>{\n"
       "  static __forceinline__ __device__ __host__\n"
-      "  void call(unsigned short funcIndex) noexcept { ncclFuncs[f](); }\n"
+      "  void call(unsigned short funcIndex) noexcept { ncclDevFuncTable[f](); }\n"
       "};\n"
     )
     file(APPEND ${DEVICE_TABLE_H_FILE} "__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
     list(LENGTH FUNC_LIST max_index)
-    math(EXPR max_index "${max_index} + 9") ## Add onerankreduce functions
     file(APPEND ${DEVICE_TABLE_H_FILE} "  Caller<0, ${max_index}>::call(funcIndex);\n}\n\n")
   endif()
 
   ## Function name table for collective trace
   if(COLLTRACE)
-    set(DEVICE_TABLE_FILE "${HIPIFY_DIR}/src/collectives/device/device_table.cpp")
+    set(DEVICE_TABLE_FILE "${HIPIFY_DIR}/src/device/device_table.cpp")
     message(STATUS "Generating ${DEVICE_TABLE_FILE}")
 
-    file(APPEND ${DEVICE_TABLE_FILE} "#include \"collectives.h\"\n#include \"devcomm.h\"\n\n const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
+    file(APPEND ${DEVICE_TABLE_FILE} "#include \"nccl_common.h\"\n#include \"device.h\"\n\n const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
     foreach(func ${FUNC_LIST})
       file(APPEND ${DEVICE_TABLE_FILE} "  \"${func}\",\n")
     endforeach()
     foreach(type IN LISTS ALL_TYPES)
-      file(APPEND ${DEVICE_TABLE_FILE} "  \"ncclFunction_OneRankReduce_PreMulSum_${type}\",\n")
+      file(APPEND ${DEVICE_TABLE_FILE} "  \"ncclDevFunc_OneRankReduce_PreMulSum_${type}\",\n")
     endforeach()
     file(APPEND ${DEVICE_TABLE_FILE} "};\n")
   endif()
@@ -238,13 +233,13 @@ endfunction()
 ## Function to generate host-side table
 ######################################################################################################
 function(gen_host_table)
-  set(HOST_TABLE_FILE "${HIPIFY_DIR}/src/collectives/device/host_table.cpp")
+  set(HOST_TABLE_FILE "${HIPIFY_DIR}/src/device/host_table.cpp")
   message(STATUS "Generating ${HOST_TABLE_FILE}")
 
-  file(WRITE ${HOST_TABLE_FILE} "#include \"devcomm.h\"\n\n")
+  file(WRITE ${HOST_TABLE_FILE} "#include \"device.h\"\n\n")
 
   ## The mapping from function rows to valid function ids
-  file(APPEND ${HOST_TABLE_FILE} "extern int const ncclFuncRowToId[] = {\n")
+  file(APPEND ${HOST_TABLE_FILE} "extern int const ncclDevFuncRowToId[] = {\n")
   set(idx 0)
   foreach(coll IN LISTS ALL_COLLS)
     foreach(algo IN LISTS ALL_ALGOS)
@@ -263,10 +258,10 @@ function(gen_host_table)
               continue()
             endif()
 
-            list(FIND FUNC_LIST "ncclFunction_${coll}_${algo}_${proto}_${redop}_${type}" fn_id)
+            list(FIND FUNC_LIST "ncclDevFunc_${coll}_${algo}_${proto}_${redop}_${type}" fn_id)
             if(NOT ${fn_id} EQUAL -1)
             set(last_valid_fn_id ${fn_id})
-              file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${fn_id}, // ncclFunction_${coll}_${algo}_${proto}_${redop}_${type}\n")
+              file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${fn_id}, // ncclDevFunc_${coll}_${algo}_${proto}_${redop}_${type}\n")
             else()
               file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${fn_id},\n")
             endif()
@@ -277,14 +272,6 @@ function(gen_host_table)
     endforeach()
   endforeach()
   math(EXPR last_valid_fn_id "${last_valid_fn_id} + 1")
-  ## Add OneRankReduce function ids at the end
-  foreach(type IN LISTS ALL_TYPES)
-    file(APPEND ${HOST_TABLE_FILE} "  /*${idx}*/ ${last_valid_fn_id}, // ncclFunction_OneRankReduce_PreMulSum_${type}\n")
-
-    ## Increment the index and func id for each OneRankReduce
-    math(EXPR idx "${idx} + 1")
-    math(EXPR last_valid_fn_id "${last_valid_fn_id} + 1")
-  endforeach()
   file(APPEND ${HOST_TABLE_FILE} "${last_valid_fn_id}};\n\n")
 
   ## Add the host_table file to HIP_SOURCES
@@ -296,16 +283,14 @@ endfunction()
 ## Function to generate MSCCL Kernels
 ###########################################################################################################
 function(gen_msccl_kernels)
-  set(MSCCL_REDOP Sum Prod Max Min)
+  set(MSCCL_REDOP Sum Prod MinMax)
   foreach(REDOP_CURRENT IN LISTS MSCCL_REDOP)
     foreach(DATA_TYPE ${ALL_TYPES})
-      set(FILE_NAME "${HIPIFY_DIR}/src/collectives/device/msccl_kernel_${REDOP_CURRENT}_${DATA_TYPE}.cpp")
+      set(FILE_NAME "${HIPIFY_DIR}/src/device/msccl_kernel_${REDOP_CURRENT}_${DATA_TYPE}.cpp")
       message(STATUS "Generating ${FILE_NAME}")
       file(WRITE ${FILE_NAME}
         "#include \"msccl_kernel_impl.h\"
-        #include \"primitives.h\"
-        #include \"collectives.h\"
-        #include \"devcomm.h\"
+        #include \"nccl_common.h\"
         MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE(${REDOP_CURRENT}, ${DATA_TYPE}, false);")
       list(APPEND HIP_SOURCES ${FILE_NAME})
     endforeach()
@@ -352,7 +337,7 @@ function(gen_collectives)
         list(GET components 3 redop)
         list(GET components 4 type)
 
-        list(APPEND IMPL_LIST "IMPL_COLL_FUNC(${coll}, ${algo}, ${proto}, ${redop}, ${type})\n")
+        list(APPEND IMPL_LIST "DEFINE_ncclDevFunc(${coll}_${algo}_${proto}_${redop}_${type}, ncclFunc${coll}, Func${redop}, ${type}, NCCL_ALGO_${algo}, NCCL_PROTO_${proto})\n")
 
         # Increment the function id
         math(EXPR index "${index} + 1")
@@ -367,11 +352,11 @@ function(gen_collectives)
     endif()
 
     ## Set name/path of the file
-    set(FILE_PATH "${HIPIFY_DIR}/src/collectives/device/${list_name}.cpp")
+    set(FILE_PATH "${HIPIFY_DIR}/src/device/${list_name}.cpp")
     message(STATUS "Generating ${FILE_PATH}")
 
     ## Construct the file
-    file(WRITE ${FILE_PATH} "#include \"${COLL_LOWER}.h\"\n#include \"common.h\"\n#include \"collectives.h\"\n")
+    file(WRITE ${FILE_PATH} "#include \"${COLL_LOWER}.h\"\n#include \"common.h\"\n\n")
     string(FIND "${list_name}" "LL128" IS_LL128)
     if(NOT IS_LL128 EQUAL -1)
       file(APPEND ${FILE_PATH} "#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")

@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include "proxy.h"
 #include "signals.h" // [RCCL]
+#include "param.h"
 
 struct bootstrapRootArgs {
   struct ncclSocket* listenSock;
@@ -29,21 +30,24 @@ ncclResult_t bootstrapNetInit() {
   if (bootstrapNetInitDone == 0) {
     pthread_mutex_lock(&bootstrapNetLock);
     if (bootstrapNetInitDone == 0) {
-      char* env = getenv("NCCL_COMM_ID");
+      const char* env = ncclGetEnv("NCCL_COMM_ID");
       if (env) {
         union ncclSocketAddress remoteAddr;
         if (ncclSocketGetAddrFromString(&remoteAddr, env) != ncclSuccess) {
           WARN("Invalid NCCL_COMM_ID, please use format: <ipv4>:<port> or [<ipv6>]:<port> or <hostname>:<port>");
+          pthread_mutex_unlock(&bootstrapNetLock);
           return ncclInvalidArgument;
         }
         if (ncclFindInterfaceMatchSubnet(bootstrapNetIfName, &bootstrapNetIfAddr, &remoteAddr, MAX_IF_NAME_SIZE, 1) <= 0) {
           WARN("NET/Socket : No usable listening interface found");
+          pthread_mutex_unlock(&bootstrapNetLock);
           return ncclSystemError;
         }
       } else {
         int nIfs = ncclFindInterfaces(bootstrapNetIfName, &bootstrapNetIfAddr, MAX_IF_NAME_SIZE, 1);
         if (nIfs <= 0) {
           WARN("Bootstrap : no socket interface found");
+          pthread_mutex_unlock(&bootstrapNetLock);
           return ncclInternalError;
         }
       }
@@ -190,7 +194,7 @@ ncclResult_t bootstrapGetUniqueId(struct ncclBootstrapHandle* handle) {
   memset(handle, 0, sizeof(ncclBootstrapHandle));
   NCCLCHECK(getRandomData(&handle->magic, sizeof(handle->magic)));
 
-  char* env = getenv("NCCL_COMM_ID");
+  const char* env = ncclGetEnv("NCCL_COMM_ID");
   if (env) {
     INFO(NCCL_ENV, "NCCL_COMM_ID set by environment to %s", env);
     if (ncclSocketGetAddrFromString(&handle->addr, env) != ncclSuccess) {
