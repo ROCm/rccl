@@ -20,7 +20,7 @@
 RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 1);
 #endif
 
-RCCL_PARAM(MscclWorkFifoDepth, "MSCCL_WORK_FIFO_DEPTH", 64<<10);
+RCCL_PARAM(MscclWorkFifoDepth, "MSCCL_WORK_FIFO_DEPTH", 256<<10);
 
 static inline size_t computeSizeNeeded(size_t nBytes, int nScratchChunks, int nChunksPerLoop) {
   return (nBytes * (size_t)nScratchChunks) / (size_t)nChunksPerLoop;
