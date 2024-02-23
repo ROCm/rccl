@@ -581,6 +581,19 @@ static struct rcclRomeModel rome_model_81 = {
   .options = "noCpuCheck=1,tuning=5",
 };
 
+static struct rcclRomeModel rome_model_84 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 16, .nLinks = 7,
+  .gpuIds = { 0x11000, 0x2f000, 0x46000, 0x5d000, 0x8b000, 0xaa000, 0xc2000, 0xda000, },
+  .nicIds = { 0xc000, 0xc000, 0x2a000, 0x2a000, 0x41000, 0x41000, 0x58000, 0x58000, 0x86000, 0x86000, 0xa5000, 0xa5000, 0xbd000, 0xbd000, 0xd5000, 0xd5000, },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel = { PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, },
+  .pattern = "4848",
+  .ringBase = "N0 0 1 2 3 4 5 6 7 N14|N2 1 0 2 4 3 5 7 6 N12|N4 2 5 0 3 7 1 6 4 N8|N6 3 6 1 5 2 7 4 0 N0|N8 4 7 0 6 5 1 3 2 N4|N10 5 4 6 3 0 7 2 1 N2|N12 6 2 0 4 1 7 5 3 N6|N14 7 3 1 4 2 6 0 5 N10|N1 0 1 2 3 4 5 6 7 N15|N3 1 0 2 4 3 5 7 6 N13|N5 2 5 0 3 7 1 6 4 N9|N7 3 6 1 5 2 7 4 0 N1|N9 4 7 0 6 5 1 3 2 N5|N11 5 4 6 3 0 7 2 1 N3|N13 6 2 0 4 1 7 5 3 N7|N15 7 3 1 4 2 6 0 5 N11",
+  .options = "noCpuCheck=1,tuning=5",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22,
   rome_model_25,
@@ -623,6 +636,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_79,
   rome_model_80,
   rome_model_81,
+  rome_model_84,
 };
 
 /* Parse user defined rings. Format is like :
@@ -1241,6 +1255,9 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   // recognize system as Rome 4P2H even if no matching model
   if (ngpus > 4 && romeTopo.nLinks) system->type |= RCCL_TOPO_4P2H_ROME;
 
+  // detect multiple NICs per GPU
+  int nnetspergpu = (nnets%ngpus == 0) ? nnets/ngpus : 0;
+
   int g[NCCL_TOPO_MAX_NODES], n[NCCL_TOPO_MAX_NODES];
   int time = 0;
   struct timeval tvs, tve;
@@ -1268,11 +1285,43 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     // permute GPU IDs
     for (int j = 0; j < ngpus; j++) g[j] = (j+2)%ngpus;
     if (!permuteGpuIds(g, 0, ngpus-1, romeTopoModels+i, &romeTopo, &time, ignore_cpu ? false : match_nbio, ignore_numa)) continue;
-    if (nnets > 1) {
-      // permute NET IDs
-      for (int j = 0; j < nnets; j++) n[j] = (j+2)%nnets;
-      if (permuteNetIds(n, g, 0, nnets-1, romeTopoModels+i, &romeTopo, &time, ignore_numa)) break;
-    } else break;
+    if (nnetspergpu) {
+      int found = 0;
+      // initialize nics mapping
+      for (int j = 0; j < nnets; j++) n[j] = -1;
+      // match nics
+      for (int j = 0; j < nnets; j++) {
+        int k;
+        for (k = 0; k < nnets; k++) {
+          int f;
+          // skips nics that are matched
+          for (f = 0; f < found; f++)
+            if (k == n[f]) break;
+          if (f < found) continue;
+          // check NUMA
+          if (romeTopoModels[i].nicNuma[j] != romeTopo.nicNuma[k]) continue;
+          int g;
+          // check GDR
+          for (g = 0; g < ngpus; g++)
+            if (romeTopoModels[i].gdrLevel[j*ngpus+g] != romeTopo.gdrLevel[k*ngpus+g]) break;
+          if (g >= ngpus) break;
+        }
+        if (k < nnets) {
+          // found match
+          n[j] = k;
+          found++;
+        } else {
+          return ncclSuccess;
+        }
+      }
+      break;
+    } else {
+      if (nnets > 1) {
+        // permute NET IDs
+        for (int j = 0; j < nnets; j++) n[j] = (j+2)%nnets;
+        if (permuteNetIds(n, g, 0, nnets-1, romeTopoModels+i, &romeTopo, &time, ignore_numa)) break;
+      } else break;
+    }
   }
   gettimeofday(&tve, NULL);
   float t = (tve.tv_sec - tvs.tv_sec)*1E3 + (tve.tv_usec - tvs.tv_usec)/1E3;
