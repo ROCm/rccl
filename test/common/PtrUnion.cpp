@@ -274,7 +274,7 @@ namespace RcclUnitTesting
       case ncclFloat16:  F2[idx]  = __float2half(__half2float(F2[idx])/divisor); break;
       case ncclFloat32:  F4[idx] /= divisor; break;
       case ncclFloat64:  F8[idx] /= divisor; break;
-      case ncclBfloat16: B2[idx] = (rccl_bfloat16((float)(B2[idx]) / divisor)); break;
+      case ncclBfloat16: B2[idx]  = (rccl_bfloat16((float)(B2[idx]) / divisor)); break;
       default:
         ERROR("Unsupported datatype\n");
         return TEST_FAIL;
@@ -295,15 +295,15 @@ namespace RcclUnitTesting
     {
       switch (dataType)
       {
-      case ncclInt8:    isMatch = (I1[idx] == expected.I1[idx]); break;
-      case ncclUint8:   isMatch = (U1[idx] == expected.U1[idx]); break;
-      case ncclInt32:   isMatch = (I4[idx] == expected.I4[idx]); break;
-      case ncclUint32:  isMatch = (U4[idx] == expected.U4[idx]); break;
-      case ncclInt64:   isMatch = (I8[idx] == expected.I8[idx]); break;
-      case ncclUint64:  isMatch = (U8[idx] == expected.U8[idx]); break;
-      case ncclFloat16: isMatch = (fabs(__half2float(F2[idx]) - __half2float(expected.F2[idx])) < 9e-2); break;
-      case ncclFloat32: isMatch = (fabs(F4[idx] - expected.F4[idx]) < 1e-5); break;
-      case ncclFloat64: isMatch = (fabs(F8[idx] - expected.F8[idx]) < 1e-12); break;
+      case ncclInt8:     isMatch = (I1[idx] == expected.I1[idx]); break;
+      case ncclUint8:    isMatch = (U1[idx] == expected.U1[idx]); break;
+      case ncclInt32:    isMatch = (I4[idx] == expected.I4[idx]); break;
+      case ncclUint32:   isMatch = (U4[idx] == expected.U4[idx]); break;
+      case ncclInt64:    isMatch = (I8[idx] == expected.I8[idx]); break;
+      case ncclUint64:   isMatch = (U8[idx] == expected.U8[idx]); break;
+      case ncclFloat16:  isMatch = (fabs(__half2float(F2[idx]) - __half2float(expected.F2[idx])) < 9e-2); break;
+      case ncclFloat32:  isMatch = (fabs(F4[idx] - expected.F4[idx]) < 1e-5); break;
+      case ncclFloat64:  isMatch = (fabs(F8[idx] - expected.F8[idx]) < 1e-12); break;
       case ncclBfloat16: isMatch = (fabs((float)B2[idx] - (float)expected.B2[idx]) < 9e-2); break;
       default:
         ERROR("Unsupported datatype\n");
