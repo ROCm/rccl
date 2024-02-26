@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -502,9 +503,13 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
   case ncclInt64:
   case ncclUint64:
   case ncclFloat16:
-  #if defined(RCCL_BFLOAT16)
+#if defined(RCCL_BFLOAT16)
   case ncclBfloat16:
-  #endif
+#endif
+#if defined(RCCL_FLOAT8)
+  case ncclFp8E4M3:
+  case ncclFp8E5M2:
+#endif
     return devRedOp == ncclDevSum || devRedOp == ncclDevMinMax;
   case ncclFloat:
   case ncclDouble:

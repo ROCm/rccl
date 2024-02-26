@@ -266,6 +266,8 @@ rocm_setup_version(VERSION ${VERSION_STRING})
 ## Fill in version information for main header file
 configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/rccl/rccl.h) # For external linking
 configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/nccl.h)      # Used by some internal files
+file(COPY src/include/rocblas_float8.h DESTINATION ${PROJECT_BINARY_DIR}/include/) # For fp8 support
+file(COPY src/include/rocblas_hip_f8_impl.h DESTINATION ${PROJECT_BINARY_DIR}/include/) # For fp8 support
 
 # Collect list of all source files
 #==================================================================================================
@@ -371,6 +373,8 @@ set(SRC_FILES
   src/include/proxy.h
   src/include/rccl_bfloat16.h
   src/include/rccl_vars.h
+  src/include/rocblas_float8.h
+  src/include/rocblas_hip_f8_impl.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
   src/include/shm.h
