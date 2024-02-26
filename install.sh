@@ -25,7 +25,7 @@ install_library=false
 msccl_kernel_enabled=true
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
-nvtx_enabled=false
+roctx_enabled=false
 run_tests=false
 run_tests_all=false
 time_trace=false
@@ -51,7 +51,7 @@ function display_help()
     echo "       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
-    echo "       --nvtx-enable           Compile with nvtx enabled"
+    echo "       --roctx-enable          Compile with roctx enabled"
     echo "    -p|--package_build         Build RCCL package"
     echo "       --prefix                Specify custom directory to install RCCL to (default: /opt/rocm)"
     echo "       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
@@ -70,7 +70,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ $? -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,nvtx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -99,7 +99,7 @@ while true; do
          --amdgpu_targets)           build_amdgpu_targets=${2};                                                                        shift 2 ;;
          --no_clean)                 clean_build=false;                                                                                shift ;;
          --npkit-enable)             npkit_enabled=true;                                                                               shift ;;
-         --nvtx-enable)              nvtx_enabled=true;                                                                                shift ;;
+         --roctx-enable)             roctx_enabled=true;                                                                               shift ;;
     -p | --package_build)            build_package=true;                                                                               shift ;;
          --prefix)                   install_prefix=${2};                                                                              shift 2 ;;
          --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                                                      shift ;;
@@ -223,9 +223,9 @@ if ($install_dependencies); then
     cmake_common_options="${cmake_common_options} -DINSTALL_DEPENDENCIES=ON"
 fi
 
-# Enable NVTX
-if [[ "${nvtx_enabled}" == true ]]; then
-    cmake_common_options="${cmake_common_options} -DNVTX=ON"
+# Enable ROCTX
+if [[ "${roctx_enabled}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DROCTX=ON"
 fi
 
 cmake_executable=cmake

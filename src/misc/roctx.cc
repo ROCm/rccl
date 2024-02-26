@@ -15,7 +15,7 @@ const char* roctxEntryTypeStr[ROCTX_PAYLOAD_NUM_ENTRY_TYPES] = {"ROCTX_PAYLOAD_E
 const char* ncclRedOpStr[ncclNumDevRedOps]                   = { "Sum", "Prod", "MinMax", "PreMulSum", "SumPostDiv" };
 
 void roctxAlloc(roctxPayloadInfo_t payloadInfo, const size_t numEntries) {
-#ifndef NVTX_NO_IMPL
+#ifndef ROCTX_NO_IMPL
   // Allocate enough memory for numEntries in payloadEntries
   payloadInfo->payloadEntries = (roctxPayloadSchemaEntryInfo*)malloc(numEntries * sizeof(roctxPayloadSchemaEntryInfo));
 
@@ -25,7 +25,7 @@ void roctxAlloc(roctxPayloadInfo_t payloadInfo, const size_t numEntries) {
 }
 
 void roctxFree(roctxPayloadInfo_t payloadInfo) {
-#ifndef NVTX_NO_IMPL
+#ifndef ROCTX_NO_IMPL
   // Free all the dynamically allocated resources by roctx
   if (payloadInfo->payloadEntries) free(payloadInfo->payloadEntries);
   if (payloadInfo->message) free((void*)payloadInfo->message);
@@ -83,7 +83,8 @@ void stringify(roctxPayloadInfo_t payloadInfo) {
         offset += snprintf(payloadInfo->message + offset, MAX_MESSAGE_LENGTH - offset, "%zu", entry.payload.typeSize); 
         break;
       case ROCTX_PAYLOAD_ENTRY_TYPE_REDOP:
-        offset += snprintf(payloadInfo->message + offset, MAX_MESSAGE_LENGTH - offset, "%s", ncclRedOpStr[entry.payload.typeRedOp]); 
+        offset += snprintf(payloadInfo->message + offset, MAX_MESSAGE_LENGTH - offset, "%s", 
+                          entry.payload.typeRedOp < ncclNumDevRedOps ? ncclRedOpStr[entry.payload.typeRedOp] : "unknown"); 
         break;
       default:
         offset += snprintf(payloadInfo->message + offset, MAX_MESSAGE_LENGTH - offset, "unknown roctx payload type"); 

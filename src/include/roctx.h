@@ -126,7 +126,7 @@ public:
   explicit roctx_scoped_range_in(const nvtxPayloadSchemaEntry_t* schema, const nvtxPayloadData_t* data, 
                                 const size_t numEntries, const char* schemaName) noexcept
   {
-#ifndef NVTX_NO_IMPL
+#ifndef ROCTX_NO_IMPL
     roctxAlloc(&payloadInfo, numEntries);
     extractPayloadInfo(schema, data, numEntries, schemaName, &payloadInfo);
     roctxRangePushA(payloadInfo.message);
@@ -138,7 +138,7 @@ public:
   */
   explicit roctx_scoped_range_in(const char* message) noexcept
   {
-#ifndef NVTX_NO_IMPL
+#ifndef ROCTX_NO_IMPL
     roctxRangePushA(message);
 #endif
   }
@@ -153,7 +153,7 @@ public:
    */
   ~roctx_scoped_range_in() noexcept
   {
-#ifndef NVTX_NO_IMPL
+#ifndef ROCTX_NO_IMPL
     roctxRangePop();
     roctxFree(&payloadInfo);
 #endif
