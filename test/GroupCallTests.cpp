@@ -118,6 +118,55 @@ namespace RcclUnitTesting
     testBed.Finalize();
   }
 
+  // Test identical collectives with different data type
+  TEST(GroupCall, MixedDataType)
+  {
+    TestBed testBed;
+
+    // Configuration
+    std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce, ncclCollAllReduce, ncclCollAllReduce};
+    std::vector<ncclRedOp_t>    const redOps          = {ncclSum, ncclSum, ncclSum};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat32, ncclFloat64};
+    std::vector<int>            const numElements     = {1048576, 384 * 1024, 384};
+
+    int                         const numCollPerGroup = numElements.size();
+    bool                        const inPlace         = false;
+    bool                        const useManagedMem   = false;
+
+    bool isCorrect = true;
+    for (int totalRanks : testBed.ev.GetNumGpusList())
+    for (int isMultiProcess : testBed.ev.GetIsMultiProcessList())
+    {
+      // Test either single process all GPUs, or 1 process per GPU
+      int const numProcesses = isMultiProcess ? totalRanks : 1;
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
+
+      if (testBed.ev.showNames)
+        INFO("%s %d-ranks GroupCall MixedDayaType\n", isMultiProcess ? "MP" : "SP", totalRanks);
+
+      // Set up the different collectives within the group
+      for (int collIdx = 0; collIdx < numCollPerGroup; ++collIdx)
+      {
+        OptionalColArgs options;
+        options.redOp = redOps[collIdx];
+        testBed.SetCollectiveArgs(funcTypes[collIdx],
+                                  dataTypes[collIdx],
+                                  numElements[collIdx],
+                                  numElements[collIdx],
+                                  options,
+                                  collIdx);
+      }
+
+      testBed.AllocateMem(inPlace, useManagedMem);
+      testBed.PrepareData();
+      testBed.ExecuteCollectives();
+      testBed.ValidateResults(isCorrect);
+      testBed.DeallocateMem();
+      testBed.DestroyComms();
+    }
+    testBed.Finalize();
+  }
+
   TEST(GroupCall, Multistream)
   {
     TestBed testBed;

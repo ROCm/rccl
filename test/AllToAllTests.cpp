@@ -16,7 +16,7 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllToAll};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat32};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat32};
     std::vector<ncclRedOp_t>    const redOps          = {ncclSum};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {1048576, 1024};
