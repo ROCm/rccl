@@ -262,27 +262,12 @@ SPECIALIZE_REDUCE(FuncMinMax, half, 1, half, fn.isMinNotMax ? __hmin(x, y) : __h
 #endif
 
 #if defined(RCCL_FLOAT8)
-#if __CUDA_ARCH__ >= 800
-  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e4m3, 1, __nv_fp8_e4m3, __nv_fp8_e4m3(__hadd(__half(x),__half(y))))
-  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e4m3, 2, __nv_fp8x2_e4m3, __nv_fp8x2_e4m3(__hadd2(__half2(x),__half2(y))))
-  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e4m3, 1, __nv_fp8_e4m3, __nv_fp8_e4m3(__hmul(__half(x),__half(y))))
-  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e4m3, 2, __nv_fp8x2_e4m3, __nv_fp8x2_e4m3(__hmul2(__half2(x),__half2(y))))
-  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e4m3, 1, __nv_fp8_e4m3, __nv_fp8_e4m3(fn.isMinNotMax ? __hmin(__half(x),__half(y)) : __hmax(__half(x), __half(y))))
-  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e4m3, 2, __nv_fp8x2_e4m3, __nv_fp8x2_e4m3(fn.isMinNotMax ? __hmin2(__half2(x),__half2(y)) : __hmax2(__half2(x), __half2(y))))
-  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e5m2, 1, __nv_fp8_e5m2, __nv_fp8_e5m2(__hadd(__half(x),__half(y))))
-  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e5m2, 2, __nv_fp8x2_e5m2, __nv_fp8x2_e5m2(__hadd2(__half2(x),__half2(y))))
-  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e5m2, 1, __nv_fp8_e5m2, __nv_fp8_e5m2(__hmul(__half(x),__half(y))))
-  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e5m2, 2, __nv_fp8x2_e5m2, __nv_fp8x2_e5m2(__hmul2(__half2(x),__half2(y))))
-  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e5m2, 1, __nv_fp8_e5m2, __nv_fp8_e5m2(fn.isMinNotMax ? __hmin(__half(x),__half(y)) : __hmax(__half(x), __half(y))))
-  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e5m2, 2, __nv_fp8x2_e5m2, __nv_fp8x2_e5m2(fn.isMinNotMax ? __hmin2(__half2(x),__half2(y)) : __hmax2(__half2(x), __half2(y))))
-#else
   SPECIALIZE_REDUCE(FuncSum, rocblas_f8, 1, rocblas_f8, rocblas_f8(float(x) + float(y)))
   SPECIALIZE_REDUCE(FuncProd, rocblas_f8, 1, rocblas_f8, rocblas_f8(float(x) * float(y)))
   SPECIALIZE_REDUCE(FuncMinMax, rocblas_f8, 1, rocblas_f8, rocblas_f8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
   SPECIALIZE_REDUCE(FuncSum, rocblas_bf8, 1, rocblas_bf8, rocblas_bf8(float(x) + float(y)))
   SPECIALIZE_REDUCE(FuncProd, rocblas_bf8, 1, rocblas_bf8, rocblas_bf8(float(x) * float(y)))
   SPECIALIZE_REDUCE(FuncMinMax, rocblas_bf8, 1, rocblas_bf8, rocblas_bf8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
-#endif
 #endif
 
 #undef SPECIALIZE_REDUCE
@@ -428,23 +413,12 @@ struct FuncPreMulSum<half> {
     // make this parameterized as a build time setting and passed here through
     // preprocessor definitions.
     using EltType = rocblas_f8;
-#if __CUDA_ARCH__ >= 800
-    rocblas_f8 scalar;
-    __nv_fp8x2_e4m3 scalar2;
-    __device__ FuncPreMulSum(uint64_t opArg) {
-      scalar = *(rocblas_f8*)&opArg;
-      scalar2.__x =
-        (static_cast<__nv_fp8x2_storage_t>(scalar.__x) << 8U) |
-        static_cast<__nv_fp8x2_storage_t>(scalar.__x);
-    }
-#else
     uint8_t scalar;
     __device__ FuncPreMulSum(uint64_t opArg=0) {
       union { uint64_t u64; rocblas_f8 val; };
       u64 = opArg;
       scalar = (uint8_t)(val);
     }
-#endif
   };
 
   template<>
@@ -454,23 +428,12 @@ struct FuncPreMulSum<half> {
     // make this parameterized as a build time setting and passed here through
     // preprocessor definitions.
     using EltType = rocblas_bf8;
-#if __CUDA_ARCH__ >= 800
-    rocblas_bf8 scalar;
-    __nv_fp8x2_e5m2 scalar2;
-    __device__ FuncPreMulSum(uint64_t opArg) {
-      scalar = *(rocblas_bf8*)&opArg;
-      scalar2.__x =
-        (static_cast<__nv_fp8x2_storage_t>(scalar.__x) << 8U) |
-        static_cast<__nv_fp8x2_storage_t>(scalar.__x);
-    }
-#else
     uint8_t scalar;
     __device__ FuncPreMulSum(uint64_t opArg=0) {
       union { uint64_t u64; rocblas_bf8 val; };
       u64 = opArg;
       scalar = (uint8_t)(val);
     }
-#endif
   };
 #endif
 
@@ -549,26 +512,9 @@ struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
     __device__ static BytePack<sizeof(rocblas_f8)> preOp(
         FuncPreMulSum<rocblas_f8> fn, BytePack<sizeof(rocblas_f8)> a
       ) {
-      #if __CUDA_ARCH__ >= 800
-        return toPack<__nv_fp8_e4m3>(__nv_fp8_e4m3(__hmul(__half(fromPack<__nv_fp8_e4m3>(a)), __half(fn.scalar))));
-      #else
         return toPack<rocblas_f8>(rocblas_f8(float(fromPack<rocblas_f8>(a)) * float(fn.scalar)));
-      #endif
     }
   };
-
-  #if __CUDA_ARCH__ >= 800
-    template<>
-    struct Apply_PreOp<FuncPreMulSum<__nv_fp8_e4m3>, /*EltPerPack=*/2> {
-      static constexpr bool IsIdentity = false;
-
-      __device__ static BytePack<sizeof(__nv_fp8x2_e4m3)> preOp(
-          FuncPreMulSum<__nv_fp8_e4m3> fn, BytePack<sizeof(__nv_fp8x2_e4m3)> a
-        ) {
-        return toPack<__nv_fp8x2_e4m3>(__nv_fp8x2_e4m3(__hmul2(__half2(fromPack<__nv_fp8x2_e4m3>(a)), __half2(fn.scalar2))));
-      }
-    };
-  #endif
 
   template<>
   struct Apply_PreOp<FuncPreMulSum<rocblas_bf8>, /*EltPerPack=*/1> {
@@ -577,26 +523,9 @@ struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
     __device__ static BytePack<sizeof(rocblas_bf8)> preOp(
         FuncPreMulSum<rocblas_bf8> fn, BytePack<sizeof(rocblas_bf8)> a
       ) {
-      #if __CUDA_ARCH__ >= 800
-        return toPack<__nv_fp8_e5m2>(__nv_fp8_e5m2(__hmul(__half(fromPack<__nv_fp8_e5m2>(a)), __half(fn.scalar))));
-      #else
         return toPack<rocblas_bf8>(rocblas_bf8(float(fromPack<rocblas_bf8>(a)) * float(fn.scalar)));
-      #endif
     }
   };
-
-  #if __CUDA_ARCH__ >= 800
-    template<>
-    struct Apply_PreOp<FuncPreMulSum<__nv_fp8_e5m2>, /*EltPerPack=*/2> {
-     static constexpr bool IsIdentity = false;
-
-      __device__ static BytePack<sizeof(__nv_fp8x2_e5m2)> preOp(
-          FuncPreMulSum<__nv_fp8_e5m2> fn, BytePack<sizeof(__nv_fp8x2_e5m2)> a
-        ) {
-        return toPack<__nv_fp8x2_e5m2>(__nv_fp8x2_e5m2(__hmul2(__half2(fromPack<__nv_fp8x2_e5m2>(a)), __half2(fn.scalar2))));
-      }
-    };
-  #endif  
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////

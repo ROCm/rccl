@@ -22,6 +22,7 @@
 
 #ifndef ROCBLAS_HIP_FP8_IMPL_H
 #define ROCBLAS_HIP_FP8_IMPL_H
+#include <cstdint>
 
 namespace rocblas_hip_f8_impl
 {

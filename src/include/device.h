@@ -11,6 +11,7 @@
 
 #include "nccl.h"
 #include "rccl_bfloat16.h"
+#include "rocblas_float8.h"
 #include "nccl_common.h"
 #include "align.h"
 #include "collectives.h"
