@@ -22,10 +22,12 @@
 
 #ifndef ROCBLAS_FLOAT8_H
 #define ROCBLAS_FLOAT8_H
-#include <cstdint>
+
+#include <stdint.h>
 
 #if __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
 /*! \brief Struct to represent a 8 bit floating-point number. */
+
 typedef struct
 {
     uint8_t data;
@@ -61,7 +63,7 @@ namespace rocblas_hip_f8_impl
 static __device__ bool rocblas_hip_f8_bias_mode_bit_device = true;
 static bool            rocblas_hip_f8_bias_mode_bit_host   = true;
 
-struct ROCBLAS_EXPORT rocblas_f8
+struct rocblas_f8
 {
     uint8_t data;
     enum class rocblas_hip_f8_rounding_mode
@@ -158,7 +160,7 @@ struct ROCBLAS_EXPORT rocblas_f8
     {
     }
     // constructor from bfloat16
-    explicit HIP_HOST_DEVICE rocblas_f8(rocblas_bfloat16             v,
+    explicit HIP_HOST_DEVICE rocblas_f8(rccl_bfloat16             v,
                                         rocblas_hip_f8_rounding_mode rm
                                         = rocblas_hip_f8_rounding_mode::standard,
                                         uint32_t rng = 0)
@@ -211,9 +213,9 @@ struct ROCBLAS_EXPORT rocblas_f8
     }
 
     // convert to bfloat16
-    explicit inline HIP_HOST_DEVICE operator rocblas_bfloat16() const
+    explicit inline HIP_HOST_DEVICE operator rccl_bfloat16() const
     {
-        return rocblas_bfloat16(float(*this)); // convert to float, then convert to f16
+        return rccl_bfloat16(float(*this)); // convert to float, then convert to f16
     }
 
     // check for zero
@@ -242,7 +244,7 @@ struct ROCBLAS_EXPORT rocblas_f8
     }
 };
 
-struct ROCBLAS_EXPORT rocblas_bf8
+struct rocblas_bf8
 {
     uint8_t data;
     enum class rocblas_hip_f8_rounding_mode
@@ -339,7 +341,7 @@ struct ROCBLAS_EXPORT rocblas_bf8
     {
     }
     // constructor from bfloat16
-    explicit HIP_HOST_DEVICE rocblas_bf8(rocblas_bfloat16             v,
+    explicit HIP_HOST_DEVICE rocblas_bf8(rccl_bfloat16             v,
                                          rocblas_hip_f8_rounding_mode rm
                                          = rocblas_hip_f8_rounding_mode::standard,
                                          uint32_t rng = 0)
@@ -392,9 +394,9 @@ struct ROCBLAS_EXPORT rocblas_bf8
     }
 
     // convert to bfloat16
-    explicit inline HIP_HOST_DEVICE operator rocblas_bfloat16() const
+    explicit inline HIP_HOST_DEVICE operator rccl_bfloat16() const
     {
-        return rocblas_bfloat16(float(*this)); // convert to float, then convert to f16
+        return rccl_bfloat16(float(*this)); // convert to float, then convert to f16
     }
 
     // check for zero

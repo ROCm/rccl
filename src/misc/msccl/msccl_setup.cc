@@ -228,7 +228,7 @@ static ncclResult_t hostToDevRedOp(
     #endif
     #if defined(RCCL_FLOAT8)
       rocblas_f8 fp8_e4m3;
-      rocblas_f8 fp8_e5m2;
+      rocblas_bf8 fp8_e5m2;
     #endif
     float f32;
     double f64;
@@ -330,8 +330,8 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, ncclFp8E4M3, fullOps), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, ncclFp8E5M2, fullOps)
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rocblas_f8, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rocblas_bf8, fullOps)
 
 #define MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(devredop, fullOps) \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t, fullOps), \
@@ -340,6 +340,8 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint32_t, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int64_t, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint64_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \

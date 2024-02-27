@@ -14,6 +14,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "rocblas_float8.h"
+
 template<typename T>
 struct IsFloatingPoint: std::false_type {};
 template<>
@@ -413,11 +415,11 @@ struct FuncPreMulSum<half> {
     // make this parameterized as a build time setting and passed here through
     // preprocessor definitions.
     using EltType = rocblas_f8;
-    uint8_t scalar;
+    float scalar;
     __device__ FuncPreMulSum(uint64_t opArg=0) {
       union { uint64_t u64; rocblas_f8 val; };
       u64 = opArg;
-      scalar = (uint8_t)(val);
+      scalar = (float)(val);
     }
   };
 
@@ -428,11 +430,11 @@ struct FuncPreMulSum<half> {
     // make this parameterized as a build time setting and passed here through
     // preprocessor definitions.
     using EltType = rocblas_bf8;
-    uint8_t scalar;
+    float scalar;
     __device__ FuncPreMulSum(uint64_t opArg=0) {
       union { uint64_t u64; rocblas_bf8 val; };
       u64 = opArg;
-      scalar = (uint8_t)(val);
+      scalar = (float)(val);
     }
   };
 #endif

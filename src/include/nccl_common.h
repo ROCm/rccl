@@ -17,7 +17,7 @@ typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncRed
 
 #define FUNC_INDEX_P2P 835
 #define FUNC_INDEX_ALLTOALL_PIVOT 555
-#define FUNC_INDEX_TOTAL 846
+#define FUNC_INDEX_TOTAL 992
 
 #define NCCL_NUM_ALGORITHMS 6 // Tree/Ring/CollNet*
 #define NCCL_ALGO_UNDEF -1
