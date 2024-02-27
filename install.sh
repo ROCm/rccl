@@ -51,7 +51,7 @@ function display_help()
     echo "       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
-    echo "       --roctx-enable          Compile with roctx enabled"
+    echo "       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)"
     echo "    -p|--package_build         Build RCCL package"
     echo "       --prefix                Specify custom directory to install RCCL to (default: /opt/rocm)"
     echo "       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility"

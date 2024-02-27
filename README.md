@@ -37,6 +37,7 @@ The root of this repository has a helper script 'install.sh' to build and instal
     -l|--local_gpu_only        Only compile for local GPU architecture
        --no_clean              Don't delete files if they already exist
        --npkit-enable          Compile with npkit enabled
+       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)
     -p|--package_build         Build RCCL package
        --prefix                Specify custom directory to install RCCL to (default: /opt/rocm)
        --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility

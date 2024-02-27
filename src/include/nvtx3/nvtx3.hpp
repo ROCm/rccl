@@ -13,9 +13,6 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-#if !defined(__HIP_PLATFORM_HCC__) && !defined(__HCC__) && !defined(__HIPCC__)
-#include "roctx.h"
-#endif
 
 /* Temporary helper #defines, #undef'ed at end of header */
 #define NVTX3_CPP_VERSION_MAJOR 1
