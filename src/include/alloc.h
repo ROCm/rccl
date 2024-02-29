@@ -160,19 +160,12 @@ static inline ncclResult_t ncclCuMemFree(void *ptr) {
 #endif
 
 template <typename T>
-ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, bool isFineGrain = false) {
+ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, unsigned int flags = hipDeviceMallocDefault) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  if (isFineGrain) {
-#if defined(HIP_UNCACHED_MEMORY)
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
-#else
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
-#endif
-  } else
-    CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
+  CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), flags), result, finish);
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA malloc %ld bytes", nelem*sizeof(T));
@@ -182,7 +175,7 @@ finish:
 #define ncclCudaMalloc(...) ncclCudaMallocDebug( __FILE__, __LINE__, __VA_ARGS__)
 
 template <typename T>
-ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, cudaStream_t sideStream = nullptr, bool isFineGrain = false) {
+ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, cudaStream_t sideStream = nullptr, unsigned int flags = hipDeviceMallocDefault) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
@@ -190,15 +183,8 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   // Need a side stream so as not to interfere with graph capture.
   cudaStream_t stream = sideStream;
   if (stream == nullptr)
-    CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
-  if (isFineGrain) {
-#if defined(HIP_UNCACHED_MEMORY)
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
-#else
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
-#endif
-  } else
-    CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
+  CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+  CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), flags), result, finish);
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
   CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
   if (sideStream == nullptr)
@@ -218,19 +204,12 @@ finish:
 #define ncclCudaCalloc(...) ncclCudaCallocDebug(__FILE__, __LINE__, __VA_ARGS__)
 
 template <typename T>
-ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t stream, bool isFineGrain = false) {
+ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t stream, unsigned int flags = hipDeviceMallocDefault) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  if (isFineGrain) {
-#if defined(HIP_UNCACHED_MEMORY)
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
-#else
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
-#endif
-  } else
-    CUDACHECKGOTO(cudaMalloc(ptr, nelem*sizeof(T)), result, finish);
+  CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), flags), result, finish);
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream), result, finish);
   int dev;
   CUDACHECK(hipGetDevice(&dev));

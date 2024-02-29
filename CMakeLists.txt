@@ -148,6 +148,9 @@ check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVE
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
+### Check for hipDeviceMallocContiguous support
+check_symbol_exists("hipDeviceMallocContiguous" "hip/hip_runtime_api.h" HIP_CONTIGUOUS_MEMORY)
+
 ### Check for indirect function call support
 if(ENABLE_IFC)
   if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.5.30201")
@@ -574,6 +577,9 @@ if(TRACE)
 endif()
 if(${HIP_EVENT_DISABLE_FENCE})
   target_compile_definitions(rccl PRIVATE HIP_EVENT_DISABLE_FENCE)
+endif()
+if(${HIP_CONTIGUOUS_MEMORY})
+  target_compile_definitions(rccl PRIVATE HIP_CONTIGUOUS_MEMORY)
 endif()
 if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.7.31920")
   target_compile_definitions(rccl PRIVATE HIP_UNCACHED_MEMORY)

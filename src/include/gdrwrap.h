@@ -176,8 +176,11 @@ static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** 
   // GDRCOPY Pinned buffer has to be a minimum of a GPU_PAGE_SIZE
   ALIGN_SIZE(mapSize, GPU_PAGE_SIZE);
   // GDRCOPY Pinned buffer has to be GPU_PAGE_SIZE aligned too
-  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, stream, true));
-
+#if defined(HIP_UNCACHED_MEMORY)
+  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, stream, hipDeviceMallocUncached));
+#else
+  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, stream, hipDeviceMallocFinegrained));
+#endif
   gdr_mem_desc_t* md;
   NCCLCHECK(ncclCalloc(&md, 1));
   md->gdrDevMem = devMem;
