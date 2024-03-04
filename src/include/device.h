@@ -535,7 +535,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
   // <all_algos> / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncAllReduce) {
-    row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * (algo * NCCL_NUM_PROTOCOLS + proto);
+    row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * (algo * NCCL_NUM_PROTOCOLS + proto);
     goto have_row;
   }
   row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
