@@ -19,7 +19,7 @@ option(COLLTRACE                               "Collective Trace Option"        
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
-option(NVTX                                    "Enable NVTX"                                   OFF)
+option(ROCTX                                   "Enable ROCTX"                                  OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
@@ -147,6 +147,9 @@ check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVE
 
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
+
+### Check for hipDeviceMallocContiguous support
+check_symbol_exists("hipDeviceMallocContiguous" "hip/hip_runtime_api.h" HIP_CONTIGUOUS_MEMORY)
 
 ### Check for indirect function call support
 if(ENABLE_IFC)
@@ -374,6 +377,7 @@ set(SRC_FILES
   src/include/rccl_bfloat8.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
+  src/include/roctx.h
   src/include/shm.h
   src/include/signals.h
   src/include/socket.h
@@ -449,6 +453,7 @@ set(SRC_FILES
   src/misc/profiler.cc
   src/misc/rocm_smi_wrap.cc
   src/misc/rocmwrap.cc
+  src/misc/roctx.cc
   src/misc/shmutils.cc
   src/misc/signals.cc
   src/misc/socket.cc
@@ -548,9 +553,6 @@ if(DEMANGLE_DIR)
 endif()
 
 ## Set RCCL compile definitions
-if(NOT NVTX)
-  target_compile_definitions(rccl PRIVATE NVTX_NO_IMPL)
-endif()
 if(COLLTRACE)
   target_compile_definitions(rccl PRIVATE ENABLE_COLLTRACE)
 endif()
@@ -566,11 +568,19 @@ endif()
 if(PROFILE)
   target_compile_definitions(rccl PRIVATE ENABLE_PROFILING)
 endif()
+if(NOT ROCTX)
+  target_compile_definitions(rccl PRIVATE NVTX_NO_IMPL)
+  target_compile_definitions(rccl PRIVATE ROCTX_NO_IMPL)
+  target_compile_definitions(rccl PRIVATE NVTX_DISABLE)
+endif()
 if(TRACE)
   target_compile_definitions(rccl PRIVATE ENABLE_TRACE)
 endif()
 if(${HIP_EVENT_DISABLE_FENCE})
   target_compile_definitions(rccl PRIVATE HIP_EVENT_DISABLE_FENCE)
+endif()
+if(${HIP_CONTIGUOUS_MEMORY})
+  target_compile_definitions(rccl PRIVATE HIP_CONTIGUOUS_MEMORY)
 endif()
 if(${hipcc_version_string} VERSION_GREATER_EQUAL "5.7.31920")
   target_compile_definitions(rccl PRIVATE HIP_UNCACHED_MEMORY)
@@ -639,7 +649,15 @@ if (HAS_BFD)
     target_link_libraries(rccl PRIVATE iberty z)
   endif()
 endif()
+if (ROCTX)
+  target_link_libraries(rccl PRIVATE -lroctx64)
+endif()
 target_link_libraries(rccl PRIVATE -fgpu-rdc)             # Required when linking relocatable device code
+target_link_libraries(rccl PRIVATE   Threads::Threads)
+target_link_libraries(rccl INTERFACE hip::host)
+target_link_libraries(rccl PRIVATE   hip::device)
+target_link_libraries(rccl PRIVATE   dl)
+target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
 
 ## Set RCCL link options
 target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link
@@ -663,12 +681,6 @@ endif()
 if (HAVE_KERNARG_PRELOAD)
   target_link_options(rccl PRIVATE -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16)
 endif()
-
-target_link_libraries(rccl PRIVATE   Threads::Threads)
-target_link_libraries(rccl INTERFACE hip::host)
-target_link_libraries(rccl PRIVATE   hip::device)
-target_link_libraries(rccl PRIVATE   dl)
-target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
 
 ## Track linking time
 set_property(TARGET rccl PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")

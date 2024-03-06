@@ -218,7 +218,11 @@ ncclResult_t ncclP2pAllocateShareableBuffer(size_t size, ncclIpcDesc *ipcDesc, v
 #endif
   } else {
     // Allocate a CUDA buffer and generate an IPC handle for it
-    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, nullptr, true));
+#if defined(HIP_UNCACHED_MEMORY)
+    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, nullptr, hipDeviceMallocUncached));
+#else
+    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, nullptr, hipDeviceMallocFinegrained));
+#endif
     cudaError_t res = cudaIpcGetMemHandle(&ipcDesc->devIpc, *ptr);
     if (res != cudaSuccess) {
       WARN("cudaIpcGetMemHandle failed : %s", cudaGetErrorString(res));
@@ -593,7 +597,11 @@ static ncclResult_t p2pSendProxySetup(struct ncclProxyConnection* connection, st
     NCCLCHECK(ncclCalloc(&proxyInfo, 1));
     connection->transportResources = proxyInfo;
 
-    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], nullptr, true));
+#if defined(HIP_UNCACHED_MEMORY)
+    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], nullptr, hipDeviceMallocUncached));
+#else
+    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], nullptr, hipDeviceMallocFinegrained));
+#endif
 
     char shmPath[PATH_MAX];
     shmPath[0] = '\0';

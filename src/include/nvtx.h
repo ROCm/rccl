@@ -8,6 +8,7 @@
 #define NCCL_NVTX_H_
 
 #include "nvtx3/nvtx3.hpp"
+#include "roctx.h"
 
 #if __cpp_constexpr >= 201304L && !defined(NVTX3_CONSTEXPR_IF_CPP14)
 #define NVTX3_CONSTEXPR_IF_CPP14 constexpr
@@ -22,11 +23,16 @@
 #define NVTX_SID_CommAbort     3 // same schema as NVTX_SID_CommInitRank
 #define NVTX_SID_AllGather     4
 #define NVTX_SID_AllReduce     5
-#define NVTX_SID_Broadcast     6
-#define NVTX_SID_ReduceScatter 7
-#define NVTX_SID_Reduce        8
-#define NVTX_SID_Send          9
-#define NVTX_SID_Recv          10
+#define NVTX_SID_AllToAll      6
+#define NVTX_SID_AllToAllv     7
+#define NVTX_SID_Broadcast     8
+#define NVTX_SID_Gather        9
+#define NVTX_SID_MSCCL         10
+#define NVTX_SID_ReduceScatter 11
+#define NVTX_SID_Reduce        12
+#define NVTX_SID_Scatter       13
+#define NVTX_SID_Send          14
+#define NVTX_SID_Recv          15
 
 // Define static schema ID for the reduction operation.
 #define NVTX_PAYLOAD_ENTRY_NCCL_REDOP 11 + NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START
@@ -71,6 +77,12 @@ class payload_schema {
 // @param N  schema name
 // @param S  schema (entries)
 // @param P  payload (struct)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#define NVTX3_FUNC_WITH_PARAMS(ID, S, P) \
+  nvtxPayloadData_t nvtx3_bpl__[] = { \
+    {NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##ID, sizeof(P), &(P)}}; \
+  roctx_scoped_range_in const roctx_range__{S, nvtx3_bpl__, std::extent<decltype(S)>::value, "RCCL_" #ID};
+#else
 #define NVTX3_FUNC_WITH_PARAMS(ID, S, P) \
   static const payload_schema schema{S, std::extent<decltype(S)>::value, \
     NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##ID, #ID}; \
@@ -79,6 +91,7 @@ class payload_schema {
     {NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##ID, sizeof(P), &(P)}}; \
   ::nvtx3::v1::event_attributes const nvtx3_func_attr__{nvtx3_func_name__, nvtx3_bpl__}; \
   ::nvtx3::v1::scoped_range_in<nccl_domain> const nvtx3_range__{nvtx3_func_attr__};
+#endif
 
 extern void initNvtxRegisteredEnums();
 

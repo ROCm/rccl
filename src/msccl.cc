@@ -44,6 +44,18 @@ ncclResult_t mscclRunAlgo(
     void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
     size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
     mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream) {
+  struct NvtxParamsMsccl {
+    size_t sendbytes;
+    size_t recvbytes;
+  };
+  // Just pass the size of one send/recv messages and not the total bytes sent/received.
+  constexpr nvtxPayloadSchemaEntry_t MscclSchema[] = {
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes] (Send)"},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes] (Recv)"}
+  };
+  NvtxParamsMsccl payload{sendCounts[comm->rank] * ncclTypeSize(dataType), recvCounts[comm->rank] * ncclTypeSize(dataType)};
+  NVTX3_FUNC_WITH_PARAMS(MSCCL, MscclSchema, payload)
+  
   mscclStatus& status = mscclGetStatus();
   struct mscclAlgo* hostAlgo = status.hostAlgos[mscclAlgoHandle];
   struct mscclAlgo* devAlgo = status.devAlgos[mscclAlgoHandle];
