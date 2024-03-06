@@ -428,14 +428,6 @@ struct rccl_float8
         : rccl_float8((float)v, rm, rng)
     {
     }
-    // constructor from bfloat16
-    explicit HIP_HOST_DEVICE rccl_float8(rccl_bfloat16             v,
-                                        rocblas_hip_f8_rounding_mode rm
-                                        = rocblas_hip_f8_rounding_mode::standard,
-                                        uint32_t rng = 0)
-        : rccl_float8((float)v, rm, rng)
-    {
-    }
     // constructor from int
     explicit HIP_HOST_DEVICE rccl_float8(int                          v,
                                         rocblas_hip_f8_rounding_mode rm
@@ -479,12 +471,6 @@ struct rccl_float8
     explicit inline HIP_HOST_DEVICE operator _Float16() const
     {
         return _Float16(float(*this)); // convert to float, then convert to f16
-    }
-
-    // convert to bfloat16
-    explicit inline HIP_HOST_DEVICE operator rccl_bfloat16() const
-    {
-        return rccl_bfloat16(float(*this)); // convert to float, then convert to f16
     }
 
     // check for zero
@@ -609,14 +595,6 @@ struct rccl_bfloat8
         : rccl_bfloat8((float)v, rm, rng)
     {
     }
-    // constructor from bfloat16
-    explicit HIP_HOST_DEVICE rccl_bfloat8(rccl_bfloat16             v,
-                                         rocblas_hip_f8_rounding_mode rm
-                                         = rocblas_hip_f8_rounding_mode::standard,
-                                         uint32_t rng = 0)
-        : rccl_bfloat8((float)v, rm, rng)
-    {
-    }
     // constructor from int
     explicit HIP_HOST_DEVICE rccl_bfloat8(int                          v,
                                          rocblas_hip_f8_rounding_mode rm
@@ -660,12 +638,6 @@ struct rccl_bfloat8
     explicit inline HIP_HOST_DEVICE operator _Float16() const
     {
         return _Float16(float(*this)); // convert to float, then convert to f16
-    }
-
-    // convert to bfloat16
-    explicit inline HIP_HOST_DEVICE operator rccl_bfloat16() const
-    {
-        return rccl_bfloat16(float(*this)); // convert to float, then convert to f16
     }
 
     // check for zero

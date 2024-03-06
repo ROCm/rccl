@@ -185,11 +185,11 @@ namespace RcclUnitTesting
     case ncclUint32:   valueI = U4[idx]; break;
     case ncclInt64:    valueI = I8[idx]; break;
     case ncclUint64:   valueI = U8[idx]; break;
-    case ncclFp8E4M3:  valueF = rccl_bfloat16(F1[idx]); break; 
+    case ncclFp8E4M3:  valueF = float(F1[idx]); break; 
     case ncclFloat16:  valueF = __half2float(F2[idx]); break;
     case ncclFloat32:  valueF = F4[idx]; break;
     case ncclFloat64:  valueF = F8[idx]; break;
-    case ncclFp8E5M2:  valueF = rccl_bfloat16(B1[idx]); break; 
+    case ncclFp8E5M2:  valueF = float(B1[idx]); break; 
     case ncclBfloat16: valueF = B2[idx]; break;
     default:
       ERROR("Unsupported datatype\n");
@@ -281,11 +281,11 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] /= divisor; break;
       case ncclInt64:    I8[idx] /= divisor; break;
       case ncclUint64:   U8[idx] /= divisor; break;
-      case ncclFp8E4M3:  F1[idx] /= divisor; break;
-      case ncclFloat16:  F2[idx]  = __float2half(__half2float(F2[idx])/divisor); break;
+      case ncclFp8E4M3:  F1[idx] = (rccl_float8((float)(F1[idx]) / divisor)); break;
+      case ncclFloat16:  F2[idx] = __float2half(__half2float(F2[idx])/divisor); break;
       case ncclFloat32:  F4[idx] /= divisor; break;
       case ncclFloat64:  F8[idx] /= divisor; break;
-      case ncclFp8E5M2:  B1[idx] /= divisor; break;
+      case ncclFp8E5M2:  B1[idx] = (rccl_bfloat8((float)(B1[idx]) / divisor)); break;
       case ncclBfloat16: B2[idx] = (rccl_bfloat16((float)(B2[idx]) / divisor)); break;
       default:
         ERROR("Unsupported datatype\n");
