@@ -53,7 +53,9 @@ namespace RcclUnitTesting
     "ncclFloat16",
     "ncclFloat32",
     "ncclFloat64",
-    "ncclBfloat16"
+    "ncclBfloat16",
+    "ncclFp8E4M3",
+    "ncclFp8E5M2"
   };
 
   char const ncclRedOpNames[ncclNumOps][32] =

@@ -18,7 +18,7 @@
 #include "channel.h"
 #include "rocmwrap.h"
 #include "rccl_vars.h"
-#include "rocblas_float8.h"
+#include "rccl_bfloat8.h"
 #include "transport.h"
 #include "common.h"
 #include <cstring> // std::memcpy
@@ -1562,8 +1562,8 @@ static ncclResult_t hostToDevRedOp(
     rccl_bfloat16 bf16;
 #endif
 #if defined(RCCL_FLOAT8)
-    rocblas_f8 fp8_e4m3;
-    rocblas_bf8 fp8_e5m2;
+    rccl_float8 fp8_e4m3;
+    rccl_bfloat8 fp8_e5m2;
 #endif
     void *ptr;
   };
@@ -1609,11 +1609,11 @@ static ncclResult_t hostToDevRedOp(
 #if defined(RCCL_FLOAT8)
     case ncclFp8E4M3:
       opFull->op = ncclDevPreMulSum;
-      fp8_e4m3 = static_cast<rocblas_f8>(float(1.0/comm->nRanks));
+      fp8_e4m3 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
       break;
     case ncclFp8E5M2:
       opFull->op = ncclDevPreMulSum;
-      fp8_e5m2 = static_cast<rocblas_bf8>(float(1.0/comm->nRanks));
+      fp8_e5m2 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
       break;
 #endif
     case ncclFloat32:

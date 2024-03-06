@@ -68,8 +68,8 @@ ncclResult_t ncclLaunchOneRank(void* dst, void const* src, size_t nElts, struct 
   case ncclBfloat16: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat16>>; break;
 #endif
 #if defined(RCCL_FLOAT8)
-  case ncclFp8E4M3: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rocblas_f8>>; break;
-  case ncclFp8E5M2: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rocblas_bf8>>; break;
+  case ncclFp8E4M3: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_float8>>; break;
+  case ncclFp8E5M2: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat8>>; break;
 #endif
   case ncclFloat32:  kernel = (void const*)&oneRankReduce<FuncPreMulSum<float>>; break;
   case ncclFloat64:  kernel = (void const*)&oneRankReduce<FuncPreMulSum<double>>; break;

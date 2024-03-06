@@ -371,8 +371,7 @@ set(SRC_FILES
   src/include/proxy.h
   src/include/rccl_bfloat16.h
   src/include/rccl_vars.h
-  src/include/rocblas_float8.h
-  src/include/rocblas_hip_f8_impl.h
+  src/include/rccl_bfloat8.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
   src/include/shm.h
