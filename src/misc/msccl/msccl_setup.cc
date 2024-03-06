@@ -445,7 +445,11 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
         }
         sizeRounded *= 2;
       }
-      NCCLCHECK(ncclCudaMalloc((char**)&scratchBuffer, sizeRounded, true));
+#if defined(HIP_UNCACHED_MEMORY)
+      NCCLCHECK(ncclCudaMalloc((char**)&scratchBuffer, sizeRounded, hipDeviceMallocUncached));
+#else
+      NCCLCHECK(ncclCudaMalloc((char**)&scratchBuffer, sizeRounded, hipDeviceMallocFinegrained));
+#endif
       work.scratchBuffer = status.scratchBuffers[sizeRounded] = scratchBuffer;
       INFO(NCCL_INIT, "MSCCL: Allocated scratch buffer of size %lu on request (%lu)", sizeRounded, sizeNeeded);
     } else {
@@ -533,7 +537,11 @@ error:
 
 ncclResult_t mscclInitWorkFifoStatus(mscclWorkFifoStatus* workFifoStatus) {
   workFifoStatus->workFifoDepth = rcclParamMscclWorkFifoDepth();
-  NCCLCHECK(ncclCudaMalloc(&(workFifoStatus->workFifo), workFifoStatus->workFifoDepth, true));
+#if defined(HIP_UNCACHED_MEMORY)
+  NCCLCHECK(ncclCudaMalloc(&(workFifoStatus->workFifo), workFifoStatus->workFifoDepth, hipDeviceMallocUncached));
+#else
+  NCCLCHECK(ncclCudaMalloc(&(workFifoStatus->workFifo), workFifoStatus->workFifoDepth, hipDeviceMallocFinegrained));
+#endif
   NCCLCHECK(ncclCudaHostCalloc(&(workFifoStatus->workFifoDone), MSCCL_MAX_NUM_THREAD_BLOCKS));
   workFifoStatus->workFifoSent = 0;
   for (int i = 0; i < MSCCL_MAX_NUM_THREAD_BLOCKS; i++) {
