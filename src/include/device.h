@@ -539,7 +539,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
     row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * (algo * NCCL_NUM_PROTOCOLS + proto);
     goto have_row;
   }
-  row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+  row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
 
   // RING / SIMPLE / Sum / int8_t
   if (coll == ncclFuncAllToAllPivot) goto have_row;
@@ -554,17 +554,17 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
   // RING / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncReduce) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto; 
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto;
     goto have_row;
   }
-  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
 
   // RING / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncReduceScatter) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto;
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto;
     goto have_row;
   }
-  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
 
   // RING / SIMPLE / Sum / int8_t
   if (coll == ncclFuncSendRecv) goto have_row;
