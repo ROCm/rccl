@@ -18,7 +18,6 @@
 #include "channel.h"
 #include "rocmwrap.h"
 #include "rccl_vars.h"
-#include "rccl_bfloat8.h"
 #include "transport.h"
 #include "common.h"
 #include <cstring> // std::memcpy
