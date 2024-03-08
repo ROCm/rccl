@@ -10,6 +10,7 @@
 #define NCCL_DEVICE_H_
 
 #include "nccl.h"
+#include "rccl_bfloat8.h"
 #include "rccl_bfloat16.h"
 #include "nccl_common.h"
 #include "align.h"
@@ -553,14 +554,14 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
   // RING / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncReduce) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto; 
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto; 
     goto have_row;
   }
   row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
 
   // RING / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncReduceScatter) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto;
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto;
     goto have_row;
   }
   row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);

@@ -6,8 +6,6 @@
 #ifndef MSCCL_KERNEL_H_
 #define MSCCL_KERNEL_H_
 
-#include "rccl_bfloat8.h"
-
 #define MSCCL_KERNEL_ENTRY_NAME(devredop, type, proto, fullOps) mscclKernel_##devredop##_##type##_##proto##_##fullOps
 
 #define MSCCL_DECL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE_PROTO(devredop, type, proto, fullOps) \
