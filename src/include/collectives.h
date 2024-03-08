@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -29,11 +30,15 @@ inline int ncclTypeSize(ncclDataType_t type) {
   switch (type) {
   case ncclInt8:
   case ncclUint8:
+#if defined(RCCL_FLOAT8)
+  case ncclFp8E4M3:
+  case ncclFp8E5M2:
+#endif
     return 1;
   case ncclFloat16:
-  #if defined(RCCL_BFLOAT16)
+#if defined(RCCL_BFLOAT16)
   case ncclBfloat16:
-  #endif
+#endif
     return 2;
   case ncclInt32:
   case ncclUint32:

@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -13,6 +14,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "rccl_float8.h"
+
 template<typename T>
 struct IsFloatingPoint: std::false_type {};
 template<>
@@ -20,6 +23,12 @@ struct IsFloatingPoint<half>: std::true_type {};
 #if defined(RCCL_BFLOAT16)
 template<>
 struct IsFloatingPoint<rccl_bfloat16>: std::true_type {};
+#endif
+#if defined(RCCL_FLOAT8)
+template<>
+struct IsFloatingPoint<rccl_float8>: std::true_type {};
+template<>
+struct IsFloatingPoint<rccl_bfloat8>: std::true_type {};
 #endif
 template<>
 struct IsFloatingPoint<float>: std::true_type {};
@@ -254,6 +263,15 @@ SPECIALIZE_REDUCE(FuncMinMax, half, 1, half, fn.isMinNotMax ? __hmin(x, y) : __h
 #endif
 #endif
 
+#if defined(RCCL_FLOAT8)
+  SPECIALIZE_REDUCE(FuncSum, rccl_float8, 1, rccl_float8, rccl_float8(float(x) + float(y)))
+  SPECIALIZE_REDUCE(FuncProd, rccl_float8, 1, rccl_float8, rccl_float8(float(x) * float(y)))
+  SPECIALIZE_REDUCE(FuncMinMax, rccl_float8, 1, rccl_float8, rccl_float8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+  SPECIALIZE_REDUCE(FuncSum, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) + float(y)))
+  SPECIALIZE_REDUCE(FuncProd, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) * float(y)))
+  SPECIALIZE_REDUCE(FuncMinMax, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+#endif
+
 #undef SPECIALIZE_REDUCE
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -389,6 +407,38 @@ struct FuncPreMulSum<half> {
   };
 #endif
 
+#if defined(RCCL_FLOAT8)
+  template<>
+  struct FuncPreMulSum<rccl_float8> {
+    // Change these to switch between all prescale, all postscale, or both by sqrt(N).
+    // Obviously, the only invalid combination is both true. An improvement would be
+    // make this parameterized as a build time setting and passed here through
+    // preprocessor definitions.
+    using EltType = rccl_float8;
+    float scalar;
+    __device__ FuncPreMulSum(uint64_t opArg=0) {
+      union { uint64_t u64; rccl_float8 val; };
+      u64 = opArg;
+      scalar = (float)(val);
+    }
+  };
+
+  template<>
+  struct FuncPreMulSum<rccl_bfloat8> {
+    // Change these to switch between all prescale, all postscale, or both by sqrt(N).
+    // Obviously, the only invalid combination is both true. An improvement would be
+    // make this parameterized as a build time setting and passed here through
+    // preprocessor definitions.
+    using EltType = rccl_bfloat8;
+    float scalar;
+    __device__ FuncPreMulSum(uint64_t opArg=0) {
+      union { uint64_t u64; rccl_bfloat8 val; };
+      u64 = opArg;
+      scalar = (float)(val);
+    }
+  };
+#endif
+
 template<typename T>
 struct Apply_Reduce<FuncPreMulSum<T>, /*EltPerPack=*/1> {
   __device__ static BytePack<sizeof(T)> reduce(FuncPreMulSum<T> fn, BytePack<sizeof(T)> a, BytePack<sizeof(T)> b) {
@@ -454,6 +504,30 @@ struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
       }
     };
   #endif
+#endif
+
+#if defined(RCCL_FLOAT8)
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<rccl_float8>, /*EltPerPack=*/1> {
+    static constexpr bool IsIdentity = false;
+
+    __device__ static BytePack<sizeof(rccl_float8)> preOp(
+        FuncPreMulSum<rccl_float8> fn, BytePack<sizeof(rccl_float8)> a
+      ) {
+        return toPack<rccl_float8>(rccl_float8(float(fromPack<rccl_float8>(a)) * float(fn.scalar)));
+    }
+  };
+
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<rccl_bfloat8>, /*EltPerPack=*/1> {
+    static constexpr bool IsIdentity = false;
+
+    __device__ static BytePack<sizeof(rccl_bfloat8)> preOp(
+        FuncPreMulSum<rccl_bfloat8> fn, BytePack<sizeof(rccl_bfloat8)> a
+      ) {
+        return toPack<rccl_bfloat8>(rccl_bfloat8(float(fromPack<rccl_bfloat8>(a)) * float(fn.scalar)));
+    }
+  };
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////

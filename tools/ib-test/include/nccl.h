@@ -20,6 +20,7 @@
 #define NCCL_VERSION(X,Y,Z) ((X) * 1000 + (Y) * 100 + (Z))
 
 #define RCCL_BFLOAT16 1
+#define RCCL_BFLOAT8 1
 #define RCCL_GATHER_SCATTER 1
 
 #ifdef __cplusplus
@@ -120,7 +121,9 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
                ncclFloat32    = 7, ncclFloat      = 7,
                ncclFloat64    = 8, ncclDouble     = 8,
                ncclBfloat16   = 9,
-               ncclNumTypes   = 10 } ncclDataType_t;
+               ncclFp8E4M3    = 10,
+               ncclFp8E5M2    = 11,
+               ncclNumTypes   = 12 } ncclDataType_t;
 
 /*
  * Collective communication operations

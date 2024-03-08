@@ -114,6 +114,8 @@ namespace RcclUnitTesting
       dataTypes.push_back(ncclFloat32);
       dataTypes.push_back(ncclFloat64);
       dataTypes.push_back(ncclBfloat16);
+      dataTypes.push_back(ncclFp8E4M3);
+      dataTypes.push_back(ncclFp8E5M2);
     }
 
     // Build list of possible # GPU ranks based on env vars

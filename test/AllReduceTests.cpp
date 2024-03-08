@@ -32,7 +32,7 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat64};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat64, ncclFp8E4M3, ncclFp8E5M2};
     std::vector<ncclRedOp_t>    const redOps          = {ncclMin};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {12888};
@@ -70,7 +70,7 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclInt32};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclInt32, ncclFp8E4M3, ncclFp8E5M2};
     std::vector<ncclRedOp_t>    const redOps          = {ncclMax};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {393216, 12888, 384};

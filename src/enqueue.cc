@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -1556,9 +1557,13 @@ static ncclResult_t hostToDevRedOp(
     half f16;
     float f32; 
     double f64;
-    #if defined(RCCL_BFLOAT16)
-      rccl_bfloat16 bf16;
-    #endif
+#if defined(RCCL_BFLOAT16)
+    rccl_bfloat16 bf16;
+#endif
+#if defined(RCCL_FLOAT8)
+    rccl_float8 fp8_e4m3;
+    rccl_bfloat8 fp8_e5m2;
+#endif
     void *ptr;
   };
   u64 = 0;
@@ -1594,12 +1599,22 @@ static ncclResult_t hostToDevRedOp(
       opFull->op = ncclDevPreMulSum;
       f16 = __float2half(float(1.0/comm->nRanks)); // __double2half not supported pre CUDA 11.x
       break;
-    #if defined(RCCL_BFLOAT16)
+#if defined(RCCL_BFLOAT16)
     case ncclBfloat16:
       opFull->op = ncclDevPreMulSum;
       bf16 = (rccl_bfloat16)(float(1.0/comm->nRanks));
       break;
-    #endif
+#endif
+#if defined(RCCL_FLOAT8)
+    case ncclFp8E4M3:
+      opFull->op = ncclDevPreMulSum;
+      fp8_e4m3 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
+      break;
+    case ncclFp8E5M2:
+      opFull->op = ncclDevPreMulSum;
+      fp8_e5m2 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
+      break;
+#endif
     case ncclFloat32:
       opFull->op = ncclDevPreMulSum;
       f32 = float(1.0/comm->nRanks);

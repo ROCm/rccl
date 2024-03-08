@@ -130,6 +130,8 @@ size_t DataTypeToBytes(ncclDataType_t const dataType)
   case ncclFloat32: return 4;
   case ncclFloat64: return 8;
   case ncclBfloat16: return 2;
+  case ncclFp8E4M3:  return 1;
+  case ncclFp8E5M2:  return 1;
   default:
     printf("Unsupported datatype (%d)\n", dataType);
     exit(0);

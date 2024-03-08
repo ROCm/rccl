@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,6 +10,7 @@
 #define NCCL_DEVICE_H_
 
 #include "nccl.h"
+#include "rccl_float8.h"
 #include "rccl_bfloat16.h"
 #include "nccl_common.h"
 #include "align.h"
@@ -502,9 +504,13 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
   case ncclInt64:
   case ncclUint64:
   case ncclFloat16:
-  #if defined(RCCL_BFLOAT16)
+#if defined(RCCL_BFLOAT16)
   case ncclBfloat16:
-  #endif
+#endif
+#if defined(RCCL_FLOAT8)
+  case ncclFp8E4M3:
+  case ncclFp8E5M2:
+#endif
     return devRedOp == ncclDevSum || devRedOp == ncclDevMinMax;
   case ncclFloat:
   case ncclDouble:
@@ -530,10 +536,10 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
   // <all_algos> / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncAllReduce) {
-    row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * (algo * NCCL_NUM_PROTOCOLS + proto);
+    row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * (algo * NCCL_NUM_PROTOCOLS + proto);
     goto have_row;
   }
-  row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+  row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
 
   // RING / SIMPLE / Sum / int8_t
   if (coll == ncclFuncAllToAllPivot) goto have_row;
@@ -548,17 +554,17 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
   // RING / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncReduce) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto; 
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto; 
     goto have_row;
   }
-  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
 
   // RING / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncReduceScatter) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto;
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto;
     goto have_row;
   }
-  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);
+  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
 
   // RING / SIMPLE / Sum / int8_t
   if (coll == ncclFuncSendRecv) goto have_row;

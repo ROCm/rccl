@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -63,9 +64,13 @@ ncclResult_t ncclLaunchOneRank(void* dst, void const* src, size_t nElts, struct 
   case ncclInt64:    kernel = (void const*)&oneRankReduce<FuncPreMulSum<int64_t>>; break;
   case ncclUint64:   kernel = (void const*)&oneRankReduce<FuncPreMulSum<uint64_t>>; break;
   case ncclFloat16:  kernel = (void const*)&oneRankReduce<FuncPreMulSum<half>>; break;
-  #if defined(RCCL_BFLOAT16)
+#if defined(RCCL_BFLOAT16)
   case ncclBfloat16: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat16>>; break;
-  #endif
+#endif
+#if defined(RCCL_FLOAT8)
+  case ncclFp8E4M3: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_float8>>; break;
+  case ncclFp8E5M2: kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat8>>; break;
+#endif
   case ncclFloat32:  kernel = (void const*)&oneRankReduce<FuncPreMulSum<float>>; break;
   case ncclFloat64:  kernel = (void const*)&oneRankReduce<FuncPreMulSum<double>>; break;
   default: return ncclInvalidArgument;

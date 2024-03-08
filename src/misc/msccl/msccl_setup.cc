@@ -226,6 +226,10 @@ static ncclResult_t hostToDevRedOp(
     #if defined(RCCL_BFLOAT16)
       rccl_bfloat16 bf16;
     #endif
+    #if defined(RCCL_FLOAT8)
+      rccl_float8 fp8_e4m3;
+      rccl_bfloat8 fp8_e5m2;
+    #endif
     float f32;
     double f64;
     void *ptr;
@@ -267,6 +271,16 @@ static ncclResult_t hostToDevRedOp(
     case ncclBfloat16:
       opFull->op = ncclDevPreMulSum;
       bf16 = (rccl_bfloat16)(float(1.0/comm->nRanks));
+      break;
+    #endif
+    #if defined(RCCL_FLOAT8)
+    case ncclFp8E4M3:
+      opFull->op = ncclDevPreMulSum;
+      fp8_e4m3 = (rccl_float8)(float(1.0/comm->nRanks));
+      break;
+    case ncclFp8E5M2:
+      opFull->op = ncclDevPreMulSum;
+      fp8_e5m2 = (rccl_bfloat8)(float(1.0/comm->nRanks));
       break;
     #endif
     case ncclFloat32:
@@ -315,7 +329,9 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, half, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double, fullOps), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps)
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_float8, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat8, fullOps)
 
 #define MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(devredop, fullOps) \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t, fullOps), \
@@ -324,6 +340,8 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint32_t, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int64_t, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, uint64_t, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_NULL(), \
