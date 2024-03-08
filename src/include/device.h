@@ -10,7 +10,7 @@
 #define NCCL_DEVICE_H_
 
 #include "nccl.h"
-#include "rccl_bfloat8.h"
+#include "rccl_float8.h"
 #include "rccl_bfloat16.h"
 #include "nccl_common.h"
 #include "align.h"

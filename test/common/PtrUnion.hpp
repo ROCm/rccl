@@ -7,7 +7,7 @@
 #pragma once
 #include "ErrCode.hpp"
 #include "rccl/rccl.h"
-#include "rccl_bfloat8.h"
+#include "rccl_float8.h"
 #include "rccl_bfloat16.h"
 #include "hip/hip_fp16.h"
 

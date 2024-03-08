@@ -14,7 +14,7 @@
 #include <limits>
 #include <type_traits>
 
-#include "rccl_bfloat8.h"
+#include "rccl_float8.h"
 
 template<typename T>
 struct IsFloatingPoint: std::false_type {};
