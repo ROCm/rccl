@@ -758,7 +758,7 @@ inline __host__ __device__ rccl_bfloat8& operator+=(rccl_bfloat8& a, rccl_bfloat
 }
 
 // overloading multiplication, always returns float,
-inline __host__ __device__ float operator*(mk a, rccl_float8 b)
+inline __host__ __device__ float operator*(rccl_float8 a, rccl_float8 b)
 {
     return float(a) * float(b);
 }
