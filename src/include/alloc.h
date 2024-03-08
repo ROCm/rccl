@@ -169,7 +169,7 @@ ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA malloc %ld bytes", nelem*sizeof(T));
-  INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
+  INFO(NCCL_ALLOC, "%s:%d Cuda malloc size %ld pointer %p flags %d", filefunc, line, nelem*sizeof(T), *ptr, flags);
   return result;
 }
 #define ncclCudaMalloc(...) ncclCudaMallocDebug( __FILE__, __LINE__, __VA_ARGS__)
@@ -198,7 +198,7 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA calloc %ld bytes", nelem*sizeof(T));
-  INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
+  INFO(NCCL_ALLOC, "%s:%d Cuda calloc size %ld pointer %p flags %d", filefunc, line, nelem*sizeof(T), *ptr, flags);
   return result;
 }
 #define ncclCudaCalloc(...) ncclCudaCallocDebug(__FILE__, __LINE__, __VA_ARGS__)
@@ -220,7 +220,7 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr) WARN("Failed to CUDA calloc async %ld bytes", nelem*sizeof(T));
-  INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p", filefunc, line, nelem*sizeof(T), *ptr);
+  INFO(NCCL_ALLOC, "%s:%d Cuda calloc async size %ld pointer %p flags %d", filefunc, line, nelem*sizeof(T), *ptr, flags);
   return result;
 }
 #define ncclCudaCallocAsync(...) ncclCudaCallocAsyncDebug(__FILE__, __LINE__, __VA_ARGS__)
