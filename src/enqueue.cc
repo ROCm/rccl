@@ -1136,6 +1136,8 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   else {
     float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
     // Find algorithm / protocol.
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, 0));
     info->algorithm = -1;
     info->protocol = -1;
     int nAlgos = NCCL_NUM_ALGORITHMS;
@@ -1146,7 +1148,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
       if (a == NCCL_ALGO_NVLS_TREE && !NCCL_NVLS_SUPPORTS(info->datatype, info->opFull.op)) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-        if (p == NCCL_PROTO_LL128 && info->comm->topo->type != RCCL_TOPO_XGMI_ALL) continue;
+        if (p == NCCL_PROTO_LL128 && info->comm->topo->type != RCCL_TOPO_XGMI_ALL && !IsArchMatch(devProp.gcnArchName,"gfx1030")) continue;
         float time;
         NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
         if (time >= 0 && time < minTime) {
