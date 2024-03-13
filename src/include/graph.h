@@ -34,6 +34,7 @@ int ncclTopoPathAllNVLink(struct ncclTopoSystem* system);
 // Query topology
 ncclResult_t ncclTopoGetNetDev(struct ncclComm* comm, int rank, struct ncclTopoGraph* graph, int channelId, int peerRank, int* net, int* proxyRank);
 ncclResult_t ncclTopoCheckP2p(struct ncclTopoSystem* system, int64_t id1, int64_t id2, int* p2p, int *read, int* intermediateRank);
+ncclResult_t ncclTopoCheckMNNVL(struct ncclTopoSystem* system, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2, int* ret);
 ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* topo, int64_t busId, int netDev, int read, int* useGdr);
 #define MAX_XGMI_INTER_GPUS 4
 ncclResult_t ncclTopoGetIntraNetDev(struct ncclTopoSystem* system, int rank, struct ncclTopoGraph* graph, int channelId, int type, int* dev);
@@ -59,10 +60,11 @@ ncclResult_t ncclTopoGetCpuAffinity(struct ncclTopoSystem* system, int rank, cpu
 #define NCCL_TOPO_CPU_TYPE_YONGFENG 1
 ncclResult_t ncclTopoCpuType(struct ncclTopoSystem* system, int* arch, int* vendor, int* model);
 ncclResult_t ncclTopoGetGpuCount(struct ncclTopoSystem* system, int* count);
-ncclResult_t ncclTopoGetNvsCount(struct ncclTopoSystem* system, int* count);
+ncclResult_t ncclTopoGetNetCount(struct ncclTopoSystem* system, int* count);
 ncclResult_t ncclTopoGetNvsCount(struct ncclTopoSystem* system, int* count);
 ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int channelId, int* id);
 ncclResult_t ncclTopoGetLocalGpu(struct ncclTopoSystem* system, int net, int* gpuIndex);
+ncclResult_t getLocalNetCountByBw(struct ncclTopoSystem* system, int gpu, int *count);
 
 #define NCCL_TOPO_MAX_NODES 256
 
@@ -111,6 +113,7 @@ struct ncclTopoRanks {
   int treeToChild0[MAXCHANNELS];
   int treeToChild1[MAXCHANNELS];
   int nvlsHeads[MAXCHANNELS];
+  int nvlsHeadNum;
 };
 
 ncclResult_t ncclTopoPreset(struct ncclComm* comm, struct ncclTopoGraph** graphs, struct ncclTopoRanks* topoRanks);

@@ -17,7 +17,7 @@
 #define SM60_NVLINK_BW 18.0
 #define SM70_NVLINK_BW 20.0
 #define SM80_NVLINK_BW 20.0
-#define SM90_NVLINK_BW 20.0
+#define SM90_NVLINK_BW 20.6
 #define SM86_NVLINK_BW 12.0
 #define PCI_BW 12.0           // PCI Gen3 x16
 #define QPI_BW 6.0
@@ -241,6 +241,17 @@ static float ncclTopoXGMISpeed(const char* gcn) {
 #else
   #define ncclGetKernelIndex(p_comm) (0)
 #endif
+
+// Returns NVLink bw in GB/s
+static float ncclTopoNVLinkBw(int cudaCompCap) {
+  return
+    cudaCompCap >= 90 ? SM90_NVLINK_BW :
+    cudaCompCap == 86 ? SM86_NVLINK_BW :
+    cudaCompCap >= 80 ? SM80_NVLINK_BW :
+    cudaCompCap >= 70 ? SM70_NVLINK_BW :
+    cudaCompCap >= 60 ? SM60_NVLINK_BW :
+    SM80_NVLINK_BW;
+}
 
 // Mirror bits
 static bool isPow2(int val) {

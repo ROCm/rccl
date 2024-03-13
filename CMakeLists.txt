@@ -281,11 +281,12 @@ set(SRC_FILES
   src/enqueue.cc
   src/group.cc
   src/init.cc
+  src/init_nvtx.cc
   src/net.cc
   src/msccl.cc
   src/proxy.cc
+  src/register.cc
   src/transport.cc
-  src/init_nvtx.cc
 # src/clique/AllReduceCliqueKernel.h
 # src/clique/CliqueCommon.h
 # src/clique/CliqueManager.cc
@@ -374,6 +375,7 @@ set(SRC_FILES
   src/include/proxy.h
   src/include/rccl_bfloat16.h
   src/include/rccl_vars.h
+  src/include/register.h
   src/include/rccl_float8.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
