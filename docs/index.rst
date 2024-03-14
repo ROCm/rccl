@@ -12,14 +12,15 @@ Welcome to the ROCm Collective Communication Library (RCCL) docs home page! To l
 
 Our documentation is structured as follows:
 
+
 .. grid:: 2
-    :gutter: 3
-  
+  :gutter: 3
+
   .. grid-item-card:: API reference
 
     * :ref:`library-specification`
     * :ref:`api-library`
-   
+       
 To contribute to the documentation refer to
 `Contributing to ROCm  <https://rocm.docs.amd.com/en/latest/contribute/contributing.html>`_.
 
