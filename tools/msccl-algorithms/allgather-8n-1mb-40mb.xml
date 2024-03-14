@@ -1,6 +1,6 @@
 <!-- Copyright (c) Microsoft Corporation. -->
 <!-- Licensed under the MIT License. -->
-<algo name="all_gather_llm" proto="Simple" nchannels="8" nchunksperloop="64" ngpus="8" coll="allgather" inplace="1" outofplace="0" minBytes="4194303" maxBytes="16777216">
+<algo name="all_gather_llm" proto="Simple" nchannels="8" nchunksperloop="64" ngpus="8" coll="allgather" inplace="1" outofplace="0" minBytes="1048576" maxBytes="41943040">
   <gpu id="0" i_chunks="0" o_chunks="64" s_chunks="0">
     <tb id="0" send="1" recv="1" chan="0">
       <step s="0" type="s" srcbuf="o" srcoff="0" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
