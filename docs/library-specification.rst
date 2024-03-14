@@ -4,17 +4,13 @@
 
 .. _library-specification:
 
-.. toctree::
-   :maxdepth: 4
-   :caption: Contents:
-
 ============================
 RCCL library specification
 ============================
 
 This document provides details of the API library. 
 
-Communicator Functions
+Communicator functions
 ----------------------
 
 .. doxygenfunction:: ncclGetUniqueId
@@ -33,7 +29,7 @@ Communicator Functions
 
 .. doxygenfunction:: ncclCommUserRank
 
-Collective Communication Operations
+Collective communication operations
 -----------------------------------
 
 Collective communication operations must be called separately for each communicator in a communicator clique.
@@ -64,7 +60,7 @@ Since they may perform inter-CPU synchronization, each call has to be done from 
 
 .. doxygenfunction:: ncclAllToAll
 
-Group Semantics
+Group semantics
 ---------------
 When managing multiple GPUs from a single thread, and since NCCL collective
 calls may perform inter-CPU synchronization, we need to "group" calls for
@@ -84,7 +80,7 @@ of ncclGroupStart/ncclGroupEnd.
 
 .. doxygenfunction:: ncclGroupEnd
 
-Library Functions
+Library functions
 -----------------
 
 .. doxygenfunction:: ncclGetVersion
@@ -114,7 +110,3 @@ This section provides all the enumerations used.
 .. doxygenenum:: ncclRedOp_t
 
 .. doxygenenum:: ncclDataType_t
-
-
-
-

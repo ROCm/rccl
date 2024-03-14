@@ -8,11 +8,12 @@
 RCCL documentation
 ===========================
 
-Welcome to the RCCL (ROCm Collective Communication Library) docs home page! To learn more, see :ref:`what-is-rccl`.
+Welcome to the ROCm Collective Communication Library (RCCL) docs home page! To learn more, see :ref:`what-is-rccl`.
 
 Our documentation is structured as follows:
 
 .. grid:: 2
+    :gutter: 3
   
   .. grid-item-card:: API reference
 
