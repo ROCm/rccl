@@ -18,7 +18,7 @@ Our documentation is structured as follows:
 
   .. grid-item-card:: API reference
 
-    * :ref:`library-specification`
+    * :ref:`Library specification<library-specification>`
     * :ref:`api-library`
        
 To contribute to the documentation refer to
