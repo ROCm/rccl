@@ -1,10 +1,14 @@
 root: index
 subtrees:
 - entries:
-  - file: api
-  - file: allapi
-  - file: attributions
+  - file: what-is-rccl
+- caption: API reference 
+  entries:
+  - file: library-specification
+  - file: api-library
+  
 - caption: About
   entries:
   - file: license
+  - file: attributions
 
