@@ -589,6 +589,12 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
   int minNchannels = ncclMinNchannels();
 
+  if IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") {
+    int managed = 0;
+    CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
+    minNchannels = std::max((managed+1)*nChannels,minNchannels);
+  }
+
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     int mscclNumChannelsRequired = 0;
     mscclSchedulerInit(comm, &mscclNumChannelsRequired);
