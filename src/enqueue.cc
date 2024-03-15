@@ -1127,40 +1127,57 @@ static inline ncclResult_t getCollNetSupport(struct ncclInfo* info, int* collNet
 }
 
 // numPipeOps: number of pipelined ops. Can be greater than 1 in aggregation mode. Used to adjust latency.
-static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, int numPipeOps) {
+static ncclResult_t topoGetAlgoInfo(struct ncclInfo* info, int collNetSupport, int nvlsSupport, int numPipeOps) {
   struct ncclComm* comm = info->comm;
   if (comm->nRanks == 1 || info->coll == ncclFuncAllToAllPivot) {
     info->algorithm = NCCL_ALGO_RING;
     info->protocol = NCCL_PROTO_SIMPLE;
   }
-  else {
+  else if (info->algorithm == NCCL_ALGO_UNDEF || info->protocol == NCCL_PROTO_UNDEF) {
     float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
+    float backupMinTime = 3600000000.0;
+    bool backup = false;
+    int backupAlgo = NCCL_ALGO_UNDEF; // back up algo and proto if no algo/proto is picked up.
+    int backupProto = NCCL_PROTO_UNDEF;
     // Find algorithm / protocol.
-    hipDeviceProp_t devProp;
-    CUDACHECK(hipGetDeviceProperties(&devProp, 0));
     info->algorithm = -1;
     info->protocol = -1;
     int nAlgos = NCCL_NUM_ALGORITHMS;
     for (int a=0; a<nAlgos; a++) {
-      if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetTypeSupport != 1) continue;
-      if (a == NCCL_ALGO_NVLS && !NCCL_NVLS_SUPPORTS(info->datatype, info->opFull.op)) continue;
-      if (a == NCCL_ALGO_NVLS && collNetTypeSupport != 1 && comm->nNodes > 1) continue;
-      if (a == NCCL_ALGO_NVLS_TREE && !NCCL_NVLS_SUPPORTS(info->datatype, info->opFull.op)) continue;
+      if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
+      if (a == NCCL_ALGO_NVLS && nvlsSupport != 1 && info->coll != ncclFuncAllGather) continue;
+      if (a == NCCL_ALGO_NVLS && collNetSupport != 1 && comm->nNodes > 1) continue;
+      /* now we only support single-node NVLS allgather and reducescatter */
+      if (a == NCCL_ALGO_NVLS && (info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter) && comm->nNodes > 1) continue;
+      if (a == NCCL_ALGO_NVLS_TREE && nvlsSupport != 1) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-        if (p == NCCL_PROTO_LL128 && info->comm->topo->type != RCCL_TOPO_XGMI_ALL && !IsArchMatch(devProp.gcnArchName,"gfx1030")) continue;
+        if (p == NCCL_PROTO_LL128 && info->comm->topo->type != RCCL_TOPO_XGMI_ALL) continue;
         float time;
-        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
-        if (time >= 0 && time < minTime) {
-          info->algorithm = a;
-          info->protocol = p;
-          minTime = time;
+        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time, &backup));
+        if (!backup) {
+          if (time >= 0 && time < minTime) {
+            info->algorithm = a;
+            info->protocol = p;
+            minTime = time;
+          }
+        } else {
+          if (time >= 0 && time < backupMinTime) {
+            backupAlgo = a;
+            backupProto = p;
+            backupMinTime = time;
+          }
         }
       }
     }
-    if (info->algorithm == -1 || info->protocol == -1) {
-      WARN("Error : no algorithm/protocol available");
-      return ncclInternalError;
+
+    if (info->algorithm == NCCL_ALGO_UNDEF || info->protocol == NCCL_PROTO_UNDEF) {
+      if (backupAlgo == NCCL_ALGO_UNDEF || backupProto == NCCL_PROTO_UNDEF) {
+        WARN("Error : no algorithm/protocol available");
+        return ncclInternalError;
+      }
+      info->algorithm = backupAlgo;
+      info->protocol = backupProto;
     }
     //if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
     TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
@@ -1238,6 +1255,26 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
   info->nThreads = nt;
   return ncclSuccess;
 }
+
+// Use the default topo-based tuner if tuner plugin is not successful.
+// Call the plugin first. Let it set algo+proto, and/or nChannels.
+// Then, topoGetAlgoInfo will set algo/proto if not set, then nChannels and nThreads based on algo/proto.
+// Finally, nChannels will be overriden by the plugin setting.
+static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetSupport, int nvlsSupport, int numPipeOps) {
+  info->algorithm = NCCL_ALGO_UNDEF;
+  info->protocol = NCCL_PROTO_UNDEF;
+  int nChannels = 0;
+  if (info->comm->tuner != NULL) {
+    NCCLCHECK(info->comm->tuner->getCollInfo(
+          info->coll, info->nBytes,
+          collNetSupport, nvlsSupport, numPipeOps,
+          &info->algorithm, &info->protocol, &nChannels));
+  }
+  NCCLCHECK(topoGetAlgoInfo(info, collNetSupport, nvlsSupport, numPipeOps));
+  if (nChannels) info->nChannels = nChannels; // Set by plugin; override default.
+  return ncclSuccess;
+}
+
 
 static ncclResult_t getPatternInfo(struct ncclInfo* info) {
   switch (info->coll) {
