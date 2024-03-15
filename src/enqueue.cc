@@ -1152,7 +1152,7 @@ static ncclResult_t topoGetAlgoInfo(struct ncclInfo* info, int collNetSupport, i
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         if (p == NCCL_PROTO_LL128 && info->comm->topo->type != RCCL_TOPO_XGMI_ALL) continue;
         float time;
-        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time, &backup));
+        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
         if (!backup) {
           if (time >= 0 && time < minTime) {
             info->algorithm = a;
