@@ -26,6 +26,7 @@ extern const char* funcNames[FUNC_INDEX_TOTAL];
 #endif
 
 #define NCCL_NUM_ALGORITHMS 6 // Tree/Ring/CollNet*
+#define NCCL_ALGO_UNDEF -1
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
 #define NCCL_ALGO_COLLNET_DIRECT 2
@@ -35,6 +36,7 @@ extern const char* funcNames[FUNC_INDEX_TOTAL];
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
+#define NCCL_PROTO_UNDEF -1
 #define NCCL_PROTO_LL 0
 #define NCCL_PROTO_LL128 1
 #define NCCL_PROTO_SIMPLE 2
@@ -521,7 +523,7 @@ inline int ncclFuncId(int coll, int devRedOp, int type, int algo, int proto) {
 
   // RING / <all_protos> / <all_redops> / <all_types>
   if (coll == ncclFuncReduce) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto; 
+    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 4 * proto;
     goto have_row;
   }
   row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 4);

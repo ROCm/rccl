@@ -1127,7 +1127,7 @@ static inline ncclResult_t getCollNetSupport(struct ncclInfo* info, int* collNet
 }
 
 // numPipeOps: number of pipelined ops. Can be greater than 1 in aggregation mode. Used to adjust latency.
-static ncclResult_t topoGetAlgoInfo(struct ncclInfo* info, int collNetSupport, int nvlsSupport, int numPipeOps) {
+static ncclResult_t topoGetAlgoInfo(struct ncclInfo* info, int collNetSupport, int numPipeOps) {
   struct ncclComm* comm = info->comm;
   if (comm->nRanks == 1 || info->coll == ncclFuncAllToAllPivot) {
     info->algorithm = NCCL_ALGO_RING;
@@ -1145,11 +1145,9 @@ static ncclResult_t topoGetAlgoInfo(struct ncclInfo* info, int collNetSupport, i
     int nAlgos = NCCL_NUM_ALGORITHMS;
     for (int a=0; a<nAlgos; a++) {
       if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
-      if (a == NCCL_ALGO_NVLS && nvlsSupport != 1 && info->coll != ncclFuncAllGather) continue;
       if (a == NCCL_ALGO_NVLS && collNetSupport != 1 && comm->nNodes > 1) continue;
       /* now we only support single-node NVLS allgather and reducescatter */
       if (a == NCCL_ALGO_NVLS && (info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter) && comm->nNodes > 1) continue;
-      if (a == NCCL_ALGO_NVLS_TREE && nvlsSupport != 1) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         if (p == NCCL_PROTO_LL128 && info->comm->topo->type != RCCL_TOPO_XGMI_ALL) continue;
@@ -1264,13 +1262,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetSupport, int n
   info->algorithm = NCCL_ALGO_UNDEF;
   info->protocol = NCCL_PROTO_UNDEF;
   int nChannels = 0;
-  if (info->comm->tuner != NULL) {
-    NCCLCHECK(info->comm->tuner->getCollInfo(
-          info->coll, info->nBytes,
-          collNetSupport, nvlsSupport, numPipeOps,
-          &info->algorithm, &info->protocol, &nChannels));
-  }
-  NCCLCHECK(topoGetAlgoInfo(info, collNetSupport, nvlsSupport, numPipeOps));
+  NCCLCHECK(topoGetAlgoInfo(info, collNetSupport, numPipeOps));
   if (nChannels) info->nChannels = nChannels; // Set by plugin; override default.
   return ncclSuccess;
 }
