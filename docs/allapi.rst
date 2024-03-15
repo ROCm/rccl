@@ -1,7 +1,0 @@
-=======
-All API
-=======
-
-.. doxygenindex::
-
-

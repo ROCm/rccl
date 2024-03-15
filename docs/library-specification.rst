@@ -1,14 +1,16 @@
-.. toctree::
-   :maxdepth: 4
-   :caption: Contents:
+.. meta::
+   :description: RCCL is a stand-alone library that provides multi-GPU and multi-node collective communication primitives optimized for AMD GPUs
+   :keywords: RCCL, ROCm, library, API
 
-===
-API
-===
+.. _library-specification:
 
-This section provides details of the library API
+============================
+RCCL library specification
+============================
 
-Communicator Functions
+This document provides details of the API library. 
+
+Communicator functions
 ----------------------
 
 .. doxygenfunction:: ncclGetUniqueId
@@ -27,7 +29,7 @@ Communicator Functions
 
 .. doxygenfunction:: ncclCommUserRank
 
-Collective Communication Operations
+Collective communication operations
 -----------------------------------
 
 Collective communication operations must be called separately for each communicator in a communicator clique.
@@ -58,7 +60,7 @@ Since they may perform inter-CPU synchronization, each call has to be done from 
 
 .. doxygenfunction:: ncclAllToAll
 
-Group Semantics
+Group semantics
 ---------------
 When managing multiple GPUs from a single thread, and since NCCL collective
 calls may perform inter-CPU synchronization, we need to "group" calls for
@@ -78,7 +80,7 @@ of ncclGroupStart/ncclGroupEnd.
 
 .. doxygenfunction:: ncclGroupEnd
 
-Library Functions
+Library functions
 -----------------
 
 .. doxygenfunction:: ncclGetVersion
@@ -108,7 +110,3 @@ This section provides all the enumerations used.
 .. doxygenenum:: ncclRedOp_t
 
 .. doxygenenum:: ncclDataType_t
-
-
-
-
