@@ -1588,58 +1588,76 @@ static ncclResult_t getTunerInfo(struct ncclInfo* collInfo, int collNetSupport, 
 /* Compute nChannels and nThreads. */
 static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo) {
   struct ncclComm *comm = collInfo->comm;
-  int nc = comm->collChannels;
+  int nc = (collInfo->nChannels > 0) ? collInfo->nChannels : comm->nChannels;
   int nt = comm->maxThreads[collInfo->algorithm][collInfo->protocol];
   int threadThreshold = comm->threadThresholds[collInfo->algorithm][collInfo->protocol];
-
-  if (collInfo->nChannels == 0) {
-    /* not preset by users */
-    if (collInfo->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
-      // CollNet channel tuning
-      int ncSwitch = 16;
-      bool flag = true;
-      while (ncSwitch >= 1 && flag) {
-        while ((flag = collInfo->nBytes < nc * nt * collInfo->comm->channels[0].collnetDirect.nHeads * threadThreshold) && nc > ncSwitch) {
-          if (nc == ncSwitch + ncSwitch / 2) threadThreshold /= 2;
-          nc--;
-        }
-        ncSwitch /= 2;
+  if (collInfo->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
+    // CollNet channel tuning
+    int ncSwitch = 16;
+    bool flag = true;
+    while (ncSwitch >= 1 && flag) {
+      while ((flag = collInfo->nBytes < nc*nt*collInfo->comm->channels[0].collnetDirect.nHeads*threadThreshold) && nc > ncSwitch) {
+        if (nc == ncSwitch+ncSwitch/2) threadThreshold /= 2;
+        nc--;
       }
-    } else if (collInfo->algorithm == NCCL_ALGO_NVLS || collInfo->algorithm == NCCL_ALGO_NVLS_TREE) {
-      // NVLS should not need more than 16 channels to get peak BW.
-      nc = comm->nvlsChannels;
-    } else {
-      // Ring/Tree channel tuning
-      while (collInfo->nBytes < nc * nt * threadThreshold) {
-        if (nc >= 2) nc--;
-        else break;
-      }
+      ncSwitch /= 2;
+    }
+  } else if (collInfo->algorithm == NCCL_ALGO_NVLS || collInfo->algorithm == NCCL_ALGO_NVLS_TREE) {
+    // NVLS should not need more than 16 channels to get peak BW.
+    nc = comm->nvlsChannels;
+  } else {
+    // Ring/Tree channel tuning
+    while (collInfo->nBytes < nc*nt*threadThreshold) {
+      if (nc >= 2) nc--;
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+      // do not reduce threads count on VEGA
+#else
+      else if ((nt % 128) == 0) nt/=2;
+#endif
+      else break;
+    }
+  }
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#else
+  if (collInfo->protocol == NCCL_PROTO_SIMPLE) {
+    if (collInfo->algorithm == NCCL_ALGO_RING) nt += WARP_SIZE; // Extra warp for sync
+    // More threads or sync warps needed due to split thread model
+    if (collInfo->algorithm == NCCL_ALGO_TREE) nt += 4*WARP_SIZE;
+  }
+  nt = nt/WARP_SIZE < 3 ? 3*WARP_SIZE : nt;
+#endif
+  if (collInfo->coll == ncclFuncAllToAllPivot) {
+    int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
+    collInfo->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
+  } else if (collInfo->coll == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
+    static int userTuneInput = -2;
+    if (userTuneInput == -2) {
+      const char *protoStr = getenv("NCCL_PROTO");
+      const char *algoStr = getenv("NCCL_ALGO");
+      if (!protoStr && !algoStr)
+        userTuneInput = 0;
+      else
+        userTuneInput = 1;
     }
     collInfo->nChannels = nc;
-  } else {
-    nc = collInfo->nChannels;
-  }
-
-  if (collInfo->nThreads == 0) {
-    if (collInfo->algorithm != NCCL_ALGO_NVLS && collInfo->algorithm != NCCL_ALGO_NVLS_TREE &&
-      collInfo->algorithm != NCCL_ALGO_COLLNET_DIRECT) {
-      while (collInfo->nBytes < nc * nt * threadThreshold) {
-        if (nt % 128 == 0) nt /= 2;
-        else break;
+    if (!userTuneInput) {
+      // always respect user settings
+      if (collInfo->nBytes <= 2200008) {
+        collInfo->protocol = NCCL_PROTO_LL;
+        collInfo->algorithm = NCCL_ALGO_TREE;
+        collInfo->nChannels = std::min(24, comm->nChannels);
+      } else {
+        collInfo->protocol = NCCL_PROTO_SIMPLE;
+        collInfo->algorithm = NCCL_ALGO_RING;
       }
     }
-
-#if !defined(__HIP_PLATFORM_HCC__) && !defined(__HCC__) && !defined(__HIPCC__)
-    if (collInfo->protocol == NCCL_PROTO_SIMPLE) {
-      if (collInfo->algorithm == NCCL_ALGO_RING) nt += WARP_SIZE; // Extra warp for sync
-      // More threads or sync warps needed due to split thread model
-      if (collInfo->algorithm == NCCL_ALGO_TREE) nt += 4*WARP_SIZE;
-    }
-#endif
-    nt = nt / WARP_SIZE < 3 ? 3 * WARP_SIZE : nt;
-    collInfo->nThreads = nt;
+  } else if (collInfo->coll == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
+    collInfo->algorithm = NCCL_ALGO_TREE;
+    collInfo->nChannels = nc;
+  } else {
+    collInfo->nChannels = nc;
   }
-
+  collInfo->nThreads = nt;
   return ncclSuccess;
 }
 
