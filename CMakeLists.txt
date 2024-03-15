@@ -670,11 +670,6 @@ endif()
 
 if(NOT BUILD_SHARED_LIBS)
   message(STATUS "Building static RCCL library")
-  target_link_libraries(rccl PRIVATE --emit-static-lib)
-  set(CMAKE_AR "${hipcc_executable}")
-  get_property(link_libraries TARGET rccl PROPERTY LINK_LIBRARIES)
-  string (REPLACE ";" " " LINK_PROPS "${link_libraries}")
-  set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> -o <TARGET> ${LINK_PROPS} <LINK_FLAGS> <OBJECTS>")
 else()
   message(STATUS "Building shared RCCL library")
 endif()
@@ -764,11 +759,13 @@ if(BUILD_TESTS)
   rocm_package_setup_client_component(tests PACKAGE_NAME unittests)
   add_subdirectory(test)
 
-  add_custom_command(TARGET rccl POST_BUILD
-    COMMENT "Extracting metadata from librccl.so"
-    COMMAND COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/extract_metadata.cmake
-    VERBATIM
-  )
+  if(BUILD_SHARED_LIBS)
+    add_custom_command(TARGET rccl POST_BUILD
+      COMMENT "Extracting metadata from librccl.so"
+      COMMAND COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/extract_metadata.cmake
+      VERBATIM
+    )
+  endif()
 endif()
 
 rocm_create_package(
