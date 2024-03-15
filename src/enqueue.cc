@@ -1258,7 +1258,7 @@ static ncclResult_t topoGetAlgoInfo(struct ncclInfo* info, int collNetSupport, i
 // Call the plugin first. Let it set algo+proto, and/or nChannels.
 // Then, topoGetAlgoInfo will set algo/proto if not set, then nChannels and nThreads based on algo/proto.
 // Finally, nChannels will be overriden by the plugin setting.
-static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetSupport, int nvlsSupport, int numPipeOps) {
+static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetSupport, int numPipeOps) {
   info->algorithm = NCCL_ALGO_UNDEF;
   info->protocol = NCCL_PROTO_UNDEF;
   int nChannels = 0;
