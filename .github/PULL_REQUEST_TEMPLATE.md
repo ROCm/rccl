@@ -16,13 +16,13 @@ _Technical details behind the work. Explain any AMD hardware gotchas._
 _What else should the reviewer know?_
 
 **Test Cases:**
-- _List here_
+- [ ] _List here_
 
 ## Approval Checklist
-- PR Buddy: Test functionality
-- PR Buddy: Test performance
-- PR Buddy: Verify accurate documentation by testing listed steps
-- Ensure checklist criteria are met
-- Ensure CI passes
-- Verify test coverage has been added
-- Verify the CHANGELOG has been updated with a summary of the feature
+- [ ] PR Buddy: Test functionality
+- [ ] PR Buddy: Test performance
+- [ ] PR Buddy: Verify accurate documentation by testing listed steps
+- [ ] Ensure checklist criteria are met
+- [ ] Ensure CI passes
+- [ ] Verify test coverage has been added
+- [ ] Verify the CHANGELOG has been updated with a summary of the feature
