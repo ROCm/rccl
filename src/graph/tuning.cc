@@ -452,7 +452,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   if (protoStr) {
     INFO(NCCL_ENV, "NCCL_PROTO set by environment to %s", protoStr);
     if ((strcasecmp(protoStr, "LL128")==0) && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx90a")) && comm->topo->type != RCCL_TOPO_XGMI_ALL) {
-	INFO(NCCL_ENV, "LL128 is not supported so switching to LL");
+	INFO(NCCL_ENV, "LL128 is not supported, switching to LL");
 	NCCLCHECK(parseList("LL", ncclProtoStr, NCCL_NUM_PROTOCOLS, protoEnable));
     }
     else {
