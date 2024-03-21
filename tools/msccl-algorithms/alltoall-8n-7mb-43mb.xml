@@ -1,6 +1,6 @@
 <!-- Copyright (c) Microsoft Corporation. -->
 <!-- Licensed under the MIT License. -->
-<algo name="alltoall_llm" proto="Simple" nchannels="8" nchunksperloop="64" ngpus="8" coll="alltoall" inplace="0" outofplace="1" minBytes="4194303" maxBytes="16777216">
+<algo name="alltoall_llm" proto="Simple" nchannels="8" nchunksperloop="64" ngpus="8" coll="alltoall" inplace="0" outofplace="1" minBytes="7340033" maxBytes="45088768">
   <gpu id="0" i_chunks="64" o_chunks="64" s_chunks="0">
     <tb id="0" send="-1" recv="-1" chan="0">
       <step s="0" type="cpy" srcbuf="i" srcoff="0" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
