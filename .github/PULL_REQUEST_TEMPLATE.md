@@ -7,7 +7,7 @@ ___Do not mention proprietary info or link to internal work items in this PR.___
 _One sentence describing the work done._
 
 **Why were the changes made?**  
-_Explain the motivation behind the work. Provide historical context and customer-specific info._
+_Explain the motivation behind the work. Provide any publicly-available historical context._
 
 **How was the outcome achieved?**  
 _Technical details behind the work. Explain any AMD hardware gotchas._
