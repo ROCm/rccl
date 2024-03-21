@@ -1,5 +1,5 @@
 ## Checklist
-**This PR resolves JIRA:** SWDEV-______
+___Do not mention proprietary info or link to internal work items in this PR.___
 
 **PR Buddy:** _@ mention a team member_
 
