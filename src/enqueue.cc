@@ -485,14 +485,22 @@ static ncclResult_t addCBDCollToPlan(
   NCCLCHECKGOTO(computeCollAlignCount(collInfo, &alignCount), ret, fail);
   NCCLCHECKGOTO(initCollWorkElem(collInfo, &workElem), ret, fail);
   for (int c = 0; c < usableChannels; c++) {
-    if (plan->maxBytesPerChannel <= chans[c].collBytes) continue;
-    if (workBytesTotal == 0) break;
     enqBytes = std::min(plan->maxBytesPerChannel - chans[c].collBytes, workBytesTotal);
     workCount = std::min(DIVUP(DIVUP(enqBytes, typeSize), alignCount) * alignCount, workCountTotal);
     enqBytes = workCount * typeSize;
 
-    NCCLCHECKGOTO(computeCollLastChunkInfo(collInfo, workCount, alignCount, &lastChunkCount), ret, fail);
-    NCCLCHECKGOTO(setCollWorkElem(workCount, workOffset, lastChunkCount, &workElem), ret, fail);
+    // AllToAllPivot needs bid/nChannels/pivotA2ANumBiRings from ncclWorkElem instead
+    if (collInfo->coll == ncclFuncAllToAllPivot) {
+      workElem.nChannels = std::min(collInfo->nChannels, usableChannels);
+      workElem.pivotA2ANumBiRings = collInfo->comm->topo->pivotA2ANumBiRings;
+      workElem.bid = c;
+    } else {
+      if (plan->maxBytesPerChannel <= chans[c].collBytes) continue;
+      if (workBytesTotal == 0) break;
+
+      NCCLCHECKGOTO(computeCollLastChunkInfo(collInfo, workCount, alignCount, &lastChunkCount), ret, fail);
+      NCCLCHECKGOTO(setCollWorkElem(workCount, workOffset, lastChunkCount, &workElem), ret, fail);
+    }
 
     // Add work elem
     *nWorkBudget += chans[c].nWork;
@@ -1626,10 +1634,7 @@ static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo) {
   }
   nt = nt/WARP_SIZE < 3 ? 3*WARP_SIZE : nt;
 #endif
-  if (collInfo->coll == ncclFuncAllToAllPivot) {
-    int pivotA2ANumUniRings = comm->topo->pivotA2ANumBiRings * 2;
-    collInfo->nChannels = comm->nChannels / pivotA2ANumUniRings * pivotA2ANumUniRings;
-  } else if (collInfo->coll == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
+  if (collInfo->coll == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
     static int userTuneInput = -2;
     if (userTuneInput == -2) {
       const char *protoStr = getenv("NCCL_PROTO");
@@ -1714,11 +1719,6 @@ static ncclResult_t initCollWorkElem(struct ncclInfo* collInfo, struct ncclWorkE
       work->connIndex = NCCL_CONN_IDX_P2P_NET;
     }
   }
-  // For Pivot A2A, lastChunkSize is not needed, set pivotA2ANumBiRings instead
-  if (collInfo->coll == ncclFuncAllToAllPivot) {
-    work->pivotA2ANumBiRings = collInfo->comm->topo->pivotA2ANumBiRings;
-  }
-
   if (collInfo->comm->nNodes == 1)
     work->oneNode = 1;
   else

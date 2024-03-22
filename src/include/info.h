@@ -82,7 +82,7 @@ struct ncclInfo {
 
 inline ncclResult_t ncclInfoSetDerived(struct ncclInfo* info, int nRanks) {
   info->nBytes = info->workBytes = info->count * ncclTypeSize(info->datatype);
-  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast) {
+  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast || info->coll == ncclFuncAllToAllPivot) {
     info->count = info->workBytes;
     info->datatype = ncclInt8;
   }

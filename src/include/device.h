@@ -236,6 +236,7 @@ struct ncclWorkElem {
   };
   uint8_t nWarps;
   uint8_t direct;
+
   uint32_t root:30, connIndex:2;
   const void *sendbuff;
   void *recvbuff;
@@ -245,15 +246,15 @@ struct ncclWorkElem {
   uint64_t chunkCount:25, workCount:39;
   union {
     struct {
-      union {
-        uint32_t lastChunkCount;
-        uint32_t pivotA2ANumBiRings;
-      };
+      uint32_t lastChunkCount;
       uint32_t workOffset;
     };
     struct {
-      uint32_t bid;
       uint32_t nChannels;
+      uint16_t bid;
+      // Pivot A2A kernel computes chunk size itself.
+      // Instead, it needs the number of bidirectional rings.
+      uint16_t pivotA2ANumBiRings;
     };
   };
 };

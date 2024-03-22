@@ -320,16 +320,24 @@ ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
 /*! @endcond */
 /*! @} */
 
-
 /* Register CUDA buffer for zero-copy operation */
 ncclResult_t  ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
+/*! @cond       include_hidden */
 ncclResult_t pncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
+/*! @endcond */
 
 /* Deregister CUDA buffer */
 ncclResult_t  ncclCommDeregister(const ncclComm_t comm, void* handle);
+/*! @cond       include_hidden */
 ncclResult_t pncclCommDeregister(const ncclComm_t comm, void* handle);
+/*! @endcond */
 
-/* Reduction operation selector */
+/*! @defgroup   rccl_api_enumerations API Enumerations
+    @details    Enumerations used by collective communication calls
+    @{ */
+
+/*! @brief      Dummy reduction enumeration
+    @details    Dummy reduction enumeration used to determine value for ncclMaxRedOp */
 typedef enum { ncclNumOps_dummy = 5 } ncclRedOp_dummy_t;
 
 /*! @brief      Reduction operation selector
@@ -811,14 +819,6 @@ ncclResult_t  ncclGroupEnd();
 ncclResult_t pncclGroupEnd();
 /*! @endcond */
 /*! @} */
-
-/* Register CUDA buffer for zero-copy operation */
-ncclResult_t  ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
-ncclResult_t pncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
-
-/* Deregister CUDA buffer */
-ncclResult_t  ncclCommDeregister(const ncclComm_t comm, void* handle);
-ncclResult_t pncclCommDeregister(const ncclComm_t comm, void* handle);
 
 #ifdef __cplusplus
 } // end extern "C"
