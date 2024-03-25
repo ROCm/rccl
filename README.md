@@ -16,7 +16,7 @@ The collective operations are implemented using ring and tree algorithms and hav
 ## Quickstart RCCL Build
 
 RCCL directly depends on HIP runtime plus the HIP-Clang compiler, which are part of the ROCm software stack.
-For ROCm installation instructions, see https://github.com/RadeonOpenCompute/ROCm.
+For ROCm installation instructions, see https://github.com/ROCm/ROCm.
 
 The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
 
@@ -54,7 +54,7 @@ The root of this repository has a helper script 'install.sh' to build and instal
 ### To build the library :
 
 ```shell
-$ git clone https://github.com/ROCmSoftwarePlatform/rccl.git
+$ git clone https://github.com/ROCm/rccl.git
 $ cd rccl
 $ mkdir build
 $ cd build
@@ -100,7 +100,7 @@ UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./rccl-UnitTests --gtest_filter="AllRed
 will run only AllReduce correctness tests with float16 datatype. A list of available filtering environment variables appears at the top of every run. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
 
 
-There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCmSoftwarePlatform/rccl-tests.
+There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCm/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
 
 ## NPKit
