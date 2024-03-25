@@ -20,7 +20,7 @@ export MY_OMPI_BRANCH=v5.0.x
 export MY_OMPI_DIR=$PWD/ompi/install
 
 # HIP MPI testsuite
-export MY_HIP_MPI_TEST_SOURCE=git@github.com:ROCmSoftwarePlatform/hip-mpi-testsuite.git
+export MY_HIP_MPI_TEST_SOURCE=git@github.com:ROCm/hip-mpi-testsuite.git
 export MY_HIP_MPI_TEST_DIR=$PWD/hip-mpi-testsuite
 
 # OSU Benchmark configuration options
@@ -29,17 +29,17 @@ export MY_OSU_FILE=osu-micro-benchmarks-7.2.tar.gz
 export MY_OSU_DIR=$PWD/osu-micro-benchmarks-7.2
 
 # RCCL configuration options
-export MY_RCCL_SOURCE=https://github.com/ROCmSoftwarePlatform/rccl.git
+export MY_RCCL_SOURCE=https://github.com/ROCm/rccl.git
 export MY_RCCL_BRANCH=develop
 export MY_RCCL_DIR=$PWD/rccl
 
 # RCCL-tests configuration options
-export MY_RCCL_TESTS_SOURCE=https://github.com/ROCmSoftwarePlatform/rccl-tests.git
+export MY_RCCL_TESTS_SOURCE=https://github.com/ROCm/rccl-tests.git
 export MY_RCCL_TESTS_BRANCH=master
 export MY_RCCL_TESTS_DIR=$PWD/rccl-tests
 
 # Transferbench configuration options
-export MY_TRANSFERBENCH_SOURCE=https://github.com/ROCmSoftwarePlatform/TransferBench.git
+export MY_TRANSFERBENCH_SOURCE=https://github.com/ROCm/TransferBench.git
 export MY_TRANSFERBENCH_BRANCH=develop
 export MY_TRANSFERBENCH_DIR=$PWD/TransferBench
 
