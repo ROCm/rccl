@@ -142,9 +142,6 @@ else()
     message(WARNING "Failed to extract ROCm version.")
 endif()
 
-### Check for hipEventDisableSystemFence support
-check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVENT_DISABLE_FENCE)
-
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
@@ -573,9 +570,6 @@ if(NOT ROCTX)
 endif()
 if(TRACE)
   target_compile_definitions(rccl PRIVATE ENABLE_TRACE)
-endif()
-if(${HIP_EVENT_DISABLE_FENCE})
-  target_compile_definitions(rccl PRIVATE HIP_EVENT_DISABLE_FENCE)
 endif()
 if(${HIP_CONTIGUOUS_MEMORY})
   target_compile_definitions(rccl PRIVATE HIP_CONTIGUOUS_MEMORY)

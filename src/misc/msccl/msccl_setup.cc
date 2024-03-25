@@ -16,10 +16,6 @@
 #include "msccl/msccl_setup.h"
 #include "msccl/msccl_status.h"
 
-#ifndef HIP_EVENT_DISABLE_FENCE
-RCCL_PARAM(MscclEnableDoneEvent, "MSCCL_ENABLE_DONE_EVENT", 1);
-#endif
-
 RCCL_PARAM(MscclWorkFifoDepth, "MSCCL_WORK_FIFO_DEPTH", 256<<10);
 
 static inline size_t computeSizeNeeded(size_t nBytes, int nScratchChunks, int nChunksPerLoop) {
@@ -417,14 +413,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   mscclStatus& status = mscclGetStatus();
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
 
-  bool enableDoneEvent =
-#ifndef HIP_EVENT_DISABLE_FENCE
-	  (rcclParamMscclEnableDoneEvent() == 1);
-#else
-          true;
-#endif
-
-  if (enableDoneEvent && (status.lastStream != stream && status.lastStream != nullptr)) {
+  if (status.lastStream != stream && status.lastStream != nullptr) {
     CUDACHECK(hipStreamWaitEvent(stream, comm->doneEvent, 0));
   }
 
@@ -526,11 +515,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
 
   void *args[3] = {&comm->devComm, &devAlgo, &workPtr};
   void *func = mscclKernelEntries[fnIndex];
-  if (enableDoneEvent) {
-    CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
-  } else {
-    CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, NULL, 0));
-  }
+  CUDACHECK(hipExtLaunchKernel(func, grid, block, args, 0, stream, NULL, comm->doneEvent, 0));
   status.workIndex++;
   status.lastStream = stream;
   return ncclSuccess;
