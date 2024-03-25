@@ -35,7 +35,7 @@ namespace {
     int chunk;
 
 #if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
+    int npKitCtxIdx = gridOffset / channelCount;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -228,11 +228,12 @@ namespace {
     const size_t channelCount = args->workCount;
     const size_t gridOffset = args->workOffset;
     const size_t chunkCount = args->chunkCount;
+    const ssize_t size = args->count;
     size_t offset;
     int nelem;
 
 #if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
+    int npKitCtxIdx = gridOffset / channelCount;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -376,6 +377,8 @@ namespace {
     const size_t chunkCount = args->chunkCount;
     const size_t gridOffset = args->workOffset;
     const size_t channelCount = args->workCount;
+    const ssize_t size = args->count;
+    const int bid = gridOffset / channelCount;
     size_t offset;
     int nelem;
 
