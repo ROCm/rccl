@@ -521,12 +521,7 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   // Try to create a CUDA object right away. If there is something wrong with
   // the device we're on (failure cause #1) , better know it early.
   hipEvent_t doneEvent;
-#ifdef HIP_EVENT_DISABLE_FENCE
-  CUDACHECK(hipEventCreateWithFlags(&doneEvent, hipEventDisableTiming|hipEventDisableSystemFence));
-#else
   CUDACHECK(hipEventCreateWithFlags(&doneEvent, hipEventDisableTiming));
-#endif
-
 
   comm->doneEvent = doneEvent;
   comm->lastStream = nullptr;
