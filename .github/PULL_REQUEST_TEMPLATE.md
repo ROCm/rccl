@@ -17,9 +17,12 @@ _What else should the reviewer know?_
 - [ ] _List here_
 
 ## Approval Checklist
+___Do not approve until these items are satisfied.___
 - [ ] Ensure above details are appropriately filled
 - [ ] Ensure relevant internal documentation has been updated
-- [ ] Verify appropriate developer testing was done
-- [ ] Verify relevant CI is passing, if necessary
 - [ ] Verify test coverage has been added, if necessary
 - [ ] Verify the CHANGELOG has been updated, if necessary
+
+## Merge Checklist
+___Do not merge until these items are satisfied.___
+- [ ] Verify relevant CI is passing, if necessary
