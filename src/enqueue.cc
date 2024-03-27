@@ -1558,7 +1558,7 @@ static ncclResult_t hostToDevRedOp(
     float f32; 
     double f64;
 #if defined(RCCL_BFLOAT16)
-    rccl_bfloat16 bf16;
+    hip_bfloat16 bf16;
 #endif
 #if defined(RCCL_FLOAT8)
     rccl_float8 fp8_e4m3;
@@ -1602,7 +1602,7 @@ static ncclResult_t hostToDevRedOp(
 #if defined(RCCL_BFLOAT16)
     case ncclBfloat16:
       opFull->op = ncclDevPreMulSum;
-      bf16 = (rccl_bfloat16)(float(1.0/comm->nRanks));
+      bf16 = (hip_bfloat16)(float(1.0/comm->nRanks));
       break;
 #endif
 #if defined(RCCL_FLOAT8)

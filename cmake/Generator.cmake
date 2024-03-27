@@ -25,9 +25,9 @@ set(ALL_COLLS "AllGather" "AllReduce" "AllToAllPivot" "Broadcast" "Reduce" "Redu
 set(ALL_ALGOS "TREE" "RING" "COLLNET_DIRECT" "COLLNET_CHAIN")
 set(ALL_PROTOS "LL" "LL128" "SIMPLE")
 set(ALL_REDOPS "Sum" "Prod" "MinMax" "PreMulSum" "SumPostDiv")
-set(ALL_TYPES "int8_t" "uint8_t" "int32_t" "uint32_t" "int64_t" "uint64_t" "half" "float" "double" "rccl_bfloat16" "rccl_float8" "rccl_bfloat8")
+set(ALL_TYPES "int8_t" "uint8_t" "int32_t" "uint32_t" "int64_t" "uint64_t" "half" "float" "double" "hip_bfloat16" "rccl_float8" "rccl_bfloat8")
 
-set(FLOATS_LIST "half" "float" "double" "rccl_bfloat16" "rccl_float8" "rccl_bfloat8")
+set(FLOATS_LIST "half" "float" "double" "hip_bfloat16" "rccl_float8" "rccl_bfloat8")
 
 ################################################################################
 # The command line argument is used as a regex to filter the functions

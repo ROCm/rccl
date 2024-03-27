@@ -167,7 +167,7 @@ namespace RcclUnitTesting
     case ncclFloat32:  F4[idx] = valueF; break;
     case ncclFloat64:  F8[idx] = valueF; break;
     case ncclFp8E5M2:  B1[idx] = rccl_bfloat8(valueF); break;
-    case ncclBfloat16: B2[idx] = rccl_bfloat16(static_cast<float>(valueF)); break;
+    case ncclBfloat16: B2[idx] = hip_bfloat16(static_cast<float>(valueF)); break;
     default:
       ERROR("Unsupported datatype\n");
       return TEST_FAIL;
@@ -286,7 +286,7 @@ namespace RcclUnitTesting
       case ncclFloat32:  F4[idx] /= divisor; break;
       case ncclFloat64:  F8[idx] /= divisor; break;
       case ncclFp8E5M2:  B1[idx] = (rccl_bfloat8((float)(B1[idx]) / divisor)); break;
-      case ncclBfloat16: B2[idx] = (rccl_bfloat16((float)(B2[idx]) / divisor)); break;
+      case ncclBfloat16: B2[idx] = (hip_bfloat16((float)(B2[idx]) / divisor)); break;
       default:
         ERROR("Unsupported datatype\n");
         return TEST_FAIL;
