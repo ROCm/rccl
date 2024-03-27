@@ -30,7 +30,7 @@ namespace {
     const ssize_t chunk_offset = elem_size * (num_elems / num_chunks * chunk_id + (chunk_id < num_padding_chunks ? chunk_id : num_padding_chunks));
     const ssize_t chunk_size = elem_size * (num_elems / num_chunks + (chunk_id < num_padding_chunks ? 1 : 0));
     const int pivot_direction = (bid % num_uni_rings) / num_bi_rings;
-    const ssize_t prims_size = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? ALLTOALL_PIVOT_CHUNKSTEPS : 1));
+    const ssize_t prims_size = args->chunkCount;
 
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, /*redOpArg(ignored)=*/0);
@@ -39,10 +39,10 @@ namespace {
       const int src_rank = ring->userRanks[(nranks - num_hops) % nranks];
       const int dst_rank = ring->userRanks[num_hops];
       const ssize_t send_offset =
-          dst_rank * num_elems * elem_size + chunk_offset +
+          dst_rank * args->count + chunk_offset +
           (src_rank == dst_rank ? pivot_direction * chunk_size / 2 : 0);
       const ssize_t recv_offset =
-          src_rank * num_elems * elem_size + chunk_offset +
+          src_rank * args->count + chunk_offset +
           (src_rank == dst_rank ? pivot_direction * chunk_size / 2 : 0);
       const ssize_t send_recv_size =
           src_rank == dst_rank ?
