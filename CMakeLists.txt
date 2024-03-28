@@ -77,11 +77,19 @@ include(cmake/Dependencies.cmake) # Reloading to use desired GPU_TARGETS instead
 #==================================================================================================
 if(NOT DEFINED ROCM_PATH)
   if("${CMAKE_CXX_COMPILER}" MATCHES ".*hipcc$")
+    message(STATUS "Compiling with hipcc")
     # Guess based on provided compiler location
     get_filename_component(_real_path ${CMAKE_CXX_COMPILER} REALPATH)
     get_filename_component(_new_path "${_real_path}" DIRECTORY)
     get_filename_component(ROCM_PATH "${_new_path}/.." REALPATH)
     message(STATUS "Setting ROCM_PATH based on hipcc location to ${ROCM_PATH}")
+  elseif("${CMAKE_CXX_COMPILER}" MATCHES ".*amdclang")
+    message(STATUS "Compiling with amdclang")
+    # Guess based on provided compiler location
+    get_filename_component(_real_path ${CMAKE_CXX_COMPILER} ABSOLUTE)
+    get_filename_component(_new_path "${_real_path}" DIRECTORY)
+    get_filename_component(ROCM_PATH "${_new_path}/.." REALPATH)
+    message(STATUS "Setting ROCM_PATH based on amdclang location to ${ROCM_PATH}")
   else()
     # Guess default location
     set(ROCM_PATH "/opt/rocm")
@@ -115,12 +123,21 @@ message(STATUS "HIP runtime:      ${HIP_RUNTIME}")
 if(NOT "${HIP_COMPILER}" MATCHES "clang")
   message(FATAL_ERROR "RCCL requires clang-based compiler (hipcc)")
 endif()
-find_program(hipcc_executable hipcc)
-message(STATUS "hipcc executable: ${hipcc_executable}")
-execute_process(
-  COMMAND         bash "-c" "${hipcc_executable} --version | grep 'HIP version' | awk -F\" \" '{ printf $3}' | awk -F\"-\" '{ printf $1}'"
-  OUTPUT_VARIABLE hipcc_version_string)
-message(STATUS "hipcc version:    ${hipcc_version_string}")
+if("${CMAKE_CXX_COMPILER}" MATCHES ".*hipcc$")
+  find_program(hipcc_executable hipcc)
+  message(STATUS "hipcc executable: ${hipcc_executable}")
+  execute_process(
+    COMMAND         bash "-c" "${hipcc_executable} --version | grep 'HIP version' | awk -F\" \" '{ printf $3}' | awk -F\"-\" '{ printf $1}'"
+    OUTPUT_VARIABLE hipcc_version_string)
+  message(STATUS "hipcc version:    ${hipcc_version_string}")
+elseif("${CMAKE_CXX_COMPILER}" MATCHES ".*amdclang")
+  find_program(hipcc_executable amdclang)
+  message(STATUS "amdclang executable: ${hipcc_executable}")
+  execute_process(
+    COMMAND         bash "-c" "${hipcc_executable} --version | grep 'AMD clang version' | awk -F\" \" '{ printf $4}'"
+    OUTPUT_VARIABLE hipcc_version_string)
+  message(STATUS "amdclang version:    ${hipcc_version_string}")
+endif()
 
 ## Check for ROCm version
 execute_process(
