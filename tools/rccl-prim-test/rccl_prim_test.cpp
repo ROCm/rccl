@@ -34,7 +34,7 @@ THE SOFTWARE.
 #include "copy_kernel.h"
 
 #define MAX_GPU 16
-#define MAX_WORKGROUPS 32
+#define MAX_WORKGROUPS 56
 #define THREADS 256
 #define NGPUS 2
 
@@ -377,7 +377,7 @@ int main(int argc,char* argv[])
     workgroups = atol(wg);
   printf("Benchmarking using %d workgroups\n", workgroups);
 
-  int iters = 10;
+  int iters = 1000;
   char *it = getCmdOption(argv, argv + argc, "-i");
   if (it)
     iters = atol(it);
@@ -582,8 +582,8 @@ int main(int argc,char* argv[])
   for (int op = begin_op; op < end_op; op ++) {
     const char *OpsName[] = {"Copy", "Local Copy", "Double Copy", "doublecopylocal", "Reduce", "ReduceCopy", "Read"};
     printf("\n[Testing %s]: \n", OpsName[op]);
-    // 4 warm up cycles
-    for (int j = 0; j < 4; j ++) {
+    // 20 warm up cycles
+    for (int j = 0; j < 20; j ++) {
       for (int i = 0; i < nGpu; i ++) {
 #if 0
         args[i*3] = &transfer_data[i];
