@@ -171,7 +171,7 @@ int main(int argc,char* argv[])
   int maxCTAsEnv;
 
   if (!cmdOptionExists(argv, argv + argc, "-m")) {
-    printf("Usage: ./topo_expl -m model_id\n");
+    printf("Usage: ./topo_expl -m model_id [-n numNodes=1]\n");
     printf("List of model_id:\n");
     for (int i = 0; i < num_models; i++)
       printf("  %d: %s\n", i, model_descs[i].description);
@@ -194,7 +194,13 @@ int main(int argc,char* argv[])
   initCollNet();
 
   NodeModelDesc *desc = &model_descs[model_id];
-  for (int i=0; i<desc->num_nodes; i++) {
+  int numNodes = desc->num_nodes;
+  if (cmdOptionExists(argv, argv + argc, "-n")) {
+    char *numNodesStr = getCmdOption(argv, argv + argc, "-n");
+    if (numNodesStr)
+      numNodes = atol(numNodesStr);
+  }
+  for (int i=0; i < numNodes; i++) {
       node = new NodeModel(desc->filename);
       network.AddNode(node);
   }
