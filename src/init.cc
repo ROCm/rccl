@@ -1060,6 +1060,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       goto fail;
     }
   }
+
   // AllGather1 - end
 
   do {
@@ -1158,6 +1159,27 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   // Determine local Nvls support
   NCCLCHECK(ncclNvlsInit(comm));
+
+  // [RCCL] Compute hostIdx (based on hostHash)
+  {
+    comm->topo->nHosts = 0;
+    for (int r = 0; r < nranks; r++) {
+      int isNewHost = 1;
+      // Check if this is the first time this hostname has been used
+      for (int i = 0; i < r && isNewHost; i++) {
+        if (comm->peerInfo[i].hostHash == comm->peerInfo[r].hostHash) {
+          isNewHost = 0;
+        }
+      }
+      if (isNewHost)
+      {
+        // Check if this is the same hostname associated with this rank
+        if (comm->peerInfo[r].hostHash == comm->peerInfo[rank].hostHash)
+          comm->topo->hostIdx = comm->topo->nHosts;
+        comm->topo->nHosts++;
+      }
+    }
+  }
 
   // Get rings and trees
   memset(&ringGraph, 0, sizeof(struct ncclTopoGraph));

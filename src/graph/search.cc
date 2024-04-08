@@ -946,7 +946,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
       NCCLCHECK(parseGraphLight(strTrees, system, graph, NULL));
       system->treeDefined=true;
     } else {
-      NCCLCHECK(parseGraph(str, system, graph, NULL, NULL));
+      NCCLCHECK(parseGraph(str, system, graph, NULL, NULL, false));
       int arch, vendor, model;
       NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
       if (graph->nChannels && arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME) {
@@ -959,6 +959,7 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels) return ncclSuccess;
     // try to match Rome 4P2H
     NCCLCHECK(parseRome4P2H(system, graph));
+
     if (graph->nChannels) return ncclSuccess;
     // try to match 1H16P
     NCCLCHECK(parse1H16P(system, graph));
