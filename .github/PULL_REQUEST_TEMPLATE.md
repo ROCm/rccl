@@ -18,13 +18,6 @@ _What else should the reviewer know?_
 
 ## Approval Checklist
 ___Do not approve until these items are satisfied.___
-- [ ] Ensure above details are appropriately filled
-- [ ] Ensure relevant internal documentation has been updated
-- [ ] Verify test coverage has been added, if necessary
 - [ ] Verify the CHANGELOG has been updated, if
   - any changes impact library users, and/or
   - any changes impact any other ROCm library.
-
-## Merge Checklist
-___Do not merge until these items are satisfied.___
-- [ ] Verify relevant CI is passing, if necessary
