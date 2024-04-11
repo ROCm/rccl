@@ -8,7 +8,7 @@
 #include "ErrCode.hpp"
 #include "rccl/rccl.h"
 #include "rccl_float8.h"
-#include "rccl_bfloat16.h"
+#include <hip/hip_bfloat16.h>
 #include "hip/hip_fp16.h"
 
 namespace RcclUnitTesting
@@ -48,7 +48,7 @@ namespace RcclUnitTesting
     float*         F4; // ncclFloat32
     double*        F8; // ncclFloat64
     rccl_bfloat8*  B1; // ncclFp8E5M2
-    rccl_bfloat16* B2; // ncclBfloat16
+    hip_bfloat16*  B2; // ncclBfloat16
 
     constexpr PtrUnion() : ptr(nullptr) {}
 

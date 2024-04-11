@@ -220,7 +220,7 @@ static ncclResult_t hostToDevRedOp(
     uint64_t u64;
     half f16;
     #if defined(RCCL_BFLOAT16)
-      rccl_bfloat16 bf16;
+      hip_bfloat16 bf16;
     #endif
     #if defined(RCCL_FLOAT8)
       rccl_float8 fp8_e4m3;
@@ -266,7 +266,7 @@ static ncclResult_t hostToDevRedOp(
     #if defined(RCCL_BFLOAT16)
     case ncclBfloat16:
       opFull->op = ncclDevPreMulSum;
-      bf16 = (rccl_bfloat16)(float(1.0/comm->nRanks));
+      bf16 = (hip_bfloat16)(float(1.0/comm->nRanks));
       break;
     #endif
     #if defined(RCCL_FLOAT8)
@@ -325,7 +325,7 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, half, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double, fullOps), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat16, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, hip_bfloat16, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_float8, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, rccl_bfloat8, fullOps)
 
