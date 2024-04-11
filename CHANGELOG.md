@@ -2,15 +2,33 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased
+## RCCL 2.18.6 for ROCm 6.1.0
+### Changed
+- Compatibility with NCCL 2.18.6
+
+## RCCL 2.18.3 for ROCm 6.0.0
+### Changed
+- Compatibility with NCCL 2.18.3
+
+## RCCL 2.17.1-1 for ROCm 5.7.0
+### Changed
+- Compatibility with NCCL 2.17.1-1
+- Performance tuning for some collective operations
+### Added
+- Minor improvements to MSCCL codepath
+- NCCL_NCHANNELS_PER_PEER support
+- Improved compilation performance
+- Support for gfx94x
+### Fixed
+- Potential race-condition during ncclSocketClose()
+
+## RCCL 2.16.2 for ROCm 5.6.0
 ### Changed
 - Compatibility with NCCL 2.16.2
-### Added
 ### Fixed
 - Remove workaround and use indirect function call
-### Removed
 
-## Unreleased - RCCL 2.15.5 for ROCm 5.5.0
+## RCCL 2.15.5 for ROCm 5.5.0
 ### Changed
 - Compatibility with NCCL 2.15.5
 - Unit test executable renamed to rccl-UnitTests
