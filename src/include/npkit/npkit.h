@@ -20,9 +20,9 @@
 
 class NpKit {
  public:
-  static const uint64_t kNumGpuEventBuffers = 512;
+  static const uint64_t kNumGpuEventBuffers = 1024;
 
-  static const uint64_t kNumCpuEventBuffers = 32;
+  static const uint64_t kNumCpuEventBuffers = 64;
 
   static ncclResult_t Init(int rank);
 

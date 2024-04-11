@@ -109,7 +109,7 @@ static ncclResult_t ncclInit() {
     NCCLCHECK(bootstrapNetInit());
     NCCLCHECK(ncclNetPluginInit());
 
-    char strValue[1024];
+    char strValue[2048];
     NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
     if (strcmp(strValue, "1") == 0)
       WARN("NUMA auto balancing enabled which can lead to variability in the RCCL performance! Disable by \"sudo sysctl kernel.numa_balancing=0\"");
@@ -127,7 +127,7 @@ static ncclResult_t ncclInit() {
         FILE* file;
         if ((file = fopen("/proc/cmdline", "r")) != NULL) {
           if (feof(file) == 0 && ferror(file) == 0) {
-            int len = fread(strValue, 1, 1024, file);
+            int len = fread(strValue, 1, 2047, file);
             strValue[len] = '\0';
           }
           fclose(file);
@@ -521,12 +521,7 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   // Try to create a CUDA object right away. If there is something wrong with
   // the device we're on (failure cause #1) , better know it early.
   hipEvent_t doneEvent;
-#ifdef HIP_EVENT_DISABLE_FENCE
-  CUDACHECK(hipEventCreateWithFlags(&doneEvent, hipEventDisableTiming|hipEventDisableSystemFence));
-#else
   CUDACHECK(hipEventCreateWithFlags(&doneEvent, hipEventDisableTiming));
-#endif
-
 
   comm->doneEvent = doneEvent;
   comm->lastStream = nullptr;

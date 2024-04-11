@@ -142,9 +142,6 @@ else()
     message(WARNING "Failed to extract ROCm version.")
 endif()
 
-### Check for hipEventDisableSystemFence support
-check_symbol_exists("hipEventDisableSystemFence" "hip/hip_runtime_api.h" HIP_EVENT_DISABLE_FENCE)
-
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
@@ -372,7 +369,6 @@ set(SRC_FILES
   src/include/param.h
   src/include/profiler.h
   src/include/proxy.h
-  src/include/rccl_bfloat16.h
   src/include/rccl_vars.h
   src/include/rccl_float8.h
   src/include/rocm_smi_wrap.h
@@ -425,7 +421,6 @@ set(SRC_FILES
   src/include/param.h
   src/include/profiler.h
   src/include/proxy.h
-  src/include/rccl_bfloat16.h
   src/include/rccl_vars.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
@@ -576,9 +571,6 @@ endif()
 if(TRACE)
   target_compile_definitions(rccl PRIVATE ENABLE_TRACE)
 endif()
-if(${HIP_EVENT_DISABLE_FENCE})
-  target_compile_definitions(rccl PRIVATE HIP_EVENT_DISABLE_FENCE)
-endif()
 if(${HIP_CONTIGUOUS_MEMORY})
   target_compile_definitions(rccl PRIVATE HIP_CONTIGUOUS_MEMORY)
 endif()
@@ -692,8 +684,8 @@ rocm_install(FILES       ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/n
 file(COPY tools/msccl-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 ## Install Algorithm files under share folder
-install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
-install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-unit-test-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
+rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
+rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-unit-test-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
 
 rocm_export_targets(
   NAMESPACE roc::
@@ -719,7 +711,12 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
 endif()
 
 ## Set package dependencies
-rocm_package_add_dependencies(DEPENDS "hip-rocclr >= 3.5.0" "rocm-smi-lib >= 4.0.0")
+if(BUILD_ADDRESS_SANITIZER)
+  set(DEPENDS_HIP_RUNTIME "hip-runtime-amd-asan" )
+else()
+  set(DEPENDS_HIP_RUNTIME "hip-runtime-amd" )
+endif()
+rocm_package_add_dependencies(DEPENDS "${DEPENDS_HIP_RUNTIME} >= 4.5.0" "rocm-smi-lib >= 4.0.0")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "${ROCM_PATH}")
 
@@ -729,14 +726,14 @@ if(DEBIAN)
   file(WRITE "${CMAKE_BINARY_DIR}/copyright"
   "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: rccl
-Source: https://github.com/ROCmSoftwarePlatform/rccl
+Source: https://github.com/ROCm/rccl
 
 Files: *
 Copyright: (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
 Modifications Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
 Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 License: See LICENSE.txt for license information\n")
-  install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
+  rocm_install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   # Write changelog file
   find_program( date_executable date )
   execute_process(COMMAND ${date_executable} -R OUTPUT_VARIABLE TIMESTAMP)
@@ -749,7 +746,7 @@ License: See LICENSE.txt for license information\n")
   find_program( gzip_executable gzip )
   execute_process(COMMAND bash "-c" "${gzip_executable} -9 -c ${CMAKE_BINARY_DIR}/changelog"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR} OUTPUT_FILE "${CMAKE_BINARY_DIR}/changelog.Debian.gz")
-  install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
+  rocm_install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "ROCm Communication Collectives Library
   Optimized primitives for collective multi-GPU communication")
 endif()
