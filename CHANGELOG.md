@@ -2,6 +2,20 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## Unreleased - RCCL 2.18.6 for ROCm 6.1.0
+### Changed
+- Compatibility with NCCL 2.18.6
+### Added
+### Fixed
+### Removed
+
+## RCCL 2.18.3 for ROCm 6.0.0
+### Changed
+- Compatibility with NCCL 2.18.3
+### Added
+### Fixed
+### Removed
+
 ## RCCL 2.17.1-1 for ROCm 5.7.0
 ### Changed
 - Compatibility with NCCL 2.17.1-1
