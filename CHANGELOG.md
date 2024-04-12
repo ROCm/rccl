@@ -5,6 +5,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## Unreleased - RCCL 2.18.6 for ROCm 6.1.0
 ### Changed
 - Compatibility with NCCL 2.18.6
+- Modifying rings to be rail-optimized topology friendly
 ### Added
 ### Fixed
 ### Removed
