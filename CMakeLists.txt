@@ -415,25 +415,6 @@ set(SRC_FILES
   src/include/nvtx3/nvtxExtDetail/nvtxExtInit.h
   src/include/nvtx3/nvtxExtDetail/nvtxExtPayloadTypeInfo.h
   src/include/nvtx3/nvtxExtDetail/nvtxExtTypes.h
-  src/include/nvtx.h
-  src/include/nvtx_stub.h
-  src/include/p2p.h
-  src/include/param.h
-  src/include/profiler.h
-  src/include/proxy.h
-  src/include/rccl_vars.h
-  src/include/rocm_smi_wrap.h
-  src/include/rocmwrap.h
-  src/include/shm.h
-  src/include/signals.h
-  src/include/socket.h
-  src/include/strongstream.h
-  src/include/timer.h
-  src/include/transport.h
-  src/include/trees.h
-  src/include/utils.h
-  src/init.cc
-  src/init_nvtx.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
 # src/misc/cudawrap.cc
@@ -491,6 +472,9 @@ foreach(SRC_FILE ${SRC_FILES})
   # Establish hipified copy of the source file
   set(HIP_FILE "${HIPIFY_DIR}/${SRC_FILE}")
   get_filename_component(HIP_FILE_DIR ${HIP_FILE} DIRECTORY)
+
+  # Make sure the file name is unique and there is no duplicate
+  add_file_unique(HIP_SOURCES ${HIP_FILE})
 
   # Convert .cu files to .cpp so that they get processed properly
   string(REPLACE "\.cu" "\.cu.cpp" HIP_FILE ${HIP_FILE})
