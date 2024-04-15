@@ -133,6 +133,27 @@ function(rocm_local_targets VARIABLE)
   endif()
 endfunction()
 
+# Iterate over the "source" list and check if there is a duplicate file name
+# NOTE: This is due to compiler bug '--save-temps' and can be removed when fix availabe
+function(add_file_unique FILE_LIST FILE)
+  get_filename_component(FILE_NAME "${FILE}" NAME)
+
+  # Iterate over whatever is in the list so far
+  foreach(curr_file IN LISTS ${FILE_LIST})
+    get_filename_component(curr_file_name ${curr_file} NAME)
+
+    # Check if duplicate
+    if(${FILE_NAME} STREQUAL ${curr_file_name})
+      get_filename_component(DIR_PATH "${FILE}" DIRECTORY)
+      get_filename_component(FILE_NAME_WE "${FILE}" NAME_WE)
+      get_filename_component(FILE_EXT "${FILE}" EXT)
+
+      # Construct a new file name by adding _tmp
+      set(HIP_FILE "${DIR_PATH}/${FILE_NAME_WE}_tmp${FILE_EXT}" PARENT_SCOPE)
+    endif()
+  endforeach()
+endfunction()
+
 include(ROCMSetupVersion)
 include(ROCMCreatePackage)
 include(ROCMInstallTargets)
