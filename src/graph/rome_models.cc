@@ -42,8 +42,12 @@ struct rcclRomeModel {
   uint8_t gdrLevel[NCCL_TOPO_MAX_NODES*NCCL_TOPO_MAX_NODES];
   const char *pattern;
   const char *ringBase;
+  const char *ringTail2;  // Lines to use for node N-2 if the total number of nodes is odd
+  const char *ringTail1;  // Lines to use for node N-1 if the total number of nodes is odd
   const char *options;
   const char *treeBase;
+
+
 };
 
 static struct rcclRomeModel rome_model_22 = {
@@ -570,15 +574,76 @@ static struct rcclRomeModel rome_model_80 = {
 
 static struct rcclRomeModel rome_model_81 = {
   .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 7,
-  .gpuIds = { 0xc000, 0x22000, 0x38000, 0x5c000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
-  .nicIds = { 0x7000, 0x1d000, 0x33000, 0x57000, 0x9a000, 0xaa000, 0xba000, 0xda000, },
-  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
-  .nicNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
-  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, },
-  .gdrLevel = { PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, },
-  .pattern = "4444",
-  .ringBase = "N0 0 1 2 3 4 5 6 7 N7|N1 1 0 2 4 3 5 7 6 N6|N2 2 5 0 3 7 1 6 4 N4|N3 3 6 1 5 2 7 4 0 N0|N4 4 7 0 6 5 1 3 2 N2|N5 5 4 6 3 0 7 2 1 N1|N6 6 2 0 4 1 7 5 3 N3|N7 7 3 1 4 2 6 0 5 N5|N0 0 1 2 3 4 5 6 7 N7|N1 1 0 2 4 3 5 7 6 N6|N2 2 5 0 3 7 1 6 4 N4|N3 3 6 1 5 2 7 4 0 N0|N4 4 7 0 6 5 1 3 2 N2|N5 5 4 6 3 0 7 2 1 N1|N6 6 2 0 4 1 7 5 3 N3|N7 7 3 1 4 2 6 0 5 N5",
-  .options = "noCpuCheck=1,tuning=5",
+  .gpuIds     = { 0xc000, 0x22000, 0x38000, 0x5c000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
+  .nicIds     = { 0x7000, 0x1d000, 0x33000, 0x57000, 0x9a000, 0xaa000, 0xba000, 0xda000, },
+  .gpuNuma    = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma    = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1,
+                  1, 0, 1, 1, 1, 1, 1, 1,
+                  1, 1, 0, 1, 1, 1, 1, 1,
+                  1, 1, 1, 0, 1, 1, 1, 1,
+                  1, 1, 1, 1, 0, 1, 1, 1,
+                  1, 1, 1, 1, 1, 0, 1, 1,
+                  1, 1, 1, 1, 1, 1, 0, 1,
+                  1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel   = {PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, },
+  .pattern    = "4444",
+  .ringBase   = "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3",
+  .ringTail2  = "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0",
+  .ringTail1  = "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7",
+  .options    = "noCpuCheck=1,tuning=5",
 };
 
 static struct rcclRomeModel rome_model_84 = {
@@ -609,49 +674,49 @@ static struct rcclRomeModel rome_model_85 = {
 
 
 static struct rcclRomeModel romeTopoModels[] = {
-  rome_model_22,
-  rome_model_25,
-  rome_model_27,
-  rome_model_29,
-  rome_model_31,
-  rome_model_33,
-  rome_model_30,
-  rome_model_32,
-  rome_model_24,
-  rome_model_26,
-  rome_model_23,
-  rome_model_38,
-  rome_model_28,
-  rome_model_40,
-  rome_model_42,
-  rome_model_44,
-  rome_model_45,
-  rome_model_46,
-  rome_model_48,
-  rome_model_49,
-  rome_model_52,
-  rome_model_53,
-  rome_model_43,
-  rome_model_55,
-  rome_model_56,
-  rome_model_58,
-  rome_model_59,
-  rome_model_62,
-  rome_model_63,
-  rome_model_65,
-  rome_model_66,
-  rome_model_67,
-  rome_model_68,
-  rome_model_71,
-  rome_model_72,
-  rome_model_73,
-  rome_model_74,
-  rome_model_76,
-  rome_model_79,
-  rome_model_80,
-  rome_model_81,
-  rome_model_84,
-  rome_model_85,
+  rome_model_22, /*  0 */
+  rome_model_25, /*  1 */
+  rome_model_27, /*  2 */
+  rome_model_29, /*  3 */
+  rome_model_31, /*  4 */
+  rome_model_33, /*  5 */
+  rome_model_30, /*  6 */
+  rome_model_32, /*  7 */
+  rome_model_24, /*  8 */
+  rome_model_26, /*  9 */
+  rome_model_23, /* 10 */
+  rome_model_38, /* 11 */
+  rome_model_28, /* 12 */
+  rome_model_40, /* 13 */
+  rome_model_42, /* 14 */
+  rome_model_44, /* 15 */
+  rome_model_45, /* 16 */
+  rome_model_46, /* 17 */
+  rome_model_48, /* 18 */
+  rome_model_49, /* 19 */
+  rome_model_52, /* 20 */
+  rome_model_53, /* 21 */
+  rome_model_43, /* 22 */
+  rome_model_55, /* 23 */
+  rome_model_56, /* 24 */
+  rome_model_58, /* 25 */
+  rome_model_59, /* 26 */
+  rome_model_62, /* 27 */
+  rome_model_63, /* 28 */
+  rome_model_65, /* 29 */
+  rome_model_66, /* 30 */
+  rome_model_67, /* 31 */
+  rome_model_68, /* 32 */
+  rome_model_71, /* 33 */
+  rome_model_72, /* 34 */
+  rome_model_73, /* 35 */
+  rome_model_74, /* 36 */
+  rome_model_76, /* 37 */
+  rome_model_79, /* 38 */
+  rome_model_80, /* 39 */
+  rome_model_81, /* 40 */
+  rome_model_84, /* 41 */
+  rome_model_85, /* 42 */
 };
 
 /* Parse user defined rings. Format is like :
@@ -660,7 +725,7 @@ static struct rcclRomeModel romeTopoModels[] = {
  * Rings with a non-matching number of gpus are ignored so we can provide
  * rings for multiple cases.
  */
-ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int* net_map) {
+ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int* net_map, int reverse) {
   int gpus[NCCL_TOPO_MAX_NODES];
   int nChannels = 0;
   int gpu = 0;
@@ -725,8 +790,10 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
             for (j = 0; j < ngpus; j++)
               if (g == system->nodes[GPU].nodes[j].gpu.dev)
                 break;
-            if (j < ngpus)
-              graph->intra[nChannels*ngpus+r] = system->nodes[GPU].nodes[j].gpu.rank;
+            if (j < ngpus) {
+              int idx = (nChannels*ngpus) + (reverse ? ngpus - 1 - r : r);
+              graph->intra[idx] = system->nodes[GPU].nodes[j].gpu.rank;
+            }
             else
               return ncclInternalError;
           }
@@ -735,6 +802,12 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
             for (int i = 0; net_map && i < ngpus*2; i++) {
               if (nets[i]-'N' < 0 || nets[i]-'N' >= nnets) continue;
               nets[i] = net_map[nets[i]-'N']+'N';
+            }
+            // Swap input/output NICs if reversed
+            if (reverse) {
+              int t = nets[0];
+              nets[0] = nets[ngpus*2-1];
+              nets[ngpus*2-1] = t;
             }
             memcpy(&graph->intraNets[ngpus*nChannels*2], nets, ngpus*2*sizeof(int));
             graph->nIntraChannels++;
@@ -764,11 +837,12 @@ end:
       graph->inter[i*2+1] = net;
     }
   }
+
 #if 0
   for (int i=0; i<graph->nChannels; i++) {
-    printf("%d: ", i);
-    printf ("NET/%d ", graph->inter[i*2]);
-    for (int j=0; j<ngpus; j++) printf("GPU/%d ", graph->intra[i*ngpus+j]);
+    printf("Channel %02d: ", i);
+    printf ("NET/%02d ", graph->inter[i*2]);
+    for (int j=0; j<ngpus; j++) printf("GPU/%02d ", graph->intra[i*ngpus+j]);
     printf ("NET/%d ", graph->inter[i*2+1]);
     printf("\n");
   }
@@ -972,7 +1046,7 @@ ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGrap
   }
   // create chordal ring based on reference and remapped ids
   system->type |= RCCL_TOPO_CR8G;
-  NCCLCHECK(parseGraph(ringBase, system, graph, id, NULL));
+  NCCLCHECK(parseGraph(ringBase, system, graph, id, NULL, false));
   if (system->nodes[NET].count && system->nodes[GPU].count != system->nRanks) {
     int *intra, *used;
     graph->nChannels = system->nodes[NET].count;
@@ -1257,6 +1331,11 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   int ncpus = system->nodes[CPU].count;
   int nnets = system->nodes[NET].count;
 
+  // Only support ring and tree graphs
+  if (graph->pattern != NCCL_TOPO_PATTERN_RING &&
+      graph->pattern != NCCL_TOPO_PATTERN_BALANCED_TREE)
+    return ncclSuccess;
+
   if (ngpus > 8) return ncclSuccess;
   // only valid on Rome
   int arch, vendor, model;
@@ -1365,8 +1444,42 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   parseOptions(system, romeTopoModels[i].options);
 
   // create 4P2H based on reference and remapped ids
-  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL));
-  if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g));
+  switch (graph->pattern) {
+  case NCCL_TOPO_PATTERN_RING:
+    // Attempt to use rail-optimized rings if they exist
+    if (system->nHosts % 2 == 0) {
+      // For even number of nodes, alternate forward/reverse on ringBase
+      NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+    }
+    else {
+      // For odd number of nodes, check first to see if ringTail1 and ringTail2 are defined
+      if (system->nHosts == 1 || romeTopoModels[i].ringTail1 == nullptr || romeTopoModels[i].ringTail2 == nullptr) {
+        if (system->nHosts > 1)
+          INFO(NCCL_GRAPH, "[WARN] Dropping back due to lack of support for odd-number of nodes for model index %d\n", i);
+        NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+      }
+      else
+      {
+        if (system->hostIdx == (system->nHosts - 1)) {
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail1, system, graph, g, nnets > 1 ? n : NULL, 0));
+        } else if (system->hostIdx == (system->nHosts - 2)) {
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, g, nnets > 1 ? n : NULL, 0));
+        } else {
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+        }
+      }
+    }
+    break;
+  case NCCL_TOPO_PATTERN_BALANCED_TREE:
+    if (romeTopoModels[i].treeBase != nullptr) {
+      NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g));
+      if (graph->nChannels) return ncclSuccess;
+    }
+
+    // Fall back to tree from ringBase
+    NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    break;
+  }
   return ncclSuccess;
 }
 
@@ -1499,7 +1612,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   parseOptions(system, romeTopoModels[i].options);
 
   // create 16P1H based on reference and remapped ids
-  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL));
+  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL, false));
 
   if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
   // clean up
@@ -1601,6 +1714,6 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
     system->type |= RCCL_TOPO_4P2H_ROME;
   parseOptions(system, rome_model_68.options);
   // create 4P4H based on reference and remapped ids
-  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives, n_hives));
+  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives, n_hives, false));
   return ncclSuccess;
 }
