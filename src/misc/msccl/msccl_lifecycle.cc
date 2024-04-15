@@ -28,9 +28,29 @@ static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 static std::atomic<bool> mscclInitialized;
 static std::mutex mscclLifecycleMutex;
 
+static const char* mscclSchedulerPathEnv = "MSCCL_SCHEDULER";
+static const char* mscclSchedulerDefaultPath = "libmsccl-scheduler.so";
+static const char* mscclAlgoDirEnv = "MSCCL_ALGO_DIR";
+static const char* mscclAlgoDefaultDir = "msccl-algorithms";
+extern "C" bool mscclUnitTestMode() __attribute__((__weak__));
+static const char* mscclUnitTestAlgoDefaultDir = "msccl-unit-test-algorithms";
+static const char* mscclAlgoShareDirPath = "../share/rccl/msccl-algorithms";
+static const char* mscclUnitTestAlgoShareDirPath = "../share/rccl/msccl-unit-test-algorithms";
+
+
+bool checkXMLFolderExists() {
+  DIR *dp = nullptr;
+  dp = opendir(mscclAlgoDefaultDir);
+  if (dp == nullptr) {
+      WARN("MSCCL XML files are not found, MSCCL failed, chaging the mode to RCCL!");
+      return false;
+    }
+  return true;
+}
+
 bool mscclEnabled() {
 #ifdef COMPILE_MSCCL_KERNEL
-  return rcclParamMscclEnabled();
+  return rcclParamMscclEnabled() && checkXMLFolderExists();
 #else
   return false;
 #endif
@@ -75,15 +95,6 @@ static bool mscclCommCompatible(ncclComm_t comm) {
   }
   return true;
 }
-
-static const char* mscclSchedulerPathEnv = "MSCCL_SCHEDULER";
-static const char* mscclSchedulerDefaultPath = "libmsccl-scheduler.so";
-static const char* mscclAlgoDirEnv = "MSCCL_ALGO_DIR";
-static const char* mscclAlgoDefaultDir = "msccl-algorithms";
-extern "C" bool mscclUnitTestMode() __attribute__((__weak__));
-static const char* mscclUnitTestAlgoDefaultDir = "msccl-unit-test-algorithms";
-static const char* mscclAlgoShareDirPath = "../share/rccl/msccl-algorithms";
-static const char* mscclUnitTestAlgoShareDirPath = "../share/rccl/msccl-unit-test-algorithms";
 
 static ncclResult_t mscclInternalSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
   static bool mscclAlgoMetaLoaded = false;
