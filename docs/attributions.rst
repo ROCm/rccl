@@ -40,4 +40,4 @@ under subcontract 7078610 with Lawrence Berkeley National Laboratory.
 
 This code also includes files from the NVIDIA Tools Extension SDK project.
 
-For more information and license details, see [https://github.com/NVIDIA/NVTX](https://github.com/NVIDIA/NVTX)
+For more information and license details, see `https://github.com/NVIDIA/NVTX <https://github.com/NVIDIA/NVTX>`_
