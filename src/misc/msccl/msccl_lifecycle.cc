@@ -39,13 +39,41 @@ static const char* mscclUnitTestAlgoShareDirPath = "../share/rccl/msccl-unit-tes
 
 
 bool checkXMLFolderExists() {
-  DIR *dp = nullptr;
-  dp = opendir(mscclAlgoDefaultDir);
-  if (dp == nullptr) {
-      WARN("MSCCL XML files are not found, MSCCL failed, chaging the mode to RCCL!");
-      return false;
+  const char* mscclAlgoDir = getenv(mscclAlgoDirEnv);
+  const char* mscclAlgoShareDir = nullptr;
+  std::string mscclAlgoDirStr;
+  std::string mscclAlgoShareDirStr;
+  const char *fullDirPath = nullptr;
+  if (mscclAlgoDir == nullptr)
+  {
+    // Try to find default algorithm directory based on librccl.so path
+    Dl_info dl_info;
+    struct link_map *link_map_ptr = nullptr;
+    if (!dladdr1((void *)checkXMLFolderExists, &dl_info, (void **)&link_map_ptr, RTLD_DL_LINKMAP)) {
+      WARN("MSCCL Internal Scheduler: dladdr1 failed");
+      return ncclInvalidUsage;
     }
-  return true;
+ 
+    std::string selfLibPath = link_map_ptr->l_name;
+    mscclAlgoDirStr = selfLibPath.substr(0, selfLibPath.find_last_of("/\\") + 1);
+    mscclAlgoDirStr += (mscclUnitTestMode && mscclUnitTestMode()) ? mscclUnitTestAlgoDefaultDir : mscclAlgoDefaultDir;
+    mscclAlgoDir = mscclAlgoDirStr.c_str();
+    // Get share Directory Paths
+    mscclAlgoShareDirStr = selfLibPath.substr(0, selfLibPath.find_last_of("/\\") + 1);
+    mscclAlgoShareDirStr += (mscclUnitTestMode && mscclUnitTestMode()) ? mscclUnitTestAlgoShareDirPath : mscclAlgoShareDirPath;
+    mscclAlgoShareDir = mscclAlgoShareDirStr.c_str();
+    static bool mscclAlgoDefaultDirChecked = false;
+
+    DIR *dp = nullptr;
+    dp = opendir(mscclAlgoDir);
+    if (dp == nullptr && !mscclAlgoDefaultDirChecked) {
+       WARN("MSCCL XML files are not found, MSCCL failed, changing the mode to RCCL! %s ", mscclAlgoDir);
+       mscclAlgoDefaultDirChecked = true;
+       return false;
+    }
+    return true;
+  }
+  return false;
 }
 
 bool mscclEnabled() {
