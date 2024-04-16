@@ -307,8 +307,11 @@ ncclResult_t ncclTopoXmlLoadSystem(FILE* file, struct ncclXml* xml, struct ncclX
   }
   const char* name;
   NCCLCHECK(xmlGetAttr(head, "name", &name));
-  if (name != NULL) INFO(NCCL_GRAPH, "Loading topology %s", name);
-  else INFO(NCCL_GRAPH, "Loading unnamed topology");
+  if (name != NULL) {
+    INFO(NCCL_GRAPH, "Loading topology %s", name);
+  } else {
+    INFO(NCCL_GRAPH, "Loading unnamed topology");
+  }
 
   struct xmlHandler handlers[] = { { "cpu", ncclTopoXmlLoadCpu } };
   NCCLCHECK(xmlLoadSub(file, xml, head, handlers, 1));

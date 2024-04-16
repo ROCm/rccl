@@ -224,6 +224,33 @@ static ncclResult_t connectRings(struct ncclComm* comm, int* ringRecv, int* ring
     TRACE(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c, channel0->ring.prev, comm->rank, channel0->ring.next);
     if (channel1) TRACE(NCCL_GRAPH, "Ring %d : %d -> %d -> %d", c+nChannels, channel1->ring.prev, comm->rank, channel1->ring.next);
   }
+
+  // [RCCL] Print off the recv/send local ranks per node, per channel
+  if (comm->rank == 0)
+  {
+    char buff[2048] = "";
+    int offset = 0;
+    int inc;
+    int numChannels = (nChannels > MAXCHANNELS/2) ? 2 * nChannels : nChannels;
+
+    for (int c = 0; c < numChannels; c++) {
+      sprintf(buff + offset, "     %02d%n", c, &inc);
+      offset += inc;
+    }
+    INFO(NCCL_GRAPH, "[RINGS] %s", buff);
+
+    for (int n = 0; n < nNodes; n++) {
+      offset = 0;
+      for (int c = 0; c < nChannels; c++) {
+        int recvRank = comm->rankToLocalRank[ringRecv[c*comm->nNodes+n]];
+        int sendRank = comm->rankToLocalRank[ringSend[c*comm->nNodes+n]];
+        sprintf(buff + offset, " %02d->%02d%n",  recvRank, sendRank, &inc);
+        offset += inc;
+      }
+      INFO(NCCL_GRAPH, "[RINGS] %s", buff);
+    }
+  }
+
   return ncclSuccess;
 }
 

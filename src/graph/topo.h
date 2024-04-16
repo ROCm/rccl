@@ -177,6 +177,10 @@ struct ncclTopoSystem {
   bool ll128Enabled;
   float baseBw;
   bool mscclEnabled;
+
+  // [RCCL] Track hostIdx and number of hosts to support rail-optimized rings/trees
+  int nHosts;
+  int hostIdx;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
