@@ -371,7 +371,12 @@ ncclResult_t ncclTopoAddNic(struct ncclXmlNode* xmlNic, struct ncclTopoSystem* s
 }
 
 ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* system, struct ncclTopoNode* gpu) {
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+  // There is no direct mapping between CUDA SM to HIP GFX. Use SM60 as compatibility level.
+  gpu->gpu.cudaCompCap = 60;
+#else
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "sm", &gpu->gpu.cudaCompCap));
+#endif
   const char* gcnArch;
   const char* gcnArchName;
   NCCLCHECK(xmlGetAttr(xmlGpu, "gcn", &gcnArch));
