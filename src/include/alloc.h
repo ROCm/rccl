@@ -27,7 +27,16 @@ ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  CUDACHECKGOTO(hipHostMalloc(ptr, nelem*sizeof(T), cudaHostAllocMapped), result, finish);
+  int managed = 0;
+  CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
+  if (managed) {
+#if defined(HIP_UNCACHED_MEMORY)
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocUncached), result, finish);
+#else
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*sizeof(T), hipDeviceMallocFinegrained), result, finish);
+#endif
+  } else
+    CUDACHECKGOTO(hipHostMalloc(ptr, nelem*sizeof(T), cudaHostAllocMapped), result, finish);
   memset(*ptr, 0, nelem*sizeof(T));
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
