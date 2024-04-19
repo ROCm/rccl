@@ -276,8 +276,8 @@ namespace RcclUnitTesting
 
     // Read values sent by parent [see TestBed::SetCollectiveArgs()]
     int             globalRank;
-    int             groupId;
     int             collId;
+    int             groupId;
     ncclFunc_t      funcType;
     ncclDataType_t  dataType;
     size_t          numInputElements;
@@ -286,8 +286,8 @@ namespace RcclUnitTesting
     OptionalColArgs options;
 
     PIPE_READ(globalRank);
-    PIPE_READ(groupId);
     PIPE_READ(collId);
+    PIPE_READ(groupId);
     PIPE_READ(funcType);
     PIPE_READ(dataType);
     PIPE_READ(numInputElements);

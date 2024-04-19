@@ -63,8 +63,8 @@ namespace RcclUnitTesting
                            size_t          const numInputElements,
                            size_t          const numOutputElements,
                            OptionalColArgs const &optionalArgs = {},
-                           int             const groupId       = 0,
                            int             const collId        = -1,
+                           int             const groupId       = 0,
                            int             const rank          = -1,
                            int             const streamIdx     = 0);
 

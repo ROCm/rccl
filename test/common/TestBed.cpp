@@ -201,8 +201,8 @@ namespace RcclUnitTesting
                                   size_t          const numInputElements,
                                   size_t          const numOutputElements,
                                   OptionalColArgs const &optionalArgs,
-                                  int             const groupId,
                                   int             const collId,
+                                  int             const groupId,
                                   int             const rank,
                                   int             const streamIdx)
   {
@@ -225,8 +225,8 @@ namespace RcclUnitTesting
       int const childId = rankToChildMap[currRank];
       PIPE_WRITE(childId, cmd);
       PIPE_WRITE(childId, currRank);
-      PIPE_WRITE(childId, groupId);
       PIPE_WRITE(childId, collId);
+      PIPE_WRITE(childId, groupId);
       PIPE_WRITE(childId, funcType);
       PIPE_WRITE(childId, dataType);
       PIPE_WRITE(childId, numInputElements);

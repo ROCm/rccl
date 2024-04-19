@@ -195,14 +195,14 @@ namespace RcclUnitTesting
                  isMultiProcess ? "MP" : "SP", totalRanks, numCollPerGroup, numStreamsPerGroup);
 
           testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks),
-                            numCollPerGroup, true, numStreamsPerGroup);
+                            numCollPerGroup, numStreamsPerGroup);
 
           // Set up each collective in group in different stream (modulo numStreamsPerGroup)
           options.redOp = ncclSum;
           for (int collIdx = 0; collIdx < numCollPerGroup; ++collIdx)
           {
             testBed.SetCollectiveArgs(ncclCollAllReduce, ncclFloat, numElements, numElements,
-                                      options, collIdx, -1, collIdx % numStreamsPerGroup);
+                                      options, collIdx, 0, -1, collIdx % numStreamsPerGroup);
           }
 
           testBed.AllocateMem(inPlace, useManagedMem);
@@ -271,8 +271,8 @@ namespace RcclUnitTesting
                                     numInputElements,
                                     numOutputElements,
                                     options,
-                                    groupCallIdx,
-                                    collIdx);
+                                    collIdx,
+                                    groupCallIdx);
         }
 
         testBed.AllocateMem(inPlace, useManagedMem, groupCallIdx);
