@@ -106,8 +106,7 @@ struct ncclConnInfo {
   void **ptrExchange; // Pointer exchange for direct communication
   uint64_t* redOpArgExchange; // PreOp scaler exchange for direct pull case
 
-  int *sizesFifo;     // Sizes fifo from GPU to proxy
-  int *offsFifo;      // Buffer fifo from proxy to GPU
+  struct ncclConnFifo* connFifo; // Used for GPU - Proxy communication
 
   uint64_t step;      // Keep where we are
   uint64_t llLastCleaning;
@@ -167,6 +166,9 @@ struct ncclDirect {
   int nHeads;   // Number of parallel N<->1<->net operations we'll do in parallel; size of up/down
   int headRank; // Index in 0..nHeads-1 I am the head rank of. -1 if I'm not a head rank (no local NIC)
   int shift;    // Shuffling of send/recv for scatter/gather operations, basically localRank%nHeads
+  // The heads[...] are guaranteed to be in rotated order start with self:
+  //   headRank, (headRank+1)%nHeads, (headRank+2)%nHeads, ...
+  int heads[NCCL_MAX_DIRECT_ARITY+1];
   int up[NCCL_MAX_DIRECT_ARITY];
   int down[NCCL_MAX_DIRECT_ARITY];
 };
@@ -229,30 +231,32 @@ struct ncclWorkElem {
   union {
     uint8_t flagBits;
     struct {
-      uint8_t isUsed:1, redOpArgIsPtr:1, regUsed:1, nWarps:5;
+      uint8_t isUsed:1, redOpArgIsPtr:1, regUsed:1, oneNode:1;
     };
   };
+  uint8_t nWarps;
   uint8_t direct;
-  uint8_t bid;
-  uint8_t nChannels;
-  struct {
-    uint32_t root:28;
-    uint32_t pad_0:2;
-    uint32_t connIndex:2;
-  };
 
-  const void * sendbuff;
-  void * recvbuff;
+  uint32_t root:30, connIndex:2;
+  const void *sendbuff;
+  void *recvbuff;
 
-  size_t count;
-  union {
-    size_t lastChunkSize;
-    // Pivot A2A kernel computes chunk size itself.
-    // Instead, it needs the number of bidirectional rings.
-    size_t pivotA2ANumBiRings;
-  };
+  uint64_t count:39, opCount:25;
   uint64_t redOpArg;
-  uint64_t opCount;
+  uint64_t chunkCount:25, workCount:39;
+  union {
+    struct {
+      uint64_t lastChunkCount:25;
+      uint64_t workOffset:39;
+    };
+    struct {
+      uint32_t nChannels;
+      uint16_t bid;
+      // Pivot A2A kernel computes chunk size itself.
+      // Instead, it needs the number of bidirectional rings.
+      uint16_t pivotA2ANumBiRings;
+    };
+  };
 };
 
 static_assert((NCCL_WORK_SIZE - alignUp(sizeof(ncclWorkHeader), alignof(ncclWorkElem)))/sizeof(ncclWorkElem) == 4, "Sanity check: NCCL_MAX_WORK_ELEMENTS == 4");
@@ -265,15 +269,16 @@ struct ncclWorkElemP2p {
     int32_t proto:2;
   };
   union {
-    uint16_t flagBits;
+    uint16_t flagBit;
     struct {
       enum ncclWorkP2PType p2pType:4;
-      uint16_t nWarps:4;
-      uint16_t warpStart:4;
-      uint16_t ngroups:4;
+      uint8_t nWarps:4;
+      uint8_t warpStart:4;
+      uint8_t ngroups:4;
     };
   };
-  uint16_t opCount;
+  uint8_t reg:1;
+  uint16_t opCount:12;
   // Important not to use any fields with greater than 4-byte alignment since
   // we need sizeof(ncclWorkElemP2p)==28, but that would be padded up to 32 if
   // there were 8-byte fields.
@@ -398,12 +403,16 @@ struct alignas(16) ncclDevChannel {
 struct ncclDevComm {
   int rank;
   int nRanks;
+  int node;
+  int nNodes;
   int buffSizes[NCCL_NUM_PROTOCOLS];
   int p2pChunkSize;
 
   // Operation list for aggregation
   int workFifoDepth;
   struct ncclWork* workFifoHeap; // may be cudaHost or GDR memory
+
+  int* collNetDenseToUserRank;
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t* abortFlag;
@@ -526,56 +535,55 @@ extern int const ncclDevFuncRowToId[];
 // `ncclFuncIndex()` needs to be in sync with 'ALL_COLLS' in Generate.cmake
 inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
   int row = 0;
+  do {
+    // RING / <all_protos> / Sum / int8_t
+    if (coll == ncclFuncAllGather) {
+      row += proto;
+      break;
+    }
+    row += NCCL_NUM_PROTOCOLS;
 
-  // RING / <all_protos> / Sum / int8_t
-  if (coll == ncclFuncAllGather) {
-    row += proto;
-    goto have_row;
-  }
-  row += NCCL_NUM_PROTOCOLS;
+    // <all_algos> / <all_protos> / <all_redops> / <all_types>
+    if (coll == ncclFuncAllReduce) {
+      row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
+      break;
+    }
+    row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
-  // <all_algos> / <all_protos> / <all_redops> / <all_types>
-  if (coll == ncclFuncAllReduce) {
-    row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * (algo * NCCL_NUM_PROTOCOLS + proto);
-    goto have_row;
-  }
-  row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
+    // RING / SIMPLE / Sum / int8_t
+    if (coll == ncclFuncAllToAllPivot) break;
+    row += 1;
 
-  // RING / SIMPLE / Sum / int8_t
-  if (coll == ncclFuncAllToAllPivot) goto have_row;
-  row += 1;
+    // RING / <all_protos> / Sum / int8_t
+    if (coll == ncclFuncBroadcast) {
+      row += proto;
+      break;
+    }
+    row += NCCL_NUM_PROTOCOLS;
 
-  // RING / <all_protos> / Sum / int8_t
-  if (coll == ncclFuncBroadcast) {
-    row += proto;
-    goto have_row;
-  }
-  row += NCCL_NUM_PROTOCOLS;
+    // RING / <all_protos> / <all_redops> / <all_types>
+    if (coll == ncclFuncReduce) {
+      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto; 
+      break;
+    }
+    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
-  // RING / <all_protos> / <all_redops> / <all_types>
-  if (coll == ncclFuncReduce) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto; 
-    goto have_row;
-  }
-  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
+    // RING / <all_protos> / <all_redops> / <all_types>
+    if (coll == ncclFuncReduceScatter) {
+      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto;
+      break;
+    }
+    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
-  // RING / <all_protos> / <all_redops> / <all_types>
-  if (coll == ncclFuncReduceScatter) {
-    row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - /*floats for each SumPostDiv*/ 6 * proto;
-    goto have_row;
-  }
-  row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - /*floats for each SumPostDiv*/ 6);
+    // RING / SIMPLE / Sum / int8_t
+    if (coll == ncclFuncSendRecv) break;
+    row += 1;
 
-  // RING / SIMPLE / Sum / int8_t
-  if (coll == ncclFuncSendRecv) goto have_row;
-  row += 1;
+  } while (false);
 
-have_row:
   return ncclDevFuncRowToId[row];
 }
 
-inline int ncclDevFuncId_P2p() { return ncclDevFuncRowToId[FUNC_INDEX_P2P]; }
-
-inline int ncclDevFuncId_AllToAllPivot() { return ncclDevFuncRowToId[FUNC_INDEX_ALLTOALL_PIVOT]; }
+inline int ncclDevFuncId_P2p() { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - NCCL_NUM_ONERANK - 1]; }
 
 #endif

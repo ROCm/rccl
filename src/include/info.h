@@ -14,6 +14,7 @@
 #include "core.h"
 #include "utils.h"
 #include "strongstream.h"
+#define NCCL_MAX_LOCAL_RANKS 64
 
 typedef enum : uint8_t {
   ncclPatternRing,
@@ -30,6 +31,13 @@ typedef enum : uint8_t {
   ncclPatternSend,
   ncclPatternRecv
 } ncclPattern_t;
+
+enum ncclRegBufferType {
+  NCCL_REGULAR_BUFFER = 0,
+  NCCL_IPC_REG_BUFFER = 1,
+  NCCL_NVLS_REG_BUFFER = 2,
+  NCCL_REG_BUFFER_NUM = 3
+};
 
 // Used to pass NCCL call information between functions
 struct ncclInfo {
@@ -49,37 +57,46 @@ struct ncclInfo {
   int sliceSteps;
   // Computed later
   ncclDevRedOpFull opFull;
-  int algorithm;
-  int protocol;
   ncclPattern_t pattern;
-  int nChannels;
-  int nThreads;
   size_t nBytes;
+  size_t aggnBytes;
+  size_t workBytes;
   size_t sendbuffSize;
   size_t recvbuffSize;
-  int nstepsPerLoop;
-  int nchunksPerLoop;
+  int stepSize;
+  int chunkCount;
   int chunkSize;
   int channelId;
+  int workFuncIndex;
+  ncclRegBufferType regBufType;
+  void* regBufSend[NCCL_MAX_LOCAL_RANKS];
+  void* regBufRecv[NCCL_MAX_LOCAL_RANKS];
+  // Need to initialize
+  int nThreads;
+  int nChannels;
+  int algorithm;
+  int protocol;
+  bool userTuned;
+  struct ncclInfo *next;
 };
 
 inline ncclResult_t ncclInfoSetDerived(struct ncclInfo* info, int nRanks) {
-  info->nBytes = info->count * ncclTypeSize(info->datatype);
+  info->nBytes = info->workBytes = info->count * ncclTypeSize(info->datatype);
   if (info->coll == ncclFuncAllGather || info->coll == ncclFuncBroadcast || info->coll == ncclFuncAllToAllPivot) {
-    info->count = info->nBytes;
+    info->count = info->workBytes;
     info->datatype = ncclInt8;
   }
   if (info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter) info->nBytes *= nRanks; // count is per rank
 
   /* compute buffer size for NVLS buffer registration */
   if (info->coll == ncclFuncAllGather) {
-    info->sendbuffSize = info->count * ncclTypeSize(info->datatype);
+    info->sendbuffSize = info->workBytes;
     info->recvbuffSize = info->sendbuffSize * nRanks;
   } else if (info->coll == ncclFuncReduceScatter) {
-    info->recvbuffSize = info->count * ncclTypeSize(info->datatype);
+    info->recvbuffSize = info->workBytes;
     info->sendbuffSize = info->recvbuffSize * nRanks;
   } else {
-    info->sendbuffSize = info->recvbuffSize = info->count * ncclTypeSize(info->datatype);
+    info->sendbuffSize = info->recvbuffSize = info->workBytes;
   }
   return ncclSuccess;
 }
@@ -94,6 +111,7 @@ struct ncclTaskColl {
   ncclDataType_t datatype;
   ncclDevRedOpFull op;
   int chunkSteps, sliceSteps;
+  struct ncclInfo info;
 };
 struct ncclTaskP2p {
   ncclTaskP2p *next;
@@ -114,8 +132,16 @@ struct ncclTasks {
     struct ncclIntruQueue<struct ncclTaskP2p, &ncclTaskP2p::next> sendQueue;
     struct ncclIntruQueue<struct ncclTaskP2p, &ncclTaskP2p::next> recvQueue;
   };
-  struct ncclIntruQueue<ncclTaskColl, &ncclTaskColl::next> collQueue;
-  size_t collBytesTotal;
+  struct ncclIntruQueue<struct ncclInfo, &ncclInfo::next> collQueue;
+  // Queue for user-tuned executed collectives
+  struct ncclIntruQueue<struct ncclInfo, &ncclInfo::next> collTunedQueue;
+  // Queue for continuous bytes distribution (CBD) collectives
+  struct ncclIntruQueue<struct ncclInfo, &ncclInfo::next> collCBDQueue;
+  // Queue for collnet
+  struct ncclIntruQueue<struct ncclInfo, &ncclInfo::next> collnetQueue;
+  size_t workBytesTotal;
+  int usableChannels;
+  bool sorted;
   struct Peer* peers/*[nRanks]*/;
   int *p2pSendOrder, *p2pRecvOrder;
   int p2pOrderSteps;

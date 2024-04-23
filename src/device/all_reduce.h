@@ -21,18 +21,21 @@ namespace {
   __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
 #endif
     const int tid = threadIdx.x;
-    const int nthreads = args->nWarps*WARP_SIZE;
-    const int bid = args->bid;
-    const int nChannels = args->nChannels;
+    const int nthreads = (int)args->nWarps * WARP_SIZE;
     ncclRing *ring = &ncclShmem.channel.ring;
     int ringIx = ring->index;
-    const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? ALLREDUCE_CHUNKSTEPS : 1));
+    ssize_t chunkCount = args->chunkCount;
     const int nranks = ncclShmem.comm.nRanks;
-    const ssize_t loopSize = nChannels*nranks*chunkSize;
+    const ssize_t loopCount = nranks * chunkCount;
+    ssize_t offset;
+    ssize_t gridOffset = args->workOffset;
+    ssize_t channelCount = args->workCount;
     const ssize_t size = args->count;
+    int nelem;
+    int chunk;
 
 #if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
+    int npKitCtxIdx = gridOffset / channelCount;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -74,34 +77,21 @@ namespace {
     }
 #endif
 
-    for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-      ssize_t realChunkSize;
-      if (Proto::Id == NCCL_PROTO_SIMPLE) {
-        realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks));
-        realChunkSize = roundUp(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
-      }
-      else
-        realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks*minChunkSize)*minChunkSize);
-      realChunkSize = int(realChunkSize);
+    for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+      ssize_t remCount = channelCount - elemOffset;
+      ssize_t chunkOffset;
 
-      auto calcOffset = [&]__device__(int chunk)->ssize_t {
-        if (Proto::Id == NCCL_PROTO_SIMPLE)
-          return gridOffset + bid*nranks*realChunkSize + chunk*realChunkSize;
-        else
-          return gridOffset + (chunk*nChannels + bid)*realChunkSize;
-      };
+      if (remCount < loopCount) chunkCount = args->lastChunkCount;
+
       auto modRanks = [&]__device__(int r)->int {
         return r - (r >= nranks ? nranks : 0);
       };
 
-      ssize_t offset;
-      int nelem;
-      int chunk;
-
       // step 0: push data to next GPU
-      chunk = modRanks(ringIx + nranks-1);
-      offset = calcOffset(chunk);
-      nelem = min(realChunkSize, size-offset);
+      chunk = modRanks(ringIx + nranks - 1);
+      chunkOffset = chunk * chunkCount;
+      offset = gridOffset + elemOffset + chunkOffset;
+      nelem = (int)min(chunkCount, remCount - chunkOffset);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_SEND_ENTRY)
       if (tid == 0) {
@@ -130,10 +120,11 @@ namespace {
       }
 #endif
 
-      for (int j=2; j<nranks; ++j) {
-        chunk = modRanks(ringIx + nranks-j);
-        offset = calcOffset(chunk);
-        nelem = min(realChunkSize, size-offset);
+      for (int j = 2; j < nranks; ++j) {
+        chunk = modRanks(ringIx + nranks - j);
+        chunkOffset = chunk * chunkCount;
+        offset = gridOffset + elemOffset + chunkOffset;
+        nelem = (int)min(chunkCount, remCount - chunkOffset);
         prims.recvReduceSend(offset, nelem);
       }
 
@@ -147,8 +138,9 @@ namespace {
       // step k-1: reduce this buffer and data, which will produce the final
       // result that we store in this data and push to the next GPU
       chunk = ringIx + 0;
-      offset = calcOffset(chunk);
-      nelem = min(realChunkSize, size-offset);
+      chunkOffset = chunk * chunkCount;
+      offset = gridOffset + elemOffset + chunkOffset;
+      nelem = (int)min(chunkCount, remCount - chunkOffset);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY)
       if (tid == 0) {
@@ -176,10 +168,11 @@ namespace {
 #endif
 
       // k-2 steps: copy to next GPU
-      for (int j=1; j<nranks-1; ++j) {
-        chunk = modRanks(ringIx + nranks-j);
-        offset = calcOffset(chunk);
-        nelem = min(realChunkSize, size-offset);
+      for (int j = 1; j < nranks - 1; ++j) {
+        chunk = modRanks(ringIx + nranks - j);
+        chunkOffset = chunk * chunkCount;
+        offset = gridOffset + elemOffset + chunkOffset;
+        nelem = (int)min(chunkCount, remCount - chunkOffset);
         prims.directRecvCopySend(offset, nelem);
       }
 
@@ -200,8 +193,9 @@ namespace {
 
       // Make final copy from buffer to dest.
       chunk = modRanks(ringIx + 1);
-      offset = calcOffset(chunk);
-      nelem = min(realChunkSize, size-offset);
+      chunkOffset = chunk * chunkCount;
+      offset = gridOffset + elemOffset + chunkOffset;
+      nelem = (int)min(chunkCount, remCount - chunkOffset);
       prims.directRecv(offset, nelem);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_EXIT)
@@ -229,21 +223,17 @@ namespace {
   __device__ __attribute__((noinline)) void runTreeUpDown(ncclWorkElem *args) {
 #endif
     const int tid = threadIdx.x;
-    const int nthreads = args->nWarps*WARP_SIZE;
-    const int bid = args->bid;
-    const int nChannels = args->nChannels;
+    const int nthreads = (int)args->nWarps * WARP_SIZE;
     ncclTree *tree = &ncclShmem.channel.tree;
-    ssize_t chunkSize = int(
-      Proto::Id == NCCL_PROTO_SIMPLE ? args->lastChunkSize
-                   /* LL & LL128 */  : Proto::calcBytePerStep()/sizeof(T));
-    const ssize_t minChunkSize = int(
-      Proto::Id == NCCL_PROTO_SIMPLE ? nthreads*8*(sizeof(uint64_t)/sizeof(T))
-                   /* LL & LL128 */  : nthreads*(Proto::calcBytePerGrain()/sizeof(T)));
-    const ssize_t loopSize = int(nChannels*chunkSize);
+    const size_t channelCount = args->workCount;
+    const size_t gridOffset = args->workOffset;
+    const size_t chunkCount = args->chunkCount;
     const ssize_t size = args->count;
+    size_t offset;
+    int nelem;
 
 #if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
+    int npKitCtxIdx = gridOffset / channelCount;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -268,9 +258,6 @@ namespace {
     }
 #endif
 
-    if (loopSize > size)
-      chunkSize = divUp((int)size, int(nChannels*minChunkSize))*int(minChunkSize);
-
     { // Reduce : max number of recv is 3, max number of send is 1 (binary tree + local)
       Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0> prims
         (tid, nthreads, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->redOpArg);
@@ -290,23 +277,23 @@ namespace {
 #endif
 
       if (tree->up == -1) {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.recvReduceCopy(offset, offset, nelem, /*postOp=*/true);
         }
       }
       else if (tree->down[0] == -1) {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.send(offset, nelem);
         }
       }
       else {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.recvReduceSend(offset, nelem);
         }
       }
@@ -339,23 +326,23 @@ namespace {
 #endif
 
       if (tree->up == -1) {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.directSendFromOutput(offset, nelem);
         }
       }
       else if (tree->down[0] == -1) {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.directRecv(offset, nelem);
         }
       }
       else {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.directRecvCopySend(offset, nelem);
         }
       }
@@ -385,19 +372,16 @@ namespace {
   __device__ __attribute__((noinline)) void runTreeSplit(ncclWorkElem *args) {
 #endif
     const int tid = threadIdx.x;
-    const int nthreads = args->nWarps*WARP_SIZE;
-    const int bid = args->bid;
-    const int nChannels = args->nChannels;
+    const int nthreads = (int)args->nWarps * WARP_SIZE;
     ncclTree *tree = &ncclShmem.channel.tree;
-    ssize_t chunkSize = int(
-      Proto::Id != NCCL_PROTO_LL ? args->lastChunkSize
-                                 : Proto::calcBytePerStep()/sizeof(T));
-    const ssize_t minChunkSize = int(
-      Proto::Id == NCCL_PROTO_SIMPLE ? nthreads*8*(sizeof(uint64_t)/sizeof(T)) :
-      Proto::Id == NCCL_PROTO_LL     ? nthreads*(Proto::calcBytePerGrain()/sizeof(T))
-                   /* LL128 */       : nthreads*(Proto::calcBytePerGrain()/sizeof(T))/8);
-    const ssize_t loopSize = int(nChannels*chunkSize);
+    const size_t chunkCount = args->chunkCount;
+    const size_t gridOffset = args->workOffset;
+    const size_t channelCount = args->workCount;
     const ssize_t size = args->count;
+    const int bid = gridOffset / channelCount;
+    size_t offset;
+    int nelem;
+
     int nthreadsSplit;
     if (Proto::Id == NCCL_PROTO_SIMPLE) {
       nthreadsSplit = nthreads/2;
@@ -442,9 +426,6 @@ namespace {
     }
 #endif
 
-    if (loopSize > size)
-      chunkSize = divUp((int)size, nChannels*int(minChunkSize))*int(minChunkSize);
-
     if (tree->up == -1) {
       // Reduce and broadcast. Max number of recv is 2, max number of send is 2
       Primitives<T, RedOp, FanSymmetric<NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0>
@@ -464,9 +445,9 @@ namespace {
       }
 #endif
 
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        ssize_t offset = gridOffset + bid*int(chunkSize);
-        int nelem = min(chunkSize, size-offset);
+      for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+        offset = gridOffset + elemOffset;
+        nelem = min(chunkCount, channelCount - elemOffset);
         prims.directRecvReduceCopySend(offset, offset, nelem, /*doPost=*/true);
       }
 
@@ -505,16 +486,16 @@ namespace {
 #endif
 
       if (tree->down[0] == -1) {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.send(offset, nelem);
         }
       }
       else {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.recvReduceSend(offset, nelem);
         }
       }
@@ -548,16 +529,16 @@ namespace {
 #endif
 
       if (tree->down[0] == -1) {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.directRecv(offset, nelem);
         }
       }
       else {
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + bid*int(chunkSize);
-          int nelem = min(chunkSize, size-offset);
+        for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
+          offset = gridOffset + elemOffset;
+          nelem = min(chunkCount, channelCount - elemOffset);
           prims.directRecvCopySend(offset, nelem);
         }
       }
@@ -604,7 +585,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NCC
     const int bid = args->bid;
     const int nChannels = args->nChannels;
     struct ncclDirect* direct = &ncclShmem.channel.collnetDirect;
-    const ssize_t chunkSize = int(args->lastChunkSize);
+    const ssize_t chunkSize = args->chunkCount;
     const ssize_t size = args->count;
     const ssize_t loopSize = nChannels*direct->nHeads*chunkSize;
 
@@ -700,14 +681,10 @@ template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
     const int tid = threadIdx.x;
-    const int bid = args->bid;
-    const int nChannels = args->nChannels;
     struct ncclNvls* nvls = &ncclShmem.channel.nvls;
-    const ssize_t chunkSize = int(args->lastChunkSize);
-    const ssize_t size = args->count;
-    const ssize_t loopSize = nChannels*nvls->nHeads*chunkSize;
-    const int nranks = ncclShmem.comm.nRanks;
+    ssize_t chunkSize = args->chunkCount;
     const bool hasOut = nvls->out != -1;
+    const int nranks = ncclShmem.comm.nRanks;
     const int totalWarps = NCCL_MAX_NTHREADS/WARP_SIZE;
     const int bcastWarps = hasOut ? (args->regUsed ? ((totalWarps - 2) >> 1) - 1 : 2) : 0;
     const int reduceWarps = args->regUsed ? (totalWarps - bcastWarps - 2) : (hasOut ? 3 : nranks <= 6 ? 7 : 5);
@@ -723,62 +700,114 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SI
     const int tidEndReduce = tidEndGather + nThreadsReduce;
     const int tidEndBcast = tidEndReduce + nThreadsBcast;
 
-    if (tid < tidEndScatter) {
-      // Scatter
-      using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
-      Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
-        prims(tid, nThreadsScatter, NULL, nvls->up, args->sendbuff, NULL,
-          args->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        ssize_t offset = gridOffset + bid * nvls->nHeads * chunkSize;
-        int nelem = args->regUsed ? 0 : min(nvls->nHeads * chunkSize, size - offset);
-        prims.scatter(offset, nelem, chunkSize, chunkSize, -1, 0);
-      }
-    } else if (tid < tidEndGather) {
-      // Gather
-      using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
-        prims(tid - tidEndScatter, nThreadsGather, nvls->up, NULL, NULL, args->recvbuff,
-          args->redOpArg, 1 * Proto::MaxGroupWidth, 1, 1);
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        ssize_t offset = gridOffset + bid * nvls->nHeads * chunkSize;
-        int nelem = args->regUsed ? 0 :min(nvls->nHeads * chunkSize, size - offset);
-        prims.gather(offset, nelem, chunkSize, chunkSize, -1, 0);
-      }
-    } else if (tid < tidEndReduce && nvls->headRank != -1) {
-      if (!hasOut) {
+    if (args->oneNode) {
+      const ssize_t loopCount = nvls->nHeads * chunkSize;
+      const ssize_t channelCount = args->workCount;
+      const ssize_t gridOffset = args->workOffset;
+      ssize_t offset;
+      int nelem;
+
+      if (tid < tidEndScatter) {
+        // Scatter
+        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
+          prims(tid, nThreadsScatter, NULL, nvls->up, args->sendbuff, NULL,
+            args->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
+        for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+          if (channelCount - elemOffset < loopCount) chunkSize = args->lastChunkCount;
+          offset = gridOffset + elemOffset;
+          nelem = args->regUsed ? 0 : min(loopCount, channelCount - elemOffset);
+          prims.scatter(offset, nelem, chunkSize, chunkSize, -1, 0);
+        }
+      } else if (tid < tidEndGather) {
+        // Gather
+        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
+          prims(tid - tidEndScatter, nThreadsGather, nvls->up, NULL, NULL, args->recvbuff,
+            args->redOpArg, 1 * Proto::MaxGroupWidth, 1, 1);
+        for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+          if (channelCount - elemOffset < loopCount) chunkSize = args->lastChunkCount;
+          offset = gridOffset + elemOffset;
+          nelem = args->regUsed ? 0 : min(loopCount, channelCount - elemOffset);
+          prims.gather(offset, nelem, chunkSize, chunkSize, -1, 0);
+        }
+      } else if (tid < tidEndReduce) {
         // Reduce, broadcast through NVLS
         using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 1>;
         Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
           prims(tid - tidEndGather, nThreadsReduce, &nvls->down, &nvls->down, NULL, NULL,
             args->redOpArg, 2 * Proto::MaxGroupWidth, 0, 0, args);
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
-          int nelem = min(chunkSize, size - offset);
-          prims.directRecvDirectSend(offset, offset, nelem);
-        }
-      } else {
-        // Reduce, send to network
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
-        Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
-          prims(tid - tidEndGather, nThreadsReduce, &nvls->down, &nvls->out, NULL, NULL,
-            args->redOpArg, 2 * Proto::MaxGroupWidth, 0, 1, args);
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
-          int nelem = min(chunkSize, size - offset);
+        for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+          ssize_t chunkOffset;
+          if (channelCount - elemOffset < loopCount) chunkSize = args->lastChunkCount;
+          chunkOffset = elemOffset + nvls->headRank * chunkSize;
+          offset = gridOffset + chunkOffset;
+          nelem = min(chunkSize, channelCount - chunkOffset);
           prims.directRecvDirectSend(offset, offset, nelem);
         }
       }
-    } else if (tid < tidEndBcast && nvls->headRank != -1) {
-      // Recv from network, broadcast
-      using Proto = ProtoSimple<1, 1, COLL_UNROLL, 0, 1>;
-      Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
-        prims(tid - tidEndReduce, nThreadsBcast, &nvls->out, &nvls->down, NULL, NULL,
-          args->redOpArg, 3 * Proto::MaxGroupWidth, 0, 0, args);
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
-        int nelem = min(chunkSize, size - offset);
-        prims.directRecvDirectSend(offset, offset, nelem);
+    } else {
+      const int bid = args->bid;
+      const ssize_t loopSize = args->nChannels * nvls->nHeads * chunkSize;
+      const ssize_t size = args->count;
+
+      if (tid < tidEndScatter) {
+        // Scatter
+        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
+          prims(tid, nThreadsScatter, NULL, nvls->up, args->sendbuff, NULL,
+            args->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
+        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+          ssize_t offset = gridOffset + bid * nvls->nHeads * chunkSize;
+          int nelem = args->regUsed ? 0 : min(nvls->nHeads * chunkSize, size - offset);
+          prims.scatter(offset, nelem, chunkSize, chunkSize, -1, 0);
+        }
+      } else if (tid < tidEndGather) {
+        // Gather
+        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
+          prims(tid - tidEndScatter, nThreadsGather, nvls->up, NULL, NULL, args->recvbuff,
+            args->redOpArg, 1 * Proto::MaxGroupWidth, 1, 1);
+        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+          ssize_t offset = gridOffset + bid * nvls->nHeads * chunkSize;
+          int nelem = args->regUsed ? 0 :min(nvls->nHeads * chunkSize, size - offset);
+          prims.gather(offset, nelem, chunkSize, chunkSize, -1, 0);
+        }
+      } else if (tid < tidEndReduce && nvls->headRank != -1) {
+        if (!hasOut) {
+          // Reduce, broadcast through NVLS
+          using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 1>;
+          Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
+            prims(tid - tidEndGather, nThreadsReduce, &nvls->down, &nvls->down, NULL, NULL,
+              args->redOpArg, 2 * Proto::MaxGroupWidth, 0, 0, args);
+          for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+            ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
+            int nelem = min(chunkSize, size - offset);
+            prims.directRecvDirectSend(offset, offset, nelem);
+          }
+        } else {
+          // Reduce, send to network
+          using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
+          Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
+            prims(tid - tidEndGather, nThreadsReduce, &nvls->down, &nvls->out, NULL, NULL,
+              args->redOpArg, 2 * Proto::MaxGroupWidth, 0, 1, args);
+          for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+            ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
+            int nelem = min(chunkSize, size - offset);
+            prims.directRecvDirectSend(offset, offset, nelem);
+          }
+        }
+      } else if (tid < tidEndBcast && nvls->headRank != -1) {
+        // Recv from network, broadcast
+        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 0, 1>;
+        Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
+          prims(tid - tidEndReduce, nThreadsBcast, &nvls->out, &nvls->down, NULL, NULL,
+            args->redOpArg, 3 * Proto::MaxGroupWidth, 0, 0, args);
+        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+          ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
+          int nelem = min(chunkSize, size - offset);
+          prims.directRecvDirectSend(offset, offset, nelem);
+        }
       }
     }
   }
@@ -788,14 +817,13 @@ template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
     const int tid = threadIdx.x;
-    const int bid = args->bid;
-    const int nChannels = args->nChannels;
     struct ncclNvls* nvls = &ncclShmem.channel.nvls;
     const int treeUp = nvls->treeUp;
     const int* treeDown = nvls->treeDown;
-    const ssize_t chunkSize = int(args->lastChunkSize);
-    const ssize_t size = args->count;
-    const ssize_t loopSize = nChannels*nvls->nHeads*chunkSize;
+    ssize_t chunkCount = args->chunkCount;
+    const ssize_t loopCount = nvls->nHeads * chunkCount;
+    const ssize_t channelCount = args->workCount;
+    const ssize_t gridOffset = args->workOffset;
     const int nranks = ncclShmem.comm.nRanks;
     const bool hasUp = treeUp != -1;
     const int totalWarps = NCCL_MAX_NTHREADS/WARP_SIZE;
@@ -803,6 +831,8 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PRO
     const int reduceWarps = args->regUsed ? (totalWarps - bcastWarps - 2) : (hasUp ? 5 : nranks <= 6 ? 7 : 5);
     const int scatterWarps = args->regUsed ? 1 : (totalWarps - reduceWarps - bcastWarps + 1) >> 1;
     const int gatherWarps = args->regUsed ? 1 : (totalWarps - reduceWarps - bcastWarps) >> 1;
+    ssize_t offset;
+    int nelem;
 
     const int nThreadsScatter = scatterWarps*WARP_SIZE;
     const int nThreadsGather  = gatherWarps*WARP_SIZE;
@@ -819,10 +849,11 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PRO
       Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
         prims(tid, nThreadsScatter, NULL, nvls->up, args->sendbuff, NULL,
           args->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        ssize_t offset = gridOffset + bid * nvls->nHeads * chunkSize;
-        int nelem = args->regUsed ? 0 : min(nvls->nHeads * chunkSize, size - offset);
-        prims.scatter(offset, nelem, chunkSize, chunkSize, -1, 0);
+      for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+        if (channelCount - elemOffset < loopCount) chunkCount = args->lastChunkCount;
+        offset = gridOffset + elemOffset;
+        nelem = args->regUsed ? 0 : min(loopCount, channelCount - elemOffset);
+        prims.scatter(offset, nelem, chunkCount, chunkCount, -1, 0);
       }
     } else if (tid < tidEndGather) {
       // Gather
@@ -830,10 +861,11 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PRO
       Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
         prims(tid - tidEndScatter, nThreadsGather, nvls->up, NULL, NULL, args->recvbuff,
           args->redOpArg, 1 * Proto::MaxGroupWidth, 1, 1);
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        ssize_t offset = gridOffset + bid * nvls->nHeads * chunkSize;
-        int nelem = args->regUsed ? 0 : min(nvls->nHeads * chunkSize, size - offset);
-        prims.gather(offset, nelem, chunkSize, chunkSize, -1, 0);
+      for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+        if (channelCount - elemOffset < loopCount) chunkCount = args->lastChunkCount;
+        offset = gridOffset + elemOffset;
+        nelem = args->regUsed ? 0 : min(loopCount, channelCount - elemOffset);
+        prims.gather(offset, nelem, chunkCount, chunkCount, -1, 0);
       }
     } else if (tid < tidEndReduce && nvls->headRank != -1) {
       if (!hasUp) {
@@ -842,9 +874,12 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PRO
         Primitives<T, RedOp, FanSymmetric<3>, /*Direct=*/1, Proto, 0>
           prims(tid - tidEndGather, nThreadsReduce, treeDown, treeDown, NULL, NULL,
             args->redOpArg, 2 * Proto::MaxGroupWidth, 0, 0, args);
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
-          int nelem = min(chunkSize, size - offset);
+        for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+          ssize_t chunkOffset;
+          if (channelCount - elemOffset < loopCount) chunkCount = args->lastChunkCount;
+          chunkOffset = elemOffset + nvls->headRank * chunkCount;
+          offset = gridOffset + chunkOffset;
+          nelem = min(chunkCount, channelCount - chunkOffset);
           prims.directRecvDirectSend(offset, offset, nelem);
         }
       } else {
@@ -853,9 +888,12 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PRO
         Primitives<T, RedOp, FanAsymmetric<3, 1>, /*Direct=*/1, Proto, 0>
           prims(tid - tidEndGather, nThreadsReduce, treeDown, &treeUp, NULL, NULL,
             args->redOpArg, 2 * Proto::MaxGroupWidth, 0, 0, args);
-        for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-          ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
-          int nelem = min(chunkSize, size - offset);
+        for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+          ssize_t chunkOffset;
+          if (channelCount - elemOffset < loopCount) chunkCount = args->lastChunkCount;
+          chunkOffset = elemOffset + nvls->headRank * chunkCount;
+          offset = gridOffset + chunkOffset;
+          nelem = min(chunkCount, channelCount - chunkOffset);
           prims.directRecvDirectSend(offset, offset, nelem);
         }
       }
@@ -865,9 +903,12 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PRO
       Primitives<T, RedOp, FanAsymmetric<1, 3>, /*Direct=*/1, Proto, 0>
         prims(tid - tidEndReduce, nThreadsBcast, &treeUp, treeDown, NULL, NULL,
           args->redOpArg, 3 * Proto::MaxGroupWidth, 0, 0, args);
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        ssize_t offset = gridOffset + (bid * nvls->nHeads + nvls->headRank) * chunkSize;
-        int nelem = min(chunkSize, size - offset);
+      for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
+        ssize_t chunkOffset;
+        if (channelCount - elemOffset < loopCount) chunkCount = args->lastChunkCount;
+        chunkOffset = elemOffset + nvls->headRank * chunkCount;
+        offset = gridOffset + chunkOffset;
+        nelem = min(chunkCount, channelCount - chunkOffset);
         prims.directRecvDirectSend(offset, offset, nelem);
       }
     }
@@ -882,7 +923,7 @@ struct RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET_CHAIN, NCCL
     const int bid = args->bid;
     const int nChannels = args->nChannels;
     ncclTree *tree = &ncclShmem.channel.collnetChain;
-    ssize_t chunkSize = int(args->lastChunkSize);
+    ssize_t chunkSize = args->chunkCount;
     const ssize_t loopSize = int(nChannels*chunkSize);
     const int nranks = ncclShmem.comm.nRanks;
     const ssize_t size = args->count;
