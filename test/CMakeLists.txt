@@ -26,7 +26,20 @@ if(BUILD_TESTS)
   include_directories(${GTEST_INCLUDE_DIRS} ./common)
 
   # Collect testing framework source files
-  set (COMMON_SOURCE_FILES
+  set(TEST_SOURCE_FILES
+    AllGatherTests.cpp
+    AllReduceTests.cpp
+    AllToAllTests.cpp
+    AllToAllVTests.cpp
+    BroadcastTests.cpp
+    GatherTests.cpp
+    GroupCallTests.cpp
+    NonBlockingTests.cpp
+    ReduceScatterTests.cpp
+    ReduceTests.cpp
+    ScatterTests.cpp
+    SendRecvTests.cpp
+    StandaloneTests.cpp
     common/main.cpp
     common/CollectiveArgs.cpp
     common/EnvVars.cpp
@@ -36,38 +49,7 @@ if(BUILD_TESTS)
     common/TestBedChild.cpp
     )
 
-  # Collect source files for tests
-  if(ONLY_FUNCS)
-    # Convert input string to a list
-    string(REPLACE "|" ";" CONFIG_LIST ${ONLY_FUNCS})
-
-    # For each config in config list
-    foreach(item ${CONFIG_LIST})
-      string(REPLACE " " ";" CONFIG_PARAMS ${item})
-      list(GET CONFIG_PARAMS 0 COLL)
-
-      set(TEST_FILE "${COLL}Tests.cpp")
-      list(APPEND TEST_SOURCE_FILES ${TEST_FILE})
-    endforeach()
-  else()
-    set(TEST_SOURCE_FILES
-      AllGatherTests.cpp
-      AllReduceTests.cpp
-      AllToAllTests.cpp
-      AllToAllVTests.cpp
-      BroadcastTests.cpp
-      GatherTests.cpp
-      GroupCallTests.cpp
-      NonBlockingTests.cpp
-      ReduceScatterTests.cpp
-      ReduceTests.cpp
-      ScatterTests.cpp
-      SendRecvTests.cpp
-      StandaloneTests.cpp
-      )
-  endif()
-
-  add_executable(rccl-UnitTests ${COMMON_SOURCE_FILES} ${TEST_SOURCE_FILES})
+  add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})
 
   ## Set rccl-UnitTests include directories
   target_include_directories(rccl-UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})

@@ -155,7 +155,7 @@ static ncclResult_t doLaunches(struct ncclComm* head) {
     }
 
     while (true) { // Iterate rounds of launches for clique.
-      bool moreRounds;
+      bool moreRounds = false;
       comm = cliqueHead;
       do { // Iterate clique members.
         struct ncclComm* next = comm->groupNext;
@@ -163,7 +163,7 @@ static ncclResult_t doLaunches(struct ncclComm* head) {
           // Barrier reduction result tells us if this was the final round.
           moreRounds = 0 != ncclCommIntraBarrierOut(comm);
         } else {
-          moreRounds = comm->unlaunchedPlansHead != nullptr;
+          moreRounds |= comm->unlaunchedPlansHead != nullptr;
         }
         if (moreRounds) {
           // Pop next unlaunched kernel
@@ -248,9 +248,9 @@ static void groupCleanup(struct ncclComm** groupCommHeadPtr, struct ncclComm** g
     // Reset comm->tasks to empty.
     comm->tasks.nTasksColl = 0;
     comm->tasks.nTasksP2p = 0;
+    comm->tasks.workBytesTotal = 0;
     comm->tasks.streams = nullptr;
     ncclIntruQueueConstruct(&comm->tasks.collQueue);
-    comm->tasks.collBytesTotal = 0;
     for (int i = 0; i < comm->nRanks; i++) {
       ncclIntruQueueConstruct(&comm->tasks.peers[i].sendQueue);
       ncclIntruQueueConstruct(&comm->tasks.peers[i].recvQueue);
@@ -334,9 +334,9 @@ static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) {
           assert(state == ncclGroupJobJoined);
         }
 
-        if (*groupAbortFlag == true || errorJobAbortFlag == true) {
-          *job->abortFlag = 1;
-          if (job->childAbortFlag) *job->childAbortFlag = 1;
+        if (__atomic_load_n(groupAbortFlag, __ATOMIC_RELAXED) || errorJobAbortFlag == true) {
+          __atomic_store_n(job->abortFlag, 1, __ATOMIC_RELAXED);
+          if (job->childAbortFlag) __atomic_store_n(job->childAbortFlag, 1, __ATOMIC_RELAXED);
         }
 
         job = job->next;
@@ -455,7 +455,7 @@ ncclResult_t ncclGroupJobComplete(struct ncclGroupJob* groupJob) {
 
 ncclResult_t ncclGroupJobAbort(struct ncclGroupJob* groupJob) {
   if (groupJob && groupJob->initialized) {
-    *groupJob->abortFlagPtr = true;
+    __atomic_store_n(groupJob->abortFlagPtr, true, __ATOMIC_RELAXED);
     NCCLCHECK(ncclGroupJobComplete(groupJob));
   }
   return ncclSuccess;

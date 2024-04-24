@@ -264,11 +264,7 @@ const char*  ncclGetErrorString(ncclResult_t result);
 const char* pncclGetErrorString(ncclResult_t result);
 /*! @endcond */
 
-/*! @brief      Returns mesage on last result that occured.
-    @details    Returns a human-readable message of the last error that occurred.
-    @return     String containing the last result
-
-    @param[in]  comm is currently unused and can be set to NULL */
+/* Returns a human-readable message of the last error that occurred. */
 const char*  ncclGetLastError(ncclComm_t comm);
 /*! @cond       include_hidden */
 const char* pncclGetLastError(ncclComm_t comm);
@@ -323,6 +319,18 @@ ncclResult_t  ncclCommUserRank(const ncclComm_t comm, int* rank);
 ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
 /*! @endcond */
 /*! @} */
+
+/* Register CUDA buffer for zero-copy operation */
+ncclResult_t  ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
+/*! @cond       include_hidden */
+ncclResult_t pncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
+/*! @endcond */
+
+/* Deregister CUDA buffer */
+ncclResult_t  ncclCommDeregister(const ncclComm_t comm, void* handle);
+/*! @cond       include_hidden */
+ncclResult_t pncclCommDeregister(const ncclComm_t comm, void* handle);
+/*! @endcond */
 
 /*! @defgroup   rccl_api_enumerations API Enumerations
     @details    Enumerations used by collective communication calls
@@ -811,14 +819,6 @@ ncclResult_t  ncclGroupEnd();
 ncclResult_t pncclGroupEnd();
 /*! @endcond */
 /*! @} */
-
-/* Register CUDA buffer for zero-copy operation */
-ncclResult_t  ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
-ncclResult_t pncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle);
-
-/* Deregister CUDA buffer */
-ncclResult_t  ncclCommDeregister(const ncclComm_t comm, void* handle);
-ncclResult_t pncclCommDeregister(const ncclComm_t comm, void* handle);
 
 #ifdef __cplusplus
 } // end extern "C"
