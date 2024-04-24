@@ -1617,7 +1617,7 @@ static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo) {
     // Ring/Tree channel tuning
     while (collInfo->nBytes < nc*nt*threadThreshold) {
       if (nc >= 2) nc--;
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
       // do not reduce threads count on VEGA
 #else
       else if ((nt % 128) == 0) nt/=2;
@@ -1625,7 +1625,7 @@ static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo) {
       else break;
     }
   }
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
 #else
   if (collInfo->protocol == NCCL_PROTO_SIMPLE) {
     if (collInfo->algorithm == NCCL_ALGO_RING) nt += WARP_SIZE; // Extra warp for sync

@@ -304,7 +304,7 @@ compare:
   // Compute the PCI distance and compare with the p2pLevel.
   if (path->type <= p2pLevel) *p2p = 1;
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
 #else
   if (*p2p == 1) {
     // NCCL_IGNORE_DISABLED_P2P=2 is used by unit tests that don't want to

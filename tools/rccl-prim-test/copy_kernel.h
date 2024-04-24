@@ -85,7 +85,7 @@ struct MULTI128 {
 };
 
 inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
   v.x = __builtin_nontemporal_load(&p->x);
   v.y = __builtin_nontemporal_load(&p->y);
 #else
@@ -93,7 +93,7 @@ inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
 #endif
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
   __builtin_nontemporal_store(v.x, &p->x);
   __builtin_nontemporal_store(v.y, &p->y);
 #else
@@ -198,7 +198,7 @@ __device__ int ptrAlign128(T* ptr) { return (uint64_t)ptr % alignof(int32_t); }
 
 #define PACKELEMS (sizeof(Pack128) / sizeof(T))
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
 // Multiply UNROLL by 2 if single source/single destination
 #define AUTOUNROLL (UNROLL*((MINSRCS==1 && MINDSTS==1) ? 2 : 1))
 #endif
