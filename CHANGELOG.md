@@ -2,14 +2,33 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased
+## Unreleased - RCCL 2.20.5 for ROCm 6.2.0
 ### Changed
-- Modifying rings to be rail-optimized topology friendly
+- Compatibility with NCCL 2.20.5
+- Compatibility with NCCL 2.19.4
+- Performance tuning for some collective operations on MI300
+- Enabled NVTX code in RCCL
+- Replaced rccl_bfloat16 with hip_bfloat16
+- NPKit updates:
+  - Removed warm-up iteration removal by default, need to opt in now
+  - Doubled the size of buffers to accommodate for more channels
+- Modified rings to be rail-optimized topology friendly
+- Replaced ROCmSoftwarePlatform links with ROCm links
 ### Added
+- Support for fp8 and rccl_bfloat8
+- Support for using HIP contiguous memory
+- Implemented ROC-TX for host-side profiling
+- Enabled static build
+- Added new rome model
+- Added fp16 and fp8 cases to unit tests
+- New unit test for main kernel stack size
+- New -n option for topo_expl to override # of nodes
+- Improved debug messages of memory allocations
 ### Fixed
-### Removed
+- Bug when configuring RCCL for only LL128 protocol
+- Scratch memory allocation after API change for MSCCL
 
-## Unreleased - RCCL 2.18.6 for ROCm 6.1.0
+## RCCL 2.18.6 for ROCm 6.1.0
 ### Changed
 - Compatibility with NCCL 2.18.6
 
