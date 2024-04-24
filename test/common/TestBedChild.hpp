@@ -28,7 +28,7 @@ namespace RcclUnitTesting
       CHILD_PREPARE_DATA     = 4,  // PrepareData()
       CHILD_EXECUTE_COLL     = 5,  // ExecuteCollectives()
       CHILD_VALIDATE_RESULTS = 6,  // ValidateResults()
-      CHIILD_LAUNCH_GRAPHS   = 7,  // LaunchGraphs()
+      CHILD_LAUNCH_GRAPHS    = 7,  // LaunchGraphs()
       CHILD_DEALLOCATE_MEM   = 8,  // DeallocateMem()
       CHILD_DESTROY_COMMS    = 9,  // DestroyComms()
       CHILD_DESTROY_GRAPHS   = 10, // DestroyGraphs()

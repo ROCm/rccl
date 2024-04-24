@@ -404,7 +404,7 @@ namespace RcclUnitTesting
     for (int i = 0; i < this->numGroupCalls; ++i)
       if (groupId == -1 || groupId == i) groupList.push_back(i);
 
-    int const cmd = TestBedChild::CHIILD_LAUNCH_GRAPHS;
+    int const cmd = TestBedChild::CHILD_LAUNCH_GRAPHS;
     for (auto currGroup : groupList) 
     {
       for (int childId = 0; childId < this->numActiveChildren; ++childId)

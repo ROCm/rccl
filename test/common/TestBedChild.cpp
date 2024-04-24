@@ -97,7 +97,7 @@ namespace RcclUnitTesting
       case CHILD_PREPARE_DATA    : status = PrepareData();        break;
       case CHILD_EXECUTE_COLL    : status = ExecuteCollectives(); break;
       case CHILD_VALIDATE_RESULTS: status = ValidateResults();    break;
-      case CHIILD_LAUNCH_GRAPHS  : status = LaunchGraphs();       break;
+      case CHILD_LAUNCH_GRAPHS   : status = LaunchGraphs();       break;
       case CHILD_DEALLOCATE_MEM  : status = DeallocateMem();      break;
       case CHILD_DESTROY_COMMS   : status = DestroyComms();       break;
       case CHILD_DESTROY_GRAPHS  : status = DestroyGraphs();      break;
