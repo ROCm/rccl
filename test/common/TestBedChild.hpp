@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -28,10 +28,12 @@ namespace RcclUnitTesting
       CHILD_PREPARE_DATA     = 4,  // PrepareData()
       CHILD_EXECUTE_COLL     = 5,  // ExecuteCollectives()
       CHILD_VALIDATE_RESULTS = 6,  // ValidateResults()
-      CHILD_DEALLOCATE_MEM   = 7,  // DeallocateMem()
-      CHILD_DESTROY_COMMS    = 8,  // DestroyComms()
-      CHILD_STOP             = 9,  // Stop()
-      NUM_CHILD_COMMANDS     = 10
+      CHILD_LAUNCH_GRAPHS    = 7,  // LaunchGraphs()
+      CHILD_DEALLOCATE_MEM   = 8,  // DeallocateMem()
+      CHILD_DESTROY_COMMS    = 9,  // DestroyComms()
+      CHILD_DESTROY_GRAPHS   = 10, // DestroyGraphs()
+      CHILD_STOP             = 11, // Stop()
+      NUM_CHILD_COMMANDS     = 12
     };
 
     char const ChildCommandNames[NUM_CHILD_COMMANDS][20] =
@@ -43,8 +45,10 @@ namespace RcclUnitTesting
       "PREPARE_DATA",
       "EXECUTE_COLL",
       "VALIDATE_RESULTS",
+      "LAUNCH_GRAPHS",
       "DEALLOCATE_MEM",
       "DESTROY_COMMS",
+      "DESTROY_GRAPHS",
       "STOP"
     };
 
@@ -61,15 +65,19 @@ namespace RcclUnitTesting
     int childReadFd;
 
     // These varibles may change based on commands issued by parent
-    int totalRanks;                                     // Total ranks
-    int rankOffset;                                     // Global rank offset for this child
-    int numCollectivesInGroup;                          // # of collectives to run per group call
-    bool useBlocking;                                   // RCCL communication with blocking or non-blocking option
-    int numStreamsPerGroup;                             // # of different streams allowed per group call
-    std::vector<ncclComm_t> comms;                      // RCCL communicators for each rank
-    std::vector<int> deviceIds;                         // Device IDs for each rank
-    std::vector<std::vector<hipStream_t>> streams;      // Streams for executing collectives
-    std::vector<std::vector<CollectiveArgs>> collArgs;  // Info for each collective for each rank
+    int totalRanks;                                                   // Total ranks
+    int rankOffset;                                                   // Global rank offset for this child
+    int numGroupCalls;                                                // Toatal # of group calls to be executed
+    bool useBlocking;                                                 // RCCL communication with blocking or non-blocking option
+    std::vector<int> numCollectivesInGroup;                           // # of collectives to run per group call
+    std::vector<int> numStreamsPerGroup;                              // # of different streams allowed per group call
+    std::vector<ncclComm_t> comms;                                    // RCCL communicators for each rank
+    std::vector<int> deviceIds;                                       // Device IDs for each rank
+    std::vector<std::vector<std::vector<hipStream_t>>> streams;       // Streams for executing collectives per group call
+    std::vector<std::vector<std::vector<CollectiveArgs>>> collArgs;   // Info for each collective for each rank per group call
+    std::vector<std::vector<std::vector<hipGraph_t>>> graphs;         // Graphs for executing collectives per group call
+    std::vector<std::vector<std::vector<hipGraphExec_t>>> graphExecs; // GraphExecs for executing collectives per group call
+    std::vector<std::vector<std::vector<bool>>> graphEnabled; 
 
     // Constructor
     TestBedChild(int const childId, bool const verbose, int const printValues);
@@ -102,10 +110,16 @@ namespace RcclUnitTesting
     // Validate that output matches expected
     ErrCode ValidateResults();
 
+    // Launch instantiated graphs
+    ErrCode LaunchGraphs();
+
     // Release allocated memory
     ErrCode DeallocateMem();
 
     // Destroys RCCL communicators
     ErrCode DestroyComms();
+
+    // Destroys graphs
+    ErrCode DestroyGraphs();
   };
 }

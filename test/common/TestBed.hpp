@@ -22,27 +22,37 @@ namespace RcclUnitTesting
     std::vector<TestBedChild*> childList;             // List of child processes
     std::vector<int>           rankToChildMap;        // Tracks which child process each rank is assigned to
     std::vector<int>           rankToDeviceMap;       // Tracks which device each rank is assigned to
+    std::vector<int>           numCollectivesInGroup; // # of collectives to execute per group call
+    std::vector<int>           numStreamsPerGroup;    // # of different streams available per group call
+    int                        numGroupCalls;         // Total # of group calls to be executed
     int                        numActiveChildren;     // List of active children (with usable RCCL comms)
     int                        numActiveRanks;        // Current # of ranks in use
-    int                        numCollectivesInGroup; // # of collectives to execute per group call
     bool                       useBlocking;           // RCCL communication with blocking or non-blocking option
-    int                        numStreamsPerGroup;    // # of different streams available per group call
     EnvVars                    ev;                    // Environment variables
 
     // Constructor - Creates one child process per detected GPU device that waits for further commands
     TestBed();
 
+    // Prepare TestBed with multiple group call customization
+    void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild,
+                   std::vector<int>              const& numCollectivesInGroup,
+                   std::vector<int>              const& numStreamsPerGroup,
+                   int                           const  numGroupCalls = 1,
+                   bool                          const  useBlocking   = true);
+ 
     // Prepare TestBed for use with GPUs across multiple child processes
     void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild,
                    int  const numCollectivesInGroup = 1,
-                   bool const useBlocking           = true,
-                   int  const numStreamsPerGroup    = 1);
+                   int  const numStreamsPerGroup    = 1,
+                   int  const numGroupCalls         = 1,
+                   bool const useBlocking           = true);
 
     // Prepare TestBed for use with GPUs on a single child process
     void InitComms(int  const numGpus,
                    int  const numCollectivesInGroup = 1,
-                   bool const useBlocking           = true,
-                   int  const numStreamsPerGroup    = 1);
+                   int  const numStreamsPerGroup    = 1,
+                   int  const numGroupCalls         = 1,
+                   bool const useBlocking           = true);
 
     // Set collectives arguments for specified collective / rank
     // Setting scalarsPerRank to non-null will create custom reduction operator
@@ -54,6 +64,7 @@ namespace RcclUnitTesting
                            size_t          const numOutputElements,
                            OptionalColArgs const &optionalArgs = {},
                            int             const collId        = -1,
+                           int             const groupId       = 0,
                            int             const rank          = -1,
                            int             const streamIdx     = 0);
 
@@ -61,32 +72,44 @@ namespace RcclUnitTesting
     // - Requires SetCollectiveArgs to have been called already
     // Using collId = -1 (default) applies settings to all collectives in group
     // Using rank = -1 (default) applies settings to all ranks
+    // Using groupIdx = -1 (default) applies setting to all groups
     void AllocateMem(bool   const inPlace = false,
                      bool   const useManagedMem = false,
-                     int    const collId = -1,
-                     int    const rank = -1);
+                     int    const groupId  = -1,
+                     int    const collId   = -1,
+                     int    const rank     = -1);
 
     // Initialize input and compute expected results
     // - requires that SetCollectiveArgs and AllocateMemory have already been called
+    // Setting groupId to -1 applies setting to all groups
     // Setting collId to -1 applies settings to all collectives in group
     // Setting rank to -1 applies settings to all ranks
     // Setting prepDataFunc to nullptr uses the default fill pattern routine
-    void PrepareData(int const collId = -1,
-                     int const rank = -1,
+    void PrepareData(int         const groupId      = -1,
+                     int         const collId       = -1,
+                     int         const rank         = -1,
                      CollFuncPtr const prepDataFunc = nullptr);
 
     // Execute all collectives on all test children
     // Blocks until collective is completed
-    void ExecuteCollectives(std::vector<int> const &currentRanks = {}, bool const useHipGraph = false);
+    void ExecuteCollectives(std::vector<int> const &currentRanks = {},
+                            int              const groupId       = -1, 
+                            bool             const useHipGraph   = false);
 
     // Perform results validation - compare output to expected
-    void ValidateResults(bool& isCorrect, int collId = -1, int const rank = -1);
+    void ValidateResults(bool& isCorrect, int const groupId = -1, int const collId = -1, int const rank = -1);
+
+    // Launch instantiated graphs
+    void LaunchGraphs(int const groupId = -1);
 
     // Release allocated memory
-    void DeallocateMem(int collId = -1, int const rank = -1);
+    void DeallocateMem(int const groupId = -1, int const collId = -1, int const rank = -1);
 
     // Release the RCCL comms
     void DestroyComms();
+
+    // Release created graphs
+    void DestroyGraphs();
 
     // Explicit TestBed destructor that releases all child processes
     // No further calls to TestBed should be performed after this call
@@ -100,6 +123,14 @@ namespace RcclUnitTesting
 
     // Return all the supported data types based on build settings
     std::vector<ncclDataType_t> const& GetAllSupportedDataTypes();
+
+    // Return a list for # of collectives per group
+    std::vector<int> const GetNumCollsPerGroup(int const numCollectivesInGroup,
+                                                int const numGroupCalls);
+
+    // Return a list for # of streams per group
+    std::vector<int> const GetNumStreamsPerGroup(int const numStreamsPerGroup,
+                                                  int const numGroupCalls);
 
     // Helper function that splits up GPUs to the given number of processes
     static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
