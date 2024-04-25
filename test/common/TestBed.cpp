@@ -58,15 +58,17 @@ namespace RcclUnitTesting
   }
 
   void TestBed::InitComms(std::vector<std::vector<int>> const& deviceIdsPerProcess,
-                          int  const numCollectivesInGroup,
-                          bool const useBlocking,
-                          int  const numStreamsPerGroup)
+                          std::vector<int>              const& numCollectivesInGroup,
+                          std::vector<int>              const& numStreamsPerGroup,
+                          int                           const  numGroupCalls,
+                          bool                          const  useBlocking)
   {
     InteractiveWait("Starting InitComms");
 
     // Count up the total number of GPUs to use and track child/deviceId per rank
     this->numActiveChildren = deviceIdsPerProcess.size();
     this->numActiveRanks = 0;
+    this->numGroupCalls = numGroupCalls;
     this->numCollectivesInGroup = numCollectivesInGroup;
     this->useBlocking = useBlocking;
     this->numStreamsPerGroup = numStreamsPerGroup;
@@ -150,6 +152,9 @@ namespace RcclUnitTesting
       // Send the rank offset for this child process
       PIPE_WRITE(childId, rankOffset);
 
+      // Send the total number of group calls for this child process
+      PIPE_WRITE(childId, numGroupCalls);
+
       // Send the number of collectives to be run per group call
       PIPE_WRITE(childId, numCollectivesInGroup);
 
@@ -180,9 +185,15 @@ namespace RcclUnitTesting
     InteractiveWait("Finishing InitComms");
   }
 
-  void TestBed::InitComms(int const numGpus, int const numCollectivesInGroup, bool const useBlocking, int const numStreamsPerGroup)
+  void TestBed::InitComms(std::vector<std::vector<int>> const& deviceIdsPerProcess,
+                          int const numCollectivesInGroup, int const numStreamsPerGroup, int const numGroupCalls, bool const useBlocking)
   {
-    InitComms(TestBed::GetDeviceIdsList(1, numGpus), numCollectivesInGroup, useBlocking, numStreamsPerGroup);
+    InitComms(deviceIdsPerProcess, TestBed::GetNumCollsPerGroup(numCollectivesInGroup, numGroupCalls), TestBed::GetNumStreamsPerGroup(numStreamsPerGroup, numGroupCalls), numGroupCalls, useBlocking);
+  }
+
+  void TestBed::InitComms(int const numGpus, int const numCollectivesInGroup, int const numStreamsPerGroup, int const numGroupCalls, bool const useBlocking)
+  {
+    InitComms(TestBed::GetDeviceIdsList(1, numGpus), TestBed::GetNumCollsPerGroup(numCollectivesInGroup, numGroupCalls), TestBed::GetNumStreamsPerGroup(numStreamsPerGroup, numGroupCalls), numGroupCalls, useBlocking);
   }
 
   void TestBed::SetCollectiveArgs(ncclFunc_t      const funcType,
@@ -191,6 +202,7 @@ namespace RcclUnitTesting
                                   size_t          const numOutputElements,
                                   OptionalColArgs const &optionalArgs,
                                   int             const collId,
+                                  int             const groupId,
                                   int             const rank,
                                   int             const streamIdx)
   {
@@ -200,9 +212,9 @@ namespace RcclUnitTesting
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
 
-    if (streamIdx < 0 || streamIdx >= this->numStreamsPerGroup)
+    if (streamIdx < 0 || streamIdx >= this->numStreamsPerGroup[groupId])
     {
-      ERROR("StreamIdx for collective %d is out of bounds (%d/%d):\n",  collId, streamIdx, numStreamsPerGroup);
+      ERROR("StreamIdx for group %d collective %d is out of bounds (%d/%d):\n", groupId, collId, streamIdx, numStreamsPerGroup[groupId]);
       FAIL();
     }
 
@@ -214,6 +226,7 @@ namespace RcclUnitTesting
       PIPE_WRITE(childId, cmd);
       PIPE_WRITE(childId, currRank);
       PIPE_WRITE(childId, collId);
+      PIPE_WRITE(childId, groupId);
       PIPE_WRITE(childId, funcType);
       PIPE_WRITE(childId, dataType);
       PIPE_WRITE(childId, numInputElements);
@@ -227,6 +240,7 @@ namespace RcclUnitTesting
 
   void TestBed::AllocateMem(bool   const inPlace,
                             bool   const useManagedMem,
+                            int    const groupId,
                             int    const collId,
                             int    const rank)
   {
@@ -236,23 +250,32 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
+    
+    // Build list of groups this applies to (-1 for groupId means to set for all)
+    std::vector<int> groupList;
+    for (int i = 0; i < this->numGroupCalls; ++i)
+      if (groupId == -1 || groupId == i) groupList.push_back(i);
 
     // Loop over all ranks and send allocation command to appropriate child process
     int const cmd = TestBedChild::CHILD_ALLOCATE_MEM;
-    for (auto currRank : rankList)
-    {
-      int const childId = rankToChildMap[currRank];
-      PIPE_WRITE(childId, cmd);
-      PIPE_WRITE(childId, currRank);
-      PIPE_WRITE(childId, collId);
-      PIPE_WRITE(childId, inPlace);
-      PIPE_WRITE(childId, useManagedMem);
-      PIPE_CHECK(childId);
+    for (auto currGroup : groupList) {
+      for (auto currRank : rankList)
+      {
+        int const childId = rankToChildMap[currRank];
+        PIPE_WRITE(childId, cmd);
+        PIPE_WRITE(childId, currRank);
+        PIPE_WRITE(childId, collId);
+        PIPE_WRITE(childId, inPlace);
+        PIPE_WRITE(childId, useManagedMem);
+        PIPE_WRITE(childId, currGroup);
+        PIPE_CHECK(childId);
+      }
     }
     InteractiveWait("Finishing AllocateMem");
   }
 
-  void TestBed::PrepareData(int         const collId,
+  void TestBed::PrepareData(int         const groupId,
+                            int         const collId,
                             int         const rank,
                             CollFuncPtr const prepDataFunc)
   {
@@ -261,22 +284,32 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
+    
+    // Build list of groups this applies to (-1 for groupId means to set for all)
+    std::vector<int> groupList;
+    for (int i = 0; i < this->numGroupCalls; ++i)
+      if (groupId == -1 || groupId == i) groupList.push_back(i);
 
     // Loop over all ranks and send prepare data command to appropriate child process
     int const cmd = TestBedChild::CHILD_PREPARE_DATA;
-    for (auto currRank : rankList)
+    for (auto currGroup : groupList)
     {
-      int const childId = rankToChildMap[currRank];
-      PIPE_WRITE(childId, cmd);
-      PIPE_WRITE(childId, currRank);
-      PIPE_WRITE(childId, collId);
-      PIPE_WRITE(childId, prepDataFunc);
-      PIPE_CHECK(childId);
+      for (auto currRank : rankList)
+      {
+        int const childId = rankToChildMap[currRank];
+        PIPE_WRITE(childId, cmd);
+        PIPE_WRITE(childId, currRank);
+        PIPE_WRITE(childId, currGroup);
+        PIPE_WRITE(childId, collId);
+        PIPE_WRITE(childId, prepDataFunc);
+        PIPE_CHECK(childId);
+      }
     }
     InteractiveWait("Finishing PrepareData");
   }
 
-  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks, bool const useHipGraph)
+  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks, int const groupId, 
+                                   bool const useHipGraph)
   {
     InteractiveWait("Starting ExecuteCollectives");
 
@@ -289,19 +322,27 @@ namespace RcclUnitTesting
       ranksPerChild[rankToChildMap[currentRanks[rank]]].push_back(rank);
     }
 
-    // Send ExecuteColl command to each active child process
-    for (int childId = 0; childId < this->numActiveChildren; ++childId)
-    {
-      if ((currentRanks.size() == 0) || (ranksPerChild[childId].size() > 0))
+    // Build list of groups this applies to (-1 for groupId means to set for all)
+    std::vector<int> groupList;
+    for (int i = 0; i < this->numGroupCalls; ++i)
+      if (groupId == -1 || groupId == i) groupList.push_back(i);
+
+    for (auto currGroup : groupList) {
+      // Send ExecuteColl command to each active child process
+      for (int childId = 0; childId < this->numActiveChildren; ++childId)
       {
-        InteractiveWait("Starting ExecuteCollectives for child " + std::to_string(childId));
-        PIPE_WRITE(childId, cmd);
-        PIPE_WRITE(childId, ev.timeoutUs);
-        PIPE_WRITE(childId, useHipGraph);
-        int tempCurrentRanks = currentRanks.size();
-        PIPE_WRITE(childId, tempCurrentRanks);
-        for (int rank = 0; rank < currentRanks.size(); ++rank){
-          PIPE_WRITE(childId, currentRanks[rank]);
+        if ((currentRanks.size() == 0) || (ranksPerChild[childId].size() > 0))
+        {
+          InteractiveWait("Starting ExecuteCollectives for child " + std::to_string(childId));
+          PIPE_WRITE(childId, cmd);
+          PIPE_WRITE(childId, ev.timeoutUs);
+          PIPE_WRITE(childId, currGroup);
+          PIPE_WRITE(childId, useHipGraph);
+          int tempCurrentRanks = currentRanks.size();
+          PIPE_WRITE(childId, tempCurrentRanks);
+          for (int rank = 0; rank < currentRanks.size(); ++rank){
+            PIPE_WRITE(childId, currentRanks[rank]);
+          }
         }
       }
     }
@@ -315,7 +356,7 @@ namespace RcclUnitTesting
     InteractiveWait("Finishing ExecuteCollectives");
   }
 
-  void TestBed::ValidateResults(bool& isCorrect, int const collId, int const rank)
+  void TestBed::ValidateResults(bool& isCorrect, int const groupId, int const collId, int const rank)
   {
     InteractiveWait("Starting ValidateResults");
 
@@ -323,21 +364,30 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
+    
+    // Build list of groups this applies to (-1 for groupId means to set for all)
+    std::vector<int> groupList;
+    for (int i = 0; i < this->numGroupCalls; ++i)
+      if (groupId == -1 || groupId == i) groupList.push_back(i);
 
     int const cmd = TestBedChild::CHILD_VALIDATE_RESULTS;
 
     isCorrect = true;
-    // Send ValidateResults command to each active child process
-    for (auto currRank : rankList)
+    for (auto currGroup : groupList)
     {
-      int const childId = rankToChildMap[currRank];
-      PIPE_WRITE(childId, cmd);
-      PIPE_WRITE(childId, currRank);
-      PIPE_WRITE(childId, collId);
+      // Send ValidateResults command to each active child process
+      for (auto currRank : rankList)
+      {
+        int const childId = rankToChildMap[currRank];
+        PIPE_WRITE(childId, cmd);
+        PIPE_WRITE(childId, currRank);
+        PIPE_WRITE(childId, currGroup);
+        PIPE_WRITE(childId, collId);
 
-      int response = 0;
-      ASSERT_EQ(read(childList[childId]->parentReadFd, &response, sizeof(int)), sizeof(int));
-      isCorrect &= (response == TEST_SUCCESS);
+        int response = 0;
+        ASSERT_EQ(read(childList[childId]->parentReadFd, &response, sizeof(int)), sizeof(int));
+        isCorrect &= (response == TEST_SUCCESS);
+      }
     }
 
     ASSERT_EQ(isCorrect, true) << "Output does not match expected";
@@ -345,27 +395,62 @@ namespace RcclUnitTesting
     InteractiveWait("Finishing ValidateResults");
   }
 
-  void TestBed::DeallocateMem(int const collId, int const rank)
+  void TestBed::LaunchGraphs(int const groupId)
   {
-    InteractiveWait("Starting ValidateResults");
+    InteractiveWait("Starting LaunchGraphs");
+
+    // Build list of groups this applies to (-1 for groupId means to set for all)
+    std::vector<int> groupList;
+    for (int i = 0; i < this->numGroupCalls; ++i)
+      if (groupId == -1 || groupId == i) groupList.push_back(i);
+
+    int const cmd = TestBedChild::CHILD_LAUNCH_GRAPHS;
+    for (auto currGroup : groupList) 
+    {
+      for (int childId = 0; childId < this->numActiveChildren; ++childId)
+      {
+        // Send LaunchGraphs command to each active child process
+        PIPE_WRITE(childId, cmd);
+        PIPE_WRITE(childId, currGroup);
+
+        // Wait for child acknowledgement
+        PIPE_CHECK(childId);
+      }
+    }
+
+    InteractiveWait("Finishing LaunchGraphs");
+  }
+
+  void TestBed::DeallocateMem(int const groupId, int const collId, int const rank)
+  {
+    InteractiveWait("Starting DeallocateMem");
 
     // Build list of ranks this applies to (-1 for rank means to set for all)
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
 
+    // Build list of groups this applies to (-1 for groupId means to set for all)
+    std::vector<int> groupList;
+    for (int i = 0; i < this->numGroupCalls; ++i)
+      if (groupId == -1 || groupId == i) groupList.push_back(i);
+
     int const cmd = TestBedChild::CHILD_DEALLOCATE_MEM;
 
-    for (auto currRank : rankList)
+    for (auto currGroup : groupList)
     {
-      int const childId = rankToChildMap[currRank];
-      PIPE_WRITE(childId, cmd);
-      PIPE_WRITE(childId, currRank);
-      PIPE_WRITE(childId, collId);
-      PIPE_CHECK(childId);
+      for (auto currRank : rankList)
+      {
+        int const childId = rankToChildMap[currRank];
+        PIPE_WRITE(childId, cmd);
+        PIPE_WRITE(childId, currRank);
+        PIPE_WRITE(childId, currGroup);
+        PIPE_WRITE(childId, collId);
+        PIPE_CHECK(childId);
+      }
     }
 
-    InteractiveWait("Finishing ValidateResults");
+    InteractiveWait("Finishing DeallocateMem");
   }
 
   void TestBed::DestroyComms()
@@ -386,6 +471,27 @@ namespace RcclUnitTesting
     Finalize();
 
     InteractiveWait("Finishing DestroyComms");
+  }
+
+  void TestBed::DestroyGraphs()
+  {
+    InteractiveWait("Starting DestroyGraphs");
+
+    int const cmd = TestBedChild::CHILD_DESTROY_GRAPHS;
+    for (int currGroup = 0; currGroup < this->numGroupCalls; ++currGroup)
+    {
+      for (int childId = 0; childId < this->numActiveChildren; ++childId)
+      {
+        // Send DestroyGraphs command to each active child process
+        PIPE_WRITE(childId, cmd);
+        PIPE_WRITE(childId, currGroup);
+
+        // Wait for child acknowledgement
+        PIPE_CHECK(childId);
+      }
+    }
+
+    InteractiveWait("Finishing DestroyGraphs");
   }
 
   void TestBed::Finalize()
@@ -422,7 +528,6 @@ namespace RcclUnitTesting
     // Reset bookkeeping
     this->numActiveChildren = 0;
     this->numActiveRanks = 0;
-    this->numCollectivesInGroup = 0;
 
     InteractiveWait("Finishing Finalize");
   }
@@ -440,6 +545,18 @@ namespace RcclUnitTesting
   std::vector<ncclDataType_t> const& TestBed::GetAllSupportedDataTypes()
   {
     return ev.GetAllSupportedDataTypes();
+  }
+
+  std::vector<int> const TestBed::GetNumCollsPerGroup(int numCollectivesInGroup, 
+                                                       int numGroupCalls)
+  {
+    return std::vector<int>(numGroupCalls, numCollectivesInGroup);
+  }
+
+  std::vector<int> const TestBed::GetNumStreamsPerGroup(int numStreamsPerGroup,
+                                                         int numGroupCalls)
+  {
+    return std::vector<int>(numGroupCalls, numStreamsPerGroup);
   }
 
   std::vector<std::vector<int>> TestBed::GetDeviceIdsList(int const numProcesses,
@@ -618,7 +735,11 @@ namespace RcclUnitTesting
             }
 
             std::vector<int> currentRanksEmpty = {};
-            this->ExecuteCollectives(currentRanksEmpty, useHipGraphList[hgIdx]);
+            this->ExecuteCollectives(currentRanksEmpty, /*all groups*/ -1, useHipGraphList[hgIdx]);
+            if (useHipGraphList[hgIdx]) {
+              this->LaunchGraphs();
+              this->DestroyGraphs();
+            }
             if (testing::Test::HasFailure())
             {
               isCorrect = false;

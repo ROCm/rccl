@@ -34,7 +34,7 @@ namespace RcclUnitTesting
     {
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       // Initialize communicators in non-blocking mode
-      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), 1, useBlocking);
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), 1, 1, 1, useBlocking);
 
       // Loop over various collective functions
       for (auto funcType : funcTypes)

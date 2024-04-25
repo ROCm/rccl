@@ -98,6 +98,7 @@ namespace RcclUnitTesting
                                     numOutputElements[rank],
                                     options,
                                     -1,
+                                    0,
                                     rank);
         }
         testBed.AllocateMem(inPlace, useManagedMem);
@@ -154,6 +155,7 @@ namespace RcclUnitTesting
                                     numOutputElements[rank],
                                     options,
                                     -1,
+                                    0,
                                     rank);
         }
         testBed.AllocateMem(inPlace, useManagedMem);

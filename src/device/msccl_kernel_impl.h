@@ -48,7 +48,7 @@ extern __shared__ struct mscclShmemData mscclShmem;
 #endif
 
 inline __device__ static void barrier(int nthreads) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
   assert(nthreads == NCCL_MAX_NTHREADS);
   __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier");
 #else
@@ -161,7 +161,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
     default:
       break;
     }
-    copyToShmem8(tid%WARP_SIZE, dst, src, bytes);
+    if (bytes) copyToShmem8(tid%WARP_SIZE, dst, src, bytes);
   }
 
 #if defined(ENABLE_NPKIT)
@@ -296,7 +296,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_SEND_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
 
-#endif	
+#endif
           prims.send(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
@@ -310,7 +310,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
             if (tid == 0) {
               NpKit::CollectGpuEventLDS(NPKIT_EVENT_MSCCL_RECV_ENTRY, thisNelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP());
             }
-#endif	
+#endif
           prims.recv(dstOffset, thisNelem);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_RECV_EXIT)

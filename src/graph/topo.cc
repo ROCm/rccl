@@ -21,7 +21,7 @@
 #define BUSID_REDUCED_SIZE (sizeof("0000:00"))
 
 const char* topoNodeTypeStr[] = { "GPU", "PCI", "NVS", "CPU", "NIC", "NET" };
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
 const char* topoLinkTypeStr[] = { "LOC", "XGMI", "",    "PCI",    "",    "",    "", "SYS", "NET" };
 const char* topoPathTypeStr[] = { "LOC", "XGMI", "NVB", "PIX", "PXB", "PXN", "PHB", "SYS", "DIS" };
 #else
@@ -186,12 +186,17 @@ ncclResult_t ncclTopoConnectNodes(struct ncclTopoNode* node, struct ncclTopoNode
 // even though they're supposed to sustain full BW across all ports.
 // Flatten the switch as this extra level can break the search and make
 // NCCL take wrong topology decisions.
+int getBcmGen(uint64_t id, int level) {
+  if ((id & 0xfffffffffffff000) == 0x1000c0101000a000) return 4;
+  if ((id & 0xfffffffffffff000) == (0x1000c03010000000 | level*0x1000)) return 5;
+  return 0;
+}
 ncclResult_t ncclTopoFlattenBcmSwitches(struct ncclTopoSystem* system) {
   for (int s=0; s<system->nodes[PCI].count; s++) {
     struct ncclTopoNode* pciSwitch = system->nodes[PCI].nodes+s;
-    uint64_t device = pciSwitch->pci.device;
-    // Only flatten PEX Gen 4 switches in base mode
-    if ((device & 0xfffffffffffff000) == 0x1000c0101000a000) {
+    int gen = getBcmGen(pciSwitch->pci.device, 0);
+    // Flatten Gen4 PEX switches in base mode
+    if (gen) {
       // Find sub switches with the same device ID.
       int64_t* subSwIds;
       NCCLCHECK(ncclCalloc(&subSwIds, pciSwitch->nlinks));
@@ -199,7 +204,7 @@ ncclResult_t ncclTopoFlattenBcmSwitches(struct ncclTopoSystem* system) {
       for (int l=0; l<pciSwitch->nlinks; l++) {
         struct ncclTopoNode* sub = pciSwitch->links[l].remNode;
         // Only fuse sub switches with the same device ID.
-        if (sub->type != PCI || sub->pci.device != device) continue;
+        if (sub->type != PCI || getBcmGen(sub->pci.device, 1) != gen) continue;
         // Save sub switch for later
         subSwIds[subs++] = sub->id;
         // Remove link to that sub switch
@@ -231,8 +236,8 @@ ncclResult_t ncclTopoFlattenBcmSwitches(struct ncclTopoSystem* system) {
         }
         NCCLCHECK(ncclTopoRemoveNode(system, PCI, index));
       }
-      // Set subdevice to 0x0000 to make sure we don't merge this switch again.
-      pciSwitch->pci.device = 0x1000c01010000000;
+      // Set subdevice to 0xffff to make sure we don't merge this switch again.
+      pciSwitch->pci.device |= 0xffff;
       free(subSwIds);
       // Restart, as system->nodes[PCI].nodes has changed.
       s = 0;
@@ -371,7 +376,12 @@ ncclResult_t ncclTopoAddNic(struct ncclXmlNode* xmlNic, struct ncclTopoSystem* s
 }
 
 ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* system, struct ncclTopoNode* gpu) {
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+  // There is no direct mapping between CUDA SM to HIP GFX. Use SM60 as compatibility level.
+  gpu->gpu.cudaCompCap = 60;
+#else
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "sm", &gpu->gpu.cudaCompCap));
+#endif
   const char* gcnArch;
   const char* gcnArchName;
   NCCLCHECK(xmlGetAttr(xmlGpu, "gcn", &gcnArch));
@@ -514,7 +524,7 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
   return ncclSuccess;
 }
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
 ncclResult_t ncclTopoAddXGMI(struct ncclXmlNode* node, struct ncclTopoSystem* system, const char* parentBusId) {
   if (strcmp(node->name, "xgmi") == 0) {
     struct ncclTopoNode* gpu = NULL;
@@ -656,7 +666,7 @@ ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "cpu") == 0) NCCLCHECK(ncclTopoAddCpu(node, *topoSystem));
   }
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
   NCCLCHECK(ncclTopoAddXGMI(topNode, *topoSystem, NULL));
 #else
   NCCLCHECK(ncclTopoAddNvLinks(topNode, *topoSystem, NULL));
@@ -811,6 +821,30 @@ ncclResult_t ncclTopoGetLocal(struct ncclTopoSystem* system, int type, int index
   return ncclSuccess;
 }
 
+ncclResult_t getLocalNetCountByBw(struct ncclTopoSystem* system, int gpu, int *count) {
+  int localNetCount = 0, netCountByBw = 0;
+  int* localNets;
+  float totalNetBw = 0, gpuBw = 0;
+
+  for (int l=0; l<system->nodes[GPU].nodes[gpu].nlinks; l++) {
+    //assuming BW to CPU reflects the GPU bandwidth via P2P or C2C
+    //caveat, this could be wrong if there is a PCIe switch,
+    //and a narrower link to the CPU
+    if (system->nodes[GPU].nodes[gpu].links[l].remNode->type == CPU) {
+       gpuBw = system->nodes[GPU].nodes[gpu].links[l].bw;
+    }
+  }
+
+  NCCLCHECK(ncclTopoGetLocal(system, GPU, gpu, NET, &localNets, &localNetCount, NULL));
+  for (int l=0; (l < localNetCount) && (totalNetBw < gpuBw); l++, netCountByBw++) {
+     totalNetBw += system->nodes[GPU].nodes[gpu].paths[NET][localNets[l]].bw;
+  }
+  *count = netCountByBw;
+
+  free(localNets);
+  return ncclSuccess;
+}
+
 ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int channelId, int* id) {
   int gpu;
   NCCLCHECK(ncclTopoRankToIndex(system, rank, &gpu));
@@ -840,17 +874,25 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int ch
 }
 
 ncclResult_t ncclTopoGetLocalGpu(struct ncclTopoSystem* system, int net, int* gpuIndex) {
+  int netIndex;
+  NCCLCHECK(ncclTopoIdToIndex(system, NET, net, &netIndex));
+  int* localGpus = NULL;
+  int localGpuCount;
+  NCCLCHECK(ncclTopoGetLocal(system, NET, netIndex, GPU, &localGpus, &localGpuCount, NULL));
   for (int c=0; c<MAXCHANNELS; c++) {
-    for (int g=0; g<system->nodes[GPU].count; g++) {
+    for (int lg=0; lg<localGpuCount; lg++) {
+      int g = localGpus[lg];
       struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
       int id;
       NCCLCHECK(ncclTopoGetLocalNet(system, gpu->gpu.rank, c, &id));
       if (net == id) {
         *gpuIndex = g;
+        free(localGpus);
         return ncclSuccess;
       }
     }
   }
+  free(localGpus);
   *gpuIndex = -1;
   return ncclSuccess;
 }

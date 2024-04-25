@@ -114,6 +114,7 @@ struct ncclShmemGroup {
   union {
     unpackGroupShmem unpack;
   } devicePlugin;
+  int32_t dstSizes[NCCL_MAX_NVLS_ARITY+1];
 };
 
 #define LDS_NUM_EVENTS 64
