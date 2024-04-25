@@ -352,7 +352,7 @@ ncclResult_t ncclIbDevices(int* ndev) {
 ncclResult_t ncclIbGdrSupport() {
   static int moduleLoaded = -1;
   if (moduleLoaded == -1) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
     char strValue[MAX_STR_LEN];
     NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));

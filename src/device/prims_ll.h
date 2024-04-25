@@ -81,7 +81,7 @@ private:
   uint64_t* barrier_next;
 
   inline __device__ void barrier() {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
     if (nthreads != WARP_SIZE)
       barrier_by_group();
 #else
@@ -159,7 +159,7 @@ private:
     }
 #endif
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
     union ncclLLFifoLine i4;
     do {
       i4.v[0] = LL_LOAD(src->v);
@@ -197,7 +197,7 @@ private:
     for (int i=BeginIx; i < MaxRecv; i++) {
       if (i < fan.nrecv()) {
         union ncclLLFifoLine* src = recvPtr(i) + offset;
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
         line[i].v[0] = LL_LOAD(src->v);
         line[i].v[1] = LL_LOAD(src->v+1);
 #else
@@ -219,7 +219,7 @@ private:
 #endif
 
     do {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
       line[i].v[0] = LL_LOAD(src->v);
       line[i].v[1] = LL_LOAD(src->v+1);
 #else
@@ -243,7 +243,7 @@ private:
   }
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
     union ncclLLFifoLine i4;
     i4.data1 = val & 0xffffffff;
     i4.flag1 = flag;
@@ -267,7 +267,7 @@ private:
       uint32_t u4;
       uint64_t u8;
     };
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
       u1 = LL_LOAD((uint8_t*)src);
     else if(sizeof(U) == 2)
@@ -299,7 +299,7 @@ private:
       uint64_t u8;
     };
     elt = val;
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
       LL_STORE(u1, (uint8_t*)dst);
     else if(sizeof(U) == 2)
