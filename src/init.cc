@@ -1208,6 +1208,13 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       ret = ncclInternalError;
       goto fail;
     }
+    #if defined(ENABLE_NPKIT)
+    if (intraProcRanks != 1) {
+      WARN("NPKit currently does not support more than 1 device per process");
+      ret = ncclInternalError;
+      goto fail;
+    }
+    #endif
     struct ncclComm* comm0 = comm->peerInfo[intraProcRank0].comm;
     assert(intraProcRank==0 ? comm==comm0 : true);
     comm->intraComm0 = comm0;
