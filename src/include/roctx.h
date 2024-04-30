@@ -11,7 +11,9 @@
 #include <string.h>
 #include <map>
 
+#ifndef ROCTX_NO_IMPL
 #include <roctracer/roctx.h>
+#endif
 #include "nvtx3/nvtx3.hpp"
 #include "device.h"
 
