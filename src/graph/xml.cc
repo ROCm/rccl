@@ -846,7 +846,7 @@ ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct nccl
   NCCLCHECK(xmlSetAttrIfUnset(node, "class", "0x03"));
   NCCLCHECK(ncclTopoGetXmlFromSys(node, xml));
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
-  uint32_t devIndex;
+  uint32_t devIndex = 0;
   static int rocmsmiInit = 0;
   if (rocmsmiInit == 0) {
     rocmsmiInit = (rocm_smi_init() != ncclSuccess) ? 2 : 1;
