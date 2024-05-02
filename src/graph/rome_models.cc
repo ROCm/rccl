@@ -1393,7 +1393,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
             if (k == n[f]) break;
           if (f < found) continue;
           // check NUMA
-          if (romeTopoModels[i].nicNuma[j] != romeTopo.nicNuma[k]) continue;
+          if (!ignore_numa && romeTopoModels[i].nicNuma[j] != romeTopo.nicNuma[k]) continue;
           int g;
           // check GDR
           for (g = 0; g < ngpus; g++)
