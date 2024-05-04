@@ -386,6 +386,8 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
   if (read) { // For reads (sends) only enable under certain conditions
     int gdrReadParam = ncclParamNetGdrRead();
     if (gdrReadParam == 0) return ncclSuccess;
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#else
     // Disable GDR Reads pre-Ampere when we have other PCI flows
     if (gdrReadParam < 0 && gpu->gpu.cudaCompCap < 80) {
       int nvlink = 0;
@@ -401,6 +403,7 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
       }
       if (!nvlink) return ncclSuccess;
     }
+#endif
   }
 
   // Check if we are close enough that it makes sense to enable GDR
@@ -452,8 +455,11 @@ ncclResult_t ncclTopoNeedFlush(struct ncclTopoSystem* system, int64_t busId, int
   int g;
   NCCLCHECK(ncclTopoIdToIndex(system, GPU, busId, &g));
   struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#else
   // Flush is required on Ampere and earlier
   *flush = gpu->gpu.cudaCompCap < 90 ? 1 : ncclParamNetForceFlush();
+#endif
   return ncclSuccess;
 }
 
