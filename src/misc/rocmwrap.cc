@@ -101,7 +101,7 @@ static void initOnceFunc() {
   /* DMA-BUF support */
   //ROCm support
   if (ncclParamDmaBufEnable() == 0 ) {
-    INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_ENABLE_DMABUF_SUPPORT=1");
+    INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
     goto error;
   }
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
