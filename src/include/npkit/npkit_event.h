@@ -127,4 +127,6 @@
 #define NPKIT_EVENT_MSCCL_INIT_ENTRY                            0x66
 #define NPKIT_EVENT_MSCCL_INIT_EXIT                             0x67
 
+#define NPKIT_EVENT_BROADCAST_RING_ENTRY                        0x68
+#define NPKIT_EVENT_BROADCAST_RING_EXIT                         0x69
 #endif
