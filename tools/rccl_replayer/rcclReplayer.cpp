@@ -59,7 +59,7 @@ int main(int argc, char **argv)
   if (parseOnly) return 0;
 
   // Setup all communicators
-  if (mpiRank == 0) printf("Preparing communicators\n");
+  if (mpiRank == 0) printf("Preparing %d communicator(s) per rank\n", collCalls.numCommsPerRank);
   collCalls.localRankComms.resize(numGpusPerMpiRank, std::vector<ncclComm_t>(collCalls.numCommsPerRank));
   collCalls.localRankStreams.resize(numGpusPerMpiRank, std::vector<hipStream_t>(collCalls.numCommsPerRank));
 
@@ -78,13 +78,20 @@ int main(int argc, char **argv)
     }
     NCCL_CALL(ncclGroupEnd());
   }
+  printf("Rank %d Done setting up communicators\n", mpiRank);
 
   int numSkippedCalls = 0;
   auto start = std::chrono::high_resolution_clock::now();
   for (size_t i = 0; i < collCalls.groupCalls.size(); i++) {
-    if (collCalls.groupCalls[i].isValid)
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (collCalls.groupCalls[i].isValid) {
+      if (mpiRank == 0)
+      {
+        printf("Running Collective Call %lu of %lu\n", i+1, collCalls.groupCalls.size());
+        PrintGroupCall(collCalls.groupCalls[i]);
+      }
       ReplayRccl(collCalls, i);
-    else {
+    } else {
       if (mpiRank == 0) {
         printf("[ERROR] in group call: (skipping...)\n");
         for (auto const& rd : collCalls.groupCalls[i].rankData) {
@@ -121,8 +128,27 @@ int main(int argc, char **argv)
   return 0;
 }
 
-void ParseCollectives(char const* logFilename, bool verbose, CollectiveCalls& cc)
+void PrintGroupCall(GroupCall const& gc)
 {
+  printf("OpCount: %d\n", gc.opCount);
+
+  for (auto rd : gc.rankData) {
+    printf("  - Rank %02d: comm %d\n", rd.first, rd.second.commIdx);
+
+    for (int task = 0; task < rd.second.tasks.size(); task++) {
+      TaskInfo ti = rd.second.tasks[task];
+      std::string funcName = (ti.funcType == ncclCollSend || ti.funcType == ncclCollRecv) ? "Send/Recv" : ncclFuncNames[ti.funcType];
+      std::tuple<std::string, size_t, int, int> key(funcName, ti.count, ti.datatype, ti.op);
+      printf("  - Task %02d: %32s inPlace=%d count=%lu datatype=%d op=%d root=%d\n",
+             task, funcName.c_str(), ti.inPlace, ti.count, ti.datatype, ti.op, ti.root);
+    }
+  }
+}
+
+
+void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls& cc)
+{
+  bool verbose = isFirstRank && (getenv("VERBOSE") != NULL);
   cc.globalRankComms.clear();
   cc.globalRankComms.resize(cc.numGlobalRanks);
   cc.groupCalls.clear();
@@ -136,6 +162,7 @@ void ParseCollectives(char const* logFilename, bool verbose, CollectiveCalls& cc
   std::string line;
   LineItem li;
   int lineNum = 0;
+
   while (std::getline(logFile, line)) {
     ++lineNum;
 
@@ -190,7 +217,7 @@ void ParseCollectives(char const* logFilename, bool verbose, CollectiveCalls& cc
     // If no collectives were found, create new one
     if (!found) {
       if (li.task != 0) {
-        if (verbose) printf("[WARN] Was unable to find corresponding collective for line %d\n", lineNum);
+        if (isFirstRank) printf("[WARN] Was unable to find corresponding collective for line %d\n", lineNum);
       }
 
       GroupCall gc;
@@ -206,32 +233,19 @@ void ParseCollectives(char const* logFilename, bool verbose, CollectiveCalls& cc
   // Validate group calls
   // - For non Send/Recv, check that all ranks participate with same parameters count
   // - For Send/Recv, check that pairs of Send/Recv calls exist
-  if (verbose) printf("Found %lu groupCalls\n", cc.groupCalls.size());
+  if (isFirstRank) printf("Found %lu groupCalls\n", cc.groupCalls.size());
   for (int i = 0; i < cc.groupCalls.size(); i++) {
     GroupCall& gc = cc.groupCalls[i];
     std::map<std::tuple<std::string, size_t, int, int>, std::vector<int>> arrivalCounter;
 
     gc.isValid = true;
 
-    if (verbose) {
-      printf("GroupCall %d\n", i);
-      printf(" - OpCount: %d\n", gc.opCount);
-    }
-
     for (auto rd : gc.rankData) {
-      if (verbose)
-        printf("  - Rank %02d: comm %d\n", rd.first, rd.second.commIdx);
-
       for (int task = 0; task < rd.second.tasks.size(); task++) {
         TaskInfo ti = rd.second.tasks[task];
 
         std::string funcName = (ti.funcType == ncclCollSend || ti.funcType == ncclCollRecv) ? "Send/Recv" : ncclFuncNames[ti.funcType];
         std::tuple<std::string, size_t, int, int> key(funcName, ti.count, ti.datatype, ti.op);
-
-        if (verbose) {
-          printf("  - Task %02d: %32s inPlace=%d count=%lu datatype=%d op=%d root=%d\n",
-                 task, funcName.c_str(), ti.inPlace, ti.count, ti.datatype, ti.op, ti.root);
-        }
 
         auto& rankVector = arrivalCounter[key];
         if (rankVector.size() < cc.numGlobalRanks)
@@ -264,11 +278,21 @@ void ParseCollectives(char const* logFilename, bool verbose, CollectiveCalls& cc
         if (e.second[i] != (isp2p ? 0 : maxVal)) {
           std::string warning = (isp2p ? (e.second[i] > 0 ? "[WARN] Missing Recv" : "[WARN] Missing Send") : "[WARN] Missing " + std::string(funcName))
             + " count=" + std::to_string(count) + " datatype=" + std::to_string(datatype) + " op=" + std::to_string(op) + " at rank [" + std::to_string(i) + "]";
-          if(verbose) printf("%s\n", warning.c_str());
+          if(isFirstRank) printf("%s\n", warning.c_str());
 
           gc.isValid = false;
         }
       }
+    }
+  }
+
+  // Check number of comms per rank
+  cc.numCommsPerRank = cc.globalRankComms[0].size();
+  for (int i = 1; i < cc.numGlobalRanks; i++) {
+    if (cc.numCommsPerRank != cc.globalRankComms[i].size()) {
+      printf("[ERROR] Replayer currently only supports identical number of communicators across all ranks\n");
+      printf("[ERROR] Rank %d has %lu communicators (expecting %d)\n", i, cc.globalRankComms[i].size(), cc.numCommsPerRank);
+      exit(1);
     }
   }
 }
@@ -289,6 +313,9 @@ void ReplayRccl(CollectiveCalls const& cc, int groupIdx)
 {
   int numLocalRanks = cc.localRankComms.size();
 
+
+
+
   // Allocate memory for collective
   std::vector<std::vector<void*>> sendbuff(numLocalRanks);
   std::vector<std::vector<void*>> recvbuff(numLocalRanks);
@@ -296,7 +323,6 @@ void ReplayRccl(CollectiveCalls const& cc, int groupIdx)
   for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
     int globalRank = cc.firstGlobalRank + localIdx;
     if (cc.groupCalls[groupIdx].rankData.count(globalRank) == 0) continue;
-
     HIP_CALL(hipSetDevice(cc.localGpuOffset + localIdx));
 
     RankData const& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);

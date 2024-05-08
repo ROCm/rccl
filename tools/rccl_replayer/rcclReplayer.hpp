@@ -157,11 +157,14 @@ bool ParseLineItem(std::string const& line, LineItem& li);
 
 // this covers grouping the logs based on opCount and task number,
 // validatation of the groupCalls for both non-send/recv collectives and send/recv
-void ParseCollectives(char const* logFilename, bool verbose, CollectiveCalls& collectiveCalls);
+void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls& collectiveCalls);
 
 // allocates send/recv buff, sets the device based on which rank the task belongs to,
 // syncronize devices after executing all the tasks and free device memory.
 void ReplayRccl(CollectiveCalls const& collCall, int groupIdx);
+
+// Print information about a group call
+void PrintGroupCall(GroupCall const& gc);
 
 // size differ for each collective call and getSize gives a specific size in bytes depending on type of task,
 // global rank, element count and data type
