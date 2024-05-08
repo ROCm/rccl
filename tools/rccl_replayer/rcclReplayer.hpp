@@ -6,39 +6,30 @@
 
 // NOTE: Parsing is based on this line logging collective information in enqueue.cc
 // INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d \
-                       root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
+                   root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
 //                info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
 //                info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream,
 //                info->comm->tasks.nTasksP2p + info->comm->tasks.nTasksColl,
 //                info->comm->localRankToRank[info->comm->localRank]);
 
-#define MPICHECK(cmd) do {                          \
-  int e = cmd;                                      \
-  if( e != MPI_SUCCESS ) {                          \
-    printf("Failed: MPI error %s:%d '%d'\n",        \
-        __FILE__,__LINE__, e);                      \
-    exit(EXIT_FAILURE);                             \
-  }                                                 \
-} while(0)
+#define HIP_CALL(cmd)                                                   \
+  do {                                                                  \
+      hipError_t error = (cmd);                                         \
+      if (error != hipSuccess) {                                        \
+        printf("Encountered HIP error (%s) at line %d in file %s\n",    \
+               hipGetErrorString(error), __LINE__, __FILE__);           \
+        exit(-1);                                                       \
+      }                                                                 \
+  } while (0)
 
-#define HIPCALL(cmd)                                                                          \
-    do {                                                                                      \
-        hipError_t error = (cmd);                                                             \
-        if (error != hipSuccess)                                                              \
-        {                                                                                     \
-            printf("Encountered HIP error (%s) at line %d in file %s\n",                      \
-                                  hipGetErrorString(error), __LINE__, __FILE__);              \
-            exit(-1);                                                                         \
-        }                                                                                     \
-    } while (0)
-
-#define NCCLCHECK(cmd) do {                                     \
+#define NCCL_CALL(cmd)                                          \
+  do {                                                          \
     ncclResult_t res = cmd;                                     \
     if (res != ncclSuccess) {                                   \
-         printf("NCCL failure %s:%d '%s'\n",                    \
-            __FILE__,__LINE__,ncclGetErrorString(res));         \
+      printf("NCCL failure %s:%d '%s'\n",                       \
+             __FILE__,__LINE__,ncclGetErrorString(res));        \
     }                                                           \
-} while(0)
+  } while(0)
 
 struct LineItem
 {
@@ -106,7 +97,7 @@ struct TaskInfo
 struct RankData
 {
   int                   lineNum;
-  std::string           comm;
+  int                   commIdx;
   std::vector<TaskInfo> tasks;
 };
 
@@ -114,21 +105,36 @@ struct GroupCall
 {
   bool isValid;
   int opCount;
-  std::map<int, RankData> rankData;  // Indexed by globalRank
+  std::map<int, RankData> rankData;
 };
+
+struct CollectiveCalls
+{
+  int numGlobalRanks;
+  int numGpusPerMpiRank;
+  std::vector<std::vector<std::string>> globalRankComms;  // Set of comms used by each global rank
+  std::vector<GroupCall>                groupCalls;       // List of group calls for each global rank
+
+  int localGpuOffset;                                     // First local GPU device idx for this MPI process
+  int firstGlobalRank;                                    // First global rank for this MPI process
+  int numCommsPerRank;                                    // Number of communicators per rank
+  std::vector<std::vector<ncclComm_t>>  localRankComms;   // comms per local rank
+  std::vector<std::vector<hipStream_t>> localRankStreams; // streams per local rank
+};
+
 
 size_t DataTypeToBytes(ncclDataType_t const dataType)
 {
   switch (dataType) {
-  case ncclInt8:   return 1;
-  case ncclUint8:  return 1;
-  case ncclInt32:  return 4;
-  case ncclUint32: return 4;
-  case ncclInt64:  return 8;
-  case ncclUint64: return 8;
-  case ncclFloat16: return 2;
-  case ncclFloat32: return 4;
-  case ncclFloat64: return 8;
+  case ncclInt8:     return 1;
+  case ncclUint8:    return 1;
+  case ncclInt32:    return 4;
+  case ncclUint32:   return 4;
+  case ncclInt64:    return 8;
+  case ncclUint64:   return 8;
+  case ncclFloat16:  return 2;
+  case ncclFloat32:  return 4;
+  case ncclFloat64:  return 8;
   case ncclBfloat16: return 2;
   case ncclFp8E4M3:  return 1;
   case ncclFp8E5M2:  return 1;
@@ -147,26 +153,19 @@ ncclFunc_t GetFuncType(char* func)
 }
 
 // parse the logs and assign them into lineItem
-bool ParseLineItem(char const* line, LineItem& li);
+bool ParseLineItem(std::string const& line, LineItem& li);
 
-// this covers grouping the logs based on opCount and task number, 
+// this covers grouping the logs based on opCount and task number,
 // validatation of the groupCalls for both non-send/recv collectives and send/recv
-void ParseCollectives(char const* logFilename,
-                      int  const  numGlobalRanks,
-                      std::vector<GroupCall>& groupCalls);
+void ParseCollectives(char const* logFilename, bool verbose, CollectiveCalls& collectiveCalls);
 
-// size differ for each collective call and getSize gives a specific size in bytes depending on type of task, 
+// allocates send/recv buff, sets the device based on which rank the task belongs to,
+// syncronize devices after executing all the tasks and free device memory.
+void ReplayRccl(CollectiveCalls const& collCall, int groupIdx);
+
+// size differ for each collective call and getSize gives a specific size in bytes depending on type of task,
 // global rank, element count and data type
-std::pair<size_t, size_t> GetSize(TaskInfo taskInfo, 
-                                  int numGlobalRanks);
+std::pair<size_t, size_t> GetSize(TaskInfo taskInfo, int numGlobalRanks);
 
-// executes the collective call (task) 
-void ExecuteCollective(TaskInfo task, ncclComm_t comm, hipStream_t stream, const void *sendbuff, void *recvbuff);
-
-// allocates send/recv buff, sets the device based on which rank the task belongs to, 
-// syncronize devices after executing all the tasks and free device memory. 
-void ReplayRccl(GroupCall& groupCall, std::vector<ncclComm_t> comms, std::vector<hipStream_t> streams,
-                                                                            int const localGpuOffset,
-                                                                            int const numGpusPerMpiRank,
-                                                                            int const firstGlobalRank,
-                                                                            int const numGlobalRanks);
+// executes the collective call (task)
+void ExecuteCollective(TaskInfo const& task, ncclComm_t const& comm, hipStream_t stream, const void *sendbuff, void *recvbuff);
