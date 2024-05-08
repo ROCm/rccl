@@ -129,7 +129,7 @@ static ncclResult_t mscclInternalSchedulerInit(ncclComm_t comm, int* numChannels
     //Try to find the algorithm directory under share folder based on librccl.so path
     dp = opendir(mscclAlgoShareDir);
     if (dp == nullptr) {
-      WARN("MSCCL Internal Scheduler: open algorithm in share directory %s failed", mscclAlgoShareDir);
+      WARN("MSCCL Internal Scheduler:  Unable to find algorithm files in %s. Please ensure that RCCL has been installed properly" , mscclAlgoShareDir);
       return ncclInvalidUsage;
     }
     fullDirPath = mscclAlgoShareDir;
