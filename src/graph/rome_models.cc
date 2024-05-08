@@ -1379,7 +1379,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     // permute GPU IDs
     for (int j = 0; j < ngpus; j++) g[j] = (j+2)%ngpus;
     if (!permuteGpuIds(g, 0, ngpus-1, romeTopoModels+i, &romeTopo, &time, ignore_cpu ? false : match_nbio, ignore_numa)) continue;
-    if (nnetspergpu) {
+    if (nnetspergpu > 1) {
       int found = 0;
       // initialize nics mapping
       for (int j = 0; j < nnets; j++) n[j] = -1;
