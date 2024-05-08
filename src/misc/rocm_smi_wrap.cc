@@ -43,7 +43,11 @@ ncclResult_t rocm_smi_init() {
     INFO(NCCL_INIT, "Not using rocm_smi_lib due to WSL2 environment detected.");
     return ncclSuccess;
   }
+#ifdef USE_ROCM_SMI_THREAD_ONLY_MUTEX
+  ROCMSMICHECK(rsmi_init(RSMI_INIT_FLAG_THRAD_ONLY_MUTEX));
+#else
   ROCMSMICHECK(rsmi_init(0));
+#endif
   rsmi_version_t version;
   ROCMSMICHECK(rsmi_version_get(&version));
   INFO(NCCL_INIT, "rocm_smi_lib: version %d.%d.%d.%s", version.major, version.minor, version.patch, version.build);
