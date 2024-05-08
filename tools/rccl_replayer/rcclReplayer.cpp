@@ -348,6 +348,8 @@ void ReplayRccl(CollectiveCalls const& cc, int groupIdx)
       if (!task.inPlace) {
         HIP_CALL(hipMalloc(&recvbuff[localIdx][taskId], numBytes.second));
         HIP_CALL(hipMemset(recvbuff[localIdx][taskId], 0, numBytes.second));
+      } else {
+        recvbuff[localIdx][taskId] = sendbuff[localIdx][taskId];
       }
 
       HIP_CALL(hipDeviceSynchronize());
