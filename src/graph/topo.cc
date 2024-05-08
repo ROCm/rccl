@@ -848,11 +848,16 @@ ncclResult_t getLocalNetCountByBw(struct ncclTopoSystem* system, int gpu, int *c
 ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int channelId, int* id) {
   int gpu;
   NCCLCHECK(ncclTopoRankToIndex(system, rank, &gpu));
-  int* localNets;
+  int* localNets = NULL;
   int localNetCount;
   NCCLCHECK(ncclTopoGetLocal(system, GPU, gpu, NET, &localNets, &localNetCount, NULL));
-  int* localGpus;
+  int* localGpus = NULL;
   int localGpuCount;
+  if (localNetCount == 0) {
+    *id = -1;
+    free(localNets);
+    return ncclSuccess;
+  }
   NCCLCHECK(ncclTopoGetLocal(system, NET, localNets[0], GPU, &localGpus, &localGpuCount, NULL));
   int net = 0;
   for (int i = 0; i < localGpuCount; i++) {
