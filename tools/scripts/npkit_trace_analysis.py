@@ -120,7 +120,7 @@ def thruput_series(gpu, interval = 100):
 						totalbyte += (size / 1e6)  * ( (end-start) / duration)
 					if totalbyte < 0:
 						print(i, j, start, end, ts)
-						print(totalbyte, size, ( (end-start) / duration)
+						print(totalbyte, size, ( (end-start) / duration))
 						raise RuntimeError("an error with time interval")
 			
 		series.append(totalbyte * 1000 / interval)
