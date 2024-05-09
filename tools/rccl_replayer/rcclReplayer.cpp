@@ -1,7 +1,6 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
-#include <fstream>
 #include <algorithm>
 #include <chrono>
 #include <mpi.h>
@@ -153,17 +152,17 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
   cc.globalRankComms.resize(cc.numGlobalRanks);
   cc.groupCalls.clear();
 
-  std::ifstream logFile(logFilename);
-  if (!logFile.is_open()) {
+  FILE* fp = fopen(logFilename, "r");
+  if (!fp) {
     printf("[ERROR] Unable to open file %s\n", logFilename);
     exit(-1);
   }
 
-  std::string line;
+  char line[2048];
   LineItem li;
   int lineNum = 0;
 
-  while (std::getline(logFile, line)) {
+  while (fgets(line, 2048, fp)) {
     ++lineNum;
 
     //Ignore invalid lines and collectives
@@ -228,7 +227,7 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
       cc.groupCalls.push_back(gc);
     }
   }
-  logFile.close();
+  fclose(fp);
 
   // Validate group calls
   // - For non Send/Recv, check that all ranks participate with same parameters count
@@ -297,9 +296,9 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
   }
 }
 
-bool ParseLineItem(std::string const& line, LineItem& li)
+bool ParseLineItem(char const* line, LineItem& li)
 {
-  return sscanf(line.c_str(),
+  return sscanf(line,
                 "%[^:]:%d:%d [%d] NCCL INFO %[^:]: opCount %x sendbuff %s "
                 "recvbuff %s count %lu datatype %d op %d root %d comm %s "
                 "[nranks=%d] stream %p task %d globalrank %d",

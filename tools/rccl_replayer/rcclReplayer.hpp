@@ -153,7 +153,7 @@ ncclFunc_t GetFuncType(char* func)
 }
 
 // parse the logs and assign them into lineItem
-bool ParseLineItem(std::string const& line, LineItem& li);
+bool ParseLineItem(char const* line, LineItem& li);
 
 // this covers grouping the logs based on opCount and task number,
 // validatation of the groupCalls for both non-send/recv collectives and send/recv
