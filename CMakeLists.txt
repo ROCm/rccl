@@ -426,6 +426,8 @@ set(SRC_FILES
   src/include/nvtx3/nvtxExtDetail/nvtxExtInit.h
   src/include/nvtx3/nvtxExtDetail/nvtxExtPayloadTypeInfo.h
   src/include/nvtx3/nvtxExtDetail/nvtxExtTypes.h
+  src/include/alt_rsmi.h
+  src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
 # src/misc/cudawrap.cc
