@@ -75,7 +75,8 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
 
     if (maxStackSize) {
       cudaFuncAttributes attr = {0};
-      CUDACHECKGOTO(cudaFuncGetAttributes(&attr, fn), result, ignore0);
+      if (cudaFuncGetAttributes(&attr, fn) != cudaSuccess)
+        WARN("Failed to get kernel attributes");
       if (attr.localSizeBytes > *maxStackSize) *maxStackSize = attr.localSizeBytes;
     ignore0:;
     }
@@ -100,7 +101,6 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
 /*****************************************************************************/
 /*       Launch system : synchronization and CUDA kernel launch              */
 /*****************************************************************************/
-
 static void appendWorkElemColl(
     struct ncclComm* comm, struct ncclKernelPlan* plan, int channelId,
     int funcIndex, struct ncclWorkElem const *elem) {

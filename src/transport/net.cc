@@ -591,7 +591,10 @@ static ncclResult_t sharedNetBuffersDestroy(struct ncclProxyState* proxyState, i
 }
 
 static ncclResult_t proxySharedInit(struct ncclProxyConnection* connection, struct ncclProxyState* proxyState, int nChannels) {
-  NCCLCHECK(sharedNetBuffersInit(proxyState, 1, connection->tpLocalRank, 0, connection->sameProcess, nChannels, NULL, NULL, NULL, NULL));
+  static int is_wsl2 = -1;
+  if (is_wsl2 == -1)
+    is_wsl2 = (access("/dev/dxg", F_OK) == -1) ? 0 : 1;
+  NCCLCHECK(sharedNetBuffersInit(proxyState, is_wsl2 == 0 ? 1 : 0, connection->tpLocalRank, 0, connection->sameProcess, nChannels, NULL, NULL, NULL, NULL));
   return ncclSuccess;
 }
 
