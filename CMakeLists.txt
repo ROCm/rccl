@@ -16,6 +16,7 @@ option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on 
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
+option(DEBUG_AGENT                             "Build with ROCm Debug Agent support"           OFF)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
@@ -467,7 +468,7 @@ if (ENABLE_MSCCL_KERNEL)
   )
   list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
 endif()
-  
+
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
 find_program(hipify-perl_executable hipify-perl)
@@ -604,8 +605,8 @@ if(DEMANGLE_DIR)
 endif()
 if(${hipcc_version_string} VERSION_GREATER_EQUAL "6.1.33591")
   set(LL128_ENABLED ON)
-	target_compile_definitions(rccl PRIVATE ENABLE_LL128)
-	message(STATUS "RCCL LL128 protocol enabled")
+  target_compile_definitions(rccl PRIVATE ENABLE_LL128)
+  message(STATUS "RCCL LL128 protocol enabled")
 endif()
 
 ## Set RCCL compile options
@@ -628,6 +629,9 @@ if(BUILD_ADDRESS_SANITIZER)
 endif()
 if(TIMETRACE)
   target_compile_options(rccl PRIVATE -ftime-trace)
+endif()
+if(DEBUG_AGENT)
+  target_compile_options(rccl PRIVATE -O0 -ggdb)
 endif()
 
 ## Set RCCL linked library directories
