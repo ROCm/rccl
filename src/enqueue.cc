@@ -171,11 +171,15 @@ static void finishWork(struct ncclWork* work, int WarpSize) {
   }
 }
 
-static void appendWorkElemP2p(
+static ncclResult_t appendWorkElemP2p(
     struct ncclComm* comm, struct ncclKernelPlan* plan, int channelId,
     struct ncclWorkElemP2p const *elem, bool fuseOk
   ) {
   int funcIndex = ncclDevFuncId_P2p();
+  if (funcIndex < 0) {
+    WARN("%s: unspported collective. Please ensure the collective has been enabled in build.", __func__);
+    return ncclInvalidUsage;
+  }
   struct ncclKernelPlan::Channel* chan = &plan->channels[channelId];
   struct ncclWorkList* q = ncclIntruQueueTail(&chan->workQueue);
   if (q && funcIndex == q->work.header.funcIndex) {
@@ -190,7 +194,7 @@ static void appendWorkElemP2p(
       int e = chan->p2pTailElem[elem->p2pType-1];
       q->work.p2pElems[e] = *elem; // C++ struct assignment
       chan->p2pTailElem[elem->p2pType-1] += 2;
-      return;
+      return ncclSuccess;
     }
   NewWork:
     finishWorkP2p(&q->work, comm->WarpSize);
@@ -204,6 +208,7 @@ static void appendWorkElemP2p(
   chan->p2pTailElem[elem->p2pType-1] += 2;
   chan->nWork += 1;
   ncclIntruQueueEnqueue(&chan->workQueue, q);
+  return ncclSuccess;
 }
 
 static ncclResult_t addProxyOpIfNeeded(struct ncclComm* comm, struct ncclKernelPlan* plan, struct ncclProxyOp* op) {
@@ -1699,6 +1704,10 @@ RCCL_PARAM(IntraNetThreshold, "INTRANET_THRESHOLD", 8388608);
 
 static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo) {
   collInfo->workFuncIndex = ncclDevFuncId(collInfo->coll, collInfo->opFull.op, collInfo->datatype, collInfo->algorithm, collInfo->protocol);
+  if (collInfo->workFuncIndex < 0) {
+    WARN("%s: unspported collective. Please ensure the collective has been enabled in build.", __func__);
+    return ncclInvalidUsage;
+  }
   return ncclSuccess;
 }
 
