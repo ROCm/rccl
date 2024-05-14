@@ -23,7 +23,7 @@ THE SOFTWARE.
 #include "core.h"
 #include "utils.h"
 
-static int is_wsl2 = -1;
+__thread static int is_wsl2 = -1;
 
 #define ROCMSMICHECK(cmd) do {               \
   rsmi_status_t ret = cmd;                   \
