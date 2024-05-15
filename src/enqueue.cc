@@ -177,7 +177,7 @@ static ncclResult_t appendWorkElemP2p(
   ) {
   int funcIndex = ncclDevFuncId_P2p();
   if (funcIndex < 0) {
-    WARN("%s: unspported collective. Please ensure the collective has been enabled in build.", __func__);
+    WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
     return ncclInvalidUsage;
   }
   struct ncclKernelPlan::Channel* chan = &plan->channels[channelId];
@@ -1705,7 +1705,7 @@ RCCL_PARAM(IntraNetThreshold, "INTRANET_THRESHOLD", 8388608);
 static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo) {
   collInfo->workFuncIndex = ncclDevFuncId(collInfo->coll, collInfo->opFull.op, collInfo->datatype, collInfo->algorithm, collInfo->protocol);
   if (collInfo->workFuncIndex < 0) {
-    WARN("%s: unspported collective. Please ensure the collective has been enabled in build.", __func__);
+    WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
     return ncclInvalidUsage;
   }
   return ncclSuccess;
