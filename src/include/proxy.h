@@ -143,7 +143,7 @@ struct ncclProxyOps {
 
 struct ncclProxySharedP2p {
   int refcount;
-  int size;
+  int64_t size;
   char* cudaBuff;
   char* hostBuff;
   // CUDA IPC

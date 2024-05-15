@@ -13,6 +13,7 @@
 #include "op128.h"
 #include "device_table.h"
 #include "network/unpack/unpack_defs.h"
+#include "comm.h"
 
 #if defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
 #define COLL_UNROLL 2
@@ -226,22 +227,31 @@ static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we
 }
 
 template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE>
-__forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) {
+__forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) {
   const int tid = threadIdx.x;
   int x = tid;
+  int total = 0, y;
+  int num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
+
   switch (tid/WARP_SIZE) {
   case 0:
-    if (channelMask & (1ull<<x)) {
-      int y = __popcll(channelMask & ((1ull<<x)-1));
+	  ncclShmem.channelId = blockIdx.x;
+  /*for (int i = 0; i < num; i++) {
+    if (channelMask.masks[i] & (1ull<<x)) {
+      y = __popcll(channelMask.masks[i] & ((1ull<<x)-1));
+      y = total + y;
       if (blockIdx.x == y) ncclShmem.channelId = x;
     }
-    if (WARP_SIZE < MAXCHANNELS) {
+    if (WARP_SIZE < 64) {
       x = WARP_SIZE + tid;
-      if (channelMask & (1ull<<x)) {
-        int y = __popcll(channelMask & ((1ull<<x)-1));
+      if (channelMask.masks[i] & (1ull<<x)) {
+	y = __popcll(channelMask.masks[i] & ((1ull<<x)-1));
+	y = y + total;
         if (blockIdx.x == y) ncclShmem.channelId = x;
       }
     }
+    total = __popcll(channelMask.masks[i]);
+  }*/
     break;
   case 1:
     if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
@@ -361,23 +371,23 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, uint64_
 #endif
 }
 
-__global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
+__global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #ifdef ENABLE_COLLTRACE
-__global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead);
+__global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #endif
 
 #ifdef ENABLE_COLLTRACE
 #define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, specializedFnId) \
-  __global__ void ncclDevKernel_##suffix(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) { \
+  __global__ void ncclDevKernel_##suffix(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) { \
     ncclKernelMain<specializedFnId, RunWork<coll, ty, redop<ty>, algo, proto>, false>(comm, channelMask, workHead); \
   } \
   \
-  __global__ void ncclDevKernelDebug_##suffix(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) { \
+  __global__ void ncclDevKernelDebug_##suffix(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) { \
     ncclKernelMain<specializedFnId, RunWork<coll, ty, redop<ty>, algo, proto>, true>(comm, channelMask, workHead); \
   }
 #else
 #define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, specializedFnId) \
-  __global__ void ncclDevKernel_##suffix(struct ncclDevComm* comm, uint64_t channelMask, struct ncclWork* workHead) { \
+  __global__ void ncclDevKernel_##suffix(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) { \
     ncclKernelMain<specializedFnId, RunWork<coll, ty, redop<ty>, algo, proto>, false>(comm, channelMask, workHead); \
   }
 #endif
