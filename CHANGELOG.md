@@ -2,6 +2,10 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## RCCL 2.18.6 for ROCm 6.1.1
+### Changed
+- Reduced NCCL_TOPO_MAX_NODES to limit stack usage and avoid overflow
+
 ## RCCL 2.18.6 for ROCm 6.1.0
 ### Changed
 - Compatibility with NCCL 2.18.6
