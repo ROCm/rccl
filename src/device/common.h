@@ -14,7 +14,7 @@
 #include "device_table.h"
 #include "network/unpack/unpack_defs.h"
 
-#if defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx908__)
 #define COLL_UNROLL 2
 #else
 #define COLL_UNROLL 4
