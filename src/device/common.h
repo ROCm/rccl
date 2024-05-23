@@ -241,7 +241,7 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
         y = __popcll(channelMask.masks[i] & ((1ull<<x)-1));
         y = total + y;
         if (blockIdx.x == y) {
-          ncclShmem.channelId = y;
+          ncclShmem.channelId = x + total;
 	  break;
         }
       }
@@ -251,7 +251,7 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
 	  y = __popcll(channelMask.masks[i] & ((1ull<<x)-1));
 	  y = y + total;
           if (blockIdx.x == y) {
-	    ncclShmem.channelId = y;
+	    ncclShmem.channelId = x + total;
 	    break;
 	  }
         }

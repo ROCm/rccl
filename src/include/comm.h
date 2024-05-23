@@ -173,7 +173,7 @@ struct ncclNvlsMcHandleList {
 };
 
 struct channelMasks {
-        uint64_t masks[4];
+        uint64_t masks[MAXCHANNELS/64];
 };
 
 struct ncclKernelPlan {

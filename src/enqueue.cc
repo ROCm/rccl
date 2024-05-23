@@ -618,7 +618,7 @@ static void finishPlan(struct ncclKernelPlan* plan) {
   int channelCount = 0;
   //uint64_t channelMask = 0;
   struct channelMasks channelMask;
-  for (int i =0; i < 4; i++) {
+  for (int i =0; i < MAXCHANNELS/64; i++) {
 	channelMask.masks[i] = 0;
   }
   bool hasProxyOps = false;

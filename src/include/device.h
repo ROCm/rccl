@@ -61,7 +61,8 @@ union ncclLLFifoLine {
 };
 
 #define WARP_SIZE warpSize
-#define MAXCHANNELS 256
+
+#define MAXCHANNELS 128
 #define CHANNEL_LIMIT 16
 
 #define NCCL_MAX_NTHREADS 256

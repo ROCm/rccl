@@ -106,6 +106,9 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
   timeLast = timeStart; // struct copy
   bool timeReported = false;
 
+  int count = 0;
+  int num = MAXCHANNELS/64;
+
   NCCLCHECKGOTO(ncclStrongStreamAcquireUncaptured(&comm->sharedRes->hostStream), ret, fail);
   // First time initialization
   for (int i=1; i<comm->nRanks; i++) {
@@ -123,7 +126,16 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     // The next M entries contain sendData, connection information for send connections
     // It's not guaranteed that each entry of data has the same number of total or send/recv specific connections
     int p = i-(done+1);
-    if ((recvMask.masks[0]) || (sendMask.masks[0])) NCCLCHECK(ncclCalloc(data+p, 2*MAXCHANNELS));
+    count = 0;
+    for (int j = 0; j < num; j++) {
+        if ((recvMask.masks[j]) || (sendMask.masks[j])) {
+                count++;
+        }
+    }
+
+    //if ((recvMask.masks[0]) || (sendMask.masks[0])) NCCLCHECK(ncclCalloc(data+p, 2*MAXCHANNELS));
+    if (count) NCCLCHECK(ncclCalloc(data+p, 2*MAXCHANNELS));
+
     recvData[p] = data[p];
     int sendChannels = 0, recvChannels = 0;
     int type;
@@ -220,7 +232,15 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
             }
             TIME_STOP(4);
           }
-          if (sendMask.masks[0] || recvMask.masks[0]) {
+
+	  count = 0;
+          for (int j = 0; j < num; j++) {
+            if ((recvMask.masks[j]) || (sendMask.masks[j])) {
+              count++;
+            }
+          }
+          //if (sendMask.masks[0] || recvMask.masks[0]) {
+	  if (count) {
             free(data[p]);
             data[p] = NULL;
           }
@@ -262,7 +282,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int sendPeer = (comm->rank + i) % comm->nRanks;
     int flag = 0;
 
-    for (int j = 0; j < 4; j++) {
+    for (int j = 0; j < MAXCHANNELS/64; j++) {
     if (recvPeer != sendPeer) {
       if (comm->connectSend[sendPeer].masks[j] != 0UL)
         NCCLCHECKGOTO(bootstrapSend(comm->bootstrap, sendPeer, bootstrapTag, &flag, sizeof(int)), ret, fail);

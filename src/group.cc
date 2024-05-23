@@ -225,7 +225,7 @@ static void groupCleanup(struct ncclComm** groupCommHeadPtr, struct ncclComm** g
     for (int i = 0; i < comm->nRanks; i++) {
       comm->tasks.peers[i].sendSeen = false;
       comm->tasks.peers[i].recvSeen = false;
-      for (int j = 0; j < 4; j++) {
+      for (int j = 0; j < MAXCHANNELS/64; j++) {
       	comm->connectSend[i].masks[j] = 0UL;
       	comm->connectRecv[i].masks[j] = 0UL;
       }
