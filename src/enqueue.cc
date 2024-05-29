@@ -1799,6 +1799,14 @@ static ncclResult_t computeCollChunkInfo(struct ncclInfo* collInfo, size_t nByte
       while (collInfo->nBytes / (collInfo->nChannels*chunkSize) < collInfo->comm->channels[0].tree.depth*4 && chunkSize > 65536) chunkSize /= 2;
       while (collInfo->nBytes / (collInfo->nChannels*chunkSize) < collInfo->comm->channels[0].tree.depth && chunkSize > 32768) chunkSize /= 2;
     }
+  } else if (collInfo->algorithm == NCCL_ALGO_RING && collInfo->protocol == NCCL_PROTO_SIMPLE) {
+    if (collInfo->pattern == ncclPatternPipelineFrom || collInfo->pattern == ncclPatternPipelineTo) {
+      // Optimize chunkSize / nSteps
+      while (collInfo->nBytes / (collInfo->nChannels*chunkSize) < 64 && chunkSize > 262144) chunkSize /= 2;
+      while (collInfo->nBytes / (collInfo->nChannels*chunkSize) < 32 && chunkSize > 131072) chunkSize /= 2;
+      while (collInfo->nBytes / (collInfo->nChannels*chunkSize) < 16 && chunkSize > 65536) chunkSize /= 2;
+      while (collInfo->nBytes / (collInfo->nChannels*chunkSize) < 8 && chunkSize > 32768) chunkSize /= 2;
+    }
   } else if (collInfo->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
     // Optimize chunkSize / nSteps
     while (nBytes / (nChannels * collInfo->comm->channels[0].collnetDirect.nHeads * chunkSize) < collInfo->comm->channels[0].collnetDirect.depth * 64 && chunkSize > 131072) chunkSize /= 2;
