@@ -1,7 +1,16 @@
 # Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
 # Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
+# CMake version minimum requirements
+#==================================================================================================
 cmake_minimum_required(VERSION 3.5)
+
+# CMake Toolchain file to define compilers and path to ROCm
+#==================================================================================================
+if (NOT CMAKE_TOOLCHAIN_FILE)
+  set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/toolchain-linux.cmake")
+  message(STATUS "CMAKE_TOOLCHAIN_FILE: ${CMAKE_TOOLCHAIN_FILE}")
+endif()
 
 # RCCL project
 #==================================================================================================
