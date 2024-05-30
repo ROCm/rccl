@@ -86,7 +86,7 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm, struct ncclTopoGraph** graphs
       topoRanks->nvlsHeads[topoRanks->nvlsHeadNum++] = nvlsIntra[0];
     }
   }
-  
+
   return ncclSuccess;
 }
 
@@ -637,8 +637,13 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   for (int c=0; c<nChannels; c++) {
     struct ncclChannel* channel0 = comm->channels+c;
     struct ncclChannel* channel1 = channel0+nChannels;
-    channel0->ring.prev = channel1->ring.prev = ringPrev[c*nranks+comm->rank];
-    channel0->ring.next = channel1->ring.next = ringNext[c*nranks+comm->rank];
+    channel0->ring.prev = ringPrev[c*nranks+comm->rank];
+    channel0->ring.next = ringNext[c*nranks+comm->rank];
+
+    if (c + nChannels < MAXCHANNELS) {
+      channel1->ring.prev = channel0->ring.prev;
+      channel1->ring.next = channel0->ring.next;
+    }
   }
 
   // Duplication should be complete now
