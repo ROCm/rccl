@@ -34,6 +34,7 @@ struct rcclRomeModel {
   int nCpus;
   int nNics;
   int nLinks;
+  int channelWidth;
   int64_t gpuIds[NCCL_TOPO_MAX_NODES];
   int64_t nicIds[NCCL_TOPO_MAX_NODES];
   int64_t gpuNuma[NCCL_TOPO_MAX_NODES];
@@ -51,7 +52,7 @@ struct rcclRomeModel {
 };
 
 static struct rcclRomeModel rome_model_22 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 2,
+  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x3000, 0x43000, 0x26000, 0xc3000, 0x83000, 0x23000, 0xc6000, 0xa3000, },
   .nicIds = { 0xe1000, },
   .gpuNuma = { 1, 0, 1, 2, 3, 1, 2, 3, },
@@ -64,7 +65,7 @@ static struct rcclRomeModel rome_model_22 = {
 };
 
 static struct rcclRomeModel rome_model_25 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 2, .nLinks = 2,
+  .nGpus = 8, .nCpus = 4, .nNics = 2, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
@@ -77,7 +78,7 @@ static struct rcclRomeModel rome_model_25 = {
 };
 
 static struct rcclRomeModel rome_model_27 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 2, .nLinks = 2,
+  .nGpus = 8, .nCpus = 4, .nNics = 2, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
@@ -90,7 +91,7 @@ static struct rcclRomeModel rome_model_27 = {
 };
 
 static struct rcclRomeModel rome_model_29 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { 0xe1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
@@ -103,7 +104,7 @@ static struct rcclRomeModel rome_model_29 = {
 };
 
 static struct rcclRomeModel rome_model_31 = {
-  .nGpus = 8, .nCpus = 8, .nNics = 2, .nLinks = 2,
+  .nGpus = 8, .nCpus = 8, .nNics = 2, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
@@ -116,7 +117,7 @@ static struct rcclRomeModel rome_model_31 = {
 };
 
 static struct rcclRomeModel rome_model_33 = {
-  .nGpus = 8, .nCpus = 8, .nNics = 2, .nLinks = 2,
+  .nGpus = 8, .nCpus = 8, .nNics = 2, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { 0x61000, 0xa1000, },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
@@ -129,7 +130,7 @@ static struct rcclRomeModel rome_model_33 = {
 };
 
 static struct rcclRomeModel rome_model_30 = {
-  .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2,
+  .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
@@ -142,7 +143,7 @@ static struct rcclRomeModel rome_model_30 = {
 };
 
 static struct rcclRomeModel rome_model_32 = {
-  .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2,
+  .nGpus = 8, .nCpus = 8, .nNics = 0, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 1, 2, 2, 3, 4, 5, 5, 7, },
@@ -155,7 +156,7 @@ static struct rcclRomeModel rome_model_32 = {
 };
 
 static struct rcclRomeModel rome_model_24 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
@@ -168,7 +169,7 @@ static struct rcclRomeModel rome_model_24 = {
 };
 
 static struct rcclRomeModel rome_model_26 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xe3000, 0xc3000, 0xc6000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 2, 3, },
@@ -181,7 +182,7 @@ static struct rcclRomeModel rome_model_26 = {
 };
 
 static struct rcclRomeModel rome_model_23 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
@@ -194,7 +195,7 @@ static struct rcclRomeModel rome_model_23 = {
 };
 
 static struct rcclRomeModel rome_model_38 = {
-  .nGpus = 8, .nCpus = 7, .nNics = 0, .nLinks = 2,
+  .nGpus = 8, .nCpus = 7, .nNics = 0, .nLinks = 2, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
@@ -207,7 +208,7 @@ static struct rcclRomeModel rome_model_38 = {
 };
 
 static struct rcclRomeModel rome_model_28 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
@@ -220,7 +221,7 @@ static struct rcclRomeModel rome_model_28 = {
 };
 
 static struct rcclRomeModel rome_model_40 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { 0xe1000, },
   .gpuNuma = { 0, 1, 1, 1, 2, 2, 3, 3, },
@@ -233,7 +234,7 @@ static struct rcclRomeModel rome_model_40 = {
 };
 
 static struct rcclRomeModel rome_model_42 = {
-  .nGpus = 8, .nCpus = 7, .nNics = 1, .nLinks = 3,
+  .nGpus = 8, .nCpus = 7, .nNics = 1, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { 0xe1000, },
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
@@ -246,7 +247,7 @@ static struct rcclRomeModel rome_model_42 = {
 };
 
 static struct rcclRomeModel rome_model_44 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 1, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x63000, 0x43000, 0x27000, 0x3000, 0xe3000, 0xc3000, 0xa3000, 0x83000, },
   .nicIds = { 0xc4000, },
   .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
@@ -259,7 +260,7 @@ static struct rcclRomeModel rome_model_44 = {
 };
 
 static struct rcclRomeModel rome_model_45 = {
-  .nGpus = 8, .nCpus = 7, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 7, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
@@ -272,7 +273,7 @@ static struct rcclRomeModel rome_model_45 = {
 };
 
 static struct rcclRomeModel rome_model_46 = {
-  .nGpus = 8, .nCpus = 7, .nNics = 1, .nLinks = 3,
+  .nGpus = 8, .nCpus = 7, .nNics = 1, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x43000, 0x23000, 0x26000, 0x3000, 0xc3000, 0xc6000, 0xa3000, 0x83000, },
   .nicIds = { 0xe1000, },
   .gpuNuma = { 1, 2, 2, 3, 5, 5, 6, 7, },
@@ -285,7 +286,7 @@ static struct rcclRomeModel rome_model_46 = {
 };
 
 static struct rcclRomeModel rome_model_48 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x4a000, 0x50000, 0xa000, 0xf000, 0xcb000, 0xd1000, 0x8a000, 0x90000, },
   .nicIds = { },
   .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
@@ -298,7 +299,7 @@ static struct rcclRomeModel rome_model_48 = {
 };
 
 static struct rcclRomeModel rome_model_49 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x4a000, 0x50000, 0xa000, 0xf000, 0xcb000, 0xd1000, 0x8a000, 0x90000, },
   .nicIds = { 0x45000, 0x13000, 0xc6000, 0x85000, },
   .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
@@ -311,7 +312,7 @@ static struct rcclRomeModel rome_model_49 = {
 };
 
 static struct rcclRomeModel rome_model_52 = {
-  .nGpus = 8, .nCpus = 1, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 1, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0xc1000, 0xc5000, 0xc9000, 0xcd000, 0xd1000, 0xd5000, 0xd9000, 0xdd000, },
   .nicIds = { },
   .gpuNuma = { 0, 0, 0, 0, 0, 0, 0, 0, },
@@ -324,7 +325,7 @@ static struct rcclRomeModel rome_model_52 = {
 };
 
 static struct rcclRomeModel rome_model_53 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x4a000, 0x50000, 0xa000, 0xf000, 0xcb000, 0xd1000, 0x8a000, 0x90000, },
   .nicIds = { 0x45000, 0x13000, 0xc6000, 0x85000, },
   .gpuNuma = { 1, 1, 3, 3, 5, 5, 7, 7, },
@@ -337,7 +338,7 @@ static struct rcclRomeModel rome_model_53 = {
 };
 
 static struct rcclRomeModel rome_model_43 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x63000, 0x43000, 0x27000, 0x3000, 0xe3000, 0xc3000, 0xa3000, 0x83000, },
   .nicIds = { },
   .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
@@ -351,7 +352,7 @@ static struct rcclRomeModel rome_model_43 = {
 };
 
 static struct rcclRomeModel rome_model_55 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x100000, 0x200000, 0x300000, 0x400000, 0x500000, 0x600000, 0x700000, 0x800000, },
   .nicIds = { },
   .gpuNuma = { 0, 0, 1, 1, 2, 2, 3, 3, },
@@ -364,7 +365,7 @@ static struct rcclRomeModel rome_model_55 = {
 };
 
 static struct rcclRomeModel rome_model_56 = {
-  .nGpus = 16, .nCpus = 4, .nNics = 0, .nLinks = 4,
+  .nGpus = 16, .nCpus = 4, .nNics = 0, .nLinks = 4, .channelWidth = 1,
   .gpuIds = { 0x4e000, 0x51000, 0x56000, 0x59000, 0xe000, 0x11000, 0x16000, 0x19000, 0xcf000, 0xd2000, 0xd7000, 0xda000, 0x8f000, 0x92000, 0x97000, 0x9a000, },
   .nicIds = { },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, },
@@ -378,7 +379,7 @@ static struct rcclRomeModel rome_model_56 = {
 };
 
 static struct rcclRomeModel rome_model_58 = {
-  .nGpus = 8, .nCpus = 3, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 3, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
   .nicIds = { },
   .gpuNuma = { 3, 3, 1, 1, 0, 0, 0, 0, },
@@ -391,7 +392,7 @@ static struct rcclRomeModel rome_model_58 = {
 };
 
 static struct rcclRomeModel rome_model_59 = {
-  .nGpus = 16, .nCpus = 4, .nNics = 8, .nLinks = 4,
+  .nGpus = 16, .nCpus = 4, .nNics = 8, .nLinks = 4, .channelWidth = 1,
   .gpuIds = { 0x4e000, 0x51000, 0x56000, 0x59000, 0xe000, 0x11000, 0x16000, 0x19000, 0xcf000, 0xd2000, 0xd7000, 0xda000, 0x8f000, 0x92000, 0x97000, 0x9a000, },
   .nicIds = { 0x4b000, 0x5a000, 0xb000, 0x1a000, 0xcc000, 0xdb000, 0x8c000, 0x9b000, },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, },
@@ -404,7 +405,7 @@ static struct rcclRomeModel rome_model_59 = {
 };
 
 static struct rcclRomeModel rome_model_62 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
   .nicIds = { },
   .gpuNuma = { 3, 3, 1, 1, 0, 0, 2, 2, },
@@ -417,7 +418,7 @@ static struct rcclRomeModel rome_model_62 = {
 };
 
 static struct rcclRomeModel rome_model_63 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
   .nicIds = { 0xc5000, 0xcd000, 0xd5000, 0xdd000, },
   .gpuNuma = { 3, 3, 1, 1, 0, 0, 2, 2, },
@@ -430,7 +431,7 @@ static struct rcclRomeModel rome_model_63 = {
 };
 
 static struct rcclRomeModel rome_model_65 = {
-  .nGpus = 16, .nCpus = 4, .nNics = 8, .nLinks = 4,
+  .nGpus = 16, .nCpus = 4, .nNics = 8, .nLinks = 4, .channelWidth = 1,
   .gpuIds = { 0x4e000, 0x51000, 0x56000, 0x59000, 0xe000, 0x11000, 0x16000, 0x19000, 0xcf000, 0xd2000, 0xd7000, 0xda000, 0x8f000, 0x92000, 0x97000, 0x9a000, },
   .nicIds = { 0x4b000, 0x5a000, 0xb000, 0x1a000, 0xcc000, 0xdb000, 0x8c000, 0x9b000, },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, },
@@ -443,7 +444,7 @@ static struct rcclRomeModel rome_model_65 = {
 };
 
 static struct rcclRomeModel rome_model_66 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x29000, 0x2c000, 0x2f000, 0x32000, 0xad000, 0xb0000, 0xb3000, 0xb6000, },
   .nicIds = { },
   .gpuNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
@@ -456,7 +457,7 @@ static struct rcclRomeModel rome_model_66 = {
 };
 
 static struct rcclRomeModel rome_model_67 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3,
+  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x29000, 0x2c000, 0x2f000, 0x32000, 0xad000, 0xb0000, 0xb3000, 0xb6000, },
   .nicIds = { 0x1d000, 0x1e000, 0xa1000, 0xa2000, },
   .gpuNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
@@ -469,7 +470,7 @@ static struct rcclRomeModel rome_model_67 = {
 };
 
 static struct rcclRomeModel rome_model_68 = {
-  .nGpus = 16, .nCpus = 1, .nNics = 16, .nLinks = 3,
+  .nGpus = 16, .nCpus = 1, .nNics = 16, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0xcf000, 0xd4000, 0xd5000, 0xd6000, 0xd0000, 0xd1000, 0xd2000, 0xd3000, 0xf0000, 0xf1000, 0xf2000, 0xf3000, 0xf4000, 0xf5000, 0xf6000, 0xf7000, },
   .nicIds = { 0xcd000, 0xc8000, 0xc9000, 0xcb000, 0xcc000, 0xce000, 0xc7000, 0xca000, 0xe8000, 0xe9000, 0xea000, 0xeb000, 0xec000, 0xed000, 0xee000, 0xef000, },
   .gpuNuma = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, },
@@ -482,7 +483,7 @@ static struct rcclRomeModel rome_model_68 = {
 };
 
 static struct rcclRomeModel rome_model_71 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x32000, 0x35000, 0x11000, 0x14000, 0xae000, 0xb3000, 0x8e000, 0x93000, },
   .nicIds = { },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
@@ -495,7 +496,7 @@ static struct rcclRomeModel rome_model_71 = {
 };
 
 static struct rcclRomeModel rome_model_72 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3,
+  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x32000, 0x35000, 0x11000, 0x14000, 0xae000, 0xb3000, 0x8e000, 0x93000, },
   .nicIds = { 0x1d000, 0x1e000, 0xa0000, 0xa1000, },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
@@ -508,7 +509,7 @@ static struct rcclRomeModel rome_model_72 = {
 };
 
 static struct rcclRomeModel rome_model_73 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 0, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
   .nicIds = { },
   .gpuNuma = { 3, 3, 1, 1, 0, 0, 2, 2, },
@@ -521,7 +522,7 @@ static struct rcclRomeModel rome_model_73 = {
 };
 
 static struct rcclRomeModel rome_model_74 = {
-  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .nGpus = 8, .nCpus = 4, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0xc1000, 0xc6000, 0xc9000, 0xce000, 0xd1000, 0xd6000, 0xd9000, 0xde000, },
   .nicIds = { 0xc5000, 0xcd000, 0xd5000, 0xdd000, },
   .gpuNuma = { 3, 3, 1, 1, 0, 0, 2, 2, },
@@ -534,7 +535,7 @@ static struct rcclRomeModel rome_model_74 = {
 };
 
 static struct rcclRomeModel rome_model_76 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 3,
+  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x32000, 0x35000, 0x11000, 0x14000, 0xae000, 0xb3000, 0x8e000, 0x93000, },
   .nicIds = { 0x26000, 0x2d000, 0x5000, 0xc000, 0xab000, 0xb4000, 0x8b000, 0x94000, },
   .gpuNuma = { 1, 1, 1, 1, 3, 3, 3, 3, },
@@ -547,7 +548,7 @@ static struct rcclRomeModel rome_model_76 = {
 };
 
 static struct rcclRomeModel rome_model_79 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 7,
+  .nGpus = 8, .nCpus = 2, .nNics = 0, .nLinks = 7, .channelWidth = 1,
   .gpuIds = { 0x1d000, 0x2e000, 0x3f000, 0x61000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
   .nicIds = { },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
@@ -560,7 +561,7 @@ static struct rcclRomeModel rome_model_79 = {
 };
 
 static struct rcclRomeModel rome_model_80 = {
-  .nGpus = 4, .nCpus = 4, .nNics = 4, .nLinks = 3,
+  .nGpus = 4, .nCpus = 4, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x82000, 0xc2000, 0x2000, 0x42000, },
   .nicIds = { 0x81000, 0xc1000, 0x1000, 0x41000, },
   .gpuNuma = { 2, 3, 0, 1, },
@@ -573,7 +574,7 @@ static struct rcclRomeModel rome_model_80 = {
 };
 
 static struct rcclRomeModel rome_model_81 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 7,
+  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 7, .channelWidth = 8,
   .gpuIds     = { 0xc000, 0x22000, 0x38000, 0x5c000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
   .nicIds     = { 0x7000, 0x1d000, 0x33000, 0x57000, 0x9a000, 0xaa000, 0xba000, 0xda000, },
   .gpuNuma    = { 0, 0, 0, 0, 1, 1, 1, 1, },
@@ -602,24 +603,8 @@ static struct rcclRomeModel rome_model_81 = {
                 "N4 4 6 2 7 3 0 5 1 N1|"
                 "N5 5 4 7 1 3 2 6 0 N0|"
                 "N6 6 3 1 4 0 7 5 2 N2|"
-                "N7 7 2 0 6 4 1 5 3 N3|"
-                "N0 0 1 2 3 4 5 6 7 N7|"
-                "N1 1 0 2 4 3 5 7 6 N6|"
-                "N2 2 5 0 3 6 1 7 4 N4|"
-                "N3 3 7 0 4 2 1 6 5 N5|"
-                "N4 4 6 2 7 3 0 5 1 N1|"
-                "N5 5 4 7 1 3 2 6 0 N0|"
-                "N6 6 3 1 4 0 7 5 2 N2|"
                 "N7 7 2 0 6 4 1 5 3 N3",
   .ringTail2  = "N7 7 4 1 3 2 0 6 5 N5|"
-                "N6 6 3 0 7 5 1 4 2 N2|"
-                "N4 4 6 2 1 7 0 5 3 N3|"
-                "N5 5 2 7 3 1 6 0 4 N4|"
-                "N1 1 0 2 4 3 5 7 6 N6|"
-                "N0 0 1 2 3 4 5 6 7 N7|"
-                "N2 2 5 0 3 6 4 7 1 N1|"
-                "N3 3 7 2 6 1 5 4 0 N0|"
-                "N7 7 4 1 3 2 0 6 5 N5|"
                 "N6 6 3 0 7 5 1 4 2 N2|"
                 "N4 4 6 2 1 7 0 5 3 N3|"
                 "N5 5 2 7 3 1 6 0 4 N4|"
@@ -634,20 +619,12 @@ static struct rcclRomeModel rome_model_81 = {
                 "N6 6 2 0 7 5 3 1 4 N4|"
                 "N7 7 3 2 6 0 4 1 5 N5|"
                 "N1 1 0 2 4 3 5 7 6 N6|"
-                "N0 0 1 2 3 4 5 6 7 N7|"
-                "N5 5 4 2 7 1 6 3 0 N0|"
-                "N2 2 5 0 3 7 4 6 1 N1|"
-                "N3 3 6 4 0 5 1 7 2 N2|"
-                "N4 4 7 0 6 5 2 1 3 N3|"
-                "N6 6 2 0 7 5 3 1 4 N4|"
-                "N7 7 3 2 6 0 4 1 5 N5|"
-                "N1 1 0 2 4 3 5 7 6 N6|"
                 "N0 0 1 2 3 4 5 6 7 N7",
   .options    = "noCpuCheck=1,tuning=5",
 };
 
 static struct rcclRomeModel rome_model_84 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 16, .nLinks = 7,
+  .nGpus = 8, .nCpus = 2, .nNics = 16, .nLinks = 7, .channelWidth = 1,
   .gpuIds = { 0x11000, 0x2f000, 0x46000, 0x5d000, 0x8b000, 0xaa000, 0xc2000, 0xda000, },
   .nicIds = { 0xc000, 0xc000, 0x2a000, 0x2a000, 0x41000, 0x41000, 0x58000, 0x58000, 0x86000, 0x86000, 0xa5000, 0xa5000, 0xbd000, 0xbd000, 0xd5000, 0xd5000, },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
@@ -660,7 +637,7 @@ static struct rcclRomeModel rome_model_84 = {
 };
 
 static struct rcclRomeModel rome_model_85 = {
-  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3,
+  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 3, .channelWidth = 1,
   .gpuIds = { 0x32000, 0x35000, 0x11000, 0x14000, 0xae000, 0xb3000, 0x8e000, 0x93000, },
   .nicIds = { 0x2d000, 0x5000, 0xab000, 0x94000, },
   .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
@@ -725,7 +702,7 @@ static struct rcclRomeModel romeTopoModels[] = {
  * Rings with a non-matching number of gpus are ignored so we can provide
  * rings for multiple cases.
  */
-ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int* net_map, int reverse) {
+ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int* net_map, int reverse, int width) {
   int gpus[NCCL_TOPO_MAX_NODES];
   int nChannels = 0;
   int gpu = 0;
@@ -776,49 +753,51 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
           // Ignore if net_count is not 0 or odd number
           if (net_count && net_count%2) goto newchannel;
 
-          for (int r=0; r<ngpus; r++) {
-            int g = gpus[r];
-            // Ignore if gpus are out of bounds
-            if (g < 0 || g >= ngpus) goto newchannel;
-            // Ignore if gpus are duplicate
-            for (int i=0; i<r; i++)
-              if (gpus[i] == g) goto newchannel;
-            // remap if needed
-            if (gpu_map) g = gpu_map[g];
-            // Translate gpu numbers into ranks
-            int j = 0;
-            for (j = 0; j < ngpus; j++)
-              if (g == system->nodes[GPU].nodes[j].gpu.dev)
-                break;
-            if (j < ngpus) {
-              int idx = (nChannels*ngpus) + (reverse ? ngpus - 1 - r : r);
-              graph->intra[idx] = system->nodes[GPU].nodes[j].gpu.rank;
-            }
-            else
-              return ncclInternalError;
-          }
+	  for (int w = 0; w < width; w++) {
+	    for (int r=0; r<ngpus; r++) {
+	      int g = gpus[r];
+	      // Ignore if gpus are out of bounds
+	      if (g < 0 || g >= ngpus) goto newchannel;
+	      // Ignore if gpus are duplicate
+	      for (int i=0; i<r; i++)
+		if (gpus[i] == g) goto newchannel;
+	      // remap if needed
+	      if (gpu_map) g = gpu_map[g];
+	      // Translate gpu numbers into ranks
+	      int j = 0;
+	      for (j = 0; j < ngpus; j++)
+		if (g == system->nodes[GPU].nodes[j].gpu.dev)
+		  break;
+	      if (j < ngpus) {
+		int idx = (nChannels*ngpus) + (reverse ? ngpus - 1 - r : r);
+		graph->intra[idx] = system->nodes[GPU].nodes[j].gpu.rank;
+	      }
+	      else
+		return ncclInternalError;
+	    }
 
-          if (net_count) {
-            for (int i = 0; net_map && i < ngpus*2; i++) {
-              if (nets[i]-'N' < 0 || nets[i]-'N' >= nnets) continue;
-              nets[i] = net_map[nets[i]-'N']+'N';
-            }
-            // Swap input/output NICs if reversed
-            if (reverse) {
-              int t = nets[0];
-              nets[0] = nets[ngpus*2-1];
-              nets[ngpus*2-1] = t;
-            }
-            memcpy(&graph->intraNets[ngpus*nChannels*2], nets, ngpus*2*sizeof(int));
-            graph->nIntraChannels++;
-            if (nets[0]-'N' >= nnets || nets[ngpus*2-1]-'N' >= nnets) goto newchannel;
-            graph->inter[nChannels*2] = nets[0]-'N';
-            graph->inter[nChannels*2+1] = nets[ngpus*2-1]-'N';
-          } else if (nnets) {
-            graph->inter[nChannels*2] = system->nodes[NET].nodes[nChannels%nnets].id;
-            graph->inter[nChannels*2+1] = system->nodes[NET].nodes[(nChannels+1)%nnets].id;
-          }
-          nChannels++;
+	    if (net_count) {
+	      for (int i = 0; net_map && i < ngpus*2; i++) {
+		if (nets[i]-'N' < 0 || nets[i]-'N' >= nnets) continue;
+		nets[i] = net_map[nets[i]-'N']+'N';
+	      }
+	      // Swap input/output NICs if reversed
+	      if (reverse) {
+		int t = nets[0];
+		nets[0] = nets[ngpus*2-1];
+		nets[ngpus*2-1] = t;
+	      }
+	      memcpy(&graph->intraNets[ngpus*nChannels*2], nets, ngpus*2*sizeof(int));
+	      graph->nIntraChannels++;
+	      if (nets[0]-'N' >= nnets || nets[ngpus*2-1]-'N' >= nnets) goto newchannel;
+	      graph->inter[nChannels*2] = nets[0]-'N';
+	      graph->inter[nChannels*2+1] = nets[ngpus*2-1]-'N';
+	    } else if (nnets) {
+	      graph->inter[nChannels*2] = system->nodes[NET].nodes[nChannels%nnets].id;
+	      graph->inter[nChannels*2+1] = system->nodes[NET].nodes[(nChannels+1)%nnets].id;
+	    }
+	    nChannels++;
+	  }
 newchannel:
           gpu = 0;
           net_offset = 0;
@@ -1046,7 +1025,7 @@ ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGrap
   }
   // create chordal ring based on reference and remapped ids
   system->type |= RCCL_TOPO_CR8G;
-  NCCLCHECK(parseGraph(ringBase, system, graph, id, NULL, false));
+  NCCLCHECK(parseGraph(ringBase, system, graph, id, NULL, false, 1));
   if (system->nodes[NET].count && system->nodes[GPU].count != system->nRanks) {
     int *intra, *used;
     graph->nChannels = system->nodes[NET].count;
@@ -1449,23 +1428,23 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     // Attempt to use rail-optimized rings if they exist
     if (system->nHosts % 2 == 0) {
       // For even number of nodes, alternate forward/reverse on ringBase
-      NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+      NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2, romeTopoModels[i].channelWidth));
     }
     else {
       // For odd number of nodes, check first to see if ringTail1 and ringTail2 are defined
       if (system->nHosts == 1 || romeTopoModels[i].ringTail1 == nullptr || romeTopoModels[i].ringTail2 == nullptr) {
         if (system->nHosts > 1)
           INFO(NCCL_GRAPH, "[WARN] Dropping back due to lack of support for odd-number of nodes for model index %d\n", i);
-        NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+        NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2, romeTopoModels[i].channelWidth));
       }
       else
       {
         if (system->hostIdx == (system->nHosts - 1)) {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail1, system, graph, g, nnets > 1 ? n : NULL, 0));
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail1, system, graph, g, nnets > 1 ? n : NULL, 0, romeTopoModels[i].channelWidth));
         } else if (system->hostIdx == (system->nHosts - 2)) {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, g, nnets > 1 ? n : NULL, 0));
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, g, nnets > 1 ? n : NULL, 0, romeTopoModels[i].channelWidth));
         } else {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2, romeTopoModels[i].channelWidth));
         }
       }
     }
@@ -1477,7 +1456,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
 
     // Fall back to tree from ringBase
-    NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0, romeTopoModels[i].channelWidth));
     break;
   }
   return ncclSuccess;
@@ -1612,7 +1591,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   parseOptions(system, romeTopoModels[i].options);
 
   // create 16P1H based on reference and remapped ids
-  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL, false));
+  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL, false, romeTopoModels[i].channelWidth));
 
   if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
   // clean up
@@ -1714,6 +1693,6 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
     system->type |= RCCL_TOPO_4P2H_ROME;
   parseOptions(system, rome_model_68.options);
   // create 4P4H based on reference and remapped ids
-  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives, n_hives, false));
+  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives, n_hives, false, 1));
   return ncclSuccess;
 }
