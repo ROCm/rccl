@@ -281,7 +281,10 @@ static ncclResult_t setTreeDown(struct ncclTree* tree, int* indexes, int d) {
 }
 
 static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* treeToChild0, int* treeToChild1, int* treePatterns) {
-  const int nChannels = (comm->nChannels > MAXCHANNELS/2) ? comm->nChannels/2 : comm->nChannels, nNodes = comm->nNodes, node = comm->node;
+
+  const int channelLimit = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? MAXCHANNELS/2 : 16;
+  const int nChannels = (comm->nChannels > channelLimit) ? comm->nChannels / 2 : comm->nChannels;
+  const int nNodes = comm->nNodes, node = comm->node;
 
   // Compute tree depth. Not an exact value but a good approximation in most
   // cases
@@ -290,7 +293,7 @@ static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* 
   int t0u, t0d0, t0d1, t0ChildType, t1u, t1d0, t1d1, t1ChildType;
   int* ttp, *ttc0, *ttc1;
   NCCLCHECK(ncclGetDtree(nNodes, node, &t0u, &t0d0, &t0d1, &t0ChildType, &t1u, &t1d0, &t1d1, &t1ChildType));
-  if (comm->nChannels <= IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? (MAXCHANNELS/2) : (MAXCHANNELS/4)) {
+  if (nChannels == comm->nChannels) {
     for (int c=0; c<nChannels; c++) {
        struct ncclChannel* channel0 = comm->channels+c;
        struct ncclChannel* channel1 = channel0+nChannels;
