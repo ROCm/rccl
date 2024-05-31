@@ -18,11 +18,18 @@ The collective operations are implemented using ring and tree algorithms and hav
 RCCL directly depends on HIP runtime plus the HIP-Clang compiler, which are part of the ROCm software stack.
 For ROCm installation instructions, see https://github.com/ROCm/ROCm.
 
-The root of this repository has a helper script 'install.sh' to build and install RCCL on Ubuntu with a single command.  It does not take a lot of options and hard-codes configuration that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install.
+The root of this repository has a helper script `install.sh` to build and install RCCL with a single command. It hard-codes configurations that can be specified through invoking cmake directly, but it's a great way to get started quickly and can serve as an example of how to build/install RCCL.
+
+### To build the library using the install script:
 
 ```shell
-./install.sh --help
+./install.sh
+```
 
+For more info on build options/flags when using the install script, use `./install.sh --help`
+```shell
+./install.sh --help
+RCCL build & installation helper script
  Options:
        --address-sanitizer     Build with address sanitizer enabled
     -d|--dependencies          Install RCCL depdencencies
@@ -33,37 +40,38 @@ The root of this repository has a helper script 'install.sh' to build and instal
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)
-    -j|--jobs                  Specify how many parallel compilation jobs to run (nproc by default)
+    -j|--jobs                  Specify how many parallel compilation jobs to run ($nproc by default)
     -l|--local_gpu_only        Only compile for local GPU architecture
+       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)
        --no_clean              Don't delete files if they already exist
        --npkit-enable          Compile with npkit enabled
        --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)
     -p|--package_build         Build RCCL package
-       --prefix                Specify custom directory to install RCCL to (default: /opt/rocm)
+       --prefix                Specify custom directory to install RCCL to (default: `/opt/rocm`)
        --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility
        --run_tests_all         Run all rccl unit tests (must be built already)
     -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)
        --static                Build RCCL as a static library instead of shared library
     -t|--tests_build           Build rccl unit tests, but do not run
-       --time-trace            Plot the build time of RCCL
+       --time-trace            Plot the build time of RCCL (requires `ninja-build` package installed on the system)
        --verbose               Show compile commands
 ```
 
 ## Manual build
 
-### To build the library :
+### To build the library using CMake:
 
 ```shell
 $ git clone https://github.com/ROCm/rccl.git
 $ cd rccl
 $ mkdir build
 $ cd build
-$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ ..
+$ cmake ..
 $ make -j 16      # Or some other suitable number of parallel jobs
 ```
-You may substitute an installation path of your own choosing by passing CMAKE_INSTALL_PREFIX. For example:
+You may substitute an installation path of your own choosing by passing `CMAKE_INSTALL_PREFIX`. For example:
 ```shell
-$ CXX=/opt/rocm/bin/hipcc cmake -DCMAKE_PREFIX_PATH=/opt/rocm/ -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+$ cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
 ```
 Note: ensure rocm-cmake is installed, `apt install rocm-cmake`.
 
@@ -123,11 +131,9 @@ Please refer to the [RCCL Documentation Site](https://rocm.docs.amd.com/projects
 
 Run the steps below to build documentation locally.
 
-```
+```shell
 cd docs
-
 pip3 install -r sphinx/requirements.txt
-
 python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 ```
 

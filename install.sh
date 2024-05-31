@@ -16,12 +16,13 @@ build_package=false
 build_release=true
 build_static=false
 build_tests=false
-build_verbose=0
+build_verbose=false
 clean_build=true
 collective_trace=true
 enable_ninja=""
 install_dependencies=false
 install_library=false
+install_prefix="${ROCM_PATH}"
 msccl_kernel_enabled=true
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
@@ -53,13 +54,13 @@ function display_help()
     echo "       --npkit-enable          Compile with npkit enabled"
     echo "       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)"
     echo "    -p|--package_build         Build RCCL package"
-    echo "       --prefix                Specify custom directory to install RCCL to (default: /opt/rocm)"
+    echo "       --prefix                Specify custom directory to install RCCL to (default: \`/opt/rocm\`)"
     echo "       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
     echo "       --run_tests_all         Run all rccl unit tests (must be built already)"
     echo "    -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)"
     echo "       --static                Build RCCL as a static library instead of shared library"
     echo "    -t|--tests_build           Build rccl unit tests, but do not run"
-    echo "       --time-trace            Plot the build time of RCCL"
+    echo "       --time-trace            Plot the build time of RCCL (requires \`ninja-build\` package installed on the system)"
     echo "       --verbose               Show compile commands"
 }
 
@@ -69,14 +70,14 @@ function display_help()
 
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
-if [[ $? -eq 4 ]]; then
+if [[ "$?" -eq 4 ]]; then
     GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
 fi
 
-if [[ $? -ne 0 ]]; then
+if [[ "$?" -ne 0 ]]; then
     echo "getopt invocation failed; could not parse the command line";
     exit 1
 fi
@@ -101,22 +102,20 @@ while true; do
          --npkit-enable)             npkit_enabled=true;                                                                               shift ;;
          --roctx-enable)             roctx_enabled=true;                                                                               shift ;;
     -p | --package_build)            build_package=true;                                                                               shift ;;
-         --prefix)                   install_prefix=${2};                                                                              shift 2 ;;
+         --prefix)                   install_library=true; install_prefix=${2};                                                        shift 2 ;;
          --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                                                      shift ;;
     -r | --run_tests_quick)          run_tests=true;                                                                                   shift ;;
          --run_tests_all)            run_tests=true; run_tests_all=true;                                                               shift ;;
          --static)                   build_static=true;                                                                                shift ;;
     -t | --tests_build)              build_tests=true;                                                                                 shift ;;
          --time-trace)               time_trace=true;                                                                                  shift ;;
-         --verbose)                  build_verbose=1;                                                                                  shift ;;
+         --verbose)                  build_verbose=true;                                                                               shift ;;
     --) shift ; break ;;
     *)  echo "Unexpected command line parameter received; aborting";
         exit 1
         ;;
     esac
 done
-
-ROCM_BIN_PATH=$ROCM_PATH/bin
 
 # /etc/*-release files describe the system
 if [[ -e "/etc/os-release" ]]; then
@@ -129,22 +128,36 @@ else
     exit 2
 fi
 
+# CMake executable
+cmake_executable=cmake
+time_trace_ninja_msg="apt-get install ninja-build"
+case "${OS_ID}" in
+    centos|rhel)
+    cmake_executable=cmake3
+    time_trace_ninja_msg="dnf install ninja-build"
+  ;;
+esac
+
+# CMake build options; starts with toolchain info
+cmake_common_options="--toolchain=toolchain-linux.cmake"
+
 # throw error code after running a command in the install script
 check_exit_code( )
 {
-  if (( $1 != 0 )); then
-    exit $1
-  fi
+    if (( $1 != 0 )); then
+        exit "$1"
+    fi
 }
 
-if [[ "$build_release" == true ]]; then
+# set RCCL-UnitTests path
+if [[ "${build_release}" == true ]]; then
     unit_test_path="./build/release/test/rccl-UnitTests"
 else
     unit_test_path="./build/debug/test/rccl-UnitTests"
 fi
 
-if ($run_tests) && [[ -f $unit_test_path ]]; then
-    if [[ "$build_tests" == false ]]; then
+if [[ "${run_tests}" == true ]] && [[ -f "${unit_test_path}" ]]; then
+    if [[ "${build_tests}" == false ]]; then
         clean_build=false
     fi
 fi
@@ -153,7 +166,7 @@ fi
 # prep
 # #################################################
 # ensure a clean build environment
-if ($clean_build); then
+if [[ "${clean_build}" == true ]]; then
     if [[ "${build_release}" == true ]]; then
         rm -rf build/release
     else
@@ -164,7 +177,8 @@ fi
 # Create and go to the build directory.
 mkdir -p build; cd build
 
-if ($build_release); then
+# Create and go to build type directory
+if [[ "${build_release}" == true ]]; then
     mkdir -p release; cd release
 else
     mkdir -p debug; cd debug
@@ -190,17 +204,15 @@ fi
 # Backward compatibility wrappers
 if [[ "${build_freorg_bkwdcomp}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=ON"
-else
-    cmake_common_options="${cmake_common_options} -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=OFF"
 fi
 
 # Build local GPU arch only
-if [[ "$build_local_gpu_only" == true ]]; then
+if [[ "${build_local_gpu_only}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_LOCAL_GPU_TARGET_ONLY=ON"
 fi
 
 # Build for specified GPU target(s) only
-if [[ ! -z "$build_amdgpu_targets" ]]; then
+if [[ ! -z "${build_amdgpu_targets}" ]]; then
     cmake_common_options="${cmake_common_options} -DAMDGPU_TARGETS=${build_amdgpu_targets}"
 fi
 
@@ -214,13 +226,19 @@ if [[ "${collective_trace}" == false ]]; then
     cmake_common_options="${cmake_common_options} -DCOLLTRACE=OFF"
 fi
 
+# Disable msccl kernel
 if [[ "${msccl_kernel_enabled}" == false ]]; then
     cmake_common_options="${cmake_common_options} -DENABLE_MSCCL_KERNEL=OFF"
 fi
 
 # Install dependencies
-if ($install_dependencies); then
+if [[ "${install_dependencies}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DINSTALL_DEPENDENCIES=ON"
+fi
+
+# Install RCCL library
+if [[ "${install_library}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DCMAKE_INSTALL_PREFIX=${install_prefix}"
 fi
 
 # Enable ROCTX
@@ -228,15 +246,9 @@ if [[ "${roctx_enabled}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DROCTX=ON"
 fi
 
-cmake_executable=cmake
-case "${OS_ID}" in
-    centos|rhel)
-    cmake_executable=cmake3
-  ;;
-esac
-
+# Enable NPKit
 npkit_options=""
-if ($npkit_enabled); then
+if [[ "${npkit_enabled}" == true ]]; then
     npkit_options="-DENABLE_NPKIT \
     -DENABLE_NPKIT_EVENT_TIME_SYNC_GPU \
     -DENABLE_NPKIT_EVENT_TIME_SYNC_CPU \
@@ -347,59 +359,80 @@ fi
 
 check_exit_code "$?"
 
-if ($time_trace); then
+# Enable ninja build for time tracing
+if [[ "${time_trace}" == true ]]; then
+    if ! hash ninja &>/dev/null ; then
+        echo "ninja could not be found"
+        echo "Use \"${time_trace_ninja_msg}\" to install ninja"
+        exit 1
+    fi
     build_system="ninja"
     enable_ninja="-GNinja"
 else
     build_system="make"
 fi
 
-if ($build_tests) || (($run_tests) && [[ ! -f ./test/rccl-UnitTests ]]); then
-    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=ON -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH -DONLY_FUNCS="$ONLY_FUNCS" $enable_ninja ../../.
+# Add common CMake options
+cmake_common_options="${cmake_common_options} -DROCM_PATH=${ROCM_PATH} -DONLY_FUNCS=${ONLY_FUNCS} ${enable_ninja}"
+
+# Build RCCL-UnitTests, if enabled
+if [[ "${build_tests}" == true ]] || ([[ "${run_tests}" == true ]] && [[ ! -x ./test/rccl-UnitTests ]]); then
+    cmake_common_options="${cmake_common_options} -DBUILD_TESTS=ON"
+fi
+
+# Initiate RCCL CMake
+# Passing NPKIT_FLAGS separately (not as part of ${cmake_common_options}) as
+# ${npkit_options} need to be passed "as-is" i.e. with `-D` to CMakeLists.txt
+${cmake_executable} ${cmake_common_options} -DNPKIT_FLAGS="${npkit_options}" ../../.
+check_exit_code "$?"
+
+# Enable verbose output from Makefile
+if [[ "${build_verbose}" == true ]]; then
+    build_system="${build_system} VERBOSE=1"
+fi
+
+# Initiate RCCL build (and install)
+if [[ "${install_library}" == true ]]; then
+    ${build_system} -j ${num_parallel_jobs} install
 else
-    CXX=$ROCM_BIN_PATH/hipcc $cmake_executable $cmake_common_options -DBUILD_TESTS=OFF -DNPKIT_FLAGS="${npkit_options}" -DCMAKE_INSTALL_PREFIX=$ROCM_PATH -DROCM_PATH=$ROCM_PATH -DONLY_FUNCS="$ONLY_FUNCS" $enable_ninja ../../.
+    ${build_system} -j ${num_parallel_jobs}
 fi
 check_exit_code "$?"
 
-if ($install_library); then
-    VERBOSE=${build_verbose} $build_system -j $num_parallel_jobs install
-else
-    VERBOSE=${build_verbose} $build_system -j $num_parallel_jobs
-fi
-check_exit_code "$?"
-
-if ($build_package); then
+# Initiate package build with `make package`, if enabled
+if [[ "${build_package}" == true ]]; then
     make package
     check_exit_code "$?"
 fi
 
-# Optionally, run tests if they're enabled.
-if ($run_tests); then
-    if (test -f "./test/rccl-UnitTests"); then
-        if ($run_tests_all); then
+# Optionally, run RCCL-UnitTests, if they're enabled.
+if [[ "${run_tests}" == true ]]; then
+    if [[ -x "./test/rccl-UnitTests" ]]; then
+        if [[ "${run_tests_all}" == true ]]; then
             ./test/rccl-UnitTests
         else
             ./test/rccl-UnitTests --gtest_filter="AllReduce.*"
         fi
     else
-        echo "rccl unit tests have not been built yet; please re-run script with -t to build rccl unit tests."
+        echo "RCCL-UnitTests have not been built yet; Please re-run script with \"-t\" to build RCCL-UnitTests."
         exit 1
     fi
 fi
 
-if ($time_trace); then
-    search_dir="../../"
-    time_trace_dir=$(find "$search_dir" -type d -name "time-trace" -print -quit)
+# Generate time trace for RCCL build using tools/time-trace
+if [[ "${time_trace}" == true ]]; then
+    search_dir="../../tools"
+    time_trace_dir=$(find "${search_dir}" -type d -name "time-trace" -print -quit)
 
-    if [ "$time_trace_dir" ]; then
-        time_trace_script="$time_trace_dir/rccl-TimeTrace.sh"
-        if [ -x "$time_trace_script" ]; then
+    if [[ -n "${time_trace_dir}" ]]; then
+        time_trace_script="${time_trace_dir}/rccl-TimeTrace.sh"
+        if [[ -x "${time_trace_script}" ]]; then
             echo "Generating RCCL-compile-timeline.html..."
-            (cd "$time_trace_dir" && ./rccl-TimeTrace.sh)
+            (cd "${time_trace_dir}" && ./rccl-TimeTrace.sh)
         else
-            echo "Error: Unable to execute $time_trace_script. Make sure the file has the correct permissions."
+            echo "Error: Unable to execute ${time_trace_script}. Make sure the file has the correct permissions."
         fi
     else
-        echo "Error: time-trace folder not found in $search_dir."
+        echo "Error: time-trace folder not found in ${search_dir}."
     fi
 fi
