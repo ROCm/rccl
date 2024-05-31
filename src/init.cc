@@ -1390,6 +1390,18 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph.nChannels);
   if (ringGraph.nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
+    if (nranks == 2)
+      // NCCL_MIN_NCHANNELS=52
+      allGather3Data[rank].nc = 26;
+    else if (nranks == 4)
+      // NCCL_MIN_NCHANNELS=42
+      allGather3Data[rank].nc = 7;
+    else if (nranks == 8)
+      // NCCL_MIN_NCHANNELS=56
+      allGather3Data[rank].nc = 2;
+  }
+
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
   comm->topo->ll128Enabled =  comm->topo->ll128Enabled || rcclParamLL128ForceEnable();
   allGather3Data[rank].ll128Enabled = comm->topo->ll128Enabled;
