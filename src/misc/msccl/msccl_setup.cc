@@ -458,7 +458,7 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
       NCCLCHECK(ncclCudaMalloc((char**)&scratchBuffer, sizeRounded, hipDeviceMallocFinegrained));
 #endif
       work.scratchBuffer = status.scratchBuffers[sizeRounded] = scratchBuffer;
-      INFO(NCCL_INIT, "MSCCL: Allocated scratch buffer of size %lu on request (%lu)", sizeRounded, sizeNeeded);
+      TRACE(NCCL_INIT, "MSCCL: Allocated scratch buffer of size %lu on request (%lu)", sizeRounded, sizeNeeded);
     } else {
       work.scratchBuffer = itr->second;
     }
