@@ -1,7 +1,6 @@
 root: index
 subtrees:
-- entries:
-  - file: what-is-rccl
+
 - caption: API reference 
   entries:
   - file: api-reference/library-specification
