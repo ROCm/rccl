@@ -478,7 +478,7 @@ if (ENABLE_MSCCL_KERNEL)
   )
   list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
 endif()
-  
+
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
 find_program(hipify-perl_executable hipify-perl)
@@ -645,7 +645,7 @@ endif()
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
 
 ## Set RCCL linked libraries
-if (HAS_BFD)
+if (HAVE_BFD)
   target_link_libraries(rccl PRIVATE bfd)
   if(HAVE_IBERTY)
     target_link_libraries(rccl PRIVATE iberty z)
