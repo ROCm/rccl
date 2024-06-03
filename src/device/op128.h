@@ -200,7 +200,7 @@ template<> __device__ __forceinline__ void st_global<0>(uintptr_t addr, BytePack
   template<> \
   __device__ __forceinline__ void st_##space<bytes>(addr_cxx_ty addr, BytePack<bytes> value) { \
     data_cxx_ty tmp = value.native; \
-    *((data_cxx_ty *)addr) = tmp; \
+    __builtin_nontemporal_store(tmp, (data_cxx_ty *)addr); \
   }
 
 // #if __CUDA_ARCH__ >= 700
