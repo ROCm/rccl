@@ -668,11 +668,9 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
      nChannels = comm->nChannels = copyChannels(comm, nChannels, 2*nChannels, ringPrev, ringNext);
   }
 
-  int minNchannels = 64;
-  if (comm->nNodes == 1) {
-    minNchannels = ncclMinNchannels();
-  } else {
-    minNchannels = std::min(64,ncclMinNchannels()); 	  
+  int minNchannels = ncclMinNchannels();
+  if (comm->nNodes > 1) {
+     minNchannels = std::min(64, maxChannels);
   }
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
