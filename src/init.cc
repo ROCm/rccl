@@ -1532,7 +1532,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   TRACE(NCCL_INIT, "rank %d nranks %d - BUILT %d TREES/RINGS", rank, nranks, comm->nChannels);
 
-  char line[2048];
+  char line[4096];
   line[0]='\0';
   for (int c=0; c<comm->nChannels; c++) {
     struct ncclTree* tree = &comm->channels[c].tree;
@@ -1541,7 +1541,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
          comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
   }
-  line[2047] = '\0';
+  line[4095] = '\0';
   INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
 
   NCCLCHECKGOTO(computeBuffSizes(comm), ret, fail);
@@ -1685,13 +1685,13 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         NCCLCHECKGOTO(ncclChannelCompute(comm, peer, c, ncclFuncSend, &channelId), ret, fail);
         if (comm->channels[channelId].peers[peer]->send[1].connected == 0) {
-          comm->connectSend[peer] |= (1UL<<channelId);
+	  comm->connectSend[peer].masks[channelId/64] |= (1UL<<(channelId%64));
         }
       }
       for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
         NCCLCHECKGOTO(ncclChannelCompute(comm, peer, c, ncclFuncRecv, &channelId), ret, fail);
         if (comm->channels[channelId].peers[peer]->recv[1].connected == 0) {
-          comm->connectRecv[peer] |= (1UL<<channelId);
+	  comm->connectRecv[peer].masks[channelId/64] |= (1UL<<(channelId%64));
         }
       }
     }

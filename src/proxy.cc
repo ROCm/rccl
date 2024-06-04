@@ -1362,7 +1362,8 @@ static ncclResult_t proxyProgressAsync(struct ncclProxyAsyncOp* op, struct ncclP
     TRACE(NCCL_PROXY, "proxyProgressAsync::proxyConnect() opId=%p op.reqBuff=%p", op->opId, op->reqBuff);
     res = op->connection->tcomm->proxyConnect(op->connection, proxyState, op->reqBuff, op->reqSize, op->respBuff, op->respSize, &done);
   } else if (op->type == ncclProxyMsgSharedInit) {
-    int nChannels = (int) *op->reqBuff;
+    int nChannels = *((int*) op->reqBuff);
+
     TRACE(NCCL_PROXY, "proxyProgressAsync::ncclProxyMsgSharedInit opId=%p op.reqBuff=%p nChannels=%d", op->opId, op->reqBuff, nChannels);
     if (op->connection->tcomm->proxySharedInit) res = op->connection->tcomm->proxySharedInit(op->connection, proxyState, nChannels);
     __atomic_store_n(&op->connection->state, connSharedInitialized, __ATOMIC_RELEASE);

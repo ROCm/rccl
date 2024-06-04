@@ -282,7 +282,7 @@ static ncclResult_t setTreeDown(struct ncclTree* tree, int* indexes, int d) {
 
 static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* treeToChild0, int* treeToChild1, int* treePatterns) {
 
-  const int channelLimit = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? MAXCHANNELS/2 : 16;
+  const int channelLimit = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? 2*CHANNEL_LIMIT : CHANNEL_LIMIT;
   const int nChannels = (comm->nChannels > channelLimit) ? comm->nChannels / 2 : comm->nChannels;
   const int nNodes = comm->nNodes, node = comm->node;
 
@@ -625,7 +625,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   NCCLCHECK(connectTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
 
   // Only use full MAXCHANNELS for gfx94x
-  int maxChannels = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? MAXCHANNELS : (MAXCHANNELS/2);
+  int maxChannels = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? MAXCHANNELS : 2*CHANNEL_LIMIT;
 
   // Duplicate ringPrev/ringNext for ncclBuildRing
   if (nChannels <= maxChannels/2) memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
@@ -668,7 +668,12 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
      nChannels = comm->nChannels = copyChannels(comm, nChannels, 2*nChannels, ringPrev, ringNext);
   }
 
-  int minNchannels = ncclMinNchannels();
+  int minNchannels = 64;
+  if (comm->nNodes == 1) {
+    minNchannels = ncclMinNchannels();
+  } else {
+    minNchannels = std::min(64,ncclMinNchannels()); 	  
+  }
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     int mscclNumChannelsRequired = 0;
