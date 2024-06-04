@@ -77,7 +77,8 @@ namespace RcclUnitTesting
                      bool   const useManagedMem = false,
                      int    const groupId  = -1,
                      int    const collId   = -1,
-                     int    const rank     = -1);
+                     int    const rank     = -1,
+                     bool   const userRegistered = false);
 
     // Initialize input and compute expected results
     // - requires that SetCollectiveArgs and AllocateMemory have already been called
