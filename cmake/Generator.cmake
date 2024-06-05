@@ -417,7 +417,6 @@ function(gen_functions CONFIG_INPUT)
   list(SORT INPUT_LIST)
 
   foreach(INPUT ${INPUT_LIST})
-    message(${INPUT})
     # Parse the the config string and make it a list
     string(REPLACE " " ";" FUNCTION_PARAMS ${INPUT})
 
