@@ -133,17 +133,23 @@ macro(filter_functions FUNCTION_PARAMS current_idx)
     else()
       ## Check if the current element is recognized
       list(GET ALL_PARAMS ${current_idx} current_param)
-      list(FIND ${current_param} ${current_element} is_valid)
-      if(${is_valid} EQUAL -1)
-        message(FATAL_ERROR "Error: ${current_element} is unrecognized or does not belong to this category.")
-      endif()
+      string(REPLACE "/" ";" elements ${current_element})
+      ## Iterate over the elements int the ELEMENTS_LIST
+      foreach(item IN LISTS elements)
+        list(FIND ${current_param} ${item} is_valid)
+        if(${is_valid} EQUAL -1)
+          message(FATAL_ERROR "Error: ${item} is unrecognized or does not belong to this category ${current_param}.")
+        endif()
+      endforeach()
+      foreach(item IN LISTS elements)
+        ## Add item to ITEM_LIST which will be used in the inner most loop
+        list(APPEND ITEM_LIST ${item})
+        math(EXPR new_idx "${current_idx} + 1")
+        filter_functions(${FUNCTION_PARAMS} ${new_idx} ${ARGN})
 
-      ## If not '*', no need to iterate. Add the current_element to ITEM_LIST
-      list(APPEND ITEM_LIST ${current_element})
-      math(EXPR new_idx "${current_idx} + 1")
-      filter_functions(${FUNCTION_PARAMS} ${new_idx} ${ARGN})
-
-      list(REMOVE_AT ITEM_LIST -1)
+        ## For each loop layer remove the last element in ITEM_LIST
+        list(REMOVE_AT ITEM_LIST -1)
+      endforeach()
     endif()
   else()
     ## This is the inner most loop where the file is generated
@@ -411,6 +417,7 @@ function(gen_functions CONFIG_INPUT)
   list(SORT INPUT_LIST)
 
   foreach(INPUT ${INPUT_LIST})
+    message(${INPUT})
     # Parse the the config string and make it a list
     string(REPLACE " " ";" FUNCTION_PARAMS ${INPUT})
 
