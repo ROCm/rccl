@@ -64,6 +64,7 @@ set(FLOATS_LIST "half" "float" "double" "hip_bfloat16" "rccl_float8" "rccl_bfloa
 # make ONLY_FUNCS="AllReduce RING SIMPLE * *|ReduceScatter RING LL * float"
 #                         --- or ---
 # make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * float"
+# make ONLY_FUNCS="AllReduce RING/TREE LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|AllGather RING LL/SIMPLE Sum int8_t|AllToAllPivot RING SIMPLE Sum int8_t|Broadcast RING LL/SIMPLE Sum int8_t|Reduce RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|ReduceScatter RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|SendRecv RING SIMPLE Sum int8_t"
 
 set(AllGather_Params     "RING" "*"      "Sum" "int8_t")
 set(AllReduce_Params     "*"    "*"      "*"   "*")
