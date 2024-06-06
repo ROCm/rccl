@@ -64,6 +64,7 @@ set(FLOATS_LIST "half" "float" "double" "hip_bfloat16" "rccl_float8" "rccl_bfloa
 # make ONLY_FUNCS="AllReduce RING SIMPLE * *|ReduceScatter RING LL * float"
 #                         --- or ---
 # make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * float"
+# make ONLY_FUNCS="AllReduce RING/TREE LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|AllGather RING LL/SIMPLE Sum int8_t|AllToAllPivot RING SIMPLE Sum int8_t|Broadcast RING LL/SIMPLE Sum int8_t|Reduce RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|ReduceScatter RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|SendRecv RING SIMPLE Sum int8_t"
 
 set(AllGather_Params     "RING" "*"      "Sum" "int8_t")
 set(AllReduce_Params     "*"    "*"      "*"   "*")
@@ -133,17 +134,23 @@ macro(filter_functions FUNCTION_PARAMS current_idx)
     else()
       ## Check if the current element is recognized
       list(GET ALL_PARAMS ${current_idx} current_param)
-      list(FIND ${current_param} ${current_element} is_valid)
-      if(${is_valid} EQUAL -1)
-        message(FATAL_ERROR "Error: ${current_element} is unrecognized or does not belong to this category.")
-      endif()
+      string(REPLACE "/" ";" elements ${current_element})
+      ## Iterate over the elements int the ELEMENTS_LIST
+      foreach(item IN LISTS elements)
+        list(FIND ${current_param} ${item} is_valid)
+        if(${is_valid} EQUAL -1)
+          message(FATAL_ERROR "Error: ${item} is unrecognized or does not belong to this category ${current_param}.")
+        endif()
+      endforeach()
+      foreach(item IN LISTS elements)
+        ## Add item to ITEM_LIST which will be used in the inner most loop
+        list(APPEND ITEM_LIST ${item})
+        math(EXPR new_idx "${current_idx} + 1")
+        filter_functions(${FUNCTION_PARAMS} ${new_idx} ${ARGN})
 
-      ## If not '*', no need to iterate. Add the current_element to ITEM_LIST
-      list(APPEND ITEM_LIST ${current_element})
-      math(EXPR new_idx "${current_idx} + 1")
-      filter_functions(${FUNCTION_PARAMS} ${new_idx} ${ARGN})
-
-      list(REMOVE_AT ITEM_LIST -1)
+        ## For each loop layer remove the last element in ITEM_LIST
+        list(REMOVE_AT ITEM_LIST -1)
+      endforeach()
     endif()
   else()
     ## This is the inner most loop where the file is generated
