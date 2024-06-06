@@ -812,7 +812,7 @@ static struct rcclRomeModel rome_model_81 = {
                 "N7 7 3 2 6 0 4 1 5 N5|"
                 "N1 1 0 2 4 3 5 7 6 N6|",
 
-  .options    = "noCpuCheck=1,tuning=5",
+  .options    = "noCpuCheck=1,tuning=5,disableNumaMatching=1",
 };
 
 static struct rcclRomeModel rome_model_84 = {
