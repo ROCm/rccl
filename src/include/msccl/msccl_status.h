@@ -8,6 +8,8 @@
 
 #include "msccl/msccl_struct.h"
 
+void mscclSetThreadLocalComm(struct ncclComm*);
+
 mscclStatus& mscclGetStatus();
 
 mscclSavedProxyArgs& mscclGetSavedProxyArgs();

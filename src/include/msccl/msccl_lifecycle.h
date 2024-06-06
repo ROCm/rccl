@@ -17,7 +17,7 @@ void mscclSetIsCallerFlag();
 void mscclClearIsCallerFlag();
 bool mscclIsCaller();
 
-bool mscclAvailable();
+bool mscclAvailable(ncclComm_t comm = nullptr);
 
 ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired);
 

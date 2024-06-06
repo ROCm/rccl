@@ -25,7 +25,7 @@
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
-static std::atomic<bool> mscclInitialized;
+static thread_local std::atomic<bool> mscclInitialized;
 static std::mutex mscclLifecycleMutex;
 
 bool mscclEnabled() {
@@ -56,23 +56,28 @@ bool mscclIsCaller() {
   return mscclGetThreadLocalStatus().mscclIsCallerFlag;
 }
 
-bool mscclAvailable() {
-  return mscclEnabled() && mscclInitialized.load(std::memory_order_acquire);
+bool mscclAvailable(ncclComm_t comm) {
+  if (mscclEnabled() /*&& mscclInitialized.load(std::memory_order_acquire)*/) {
+    if (comm) mscclSetThreadLocalComm(comm);
+    return true;
+  }
+  return false;
 }
 
 static bool mscclCommCompatible(ncclComm_t comm) {
-  std::map<uint64_t, std::set<uint64_t>> hostHashToPidHashes;
-  for (int i = 0; i < comm->nRanks; i++) {
-    uint64_t hostHash = comm->peerInfo[i].hostHash;
-    uint64_t pidHash = comm->peerInfo[i].pidHash;
-    if (hostHashToPidHashes.find(hostHash) != hostHashToPidHashes.end()) {
-      auto& pidHashSet = hostHashToPidHashes[hostHash];
-      if (pidHashSet.find(pidHash) != pidHashSet.end()) {
-        return false;
-      }
-    }
-    hostHashToPidHashes[hostHash].insert(pidHash);
-  }
+  //std::map<uint64_t, std::set<uint64_t>> hostHashToPidHashes;
+  //for (int i = 0; i < comm->nRanks; i++) {
+  //  uint64_t hostHash = comm->peerInfo[i].hostHash;
+  //  uint64_t pidHash = comm->peerInfo[i].pidHash;
+  //  if (hostHashToPidHashes.find(hostHash) != hostHashToPidHashes.end()) {
+  //    auto& pidHashSet = hostHashToPidHashes[hostHash];
+  //    if (pidHashSet.find(pidHash) != pidHashSet.end()) {
+  //      INFO(NCCL_COLL, "MSCCL: mscclCommCompatible = false");
+  //      return false;
+  //    }
+  //  }
+  //  hostHashToPidHashes[hostHash].insert(pidHash);
+  //}
   return true;
 }
 
@@ -86,7 +91,7 @@ static const char* mscclAlgoShareDirPath = "../share/rccl/msccl-algorithms";
 static const char* mscclUnitTestAlgoShareDirPath = "../share/rccl/msccl-unit-test-algorithms";
 
 static ncclResult_t mscclInternalSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
-  static bool mscclAlgoMetaLoaded = false;
+  static thread_local bool mscclAlgoMetaLoaded = false;
   mscclStatus& status = mscclGetStatus();
 
   *numChannelsRequired = 0;
@@ -166,7 +171,7 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
     return ncclSuccess;
   }
 
-  std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
+  //std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
 
   mscclStatus& status = mscclGetStatus();
   bool useInternalScheduler = false;
@@ -200,6 +205,7 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
 
 ncclResult_t mscclInit(ncclComm_t comm) {
   // Always initialize thread local status
+  mscclSetThreadLocalComm(comm);
   mscclThreadLocalStatus threadLocalStatus = mscclGetThreadLocalStatus();
   threadLocalStatus.groupStatus = mscclNoGroup;
   threadLocalStatus.groupDepth = 0;
@@ -207,7 +213,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
   threadLocalStatus.captureStatus = mscclNoCapture;
 
   {
-    std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
+    //std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
 
     mscclStatus& status = mscclGetStatus();
 
@@ -229,6 +235,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
         if (m.nRanks == comm->nRanks) {
           // Load algorithms
           if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()) {
+            std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
             NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
           }
           // Connect algorithms
@@ -535,7 +542,7 @@ ncclResult_t mscclTeardown() {
   threadLocalStatus.savedSchedulerParams.clear();
 
   {
-    std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
+    //std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
 
     if (!mscclInitialized.load(std::memory_order_acquire)) {
       return ncclSuccess;
