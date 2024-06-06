@@ -8,7 +8,9 @@
 
 #include "msccl/msccl_struct.h"
 
-void mscclSetThreadLocalComm(struct ncclComm*);
+void mscclSetThreadRank(int rank);
+
+bool& mscclInitialized();
 
 mscclStatus& mscclGetStatus();
 

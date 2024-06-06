@@ -25,8 +25,6 @@
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
-static thread_local std::atomic<bool> mscclInitialized;
-static std::mutex mscclLifecycleMutex;
 
 bool mscclEnabled() {
 #ifdef COMPILE_MSCCL_KERNEL
@@ -56,9 +54,9 @@ bool mscclIsCaller() {
   return mscclGetThreadLocalStatus().mscclIsCallerFlag;
 }
 
-bool mscclAvailable(ncclComm_t comm) {
-  if (mscclEnabled() /*&& mscclInitialized.load(std::memory_order_acquire)*/) {
-    if (comm) mscclSetThreadLocalComm(comm);
+bool mscclAvailable(int rank) {
+  if (rank >= 0) mscclSetThreadRank(rank);
+  if (mscclEnabled() && mscclInitialized()) {
     return true;
   }
   return false;
@@ -171,8 +169,6 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
     return ncclSuccess;
   }
 
-  //std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
-
   mscclStatus& status = mscclGetStatus();
   bool useInternalScheduler = false;
 
@@ -205,7 +201,7 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
 
 ncclResult_t mscclInit(ncclComm_t comm) {
   // Always initialize thread local status
-  mscclSetThreadLocalComm(comm);
+  mscclSetThreadRank(comm->rank);
   mscclThreadLocalStatus threadLocalStatus = mscclGetThreadLocalStatus();
   threadLocalStatus.groupStatus = mscclNoGroup;
   threadLocalStatus.groupDepth = 0;
@@ -213,12 +209,10 @@ ncclResult_t mscclInit(ncclComm_t comm) {
   threadLocalStatus.captureStatus = mscclNoCapture;
 
   {
-    //std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
-
     mscclStatus& status = mscclGetStatus();
 
     // freeAlgoHandles and needsProxy are initialized globally once and before algorithm pre-processing and connection
-    if (!mscclInitialized.load(std::memory_order_acquire)) {
+    if (!mscclInitialized()) {
       status.freeAlgoHandles.resize(MSCCL_MAX_NUM_ALGOS);
       for (int i = 0; i < MSCCL_MAX_NUM_ALGOS; i++) {
         status.freeAlgoHandles[i] = MSCCL_MAX_NUM_ALGOS - i - 1;
@@ -235,7 +229,8 @@ ncclResult_t mscclInit(ncclComm_t comm) {
         if (m.nRanks == comm->nRanks) {
           // Load algorithms
           if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()) {
-            std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
+            static std::mutex loadAlgoMutex;
+            std::lock_guard<std::mutex> lock(loadAlgoMutex);
             NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
           }
           // Connect algorithms
@@ -248,7 +243,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
       }
     }
 
-    if (mscclInitialized.load(std::memory_order_acquire)) {
+    if (mscclInitialized()) {
       return ncclSuccess;
     }
 
@@ -257,7 +252,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.lastStream = nullptr;
     NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
 
-    mscclInitialized.store(true, std::memory_order_release);
+    mscclInitialized() = true;
   }
 
   INFO(NCCL_INIT, "MSCCL: Initialization finished, localSize %ld", mscclKernMaxLocalSize());
@@ -542,9 +537,7 @@ ncclResult_t mscclTeardown() {
   threadLocalStatus.savedSchedulerParams.clear();
 
   {
-    //std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
-
-    if (!mscclInitialized.load(std::memory_order_acquire)) {
+    if (!mscclInitialized()) {
       return ncclSuccess;
     }
     mscclStatus& status = mscclGetStatus();
@@ -576,7 +569,7 @@ ncclResult_t mscclTeardown() {
     for (auto &p : status.graphWorkFifoStatus) {
       NCCLCHECK(mscclDestroyWorkFifoStatus(&(p.second)));
     }
-    mscclInitialized.store(false, std::memory_order_release);
+    mscclInitialized() = false;
   }
 
   INFO(NCCL_INIT, "MSCCL: Teardown finished");
