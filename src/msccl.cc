@@ -77,5 +77,6 @@ ncclResult_t mscclRunAlgo(
 
 NCCL_API(ncclResult_t, mscclUnloadAlgo, mscclAlgoHandle_t mscclAlgoHandle);
 ncclResult_t mscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle) {
+  // deprecated
   return ncclSuccess;
 }

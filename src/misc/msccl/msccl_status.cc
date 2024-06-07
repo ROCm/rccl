@@ -54,7 +54,9 @@ bool mscclInitialized(int rank) {
 }
 
 void mscclSetInitialized(int rank, bool initialized) {
-  mscclGetRankState(rank).initialized = initialized;
+  auto& state = mscclGetRankState(rank);
+  assert(!initialized || !state.initialized);
+  state.initialized = initialized;
 }
 
 mscclStatus& mscclGetStatus(int rank) {
