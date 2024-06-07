@@ -200,13 +200,7 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
 }
 
 ncclResult_t mscclInit(ncclComm_t comm) {
-  // Always initialize thread local status
   mscclSetThreadRank(comm->rank);
-  mscclThreadLocalStatus threadLocalStatus = mscclGetThreadLocalStatus();
-  threadLocalStatus.groupStatus = mscclNoGroup;
-  threadLocalStatus.groupDepth = 0;
-  threadLocalStatus.captureId = ULLONG_MAX;
-  threadLocalStatus.captureStatus = mscclNoCapture;
 
   {
     mscclStatus& status = mscclGetStatus();
@@ -532,10 +526,6 @@ static ncclResult_t mscclInternalSchedulerTeardown() {
 }
 
 ncclResult_t mscclTeardown() {
-  // Always teardown thread local status
-  mscclThreadLocalStatus threadLocalStatus = mscclGetThreadLocalStatus();
-  threadLocalStatus.savedSchedulerParams.clear();
-
   {
     if (!mscclInitialized()) {
       return ncclSuccess;

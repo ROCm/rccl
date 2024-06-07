@@ -13,10 +13,9 @@
 struct mscclThreadState {
   bool initialized;
   mscclStatus status;
-  mscclThreadLocalStatus threadLocalStatus;
   mscclSavedProxyArgs savedProxyArgs;
 
-  mscclThreadState() : initialized(false), status(), threadLocalStatus(), savedProxyArgs() {}
+  mscclThreadState() : initialized(false), status(), savedProxyArgs() {}
   mscclThreadState(const mscclThreadState&) = delete;
 };
 
@@ -64,8 +63,8 @@ mscclStatus& mscclGetStatus() {
 }
 
 mscclThreadLocalStatus& mscclGetThreadLocalStatus() {
-  //static thread_local mscclThreadLocalStatus threadLocalStatus;
-  return mscclGetThreadState().threadLocalStatus;
+  static thread_local mscclThreadLocalStatus threadLocalStatus;
+  return threadLocalStatus;
 }
 
 mscclSavedProxyArgs& mscclGetSavedProxyArgs() {
