@@ -49,8 +49,12 @@ static inline mscclRankState& mscclGetRankState(int rank) {
   return *threadRankState;
 }
 
-bool& mscclInitialized(int rank) {
+bool mscclInitialized(int rank) {
   return mscclGetRankState(rank).initialized;
+}
+
+void mscclSetInitialized(int rank, bool initialized) {
+  mscclGetRankState(rank).initialized = initialized;
 }
 
 mscclStatus& mscclGetStatus(int rank) {

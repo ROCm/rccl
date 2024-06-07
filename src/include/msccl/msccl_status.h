@@ -8,7 +8,9 @@
 
 #include "msccl/msccl_struct.h"
 
-bool& mscclInitialized(int rank);
+bool mscclInitialized(int rank);
+
+void mscclSetInitialized(int rank, bool initialized = true);
 
 mscclStatus& mscclGetStatus(int rank);
 

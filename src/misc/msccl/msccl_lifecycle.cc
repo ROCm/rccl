@@ -228,7 +228,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.lastStream = nullptr;
     NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
 
-    mscclInitialized(comm->rank) = true;
+    mscclSetInitialized(comm->rank);
   }
 
   INFO(NCCL_INIT, "MSCCL: Initialization finished, localSize %ld", mscclKernMaxLocalSize());
@@ -559,7 +559,7 @@ ncclResult_t mscclTeardown(int rank) {
     for (auto &p : status.graphWorkFifoStatus) {
       NCCLCHECK(mscclDestroyWorkFifoStatus(&(p.second)));
     }
-    mscclInitialized(rank) = false;
+    mscclSetInitialized(rank, false);
   }
 
   INFO(NCCL_INIT, "MSCCL: Teardown finished");
