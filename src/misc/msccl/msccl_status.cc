@@ -46,20 +46,20 @@ void mscclSetThreadRank(int rank) {
   }
 }
 
-static inline mscclThreadState& mscclGetThreadState() {
+static inline mscclThreadState& mscclGetThreadState(int rank) {
+  mscclSetThreadRank(rank);
   if (!threadState) {
     threadState = std::make_shared<mscclThreadState>();
   }
   return *threadState;
 }
 
-bool& mscclInitialized() {
-  return mscclGetThreadState().initialized;
+bool& mscclInitialized(int rank) {
+  return mscclGetThreadState(rank).initialized;
 }
 
-mscclStatus& mscclGetStatus() {
-  //static thread_local mscclStatus status;
-  return mscclGetThreadState().status;
+mscclStatus& mscclGetStatus(int rank) {
+  return mscclGetThreadState(rank).status;
 }
 
 mscclThreadLocalStatus& mscclGetThreadLocalStatus() {
@@ -67,7 +67,6 @@ mscclThreadLocalStatus& mscclGetThreadLocalStatus() {
   return threadLocalStatus;
 }
 
-mscclSavedProxyArgs& mscclGetSavedProxyArgs() {
-  //static thread_local mscclSavedProxyArgs savedProxyArgs;
-  return mscclGetThreadState().savedProxyArgs;
+mscclSavedProxyArgs& mscclGetSavedProxyArgs(int rank) {
+  return mscclGetThreadState(rank).savedProxyArgs;
 }

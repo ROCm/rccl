@@ -8,13 +8,11 @@
 
 #include "msccl/msccl_struct.h"
 
-void mscclSetThreadRank(int rank);
+bool& mscclInitialized(int rank);
 
-bool& mscclInitialized();
+mscclStatus& mscclGetStatus(int rank);
 
-mscclStatus& mscclGetStatus();
-
-mscclSavedProxyArgs& mscclGetSavedProxyArgs();
+mscclSavedProxyArgs& mscclGetSavedProxyArgs(int rank);
 
 mscclThreadLocalStatus& mscclGetThreadLocalStatus();
 

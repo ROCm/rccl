@@ -12,7 +12,7 @@
 
 NCCL_API(ncclResult_t, mscclLoadAlgo, const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
 ncclResult_t mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(rank);
 
   if (status.freeAlgoHandles.size() == 0) {
     WARN("MSCCL: MSCCL_MAX_NUM_ALGOS (%d) limit reached", MSCCL_MAX_NUM_ALGOS);
@@ -56,17 +56,17 @@ ncclResult_t mscclRunAlgo(
   NvtxParamsMsccl payload{sendCounts[comm->rank] * ncclTypeSize(dataType), recvCounts[comm->rank] * ncclTypeSize(dataType)};
   NVTX3_FUNC_WITH_PARAMS(MSCCL, MscclSchema, payload)
   
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
   struct mscclAlgo* hostAlgo = status.hostAlgos[mscclAlgoHandle];
   struct mscclAlgo* devAlgo = status.devAlgos[mscclAlgoHandle];
 
-  NCCLCHECK(mscclGetCaptureStatus(stream));
+  NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
 
   NCCLCHECK(mscclSetupCount(hostAlgo, comm, count, dataType));
 
   NCCLCHECK(mscclSetupScratch(hostAlgo, stream));
 
-  NCCLCHECK(mscclSetupSyncFlags(stream));
+  NCCLCHECK(mscclSetupSyncFlags(comm->rank, stream));
 
   NCCLCHECK(mscclSetupProxy(hostAlgo, comm, stream));
 
@@ -77,19 +77,5 @@ ncclResult_t mscclRunAlgo(
 
 NCCL_API(ncclResult_t, mscclUnloadAlgo, mscclAlgoHandle_t mscclAlgoHandle);
 ncclResult_t mscclUnloadAlgo(mscclAlgoHandle_t mscclAlgoHandle) {
-  mscclStatus& status = mscclGetStatus();
-
-  free(status.hostAlgos[mscclAlgoHandle]);
-  status.hostAlgos.erase(mscclAlgoHandle);
-
-  NCCLCHECK(ncclCudaFree(status.devAlgos[mscclAlgoHandle]));
-  status.devAlgos.erase(mscclAlgoHandle);
-
-  status.freeAlgoHandles.push_back(mscclAlgoHandle);
-
-  for (auto &s : status.connectedAlgos) {
-    s.second.erase(mscclAlgoHandle);
-  }
-
   return ncclSuccess;
 }

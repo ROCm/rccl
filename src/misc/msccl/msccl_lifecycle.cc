@@ -55,8 +55,7 @@ bool mscclIsCaller() {
 }
 
 bool mscclAvailable(int rank) {
-  if (rank >= 0) mscclSetThreadRank(rank);
-  if (mscclEnabled() && mscclInitialized()) {
+  if (mscclEnabled() && mscclInitialized(rank)) {
     return true;
   }
   return false;
@@ -90,7 +89,7 @@ static const char* mscclUnitTestAlgoShareDirPath = "../share/rccl/msccl-unit-tes
 
 static ncclResult_t mscclInternalSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
   static thread_local bool mscclAlgoMetaLoaded = false;
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
 
   *numChannelsRequired = 0;
   // Query numChannelsRequired from loaded algorithm metas
@@ -169,7 +168,7 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
     return ncclSuccess;
   }
 
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
   bool useInternalScheduler = false;
 
   const char* mscclSchedulerPath = getenv(mscclSchedulerPathEnv);
@@ -200,13 +199,11 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
 }
 
 ncclResult_t mscclInit(ncclComm_t comm) {
-  mscclSetThreadRank(comm->rank);
-
   {
-    mscclStatus& status = mscclGetStatus();
+    mscclStatus& status = mscclGetStatus(comm->rank);
 
     // freeAlgoHandles and needsProxy are initialized globally once and before algorithm pre-processing and connection
-    if (!mscclInitialized()) {
+    if (!mscclInitialized(comm->rank)) {
       status.freeAlgoHandles.resize(MSCCL_MAX_NUM_ALGOS);
       for (int i = 0; i < MSCCL_MAX_NUM_ALGOS; i++) {
         status.freeAlgoHandles[i] = MSCCL_MAX_NUM_ALGOS - i - 1;
@@ -237,7 +234,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
       }
     }
 
-    if (mscclInitialized()) {
+    if (mscclInitialized(comm->rank)) {
       return ncclSuccess;
     }
 
@@ -246,7 +243,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.lastStream = nullptr;
     NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
 
-    mscclInitialized() = true;
+    mscclInitialized(comm->rank) = true;
   }
 
   INFO(NCCL_INIT, "MSCCL: Initialization finished, localSize %ld", mscclKernMaxLocalSize());
@@ -262,8 +259,8 @@ ncclResult_t mscclGroupStart() {
   return ncclSuccess;
 }
 
-static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam* param) {
-  mscclStatus& status = mscclGetStatus();
+static ncclResult_t mscclInternalSchedulerSelectAlgo(int rank, struct mscclSchedulerParam* param) {
+  mscclStatus& status = mscclGetStatus(rank);
   param->scheduled = false;
 
   // Current MSCCL doesn't support pre/post op
@@ -308,13 +305,13 @@ static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam*
 }
 
 static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* param) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(param->comm->rank);
   if (status.mscclSchedulerPtr) {
     NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
     // Disable MSCCL algorithms if machine type is not matching
     if (param->comm->topo->mscclEnabled || mscclForceEnabled()) {
-      NCCLCHECK(mscclInternalSchedulerSelectAlgo(&(param->p)));
+      NCCLCHECK(mscclInternalSchedulerSelectAlgo(param->comm->rank, &(param->p)));
     } else {
       param->p.scheduled = false;
     }
@@ -509,12 +506,30 @@ ncclResult_t mscclGroupEnd() {
   return ncclSuccess;
 }
 
-static ncclResult_t mscclInternalSchedulerTeardown() {
+static ncclResult_t mscclInternalUnloadAlgo(int rank, mscclAlgoHandle_t mscclAlgoHandle) {
+  mscclStatus& status = mscclGetStatus(rank);
+
+  free(status.hostAlgos[mscclAlgoHandle]);
+  status.hostAlgos.erase(mscclAlgoHandle);
+
+  NCCLCHECK(ncclCudaFree(status.devAlgos[mscclAlgoHandle]));
+  status.devAlgos.erase(mscclAlgoHandle);
+
+  status.freeAlgoHandles.push_back(mscclAlgoHandle);
+
+  for (auto &s : status.connectedAlgos) {
+    s.second.erase(mscclAlgoHandle);
+  }
+
+  return ncclSuccess;
+}
+
+static ncclResult_t mscclInternalSchedulerTeardown(int rank) {
   ncclResult_t ret = ncclSuccess, tmpRet = ncclSuccess;
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(rank);
   for (auto &m : status.rankToAlgoHandles) {
     for (auto &p : m) {
-      tmpRet = mscclUnloadAlgo(p.second);
+      tmpRet = mscclInternalUnloadAlgo(rank, p.second);
       if (ret == ncclSuccess) {
         ret = tmpRet;
       }
@@ -525,12 +540,12 @@ static ncclResult_t mscclInternalSchedulerTeardown() {
   return ret;
 }
 
-ncclResult_t mscclTeardown() {
+ncclResult_t mscclTeardown(int rank) {
   {
-    if (!mscclInitialized()) {
+    if (!mscclInitialized(rank)) {
       return ncclSuccess;
     }
-    mscclStatus& status = mscclGetStatus();
+    mscclStatus& status = mscclGetStatus(rank);
     for (auto &p : status.hostAlgos) {
       free(p.second);
       status.freeAlgoHandles.push_back(p.first);
@@ -553,13 +568,13 @@ ncclResult_t mscclTeardown() {
       dlclose(status.mscclSchedulerLib);
       status.mscclSchedulerLib = nullptr;
     } else {
-      NCCLCHECK(mscclInternalSchedulerTeardown());
+      NCCLCHECK(mscclInternalSchedulerTeardown(rank));
     }
     NCCLCHECK(mscclDestroyWorkFifoStatus(&(status.defaultWorkFifoStatus)));
     for (auto &p : status.graphWorkFifoStatus) {
       NCCLCHECK(mscclDestroyWorkFifoStatus(&(p.second)));
     }
-    mscclInitialized() = false;
+    mscclInitialized(rank) = false;
   }
 
   INFO(NCCL_INIT, "MSCCL: Teardown finished");

@@ -33,7 +33,7 @@ ncclResult_t mscclEnqueueCheck(
 
 ncclResult_t mscclGroupEnd();
 
-ncclResult_t mscclTeardown();
+ncclResult_t mscclTeardown(int rank);
 
 size_t mscclKernMaxLocalSize();
 
