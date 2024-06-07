@@ -627,6 +627,10 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   // Only use full MAXCHANNELS for gfx94x
   int maxChannels = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? MAXCHANNELS : 2*CHANNEL_LIMIT;
 
+  if (graphs[NCCL_ALGO_RING]->nIntraChannels > 0 || comm->nNodes > 1) {
+        maxChannels = std::min(64, maxChannels);
+  }
+
   // Duplicate ringPrev/ringNext for ncclBuildRing
   if (nChannels <= maxChannels/2) memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
   if (nChannels <= maxChannels/2) memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
@@ -668,11 +672,9 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
      nChannels = comm->nChannels = copyChannels(comm, nChannels, 2*nChannels, ringPrev, ringNext);
   }
 
-  int minNchannels = 64;
-  if (comm->nNodes == 1) {
-    minNchannels = ncclMinNchannels();
-  } else {
-    minNchannels = std::min(64,ncclMinNchannels()); 	  
+  int minNchannels = ncclMinNchannels();
+  if (comm->nNodes > 1) {
+     minNchannels = std::min(64, maxChannels);
   }
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
