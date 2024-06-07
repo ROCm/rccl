@@ -162,6 +162,7 @@ static void initOnceFunc() {
   pfn_hsa_init();
 
   initResult = ncclSuccess;
+  return;
 
 error:
   initResult = ncclSystemError;
