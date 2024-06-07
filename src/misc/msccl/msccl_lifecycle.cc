@@ -55,26 +55,11 @@ bool mscclIsCaller() {
 }
 
 bool mscclAvailable(int rank) {
-  if (mscclEnabled() && mscclInitialized(rank)) {
-    return true;
-  }
-  return false;
+  return mscclEnabled() && mscclInitialized(rank);
 }
 
 static bool mscclCommCompatible(ncclComm_t comm) {
-  //std::map<uint64_t, std::set<uint64_t>> hostHashToPidHashes;
-  //for (int i = 0; i < comm->nRanks; i++) {
-  //  uint64_t hostHash = comm->peerInfo[i].hostHash;
-  //  uint64_t pidHash = comm->peerInfo[i].pidHash;
-  //  if (hostHashToPidHashes.find(hostHash) != hostHashToPidHashes.end()) {
-  //    auto& pidHashSet = hostHashToPidHashes[hostHash];
-  //    if (pidHashSet.find(pidHash) != pidHashSet.end()) {
-  //      INFO(NCCL_COLL, "MSCCL: mscclCommCompatible = false");
-  //      return false;
-  //    }
-  //  }
-  //  hostHashToPidHashes[hostHash].insert(pidHash);
-  //}
+  // MSCCL is always compatible now. No need to guard against multi-thread.
   return true;
 }
 

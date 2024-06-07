@@ -6,60 +6,55 @@
 #include "msccl/msccl_status.h"
 #include "msccl/msccl_struct.h"
 
+#include "debug.h"
+
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+using namespace std;
 
-struct mscclThreadState {
+struct mscclRankState {
+  int rank;
   bool initialized;
   mscclStatus status;
   mscclSavedProxyArgs savedProxyArgs;
 
-  mscclThreadState() : initialized(false), status(), savedProxyArgs() {}
-  mscclThreadState(const mscclThreadState&) = delete;
+  mscclRankState() : rank(-1), initialized(false), status(), savedProxyArgs() {}
+  mscclRankState(const mscclRankState&) = delete;
 };
 
-static std::mutex threadStatesMutex;
-static std::unordered_map<int, std::shared_ptr<mscclThreadState>> threadStates;
+static inline mscclRankState& mscclGetRankState(int rank) {
+  static mutex rankStatesMutex;
+  static unordered_map<int, shared_ptr<mscclRankState>> rankStates;
 
-static thread_local std::shared_ptr<mscclThreadState> threadState;
-static thread_local int threadLocalRank = -1;
+  static thread_local shared_ptr<mscclRankState> threadRankState = make_shared<mscclRankState>();
 
-void mscclSetThreadRank(int rank) {
-  if (rank < 0 || threadLocalRank == rank) {
-    return;
+  if (rank < 0 || threadRankState->rank == rank) {
+    return *threadRankState;
+  }
+  if (threadRankState->rank >= 0) {
+    WARN("Changing rank %d to rank %d", threadRankState->rank, rank);
   }
 
-  threadLocalRank = rank;
+  lock_guard<mutex> lock(rankStatesMutex);
 
-  std::lock_guard<std::mutex> lock(threadStatesMutex);
-
-  auto threadStateIt = threadStates.find(threadLocalRank);
-  if (threadStateIt == threadStates.end()) {
-    if (!threadState) {
-      threadState = std::make_shared<mscclThreadState>();
-    }
-    threadStates.insert(std::make_pair(threadLocalRank, threadState));
+  auto rankStateIt = rankStates.find(rank);
+  if (rankStateIt == rankStates.end()) {
+    threadRankState->rank = rank;
+    rankStates.insert(make_pair(rank, threadRankState));
   }
   else {
-    threadState = threadStateIt->second;
+    threadRankState = rankStateIt->second;
   }
-}
-
-static inline mscclThreadState& mscclGetThreadState(int rank) {
-  mscclSetThreadRank(rank);
-  if (!threadState) {
-    threadState = std::make_shared<mscclThreadState>();
-  }
-  return *threadState;
+  return *threadRankState;
 }
 
 bool& mscclInitialized(int rank) {
-  return mscclGetThreadState(rank).initialized;
+  return mscclGetRankState(rank).initialized;
 }
 
 mscclStatus& mscclGetStatus(int rank) {
-  return mscclGetThreadState(rank).status;
+  return mscclGetRankState(rank).status;
 }
 
 mscclThreadLocalStatus& mscclGetThreadLocalStatus() {
@@ -68,5 +63,5 @@ mscclThreadLocalStatus& mscclGetThreadLocalStatus() {
 }
 
 mscclSavedProxyArgs& mscclGetSavedProxyArgs(int rank) {
-  return mscclGetThreadState(rank).savedProxyArgs;
+  return mscclGetRankState(rank).savedProxyArgs;
 }
