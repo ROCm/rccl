@@ -231,7 +231,13 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
   const int tid = threadIdx.x;
   int x = tid;
   int total = 0, y;
-  int num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
+  int num;
+
+  if (comm->maxChannels == 64) {
+        num = 1;
+  } else {
+	num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
+  }
 
   switch (tid/WARP_SIZE) {
   case 0:
