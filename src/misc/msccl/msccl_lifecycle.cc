@@ -528,6 +528,7 @@ static ncclResult_t mscclInternalSchedulerTeardown(int rank) {
 ncclResult_t mscclTeardown(int rank) {
   {
     if (!mscclInitialized(rank)) {
+      mscclRemoveRank(rank);
       return ncclSuccess;
     }
     mscclStatus& status = mscclGetStatus(rank);
@@ -560,6 +561,7 @@ ncclResult_t mscclTeardown(int rank) {
       NCCLCHECK(mscclDestroyWorkFifoStatus(&(p.second)));
     }
     mscclSetInitialized(rank, false);
+    mscclRemoveRank(rank);
   }
 
   INFO(NCCL_INIT, "MSCCL: Teardown finished");

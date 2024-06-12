@@ -12,6 +12,8 @@ bool mscclInitialized(int rank);
 
 void mscclSetInitialized(int rank, bool initialized = true);
 
+void mscclRemoveRank(int rank);
+
 mscclStatus& mscclGetStatus(int rank);
 
 mscclSavedProxyArgs& mscclGetSavedProxyArgs(int rank);

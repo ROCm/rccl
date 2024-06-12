@@ -20,33 +20,27 @@ struct mscclRankState {
   mscclSavedProxyArgs savedProxyArgs;
 
   mscclRankState() : rank(-1), initialized(false), status(), savedProxyArgs() {}
-  mscclRankState(const mscclRankState&) = delete;
+  explicit mscclRankState(const mscclRankState&) = default;
 };
 
-static inline mscclRankState& mscclGetRankState(int rank) {
-  static mutex rankStatesMutex;
-  static unordered_map<int, shared_ptr<mscclRankState>> rankStates;
+static mutex rankStatesMutex;
+static unordered_map<int, shared_ptr<mscclRankState>> rankStates;
 
+static inline mscclRankState& mscclGetRankState(int rank) {
   static thread_local shared_ptr<mscclRankState> threadRankState = make_shared<mscclRankState>();
 
-  if (rank < 0 || threadRankState->rank == rank) {
+  if (rank < 0) {
     return *threadRankState;
-  }
-  if (threadRankState->rank >= 0) {
-    WARN("Changing rank %d to rank %d", threadRankState->rank, rank);
   }
 
   lock_guard<mutex> lock(rankStatesMutex);
 
   auto rankStateIt = rankStates.find(rank);
   if (rankStateIt == rankStates.end()) {
-    threadRankState->rank = rank;
-    rankStates.insert(make_pair(rank, threadRankState));
+    rankStateIt = rankStates.insert(make_pair(rank, make_shared<mscclRankState>(*threadRankState))).first;
+    rankStateIt->second->rank = rank;
   }
-  else {
-    threadRankState = rankStateIt->second;
-  }
-  return *threadRankState;
+  return *(rankStateIt->second);
 }
 
 bool mscclInitialized(int rank) {
@@ -57,6 +51,11 @@ void mscclSetInitialized(int rank, bool initialized) {
   auto& state = mscclGetRankState(rank);
   assert(!initialized || !state.initialized);
   state.initialized = initialized;
+}
+
+void mscclRemoveRank(int rank) {
+  lock_guard<mutex> lock(rankStatesMutex);
+  rankStates.erase(rank);
 }
 
 mscclStatus& mscclGetStatus(int rank) {
