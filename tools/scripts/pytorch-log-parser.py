@@ -15,17 +15,17 @@ def load_json_files(directory):
     return json_data
 
 
-def parse(json_file_path, function_name, output_file_name):
+def parse(json_file_path, output_file_name):
 
     data_all = load_json_files(json_file_path)
     data = data_all['traceEvents']
-
     kernels=[]
 
     for entries in data:
         for entry in entries:
-            if  'name'in entry and ((entry['name'] == 'hipExtLaunchKernel' and function_name in entry['args']) or function_name in entry['name']):
+            if  'name'in entry and 'cat' in entry and (entry['cat'] == 'kernel' ):
                 kernels.append(entry)
+                print(entry)
 
     sorted_kernels = sorted(kernels, key=lambda x: ( ['pid']))
 
@@ -62,11 +62,10 @@ def main():
 
     #parser.add_argument('json_files_path', type=argparse.FileType('r'), help='JSON file to load!')
     parser.add_argument('json_file_path', metavar='file_path', type=str,  help='Path to the JSON file to process')
-    parser.add_argument('function_name', type=str, help='Kernel Function Name, e.g., gatherTopK, ncclDevKernel_Generic, mscclKernel')
     parser.add_argument('output_file_name', type=str, help='Output File Name')
 
     args = parser.parse_args()
-    parse(args.json_file_path, args.function_name, args.output_file_name)
+    parse(args.json_file_path,  args.output_file_name)
 
 if __name__ == '__main__':
     main()
