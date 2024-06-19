@@ -12,22 +12,22 @@ def load_json_files(directory):
                 with open(directory+file, 'r') as f:
                     data = json.load(f)
                     json_data.setdefault('traceEvents',[]).append(data['traceEvents'])
-
     return json_data
+
 
 def parse(json_file_path, function_name, output_file_name):
 
-    data = load_json_files(json_file_path)
+    data_all = load_json_files(json_file_path)
+    data = data_all['traceEvents']
 
     kernels=[]
-    for entries in data["traceEvents"]:
-        for entry in entries:
-            print(entry)
-            if  'name'in entry and ((entry['name'] == 'hipExtLaunchKernel' and function_name in entry['args']['args']) or function_name in entry['name']):
-                kernels.append(entry)
-                print(entry)
 
-    sorted_kernels = sorted(kernels, key=lambda x: (x['args']['BeginNs'], x['args']['pid']))
+    for entries in data:
+        for entry in entries:
+            if  'name'in entry and ((entry['name'] == 'hipExtLaunchKernel' and function_name in entry['args']) or function_name in entry['name']):
+                kernels.append(entry)
+
+    sorted_kernels = sorted(kernels, key=lambda x: ( ['pid']))
 
     csv_file_name = output_file_name + '.csv'
     json_file_out = output_file_name + '.json'
@@ -36,13 +36,13 @@ def parse(json_file_path, function_name, output_file_name):
     json_data_out.setdefault('traceEvents',[]).append({})
 
     with open(csv_file_name, 'w', newline='') as csvfile:
-        fieldnames = ['pid', 'BeginNs', 'dur', 'ts']
+        fieldnames = ['pid',  'dur', 'ts']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
         i = 1
         for entry in sorted_kernels:
-            record = {'pid': entry['args']['pid'], 'BeginNs': entry['args']['BeginNs'], 'dur': entry['dur'],
+            record = {'pid': entry['pid'], 'dur': entry['dur'],
                      'ts': entry['ts']}
             json_data_out.setdefault('traceEvents',[]).append(entry)
 
