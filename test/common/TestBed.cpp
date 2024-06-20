@@ -97,7 +97,7 @@ namespace RcclUnitTesting
     childList.resize(this->numActiveChildren);
     for (int childId = 0; childId < this->numActiveChildren; ++childId)
     {
-      childList[childId] = new TestBedChild(childId, ev.verbose, ev.printValues);
+      childList[childId] = new TestBedChild(childId, ev.verbose, ev.printValues, ev.useMultithreading);
       if (childList[childId]->InitPipes() != TEST_SUCCESS)
       {
         ERROR("Unable to create pipes to child process\n");
