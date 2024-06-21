@@ -556,7 +556,7 @@ static struct rcclRomeModel rome_model_79 = {
   .gdrLevel = { },
   .pattern = "4040",
   .ringBase = "0 1 2 3 4 5 6 7|0 1 2 3 4 5 7 6|0 2 4 1 3 6 5 7|0 2 4 6 1 7 3 5|0 3 1 5 2 7 4 6|0 3 5 1 6 2 7 4|0 4 1 7 3 6 2 5|7 6 5 4 3 2 1 0|6 7 5 4 3 2 1 0|7 5 6 3 1 4 2 0|5 3 7 1 6 4 2 0|6 4 7 2 5 1 3 0|4 7 2 6 1 5 3 0|5 2 6 3 7 1 4 0|0 1 2 3 4 5 6 7|0 1 2 3 4 5 7 6|0 2 4 1 3 6 5 7|0 2 4 6 1 7 3 5|0 3 1 5 2 7 4 6|0 3 5 1 6 2 7 4|0 4 1 7 3 6 2 5|7 6 5 4 3 2 1 0|6 7 5 4 3 2 1 0|7 5 6 3 1 4 2 0|5 3 7 1 6 4 2 0|6 4 7 2 5 1 3 0|4 7 2 6 1 5 3 0|5 2 6 3 7 1 4 0",
-  .options = "noCpuCheck=1,mscclEnabled=1,tuning=5",
+  .options = "noCpuCheck=1,mscclEnabled=1,tuning=5,disableNumaMatching=1",
 };
 
 static struct rcclRomeModel rome_model_80 = {
@@ -812,7 +812,7 @@ static struct rcclRomeModel rome_model_81 = {
                 "N7 7 3 2 6 0 4 1 5 N5|"
                 "N1 1 0 2 4 3 5 7 6 N6|",
 
-  .options    = "noCpuCheck=1,tuning=5",
+  .options    = "noCpuCheck=1,tuning=5,disableNumaMatching=1",
 };
 
 static struct rcclRomeModel rome_model_84 = {

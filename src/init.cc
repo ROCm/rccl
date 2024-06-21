@@ -1396,10 +1396,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       allGather3Data[rank].nc = 16;
     else if (nranks == 4)
       // NCCL_MIN_NCHANNELS=24
-      allGather3Data[rank].nc = 6;
-    else if (nranks == 8)
-      // NCCL_MIN_NCHANNELS=56
-      allGather3Data[rank].nc = 2;
+      allGather3Data[rank].nc = 4;
   }
 
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();

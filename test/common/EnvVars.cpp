@@ -15,6 +15,48 @@ namespace RcclUnitTesting
   int const UT_SINGLE_PROCESS = (1<<0);
   int const UT_MULTI_PROCESS  = (1<<1);
 
+  int getArchInfo(bool *isRightArch)
+  {
+    // Prepare parent->child pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+      ERROR("Unable to create parent->child pipe for getting number of devices\n");
+      return TEST_FAIL;
+    }
+    pid_t pid = fork();
+    if (0 == pid) {
+      bool isGfx94 = false;
+      int dev;
+      hipGetDeviceCount(&dev);
+      for (int deviceId = 0; deviceId < dev; deviceId++) {
+        char gcn[256];
+        hipDeviceProp_t devProp;
+        hipGetDeviceProperties(&devProp, deviceId);
+        char *gcnArchNameToken = strtok(devProp.gcnArchName, ":");
+        strcpy(gcn, gcnArchNameToken);
+        if(std::strncmp("gfx94", gcn, 5) == 0) {
+          isGfx94 = true;
+        } else {
+          isGfx94 = false;
+          break;
+        }
+      }
+      if (write(pipefd[1], &isGfx94, sizeof(isGfx94)) != sizeof(isGfx94)) return TEST_FAIL;
+      close(pipefd[0]);
+      close(pipefd[1]);
+      exit(EXIT_SUCCESS);
+    }
+    else {
+      int status;
+      if (read(pipefd[0], isRightArch, sizeof(*isRightArch)) != sizeof(*isRightArch)) return TEST_FAIL;
+      waitpid(pid, &status, 0);
+      assert(!status);
+      close(pipefd[0]);
+      close(pipefd[1]);
+    }
+    return TEST_SUCCESS;
+  }
+
   int getDeviceCount(int *devices)
   {
     // Prepare parent->child pipe
@@ -52,6 +94,8 @@ namespace RcclUnitTesting
     // NOTE: Cannot use HIP call prior to launching unless it is inside another child process
     numDetectedGpus = 0;
     getDeviceCount(&numDetectedGpus);
+    isGfx94 = false;
+    getArchInfo(&isGfx94);
 
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus        = GetEnvVar("UT_MIN_GPUS"    , 2);

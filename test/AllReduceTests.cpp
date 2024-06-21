@@ -102,6 +102,30 @@ namespace RcclUnitTesting
     testBed.Finalize();
   }
 
+  TEST(AllReduce, Channels)
+  {
+    TestBed testBed;
+    if(testBed.ev.isGfx94) {
+      // Configuration
+      std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
+      std::vector<ncclDataType_t> const dataTypes       = {ncclBfloat16, ncclHalf};
+      std::vector<ncclRedOp_t>    const redOps          = {ncclSum};
+      std::vector<int>            const roots           = {0};
+      std::vector<int>            const numElements     = {64 * 1024 * 1024, 1024};
+      std::vector<bool>           const inPlaceList     = {false};
+      std::vector<bool>           const managedMemList  = {false};
+      std::vector<bool>           const useHipGraphList = {false, true};
+      std::vector<char *>         const channelList     = {"56", "84", "112"}; 
+      for (auto channel : channelList) {
+        setenv("NCCL_MIN_NCHANNELS", channel, 1);
+        testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
+                              inPlaceList, managedMemList, useHipGraphList);
+        testBed.Finalize();
+        unsetenv("NCCL_MIN_NCHANNELS");
+      }
+    }
+  }
+
   TEST(AllReduce, ManagedMemGraph)
   {
     TestBed testBed;
