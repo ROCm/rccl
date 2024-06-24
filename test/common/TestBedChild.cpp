@@ -12,6 +12,15 @@
 #include <omp.h>
 #endif
 
+static int getThreadId()
+{
+  #ifdef ENABLE_OPENMP
+  return (int)omp_get_thread_num();
+  #else
+  return -1;
+  #endif
+}
+
 #define CHILD_NCCL_CALL_BASE(cmd, msg, RESULT, RESULT_ARGS...)          \
   do {                                                                  \
     if (this->verbose) printf("[ NCCL CALL] " #cmd "\n");               \
@@ -487,9 +496,7 @@ namespace RcclUnitTesting
       }
     }
 
-    #ifdef ENABLE_OPENMP
     int numThreadsToUse = this->useRankThreading ? numRanksToExecute : 1;
-    #endif
 
     // Start group call
     CHILD_NCCL_CALL(ncclGroupStart(), "ncclGroupStart");
@@ -498,17 +505,15 @@ namespace RcclUnitTesting
     for (int collId = 0; collId < this->numCollectivesInGroup[groupId]; ++collId)
     {
       // Loop over all local ranks
+      if (this->verbose && this->useRankThreading)
+        INFO("Group %d collective %d running %d threads\n", groupId, collId, numThreadsToUse);
       ErrCode errCode = TEST_SUCCESS;
-      #ifdef ENABLE_OPENMP
-      if (this->verbose) INFO("Group %d collective %d running %d threads\n", groupId, collId, numThreadsToUse);
       auto& errCodeVal = reinterpret_cast<int&>(errCode);
       #pragma omp parallel for num_threads(numThreadsToUse) reduction(max : errCodeVal)
-      #endif
       for (int localRank : localRanksToExecute)
       {
-        #ifdef ENABLE_OPENMP
-        if (this->verbose) INFO("Group %d collective %d running rank %d on thread %d\n", groupId, collId, localRank, (int)omp_get_thread_num());
-        #endif
+        if (this->verbose && this->useRankThreading)
+          INFO("Group %d collective %d running rank %d on thread %d\n", groupId, collId, localRank, getThreadId());
 
         CHECK_HIP_RANK(errCode, hipSetDevice(this->deviceIds[localRank]));
 
@@ -663,13 +668,11 @@ namespace RcclUnitTesting
           CHILD_NCCL_CALL_NON_BLOCKING_RANK(errCode, "ncclCommGetAsyncErrorExecuteCollectives", localRank);
         }
 
-        #ifdef ENABLE_OPENMP
-        if (this->verbose) INFO("Group %d collective %d done rank %d on thread %d\n", groupId, collId, localRank, (int)omp_get_thread_num());
-        #endif
+        if (this->verbose && this->useRankThreading)
+          INFO("Group %d collective %d done rank %d on thread %d\n", groupId, collId, localRank, getThreadId());
       }
-      #ifdef ENABLE_OPENMP
-      CHECK_CALL(errCode);
-      #endif
+
+      if (this->useRankThreading) CHECK_CALL(errCode);
     }
     // End group call
     if (this->useBlocking == false)
