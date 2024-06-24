@@ -23,6 +23,7 @@
 #include <unistd.h>
 #define ENABLE_TIMER 0
 #include "timer.h"
+#include <sys/utsname.h>
 
 #include "ibvwrap.h"
 #include "graph/xml.h"
@@ -361,6 +362,31 @@ ncclResult_t ncclIbGdrSupport() {
       NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
       if (strcmp(strValue, "1") == 0 && roMode == 0)
         moduleLoaded = 0;
+    } else {
+      char kernel_header_file[256];
+      struct utsname utsname;
+      moduleLoaded = 0;
+      char buf[256];
+      FILE *fp = NULL;
+      //check for kernel name exists
+      if (uname(&utsname) == -1) {
+        INFO(NCCL_NET,"Could not get kernel name");
+      } else {
+        //format and store the kernel conf file location
+        snprintf(kernel_header_file, sizeof(kernel_header_file), "/lib/modules/%s/build/include/rdma/ib_umem.h", utsname.release);
+        fp = fopen(kernel_header_file, "r");
+        if (fp == NULL) {
+          INFO(NCCL_INIT,"Could not open kernel header file %s", kernel_header_file);
+        } else {
+          //look for kernel_opt1 and kernel_opt2 in the conf file and check
+          while (fgets(buf, sizeof(buf), fp) != NULL) {
+            if (strstr(buf, "ib_umem_get_peer") != NULL) {
+              moduleLoaded = 1;
+              INFO(NCCL_INIT,"Found ib_umem_get_peer in %s", kernel_header_file);
+            }
+          }
+        }
+      }
     }
 #else
     // Check for the nv_peer_mem module being loaded
