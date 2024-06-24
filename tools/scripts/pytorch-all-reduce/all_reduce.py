@@ -6,7 +6,7 @@ import argparse
 import statistics
 
 def init_process(rank, size, fn, backend='nccl'):
-    """ Initialize the distributed environment. """
+    """ Init the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '29500'
     os.environ['RANK'] = str(rank)
@@ -24,7 +24,7 @@ def get_algo_type(data_size):
         return "nccl"
 
 def benchmark_all_reduce(rank, size, sequence_lengths, dim, all_reduce_algos, tracing):
-    """ Benchmark all-reduce operation. """
+    """ Benchmark all-reduce operation - 4 different datasizes will be benched per run """
     torch.cuda.set_device(rank)
 
     n_runs = 1000
@@ -45,12 +45,12 @@ def benchmark_all_reduce(rank, size, sequence_lengths, dim, all_reduce_algos, tr
             main_times = []
             tensor = torch.randn(*shape, device='cuda').to(torch.bfloat16)
 
-            # Warm-up
-            for _ in range(10):
+            # Warm-up - before result collection 
+            for _ in range(5):
                 dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
                 dist.barrier()
 
-            # Main timing 
+            # Benchmark - result collection and timers disabled if --tracing applied 
             for _ in range(n_runs):
                 if not tracing: 
                     start = time.time()
@@ -69,11 +69,9 @@ def benchmark_all_reduce(rank, size, sequence_lengths, dim, all_reduce_algos, tr
                 max_time = max(main_times)
                 min_time = min(main_times)
                 std_time = statistics.stdev(main_times)
-
-                data_size_bytes = torch.tensor(shape).prod().item() * 2  # bfloat16 takes 2 bytes
+                data_size_bytes = torch.tensor(shape).prod().item() * 2  # * 2 as bfloat16 takes 2 bytes
                 data_size_mb = data_size_bytes / (1024 ** 2)
                 algo_type = get_algo_type(data_size_bytes)
-
                 results.append([f"all_reduce_{algo}", seq_len, data_size_mb, algo_type, mean_time, median_time, max_time, min_time, std_time])
 
     return results if rank == 0 and not tracing else None
