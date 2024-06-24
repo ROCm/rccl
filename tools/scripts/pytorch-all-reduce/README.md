@@ -3,12 +3,12 @@ Small benchmark utility for gpt-fast's all reduce.
 ### How to run 
 Out of box run (This will try various sequence lengths and dump perf results to terminal output)
 ```
-python3 all_reduce.py 
+torchrun --nproc_per_node=8 all_reduce.py 
 ```
 
 To enable intra node all-reduce algorithms use:
 ```
-ENABLE_INTRA_NODE_COMM=1 python3 all_reduce.py
+ENABLE_INTRA_NODE_COMM=1 torchrun --nproc_per_node=8 python3 all_reduce.py
 ```
 
 ### Rocprof trace script
