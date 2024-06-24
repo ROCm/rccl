@@ -371,6 +371,7 @@ set(SRC_FILES
   src/include/git_version.h
   src/include/graph.h
   src/include/group.h
+  src/include/hip_rocm_version_info.h
   src/include/ibvcore.h
   src/include/ibvsymbols.h
   src/include/ibvwrap.h
@@ -391,6 +392,7 @@ set(SRC_FILES
   src/include/rccl_vars.h
   src/include/register.h
   src/include/rccl_float8.h
+  src/include/rccl_libpath_info.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
   src/include/roctx.h
@@ -449,6 +451,7 @@ set(SRC_FILES
   src/misc/nvmlwrap_stub.cc
   src/misc/param.cc
   src/misc/profiler.cc
+  src/misc/rccl_libpath_info.cc
   src/misc/rocm_smi_wrap.cc
   src/misc/rocmwrap.cc
   src/misc/roctx.cc
