@@ -21,29 +21,17 @@ THE SOFTWARE.
 */
 
 #include "rccl_libpath_info.h"
-#include <stdlib.h>
 #include <dlfcn.h>
-#include <link.h>
 #include <string.h>
 
 void getRcclLibPath(char *libPath, int pathLen) {
-    const char *rcclLib = "librccl.so";
-    //Open lib handle
-    void *dlHandle = dlopen(rcclLib, RTLD_LAZY);
-    //Return Unknown if opening handle was not successful
-    if (!dlHandle) {
-        strncpy(libPath, "Unknown", pathLen);
-        return;
+    Dl_info pathInfo;
+    if (dladdr((void*)getRcclLibPath, &pathInfo)) {
+        strncpy(libPath, pathInfo.dli_fname, pathLen - 1);
+        libPath[pathLen - 1] = '\0'; //To prevent overflow
     }
-    //Retrive lib info
-    struct link_map *dlLinkMap;
-    if (dlinfo(dlHandle, RTLD_DI_LINKMAP, &dlLinkMap) != 0) {
+    else {
+        //Sets libPath to Unknown if the above function call is not successful
         strncpy(libPath, "Unknown", pathLen);
-        return;
     }
-    //Retrieval successful. Copy to libPath
-    strncpy(libPath, dlLinkMap->l_name, pathLen - 1);
-    libPath[pathLen - 1] = '\0';
-    //Close handle
-    dlclose(dlHandle);
 }
