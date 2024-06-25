@@ -106,6 +106,9 @@ namespace RcclUnitTesting
 
     // Wait for commands from parent process
     if (verbose) INFO("Child %d enters execution loop\n", this->childId);
+    #ifndef ENABLE_OPENMP
+    if (verbose && useRankThreading) WARN("Multi-threaded ranks requires ENABLE_OPENMP to be defined\n");
+    #endif
     int command;
     while (read(childReadFd, &command, sizeof(command)) > 0)
     {
