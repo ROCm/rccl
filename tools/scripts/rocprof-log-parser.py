@@ -3,29 +3,24 @@ import argparse
 import os
 import csv
 
+def parse(json_file, function_name, output_file_name):
 
-def load_json_files(directory):
-    json_data = {}
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith('json'):
-                with open(directory+file, 'r') as f:
-                    data = json.load(f)
-                    json_data.setdefault('traceEvents',[]).append(data['traceEvents'])
-
-    return json_data
-
-def parse(json_file_path, function_name, output_file_name):
-
-    data = load_json_files(json_file_path)
+    with open(json_file, 'r') as f:
+        data = json.load(f)
 
     kernels=[]
-    for entries in data["traceEvents"]:
-        for entry in entries:
-            print(entry)
-            if  'name'in entry and ((entry['name'] == 'hipExtLaunchKernel' and function_name in entry['args']['args']) or function_name in entry['name']):
+    found = False
+    for entry in data["traceEvents"]:
+        if  'name'in entry and (entry['name'] == 'hipExtLaunchKernel' or entry['name'] == 'hipLaunchKernel'):
+            if function_name == 'all':
+                found = True
                 kernels.append(entry)
-                print(entry)
+            elif function_name in entry['args']['args'] or function_name in entry['name']:
+                kernels.append(entry)
+                found = True
+    if not found:
+        print('There is no ' + function_name +' in this log')
+        return
 
     sorted_kernels = sorted(kernels, key=lambda x: (x['args']['BeginNs'], x['args']['pid']))
 
