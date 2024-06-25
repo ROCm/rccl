@@ -722,7 +722,11 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
 #endif
     CUDACHECK(hipFree(ptr));
     info->hasFineGrain = true;
-    NCCLCHECK(ncclGpuGdrSupport(comm, &info->gdrSupport));
+    // GPU supports GDR if DMABUF is supported
+    if (dmaBufSupported(comm) == ncclSuccess)
+      info->gdrSupport = 1;
+    else
+      NCCLCHECK(ncclGpuGdrSupport(comm, &info->gdrSupport));
   }
   else {
     info->hasFineGrain = false;
