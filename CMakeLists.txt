@@ -371,6 +371,7 @@ set(SRC_FILES
   src/include/git_version.h
   src/include/graph.h
   src/include/group.h
+  src/include/hip_rocm_version_info.h
   src/include/ibvcore.h
   src/include/ibvsymbols.h
   src/include/ibvwrap.h
