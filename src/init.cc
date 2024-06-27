@@ -7,6 +7,9 @@
  ************************************************************************/
 
 #include "nccl.h"
+#ifdef ENABLE_MSCCLPP
+#include "mscclpp/mscclpp_nccl.h"
+#endif
 #include "channel.h"
 #include "nvmlwrap.h"
 #include "gdrwrap.h"
@@ -157,12 +160,25 @@ ncclResult_t ncclGetVersion(int* version) {
   return ncclSuccess;
 }
 
+#ifdef ENABLE_MSCCLPP
+RCCL_PARAM(EnableMscclpp, "ENABLE_MSCCLPP", 0);
+RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(1024*1024));
+#endif
+
 NCCL_API(ncclResult_t, ncclGetUniqueId, ncclUniqueId* out);
 ncclResult_t ncclGetUniqueId(ncclUniqueId* out) {
   NCCLCHECK(ncclInit());
   NCCLCHECK(PtrCheck(out, "GetUniqueId", "out"));
   ncclResult_t res = bootstrapGetUniqueId((struct ncclBootstrapHandle*)out);
   TRACE_CALL("ncclGetUniqueId(0x%llx)", (unsigned long long)hashUniqueId(*out));
+#ifdef ENABLE_MSCCLPP
+  if (rcclParamEnableMscclpp())
+  {
+    NCCLCHECK(res);
+    INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclGetUniqueId");
+    res = mscclpp_ncclGetUniqueId(reinterpret_cast<mscclpp_ncclUniqueId*>(&(out->internal2)));
+  }
+#endif
   return res;
 }
 
@@ -2184,6 +2200,23 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
   NVTX3_FUNC_WITH_PARAMS(CommInitRank, CommInitRankSchema, payload)
 
   NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, &config));
+
+#ifdef ENABLE_MSCCLPP
+  if (rcclParamEnableMscclpp())
+  {
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
+    (*newcomm)->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
+    if ((*newcomm)->mscclppCompatible)
+    {
+      (*newcomm)->mscclpp_threshold = rcclParamMscclppThreshold();
+      INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", (*newcomm)->mscclpp_threshold);
+      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommInitRank (nranks=%d)", nranks);
+      NCCLCHECK(mscclpp_ncclCommInitRank(&((*newcomm)->mscclpp_comm), nranks, *reinterpret_cast<mscclpp_ncclUniqueId*>(&(commId.internal2)), myrank));
+    }
+  }
+#endif
+
   return ncclSuccess;
 }
 
@@ -2498,6 +2531,18 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
   }
+
+#ifdef ENABLE_MSCCLPP
+  if (comm->mscclppCompatible) {
+    INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommDestroy");
+    ncclResult_t res = mscclpp_ncclCommDestroy(comm->mscclpp_comm);
+    if (res != ncclSuccess) {
+      WARN("MSCCL++: mscclpp_ncclCommDestroy failed (%s)", ncclGetErrorString(res));
+    }
+    comm->mscclppCompatible = false;
+    comm->mscclpp_comm = nullptr;
+  }
+#endif
 
   int rank = comm->rank, nranks = comm->nRanks, cudaDev = comm->cudaDev;
 

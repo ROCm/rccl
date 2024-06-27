@@ -22,6 +22,10 @@
 #include "msccl/msccl_setup.h"
 #include "msccl/msccl_status.h"
 
+#ifdef ENABLE_MSCCLPP
+#include "mscclpp/mscclpp_nccl.h"
+#endif
+
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
@@ -448,18 +452,60 @@ ncclResult_t mscclEnqueueCheck(
     count, dataType, root, peer, op, func, comm, stream,
     &threadLocalStatus.savedSchedulerParams.back()));
 
+  //printf("In msccl enqueue check\n");
+  NCCLCHECK(mscclGetCaptureStatus(stream));
+  size_t nBytes = count * ncclTypeSize(dataType);
+
   switch (threadLocalStatus.groupStatus) {
     case mscclNoGroup:
+#ifdef ENABLE_MSCCLPP
+      if (comm->mscclppCompatible) {
+        /* check if one rank per GPU and graph mode is enabled */
+        if ((nBytes > 0 && nBytes <= comm->mscclpp_threshold) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
+          if (func == mscclFuncAllReduce) {
+            INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllReduce (groupStatus=mscclNoGroup)");
+            NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
+            threadLocalStatus.savedSchedulerParams.clear();
+            break;
+          }
+          else if (func == mscclFuncAllGather) {
+            INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllGather (groupStatus=mscclNoGroup)");
+            NCCLCHECK(mscclpp_ncclAllGather(sendBuff, recvBuff, count, dataType, comm->mscclpp_comm, stream));
+            threadLocalStatus.savedSchedulerParams.clear();
+            break;
+          }
+        }
+      }
+#endif
       if (comm->mscclCompatible) {
           NCCLCHECK(mscclSchedulerSelectAlgo(&threadLocalStatus.savedSchedulerParams.back()));
           if (threadLocalStatus.savedSchedulerParams.back().p.scheduled) {
             NCCLCHECK(mscclRunSavedParams());
             break;
           }
-        }
+      }
       NCCLCHECK(mscclFallBackSavedParams());
       break;
     case mscclGroupSupportedOp:
+#ifdef ENABLE_MSCCLPP
+      if (comm->mscclppCompatible) {
+        /* check if one rank per GPU and graph mode is enabled */
+        if ((nBytes > 0 && nBytes <= comm->mscclpp_threshold) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
+          if (func == mscclFuncAllReduce) {
+            INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllReduce (groupStatus=mscclGroupSupportedOp)");
+            NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
+            threadLocalStatus.savedSchedulerParams.clear();
+            break;
+          }
+          else if (func == mscclFuncAllGather) {
+            INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllGather (groupStatus=mscclGroupSupportedOp)");
+            NCCLCHECK(mscclpp_ncclAllGather(sendBuff, recvBuff, count, dataType, comm->mscclpp_comm, stream));
+            threadLocalStatus.savedSchedulerParams.clear();
+            break;
+          }
+        }
+      }
+#endif
       if (comm->mscclCompatible) {
           NCCLCHECK(mscclSchedulerSelectAlgo(&threadLocalStatus.savedSchedulerParams.back()));
           if (threadLocalStatus.savedSchedulerParams.back().p.scheduled) {

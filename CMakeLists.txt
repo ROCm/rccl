@@ -26,6 +26,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  OFF)
@@ -479,6 +480,14 @@ if (ENABLE_MSCCL_KERNEL)
   list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
 endif()
 
+if (ENABLE_MSCCLPP)
+  set(MSCCLPP_SOURCES
+    src/include/mscclpp/mscclpp_nccl.h
+    src/misc/mscclpp/mscclpp_nccl.cc
+  )
+  list(APPEND SRC_FILES ${MSCCLPP_SOURCES})
+endif()
+
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
 find_program(hipify-perl_executable hipify-perl)
@@ -559,6 +568,9 @@ if(COLLTRACE)
 endif()
 if(ENABLE_MSCCL_KERNEL)
   target_compile_definitions(rccl PRIVATE COMPILE_MSCCL_KERNEL)
+endif()
+if(ENABLE_MSCCLPP)
+  target_compile_definitions(rccl PRIVATE ENABLE_MSCCLPP)
 endif()
 if(HAVE_ROCM_SMI64CONFIG)
   target_compile_definitions(rccl PRIVATE USE_ROCM_SMI64CONFIG)
@@ -677,6 +689,11 @@ else()
 endif()
 if (HAVE_KERNARG_PRELOAD)
   target_link_options(rccl PRIVATE -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16)
+endif()
+
+if(ENABLE_MSCCLPP)
+  include(cmake/MSCCLPP.cmake)
+  message(STATUS "Building RCCL with MSCCL++ support")
 endif()
 
 ## Track linking time
