@@ -26,8 +26,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
     if (isNpKitThread) {
-      uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
-      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
+      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, NPKIT_GET_CPU_TIMESTAMP_FROM_BLOCK,
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
@@ -127,8 +126,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
     if (isNpKitThread) {
-      uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
-      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
+      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, NPKIT_GET_CPU_TIMESTAMP_FROM_BLOCK,
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif

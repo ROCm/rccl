@@ -185,8 +185,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
   if (tid == 0) {
-    uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, xcc_id, *cpuTimestamp);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, xcc_id, NPKIT_GET_CPU_TIMESTAMP_FROM_BLOCK);
   }
 #endif
 
