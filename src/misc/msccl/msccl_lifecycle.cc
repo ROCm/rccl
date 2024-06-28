@@ -452,8 +452,6 @@ ncclResult_t mscclEnqueueCheck(
     count, dataType, root, peer, op, func, comm, stream,
     &threadLocalStatus.savedSchedulerParams.back()));
 
-  //printf("In msccl enqueue check\n");
-  NCCLCHECK(mscclGetCaptureStatus(stream));
   size_t nBytes = count * ncclTypeSize(dataType);
 
   switch (threadLocalStatus.groupStatus) {

@@ -46,8 +46,7 @@ if(ENABLE_MSCCLPP)
     
         download_project(PROJ                mscclpp_nccl
                          GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
-                         # GIT_TAG             main  # TODO: switch back to main before merging
-                         GIT_TAG             caiorocha/ncclapi_integration
+                         GIT_TAG             main
                          INSTALL_DIR         ${MSCCLPP_ROOT}
                          CMAKE_ARGS          -DGPU_TARGETS=${GPU_TARGETS} -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                          LOG_DOWNLOAD        TRUE

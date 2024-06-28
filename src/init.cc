@@ -172,11 +172,18 @@ ncclResult_t ncclGetUniqueId(ncclUniqueId* out) {
   ncclResult_t res = bootstrapGetUniqueId((struct ncclBootstrapHandle*)out);
   TRACE_CALL("ncclGetUniqueId(0x%llx)", (unsigned long long)hashUniqueId(*out));
 #ifdef ENABLE_MSCCLPP
-  if (rcclParamEnableMscclpp())
-  {
+  if (rcclParamEnableMscclpp()) {
     NCCLCHECK(res);
-    INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclGetUniqueId");
-    res = mscclpp_ncclGetUniqueId(reinterpret_cast<mscclpp_ncclUniqueId*>(&(out->internal2)));
+    int dev;
+    CUDACHECK(cudaGetDevice(&dev));
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, dev));
+    if (IsArchMatch(devProp.gcnArchName, "gfx94")) {
+      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclGetUniqueId");
+      res = mscclpp_ncclGetUniqueId(reinterpret_cast<mscclpp_ncclUniqueId*>(&(out->internal2)));
+    } else {
+      WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
+    }
   }
 #endif
   return res;
@@ -2202,17 +2209,17 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
   NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, &config));
 
 #ifdef ENABLE_MSCCLPP
-  if (rcclParamEnableMscclpp())
-  {
+  if (rcclParamEnableMscclpp()) {
     hipDeviceProp_t devProp;
     CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
     (*newcomm)->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
-    if ((*newcomm)->mscclppCompatible)
-    {
+    if ((*newcomm)->mscclppCompatible) {
       (*newcomm)->mscclpp_threshold = rcclParamMscclppThreshold();
       INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", (*newcomm)->mscclpp_threshold);
       INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommInitRank (nranks=%d)", nranks);
       NCCLCHECK(mscclpp_ncclCommInitRank(&((*newcomm)->mscclpp_comm), nranks, *reinterpret_cast<mscclpp_ncclUniqueId*>(&(commId.internal2)), myrank));
+    } else {
+      WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
     }
   }
 #endif
