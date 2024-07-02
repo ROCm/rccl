@@ -28,6 +28,7 @@ THE SOFTWARE.
 #include <algorithm>
 #include <string.h>
 #include "rome_models.h"
+#include "param.h"
 
 struct rcclRomeModel {
   int nGpus;
@@ -603,14 +604,70 @@ static struct rcclRomeModel rome_model_81 = {
                 "N5 5 4 7 1 3 2 6 0 N0|"
                 "N6 6 3 1 4 0 7 5 2 N2|"
                 "N7 7 2 0 6 4 1 5 3 N3|"
-                "N0 0 1 2 3 4 5 6 7 N7|"
+
                 "N1 1 0 2 4 3 5 7 6 N6|"
                 "N2 2 5 0 3 6 1 7 4 N4|"
                 "N3 3 7 0 4 2 1 6 5 N5|"
                 "N4 4 6 2 7 3 0 5 1 N1|"
                 "N5 5 4 7 1 3 2 6 0 N0|"
                 "N6 6 3 1 4 0 7 5 2 N2|"
-                "N7 7 2 0 6 4 1 5 3 N3",
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+
+                "N7 7 2 0 6 4 1 5 3 N3|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|",
+
   .ringTail2  = "N7 7 4 1 3 2 0 6 5 N5|"
                 "N6 6 3 0 7 5 1 4 2 N2|"
                 "N4 4 6 2 1 7 0 5 3 N3|"
@@ -619,14 +676,71 @@ static struct rcclRomeModel rome_model_81 = {
                 "N0 0 1 2 3 4 5 6 7 N7|"
                 "N2 2 5 0 3 6 4 7 1 N1|"
                 "N3 3 7 2 6 1 5 4 0 N0|"
-                "N7 7 4 1 3 2 0 6 5 N5|"
+
                 "N6 6 3 0 7 5 1 4 2 N2|"
                 "N4 4 6 2 1 7 0 5 3 N3|"
                 "N5 5 2 7 3 1 6 0 4 N4|"
                 "N1 1 0 2 4 3 5 7 6 N6|"
                 "N0 0 1 2 3 4 5 6 7 N7|"
                 "N2 2 5 0 3 6 4 7 1 N1|"
-                "N3 3 7 2 6 1 5 4 0 N0",
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+
+                "N3 3 7 2 6 1 5 4 0 N0|"
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|",
+
+
   .ringTail1  = "N5 5 4 2 7 1 6 3 0 N0|"
                 "N2 2 5 0 3 7 4 6 1 N1|"
                 "N3 3 6 4 0 5 1 7 2 N2|"
@@ -635,15 +749,71 @@ static struct rcclRomeModel rome_model_81 = {
                 "N7 7 3 2 6 0 4 1 5 N5|"
                 "N1 1 0 2 4 3 5 7 6 N6|"
                 "N0 0 1 2 3 4 5 6 7 N7|"
-                "N5 5 4 2 7 1 6 3 0 N0|"
+
                 "N2 2 5 0 3 7 4 6 1 N1|"
                 "N3 3 6 4 0 5 1 7 2 N2|"
                 "N4 4 7 0 6 5 2 1 3 N3|"
                 "N6 6 2 0 7 5 3 1 4 N4|"
                 "N7 7 3 2 6 0 4 1 5 N5|"
                 "N1 1 0 2 4 3 5 7 6 N6|"
-                "N0 0 1 2 3 4 5 6 7 N7",
-  .options    = "noCpuCheck=1,tuning=5,disableNumaMatching=1",
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|",
+
+  .options    = "noCpuCheck=1,tuning=5,disableNumaMatching=1,isRoCE=0",
 };
 
 static struct rcclRomeModel rome_model_84 = {
@@ -670,6 +840,114 @@ static struct rcclRomeModel rome_model_85 = {
   .pattern = "4242",
   .ringBase = "N0 0 1 3 2 4 5 7 6 N3|N1 2 3 1 0 6 7 5 4 N2|N3 7 6 0 1 5 4 2 3 N1|N0 1 0 6 7 3 2 4 5 N2|N2 4 5 7 6 0 1 3 2 N1|N3 6 7 5 4 2 3 1 0 N0|N2 5 4 2 3 7 6 0 1 N0|N1 3 2 4 5 1 0 6 7 N3",
   .options = "tuning=2",
+};
+
+static struct rcclRomeModel rome_model_86 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 8, .nLinks = 7,
+  .gpuIds     = { 0xc000, 0x22000, 0x38000, 0x5c000, 0x9f000, 0xaf000, 0xbf000, 0xdf000, },
+  .nicIds     = { 0x7000, 0x1d000, 0x33000, 0x57000, 0x9a000, 0xaa000, 0xba000, 0xda000, },
+  .gpuNuma    = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma    = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1,
+                  1, 0, 1, 1, 1, 1, 1, 1,
+                  1, 1, 0, 1, 1, 1, 1, 1,
+                  1, 1, 1, 0, 1, 1, 1, 1,
+                  1, 1, 1, 1, 0, 1, 1, 1,
+                  1, 1, 1, 1, 1, 0, 1, 1,
+                  1, 1, 1, 1, 1, 1, 0, 1,
+                  1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel   = {PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB,
+                 PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, },
+  .pattern    = "4444",
+  .ringBase   = "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3|"
+
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N2 2 5 0 3 6 1 7 4 N4|"
+                "N3 3 7 0 4 2 1 6 5 N5|"
+                "N4 4 6 2 7 3 0 5 1 N1|"
+                "N5 5 4 7 1 3 2 6 0 N0|"
+                "N6 6 3 1 4 0 7 5 2 N2|"
+                "N7 7 2 0 6 4 1 5 3 N3",
+
+  .ringTail2  = "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0|"
+
+                "N7 7 4 1 3 2 0 6 5 N5|"
+                "N6 6 3 0 7 5 1 4 2 N2|"
+                "N4 4 6 2 1 7 0 5 3 N3|"
+                "N5 5 2 7 3 1 6 0 4 N4|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+                "N2 2 5 0 3 6 4 7 1 N1|"
+                "N3 3 7 2 6 1 5 4 0 N0",
+
+
+  .ringTail1  = "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7|"
+
+                "N5 5 4 2 7 1 6 3 0 N0|"
+                "N2 2 5 0 3 7 4 6 1 N1|"
+                "N3 3 6 4 0 5 1 7 2 N2|"
+                "N4 4 7 0 6 5 2 1 3 N3|"
+                "N6 6 2 0 7 5 3 1 4 N4|"
+                "N7 7 3 2 6 0 4 1 5 N5|"
+                "N1 1 0 2 4 3 5 7 6 N6|"
+                "N0 0 1 2 3 4 5 6 7 N7",
+
+  .options    = "noCpuCheck=1,tuning=5,disableNumaMatching=1,isRoCE=1",
 };
 
 
@@ -717,6 +995,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_81, /* 40 */
   rome_model_84, /* 41 */
   rome_model_85, /* 42 */
+  rome_model_86, /* 43 */
 };
 
 /* Parse user defined rings. Format is like :
@@ -1002,6 +1281,27 @@ static bool checkOption(const char *options, const char *name) {
     free(str_temp);
   }
   return false;
+}
+
+static int checkOptionValue(const char *options, const char *name) {
+  if (strcmp(options, "")) {
+    char *str_temp = (char *)malloc(strlen(options) + 1);
+    strcpy(str_temp, options);
+    char* tokens[MAX_OPT_TOKENS];
+    int numTokens = 0;
+    char* state;
+    tokens[numTokens] = strtok_r(str_temp, "=, ", &state);
+    numTokens++;
+    while (tokens[numTokens-1] != NULL && numTokens < MAX_OPT_TOKENS)
+        tokens[numTokens++] = strtok_r(NULL, "=, ", &state);
+    for (int i = 0; i < numTokens/2; i++) {
+      if (strcmp(tokens[i*2], name) == 0) {
+        return atol(tokens[i*2+1]);
+      }
+    }
+    free(str_temp);
+  }
+  return -2;
 }
 
 ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
@@ -1367,12 +1667,24 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   }
   if (i < romeTopo.nGpus) match_nbio = false;
 
+  // check if NCCL_IB_GID_INDEX=3 -- needed for RoCE systems
+  const char* ncclIbGidIndex = ncclGetEnv("NCCL_IB_GID_INDEX");
+  int gid_index = 0;
+  if (ncclIbGidIndex) gid_index = atoi(ncclIbGidIndex);
+  int isRoCE = gid_index == 3 ? 1 : 0;
+
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
     bool ignore_cpu = checkOption(romeTopoModels[i].options, "noCpuCheck");
     if (!ignore_cpu && (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME))
       continue;
+
     bool ignore_numa = checkOption(romeTopoModels[i].options, "disableNumaMatching");
     if (!ignore_numa && romeTopo.nCpus != romeTopoModels[i].nCpus) continue;
+
+    // check if "isRoCE=1" is defined in model struct options
+    int optionsIsRoCE = checkOptionValue(romeTopoModels[i].options, "isRoCE");
+    if (optionsIsRoCE != -2 && optionsIsRoCE != isRoCE) continue;
+
     if (romeTopo.nGpus != romeTopoModels[i].nGpus ||
       romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
     if (!ignore_numa && strcmp(romeTopoModels[i].pattern, pattern)) continue;
