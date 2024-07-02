@@ -39,10 +39,7 @@ typedef struct ncclComm* ncclComm_t;
 #define NCCL_UNIQUE_ID_BYTES 128
 /*! @brief      Opaque unique id used to initialize communicators
     @details    The ncclUniqueId must be passed to all participating ranks */
-typedef struct {
-    char internal[NCCL_UNIQUE_ID_BYTES]; /*!< Opaque array>*/
-    char internal2[NCCL_UNIQUE_ID_BYTES]; /*!< Opaque array>*/
-} ncclUniqueId;
+typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; /*!< Opaque array>*/} ncclUniqueId;
 
 /*! @defgroup   rccl_result_code Result Codes
     @details    The various result codes that RCCL API calls may return

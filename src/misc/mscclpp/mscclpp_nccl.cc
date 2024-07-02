@@ -7,6 +7,7 @@
 #include "mscclpp/mscclpp_nccl.h"
 #include "debug.h"
 #include <dlfcn.h>
+#include <unordered_map>
 
 #define MSCCLPP_DECLARE(X) decltype(mscclpp_##X) mscclpp_##X = nullptr
 #define MSCCLPP_LOAD(HANDLE, X) do {                            \
@@ -49,3 +50,5 @@ static struct mscclpp_nccl_access {
     }
   }
 } access;
+
+std::unordered_map<ncclUniqueId, mscclpp_ncclUniqueId> mscclpp_uniqueIdMap;

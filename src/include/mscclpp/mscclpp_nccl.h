@@ -8,14 +8,14 @@
 #define MSCCLPP_NCCL_H_
 
 #include "nccl.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <unordered_map>
 
 typedef struct mscclpp_ncclComm* mscclpp_ncclComm_t;
 
 typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } mscclpp_ncclUniqueId;
+
+/* A ncclUniqueId and a mscclpp_ncclUniqueId will always be created together and used alternatively. This maps between them. */
+extern std::unordered_map<ncclUniqueId, mscclpp_ncclUniqueId> mscclpp_uniqueIdMap;
 
 /* See ncclGetUniqueId. */
 extern ncclResult_t  (*mscclpp_ncclGetUniqueId)(mscclpp_ncclUniqueId* uniqueId);
@@ -34,8 +34,13 @@ extern ncclResult_t  (*mscclpp_ncclAllReduce)(const void* sendbuff, void* recvbu
 extern ncclResult_t  (*mscclpp_ncclAllGather)(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, mscclpp_ncclComm_t comm, hipStream_t stream);
 
-#ifdef __cplusplus
+namespace std {
+  template <>
+  struct hash<ncclUniqueId> {
+    size_t operator ()(const ncclUniqueId& uniqueId) const noexcept;
+  };
 }
-#endif
+
+bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b);
 
 #endif

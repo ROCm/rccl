@@ -7,9 +7,6 @@
  ************************************************************************/
 
 #include "nccl.h"
-#ifdef ENABLE_MSCCLPP
-#include "mscclpp/mscclpp_nccl.h"
-#endif
 #include "channel.h"
 #include "nvmlwrap.h"
 #include "gdrwrap.h"
@@ -47,6 +44,9 @@
 #include "rccl_vars.h"
 //#include "clique/CliqueManager.h"
 //#include <hsa/hsa_ext_amd.h>
+#ifdef ENABLE_MSCCLPP
+#include "mscclpp/mscclpp_nccl.h"
+#endif
 // [/RCCL]
 
 #include "msccl/msccl_lifecycle.h"
@@ -85,6 +85,16 @@ static uint64_t hashUniqueId(ncclUniqueId const &id) {
   }
   return h;
 }
+
+#ifdef ENABLE_MSCCLPP
+size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
+  return (size_t)hashUniqueId(uniqueId);
+}
+
+bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b) {
+  return memcmp(a.internal, b.internal, NCCL_UNIQUE_ID_BYTES) == 0;
+}
+#endif
 
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
@@ -180,7 +190,7 @@ ncclResult_t ncclGetUniqueId(ncclUniqueId* out) {
     CUDACHECK(hipGetDeviceProperties(&devProp, dev));
     if (IsArchMatch(devProp.gcnArchName, "gfx94")) {
       INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclGetUniqueId");
-      res = mscclpp_ncclGetUniqueId(reinterpret_cast<mscclpp_ncclUniqueId*>(&(out->internal2)));
+      res = mscclpp_ncclGetUniqueId(&(mscclpp_uniqueIdMap[*out]));
     } else {
       WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
     }
@@ -1924,6 +1934,24 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent), res, fail);
 
+#ifdef ENABLE_MSCCLPP
+  if (rcclParamEnableMscclpp()) {
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
+    comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
+    if (comm->mscclppCompatible) {
+      NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &(mscclpp_uniqueIdMap[job->commId]), sizeof(mscclpp_ncclUniqueId)), res, fail);
+      INFO(NCCL_INIT, "MSCCL++: Broadcast mscclpp_ncclUniqueId to %d ranks", (comm->localRanks - 1));
+      comm->mscclpp_threshold = rcclParamMscclppThreshold();
+      INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", comm->mscclpp_threshold);
+      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommInitRank (nranks=%d)", job->nranks);
+      NCCLCHECKGOTO(mscclpp_ncclCommInitRank(&(comm->mscclpp_comm), job->nranks, mscclpp_uniqueIdMap[job->commId], job->myrank), res, fail);
+    } else {
+      WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
+    }
+  }
+#endif
+
   NCCLCHECKGOTO(ncclLoadTunerPlugin(&comm->tuner), res, fail);
   if (comm->tuner) {
     NCCLCHECK(comm->tuner->init(comm->nRanks, comm->nNodes, ncclDebugLog));
@@ -2207,22 +2235,6 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
   NVTX3_FUNC_WITH_PARAMS(CommInitRank, CommInitRankSchema, payload)
 
   NCCLCHECK(ncclCommInitRankDev(newcomm, nranks, commId, myrank, cudaDev, &config));
-
-#ifdef ENABLE_MSCCLPP
-  if (rcclParamEnableMscclpp()) {
-    hipDeviceProp_t devProp;
-    CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
-    (*newcomm)->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
-    if ((*newcomm)->mscclppCompatible) {
-      (*newcomm)->mscclpp_threshold = rcclParamMscclppThreshold();
-      INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", (*newcomm)->mscclpp_threshold);
-      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommInitRank (nranks=%d)", nranks);
-      NCCLCHECK(mscclpp_ncclCommInitRank(&((*newcomm)->mscclpp_comm), nranks, *reinterpret_cast<mscclpp_ncclUniqueId*>(&(commId.internal2)), myrank));
-    } else {
-      WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
-    }
-  }
-#endif
 
   return ncclSuccess;
 }
