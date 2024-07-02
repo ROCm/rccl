@@ -616,7 +616,8 @@ namespace RcclUnitTesting
                                std::vector<int>            const& numElements,
                                std::vector<bool>           const& inPlaceList,
                                std::vector<bool>           const& managedMemList,
-                               std::vector<bool>           const& useHipGraphList)
+                               std::vector<bool>           const& useHipGraphList,
+                               bool                        const& enableSweep)
   {
     // Sort numElements in descending order to cut down on # of allocations
     std::vector<int> sortedN = numElements;
@@ -662,6 +663,9 @@ namespace RcclUnitTesting
       // Test either single process all GPUs, or 1 process per GPU
       int const numChildren = isMultiProcess ? numGpus : 1;
       int const numRanks    = numGpus*ranksPerGpu;
+      if(enableSweep == false && (numGpus < 8 || numRanks < 8)) {
+        continue;
+      }
       this->InitComms(TestBed::GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
       if (testing::Test::HasFailure())
       {

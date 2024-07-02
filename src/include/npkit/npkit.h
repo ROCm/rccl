@@ -16,6 +16,8 @@
 #include "common.h"
 
 #define NPKIT_GET_GPU_TIMESTAMP wall_clock64
+#define NPKIT_GET_CPU_TIMESTAMP_FROM_BLOCK \
+  __atomic_load_n(reinterpret_cast<uint64_t*>((uint8_t *)ncclShmem.comm.cpuTimestamp + 128*blockIdx.x), __ATOMIC_RELAXED)
 
 
 class NpKit {
