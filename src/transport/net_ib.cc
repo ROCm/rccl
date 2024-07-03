@@ -362,10 +362,9 @@ ncclResult_t ncclIbGdrSupport() {
       NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
       if (strcmp(strValue, "1") == 0 && roMode == 0)
         moduleLoaded = 0;
-    } else {
+    } else if (moduleLoaded == 0) {
       char kernel_header_file[256];
       struct utsname utsname;
-      moduleLoaded = 0;
       char buf[256];
       FILE *fp = NULL;
       //check for kernel name exists
