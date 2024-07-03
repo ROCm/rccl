@@ -70,9 +70,7 @@ Dependencies on NPKit (MIT License)
 
 _______________________________________________________________
 
-Dependencies on MSCCLPP (MIT License)
-  branch chhwang/fix-nccl-hanging commit 2e0013f915bef1fbb24bd2382c0022006cc9503c
-  modified branch nusislam:mscclpp:streamsync-fix commit ac665802ad408e94dd7213745d01a265b1f1882c
+Dependencies on MSCCL++ (MIT License)
 
     Copyright (c) Microsoft Corporation.
 
@@ -93,3 +91,9 @@ Dependencies on MSCCLPP (MIT License)
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE
+
+See:
+
+    https://github.com/microsoft/mscclpp
+
+for more information and license details.
