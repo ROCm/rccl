@@ -27,6 +27,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Fixed
 - Bug when configuring RCCL for only LL128 protocol
 - Scratch memory allocation after API change for MSCCL
+- GDR support flag now set with DMABUF
 
 ## RCCL 2.18.6 for ROCm 6.1.0
 ### Changed
