@@ -25,8 +25,6 @@
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
-static std::atomic<bool> mscclInitialized;
-static std::mutex mscclLifecycleMutex;
 
 bool mscclEnabled() {
 #ifdef COMPILE_MSCCL_KERNEL
@@ -56,23 +54,12 @@ bool mscclIsCaller() {
   return mscclGetThreadLocalStatus().mscclIsCallerFlag;
 }
 
-bool mscclAvailable() {
-  return mscclEnabled() && mscclInitialized.load(std::memory_order_acquire);
+bool mscclAvailable(int rank) {
+  return mscclEnabled() && mscclInitialized(rank);
 }
 
 static bool mscclCommCompatible(ncclComm_t comm) {
-  std::map<uint64_t, std::set<uint64_t>> hostHashToPidHashes;
-  for (int i = 0; i < comm->nRanks; i++) {
-    uint64_t hostHash = comm->peerInfo[i].hostHash;
-    uint64_t pidHash = comm->peerInfo[i].pidHash;
-    if (hostHashToPidHashes.find(hostHash) != hostHashToPidHashes.end()) {
-      auto& pidHashSet = hostHashToPidHashes[hostHash];
-      if (pidHashSet.find(pidHash) != pidHashSet.end()) {
-        return false;
-      }
-    }
-    hostHashToPidHashes[hostHash].insert(pidHash);
-  }
+  // MSCCL is always compatible now. No need to guard against multi-thread.
   return true;
 }
 
@@ -86,8 +73,8 @@ static const char* mscclAlgoShareDirPath = "../share/rccl/msccl-algorithms";
 static const char* mscclUnitTestAlgoShareDirPath = "../share/rccl/msccl-unit-test-algorithms";
 
 static ncclResult_t mscclInternalSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
-  static bool mscclAlgoMetaLoaded = false;
-  mscclStatus& status = mscclGetStatus();
+  static thread_local bool mscclAlgoMetaLoaded = false;
+  mscclStatus& status = mscclGetStatus(comm->rank);
 
   *numChannelsRequired = 0;
   // Query numChannelsRequired from loaded algorithm metas
@@ -166,9 +153,7 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
     return ncclSuccess;
   }
 
-  std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
-
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
   bool useInternalScheduler = false;
 
   const char* mscclSchedulerPath = getenv(mscclSchedulerPathEnv);
@@ -199,20 +184,11 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
 }
 
 ncclResult_t mscclInit(ncclComm_t comm) {
-  // Always initialize thread local status
-  mscclThreadLocalStatus threadLocalStatus = mscclGetThreadLocalStatus();
-  threadLocalStatus.groupStatus = mscclNoGroup;
-  threadLocalStatus.groupDepth = 0;
-  threadLocalStatus.captureId = ULLONG_MAX;
-  threadLocalStatus.captureStatus = mscclNoCapture;
-
   {
-    std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
-
-    mscclStatus& status = mscclGetStatus();
+    mscclStatus& status = mscclGetStatus(comm->rank);
 
     // freeAlgoHandles and needsProxy are initialized globally once and before algorithm pre-processing and connection
-    if (!mscclInitialized.load(std::memory_order_acquire)) {
+    if (!mscclInitialized(comm->rank)) {
       status.freeAlgoHandles.resize(MSCCL_MAX_NUM_ALGOS);
       for (int i = 0; i < MSCCL_MAX_NUM_ALGOS; i++) {
         status.freeAlgoHandles[i] = MSCCL_MAX_NUM_ALGOS - i - 1;
@@ -229,6 +205,8 @@ ncclResult_t mscclInit(ncclComm_t comm) {
         if (m.nRanks == comm->nRanks) {
           // Load algorithms
           if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()) {
+            static std::mutex loadAlgoMutex;
+            std::lock_guard<std::mutex> lock(loadAlgoMutex);
             NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
           }
           // Connect algorithms
@@ -241,7 +219,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
       }
     }
 
-    if (mscclInitialized.load(std::memory_order_acquire)) {
+    if (mscclInitialized(comm->rank)) {
       return ncclSuccess;
     }
 
@@ -250,7 +228,7 @@ ncclResult_t mscclInit(ncclComm_t comm) {
     status.lastStream = nullptr;
     NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
 
-    mscclInitialized.store(true, std::memory_order_release);
+    mscclSetInitialized(comm->rank);
   }
 
   INFO(NCCL_INIT, "MSCCL: Initialization finished, localSize %ld", mscclKernMaxLocalSize());
@@ -266,8 +244,8 @@ ncclResult_t mscclGroupStart() {
   return ncclSuccess;
 }
 
-static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam* param) {
-  mscclStatus& status = mscclGetStatus();
+static ncclResult_t mscclInternalSchedulerSelectAlgo(int rank, struct mscclSchedulerParam* param) {
+  mscclStatus& status = mscclGetStatus(rank);
   param->scheduled = false;
 
   // Current MSCCL doesn't support pre/post op
@@ -312,13 +290,13 @@ static ncclResult_t mscclInternalSchedulerSelectAlgo(struct mscclSchedulerParam*
 }
 
 static ncclResult_t mscclSchedulerSelectAlgo(struct mscclSavedSchedulerParam* param) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(param->comm->rank);
   if (status.mscclSchedulerPtr) {
     NCCLCHECK(status.mscclSchedulerPtr->selectAlgo(&(param->p)));
   } else {
     // Disable MSCCL algorithms if machine type is not matching
     if (param->comm->topo->mscclEnabled || mscclForceEnabled()) {
-      NCCLCHECK(mscclInternalSchedulerSelectAlgo(&(param->p)));
+      NCCLCHECK(mscclInternalSchedulerSelectAlgo(param->comm->rank, &(param->p)));
     } else {
       param->p.scheduled = false;
     }
@@ -513,12 +491,30 @@ ncclResult_t mscclGroupEnd() {
   return ncclSuccess;
 }
 
-static ncclResult_t mscclInternalSchedulerTeardown() {
+static ncclResult_t mscclInternalUnloadAlgo(int rank, mscclAlgoHandle_t mscclAlgoHandle) {
+  mscclStatus& status = mscclGetStatus(rank);
+
+  free(status.hostAlgos[mscclAlgoHandle]);
+  status.hostAlgos.erase(mscclAlgoHandle);
+
+  NCCLCHECK(ncclCudaFree(status.devAlgos[mscclAlgoHandle]));
+  status.devAlgos.erase(mscclAlgoHandle);
+
+  status.freeAlgoHandles.push_back(mscclAlgoHandle);
+
+  for (auto &s : status.connectedAlgos) {
+    s.second.erase(mscclAlgoHandle);
+  }
+
+  return ncclSuccess;
+}
+
+static ncclResult_t mscclInternalSchedulerTeardown(int rank) {
   ncclResult_t ret = ncclSuccess, tmpRet = ncclSuccess;
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(rank);
   for (auto &m : status.rankToAlgoHandles) {
     for (auto &p : m) {
-      tmpRet = mscclUnloadAlgo(p.second);
+      tmpRet = mscclInternalUnloadAlgo(rank, p.second);
       if (ret == ncclSuccess) {
         ret = tmpRet;
       }
@@ -529,18 +525,13 @@ static ncclResult_t mscclInternalSchedulerTeardown() {
   return ret;
 }
 
-ncclResult_t mscclTeardown() {
-  // Always teardown thread local status
-  mscclThreadLocalStatus threadLocalStatus = mscclGetThreadLocalStatus();
-  threadLocalStatus.savedSchedulerParams.clear();
-
+ncclResult_t mscclTeardown(int rank) {
   {
-    std::lock_guard<std::mutex> lock(mscclLifecycleMutex);
-
-    if (!mscclInitialized.load(std::memory_order_acquire)) {
+    if (!mscclInitialized(rank)) {
+      mscclRemoveRank(rank);
       return ncclSuccess;
     }
-    mscclStatus& status = mscclGetStatus();
+    mscclStatus& status = mscclGetStatus(rank);
     for (auto &p : status.hostAlgos) {
       free(p.second);
       status.freeAlgoHandles.push_back(p.first);
@@ -563,13 +554,14 @@ ncclResult_t mscclTeardown() {
       dlclose(status.mscclSchedulerLib);
       status.mscclSchedulerLib = nullptr;
     } else {
-      NCCLCHECK(mscclInternalSchedulerTeardown());
+      NCCLCHECK(mscclInternalSchedulerTeardown(rank));
     }
     NCCLCHECK(mscclDestroyWorkFifoStatus(&(status.defaultWorkFifoStatus)));
     for (auto &p : status.graphWorkFifoStatus) {
       NCCLCHECK(mscclDestroyWorkFifoStatus(&(p.second)));
     }
-    mscclInitialized.store(false, std::memory_order_release);
+    mscclSetInitialized(rank, false);
+    mscclRemoveRank(rank);
   }
 
   INFO(NCCL_INIT, "MSCCL: Teardown finished");

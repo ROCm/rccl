@@ -766,6 +766,7 @@ ncclResult_t pmscclRunAlgo(
 /*! @endcond */
 
 /*! @brief      MSCCL Unload Algorithm
+    @deprecated This function has been removed from the public API.
     @details    Unload MSCCL algorithm previous loaded using its handle. This API
                 is expected to be called by MSCCL scheduler instead of end users.
     @return     Result code. See @ref rccl_result_code for more details.

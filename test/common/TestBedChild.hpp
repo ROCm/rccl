@@ -57,6 +57,7 @@ namespace RcclUnitTesting
     pid_t pid;
     bool  verbose;
     int   printValues;
+    bool  useRankThreading;
 
     // Pipes used to communicate between parent process
     int parentWriteFd;
@@ -80,7 +81,7 @@ namespace RcclUnitTesting
     std::vector<std::vector<std::vector<bool>>> graphEnabled; 
 
     // Constructor
-    TestBedChild(int const childId, bool const verbose, int const printValues);
+    TestBedChild(int const childId, bool const verbose, int const printValues, bool const useRankThreading);
 
     // Prepare parent/child communication pipes - to be executed by parent process
     int InitPipes();

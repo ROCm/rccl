@@ -108,6 +108,7 @@ namespace RcclUnitTesting
     showTiming     = GetEnvVar("UT_SHOW_TIMING",  1);
     useInteractive = GetEnvVar("UT_INTERACTIVE",  0);
     timeoutUs      = GetEnvVar("UT_TIMEOUT_US" ,  5000000);
+    useMultithreading = GetEnvVar("UT_MULTITHREAD", false);
 
     // Total number of reduction ops
     int numOps = ncclNumOps;
@@ -232,7 +233,8 @@ namespace RcclUnitTesting
         std::make_tuple("UT_PRINT_VALUES"     , printValues   , "Print array values (-1 for all)"),
         std::make_tuple("UT_SHOW_TIMING"      , showTiming    , "Show timing table"),
         std::make_tuple("UT_INTERACTIVE"      , useInteractive, "Run in interactive mode"),
-        std::make_tuple("UT_TIMEOUT_US"       , timeoutUs     , "Timeout limit for collective calls in us")
+        std::make_tuple("UT_TIMEOUT_US"       , timeoutUs     , "Timeout limit for collective calls in us"),
+        std::make_tuple("UT_MULTITHREAD"      , useMultithreading, "Multi-thread single-process ranks"),
       };
 
     printf("================================================================================\n");

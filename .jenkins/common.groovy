@@ -24,7 +24,7 @@ def runTestCommand (platform, project, gfilter, envars)
                 cd ${project.paths.project_build_prefix}/build/release/test
                 ${sudo} ulimit -l unlimited
                 ulimit -a
-                ${sudo} ${envars} RCCL_ENABLE_SIGNALHANDLER=1 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
+                ${sudo} ${envars} RCCL_ENABLE_SIGNALHANDLER=1 NCCL_DEBUG=INFO HSA_FORCE_FINE_GRAIN_PCIE=1 UT_MULTITHREAD=1 UT_PROCESS_MASK=1 ./rccl-UnitTests --gtest_filter=${gfilter} --gtest_output=xml --gtest_color=yes
             """
 
    platform.runCommand(this, command)

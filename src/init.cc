@@ -1738,7 +1738,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     NCCLCHECK(mscclInit(comm));
-    mscclStatus& status = mscclGetStatus();
+    mscclStatus& status = mscclGetStatus(comm->rank);
     status.needsProxy |= mscclNeedsProxy;
   }
 
@@ -2351,7 +2351,7 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
 #endif
 
   if (mscclEnabled() && (mscclEnabledForTopo || mscclForceEnabled())) {
-    NCCLCHECK(mscclTeardown());
+    NCCLCHECK(mscclTeardown(comm->rank));
   }
 
   return ncclSuccess;

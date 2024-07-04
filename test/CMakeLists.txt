@@ -5,6 +5,8 @@ cmake_minimum_required(VERSION 2.8.12)
 
 if(BUILD_TESTS)
 
+  option(OPENMP_TESTS_ENABLED "Enable OpenMP for unit tests" OFF)
+  
   message("Building rccl unit tests (Installed in /test/rccl-UnitTests)")
 
   find_package(hsa-runtime64 PATHS /opt/rocm )
@@ -21,6 +23,10 @@ if(BUILD_TESTS)
 
     # Search for ROCr library file in user defined locations
     find_library(ROCR_LIB ${CORE_RUNTIME_TARGET} PATHS ${ROCR_LIB_DIR} "/opt/rocm" PATH_SUFFIXES lib lib64 REQUIRED)
+  endif()
+
+  if(OPENMP_TESTS_ENABLED)
+    find_package(OpenMP REQUIRED)
   endif()
 
   include_directories(${GTEST_INCLUDE_DIRS} ./common)
@@ -60,12 +66,23 @@ if(BUILD_TESTS)
   if(LL128_ENABLED)
     target_compile_definitions(rccl-UnitTests PRIVATE ENABLE_LL128)
   endif()
+  if(OPENMP_TESTS_ENABLED)
+    target_compile_definitions(rccl-UnitTests PRIVATE ENABLE_OPENMP)
+  endif()
   target_compile_definitions(rccl-UnitTests PRIVATE ROCM_PATH="${ROCM_PATH}")
+
+  ## Set rccl-UnitTests compile definitions
+  if(OPENMP_TESTS_ENABLED)
+    target_compile_options(rccl-UnitTests PRIVATE "${OpenMP_CXX_FLAGS}")
+  endif()
 
   ## Set rccl-UnitTests linked libraries
   target_link_libraries(rccl-UnitTests PRIVATE ${GTEST_BOTH_LIBRARIES})
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
   target_link_libraries(rccl-UnitTests PRIVATE Threads::Threads)
+  if(OPENMP_TESTS_ENABLED)
+    target_link_libraries(rccl-UnitTests PRIVATE "${OpenMP_CXX_FLAGS}")
+  endif()
 
   # rccl-UnitTests using static library of rccl requires passing rccl
   # through -l and -L instead of command line input.

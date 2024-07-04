@@ -8,9 +8,15 @@
 
 #include "msccl/msccl_struct.h"
 
-mscclStatus& mscclGetStatus();
+bool mscclInitialized(int rank);
 
-mscclSavedProxyArgs& mscclGetSavedProxyArgs();
+void mscclSetInitialized(int rank, bool initialized = true);
+
+void mscclRemoveRank(int rank);
+
+mscclStatus& mscclGetStatus(int rank);
+
+mscclSavedProxyArgs& mscclGetSavedProxyArgs(int rank);
 
 mscclThreadLocalStatus& mscclGetThreadLocalStatus();
 
