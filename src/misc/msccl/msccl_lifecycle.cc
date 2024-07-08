@@ -459,7 +459,7 @@ ncclResult_t mscclEnqueueCheck(
 #ifdef ENABLE_MSCCLPP
       if (comm->mscclppCompatible) {
         /* check if one rank per GPU and graph mode is enabled */
-        if ((nBytes > 0 && nBytes <= comm->mscclpp_threshold) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
+        if ((nBytes > 32 && nBytes <= comm->mscclpp_threshold) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
           if (func == mscclFuncAllReduce) {
             INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllReduce (groupStatus=mscclNoGroup)");
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
@@ -488,7 +488,7 @@ ncclResult_t mscclEnqueueCheck(
 #ifdef ENABLE_MSCCLPP
       if (comm->mscclppCompatible) {
         /* check if one rank per GPU and graph mode is enabled */
-        if ((nBytes > 0 && nBytes <= comm->mscclpp_threshold) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
+        if ((nBytes > 32 && nBytes <= comm->mscclpp_threshold) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
           if (func == mscclFuncAllReduce) {
             INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllReduce (groupStatus=mscclGroupSupportedOp)");
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
