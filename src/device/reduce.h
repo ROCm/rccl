@@ -10,7 +10,7 @@
 #include "primitives.h"
 
 namespace {
-  template<typename T, typename RedOp, typename Proto>
+  template<typename T, typename RedOp, typename Proto, int COLL_UNROLL>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
   __device__ void runRing(ncclWorkElem *args) {
 #else
@@ -56,24 +56,24 @@ namespace {
   }
 }
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, COLL_UNROLL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    using Proto = ProtoSimple<REDUCE_CHUNKSTEPS/REDUCE_SLICESTEPS, REDUCE_SLICESTEPS>;
-    runRing<T, RedOp, Proto>(args);
+    using Proto = ProtoSimple<REDUCE_CHUNKSTEPS/REDUCE_SLICESTEPS, REDUCE_SLICESTEPS, COLL_UNROLL>;
+    runRing<T, RedOp, Proto, COLL_UNROLL>(args);
   }
 };
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL, COLL_UNROLL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL>(args);
+    runRing<T, RedOp, ProtoLL, COLL_UNROLL>(args);
   }
 };
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128, COLL_UNROLL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL128>(args);
+    runRing<T, RedOp, ProtoLL128, COLL_UNROLL>(args);
   }
 };

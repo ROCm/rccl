@@ -240,12 +240,6 @@ static float ncclTopoXGMISpeed(const char* gcn) {
     return VEGA_XGMI_WIDTH;
 }
 
-#if ENABLE_COLLTRACE
-  #define ncclGetKernelIndex(p_comm) ((p_comm)->collTraceThread ? 1 : 0)
-#else
-  #define ncclGetKernelIndex(p_comm) (0)
-#endif
-
 // Returns NVLink bw in GB/s
 static float ncclTopoNVLinkBw(int cudaCompCap) {
   return

@@ -12,8 +12,8 @@
 #include "npkit/npkit.h"
 #endif
 
-template<typename T, typename RedOp>
-struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, COLL_UNROLL> {
   template<typename Proto>
   __device__ void runSend(const int tid, const int nthreads, const uint8_t group, struct ncclWorkElemP2p* args) {
     void* buff = reinterpret_cast<void*>(uintptr_t(args->buffHi32)<<32 | args->buffLo32);
@@ -211,7 +211,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 #elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
         runRecv<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
 #else
-        runRecv<ProtoSimple<1,1>>(tid, nthreads, group, args);
+        runRecv<ProtoSimple<1,1,COLL_UNROLL>>(tid, nthreads, group, args);
 #endif
       }
     } else {
@@ -223,7 +223,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 #elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
         runSend<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
 #else
-        runSend<ProtoSimple<1,1>>(tid, nthreads, group, args);
+        runSend<ProtoSimple<1,1,COLL_UNROLL>>(tid, nthreads, group, args);
 #endif
       }
     }

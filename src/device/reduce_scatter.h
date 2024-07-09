@@ -10,7 +10,7 @@
 #include "primitives.h"
 
 namespace {
-  template<typename T, typename RedOp, typename Proto>
+  template<typename T, typename RedOp, typename Proto, int COLL_UNROLL>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
   __device__ void runRing(ncclWorkElem *args) {
 #else
@@ -58,30 +58,30 @@ namespace {
   }
 }
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, COLL_UNROLL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    using Proto = ProtoSimple<REDUCESCATTER_CHUNKSTEPS/REDUCESCATTER_SLICESTEPS, REDUCESCATTER_SLICESTEPS>;
-    runRing<T, RedOp, Proto>(args);
+    using Proto = ProtoSimple<REDUCESCATTER_CHUNKSTEPS/REDUCESCATTER_SLICESTEPS, REDUCESCATTER_SLICESTEPS, COLL_UNROLL>;
+    runRing<T, RedOp, Proto, COLL_UNROLL>(args);
   }
 };
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL, COLL_UNROLL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL>(args);
+    runRing<T, RedOp, ProtoLL, COLL_UNROLL>(args);
   }
 };
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128, COLL_UNROLL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL128>(args);
+    runRing<T, RedOp, ProtoLL128, COLL_UNROLL>(args);
   }
 };
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPLE> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPLE, COLL_UNROLL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
     const int tid = threadIdx.x;
     struct ncclNvls* nvls = &ncclShmem.channel.nvls;
@@ -159,8 +159,8 @@ struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROT
   }
 };
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NCCL_PROTO_SIMPLE> {
+template<typename T, typename RedOp, int COLL_UNROLL>
+struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NCCL_PROTO_SIMPLE, COLL_UNROLL> {
   template<bool ReduceSendNotRecv>
   struct Scatterer {
     struct ncclWorkElem* args;
@@ -246,7 +246,7 @@ struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT,
     nWarps2 = int(denom*nWarps2);
     nWarps1 = args->nWarps - (nWarps2+nWarps3);
 
-    using Proto = ProtoSimple<1, 1>;
+    using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
 
     int tn = nWarps1*WARP_SIZE;
     if (tid < tn) {
