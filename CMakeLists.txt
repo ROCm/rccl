@@ -505,7 +505,9 @@ foreach(SRC_FILE ${SRC_FILES})
   # Create a custom command to create hipified source code
   add_custom_command(
     OUTPUT ${HIP_FILE}
-    COMMAND mkdir -p ${HIP_FILE_DIR} && $ ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
+    COMMAND mkdir -p ${HIP_FILE_DIR}
+            && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
+            && ${CMAKE_COMMAND} -DHIP_FILE=${HIP_FILE} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/AddUnroll.cmake
     MAIN_DEPENDENCY ${SRC_FILE}
     COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
   )
