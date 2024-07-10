@@ -50,7 +50,11 @@ extern __shared__ struct mscclShmemData mscclShmem;
 inline __device__ static void barrier(int nthreads) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
   assert(nthreads == NCCL_MAX_NTHREADS);
-  __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier");
+  #ifdef __GFX12__
+    __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier_signal -1\ns_barrier_wait -1");
+  #else
+    __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier");
+  #endif
 #else
   asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15));
 #endif
