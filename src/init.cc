@@ -698,26 +698,22 @@ fail:
 static void showVersion() {
   static int shown = 0;
   if (shown == 0 && ncclDebugLevel >= NCCL_LOG_VERSION) {
-    char hostInfo[HOST_NAME_MAX], libPathInfo[2048];
-    size_t hostInfoSize = sizeof(hostInfo);
-    size_t libPathInfoSize = sizeof(libPathInfo);
+    char hostInfo[HOST_NAME_MAX] = {}, libPathInfo[2048] = {};
+    size_t hostInfoSize = sizeof(hostInfo), libPathInfoSize = sizeof(libPathInfo);
     
-    // Retireve Hostname info
-    if (gethostname(hostInfo, hostInfoSize-1) == 0) {
-      hostInfo[hostInfoSize-1] = '\0'; //To prevent overflow
-    } else {
+    // Retrieve Hostname info
+    if (gethostname(hostInfo, hostInfoSize-1) != 0) {
       // Returns Unknown in hostInfo if function call unsuccessful
-      strncpy(hostInfo, "Unknown", hostInfoSize);
+      strncpy(hostInfo, "Unknown", hostInfoSize-1);
     }
     
     // Retrieve librccl path
     Dl_info pathInfo;
     if (dladdr((void*)ncclCommInitRank, &pathInfo)) {
       strncpy(libPathInfo, pathInfo.dli_fname, libPathInfoSize-1);
-      libPathInfo[libPathInfoSize-1] = '\0'; //To prevent overflow
     } else {
       // Sets libPath to Unknown if the above function call is not successful
-      strncpy(libPathInfo, "Unknown", libPathInfoSize);
+      strncpy(libPathInfo, "Unknown", libPathInfoSize-1);
     }
 
     printf("%s-%s\n%s\n", VERSION_STRING, rcclGitHash, VERSION_STRING_EXTENDED);
