@@ -58,4 +58,13 @@ if(ENABLE_MSCCLPP)
 
         find_package(mscclpp_nccl REQUIRED)
     endif()
+
+    # Copy the outputs to the PROJECT_BINARY_DIR, list them in MSCCLPP_OUT_LIBS
+    file(GLOB MSCCLPP_LIB_FILES "${MSCCLPP_ROOT}/lib/*")
+    file(GLOB MSCCLPP_LIB_NAMES RELATIVE ${MSCCLPP_ROOT}/lib "${MSCCLPP_ROOT}/lib/*")
+    set(MSCCLPP_OUT_LIBS "")
+    foreach(LIB_NAME ${MSCCLPP_LIB_NAMES})
+        list(APPEND MSCCLPP_OUT_LIBS ${PROJECT_BINARY_DIR}/${LIB_NAME})
+    endforeach()  
+    file(COPY ${MSCCLPP_LIB_FILES} DESTINATION ${PROJECT_BINARY_DIR})
 endif()
