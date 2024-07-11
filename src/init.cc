@@ -1940,6 +1940,9 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
     comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
     if (comm->mscclppCompatible) {
+      Dl_info pathInfo;
+      dladdr((void*)ncclCommInitRank, &pathInfo);
+      INFO(NCCL_INIT, "***** %s *****", pathInfo.dli_fname);
       NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &(mscclpp_uniqueIdMap[job->commId]), sizeof(mscclpp_ncclUniqueId)), res, fail);
       INFO(NCCL_INIT, "MSCCL++: Broadcast mscclpp_ncclUniqueId to %d ranks", (comm->localRanks - 1));
       comm->mscclpp_threshold = rcclParamMscclppThreshold();
