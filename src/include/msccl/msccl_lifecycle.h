@@ -17,7 +17,7 @@ void mscclSetIsCallerFlag();
 void mscclClearIsCallerFlag();
 bool mscclIsCaller();
 
-bool mscclAvailable();
+bool mscclAvailable(int rank = -1);
 
 ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired);
 
@@ -33,7 +33,7 @@ ncclResult_t mscclEnqueueCheck(
 
 ncclResult_t mscclGroupEnd();
 
-ncclResult_t mscclTeardown();
+ncclResult_t mscclTeardown(int rank);
 
 size_t mscclKernMaxLocalSize();
 

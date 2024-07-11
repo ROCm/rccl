@@ -22,10 +22,10 @@ static inline size_t computeSizeNeeded(size_t nBytes, int nScratchChunks, int nC
   return (nBytes * (size_t)nScratchChunks) / (size_t)nChunksPerLoop;
 }
 
-ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
-  mscclStatus& status = mscclGetStatus();
+ncclResult_t mscclGetCaptureStatus(int rank, hipStream_t stream) {
+  mscclStatus& status = mscclGetStatus(rank);
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
-  mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
+  mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs(rank);
   cudaStreamCaptureStatus captureStatus;
   unsigned long long captureId;
   CUDACHECK(hipStreamGetCaptureInfo_v2(stream, &captureStatus, &captureId, &threadLocalStatus.graph, nullptr, nullptr));
@@ -42,12 +42,12 @@ ncclResult_t mscclGetCaptureStatus(hipStream_t stream) {
   } else {
     threadLocalStatus.captureStatus = mscclNoCapture;
   }
-  INFO(NCCL_NET,"mscclGetCaptureStatus: %d, captureId: %llu, size: %lu\n", threadLocalStatus.captureStatus, threadLocalStatus.captureId, mscclGetSavedProxyArgs()[captureId].size());
+  INFO(NCCL_NET,"mscclGetCaptureStatus: %d, captureId: %llu, size: %lu\n", threadLocalStatus.captureStatus, threadLocalStatus.captureId, savedProxyArgs[captureId].size());
   return ncclSuccess;
 }
 
 ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t count, ncclDataType_t dataType) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
   status.stepSize = comm->buffSizes[hostAlgo->protocol] / NCCL_STEPS;
   status.chunkSteps = hostAlgo->protocol == NCCL_PROTO_SIMPLE ? hostAlgo->chunkSteps : 1;
   status.sliceSteps = hostAlgo->protocol == NCCL_PROTO_SIMPLE ? hostAlgo->sliceSteps : 1;
@@ -69,12 +69,11 @@ ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t
 }
 
 ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream) {
-  mscclStatus& status = mscclGetStatus();
   return ncclSuccess;
 }
 
-ncclResult_t mscclSetupSyncFlags(hipStream_t stream) {
-  mscclStatus& status = mscclGetStatus();
+ncclResult_t mscclSetupSyncFlags(int rank, hipStream_t stream) {
+  mscclStatus& status = mscclGetStatus(rank);
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   if (threadLocalStatus.captureStatus == mscclNewCapture ||
       status.workIndex > (1ULL << (8*sizeof(status.workIndex))) - 2 * NCCL_MAX_OPS - 1) {
@@ -86,7 +85,7 @@ ncclResult_t mscclSetupSyncFlags(hipStream_t stream) {
 }
 
 ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
 
   // Check whether there are enough channels
   if (hostAlgo->nChannels > comm->nChannels) {
@@ -124,7 +123,7 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
 }
 
 static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   struct ncclProxyOp proxyOp = {};
   proxyOp.connIndex = 0;
@@ -185,9 +184,9 @@ static void HIPRT_CB mscclSetupProxyCallback(void *args) {
 }
 
 ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStream_t stream) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
-  mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs();
+  mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs(comm->rank);
   if (threadLocalStatus.captureStatus == mscclNoCapture) {
     INFO(NCCL_NET,"mscclSetupProxy: no capture\n");
     NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm));
@@ -203,7 +202,7 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStr
       p.userData = params;
       CUDACHECK(hipGraphAddHostNode(&callbackNode, threadLocalStatus.graph, nullptr, 0, &p));
     }
-    mscclGetSavedProxyArgs()[threadLocalStatus.captureId].emplace_back(hostAlgo, comm);
+    savedProxyArgs[threadLocalStatus.captureId].emplace_back(hostAlgo, comm);
   }
   return ncclSuccess;
 }
@@ -410,7 +409,7 @@ RCCL_PARAM(MscclForceFullOps, "MSCCL_FORCE_FULLOPS", 0);
 ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count,
     ncclDataType_t dataType, ncclRedOp_t op, struct mscclAlgo* hostAlgo, struct mscclAlgo* devAlgo,
     ncclComm_t comm, hipStream_t stream) {
-  mscclStatus& status = mscclGetStatus();
+  mscclStatus& status = mscclGetStatus(comm->rank);
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
 
   if (status.lastStream != stream && status.lastStream != nullptr) {

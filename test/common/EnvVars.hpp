@@ -29,6 +29,7 @@ namespace RcclUnitTesting
     bool showTiming;     // Show timing per case at end            [UT_SHOW_TIMING]
     bool useInteractive; // Run in interactive mode                [UT_INTERACTIVE]
     int  timeoutUs;      // Set timeout for child in microseconds  [UT_TIMEOUT_US]
+    bool useMultithreading; // Multi-thread single-process ranks   [UT_MULTITHREAD]
     bool isGfx94;        // Detects if architecture is gfx94
 
     // Constructor that parses and collects environment variables

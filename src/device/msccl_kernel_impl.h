@@ -50,7 +50,11 @@ extern __shared__ struct mscclShmemData mscclShmem;
 inline __device__ static void barrier(int nthreads) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
   assert(nthreads == NCCL_MAX_NTHREADS);
-  __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier");
+  #ifdef __GFX12__
+    __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier_signal -1\ns_barrier_wait -1");
+  #else
+    __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier");
+  #endif
 #else
   asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15));
 #endif
@@ -185,8 +189,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
   if (tid == 0) {
-    uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
-    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, xcc_id, *cpuTimestamp);
+    NpKit::CollectGpuEventLDS(NPKIT_EVENT_TIME_SYNC_CPU, 0, xcc_id, NPKIT_GET_CPU_TIMESTAMP_FROM_BLOCK);
   }
 #endif
 

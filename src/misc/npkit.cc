@@ -28,10 +28,12 @@ void NpKit::CpuTimestampUpdateThread() {
   uint64_t init_system_clock = std::chrono::system_clock::now().time_since_epoch().count();
   uint64_t init_steady_clock = std::chrono::steady_clock::now().time_since_epoch().count();
   uint64_t curr_steady_clock = 0;
-  volatile uint64_t* volatile_cpu_timestamp_ = cpu_timestamp_;
   while (!cpu_timestamp_update_thread_should_stop_) {
-    curr_steady_clock = std::chrono::steady_clock::now().time_since_epoch().count();
-    *volatile_cpu_timestamp_ = init_system_clock + (curr_steady_clock - init_steady_clock);
+    for (int c = 0; c < MAXCHANNELS; c++) {
+      volatile uint64_t* volatile_cpu_timestamp_ = (volatile uint64_t*)((uint8_t *)cpu_timestamp_ + 128*c);
+      curr_steady_clock = std::chrono::steady_clock::now().time_since_epoch().count();
+      __atomic_store_n(volatile_cpu_timestamp_, init_system_clock + (curr_steady_clock - init_steady_clock), __ATOMIC_RELAXED);
+    }
   }
 }
 
@@ -58,8 +60,8 @@ ncclResult_t NpKit::Init(int rank) {
     cpu_collect_contexts_[i] = ctx;
   }
 
-  // Init timestamp
-  NCCLCHECK(ncclCudaHostCalloc(&cpu_timestamp_, 1));
+  // Init timestamp. Allocates MAXCHANNELS*128 bytes buffer for GPU
+  NCCLCHECK(ncclCudaHostCalloc(&cpu_timestamp_, MAXCHANNELS*128/sizeof(cpu_timestamp_)));
   volatile uint64_t* volatile_cpu_timestamp = cpu_timestamp_;
   *volatile_cpu_timestamp = std::chrono::system_clock::now().time_since_epoch().count();
   cpu_timestamp_update_thread_should_stop_ = false;

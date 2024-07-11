@@ -23,7 +23,7 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
   size_t msgsize = sendcount * ncclTypeSize(datatype);
   NVTX3_FUNC_WITH_PARAMS(AllGather, AllGatherSchema, msgsize)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
@@ -52,7 +52,7 @@ ncclResult_t ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
   NvtxParamsAllReduce payload{count * ncclTypeSize(datatype), op};
   NVTX3_FUNC_WITH_PARAMS(AllReduce, AllReduceSchema, payload)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
@@ -75,7 +75,7 @@ ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count, nc
   size_t msgsize = count * ncclTypeSize(datatype);
   NVTX3_FUNC_WITH_PARAMS(AllToAll, AllToAllSchema, msgsize)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, 0, ncclSum, mscclFuncAllToAll, comm, stream);
@@ -122,7 +122,7 @@ ncclResult_t ncclAllToAllv(const void *sendbuff, const size_t sendcounts[], cons
   NvtxParamsAllToAllv payload{sendcounts[comm->rank] * ncclTypeSize(datatype), recvcounts[comm->rank] * ncclTypeSize(datatype)};
   NVTX3_FUNC_WITH_PARAMS(AllToAllv, AllToAllvSchema, payload)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, sendcounts, sdispls, recvbuff, recvcounts, rdispls,
       0, datatype, 0, 0, ncclSum, mscclFuncAllToAllv, comm, stream);
@@ -166,7 +166,7 @@ ncclResult_t ncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, n
   NvtxParamsBroadcast payload{count * ncclTypeSize(datatype), root};
   NVTX3_FUNC_WITH_PARAMS(Broadcast, BroadcastSchema, payload)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, root, 0, ncclSum, mscclFuncBroadcast, comm, stream);
@@ -200,7 +200,7 @@ ncclResult_t ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     NvtxParamsGather payload{sendcount * ncclTypeSize(datatype), root};
     NVTX3_FUNC_WITH_PARAMS(Gather, GatherSchema, payload)
 
-    if (mscclAvailable() && !mscclIsCaller()) {
+    if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
       return mscclEnqueueCheck(
         sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
         sendcount, datatype, root, 0, ncclSum, mscclFuncGather, comm, stream);
@@ -240,7 +240,7 @@ ncclResult_t ncclReduce(const void* sendbuff, void* recvbuff, size_t count,
   NvtxParamsReduce payload{count * ncclTypeSize(datatype), root, op};
   NVTX3_FUNC_WITH_PARAMS(Reduce, ReduceSchema, payload)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, root, 0, op, mscclFuncReduce, comm, stream);
@@ -268,7 +268,7 @@ ncclResult_t ncclReduceScatter(const void* sendbuff, void* recvbuff, size_t recv
   NvtxParamsReduceScatter payload{recvcount * ncclTypeSize(datatype), op};
   NVTX3_FUNC_WITH_PARAMS(ReduceScatter, ReduceScatterSchema, payload)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       recvcount, datatype, 0, 0, op, mscclFuncReduceScatter, comm, stream);
@@ -295,7 +295,7 @@ ncclResult_t ncclScatter(const void* sendbuff, void* recvbuff, size_t recvcount,
     NvtxParamsScatter payload{recvcount * ncclTypeSize(datatype), root};
     NVTX3_FUNC_WITH_PARAMS(Scatter, ScatterSchema, payload)
     
-    if (mscclAvailable() && !mscclIsCaller()) {
+    if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
       return mscclEnqueueCheck(
         sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
         recvcount, datatype, root, 0, ncclSum, mscclFuncScatter, comm, stream);
@@ -333,7 +333,7 @@ ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatyp
   NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
   NVTX3_FUNC_WITH_PARAMS(Send, SendRecvSchema, payload)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, nullptr, nullptr, nullptr,
       count, datatype, 0, peer, ncclSum, mscclFuncSend, comm, stream);
@@ -356,7 +356,7 @@ ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int
   NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
   NVTX3_FUNC_WITH_PARAMS(Recv, SendRecvSchema, payload)
 
-  if (mscclAvailable() && !mscclIsCaller()) {
+  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       nullptr, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, peer, ncclSum, mscclFuncRecv, comm, stream);

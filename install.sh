@@ -26,6 +26,7 @@ install_prefix="${ROCM_PATH}"
 msccl_kernel_enabled=true
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
+openmp_test_enabled=false
 roctx_enabled=false
 run_tests=false
 run_tests_all=false
@@ -52,6 +53,7 @@ function display_help()
     echo "       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
+    echo "       --openmp-test-enable    Enable OpenMP in rccl unit tests"
     echo "       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)"
     echo "    -p|--package_build         Build RCCL package"
     echo "       --prefix                Specify custom directory to install RCCL to (default: \`/opt/rocm\`)"
@@ -71,7 +73,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ "$?" -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -100,6 +102,7 @@ while true; do
          --amdgpu_targets)           build_amdgpu_targets=${2};                                                                        shift 2 ;;
          --no_clean)                 clean_build=false;                                                                                shift ;;
          --npkit-enable)             npkit_enabled=true;                                                                               shift ;;
+         --openmp-test-enable)       openmp_test_enabled=true;                                                                         shift ;;
          --roctx-enable)             roctx_enabled=true;                                                                               shift ;;
     -p | --package_build)            build_package=true;                                                                               shift ;;
          --prefix)                   install_library=true; install_prefix=${2};                                                        shift 2 ;;
@@ -244,6 +247,11 @@ fi
 # Enable ROCTX
 if [[ "${roctx_enabled}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DROCTX=ON"
+fi
+
+# Enable OpenMP in unit tests
+if [[ "${openmp_test_enabled}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DOPENMP_TESTS_ENABLED=ON"
 fi
 
 # Enable NPKit

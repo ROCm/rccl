@@ -722,7 +722,11 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
 #endif
     CUDACHECK(hipFree(ptr));
     info->hasFineGrain = true;
-    NCCLCHECK(ncclGpuGdrSupport(comm, &info->gdrSupport));
+    // GPU supports GDR if DMABUF is supported
+    if (dmaBufSupported(comm) == ncclSuccess)
+      info->gdrSupport = 1;
+    else
+      NCCLCHECK(ncclGpuGdrSupport(comm, &info->gdrSupport));
   }
   else {
     info->hasFineGrain = false;
@@ -1734,7 +1738,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     NCCLCHECK(mscclInit(comm));
-    mscclStatus& status = mscclGetStatus();
+    mscclStatus& status = mscclGetStatus(comm->rank);
     status.needsProxy |= mscclNeedsProxy;
   }
 
@@ -2347,7 +2351,7 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
 #endif
 
   if (mscclEnabled() && (mscclEnabledForTopo || mscclForceEnabled())) {
-    NCCLCHECK(mscclTeardown());
+    NCCLCHECK(mscclTeardown(comm->rank));
   }
 
   return ncclSuccess;
