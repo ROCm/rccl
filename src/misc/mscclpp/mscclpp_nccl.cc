@@ -31,6 +31,10 @@ static struct mscclpp_nccl_access {
   void* handle;
   
   mscclpp_nccl_access() : handle(nullptr) {
+    Dl_info pathInfo;
+    dladdr((void*)ncclCommInitRank, &pathInfo);
+    INFO(NCCL_INIT, "***** %s *****", pathInfo.dli_fname);
+    
     handle = dlopen(mscclpp_nccl_lib_name, RTLD_LAZY);
     if (!handle) {
       WARN("MSCCL++: failed to access %s : %s", mscclpp_nccl_lib_name, dlerror());
