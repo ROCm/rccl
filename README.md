@@ -146,7 +146,7 @@ E.g.: `export NCCL_MIN_NCHANNELS=32`
 
 Increasing the number of channels can be beneficial to performance, but it also increases GPU utilization for collective operations.
 
-Additionally, we have pre-defined higher number of channels when using only 2 GPUs or 4 GPUs on a 8\*MI300 system. Here, RCCL will use **32 channels** for the 2 MI300 GPUs sceanrio and **24 channels** for the 4 MI300 GPUs scenario.
+Additionally, we have pre-defined higher number of channels when using only 2 GPUs or 4 GPUs on a 8\*MI300 system. Here, RCCL will use **32 channels** for the 2 MI300 GPUs scenario and **24 channels** for the 4 MI300 GPUs scenario.
 
 ## Copyright
 
