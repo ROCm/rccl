@@ -14,6 +14,8 @@ typedef struct mscclpp_ncclComm* mscclpp_ncclComm_t;
 
 typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } mscclpp_ncclUniqueId;
 
+bool mscclpp_init();
+
 /* A ncclUniqueId and a mscclpp_ncclUniqueId will always be created together and used alternatively. This maps between them. */
 extern std::unordered_map<ncclUniqueId, mscclpp_ncclUniqueId> mscclpp_uniqueIdMap;
 

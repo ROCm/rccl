@@ -15,7 +15,7 @@
   const char* error;                                            \
   if ((error = dlerror()) != nullptr) {                         \
     WARN("MSCCL++: failed to load %s : %s", (#X), error);       \
-    exit(1);                                                    \
+    return false;                                               \
   }                                                             \
 } while (false)
 
@@ -27,32 +27,20 @@ MSCCLPP_DECLARE(ncclCommDestroy);
 MSCCLPP_DECLARE(ncclAllReduce);
 MSCCLPP_DECLARE(ncclAllGather);
 
-static struct mscclpp_nccl_access {
-  void* handle;
-  
-  mscclpp_nccl_access() : handle(nullptr) {
-    Dl_info pathInfo;
-    dladdr((void*)ncclCommInitRank, &pathInfo);
-    INFO(NCCL_INIT, "***** %s *****", pathInfo.dli_fname);
-    
-    handle = dlopen(mscclpp_nccl_lib_name, RTLD_LAZY);
-    if (!handle) {
-      WARN("MSCCL++: failed to access %s : %s", mscclpp_nccl_lib_name, dlerror());
-    }
-    dlerror(); // Clear any errors.
+bool mscclpp_init() {
+  void* handle = dlopen(mscclpp_nccl_lib_name, RTLD_LAZY);
+  if (!handle) {
+    WARN("MSCCL++: failed to access %s : %s", mscclpp_nccl_lib_name, dlerror());
+    return false;
+  }
+  dlerror(); // Clear any errors.
 
-    MSCCLPP_LOAD(handle, ncclGetUniqueId);
-    MSCCLPP_LOAD(handle, ncclCommInitRank);
-    MSCCLPP_LOAD(handle, ncclCommDestroy);
-    MSCCLPP_LOAD(handle, ncclAllReduce);
-    MSCCLPP_LOAD(handle, ncclAllGather);
-  }
-  ~mscclpp_nccl_access() {
-    if (handle) {
-      INFO(NCCL_INIT, "MSCCL++: closing handle to %s", mscclpp_nccl_lib_name);
-      dlclose(handle);
-    }
-  }
-} access;
+  MSCCLPP_LOAD(handle, ncclGetUniqueId);
+  MSCCLPP_LOAD(handle, ncclCommInitRank);
+  MSCCLPP_LOAD(handle, ncclCommDestroy);
+  MSCCLPP_LOAD(handle, ncclAllReduce);
+  MSCCLPP_LOAD(handle, ncclAllGather);
+  return true;
+}
 
 std::unordered_map<ncclUniqueId, mscclpp_ncclUniqueId> mscclpp_uniqueIdMap;

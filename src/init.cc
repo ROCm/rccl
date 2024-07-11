@@ -157,6 +157,11 @@ static ncclResult_t ncclInit() {
 #ifndef NVTX_NO_IMPL
     initNvtxRegisteredEnums();
 #endif
+#ifdef ENABLE_MSCCLPP
+    if (!mscclpp_init()) {
+      return ncclSystemError;
+    }
+#endif
     __atomic_store_n(&initialized, true, __ATOMIC_RELEASE);
   }
   pthread_mutex_unlock(&initLock);
