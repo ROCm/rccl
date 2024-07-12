@@ -200,8 +200,8 @@ ncclResult_t ncclGetUniqueId(ncclUniqueId* out) {
     hipDeviceProp_t devProp;
     CUDACHECK(hipGetDeviceProperties(&devProp, dev));
     if (IsArchMatch(devProp.gcnArchName, "gfx94")) {
-      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclGetUniqueId");
       res = mscclpp_ncclGetUniqueId(&(mscclpp_uniqueIdMap[*out]));
+      TRACE_CALL("mscclpp_ncclGetUniqueId");
     } else {
       WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
     }
@@ -1975,11 +1975,11 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
     if (comm->mscclppCompatible) {
       NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &(mscclpp_uniqueIdMap[job->commId]), sizeof(mscclpp_ncclUniqueId)), res, fail);
-      INFO(NCCL_INIT, "MSCCL++: Broadcast mscclpp_ncclUniqueId to %d ranks", (comm->localRanks - 1));
+      TRACE_CALL("bootstrapIntraNodeBroadcast(rank=%d, nranks=%d, root=%d, bcastData=<mscclpp_ncclUniqueId>)", comm->localRank, comm->localRanks, 0);
       comm->mscclpp_threshold = rcclParamMscclppThreshold();
       INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", comm->mscclpp_threshold);
-      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommInitRank (nranks=%d)", job->nranks);
       NCCLCHECKGOTO(mscclpp_ncclCommInitRank(&(comm->mscclpp_comm), job->nranks, mscclpp_uniqueIdMap[job->commId], job->myrank), res, fail);
+      TRACE_CALL("mscclpp_ncclCommInitRank (nranks=%d, myrank=%d)", job->nranks, job->myrank);
     } else {
       WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
     }
@@ -2586,8 +2586,8 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
 
 #ifdef ENABLE_MSCCLPP
   if (comm->mscclppCompatible) {
-    INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommDestroy");
     ncclResult_t res = mscclpp_ncclCommDestroy(comm->mscclpp_comm);
+    TRACE_CALL("mscclpp_ncclCommDestroy");
     if (res != ncclSuccess) {
       WARN("MSCCL++: mscclpp_ncclCommDestroy failed (%s)", ncclGetErrorString(res));
     }
