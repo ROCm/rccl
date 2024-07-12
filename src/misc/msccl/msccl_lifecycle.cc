@@ -459,9 +459,8 @@ ncclResult_t mscclEnqueueCheck(
 #ifdef ENABLE_MSCCLPP
       if (comm->mscclppCompatible) {
         /* check if one rank per GPU and graph mode is enabled */
-        if ((nBytes >= 32) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
-          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
-            INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllReduce (groupStatus=mscclNoGroup)");
+        if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
+          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && (nBytes & 31) == 0) {
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
             threadLocalStatus.savedSchedulerParams.clear();
             break;
@@ -488,9 +487,8 @@ ncclResult_t mscclEnqueueCheck(
 #ifdef ENABLE_MSCCLPP
       if (comm->mscclppCompatible) {
         /* check if one rank per GPU and graph mode is enabled */
-        if ((nBytes >= 32) && (threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
-          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
-            INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclAllReduce (groupStatus=mscclGroupSupportedOp)");
+        if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
+          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && (nBytes & 31) == 0) {
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
             threadLocalStatus.savedSchedulerParams.clear();
             break;
