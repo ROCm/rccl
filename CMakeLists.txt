@@ -58,6 +58,8 @@ include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
 include(cmake/Generator.cmake)    # Configure functions that goes into RCCL
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 # Build only for local GPU architecture
 if (BUILD_LOCAL_GPU_TARGET_ONLY)
   message(STATUS "Building only for local GPU target")
@@ -239,6 +241,15 @@ endif()
 check_cxx_compiler_flag("-mllvm --amdgpu-kernarg-preload-count=16" HAVE_KERNARG_PRELOAD)
 if (HAVE_KERNARG_PRELOAD)
   message(STATUS "Kernarg preloading to SGPR enabled")
+endif()
+
+# Check for IBVerbs; disable MSCCL++ if not present
+if (ENABLE_MSCCLPP)
+  find_package(IBVerbs)
+  if (NOT IBVerbs_FOUND)
+    set(ENABLE_MSCCLPP OFF)
+    message(WARNING "IBVerbs not found; disabling MSCCL++")
+  endif()
 endif()
 
 # Determine version from makefiles/version.mk and fill in templates
