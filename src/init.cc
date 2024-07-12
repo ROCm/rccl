@@ -42,6 +42,7 @@
 // [RCCL]
 #include "git_version.h"
 #include "rccl_vars.h"
+#include "hip_rocm_version_info.h"
 //#include "clique/CliqueManager.h"
 //#include <hsa/hsa_ext_amd.h>
 // [/RCCL]
@@ -49,8 +50,13 @@
 #include "msccl/msccl_lifecycle.h"
 #include "msccl/msccl_status.h"
 
-#define STR2(v) #v
-#define STR(v) STR2(v)
+#ifndef STR2
+  #define STR2(v) #v
+#endif
+
+#ifndef STR
+  #define STR(v) STR2(v)
+#endif
 
 #if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
 #define NCCL_GROUP_CUDA_STREAM 0 // CGMD: CUDA 9.2,10.X Don't need to use an internal CUDA stream
@@ -683,17 +689,40 @@ fail:
 
 // Pre-process the string so that running "strings" on the lib can quickly reveal the version.
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
-#define VERSION_STRING "RCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+hip" STR(HIP_VERSION_MAJOR) "." STR(HIP_VERSION_MINOR)
+#define VERSION_STRING "RCCL version : " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX
+#define VERSION_STRING_EXTENDED "HIP version  : " HIP_BUILD_INFO "\nROCm version : " ROCM_BUILD_INFO
 #else
-#define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+cuda" STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
+#define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX
+#define VERSION_STRING_EXTENDED "CUDA version " STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
 #endif
 static void showVersion() {
   static int shown = 0;
   if (shown == 0 && ncclDebugLevel >= NCCL_LOG_VERSION) {
-    printf("%s %s\n", VERSION_STRING, rcclGitHash);
+    char hostInfo[HOST_NAME_MAX] = {}, libPathInfo[2048] = {};
+    size_t hostInfoSize = sizeof(hostInfo), libPathInfoSize = sizeof(libPathInfo);
+    
+    // Retrieve Hostname info
+    if (gethostname(hostInfo, hostInfoSize-1) != 0) {
+      // Returns Unknown in hostInfo if function call unsuccessful
+      strncpy(hostInfo, "Unknown", hostInfoSize-1);
+    }
+    
+    // Retrieve librccl path
+    Dl_info pathInfo;
+    if (dladdr((void*)ncclCommInitRank, &pathInfo)) {
+      strncpy(libPathInfo, pathInfo.dli_fname, libPathInfoSize-1);
+    } else {
+      // Sets libPath to Unknown if the above function call is not successful
+      strncpy(libPathInfo, "Unknown", libPathInfoSize-1);
+    }
+
+    printf("%s-%s\n%s\n", VERSION_STRING, rcclGitHash, VERSION_STRING_EXTENDED);
+    printf("%-12s : %s\n%-12s : %s\n", "Hostname", hostInfo, "Librccl path", libPathInfo);
     fflush(stdout);
-    if (ncclDebugFile != stdout)
-      INFO(NCCL_ALL,"%s %s", VERSION_STRING, rcclGitHash); // Also log NCCL version in one of the files
+    if (ncclDebugFile != stdout) {
+      INFO(NCCL_ALL, "%s-%s\n%s\n", VERSION_STRING, rcclGitHash, VERSION_STRING_EXTENDED); // Also log NCCL version in one of the files
+      INFO(NCCL_ALL, "%-12s : %s\n%-12s : %s\n", "Hostname", hostInfo, "Librccl path", libPathInfo);
+    }
     shown = 1;
   }
 }
