@@ -45,6 +45,9 @@
 #include "hip_rocm_version_info.h"
 //#include "clique/CliqueManager.h"
 //#include <hsa/hsa_ext_amd.h>
+#ifdef ENABLE_MSCCLPP
+#include "mscclpp/mscclpp_nccl.h"
+#endif
 // [/RCCL]
 
 #include "msccl/msccl_lifecycle.h"
@@ -88,6 +91,16 @@ static uint64_t hashUniqueId(ncclUniqueId const &id) {
   }
   return h;
 }
+
+#ifdef ENABLE_MSCCLPP
+size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
+  return (size_t)hashUniqueId(uniqueId);
+}
+
+bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b) {
+  return memcmp(a.internal, b.internal, NCCL_UNIQUE_ID_BYTES) == 0;
+}
+#endif
 
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
@@ -150,6 +163,11 @@ static ncclResult_t ncclInit() {
 #ifndef NVTX_NO_IMPL
     initNvtxRegisteredEnums();
 #endif
+#ifdef ENABLE_MSCCLPP
+    if (!mscclpp_init()) {
+      return ncclSystemError;
+    }
+#endif
     __atomic_store_n(&initialized, true, __ATOMIC_RELEASE);
   }
   pthread_mutex_unlock(&initLock);
@@ -163,12 +181,32 @@ ncclResult_t ncclGetVersion(int* version) {
   return ncclSuccess;
 }
 
+#ifdef ENABLE_MSCCLPP
+RCCL_PARAM(EnableMscclpp, "ENABLE_MSCCLPP", 0);
+RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(1024*1024));
+#endif
+
 NCCL_API(ncclResult_t, ncclGetUniqueId, ncclUniqueId* out);
 ncclResult_t ncclGetUniqueId(ncclUniqueId* out) {
   NCCLCHECK(ncclInit());
   NCCLCHECK(PtrCheck(out, "GetUniqueId", "out"));
   ncclResult_t res = bootstrapGetUniqueId((struct ncclBootstrapHandle*)out);
   TRACE_CALL("ncclGetUniqueId(0x%llx)", (unsigned long long)hashUniqueId(*out));
+#ifdef ENABLE_MSCCLPP
+  if (rcclParamEnableMscclpp()) {
+    NCCLCHECK(res);
+    int dev;
+    CUDACHECK(cudaGetDevice(&dev));
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, dev));
+    if (IsArchMatch(devProp.gcnArchName, "gfx94")) {
+      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclGetUniqueId");
+      res = mscclpp_ncclGetUniqueId(&(mscclpp_uniqueIdMap[*out]));
+    } else {
+      WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
+    }
+  }
+#endif
   return res;
 }
 
@@ -1930,6 +1968,24 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent), res, fail);
 
+#ifdef ENABLE_MSCCLPP
+  if (rcclParamEnableMscclpp()) {
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
+    comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
+    if (comm->mscclppCompatible) {
+      NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &(mscclpp_uniqueIdMap[job->commId]), sizeof(mscclpp_ncclUniqueId)), res, fail);
+      INFO(NCCL_INIT, "MSCCL++: Broadcast mscclpp_ncclUniqueId to %d ranks", (comm->localRanks - 1));
+      comm->mscclpp_threshold = rcclParamMscclppThreshold();
+      INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", comm->mscclpp_threshold);
+      INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommInitRank (nranks=%d)", job->nranks);
+      NCCLCHECKGOTO(mscclpp_ncclCommInitRank(&(comm->mscclpp_comm), job->nranks, mscclpp_uniqueIdMap[job->commId], job->myrank), res, fail);
+    } else {
+      WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
+    }
+  }
+#endif
+
   NCCLCHECKGOTO(ncclLoadTunerPlugin(&comm->tuner), res, fail);
   if (comm->tuner) {
     NCCLCHECK(comm->tuner->init(comm->nRanks, comm->nNodes, ncclDebugLog));
@@ -2527,6 +2583,18 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
   }
+
+#ifdef ENABLE_MSCCLPP
+  if (comm->mscclppCompatible) {
+    INFO(NCCL_INIT, "MSCCL++: mscclpp_ncclCommDestroy");
+    ncclResult_t res = mscclpp_ncclCommDestroy(comm->mscclpp_comm);
+    if (res != ncclSuccess) {
+      WARN("MSCCL++: mscclpp_ncclCommDestroy failed (%s)", ncclGetErrorString(res));
+    }
+    comm->mscclppCompatible = false;
+    comm->mscclpp_comm = nullptr;
+  }
+#endif
 
   int rank = comm->rank, nranks = comm->nRanks, cudaDev = comm->cudaDev;
 
