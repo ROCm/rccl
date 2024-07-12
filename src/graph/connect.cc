@@ -631,7 +631,8 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   // Define channels for gfx94 GPU architectures
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94")) {
     // Only use full MAXCHANNELS for gfx94x
-    maxChannels = MAXCHANNELS;
+    // Use max 80 channels in case of 80 CUs
+    maxChannels = comm->topo->nodes[GPU].nodes[0].gpu.cu == 80 ? 80 : MAXCHANNELS;
 
     // Define channels=64 for gfx94 multi-node systems
     multiNodeNchannels = 64;
@@ -697,6 +698,10 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   if (comm->nRanks < 8 && 64 < minNchannels) {
     minNchannels = 2;
     WARN("NCCL_MIN_NCHANNELS set by environment is ignored due to less than 8 GPUs.");
+  }
+  if (minNchannels > maxChannels) {
+    minNchannels = 2;
+    WARN("NCCL_MIN_NCHANNELS set by environment is ignored due to greater than max allowed %d channels.", maxChannels);
   }
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {

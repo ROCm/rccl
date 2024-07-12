@@ -128,6 +128,7 @@ struct ncclTopoNode {
       int gdrSupport;
       const char* gcn;
       hipDeviceArch_t arch;
+      int cu;
     }gpu;
     struct {
       uint64_t asic;
