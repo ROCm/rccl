@@ -18,7 +18,7 @@ def runCI =
     def prj  = new rocProject('rccl', 'PreCheckin')
 
     prj.timeout.test = 300
-    prj.paths.build_command = './install.sh -t --fast'
+    prj.paths.build_command = './install.sh -tj 8 --fast'
 
     // Define test architectures, optional rocm version argument is available
     def nodes = new dockerNodes(nodeDetails, jobName, prj)
