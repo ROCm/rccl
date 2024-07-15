@@ -59,14 +59,6 @@ namespace {
     }
 #endif
 
-    int minChunkSize;
-    if (Proto::Id == NCCL_PROTO_LL)
-      minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T));
-    if (Proto::Id == NCCL_PROTO_LL128) {
-      // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
-      minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
-    }
-
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg, 0, args->connIndex, args->connIndex);
 
