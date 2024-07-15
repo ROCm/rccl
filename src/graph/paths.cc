@@ -121,7 +121,6 @@ static void printNodePaths(struct ncclTopoSystem* system, struct ncclTopoNode* n
 #else
   sprintf(line, "%s/%lX :", topoNodeTypeStr[node->type], node->id);
   int offset = strlen(line);
-
 #endif
   for (int t=0; t<NCCL_TOPO_NODE_TYPES; t++) {
     if (node->paths[t] == NULL) continue;
@@ -137,10 +136,8 @@ static void printNodePaths(struct ncclTopoSystem* system, struct ncclTopoNode* n
       }
       INFO(NCCL_GRAPH, "%s (%f)", line, node->paths[t][n].bw);
 #else
-      //printf("In printNodePath %ld, offset = %d\n", node->id, offset);
       sprintf(line+offset, "%s/%lX (%d/%f/%s) ", topoNodeTypeStr[t], system->nodes[t].nodes[n].id, node->paths[t][n].count, node->paths[t][n].bw, topoPathTypeStr[node->paths[t][n].type]);
       offset = strlen(line);
-      //printf("Done print %d\n", offset);
 #endif
     }
   }
@@ -151,9 +148,6 @@ static void printNodePaths(struct ncclTopoSystem* system, struct ncclTopoNode* n
 
 ncclResult_t ncclTopoPrintPaths(struct ncclTopoSystem* system) {
   for (int i=0; i<system->nodes[GPU].count; i++) {
-	/*printf("Inside print path gpu = %d, i = %d\n", system->nodes[GPU].count, i);
-	if (system->nodes[GPU].nodes == NULL)
-		printf("DHORA\n");*/
     printNodePaths(system, system->nodes[GPU].nodes+i);
   }
   for (int i=0; i<system->nodes[NET].count; i++) {
@@ -206,11 +200,7 @@ static void ncclTopoRemovePathType(struct ncclTopoSystem* system, int nodeType) 
     // Remove links _to_ the given type
     for (int n=0; n<system->nodes[t].count; n++) {
       struct ncclTopoNode* node = system->nodes[t].nodes+n;
-      //printf("t = %d, n = %d\n", t, n);
-      //if (node->paths[nodeType] != NULL) {
-	//printf("Non null path type = %d, n = %d t = %d\n", nodeType, n, t);      
-      	free(node->paths[nodeType]);
-      //}
+      free(node->paths[nodeType]);
       node->paths[nodeType] = NULL;
     }
     // Remove links _from_ the given type
