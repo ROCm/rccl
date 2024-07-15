@@ -529,7 +529,6 @@ private:
         dsts[i] += tid*EltPerLine;
       }
     }
-    int offset = tid;
     int eltPerTrip = nthreads*EltPerLine;
     while (nelem > 0) {
       int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
@@ -569,7 +568,6 @@ private:
         }
       }
       nelem -= eltPerTrip;
-      offset += nthreads;
     }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_GENERIC_OP_EXIT)
