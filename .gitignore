@@ -2,3 +2,4 @@
 *.gcov
 /coverage/
 build/
+ext/

@@ -26,6 +26,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  OFF)
@@ -48,7 +49,9 @@ set(DEFAULT_GPUS
       gfx1030
       gfx1100
       gfx1101
-      gfx1102)
+      gfx1102
+      gfx1200
+      gfx1201)
 
 # Load CMake modules
 #==================================================================================================
@@ -56,6 +59,8 @@ include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
 include(cmake/Generator.cmake)    # Configure functions that goes into RCCL
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Build only for local GPU architecture
 if (BUILD_LOCAL_GPU_TARGET_ONLY)
@@ -240,6 +245,15 @@ if (HAVE_KERNARG_PRELOAD)
   message(STATUS "Kernarg preloading to SGPR enabled")
 endif()
 
+# Check for IBVerbs; disable MSCCL++ if not present
+if (ENABLE_MSCCLPP)
+  find_package(IBVerbs)
+  if (NOT IBVerbs_FOUND)
+    set(ENABLE_MSCCLPP OFF)
+    message(WARNING "IBVerbs not found; disabling MSCCL++")
+  endif()
+endif()
+
 # Determine version from makefiles/version.mk and fill in templates
 #==================================================================================================
 ## parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
@@ -371,6 +385,7 @@ set(SRC_FILES
   src/include/git_version.h
   src/include/graph.h
   src/include/group.h
+  src/include/hip_rocm_version_info.h
   src/include/ibvcore.h
   src/include/ibvsymbols.h
   src/include/ibvwrap.h
@@ -479,6 +494,14 @@ if (ENABLE_MSCCL_KERNEL)
   list(APPEND SRC_FILES ${MSCCL_KERNEL_SOURCES})
 endif()
 
+if (ENABLE_MSCCLPP)
+  set(MSCCLPP_SOURCES
+    src/include/mscclpp/mscclpp_nccl.h
+    src/misc/mscclpp/mscclpp_nccl.cc
+  )
+  list(APPEND SRC_FILES ${MSCCLPP_SOURCES})
+endif()
+
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
 find_program(hipify-perl_executable hipify-perl)
@@ -561,6 +584,9 @@ if(COLLTRACE)
 endif()
 if(ENABLE_MSCCL_KERNEL)
   target_compile_definitions(rccl PRIVATE COMPILE_MSCCL_KERNEL)
+endif()
+if(ENABLE_MSCCLPP)
+  target_compile_definitions(rccl PRIVATE ENABLE_MSCCLPP)
 endif()
 if(HAVE_ROCM_SMI64CONFIG)
   target_compile_definitions(rccl PRIVATE USE_ROCM_SMI64CONFIG)
@@ -681,6 +707,11 @@ if (HAVE_KERNARG_PRELOAD)
   target_link_options(rccl PRIVATE -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16)
 endif()
 
+if(ENABLE_MSCCLPP)
+  include(cmake/MSCCLPP.cmake)
+  message(STATUS "Building RCCL with MSCCL++ support")
+endif()
+
 ## Track linking time
 set_property(TARGET rccl PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
 
@@ -698,6 +729,9 @@ file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 ## Install Algorithm files under share folder
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-unit-test-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
+if(ENABLE_MSCCLPP)
+  rocm_install(FILES ${MSCCLPP_OUT_LIBS} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT "runtime")
+endif()
 
 rocm_export_targets(
   NAMESPACE roc::

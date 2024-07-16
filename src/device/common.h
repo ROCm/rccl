@@ -19,8 +19,13 @@
 
 #define __syncwarp()
 
+#ifdef __GFX12__
+#define __synclds() \
+  asm volatile("s_waitcnt lgkmcnt(0) \n s_barrier_signal -1 \n s_barrier_wait -1");
+#else
 #define __synclds() \
   asm volatile("s_waitcnt lgkmcnt(0) \n s_barrier");
+#endif
 
 #ifdef __GFX9__
 #define STORE(DST, SRC) \
@@ -30,7 +35,7 @@
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
 #endif
 
-#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__)
+#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__)
 #define __trace_hwreg()
 #else
 #define __trace_hwreg() \
