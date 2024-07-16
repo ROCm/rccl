@@ -165,6 +165,7 @@ struct mscclSavedSchedulerParam {
 };
 
 enum mscclCaptureStatus {
+  mscclUnknownCaptureStatus,
   mscclNoCapture,
   mscclNewCapture,
   mscclExistingCapture
