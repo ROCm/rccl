@@ -115,7 +115,7 @@ static ncclResult_t ncclTopoSetPaths(struct ncclTopoNode* baseNode, struct ncclT
 }
 
 static void printNodePaths(struct ncclTopoSystem* system, struct ncclTopoNode* node) {
-  char line[1024];
+  char line[2048];
 #ifdef ENABLE_TRACE
   INFO(NCCL_GRAPH, "Paths from %s/%lX :", topoNodeTypeStr[node->type], node->id);
 #else

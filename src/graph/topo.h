@@ -94,7 +94,8 @@ struct ncclTopoLink {
   float bw;
   struct ncclTopoNode* remNode;
 };
-#define NCCL_TOPO_MAX_LINKS 32
+#define NCCL_TOPO_MAX_LINKS 64	//Changed the value from 32 to 64 for CPX mode
+
 #define NCCL_TOPO_MAX_HOPS (NCCL_TOPO_MAX_NODES*NCCL_TOPO_NODE_TYPES)
 
 struct ncclTopoLinkList {
@@ -128,6 +129,7 @@ struct ncclTopoNode {
       int gdrSupport;
       const char* gcn;
       hipDeviceArch_t arch;
+      int cu;
     }gpu;
     struct {
       uint64_t asic;
@@ -239,12 +241,6 @@ static float ncclTopoXGMISpeed(const char* gcn) {
   else
     return VEGA_XGMI_WIDTH;
 }
-
-#if ENABLE_COLLTRACE
-  #define ncclGetKernelIndex(p_comm) ((p_comm)->collTraceThread ? 1 : 0)
-#else
-  #define ncclGetKernelIndex(p_comm) (0)
-#endif
 
 // Returns NVLink bw in GB/s
 static float ncclTopoNVLinkBw(int cudaCompCap) {

@@ -624,29 +624,12 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   NCCLCHECK(connectRings(comm, ringRecv, ringSend, ringPrev, ringNext));
   NCCLCHECK(connectTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
 
-  // Define channels for non-gfx94 GPU architectures
-  int maxChannels = 2*CHANNEL_LIMIT;
-  int multiNodeNchannels = maxChannels;
-
-  // Define channels for gfx94 GPU architectures
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94")) {
-    // Only use full MAXCHANNELS for gfx94x
-    maxChannels = MAXCHANNELS;
-
-    // Define channels=64 for gfx94 multi-node systems
-    multiNodeNchannels = 64;
-
-    // Check if NCCL_IB_GID_INDEX=3 -- needed for RoCE systems
-    const char* ncclIbGidIndex = ncclGetEnv("NCCL_IB_GID_INDEX");
-    int gid_index = 0;
-    if (ncclIbGidIndex) gid_index = atoi(ncclIbGidIndex);
-
-    // Limit channels=48 for RoCE gfx94 multi-node systems
-    multiNodeNchannels = gid_index == 3 ? 48 : multiNodeNchannels;
-  }
+  // Only use full MAXCHANNELS for gfx94x
+  int maxChannels = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ?
+    (comm->topo->nodes[GPU].nodes[0].gpu.cu == 80 ? 80 : MAXCHANNELS) : 2*CHANNEL_LIMIT;
 
   if (graphs[NCCL_ALGO_RING]->nIntraChannels > 0 || comm->nNodes > 1) {
-        maxChannels = std::min(multiNodeNchannels, maxChannels);
+    maxChannels = std::min(64, maxChannels);
   }
 
   // Duplicate ringPrev/ringNext for ncclBuildRing
@@ -692,15 +675,19 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
   int minNchannels = ncclMinNchannels();
   if (comm->nNodes > 1) {
-    minNchannels = std::min(multiNodeNchannels, minNchannels);
+    minNchannels = std::min(64, minNchannels);
   }
   if (comm->nRanks < 8 && 64 < minNchannels) {
     minNchannels = 2;
     WARN("NCCL_MIN_NCHANNELS set by environment is ignored due to less than 8 GPUs.");
   }
+  if (minNchannels > maxChannels) {
+    minNchannels = 2;
+    WARN("NCCL_MIN_NCHANNELS set by environment is ignored due to greater than max allowed %d channels.", maxChannels);
+  }
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
-    int mscclNumChannelsRequired = 0;
+    int mscclNumChannelsRequired = maxNchannels;
     mscclSchedulerInit(comm, &mscclNumChannelsRequired);
     minNchannels = std::max(minNchannels, mscclNumChannelsRequired);
   }

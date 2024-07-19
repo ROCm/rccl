@@ -24,6 +24,7 @@ install_dependencies=false
 install_library=false
 install_prefix="${ROCM_PATH}"
 msccl_kernel_enabled=true
+mscclpp_enabled=true
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
 openmp_test_enabled=false
@@ -45,6 +46,7 @@ function display_help()
     echo "       --enable_backtrace      Build with custom backtrace support"
     echo "       --disable-colltrace     Build without collective trace"
     echo "       --disable-msccl-kernel  Build without MSCCL kernels"
+    echo "       --disable-mscclpp       Build without MSCCL++ support"
     echo "    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
@@ -73,7 +75,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ "$?" -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,disable-mscclpp,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -94,6 +96,7 @@ while true; do
          --enable_backtrace)         build_bfd=true;                                                                                   shift ;;
          --disable-colltrace)        collective_trace=false;                                                                           shift ;;
          --disable-msccl-kernel)     msccl_kernel_enabled=false;                                                                       shift ;;
+         --disable-mscclpp)          mscclpp_enabled=false;                                                                            shift ;;
     -f | --fast)                     build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;                    shift ;;
     -h | --help)                     display_help;                                                                                     exit 0 ;;
     -i | --install)                  install_library=true;                                                                             shift ;;
@@ -232,6 +235,10 @@ fi
 # Disable msccl kernel
 if [[ "${msccl_kernel_enabled}" == false ]]; then
     cmake_common_options="${cmake_common_options} -DENABLE_MSCCL_KERNEL=OFF"
+fi
+
+if [[ "${mscclpp_enabled}" == false ]]; then
+    cmake_common_options="${cmake_common_options} -DENABLE_MSCCLPP=OFF"
 fi
 
 # Install dependencies

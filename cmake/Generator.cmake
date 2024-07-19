@@ -196,11 +196,11 @@ function(gen_device_table)
     string(FIND "${func}" "LL128" IS_LL128)
     if(NOT IS_LL128 EQUAL -1)
       file(APPEND ${DEVICE_TABLE_H_FILE} "#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
-      file(APPEND ${DEVICE_TABLE_H_FILE} "${func_declaration} ${func}();\n#else\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "${func_declaration} ${func}();\n${func_declaration} ${func}_4();\n#else\n")
       string(REPLACE "LL128" "LL" func "${func}")
-      file(APPEND ${DEVICE_TABLE_H_FILE} "${func_declaration} ${func}();\n#endif\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "${func_declaration} ${func}();\n${func_declaration} ${func}_4();\n#endif\n")
     else()
-      file(APPEND ${DEVICE_TABLE_H_FILE} "${func_declaration} ${func}();\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "${func_declaration} ${func}();\n${func_declaration} ${func}_4();\n")
     endif()
   endforeach()
   file(APPEND ${DEVICE_TABLE_H_FILE} "\n")
@@ -217,6 +217,19 @@ function(gen_device_table)
       file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func},\n#endif\n")
     else()
       file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func},\n")
+    endif()
+  endforeach()
+  file(APPEND ${DEVICE_TABLE_H_FILE} "nullptr};\n\n")
+  file(APPEND ${DEVICE_TABLE_H_FILE} "__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
+  foreach(func ${FUNC_LIST})
+    string(FIND "${func}" "LL128" IS_LL128)
+    if(NOT IS_LL128 EQUAL -1)
+      file(APPEND ${DEVICE_TABLE_H_FILE} "#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func}_4,\n#else\n")
+      string(REPLACE "LL128" "LL" func "${func}")
+      file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func}_4,\n#endif\n")
+    else()
+      file(APPEND ${DEVICE_TABLE_H_FILE} "  ${func}_4,\n")
     endif()
   endforeach()
   file(APPEND ${DEVICE_TABLE_H_FILE} "nullptr};\n\n")
@@ -243,6 +256,27 @@ function(gen_device_table)
     file(APPEND ${DEVICE_TABLE_H_FILE} "__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
     list(LENGTH FUNC_LIST max_index)
     file(APPEND ${DEVICE_TABLE_H_FILE} "  Caller<0, ${max_index}>::call(funcIndex);\n}\n\n")
+
+    file(APPEND ${DEVICE_TABLE_H_FILE}
+      "template<unsigned short f, unsigned short l>\n"
+      "struct Caller4 {\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call4(unsigned short funcIndex) noexcept\n"
+      "  {\n"
+      "    constexpr unsigned short m = f + (l - f) / 2;\n"
+      "    return (funcIndex < m) ? Caller4<f, m>::call4(funcIndex) : Caller4<m, l>::call4(funcIndex);\n"
+      "  }\n"
+      "};\n"
+      "\n"
+      "template<unsigned short f>\n"
+      "struct Caller4<f, f + 1>{\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call4(unsigned short funcIndex) noexcept { ncclDevFuncTable_4[f](); }\n"
+      "};\n"
+    )
+    file(APPEND ${DEVICE_TABLE_H_FILE} "__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_4(unsigned short funcIndex) noexcept {\n")
+    list(LENGTH FUNC_LIST max_index)
+    file(APPEND ${DEVICE_TABLE_H_FILE} "  Caller4<0, ${max_index}>::call4(funcIndex);\n}\n\n")
   endif()
 
   ## Function name table for collective trace
