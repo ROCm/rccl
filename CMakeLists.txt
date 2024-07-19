@@ -26,7 +26,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  OFF)
@@ -528,7 +528,9 @@ foreach(SRC_FILE ${SRC_FILES})
   # Create a custom command to create hipified source code
   add_custom_command(
     OUTPUT ${HIP_FILE}
-    COMMAND mkdir -p ${HIP_FILE_DIR} && $ ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
+    COMMAND mkdir -p ${HIP_FILE_DIR}
+            && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
+            && ${CMAKE_COMMAND} -DHIP_FILE=${HIP_FILE} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/AddUnroll.cmake
     MAIN_DEPENDENCY ${SRC_FILE}
     COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
   )
@@ -688,7 +690,7 @@ target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
 
 ## Set RCCL link options
-target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link
+target_link_options(rccl PRIVATE -parallel-jobs=6)       # Use multiple threads to link
 if(BUILD_ADDRESS_SANITIZER)
   target_link_options(rccl PRIVATE -fuse-ld=lld)
 endif()

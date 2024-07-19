@@ -15,12 +15,6 @@
 #include "network/unpack/unpack_defs.h"
 #include "comm.h"
 
-#if defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
-#define COLL_UNROLL 2
-#else
-#define COLL_UNROLL 4
-#endif
-
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
 #define __syncwarp()
@@ -185,14 +179,14 @@ inline __device__ void copyToShmem16(int tid, void* dst, void const* src, int by
   }
 }
 
-template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int COLL_UNROLL>
 struct RunWorkElement {
   __device__ void run(ncclWorkElem*) {
     // Put NOT IMPLEMENTED behavior here.
   }
 };
 
-template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int COLL_UNROLL>
 struct RunWork {
   // This __forceinline__ is necessary. The compiler was inserting a function call
   // here from the LL ncclKernel.
@@ -203,7 +197,7 @@ struct RunWork {
     #pragma unroll 1
     while ((char*)we + stride <= (char*)(w+1) && we->isUsed) {
       if (wid < we->nWarps) {
-        RunWorkElement<Fn, T, RedOp, Algo, Proto>().run(we);
+        RunWorkElement<Fn, T, RedOp, Algo, Proto, COLL_UNROLL>().run(we);
       }
       we = (ncclWorkElem*)((char*)we + stride);
     }
@@ -231,7 +225,7 @@ static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we
   }
 }
 
-template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE>
+template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE, int COLL_UNROLL>
 __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) {
   const int tid = threadIdx.x;
   int x = tid;
@@ -350,9 +344,15 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
       SpecializedRunWork().run(&ncclShmem.work);
     } else {
 #ifdef USE_INDIRECT_FUNCTION_CALL
-      ncclDevFuncTable[ncclShmem.work.header.funcIndex]();
+      if (COLL_UNROLL == 4)
+        ncclDevFuncTable_4[ncclShmem.work.header.funcIndex]();
+      else
+        ncclDevFuncTable[ncclShmem.work.header.funcIndex]();
 #else
-      NCCL_CALL_FUNCTIONS(ncclShmem.work.header.funcIndex);
+      if (COLL_UNROLL == 4)
+        NCCL_CALL_FUNCTIONS_4(ncclShmem.work.header.funcIndex);
+      else
+        NCCL_CALL_FUNCTIONS(ncclShmem.work.header.funcIndex);
 #endif
     }
 
@@ -383,35 +383,27 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
 }
 
 __global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
+__global__ void ncclDevKernel_Generic_4(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #ifdef ENABLE_COLLTRACE
 __global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
-#endif
-
-#ifdef ENABLE_COLLTRACE
-#define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, specializedFnId) \
-  __global__ void ncclDevKernel_##suffix(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) { \
-    ncclKernelMain<specializedFnId, RunWork<coll, ty, redop<ty>, algo, proto>, false>(comm, channelMask, workHead); \
-  } \
-  \
-  __global__ void ncclDevKernelDebug_##suffix(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) { \
-    ncclKernelMain<specializedFnId, RunWork<coll, ty, redop<ty>, algo, proto>, true>(comm, channelMask, workHead); \
-  }
-#else
-#define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, specializedFnId) \
-  __global__ void ncclDevKernel_##suffix(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) { \
-    ncclKernelMain<specializedFnId, RunWork<coll, ty, redop<ty>, algo, proto>, false>(comm, channelMask, workHead); \
-  }
+__global__ void ncclDevKernelDebug_Generic_4(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #endif
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
 #define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto) \
   __device__ void ncclDevFunc_##suffix() { \
-    RunWork<coll, ty, redop<ty>, algo, proto>().run(&ncclShmem.work); \
+    RunWork<coll, ty, redop<ty>, algo, proto, 2>().run(&ncclShmem.work); \
+  } \
+  __device__ void ncclDevFunc_##suffix##_4() { \
+    RunWork<coll, ty, redop<ty>, algo, proto, 4>().run(&ncclShmem.work); \
   }
 #else
 #define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto) \
   __device__ __attribute__((noinline)) void ncclDevFunc_##suffix() { \
-    RunWork<coll, ty, redop<ty>, algo, proto>().run(&ncclShmem.work); \
+    RunWork<coll, ty, redop<ty>, algo, proto, 2>().run(&ncclShmem.work); \
+  } \
+  __device__ __attribute__((noinline)) void ncclDevFunc_##suffix##_4() { \
+    RunWork<coll, ty, redop<ty>, algo, proto, 4>().run(&ncclShmem.work); \
   }
 #endif
 

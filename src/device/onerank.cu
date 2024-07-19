@@ -11,6 +11,12 @@
 #include "common.h"
 #include <cuda_runtime.h>
 
+#if defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#define COLL_UNROLL 2
+#else
+#define COLL_UNROLL 4
+#endif
+
 namespace {
   template<typename RedOp>
   __global__ __launch_bounds__(512, 1)
