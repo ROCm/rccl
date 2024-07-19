@@ -100,6 +100,9 @@ size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const 
 bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b) {
   return memcmp(a.internal, b.internal, NCCL_UNIQUE_ID_BYTES) == 0;
 }
+
+RCCL_PARAM(EnableMscclpp, "ENABLE_MSCCLPP", 0);
+RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(1024*1024));
 #endif
 
 // GDRCOPY support: Off by default
@@ -164,7 +167,7 @@ static ncclResult_t ncclInit() {
     initNvtxRegisteredEnums();
 #endif
 #ifdef ENABLE_MSCCLPP
-    if (!mscclpp_init()) {
+    if (rcclParamEnableMscclpp() && !mscclpp_init()) {
       return ncclSystemError;
     }
 #endif
@@ -180,11 +183,6 @@ ncclResult_t ncclGetVersion(int* version) {
   *version = NCCL_VERSION_CODE;
   return ncclSuccess;
 }
-
-#ifdef ENABLE_MSCCLPP
-RCCL_PARAM(EnableMscclpp, "ENABLE_MSCCLPP", 0);
-RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(1024*1024));
-#endif
 
 NCCL_API(ncclResult_t, ncclGetUniqueId, ncclUniqueId* out);
 ncclResult_t ncclGetUniqueId(ncclUniqueId* out) {
