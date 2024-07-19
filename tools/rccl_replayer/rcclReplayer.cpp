@@ -84,6 +84,10 @@ int main(int argc, char **argv)
   double runTime;
   std::ofstream datafile;
   datafile.open("replayer_data.csv");
+  if (!datafile.is_open()) {
+    printf("[ERROR] Unable to open file replayer_data.csv\n");
+    exit(-1);
+  }
   datafile << "callNumber, functionName, inPlace, count(numElements), datatype, op, root, time(msec), groupCallBusBandwidth(GB/s)\n";
   auto start = std::chrono::high_resolution_clock::now();
   for (size_t i = 0; i < collCalls.groupCalls.size(); i++) {
@@ -164,7 +168,7 @@ void dataToCsv(GroupCall const& gc, std::ofstream &datafile, double runTime)
   double busBw = (S/t);
   if (funcName == "AllReduce") busBw *= (2*(n- 1)/n);
   else if (funcName == "ReduceScatter" || funcName == "AllGather") busBw *= ((n-1)/n);
-  busBw /= (1024 * 1024 * 1024); //in gb/s
+  busBw /= (1e9); //in gb/s
   std::string dataTypeName = DataTypeToName(ti.datatype);
   std::string redOp = getRedOp(ti.op);
   datafile << gc.opCount << ", " << funcName.c_str() << ", " << ti.inPlace << ", " << ti.count << ", " << dataTypeName << ", " << redOp << ", " << ti.root << ", " << runTime << ", " << busBw << "\n";

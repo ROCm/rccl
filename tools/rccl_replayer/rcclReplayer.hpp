@@ -183,12 +183,12 @@ std::string DataTypeToName(ncclDataType_t const dataType)
 std::string getRedOp(ncclRedOp_t const op)
 {
   switch (op) {
-  case ncclSum:     return "Sum";
-  case ncclProd:    return "Product";
-  case ncclMax:    return "Max";
-  case ncclMin:   return "Min";
-  case ncclAvg:    return "Average";
-  case ncclNumOps:   return "Number of built-in reduction ops";
+  case ncclSum:       return "Sum";
+  case ncclProd:      return "Product";
+  case ncclMax:       return "Max";
+  case ncclMin:       return "Min";
+  case ncclAvg:       return "Average";
+  case ncclNumOps:    return "Number of built-in reduction ops";
   case ncclMaxRedOp:  return "Largest value for ncclRedOp_t";
   default:
     printf("Unsupported redOp (%d)\n", op);
