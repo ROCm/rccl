@@ -49,10 +49,10 @@ if(ENABLE_MSCCLPP)
                          GIT_TAG             b1b9d0626cfa40319c18c05f8c16650568395c29
                          INSTALL_DIR         ${MSCCLPP_ROOT}
                          CMAKE_ARGS          -DGPU_TARGETS=${GPU_TARGETS} -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-                         LOG_DOWNLOAD        TRUE
-                         LOG_CONFIGURE       TRUE
-                         LOG_BUILD           TRUE
-                         LOG_INSTALL         TRUE
+                         LOG_DOWNLOAD        FALSE
+                         LOG_CONFIGURE       FALSE
+                         LOG_BUILD           FALSE
+                         LOG_INSTALL         FALSE
                          UPDATE_DISCONNECTED TRUE
         )
 
