@@ -187,6 +187,10 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStr
   mscclStatus& status = mscclGetStatus(comm->rank);
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   mscclSavedProxyArgs& savedProxyArgs = mscclGetSavedProxyArgs(comm->rank);
+  if (threadLocalStatus.captureStatus == mscclUnknownCaptureStatus) {
+    INFO(NCCL_NET, "mscclSetupProxy: reading capture status");
+    NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
+  }
   if (threadLocalStatus.captureStatus == mscclNoCapture) {
     INFO(NCCL_NET,"mscclSetupProxy: no capture\n");
     NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm));
@@ -476,6 +480,10 @@ ncclResult_t mscclSetupKernel(const void* sendBuff, void* recvBuff, size_t count
   work.fnIndex = fnIndex;
   INFO(NCCL_COLL, "MSCCL: typeMask %x fnIndex %d Setup Kernel finished", hostAlgo->typeMask, fnIndex);
 
+  if (threadLocalStatus.captureStatus == mscclUnknownCaptureStatus) {
+    INFO(NCCL_NET, "MSCCL: reading capture status");
+    NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
+  }
   mscclWorkFifoStatus* workFifoStatus = nullptr;
   if (threadLocalStatus.captureStatus == mscclNoCapture) {
     workFifoStatus = &(status.defaultWorkFifoStatus);
