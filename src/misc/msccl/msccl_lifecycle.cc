@@ -377,9 +377,9 @@ static ncclResult_t mscclSaveCountsAndDispls(struct mscclSavedSchedulerParam* pa
 static ncclResult_t mscclRunSavedParams() {
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   for (auto& param : threadLocalStatus.savedSchedulerParams) {
-    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
     mscclFuncNames[param.p.func], param.p.opCount, param.p.sendBuff, param.p.recvBuff, param.p.count,
-    param.p.dataType, param.p.op, param.p.root, param.comm, param.p.nRanks, param.stream);
+    param.p.dataType, param.p.op, param.p.root, param.comm, param.p.nRanks, param.stream, param.comm->tasks.nTasksP2p + param.comm->tasks.nTasksColl, param.comm->localRankToRank[param.comm->localRank]);
 
     NCCLCHECK(mscclRunAlgo(
       param.p.sendBuff, param.p.sendCounts, param.p.sDisPls,

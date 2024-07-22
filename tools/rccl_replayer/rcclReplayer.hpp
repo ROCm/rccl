@@ -84,6 +84,21 @@ char const ncclFuncNames[ncclNumFuncs][32] =
   "Recv"
 };
 
+char const mscclFuncNames[ncclNumFuncs][32] =
+{
+  "mscclFuncBroadcast",
+  "mscclFuncReduce",
+  "mscclFuncAllGather",
+  "mscclFuncReduceScatter",
+  "mscclFuncAllReduce",
+  "mscclFuncGather",
+  "mscclFuncScatter",
+  "mscclFuncAllToAll",
+  "mscclFuncAllToAllv",
+  "mscclFuncSend",
+  "mscclFuncRecv"
+};
+
 struct TaskInfo
 {
   ncclFunc_t     funcType;
@@ -144,11 +159,48 @@ size_t DataTypeToBytes(ncclDataType_t const dataType)
   }
 }
 
+std::string DataTypeToName(ncclDataType_t const dataType)
+{
+  switch (dataType) {
+  case ncclInt8:     return "Int8";
+  case ncclUint8:    return "Uint8";
+  case ncclInt32:    return "Int32";
+  case ncclUint32:   return "Uint32";
+  case ncclInt64:    return "Int64";
+  case ncclUint64:   return "Uint64";
+  case ncclFloat16:  return "Float16";
+  case ncclFloat32:  return "Float32";
+  case ncclFloat64:  return "Float64";
+  case ncclBfloat16: return "Bfloat16";
+  case ncclFp8E4M3:  return "Fp8E4M3";
+  case ncclFp8E5M2:  return "Fp8E5M2";
+  default:
+    printf("Unsupported datatype (%d)\n", dataType);
+    exit(0);
+  }
+}
+
+std::string getRedOp(ncclRedOp_t const op)
+{
+  switch (op) {
+  case ncclSum:       return "Sum";
+  case ncclProd:      return "Product";
+  case ncclMax:       return "Max";
+  case ncclMin:       return "Min";
+  case ncclAvg:       return "Average";
+  case ncclNumOps:    return "Number of built-in reduction ops";
+  case ncclMaxRedOp:  return "Largest value for ncclRedOp_t";
+  default:
+    printf("Unsupported redOp (%d)\n", op);
+    exit(0);
+  }
+}
+
 ncclFunc_t GetFuncType(char* func)
 {
   for (int i = 0; i < ncclNumFuncs; i++)
-    if (!strcmp(func, ncclFuncNames[i])) return (ncclFunc_t)i;
-  printf("[ERROR] Unrecognzied func %s\n", func);
+    if (!strcmp(func, ncclFuncNames[i]) || !strcmp(func, mscclFuncNames[i])) return (ncclFunc_t)i;
+  printf("[ERROR] Unrecognized func %s\n", func);
   exit(1);
 }
 
@@ -161,10 +213,13 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
 
 // allocates send/recv buff, sets the device based on which rank the task belongs to,
 // syncronize devices after executing all the tasks and free device memory.
-void ReplayRccl(CollectiveCalls const& collCall, int groupIdx);
+double ReplayRccl(CollectiveCalls const& collCall, int groupIdx);
 
 // Print information about a group call
 void PrintGroupCall(GroupCall const& gc);
+
+// Records performance data of each group call in a csv file named replayer_data.csv
+void dataToCsv(GroupCall const& gc, std::ofstream &datafile, double runTime);
 
 // size differ for each collective call and getSize gives a specific size in bytes depending on type of task,
 // global rank, element count and data type
