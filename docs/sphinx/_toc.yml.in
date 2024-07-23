@@ -1,15 +1,8 @@
 root: index
 subtrees:
-- caption: GitHub
-  entries:
-  - url: "{url}/tree/{branch}"
-    title: README
-
-- caption: API
-  entries:
+- entries:
   - file: api
   - file: allapi
-
-- caption: About
-  entries:
   - file: attributions
+
+
