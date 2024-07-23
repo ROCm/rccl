@@ -4,6 +4,7 @@ subtrees:
 - caption: GitHub
   entries:
   - url: "{url}/tree/{branch}"
+    title: README
 
 - caption: API reference 
   entries:

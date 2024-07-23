@@ -17,8 +17,6 @@ It supports an arbitrary number of GPUs installed in a single-node or multi-node
 
 You can access RCCL code on our `GitHub repository <https://github.com/ROCm/rccl>`_.
 
-You can access RCCL code on our `GitHub repository <"{url}/tree/{branch}">`_.
-
 The documentation is structured as follows:
 
 .. grid:: 2
