@@ -7,9 +7,10 @@
 #include <gtest/gtest.h>
 #include <rccl/rccl.h>
 
+#include "TestBed.hpp"
 #include "StandaloneUtils.hpp"
 
-namespace RcclUnitTesting 
+namespace RcclUnitTesting
 {
   /**
    * \brief Verify that each device is assigned to the right rank using ncclCommSplit API.
@@ -73,7 +74,7 @@ namespace RcclUnitTesting
     NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
 
     // Split into new comms (all of the same color)
-    std::vector<ncclComm_t> subComms(numDevices);  
+    std::vector<ncclComm_t> subComms(numDevices);
     NCCLCHECK(ncclGroupStart());
     for (int localRank = 0; localRank < numDevices; localRank++)
       NCCLCHECK(ncclCommSplit(comms[localRank], 0, localRank, &subComms[localRank], NULL));
@@ -88,7 +89,7 @@ namespace RcclUnitTesting
       int subCommRank, subCommNRank;
       NCCLCHECK(ncclCommUserRank(subComms[i], &subCommRank));
       NCCLCHECK(ncclCommCount(subComms[i], &subCommNRank));
-          
+
       ASSERT_EQ(originalRank, subCommRank);
       ASSERT_EQ(originalNRank, subCommNRank);
     }
@@ -117,7 +118,7 @@ namespace RcclUnitTesting
     NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
 
     // Split into new comms
-    int numReducedRanks = numDevices / 2; 
+    int numReducedRanks = numDevices / 2;
     std::vector<ncclComm_t> subComms(numDevices);
     NCCLCHECK(ncclGroupStart());
     for (int localRank = 0; localRank < numDevices; localRank++)
@@ -131,12 +132,12 @@ namespace RcclUnitTesting
       int originalRank, originalNRank;
       NCCLCHECK(ncclCommUserRank(comms[i], &originalRank));
       NCCLCHECK(ncclCommCount(comms[i], &originalNRank));
-        
+
       if (i < numReducedRanks) {
         int subCommRank, subCommNRank;
         NCCLCHECK(ncclCommUserRank(subComms[i], &subCommRank));
         NCCLCHECK(ncclCommCount(subComms[i], &subCommNRank));
-        
+
         ASSERT_EQ(originalRank, subCommRank);
         ASSERT_EQ(subCommNRank, numReducedRanks);
       } else {
@@ -150,12 +151,13 @@ namespace RcclUnitTesting
     for (auto& comm : comms)
       NCCLCHECK(ncclCommDestroy(comm));
   }
-  
+
   /**
    * \brief Verify there is no regression in timing for each protocol [LL, LL128, Simple]
    * ******************************************************************************************/
   TEST(Standalone, RegressionTiming)
   {
+    TestBed testBed;
     // timing
     using namespace std::chrono;
     using Clock = std::chrono::high_resolution_clock;
@@ -178,7 +180,12 @@ namespace RcclUnitTesting
     for (auto p : protocolList)
     {
       usElapsed = 0;
-      setenv("NCCL_PROTO", p, 1);
+      if(testBed.ev.isGfx12) {
+        setenv("NCCL_PROTO", "Simple", 1);
+      } else {
+        setenv("NCCL_PROTO", p, 1);
+      }
+
       NCCLCHECK(ncclCommInitAll(comms.data(), numRanks, nullptr));
 
       // Prepare CPU data arrays

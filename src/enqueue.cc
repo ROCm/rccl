@@ -271,7 +271,7 @@ static ncclResult_t computeCollAlignCount(struct ncclInfo* collInfo, size_t* ali
   if (collInfo->protocol == NCCL_PROTO_SIMPLE) {
     *alignCount = NCCL_SIMPLE_ALIGNMENT / ncclTypeSize(collInfo->datatype);
   } else if (collInfo->protocol == NCCL_PROTO_LL128) {
-    // LL128 alignCount should be same as LL for now. NCCL_LL128_ALIGNMENT_PER_WARP needs review 
+    // LL128 alignCount should be same as LL for now. NCCL_LL128_ALIGNMENT_PER_WARP needs review
     *alignCount = NCCL_LL_ALIGNMENT_PER_THREAD / ncclTypeSize(collInfo->datatype) * collInfo->nThreads;
   } else {
     *alignCount = NCCL_LL_ALIGNMENT_PER_THREAD / ncclTypeSize(collInfo->datatype) * collInfo->nThreads;
@@ -591,8 +591,8 @@ static ncclResult_t addP2pToPlan(
   // 1 is connIndex
   struct ncclConnInfo* conn = isSendNotRecv ?
     &comm->channels[channelId].peers[peer]->send[1].conn : &comm->channels[channelId].peers[peer]->recv[1].conn;
-  // do not use LL on gfx11
-  info.protocol = ((conn->buffs[NCCL_PROTO_LL] != nullptr) && bytes <= ncclParamP2pLLThreshold()) ? NCCL_PROTO_LL : NCCL_PROTO_SIMPLE;
+  // do not use LL on gfx12
+  info.protocol = ((conn->buffs[NCCL_PROTO_LL] != nullptr) && bytes <= ncclParamP2pLLThreshold() && !IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx12")) ? NCCL_PROTO_LL : NCCL_PROTO_SIMPLE;
 
   int reg = 0;
   if (info.protocol == NCCL_PROTO_SIMPLE) {
@@ -1923,7 +1923,7 @@ static ncclResult_t hostToDevRedOp(
     int64_t i64;
     uint64_t u64;
     half f16;
-    float f32; 
+    float f32;
     double f64;
 #if defined(RCCL_BFLOAT16)
     hip_bfloat16 bf16;
