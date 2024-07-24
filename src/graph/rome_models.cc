@@ -1001,9 +1001,9 @@ end:
   graph->bwIntra = graph->bwInter = system->totalBw/nChannels;
   if (graph->id == 1) {
     for (int i=0; i<graph->nChannels; i++) {
-      int net;
-      ncclTopoGetLocalNet(system, graph->intra[i*ngpus+1], i, &net);
-      graph->inter[i*2+1] = net;
+      int64_t netId;
+      ncclTopoGetLocalNet(system, graph->intra[i*ngpus+1], i, &netId, nullptr);
+      graph->inter[i*2+1] = netId;
     }
   }
 
