@@ -3,9 +3,9 @@
 #
 # See LICENSE.txt for license information
 #
-NCCL_HOME:=../../build/
-CUDA_HOME:=/usr/local/cuda
-INC:= -I$(NCCL_HOME)/include -I$(CUDA_HOME)/include -Inccl
+RCCL_HOME:=../../build/release
+HIP_HOME:=/opt/rocm
+INC:= -I$(RCCL_HOME)/include/  -I$(HIP_HOME)/include/ -D__HIP_PLATFORM_AMD__ -Inccl
 PLUGIN_SO:=libnccl-tuner.so
 
 default: $(PLUGIN_SO)
