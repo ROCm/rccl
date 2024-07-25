@@ -41,6 +41,7 @@ if(ENABLE_MSCCLPP)
     find_package(mscclpp_nccl)
 
     if(NOT mscclpp_nccl_FOUND)
+        string (REPLACE ";" "$<SEMICOLON>" CMAKE_PREFIX "${CMAKE_PREFIX_PATH}")
         message(STATUS "MSCCL++ not found. Downloading and building MSCCL++ only for gfx942.")
         # Download, build and install mscclpp
     
@@ -48,7 +49,7 @@ if(ENABLE_MSCCLPP)
                          GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
                          GIT_TAG             8c6fb429e92e07acb82c0fdcdab44854fc63aa68
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DGPU_TARGETS=gfx942 -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+                         CMAKE_ARGS          -DGPU_TARGETS=gfx942 -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX}"
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
