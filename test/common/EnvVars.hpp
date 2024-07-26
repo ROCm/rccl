@@ -31,6 +31,7 @@ namespace RcclUnitTesting
     int  timeoutUs;      // Set timeout for child in microseconds  [UT_TIMEOUT_US]
     bool useMultithreading; // Multi-thread single-process ranks   [UT_MULTITHREAD]
     bool isGfx94;        // Detects if architecture is gfx94
+    bool isGfx12;        // Detects if architecture is gfx12
 
     // Constructor that parses and collects environment variables
     EnvVars();
