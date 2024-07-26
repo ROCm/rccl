@@ -16,6 +16,7 @@ def runCI =
 
     def prj  = new rocProject('rccl', 'Extended')
 
+    prj.timeout.compile = 400
     prj.timeout.test = 600
     prj.paths.build_command = './install.sh -tj 16'
 
