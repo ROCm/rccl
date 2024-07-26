@@ -699,7 +699,23 @@ target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
 
 ## Set RCCL link options
-target_link_options(rccl PRIVATE -parallel-jobs=16)       # Use multiple threads to link
+## Find out available memory
+execute_process(
+  COMMAND bash "-c" "cat /sys/fs/cgroup/memory.max"
+  OUTPUT_VARIABLE memory_max_string)
+if (${memory_max_string} MATCHES "^[0-9]+")
+  math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024 * 1024)")
+else()
+  cmake_host_system_information(RESULT memory_max_string QUERY AVAILABLE_PHYSICAL_MEMORY )
+  math(EXPR memory_in_gb "${memory_max_string} / 1024")
+endif()
+## Reserve 16GB for each linker job. Limit max number of linker jobs to 16
+math(EXPR num_linker_jobs "(${memory_in_gb} + 15) / 16")
+if (${num_linker_jobs} VERSION_GREATER_EQUAL "16")
+  set(num_linker_jobs "16")
+endif()
+message(STATUS "Use ${num_linker_jobs} jobs for linking")
+target_link_options(rccl PRIVATE -parallel-jobs=${num_linker_jobs})       # Use multiple threads to link
 if(BUILD_ADDRESS_SANITIZER)
   target_link_options(rccl PRIVATE -fuse-ld=lld)
 endif()
