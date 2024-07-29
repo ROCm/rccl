@@ -706,8 +706,15 @@ execute_process(
 if (${memory_max_string} MATCHES "^[0-9]+")
   math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024 * 1024)")
 else()
-  cmake_host_system_information(RESULT memory_max_string QUERY AVAILABLE_PHYSICAL_MEMORY )
-  math(EXPR memory_in_gb "${memory_max_string} / 1024")
+  execute_process(
+    COMMAND bash "-c" "cat /sys/fs/cgroup/memory/memory.limit_in_bytes"
+    OUTPUT_VARIABLE memory_max_string)
+  if (${memory_max_string} MATCHES "^[0-9]+")
+    math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024 * 1024)")
+  else()
+    cmake_host_system_information(RESULT memory_max_string QUERY AVAILABLE_PHYSICAL_MEMORY )
+    math(EXPR memory_in_gb "${memory_max_string} / 1024")
+  endif()
 endif()
 ## Reserve 16GB for each linker job. Limit max number of linker jobs to 16
 math(EXPR num_linker_jobs "(${memory_in_gb} + 15) / 16")
