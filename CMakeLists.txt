@@ -711,7 +711,7 @@ else()
 endif()
 ## Reserve 16GB for each linker job. Limit max number of linker jobs to 16
 math(EXPR num_linker_jobs "(${memory_in_gb} + 15) / 16")
-if (${num_linker_jobs} VERSION_GREATER_EQUAL "16")
+if (${num_linker_jobs} GREATER_EQUAL "16")
   set(num_linker_jobs "16")
 endif()
 message(STATUS "Use ${num_linker_jobs} jobs for linking")
