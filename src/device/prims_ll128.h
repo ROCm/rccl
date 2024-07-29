@@ -382,7 +382,6 @@ private:
 
     T const *srcPtr = srcs[0];
     T       *dstPtr = dsts[0];
-    int wireOffset = WireWordPerSlice*warp + 2*wid;
     const int nwarps = nthreads/WARP_SIZE;
     nelem = nelem < 0 ? 0 : nelem;
 
@@ -438,7 +437,6 @@ private:
         }
       }
 
-      wireOffset += WireWordPerSlice*nwarps;
       srcPtr += DataEltPerSlice*nwarps;
       dstPtr += DataEltPerSlice*nwarps;
       if (MULTISRCS){
