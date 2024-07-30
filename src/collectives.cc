@@ -9,12 +9,19 @@
 #include "enqueue.h"
 #include "graph/topo.h"
 #include "nccl.h"
+#include "api_trace.h"
 
 #include "msccl/msccl_lifecycle.h"
 
 NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
+    ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclAllGather_fn(sendbuff, recvbuff, sendcount,
+                                     datatype, comm, stream);
+}
+
+ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream) {
   // Just pass the size of one message and not the total bytes sent/received.
   constexpr nvtxPayloadSchemaEntry_t AllGatherSchema[] = {
@@ -37,7 +44,12 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
 
 NCCL_API(ncclResult_t, ncclAllReduce, const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
-ncclResult_t ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
+NCCL_API(ncclResult_t, ncclAllReduce, const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream){
+      return ::rccl::RcclGetFunctionTable()->ncclAllReduce_fn(sendbuff, recvbuff, count,
+                                     datatype, op, comm, stream);
+    }
+ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream) {
   struct NvtxParamsAllReduce {
     size_t bytes;
@@ -66,7 +78,12 @@ ncclResult_t ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
 
 NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream);
-ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
+NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
+  ncclComm_t comm, hipStream_t stream) {
+    return ::rccl::RcclGetFunctionTable()->ncclAllToAll_fn(sendbuff, recvbuff, count,
+                                     datatype, comm, stream);
+  }
+ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream) {
   // Just pass the size of one message and not the total bytes sent/received.
   constexpr nvtxPayloadSchemaEntry_t AllToAllSchema[] = {
@@ -107,7 +124,15 @@ ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count, nc
 NCCL_API(ncclResult_t, ncclAllToAllv, const void *sendbuff, const size_t sendcounts[], const size_t sdispls[],
     void *recvbuff, const size_t recvcounts[], const size_t rdispls[],
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
-ncclResult_t ncclAllToAllv(const void *sendbuff, const size_t sendcounts[], const size_t sdispls[],
+
+NCCL_API(ncclResult_t, ncclAllToAllv, const void *sendbuff, const size_t sendcounts[], const size_t sdispls[],
+    void *recvbuff, const size_t recvcounts[], const size_t rdispls[],
+    ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclAllToAllv_fn(sendbuff, sendcounts, sdispls, recvbuff,
+        recvcounts, rdispls, datatype, comm, stream);
+}
+
+ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[], const size_t sdispls[],
     void *recvbuff, const size_t recvcounts[], const size_t rdispls[],
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream) {
   struct NvtxParamsAllToAllv {
@@ -153,7 +178,12 @@ ncclResult_t ncclAllToAllv(const void *sendbuff, const size_t sendcounts[], cons
 
 NCCL_API(ncclResult_t, ncclBroadcast, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, cudaStream_t stream);
-ncclResult_t ncclBroadcast(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
+NCCL_API(ncclResult_t, ncclBroadcast, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
+    ncclComm_t comm, cudaStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclBroadcast_fn(sendbuff, recvbuff, count, datatype, root,
+      comm, stream);
+  }
+ncclResult_t ncclBroadcast_impl(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, cudaStream_t stream) {
   struct NvtxParamsBroadcast {
     size_t bytes;
@@ -187,7 +217,12 @@ ncclResult_t ncclBcast(void* buff, size_t count, ncclDataType_t datatype, int ro
 
 NCCL_API(ncclResult_t, ncclGather, const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
-ncclResult_t ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
+NCCL_API(ncclResult_t, ncclGather, const void* sendbuff, void* recvbuff, size_t sendcount,
+    ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclGather_fn(sendbuff, recvbuff, sendcount, datatype,
+          root, comm, stream);
+}
+ncclResult_t ncclGather_impl(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream) {
     struct NvtxParamsGather {
       size_t bytes;
@@ -224,7 +259,12 @@ ncclResult_t ncclGather(const void* sendbuff, void* recvbuff, size_t sendcount,
 
 NCCL_API(ncclResult_t, ncclReduce, const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream);
-ncclResult_t ncclReduce(const void* sendbuff, void* recvbuff, size_t count,
+NCCL_API(ncclResult_t, ncclReduce, const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclReduce_fn(sendbuff, recvbuff, count, datatype,
+          op, root, comm, stream);
+}
+ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream) {
   struct NvtxParamsReduce {
     size_t bytes;
@@ -254,7 +294,12 @@ ncclResult_t ncclReduce(const void* sendbuff, void* recvbuff, size_t count,
 
 NCCL_API(ncclResult_t, ncclReduceScatter, const void* sendbuff, void* recvbuff, size_t recvcount,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
-ncclResult_t ncclReduceScatter(const void* sendbuff, void* recvbuff, size_t recvcount,
+NCCL_API(ncclResult_t, ncclReduceScatter, const void* sendbuff, void* recvbuff, size_t recvcount,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream){
+      return ::rccl::RcclGetFunctionTable()->ncclReduceScatter_fn(sendbuff, recvbuff, recvcount,
+        datatype, op, comm, stream);
+}
+ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t recvcount,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream) {
   struct NvtxParamsReduceScatter {
     size_t bytes;
@@ -282,7 +327,12 @@ ncclResult_t ncclReduceScatter(const void* sendbuff, void* recvbuff, size_t recv
 
 NCCL_API(ncclResult_t, ncclScatter, const void* sendbuff, void* recvbuff, size_t recvcount, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream);
-ncclResult_t ncclScatter(const void* sendbuff, void* recvbuff, size_t recvcount, ncclDataType_t datatype, int root,
+NCCL_API(ncclResult_t, ncclScatter, const void* sendbuff, void* recvbuff, size_t recvcount, ncclDataType_t datatype, int root,
+    ncclComm_t comm, hipStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclScatter_fn(sendbuff, recvbuff, recvcount, datatype, root,
+        comm, stream);
+}
+ncclResult_t ncclScatter_impl(const void* sendbuff, void* recvbuff, size_t recvcount, ncclDataType_t datatype, int root,
     ncclComm_t comm, hipStream_t stream) {
     struct NvtxParamsScatter {
       size_t bytes;
@@ -328,7 +378,12 @@ constexpr const nvtxPayloadSchemaEntry_t SendRecvSchema[] = {
 
 NCCL_API(ncclResult_t, ncclSend, const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream);
-ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
+NCCL_API(ncclResult_t, ncclSend, const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
+    ncclComm_t comm, cudaStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclSend_fn(sendbuff, count, datatype, peer,
+        comm, stream);
+}
+ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
   NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
   NVTX3_FUNC_WITH_PARAMS(Send, SendRecvSchema, payload)
@@ -351,7 +406,12 @@ ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatyp
 
 NCCL_API(ncclResult_t, ncclRecv, void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream);
-ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
+NCCL_API(ncclResult_t, ncclRecv, void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
+    ncclComm_t comm, cudaStream_t stream) {
+      return ::rccl::RcclGetFunctionTable()->ncclRecv_fn(recvbuff, count, datatype, peer,
+        comm, stream);
+}
+ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
   NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
   NVTX3_FUNC_WITH_PARAMS(Recv, SendRecvSchema, payload)

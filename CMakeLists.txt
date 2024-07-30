@@ -376,6 +376,7 @@ set(SRC_FILES
   src/include/align.h
   src/include/alloc.h
   src/include/archinfo.h
+  src/include/api_trace.h
   src/include/argcheck.h
   src/include/BfdBacktrace.hpp
   src/include/bootstrap.h
@@ -680,6 +681,10 @@ endif()
 
 ## Set RCCL linked library directories
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
+
+find_package(rocprofiler-register REQUIRED)
+target_link_libraries(
+    rccl PRIVATE rocprofiler-register::rocprofiler-register)
 
 ## Set RCCL linked libraries
 if (HAVE_BFD)
