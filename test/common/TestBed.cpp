@@ -242,7 +242,8 @@ namespace RcclUnitTesting
                             bool   const useManagedMem,
                             int    const groupId,
                             int    const collId,
-                            int    const rank)
+                            int    const rank,
+                            bool   const userRegistered)
   {
     InteractiveWait("Starting AllocateMem");
 
@@ -267,6 +268,7 @@ namespace RcclUnitTesting
         PIPE_WRITE(childId, collId);
         PIPE_WRITE(childId, inPlace);
         PIPE_WRITE(childId, useManagedMem);
+        PIPE_WRITE(childId, userRegistered);
         PIPE_WRITE(childId, currGroup);
         PIPE_CHECK(childId);
       }

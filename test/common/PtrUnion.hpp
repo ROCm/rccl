@@ -55,10 +55,10 @@ namespace RcclUnitTesting
     ErrCode Attach(void *ptr);
     ErrCode Attach(PtrUnion ptrUnion);
 
-    ErrCode AllocateGpuMem(size_t const numBytes, bool const useManagedMem = false);
+    ErrCode AllocateGpuMem(size_t const numBytes, bool const useManagedMem = false, bool const userRegistered = false);
     ErrCode AllocateCpuMem(size_t const numBytes);
 
-    ErrCode FreeGpuMem();
+    ErrCode FreeGpuMem(bool const userRegistered = false);
     ErrCode FreeCpuMem();
 
     ErrCode ClearGpuMem(size_t const numBytes);

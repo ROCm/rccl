@@ -58,7 +58,8 @@ namespace RcclUnitTesting
   }
 
   ErrCode CollectiveArgs::AllocateMem(bool   const inPlace,
-                                      bool   const useManagedMem)
+                                      bool   const useManagedMem,
+                                      bool   const userRegistered)
   {
     this->numInputBytesAllocated     = this->numInputElements * DataTypeToBytes(this->dataType);
     this->numOutputBytesAllocated    = this->numOutputElements * DataTypeToBytes(this->dataType);
@@ -66,6 +67,7 @@ namespace RcclUnitTesting
     this->numOutputElementsAllocated = this->numOutputElements;
     this->inPlace                    = inPlace;
     this->useManagedMem              = useManagedMem;
+    this->userRegistered             = userRegistered;
 
     if (hipSetDevice(this->deviceId) != hipSuccess)
     {
@@ -77,26 +79,26 @@ namespace RcclUnitTesting
     {
       if (this->funcType == ncclCollScatter)
       {
-        CHECK_CALL(this->inputGpu.AllocateGpuMem(this->numInputBytesAllocated, useManagedMem));
+        CHECK_CALL(this->inputGpu.AllocateGpuMem(this->numInputBytesAllocated, useManagedMem, userRegistered));
         this->outputGpu.Attach(this->inputGpu.U1 + (this->globalRank  * this->numOutputBytesAllocated));
       }
       else if (this->funcType == ncclCollGather)
       {
-        CHECK_CALL(this->outputGpu.AllocateGpuMem(this->numOutputBytesAllocated, useManagedMem));
+        CHECK_CALL(this->outputGpu.AllocateGpuMem(this->numOutputBytesAllocated, useManagedMem, userRegistered));
         this->inputGpu.Attach(this->outputGpu.U1 + (this->globalRank * this->numInputBytesAllocated));
       }
       else
       {
         size_t const numBytes = std::max(this->numInputBytesAllocated, this->numOutputBytesAllocated);
-        CHECK_CALL(this->inputGpu.AllocateGpuMem(numBytes, useManagedMem));
+        CHECK_CALL(this->inputGpu.AllocateGpuMem(numBytes, useManagedMem, userRegistered));
         this->outputGpu.Attach(this->inputGpu.ptr);
       }
       CHECK_CALL(this->expected.AllocateCpuMem(this->numOutputBytesAllocated));
     }
     else
     {
-      CHECK_CALL(this->inputGpu.AllocateGpuMem(this->numInputBytesAllocated, useManagedMem));
-      CHECK_CALL(this->outputGpu.AllocateGpuMem(this->numOutputBytesAllocated, useManagedMem));
+      CHECK_CALL(this->inputGpu.AllocateGpuMem(this->numInputBytesAllocated, useManagedMem, userRegistered));
+      CHECK_CALL(this->outputGpu.AllocateGpuMem(this->numOutputBytesAllocated, useManagedMem, userRegistered));
       CHECK_CALL(this->expected.AllocateCpuMem(this->numOutputBytesAllocated));
     }
     CHECK_CALL(this->outputCpu.AllocateCpuMem(this->numOutputBytesAllocated));
@@ -136,12 +138,12 @@ namespace RcclUnitTesting
       if (this->funcType == ncclCollGather)
         this->outputGpu.FreeGpuMem();
       else
-        this->inputGpu.FreeGpuMem();
+        this->inputGpu.FreeGpuMem(this->userRegistered);
     }
     else
     {
-      this->inputGpu.FreeGpuMem();
-      this->outputGpu.FreeGpuMem();
+      this->inputGpu.FreeGpuMem(this->userRegistered);
+      this->outputGpu.FreeGpuMem(this->userRegistered);
     }
 
     this->outputCpu.FreeCpuMem();

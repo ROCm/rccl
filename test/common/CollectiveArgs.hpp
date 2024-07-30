@@ -115,6 +115,8 @@ namespace RcclUnitTesting
     PtrUnion       expected;
     bool           inPlace;
     bool           useManagedMem;
+    bool           userRegistered;
+    void*          commRegHandle;
     size_t         numInputBytesAllocated;
     size_t         numOutputBytesAllocated;
     size_t         numInputElementsAllocated;
@@ -134,7 +136,8 @@ namespace RcclUnitTesting
     // Allocates GPU memory for input/output and CPU memory for expected
     // When inPlace is true, input and output share the same memory
     ErrCode AllocateMem(bool   const inPlace,
-                        bool   const useManagedMem);
+                        bool   const useManagedMem,
+                        bool   const userRegistered);
 
     // Execute the provided data preparation function to fill input and compute expected results
     ErrCode PrepareData(CollFuncPtr const prepareDataFunc);

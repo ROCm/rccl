@@ -42,26 +42,38 @@ namespace RcclUnitTesting
     return TEST_SUCCESS;
   }
 
-  ErrCode PtrUnion::AllocateGpuMem(size_t const numBytes, bool const useManagedMem)
+  ErrCode PtrUnion::AllocateGpuMem(size_t const numBytes, bool const useManagedMem, bool const userRegistered)
   {
     if (numBytes)
     {
-      if (useManagedMem)
+      if (userRegistered)
       {
-        if (hipMallocManaged(&I1, numBytes) != hipSuccess)
+        if (ncclMemAlloc((void**)&I1, numBytes) != ncclSuccess)
         {
-          ERROR("Unable to allocate managed memory of GPU memory (%lu bytes)\n", numBytes);
+          ERROR("Unable to allocate user managed GPU memory (%lu bytes)\n", numBytes);
           return TEST_FAIL;
         }
       }
       else
       {
-        if (hipMalloc(&I1, numBytes) != hipSuccess)
+        if (useManagedMem)
         {
-          ERROR("Unable to allocate memory of GPU memory (%lu bytes)\n", numBytes);
-          return TEST_FAIL;
+          if (hipMallocManaged(&I1, numBytes) != hipSuccess)
+          {
+            ERROR("Unable to allocate managed memory of GPU memory (%lu bytes)\n", numBytes);
+            return TEST_FAIL;
+          }
+        }
+        else
+        {
+          if (hipMalloc(&I1, numBytes) != hipSuccess)
+          {
+            ERROR("Unable to allocate memory of GPU memory (%lu bytes)\n", numBytes);
+            return TEST_FAIL;
+          }
         }
       }
+
     }
     return TEST_SUCCESS;
   }
@@ -80,11 +92,14 @@ namespace RcclUnitTesting
     return TEST_SUCCESS;
   }
 
-  ErrCode PtrUnion::FreeGpuMem()
+  ErrCode PtrUnion::FreeGpuMem(bool const userRegistered)
   {
     if (this->ptr != nullptr)
     {
-      hipFree(this->ptr);
+      if (userRegistered)
+        ncclMemFree(this->ptr);
+      else
+        hipFree(this->ptr);
       this->ptr = nullptr;
     }
     return TEST_SUCCESS;
