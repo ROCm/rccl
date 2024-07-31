@@ -44,3 +44,6 @@ bool mscclpp_init() {
 }
 
 std::unordered_map<ncclUniqueId, mscclppUniqueId> mscclpp_uniqueIdMap;
+std::unordered_map<mscclppUniqueId, std::unordered_set<ncclUniqueId>> mscclpp_uniqueIdReverseMap;
+std::unordered_map<mscclppComm_t, mscclppUniqueId> mscclpp_commToUniqueIdMap;
+std::unordered_map<ncclComm_t, ncclUniqueId> ncclCommToUniqueIdMap;

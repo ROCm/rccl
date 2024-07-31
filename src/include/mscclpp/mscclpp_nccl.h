@@ -9,6 +9,7 @@
 
 #include "nccl.h"
 #include <unordered_map>
+#include <unordered_set>
 
 typedef struct mscclppComm* mscclppComm_t;
 
@@ -18,6 +19,9 @@ bool mscclpp_init();
 
 /* A ncclUniqueId and a mscclppUniqueId will always be created together and used alternatively. This maps between them. */
 extern std::unordered_map<ncclUniqueId, mscclppUniqueId> mscclpp_uniqueIdMap;
+extern std::unordered_map<mscclppUniqueId, std::unordered_set<ncclUniqueId>> mscclpp_uniqueIdReverseMap;
+extern std::unordered_map<mscclppComm_t, mscclppUniqueId> mscclpp_commToUniqueIdMap;
+extern std::unordered_map<ncclComm_t, ncclUniqueId> ncclCommToUniqueIdMap;
 
 /* See ncclGetUniqueId. */
 extern ncclResult_t  (*mscclpp_ncclGetUniqueId)(mscclppUniqueId* uniqueId);
