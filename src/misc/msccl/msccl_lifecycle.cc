@@ -477,7 +477,12 @@ ncclResult_t mscclEnqueueCheck(
 
         /* check if one rank per GPU and graph mode is enabled */
         if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
-          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
+          bool isManagedBuffer = false;
+          if (sendBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(sendBuff)));
+          if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
+
+          if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
+          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
               "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
@@ -513,7 +518,12 @@ ncclResult_t mscclEnqueueCheck(
 
         /* check if one rank per GPU and graph mode is enabled */
         if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
-          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
+          bool isManagedBuffer = false;
+          if (sendBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(sendBuff)));
+          if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
+
+          if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
+          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
               "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
