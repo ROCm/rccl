@@ -451,6 +451,25 @@ static ncclResult_t mscclFallBackSavedParams() {
   return ncclSuccess;
 }
 
+#ifdef ENABLE_MSCCLPP
+static inline bool isMscclppAllReduceSupported(ncclDataType_t dataType, ncclRedOp_t op) {
+  switch (dataType) {
+  case ncclFloat16:
+  case ncclInt32:
+  case ncclUint32:
+  case ncclFloat32:
+#ifdef RCCL_BFLOAT16
+  case ncclBfloat16:
+#endif
+    break;
+  default:
+    return false;
+  }
+
+  return (op == ncclSum);
+}
+#endif
+
 ncclResult_t mscclEnqueueCheck(
     const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
     void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
@@ -482,7 +501,7 @@ ncclResult_t mscclEnqueueCheck(
           if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
 
           if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
-          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
+          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && isMscclppAllReduceSupported(dataType, op)) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
               "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
@@ -523,7 +542,7 @@ ncclResult_t mscclEnqueueCheck(
           if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
 
           if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
-          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold) {
+          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && isMscclppAllReduceSupported(dataType, op)) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
               "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
