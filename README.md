@@ -59,6 +59,8 @@ RCCL build & installation helper script
        --verbose               Show compile commands
 ```
 
+By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeLists.txt`. To target specific GPU(s), and potentially reduce build time, use `--amdgpu_targets` as a `;` separated string listing GPU(s) to target.
+
 ## Manual build
 
 ### To build the library using CMake:
