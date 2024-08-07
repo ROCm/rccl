@@ -185,7 +185,10 @@ namespace rccl {
 
     const rcclApiFuncTable* RcclGetFunctionTable()
     {
-        static rcclApiFuncTable* tbl = RcclGetFunctionTable_impl();
+	 static rcclApiFuncTable* tbl = nullptr;
+         if(tbl == nullptr)
+             tbl = RcclGetFunctionTable_impl();
+
         return tbl;
     }
 }
