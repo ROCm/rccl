@@ -224,18 +224,18 @@ static struct tuningModel tuning_model_4 {
 static struct tuningModel tuning_model_5 {
   .hwLat = {
     /* NVLINK */
-    { /* Tree (LL/LL128/Simple)*/ { 0.9, 0.0, 2.3 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 2.1 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.9 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.9, 0.0, 2.3 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 2.1 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.9 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
     /* PCI */
-    { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 5.7 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 5.7 } },
+    { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 5.7 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 5.7 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
     /* NET */
-    { /* Tree (LL/LL128/Simple)*/ { 10.5, 0.0, 9.0 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 0.0, 320.0 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 10.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 } },
+    { /* Tree (LL/LL128/Simple)*/ { 10.5, 0.0, 9.0 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 0.0, 320.0 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 10.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
   },
 
   .bwRatio = {
     /* 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.07, 0.00, 0.32 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.07, 0.00, 0.32 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
     /* more than 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.07, 0.00, 0.62 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.07, 0.00, 0.62 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
   },
 
   .treeCorrectionFactor = {
