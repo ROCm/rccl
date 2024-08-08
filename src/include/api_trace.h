@@ -24,15 +24,16 @@
 #include "nccl.h"
 #include <vector>
 #include <iostream>
-#include "rocprofiler-sdk-roctx/version.h"
-#include <rocprofiler-register/rocprofiler-register.h>
-
+#if ROCM_VERSION >= 60100
+    #include "rocprofiler-sdk-roctx/version.h"
+    #include <rocprofiler-register/rocprofiler-register.h>
 
 #define ROCP_REG_VERSION                                                                           \
     ROCPROFILER_REGISTER_COMPUTE_VERSION_3(                                                        \
         ROCTX_VERSION_MAJOR, ROCTX_VERSION_MINOR, ROCTX_VERSION_PATCH)
 
 ROCPROFILER_REGISTER_DEFINE_IMPORT(rccl, ROCP_REG_VERSION)
+#endif
 
 ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
@@ -162,23 +163,24 @@ namespace rccl {
                                         &ncclScatter_impl,
                                         &ncclSend_impl,
                                         &ncclRecv_impl};
+        #if ROCM_VERSION >= 60100
+            std::array<void*, 1> table_array{&tbl};
+            rocprofiler_register_library_indentifier_t lib_id      = rocprofiler_register_library_indentifier_t{};
+            rocprofiler_register_error_code_t rocp_reg_status =
+                rocprofiler_register_library_api_table("rccl",
+                                                    &ROCPROFILER_REGISTER_IMPORT_FUNC(rccl),
+                                                    ROCP_REG_VERSION,
+                                                    table_array.data(),
+                                                    table_array.size(),
+                                                    &lib_id);
 
-        std::array<void*, 1> table_array{&tbl};
-        rocprofiler_register_library_indentifier_t lib_id      = rocprofiler_register_library_indentifier_t{};
-        rocprofiler_register_error_code_t rocp_reg_status =
-            rocprofiler_register_library_api_table("rccl",
-                                                &ROCPROFILER_REGISTER_IMPORT_FUNC(rccl),
-                                                ROCP_REG_VERSION,
-                                                table_array.data(),
-                                                table_array.size(),
-                                                &lib_id);
+            INFO( NCCL_COLL,"[rocprofiler-sdk-rccl][ = %d ] rocprofiler-register returned code = %d : %s", getpid(),
+                rocp_reg_status, rocprofiler_register_error_string(rocp_reg_status));
 
-        INFO( NCCL_COLL,"[rocprofiler-sdk-rccl][ = %d ] rocprofiler-register returned code = %d : %s", getpid(),
-               rocp_reg_status, rocprofiler_register_error_string(rocp_reg_status));
-
-        if(rocp_reg_status != ROCP_REG_SUCCESS && rocp_reg_status != ROCP_REG_NO_TOOLS)
-            WARN( "[rocprofiler-sdk-rccl][%d] rocprofiler-register failed with error code %d : %s",  getpid(),
-            rocp_reg_status, rocprofiler_register_error_string(rocp_reg_status));
+            if(rocp_reg_status != ROCP_REG_SUCCESS && rocp_reg_status != ROCP_REG_NO_TOOLS)
+                WARN( "[rocprofiler-sdk-rccl][%d] rocprofiler-register failed with error code %d : %s",  getpid(),
+                rocp_reg_status, rocprofiler_register_error_string(rocp_reg_status));
+        #endif
 
         return &tbl;
     }

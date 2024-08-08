@@ -682,9 +682,11 @@ endif()
 ## Set RCCL linked library directories
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
 
-find_package(rocprofiler-register REQUIRED)
-target_link_libraries(
-    rccl PRIVATE rocprofiler-register::rocprofiler-register)
+if (ROCM_VERSION VERSION_GREATER_EQUAL "60100")
+  find_package(rocprofiler-register REQUIRED)
+  target_link_libraries(
+      rccl PRIVATE rocprofiler-register::rocprofiler-register)
+  endif()
 
 ## Set RCCL linked libraries
 if (HAVE_BFD)
