@@ -347,7 +347,9 @@ static void memcpylower(char* dst, const char* src, const size_t size) {
 static ncclResult_t getPciPath(const char* busId, char** path) {
   char busPath[] = "/sys/class/pci_bus/0000:00/../../0000:00:00.0";
   memcpylower(busPath+sizeof("/sys/class/pci_bus/")-1, busId, BUSID_REDUCED_SIZE-1);
-  memcpylower(busPath+sizeof("/sys/class/pci_bus/0000:00/../../")-1, busId, BUSID_SIZE-1);
+  memcpylower(busPath+sizeof("/sys/class/pci_bus/0000:00/../../")-1, busId, BUSID_SIZE-2);
+  // override PCIe device function ID in CPX mode
+  busPath[sizeof("/sys/class/pci_bus/0000:00/../../")+BUSID_SIZE-3] = '0';
   *path = realpath(busPath, NULL);
   if (*path == NULL) {
     WARN("Could not find real path of %s", busPath);

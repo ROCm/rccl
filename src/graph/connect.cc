@@ -626,7 +626,8 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
   // Only use full MAXCHANNELS for gfx94x
   int maxChannels = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ?
-    (comm->topo->nodes[GPU].nodes[0].gpu.cu == 80 ? 80 : MAXCHANNELS) : 2*CHANNEL_LIMIT;
+    ((comm->topo->nodes[GPU].nodes[0].gpu.cu == 80 || comm->topo->nodes[GPU].nodes[0].gpu.cu == 20)
+      ? comm->topo->nodes[GPU].nodes[0].gpu.cu : MAXCHANNELS) : 2*CHANNEL_LIMIT;
 
   if (graphs[NCCL_ALGO_RING]->nIntraChannels > 0 || comm->nNodes > 1) {
     maxChannels = std::min(64, maxChannels);
