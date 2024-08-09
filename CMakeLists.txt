@@ -464,6 +464,7 @@ set(SRC_FILES
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
+  src/api_trace.cc
 # src/misc/cudawrap.cc
 # src/misc/gdrwrap.cc
   src/misc/ibvsymbols.cc
@@ -683,10 +684,19 @@ endif()
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
 
 if (ROCM_VERSION VERSION_GREATER_EQUAL "60100")
+    option(RCCL_ROCPROFILER_REGISTER "Enable rocprofiler-register support" ON)
+else()
+    if(RCCL_ROCPROFILER_REGISTER)
+        message(AUTHOR_WARNING "RCCL_ROCPROFILER_REGISTER is not valid option for ROCm < 6.2. Current ROCm version: ${ROCM_VERSION}")
+    endif()
+    set(RCCL_ROCPROFILER_REGISTER OFF CACHE BOOL "" FORCE)
+endif()
+if(RCCL_ROCPROFILER_REGISTER)
   find_package(rocprofiler-register REQUIRED)
+  target_compile_definitions(rccl PRIVATE RCCL_ROCPROFILER_REGISTER=1)
   target_link_libraries(
       rccl PRIVATE rocprofiler-register::rocprofiler-register)
-  endif()
+endif()
 
 ## Set RCCL linked libraries
 if (HAVE_BFD)
