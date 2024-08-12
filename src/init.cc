@@ -61,7 +61,7 @@
   #define STR(v) STR2(v)
 #endif
 
-#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define NCCL_GROUP_CUDA_STREAM 0 // CGMD: CUDA 9.2,10.X Don't need to use an internal CUDA stream
 #else
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
@@ -724,7 +724,7 @@ fail:
 }
 
 // Pre-process the string so that running "strings" on the lib can quickly reveal the version.
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define VERSION_STRING "RCCL version : " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX
 #define VERSION_STRING_EXTENDED "HIP version  : " HIP_BUILD_INFO "\nROCm version : " ROCM_BUILD_INFO
 #else
@@ -736,13 +736,13 @@ static void showVersion() {
   if (shown == 0 && ncclDebugLevel >= NCCL_LOG_VERSION) {
     char hostInfo[HOST_NAME_MAX] = {}, libPathInfo[2048] = {};
     size_t hostInfoSize = sizeof(hostInfo), libPathInfoSize = sizeof(libPathInfo);
-    
+
     // Retrieve Hostname info
     if (gethostname(hostInfo, hostInfoSize-1) != 0) {
       // Returns Unknown in hostInfo if function call unsuccessful
       strncpy(hostInfo, "Unknown", hostInfoSize-1);
     }
-    
+
     // Retrieve librccl path
     Dl_info pathInfo;
     if (dladdr((void*)ncclCommInitRank, &pathInfo)) {
@@ -802,7 +802,7 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
   info->comm = comm;
   info->cudaCompCap = comm->minCompCap = comm->maxCompCap = comm->compCap;
 
-#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HCC__) && !defined(__HIPCC__)
+#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
   // MNNVL support
   {
     // MNNVL: Request the fabric UUID and partition info

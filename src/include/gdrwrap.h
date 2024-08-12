@@ -157,7 +157,7 @@ typedef struct gdr_mem_desc {
   gdr_mh_t gdrMh;
 } gdr_mem_desc_t;
 
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 static gdr_t ncclGdrInit() {
   INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation");
   return (gdr_t)0x12345678L;

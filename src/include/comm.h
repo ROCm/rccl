@@ -17,7 +17,7 @@
 #include "nccl_net.h"
 #include "register.h"
 
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
 #else
 #if CUDART_VERSION < 9000

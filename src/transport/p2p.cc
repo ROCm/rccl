@@ -106,7 +106,7 @@ static void initCeOperation();
 /* Determine if two peers can communicate through p2p */
 ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
   initCeOperation();
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   if (!info1->hasFineGrain || !info2->hasFineGrain)  {
     *ret = 0;
     return ncclSuccess;
@@ -146,7 +146,7 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
   int cudaDev1 = busIdToCudaDev(info1->busId);
   int cudaDev2 = busIdToCudaDev(info2->busId);
   if (cudaDev1 == -1 || cudaDev2 == -1) {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__) || CUDART_VERSION >= 10010
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__) || CUDART_VERSION >= 10010
     // CUDA 10.1 and later can use P2P with invisible devices.
     return ncclSuccess;
 #else
@@ -165,7 +165,7 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
     return ncclSuccess;
   }
 
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #else
   // This will always fail when using NCCL_CUMEM_ENABLE=1
   if (p2p != 0 && !ncclCuMemEnable()) {
