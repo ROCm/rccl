@@ -30,16 +30,13 @@ struct ncclKernelMatch {
 };
 
 #ifdef ENABLE_COLLTRACE
-static ncclKernelMatch const ncclKerns[4] = {
+static ncclKernelMatch const ncclKerns[2] = {
   {(void *)ncclDevKernel_Generic, true},
-  {(void *)ncclDevKernel_Generic_4, true},
   {(void *)ncclDevKernelDebug_Generic, true},
-  {(void *)ncclDevKernelDebug_Generic_4, true},
 };
 #else
-static ncclKernelMatch const ncclKerns[2] = {
-  {(void*)ncclDevKernel_Generic, true},
-  {(void*)ncclDevKernel_Generic_4, true},
+static ncclKernelMatch const ncclKerns[1] = {
+  {(void*)ncclDevKernel_Generic, true}
 };
 #endif
 
@@ -59,21 +56,6 @@ static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo);
 static ncclResult_t getPatternInfo(struct ncclInfo* collInfo);
 static ncclResult_t getLoopInfo(struct ncclInfo* collInfo);
 static ncclResult_t getCollNetSupport(struct ncclInfo* info, int* collNetSupport);
-
-int ncclGetKernelIndex(struct ncclComm* comm) {
-#if ENABLE_COLLTRACE
-  int start_idx = comm->collTraceThread ? 2 : 0;
-#else
-  int start_idx = 0;
-#endif
-  hipDeviceProp_t devProp;
-  CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx908") || (IsArchMatch(devProp.gcnArchName, "gfx94")
-    && devProp.multiProcessorCount > 80))
-    return start_idx;
-  else
-    return start_idx + 1;
-}
 
 // Returns maximum kernel stack size of all CUDA kernels
 ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
