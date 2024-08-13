@@ -119,7 +119,7 @@ ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle);
 
 
 typedef uint64_t rccl_range_id_t;
-typedef ncclResult_t (*ncclAllGatherfn_t)(const void* sendbuff, void* recvbuff, size_t sendcount,
+typedef ncclResult_t (*ncclAllGather_fn_t)(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 typedef ncclResult_t (*ncclAllReduce_fn_t)(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
@@ -198,7 +198,7 @@ typedef ncclResult_t (*ncclCommDeregister_fn_t)(const ncclComm_t comm, void* han
 typedef struct rcclApiFuncTable
 {
     uint64_t                            size;
-    ncclAllGatherfn_t                   ncclAllGather_fn;
+    ncclAllGather_fn_t                  ncclAllGather_fn;
     ncclAllReduce_fn_t                  ncclAllReduce_fn;
     ncclAllToAll_fn_t                   ncclAllToAll_fn;
     ncclAllToAllv_fn_t                  ncclAllToAllv_fn;
