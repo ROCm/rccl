@@ -11,6 +11,7 @@
 #include "enqueue.h"
 #include "transport.h"
 #include "channel.h"
+#include "api_trace.h"
 #include <assert.h>
 
 #include "msccl/msccl_lifecycle.h"
@@ -83,7 +84,7 @@ ncclResult_t ncclAsyncJobComplete(struct ncclAsyncJob* job) {
 }
 
 NCCL_API(ncclResult_t, ncclGroupStart);
-ncclResult_t ncclGroupStart() {
+ncclResult_t ncclGroupStart_impl() {
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
@@ -101,7 +102,7 @@ ncclResult_t ncclGroupStartInternal() {
 }
 
 NCCL_API(ncclResult_t, ncclGroupEnd);
-ncclResult_t ncclGroupEnd() {
+ncclResult_t ncclGroupEnd_impl() {
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   NCCLCHECKGOTO(ncclGroupEndInternal(), ret, exit);
