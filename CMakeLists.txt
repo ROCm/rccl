@@ -26,8 +26,8 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
-option(BUILD_MSCCLPP                           "Build MSCCL++"                                 ON)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
+option(BUILD_MSCCLPP                           "Build MSCCL++"                                 OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  OFF)
@@ -38,12 +38,9 @@ option(TRACE                                   "Enable additional tracing"      
 # Default GPU architectures to build
 #==================================================================================================
 set(DEFAULT_GPUS
-      gfx803
-      gfx900:xnack-
-      gfx906:xnack-
-      gfx908:xnack-
-      gfx90a:xnack-
-      gfx90a:xnack+
+      gfx906
+      gfx908
+      gfx90a
       gfx940
       gfx941
       gfx942
@@ -75,13 +72,27 @@ endif()
 
 # Determine which GPU architectures to build for
 set(AMDGPU_TARGETS "${DEFAULT_GPUS}" CACHE STRING "Target default GPUs if AMDGPU_TARGETS is not defined.")
+
+# Modify GPU architectures for Address Sanitizer builds by appending "xnack+"
+if (BUILD_ADDRESS_SANITIZER)
+  SET(amdgpu_targets "")
+  foreach(amdgpu_target IN LISTS AMDGPU_TARGETS)
+    if(NOT amdgpu_target STREQUAL "")
+      list(APPEND amdgpu_targets "${amdgpu_target}:xnack+")
+    endif()
+  endforeach()
+  SET(AMDGPU_TARGETS "${amdgpu_targets}" CACHE STRING "Modified GPU list for Address-Sanitizer enabled build." FORCE)
+endif()
+
+# Check if clang compiler can offload to AMDGPU_TARGETS
 if (COMMAND rocm_check_target_ids)
-  message(STATUS "Checking for ROCm support for GPU targets:")
+  message(STATUS "Checking for ROCm support for GPU targets: " "${AMDGPU_TARGETS}")
   rocm_check_target_ids(SUPPORTED_GPUS TARGETS ${AMDGPU_TARGETS})
 else()
   message(WARNING "Unable to check for supported GPU targets. Falling back to default GPUs.")
   set(SUPPORTED_GPUS ${DEFAULT_GPUS})
 endif()
+
 set(GPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
 message(STATUS "Compiling for ${GPU_TARGETS}")
 

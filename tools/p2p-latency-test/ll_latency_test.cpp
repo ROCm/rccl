@@ -78,14 +78,14 @@ __device__ uint64_t readLL(union LLFifoLine* src, uint32_t flag, uint32_t* abort
 __global__ void PingKernel(LLFifoLine* local_flag, LLFifoLine* remote_flag, uint64_t* time_delta, uint32_t* abortFlag) {
   int tid = threadIdx.x;
   #pragma unroll
-  for (uint32_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
+  for (uint32_t i = 1; i <= NUM_LOOPS_WARMUP; i++) {
     storeLL(remote_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, i);
     while (readLL(local_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, abortFlag) != i);
   }
   uint64_t start_time, end_time;
   if (tid == 0) start_time = wall_clock64();
   #pragma unroll
-  for (uint32_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
+  for (uint32_t i = NUM_LOOPS_WARMUP + 1; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
     storeLL(remote_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, i);
     while (readLL(local_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, abortFlag) != i);
   }
@@ -97,14 +97,14 @@ __global__ void PingKernel(LLFifoLine* local_flag, LLFifoLine* remote_flag, uint
 __global__ void PongKernel(LLFifoLine* local_flag, LLFifoLine* remote_flag, uint64_t* time_delta, uint32_t* abortFlag) {
   int tid = threadIdx.x;
   #pragma unroll
-  for (uint32_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
+  for (uint32_t i = 1; i <= NUM_LOOPS_WARMUP; i++) {
     while (readLL(local_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, abortFlag) != i);
     storeLL(remote_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, i);
   }
   uint64_t start_time, end_time;
   if (tid == 0) start_time = wall_clock64();
   #pragma unroll
-  for (uint32_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
+  for (uint32_t i = NUM_LOOPS_WARMUP + 1; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
     while (readLL(local_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, abortFlag) != i);
     storeLL(remote_flag+tid+(i%LL_MAX_LINES)*LL_MAX_THREADS, i, i);
   }
