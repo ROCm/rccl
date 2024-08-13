@@ -23,13 +23,13 @@
 
 __global__ void PingKernel(uint64_t* local_flag, uint64_t* remote_flag, uint64_t* time_delta) {
   #pragma unroll
-  for (uint32_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
+  for (uint32_t i = 1; i <= NUM_LOOPS_WARMUP; i++) {
     __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
     while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
   }
   uint64_t start_time = wall_clock64();
   #pragma unroll
-  for (uint32_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
+  for (uint32_t i = NUM_LOOPS_WARMUP + 1; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
     __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
     while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
   }
@@ -39,13 +39,13 @@ __global__ void PingKernel(uint64_t* local_flag, uint64_t* remote_flag, uint64_t
 
 __global__ void PongKernel(uint64_t* local_flag, uint64_t* remote_flag, uint64_t* time_delta) {
   #pragma unroll
-  for (uint32_t i = 1; i < NUM_LOOPS_WARMUP; i++) {
+  for (uint32_t i = 1; i <= NUM_LOOPS_WARMUP; i++) {
     while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
     __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
   }
   uint64_t start_time = wall_clock64();
   #pragma unroll
-  for (uint32_t i = NUM_LOOPS_WARMUP; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
+  for (uint32_t i = NUM_LOOPS_WARMUP + 1; i <= NUM_LOOPS_WARMUP + NUM_LOOPS_RUN; i++) {
     while (__atomic_load_n(local_flag, __ATOMIC_RELAXED) != i);
     __atomic_store_n(remote_flag, i, __ATOMIC_RELAXED);
   }
