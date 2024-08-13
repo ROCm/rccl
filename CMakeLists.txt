@@ -464,7 +464,7 @@ set(SRC_FILES
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
-  src/api_trace.cc
+  src/misc/api_trace.cc
 # src/misc/cudawrap.cc
 # src/misc/gdrwrap.cc
   src/misc/ibvsymbols.cc

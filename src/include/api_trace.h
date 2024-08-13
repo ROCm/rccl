@@ -63,6 +63,60 @@ ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t da
 ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream);
 
+ncclResult_t ncclRedOpCreatePreMulSum_impl(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
+
+ncclResult_t ncclRedOpDestroy_impl(ncclRedOp_t op, ncclComm_t comm);
+
+ncclResult_t ncclGroupStart_impl();
+
+ncclResult_t ncclGroupEnd_impl();
+
+ncclResult_t ncclGetVersion_impl(int* version);
+
+ncclResult_t ncclGetUniqueId_impl(ncclUniqueId* out);
+
+ncclResult_t ncclCommInitRank_impl(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank);
+
+ncclResult_t ncclCommInitAll_impl(ncclComm_t* comms, int ndev, const int* devlist);
+
+ncclResult_t ncclCommInitRankConfig_impl(ncclComm_t* comm, int nranks, ncclUniqueId commId, int myrank, ncclConfig_t *config);
+
+ncclResult_t ncclCommFinalize_impl(ncclComm_t comm);
+
+ncclResult_t ncclCommDestroy_impl(ncclComm_t comm);
+
+ncclResult_t ncclCommAbort_impl(ncclComm_t comm);
+
+ncclResult_t ncclCommSplit_impl(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t *config);
+
+const char* ncclGetErrorString_impl(ncclResult_t code);
+
+const char* ncclGetLastError_impl(const ncclComm_t comm);
+
+ncclResult_t ncclCommGetAsyncError_impl(ncclComm_t comm, ncclResult_t *asyncError);
+
+ncclResult_t ncclCommCount_impl(const ncclComm_t comm, int* count);
+
+ncclResult_t ncclCommCuDevice_impl(const ncclComm_t comm, int* devid);
+
+ncclResult_t ncclCommUserRank_impl(const ncclComm_t comm, int* rank);
+
+ncclResult_t ncclMemAlloc_impl(void **ptr, size_t size);
+
+ncclResult_t mscclLoadAlgo_impl(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
+
+ncclResult_t mscclRunAlgo_impl(
+    const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
+    void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
+    size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
+    mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream);
+
+ncclResult_t mscclUnloadAlgo_impl(mscclAlgoHandle_t mscclAlgoHandle);
+
+ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t size, void** handle);
+
+ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle);
+
 
 typedef uint64_t rccl_range_id_t;
 typedef ncclResult_t (*ncclAllGatherfn_t)(const void* sendbuff, void* recvbuff, size_t sendcount,
@@ -88,22 +142,97 @@ typedef ncclResult_t (*ncclSend_fn_t)(const void* sendbuff, size_t count, ncclDa
     ncclComm_t comm, cudaStream_t stream);
 typedef ncclResult_t (*ncclRecv_fn_t)(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream);
+typedef ncclResult_t (*ncclRedOpCreatePreMulSum_fn_t)(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
+typedef ncclResult_t (*ncclRedOpDestroy_fn_t)(ncclRedOp_t op, ncclComm_t comm);
+typedef ncclResult_t (*ncclGroupStart_fn_t)();
+typedef ncclResult_t (*ncclGroupEnd_fn_t)();
+typedef ncclResult_t (*ncclGetVersion_fn_t)(int* version);
+typedef ncclResult_t (*ncclGetUniqueId_fn_t)(ncclUniqueId* out);
+
+typedef ncclResult_t (*ncclCommInitRank_fn_t)(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank);
+
+typedef ncclResult_t (*ncclCommInitAll_fn_t)(ncclComm_t* comms, int ndev, const int* devlist);
+
+typedef ncclResult_t (*ncclCommInitRankConfig_fn_t)(ncclComm_t* comm, int nranks, ncclUniqueId commId, int myrank, ncclConfig_t *config);
+
+typedef ncclResult_t (*ncclCommFinalize_fn_t)(ncclComm_t comm);
+
+typedef ncclResult_t (*ncclCommDestroy_fn_t)(ncclComm_t comm);
+
+typedef ncclResult_t (*ncclCommAbort_fn_t)(ncclComm_t comm);
+
+typedef ncclResult_t (*ncclCommSplit_fn_t)(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t *config);
+
+typedef const char*  (*ncclGetErrorString_fn_t)(ncclResult_t code);
+
+typedef const char*  (*ncclGetLastError_fn_t)(const ncclComm_t comm);
+
+typedef ncclResult_t (*ncclCommGetAsyncError_fn_t)(ncclComm_t comm, ncclResult_t *asyncError);
+
+typedef ncclResult_t (*ncclCommCount_fn_t)(const ncclComm_t comm, int* count);
+
+typedef ncclResult_t (*ncclCommCuDevice_fn_t)(const ncclComm_t comm, int* devid);
+
+typedef ncclResult_t (*ncclCommUserRank_fn_t)(const ncclComm_t comm, int* rank);
+
+typedef ncclResult_t (*ncclMemAlloc_fn_t)(void **ptr, size_t size);
+
+typedef ncclResult_t (*mscclLoadAlgo_fn_t)(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
+
+typedef ncclResult_t (*mscclRunAlgo_fn_t)(
+    const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
+    void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
+    size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
+    mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream);
+
+typedef ncclResult_t (*mscclUnloadAlgo_fn_t)(mscclAlgoHandle_t mscclAlgoHandle);
+
+typedef ncclResult_t (*ncclCommRegister_fn_t)(const ncclComm_t comm, void* buff, size_t size, void** handle);
+
+typedef ncclResult_t (*ncclCommDeregister_fn_t)(const ncclComm_t comm, void* handle);
+
+
+
 
 
 typedef struct rcclApiFuncTable
 {
-    uint64_t               size;
-    ncclAllGatherfn_t      ncclAllGather_fn;
-    ncclAllReduce_fn_t     ncclAllReduce_fn;
-    ncclAllToAll_fn_t      ncclAllToAll_fn;
-    ncclAllToAllv_fn_t     ncclAllToAllv_fn;
-    ncclBroadcast_fn_t     ncclBroadcast_fn;
-    ncclGather_fn_t        ncclGather_fn;
-    ncclReduce_fn_t        ncclReduce_fn;
-    ncclReduceScatter_fn_t ncclReduceScatter_fn;
-    ncclScatter_fn_t       ncclScatter_fn;
-    ncclSend_fn_t          ncclSend_fn;
-    ncclRecv_fn_t          ncclRecv_fn;
+    uint64_t                            size;
+    ncclAllGatherfn_t                   ncclAllGather_fn;
+    ncclAllReduce_fn_t                  ncclAllReduce_fn;
+    ncclAllToAll_fn_t                   ncclAllToAll_fn;
+    ncclAllToAllv_fn_t                  ncclAllToAllv_fn;
+    ncclBroadcast_fn_t                  ncclBroadcast_fn;
+    ncclGather_fn_t                     ncclGather_fn;
+    ncclReduce_fn_t                     ncclReduce_fn;
+    ncclReduceScatter_fn_t              ncclReduceScatter_fn;
+    ncclScatter_fn_t                    ncclScatter_fn;
+    ncclSend_fn_t                       ncclSend_fn;
+    ncclRecv_fn_t                       ncclRecv_fn;
+    ncclRedOpCreatePreMulSum_fn_t       ncclRedOpCreatePreMulSum_fn;
+    ncclRedOpDestroy_fn_t               ncclRedOpDestroy_fn;
+    ncclGroupStart_fn_t                 ncclGroupStart_fn;
+    ncclGroupEnd_fn_t                   ncclGroupEnd_fn;
+    ncclGetVersion_fn_t                 ncclGetVersion_fn;
+    ncclGetUniqueId_fn_t                ncclGetUniqueId_fn;
+    ncclCommInitRank_fn_t               ncclCommInitRank_fn;
+    ncclCommInitAll_fn_t                ncclCommInitAll_fn;
+    ncclCommInitRankConfig_fn_t         ncclCommInitRankConfig_fn;
+    ncclCommFinalize_fn_t               ncclCommFinalize_fn;
+    ncclCommDestroy_fn_t                ncclCommDestroy_fn;
+    ncclCommAbort_fn_t                  ncclCommAbort_fn;
+    ncclCommSplit_fn_t                  ncclCommSplit_fn;
+    ncclGetErrorString_fn_t             ncclGetErrorString_fn;
+    ncclGetLastError_fn_t               ncclGetLastError_fn;
+    ncclCommGetAsyncError_fn_t          ncclCommGetAsyncError_fn;
+    ncclCommCount_fn_t                  ncclCommCount_fn;
+    ncclCommCuDevice_fn_t               ncclCommCuDevice_fn;
+    ncclCommUserRank_fn_t               ncclCommUserRank_fn;
+    ncclMemAlloc_fn_t                   ncclMemAlloc_fn;
+    mscclLoadAlgo_fn_t                  mscclLoadAlgo_fn;
+    mscclRunAlgo_fn_t                   mscclRunAlgo_fn;
+    mscclUnloadAlgo_fn_t                mscclUnloadAlgo_fn;
+    ncclCommRegister_fn_t               ncclCommRegister_fn;
+    ncclCommDeregister_fn_t             ncclCommDeregister_fn;
+
 } rcclApiFuncTable;
-
-

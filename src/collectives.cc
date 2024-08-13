@@ -13,6 +13,9 @@
 
 #include "msccl/msccl_lifecycle.h"
 
+NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size_t sendcount,
+    ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
+
 ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream) {
   // Just pass the size of one message and not the total bytes sent/received.
