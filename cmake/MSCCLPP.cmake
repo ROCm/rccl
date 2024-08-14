@@ -77,14 +77,8 @@ if(ENABLE_MSCCLPP)
         find_package(mscclpp_nccl REQUIRED)
     endif()
 
-    execute_process(COMMAND bash -c "> ${PROJECT_BINARY_DIR}/mscclpp_nccl_syms.txt; 
-                    for sym in \$(nm -fjust-symbols ${MSCCLPP_ROOT}/lib/libmscclpp_nccl_static.a | grep \"^nccl\"); do 
-                        echo \$sym mscclpp_\$sym>> ${PROJECT_BINARY_DIR}/mscclpp_nccl_syms.txt;
-                    done"
-    )
-    
     execute_process(COMMAND objcopy
-                    --redefine-syms=${PROJECT_BINARY_DIR}/mscclpp_nccl_syms.txt
+                    --redefine-syms=${CMAKE_CURRENT_SOURCE_DIR}/src/misc/mscclpp/mscclpp_nccl_syms.txt
                     "${MSCCLPP_ROOT}/lib/libmscclpp_nccl_static.a"
                     "${PROJECT_BINARY_DIR}/libmscclpp_nccl.a"
     )
