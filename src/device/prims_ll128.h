@@ -74,7 +74,7 @@ private:
 #endif
 
   inline __device__ void barrier() {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   if (nthreads != WARP_SIZE)
     barrier_by_group();
 #else

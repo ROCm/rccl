@@ -125,8 +125,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++14 ins
 list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA
             ${ROCM_PATH}
             ${ROCM_PATH}/hip
-            ${ROCM_PATH}/llvm
-            ${ROCM_PATH}/hcc)
+            ${ROCM_PATH}/llvm)
 
 # Check for required dependencies
 #==================================================================================================
