@@ -278,11 +278,7 @@ endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
 if (ENABLE_MSCCLPP)
-  find_package(IBVerbs)
-  if (NOT IBVerbs_FOUND)
-    set(ENABLE_MSCCLPP OFF)
-    message(WARNING "IBVerbs not found; disabling MSCCL++ build")
-  elseif(NOT "gfx942" IN_LIST GPU_TARGETS)
+  if(NOT "gfx942" IN_LIST GPU_TARGETS)
     set(ENABLE_MSCCLPP OFF)
     message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
   endif()
