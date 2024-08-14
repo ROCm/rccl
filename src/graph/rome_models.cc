@@ -1475,6 +1475,8 @@ static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel*
     // match gdr level
     for (i = 0; i < ref->nNics; i++) {
       for (j = 0; j < ref->nGpus; j++) {
+        // enabling PXN override paths over PHB and SYS
+        if (topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXN) continue;
         if (ref->gdrLevel[i*ref->nGpus+j] != topo->gdrLevel[n[i]*ref->nGpus+g[j]]) break;
       }
       if (j < ref->nGpus) break;
@@ -1565,8 +1567,11 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
           if (!ignore_numa && romeTopoModels[i].nicNuma[j] != romeTopo.nicNuma[k]) continue;
           int g;
           // check GDR
-          for (g = 0; g < ngpus; g++)
+          for (g = 0; g < ngpus; g++) {
+            // enabling PXN override paths over PHB and SYS
+            if (romeTopo.gdrLevel[k*ngpus+g] == PATH_PXN) continue;
             if (romeTopoModels[i].gdrLevel[j*ngpus+g] != romeTopo.gdrLevel[k*ngpus+g]) break;
+          }
           if (g >= ngpus) break;
         }
         if (k < nnets) {
