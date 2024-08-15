@@ -69,8 +69,10 @@ int ncclGetKernelIndex(struct ncclComm* comm) {
 #endif
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
+  // Use UNROLL=2 for gfx908 and gfx942 with greater than 96 CUs
+  // Else, use UNROLL=4
   if(IsArchMatch(devProp.gcnArchName, "gfx908") || (IsArchMatch(devProp.gcnArchName, "gfx94")
-    && devProp.multiProcessorCount > 80))
+    && devProp.multiProcessorCount > 96))
     return start_idx;
   else
     return start_idx + 1;
