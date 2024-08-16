@@ -172,7 +172,8 @@ ncclResult_t rocm_smi_getLinkInfo(int srcIndex, int dstIndex, RSMI_IO_LINK_TYPE*
     if (rcclParamUseRocmSmiLib()) {
       ROCMSMICHECK(rsmi_topo_get_link_type(srcIndex, dstIndex, &rsmi_hops, rsmi_type));
       ROCMSMICHECK(rsmi_topo_get_link_weight(srcIndex, dstIndex, &rsmi_weight));
-      if (*rsmi_type == RSMI_IOLINK_TYPE_XGMI && rsmi_weight == 15) {
+      if (*rsmi_type == RSMI_IOLINK_TYPE_XGMI && (rsmi_weight == 15 ||
+        rsmi_weight == 41 || rsmi_weight == 13)) {
 	uint64_t min_bw = 0, max_bw = 0;
 	*hops = 1;
 #if defined USE_ROCM_SMI64CONFIG && rocm_smi_VERSION_MAJOR >= 5
@@ -189,7 +190,8 @@ ncclResult_t rocm_smi_getLinkInfo(int srcIndex, int dstIndex, RSMI_IO_LINK_TYPE*
       ARSMICHECK(ARSMI_topo_get_link_info(srcIndex, dstIndex, &tinfo));
 
       *rsmi_type  = (RSMI_IO_LINK_TYPE) tinfo.type;
-      if (*rsmi_type == RSMI_IOLINK_TYPE_XGMI && tinfo.weight == 15) {
+      if (*rsmi_type == RSMI_IOLINK_TYPE_XGMI && (tinfo.weight == 15 ||
+        tinfo.weight == 41 || tinfo.weight == 13)) {
 	*hops = 1;
 	if (tinfo.max_bandwidth && tinfo.min_bandwidth)
 	  *count = tinfo.max_bandwidth/tinfo.min_bandwidth;
