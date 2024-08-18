@@ -334,6 +334,8 @@ ncclResult_t ncclTopoSortSystem(struct ncclTopoSystem* system) {
   return ncclSuccess;
 }
 
+RCCL_PARAM(OverrideNetSpeed, "OVERRIDE_NET_SPEED", -2);
+
 ncclResult_t ncclTopoAddNet(struct ncclXmlNode* xmlNet, struct ncclTopoSystem* system, struct ncclTopoNode* nic, int64_t busId) {
   int dev;
   NCCLCHECK(xmlGetAttrInt(xmlNet, "dev", &dev));
@@ -350,6 +352,9 @@ ncclResult_t ncclTopoAddNet(struct ncclXmlNode* xmlNet, struct ncclTopoSystem* s
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "speed", &mbps, 0));
   if (mbps <= 0) mbps = 10000; // Some NICs define speed = -1
   net->net.bw = mbps / 8000.0;
+  if (rcclParamOverrideNetSpeed() != -2)
+    net->net.bw = rcclParamOverrideNetSpeed();
+
   if (xmlGetAttrFloat(xmlNet, "latency", &net->net.latency) != ncclSuccess) net->net.latency = 0;
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "port", &net->net.port, 0));
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "gdr", &net->net.gdrSupport, 0));

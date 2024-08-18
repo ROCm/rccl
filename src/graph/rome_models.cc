@@ -841,6 +841,18 @@ static struct rcclRomeModel rome_model_85 = {
   .options = "tuning=2",
 };
 
+static struct rcclRomeModel rome_model_87 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 7,
+  .gpuIds = { 0xa000, 0x80000, 0xa4000, 0xc8000, 0x10b000, 0x181000, 0x1a5000, 0x1c9000, },
+  .nicIds = { 0xc9000, 0x1a2000, 0x108000, 0x81000, },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { 0, 1, 1, 0, },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel = { PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, },
+  .pattern = "4242",
+  .ringBase = "",
+  .options = "noCpuCheck=1,netOverride=1",
+};
 
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22, /*  0 */
@@ -886,6 +898,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_81, /* 40 */
   rome_model_84, /* 41 */
   rome_model_85, /* 42 */
+  rome_model_87, /* 43 */
 };
 
 /* Parse user defined rings. Format is like :
@@ -1146,6 +1159,23 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
         system->mscclEnabled = (bool)atol(tokens[i*2+1]);
       } else if (strcmp(tokens[i*2], "treeDefined") == 0) {
         system->treeDefined = (bool)atol(tokens[i*2+1]);
+      } else if (strcmp(tokens[i*2], "netOverride") == 0) {
+        int override = system->tuning = atol(tokens[i*2+1]);
+        if (override == 1) {
+          for (int i = 0; i < system->nodes[NET].count; i++) {
+            for (int j = 0; j < system->nodes[GPU].count; j++) {
+              if (system->nodes[GPU].nodes[j].paths[NET][i].type == PATH_PXB) {
+                int k;
+                for (k = 0; k < system->nodes[GPU].count; k++) {
+                  if (k != j &&
+                    system->nodes[GPU].nodes[k].gpu.dev/2 == system->nodes[GPU].nodes[j].gpu.dev/2)
+                    break;
+                }
+                system->nodes[GPU].nodes[k].paths[NET][i].type = PATH_PXB;
+              }
+            }
+          }
+        }
       }
     }
     free(str_temp);
@@ -1616,6 +1646,10 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   }
   INFO(NCCL_GRAPH, "%s", line);
   parseOptions(system, romeTopoModels[i].options);
+  if (strcmp(romeTopoModels[i].ringBase, "") == 0) {
+     graph->nChannels = 0;
+     return ncclSuccess;
+  }
 
   // create 4P2H based on reference and remapped ids
   switch (graph->pattern) {
