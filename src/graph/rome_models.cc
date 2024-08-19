@@ -1160,7 +1160,7 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
       } else if (strcmp(tokens[i*2], "treeDefined") == 0) {
         system->treeDefined = (bool)atol(tokens[i*2+1]);
       } else if (strcmp(tokens[i*2], "netOverride") == 0) {
-        int override = system->tuning = atol(tokens[i*2+1]);
+        int override = atol(tokens[i*2+1]);
         if (override == 1) {
           for (int i = 0; i < system->nodes[NET].count; i++) {
             for (int j = 0; j < system->nodes[GPU].count; j++) {
