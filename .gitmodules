@@ -1,0 +1,4 @@
+[submodule "ext-src/mscclpp"]
+	path = ext-src/mscclpp
+	url = https://github.com/microsoft/mscclpp.git
+	ignore = dirty
