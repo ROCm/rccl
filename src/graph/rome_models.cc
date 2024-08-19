@@ -1171,7 +1171,8 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
                     system->nodes[GPU].nodes[k].gpu.dev/2 == system->nodes[GPU].nodes[j].gpu.dev/2)
                     break;
                 }
-                system->nodes[GPU].nodes[k].paths[NET][i].type = PATH_PXB;
+                if (k < system->nodes[GPU].count)
+                  system->nodes[GPU].nodes[k].paths[NET][i].type = PATH_PXB;
               }
             }
           }
