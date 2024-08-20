@@ -782,7 +782,7 @@ rocm_set_soversion(rccl "1.0")
 #==================================================================================================
 ## Specify install targets
 rocm_install_targets(TARGETS rccl)
-rocm_install(FILES       ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h
+rocm_install(FILES       ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h src/include/api_trace.h
              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
 file(COPY tools/msccl-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
@@ -809,10 +809,10 @@ if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
 
   ### install the wrapper header file to package
   rocm_install(
-    FILES ${PROJECT_BINARY_DIR}/rccl/include/rccl.h src/include/nccl_net.h
+    FILES ${PROJECT_BINARY_DIR}/rccl/include/rccl.h src/include/nccl_net.h src/include/api_trace.h
     DESTINATION "./rccl/${CMAKE_INSTALL_INCLUDEDIR}/" )
   rocm_install(
-    FILES ${PROJECT_BINARY_DIR}/include/rccl.h src/include/nccl_net.h
+    FILES ${PROJECT_BINARY_DIR}/include/rccl.h src/include/nccl_net.h src/include/api_trace.h
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" )
 endif()
 

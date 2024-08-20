@@ -16,6 +16,7 @@ ROCPROFILER_REGISTER_DEFINE_IMPORT(rccl, ROCP_REG_VERSION)
 
 
 namespace rccl {
+namespace{
 
    constexpr size_t
     compute_table_offset(size_t n)
@@ -78,12 +79,12 @@ namespace rccl {
         sizeof(rcclApiFuncTable) == compute_table_size(37),
         "Update table major/step version and add a new offset assertion if this fails to compile");
 
-    static std::array<unsigned char, sizeof(rcclApiFuncTable)> m_buffer;
+    std::array<unsigned char, sizeof(rcclApiFuncTable)> m_buffer;
 
 
     rcclApiFuncTable* RcclGetFunctionTable_impl()
     {
-        static rcclApiFuncTable tbl = {sizeof(rcclApiFuncTable),
+        static auto* tbl = new(m_buffer.data()) rcclApiFuncTable{sizeof(rcclApiFuncTable),
                                         &ncclAllGather_impl,
                                         &ncclAllReduce_impl,
                                         &ncclAllToAll_impl,
@@ -123,7 +124,7 @@ namespace rccl {
                                         &ncclCommDeregister_impl};
 
         #if defined(RCCL_ROCPROFILER_REGISTER) && RCCL_ROCPROFILER_REGISTER > 0
-            std::array<void*, 1> table_array{&tbl};
+            std::array<void*, 1> table_array{tbl};
             rocprofiler_register_library_indentifier_t lib_id      = rocprofiler_register_library_indentifier_t{};
             rocprofiler_register_error_code_t rocp_reg_status =
                 rocprofiler_register_library_api_table("rccl",
@@ -141,7 +142,7 @@ namespace rccl {
                 rocp_reg_status, rocprofiler_register_error_string(rocp_reg_status));
         #endif
 
-        return &tbl;
+        return tbl;
     }
 
     const rcclApiFuncTable* RcclGetFunctionTable()
@@ -152,7 +153,8 @@ namespace rccl {
 
         return tbl;
     }
-}
+} // end of namespace
+} // end of namespace rccl
 
 
 NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size_t sendcount,
