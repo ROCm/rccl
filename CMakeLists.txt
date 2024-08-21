@@ -475,6 +475,7 @@ set(SRC_FILES
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
+  src/misc/api_trace.c
   src/misc/api_trace.cc
 # src/misc/cudawrap.cc
 # src/misc/gdrwrap.cc
@@ -784,6 +785,8 @@ rocm_set_soversion(rccl "1.0")
 rocm_install_targets(TARGETS rccl)
 rocm_install(FILES       ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h
              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
+rocm_install(FILES       src/include/api_trace.h
+             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl/amd_detail)
 file(COPY tools/msccl-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 ## Install Algorithm files under share folder
