@@ -1629,10 +1629,6 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   }
   INFO(NCCL_GRAPH, "%s", line);
   parseOptions(system, romeTopoModels[i].options);
-  if (strcmp(romeTopoModels[i].ringBase, "") == 0) {
-     graph->nChannels = 0;
-     return ncclSuccess;
-  }
 
   // create 4P2H based on reference and remapped ids
   switch (graph->pattern) {
@@ -1669,6 +1665,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
     // Fall back to tree from ringBase
     NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    // Override GDR distance if requested
     if (checkOption(romeTopoModels[i].options, "netOverride")) {
       for (int i = 0; i < system->nodes[NET].count; i++) {
         for (int j = 0; j < system->nodes[GPU].count; j++) {
