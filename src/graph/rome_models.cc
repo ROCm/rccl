@@ -1684,8 +1684,6 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
     break;
   }
-
-
   return ncclSuccess;
 }
 
