@@ -1159,24 +1159,6 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
         system->mscclEnabled = (bool)atol(tokens[i*2+1]);
       } else if (strcmp(tokens[i*2], "treeDefined") == 0) {
         system->treeDefined = (bool)atol(tokens[i*2+1]);
-      } else if (strcmp(tokens[i*2], "netOverride") == 0) {
-        int override = atol(tokens[i*2+1]);
-        if (override == 1) {
-          for (int i = 0; i < system->nodes[NET].count; i++) {
-            for (int j = 0; j < system->nodes[GPU].count; j++) {
-              if (system->nodes[GPU].nodes[j].paths[NET][i].type == PATH_PXB) {
-                int k;
-                for (k = 0; k < system->nodes[GPU].count; k++) {
-                  if (k != j &&
-                    system->nodes[GPU].nodes[k].gpu.dev/2 == system->nodes[GPU].nodes[j].gpu.dev/2)
-                    break;
-                }
-                if (k < system->nodes[GPU].count)
-                  system->nodes[GPU].nodes[k].paths[NET][i].type = PATH_PXB;
-              }
-            }
-          }
-        }
       }
     }
     free(str_temp);
@@ -1687,8 +1669,26 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
     // Fall back to tree from ringBase
     NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    if (checkOption(romeTopoModels[i].options, "netOverride")) {
+      for (int i = 0; i < system->nodes[NET].count; i++) {
+        for (int j = 0; j < system->nodes[GPU].count; j++) {
+          if (system->nodes[GPU].nodes[j].paths[NET][i].type == PATH_PXB) {
+            int k;
+            for (k = 0; k < system->nodes[GPU].count; k++) {
+              if (k != j &&
+                system->nodes[GPU].nodes[k].gpu.dev/2 == system->nodes[GPU].nodes[j].gpu.dev/2)
+                break;
+            }
+            if (k < system->nodes[GPU].count)
+              system->nodes[GPU].nodes[k].paths[NET][i].type = PATH_PXB;
+          }
+        }
+      }
+    }
     break;
   }
+
+
   return ncclSuccess;
 }
 
