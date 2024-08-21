@@ -12,8 +12,7 @@
 #    include <rocprofiler-register/rocprofiler-register.h>
 
 #    define ROCP_REG_VERSION                                                             \
-        ROCPROFILER_REGISTER_COMPUTE_VERSION_3(RCCL_VERSION_MAJOR, RCCL_VERSION_MINOR,   \
-                                               RCCL_VERSION_PATCH)
+        ROCPROFILER_REGISTER_COMPUTE_VERSION_3(NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH)
 
 ROCPROFILER_REGISTER_DEFINE_IMPORT(rccl, ROCP_REG_VERSION)
 #endif

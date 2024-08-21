@@ -27,9 +27,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define RCCL_VERSION_MAJOR 0
-#define RCCL_VERSION_MINOR 0
-#define RCCL_VERSION_PATCH 0
+// should only be increased if fundamental changes to dispatch table(s)
+#define RCCL_API_TRACE_VERSION_MAJOR 0
+
+// should be increased every time new members are added to existing dispatch tables
+#define RCCL_API_TRACE_VERSION_PATCH 0
 
 #if !defined(RCCL_EXTERN_C_INIT)
 #    ifdef __cplusplus
