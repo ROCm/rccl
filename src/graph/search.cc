@@ -905,6 +905,24 @@ float sm90SpeedArrayInter[] = { 48.0, 45.0, 42.0, 40.0, 30.0, 24.0, 22.0, 20.0, 
 
 RCCL_PARAM(ModelMatchingDisable, "MODEL_MATCHING_DISABLE", 0);
 
+static int* gpuMapFromSystem(struct ncclTopoSystem* system)
+{
+  ncclResult_t r;
+  int ngpus = system->nodes[GPU].count;
+  int *retGpuMap = NULL;
+
+  if (system->nodes[GPU].nodes[ngpus - 1].gpu.dev == ngpus - 1)
+    return NULL;
+
+  NCCLCHECKGOTO(ncclCalloc(&retGpuMap, ngpus), r, exit);
+  int i;
+  for (i = 0; i < ngpus; i++)
+    retGpuMap[i] = system->nodes[GPU].nodes[i].gpu.dev;
+
+exit:
+  return retGpuMap;
+}
+
 ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
   int crossNic = (system->nodes[NET].count > 1) &&
@@ -947,7 +965,10 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
       NCCLCHECK(parseGraphLight(strTrees, system, graph, NULL));
       system->treeDefined=true;
     } else {
-      NCCLCHECK(parseGraph(str, system, graph, NULL, NULL, false));
+      int *gpuMap = gpuMapFromSystem(system);
+      NCCLCHECK(parseGraph(str, system, graph, gpuMap, NULL, false));
+      if (gpuMap)
+        free(gpuMap);
       int arch, vendor, model;
       NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
       if (graph->nChannels && arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME) {
