@@ -1319,7 +1319,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   struct ncclNetId net_scores[NCCL_TOPO_MAX_NODES];
   for (int i = 0; i < romeTopo->nNics; i ++) {
     net_scores[i].n = i;
-    net_scores[i].id = system->nodes[NET].nodes[i].id;
+    net_scores[i].id = system->nodes[NET].nodes[i].net.dev;
   }
   qsort(net_scores, romeTopo->nNics, sizeof(struct ncclNetId), cmpNets);
 
