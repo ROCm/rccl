@@ -59,7 +59,7 @@ typedef ncclResult_t (*ncclAllGather_fn_t)(const void* sendbuff, void* recvbuff,
                                            ncclComm_t comm, hipStream_t stream);
 typedef ncclResult_t (*ncclAllReduce_fn_t)(const void* sendbuff, void* recvbuff,
                                            size_t count, ncclDataType_t datatype,
-                                           ncclRedOp_t op, ncclComm* comm,
+                                           ncclRedOp_t op, struct ncclComm* comm,
                                            cudaStream_t stream);
 typedef ncclResult_t (*ncclAllToAll_fn_t)(const void* sendbuff, void* recvbuff,
                                           size_t count, ncclDataType_t datatype,
@@ -81,7 +81,7 @@ typedef ncclResult_t (*ncclReduce_fn_t)(const void* sendbuff, void* recvbuff,
                                         cudaStream_t stream);
 typedef ncclResult_t (*ncclReduceScatter_fn_t)(const void* sendbuff, void* recvbuff,
                                                size_t recvcount, ncclDataType_t datatype,
-                                               ncclRedOp_t op, ncclComm* comm,
+                                               ncclRedOp_t op, struct ncclComm* comm,
                                                cudaStream_t stream);
 typedef ncclResult_t (*ncclScatter_fn_t)(const void* sendbuff, void* recvbuff,
                                          size_t recvcount, ncclDataType_t datatype,
