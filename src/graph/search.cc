@@ -948,7 +948,8 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
       system->treeDefined=true;
     } else {
       // For even number of nodes, alternate forward/reverse on ringBase
-      NCCLCHECK(parseGraph(str, system, graph, NULL, NULL, system->hostIdx % 2));
+      NCCLCHECK(parseGraph(str, system, graph, NULL, NULL,
+        graph->pattern == NCCL_TOPO_PATTERN_RING ? system->hostIdx % 2 : 0));
       int arch, vendor, model;
       NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
       if (graph->nChannels && arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME) {
