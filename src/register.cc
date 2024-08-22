@@ -9,6 +9,7 @@
 #include "comm.h"
 #include "net.h"
 #include "register.h"
+#include "api_trace.h"
 
 ncclResult_t ncclNetDeregister(struct ncclComm* comm, struct ncclReg* reg) {
   struct ncclRegCache* cache = &comm->regCache;
@@ -151,7 +152,7 @@ ncclResult_t ncclRegCleanup(struct ncclComm* comm) {
 }
 
 NCCL_API(ncclResult_t, ncclCommRegister, const ncclComm_t comm, void* buff, size_t size, void** handle);
-ncclResult_t ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, void** handle) {
+ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t size, void** handle) {
   NCCLCHECK(PtrCheck(comm, "ncclCommRegister", "comm"));
   if (comm->checkPointers) NCCLCHECK(CudaPtrCheck(buff, comm, "buff", "ncclCommRegister"));
   NCCLCHECK(ncclRegister(comm, buff, size, handle));
@@ -159,7 +160,7 @@ ncclResult_t ncclCommRegister(const ncclComm_t comm, void* buff, size_t size, vo
 }
 
 NCCL_API(ncclResult_t, ncclCommDeregister, const ncclComm_t comm, void* handle);
-ncclResult_t ncclCommDeregister(const ncclComm_t comm, void* handle) {
+ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
   NCCLCHECK(PtrCheck(comm, "ncclCommRegister", "comm"));
   struct ncclReg* reg = (struct ncclReg*)handle;
   struct ncclRegCache* cache = &comm->regCache;

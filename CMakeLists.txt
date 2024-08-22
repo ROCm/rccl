@@ -386,6 +386,7 @@ set(SRC_FILES
   src/include/align.h
   src/include/alloc.h
   src/include/archinfo.h
+  src/include/api_trace.h
   src/include/argcheck.h
   src/include/BfdBacktrace.hpp
   src/include/bootstrap.h
@@ -473,6 +474,8 @@ set(SRC_FILES
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
+  src/misc/api_trace.c
+  src/misc/api_trace.cc
 # src/misc/cudawrap.cc
 # src/misc/gdrwrap.cc
   src/misc/ibvsymbols.cc
@@ -691,6 +694,21 @@ endif()
 ## Set RCCL linked library directories
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
 
+if (ROCM_VERSION VERSION_GREATER_EQUAL "60100")
+    option(RCCL_ROCPROFILER_REGISTER "Enable rocprofiler-register support" ON)
+else()
+    if(RCCL_ROCPROFILER_REGISTER)
+        message(AUTHOR_WARNING "RCCL_ROCPROFILER_REGISTER is not valid option for ROCm < 6.2. Current ROCm version: ${ROCM_VERSION}")
+    endif()
+    set(RCCL_ROCPROFILER_REGISTER OFF CACHE BOOL "" FORCE)
+endif()
+if(RCCL_ROCPROFILER_REGISTER)
+  find_package(rocprofiler-register REQUIRED)
+  target_compile_definitions(rccl PRIVATE RCCL_ROCPROFILER_REGISTER=1)
+  target_link_libraries(
+      rccl PRIVATE rocprofiler-register::rocprofiler-register)
+endif()
+
 ## Set RCCL linked libraries
 if (HAVE_BFD)
   target_link_libraries(rccl PRIVATE bfd)
@@ -766,6 +784,8 @@ rocm_set_soversion(rccl "1.0")
 rocm_install_targets(TARGETS rccl)
 rocm_install(FILES       ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h
              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
+rocm_install(FILES       src/include/api_trace.h
+             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl/amd_detail)
 file(COPY tools/msccl-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 ## Install Algorithm files under share folder

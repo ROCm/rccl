@@ -20,6 +20,7 @@
 #include "rccl_vars.h"
 #include "transport.h"
 #include "common.h"
+#include "api_trace.h"
 #include <cassert>
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
@@ -2170,7 +2171,7 @@ fail:
 }
 
 NCCL_API(ncclResult_t, ncclRedOpCreatePreMulSum, ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
-ncclResult_t ncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm) {
+ncclResult_t ncclRedOpCreatePreMulSum_impl(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm) {
   NCCLCHECK(PtrCheck(comm, "ncclRedOpCreatePreMulSum", "comm"));
   /* join init thread before creating PreMulSum op. */
   NCCLCHECK(ncclCommEnsureReady(comm));
@@ -2209,7 +2210,7 @@ ncclResult_t ncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataTyp
 }
 
 NCCL_API(ncclResult_t, ncclRedOpDestroy, ncclRedOp_t op, ncclComm_t comm);
-ncclResult_t ncclRedOpDestroy(ncclRedOp_t op, ncclComm_t comm) {
+ncclResult_t ncclRedOpDestroy_impl(ncclRedOp_t op, ncclComm_t comm) {
   if (0 <= int(op) && int(op) < int(ncclNumOps)) {
     WARN("ncclRedOpDestroy : operator is a NCCL builtin.");
     return ncclInvalidArgument;
