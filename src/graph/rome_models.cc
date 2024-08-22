@@ -1507,7 +1507,7 @@ static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel*
 }
 
 
-ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
+ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, const char *ringBase) {
   static char ringRemap[64];
   int i;
 
@@ -1636,14 +1636,14 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     // Attempt to use rail-optimized rings if they exist
     if (system->nHosts % 2 == 0) {
       // For even number of nodes, alternate forward/reverse on ringBase
-      NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+      NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
     }
     else {
       // For odd number of nodes, check first to see if ringTail1 and ringTail2 are defined
       if (system->nHosts == 1 || romeTopoModels[i].ringTail1 == nullptr || romeTopoModels[i].ringTail2 == nullptr) {
         if (system->nHosts > 1)
           INFO(NCCL_GRAPH, "[WARN] Dropping back due to lack of support for odd-number of nodes for model index %d\n", i);
-        NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+        NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
       }
       else
       {
@@ -1652,7 +1652,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
         } else if (system->hostIdx == (system->nHosts - 2)) {
           NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, g, nnets > 1 ? n : NULL, 0));
         } else {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+          NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
         }
       }
     }
@@ -1664,7 +1664,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
 
     // Fall back to tree from ringBase
-    NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
     // Override GDR distance if requested
     if (checkOption(romeTopoModels[i].options, "netOverride")) {
       for (int i = 0; i < system->nodes[NET].count; i++) {
