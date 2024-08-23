@@ -355,6 +355,7 @@ ncclResult_t ncclTopoAddNet(struct ncclXmlNode* xmlNet, struct ncclTopoSystem* s
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "gdr", &net->net.gdrSupport, 0));
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "maxconn", &net->net.maxChannels, MAXCHANNELS));
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "coll", &net->net.collSupport, 0));
+  NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "dev", &net->net.dev, 0));
   net->net.busId = busId;
   ncclDebugNoWarn = 0;
 

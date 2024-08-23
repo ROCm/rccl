@@ -140,6 +140,7 @@ struct ncclTopoNode {
       int collSupport;
       int maxChannels;
       int64_t busId;
+      int dev;
     }net;
     struct {
       int arch;
