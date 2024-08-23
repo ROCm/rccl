@@ -94,7 +94,7 @@ struct ncclTopoLink {
   float bw;
   struct ncclTopoNode* remNode;
 };
-#define NCCL_TOPO_MAX_LINKS 64	//Changed the value from 32 to 64 for CPX mode
+#define NCCL_TOPO_MAX_LINKS 128	//Changed the value from 32 to 128 for CPX mode
 
 #define NCCL_TOPO_MAX_HOPS (NCCL_TOPO_MAX_NODES*NCCL_TOPO_NODE_TYPES)
 
