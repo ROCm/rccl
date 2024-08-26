@@ -17,8 +17,8 @@
 // A few constraints to make the implementation easy
 #define MAX_STR_LEN 255
 #define MAX_ATTR_COUNT 16
-#define MAX_SUBS 64	//Changed the value from 32 to 64 for CPX mode
-#define MAX_NODES 4096 //Changed the value from 1024 to 4096 for CPX mode
+#define MAX_SUBS 512	//Changed the value from 32 to 512 for CPX mode
+#define MAX_NODES 8192 //Changed the value from 1024 to 8192 for CPX mode
 
 #define NODE_TYPE_NONE 0
 #define NODE_TYPE_OPEN 1
