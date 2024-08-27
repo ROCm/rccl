@@ -43,4 +43,4 @@ bool mscclpp_init() {
   return true;
 }
 
-std::unordered_map<ncclUniqueId, mscclpp_ncclUniqueId> mscclpp_uniqueIdMap;
+std::unordered_map<ncclUniqueId, mscclppUniqueId> mscclpp_uniqueIdMap;

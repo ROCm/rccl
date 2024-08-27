@@ -1972,8 +1972,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
     comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
     if (comm->mscclppCompatible) {
-      NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &(mscclpp_uniqueIdMap[job->commId]), sizeof(mscclpp_ncclUniqueId)), res, fail);
-      TRACE_CALL("bootstrapIntraNodeBroadcast(rank=%d, nranks=%d, root=%d, bcastData=<mscclpp_ncclUniqueId>)", comm->localRank, comm->localRanks, 0);
+      NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &(mscclpp_uniqueIdMap[job->commId]), sizeof(mscclppUniqueId)), res, fail);
+      TRACE_CALL("bootstrapIntraNodeBroadcast(rank=%d, nranks=%d, root=%d, bcastData=<mscclppUniqueId>)", comm->localRank, comm->localRanks, 0);
       comm->mscclpp_threshold = rcclParamMscclppThreshold();
       INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", comm->mscclpp_threshold);
       NCCLCHECKGOTO(mscclpp_ncclCommInitRank(&(comm->mscclpp_comm), job->nranks, mscclpp_uniqueIdMap[job->commId], job->myrank), res, fail);
