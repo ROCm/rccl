@@ -8,7 +8,7 @@
       <pci busid="0000:46:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:48:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:4a:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="0" sm="90" gcn="908" arch="38911" rank="0" gdr="1">
+            <gpu dev="0" sm="120" gcn="908" arch="38911" rank="0" gdr="1">
               <xgmi target="0000:50:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0a:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0f:00.0" count="1" tclass="0x038000"/>
@@ -19,7 +19,7 @@
       <pci busid="0000:4c:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:4e:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:50:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="1" sm="90" gcn="908" arch="38911" rank="1" gdr="1">
+            <gpu dev="1" sm="120" gcn="908" arch="38911" rank="1" gdr="1">
               <xgmi target="0000:4a:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0a:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0f:00.0" count="1" tclass="0x038000"/>
@@ -39,7 +39,7 @@
       <pci busid="0000:05:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:08:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:0a:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="2" sm="90" gcn="908" arch="38911" rank="2" gdr="1">
+            <gpu dev="2" sm="120" gcn="908" arch="38911" rank="2" gdr="1">
               <xgmi target="0000:4a:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:50:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0f:00.0" count="1" tclass="0x038000"/>
@@ -50,7 +50,7 @@
       <pci busid="0000:0b:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:0d:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:0f:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="3" sm="90" gcn="908" arch="38911" rank="3" gdr="1">
+            <gpu dev="3" sm="120" gcn="908" arch="38911" rank="3" gdr="1">
               <xgmi target="0000:4a:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:50:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0a:00.0" count="1" tclass="0x038000"/>
@@ -70,7 +70,7 @@
       <pci busid="0000:c7:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:c9:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:cb:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="4" sm="90" gcn="908" arch="38911" rank="4" gdr="1">
+            <gpu dev="4" sm="120" gcn="908" arch="38911" rank="4" gdr="1">
               <xgmi target="0000:d1:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:8a:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:90:00.0" count="1" tclass="0x038000"/>
@@ -81,7 +81,7 @@
       <pci busid="0000:cd:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:cf:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:d1:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="5" sm="90" gcn="908" arch="38911" rank="5" gdr="1">
+            <gpu dev="5" sm="120" gcn="908" arch="38911" rank="5" gdr="1">
               <xgmi target="0000:cb:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:8a:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:90:00.0" count="1" tclass="0x038000"/>
@@ -101,7 +101,7 @@
       <pci busid="0000:86:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:88:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:8a:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="6" sm="90" gcn="908" arch="38911" rank="6" gdr="1">
+            <gpu dev="6" sm="120" gcn="908" arch="38911" rank="6" gdr="1">
               <xgmi target="0000:cb:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:d1:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:90:00.0" count="1" tclass="0x038000"/>
@@ -112,7 +112,7 @@
       <pci busid="0000:8c:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
         <pci busid="0000:8e:00.0" class="0x060400" link_speed="16 GT/s" link_width="16">
           <pci busid="0000:90:00.0" class="0x038000" link_speed="16 GT/s" link_width="16">
-            <gpu dev="7" sm="90" gcn="908" arch="38911" rank="7" gdr="1">
+            <gpu dev="7" sm="120" gcn="908" arch="38911" rank="7" gdr="1">
               <xgmi target="0000:cb:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:d1:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:8a:00.0" count="1" tclass="0x038000"/>
