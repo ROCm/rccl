@@ -128,7 +128,7 @@ To manually run RCCL with NPKit enabled, environment variable `NPKIT_DUMP_DIR` n
 To manually analyze NPKit dump results, please leverage [npkit_trace_generator.py](https://github.com/microsoft/NPKit/blob/main/rccl_samples/npkit_trace_generator.py).
 
 ## MSCCL/MSCCL++
-RCCL integrates MSCCL(https://github.com/microsoft/msccl) and MSCCL++ (https://github.com/microsoft/mscclpp) to leverage the highly efficient GPU-GPU communication primitives for collective operations. Thanks to Microsoft Corporation for collaborating with us in this project.
+RCCL integrates MSCCL(https://github.com/Azure/msccl) and MSCCL++ (https://github.com/microsoft/mscclpp) to leverage the highly efficient GPU-GPU communication primitives for collective operations. Thanks to Microsoft Corporation for collaborating with us in this project.
 
 MSCCL uses XMLs for different collective algorithms on different architectures. RCCL collectives can leverage those algorithms once the corresponding XML has been provided by the user. The XML files contain the sequence of send-recv and reduction operations to be executed by the kernel. On MI300X, MSCCL is enabled by default. On other platforms, the users may have to enable this by setting `RCCL_MSCCL_FORCE_ENABLE=1`.
 
