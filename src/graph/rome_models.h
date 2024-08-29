@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map, int* net_map, int reverse);
 ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map);
-ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
+ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph2, const char *ringBase);
 ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);

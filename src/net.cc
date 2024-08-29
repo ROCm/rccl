@@ -548,7 +548,7 @@ ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport) {
       ncclNetProperties_t props;
       NCCLCHECK(comm->ncclNet->getProperties(dev, &props));
       if ((props.ptrSupport & NCCL_PTR_CUDA) == 0) continue;
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
       gdrSupportMatrix[comm->cudaDev] = 1;
       break;
 #endif

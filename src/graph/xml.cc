@@ -266,7 +266,7 @@ ncclResult_t ncclTopoXmlLoadC2c(FILE* file, struct ncclXml* xml, struct ncclXmlN
   return ncclSuccess;
 }
 ncclResult_t ncclTopoXmlLoadGpu(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   struct xmlHandler handlers[] = { { "xgmi", ncclTopoXmlLoadNvlink } };
 #else
   struct xmlHandler handlers[] = { { "nvlink", ncclTopoXmlLoadNvlink }, { "c2c", ncclTopoXmlLoadC2c } };
@@ -347,7 +347,9 @@ static void memcpylower(char* dst, const char* src, const size_t size) {
 static ncclResult_t getPciPath(const char* busId, char** path) {
   char busPath[] = "/sys/class/pci_bus/0000:00/../../0000:00:00.0";
   memcpylower(busPath+sizeof("/sys/class/pci_bus/")-1, busId, BUSID_REDUCED_SIZE-1);
-  memcpylower(busPath+sizeof("/sys/class/pci_bus/0000:00/../../")-1, busId, BUSID_SIZE-1);
+  memcpylower(busPath+sizeof("/sys/class/pci_bus/0000:00/../../")-1, busId, BUSID_SIZE-2);
+  // override PCIe device function ID in CPX mode
+  busPath[sizeof("/sys/class/pci_bus/0000:00/../../")+BUSID_SIZE-3] = '0';
   *path = realpath(busPath, NULL);
   if (*path == NULL) {
     WARN("Could not find real path of %s", busPath);
@@ -690,7 +692,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   struct ncclXmlNode* nvlNode = NULL;
   NCCLCHECK(xmlGetSub(gpuNode, "nvlink", &nvlNode));
   if (nvlNode == NULL) {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     const char* busId;
     NCCLCHECK(xmlGetAttr(pciNode, "busid", &busId));
     uint32_t deviceCnt;
@@ -813,7 +815,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   // Fill target classes
   for (int s=0; s<gpuNode->nSubs; s++) {
     struct ncclXmlNode* sub = gpuNode->subs[s];
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     if (strcmp(sub->name, "xgmi") != 0) continue;
 #else
     if (strcmp(sub->name, "nvlink") != 0) continue;
@@ -845,7 +847,7 @@ ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct nccl
   NCCLCHECK(ncclTopoGetPciNode(xml, busId, &node));
   NCCLCHECK(xmlSetAttrIfUnset(node, "class", "0x03"));
   NCCLCHECK(ncclTopoGetXmlFromSys(node, xml));
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   uint32_t devIndex = 0;
   static int rocmsmiInit = 0;
   if (rocmsmiInit == 0) {

@@ -59,6 +59,8 @@ RCCL build & installation helper script
        --verbose               Show compile commands
 ```
 
+By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeLists.txt`. To target specific GPU(s), and potentially reduce build time, use `--amdgpu_targets` as a `;` separated string listing GPU(s) to target.
+
 ## Manual build
 
 ### To build the library using CMake:
@@ -145,6 +147,17 @@ cd docs
 pip3 install -r sphinx/requirements.txt
 python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 ```
+
+### Improving performance on MI300 when using less than 8 GPUs
+
+On a system with 8\*MI300X GPUs, each pair of GPUs are connected with dedicated XGMI links in a fully-connected topology. So, for collective operations, one can achieve good performance when all 8 GPUs (and all XGMI links) are used. When using less than 8 GPUs, one can only achieve a fraction of the potential bandwidth on the system.
+
+But, if your workload warrants using less than 8 MI300 GPUs on a system, you can set the run-time variable `NCCL_MIN_NCHANNELS` to increase the number of channels.\
+E.g.: `export NCCL_MIN_NCHANNELS=32`
+
+Increasing the number of channels can be beneficial to performance, but it also increases GPU utilization for collective operations.
+
+Additionally, we have pre-defined higher number of channels when using only 2 GPUs or 4 GPUs on a 8\*MI300 system. Here, RCCL will use **32 channels** for the 2 MI300 GPUs scenario and **24 channels** for the 4 MI300 GPUs scenario.
 
 ## Copyright
 

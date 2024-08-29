@@ -841,6 +841,18 @@ static struct rcclRomeModel rome_model_85 = {
   .options = "tuning=2",
 };
 
+static struct rcclRomeModel rome_model_87 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 7,
+  .gpuIds = { 0xa000, 0x80000, 0xa4000, 0xc8000, 0x10b000, 0x181000, 0x1a5000, 0x1c9000, },
+  .nicIds = { 0xc9000, 0x1a2000, 0x108000, 0x81000, },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { 0, 1, 1, 0, },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel = { PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, },
+  .pattern = "4242",
+  .ringBase = "N3 0 1 2 3 4 5 6 7 N1|N3 1 0 2 4 3 5 7 6 N1|N0 2 5 0 3 6 1 7 4 N2|N0 3 7 0 4 2 1 6 5 N2|N2 4 6 2 7 3 0 5 1 N3|N2 5 4 7 1 3 2 6 0 N3|N1 6 3 1 4 0 7 5 2 N0|N1 7 2 0 6 4 1 5 3 N0|N3 1 0 2 4 3 5 7 6 N1|N0 2 5 0 3 6 1 7 4 N2|N0 3 7 0 4 2 1 6 5 N2|N2 4 6 2 7 3 0 5 1 N3|N2 5 4 7 1 3 2 6 0 N3|N1 6 3 1 4 0 7 5 2 N0|N1 7 2 0 6 4 1 5 3 N0|N3 0 1 2 3 4 5 6 7 N1|N0 2 5 0 3 6 1 7 4 N2|N0 3 7 0 4 2 1 6 5 N2|N2 4 6 2 7 3 0 5 1 N3|N2 5 4 7 1 3 2 6 0 N3|N1 6 3 1 4 0 7 5 2 N0|N1 7 2 0 6 4 1 5 3 N0|N3 0 1 2 3 4 5 6 7 N1|N3 1 0 2 4 3 5 7 6 N1|N0 3 7 0 4 2 1 6 5 N2|N2 4 6 2 7 3 0 5 1 N3|N2 5 4 7 1 3 2 6 0 N3|N1 6 3 1 4 0 7 5 2 N0|N1 7 2 0 6 4 1 5 3 N0|N3 0 1 2 3 4 5 6 7 N1|N3 1 0 2 4 3 5 7 6 N1|N0 2 5 0 3 6 1 7 4 N2|N2 4 6 2 7 3 0 5 1 N3|N2 5 4 7 1 3 2 6 0 N3|N1 6 3 1 4 0 7 5 2 N0|N1 7 2 0 6 4 1 5 3 N0|N3 0 1 2 3 4 5 6 7 N1|N3 1 0 2 4 3 5 7 6 N1|N0 2 5 0 3 6 1 7 4 N2|N0 3 7 0 4 2 1 6 5 N2|N2 5 4 7 1 3 2 6 0 N3|N1 6 3 1 4 0 7 5 2 N0|N1 7 2 0 6 4 1 5 3 N0|N3 0 1 2 3 4 5 6 7 N1|N3 1 0 2 4 3 5 7 6 N1|N0 2 5 0 3 6 1 7 4 N2|N0 3 7 0 4 2 1 6 5 N2|N2 4 6 2 7 3 0 5 1 N3|N1 6 3 1 4 0 7 5 2 N0|N1 7 2 0 6 4 1 5 3 N0|N3 0 1 2 3 4 5 6 7 N1|N3 1 0 2 4 3 5 7 6 N1|N0 2 5 0 3 6 1 7 4 N2|N0 3 7 0 4 2 1 6 5 N2|N2 4 6 2 7 3 0 5 1 N3|N2 5 4 7 1 3 2 6 0 N3|N1 7 2 0 6 4 1 5 3 N0|N3 0 1 2 3 4 5 6 7 N1|N3 1 0 2 4 3 5 7 6 N1|N0 2 5 0 3 6 1 7 4 N2|N0 3 7 0 4 2 1 6 5 N2|N2 4 6 2 7 3 0 5 1 N3|N2 5 4 7 1 3 2 6 0 N3|N1 6 3 1 4 0 7 5 2 N0",
+  .options = "noCpuCheck=1,netOverride=1",
+};
 
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22, /*  0 */
@@ -886,6 +898,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_81, /* 40 */
   rome_model_84, /* 41 */
   rome_model_85, /* 42 */
+  rome_model_87, /* 43 */
 };
 
 /* Parse user defined rings. Format is like :
@@ -1306,7 +1319,7 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
   struct ncclNetId net_scores[NCCL_TOPO_MAX_NODES];
   for (int i = 0; i < romeTopo->nNics; i ++) {
     net_scores[i].n = i;
-    net_scores[i].id = system->nodes[NET].nodes[i].id;
+    net_scores[i].id = system->nodes[NET].nodes[i].net.dev;
   }
   qsort(net_scores, romeTopo->nNics, sizeof(struct ncclNetId), cmpNets);
 
@@ -1475,6 +1488,8 @@ static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel*
     // match gdr level
     for (i = 0; i < ref->nNics; i++) {
       for (j = 0; j < ref->nGpus; j++) {
+        // enabling PXN override paths over PHB and SYS
+        if (topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXN) continue;
         if (ref->gdrLevel[i*ref->nGpus+j] != topo->gdrLevel[n[i]*ref->nGpus+g[j]]) break;
       }
       if (j < ref->nGpus) break;
@@ -1492,7 +1507,7 @@ static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel*
 }
 
 
-ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
+ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, const char *ringBase) {
   static char ringRemap[64];
   int i;
 
@@ -1565,8 +1580,11 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
           if (!ignore_numa && romeTopoModels[i].nicNuma[j] != romeTopo.nicNuma[k]) continue;
           int g;
           // check GDR
-          for (g = 0; g < ngpus; g++)
+          for (g = 0; g < ngpus; g++) {
+            // enabling PXN override paths over PHB and SYS
+            if (romeTopo.gdrLevel[k*ngpus+g] == PATH_PXN) continue;
             if (romeTopoModels[i].gdrLevel[j*ngpus+g] != romeTopo.gdrLevel[k*ngpus+g]) break;
+          }
           if (g >= ngpus) break;
         }
         if (k < nnets) {
@@ -1618,14 +1636,14 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     // Attempt to use rail-optimized rings if they exist
     if (system->nHosts % 2 == 0) {
       // For even number of nodes, alternate forward/reverse on ringBase
-      NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+      NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
     }
     else {
       // For odd number of nodes, check first to see if ringTail1 and ringTail2 are defined
       if (system->nHosts == 1 || romeTopoModels[i].ringTail1 == nullptr || romeTopoModels[i].ringTail2 == nullptr) {
         if (system->nHosts > 1)
           INFO(NCCL_GRAPH, "[WARN] Dropping back due to lack of support for odd-number of nodes for model index %d\n", i);
-        NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+        NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
       }
       else
       {
@@ -1634,7 +1652,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
         } else if (system->hostIdx == (system->nHosts - 2)) {
           NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, g, nnets > 1 ? n : NULL, 0));
         } else {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+          NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
         }
       }
     }
@@ -1646,7 +1664,24 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
 
     // Fall back to tree from ringBase
-    NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    // Override GDR distance if requested
+    if (checkOption(romeTopoModels[i].options, "netOverride")) {
+      for (int i = 0; i < system->nodes[NET].count; i++) {
+        for (int j = 0; j < system->nodes[GPU].count; j++) {
+          if (system->nodes[GPU].nodes[j].paths[NET][i].type == PATH_PXB) {
+            int k;
+            for (k = 0; k < system->nodes[GPU].count; k++) {
+              if (k != j &&
+                system->nodes[GPU].nodes[k].gpu.dev/2 == system->nodes[GPU].nodes[j].gpu.dev/2)
+                break;
+            }
+            if (k < system->nodes[GPU].count)
+              system->nodes[GPU].nodes[k].paths[NET][i].type = PATH_PXB;
+          }
+        }
+      }
+    }
     break;
   }
   return ncclSuccess;

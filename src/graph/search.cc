@@ -886,7 +886,7 @@ ncclResult_t ncclTopoDupChannels(struct ncclTopoGraph* graph, int ccMin, int ngp
   return ncclSuccess;
 }
 
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 float speedArrayIntra[] = { 48.0, 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 float speedArrayInter[] = { 48.0, 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #define NSPEEDSINTRA (sizeof(speedArrayIntra)/sizeof(float))
@@ -947,7 +947,9 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
       NCCLCHECK(parseGraphLight(strTrees, system, graph, NULL));
       system->treeDefined=true;
     } else {
-      NCCLCHECK(parseGraph(str, system, graph, NULL, NULL, false));
+      // For even number of nodes, alternate forward/reverse on ringBase
+      NCCLCHECK(parseGraph(str, system, graph, NULL, NULL,
+        graph->pattern == NCCL_TOPO_PATTERN_RING ? system->hostIdx % 2 : 0));
       int arch, vendor, model;
       NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
       if (graph->nChannels && arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME) {
@@ -959,7 +961,8 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     NCCLCHECK(parseChordalRing(system, graph));
     if (graph->nChannels) return ncclSuccess;
     // try to match Rome 4P2H
-    NCCLCHECK(parseRome4P2H(system, graph));
+    const char *remap_str = getenv("NCCL_RINGS_REMAP");
+    NCCLCHECK(parseRome4P2H(system, graph, remap_str));
 
     if (graph->nChannels) return ncclSuccess;
     // try to match 1H16P

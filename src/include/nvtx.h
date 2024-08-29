@@ -77,7 +77,7 @@ class payload_schema {
 // @param N  schema name
 // @param S  schema (entries)
 // @param P  payload (struct)
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define NVTX3_FUNC_WITH_PARAMS(ID, S, P) \
   nvtxPayloadData_t nvtx3_bpl__[] = { \
     {NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##ID, sizeof(P), &(P)}}; \

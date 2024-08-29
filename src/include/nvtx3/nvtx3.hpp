@@ -2777,7 +2777,7 @@ inline void mark(Args const&... args) noexcept
  * `domain` to which the `registered_string_in` belongs. Else,
  * `domain::global` to  indicate that the global NVTX domain should be used.
  */
-#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HCC__) && !defined(__HIPCC__)
+#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
 #define NVTX3_V1_FUNC_RANGE_IN(D)                                                  \
   static ::nvtx3::v1::registered_string_in<D> const nvtx3_func_name__{__func__};   \
   static ::nvtx3::v1::event_attributes const nvtx3_func_attr__{nvtx3_func_name__}; \

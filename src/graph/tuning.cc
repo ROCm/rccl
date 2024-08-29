@@ -224,30 +224,30 @@ static struct tuningModel tuning_model_4 {
 static struct tuningModel tuning_model_5 {
   .hwLat = {
     /* NVLINK */
-    { /* Tree (LL/LL128/Simple)*/ { 0.8, 0.0, 2.5 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 3.6 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.8 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.9, 0.0, 2.3 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 2.1 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.9 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
     /* PCI */
     { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 5.7 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 5.7 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
     /* NET */
-    { /* Tree (LL/LL128/Simple)*/ { 12.5, 0.0, 22.4 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 0.0, 19.8 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 12.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+    { /* Tree (LL/LL128/Simple)*/ { 10.5, 0.0, 25.0 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 0.0, 320.0 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 10.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
   },
 
   .bwRatio = {
     /* 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* Ring (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.06, 0.00, 0.11 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
     /* more than 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.41, 0.00, 0.86 }, /* Ring (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
+    { /* Tree (LL/LL128/Simple)*/ { 0.06, 0.00, 0.59 }, /* Ring (LL/LL128/Simple)*/ { 0.08, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
   },
 
   .treeCorrectionFactor = {
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 0.8, 0.1, 0.4, 0.5, 1.0, 0.6, 0.4, 0.6, 0.1, 0.3, 0.4, 0.4, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 0.6, 1.0, 0.9, 1.0, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
     { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 0.4, 1.0, 1.0, 1.0, 0.2, 0.7, 1.0, 1.0, 1.0, 0.8, 0.7, 0.7, 0.8, 0.8, 0.8, 0.9, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.7, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, },
   },
 
   .ringCorrectionFactor = {
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.1, 0.2, 0.2, 0.1, 0.5, 0.8, 1.0, 0.2, 0.4, 0.5, 0.4, 0.4, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.2, 1.0, 0.4, 0.4, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
     { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.7, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.8, 1.0, 1.0, 1.0, },
   },
 };
 
@@ -303,7 +303,7 @@ static float getNetOverhead(struct ncclComm* comm) {
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph** graphs) {
   int simpleDefaultThreads = (graphs[NCCL_ALGO_RING]->bwIntra*graphs[NCCL_ALGO_RING]->nChannels <= PCI_BW) ? 256 : NCCL_SIMPLE_MAX_NTHREADS;
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] =
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, simpleDefaultThreads, comm->WarpSize);
   comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = comm->maxThreads[NCCL_ALGO_COLLNET_DIRECT][NCCL_PROTO_SIMPLE] =
     getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS, comm->WarpSize);
@@ -374,7 +374,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         if (a == NCCL_ALGO_NVLS_TREE) bw = std::min(graphs[a]->bwIntra, nNodes <= 2 ? graphs[a]->bwInter : graphs[a]->bwInter/2);
 
         // Various model refinements
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
         if (nNodes <= 2)
           busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[0][a][p];
         else
@@ -510,7 +510,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     // Disable LL protocol on gfx12xx
     int pEnable = (p == NCCL_PROTO_LL && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx12")) ? 0 : protoEnable[p];
     if (pEnable == 2 && p == NCCL_PROTO_LL128) {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #if defined(ENABLE_LL128)
       // Enable LL128 by default only on gfx90a with available tuning table
       pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
@@ -650,7 +650,7 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
   }
   int logSize = log2i(info->nBytes>>6);
 
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   if (algorithm == NCCL_ALGO_TREE) {
     if (logSize < 27) bw *= rcclTuningModel[info->comm->topo->tuning].treeCorrectionFactor[protocol][logSize];
     else bw *= rcclTuningModel[info->comm->topo->tuning].treeCorrectionFactor[protocol][26];

@@ -20,6 +20,7 @@
 #include "rccl_vars.h"
 #include "transport.h"
 #include "common.h"
+#include "api_trace.h"
 #include <cassert>
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
@@ -1645,7 +1646,7 @@ static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo) {
     // Ring/Tree channel tuning
     while (collInfo->nBytes < nc*nt*threadThreshold) {
       if (nc >= 2) nc--;
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
       // do not reduce threads count on VEGA
 #else
       else if ((nt % 128) == 0) nt/=2;
@@ -1653,7 +1654,7 @@ static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo) {
       else break;
     }
   }
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #else
   if (collInfo->protocol == NCCL_PROTO_SIMPLE) {
     if (collInfo->algorithm == NCCL_ALGO_RING) nt += WARP_SIZE; // Extra warp for sync
@@ -2170,7 +2171,7 @@ fail:
 }
 
 NCCL_API(ncclResult_t, ncclRedOpCreatePreMulSum, ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm);
-ncclResult_t ncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm) {
+ncclResult_t ncclRedOpCreatePreMulSum_impl(ncclRedOp_t *op, void *scalar, ncclDataType_t datatype, ncclScalarResidence_t residence, ncclComm_t comm) {
   NCCLCHECK(PtrCheck(comm, "ncclRedOpCreatePreMulSum", "comm"));
   /* join init thread before creating PreMulSum op. */
   NCCLCHECK(ncclCommEnsureReady(comm));
@@ -2209,7 +2210,7 @@ ncclResult_t ncclRedOpCreatePreMulSum(ncclRedOp_t *op, void *scalar, ncclDataTyp
 }
 
 NCCL_API(ncclResult_t, ncclRedOpDestroy, ncclRedOp_t op, ncclComm_t comm);
-ncclResult_t ncclRedOpDestroy(ncclRedOp_t op, ncclComm_t comm) {
+ncclResult_t ncclRedOpDestroy_impl(ncclRedOp_t op, ncclComm_t comm) {
   if (0 <= int(op) && int(op) < int(ncclNumOps)) {
     WARN("ncclRedOpDestroy : operator is a NCCL builtin.");
     return ncclInvalidArgument;

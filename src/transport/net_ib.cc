@@ -353,7 +353,7 @@ ncclResult_t ncclIbDevices(int* ndev) {
 ncclResult_t ncclIbGdrSupport() {
   static int moduleLoaded = -1;
   if (moduleLoaded == -1) {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
     char strValue[MAX_STR_LEN];
     NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
@@ -1100,7 +1100,7 @@ ib_recv:
     // Set the ece (enhanced connection establishment) on this QP before RTR
     if (remMeta.qpInfo[q].ece_supported) {
       NCCLCHECK(wrap_ibv_set_ece(qp->qp, &remMeta.qpInfo[q].ece, &meta.qpInfo[q].ece_supported));
-  
+
       // Query the reduced ece for this QP (matching enhancements between the requestor and the responder)
       // Store this in our own qpInfo for returning to the requestor
       if (meta.qpInfo[q].ece_supported)

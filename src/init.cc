@@ -61,7 +61,7 @@
   #define STR(v) STR2(v)
 #endif
 
-#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if CUDART_VERSION >= 9020 || defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define NCCL_GROUP_CUDA_STREAM 0 // CGMD: CUDA 9.2,10.X Don't need to use an internal CUDA stream
 #else
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
@@ -178,14 +178,14 @@ static ncclResult_t ncclInit() {
 }
 
 NCCL_API(ncclResult_t, ncclGetVersion, int* version);
-ncclResult_t ncclGetVersion(int* version) {
+ncclResult_t ncclGetVersion_impl(int* version) {
   if (version == NULL) return ncclInvalidArgument;
   *version = NCCL_VERSION_CODE;
   return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclGetUniqueId, ncclUniqueId* out);
-ncclResult_t ncclGetUniqueId(ncclUniqueId* out) {
+ncclResult_t ncclGetUniqueId_impl(ncclUniqueId* out) {
   NCCLCHECK(ncclInit());
   NCCLCHECK(PtrCheck(out, "GetUniqueId", "out"));
   ncclResult_t res = bootstrapGetUniqueId((struct ncclBootstrapHandle*)out);
@@ -724,7 +724,7 @@ fail:
 }
 
 // Pre-process the string so that running "strings" on the lib can quickly reveal the version.
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define VERSION_STRING "RCCL version : " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX
 #define VERSION_STRING_EXTENDED "HIP version  : " HIP_BUILD_INFO "\nROCm version : " ROCM_BUILD_INFO
 #else
@@ -736,13 +736,13 @@ static void showVersion() {
   if (shown == 0 && ncclDebugLevel >= NCCL_LOG_VERSION) {
     char hostInfo[HOST_NAME_MAX] = {}, libPathInfo[2048] = {};
     size_t hostInfoSize = sizeof(hostInfo), libPathInfoSize = sizeof(libPathInfo);
-    
+
     // Retrieve Hostname info
     if (gethostname(hostInfo, hostInfoSize-1) != 0) {
       // Returns Unknown in hostInfo if function call unsuccessful
       strncpy(hostInfo, "Unknown", hostInfoSize-1);
     }
-    
+
     // Retrieve librccl path
     Dl_info pathInfo;
     if (dladdr((void*)ncclCommInitRank, &pathInfo)) {
@@ -802,7 +802,7 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
   info->comm = comm;
   info->cudaCompCap = comm->minCompCap = comm->maxCompCap = comm->compCap;
 
-#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HCC__) && !defined(__HIPCC__)
+#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
   // MNNVL support
   {
     // MNNVL: Request the fabric UUID and partition info
@@ -2004,7 +2004,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   }
 
 
-  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx commId 0x%llx localSize %zi used %ld bytes - Init COMPLETE", comm, comm->rank, comm->nRanks, comm->cudaDev, comm->busId, (unsigned long long)hashUniqueId(job->commId), maxLocalSizeBytes, allocTracker[comm->cudaDev].totalAllocSize);
+  INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx commId 0x%llx localSize %zi used %ld bytes on core %d - Init COMPLETE", comm, comm->rank, comm->nRanks, comm->cudaDev, comm->busId, (unsigned long long)hashUniqueId(job->commId), maxLocalSizeBytes, allocTracker[comm->cudaDev].totalAllocSize, sched_getcpu());
 exit:
   if (job->newcomm) {
     /* assign it to user pointer. */
@@ -2255,7 +2255,7 @@ constexpr nvtxPayloadSchemaEntry_t CommInitRankSchema[] = {
 };
 
 NCCL_API(ncclResult_t, ncclCommInitRank, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank);
-ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank) {
+ncclResult_t ncclCommInitRank_impl(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank) {
   // Load the CUDA driver and dlsym hooks (can fail on old drivers)
   rocmLibraryInit();
 
@@ -2271,7 +2271,7 @@ ncclResult_t ncclCommInitRank(ncclComm_t* newcomm, int nranks, ncclUniqueId comm
 }
 
 NCCL_API(ncclResult_t, ncclCommInitAll, ncclComm_t* comms, int ndev, const int* devlist);
-ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
+ncclResult_t ncclCommInitAll_impl(ncclComm_t* comms, int ndev, const int* devlist) {
   ncclResult_t ret = ncclSuccess;
   int totalnDev;
   int *gpuFlags = NULL;
@@ -2339,7 +2339,7 @@ ncclResult_t ncclCommSetAsyncError(ncclComm_t comm, ncclResult_t nextState) {
 }
 
 NCCL_API(ncclResult_t, ncclCommInitRankConfig, ncclComm_t* comm, int nranks, ncclUniqueId commId, int myrank, ncclConfig_t *config);
-ncclResult_t ncclCommInitRankConfig(ncclComm_t *newcomm, int nranks, ncclUniqueId commId, int myrank, ncclConfig_t *config) {
+ncclResult_t ncclCommInitRankConfig_impl(ncclComm_t *newcomm, int nranks, ncclUniqueId commId, int myrank, ncclConfig_t *config) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   int cudaDev;
   ncclResult_t ret = ncclSuccess;
@@ -2462,7 +2462,7 @@ fail:
 }
 
 NCCL_API(ncclResult_t, ncclCommFinalize, ncclComm_t comm);
-ncclResult_t ncclCommFinalize(ncclComm_t comm) {
+ncclResult_t ncclCommFinalize_impl(ncclComm_t comm) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   ncclResult_t ret = ncclSuccess;
 
@@ -2576,7 +2576,7 @@ fail:
 }
 
 NCCL_API(ncclResult_t, ncclCommDestroy, ncclComm_t comm);
-ncclResult_t ncclCommDestroy(ncclComm_t comm) {
+ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
   if (comm == NULL) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
@@ -2617,7 +2617,7 @@ ncclResult_t ncclCommDestroy(ncclComm_t comm) {
 }
 
 NCCL_API(ncclResult_t, ncclCommAbort, ncclComm_t comm);
-ncclResult_t ncclCommAbort(ncclComm_t comm) {
+ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
   if (comm == NULL) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
@@ -2649,7 +2649,7 @@ ncclResult_t ncclCommAbort(ncclComm_t comm) {
 }
 
 NCCL_API(ncclResult_t, ncclCommSplit, ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t *config);
-ncclResult_t ncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t *config) {
+ncclResult_t ncclCommSplit_impl(ncclComm_t comm, int color, int key, ncclComm_t *newcomm, ncclConfig_t *config) {
   struct ncclCommInitRankAsyncJob *job = NULL;
   struct ncclComm* childComm = NCCL_COMM_NULL;
   ncclResult_t res = ncclSuccess;
@@ -2713,7 +2713,7 @@ fail:
 }
 
 NCCL_API(const char*, ncclGetErrorString, ncclResult_t code);
-const char* ncclGetErrorString(ncclResult_t code) {
+const char* ncclGetErrorString_impl(ncclResult_t code) {
   switch (code) {
     case ncclSuccess                : return "no error";
     case ncclUnhandledCudaError     : return "unhandled cuda error (run with NCCL_DEBUG=INFO for details)";
@@ -2731,12 +2731,12 @@ const char* ncclGetErrorString(ncclResult_t code) {
  * comm is currently unused and can be set to NULL
  */
 NCCL_API(const char*, ncclGetLastError, const ncclComm_t comm);
-const char* ncclGetLastError(ncclComm_t comm) {
+const char* ncclGetLastError_impl(ncclComm_t comm) {
   return ncclLastError;
 }
 
 NCCL_API(ncclResult_t, ncclCommGetAsyncError, ncclComm_t comm, ncclResult_t *asyncError);
-ncclResult_t ncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError) {
+ncclResult_t ncclCommGetAsyncError_impl(ncclComm_t comm, ncclResult_t *asyncError) {
   NCCLCHECK(PtrCheck(comm, "ncclGetAsyncError", "comm"));
   NCCLCHECK(PtrCheck(asyncError, "ncclGetAsyncError", "asyncError"));
 
@@ -2746,7 +2746,7 @@ ncclResult_t ncclCommGetAsyncError(ncclComm_t comm, ncclResult_t *asyncError) {
 }
 
 NCCL_API(ncclResult_t, ncclCommCount, const ncclComm_t comm, int* count);
-ncclResult_t ncclCommCount(const ncclComm_t comm, int* count) {
+ncclResult_t ncclCommCount_impl(const ncclComm_t comm, int* count) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
   NCCLCHECK(PtrCheck(comm, "CommCount", "comm"));
@@ -2760,7 +2760,7 @@ ncclResult_t ncclCommCount(const ncclComm_t comm, int* count) {
 }
 
 NCCL_API(ncclResult_t, ncclCommCuDevice, const ncclComm_t comm, int* devid);
-ncclResult_t ncclCommCuDevice(const ncclComm_t comm, int* devid) {
+ncclResult_t ncclCommCuDevice_impl(const ncclComm_t comm, int* devid) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
   NCCLCHECK(PtrCheck(comm, "CommCuDevice", "comm"));
@@ -2773,7 +2773,7 @@ ncclResult_t ncclCommCuDevice(const ncclComm_t comm, int* devid) {
 }
 
 NCCL_API(ncclResult_t, ncclCommUserRank, const ncclComm_t comm, int* rank);
-ncclResult_t ncclCommUserRank(const ncclComm_t comm, int* rank) {
+ncclResult_t ncclCommUserRank_impl(const ncclComm_t comm, int* rank) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
   NCCLCHECK(PtrCheck(comm, "CommUserRank", "comm"));
@@ -2786,7 +2786,7 @@ ncclResult_t ncclCommUserRank(const ncclComm_t comm, int* rank) {
 }
 
 NCCL_API(ncclResult_t, ncclMemAlloc, void **ptr, size_t size);
-ncclResult_t  ncclMemAlloc(void **ptr, size_t size) {
+ncclResult_t  ncclMemAlloc_impl(void **ptr, size_t size) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   ncclResult_t ret = ncclSuccess;
 
@@ -2863,7 +2863,7 @@ fail:
 }
 
 NCCL_API(ncclResult_t, ncclMemFree, void *ptr);
-ncclResult_t  ncclMemFree(void *ptr) {
+ncclResult_t  ncclMemFree_impl(void *ptr) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   ncclResult_t ret = ncclSuccess;
   int saveDevice;

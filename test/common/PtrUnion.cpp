@@ -5,7 +5,7 @@
  ************************************************************************/
 
 #include "PtrUnion.hpp"
-
+#include "api_trace.h"
 namespace RcclUnitTesting
 {
   size_t DataTypeToBytes(ncclDataType_t const dataType)

@@ -21,7 +21,7 @@
 #define BUSID_REDUCED_SIZE (sizeof("0000:00"))
 
 const char* topoNodeTypeStr[] = { "GPU", "PCI", "NVS", "CPU", "NIC", "NET" };
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 const char* topoLinkTypeStr[] = { "LOC", "XGMI", "",    "PCI",    "",    "",    "", "SYS", "NET" };
 const char* topoPathTypeStr[] = { "LOC", "XGMI", "NVB", "PIX", "PXB", "PXN", "PHB", "SYS", "DIS" };
 #else
@@ -355,6 +355,7 @@ ncclResult_t ncclTopoAddNet(struct ncclXmlNode* xmlNet, struct ncclTopoSystem* s
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "gdr", &net->net.gdrSupport, 0));
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "maxconn", &net->net.maxChannels, MAXCHANNELS));
   NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "coll", &net->net.collSupport, 0));
+  NCCLCHECK(xmlGetAttrIntDefault(xmlNet, "dev", &net->net.dev, 0));
   net->net.busId = busId;
   ncclDebugNoWarn = 0;
 
@@ -376,7 +377,7 @@ ncclResult_t ncclTopoAddNic(struct ncclXmlNode* xmlNic, struct ncclTopoSystem* s
 }
 
 ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* system, struct ncclTopoNode* gpu) {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   // There is no direct mapping between CUDA SM to HIP GFX. Use SM60 as compatibility level.
   gpu->gpu.cudaCompCap = 60;
   // Repurpose previously unused "sm" as CU counts
@@ -526,7 +527,7 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
   return ncclSuccess;
 }
 
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 ncclResult_t ncclTopoAddXGMI(struct ncclXmlNode* node, struct ncclTopoSystem* system, const char* parentBusId) {
   if (strcmp(node->name, "xgmi") == 0) {
     struct ncclTopoNode* gpu = NULL;
@@ -668,7 +669,7 @@ ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "cpu") == 0) NCCLCHECK(ncclTopoAddCpu(node, *topoSystem));
   }
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   NCCLCHECK(ncclTopoAddXGMI(topNode, *topoSystem, NULL));
 #else
   NCCLCHECK(ncclTopoAddNvLinks(topNode, *topoSystem, NULL));
