@@ -396,7 +396,7 @@ struct ncclComm {
 #if defined(ENABLE_MSCCLPP)
   // Whether this comm is compatible with MSCCLPP
   bool mscclppCompatible;
-  struct mscclpp_ncclComm* mscclpp_comm;
+  struct mscclppComm* mscclpp_comm;
   size_t mscclpp_threshold;
 #endif
 
