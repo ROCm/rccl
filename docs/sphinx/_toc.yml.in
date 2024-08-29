@@ -1,6 +1,10 @@
 root: index
 subtrees:
 
+- caption: Installation 
+  entries:
+  - file: install/installation
+
 - caption: API reference 
   entries:
   - file: api-reference/library-specification
