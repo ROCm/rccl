@@ -45,7 +45,7 @@ endfunction()
 
 
 if(ENABLE_MSCCLPP)
-    set(MSCCLPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp CACHE PATH "")
+    # Try to find the mscclpp install
     set(MSCCLPP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/ext/mscclpp CACHE PATH "")
     execute_process(
         COMMAND mkdir -p ${MSCCLPP_ROOT}
@@ -54,8 +54,17 @@ if(ENABLE_MSCCLPP)
     find_package(mscclpp_nccl)
 
     if(NOT mscclpp_nccl_FOUND)
-        message(STATUS "MSCCL++ not found. Downloading and building MSCCL++ only for gfx942.")
-        # Download, build and install mscclpp
+        # Ensure the source code is checked out
+        set(MSCCLPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp CACHE PATH "")
+        if(NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt)
+            message(STATUS "Checking out microsoft/mscclpp")
+            execute_process(
+                COMMAND git submodule update --init --recursive
+                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            )
+        endif()
+        
+        message(STATUS "Building mscclpp only for gfx942.")
         
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
         mscclpp_cmake_arg(CMAKE_SHARED_LINKER_FLAGS_INIT)
