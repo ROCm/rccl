@@ -134,6 +134,12 @@ MSCCL uses XMLs for different collective algorithms on different architectures. 
 
 On the other hand, RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. Users need to set the RCCL environment variable `RCCL_ENABLE_MSCCLPP=1` to run RCCL workload with MSCCL++ support. It is also possible to set the message size threshold for using MSCCL++ by using the environment variable `RCCL_MSCCLPP_THRESHOLD`. Once `RCCL_MSCCLPP_THRESHOLD` (the default value is 1MB) is set, RCCL will invoke MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
 
+If some restrictions are not met, it will fall back to MSCCL or RCCL. The following are restrictions on using MSCCL++:
+- Message size must be a non-zero multiple of 32 bytes
+- Does not support `hipMallocManaged` buffers
+- Allreduce only supports `float16`, `int32`, `uint32`, `float32`, and `bfloat16` data types
+- Allreduce only supports the `sum` op
+
 ## Library and API Documentation
 
 Please refer to the [RCCL Documentation Site](https://rocm.docs.amd.com/projects/rccl/en/latest/) for current documentation.
