@@ -66,12 +66,17 @@ By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeL
 ### To build the library using CMake:
 
 ```shell
-$ git clone https://github.com/ROCm/rccl.git
+$ git clone https://github.com/ROCm/rccl.git --recurse-submodules
 $ cd rccl
 $ mkdir build
 $ cd build
 $ cmake ..
 $ make -j 16      # Or some other suitable number of parallel jobs
+```
+If you have already cloned, you can checkout the `mscclpp` submodule manually.
+```shell
+$ cd ext-src/mscclpp
+$ git submodule update --init --recursive
 ```
 You may substitute an installation path of your own choosing by passing `CMAKE_INSTALL_PREFIX`. For example:
 ```shell
