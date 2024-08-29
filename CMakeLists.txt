@@ -755,6 +755,9 @@ target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
+if(BUILD_MSCCLPP)
+  target_link_libraries(rccl PRIVATE mscclpp_nccl)
+endif()
 
 ## Set RCCL link options
 ## Find out available memory
@@ -821,9 +824,6 @@ file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 ## Install Algorithm files under share folder
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-unit-test-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
-if(BUILD_MSCCLPP)
-  rocm_install(FILES ${MSCCLPP_OUT_LIBS} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT "runtime")
-endif()
 
 rocm_export_targets(
   NAMESPACE roc::
