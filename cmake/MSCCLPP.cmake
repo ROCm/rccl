@@ -46,7 +46,7 @@ if(ENABLE_MSCCLPP)
     
         download_project(PROJ                mscclpp_nccl
                          GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
-                         GIT_TAG             b1b9d0626cfa40319c18c05f8c16650568395c29
+                         GIT_TAG             8c6fb429e92e07acb82c0fdcdab44854fc63aa68
                          INSTALL_DIR         ${MSCCLPP_ROOT}
                          CMAKE_ARGS          -DGPU_TARGETS=gfx942 -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                          LOG_DOWNLOAD        FALSE
