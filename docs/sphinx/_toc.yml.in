@@ -5,6 +5,10 @@ subtrees:
   entries:
   - file: install/installation
 
+- caption: How to 
+  entries:
+  - file: how-to/using-nccl
+
 - caption: API reference 
   entries:
   - file: api-reference/library-specification
@@ -15,4 +19,3 @@ subtrees:
   entries:
   - file: license
   - file: attributions
-
