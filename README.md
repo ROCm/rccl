@@ -2,6 +2,8 @@
 
 ROCm Communication Collectives Library
 
+**Note:** The published documentation is available at [RCCL](https://github.com/ROCm/rccl) in an organized easy-to-read format that includes a table of contents and search functionality. The documentation sources files reside in the [rccl/docs](https://github.com/ROCm/rccl/docs) folder in this repository. As with all ROCm projects, the documentation is open source. For more information, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
+
 ## Introduction
 
 RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, reduce-scatter, gather, scatter, and all-to-all. There is also initial support for direct GPU-to-GPU send and receive operations.  It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node or multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
