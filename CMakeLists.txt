@@ -243,6 +243,9 @@ if(BUILD_BFD)
   if (HAVE_BFD)
     message(STATUS "-- Found BFD support")
 
+    ### Required for checking HIP device symbols when building with amdclang++
+    set(CMAKE_REQUIRED_LIBRARIES hip::device)
+
     # Check for specific BFD feature support
     CHECK_SYMBOL_EXISTS(bfd_get_section_flags "bfd.h" HAVE_DECL_BFD_GET_SECTION_FLAGS)
     CHECK_SYMBOL_EXISTS(bfd_get_section_vma   "bfd.h" HAVE_DECL_BFD_GET_SECTION_VMA)
@@ -257,6 +260,8 @@ if(BUILD_BFD)
            return (int)(size);
        }"
       HAVE_TWO_ARG_BFD_SECTION_SIZE)
+
+    unset(CMAKE_REQUIRED_LIBRARIES)
 
     # Check for iberty support
     find_library(HAVE_IBERTY iberty PATHS /usr/lib64 /usr/lib/ PATH_SUFFIXES x86_64-linux-gnu)
