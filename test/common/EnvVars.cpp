@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <iostream>
+#include <unordered_map>
 
 namespace RcclUnitTesting
 {
@@ -88,6 +90,117 @@ namespace RcclUnitTesting
     return TEST_SUCCESS;
   }
 
+
+  std::string execCommand(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
+  }
+
+
+  int getDevicePriority (std::vector<int> *gpuPriorityOrder){
+    // Prepare parent->child pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+      ERROR("Unable to create parent->child pipe for getting the device priority vector.\n");
+      return TEST_FAIL;
+    }
+    pid_t pid = fork();
+    if (0 == pid) {
+      std::vector<int> result;
+      try {
+          std::string log = execCommand("rocm-smi --showuniqueid");
+          std::unordered_map<std::string, std::vector<int>> uniqueIdToGpuIndexes;
+          std::string::size_type pos = 0;
+
+          while ((pos = log.find("GPU[", pos)) != std::string::npos) {
+              int gpuIndex = std::stoi(log.substr(pos + 4));
+              std::string::size_type idPos = log.find("Unique ID:", pos);
+              if (idPos == std::string::npos) break;
+              std::string::size_type idEnd = log.find_first_of(" \n", idPos + 11);
+              std::string uniqueId = log.substr(idPos + 11, idEnd - (idPos + 11));
+              uniqueIdToGpuIndexes[uniqueId].push_back(gpuIndex);
+              pos = log.find('\n', pos);
+          }
+
+          // Create a vector of pairs for sorting unique IDs based on the number of associated GPUs
+          std::vector<std::pair<std::string, std::vector<int>>> sortedIds(uniqueIdToGpuIndexes.begin(), uniqueIdToGpuIndexes.end());
+          std::sort(sortedIds.begin(), sortedIds.end(), [](const auto& a, const auto& b) {
+              return a.second.size() > b.second.size();
+          });
+
+          for (const auto& pair : sortedIds) {
+              result.insert(result.end(), pair.second.begin(), pair.second.end());
+          }
+      } catch (const std::exception& e) {
+          std::cerr << "Error: " << e.what() << std::endl;
+          return 1;
+      }
+      if (write(pipefd[1], result.data(), gpuPriorityOrder->size() * sizeof(int)) != gpuPriorityOrder->size() * sizeof(int)) return TEST_FAIL;
+      close(pipefd[0]);
+      close(pipefd[1]);
+      exit(EXIT_SUCCESS);
+    } 
+    else {
+      int status;
+      if (read(pipefd[0], gpuPriorityOrder->data(), gpuPriorityOrder->size() * sizeof(int)) != gpuPriorityOrder->size() * sizeof(int)) return TEST_FAIL;
+      waitpid(pid, &status, 0);
+      assert(!status);
+      close(pipefd[0]);
+      close(pipefd[1]);
+    }
+    return TEST_SUCCESS;
+    return 0;
+  }
+       
+
+  int getDeviceMode (bool *cpxMode){
+    // Prepare parent->child pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1)
+    {
+      ERROR("Unable to create parent->child pipe for getting the device mode\n");
+      return TEST_FAIL;
+    }
+    pid_t pid = fork();
+    if (0 == pid)
+    {
+      bool iscpxMode = false;
+      try {
+          std::string log = execCommand("rocm-smi --showcomputepartition");
+          bool foundCPX = log.find("CPX") != std::string::npos;
+          if (foundCPX) {
+            iscpxMode = true;
+          }
+      } catch (const std::exception& e) {
+          std::cerr << "Error: " << e.what() << std::endl;
+          return 1;
+      }
+      if (write(pipefd[1], &iscpxMode, sizeof(iscpxMode)) != sizeof(iscpxMode)) return TEST_FAIL;
+      close(pipefd[0]);
+      close(pipefd[1]);
+      exit(EXIT_SUCCESS);
+    }
+    else {
+      int status;
+      if (read(pipefd[0], cpxMode, sizeof(*cpxMode)) != sizeof(*cpxMode)) return TEST_FAIL;
+      waitpid(pid, &status, 0);
+      assert(!status);
+      close(pipefd[0]);
+      close(pipefd[1]);
+    }
+    return TEST_SUCCESS;
+    return 0;
+  }
+
+
   EnvVars::EnvVars()
   {
     // Collect number of GPUs available
@@ -115,6 +228,18 @@ namespace RcclUnitTesting
     // Total number of reduction ops
     int numOps = ncclNumOps;
 
+    gpuPriorityOrder.resize(numDetectedGpus);
+    for(int i=0;i<numDetectedGpus;i++){
+      gpuPriorityOrder[i] = i;
+    }
+    if(isGfx94) {
+      bool cpxMode = false;
+      getDeviceMode(&cpxMode);
+      if(cpxMode) {
+        onlyPow2Gpus = true;
+        getDevicePriority(&gpuPriorityOrder);
+      }
+    }
     std::vector<std::string> redOpStrings = GetEnvVarsList("UT_REDOPS");
     for (auto s : redOpStrings)
     {
