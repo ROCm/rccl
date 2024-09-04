@@ -28,6 +28,7 @@
 
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
+RCCL_PARAM(MscclEnableSingleProcess, "MSCCL_ENABLE_SINGLE_PROCESS", 0);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 
 bool mscclEnabled() {
@@ -63,7 +64,23 @@ bool mscclAvailable(int rank) {
 }
 
 static bool mscclCommCompatible(ncclComm_t comm) {
-  // MSCCL is always compatible now. No need to guard against multi-thread.
+  if (rcclParamMscclEnableSingleProcess()) {
+    // Single process usage enabled. No need to guard against multi-thread.
+    return true;
+  }
+
+  std::map<uint64_t, std::set<uint64_t>> hostHashToPidHashes;
+  for (int i = 0; i < comm->nRanks; i++) {
+    uint64_t hostHash = comm->peerInfo[i].hostHash;
+    uint64_t pidHash = comm->peerInfo[i].pidHash;
+    if (hostHashToPidHashes.find(hostHash) != hostHashToPidHashes.end()) {
+      auto& pidHashSet = hostHashToPidHashes[hostHash];
+      if (pidHashSet.find(pidHash) != pidHashSet.end()) {
+        return false;
+      }
+    }
+    hostHashToPidHashes[hostHash].insert(pidHash);
+  }
   return true;
 }
 
