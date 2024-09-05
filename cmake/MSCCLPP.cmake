@@ -77,12 +77,11 @@ if(ENABLE_MSCCLPP)
         find_package(mscclpp_nccl REQUIRED)
     endif()
 
-    # Copy the outputs to the PROJECT_BINARY_DIR, list them in MSCCLPP_OUT_LIBS
-    file(GLOB MSCCLPP_LIB_FILES "${MSCCLPP_ROOT}/lib/*")
-    file(GLOB MSCCLPP_LIB_NAMES RELATIVE ${MSCCLPP_ROOT}/lib "${MSCCLPP_ROOT}/lib/*")
-    set(MSCCLPP_OUT_LIBS "")
-    foreach(LIB_NAME ${MSCCLPP_LIB_NAMES})
-        list(APPEND MSCCLPP_OUT_LIBS ${PROJECT_BINARY_DIR}/${LIB_NAME})
-    endforeach()
-    file(COPY ${MSCCLPP_LIB_FILES} DESTINATION ${PROJECT_BINARY_DIR})
+    execute_process(COMMAND objcopy
+                    --redefine-syms=${CMAKE_CURRENT_SOURCE_DIR}/src/misc/mscclpp/mscclpp_nccl_syms.txt
+                    "${MSCCLPP_ROOT}/lib/libmscclpp_nccl_static.a"
+                    "${PROJECT_BINARY_DIR}/libmscclpp_nccl.a"
+    )
+    add_library(mscclpp_nccl STATIC IMPORTED)
+    set_target_properties(mscclpp_nccl PROPERTIES IMPORTED_LOCATION ${PROJECT_BINARY_DIR}/libmscclpp_nccl.a)
 endif()

@@ -15,30 +15,30 @@ typedef struct mscclppComm* mscclppComm_t;
 
 typedef ncclUniqueId mscclppUniqueId;
 
-bool mscclpp_init();
-
 /* A ncclUniqueId and a mscclppUniqueId will always be created together and used alternatively. This maps between them. */
 extern std::unordered_map<ncclUniqueId, mscclppUniqueId> mscclpp_uniqueIdMap;
 extern std::unordered_map<mscclppUniqueId, std::unordered_set<ncclUniqueId>> mscclpp_uniqueIdReverseMap;
 extern std::unordered_map<mscclppComm_t, mscclppUniqueId> mscclpp_commToUniqueIdMap;
 extern std::unordered_map<ncclComm_t, ncclUniqueId> ncclCommToUniqueIdMap;
 
-/* See ncclGetUniqueId. */
-extern ncclResult_t  (*mscclpp_ncclGetUniqueId)(mscclppUniqueId* uniqueId);
+extern "C" {
+  /* See ncclGetUniqueId. */
+  ncclResult_t  mscclpp_ncclGetUniqueId(mscclppUniqueId* uniqueId);
 
-/* See ncclCommInitRank. */
-extern ncclResult_t  (*mscclpp_ncclCommInitRank)(mscclppComm_t* comm, int nranks, mscclppUniqueId commId, int rank);
+  /* See ncclCommInitRank. */
+  ncclResult_t  mscclpp_ncclCommInitRank(mscclppComm_t* comm, int nranks, mscclppUniqueId commId, int rank);
 
-/* See ncclCommDestroy. */
-extern ncclResult_t  (*mscclpp_ncclCommDestroy)(mscclppComm_t comm);
+  /* See ncclCommDestroy. */
+  ncclResult_t  mscclpp_ncclCommDestroy(mscclppComm_t comm);
 
-/* See ncclAllReduce. */
-extern ncclResult_t  (*mscclpp_ncclAllReduce)(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, ncclRedOp_t op, mscclppComm_t comm, hipStream_t stream);
+  /* See ncclAllReduce. */
+  ncclResult_t  mscclpp_ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
+      ncclDataType_t datatype, ncclRedOp_t op, mscclppComm_t comm, hipStream_t stream);
 
-/* See ncclAllGather. */
-extern ncclResult_t  (*mscclpp_ncclAllGather)(const void* sendbuff, void* recvbuff, size_t sendcount,
-    ncclDataType_t datatype, mscclppComm_t comm, hipStream_t stream);
+  /* See ncclAllGather. */
+  ncclResult_t  mscclpp_ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
+      ncclDataType_t datatype, mscclppComm_t comm, hipStream_t stream);
+}
 
 namespace std {
   template <>
