@@ -8,7 +8,7 @@
       <pci busid="0000:49:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:4c:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:4e:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="0" sm="90" gcn="910" arch="38911" rank="0" gdr="1">
+            <gpu dev="0" sm="104" gcn="910" arch="38911" rank="0" gdr="1">
               <xgmi target="0000:51:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:56:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0e:00.0" count="2" tclass="0x038000"/>
@@ -17,7 +17,7 @@
         </pci>
         <pci busid="0000:4f:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:51:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="1" sm="90" gcn="910" arch="38911" rank="1" gdr="1">
+            <gpu dev="1" sm="104" gcn="910" arch="38911" rank="1" gdr="1">
               <xgmi target="0000:4e:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:56:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:59:00.0" count="1" tclass="0x038000"/>
@@ -34,7 +34,7 @@
       <pci busid="0000:52:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:54:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:56:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="2" sm="90" gcn="910" arch="38911" rank="2" gdr="1">
+            <gpu dev="2" sm="104" gcn="910" arch="38911" rank="2" gdr="1">
               <xgmi target="0000:4e:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:51:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:59:00.0" count="4" tclass="0x038000"/>
@@ -44,7 +44,7 @@
         </pci>
         <pci busid="0000:57:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:59:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="3" sm="90" gcn="910" arch="38911" rank="3" gdr="1">
+            <gpu dev="3" sm="104" gcn="910" arch="38911" rank="3" gdr="1">
               <xgmi target="0000:51:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:56:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:19:00.0" count="2" tclass="0x038000"/>
@@ -64,7 +64,7 @@
       <pci busid="0000:09:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:0c:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:0e:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="4" sm="90" gcn="910" arch="38911" rank="4" gdr="1">
+            <gpu dev="4" sm="104" gcn="910" arch="38911" rank="4" gdr="1">
               <xgmi target="0000:4e:00.0" count="2" tclass="0x038000"/>
               <xgmi target="0000:11:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:8f:00.0" count="1" tclass="0x038000"/>
@@ -73,7 +73,7 @@
         </pci>
         <pci busid="0000:0f:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:11:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="5" sm="90" gcn="910" arch="38911" rank="5" gdr="1">
+            <gpu dev="5" sm="104" gcn="910" arch="38911" rank="5" gdr="1">
               <xgmi target="0000:51:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:0e:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:92:00.0" count="1" tclass="0x038000"/>
@@ -90,7 +90,7 @@
       <pci busid="0000:12:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:14:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:16:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="6" sm="90" gcn="910" arch="38911" rank="6" gdr="1">
+            <gpu dev="6" sm="104" gcn="910" arch="38911" rank="6" gdr="1">
               <xgmi target="0000:56:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:19:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:92:00.0" count="1" tclass="0x038000"/>
@@ -100,7 +100,7 @@
         </pci>
         <pci busid="0000:17:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:19:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="7" sm="90" gcn="910" arch="38911" rank="7" gdr="1">
+            <gpu dev="7" sm="104" gcn="910" arch="38911" rank="7" gdr="1">
               <xgmi target="0000:59:00.0" count="2" tclass="0x038000"/>
               <xgmi target="0000:16:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:9a:00.0" count="1" tclass="0x038000"/>
@@ -120,7 +120,7 @@
       <pci busid="0000:ca:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:cd:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:cf:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="8" sm="90" gcn="910" arch="38911" rank="8" gdr="1">
+            <gpu dev="8" sm="104" gcn="910" arch="38911" rank="8" gdr="1">
               <xgmi target="0000:d2:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:d7:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:8f:00.0" count="2" tclass="0x038000"/>
@@ -129,7 +129,7 @@
         </pci>
         <pci busid="0000:d0:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:d2:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="9" sm="90" gcn="910" arch="38911" rank="9" gdr="1">
+            <gpu dev="9" sm="104" gcn="910" arch="38911" rank="9" gdr="1">
               <xgmi target="0000:cf:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:d7:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:da:00.0" count="1" tclass="0x038000"/>
@@ -146,7 +146,7 @@
       <pci busid="0000:d3:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:d5:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:d7:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="10" sm="90" gcn="910" arch="38911" rank="10" gdr="1">
+            <gpu dev="10" sm="104" gcn="910" arch="38911" rank="10" gdr="1">
               <xgmi target="0000:cf:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:d2:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:da:00.0" count="4" tclass="0x038000"/>
@@ -156,7 +156,7 @@
         </pci>
         <pci busid="0000:d8:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:da:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="11" sm="90" gcn="910" arch="38911" rank="11" gdr="1">
+            <gpu dev="11" sm="104" gcn="910" arch="38911" rank="11" gdr="1">
               <xgmi target="0000:d2:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:d7:00.0" count="4" tclass="0x038000"/>
               <xgmi target="0000:9a:00.0" count="2" tclass="0x038000"/>
@@ -176,7 +176,7 @@
       <pci busid="0000:8a:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:8d:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:8f:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="12" sm="90" gcn="910" arch="38911" rank="12" gdr="1">
+            <gpu dev="12" sm="104" gcn="910" arch="38911" rank="12" gdr="1">
               <xgmi target="0000:0e:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:cf:00.0" count="2" tclass="0x038000"/>
               <xgmi target="0000:92:00.0" count="4" tclass="0x038000"/>
@@ -185,7 +185,7 @@
         </pci>
         <pci busid="0000:90:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:92:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="13" sm="90" gcn="910" arch="38911" rank="13" gdr="1">
+            <gpu dev="13" sm="104" gcn="910" arch="38911" rank="13" gdr="1">
               <xgmi target="0000:11:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:16:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:d2:00.0" count="1" tclass="0x038000"/>
@@ -202,7 +202,7 @@
       <pci busid="0000:93:00.0" class="0x060400" vendor="0x1000" device="0xc010" subsystem_vendor="0x1000" subsystem_device="0xa096" link_speed="16.0 GT/s PCIe" link_width="16">
         <pci busid="0000:95:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:97:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="14" sm="90" gcn="910" arch="38911" rank="14" gdr="1">
+            <gpu dev="14" sm="104" gcn="910" arch="38911" rank="14" gdr="1">
               <xgmi target="0000:11:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:16:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:d7:00.0" count="1" tclass="0x038000"/>
@@ -212,7 +212,7 @@
         </pci>
         <pci busid="0000:98:00.0" class="0x060400" vendor="0x1022" device="0x14c7" subsystem_vendor="0x1022" subsystem_device="0x14c7" link_speed="16.0 GT/s PCIe" link_width="8">
           <pci busid="0000:9a:00.0" class="0x038000" vendor="0x1002" device="0x740c" subsystem_vendor="0x1002" subsystem_device="0x0b0c" link_speed="32.0 GT/s PCIe" link_width="16">
-            <gpu dev="15" sm="90" gcn="910" arch="38911" rank="15" gdr="1">
+            <gpu dev="15" sm="104" gcn="910" arch="38911" rank="15" gdr="1">
               <xgmi target="0000:19:00.0" count="1" tclass="0x038000"/>
               <xgmi target="0000:da:00.0" count="2" tclass="0x038000"/>
               <xgmi target="0000:97:00.0" count="4" tclass="0x038000"/>
