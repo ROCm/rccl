@@ -2,6 +2,8 @@
 
 ROCm Communication Collectives Library
 
+**Note:** The published documentation is available at [RCCL](https://rocm.docs.amd.com/projects/rccl/en/latest/index.html) in an organized easy-to-read format that includes a table of contents and search functionality. The documentation source files reside in the [rccl/docs](https://github.com/ROCm/rccl/tree/develop/docs) folder in this repository. As with all ROCm projects, the documentation is open source. For more information, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
+
 ## Introduction
 
 RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, reduce-scatter, gather, scatter, and all-to-all. There is also initial support for direct GPU-to-GPU send and receive operations.  It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node or multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
@@ -105,8 +107,8 @@ Filtering of rccl unit tests should be done with environment variable and by pas
 ```shell
 UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./rccl-UnitTests --gtest_filter="AllReduce.C*"
 ```
-will run only AllReduce correctness tests with float16 datatype. A list of available filtering environment variables appears at the top of every run. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
 
+will run only AllReduce correctness tests with float16 datatype. A list of available filtering environment variables appears at the top of every run. See "Running a Subset of the Tests" at https://google.github.io/googletest/advanced.html#running-a-subset-of-the-tests for more information on how to form more advanced filters.
 
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCm/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
