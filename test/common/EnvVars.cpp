@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <iostream>
+#include <unordered_map>
 
 namespace RcclUnitTesting
 {
@@ -88,6 +90,40 @@ namespace RcclUnitTesting
     return TEST_SUCCESS;
   }
 
+  int getDeviceMode (bool *cpxMode){
+    // Prepare parent->child pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1)
+    {
+      ERROR("Unable to create parent->child pipe for getting the device mode\n");
+      return TEST_FAIL;
+    }
+    pid_t pid = fork();
+    if (0 == pid)
+    {
+      bool iscpxMode = false;
+      int numDeviceCUs;
+      int deviceIdx = 0;
+      hipDeviceGetAttribute(&numDeviceCUs, hipDeviceAttributeMultiprocessorCount, deviceIdx);
+      if(numDeviceCUs == 20 || numDeviceCUs == 38) iscpxMode = true;
+      if (write(pipefd[1], &iscpxMode, sizeof(iscpxMode)) != sizeof(iscpxMode)) return TEST_FAIL;
+      close(pipefd[0]);
+      close(pipefd[1]);
+      exit(EXIT_SUCCESS);
+    }
+    else {
+      int status;
+      if (read(pipefd[0], cpxMode, sizeof(*cpxMode)) != sizeof(*cpxMode)) return TEST_FAIL;
+      waitpid(pid, &status, 0);
+      assert(!status);
+      close(pipefd[0]);
+      close(pipefd[1]);
+    }
+    return TEST_SUCCESS;
+    return 0;
+  }
+
+
   EnvVars::EnvVars()
   {
     // Collect number of GPUs available
@@ -116,6 +152,13 @@ namespace RcclUnitTesting
     // Total number of reduction ops
     int numOps = ncclNumOps;
 
+    if(isGfx94) {
+      bool cpxMode = false;
+      getDeviceMode(&cpxMode);
+      if(cpxMode) {
+        onlyPow2Gpus = true;
+      }
+    }
     std::vector<std::string> redOpStrings = GetEnvVarsList("UT_REDOPS");
     for (auto s : redOpStrings)
     {
