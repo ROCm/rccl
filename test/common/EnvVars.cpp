@@ -139,7 +139,6 @@ namespace RcclUnitTesting
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus        = GetEnvVar("UT_MIN_GPUS"    , 2);
     maxGpus        = GetEnvVar("UT_MAX_GPUS"    , numDetectedGpus);
-    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , false);
     processMask    = GetEnvVar("UT_PROCESS_MASK", UT_SINGLE_PROCESS | UT_MULTI_PROCESS);
     verbose        = GetEnvVar("UT_VERBOSE"     , 0);
     printValues    = GetEnvVar("UT_PRINT_VALUES", 0);
@@ -152,13 +151,12 @@ namespace RcclUnitTesting
     // Total number of reduction ops
     int numOps = ncclNumOps;
 
+    bool cpxMode = false;
     if(isGfx94) {
-      bool cpxMode = false;
       getDeviceMode(&cpxMode);
-      if(cpxMode) {
-        onlyPow2Gpus = true;
-      }
     }
+    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , cpxMode);
+    
     std::vector<std::string> redOpStrings = GetEnvVarsList("UT_REDOPS");
     for (auto s : redOpStrings)
     {
