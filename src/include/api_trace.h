@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "nccl.h"
+#include <rccl/rccl.h>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -60,7 +60,7 @@ typedef ncclResult_t (*ncclAllGather_fn_t)(const void* sendbuff, void* recvbuff,
 typedef ncclResult_t (*ncclAllReduce_fn_t)(const void* sendbuff, void* recvbuff,
                                            size_t count, ncclDataType_t datatype,
                                            ncclRedOp_t op, struct ncclComm* comm,
-                                           cudaStream_t stream);
+                                           hipStream_t stream);
 typedef ncclResult_t (*ncclAllToAll_fn_t)(const void* sendbuff, void* recvbuff,
                                           size_t count, ncclDataType_t datatype,
                                           ncclComm_t comm, hipStream_t stream);
@@ -71,27 +71,27 @@ typedef ncclResult_t (*ncclAllToAllv_fn_t)(
 typedef ncclResult_t (*ncclBroadcast_fn_t)(const void* sendbuff, void* recvbuff,
                                            size_t count, ncclDataType_t datatype,
                                            int root, ncclComm_t comm,
-                                           cudaStream_t stream);
+                                           hipStream_t stream);
 typedef ncclResult_t (*ncclGather_fn_t)(const void* sendbuff, void* recvbuff,
                                         size_t sendcount, ncclDataType_t datatype,
                                         int root, ncclComm_t comm, hipStream_t stream);
 typedef ncclResult_t (*ncclReduce_fn_t)(const void* sendbuff, void* recvbuff,
                                         size_t count, ncclDataType_t datatype,
                                         ncclRedOp_t op, int root, ncclComm_t comm,
-                                        cudaStream_t stream);
+                                        hipStream_t stream);
 typedef ncclResult_t (*ncclReduceScatter_fn_t)(const void* sendbuff, void* recvbuff,
                                                size_t recvcount, ncclDataType_t datatype,
                                                ncclRedOp_t op, struct ncclComm* comm,
-                                               cudaStream_t stream);
+                                               hipStream_t stream);
 typedef ncclResult_t (*ncclScatter_fn_t)(const void* sendbuff, void* recvbuff,
                                          size_t recvcount, ncclDataType_t datatype,
                                          int root, ncclComm_t comm, hipStream_t stream);
 typedef ncclResult_t (*ncclSend_fn_t)(const void* sendbuff, size_t count,
                                       ncclDataType_t datatype, int peer, ncclComm_t comm,
-                                      cudaStream_t stream);
+                                      hipStream_t stream);
 typedef ncclResult_t (*ncclRecv_fn_t)(void* recvbuff, size_t count,
                                       ncclDataType_t datatype, int peer, ncclComm_t comm,
-                                      cudaStream_t stream);
+                                      hipStream_t stream);
 typedef ncclResult_t (*ncclRedOpCreatePreMulSum_fn_t)(ncclRedOp_t* op, void* scalar,
                                                       ncclDataType_t        datatype,
                                                       ncclScalarResidence_t residence,
