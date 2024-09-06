@@ -155,8 +155,8 @@ namespace RcclUnitTesting
     if(isGfx94) {
       getDeviceMode(&cpxMode);
     }
-    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , cpxMode);
-    
+    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , cpxMode); //default value set based on whether system in CPX mode or not. UT_POW2_GPUS set by user overrides it.
+
     std::vector<std::string> redOpStrings = GetEnvVarsList("UT_REDOPS");
     for (auto s : redOpStrings)
     {
