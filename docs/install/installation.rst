@@ -149,7 +149,7 @@ To manually analyze NPKit dump results, please leverage `npkit_trace_generator.p
 MSCCL/MSCCL++
 =============
 
-RCCL integrates `MSCCL <https://github.com/microsoft/msccl>`_ and `MSCCL++ <https://github.com/microsoft/mscclpp>`_ to leverage the highly efficient GPU-GPU communication primitives for collective operations. Thanks to Microsoft Corporation for collaborating with us in this project.
+RCCL integrates `MSCCL <https://github.com/Azure/msccl>`_ and `MSCCL++ <https://github.com/microsoft/mscclpp>`_ to leverage the highly efficient GPU-GPU communication primitives for collective operations. Thanks to Microsoft Corporation for collaborating with us in this project.
 
 MSCCL uses XMLs for different collective algorithms on different architectures. RCCL collectives can leverage those algorithms once the corresponding XML has been provided by the user. The XML files contain the sequence of send-recv and reduction operations to be executed by the kernel. On MI300X, MSCCL is enabled by default. On other platforms, the users may have to enable this by setting ``RCCL_MSCCL_FORCE_ENABLE=1``.
 On the other hand, RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. Users need to set the RCCL environment variable ``RCCL_ENABLE_MSCCLPP=1`` to run RCCL workload with MSCCL++ support. It is also possible to set the message size threshold for using MSCCL++ by using the environment variable ``RCCL_MSCCLPP_THRESHOLD``. Once ``RCCL_MSCCLPP_THRESHOLD`` (the default value is 1MB) is set, RCCL will invoke MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
