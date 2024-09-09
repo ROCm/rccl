@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <iostream>
+#include <unordered_map>
 
 namespace RcclUnitTesting
 {
@@ -88,6 +90,40 @@ namespace RcclUnitTesting
     return TEST_SUCCESS;
   }
 
+  int getDeviceMode (bool *cpxMode){
+    // Prepare parent->child pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1)
+    {
+      ERROR("Unable to create parent->child pipe for getting the device mode\n");
+      return TEST_FAIL;
+    }
+    pid_t pid = fork();
+    if (0 == pid)
+    {
+      bool iscpxMode = false;
+      int numDeviceCUs;
+      int deviceIdx = 0;
+      hipDeviceGetAttribute(&numDeviceCUs, hipDeviceAttributeMultiprocessorCount, deviceIdx);
+      if(numDeviceCUs == 20 || numDeviceCUs == 38) iscpxMode = true;
+      if (write(pipefd[1], &iscpxMode, sizeof(iscpxMode)) != sizeof(iscpxMode)) return TEST_FAIL;
+      close(pipefd[0]);
+      close(pipefd[1]);
+      exit(EXIT_SUCCESS);
+    }
+    else {
+      int status;
+      if (read(pipefd[0], cpxMode, sizeof(*cpxMode)) != sizeof(*cpxMode)) return TEST_FAIL;
+      waitpid(pid, &status, 0);
+      assert(!status);
+      close(pipefd[0]);
+      close(pipefd[1]);
+    }
+    return TEST_SUCCESS;
+    return 0;
+  }
+
+
   EnvVars::EnvVars()
   {
     // Collect number of GPUs available
@@ -103,7 +139,6 @@ namespace RcclUnitTesting
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus        = GetEnvVar("UT_MIN_GPUS"    , 2);
     maxGpus        = GetEnvVar("UT_MAX_GPUS"    , numDetectedGpus);
-    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , false);
     processMask    = GetEnvVar("UT_PROCESS_MASK", UT_SINGLE_PROCESS | UT_MULTI_PROCESS);
     verbose        = GetEnvVar("UT_VERBOSE"     , 0);
     printValues    = GetEnvVar("UT_PRINT_VALUES", 0);
@@ -115,6 +150,13 @@ namespace RcclUnitTesting
 
     // Total number of reduction ops
     int numOps = ncclNumOps;
+
+    bool cpxMode = false;
+    if(isGfx94) {
+      getDeviceMode(&cpxMode);
+    }
+    // Test only pow2 number of GPUs for cpx mode to reduce the runtime for UT
+    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , cpxMode); // Default value set based on whether system is in CPX mode. UT_POW2_GPUS set by user overrides it.
 
     std::vector<std::string> redOpStrings = GetEnvVarsList("UT_REDOPS");
     for (auto s : redOpStrings)
