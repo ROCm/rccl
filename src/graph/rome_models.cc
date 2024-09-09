@@ -29,6 +29,9 @@ THE SOFTWARE.
 #include <string.h>
 #include "rome_models.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wvla"
+
 struct rcclRomeModel {
   int nGpus;
   int nCpus;
@@ -1921,3 +1924,5 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
   NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives, n_hives, false));
   return ncclSuccess;
 }
+
+#pragma clang diagnostic pop
