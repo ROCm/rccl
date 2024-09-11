@@ -68,12 +68,17 @@ By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeL
 ### To build the library using CMake:
 
 ```shell
-$ git clone https://github.com/ROCm/rccl.git
+$ git clone https://github.com/ROCm/rccl.git --recurse-submodules
 $ cd rccl
 $ mkdir build
 $ cd build
 $ cmake ..
 $ make -j 16      # Or some other suitable number of parallel jobs
+```
+If you have already cloned, you can checkout the `mscclpp` submodule manually.
+```shell
+$ cd ext-src/mscclpp
+$ git submodule update --init --recursive
 ```
 You may substitute an installation path of your own choosing by passing `CMAKE_INSTALL_PREFIX`. For example:
 ```shell
@@ -134,7 +139,13 @@ RCCL integrates [MSCCL](https://github.com/Azure/msccl) and [MSCCL++](https://gi
 
 MSCCL uses XMLs for different collective algorithms on different architectures. RCCL collectives can leverage those algorithms once the corresponding XML has been provided by the user. The XML files contain the sequence of send-recv and reduction operations to be executed by the kernel. On MI300X, MSCCL is enabled by default. On other platforms, the users may have to enable this by setting `RCCL_MSCCL_FORCE_ENABLE=1`. By default, MSCCL will only be used if every rank belongs to a unique process; to disable this restriction for multi-threaded or single-threaded configurations, set `RCCL_MSCCL_ENABLE_SINGLE_PROCESS=1`.
 
-On the other hand, RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. Users need to set the RCCL environment variable `RCCL_ENABLE_MSCCLPP=1` to run RCCL workload with MSCCL++ support. It is also possible to set the message size threshold for using MSCCL++ by using the environment variable `RCCL_MSCCLPP_THRESHOLD`. Once `RCCL_MSCCLPP_THRESHOLD` (the default value is 1MB) is set, RCCL will invoke MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
+On the other hand, RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. Users need to set the RCCL environment variable `RCCL_MSCCLPP_ENABLE=1` to run RCCL workload with MSCCL++ support. It is also possible to set the message size threshold for using MSCCL++ by using the environment variable `RCCL_MSCCLPP_THRESHOLD`. Once `RCCL_MSCCLPP_THRESHOLD` (the default value is 1MB) is set, RCCL will invoke MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
+
+If some restrictions are not met, it will fall back to MSCCL or RCCL. The following are restrictions on using MSCCL++:
+- Message size must be a non-zero multiple of 32 bytes
+- Does not support `hipMallocManaged` buffers
+- Allreduce only supports `float16`, `int32`, `uint32`, `float32`, and `bfloat16` data types
+- Allreduce only supports the `sum` op
 
 ## Library and API Documentation
 
