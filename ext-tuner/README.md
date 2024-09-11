@@ -3,31 +3,19 @@
 This document describes the API structure to be implemented by an external tuner for RCCL. The purpose of this plugin is to enable stakeholders to select an algorithm, a protocol, number of channels (thread blocks) based on the input configuration: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
 
 ## Notes
-- The file `example/plugin.c` is a demonstration that uses regression to approximate BW and latency of all choices and provide the one that scores the lowest latency.
+- The [example plugin](ext-tuner/example/plugin.c) is a demonstration that uses regression to approximate BW and latency of all choices and provide the one that scores the lowest latency.
 - The API allows partial outputs: tuners can set only the algorithm and protocol, or let NCCL set the remaining fields (e.g., number of channels).
 - If `getCollInfo()` fails, NCCL will use its default internal mechanisms to determine the best collective configuration.
 - `getCollInfo()` is called for each collective call, so special care is to be taken not to cause excessive latency.
 - The advantage of this plugin is that each customer can create and maintain their hand-tailored tuner without relying on RCCL to create and maintain it.
 - Supported RCCL algorithms are `NCCL_ALGO_TREE` and `NCCL_ALGO_RING`.
 - Supported RCCL protocols are `NCCL_PROTO_SIMPLE`, `NCCL_PROTO_LL` and `NCCL_PROTO_LL128`.
-
-## Build instructions and usage
-Instructions to Utilize the External Tuner Plugin:
-
-- The way to use the external plugin is that to implement the desired tuning algorithm in ext-tuner/example/plugin.c (RCCL provides an example external tuner plugin based on MI300 tuning table by default as a reference for customers in plugin.c)
-- Then build the `libnccl-tuner.so` file with the Makefile provided in the same directory:
-
-### Building libnccl-tuner.so
+-- Until support is present, our example ignores other algorithms in `pluginGetCollInfo` API implementation
 ```
-cd $RCCL_HOME/ext-tuner/example/ 
-make
+if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
+if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1) continue;
+if (a == NCCL_ALGO_NVLS && collNetSupport != 1) continue;
 ```
-Next is to let RCCL know that you want to use the custom-made libnccl-tuner.so by setting the following environment variable to the directory of the libnccl-tuner.so file:
-
-```
-export NCCL_TUNER_PLUGIN=$RCCL_HOME/ext-tuner/example/libnccl-tuner.so
-```
-
 # API Description 
 ## Structure: `ncclTuner_v1_t`
 
@@ -84,3 +72,21 @@ Terminates the plugin and cleans up any resources allocated by the tuner.
   The result of the cleanup process.
 
 ---
+
+
+## Build instructions and usage
+
+- The way to use the external plugin is to implement the desired algorithm/protocol selection technique using the API described above. `ext-tuner/example/plugin.c` is an example based on MI300 tuning table by default as a reference for customers in `plugin.c`.
+- Then build the `libnccl-tuner.so` file with the Makefile provided in the same directory:
+
+### Building and using example libnccl-tuner.so
+```
+cd $RCCL_HOME/ext-tuner/example/ 
+make
+```
+Next is to let RCCL know that you want to use the custom-made libnccl-tuner.so by setting the following environment variable to the directory of the libnccl-tuner.so file:
+
+```
+export NCCL_TUNER_PLUGIN=$RCCL_HOME/ext-tuner/example/libnccl-tuner.so
+```
+
