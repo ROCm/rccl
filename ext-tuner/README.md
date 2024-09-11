@@ -43,7 +43,7 @@ Initializes the tuner states. Each communicator initializes its tuner. nNodes x 
   Type: `ncclResult_t`  
   The result of the initialization.
 
-#### 2. `getCollInfo` (called upon collective call per communicator)
+#### 2. `getCollInfo` (called for each collective call per communicator)
 
 Retrieves information about the collective algorithm, protocol, and number of channels for the given input parameters.
 
