@@ -3,7 +3,7 @@
 This document describes the API structure to be implemented by an external tuner for RCCL. The purpose of this plugin is to enable stakeholders to select an algorithm, a protocol, number of channels (thread blocks) based on the input configuration: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
 
 ## Notes
-- The [example plugin](ext-tuner/example/plugin.c) is a demonstration that uses regression to approximate BW and latency of all choices and provide the one that scores the lowest latency.
+- The [example plugin](example/plugin.c) is a demonstration that uses regression to approximate BW and latency of all choices and provide the one that scores the lowest latency.
 - The API allows partial outputs: tuners can set only the algorithm and protocol, or let NCCL set the remaining fields (e.g., number of channels).
 - If `getCollInfo()` fails, NCCL will use its default internal mechanisms to determine the best collective configuration.
 - `getCollInfo()` is called for each collective call, so special care is to be taken not to cause excessive latency.
