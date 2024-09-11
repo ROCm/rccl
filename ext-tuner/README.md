@@ -1,22 +1,25 @@
-# RCCL Tuner Plugin API 
+# RCCL Tuner Plugin API Overview
 
-This document describes the API structure to be implemented by an external tuner for RCCL. The purpose of this plugin is to enable stakeholders to select an algorithm, a protocol, number of channels (thread blocks) based on the input configuration: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
+This document describes the API structure to be implemented by an external tuner for RCCL. The purpose of this plugin is to enable stakeholders to select an algorithm, a protocol, number of channels (thread blocks) based on an input configuration of interest: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
 
 ## Notes
-- The [example plugin](example/plugin.c) is a demonstration that uses math models to approximate BW and latency of all available choices of algorithms and protocols and provide the one that scores the lowest latency.
-- The API allows partial outputs: tuners can set only the algorithm and protocol, or let NCCL set the remaining fields (e.g., number of channels).
-- If `getCollInfo()` fails, RCCL will use its default internal mechanisms to determine the best collective configuration.
-- `getCollInfo()` is called for each collective call, so special care is to be taken not to cause excessive latency.
-- The advantage of this plugin is that each customer can create and maintain their hand-tailored tuner without relying on RCCL to create and maintain it.
+- The [example plugin](example/plugin.c) is a demonstration that uses math models to approximate BW and latency of available choices of algorithms and protocols and provide the one that scores the lowest latency.
+- The API allows partial outputs: tuners can set only the algorithm and protocol, or let RCCL set the remaining fields (e.g., number of channels).
+- If`getCollInfo()`fails, RCCL will use its default internal mechanisms to determine the best collective configuration.
+- `getCollInfo()`is called for each collective invocation per communicator, so special care is to be taken not to cause excessive latency.
+- The advantage of this plugin is that each customer can create and maintain their hand-tailored tuner without relying on RCCL to develop and maintain it.
 - Supported RCCL algorithms are `NCCL_ALGO_TREE` and `NCCL_ALGO_RING`.
 - Supported RCCL protocols are `NCCL_PROTO_SIMPLE`, `NCCL_PROTO_LL` and `NCCL_PROTO_LL128`.
--- Until support is present, our example ignores other algorithms in `pluginGetCollInfo` API implementation
-```
-if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
-if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1) continue;
-if (a == NCCL_ALGO_NVLS && collNetSupport != 1) continue;
-```
+  - Until support is present for network collectives, we show in our example how to ignore other algorithms in `pluginGetCollInfo` API implementation as follows:
+    ```
+    if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
+    if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1) continue;
+    if (a == NCCL_ALGO_NVLS && collNetSupport != 1) continue;
+    ```
+---
 # API Description 
+The `ncclTuner_v1_t` structure must be implemented to build a custom tuner. 
+
 ## Structure: `ncclTuner_v1_t`
 
 ### Fields
@@ -57,7 +60,7 @@ Retrieves information about the collective algorithm, protocol, and other detail
   - `nChannels` (int*): The number of channels (and SMs) to be used.
   
 - **Description**:
-  If `getCollInfo()` does not return `ncclSuccess`, NCCL will fall back to its default tuning for the given collective. The tuner is allowed to leave fields unset, in which case NCCL will automatically set those fields.
+  If `getCollInfo()` does not return `ncclSuccess`, RCCL will fall back to its default tuning for the given collective. The tuner is allowed to leave fields unset, in which case RCCL will automatically set those fields.
 
 - **Return**:  
   Type: `ncclResult_t`  
@@ -74,12 +77,12 @@ Terminates the plugin and cleans up any resources allocated by the tuner.
 ---
 
 
-## Build instructions and usage
+# Build instructions and usage
 
 - The way to use the external plugin is to implement the desired algorithm/protocol selection technique using the API described above. `ext-tuner/example/plugin.c` is an example based on MI300 tuning table by default as a reference for customers in `plugin.c`.
 - Then build the `libnccl-tuner.so` file with the Makefile provided in the same directory:
 
-### Building and using example libnccl-tuner.so
+## Building and using example libnccl-tuner.so
 ```
 cd $RCCL_HOME/ext-tuner/example/ 
 make
