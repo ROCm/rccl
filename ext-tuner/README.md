@@ -30,7 +30,7 @@ The `ncclTuner_v1_t` structure must be implemented to build a custom tuner.
 
 ### Functions
 
-#### 1. `init`
+#### 1. `init` (called upon communicator initialization with `ncclCommInitRank`)
 
 Initializes the tuner states. Each communicator initializes its tuner. nNodes x nRanks = total number of GPUs participating in the collective communication
 
@@ -43,7 +43,7 @@ Initializes the tuner states. Each communicator initializes its tuner. nNodes x 
   Type: `ncclResult_t`  
   The result of the initialization.
 
-#### 2. `getCollInfo`
+#### 2. `getCollInfo` (called upon collective call per communicator)
 
 Retrieves information about the collective algorithm, protocol, and other details for a given operation.
 
@@ -66,7 +66,7 @@ Retrieves information about the collective algorithm, protocol, and other detail
   Type: `ncclResult_t`  
   The result of the operation.
 
-#### 3. `destroy`
+#### 3. `destroy` (called upon communicator finalization with `ncclCommFinalize`)
 
 Terminates the plugin and cleans up any resources allocated by the tuner.
 
