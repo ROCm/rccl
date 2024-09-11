@@ -1,6 +1,6 @@
 # RCCL Tuner Plugin API Overview
 
-This document describes the API structure to be implemented by an external tuner for RCCL. The purpose of this plugin is to enable stakeholders to select an algorithm, a protocol, number of channels (thread blocks) based on an input configuration of interest: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
+This document describes the API structure to be implemented by an external tuner plugin for RCCL. The purpose of this plugin is to enable stakeholders to hand-tailor the selection of an algorithm, a protocol, number of channels (thread blocks) based on an input configuration of interest: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
 
 ## Notes
 - The [example plugin](example/plugin.c) is a demonstration that uses math models to approximate BW and latency of available choices of algorithms and protocols and provide the one that scores the lowest latency.
