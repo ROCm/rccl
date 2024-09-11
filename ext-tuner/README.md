@@ -35,8 +35,8 @@ The `ncclTuner_v1_t` structure must be implemented to build a custom tuner.
 Initializes the tuner states. Each communicator initializes its tuner. nNodes x nRanks = total number of GPUs participating in the collective communication
 
 - **Parameters**:
-  - `nRanks` (size_t): The number of ranks (GPUs) in the current communicator.
-  - `nNodes` (size_t): The number of nodes.
+  - `nRanks` (size_t): The number of devices (GPUs).
+  - `nNodes` (size_t): The number of OS nodes (physical nodes or VMs).
   - `logFunction` (ncclDebugLogger_t): A log function that can be useful to turn on certain debugging info.
 
 - **Return**:  
