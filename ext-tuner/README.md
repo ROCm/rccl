@@ -45,7 +45,7 @@ Initializes the tuner states. Each communicator initializes its tuner. nNodes x 
 
 #### 2. `getCollInfo` (called upon collective call per communicator)
 
-Retrieves information about the collective algorithm, protocol, and other details for a given operation.
+Retrieves information about the collective algorithm, protocol, and number of channels for the given input parameters.
 
 - **Parameters**:
   - `collType` (ncclFunc_t): The collective type, e.g., `allreduce`, `allgather`, etc.
