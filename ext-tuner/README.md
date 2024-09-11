@@ -80,7 +80,7 @@ Terminates the plugin and cleans up any resources allocated by the tuner.
 # Build instructions and usage
 
 - The way to use the external plugin is to implement the desired algorithm/protocol selection technique using the API described above. `ext-tuner/example/plugin.c` is an example based on MI300 tuning table by default as a reference for customers in `plugin.c`.
-- Then build the `libnccl-tuner.so` file with the Makefile provided in the same directory:
+- Build the `libnccl-tuner.so` file following [the Makefile example](example/Makefile). 
 
 ## Building and using example libnccl-tuner.so
 ```bash
