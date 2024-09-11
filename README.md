@@ -2,6 +2,9 @@
 
 ROCm Communication Collectives Library
 
+> [!NOTE]
+> The published documentation is available at [RCCL](https://rocm.docs.amd.com/projects/rccl/en/latest/index.html) in an organized easy-to-read format that includes a table of contents and search functionality. The documentation source files reside in the `rccl/docs` folder in this repository. As with all ROCm projects, the documentation is open source. For more information, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
+
 ## Introduction
 
 RCCL (pronounced "Rickle") is a stand-alone library of standard collective communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, reduce-scatter, gather, scatter, and all-to-all. There is also initial support for direct GPU-to-GPU send and receive operations.  It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node or multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
@@ -105,8 +108,8 @@ Filtering of rccl unit tests should be done with environment variable and by pas
 ```shell
 UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./rccl-UnitTests --gtest_filter="AllReduce.C*"
 ```
-will run only AllReduce correctness tests with float16 datatype. A list of available filtering environment variables appears at the top of every run. See "Running a Subset of the Tests" at https://chromium.googlesource.com/external/github.com/google/googletest/+/HEAD/googletest/docs/advanced.md for more information on how to form more advanced filters.
 
+will run only AllReduce correctness tests with float16 datatype. A list of available filtering environment variables appears at the top of every run. See "Running a Subset of the Tests" at https://google.github.io/googletest/advanced.html#running-a-subset-of-the-tests for more information on how to form more advanced filters.
 
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCm/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
@@ -122,6 +125,11 @@ To manually build RCCL with NPKit enabled, pass `-DNPKIT_FLAGS="-DENABLE_NPKIT -
 To manually run RCCL with NPKit enabled, environment variable `NPKIT_DUMP_DIR` needs to be set as the NPKit event dump directory. Also note that currently NPKit only supports 1 GPU per process.
 
 To manually analyze NPKit dump results, please leverage [npkit_trace_generator.py](https://github.com/microsoft/NPKit/blob/main/rccl_samples/npkit_trace_generator.py).
+
+## MSCCL
+RCCL integrates [MSCCL](https://github.com/Azure/msccl) to leverage the highly efficient GPU-GPU communication primitives for collective operations. Thanks to Microsoft Corporation for collaborating with us on this project.
+
+MSCCL uses XMLs for different collective algorithms on different architectures. RCCL collectives can leverage those algorithms once the corresponding XML has been provided by the user. The XML files contain the sequence of send-recv and reduction operations to be executed by the kernel. On MI300X, MSCCL is enabled by default. On other platforms, the users may have to enable this by setting `RCCL_MSCCL_FORCE_ENABLE=1`. MSCCL will only be used if every rank belongs to a unique process.
 
 ## Library and API Documentation
 
