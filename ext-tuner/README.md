@@ -1,17 +1,20 @@
-# RCCL Tuner Plugin API
+# RCCL Tuner Plugin API 
 
-This document describes the API structure to be implemented by an external tuner for RCCL. The purpose of this plugin is to enable stakeholders to select an algorithm, a protocol and number of channels (thread blocks) based on the input configuration
+This document describes the API structure to be implemented by an external tuner for RCCL. The purpose of this plugin is to enable stakeholders to select an algorithm, a protocol, number of channels (thread blocks) based on the input configuration
 
-### Notes
+## Notes
+- The file plugin.c is an example that uses regression to approximate BW and latency of all choices and provide that one that scores lowest latency.
 - The API allows partial outputs: tuners can set only the algorithm and protocol, or let NCCL set the remaining fields (e.g., number of channels).
 - If `getCollInfo()` fails, NCCL will use its default internal mechanisms to determine the best collective configuration.
-- COLLNET algorithms (`NCCL_ALGO_COLLNET_DIRECT` and `NCCL_ALGO_COLLNET_CHAIN`) are only supported when NVLink SHARP is present.
+- COLLNET algorithms (`NCCL_ALGO_COLLNET_DIRECT` and `NCCL_ALGO_COLLNET_CHAIN`) are only supported when NVLink SHARP is present (support is provided as input from the RCCL library).
+- Once the API is built, use 
 
+# API Description 
 ## Structure: `ncclTuner_v1_t`
 
 ### Fields
 
-- **name**:  
+#### 1. `name`
   Type: `const char*`  
   Description: The name of the tuner. Used for logging purposes when (`NCCL_DEBUG=info NCCL_DEBUG_SUBSYS=tune`) are set.
 
