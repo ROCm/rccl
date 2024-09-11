@@ -11,7 +11,7 @@ This document describes the API structure to be implemented by an external tuner
 - Supported RCCL algorithms are `NCCL_ALGO_TREE` and `NCCL_ALGO_RING`.
 - Supported RCCL protocols are `NCCL_PROTO_SIMPLE`, `NCCL_PROTO_LL` and `NCCL_PROTO_LL128`.
   - Until support is present for network collectives, we show in our example how to ignore other algorithms in `pluginGetCollInfo` API implementation as follows:
-    ```
+    ```C++
     if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
     if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1) continue;
     if (a == NCCL_ALGO_NVLS && collNetSupport != 1) continue;
@@ -36,7 +36,7 @@ Initializes the tuner states. Each communicator initializes its tuner. nNodes x 
 
 - **Parameters**:
   - `nRanks` (size_t): The number of ranks (GPUs) in the current communicator.
-  - `nNodes` (size_t): The number of nodes (could be a mix of local and remote nodes).
+  - `nNodes` (size_t): The number of nodes.
   - `logFunction` (ncclDebugLogger_t): A log function that can be useful to turn on certain debugging info.
 
 - **Return**:  
@@ -83,13 +83,13 @@ Terminates the plugin and cleans up any resources allocated by the tuner.
 - Then build the `libnccl-tuner.so` file with the Makefile provided in the same directory:
 
 ## Building and using example libnccl-tuner.so
-```
+```bash
 cd $RCCL_HOME/ext-tuner/example/ 
 make
 ```
 Next is to let RCCL know that you want to use the custom-made libnccl-tuner.so by setting the following environment variable to the directory of the libnccl-tuner.so file:
 
-```
+```bash
 export NCCL_TUNER_PLUGIN=$RCCL_HOME/ext-tuner/example/libnccl-tuner.so
 ```
 
