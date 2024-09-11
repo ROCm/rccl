@@ -101,12 +101,12 @@ namespace RcclUnitTesting
     pid_t pid = fork();
     if (0 == pid)
     {
-      bool iscpxMode = false;
+      bool isCpxMode = false;
       int numDeviceCUs;
       int deviceIdx = 0;
       hipDeviceGetAttribute(&numDeviceCUs, hipDeviceAttributeMultiprocessorCount, deviceIdx);
-      if(numDeviceCUs == 20 || numDeviceCUs == 38) iscpxMode = true;
-      if (write(pipefd[1], &iscpxMode, sizeof(iscpxMode)) != sizeof(iscpxMode)) return TEST_FAIL;
+      if(numDeviceCUs == 20 || numDeviceCUs == 38) isCpxMode = true;
+      if (write(pipefd[1], &isCpxMode, sizeof(isCpxMode)) != sizeof(isCpxMode)) return TEST_FAIL;
       close(pipefd[0]);
       close(pipefd[1]);
       exit(EXIT_SUCCESS);
@@ -151,12 +151,12 @@ namespace RcclUnitTesting
     // Total number of reduction ops
     int numOps = ncclNumOps;
 
-    bool cpxMode = false;
+    bool isCpxMode = false;
     if(isGfx94) {
-      getDeviceMode(&cpxMode);
+      getDeviceMode(&isCpxMode);
     }
     // Test only pow2 number of GPUs for cpx mode to reduce the runtime for UT
-    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , cpxMode); // Default value set based on whether system is in CPX mode. UT_POW2_GPUS set by user overrides it.
+    onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , isCpxMode); // Default value set based on whether system is in CPX mode. UT_POW2_GPUS set by user overrides it.
 
     std::vector<std::string> redOpStrings = GetEnvVarsList("UT_REDOPS");
     for (auto s : redOpStrings)
