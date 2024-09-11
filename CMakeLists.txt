@@ -26,8 +26,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
-option(BUILD_MSCCLPP                           "Build MSCCL++"                                 OFF)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  OFF)
@@ -288,19 +287,10 @@ if (HAVE_KERNARG_PRELOAD)
 endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
-if (BUILD_MSCCLPP)
-  if (NOT ENABLE_MSCCLPP)
-    set(BUILD_MSCCLPP OFF)
-    message(WARNING "ENABLE_MSCCLPP not set; disabling MSCCL++ build")
-  else()
-    find_package(IBVerbs)
-    if (NOT IBVerbs_FOUND)
-      set(BUILD_MSCCLPP OFF)
-      message(WARNING "IBVerbs not found; disabling MSCCL++ build")
-    elseif(NOT "gfx942" IN_LIST GPU_TARGETS)
-      set(BUILD_MSCCLPP OFF)
-      message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
-    endif()
+if (ENABLE_MSCCLPP)
+  if(NOT "gfx942" IN_LIST GPU_TARGETS)
+    set(ENABLE_MSCCLPP OFF)
+    message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
   endif()
 endif()
 
@@ -765,6 +755,9 @@ target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
+if(ENABLE_MSCCLPP)
+  target_link_libraries(rccl PRIVATE mscclpp_nccl)
+endif()
 
 ## Set RCCL link options
 ## Find out available memory
@@ -807,7 +800,7 @@ if (HAVE_KERNARG_PRELOAD)
   target_link_options(rccl PRIVATE -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16)
 endif()
 
-if(BUILD_MSCCLPP)
+if(ENABLE_MSCCLPP)
   include(cmake/MSCCLPP.cmake)
   message(STATUS "Building MSCCL++ with NCCL API support")
 endif()
@@ -831,9 +824,6 @@ file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 ## Install Algorithm files under share folder
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-unit-test-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
-if(BUILD_MSCCLPP)
-  rocm_install(FILES ${MSCCLPP_OUT_LIBS} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT "runtime")
-endif()
 
 rocm_export_targets(
   NAMESPACE roc::

@@ -101,9 +101,13 @@ bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b) {
   return memcmp(a.internal, b.internal, NCCL_UNIQUE_ID_BYTES) == 0;
 }
 
-RCCL_PARAM(EnableMscclpp, "ENABLE_MSCCLPP", 0);
 RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(1024*1024));
+static constexpr int64_t defaultEnableMscclpp = 1;
+#else
+static constexpr int64_t defaultEnableMscclpp = 0;
 #endif
+
+RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
 
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
@@ -166,11 +170,6 @@ static ncclResult_t ncclInit() {
 #ifndef NVTX_NO_IMPL
     initNvtxRegisteredEnums();
 #endif
-#ifdef ENABLE_MSCCLPP
-    if (rcclParamEnableMscclpp() && !mscclpp_init()) {
-      return ncclSystemError;
-    }
-#endif
     __atomic_store_n(&initialized, true, __ATOMIC_RELEASE);
   }
   pthread_mutex_unlock(&initLock);
@@ -190,21 +189,25 @@ ncclResult_t ncclGetUniqueId_impl(ncclUniqueId* out) {
   NCCLCHECK(PtrCheck(out, "GetUniqueId", "out"));
   ncclResult_t res = bootstrapGetUniqueId((struct ncclBootstrapHandle*)out);
   TRACE_CALL("ncclGetUniqueId(0x%llx)", (unsigned long long)hashUniqueId(*out));
+  if (rcclParamMscclppEnabled()) {
 #ifdef ENABLE_MSCCLPP
-  if (rcclParamEnableMscclpp()) {
     NCCLCHECK(res);
     int dev;
     CUDACHECK(cudaGetDevice(&dev));
     hipDeviceProp_t devProp;
     CUDACHECK(hipGetDeviceProperties(&devProp, dev));
     if (IsArchMatch(devProp.gcnArchName, "gfx94")) {
-      res = mscclpp_ncclGetUniqueId(&(mscclpp_uniqueIdMap[*out]));
-      TRACE_CALL("mscclpp_ncclGetUniqueId");
+      auto& mscclppUniqueId = mscclpp_uniqueIdMap[*out];
+      res = mscclpp_ncclGetUniqueId(&mscclppUniqueId);
+      TRACE_CALL("mscclpp_ncclGetUniqueId(0x%llx)", (unsigned long long)hashUniqueId(mscclppUniqueId));
+      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(*out);
     } else {
       WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
     }
-  }
+#else
+    WARN("MSCCL++: Feature not enabled. ENABLE_MSCCLPP must be defined at compile-time to enable this feature.");
 #endif
+  }
   return res;
 }
 
@@ -1914,6 +1917,9 @@ fail:
 static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   struct ncclCommInitRankAsyncJob* job = (struct ncclCommInitRankAsyncJob*)job_;
   ncclComm_t comm = job->comm;
+#ifdef ENABLE_MSCCLPP
+  ncclUniqueId origUniqueId = job->commId;
+#endif
   ncclResult_t res = ncclSuccess;
   int archMajor, archMinor;
   size_t maxLocalSizeBytes = 0;
@@ -1967,22 +1973,41 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent), res, fail);
 
 #ifdef ENABLE_MSCCLPP
-  if (rcclParamEnableMscclpp()) {
+  if (job->parent) {
+    if (job->parent->mscclppCompatible) {
+      INFO(NCCL_INIT, "MSCCL++: Splitting a compatible communicator; using parent mscclpp_comm");
+      comm->mscclppCompatible = true;
+      comm->mscclpp_threshold = job->parent->mscclpp_threshold;
+      comm->mscclpp_comm = job->parent->mscclpp_comm;
+      auto& mscclppUniqueId = mscclpp_uniqueIdMap[origUniqueId];
+      mscclpp_uniqueIdMap[job->commId] = mscclppUniqueId;
+      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(job->commId);
+    }
+  }
+  else
+#endif
+  if (rcclParamMscclppEnabled()) {
+#ifdef ENABLE_MSCCLPP
     hipDeviceProp_t devProp;
     CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
     comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
     if (comm->mscclppCompatible) {
-      NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &(mscclpp_uniqueIdMap[job->commId]), sizeof(mscclpp_ncclUniqueId)), res, fail);
-      TRACE_CALL("bootstrapIntraNodeBroadcast(rank=%d, nranks=%d, root=%d, bcastData=<mscclpp_ncclUniqueId>)", comm->localRank, comm->localRanks, 0);
+      auto& mscclppUniqueId = mscclpp_uniqueIdMap[job->commId];
+      NCCLCHECKGOTO(bootstrapIntraNodeBroadcast(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, 0, &mscclppUniqueId, sizeof(mscclppUniqueId)), res, fail);
+      unsigned long long mscclppUniqueIdHash; (void)mscclppUniqueIdHash;
+      TRACE_CALL("bootstrapIntraNodeBroadcast(rank=%d, nranks=%d, root=%d, bcastData=hash:0x%llx)", comm->localRank, comm->localRanks, 0, (mscclppUniqueIdHash = (unsigned long long)hashUniqueId(mscclppUniqueId)));
       comm->mscclpp_threshold = rcclParamMscclppThreshold();
       INFO(NCCL_INIT, "MSCCL++: Enabled! Msg size threshold=%zu", comm->mscclpp_threshold);
-      NCCLCHECKGOTO(mscclpp_ncclCommInitRank(&(comm->mscclpp_comm), job->nranks, mscclpp_uniqueIdMap[job->commId], job->myrank), res, fail);
-      TRACE_CALL("mscclpp_ncclCommInitRank (nranks=%d, myrank=%d)", job->nranks, job->myrank);
+      NCCLCHECKGOTO(mscclpp_ncclCommInitRank(&(comm->mscclpp_comm), job->nranks, mscclppUniqueId, job->myrank), res, fail);
+      TRACE_CALL("mscclpp_ncclCommInitRank (*comm=%p, nranks=%d, commId=hash:0x%llx, myrank=%d)", comm->mscclpp_comm, job->nranks, mscclppUniqueIdHash, job->myrank);
+      mscclpp_commToUniqueIdMap[comm->mscclpp_comm] = mscclppUniqueId;
     } else {
       WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
     }
-  }
+#else
+    WARN("MSCCL++: Feature not enabled. ENABLE_MSCCLPP must be defined at compile-time to enable this feature.");
 #endif
+  }
 
   NCCLCHECKGOTO(ncclLoadTunerPlugin(&comm->tuner), res, fail);
   if (comm->tuner) {
@@ -2584,11 +2609,22 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
 
 #ifdef ENABLE_MSCCLPP
   if (comm->mscclppCompatible) {
-    ncclResult_t res = mscclpp_ncclCommDestroy(comm->mscclpp_comm);
-    TRACE_CALL("mscclpp_ncclCommDestroy");
-    if (res != ncclSuccess) {
-      WARN("MSCCL++: mscclpp_ncclCommDestroy failed (%s)", ncclGetErrorString(res));
+    auto& mscclppUniqueId = mscclpp_commToUniqueIdMap[comm->mscclpp_comm];
+    auto& uniqueIds = mscclpp_uniqueIdReverseMap[mscclppUniqueId];
+    auto& ncclUniqueId = ncclCommToUniqueIdMap[comm];
+    if (uniqueIds.find(ncclUniqueId) == uniqueIds.end()) {
+      WARN("MSCCL++: comm=%p not found in mscclpp_uniqueIdReverseMap for key=%p", comm, comm->mscclpp_comm);
     }
+    uniqueIds.erase(ncclUniqueId);
+    if (uniqueIds.size() == 0) {
+      mscclpp_uniqueIdReverseMap.erase(mscclppUniqueId);
+      ncclResult_t res = mscclpp_ncclCommDestroy(comm->mscclpp_comm);
+      TRACE_CALL("mscclpp_ncclCommDestroy");
+      if (res != ncclSuccess) {
+        WARN("MSCCL++: mscclpp_ncclCommDestroy failed (%s)", ncclGetErrorString(res));
+      }
+    }
+
     comm->mscclppCompatible = false;
     comm->mscclpp_comm = nullptr;
   }
