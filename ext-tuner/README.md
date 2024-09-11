@@ -3,7 +3,7 @@
 This document describes the API structure to be implemented by an external tuner plugin for RCCL. The purpose of this plugin is to enable stakeholders to hand-tailor the selection of an algorithm, a protocol, number of channels (thread blocks) based on an input configuration of interest: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
 
 ## Notes
-- The [example plugin](example/plugin.c) is a demonstration that uses math models to approximate BW and latency of available choices of algorithms and protocols and provide the one that scores the lowest latency.
+- The [example plugin](example/plugin.c) is only a demonstration that uses math models to approximate BW and latency of available choices of algorithms and protocols and provide the one that scores the lowest latency. It is customized for MI300 GPUs and RoCEv2 networks on a limited number of nodes. It is not meant to be inclusive of all AMD GPUs/Network setups out there. 
 - The API allows partial outputs: tuners can set only the algorithm and protocol, or let RCCL set the remaining fields (e.g., number of channels).
 - If`getCollInfo()`fails, RCCL will use its default internal mechanisms to determine the best collective configuration.
 - `getCollInfo()`is called for each collective invocation per communicator, so special care is to be taken not to cause excessive latency.
