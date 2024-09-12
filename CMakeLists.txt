@@ -92,7 +92,7 @@ else()
   set(SUPPORTED_GPUS ${DEFAULT_GPUS})
 endif()
 
-set(GPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
+set(GPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for." FORCE)
 message(STATUS "Compiling for ${GPU_TARGETS}")
 
 ## NOTE: Reload rocm-cmake in order to update GPU_TARGETS
