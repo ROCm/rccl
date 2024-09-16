@@ -84,6 +84,12 @@ static bool mscclCommCompatible(ncclComm_t comm) {
   return true;
 }
 
+#ifdef ENABLE_MSCCLPP
+bool mscclppCommCompatible(ncclComm_t comm) {
+  return mscclCommCompatible(comm);
+}
+#endif
+
 const char *mscclFuncNames[] = {
             "mscclFuncReduce",
             "mscclFuncBroadcast",
