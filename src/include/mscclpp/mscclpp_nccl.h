@@ -49,4 +49,6 @@ namespace std {
 
 bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b);
 
+bool mscclppCommCompatible(ncclComm_t comm);
+
 #endif
