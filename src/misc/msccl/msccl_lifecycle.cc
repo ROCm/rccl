@@ -63,12 +63,7 @@ bool mscclAvailable(int rank) {
   return mscclEnabled() && mscclInitialized(rank);
 }
 
-static bool mscclCommCompatible(ncclComm_t comm) {
-  if (rcclParamMscclEnableSingleProcess()) {
-    // Single process usage enabled. No need to guard against multi-thread.
-    return true;
-  }
-
+static bool allProcessHostsUnique(ncclComm_t comm) {
   std::map<uint64_t, std::set<uint64_t>> hostHashToPidHashes;
   for (int i = 0; i < comm->nRanks; i++) {
     uint64_t hostHash = comm->peerInfo[i].hostHash;
@@ -84,9 +79,17 @@ static bool mscclCommCompatible(ncclComm_t comm) {
   return true;
 }
 
-#ifdef ENABLE_MSCCLPP
+static bool mscclCommCompatible(ncclComm_t comm) {
+  if (rcclParamMscclEnableSingleProcess()) {
+    // Single process usage enabled. No need to guard against multi-thread.
+    return true;
+  }
+  return allProcessHostsUnique(comm);
+}
+
+#ifdef ENABLE_MSCCLPP 
 bool mscclppCommCompatible(ncclComm_t comm) {
-  return mscclCommCompatible(comm);
+  return allProcessHostsUnique(comm);
 }
 #endif
 
