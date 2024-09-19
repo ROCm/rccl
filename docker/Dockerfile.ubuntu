@@ -93,15 +93,13 @@ RUN wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.6.tar.g
 
 ## building rccl (develop)
 ENV RCCL_INSTALL_PREFIX=/opt/rocm
-RUN git clone --recursive "${RCCL_REPO}" \
+RUN git clone --recursive -b "${RCCL_BRANCH}" "${RCCL_REPO}" \
     && cd rccl \
-    && git checkout "${RCCL_BRANCH}" \
     && ./install.sh -t --prefix=${RCCL_INSTALL_PREFIX}
 
 ## building rccl-tests (develop)
-RUN git clone "${RCCL_TESTS_REPO}" \
+RUN git clone -b "${RCCL_TESTS_BRANCH}" "${RCCL_TESTS_REPO}" \
     && cd rccl-tests \
-    && git checkout "${RCCL_TESTS_BRANCH}" \
     && make MPI=1 MPI_HOME=${MPI_INSTALL_PREFIX} NCCL_HOME=${RCCL_INSTALL_PREFIX} -j16
 
 
