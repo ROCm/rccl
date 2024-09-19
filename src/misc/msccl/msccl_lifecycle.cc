@@ -84,7 +84,7 @@ static bool mscclCommCompatible(ncclComm_t comm) {
     // Single process usage enabled. No need to guard against multi-thread.
     return true;
   }
-  return mscclIsMultithreadedComm(comm);
+  return allProcessHostsUnique(comm);
 }
 
 #ifdef ENABLE_MSCCLPP 
