@@ -592,6 +592,7 @@ ncclResult_t mscclEnqueueCheck(
         }
       threadLocalStatus.groupStatus = mscclGroupUnsupportedOp;
       NCCLCHECK(mscclFallBackSavedParams());
+      break;
     case mscclGroupUnsupportedOp:
       NCCLCHECK(mscclFallBackSavedParams());
       break;
