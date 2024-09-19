@@ -68,15 +68,15 @@ static bool mscclIsMultithreadedComm(ncclComm_t comm) {
   for (int i = 0; i < comm->nRanks; i++) {
     uint64_t hostHash = comm->peerInfo[i].hostHash;
     uint64_t pidHash = comm->peerInfo[i].pidHash;
-    if (hostHashToPidHashes.find(hostHash) != hostHashToPidHashes.end()){
-      auto &pidHashSet = hostHashToPidHashes[hostHash];
-      if (pidHashSet.find(pidHash) != pidHashSet.end()){
+    if (hostHashToPidHashes.find(hostHash) != hostHashToPidHashes.end()) {
+      auto& pidHashSet = hostHashToPidHashes[hostHash];
+      if (pidHashSet.find(pidHash) != pidHashSet.end()) {
         return false;
       }
     }
     hostHashToPidHashes[hostHash].insert(pidHash);
   }
-  return true;  
+  return true;
 }
 
 static bool mscclCommCompatible(ncclComm_t comm) {
