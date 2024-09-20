@@ -2,6 +2,10 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## RCCL 2.20.5 for ROCm 6.2.1
+### Fixed
+- GDR support flag now set with DMABUF
+
 ## RCCL 2.20.5 for ROCm 6.2.0
 ### Changed
 - Compatibility with NCCL 2.20.5
@@ -24,12 +28,15 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 - New unit test for main kernel stack size
 - New -n option for topo_expl to override # of nodes
 - Improved debug messages of memory allocations
-- Channel shuffling for IB systems
+- Channel shuffling for multi-node MI300X systems
 ### Fixed
 - Bug when configuring RCCL for only LL128 protocol
 - Scratch memory allocation after API change for MSCCL
 - Incorrect minNchannels in multi-node
-- GDR support flag now set with DMABUF
+
+## RCCL 2.18.6 for ROCm 6.1.2
+### Changed
+- Reduced NCCL_TOPO_MAX_NODES to limit stack usage and avoid overflow
 
 ## RCCL 2.18.6 for ROCm 6.1.0
 ### Changed
