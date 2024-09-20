@@ -5,6 +5,8 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## RCCL 2.20.5 for ROCm 6.2.1
 ### Fixed
 - GDR support flag now set with DMABUF
+### Known issues
+- RCCL multi-node performance degradation with Linux kernel version 6.8.0 and greater on RoCE networks
 
 ## RCCL 2.20.5 for ROCm 6.2.0
 ### Changed
