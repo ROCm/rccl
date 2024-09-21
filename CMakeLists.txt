@@ -287,8 +287,9 @@ if (HAVE_KERNARG_PRELOAD)
 endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
+## Currently MSCCL++ is supported only on gfx942
 if (ENABLE_MSCCLPP)
-  if(NOT "gfx942" IN_LIST GPU_TARGETS)
+  if(NOT ("gfx942" IN_LIST GPU_TARGETS OR "gfx942:xnack-" IN_LIST GPU_TARGETS OR "gfx942:xnack+" IN_LIST GPU_TARGETS))
     set(ENABLE_MSCCLPP OFF)
     message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
   endif()
