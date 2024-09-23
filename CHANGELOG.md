@@ -1,6 +1,18 @@
-# Change Log for RCCL
+# Changelog for RCCL
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
+
+## RCCL 2.20.5 for ROCm 6.2.1
+
+### Known issues
+
+On systems running Linux kernel 6.8.0, such as Ubuntu 24.04, Direct Memory Access (DMA) transfers between the GPU and NIC are disabled and impacts multi-node RCCL performance.
+
+This issue was reproduced with RCCL 2.20.5 (ROCm 6.2.0 and 6.2.1) on systems with Broadcom Thor-2 NICs and affects other systems with RoCE networks using Linux 6.8.0 or newer.
+
+Older RCCL versions are also impacted.
+
+This issue will be addressed in a future ROCm release.
 
 ## Unreleased - RCCL 2.20.5 for ROCm 6.2.0
 ### Changed
