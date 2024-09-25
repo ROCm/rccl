@@ -352,9 +352,31 @@ ncclResult_t ncclIbDevices(int* ndev) {
 // ncclSystemError : no module or module loaded but not supported by GPU
 ncclResult_t ncclIbGdrSupport() {
   static int moduleLoaded = -1;
+
   if (moduleLoaded == -1) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-    moduleLoaded = (access("/sys/kernel/mm/memory_peers/amdkfd/version", F_OK) == -1) ? 0 : 1;
+    // Check for `memory_peers` directory containing `amdkfd/version`
+    // This `memory_peers` directory is created by NIC-GPU driver interaction
+    // On Linux kernel 5.15.0 (e.g. Ubuntu 22.04), `memory_peers` is created under `/sys/kernel/mm/`
+    // However, on newer kernels like Ubuntu 24.04.1 (Linux kernel 6.8.0) or Ubuntu 22.04.4 HWE (Linux kernel 6.5.0),
+    // this `memory_peers` directory is either not created (go to else-if condition)
+    // or created under a different path like `/sys/kernel/` or `/sys/` (depending on your ib_peer_mem module)
+    const char* memory_peers_paths[] = {"/sys/kernel/mm/memory_peers/amdkfd/version",
+                                  "/sys/kernel/memory_peers/amdkfd/version",
+                                  "/sys/memory_peers/amdkfd/version"};
+    int i = 0;
+
+    while (memory_peers_paths[i]) {
+      if (access(memory_peers_paths[i], F_OK) == 0) {
+        moduleLoaded = 1;
+        INFO(NCCL_INIT,"Found %s", memory_peers_paths[i]);
+        break;
+      } else {
+        moduleLoaded = 0;
+      }
+      ++i;
+    }
+
     char strValue[MAX_STR_LEN];
     NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
     if (strncmp("Hyper-V UEFI Release", strValue, 20) == 0) {
@@ -363,26 +385,21 @@ ncclResult_t ncclIbGdrSupport() {
       if (strcmp(strValue, "1") == 0 && roMode == 0)
         moduleLoaded = 0;
     } else if (moduleLoaded == 0) {
-      char kernel_header_file[256];
-      struct utsname utsname;
+      // Check for `ib_register_peer_memory_client` symbol in `/proc/kallsyms`
+      // if your system uses native OS ib_peer module
       char buf[256];
       FILE *fp = NULL;
-      //check for kernel name exists
-      if (uname(&utsname) == -1) {
-        INFO(NCCL_NET,"Could not get kernel name");
+      fp = fopen("/proc/kallsyms", "r");
+
+      if (fp == NULL) {
+        INFO(NCCL_INIT,"Could not open /proc/kallsyms");
       } else {
-        //format and store the kernel conf file location
-        snprintf(kernel_header_file, sizeof(kernel_header_file), "/lib/modules/%s/build/include/rdma/ib_umem.h", utsname.release);
-        fp = fopen(kernel_header_file, "r");
-        if (fp == NULL) {
-          INFO(NCCL_INIT,"Could not open kernel header file %s", kernel_header_file);
-        } else {
-          //look for kernel_opt1 and kernel_opt2 in the conf file and check
-          while (fgets(buf, sizeof(buf), fp) != NULL) {
-            if (strstr(buf, "ib_umem_get_peer") != NULL) {
-              moduleLoaded = 1;
-              INFO(NCCL_INIT,"Found ib_umem_get_peer in %s", kernel_header_file);
-            }
+        while (fgets(buf, sizeof(buf), fp) != NULL) {
+          if (strstr(buf, "t ib_register_peer_memory_client") != NULL ||
+              strstr(buf, "T ib_register_peer_memory_client") != NULL) {
+            moduleLoaded = 1;
+            INFO(NCCL_INIT,"Found ib_register_peer_memory_client in /proc/kallsyms");
+            break;
           }
         }
       }
@@ -394,7 +411,10 @@ ncclResult_t ncclIbGdrSupport() {
                     (access("/sys/kernel/mm/memory_peers/nvidia-peermem/version", F_OK) == -1)) ? 0 : 1;
 #endif
   }
-  if (moduleLoaded == 0) return ncclSystemError;
+  if (moduleLoaded == 0) {
+    INFO(NCCL_INIT,"GDRDMA not enabled. Could not find memory_peers directory or peer_memory symbol");
+    return ncclSystemError;
+  }
   return ncclSuccess;
 }
 
