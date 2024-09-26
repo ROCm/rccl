@@ -1235,7 +1235,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   memset(treeGraph, 0, sizeof(struct ncclTopoGraph));
   treeGraph->id = 1;
-  treeGraph->pattern = NCCL_TOPO_PATTERN_BALANCED_TREE;
+  treeGraph->pattern = NCCL_TOPO_PATTERN_TREE;
   treeGraph->minChannels = ringGraph->nChannels;
   treeGraph->maxChannels = ringGraph->nChannels;
   NCCLCHECKGOTO(ncclTopoCompute(comm->topo, treeGraph), ret, fail);
