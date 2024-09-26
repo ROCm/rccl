@@ -10,7 +10,7 @@
 
 #include <memory>
 #include <mutex>
-#include <unordered_map>
+#include <vector>
 using namespace std;
 
 struct mscclRankState {
@@ -24,25 +24,37 @@ struct mscclRankState {
 };
 
 static mutex rankStatesMutex;
-static unordered_map<int, shared_ptr<mscclRankState>> rankStates;
+static vector<shared_ptr<mscclRankState>> rankStates;
 
-static inline mscclRankState& mscclGetRankState(int rank) {
-  // In the unlikely case of negative rank, return a per-thread state
-  if (rank < 0) {
-    static thread_local shared_ptr<mscclRankState> threadRankState(new mscclRankState());
+static inline mscclRankState& mscclGetRankState(int rank, int rankCount = -1) {
+  static thread_local shared_ptr<mscclRankState> threadRankState;
+
+  if (rankCount > 0) {
+    lock_guard<mutex> lock(rankStatesMutex);
+    if (rankStates.size() < rankCount) {
+      rankStates.resize((size_t)rankCount);
+    }
+  }
+
+  if (rank < 0 || rank >= rankStates.size()) {
+    if (!threadRankState) {
+      threadRankState.reset(new mscclRankState());
+    }
     return *threadRankState;
   }
 
-  lock_guard<mutex> lock(rankStatesMutex);
-
-  auto rankStateIt = rankStates.find(rank);
-  if (rankStateIt == rankStates.end()) {
-    // Create a per rank threadRankState rather than per thread
-    shared_ptr<mscclRankState> newthreadRankState(new mscclRankState());
-    newthreadRankState->rank = rank;
-    rankStateIt = rankStates.insert(make_pair(rank, newthreadRankState)).first;
+  if (!rankStates[rank]) {
+    if (!threadRankState) {
+      threadRankState.reset(new mscclRankState());
+    }
+    rankStates[rank] = threadRankState;
   }
-  return *(rankStateIt->second);
+
+  if (!threadRankState) {
+    threadRankState = rankStates[rank];
+  }
+
+  return *rankStates[rank];
 }
 
 bool mscclInitialized(int rank) {
@@ -56,12 +68,13 @@ void mscclSetInitialized(int rank, bool initialized) {
 }
 
 void mscclRemoveRank(int rank) {
-  lock_guard<mutex> lock(rankStatesMutex);
-  rankStates.erase(rank);
+  if (rank < rankStates.size()) {
+    rankStates[rank].reset();
+  }
 }
 
-mscclStatus& mscclGetStatus(int rank) {
-  return mscclGetRankState(rank).status;
+mscclStatus& mscclGetStatus(int rank, int rankCount) {
+  return mscclGetRankState(rank, rankCount).status;
 }
 
 mscclThreadLocalStatus& mscclGetThreadLocalStatus() {
