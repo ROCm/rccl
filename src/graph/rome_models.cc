@@ -854,6 +854,22 @@ static struct rcclRomeModel rome_model_87 = {
   .options = "noCpuCheck=1,netOverride=1",
 };
 
+static struct rcclRomeModel rome_model_88 = {
+  .nGpus = 8, .nCpus = 2, .nNics = 4, .nLinks = 7,
+  .gpuIds = { 0x5000, 0x26000, 0x46000, 0x65000, 0x85000, 0xa6000, 0xc6000, 0xe5000, },
+  .nicIds = { 0x66000, 0x6000, 0xe6000, 0x86000, },
+  .gpuNuma = { 0, 0, 0, 0, 1, 1, 1, 1, },
+  .nicNuma = { 0, 0, 1, 1, },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel = { PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS,
+                PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PHB, PATH_PHB, PATH_PHB, PATH_PXB,
+                PATH_SYS, PATH_SYS, PATH_SYS, PATH_SYS, PATH_PXB, PATH_PHB, PATH_PHB, PATH_PHB, },
+  .pattern = "4242",
+  .ringBase = "N1 0 1 2 3 4 5 6 7 N2|N1 1 0 2 4 3 5 7 6 N2|N0 2 5 0 3 6 1 7 4 N3|N0 3 7 0 4 2 1 6 5 N3|N3 4 6 2 7 3 0 5 1 N1|N3 5 4 7 1 3 2 6 0 N1|N2 6 3 1 4 0 7 5 2 N0|N2 7 2 0 6 4 1 5 3 N0|N1 1 0 2 4 3 5 7 6 N2|N0 2 5 0 3 6 1 7 4 N3|N0 3 7 0 4 2 1 6 5 N3|N3 4 6 2 7 3 0 5 1 N1|N3 5 4 7 1 3 2 6 0 N1|N2 6 3 1 4 0 7 5 2 N0|N2 7 2 0 6 4 1 5 3 N0|N1 0 1 2 3 4 5 6 7 N2|N0 2 5 0 3 6 1 7 4 N3|N0 3 7 0 4 2 1 6 5 N3|N3 4 6 2 7 3 0 5 1 N1|N3 5 4 7 1 3 2 6 0 N1|N2 6 3 1 4 0 7 5 2 N0|N2 7 2 0 6 4 1 5 3 N0|N1 0 1 2 3 4 5 6 7 N2|N1 1 0 2 4 3 5 7 6 N2|N0 3 7 0 4 2 1 6 5 N3|N3 4 6 2 7 3 0 5 1 N1|N3 5 4 7 1 3 2 6 0 N1|N2 6 3 1 4 0 7 5 2 N0|N2 7 2 0 6 4 1 5 3 N0|N1 0 1 2 3 4 5 6 7 N2|N1 1 0 2 4 3 5 7 6 N2|N0 2 5 0 3 6 1 7 4 N3|N3 4 6 2 7 3 0 5 1 N1|N3 5 4 7 1 3 2 6 0 N1|N2 6 3 1 4 0 7 5 2 N0|N2 7 2 0 6 4 1 5 3 N0|N1 0 1 2 3 4 5 6 7 N2|N1 1 0 2 4 3 5 7 6 N2|N0 2 5 0 3 6 1 7 4 N3|N0 3 7 0 4 2 1 6 5 N3|N3 5 4 7 1 3 2 6 0 N1|N2 6 3 1 4 0 7 5 2 N0|N2 7 2 0 6 4 1 5 3 N0|N1 0 1 2 3 4 5 6 7 N2|N1 1 0 2 4 3 5 7 6 N2|N0 2 5 0 3 6 1 7 4 N3|N0 3 7 0 4 2 1 6 5 N3|N3 4 6 2 7 3 0 5 1 N1|N2 6 3 1 4 0 7 5 2 N0|N2 7 2 0 6 4 1 5 3 N0|N1 0 1 2 3 4 5 6 7 N2|N1 1 0 2 4 3 5 7 6 N2|N0 2 5 0 3 6 1 7 4 N3|N0 3 7 0 4 2 1 6 5 N3|N3 4 6 2 7 3 0 5 1 N1|N3 5 4 7 1 3 2 6 0 N1|N2 7 2 0 6 4 1 5 3 N0|N1 0 1 2 3 4 5 6 7 N2|N1 1 0 2 4 3 5 7 6 N2|N0 2 5 0 3 6 1 7 4 N3|N0 3 7 0 4 2 1 6 5 N3|N3 4 6 2 7 3 0 5 1 N1|N3 5 4 7 1 3 2 6 0 N1|N2 6 3 1 4 0 7 5 2 N0",
+  .options = "noCpuCheck=1,netOverride=1",
+};
+
 static struct rcclRomeModel romeTopoModels[] = {
   rome_model_22, /*  0 */
   rome_model_25, /*  1 */
@@ -899,6 +915,7 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_84, /* 41 */
   rome_model_85, /* 42 */
   rome_model_87, /* 43 */
+  rome_model_88, /* 44 */
 };
 
 /* Parse user defined rings. Format is like :
