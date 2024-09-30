@@ -1949,7 +1949,8 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
   // Only support ring and tree graphs
   if (graph->pattern != NCCL_TOPO_PATTERN_RING &&
-      graph->pattern != NCCL_TOPO_PATTERN_BALANCED_TREE)
+      graph->pattern != NCCL_TOPO_PATTERN_BALANCED_TREE &&
+      graph->pattern != NCCL_TOPO_PATTERN_TREE)
     return ncclSuccess;
 
   if (ngpus > 8) return ncclSuccess;
