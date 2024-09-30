@@ -1683,6 +1683,12 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
       }
     }
     break;
+  case NCCL_TOPO_PATTERN_TREE:
+    if (romeTopoModels[i].treeBase != nullptr) {
+      NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g));
+      if (graph->nChannels) return ncclSuccess;
+    }
+    break;
   }
   return ncclSuccess;
 }
