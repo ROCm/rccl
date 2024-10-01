@@ -1240,9 +1240,6 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
 #endif
 
               TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
-              sizesFifo[buffSlot] = -1;
-              // Make sure size is reset to zero before we update the head.
-              __sync_synchronize();
               sub->transmitted += args->sliceSteps;
               for (uint64_t step=sub->transmitted-args->sliceSteps; step<sub->transmitted; step++) ncclProfilingRecord(args, s, step, ncclProxyProfileSendWait);
               args->idle = 0;
