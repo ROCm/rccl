@@ -330,7 +330,7 @@ static ncclResult_t mscclInternalSchedulerSelectAlgo(int rank, struct mscclSched
     auto &m = status.algoMetas[i];
     size_t nBytes = param->count * ncclTypeSize(param->dataType) * m.sizeMultiplier;
     bool msgSizeIsValid =
-      param->count > 0 && (param->count % m.nChunksPerLoop) == 0 &&
+      param->count > 0 && ((param->count * m.sizeMultiplier) % m.nChunksPerLoop) == 0 &&
       nBytes >= m.minBytes && (m.maxBytes == 0 || nBytes <= m.maxBytes);
     if (msgSizeIsValid &&
         m.nRanks == param->nRanks &&
