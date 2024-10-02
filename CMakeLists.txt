@@ -207,6 +207,16 @@ if(ENABLE_IFC)
     set(IFC_ENABLED OFF)
     message(WARNING "Indirect function call disabled - requires HIP version >= 5.5.30201")
   endif()
+else()
+  set(IFC_ENABLED OFF)
+endif()
+
+## Check for LL128 support
+if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+  set(LL128_ENABLED ON)
+  message(STATUS "RCCL LL128 protocol enabled")
+else()
+  message(STATUS "RCCL LL128 protocol disabled - requires HIP version >= 6.1.33591")
 endif()
 
 ## Check for hsa-runtime64
@@ -582,13 +592,23 @@ endforeach()
 
 # Generate device/host tables and all the collective functions that are going to be in librccl.so
 #==================================================================================================
-if(ONLY_FUNCS)
-  ## Generate only the specified functions
-  gen_functions(${ONLY_FUNCS})
-else()
-  # Generate all the functions
-  gen_functions("AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv")
-endif()
+find_package(PythonInterp REQUIRED)
+set(GEN_DIR "${HIPIFY_DIR}/gensrc")
+
+# Execute the python script to generate required files
+execute_process(
+    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${ONLY_FUNCS}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE result
+)
+
+# Find the generated files in the output directory
+file(GLOB GENERATED_FILES "${GEN_DIR}/*")
+
+# Append all found generated files to the list
+foreach(file ${GENERATED_FILES})
+  list(APPEND HIP_SOURCES ${file})
+endforeach()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
@@ -616,6 +636,7 @@ target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # 
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
 target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
 if(DEMANGLE_DIR)
@@ -692,12 +713,8 @@ if(DEMANGLE_DIR)
   target_compile_definitions(rccl PRIVATE "HAVE_CPLUS_DEMANGLE=1")
   target_compile_definitions(rccl PRIVATE "HAVE_DECL_BASENAME=1")
 endif()
-if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
-  set(LL128_ENABLED ON)
+if(LL128_ENABLED)
   target_compile_definitions(rccl PRIVATE ENABLE_LL128)
-  message(STATUS "RCCL LL128 protocol enabled")
-else()
-  message(STATUS "RCCL LL128 protocol disabled - requires HIP version >= 6.1.33591")
 endif()
 
 ## Set RCCL compile options

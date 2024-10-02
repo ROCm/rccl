@@ -535,7 +535,7 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 // Map the rowIdx to funcIdx
 extern int const ncclDevFuncRowToId[];
 
-// `ncclFuncIndex()` needs to be in sync with 'ALL_COLLS' in Generate.cmake
+// `ncclDevFuncId()` needs to be in sync with 'ALL_COLLS' in generate.py
 inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
   int row = 0;
   do {
@@ -551,7 +551,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
       row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
       break;
     }
-    row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += (NCCL_NUM_ALGORITHMS - 4) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
     if (coll == ncclFuncAllToAllPivot) break;
