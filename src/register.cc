@@ -35,7 +35,7 @@ ncclResult_t ncclNetRegister(struct ncclComm* comm, void* addr, size_t size, str
   // Find local devices for p2p operations
   for (int c=0; c<comm->p2pnChannels; c++) {
     int dev;
-    if (ncclTopoGetLocalNet(comm->topo, comm->rank, c, &dev) != ncclSuccess) goto end; // No local net
+    if (ncclTopoGetLocalNet(comm->topo, comm->rank, c, NULL, &dev) != ncclSuccess) goto end; // No local net
     ncclNetProperties_t props;
     NCCLCHECKGOTO(comm->ncclNet->getProperties(dev, &props), ret, end);
     if (props.regIsGlobal == 0) { // We need to be sure all NICs support global registration.
@@ -153,7 +153,7 @@ ncclResult_t ncclRegCleanup(struct ncclComm* comm) {
 
 NCCL_API(ncclResult_t, ncclCommRegister, const ncclComm_t comm, void* buff, size_t size, void** handle);
 ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t size, void** handle) {
-  NCCLCHECK(PtrCheck(comm, "ncclCommRegister", "comm"));
+  NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   if (comm->checkPointers) NCCLCHECK(CudaPtrCheck(buff, comm, "buff", "ncclCommRegister"));
   NCCLCHECK(ncclRegister(comm, buff, size, handle));
   return ncclSuccess;
@@ -161,7 +161,7 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
 
 NCCL_API(ncclResult_t, ncclCommDeregister, const ncclComm_t comm, void* handle);
 ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
-  NCCLCHECK(PtrCheck(comm, "ncclCommRegister", "comm"));
+  NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   struct ncclReg* reg = (struct ncclReg*)handle;
   struct ncclRegCache* cache = &comm->regCache;
   int slot;
@@ -175,6 +175,9 @@ ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
   if (reg->state & NVLS_REG_COMPLETE) {
     NCCLCHECK(ncclNvlsDeregBuffer(&reg->mcHandle, reg->regAddr, reg->dev, reg->regSize));
     reg->regAddr = (CUdeviceptr)NULL;
+  }
+  if (reg->state & COLLNET_REG_COMPLETE) {
+    NCCLCHECK(ncclCollnetDeregBuffer(comm, reg->proxyconn, reg->collnetHandle));
   }
   free(reg);
   memmove(cache->slots+slot, cache->slots+slot+1, (cache->population-slot-1)*sizeof(struct ncclReg*));
