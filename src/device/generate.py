@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import os
 import sys
-import re
-import subprocess
 
 # Order of redops, tys, protos, algos must match src/include/device.h
 all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]

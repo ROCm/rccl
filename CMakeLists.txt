@@ -55,7 +55,6 @@ set(DEFAULT_GPUS
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
-include(cmake/Generator.cmake)    # Configure functions that goes into RCCL
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -584,7 +583,7 @@ foreach(SRC_FILE ${SRC_FILES})
     OUTPUT ${HIP_FILE}
     COMMAND mkdir -p ${HIP_FILE_DIR}
             && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
-            && ${CMAKE_COMMAND} -DHIP_FILE=${HIP_FILE} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/AddUnroll.cmake
+            && ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/add_unroll.sh ${HIP_FILE}
     MAIN_DEPENDENCY ${SRC_FILE}
     COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
   )
