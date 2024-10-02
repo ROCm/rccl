@@ -157,7 +157,7 @@ namespace RcclUnitTesting
    * ******************************************************************************************/
   TEST(Standalone, RegressionTiming)
   {
-    TestBed testBed;
+    //TestBed testBed;
     // timing
     using namespace std::chrono;
     using Clock = std::chrono::high_resolution_clock;
@@ -180,11 +180,11 @@ namespace RcclUnitTesting
     for (auto p : protocolList)
     {
       usElapsed = 0;
-      if(testBed.ev.isGfx12) {
-        setenv("NCCL_PROTO", "Simple", 1);
-      } else {
+      //if(testBed.ev.isGfx12) {
+      //  setenv("NCCL_PROTO", "Simple", 1);
+      //} else {
         setenv("NCCL_PROTO", p, 1);
-      }
+      //}
 
       NCCLCHECK(ncclCommInitAll(comms.data(), numRanks, nullptr));
 
