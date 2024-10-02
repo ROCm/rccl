@@ -86,7 +86,7 @@ ncclResult_t ncclTopoGetAlgoTime_Tuner(ncclFunc_t collType, int algorithm, int p
   return ncclSuccess;
 }
 
-__hidden ncclResult_t pluginInit(size_t nRanks, size_t nNodes, ncclDebugLogger_t logFunction) { 
+__hidden ncclResult_t pluginInit(size_t nRanks, size_t nNodes, ncclDebugLogger_t logFunction, void **context) { 
   if (nRanks <= 1) return ncclSuccess;
   int compCapIndex = HOPPER_COMPCAP_IDX;
   int index2 = nNodes <= 2 ? nNodes-1 : 2;
@@ -195,7 +195,7 @@ __hidden ncclResult_t pluginInit(size_t nRanks, size_t nNodes, ncclDebugLogger_t
   return ncclSuccess;
 }
 
-__hidden ncclResult_t pluginGetCollInfo(ncclFunc_t collType, size_t nBytes,
+__hidden ncclResult_t pluginGetCollInfo(void* context, ncclFunc_t collType, size_t nBytes,
                               int collNetSupport, int nvlsSupport, int numPipeOps,
                               int *algorithm, int *protocol, int* nChannels) {
                                 
@@ -222,11 +222,11 @@ __hidden ncclResult_t pluginGetCollInfo(ncclFunc_t collType, size_t nBytes,
   return ncclSuccess;
 }
 
-__hidden ncclResult_t pluginDestroy() { return ncclSuccess; }
+__hidden ncclResult_t pluginDestroy(void* context) { return ncclSuccess; }
 
 #define PLUGIN_NAME "Example"
 
-const ncclTuner_v1_t ncclTunerPlugin_v1 = {
+const ncclTuner_v2_t ncclTunerPlugin_v2 = {
   .name = PLUGIN_NAME,
   .init = pluginInit,
   .getCollInfo = pluginGetCollInfo,

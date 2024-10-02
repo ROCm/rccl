@@ -105,23 +105,25 @@
 #endif
 
 struct ncclShmemGroup {
-  ncclConnInfo *recvConns[NCCL_MAX_NVLS_ARITY];
-  ncclConnInfo *sendConns[NCCL_MAX_NVLS_ARITY];
-  void* srcs[NCCL_MAX_NVLS_ARITY+1];
-  void* dsts[NCCL_MAX_NVLS_ARITY+1];
+  ncclConnInfo *recvConns[NCCL_MAX_ARITY];
+  ncclConnInfo *sendConns[NCCL_MAX_ARITY];
+  void* userInput;
+  void* userOutput;
+  void* srcs[NCCL_MAX_ARITY+1];
+  void* dsts[NCCL_MAX_ARITY+1];
   uint64_t barrier;
   uint64_t barrier_next[NCCL_MAX_GROUPS];
   union {
     unpackGroupShmem unpack;
   } devicePlugin;
-  int32_t dstSizes[NCCL_MAX_NVLS_ARITY+1];
+  int32_t dstSizes[NCCL_MAX_ARITY+1];
 };
 
 #define LDS_NUM_EVENTS 64
 
 struct ncclShmemData {
   struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
-  uint64_t redOpArgs[NCCL_MAX_NVLS_ARITY+1];
+  uint64_t redOpArgs[NCCL_MAX_ARITY+1];
   int channelId;
   int aborted;
   alignas(16) struct ncclDevComm comm;

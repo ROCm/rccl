@@ -34,7 +34,8 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
   struct ncclInfo info = { ncclFuncAllGather, "AllGather",
     sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
     ALLGATHER_CHUNKSTEPS, ALLGATHER_SLICESTEPS };
-  return ncclEnqueueCheck(&info);
+  NCCLCHECK(ncclEnqueueCheck(&info));
+  return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclAllReduce, const void* sendbuff, void* recvbuff, size_t count,
@@ -65,7 +66,8 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   struct ncclInfo info = { ncclFuncAllReduce, "AllReduce",
     sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
     ALLREDUCE_CHUNKSTEPS, ALLREDUCE_SLICESTEPS };
-  return ncclEnqueueCheck(&info);
+  NCCLCHECK(ncclEnqueueCheck(&info));
+  return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
@@ -184,14 +186,16 @@ ncclResult_t ncclBroadcast_impl(const void* sendbuff, void* recvbuff, size_t cou
   struct ncclInfo info = { ncclFuncBroadcast, "Broadcast",
     sendbuff, recvbuff, count, datatype, ncclSum, root, comm, stream, /* Args */
     BROADCAST_CHUNKSTEPS, BROADCAST_SLICESTEPS };
-  return ncclEnqueueCheck(&info);
+  NCCLCHECK(ncclEnqueueCheck(&info));
+  return ncclSuccess;
 }
 /* Deprecated original "in place" function, similar to MPI */
 NCCL_API(ncclResult_t, ncclBcast, void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclBcast(void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, cudaStream_t stream) {
-  return ncclBroadcast(buff, buff, count, datatype, root, comm, stream);
+  NCCLCHECK(ncclBroadcast(buff, buff, count, datatype, root, comm, stream));
+  return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclGather, const void* sendbuff, void* recvbuff, size_t sendcount,
@@ -260,7 +264,8 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
   struct ncclInfo info = { ncclFuncReduce, "Reduce",
     sendbuff, recvbuff, count, datatype, op, root, comm, stream, /* Args */
     REDUCE_CHUNKSTEPS, REDUCE_SLICESTEPS };
-  return ncclEnqueueCheck(&info);
+  NCCLCHECK(ncclEnqueueCheck(&info));
+  return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclReduceScatter, const void* sendbuff, void* recvbuff, size_t recvcount,
@@ -290,7 +295,8 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
   struct ncclInfo info = { ncclFuncReduceScatter, "ReduceScatter",
     sendbuff, recvbuff, recvcount, datatype, op, 0, comm, stream, /* Args */
     REDUCESCATTER_CHUNKSTEPS, REDUCESCATTER_SLICESTEPS };
-  return ncclEnqueueCheck(&info);
+  NCCLCHECK(ncclEnqueueCheck(&info));
+  return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclScatter, const void* sendbuff, void* recvbuff, size_t recvcount, ncclDataType_t datatype, int root,
@@ -361,7 +367,8 @@ ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t da
     1, 1 };
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
-  ret = ncclEnqueueCheck(&info);
+  NCCLCHECKGOTO(ncclEnqueueCheck(&info), ret, exit);
+exit:
   NCCLCHECK(ncclGroupEnd());
   return ret;
 }
@@ -385,7 +392,8 @@ ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype
     1, 1 };
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
-  ret = ncclEnqueueCheck(&info);
+  NCCLCHECKGOTO(ncclEnqueueCheck(&info), ret, exit);
+exit:
   NCCLCHECK(ncclGroupEnd());
   return ret;
 }
