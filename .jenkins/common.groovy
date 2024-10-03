@@ -17,9 +17,6 @@ def runCompileCommand(platform, project, jobName)
 
 def runTestCommand (platform, project, gfilter, envars)
 {
-    // Temporarily disable Standalone.RegressionTiming for RCCL CI
-    gfilter = "*:-Standalone.Regression*"
-
     String sudo = auxiliary.sudo(platform.jenkinsLabel)
 
     def command = """#!/usr/bin/env bash
