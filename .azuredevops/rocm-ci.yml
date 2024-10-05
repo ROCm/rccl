@@ -43,4 +43,4 @@ pr:
   drafts: false
 
 jobs:
-  - template: ${{ variables.CI_COMPONENT_PATH }}/rccl.yml@pipelines_repo
+  - template: /.azuredevops/rccl.yml
