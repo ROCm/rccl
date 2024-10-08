@@ -66,7 +66,12 @@ if(ENABLE_MSCCLPP)
         execute_process(
            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-        ) 
+        )
+	execute_process(
+           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
         message(STATUS "Building mscclpp only for gfx942.")
         
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
@@ -89,6 +94,14 @@ if(ENABLE_MSCCLPP)
         )
 
         find_package(mscclpp_nccl REQUIRED)
+	execute_process(
+    		COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+        	WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+    	)
+	execute_process(
+           COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
     endif()
 
     execute_process(COMMAND objcopy
@@ -98,4 +111,5 @@ if(ENABLE_MSCCLPP)
     )
     add_library(mscclpp_nccl STATIC IMPORTED)
     set_target_properties(mscclpp_nccl PROPERTIES IMPORTED_LOCATION ${PROJECT_BINARY_DIR}/libmscclpp_nccl.a)
+
 endif()
