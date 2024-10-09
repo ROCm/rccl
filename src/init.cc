@@ -1444,12 +1444,22 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   if (ringGraph.nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx94")) {
+
+    // Multi-node MI300A
+    int managed = 0;
+    CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
+    if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") && managed && comm->nNodes > 1) {
+      allGather3Data[rank].nc = 3; // Default is 8, with 3 as a multiplier = 24 channels.
+    } else {
+
+    // MI300
     if (nranks == 2)
       // NCCL_MIN_NCHANNELS=32
       allGather3Data[rank].nc = 16;
     else if (nranks == 4)
       // NCCL_MIN_NCHANNELS=24
       allGather3Data[rank].nc = 4;
+    }
   }
 
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
