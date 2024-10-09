@@ -1448,8 +1448,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
-    if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") && managed && comm->nNodes > 1) {
-      allGather3Data[rank].nc = 3; // Default is 8, with 3 as a multiplier = 24 channels.
+    if (managed && nNodes > 1) {
+      allGather3Data[rank].nc = 6;
     } else {
 
     // MI300
