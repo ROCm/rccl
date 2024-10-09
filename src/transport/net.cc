@@ -378,10 +378,10 @@ static ncclResult_t sendConnect(struct ncclComm* comm, struct ncclConnect* conne
   send->conn.tail = &recvMem->tail;
   send->conn.stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS;
   send->conn.connFifo = recvMem->connFifo;
-  // Only fuse P2P buffers, continue to allocate dedicated buffers for ring/tree
+  struct ncclRecvMem *recvMemCpu = (struct ncclRecvMem*) NCCL_NET_MAP_GET_POINTER(map, cpu, recvMem);
   for (int i=0; i<NCCL_STEPS; i++) {
-    send->conn.connFifo[i].offset = -1;
-    recvMem->connFifo[i].mode = map->shared ? NCCL_MODE_OFFSET : NCCL_MODE_NORMAL;
+    recvMemCpu->connFifo[i].offset = -1;
+    recvMemCpu->connFifo[i].mode = map->shared ? NCCL_MODE_OFFSET : NCCL_MODE_NORMAL;
   }
 
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++)
@@ -1180,7 +1180,6 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
       // Check whether we received data from the GPU and send it to the network
       if (sub->transmitted < sub->posted && sub->transmitted < sub->done + NCCL_STEPS) {
         int buffSlot = (sub->base+sub->transmitted)%NCCL_STEPS;
-        volatile int* sizesFifo = resources->recvMem->sizesFifo;
         volatile uint64_t* recvTail = &resources->recvMem->tail;
         uint64_t tail = sub->base + (sub->reg ? 0 : sub->transmitted);
         if ((sub->reg || connFifo[buffSlot].size != -1) && ((*recvTail > tail) || p == NCCL_PROTO_LL)) {
@@ -1243,10 +1242,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
               sub->timestamp[buffSlot] = 0;
 #endif
 
-              TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
-              sizesFifo[buffSlot] = -1;
-              // Make sure size is reset to zero before we update the head.
-              __sync_synchronize();
+              TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p, size %d, proto %d, myRank %d, channelId %d", sub->transmitted, buffSlot, sub->requests[buffSlot], size, p, proxyState->tpRank, sub->channelId);
               sub->transmitted += args->sliceSteps;
               for (uint64_t step=sub->transmitted-args->sliceSteps; step<sub->transmitted; step++) ncclProfilingRecord(args, s, step, ncclProxyProfileSendWait);
               args->idle = 0;

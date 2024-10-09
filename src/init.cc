@@ -48,6 +48,7 @@
 #ifdef ENABLE_MSCCLPP
 #include "mscclpp/mscclpp_nccl.h"
 #endif
+#include "rocm_smi_wrap.h"
 // [/RCCL]
 
 #include "msccl/msccl_lifecycle.h"
@@ -548,6 +549,11 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
 
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
+  char busId[]="0000:00:00.0";
+  NCCLCHECK(int64ToBusId(comm->busId, busId));
+  NCCLCHECK(rocm_smi_init());
+  NCCLCHECK(rocm_smi_getDeviceIndexByPciBusId(busId, (unsigned int*)&comm->nvmlDev));
+
   comm->compCap = ncclCudaCompCap();
   TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx compCap %d", comm, rank, ndev, comm->cudaDev, comm->busId, comm->compCap);
 
@@ -750,7 +756,8 @@ static void showVersion() {
 
 static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, uint64_t commHash) {
   info->rank = comm->rank;
-  CUDACHECK(cudaGetDevice(&info->cudaDev));
+  info->cudaDev = comm->cudaDev;
+  info->nvmlDev = comm->nvmlDev;
   info->hostHash=getHostHash()+commHash;
   info->pidHash=getPidHash()+commHash;
 
@@ -1991,11 +1998,11 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   comm->commHash = getHash(job->commId.internal, NCCL_UNIQUE_ID_BYTES);
 
   if (job->parent) {
-    INFO(NCCL_INIT,"ncclCommSplit comm %p rank %d nranks %d cudaDev %d busId %lx parent %p color %d key %d commId 0x%llx - Init START",
-    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->busId, job->parent, job->color, job->key, (unsigned long long)hashUniqueId(job->commId));
+    INFO(NCCL_INIT,"ncclCommSplit comm %p rank %d nranks %d cudaDev %d nvmlDev %d busId %lx parent %p color %d key %d commId 0x%llx - Init START",
+    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->nvmlDev, comm->busId, job->parent, job->color, job->key, (unsigned long long)hashUniqueId(job->commId));
   } else {
-    INFO(NCCL_INIT,"ncclCommInitRank comm %p rank %d nranks %d cudaDev %d busId %lx commId 0x%llx - Init START",
-    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->busId, (unsigned long long)hashUniqueId(job->commId));
+    INFO(NCCL_INIT,"ncclCommInitRank comm %p rank %d nranks %d cudaDev %d nvmlDev %d busId %lx commId 0x%llx - Init START",
+    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->nvmlDev, comm->busId, (unsigned long long)hashUniqueId(job->commId));
   }
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent), res, fail);
@@ -2073,11 +2080,11 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   }
 
   if (job->parent) {
-    INFO(NCCL_INIT,"ncclCommSplit comm %p rank %d nranks %d cudaDev %d busId %lx parent %p color %d key %d commId 0x%llx localSize %zi used %ld bytes on core %d - Init COMPLETE",
-    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->busId, job->parent, job->color, job->key, (unsigned long long)hashUniqueId(job->commId), maxLocalSizeBytes, allocTracker[comm->cudaDev].totalAllocSize, sched_getcpu());
+    INFO(NCCL_INIT,"ncclCommSplit comm %p rank %d nranks %d cudaDev %d nvmlDev %d busId %lx parent %p color %d key %d commId 0x%llx localSize %zi used %ld bytes on core %d - Init COMPLETE",
+    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->nvmlDev, comm->busId, job->parent, job->color, job->key, (unsigned long long)hashUniqueId(job->commId), maxLocalSizeBytes, allocTracker[comm->cudaDev].totalAllocSize, sched_getcpu());
   } else {
-    INFO(NCCL_INIT,"ncclCommInitRank comm %p rank %d nranks %d cudaDev %d busId %lx commId 0x%llx localSize %zi used %ld bytes on core %d - Init COMPLETE",
-    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->busId, (unsigned long long)hashUniqueId(job->commId), maxLocalSizeBytes, allocTracker[comm->cudaDev].totalAllocSize, sched_getcpu());
+    INFO(NCCL_INIT,"ncclCommInitRank comm %p rank %d nranks %d cudaDev %d nvmlDev %d busId %lx commId 0x%llx localSize %zi used %ld bytes on core %d - Init COMPLETE",
+    comm, comm->rank, comm->nRanks, comm->cudaDev, comm->nvmlDev, comm->busId, (unsigned long long)hashUniqueId(job->commId), maxLocalSizeBytes, allocTracker[comm->cudaDev].totalAllocSize, sched_getcpu());
   }
 exit:
   if (job->newcomm) {
