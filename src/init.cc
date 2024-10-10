@@ -1449,16 +1449,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
     if (managed && nNodes > 1) {
+      // This forces the minimum channels to 24
       allGather3Data[rank].nc = 6;
     } else {
-
-    // MI300
-    if (nranks == 2)
-      // NCCL_MIN_NCHANNELS=32
-      allGather3Data[rank].nc = 16;
-    else if (nranks == 4)
-      // NCCL_MIN_NCHANNELS=24
-      allGather3Data[rank].nc = 4;
+      // MI300X
+      if (nranks == 2)
+        // NCCL_MIN_NCHANNELS=32
+        allGather3Data[rank].nc = 16;
+      else if (nranks == 4)
+        // NCCL_MIN_NCHANNELS=24
+        allGather3Data[rank].nc = 4;
     }
   }
 
