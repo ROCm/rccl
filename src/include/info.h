@@ -74,6 +74,7 @@ struct ncclInfo {
   int protocol;
   bool userTuned;
   struct ncclInfo *next;
+  int unroll;
 };
 
 inline ncclResult_t ncclInfoSetDerived(struct ncclInfo* info, int nRanks) {
