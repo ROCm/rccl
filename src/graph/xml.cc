@@ -722,14 +722,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   int dev = -1;
   NCCLCHECK(xmlGetAttrIndex(gpuNode, "dev", &index));
   if (index == -1) {
-    if (rocmDev == -1) {
-      const char* busId;
-      NCCLCHECK(xmlGetAttr(pciNode, "busid", &busId));
-      if (busId == NULL || cudaDeviceGetByPCIBusId(&dev, busId) != cudaSuccess) dev = -1;
-    } else {
-      dev = rocmDev;
-    }
-    NCCLCHECK(xmlSetAttrInt(gpuNode, "dev", dev));
+    NCCLCHECK(xmlSetAttrInt(gpuNode, "dev", rocmDev));
   }
   NCCLCHECK(xmlGetAttrInt(gpuNode, "dev", &dev));
   if (dev == -1) { *gpuNodeRet = NULL; return ncclSuccess; }
@@ -934,11 +927,9 @@ ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct nccl
   uint32_t devIndex = 0;
   static int rocmsmiInit = 0;
   if (rocmsmiInit == 0) {
-    rocmsmiInit = (rocm_smi_init() != ncclSuccess) ? 2 : 1;
+    NCCLCHECK(rocm_smi_init());
   }
-  if (rocmsmiInit == 1) {
-    if (rocm_smi_getDeviceIndexByPciBusId(busId, &devIndex) != ncclSuccess) devIndex = -1;
-  }
+  NCCLCHECK(rocm_smi_getDeviceIndexByPciBusId(busId, &devIndex));
   NCCLCHECK(ncclTopoGetXmlFromGpu(node, devIndex, xml, gpuNode));
 #else
   nvmlDevice_t nvmlDev;
