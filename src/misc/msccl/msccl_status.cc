@@ -27,9 +27,9 @@ static mutex rankStatesMutex;
 static unordered_map<int, shared_ptr<mscclRankState>> rankStates;
 
 static inline mscclRankState& mscclGetRankState(int rank) {
-  static thread_local shared_ptr<mscclRankState> threadRankState = make_shared<mscclRankState>();
-
+  // In the unlikely case of negative rank, return a per-thread state
   if (rank < 0) {
+    static thread_local shared_ptr<mscclRankState> threadRankState(new mscclRankState());
     return *threadRankState;
   }
 
@@ -37,8 +37,10 @@ static inline mscclRankState& mscclGetRankState(int rank) {
 
   auto rankStateIt = rankStates.find(rank);
   if (rankStateIt == rankStates.end()) {
-    rankStateIt = rankStates.insert(make_pair(rank, make_shared<mscclRankState>(*threadRankState))).first;
-    rankStateIt->second->rank = rank;
+    // Create a per rank threadRankState rather than per thread
+    shared_ptr<mscclRankState> newthreadRankState(new mscclRankState());
+    newthreadRankState->rank = rank;
+    rankStateIt = rankStates.insert(make_pair(rank, newthreadRankState)).first;
   }
   return *(rankStateIt->second);
 }

@@ -55,7 +55,6 @@ set(DEFAULT_GPUS
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
-include(cmake/Generator.cmake)    # Configure functions that goes into RCCL
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -207,6 +206,16 @@ if(ENABLE_IFC)
     set(IFC_ENABLED OFF)
     message(WARNING "Indirect function call disabled - requires HIP version >= 5.5.30201")
   endif()
+else()
+  set(IFC_ENABLED OFF)
+endif()
+
+## Check for LL128 support
+if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+  set(LL128_ENABLED ON)
+  message(STATUS "RCCL LL128 protocol enabled")
+else()
+  message(STATUS "RCCL LL128 protocol disabled - requires HIP version >= 6.1.33591")
 endif()
 
 ## Check for hsa-runtime64
@@ -574,7 +583,7 @@ foreach(SRC_FILE ${SRC_FILES})
     OUTPUT ${HIP_FILE}
     COMMAND mkdir -p ${HIP_FILE_DIR}
             && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
-            && ${CMAKE_COMMAND} -DHIP_FILE=${HIP_FILE} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/AddUnroll.cmake
+            && ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/add_unroll.sh ${HIP_FILE}
     MAIN_DEPENDENCY ${SRC_FILE}
     COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
   )
@@ -582,13 +591,32 @@ endforeach()
 
 # Generate device/host tables and all the collective functions that are going to be in librccl.so
 #==================================================================================================
-if(ONLY_FUNCS)
-  ## Generate only the specified functions
-  gen_functions(${ONLY_FUNCS})
-else()
-  # Generate all the functions
-  gen_functions("AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv")
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+if (NOT Python3_FOUND)
+  message(FATAL_ERROR "RCCL requires Python3 for generating host/device tables")
 endif()
+
+set(GEN_DIR "${HIPIFY_DIR}/gensrc")
+
+# Execute the python script to generate required files
+execute_process(
+    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${ONLY_FUNCS}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE gen_py_result
+    ERROR_VARIABLE gen_py_error
+)
+if (gen_py_result)
+  message(SEND_ERROR "Error: ${gen_py_error}")
+  message(FATAL_ERROR "${CMAKE_SOURCE_DIR}/src/device/generate.py failed")
+endif()
+
+# Find the generated files in the output directory
+file(GLOB GENERATED_FILES "${GEN_DIR}/*")
+
+# Append all found generated files to the list
+foreach(file ${GENERATED_FILES})
+  list(APPEND HIP_SOURCES ${file})
+endforeach()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
@@ -616,6 +644,7 @@ target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # 
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
 target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
 if(DEMANGLE_DIR)
@@ -692,12 +721,8 @@ if(DEMANGLE_DIR)
   target_compile_definitions(rccl PRIVATE "HAVE_CPLUS_DEMANGLE=1")
   target_compile_definitions(rccl PRIVATE "HAVE_DECL_BASENAME=1")
 endif()
-if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
-  set(LL128_ENABLED ON)
+if(LL128_ENABLED)
   target_compile_definitions(rccl PRIVATE ENABLE_LL128)
-  message(STATUS "RCCL LL128 protocol enabled")
-else()
-  message(STATUS "RCCL LL128 protocol disabled - requires HIP version >= 6.1.33591")
 endif()
 
 ## Set RCCL compile options

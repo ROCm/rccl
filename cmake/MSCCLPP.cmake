@@ -63,20 +63,31 @@ if(ENABLE_MSCCLPP)
                 WORKING_DIRECTORY ${MSCCLPP_SOURCE}
             )
         endif()
-        
+        execute_process(
+           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+	execute_process(
+           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
         message(STATUS "Building mscclpp only for gfx942.")
         
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
-        mscclpp_cmake_arg(CMAKE_SHARED_LINKER_FLAGS_INIT)
-        mscclpp_cmake_arg(CMAKE_EXE_LINKER_FLAGS_INIT)
         mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
         mscclpp_cmake_arg(HIP_COMPILER)
+
+        set(GFX942_VARIANT "gfx942")
+        if(BUILD_ADDRESS_SANITIZER)
+            set(GFX942_VARIANT "gfx942:xnack+")
+        endif()
     
         download_project(PROJ                mscclpp_nccl
                          # GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
                          # GIT_TAG             1e82dd444fc1ed8b7add354eebaab8a94e67d5fc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DGPU_TARGETS=gfx942 -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" "${CMAKE_SHARED_LINKER_FLAGS_INIT_ARG}" "${CMAKE_EXE_LINKER_FLAGS_INIT_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
+                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
@@ -86,6 +97,14 @@ if(ENABLE_MSCCLPP)
         )
 
         find_package(mscclpp_nccl REQUIRED)
+	execute_process(
+    		COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+        	WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+    	)
+	execute_process(
+           COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
     endif()
 
     execute_process(COMMAND objcopy
@@ -95,4 +114,5 @@ if(ENABLE_MSCCLPP)
     )
     add_library(mscclpp_nccl STATIC IMPORTED)
     set_target_properties(mscclpp_nccl PROPERTIES IMPORTED_LOCATION ${PROJECT_BINARY_DIR}/libmscclpp_nccl.a)
+
 endif()
