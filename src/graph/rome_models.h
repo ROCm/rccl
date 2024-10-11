@@ -28,5 +28,6 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
+ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, const char *ringBase);
 
 #endif

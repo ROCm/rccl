@@ -971,10 +971,12 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     // try to match 8P6L
     NCCLCHECK(parseChordalRing(system, graph));
     if (graph->nChannels) return ncclSuccess;
+    // try to match 8P alltoall connected GPUs
+    NCCLCHECK(parseA2a8P(system, graph, nullptr));
+    if (graph->nChannels) return ncclSuccess;
     // try to match Rome 4P2H
     const char *remap_str = getenv("NCCL_RINGS_REMAP");
     NCCLCHECK(parseRome4P2H(system, graph, remap_str));
-
     if (graph->nChannels) return ncclSuccess;
     // try to match 1H16P
     NCCLCHECK(parse1H16P(system, graph));
