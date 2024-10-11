@@ -609,7 +609,7 @@ static ncclResult_t addP2pToPlan(
 
   struct ncclWorkElemP2p elem = {0};
   elem.proto = info.protocol;
-  elem.peer = addr == nullptr ? -1 : peer;
+  elem.peer = peer;
   elem.nWarps = NCCL_MAX_NTHREADS/comm->WarpSize;
   elem.reg = proxyOp.reg;
   elem.p2pType = isSendNotRecv ? ncclWorkP2pTypeSend : ncclWorkP2pTypeRecv;
@@ -628,7 +628,7 @@ static ncclResult_t addP2pToPlan(
   // Calculate the opCount after appendWorkElemP2p since it will always return
   // with channel->nWork equal to one plus the work index this p2p settled in.
   proxyOp.opCount = uint64_t(plan->channels[channelId].nWork)<<1 | 1;
-  if (addr != nullptr) NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
+  NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
   return ncclSuccess;
 }
 

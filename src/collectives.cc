@@ -142,14 +142,14 @@ ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[],
   NCCLCHECK(ncclCommCount(comm, &nRanks));
   NCCLCHECK(ncclGroupStart());
   for (int r=0; r<nRanks; r++) {
-    if (sendcounts[r]) NCCLCHECK(ncclSend(
+    NCCLCHECK(ncclSend(
         ((char*)sendbuff) + sdispls[r]*ncclTypeSize(datatype),
         sendcounts[r],
         datatype,
         r,
         comm,
         stream));
-    if (recvcounts[r]) NCCLCHECK(ncclRecv(
+    NCCLCHECK(ncclRecv(
         ((char*)recvbuff) + rdispls[r]*ncclTypeSize(datatype),
         recvcounts[r],
         datatype,
