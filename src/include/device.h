@@ -610,6 +610,6 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, 
   return ncclDevFuncRowToId[row];
 }
 
-inline int ncclDevFuncId_P2p(int unroll) { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - NCCL_NUM_ONERANK - unroll - 1]; }
+inline int ncclDevFuncId_P2p(int unroll) { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - NCCL_NUM_ONERANK - (unroll > 0 ? 0 : 1) - 1]; }
 
 #endif

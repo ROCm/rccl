@@ -55,7 +55,7 @@ static ncclResult_t initCollProxyOp(struct ncclInfo* collInfo, int channelId, ui
 static ncclResult_t getTunerInfo(struct ncclInfo* collInfo, int collNetSupport, int nvlsSupport, int numPipeOps);
 static ncclResult_t topoGetAlgoInfo(struct ncclInfo* collInfo, int collNetSupport, int nvlsSupport, int numPipeOps);
 static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo);
-static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo);
+static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo, int unroll);
 static ncclResult_t getPatternInfo(struct ncclInfo* collInfo);
 static ncclResult_t getLoopInfo(struct ncclInfo* collInfo);
 static ncclResult_t getCollNetSupport(struct ncclInfo* info, int* collNetSupport);
@@ -188,7 +188,7 @@ static ncclResult_t appendWorkElemP2p(
     struct ncclComm* comm, struct ncclKernelPlan* plan, int channelId,
     struct ncclWorkElemP2p const *elem, bool fuseOk
   ) {
-  int funcIndex = ncclDevFuncId_P2p(getUnrollFactor(comm));
+  int funcIndex = ncclDevFuncId_P2p(plan->unroll);
   if (funcIndex < 0) {
     WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
     return ncclInvalidUsage;
@@ -214,7 +214,7 @@ static ncclResult_t appendWorkElemP2p(
   }
   q = ncclMemoryStackAlloc<struct ncclWorkList>(&comm->memScoped);
   q->work.header.type = ncclWorkTypeP2p;
-  q->work.header.funcIndex = ncclDevFuncId_P2p(getUnrollFactor(comm));
+  q->work.header.funcIndex = funcIndex;
   chan->p2pTailElem[ncclWorkP2pTypeRecv-1] = 0;
   chan->p2pTailElem[ncclWorkP2pTypeSend-1] = 1;
   q->work.p2pElems[chan->p2pTailElem[elem->p2pType-1]] = *elem; // C++ struct assignment
@@ -839,14 +839,13 @@ static ncclResult_t scheduleCollTasksToPlan(
           }
         }
 
-        aggInfo->unroll = getUnrollFactor(comm);
         nvlsSupport = comm->nvlsSupport && ncclNvlsSupported(aggInfo->opFull.op, aggInfo->datatype);
         NCCLCHECK(getCollNetSupport(aggInfo, &collNetSupport));
         NCCLCHECK(ncclInfoSetDerived(aggInfo, comm->nRanks));
         NCCLCHECK(getTunerInfo(aggInfo, collNetSupport, nvlsSupport, 1));
         NCCLCHECK(topoGetAlgoInfo(aggInfo, collNetSupport, nvlsSupport, 1));
         NCCLCHECK(getChannnelThreadInfo(aggInfo));
-        NCCLCHECK(computeCollWorkFunc(aggInfo));
+        NCCLCHECK(computeCollWorkFunc(aggInfo, plan->unroll));
         NCCLCHECK(getPatternInfo(aggInfo));
 
         // Try to assign algo and proto to all possible collectives
@@ -1325,6 +1324,7 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
       plan->comm = comm;
       plan->reclaimer.fn = reclaimPlan;
       plan->persistent = persistent;
+      plan->unroll = getUnrollFactor(comm);
 
       // Non-persistent kernels fill up at most half of our fifo per kernel.
       int nWorkBudget = plan->persistent ? INT_MAX : comm->workFifoDepth/2;
@@ -1757,8 +1757,8 @@ static ncclResult_t getPatternInfo(struct ncclInfo* collInfo) {
 
 RCCL_PARAM(IntraNetThreshold, "INTRANET_THRESHOLD", 8388608);
 
-static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo) {
-  collInfo->workFuncIndex = ncclDevFuncId(collInfo->coll, collInfo->opFull.op, collInfo->datatype, collInfo->algorithm, collInfo->protocol, collInfo->unroll);
+static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo, int unroll) {
+  collInfo->workFuncIndex = ncclDevFuncId(collInfo->coll, collInfo->opFull.op, collInfo->datatype, collInfo->algorithm, collInfo->protocol, unroll);
   if (collInfo->workFuncIndex < 0) {
     WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
     return ncclInvalidUsage;
