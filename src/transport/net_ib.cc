@@ -942,7 +942,8 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
   base->pd = ibDev->pd;
   pthread_mutex_unlock(&ibDev->lock);
 
-  // Recv requests can generate 3 completions (two for Send, one for the Recv).
+  // CQ is sized to accommodate the max SQ + RQ WQE completions. If each SQ WQE could be signaled, then,
+  // for each QP, there can be 2*MAX_REQUESTS completions for SQ and MAX_REQUESTS completions for RQ. 
   NCCLCHECK(wrap_ibv_create_cq(&base->cq, ibDev->context, 3*MAX_REQUESTS*ncclParamIbQpsPerConn(), NULL, NULL, 0));
 
   return ncclSuccess;
