@@ -2,6 +2,25 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## RCCL 2.20.5 for ROCm 6.3.0
+### Changed
+- Increased channel count for MI300X multi-node
+- Enabled MSCCL for single-process multi-threaded contexts
+- Enabled gfx12
+- Enabled CPX mode for MI300X
+- Enabled tracing with rocprof
+- Improved version reporting
+- Enabled GDRDMA for Linux kernel 6.4.0+
+### Added
+- MSCCL++ integration for specific contexts
+- Performance collection to rccl_replayer
+- Tuner Plugin example for MI300
+- Tuning table for large number of nodes
+- Support for amdclang++
+- New Rome model
+### Fixed
+- Fixed model matching with PXN enable
+
 ## RCCL 2.20.5 for ROCm 6.2.1
 
 ### Known issues
@@ -14,7 +33,7 @@ Older RCCL versions are also impacted.
 
 This issue will be addressed in a future ROCm release.
 
-## Unreleased - RCCL 2.20.5 for ROCm 6.2.0
+## RCCL 2.20.5 for ROCm 6.2.0
 ### Changed
 - Compatibility with NCCL 2.20.5
 - Compatibility with NCCL 2.19.4
