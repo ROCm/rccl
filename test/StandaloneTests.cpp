@@ -10,6 +10,9 @@
 #include "TestBed.hpp"
 #include "StandaloneUtils.hpp"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wvla"
+
 namespace RcclUnitTesting
 {
   /**
@@ -299,3 +302,5 @@ namespace RcclUnitTesting
     }
   }
 }
+
+#pragma clang diagnostic pop
