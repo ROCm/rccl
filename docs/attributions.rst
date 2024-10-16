@@ -1,3 +1,7 @@
+.. meta::
+   :description: RCCL attributions information
+   :keywords: RCCL, ROCm, library, API, attributions
+
 .. toctree::
    :maxdepth: 4
    :caption: Attributions
