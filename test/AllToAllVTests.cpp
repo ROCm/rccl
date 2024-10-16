@@ -73,7 +73,8 @@ namespace RcclUnitTesting
     for (int isMultiProcess : testBed.ev.GetIsMultiProcessList())
     {
       int const numProcesses = isMultiProcess ? totalRanks : 1;
-      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks));
+      //testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks));
+      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks));
 
       // Prepare AllToAllV options
       std::vector<size_t> numInputElements;
@@ -130,7 +131,8 @@ namespace RcclUnitTesting
     for (int isMultiProcess : testBed.ev.GetIsMultiProcessList())
     {
       int const numProcesses = isMultiProcess ? totalRanks : 1;
-      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks));
+      //testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks));
+      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks));
 
       // Prepare AllToAllV options
       std::vector<size_t> numInputElements;
