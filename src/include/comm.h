@@ -224,6 +224,9 @@ struct ncclKernelPlan {
     struct ncclIntruQueue<struct ncclProxyOp, &ncclProxyOp::enqNext> proxyOpQueue;
   } channels[MAXCHANNELS];
   size_t maxBytesPerChannel;
+
+  // Unroll factor for plan [RCCL]
+  int unroll;
 };
 
 #define NCCL_MAGIC 0x0280028002800280 // Nickel atomic number is 28.

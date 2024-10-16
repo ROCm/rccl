@@ -13,7 +13,7 @@ typedef enum {NCCL_INIT=1, NCCL_COLL=2, NCCL_P2P=4, NCCL_SHM=8, NCCL_NET=16, NCC
 typedef void (*ncclDebugLogger_t)(ncclDebugLogLevel level, unsigned long flags, const char *file, int line, const char *fmt, ...);
 
 #define NCCL_NUM_ONERANK 12
-#define FUNC_INDEX_TOTAL 656 + NCCL_NUM_ONERANK
+#define FUNC_INDEX_TOTAL 1312 + NCCL_NUM_ONERANK
 
 #define NCCL_NUM_FUNCTIONS 5 // Send/Recv not included for now
 typedef enum {
@@ -44,6 +44,10 @@ typedef enum {
 #define NCCL_PROTO_LL128 1
 #define NCCL_PROTO_SIMPLE 2
 
-#define NCCL_NUM_FLOATS 6 // half/float/double/rccl_bfloat16
+#define NCCL_NUM_UNROLLS 2 // 2/4
+#define NCCL_UNROLL_2 0
+#define NCCL_UNROLL_4 1
+
+#define NCCL_NUM_FLOATS 6  // half/float/double/rccl_bfloat16
 
 #endif
