@@ -400,7 +400,12 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
   const char* gcnArchName;
   NCCLCHECK(xmlGetAttr(xmlGpu, "gcn", &gcnArch));
   convertGcnArchToGcnArchName(gcnArch, &gcnArchName);
-  gpu->gpu.gcn = strdup(gcnArchName);
+  //if gpu->gpu.gcn uniquely points some location before the following assignment, we will leak memory.
+  //gpu->gpu.gcn = strdup(gcnArchName);
+  //int num_gcn_chars = snprintf(gpu->gpu.gcn, sizeof(gpu->gpu.gcn), "%s", gcnArchName);
+  strncpy(gpu->gpu.gcn, gcnArchName, sizeof(gpu->gpu.gcn) - 1);
+  gpu->gpu.gcn[sizeof(gpu->gpu.gcn) - 1] = '\0';
+
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "arch", &arch.value));
   memcpy(&gpu->gpu.arch, &arch.arch, sizeof(hipDeviceArch_t));
@@ -449,10 +454,12 @@ ncclResult_t ncclTopoAddPci(struct ncclXmlNode* xmlPci, struct ncclTopoSystem* s
     NCCLCHECK(ncclTopoGetNode(system, &nicNode, type, id));
     if (nicNode == NULL) {
       NCCLCHECK(ncclTopoCreateNode(system, &nicNode, type, id));
+      //If node contains previously heap allocated memory, free it before losing the pointer
       node = nicNode; // Connect it to parent later on
     }
     NCCLCHECK(ncclTopoAddNic(xmlNic, system, nicNode, systemId, busId));
   } else if (type == PCI) {
+    //the following might overwrite node data causing memory leak
     NCCLCHECK(ncclTopoCreateNode(system, &node, type, NCCL_TOPO_ID(systemId, busId)));
     NCCLCHECK(xmlGetAttr(xmlPci, "vendor", &str));
     if (str) node->pci.device += strtol(str, NULL, 0) << 48;
