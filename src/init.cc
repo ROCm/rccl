@@ -243,7 +243,7 @@ void *ncclCommThreadMain(void *arg) {
             (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
             fIdx, td->data_0, td->opCount, td->data_1);
         } else {
-          if (fIdx == ncclDevFuncId_P2p() || type == ncclCollTraceP2pElemType)
+          if (type == ncclCollTraceP2pElemType)
             sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
           else
             sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);
