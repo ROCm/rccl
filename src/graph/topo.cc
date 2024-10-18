@@ -402,9 +402,7 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
   convertGcnArchToGcnArchName(gcnArch, &gcnArchName);
   //if gpu->gpu.gcn uniquely points some location before the following assignment, we will leak memory.
   //gpu->gpu.gcn = strdup(gcnArchName);
-  //int num_gcn_chars = snprintf(gpu->gpu.gcn, sizeof(gpu->gpu.gcn), "%s", gcnArchName);
-  strncpy(gpu->gpu.gcn, gcnArchName, sizeof(gpu->gpu.gcn) - 1);
-  gpu->gpu.gcn[sizeof(gpu->gpu.gcn) - 1] = '\0';
+  strlcpy(gpu->gpu.gcn, gcnArchName, sizeof(gpu->gpu.gcn));
 
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "arch", &arch.value));
