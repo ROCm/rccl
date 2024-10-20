@@ -220,8 +220,8 @@ int ARSMI_init(void)
 
     for (int src_idx = 0; src_idx < ARSMI_num_devices; src_idx++) {
         struct ARSMI_systemNode node = ARSMI_orderedNodes[src_idx];
-        uint32_t src_id = node.s_node_id;
-        for (int i = 0; i < countIoLinks(src_id); i++) {
+        uint32_t src_id = node.s_node_id, nlinks = countIoLinks(src_id);
+        for (int i = 0; i < nlinks; i++) {
             ARSMI_linkInfo info;
             std::map<std::string, uint64_t> properties;
             int ret = ARSMI_readLinkProperties(src_id, i, properties);
