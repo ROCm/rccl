@@ -99,6 +99,19 @@ char const mscclFuncNames[ncclNumFuncs][32] =
   "mscclFuncRecv"
 };
 
+union PtrUnion
+{
+  void*          ptr;
+  int8_t*        I1; // ncclInt8
+  uint8_t*       U1; // ncclUint8
+  int32_t*       I4; // ncclInt32
+  uint32_t*      U4; // ncclUint32
+  int64_t*       I8; // ncclInt64
+  uint64_t*      U8; // ncclUint64
+  float*         F4; // ncclFloat32
+  double*        F8; // ncclFloat64
+};
+
 struct TaskInfo
 {
   ncclFunc_t     funcType;
@@ -107,6 +120,10 @@ struct TaskInfo
   ncclDataType_t datatype;
   ncclRedOp_t    op;
   int            root;
+  PtrUnion       inputGpu;
+  PtrUnion       outputCpu;
+  PtrUnion       outputGpu;
+  PtrUnion       expected;
 };
 
 struct RankData
@@ -136,7 +153,6 @@ struct CollectiveCalls
   std::vector<std::vector<ncclComm_t>>  localRankComms;   // comms per local rank
   std::vector<std::vector<hipStream_t>> localRankStreams; // streams per local rank
 };
-
 
 size_t DataTypeToBytes(ncclDataType_t const dataType)
 {
@@ -213,7 +229,7 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
 
 // allocates send/recv buff, sets the device based on which rank the task belongs to,
 // syncronize devices after executing all the tasks and free device memory.
-double ReplayRccl(CollectiveCalls const& collCall, int groupIdx);
+double ReplayRccl(CollectiveCalls& collCall, int groupIdx);
 
 // Print information about a group call
 void PrintGroupCall(GroupCall const& gc);
@@ -226,4 +242,40 @@ void dataToCsv(GroupCall const& gc, std::ofstream &datafile, double runTime);
 std::pair<size_t, size_t> GetSize(TaskInfo taskInfo, int numGlobalRanks);
 
 // executes the collective call (task)
-void ExecuteCollective(TaskInfo const& task, ncclComm_t const& comm, hipStream_t stream, const void *sendbuff, void *recvbuff);
+void ExecuteCollective(TaskInfo& task, ncclComm_t const& comm, hipStream_t stream);
+
+// Allocate CPU/GPU memory for ptrUnion
+void AllocateMem(PtrUnion& ptrUnion, size_t const numBytes, bool isGpu = false);
+
+// Set each element in buffer to 0
+void ClearMem(PtrUnion& ptrUnion, size_t const numBytes, bool isGpu = false);
+
+// Free CPU/GPU memory for ptrUnion
+void FreeMem(PtrUnion& ptrUnion, bool isGpu = false);
+
+// Set data for ptrUnion (Used during fillPattern)
+void SetPtr(PtrUnion& ptrUnion, ncclDataType_t const dataType, int const idx, int valueI, double valueF);
+
+// Perform various reduction ops to ptrUnion
+void Reduce(PtrUnion& ptrUnion, PtrUnion const& otherPtrUnion, size_t const numElements, ncclDataType_t const dataType, ncclRedOp_t const op);
+
+// Divide each element in ptrUnion by divisor
+void DivideByInt(PtrUnion& ptrUnion, ncclDataType_t const dataType, size_t const numElements, int const divisor);
+
+// Check if each element in actual equals to expected
+bool IsEqual(PtrUnion const& actual, PtrUnion const& expected, ncclDataType_t const dataType, size_t const numElements);
+
+// Check if a collective uses a root
+bool IsRootUsed(ncclFunc_t funcType);
+
+// Fill buffers based on pattern using globalRank
+void FillPattern(PtrUnion& ptrUnion, ncclDataType_t const dataType, size_t const numElements, int globalRank, bool isGpu = false);
+
+// PrepareData functions are responsible for setting up input / expected for the given taskInfo
+void PrepareDataFunc(TaskInfo& taskInfo, int globalRank, int totalRanks);
+void PrepData_Broadcast(TaskInfo& taskInfo, int globalRank);
+void PrepData_Reduce(TaskInfo& taskInfo, int globalRank, int totalRanks, bool isAllReduce);
+void PrepData_ReduceScatter(TaskInfo& taskInfo, int globalRank, int totalRanks);
+void PrepData_Gather(TaskInfo& taskInfo, int globalRank, int totalRanks, bool isAllGather);
+void PrepData_Send(TaskInfo& taskInfo, int globalRank);
+void PrepData_Recv(TaskInfo& taskInfo, int globalRank);
