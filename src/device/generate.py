@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import subprocess
 
 # Order of redops, tys, protos, algos must match src/include/device.h
 all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
@@ -8,8 +9,9 @@ all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16", "f8", "bf8"]
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING"]
+all_unroll = ["2", "4"]
 
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys]
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
 
 ################################################################################
 # The first command line argument is the path to the directory to generate and
@@ -65,11 +67,12 @@ else:
 def paste(sep, *args):
   return sep.join(x for x in args if x is not None)
 
-is_ifc           = 1 if sys.argv[2] == "ON" else 0
-is_colltrace     = 1 if sys.argv[3] == "ON" else 0
-is_msccl_kernels = 1 if sys.argv[4] == "ON" else 0
+is_ifc             = 1 if sys.argv[2] == "ON" else 0
+is_colltrace       = 1 if sys.argv[3] == "ON" else 0
+is_msccl_kernels   = 1 if sys.argv[4] == "ON" else 0
+is_local_arch_only = 1 if sys.argv[5] == "ON" else 0
 
-func_pattern = sys.argv[5:6]
+func_pattern = sys.argv[6:7]
 if func_pattern and func_pattern[0]:
   func_pattern = func_pattern[0]
 else:
@@ -130,6 +133,40 @@ coll_lower_to_camel = {coll_camel_to_lower[x]: x for x in coll_camel_to_lower}
 
 ################################################################################
 
+def calc_unroll_for_local_arch():
+  if not is_local_arch_only: 
+    return
+
+  res = subprocess.run(['rocminfo'], capture_output=True, text=True)
+  rocminfo_output = res.stdout
+  
+  # Parse rocminfo binary output
+  gfx_targets = {}
+  curr_name = None
+  for line in rocminfo_output.splitlines():
+    line = line.strip()
+
+    if line.startswith("Name:"):
+      name = line.split(':')[-1].strip()
+      if "gfx" in name:
+        curr_name = name
+    if line.startswith("Compute Unit:") and curr_name:
+      cu_count = int(line.split(':')[-1].strip())
+      gfx_targets[(curr_name, cu_count)] = None
+      curr_name = None
+  
+  # We want to remove duplicates but cannot use a dictionary since same gfx name can have different cu counts
+  # Use (gfx_name, cu_count) as key for dictionary and convert it to list here
+  gfx_targets = list(gfx_targets.keys())
+
+  # Homogeneous system is required to build for only 1 varient of unroll factor
+  if len(gfx_targets) == 1:
+    gfx_name, cu_count = gfx_targets[0]
+    if ("gfx908" == gfx_name or "gfx94" in gfx_name) and cu_count > 80:
+      return 2
+    else:
+      return 4
+
 # Helper function to check if the conditions for the collective is being met
 def func_validate(coll, algo, proto, redop, ty):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
@@ -182,10 +219,10 @@ def func_filter(function_params, current_idx, item_list=None):
         # For each loop layer remove the last element in item_list
         item_list.pop()
   else:
-    coll, algo, proto, redop, ty = item_list
+    coll, algo, proto, redop, ty, unroll = item_list
 
-    if func_validate(*item_list):
-      yield(coll, algo, proto, redop, ty)
+    if func_validate(coll, algo, proto, redop, ty):
+      yield(coll, algo, proto, redop, ty, unroll)
 
 # Parse ONLY_FUNCS input and feed it to func_filter
 def parse_input(func_pattern):
@@ -205,7 +242,11 @@ def parse_input(func_pattern):
 
 # Maps functions to the chosen representative for the equivalence class it
 # belongs to. For instance (sum, signed int) maps to (sum, unsigned int).
-def equivalent_primary(coll, algo, proto, redop, ty):
+def equivalent_primary(coll, algo, proto, redop, ty, unroll):
+  # if local arch only, we only need to build for 1 varient of coll_unroll.
+  # map the other varient of coll_unroll to this one.
+  if coll_unroll:
+    unroll = str(coll_unroll)
   if coll in ("AllReduce", "Reduce", "ReduceScatter"):
     # map signed integer sum/prod to unsigned
     if redop in ("Sum","Prod","PreMulSum") and ty[0]=="i":
@@ -213,7 +254,7 @@ def equivalent_primary(coll, algo, proto, redop, ty):
     # map signed integer min/max to unsigned for non-NVLS
     elif redop=="MinMax" and ty[0]=="i" and ("NVLS" not in algo):
       ty = "u"+ty[1:]
-  return (coll, algo, proto, redop, ty)
+  return (coll, algo, proto, redop, ty, unroll)
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
 def enumerate_func_rows():
@@ -222,22 +263,26 @@ def enumerate_func_rows():
       for proto in all_protos:
         for redop in all_redops:
           for ty in all_tys:
-            if func_validate(coll, algo, proto, redop, ty):
-              yield (coll, algo, proto, redop, ty)
+            for unroll in all_unroll:
+              if func_validate(coll, algo, proto, redop, ty):
+                yield (coll, algo, proto, redop, ty, unroll)
 
 # Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
 def custom_sort_key(fn):
-    coll, algo, proto, redop, ty = fn
+    coll, algo, proto, redop, ty, unroll = fn
     
     return (
         all_colls.index(coll),
         all_algos.index(algo),
         all_protos.index(proto),
         all_redops.index(redop),
-        all_tys.index(ty)
+        all_tys.index(ty),
+        all_unroll.index(unroll)
     )
 
 ################################################################################
+
+coll_unroll = calc_unroll_for_local_arch()
 
 # Corresponds to ncclDevFuncRowToId[]
 func_rows = [fn for fn in enumerate_func_rows()]
@@ -262,12 +307,12 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
       out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
-      out("%s %s();\n%s %s_4();\n#else\n" % (func_declaration, sym, func_declaration, sym))
+      out("%s %s();\n#else\n" % (func_declaration, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("%s %s();\n%s %s_4();\n#endif\n" % (func_declaration, sym_ll, func_declaration, sym_ll))
+      out("%s %s();\n#endif\n" % (func_declaration, sym_ll))
     else:
-      out("%s %s();\n%s %s_4();\n" % (func_declaration, sym, func_declaration, sym))
+      out("%s %s();\n" % (func_declaration, sym))
   out("\n")
 
   out("typedef void(*ncclDevFuncPtr_t)();\n\n")
@@ -283,22 +328,6 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       out("/*%4d*/ %s,\n#endif\n" % (index, sym_ll))
     else:
       out("/*%4d*/ %s,\n" % (index, sym))
-    index += 1
-  out("nullptr};\n")
-  out("\n")
-
-  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
-  index = 0
-  for fn in primary_funcs:
-    sym = paste("_", "ncclDevFunc", *fn)
-    if fn[2] == "LL128":
-      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
-      out("/*%4d*/ %s_4,\n#else\n" % (index, sym))
-      fn_ll = fn[:2] + ("LL",) + fn[3:]
-      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("/*%4d*/ %s_4,\n#endif\n" % (index, sym_ll))
-    else:
-      out("/*%4d*/ %s_4,\n" % (index, sym))
     index += 1
   out("nullptr};\n")
   out("\n")
@@ -321,24 +350,6 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       "};\n")
     out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
     out(f"  Caller<0, {index}>::call(funcIndex);\n")
-    out("}\n\n")
-    out("template<unsigned short f, unsigned short l>\n"
-      "struct Caller4 {\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call4(unsigned short funcIndex) noexcept\n"
-      "  {\n"
-      "    constexpr unsigned short m = f + (l - f) / 2;\n"
-      "    return (funcIndex < m) ? Caller4<f, m>::call4(funcIndex) : Caller4<m, l>::call4(funcIndex);\n"
-      "  }\n"
-      "};\n"
-      "\n"
-      "template<unsigned short f>\n"
-      "struct Caller4<f, f + 1>{\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call4(unsigned short funcIndex) noexcept { ncclDevFuncTable_4[f](); }\n"
-      "};\n")
-    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_4(unsigned short funcIndex) noexcept {\n")
-    out(f"  Caller4<0, {index}>::call4(funcIndex);\n")
     out("}\n\n")
 
 # Generate <gensrc>/device_table.cpp
@@ -381,7 +392,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
 # Maps to .cu filename which implements this func. The only constraint is that
 # "coll" is reflected in the name: formally that no two funcs having different
 # coll's map to the same filename.
-def impl_filename(coll, algo, proto, redop, ty):
+def impl_filename(coll, algo, proto, redop, ty, unroll):
   return "%s.cpp" % paste("_", coll_camel_to_lower[coll], redop and redop.lower(), ty)
 
 # Partition the functions and kernels to the .cu filenames. The partition is
@@ -437,14 +448,14 @@ for name in name_to_funcs.keys():
     )
 
     for fn in fns:
-      (coll, algo, proto, redop, ty) = fn
-      sym = paste("_", coll, algo, proto, redop, ty)
+      (coll, algo, proto, redop, ty, unroll) = fn
+      sym = paste("_", coll, algo, proto, redop, ty, unroll)
       if proto == "LL128":
         out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
       out(
-        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto})\n"
+        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
-                algo=(algo or "RING"), proto=(proto or "SIMPLE"))
+                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll)
       )
       if proto == "LL128":
         out("#endif\n")
