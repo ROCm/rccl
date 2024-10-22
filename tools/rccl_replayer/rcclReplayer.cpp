@@ -81,6 +81,7 @@ int main(int argc, char **argv)
   printf("Rank %d Done setting up communicators\n", mpiRank);
 
   int numSkippedCalls = 0;
+  int numInvalid = 0;
   double runTime;
   std::ofstream datafile;
   datafile.open("replayer_data.csv");
@@ -98,7 +99,7 @@ int main(int argc, char **argv)
         printf("Running Collective Call %lu of %lu\n", i+1, collCalls.groupCalls.size());
         PrintGroupCall(collCalls.groupCalls[i]);
       }
-      double runTime = ReplayRccl(collCalls, i);
+      double runTime = ReplayRccl(collCalls, i, numInvalid);
       if (mpiRank == 0) {
         dataToCsv(collCalls.groupCalls[i], datafile, runTime);
       }
@@ -131,6 +132,9 @@ int main(int argc, char **argv)
 
   if (mpiRank == 0) printf("Executed group calls: %zu\n", collCalls.groupCalls.size() - numSkippedCalls);
   if (mpiRank == 0) printf("Skipped group calls: %d\n", numSkippedCalls);
+
+  // Data validation failures during group calls
+  if (mpiRank == 0) printf("Failed group calls: %d\n", numInvalid); 
 
   // Time it takes to execute all the group calls
   if (mpiRank == 0) printf("Execution Time: %f seconds\n", duration.count());
@@ -170,7 +174,7 @@ void dataToCsv(GroupCall const& gc, std::ofstream &datafile, double runTime)
   else if (funcName == "ReduceScatter" || funcName == "AllGather") busBw *= ((n-1)/n);
   busBw /= (1e9); //in gb/s
   std::string dataTypeName = DataTypeToName(ti.datatype);
-  std::string redOp = getRedOp(ti.op);
+  std::string redOp = RedOpToName(ti.op);
   datafile << gc.opCount << ", " << funcName.c_str() << ", " << ti.inPlace << ", " << ti.count << ", " << dataTypeName << ", " << redOp << ", " << ti.root << ", " << runTime << ", " << busBw << "\n";
 }
 
@@ -323,6 +327,52 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
       exit(1);
     }
   }
+
+  // Detect and replace scatter patterns
+  for (auto& gc : cc.groupCalls) {
+    if (!gc.isValid) continue;
+    int scatterRoot = -1;
+    bool isScatter = true;
+    for (auto& [rank, rankData] : gc.rankData) {
+      int sendCount = 0, recvCount = 0;
+      for (const auto& task : rankData.tasks) {
+        if (task.funcType == ncclCollSend) 
+          sendCount++;
+        else if (task.funcType == ncclCollRecv) 
+          recvCount++; 
+      }
+      if (sendCount == cc.numGlobalRanks && recvCount == 1) {
+        if (scatterRoot == -1) {
+          // Root is the first rank that matches the condition
+          scatterRoot = rank;
+        } else {
+          isScatter = false;
+          break;
+        }
+      } else if (recvCount != 1 || sendCount != 0) {
+        // Non-root ranks must only recv and not send
+        isScatter = false;
+        break;
+      }
+    }
+
+    // Replace send/recv calls with scatter call for the group call
+    if (isScatter) {
+      TaskInfo scatterTask;
+      scatterTask.funcType = ncclCollScatter;
+      scatterTask.count = gc.rankData[scatterRoot].tasks[0].count;
+      scatterTask.datatype = gc.rankData[scatterRoot].tasks[0].datatype;
+      scatterTask.root = scatterRoot;
+
+      for (auto& [rank, rankData] : gc.rankData) {
+        rankData.tasks.clear();
+        rankData.tasks.push_back(scatterTask);
+      }
+
+      if (isFirstRank)
+        printf("[INFO] Scatter pattern detected and replaced with scatter collective\n");
+    }
+  }
 }
 
 bool ParseLineItem(char const* line, LineItem& li)
@@ -337,7 +387,7 @@ bool ParseLineItem(char const* line, LineItem& li)
                 &li.nRanks, &li.stream, &li.task, &li.globalRank) == 17;
 }
 
-double ReplayRccl(CollectiveCalls& cc, int groupIdx)
+double ReplayRccl(CollectiveCalls& cc, int groupIdx, int& numInvalid)
 {
   int numLocalRanks = cc.localRankComms.size();
 
@@ -360,7 +410,7 @@ double ReplayRccl(CollectiveCalls& cc, int groupIdx)
         numBytes.second = numBytes.first;
       }
 
-      // Set the device and allocate send/recv buffers
+      // Allocate memory
       AllocateMem(task.inputGpu, numBytes.first, true);
       AllocateMem(task.outputCpu, numBytes.second);
       AllocateMem(task.expected, numBytes.second);
@@ -371,6 +421,7 @@ double ReplayRccl(CollectiveCalls& cc, int groupIdx)
         task.outputGpu = task.inputGpu;
       }
 
+      // Prepare input/output for each task based on collective type
       PrepareDataFunc(task, globalRank, cc.numGlobalRanks);
 
       HIP_CALL(hipDeviceSynchronize());
@@ -409,7 +460,8 @@ double ReplayRccl(CollectiveCalls& cc, int groupIdx)
   double runTime = duration.count();
   runTime *= 1000; //convering into milliseconds
 
-  // Validation
+  // Data validation
+  bool isValid = true;
   for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
     int globalRank = cc.firstGlobalRank + localIdx;
     RankData& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);
@@ -428,11 +480,16 @@ double ReplayRccl(CollectiveCalls& cc, int groupIdx)
         numBytes.second = numBytes.first;
       }
       HIP_CALL(hipMemcpy(task.outputCpu.ptr, task.outputGpu.ptr, numBytes.second, hipMemcpyDeviceToHost));
-      if (!IsEqual(task.outputCpu, task.expected, task.datatype, task.count))
-        break;
+      if (!IsEqual(task.outputCpu, task.expected, task.datatype, task.count, globalRank)) {
+        isValid = false;
+        break; // Check other ranks
+      }
     }
   }
 
+  if (!isValid) numInvalid++;
+
+  // Free memory
   for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
     int globalRank = cc.firstGlobalRank + localIdx;
     RankData& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);
@@ -517,23 +574,17 @@ void ExecuteCollective(TaskInfo& task, ncclComm_t const& comm, hipStream_t strea
 
 void AllocateMem(PtrUnion& ptrUnion, size_t const numBytes, bool isGpu) {
   if (numBytes) {
-    if (isGpu)
-      HIP_CALL(hipMalloc(&ptrUnion.I1, numBytes));
-    else {
+    if (isGpu) {
+      HIP_CALL(hipMalloc(&ptrUnion.ptr, numBytes));
+      HIP_CALL(hipMemset(ptrUnion.ptr, 0, numBytes));
+      HIP_CALL(hipStreamSynchronize(NULL));
+    } else {
       ptrUnion.ptr = calloc(numBytes, 1);
+      memset(ptrUnion.ptr, 0, numBytes);
       if (!ptrUnion.ptr) {
         printf("Unable to allocate memory (%lu bytes)\n", numBytes);
       }
     }
-  }
-}
-
-void ClearMem(PtrUnion& ptrUnion, size_t const numBytes, bool isGpu) {
-  if (isGpu) {
-    HIP_CALL(hipMemset(ptrUnion.ptr, 0, numBytes));
-    HIP_CALL(hipStreamSynchronize(NULL));
-  } else {
-    memset(ptrUnion.ptr, 0, numBytes);
   }
 }
 
@@ -544,23 +595,6 @@ void FreeMem(PtrUnion& ptrUnion, bool isGpu) {
     else
       free(ptrUnion.ptr);
     ptrUnion.ptr = nullptr;
-  }
-}
-
-void SetPtr(PtrUnion& ptrUnion, ncclDataType_t const dataType, int const idx, int valueI, double valueF) {
-  switch (dataType)
-  {
-    case ncclInt8:     ptrUnion.I1[idx] = valueI; break;
-    case ncclUint8:    ptrUnion.U1[idx] = valueI; break;
-    case ncclInt32:    ptrUnion.I4[idx] = valueI; break;
-    case ncclUint32:   ptrUnion.U4[idx] = valueI; break;
-    case ncclInt64:    ptrUnion.I8[idx] = valueI; break;
-    case ncclUint64:   ptrUnion.U8[idx] = valueI; break;
-    case ncclFloat32:  ptrUnion.F4[idx] = valueF; break;
-    case ncclFloat64:  ptrUnion.F8[idx] = valueF; break;
-    default:
-      printf("Unsupported datatype (%d)\n", dataType);
-      exit(0);
   }
 }
 
@@ -585,96 +619,6 @@ void FillPattern(PtrUnion& ptrUnion, ncclDataType_t const dataType, size_t const
   }
 }
 
-bool IsEqual(PtrUnion const& actual, PtrUnion const& expected, ncclDataType_t const dataType, size_t const numElements) {
-  bool isMatch = true;
-  size_t idx = 0;
-  for (idx = 0; idx < numElements; ++idx)
-  {
-    printf("actual: %f expected: %f\n", actual.F4[idx], expected.F4[idx]);
-    switch (dataType)
-    {
-    case ncclInt8:    isMatch = (actual.I1[idx] == expected.I1[idx]); break;
-    case ncclUint8:   isMatch = (actual.U1[idx] == expected.U1[idx]); break;
-    case ncclInt32:   isMatch = (actual.I4[idx] == expected.I4[idx]); break;
-    case ncclUint32:  isMatch = (actual.U4[idx] == expected.U4[idx]); break;
-    case ncclInt64:   isMatch = (actual.I8[idx] == expected.I8[idx]); break;
-    case ncclUint64:  isMatch = (actual.U8[idx] == expected.U8[idx]); break;
-    case ncclFloat32: isMatch = (fabs(actual.F4[idx] - expected.F4[idx]) < 1e-5); break;
-    case ncclFloat64: isMatch = (fabs(actual.F8[idx] - expected.F8[idx]) < 1e-12); break;
-    default:
-      printf("Unsupported datatype (%d)\n", dataType);
-      exit(0);
-    }
-    if (!isMatch) {
-      printf("no match :(\n");
-      break;
-    }
-  }
-
-  return isMatch;
-}
-
-bool IsRootUsed(ncclFunc_t funcType) {
-  return (funcType == ncclCollBroadcast || funcType == ncclCollReduce ||
-          funcType == ncclCollGather    || funcType == ncclCollScatter);
-}
-
-// Performs the various basic reduction operations
-template <typename T>
-T ReduceOp(ncclRedOp_t const op, T const A, T const B)
-{
-  switch (op)
-  {
-  case ncclSum:  return A + B;
-  case ncclProd: return A * B;
-  case ncclMax:  return std::max(A, B);
-  case ncclMin:  return std::min(A, B);
-  default:
-    printf("Unsupported reduction operator (%d)\n", op);
-    exit(0);
-  }
-}
-
-void Reduce(PtrUnion& ptrUnion, PtrUnion const& otherPtrUnion, size_t const numElements, ncclDataType_t const dataType, ncclRedOp_t const op) {
-  for (size_t idx = 0; idx < numElements; ++idx)
-  {
-    switch (dataType)
-    {
-    case ncclInt8:     ptrUnion.I1[idx] = ReduceOp(op, ptrUnion.I1[idx], otherPtrUnion.I1[idx]); break;
-    case ncclUint8:    ptrUnion.U1[idx] = ReduceOp(op, ptrUnion.U1[idx], otherPtrUnion.U1[idx]); break;
-    case ncclInt32:    ptrUnion.I4[idx] = ReduceOp(op, ptrUnion.I4[idx], otherPtrUnion.I4[idx]); break;
-    case ncclUint32:   ptrUnion.U4[idx] = ReduceOp(op, ptrUnion.U4[idx], otherPtrUnion.U4[idx]); break;
-    case ncclInt64:    ptrUnion.I8[idx] = ReduceOp(op, ptrUnion.I8[idx], otherPtrUnion.I8[idx]); break;
-    case ncclUint64:   ptrUnion.U8[idx] = ReduceOp(op, ptrUnion.U8[idx], otherPtrUnion.U8[idx]); break;
-    case ncclFloat32:  ptrUnion.F4[idx] = ReduceOp(op, ptrUnion.F4[idx], otherPtrUnion.F4[idx]); break;
-    case ncclFloat64:  ptrUnion.F8[idx] = ReduceOp(op, ptrUnion.F8[idx], otherPtrUnion.F8[idx]); break;
-    default:
-      printf("Unsupported datatype (%d)\n", dataType);
-      exit(0);
-    }
-  }
-}
-
-void DivideByInt(PtrUnion& ptrUnion, ncclDataType_t const dataType, size_t const numElements, int const divisor) {
-  for (size_t idx = 0; idx < numElements; ++idx)
-  {
-    switch (dataType)
-    {
-    case ncclInt8:     ptrUnion.I1[idx] /= divisor; break;
-    case ncclUint8:    ptrUnion.U1[idx] /= divisor; break;
-    case ncclInt32:    ptrUnion.I4[idx] /= divisor; break;
-    case ncclUint32:   ptrUnion.U4[idx] /= divisor; break;
-    case ncclInt64:    ptrUnion.I8[idx] /= divisor; break;
-    case ncclUint64:   ptrUnion.U8[idx] /= divisor; break;
-    case ncclFloat32:  ptrUnion.F4[idx] /= divisor; break;
-    case ncclFloat64:  ptrUnion.F8[idx] /= divisor; break;
-    default:
-      printf("Unsupported datatype (%d)\n", dataType);
-      exit(0);
-    }
-  }
-}
-
 void PrepareDataFunc(TaskInfo& taskInfo, int globalRank, int totalRanks)
 {
   switch (taskInfo.funcType)
@@ -685,9 +629,8 @@ void PrepareDataFunc(TaskInfo& taskInfo, int globalRank, int totalRanks)
   case ncclCollReduceScatter: PrepData_ReduceScatter(taskInfo, globalRank, totalRanks); break;
   case ncclCollAllReduce:     PrepData_Reduce(taskInfo, globalRank, totalRanks, true);  break;
   case ncclCollGather:        PrepData_Gather(taskInfo, globalRank, totalRanks, false); break;
-  case ncclCollScatter:       PrepData_Broadcast(taskInfo, globalRank);                 break;
-  case ncclCollAllToAll:      PrepData_Broadcast(taskInfo, globalRank);                 break;
-  case ncclCollAllToAllv:     PrepData_Broadcast(taskInfo, globalRank);                 break;
+  case ncclCollScatter:       PrepData_Scatter(taskInfo, globalRank, totalRanks);       break;
+  case ncclCollAllToAll:      PrepData_AlltoAll(taskInfo, globalRank, totalRanks);      break;
   case ncclCollSend:          PrepData_Send(taskInfo, globalRank);                      break;
   case ncclCollRecv:          PrepData_Recv(taskInfo, globalRank);                      break;
   default:
@@ -708,46 +651,34 @@ void PrepData_Broadcast(TaskInfo& taskInfo, int globalRank) {
 void PrepData_Reduce(TaskInfo& taskInfo, int globalRank, int totalRanks, bool isAllReduce) {
   size_t const numBytes = taskInfo.count * DataTypeToBytes(taskInfo.datatype);
 
-  ClearMem(taskInfo.outputGpu, numBytes, true);
-
-  PtrUnion result;
-  result.ptr = taskInfo.expected.ptr;
-  ClearMem(result, numBytes);
-
   // If average or custom reduction operator is used, perform a summation instead
   ncclRedOp_t const tempOp = (taskInfo.op >= ncclAvg ? ncclSum : taskInfo.op);
 
-  PtrUnion tempInputCpu;
-  tempInputCpu.ptr = taskInfo.outputCpu.ptr;
   for (int rank = 0; rank < totalRanks; ++rank) {
-    FillPattern(tempInputCpu, taskInfo.datatype, taskInfo.count, rank);
+    FillPattern(taskInfo.outputCpu, taskInfo.datatype, taskInfo.count, rank);
     if (rank == globalRank)
-      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, tempInputCpu.ptr, numBytes, hipMemcpyHostToDevice));
+      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, taskInfo.outputCpu.ptr, numBytes, hipMemcpyHostToDevice));
     if (isAllReduce || taskInfo.root == globalRank) {
       if (rank == 0)
-        memcpy(result.ptr, tempInputCpu.ptr, numBytes);
+        memcpy(taskInfo.expected.ptr, taskInfo.outputCpu.ptr, numBytes);
       else
-        Reduce(result, tempInputCpu, taskInfo.count, taskInfo.datatype, tempOp);
+        Reduce(taskInfo.expected, taskInfo.outputCpu, taskInfo.count, taskInfo.datatype, tempOp);
     }
   }
 
   if (taskInfo.op == ncclAvg && (isAllReduce || taskInfo.root == globalRank))
-    DivideByInt(result, taskInfo.datatype, taskInfo.count, totalRanks);
+    DivideByInt(taskInfo.expected, taskInfo.datatype, taskInfo.count, totalRanks);
 }
 
 void PrepData_ReduceScatter(TaskInfo& taskInfo, int globalRank, int totalRanks) {
-  int numInputElements = taskInfo.count * totalRanks;
-  int numOutputElements = taskInfo.count;
+  int const numInputElements = taskInfo.count * totalRanks;
+  int const numOutputElements = taskInfo.count;
   std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
-
-  ClearMem(taskInfo.outputGpu, numBytes.second, true);
 
   PtrUnion tempInputCpu;
   PtrUnion tempResultCpu;
-
   AllocateMem(tempInputCpu, numBytes.first);
   AllocateMem(tempResultCpu, numBytes.first);
-  ClearMem(tempResultCpu, numBytes.first);
 
   // If average or custom reduction operator is used, perform a summation instead
   ncclRedOp_t const tempOp = (taskInfo.op >= ncclAvg ? ncclSum : taskInfo.op);
@@ -775,21 +706,46 @@ void PrepData_Gather(TaskInfo& taskInfo, int globalRank, int totalRanks, bool is
   int numOutputElements = totalRanks * taskInfo.count;
   std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
 
-  ClearMem(taskInfo.inputGpu, numBytes.first, true);
-  ClearMem(taskInfo.outputGpu, numBytes.second, true);
+  for (int rank = 0; rank < totalRanks; ++rank) {
+    FillPattern(taskInfo.outputCpu, taskInfo.datatype, numInputElements, rank);
+    if (rank == globalRank)
+      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, taskInfo.outputCpu.ptr, numBytes.first, hipMemcpyHostToDevice));
+    if (isAllGather || taskInfo.root == globalRank)
+      memcpy(taskInfo.expected.I1 + (rank * numBytes.first), taskInfo.outputCpu.ptr, numBytes.first);
+  }
+}
 
-  PtrUnion result;
-  PtrUnion tempInputCpu;
-  result.ptr = taskInfo.expected.ptr;
-  tempInputCpu.ptr = taskInfo.outputCpu.ptr;
-  ClearMem(result, numBytes.second);
+void PrepData_Scatter(TaskInfo& taskInfo, int globalRank, int totalRanks) {
+  int const numInputElements = taskInfo.count * totalRanks;
+  int const numOutputElements = taskInfo.count;
+  std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
+
+  PtrUnion tempInput;
+  AllocateMem(tempInput, numBytes.first);
+
+  FillPattern(tempInput, taskInfo.datatype, numInputElements, taskInfo.root);
+
+  if (globalRank == taskInfo.root)
+    HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, tempInput.ptr, numBytes.first, hipMemcpyHostToDevice));
+  
+  memcpy(taskInfo.expected.U1, tempInput.U1 + globalRank * numBytes.second, numBytes.second);
+
+  FreeMem(tempInput);
+}
+
+void PrepData_AlltoAll(TaskInfo& taskInfo, int globalRank, int totalRanks) {
+  int const numInputElements = taskInfo.count * totalRanks;
+  int const numOutputElements = numInputElements;
+  std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
+  size_t const numBytesPerRank = numBytes.first / totalRanks;
 
   for (int rank = 0; rank < totalRanks; ++rank) {
-    FillPattern(tempInputCpu, taskInfo.datatype, numInputElements, rank);
+    FillPattern(taskInfo.outputCpu, taskInfo.datatype, numInputElements, rank);
+
     if (rank == globalRank)
-      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, tempInputCpu.ptr, numBytes.first, hipMemcpyHostToDevice));
-    if (isAllGather || taskInfo.root == globalRank)
-      memcpy(result.I1 + (rank * numBytes.first), tempInputCpu.ptr, numBytes.first);
+      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, taskInfo.outputCpu.ptr, numBytes.first, hipMemcpyHostToDevice));
+    
+    memcpy(taskInfo.expected.U1 + numBytesPerRank * rank, taskInfo.outputCpu.U1 + numBytesPerRank * globalRank, numBytesPerRank);
   }
 }
 
