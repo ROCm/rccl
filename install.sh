@@ -24,7 +24,7 @@ install_dependencies=false
 install_library=false
 install_prefix="${ROCM_PATH}"
 msccl_kernel_enabled=true
-mscclpp_enabled=false
+mscclpp_enabled=true
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
 openmp_test_enabled=false
@@ -388,7 +388,7 @@ else
 fi
 
 # Add common CMake options
-cmake_common_options="${cmake_common_options} -DROCM_PATH=${ROCM_PATH} -DONLY_FUNCS=${ONLY_FUNCS} ${enable_ninja}"
+cmake_common_options="${cmake_common_options} -DROCM_PATH=${ROCM_PATH} ${enable_ninja}"
 
 # Build RCCL-UnitTests, if enabled
 if [[ "${build_tests}" == true ]] || ([[ "${run_tests}" == true ]] && [[ ! -x ./test/rccl-UnitTests ]]); then
@@ -398,7 +398,7 @@ fi
 # Initiate RCCL CMake
 # Passing NPKIT_FLAGS separately (not as part of ${cmake_common_options}) as
 # ${npkit_options} need to be passed "as-is" i.e. with `-D` to CMakeLists.txt
-${cmake_executable} ${cmake_common_options} -DNPKIT_FLAGS="${npkit_options}" ../../.
+${cmake_executable} ${cmake_common_options} -DNPKIT_FLAGS="${npkit_options}" -DONLY_FUNCS="${ONLY_FUNCS}" ../../.
 check_exit_code "$?"
 
 # Enable verbose output from Makefile

@@ -97,6 +97,15 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_IPC_READ     0x10
 #define NCCL_NVLS_MIN_POLL 0x20
 
+#define NCCL_MAX_COLLNET_SIZE (1L << 29)
+
+enum ncclRegBufferType {
+  NCCL_REGULAR_BUFFER = 0,
+  NCCL_IPC_REG_BUFFER = 1,
+  NCCL_NVLS_REG_BUFFER = 2,
+  NCCL_COLLNET_REG_BUFFER = 3
+};
+
 struct ncclConnInfo {
   // Regular comm mechanism
   char *buffs[NCCL_NUM_PROTOCOLS]; // Local for recv, remote for send
@@ -106,6 +115,7 @@ struct ncclConnInfo {
 
   int flags;          // Direct communication / other flags
   int shared;         // Buffers are shared
+  int stepSize;       // Step size for the SIMPLE buffer
   void **ptrExchange; // Pointer exchange for direct communication
   uint64_t* redOpArgExchange; // PreOp scaler exchange for direct pull case
 
@@ -177,7 +187,7 @@ struct ncclDirect {
 };
 
 #define NCCL_CONN_IDX_P2P_NET 2
-#define NCCL_MAX_NVLS_ARITY 8
+#define NCCL_MAX_NVLS_ARITY 32
 #define NCCL_MAX_NVLS_TREE_ARITY 3
 struct ncclNvls {
   int out;
@@ -190,6 +200,12 @@ struct ncclNvls {
   int node;
   int nNodes;
 };
+
+#if __CUDA_ARCH__ >= 900
+#define NCCL_MAX_ARITY NCCL_MAX_NVLS_ARITY
+#else
+#define NCCL_MAX_ARITY NCCL_MAX_DIRECT_ARITY
+#endif
 
 #define NCCL_MAX_CONNS 3
 struct ncclChannelPeer {
@@ -234,9 +250,10 @@ struct ncclWorkElem {
   union {
     uint8_t flagBits;
     struct {
-      uint8_t isUsed:1, redOpArgIsPtr:1, regUsed:1, oneNode:1;
+      uint8_t isUsed:1, redOpArgIsPtr:1, oneNode:1;
     };
   };
+  uint8_t regUsed;
   uint8_t nWarps;
   uint8_t direct;
 
@@ -535,58 +552,64 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 // Map the rowIdx to funcIdx
 extern int const ncclDevFuncRowToId[];
 
-// `ncclFuncIndex()` needs to be in sync with 'ALL_COLLS' in Generate.cmake
-inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
+// `ncclDevFuncId()` needs to be in sync with 'ALL_COLLS' in generate.py
+inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int unroll) {
   int row = 0;
   do {
     // RING / <all_protos> / Sum / int8_t
     if (coll == ncclFuncAllGather) {
-      row += proto;
+      row += proto * NCCL_NUM_UNROLLS + unroll;
       break;
     }
-    row += NCCL_NUM_PROTOCOLS;
+    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS;
 
     // <all_algos> / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncAllReduce) {
-      row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
+      row += ((((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) * NCCL_NUM_UNROLLS + unroll) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto) * NCCL_NUM_UNROLLS;
       break;
     }
-    row += (NCCL_NUM_ALGORITHMS - 2) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += NCCL_NUM_UNROLLS * (NCCL_NUM_ALGORITHMS - 4) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
-    if (coll == ncclFuncAllToAllPivot) break;
-    row += 1;
+    if (coll == ncclFuncAllToAllPivot) {
+      row += unroll;
+      break;
+    }
+    row += NCCL_NUM_UNROLLS;
 
     // RING / <all_protos> / Sum / int8_t
     if (coll == ncclFuncBroadcast) {
-      row += proto;
+      row += proto * NCCL_NUM_UNROLLS + unroll;
       break;
     }
-    row += NCCL_NUM_PROTOCOLS;
+    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS;
 
     // RING / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncReduce) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto; 
+      row += (((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) * NCCL_NUM_UNROLLS + unroll) - NCCL_NUM_FLOATS * proto * NCCL_NUM_UNROLLS; 
       break;
     }
-    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncReduceScatter) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto;
+      row += (((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) * NCCL_NUM_UNROLLS + unroll) - NCCL_NUM_FLOATS * proto * NCCL_NUM_UNROLLS;
       break;
     }
-    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
-    if (coll == ncclFuncSendRecv) break;
-    row += 1;
+    if (coll == ncclFuncSendRecv) {
+      row += unroll;
+      break;
+    }
+    row += NCCL_NUM_UNROLLS;
 
   } while (false);
 
   return ncclDevFuncRowToId[row];
 }
 
-inline int ncclDevFuncId_P2p() { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - NCCL_NUM_ONERANK - 1]; }
+inline int ncclDevFuncId_P2p(int unroll) { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - NCCL_NUM_ONERANK - (unroll > 0 ? 0 : 1) - 1]; }
 
 #endif

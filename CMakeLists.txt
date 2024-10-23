@@ -26,8 +26,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
-option(BUILD_MSCCLPP                           "Build MSCCL++"                                 OFF)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  OFF)
@@ -56,7 +55,6 @@ set(DEFAULT_GPUS
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
-include(cmake/Generator.cmake)    # Configure functions that goes into RCCL
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -208,6 +206,16 @@ if(ENABLE_IFC)
     set(IFC_ENABLED OFF)
     message(WARNING "Indirect function call disabled - requires HIP version >= 5.5.30201")
   endif()
+else()
+  set(IFC_ENABLED OFF)
+endif()
+
+## Check for LL128 support
+if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+  set(LL128_ENABLED ON)
+  message(STATUS "RCCL LL128 protocol enabled")
+else()
+  message(STATUS "RCCL LL128 protocol disabled - requires HIP version >= 6.1.33591")
 endif()
 
 ## Check for hsa-runtime64
@@ -288,19 +296,11 @@ if (HAVE_KERNARG_PRELOAD)
 endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
-if (BUILD_MSCCLPP)
-  if (NOT ENABLE_MSCCLPP)
-    set(BUILD_MSCCLPP OFF)
-    message(WARNING "ENABLE_MSCCLPP not set; disabling MSCCL++ build")
-  else()
-    find_package(IBVerbs)
-    if (NOT IBVerbs_FOUND)
-      set(BUILD_MSCCLPP OFF)
-      message(WARNING "IBVerbs not found; disabling MSCCL++ build")
-    elseif(NOT "gfx942" IN_LIST GPU_TARGETS)
-      set(BUILD_MSCCLPP OFF)
-      message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
-    endif()
+## Currently MSCCL++ is supported only on gfx942
+if (ENABLE_MSCCLPP)
+  if(NOT ("gfx942" IN_LIST GPU_TARGETS OR "gfx942:xnack-" IN_LIST GPU_TARGETS OR "gfx942:xnack+" IN_LIST GPU_TARGETS))
+    set(ENABLE_MSCCLPP OFF)
+    message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
   endif()
 endif()
 
@@ -583,7 +583,7 @@ foreach(SRC_FILE ${SRC_FILES})
     OUTPUT ${HIP_FILE}
     COMMAND mkdir -p ${HIP_FILE_DIR}
             && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
-            && ${CMAKE_COMMAND} -DHIP_FILE=${HIP_FILE} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/AddUnroll.cmake
+            && ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/add_unroll.sh ${HIP_FILE}
     MAIN_DEPENDENCY ${SRC_FILE}
     COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
   )
@@ -591,13 +591,32 @@ endforeach()
 
 # Generate device/host tables and all the collective functions that are going to be in librccl.so
 #==================================================================================================
-if(ONLY_FUNCS)
-  ## Generate only the specified functions
-  gen_functions(${ONLY_FUNCS})
-else()
-  # Generate all the functions
-  gen_functions("AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv")
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+if (NOT Python3_FOUND)
+  message(FATAL_ERROR "RCCL requires Python3 for generating host/device tables")
 endif()
+
+set(GEN_DIR "${HIPIFY_DIR}/gensrc")
+
+# Execute the python script to generate required files
+execute_process(
+    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE gen_py_result
+    ERROR_VARIABLE gen_py_error
+)
+if (gen_py_result)
+  message(SEND_ERROR "Error: ${gen_py_error}")
+  message(FATAL_ERROR "${CMAKE_SOURCE_DIR}/src/device/generate.py failed")
+endif()
+
+# Find the generated files in the output directory
+file(GLOB GENERATED_FILES "${GEN_DIR}/*")
+
+# Append all found generated files to the list
+foreach(file ${GENERATED_FILES})
+  list(APPEND HIP_SOURCES ${file})
+endforeach()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
@@ -625,6 +644,7 @@ target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # 
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
 target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
 if(DEMANGLE_DIR)
@@ -701,12 +721,8 @@ if(DEMANGLE_DIR)
   target_compile_definitions(rccl PRIVATE "HAVE_CPLUS_DEMANGLE=1")
   target_compile_definitions(rccl PRIVATE "HAVE_DECL_BASENAME=1")
 endif()
-if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
-  set(LL128_ENABLED ON)
+if(LL128_ENABLED)
   target_compile_definitions(rccl PRIVATE ENABLE_LL128)
-  message(STATUS "RCCL LL128 protocol enabled")
-else()
-  message(STATUS "RCCL LL128 protocol disabled - requires HIP version >= 6.1.33591")
 endif()
 
 ## Set RCCL compile options
@@ -765,6 +781,9 @@ target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
+if(ENABLE_MSCCLPP)
+  target_link_libraries(rccl PRIVATE mscclpp_nccl)
+endif()
 
 ## Set RCCL link options
 ## Find out available memory
@@ -807,7 +826,7 @@ if (HAVE_KERNARG_PRELOAD)
   target_link_options(rccl PRIVATE -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16)
 endif()
 
-if(BUILD_MSCCLPP)
+if(ENABLE_MSCCLPP)
   include(cmake/MSCCLPP.cmake)
   message(STATUS "Building MSCCL++ with NCCL API support")
 endif()
@@ -817,6 +836,37 @@ set_property(TARGET rccl PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
 
 ## Setup librccl.so version
 rocm_set_soversion(rccl "1.0")
+
+if(NOT BUILD_SHARED_LIBS)
+  # To create a static lib with `-fgpu-rdc`, you need `--emit-static-lib` and `--hip-link`.
+  # You also need to invoke amdclang++ again to trigger GPU code generation.
+  set(static_link_flags
+    ${CXXFLAGS}
+    --hip-link
+    -fgpu-rdc
+    --emit-static-lib
+  )
+
+  # Find all the libraries we need to link at link time to include them in the clang link
+  # command line.
+  get_target_property(rccl_libs rccl LINK_LIBRARIES)
+  foreach(target ${rccl_libs})
+    if(TARGET ${target})
+      get_target_property(location ${target} LOCATION)
+      if(location)
+        LIST(APPEND static_link_flags -l${location})
+      endif()
+    endif()
+  endforeach()
+
+  foreach(target ${GPU_TARGETS})
+    list(APPEND static_link_flags --offload-arch=${target})
+  endforeach()
+  list(JOIN static_link_flags " " flags_str)
+
+  # Invoking amdclang++ this way will produce a static archive, so just override ARCHIVE_CREATE.
+  set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_CXX_COMPILER> ${flags_str} -o <TARGET> <OBJECTS>")
+endif()
 
 # Install settings
 #==================================================================================================
@@ -831,9 +881,6 @@ file(COPY tools/msccl-unit-test-algorithms DESTINATION ${PROJECT_BINARY_DIR})
 ## Install Algorithm files under share folder
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
 rocm_install(DIRECTORY ${PROJECT_BINARY_DIR}/msccl-unit-test-algorithms DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
-if(BUILD_MSCCLPP)
-  rocm_install(FILES ${MSCCLPP_OUT_LIBS} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT "runtime")
-endif()
 
 rocm_export_targets(
   NAMESPACE roc::

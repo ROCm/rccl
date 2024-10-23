@@ -13,7 +13,7 @@
 #define NCCL_LL128_FLAGTHREAD (NCCL_LL128_LINEELEMS-1)
 
 #ifndef RCCL_USE_WBINVL1_VOL
-#if defined(__GFX8__) || defined(__GFX9__)
+#if defined(__GFX8__) || defined(__gfx906__) || defined(__gfx908__) || defined(__gfx90a__)
 #define RCCL_USE_WBINVL1_VOL 1
 #else
 #define RCCL_USE_WBINVL1_VOL 0

@@ -157,7 +157,6 @@ namespace RcclUnitTesting
    * ******************************************************************************************/
   TEST(Standalone, RegressionTiming)
   {
-    TestBed testBed;
     // timing
     using namespace std::chrono;
     using Clock = std::chrono::high_resolution_clock;
@@ -169,7 +168,8 @@ namespace RcclUnitTesting
     if (numGpus < 2) {
       GTEST_SKIP() << "This test requires at least 2 devices.";
     }
-
+    hipDeviceProp_t devProp;
+    HIPCALL(hipGetDeviceProperties(&devProp, 0));
     // Initialize RCCL
     int numRanks = 2;
     std::vector<ncclComm_t> comms(numRanks);
@@ -180,7 +180,7 @@ namespace RcclUnitTesting
     for (auto p : protocolList)
     {
       usElapsed = 0;
-      if(testBed.ev.isGfx12) {
+      if(strncmp("gfx12",devProp.gcnArchName,5) == 0) {
         setenv("NCCL_PROTO", "Simple", 1);
       } else {
         setenv("NCCL_PROTO", p, 1);

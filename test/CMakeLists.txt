@@ -86,14 +86,12 @@ if(BUILD_TESTS)
 
   # rccl-UnitTests using static library of rccl requires passing rccl
   # through -l and -L instead of command line input.
-  if(BUILD_STATIC)
+  if(BUILD_SHARED_LIBS)
+    target_link_libraries(rccl-UnitTests PRIVATE rccl)
+    set_property(TARGET rccl-UnitTests PROPERTY INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${ROCM_PATH}/lib;${CMAKE_BINARY_DIR}")
+  else()
     add_dependencies(rccl-UnitTests rccl)
     target_link_libraries(rccl-UnitTests PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR} -lrocm_smi64 -L${ROCM_PATH}/lib -L${ROCM_PATH}/rocm_smi/lib)
-  else()
-    target_link_libraries(rccl-UnitTests PRIVATE rccl)
-  endif()
-  if(BUILD_SHARED_LIBS)
-    set_property(TARGET rccl-UnitTests PROPERTY INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${ROCM_PATH}/lib;${CMAKE_BINARY_DIR}")
   endif()
   set_property(TARGET rccl-UnitTests PROPERTY BUILD_RPATH "${CMAKE_BINARY_DIR};${ROCM_PATH}/lib")
   rocm_install(TARGETS rccl-UnitTests COMPONENT tests)

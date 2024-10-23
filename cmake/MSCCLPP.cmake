@@ -32,7 +32,20 @@
 # For downloading, building, and installing required dependencies
 include(cmake/DownloadProject.cmake)
 
+function(mscclpp_cmake_arg NAME)
+    string (REPLACE ";" "$<SEMICOLON>" ARG_VALUE "${${NAME}}") # Replace ; with non-escapable SEMICOLON symbol to avoid CMake errors
+    string(STRIP "${ARG_VALUE}" ARG_VALUE) # Eliminate whitespace, reducing to empty string if necessary
+
+    # Only add a cmake argument if it has a value
+    set(${NAME}_ARG "-D${NAME}=\"${ARG_VALUE}\"" PARENT_SCOPE)
+    if("${ARG_VALUE}" STREQUAL "")
+        set(${NAME}_ARG "" PARENT_SCOPE)
+    endif()
+endfunction()
+
+
 if(ENABLE_MSCCLPP)
+    # Try to find the mscclpp install
     set(MSCCLPP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/ext/mscclpp CACHE PATH "")
     execute_process(
         COMMAND mkdir -p ${MSCCLPP_ROOT}
@@ -41,30 +54,65 @@ if(ENABLE_MSCCLPP)
     find_package(mscclpp_nccl)
 
     if(NOT mscclpp_nccl_FOUND)
-        message(STATUS "MSCCL++ not found. Downloading and building MSCCL++ only for gfx942.")
-        # Download, build and install mscclpp
+        # Ensure the source code is checked out
+        set(MSCCLPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp CACHE PATH "")
+        if(NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt)
+            message(STATUS "Checking out microsoft/mscclpp")
+            execute_process(
+                COMMAND git submodule update --init --recursive
+                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            )
+        endif()
+        execute_process(
+           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+	execute_process(
+           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
+        message(STATUS "Building mscclpp only for gfx942.")
+        
+        mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
+        mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
+        mscclpp_cmake_arg(HIP_COMPILER)
+
+        set(GFX942_VARIANT "gfx942")
+        if(BUILD_ADDRESS_SANITIZER)
+            set(GFX942_VARIANT "gfx942:xnack+")
+        endif()
     
         download_project(PROJ                mscclpp_nccl
-                         GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
-                         GIT_TAG             b1b9d0626cfa40319c18c05f8c16650568395c29
+                         # GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
+                         # GIT_TAG             1e82dd444fc1ed8b7add354eebaab8a94e67d5fc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DGPU_TARGETS=gfx942 -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
                          LOG_INSTALL         FALSE
                          UPDATE_DISCONNECTED TRUE
+                         SOURCE_DIR          ${MSCCLPP_SOURCE}
         )
 
         find_package(mscclpp_nccl REQUIRED)
+	execute_process(
+    		COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+        	WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+    	)
+	execute_process(
+           COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
     endif()
 
-    # Copy the outputs to the PROJECT_BINARY_DIR, list them in MSCCLPP_OUT_LIBS
-    file(GLOB MSCCLPP_LIB_FILES "${MSCCLPP_ROOT}/lib/*")
-    file(GLOB MSCCLPP_LIB_NAMES RELATIVE ${MSCCLPP_ROOT}/lib "${MSCCLPP_ROOT}/lib/*")
-    set(MSCCLPP_OUT_LIBS "")
-    foreach(LIB_NAME ${MSCCLPP_LIB_NAMES})
-        list(APPEND MSCCLPP_OUT_LIBS ${PROJECT_BINARY_DIR}/${LIB_NAME})
-    endforeach()  
-    file(COPY ${MSCCLPP_LIB_FILES} DESTINATION ${PROJECT_BINARY_DIR})
+    execute_process(COMMAND objcopy
+                    --redefine-syms=${CMAKE_CURRENT_SOURCE_DIR}/src/misc/mscclpp/mscclpp_nccl_syms.txt
+                    "${MSCCLPP_ROOT}/lib/libmscclpp_nccl_static.a"
+                    "${PROJECT_BINARY_DIR}/libmscclpp_nccl.a"
+    )
+    add_library(mscclpp_nccl STATIC IMPORTED)
+    set_target_properties(mscclpp_nccl PROPERTIES IMPORTED_LOCATION ${PROJECT_BINARY_DIR}/libmscclpp_nccl.a)
+
 endif()

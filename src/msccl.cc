@@ -61,6 +61,14 @@ ncclResult_t mscclRunAlgo_impl(
   struct mscclAlgo* hostAlgo = status.hostAlgos[mscclAlgoHandle];
   struct mscclAlgo* devAlgo = status.devAlgos[mscclAlgoHandle];
 
+  // NCCL adds a lot of guarantees that target device is getting used
+  // in its group management code, which we entirely skip when MSCCL is used
+  // Therefore, in single thread multiGPU mode
+  // setting the device is critical to be sure 
+  // communication is done on the intended device
+
+  CUDACHECK(hipSetDevice(comm->cudaDev)); 
+
   NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
 
   NCCLCHECK(mscclSetupCount(hostAlgo, comm, count, dataType));

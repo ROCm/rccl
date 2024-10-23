@@ -105,23 +105,25 @@
 #endif
 
 struct ncclShmemGroup {
-  ncclConnInfo *recvConns[NCCL_MAX_NVLS_ARITY];
-  ncclConnInfo *sendConns[NCCL_MAX_NVLS_ARITY];
-  void* srcs[NCCL_MAX_NVLS_ARITY+1];
-  void* dsts[NCCL_MAX_NVLS_ARITY+1];
+  ncclConnInfo *recvConns[NCCL_MAX_ARITY];
+  ncclConnInfo *sendConns[NCCL_MAX_ARITY];
+  void* userInput;
+  void* userOutput;
+  void* srcs[NCCL_MAX_ARITY+1];
+  void* dsts[NCCL_MAX_ARITY+1];
   uint64_t barrier;
   uint64_t barrier_next[NCCL_MAX_GROUPS];
   union {
     unpackGroupShmem unpack;
   } devicePlugin;
-  int32_t dstSizes[NCCL_MAX_NVLS_ARITY+1];
+  int32_t dstSizes[NCCL_MAX_ARITY+1];
 };
 
 #define LDS_NUM_EVENTS 64
 
 struct ncclShmemData {
   struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
-  uint64_t redOpArgs[NCCL_MAX_NVLS_ARITY+1];
+  uint64_t redOpArgs[NCCL_MAX_ARITY+1];
   int channelId;
   int aborted;
   alignas(16) struct ncclDevComm comm;
@@ -225,7 +227,7 @@ static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we
   }
 }
 
-template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE, int COLL_UNROLL>
+template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE>
 __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) {
   const int tid = threadIdx.x;
   int x = tid;
@@ -344,15 +346,9 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
       SpecializedRunWork().run(&ncclShmem.work);
     } else {
 #ifdef USE_INDIRECT_FUNCTION_CALL
-      if (COLL_UNROLL == 4)
-        ncclDevFuncTable_4[ncclShmem.work.header.funcIndex]();
-      else
-        ncclDevFuncTable[ncclShmem.work.header.funcIndex]();
+      ncclDevFuncTable[ncclShmem.work.header.funcIndex]();
 #else
-      if (COLL_UNROLL == 4)
-        NCCL_CALL_FUNCTIONS_4(ncclShmem.work.header.funcIndex);
-      else
-        NCCL_CALL_FUNCTIONS(ncclShmem.work.header.funcIndex);
+      NCCL_CALL_FUNCTIONS(ncclShmem.work.header.funcIndex);
 #endif
     }
 
@@ -383,27 +379,19 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
 }
 
 __global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
-__global__ void ncclDevKernel_Generic_4(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #ifdef ENABLE_COLLTRACE
 __global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
-__global__ void ncclDevKernelDebug_Generic_4(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #endif
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
-#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto) \
+#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, unroll) \
   __device__ void ncclDevFunc_##suffix() { \
-    RunWork<coll, ty, redop<ty>, algo, proto, 2>().run(&ncclShmem.work); \
-  } \
-  __device__ void ncclDevFunc_##suffix##_4() { \
-    RunWork<coll, ty, redop<ty>, algo, proto, 4>().run(&ncclShmem.work); \
+    RunWork<coll, ty, redop<ty>, algo, proto, unroll>().run(&ncclShmem.work); \
   }
 #else
-#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto) \
+#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, unroll) \
   __device__ __attribute__((noinline)) void ncclDevFunc_##suffix() { \
-    RunWork<coll, ty, redop<ty>, algo, proto, 2>().run(&ncclShmem.work); \
-  } \
-  __device__ __attribute__((noinline)) void ncclDevFunc_##suffix##_4() { \
-    RunWork<coll, ty, redop<ty>, algo, proto, 4>().run(&ncclShmem.work); \
+    RunWork<coll, ty, redop<ty>, algo, proto, unroll>().run(&ncclShmem.work); \
   }
 #endif
 

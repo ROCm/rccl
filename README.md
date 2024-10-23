@@ -68,12 +68,16 @@ By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeL
 ### To build the library using CMake:
 
 ```shell
-$ git clone https://github.com/ROCm/rccl.git
+$ git clone --recursive https://github.com/ROCm/rccl.git
 $ cd rccl
 $ mkdir build
 $ cd build
 $ cmake ..
 $ make -j 16      # Or some other suitable number of parallel jobs
+```
+If you have already cloned, you can checkout the external submodules manually.
+```shell
+$ git submodule update --init --recursive --depth=1
 ```
 You may substitute an installation path of your own choosing by passing `CMAKE_INSTALL_PREFIX`. For example:
 ```shell
@@ -91,11 +95,42 @@ $ make package
 $ sudo dpkg -i *.deb
 ```
 
-RCCL package install requires sudo/root access because it creates a directory called "rccl" under /opt/rocm/. This is an optional step and RCCL can be used directly by including the path containing librccl.so.
+RCCL package install requires sudo/root access because it installs under `/opt/rocm/`. This is an optional step as RCCL can instead be used directly by including the path containing `librccl.so`.
+
+## Docker build
+
+Assuming you have docker installed on your system:
+
+#### To build the docker image :
+
+By default, the given Dockerfile uses `docker.io/rocm/dev-ubuntu-22.04:latest` as the base docker image, and then installs RCCL (develop branch) and RCCL-Tests (develop branch).
+```shell
+$ docker build -t rccl-tests -f Dockerfile.ubuntu --pull .
+```
+
+The base docker image, rccl repo, and rccl-tests repo can be modified using `--build-args` in the `docker build` command above. E.g., to use a different base docker image:
+```shell
+$ docker build -t rccl-tests -f Dockerfile.ubuntu --build-arg="ROCM_IMAGE_NAME=rocm/dev-ubuntu-20.04" --build-arg="ROCM_IMAGE_TAG=6.2" --pull .
+```
+
+#### To start an interactive docker container on a system with AMD GPUs :
+
+```shell
+$ docker run -it --rm --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --network=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined rccl-tests /bin/bash
+```
+
+#### To run rccl-tests (all_reduce_perf) on 8 AMD GPUs (inside the docker container) :
+
+```shell
+$ mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG=VERSION /workspace/rccl-tests/build/all_reduce_perf -b 1 -e 16G -f 2 -g 1
+```
+
+For more information on rccl-tests options, refer to the [Usage](https://github.com/ROCm/rccl-tests#usage) section of rccl-tests.
+
 
 ## Enabling peer-to-peer transport
 
-In order to enable peer-to-peer access on machines with PCIe-connected GPUs, the HSA environment variable HSA_FORCE_FINE_GRAIN_PCIE=1 is required to be set, on top of requiring GPUs that support peer-to-peer access and proper large BAR addressing support.
+In order to enable peer-to-peer access on machines with PCIe-connected GPUs, the HSA environment variable `HSA_FORCE_FINE_GRAIN_PCIE=1` is required to be set, on top of requiring GPUs that support peer-to-peer access and proper large BAR addressing support.
 
 ## Tests
 
@@ -106,7 +141,7 @@ rccl unit test names are now of the format:
 
     CollectiveCall.[Type of test]
 
-Filtering of rccl unit tests should be done with environment variable and by passing the --gtest_filter command line flag, for example:
+Filtering of rccl unit tests should be done with environment variable and by passing the `--gtest_filter` command line flag, for example:
 
 ```shell
 UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./rccl-UnitTests --gtest_filter="AllReduce.C*"
@@ -134,7 +169,13 @@ RCCL integrates [MSCCL](https://github.com/Azure/msccl) and [MSCCL++](https://gi
 
 MSCCL uses XMLs for different collective algorithms on different architectures. RCCL collectives can leverage those algorithms once the corresponding XML has been provided by the user. The XML files contain the sequence of send-recv and reduction operations to be executed by the kernel. On MI300X, MSCCL is enabled by default. On other platforms, the users may have to enable this by setting `RCCL_MSCCL_FORCE_ENABLE=1`. By default, MSCCL will only be used if every rank belongs to a unique process; to disable this restriction for multi-threaded or single-threaded configurations, set `RCCL_MSCCL_ENABLE_SINGLE_PROCESS=1`.
 
-On the other hand, RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. Users need to set the RCCL environment variable `RCCL_ENABLE_MSCCLPP=1` to run RCCL workload with MSCCL++ support. It is also possible to set the message size threshold for using MSCCL++ by using the environment variable `RCCL_MSCCLPP_THRESHOLD`. Once `RCCL_MSCCLPP_THRESHOLD` (the default value is 1MB) is set, RCCL will invoke MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
+On the other hand, RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. Users need to set the RCCL environment variable `RCCL_MSCCLPP_ENABLE=1` to run RCCL workload with MSCCL++ support. It is also possible to set the message size threshold for using MSCCL++ by using the environment variable `RCCL_MSCCLPP_THRESHOLD`. Once `RCCL_MSCCLPP_THRESHOLD` (the default value is 1MB) is set, RCCL will invoke MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
+
+If some restrictions are not met, it will fall back to MSCCL or RCCL. The following are restrictions on using MSCCL++:
+- Message size must be a non-zero multiple of 32 bytes
+- Does not support `hipMallocManaged` buffers
+- Allreduce only supports `float16`, `int32`, `uint32`, `float32`, and `bfloat16` data types
+- Allreduce only supports the `sum` op
 
 ## Library and API Documentation
 

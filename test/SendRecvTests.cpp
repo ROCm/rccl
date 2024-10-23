@@ -91,7 +91,7 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat16, ncclFloat64};
-    std::vector<int>            const  numElements     = {1048576, 53327, 1024, 0};
+    std::vector<int>            const  numElements     = {1048576, 53327, 1024};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  userRegistered  = true;

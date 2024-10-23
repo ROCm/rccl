@@ -28,7 +28,7 @@
 
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
-RCCL_PARAM(MscclEnableSingleProcess, "MSCCL_ENABLE_SINGLE_PROCESS", 0);
+RCCL_PARAM(MscclEnableSingleProcess, "MSCCL_ENABLE_SINGLE_PROCESS", 1);
 static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 
 bool mscclEnabled() {
@@ -63,12 +63,7 @@ bool mscclAvailable(int rank) {
   return mscclEnabled() && mscclInitialized(rank);
 }
 
-static bool mscclCommCompatible(ncclComm_t comm) {
-  if (rcclParamMscclEnableSingleProcess()) {
-    // Single process usage enabled. No need to guard against multi-thread.
-    return true;
-  }
-
+static bool allProcessHostsUnique(ncclComm_t comm) {
   std::map<uint64_t, std::set<uint64_t>> hostHashToPidHashes;
   for (int i = 0; i < comm->nRanks; i++) {
     uint64_t hostHash = comm->peerInfo[i].hostHash;
@@ -83,6 +78,20 @@ static bool mscclCommCompatible(ncclComm_t comm) {
   }
   return true;
 }
+
+static bool mscclCommCompatible(ncclComm_t comm) {
+  if (rcclParamMscclEnableSingleProcess()) {
+    // Single process usage enabled. No need to guard against multi-thread.
+    return true;
+  }
+  return allProcessHostsUnique(comm);
+}
+
+#ifdef ENABLE_MSCCLPP 
+bool mscclppCommCompatible(ncclComm_t comm) {
+  return allProcessHostsUnique(comm);
+}
+#endif
 
 const char *mscclFuncNames[] = {
             "mscclFuncReduce",
@@ -321,7 +330,7 @@ static ncclResult_t mscclInternalSchedulerSelectAlgo(int rank, struct mscclSched
     auto &m = status.algoMetas[i];
     size_t nBytes = param->count * ncclTypeSize(param->dataType) * m.sizeMultiplier;
     bool msgSizeIsValid =
-      param->count > 0 && (param->count % m.nChunksPerLoop) == 0 &&
+      param->count > 0 && ((param->count * m.sizeMultiplier) % m.nChunksPerLoop) == 0 &&
       nBytes >= m.minBytes && (m.maxBytes == 0 || nBytes <= m.maxBytes);
     if (msgSizeIsValid &&
         m.nRanks == param->nRanks &&
@@ -468,6 +477,25 @@ static ncclResult_t mscclFallBackSavedParams() {
   return ncclSuccess;
 }
 
+#ifdef ENABLE_MSCCLPP
+static inline bool isMscclppAllReduceSupported(ncclDataType_t dataType, ncclRedOp_t op) {
+  switch (dataType) {
+  case ncclFloat16:
+  case ncclInt32:
+  case ncclUint32:
+  case ncclFloat32:
+#ifdef RCCL_BFLOAT16
+  case ncclBfloat16:
+#endif
+    break;
+  default:
+    return false;
+  }
+
+  return (op == ncclSum);
+}
+#endif
+
 ncclResult_t mscclEnqueueCheck(
     const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
     void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
@@ -493,8 +521,13 @@ ncclResult_t mscclEnqueueCheck(
         }
 
         /* check if one rank per GPU and graph mode is enabled */
-        if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
-          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && (nBytes & 31) == 0) {
+        if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
+          bool isManagedBuffer = false;
+          if (sendBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(sendBuff)));
+          if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
+
+          if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
+          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && isMscclppAllReduceSupported(dataType, op)) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
               "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
@@ -529,8 +562,13 @@ ncclResult_t mscclEnqueueCheck(
         }
 
         /* check if one rank per GPU and graph mode is enabled */
-        if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible) {
-          if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && (nBytes & 31) == 0) {
+        if ((threadLocalStatus.captureStatus != mscclNoCapture) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
+          bool isManagedBuffer = false;
+          if (sendBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(sendBuff)));
+          if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
+
+          if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
+          else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && isMscclppAllReduceSupported(dataType, op)) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
               "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));

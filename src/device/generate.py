@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 import os
 import sys
+import subprocess
 
 # Order of redops, tys, protos, algos must match src/include/device.h
-all_colls =  ["Broadcast","Reduce","AllGather","ReduceScatter","AllReduce","SendRecv"]
+all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
-all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16"]
+all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16", "f8", "bf8"]
 all_protos = ["LL","LL128","SIMPLE"]
-all_algos =  ["TREE","RING","COLLNET_DIRECT","COLLNET_CHAIN","NVLS","NVLS_TREE"]
+all_algos =  ["TREE","RING"]
+all_unroll = ["2", "4"]
+
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
 
 ################################################################################
 # The first command line argument is the path to the directory to generate and
@@ -20,71 +24,106 @@ if os.path.exists(gensrc):
     os.remove(os.path.join(gensrc, name))
     #os.truncate(os.path.join(gensrc, name), 0)
 else:
-  os.mkdir(gensrc)
+  os.makedirs(gensrc)
 
 ################################################################################
-# The second  command line argument is used as a regex to filter the functions
-# which make it into libnccl. This is helpful for reducing the binary when
+# The command line argument is used as a regex to filter the functions
+# which make it into librccl. This is helpful for reducing the binary when
 # developing device code. The regex supports non-space containing globs '*',
-# parentheses '(x)', and union 'a|b'. The string representing the function has
-# one of the forms:
+# and union 'a|b'. The string representing the function has the form:
 #
-# SendRecv
-# (AllGather|Broadcast) <algo> <proto>
-# (AlLReduce|Reduce|ReduceScatter) <redop> <type> <algo> <proto>
+# <coll> <algo> <proto> <redop> <type>
 #
 # The possible values for redop, type, algo, proto can be found in the all_<foo>
 # lists at the top of this file.
 #
-# Since the Makefile forwards this from the ONLY_FUNCS variable, useful command
-# line examples are given:
-"""
-# Only send/recv:
-make ONLY_FUNCS="SendRecv"
-
-# Only non-reductions:
-make ONLY_FUNCS="AllGather * *|Broadcast * *|SendRecv"
-
-# Only AllReduce sum f32 (but all algos, protos)
-make ONLY_FUNCS="AllReduce Sum f32 * *"
-
-# Only AllReduce minmax i32 NVLS (but all protos)
-make ONLY_FUNCS="AllReduce MinMax i32 NVLS *"
-
-# AllReduce sum <all floats> RING LL128
-make ONLY_FUNCS="AllReduce Sum f32 RING LL128"
-"""
+# Example use-cases:
+#
+# # Only send/recv:
+# make ONLY_FUNCS="SendRecv"
+#
+# # Only AllReduce and Reduce
+# make ONLY_FUNCS="AllReduce|Reduce"
+#
+# # Only non-reductions:
+# make ONLY_FUNCS="AllGather * *|Broadcast * *|SendRecv"
+#
+# # Only AllReduce Sum int32_t (but all algos, protos)
+# make ONLY_FUNCS="AllReduce * * Sum int32_t"
+#
+# # Only AllReduce RING Max float (but all protos)
+# make ONLY_FUNCS="AllReduce RING * Max float"
+#
+# # AllReduce TREE LL128 Prod rccl_bfloat16
+# make ONLY_FUNCS="AllReduce TREE LL128 Prod rccl_bfloat16"
+#
+# # AllReduce RING SIMPLE and ReduceScatter RING LL float (but all redops, types for AllReduce and all redops for ReduceScatter)
+# make ONLY_FUNCS="AllReduce RING SIMPLE * *|ReduceScatter RING LL * float"
+#                         --- or ---
+# make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * float"
+# make ONLY_FUNCS="AllReduce RING/TREE LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|AllGather RING LL/SIMPLE Sum int8_t|AllToAllPivot RING SIMPLE Sum int8_t|Broadcast RING LL/SIMPLE Sum int8_t|Reduce RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|ReduceScatter RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|SendRecv RING SIMPLE Sum int8_t"
 
 # Paste all non-None arguments together with `sep`.
 def paste(sep, *args):
   return sep.join(x for x in args if x is not None)
 
-func_pattern = sys.argv[2:3]
+is_ifc             = 1 if sys.argv[2] == "ON" else 0
+is_colltrace       = 1 if sys.argv[3] == "ON" else 0
+is_msccl_kernels   = 1 if sys.argv[4] == "ON" else 0
+is_local_arch_only = 1 if sys.argv[5] == "ON" else 0
+
+func_pattern = sys.argv[6:7]
 if func_pattern and func_pattern[0]:
-  import re
   func_pattern = func_pattern[0]
-  func_pattern = func_pattern.replace("*", "[^ ]*")
-  func_pattern += "$"
-  def func_filter(*fn):
-    return None is not re.match(func_pattern, paste(" ", *fn), flags=re.IGNORECASE)
 else:
-  def func_filter(coll, redop, ty, algo, proto):
-    return True
+  func_pattern = "AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
 
 ################################################################################
 
 algos_of_coll = {
-  "AllGather":     ["RING","COLLNET_DIRECT","NVLS"],
+  "AllGather":     ["RING"],
   "AllReduce":     all_algos,
+  "AllToAllPivot": ["RING"],
   "Broadcast":     ["RING"],
   "Reduce":        ["RING"],
-  "ReduceScatter": ["RING","COLLNET_DIRECT","NVLS"],
-  "SendRecv":      [None]
+  "ReduceScatter": ["RING"],
+  "SendRecv":      ["RING"]
+}
+
+protos_of_coll = {
+  "AllGather":     all_protos,
+  "AllReduce":     all_protos,
+  "AllToAllPivot": ["SIMPLE"],
+  "Broadcast":     all_protos,
+  "Reduce":        all_protos,
+  "ReduceScatter": all_protos,
+  "SendRecv":      ["SIMPLE"]
+}
+
+redops_of_coll = {
+  "AllGather":     ["Sum"],
+  "AllReduce":     all_redops,
+  "AllToAllPivot": ["Sum"],
+  "Broadcast":     ["Sum"],
+  "Reduce":        all_redops,
+  "ReduceScatter": all_redops,
+  "SendRecv":      ["Sum"]
+}
+
+tys_of_coll = {
+  "AllGather":     ["i8"],
+  "AllReduce":     all_tys,
+  "AllToAllPivot": ["i8"],
+  "Broadcast":     ["i8"],
+  "Reduce":        all_tys,
+  "ReduceScatter": all_tys,
+  "SendRecv":      ["i8"]
 }
 
 coll_camel_to_lower = {
   "AllGather":     "all_gather",
   "AllReduce":     "all_reduce",
+  "AllToAllPivot": "alltoall_pivot",
   "Broadcast":     "broadcast",
   "Reduce":        "reduce",
   "ReduceScatter": "reduce_scatter",
@@ -94,141 +133,245 @@ coll_lower_to_camel = {coll_camel_to_lower[x]: x for x in coll_camel_to_lower}
 
 ################################################################################
 
-# Returns pair of minimum required values for (CUDART_VERSION, __CUDA_ARCH__)
-# or None if function is never supported. Note that (0, 0) encodes universal
-# support.
-def required_cuda(coll, redop, ty, algo, proto):
-  cudart, arch = 0, 0
-  # kernels mapped to by coll="Nop" functions have coll="Generic"
-  if coll in ("SendRecv", "Generic", "Nop"): return (cudart, arch)
+def calc_unroll_for_local_arch():
+  if not is_local_arch_only: 
+    return
 
-  if proto!="SIMPLE" and algo not in ("RING","TREE"): return None
+  res = subprocess.run(['rocminfo'], capture_output=True, text=True)
+  rocminfo_output = res.stdout
+  
+  # Parse rocminfo binary output
+  gfx_targets = {}
+  curr_name = None
+  for line in rocminfo_output.splitlines():
+    line = line.strip()
 
-  if coll in ("AllReduce","Reduce","ReduceScatter"):
-    if redop=="SumPostDiv" and ty[0] not in ("i","u"): return None
-    if ty=="bf16": cudart = max(cudart, 11000)
+    if line.startswith("Name:"):
+      name = line.split(':')[-1].strip()
+      if "gfx" in name:
+        curr_name = name
+    if line.startswith("Compute Unit:") and curr_name:
+      cu_count = int(line.split(':')[-1].strip())
+      gfx_targets[(curr_name, cu_count)] = None
+      curr_name = None
+  
+  # We want to remove duplicates but cannot use a dictionary since same gfx name can have different cu counts
+  # Use (gfx_name, cu_count) as key for dictionary and convert it to list here
+  gfx_targets = list(gfx_targets.keys())
 
-  if "NVLS" in algo:
-    if coll in ("AllReduce","Reduce","ReduceScatter"):
-      # Must match ncclNvlsSupported() in src/include/device.h
-      nvls_ok = ((ty in ("i32","u32","i64","u64") and redop in ("Sum","MinMax")) or
-                 (ty in ("f32","f64") and redop=="Sum") or
-                 (ty in ("f16","bf16") and redop in ("Sum","MinMax")))
-      if not nvls_ok: return None
-    cudart = max(cudart, 12010)
-    arch = max(arch, 900)
+  # Homogeneous system is required to build for only 1 varient of unroll factor
+  if len(gfx_targets) == 1:
+    gfx_name, cu_count = gfx_targets[0]
+    if ("gfx908" == gfx_name or "gfx94" in gfx_name) and cu_count > 80:
+      return 2
+    else:
+      return 4
 
-  return (cudart, arch)
+# Helper function to check if the conditions for the collective is being met
+def func_validate(coll, algo, proto, redop, ty):
+  if redop == "SumPostDiv" and ty[0] not in ("i","u"):
+    return False
+  if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll]:
+    return False
+  return True
+
+# A recursive helper to generate collective functions based on the input given
+def func_filter(function_params, current_idx, item_list=None):
+  if item_list is None:
+    item_list = []
+
+  # Check if current_idx exceeds the max depth
+  if current_idx < len(all_params):
+    # Current element is the config parameter
+    current_element = function_params[current_idx]
+
+    # If the paramter is equal to '*', include all possible cases for it
+    if current_element == "*":
+      if current_idx == 0:
+        raise ValueError("Error: Paramter 'COLL' can not be type all '*'.")
+      
+      # all_params list must be in the same order as function_params --> <coll> <algo> <proto> <redop> <type>
+      # Get the current list from all_params
+      current_list = all_params[current_idx]
+
+      # Iterate over the items int the current_list
+      for item in current_list:
+        # Add item to item_list which will be used in the inner most loop
+        item_list.append(item)
+        yield from func_filter(function_params, current_idx+1, item_list)
+
+        # For each loop layer remove the last element in item_list
+        item_list.pop()
+    else:
+      # Check if the current element is recognized
+      elements = current_element.split("/")
+      current_param = all_params[current_idx]
+      
+      # Iterate over the elements in the elements list
+      for item in elements:
+        if item not in current_param:
+          raise ValueError(f"Error: {item} is unrecognized or does not belong to this category {current_param}.")
+        
+      for item in elements:
+        item_list.append(item)
+        yield from func_filter(function_params, current_idx+1, item_list)
+
+        # For each loop layer remove the last element in item_list
+        item_list.pop()
+  else:
+    coll, algo, proto, redop, ty, unroll = item_list
+
+    if func_validate(coll, algo, proto, redop, ty):
+      yield(coll, algo, proto, redop, ty, unroll)
+
+# Parse ONLY_FUNCS input and feed it to func_filter
+def parse_input(func_pattern):
+  input_list = sorted(func_pattern.split("|"))
+
+  for input in input_list:
+    function_params = input.split()
+    params_length = len(function_params)
+
+    # If a parameter is missing, append '*'
+    while params_length < len(all_params):
+      function_params.append("*")
+      params_length += 1
+
+    # Filter functions/kernels based on input
+    yield from func_filter(function_params, 0)
 
 # Maps functions to the chosen representative for the equivalence class it
 # belongs to. For instance (sum, signed int) maps to (sum, unsigned int).
-def equivalent_primary(coll, redop, ty, algo, proto):
+def equivalent_primary(coll, algo, proto, redop, ty, unroll):
+  # if local arch only, we only need to build for 1 varient of coll_unroll.
+  # map the other varient of coll_unroll to this one.
+  if coll_unroll:
+    unroll = str(coll_unroll)
   if coll in ("AllReduce", "Reduce", "ReduceScatter"):
     # map signed integer sum/prod to unsigned
     if redop in ("Sum","Prod","PreMulSum") and ty[0]=="i":
-      return (coll, redop, "u"+ty[1:], algo, proto)
+      ty = "u"+ty[1:]
     # map signed integer min/max to unsigned for non-NVLS
-    if redop=="MinMax" and ty[0]=="i" and ("NVLS" not in algo):
-      return (coll, redop, "u"+ty[1:], algo, proto)
-  return (coll, redop, ty, algo, proto)
-
-# Map to another func representing the best kernel to use. Every distinct value
-# returned will instantiate a ncclDevKernel specialized to run this func
-# without function call overhead.
-def best_kernel(coll, redop, ty, algo, proto):
-  def best(coll, redop, ty, algo, proto):
-    # Modify this logic to control how many kernels are specialized.
-    if coll=="Nop": return ("Generic", None, None, None, None)
-    if coll=="SendRecv": return ("SendRecv", None, None, None, None)
-    if coll in ("AllGather","Broadcast"): return (coll, None, None, "RING", "LL")
-    return (coll, "Sum", ty, ("TREE" if algo=="TREE" else "RING"), "LL")
-  # Need to ensure kernel is specialize for a primary function
-  kfn = equivalent_primary(*best(coll, redop, ty, algo, proto))
-  # And isn't filtered out.
-  if not func_filter(*kfn): return ("Generic", None, None, None, None)
-  return kfn
+    elif redop=="MinMax" and ty[0]=="i" and ("NVLS" not in algo):
+      ty = "u"+ty[1:]
+  return (coll, algo, proto, redop, ty, unroll)
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
 def enumerate_func_rows():
-  yield ("SendRecv", None, None, None, None)
-  for coll in ("AllGather", "Broadcast"):
-    algos = algos_of_coll[coll]
-    for algo in algos:
+  for coll in all_colls:
+    for algo in all_algos:
       for proto in all_protos:
-        yield (coll, None, None, algo, proto)
-  for coll in ("AllReduce", "Reduce", "ReduceScatter"):
-    algos = algos_of_coll[coll]
-    for redop in all_redops:
-      for ty in all_tys:
-        for algo in algos:
-          for proto in all_protos:
-            yield (coll, redop, ty, algo, proto)
+        for redop in all_redops:
+          for ty in all_tys:
+            for unroll in all_unroll:
+              if func_validate(coll, algo, proto, redop, ty):
+                yield (coll, algo, proto, redop, ty, unroll)
+
+# Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
+def custom_sort_key(fn):
+    coll, algo, proto, redop, ty, unroll = fn
+    
+    return (
+        all_colls.index(coll),
+        all_algos.index(algo),
+        all_protos.index(proto),
+        all_redops.index(redop),
+        all_tys.index(ty),
+        all_unroll.index(unroll)
+    )
 
 ################################################################################
 
-def is_built(coll, redop, ty, algo, proto):
-  built = required_cuda(coll, redop, ty, algo, proto)
-  built = built and func_filter(coll, redop, ty, algo, proto)
-  return built
-
-# Returns None if required_cuda(...) is None.
-# Returns the coll="Nop" function if developer has filtered it out.
-# Otherwise just returns func it was given.
-def validate(coll, redop, ty, algo, proto):
-  valid = required_cuda(coll, redop, ty, algo, proto)
-  built = valid and func_filter(coll, redop, ty, algo, proto)
-  if built: return (coll, redop, ty, algo, proto)
-  if valid: return ("Nop", None, None, None, None)
-  return None
+coll_unroll = calc_unroll_for_local_arch()
 
 # Corresponds to ncclDevFuncRowToId[]
-func_rows = [validate(*fn) for fn in enumerate_func_rows()]
+func_rows = [fn for fn in enumerate_func_rows()]
 
 # Corresponds to ncclDevFuncTable[]
-primary_funcs = sorted(set(equivalent_primary(*fn) for fn in func_rows if fn is not None))
+primary_funcs = sorted(set(equivalent_primary(*fn) for fn in parse_input(func_pattern)), key=custom_sort_key)
 
 # primary_to_index[primary_funcs[i]] == i
-primary_to_index = {fn: i for (i,fn) in zip(range(len(primary_funcs)), primary_funcs)}
-
-kernel_funcs = sorted(set(best_kernel(*fn) for fn in primary_funcs))
+primary_to_index = {fn: primary_funcs.index(fn) if fn in primary_funcs else -1 for fn in func_rows}
 
 ################################################################################
 
-# Generate <gensrc>/device_table.cu
-with open(os.path.join(gensrc, "device_table.cu"), "w") as f:
+# Generate <gensrc>/device_table.h
+with open(os.path.join(gensrc, "device_table.h"), "w") as f:
+  print("-- Generating %s" % os.path.join(gensrc, "device_table.h"))
   out = f.write
-  out('#include "common.h"\n')
-  out("\n")
+
+  if is_ifc: func_declaration = "__device__ void"
+  else: func_declaration = "__device__ __attribute__((noinline)) void"
 
   for fn in primary_funcs:
     sym = paste("_", "ncclDevFunc", *fn)
-    cudart, arch = required_cuda(*fn)
-    if (cudart, arch) != (0, 0):
-      out("#if CUDART_VERSION >= %d && __CUDA_ARCH__ >= %d\n" % (cudart, arch))
-    out("__device__ void %s();\n" % sym)
-    if (cudart, arch) != (0, 0):
-      out("#endif\n")
+    if fn[2] == "LL128":
+      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      out("%s %s();\n#else\n" % (func_declaration, sym))
+      fn_ll = fn[:2] + ("LL",) + fn[3:]
+      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
+      out("%s %s();\n#endif\n" % (func_declaration, sym_ll))
+    else:
+      out("%s %s();\n" % (func_declaration, sym))
   out("\n")
 
-  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable[] = {\n");
+  out("typedef void(*ncclDevFuncPtr_t)();\n\n")
+  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable[] = {\n")
   index = 0
   for fn in primary_funcs:
     sym = paste("_", "ncclDevFunc", *fn)
-    cudart, arch = required_cuda(*fn)
-    if (cudart, arch) != (0, 0):
-      out("#if CUDART_VERSION >= %d && __CUDA_ARCH__ >= %d\n" % (cudart ,arch))
-    out("/*%4d*/ %s,\n" % (index, sym))
-    if (cudart, arch) != (0, 0):
-      out("#else\n" "/*%4d*/ nullptr,\n" "#endif\n" % index)
+    if fn[2] == "LL128":
+      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      out("/*%4d*/ %s,\n#else\n" % (index, sym))
+      fn_ll = fn[:2] + ("LL",) + fn[3:]
+      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
+      out("/*%4d*/ %s,\n#endif\n" % (index, sym_ll))
+    else:
+      out("/*%4d*/ %s,\n" % (index, sym))
     index += 1
   out("nullptr};\n")
   out("\n")
+  
+  if not is_ifc:
+    out("template<unsigned short f, unsigned short l>\n"
+      "struct Caller {\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call(unsigned short funcIndex) noexcept\n"
+      "  {\n"
+      "    constexpr unsigned short m = f + (l - f) / 2;\n"
+      "    return (funcIndex < m) ? Caller<f, m>::call(funcIndex) : Caller<m, l>::call(funcIndex);\n"
+      "  }\n"
+      "};\n"
+      "\n"
+      "template<unsigned short f>\n"
+      "struct Caller<f, f + 1>{\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call(unsigned short funcIndex) noexcept { ncclDevFuncTable[f](); }\n"
+      "};\n")
+    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
+    out(f"  Caller<0, {index}>::call(funcIndex);\n")
+    out("}\n\n")
 
-  out("// Workaround for https://reviews.llvm.org/D55580\n"
-      "__device__ void ncclWorkaroundClangD55580() {}\n")
+# Generate <gensrc>/device_table.cpp
+if is_colltrace:
+  with open(os.path.join(gensrc, "device_table.cpp"), "w") as f:
+    print("-- Generating %s" % os.path.join(gensrc, "device_table.cpp"))
 
-# Generate <gensrc>/host_table.cc
-with open(os.path.join(gensrc, "host_table.cc"), "w") as f:
+    out = f.write
+    out('#include "nccl_common.h"\n#include "device.h"\n')
+    out("\n")
+    
+    out("const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
+    for fn in primary_funcs:
+      out('   "%s",\n' % paste("_", "ncclDevFunc", *fn))
+    for ty in all_tys:
+      out(f'   "ncclDevFunc_OneRankReduce_PreMulSum_{ty}",\n')
+    out("};\n")
+
+# Generate <gensrc>/host_table.cpp
+with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
+  print("-- Generating %s" % os.path.join(gensrc, "host_table.cpp"))
+
   out = f.write
   out('#include "device.h"\n')
   out("\n")
@@ -243,61 +386,14 @@ with open(os.path.join(gensrc, "host_table.cc"), "w") as f:
       comment = " // " + paste(" ", *fn)
     out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
     index += 1
-  out("-1};\n")
-  out("\n")
-
-  # Forward declarations of kernels.
-  for kfn in kernel_funcs:
-    cudart, _ = required_cuda(*kfn)
-    sym = paste("_", "ncclDevKernel", *kfn)
-    if cudart != 0: out("#if CUDART_VERSION >= %d\n" % cudart)
-    out("__global__ void %s(struct ncclDevComm*, uint64_t, struct ncclWork*);\n" % sym)
-    if cudart != 0: out("#endif\n")
-  out("\n")
-
-  # List of all kernel function pointers.
-  out("extern int const ncclDevKernelCount = %d;\n" % len(kernel_funcs))
-  out("extern void* const ncclDevKernelList[] = {\n")
-  index = 0
-  for kfn in kernel_funcs:
-    cudart, _ = required_cuda(*kfn)
-    sym = paste("_", "ncclDevKernel", *kfn)
-    if cudart != 0: out("#if CUDART_VERSION >= %d\n" % cudart)
-    out("/*%4d*/ (void*)%s,\n" % (index, sym));
-    if cudart != 0: out("#else\n" "/*%4d*/ nullptr,\n" "#endif\n" % index)
-    index += 1
-  out("nullptr};\n")
-  out("\n")
-
-  # Maps primary id to kernel function pointer.
-  out("extern void* const ncclDevKernelForFunc[] = {\n")
-  index = 0
-  for fn in primary_funcs:
-    kfn = best_kernel(*fn)
-    sym = paste("_", "ncclDevKernel", *kfn)
-    cudart, _ = required_cuda(*kfn)
-    if cudart != 0: out("#if CUDART_VERSION >= %d\n" % cudart)
-    out("/*%4d*/ (void*)%s,\n" % (index, sym))
-    if cudart != 0: out("#else\n" "/*%4d*/ nullptr,\n" "#endif\n" % index)
-    index += 1
-  out("nullptr};\n")
-  out("\n")
-
-  # Does the prior map use an explicitly specialized kernel.
-  out("extern bool const ncclDevKernelForFuncIsSpecialized[] = {\n")
-  index = 0
-  for fn in primary_funcs:
-    kfn = best_kernel(*fn)
-    specialized = "1" if fn == kfn else "0"
-    out("/*%4d*/ %s,\n" % (index, specialized))
-    index += 1
-  out("0};\n")
+  out(f"{index}")
+  out("};\n")
 
 # Maps to .cu filename which implements this func. The only constraint is that
 # "coll" is reflected in the name: formally that no two funcs having different
 # coll's map to the same filename.
-def impl_filename(coll, redop, ty, algo, proto):
-  return "%s.cu" % paste("_", coll_camel_to_lower[coll], redop and redop.lower(), ty)
+def impl_filename(coll, algo, proto, redop, ty, unroll):
+  return "%s.cpp" % paste("_", coll_camel_to_lower[coll], redop and redop.lower(), ty)
 
 # Partition the functions and kernels to the .cu filenames. The partition is
 # a dictionary mapping filename to (coll, func-tuple list)
@@ -312,33 +408,6 @@ def partition_by_name(fns):
   return ans
 
 name_to_funcs = partition_by_name(fn for fn in primary_funcs if fn[0]!="Nop")
-name_to_kernels = partition_by_name(kfn for kfn in kernel_funcs if kfn[0]!="Generic")
-
-# Generate <gensrc>/rules.mk
-with open(os.path.join(gensrc, "rules.mk"), "w") as f:
-  out = f.write
-  impl_names = sorted(name_to_funcs.keys())
-  names = impl_names + ["host_table.cc", "device_table.cu"]
-  out("LIB_OBJS_GEN = $(patsubst %, $(OBJDIR)/genobj/%.o, {names})\n"
-      .format(names=" ".join(names)))
-  out("\n")
-
-  # For each <coll>_<op>_<ty>.cu compile to a .cu.o file. Notice the dependencies
-  # come from the suffix-erased file (e.g. 'gensrc/all_reduce.cu')
-  for name in impl_names:
-    coll = name_to_funcs[name][0]
-    out(
-      "$(OBJDIR)/genobj/{name}.o: $(OBJDIR)/gensrc $(OBJDIR)/genobj/{lower_coll}.cu.d\n"
-      "\t" "$(call COMPILE,$@,$(OBJDIR)/gensrc/{name})\n"
-      "\n"
-      .format(name=name, lower_coll=coll_camel_to_lower[coll])
-    )
-
-# Add the suffix-erased .cu's which are used only for dependency scraping.
-for coll in set(coll for (coll,_,_,_,_) in primary_funcs if coll!="Nop"):
-  name = impl_filename(coll, None, None, None, None)
-  if name not in name_to_funcs:
-    name_to_funcs[name] = (coll, [])
 
 redop_to_cxx = {
   None: "FuncCopy",
@@ -360,13 +429,17 @@ ty_to_cxx = {
   "f16": "half",
   "f32": "float",
   "f64": "double",
-  "bf16": "__nv_bfloat16"
+  "bf16": "hip_bfloat16",
+  "f8":  "rccl_float8",
+  "bf8": "rccl_bfloat8",
 }
 
-# Generate each <gensrc>/<impl>.cu:
+# Generate each <gensrc>/<impl>.cpp:
 for name in name_to_funcs.keys():
   (coll, fns) = name_to_funcs[name]
   with open(os.path.join(gensrc, name), "w") as f:
+    print("-- Generating %s" % os.path.join(gensrc, name))
+
     out = f.write
     out(
       '#include "common.h"\n'
@@ -374,32 +447,30 @@ for name in name_to_funcs.keys():
       .format(lower_coll=coll_camel_to_lower[coll])
     )
 
-    (_, kfns) = name_to_kernels.get(name) or (None, [])
-    for kfn in kfns:
-      (coll, redop, ty, algo, proto) = kfn
-      sym = paste("_", coll, redop, ty, algo, proto)
-      fn_id = primary_to_index[kfn]
-      cudart, arch = required_cuda(*kfn)
-      if (cudart, arch) != (0, 0):
-        out("#if CUDART_VERSION >= %d && __CUDA_ARCH__ >= %d\n" % (cudart, arch))
+    for fn in fns:
+      (coll, algo, proto, redop, ty, unroll) = fn
+      sym = paste("_", coll, algo, proto, redop, ty, unroll)
+      if proto == "LL128":
+        out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
       out(
-        "DEFINE_ncclDevKernel({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {fn_id})\n"
+        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
-                algo=(algo or "RING"), proto=(proto or "SIMPLE"), fn_id=fn_id)
+                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll)
       )
-      if (cudart, arch) != (0, 0):
+      if proto == "LL128":
         out("#endif\n")
 
-    for fn in fns:
-      (coll, redop, ty, algo, proto) = fn
-      sym = paste("_", coll, redop, ty, algo, proto)
-      cudart, arch = required_cuda(*fn)
-      if (cudart, arch) != (0, 0):
-        out("#if CUDART_VERSION >= %d && __CUDA_ARCH__ >= %d\n" % (cudart, arch))
-      out(
-        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto})\n"
-        .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
-                algo=(algo or "RING"), proto=(proto or "SIMPLE"))
-      )
-      if (cudart, arch) != (0, 0):
-        out("#endif\n")
+# Generate each <gensrc>/<msccl_impl>.cpp
+if is_msccl_kernels:
+  for redop in all_redops:
+    if redop in ("Sum", "Prod", "MinMax"):
+      for ty in all_tys:
+        with open(os.path.join(gensrc, f"msccl_kernel_{redop}_{ty}.cpp"), "w") as f:
+          print("-- Generating %s" % os.path.join(gensrc, f"msccl_kernel_{redop}_{ty}.cpp"))
+
+          out = f.write
+          out('#include "msccl_kernel_impl.h"\n#include "nccl_common.h"\n')
+          out(
+            "MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE({redop}, {ty_cxx}, false);\n"
+            .format(redop=redop, ty_cxx=ty_to_cxx[ty])
+          )

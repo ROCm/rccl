@@ -9,32 +9,36 @@
 
 #include "nccl.h"
 #include <unordered_map>
+#include <unordered_set>
 
-typedef struct mscclpp_ncclComm* mscclpp_ncclComm_t;
+typedef struct mscclppComm* mscclppComm_t;
 
-typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; } mscclpp_ncclUniqueId;
+typedef ncclUniqueId mscclppUniqueId;
 
-bool mscclpp_init();
+/* A ncclUniqueId and a mscclppUniqueId will always be created together and used alternatively. This maps between them. */
+extern std::unordered_map<ncclUniqueId, mscclppUniqueId> mscclpp_uniqueIdMap;
+extern std::unordered_map<mscclppUniqueId, std::unordered_set<ncclUniqueId>> mscclpp_uniqueIdReverseMap;
+extern std::unordered_map<mscclppComm_t, mscclppUniqueId> mscclpp_commToUniqueIdMap;
+extern std::unordered_map<ncclComm_t, ncclUniqueId> ncclCommToUniqueIdMap;
 
-/* A ncclUniqueId and a mscclpp_ncclUniqueId will always be created together and used alternatively. This maps between them. */
-extern std::unordered_map<ncclUniqueId, mscclpp_ncclUniqueId> mscclpp_uniqueIdMap;
+extern "C" {
+  /* See ncclGetUniqueId. */
+  ncclResult_t  mscclpp_ncclGetUniqueId(mscclppUniqueId* uniqueId);
 
-/* See ncclGetUniqueId. */
-extern ncclResult_t  (*mscclpp_ncclGetUniqueId)(mscclpp_ncclUniqueId* uniqueId);
+  /* See ncclCommInitRank. */
+  ncclResult_t  mscclpp_ncclCommInitRank(mscclppComm_t* comm, int nranks, mscclppUniqueId commId, int rank);
 
-/* See ncclCommInitRank. */
-extern ncclResult_t  (*mscclpp_ncclCommInitRank)(mscclpp_ncclComm_t* comm, int nranks, mscclpp_ncclUniqueId commId, int rank);
+  /* See ncclCommDestroy. */
+  ncclResult_t  mscclpp_ncclCommDestroy(mscclppComm_t comm);
 
-/* See ncclCommDestroy. */
-extern ncclResult_t  (*mscclpp_ncclCommDestroy)(mscclpp_ncclComm_t comm);
+  /* See ncclAllReduce. */
+  ncclResult_t  mscclpp_ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
+      ncclDataType_t datatype, ncclRedOp_t op, mscclppComm_t comm, hipStream_t stream);
 
-/* See ncclAllReduce. */
-extern ncclResult_t  (*mscclpp_ncclAllReduce)(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, ncclRedOp_t op, mscclpp_ncclComm_t comm, hipStream_t stream);
-
-/* See ncclAllGather. */
-extern ncclResult_t  (*mscclpp_ncclAllGather)(const void* sendbuff, void* recvbuff, size_t sendcount,
-    ncclDataType_t datatype, mscclpp_ncclComm_t comm, hipStream_t stream);
+  /* See ncclAllGather. */
+  ncclResult_t  mscclpp_ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
+      ncclDataType_t datatype, mscclppComm_t comm, hipStream_t stream);
+}
 
 namespace std {
   template <>
@@ -44,5 +48,7 @@ namespace std {
 }
 
 bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b);
+
+bool mscclppCommCompatible(ncclComm_t comm);
 
 #endif
