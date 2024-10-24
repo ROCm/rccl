@@ -388,6 +388,7 @@ set(SRC_FILES
   src/device/broadcast.h
   src/device/common.h
   src/device/common_kernel.h
+  src/device/non_caching_load.h
   src/device/op128.h
   src/device/primitives.h
   src/device/prims_ll128.h
