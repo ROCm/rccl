@@ -607,7 +607,9 @@ ncclResult_t ncclIbGdrSupport() {
       NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
       if (strcmp(strValue, "1") == 0 && roMode == 0)
         moduleLoaded = 0;
-    } else if (moduleLoaded == 0) {
+    }
+
+    if (moduleLoaded == 0) {
       // Check for `ib_register_peer_memory_client` symbol in `/proc/kallsyms`
       // if your system uses native OS ib_peer module
       char buf[256];
