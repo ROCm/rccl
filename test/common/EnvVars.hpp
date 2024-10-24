@@ -32,6 +32,7 @@ namespace RcclUnitTesting
     bool useMultithreading; // Multi-thread single-process ranks   [UT_MULTITHREAD]
     bool isGfx94;        // Detects if architecture is gfx94
     bool isGfx12;        // Detects if architecture is gfx12
+    std::vector<int> gpuPriorityOrder;  // Orders the gpus based on the associativity of them with OAM with higher gpus linked.
 
     // Constructor that parses and collects environment variables
     EnvVars();

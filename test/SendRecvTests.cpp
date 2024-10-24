@@ -28,7 +28,7 @@ namespace RcclUnitTesting
       int ranksPerGpu = rpg == 0 ? 1 : testBed.ev.maxRanksPerGpu;
       int totalRanks = numGpus * ranksPerGpu;
       int const numProcesses = isMultiProcess ? numGpus : 1;
-      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu), 1);
+      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu), 1);
 
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       for (int numIdx = 0; numIdx < numElements.size() && isCorrect; ++numIdx)
@@ -106,7 +106,7 @@ namespace RcclUnitTesting
       int ranksPerGpu = rpg == 0 ? 1 : testBed.ev.maxRanksPerGpu;
       int totalRanks = numGpus * ranksPerGpu;
       int const numProcesses = isMultiProcess ? numGpus : 1;
-      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu), 1);
+      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu), 1);
 
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       for (int numIdx = 0; numIdx < numElements.size() && isCorrect; ++numIdx)
