@@ -455,7 +455,8 @@ ncclResult_t ncclTopoNeedFlush(struct ncclTopoSystem* system, int64_t busId, int
   int g;
   NCCLCHECK(ncclTopoIdToIndex(system, GPU, busId, &g));
   struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  *flush = 1;
 #else
   // Flush is required on Ampere and earlier
   *flush = gpu->gpu.cudaCompCap < 90 ? 1 : ncclParamNetForceFlush();
