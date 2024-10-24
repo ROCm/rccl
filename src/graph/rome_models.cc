@@ -1933,7 +1933,8 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
   // Only support ring and tree graphs
   if (graph->pattern != NCCL_TOPO_PATTERN_RING &&
-      graph->pattern != NCCL_TOPO_PATTERN_BALANCED_TREE)
+      graph->pattern != NCCL_TOPO_PATTERN_BALANCED_TREE &&
+      graph->pattern != NCCL_TOPO_PATTERN_TREE)
     return ncclSuccess;
 
   if (ngpus > 8) return ncclSuccess;
@@ -2073,7 +2074,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
       }
     }
     break;
-  case NCCL_TOPO_PATTERN_BALANCED_TREE:
+  case NCCL_TOPO_PATTERN_BALANCED_TREE: case NCCL_TOPO_PATTERN_TREE:
     if (romeTopoModels[i].treeBase != nullptr) {
       NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g));
       if (graph->nChannels) return ncclSuccess;
