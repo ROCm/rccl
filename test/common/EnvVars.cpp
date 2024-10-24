@@ -162,26 +162,10 @@ namespace RcclUnitTesting
             busIdToInt64(busIdStr, &busId);
             uniqueIdToGpuIndexes[busId].push_back(dev);
           }
-          // for(auto x:uniqueIdToGpuIndexes){
-          //   std::cout<<x.first<<"->";
-          //   for(int y:x.second){
-          //     std::cout<<y<<", ";
-          //   }
-          //   std::cout<<std::endl;
-          // }
           std::vector<std::pair<int64_t, std::vector<int>>> sortedIds(uniqueIdToGpuIndexes.begin(), uniqueIdToGpuIndexes.end());
           std::sort(sortedIds.begin(), sortedIds.end(), [](const auto& a, const auto& b) {
               return a.second.size() > b.second.size();
           });
-
-          // for(auto x:sortedIds){
-          //   std::cout<<x.first<<"->";
-          //   for(int y:x.second){
-          //     std::cout<<y<<", ";
-          //   }
-          //   std::cout<<std::endl;
-          // }
-
           for (const auto& pair : sortedIds) {
               result.insert(result.end(), pair.second.begin(), pair.second.end());
           }
@@ -213,7 +197,7 @@ namespace RcclUnitTesting
     // NOTE: Cannot use HIP call prior to launching unless it is inside another child process
     numDetectedGpus = 0;
     getDeviceCount(&numDetectedGpus);
-    // numDetectedGpus = min(numDetectedGpus, 16);
+    numDetectedGpus = min(numDetectedGpus, 16);
     isGfx94 = false;
     getArchInfo(&isGfx94, "gfx94");
     isGfx12 = false;
@@ -245,10 +229,7 @@ namespace RcclUnitTesting
         getDevicePriority(&gpuPriorityOrder);
       }
     }
-    for(int i =0 ;i<gpuPriorityOrder.size();i++){
-      std::cout<<i<<": "<<gpuPriorityOrder[i]<<std::endl;
-    }
-    std::cout<<"device priority vector created \n";
+
     // Test only pow2 number of GPUs for cpx mode to reduce the runtime for UT
     onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , isCpxMode); // Default value set based on whether system is in CPX mode. UT_POW2_GPUS set by user overrides it.
 

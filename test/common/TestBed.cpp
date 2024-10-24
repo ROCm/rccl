@@ -576,7 +576,6 @@ namespace RcclUnitTesting
     int k=0;
     for (int i = 0; i < numProcesses; i++)
       for (int j = 0; j < ntasks * ranksPerGpu; j++) {
-        //result[i].push_back(k%numGpus);
         result[i].push_back(ev.gpuPriorityOrder[k%numGpus]);
         k++;
       }
@@ -669,7 +668,6 @@ namespace RcclUnitTesting
       if(enableSweep == false && (numGpus < 8 || numRanks < 8)) {
         continue;
       }
-      //this->InitComms(TestBed::GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
       this->InitComms(this->GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
       if (testing::Test::HasFailure())
       {

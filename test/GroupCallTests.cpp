@@ -28,7 +28,6 @@ namespace RcclUnitTesting
     {
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
-      //testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
       testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
 
       if (testBed.ev.showNames)
@@ -85,7 +84,6 @@ namespace RcclUnitTesting
     {
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
-      //testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
       testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
 
       if (testBed.ev.showNames)
@@ -141,7 +139,6 @@ namespace RcclUnitTesting
     {
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
-      //testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
       testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks), numCollPerGroup);
 
       if (testBed.ev.showNames)
@@ -197,8 +194,6 @@ namespace RcclUnitTesting
             INFO("%s %d-ranks Multistream %d-Group Calls across %d streams\n",
                  isMultiProcess ? "MP" : "SP", totalRanks, numCollPerGroup, numStreamsPerGroup);
 
-          // testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks),
-          //                   numCollPerGroup, numStreamsPerGroup);
           testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks),
                             numCollPerGroup, numStreamsPerGroup);
 
@@ -249,7 +244,6 @@ namespace RcclUnitTesting
       int const numProcesses     = isMultiProcess ? totalRanks : 1;
 
       // Initialize comms by specifying the # of group calls
-      //testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks), numCollsPerGroup, numStreamsPerGroup, numGroupCalls, useBlocking);
       testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks), numCollsPerGroup, numStreamsPerGroup, numGroupCalls, useBlocking);
 
       if (testBed.ev.showNames)
