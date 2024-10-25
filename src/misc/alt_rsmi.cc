@@ -32,6 +32,7 @@ static int read_link_properties(uint32_t node, uint32_t target, std::string prop
                                 std::map<std::string, uint64_t> &properties);
 static int getNodeIndex(uint32_t node_id);
 static int getGpuId(uint32_t node, uint64_t *gpu_id);
+static int countIoLinks(uint32_t dev_id);
 
 struct ARSMI_systemNode {
     uint32_t s_node_id = 0;
@@ -219,9 +220,8 @@ int ARSMI_init(void)
 
     for (int src_idx = 0; src_idx < ARSMI_num_devices; src_idx++) {
         struct ARSMI_systemNode node = ARSMI_orderedNodes[src_idx];
-        uint32_t src_id = node.s_node_id;
-
-        for (int i = 0; i < ARSMI_num_devices; i++) {
+        uint32_t src_id = node.s_node_id, nlinks = countIoLinks(src_id);
+        for (int i = 0; i < nlinks; i++) {
             ARSMI_linkInfo info;
             std::map<std::string, uint64_t> properties;
             int ret = ARSMI_readLinkProperties(src_id, i, properties);
@@ -439,6 +439,27 @@ static int openNodeFile(uint32_t dev_id, std::string node_file,
     }
 
     return 0;
+}
+
+static int countIoLinks(uint32_t dev_id)
+{
+    std::string f_path;
+    int file_count = 0;
+
+    f_path = DevicePath(dev_id);
+    f_path += "/io_links/";
+
+    auto node_dir = opendir(f_path.c_str());
+    auto dentry = readdir(node_dir);
+    while (dentry != NULL) {
+        if (dentry->d_type == DT_DIR && strcmp(dentry->d_name, ".") != 0
+            && strcmp(dentry->d_name, "..") != 0) {
+            file_count++;
+        }
+        dentry = readdir(node_dir);
+    }
+    closedir(node_dir);
+    return file_count;
 }
 
 static int openLinkFile(uint32_t dev_id, uint32_t target_id,
