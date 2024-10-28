@@ -23,17 +23,19 @@ namespace {
     ncclRing *ring = &ncclShmem.channel.ring;
     int ringIx = ring->index;
     const int nranks = ncclShmem.comm.nRanks;
+    const int bid = ncclShmem.channelId - work->channelLo;
+    ssize_t size;
     ssize_t gridOffset;
     ssize_t channelCount;
     ssize_t chunkCount;
-    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), (ssize_t*)nullptr, &gridOffset, &channelCount, &chunkCount);
+    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
     const ssize_t loopCount = nranks * chunkCount;
     ssize_t offset;
     int nelem;
     int chunk;
 
 #if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = gridOffset / channelCount;
+    int npKitCtxIdx = bid;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -212,16 +214,18 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
+    const int bid = ncclShmem.channelId - work->channelLo;
     ncclTree *tree = &ncclShmem.channel.tree;
+    size_t size;
     size_t gridOffset;
     size_t channelCount;
     size_t chunkCount;
-    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), (size_t*)nullptr, &gridOffset, &channelCount, &chunkCount);
+    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
     size_t offset;
     int nelem;
 
 #if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = gridOffset / channelCount;
+    int npKitCtxIdx = bid;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -358,11 +362,13 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runTreeSplit(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
+    const int bid = ncclShmem.channelId - work->channelLo;
     ncclTree *tree = &ncclShmem.channel.tree;
+    size_t size;
     size_t gridOffset;
     size_t channelCount;
     size_t chunkCount;
-    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), (size_t*)nullptr, &gridOffset, &channelCount, &chunkCount);
+    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
     size_t offset;
     int nelem;
     int nthreadsSplit;

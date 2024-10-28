@@ -558,6 +558,7 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
     devWork.regUsed = task->regBufType;
+    devWork.pivotA2ANumBiRings = comm->topo->pivotA2ANumBiRings;
 
     struct ncclWorkList* workNode;
     switch (task->regBufType) {
@@ -1732,8 +1733,35 @@ static ncclResult_t topoGetAlgoInfo(
   }
   nt = nt/WARP_SIZE < 3 ? 3*WARP_SIZE : nt;
 #endif
+  if (info->func == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
+    static int userTuneInput = -2;
+    if (userTuneInput == -2) {
+      const char *protoStr = getenv("NCCL_PROTO");
+      const char *algoStr = getenv("NCCL_ALGO");
+      if (!protoStr && !algoStr)
+        userTuneInput = 0;
+      else
+        userTuneInput = 1;
+    }
+    info->nMaxChannels = nc;
+    if (!userTuneInput) {
+      // always respect user settings
+      if (nBytes <= 2200008) {
+        info->protocol = NCCL_PROTO_LL;
+        info->algorithm = NCCL_ALGO_TREE;
+        info->nMaxChannels = std::min(24, comm->nChannels);
+      } else {
+        info->protocol = NCCL_PROTO_SIMPLE;
+        info->algorithm = NCCL_ALGO_RING;
+      }
+    }
+  } else if (info->func == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
+    info->algorithm = NCCL_ALGO_TREE;
+    info->nMaxChannels = nc;
+  } else {
+    info->nMaxChannels = nc;
+  }
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
-  info->nMaxChannels = nc;
   info->nWarps = nt/WARP_SIZE;
   return ncclSuccess;
 }

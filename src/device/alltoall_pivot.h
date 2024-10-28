@@ -15,7 +15,7 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    const int bid = work->bid;
+    const int bid = ncclShmem.channelId - work->channelLo;
     const int nranks = ncclShmem.comm.nRanks;
     size_t count, partOffset, partCount, chunkCount;
     ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &count, &partOffset, &partCount, &chunkCount);
