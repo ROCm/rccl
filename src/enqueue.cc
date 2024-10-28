@@ -683,12 +683,6 @@ static ncclResult_t scheduleCollTasksToPlan(
       devWork->collnet.count = task->count;
       devWork->collnet.chunkCount = chunkSize/ncclTypeSize(task->datatype);
       devWork->direct = directFlags;
-      devWork->connIndex = 0;
-      if (task->protocol == NCCL_PROTO_SIMPLE && task->algorithm == NCCL_ALGO_RING) {
-        if (comm->useIntraNet && nBytes > rcclParamIntraNetThreshold()) {
-          devWork->connIndex = NCCL_CONN_IDX_P2P_NET;
-        }
-      }
 
       uint64_t proxyOpId = uint64_t(plan->collOpCount++)<<1 | 0;
       for (int c=devWork->channelLo; c <= (int)devWork->channelHi; c++) {
@@ -749,6 +743,14 @@ static ncclResult_t scheduleCollTasksToPlan(
       // in that allreduce isn't multiplied by 2.
       size_t globalBytesPerElement = elementSize*ncclFuncMaxSendRecvCount(task->func, comm->nRanks, 1);
       struct ncclProxyOp proxyOpLo, proxyOpMid, proxyOpHi;
+
+      size_t nBytes = globalBytesPerElement*task->count;
+      devWork->connIndex = 0;
+      if (task->protocol == NCCL_PROTO_SIMPLE && task->algorithm == NCCL_ALGO_RING) {
+        if (comm->useIntraNet && nBytes > rcclParamIntraNetThreshold()) {
+          devWork->connIndex = NCCL_CONN_IDX_P2P_NET;
+        }
+      }
 
       uint32_t chunkSize, directFlags=0;
       size_t grainSize = ncclProtoGrainSize(task->protocol);
@@ -1634,6 +1636,7 @@ static ncclResult_t updateCollCostTable(
     /* now we only support single-node NVLS allgather and reducescatter */
     if (a == NCCL_ALGO_NVLS && (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) && comm->nNodes > 1) continue;
     for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+      if (p == NCCL_PROTO_LL128 && comm->topo->type != RCCL_TOPO_XGMI_ALL) continue;
       bool backup;
       float time;
       NCCLCHECK(ncclTopoGetAlgoTime(comm, info->func, a, p, nBytes, numPipeOps, &time, &backup));
@@ -1787,6 +1790,9 @@ static ncclResult_t calcCollChunking(
       info->algorithm == NCCL_ALGO_COLLNET_DIRECT ? ncclPatternCollnetDirect :
       ncclPatternRing;
     break;
+  case ncclFuncAllToAllPivot:
+    pattern = ncclPatternRing;
+    break;
   case ncclFuncAllReduce:
     pattern =
       info->algorithm == NCCL_ALGO_NVLS ? ncclPatternNvls :
@@ -1838,7 +1844,22 @@ static ncclResult_t calcCollChunking(
   if (info->protocol == NCCL_PROTO_LL) chunkSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
 
-  if (info->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
+  if (info->algorithm == NCCL_ALGO_TREE && info->protocol == NCCL_PROTO_SIMPLE) {
+    if (pattern == ncclPatternTreeUpDown) {
+      // Optimize chunkSize / nSteps
+      while(nBytes / (nChannels * chunkSize) < comm->channels[0].tree.depth*8 && chunkSize > 131072) chunkSize /=2;
+      while(nBytes / (nChannels * chunkSize) < comm->channels[0].tree.depth*4 && chunkSize > 65536) chunkSize /=2;
+      while(nBytes / (nChannels * chunkSize) < comm->channels[0].tree.depth && chunkSize > 32768) chunkSize /=2;
+    }
+  } else if (info->algorithm == NCCL_ALGO_RING && info->protocol == NCCL_PROTO_SIMPLE) {
+    if (pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {
+      // Optimize chunkSize / nSteps
+      while(nBytes / (nChannels * chunkSize) < 64 && chunkSize > 262144) chunkSize /= 2;
+      while(nBytes / (nChannels * chunkSize) < 32 && chunkSize > 131072) chunkSize /= 2;
+      while(nBytes / (nChannels * chunkSize) < 16 && chunkSize > 65536) chunkSize /= 2;
+      while(nBytes / (nChannels * chunkSize) < 8 && chunkSize > 32768) chunkSize /= 2;
+    }
+  } else if (info->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
     // Optimize chunkSize / nSteps
     while (nBytes / (nChannels * comm->channels[0].collnetDirect.nHeads * chunkSize) < comm->channels[0].collnetDirect.depth * 64 && chunkSize > 131072) chunkSize /= 2;
     while (nBytes / (nChannels * comm->channels[0].collnetDirect.nHeads * chunkSize) < comm->channels[0].collnetDirect.depth * 8 && chunkSize > 65536) chunkSize /= 2;
