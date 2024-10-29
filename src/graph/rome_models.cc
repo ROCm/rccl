@@ -1743,10 +1743,10 @@ int checkAlltoallWidth(struct rcclRomeModel *romeTopo) {
 }
 
 ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, const char *ringBase) {
-  #define NUMA_CPUS 2
-  #define NUMA_GPUS 4
-  #define NUMA_PERMUTE_COUNT 24
-  #define TOTAL_PERMUTE_COUNT (NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT)
+  constexpr int NUMA_CPUS = 2;
+  constexpr int NUMA_GPUS = 4;
+  constexpr int NUMA_PERMUTE_COUNT = 24;
+  constexpr int TOTAL_PERMUTE_COUNT = (NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT);
 
   static char ringRemap[256];
   int i;
@@ -2106,10 +2106,10 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 }
 
 ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
-  #define NUMA_CPUS 4
-  #define NUMA_GPUS 4
-  #define NUMA_PERMUTE_COUNT 24
-  #define TOTAL_PERMUTE_COUNT (NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT)
+  constexpr int NUMA_CPUS = 4;
+  constexpr int NUMA_GPUS = 4;
+  constexpr int NUMA_PERMUTE_COUNT = 24;
+  constexpr int TOTAL_PERMUTE_COUNT = (NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT);
 
   static char ringRemap[256];
   int i;
@@ -2244,8 +2244,8 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
 }
 
 ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
-  #define NUM_HIVES 4
-  #define HIVE_GPUS 4
+  constexpr int NUM_HIVES = 4;
+  constexpr int HIVE_GPUS = 4;
 
   static char ringRemap[256];
 
