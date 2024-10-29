@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <math.h>
 #include <sys/time.h>
 #include <algorithm>
+#include <vector>
 #include <string.h>
 #include "rome_models.h"
 
@@ -1750,9 +1751,9 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   static char ringRemap[256];
   int i;
 
-  int ngpus = system->nodes[GPU].count;
-  int ncpus = system->nodes[CPU].count;
-  int nnets = system->nodes[NET].count;
+  const int ngpus = system->nodes[GPU].count;
+  const int ncpus = system->nodes[CPU].count;
+  const int nnets = system->nodes[NET].count;
 
   // number of GPUs and NICs on each numa node is used as first screening pattern
   struct rcclRomeModel romeTopo;
@@ -1771,11 +1772,12 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
+  std::vector<int> r(ngpus), g(ngpus);
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
     if (romeTopo.nCpus != romeTopoModels[i].nCpus || romeTopo.nGpus != romeTopoModels[i].nGpus ||
       romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
     if (strcmp(romeTopoModels[i].pattern, pattern)) continue;
-    int j, r[ngpus], g[ngpus];
+    int j;
     int numa_gpu_permutations[NUMA_CPUS][NUMA_PERMUTE_COUNT][NUMA_GPUS];
     if (isAlltoall != checkAlltoallWidth(romeTopoModels+i))
       continue;
@@ -1794,12 +1796,12 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
         if (romeTopo.gpuNuma[k] != j) continue;
         g[(2+cnt++)%ngpusPerNuma] = k;
       }
-      std::sort(g, g+ngpusPerNuma);
+      std::sort(g.begin(), g.begin()+ngpusPerNuma);
       do {
         for (int n = 0; n < ngpusPerNuma; n++)
           numa_gpu_permutations[j][npermute][n] = g[n];
         npermute++;
-      } while (std::next_permutation(g, g+ngpusPerNuma));
+      } while (std::next_permutation(g.begin(), g.begin()+ngpusPerNuma));
       if (npermute != NUMA_PERMUTE_COUNT) break;
     }
     if (j < ncpus) continue;
@@ -2112,9 +2114,9 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   static char ringRemap[256];
   int i;
 
-  int ngpus = system->nodes[GPU].count;
-  int ncpus = system->nodes[CPU].count;
-  int nnets = system->nodes[NET].count;
+  const int ngpus = system->nodes[GPU].count;
+  const int ncpus = system->nodes[CPU].count;
+  const int nnets = system->nodes[NET].count;
 
   // only valid on Rome
   int arch, vendor, model;
@@ -2135,11 +2137,12 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
+  std::vector<int> r(ngpus), g(ngpus);
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
     if (romeTopo.nCpus != romeTopoModels[i].nCpus || romeTopo.nGpus != romeTopoModels[i].nGpus ||
       romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
     if (strcmp(romeTopoModels[i].pattern, pattern)) continue;
-    int j, r[ngpus], g[ngpus];
+    int j;
     int numa_gpu_permutations[NUMA_CPUS][NUMA_PERMUTE_COUNT][NUMA_GPUS];
     // permute GPUs for each CPU NUMA nodes
     for (j = 0; j < ncpus; j++) {
@@ -2156,12 +2159,12 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
         if (romeTopo.gpuNuma[k] != j) continue;
         g[(2+cnt++)%ngpusPerNuma] = k;
       }
-      std::sort(g, g+ngpusPerNuma);
+      std::sort(g.begin(), g.begin()+ngpusPerNuma);
       do {
         for (int n = 0; n < ngpusPerNuma; n++)
           numa_gpu_permutations[j][npermute][n] = g[n];
         npermute++;
-      } while (std::next_permutation(g, g+ngpusPerNuma));
+      } while (std::next_permutation(g.begin(), g.begin()+ngpusPerNuma));
       if (npermute != NUMA_PERMUTE_COUNT) break;
     }
     if (j < ncpus) continue;
@@ -2246,8 +2249,8 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
 
   static char ringRemap[256];
 
-  int ngpus = system->nodes[GPU].count;
-  int nnets = system->nodes[NET].count;
+  const int ngpus = system->nodes[GPU].count;
+  const int nnets = system->nodes[NET].count;
 
   // only valid on Rome
   int arch, vendor, model;
@@ -2263,7 +2266,7 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
   // only match for system with 16 GPUs
   if (ngpus != NUM_HIVES*HIVE_GPUS || nnets != NUM_HIVES*HIVE_GPUS) return ncclSuccess;
 
-  int g_hives[ngpus], n_hives[nnets];
+  std::vector<int> g_hives(ngpus), n_hives(nnets);
   int ng_hives[NUM_HIVES];
 
   // try to sort GPUs into hives
@@ -2334,6 +2337,6 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
     system->type |= RCCL_TOPO_4P2H_ROME;
   parseOptions(system, rome_model_68.options);
   // create 4P4H based on reference and remapped ids
-  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives, n_hives, false));
+  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives.data(), n_hives.data(), false));
   return ncclSuccess;
 }
