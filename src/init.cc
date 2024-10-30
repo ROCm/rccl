@@ -765,10 +765,34 @@ fail:
 #define VERSION_STRING_EXTENDED "CUDA version " STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
 #endif
 static void showVersion() {
-  if (ncclDebugLevel == NCCL_LOG_VERSION || ncclDebugLevel == NCCL_LOG_WARN) {
-    VERSION("%s", VERSION_STRING);
+  char versionInfo[2048+2*HOST_NAME_MAX], hostInfo[HOST_NAME_MAX], libPathInfo[2048];
+
+  // Retrieve Hostname info
+  if (gethostname(hostInfo, sizeof(hostInfo)-1) != 0) {
+    // Returns Unknown in hostInfo if function call unsuccessful
+    strncpy(hostInfo, "Unknown", sizeof(hostInfo)-1);
+  }
+
+  // Retrieve librccl path
+  Dl_info pathInfo;
+  if (dladdr((void*)ncclCommInitRank, &pathInfo)) {
+    strncpy(libPathInfo, pathInfo.dli_fname, sizeof(libPathInfo)-1);
   } else {
-    INFO(NCCL_ALL,"%s", VERSION_STRING);
+    // Sets libPath to Unknown if the above function call is not successful
+    strncpy(libPathInfo, "Unknown", sizeof(libPathInfo)-1);
+  }
+
+  snprintf(versionInfo, sizeof(versionInfo),
+    "%s-%s\n%s\n"
+    "%-12s : %s\n%12s : %s",
+    VERSION_STRING, rcclGitHash, VERSION_STRING_EXTENDED,
+    "Hostname", hostInfo, "Librccl path", libPathInfo
+  );
+
+  if (ncclDebugLevel == NCCL_LOG_VERSION || ncclDebugLevel == NCCL_LOG_WARN) {
+    VERSION("%s", versionInfo);
+  } else {
+    INFO(NCCL_ALL,"%s", versionInfo);
   }
 }
 
