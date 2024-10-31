@@ -171,8 +171,11 @@ namespace RcclUnitTesting
     hipDeviceProp_t devProp;
     HIPCALL(hipGetDeviceProperties(&devProp, 0));
     // Initialize RCCL
-    int numRanks = 2;
+    constexpr int numRanks = 2;
     std::vector<ncclComm_t> comms(numRanks);
+    std::vector<int*> gpuInput(numRanks);
+    std::vector<int*> gpuOutput(numRanks);
+    std::vector<hipStream_t> stream(numRanks);
 
     char *proto = std::getenv("NCCL_PROTO");
     const char* protocolList[3] = {"LL", "LL128", "Simple"};
@@ -198,10 +201,6 @@ namespace RcclUnitTesting
       }
 
       // Prepare GPU data arrays
-      int* gpuInput[numRanks];
-      int* gpuOutput[numRanks];
-      hipStream_t stream[numRanks];
-
       for (int rank = 0; rank < numRanks; rank++) {
         HIPCALL(hipSetDevice(rank));
         HIPCALL(hipStreamCreate(&stream[rank]));
@@ -218,7 +217,7 @@ namespace RcclUnitTesting
           HIPCALL(hipSetDevice(rank));
           HIPCALL(hipMemset(gpuOutput[rank], 0, N * sizeof(int)));
           HIPCALL(hipDeviceSynchronize());
-	}
+        }
 
         // Initiate the allreduce
         NCCLCHECK(ncclGroupStart());
@@ -233,7 +232,7 @@ namespace RcclUnitTesting
           HIPCALL(hipStreamSynchronize(stream[rank]));
         }
 
-	if (iter >= 0)
+        if (iter >= 0)
           usElapsed += duration_cast<microseconds>(Clock::now() - start).count();
 
         // Check results
