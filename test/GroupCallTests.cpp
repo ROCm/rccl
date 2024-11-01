@@ -29,7 +29,7 @@ namespace RcclUnitTesting
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollPerGroup);
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollPerGroup);
 
       if (testBed.ev.showNames)
         INFO("%s %d-ranks GroupCall Identical\n", isMultiProcess ? "MP" : "SP", totalRanks);
@@ -86,7 +86,7 @@ namespace RcclUnitTesting
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollPerGroup);
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollPerGroup);
 
       if (testBed.ev.showNames)
         INFO("%s %d-ranks GroupCall Different\n", isMultiProcess ? "MP" : "SP", totalRanks);
@@ -142,7 +142,7 @@ namespace RcclUnitTesting
       // Test either single process all GPUs, or 1 process per GPU
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollPerGroup);
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollPerGroup);
 
       if (testBed.ev.showNames)
         INFO("%s %d-ranks GroupCall MixedDayaType\n", isMultiProcess ? "MP" : "SP", totalRanks);
@@ -198,7 +198,7 @@ namespace RcclUnitTesting
                  isMultiProcess ? "MP" : "SP", totalRanks, numCollPerGroup, numStreamsPerGroup);
 
           const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-          testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder),
+          testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder),
                             numCollPerGroup, numStreamsPerGroup);
 
           // Set up each collective in group in different stream (modulo numStreamsPerGroup)
@@ -249,7 +249,7 @@ namespace RcclUnitTesting
 
       // Initialize comms by specifying the # of group calls
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollsPerGroup, numStreamsPerGroup, numGroupCalls, useBlocking);
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollsPerGroup, numStreamsPerGroup, numGroupCalls, useBlocking);
 
       if (testBed.ev.showNames)
         INFO("%s %d-ranks GroupCall MultiGroupCall\n", isMultiProcess ? "MP" : "SP", totalRanks);

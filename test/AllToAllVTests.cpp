@@ -74,7 +74,7 @@ namespace RcclUnitTesting
     {
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
 
       // Prepare AllToAllV options
       std::vector<size_t> numInputElements;
@@ -132,7 +132,7 @@ namespace RcclUnitTesting
     {
       int const numProcesses = isMultiProcess ? totalRanks : 1;
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
 
       // Prepare AllToAllV options
       std::vector<size_t> numInputElements;

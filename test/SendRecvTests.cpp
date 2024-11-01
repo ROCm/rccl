@@ -28,7 +28,7 @@ namespace RcclUnitTesting
       int totalRanks = numGpus * ranksPerGpu;
       int const numProcesses = isMultiProcess ? numGpus : 1;
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu, gpuPriorityOrder),
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu, gpuPriorityOrder),
                         {1,2}, //two group, second group sendrecv to self, has 2 coll
                         testBed.GetNumStreamsPerGroup(1,2),
                         2);
@@ -121,7 +121,7 @@ namespace RcclUnitTesting
       int totalRanks = numGpus * ranksPerGpu;
       int const numProcesses = isMultiProcess ? numGpus : 1;
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
-      testBed.InitComms(testBed.GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu, gpuPriorityOrder),
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, numGpus, ranksPerGpu, gpuPriorityOrder),
                         {1,2}, //two group, second group sendrecv to self, has 2 coll
                         testBed.GetNumStreamsPerGroup(1,2),
                         2);
