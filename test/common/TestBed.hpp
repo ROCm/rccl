@@ -134,11 +134,14 @@ namespace RcclUnitTesting
                                                   int const numGroupCalls);
 
     // Helper function that splits up GPUs to the given number of processes
-    std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
+    static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
                                                           int const numGpus,
-                                                          int const ranksPerGpu);
-    std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
-                                                          int const numGpus);
+                                                          int const ranksPerGpu,
+                                                          const std::vector<int>& gpuPriorityOrder);
+                                                          
+    static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
+                                                          int const numGpus,
+                                                          const std::vector<int>& gpuPriorityOrder);
 
     // Generate a test case name
     static std::string GetTestCaseName(int            const totalRanks,
