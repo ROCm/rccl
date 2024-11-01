@@ -400,7 +400,8 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
   const char* gcnArchName;
   NCCLCHECK(xmlGetAttr(xmlGpu, "gcn", &gcnArch));
   convertGcnArchToGcnArchName(gcnArch, &gcnArchName);
-  gpu->gpu.gcn = strdup(gcnArchName);
+  strncpy(gpu->gpu.gcn, gcnArchName, GCN_ARCH_NAME_LEN-1);
+  gpu->gpu.gcn[GCN_ARCH_NAME_LEN-1] = '\0';
   rcclHipDeviceArch_t arch;
   NCCLCHECK(xmlGetAttrInt(xmlGpu, "arch", &arch.value));
   memcpy(&gpu->gpu.arch, &arch.arch, sizeof(hipDeviceArch_t));

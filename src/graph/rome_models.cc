@@ -1391,12 +1391,16 @@ static bool checkOption(const char *options, const char *name) {
     numTokens++;
     while (tokens[numTokens-1] != NULL && numTokens < MAX_OPT_TOKENS)
         tokens[numTokens++] = strtok_r(NULL, "=, ", &state);
+
+    bool result = false;
     for (int i = 0; i < numTokens/2; i++) {
       if (strcmp(tokens[i*2], name) == 0) {
-        return (bool)atol(tokens[i*2+1]);
+        result = (bool)atol(tokens[i*2+1]);
+        break;
       }
     }
     free(str_temp);
+    return result;
   }
   return false;
 }

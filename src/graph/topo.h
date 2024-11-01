@@ -121,6 +121,8 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_FORCE_INTRA 16
 #define RCCL_TOPO_XGMI_ALL  32
 
+#define GCN_ARCH_NAME_LEN 16
+
 struct ncclTopoNode {
   int type;
   int64_t id;
@@ -131,7 +133,7 @@ struct ncclTopoNode {
       int rank;
       int cudaCompCap;
       int gdrSupport;
-      const char* gcn;
+      char gcn[GCN_ARCH_NAME_LEN];
       hipDeviceArch_t arch;
       int cu;
     }gpu;
