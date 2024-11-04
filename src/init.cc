@@ -253,17 +253,14 @@ void *ncclCommThreadMain(void *arg) {
             (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
             fIdx, td->data_0, td->opCount, td->data_1);
         } else {
-          if (type == ncclCollTraceP2pElemType)
-            sprintf(line, "## [%012.6f] [%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->p2pOpCount[0], td->p2pOpCount[1]);
-          else
-            sprintf(line, "## [%012.6f] [%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->opCount);
+          sprintf(line, "## [%012.6f] [%02d:%02d]", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid);
           offset = strlen(line);
           if (type == ncclCollTraceCollElemType) {
-            sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
+            sprintf(line+offset, " CE %s nw %d bi %d nc %d root %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
           } else if (type == ncclCollTraceP2pElemType) {
-            sprintf(line+offset, " PE %s %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d", funcNames[fIdx],
-              td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
-              td->p2p[1].connIndex, td->p2p[1].nWarps, td->p2p[1].warpStart, td->p2p[1].ngroups, td->p2p[1].peer, comm->busId, comm->nRanks);
+            sprintf(line+offset, " Send %d -> Recv %d connIdx/nc/cb/sLL/rLL %d/%d/%d/%d/%d busId %lx nRanks %d",
+              td->p2p.sendRank, td->p2p.recvRank, td->p2p.connIndex, td->p2p.nP2pChannels, td->p2p.channelBase,
+              td->p2p.sendProtoLL, td->p2p.recvProtoLL, comm->busId, comm->nRanks);
           } else {
             switch (type&0xf) {
               case ncclCollTraceKernelLaunchType:
@@ -274,11 +271,11 @@ void *ncclCommThreadMain(void *arg) {
                   sprintf(line+offset, " CL %s", funcNames[fIdx]);
                 offset = strlen(line);
                 if ((type&0xf0) == ncclCollTraceCollElemType)
-                  sprintf(line+offset, " nw %d bi %d nc %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
+                  sprintf(line+offset, " nw %d bi %d nc %d root %d busId %lx nRanks %d", td->coll.nWarps, td->bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
                 else if ((type&0xf0) == ncclCollTraceP2pElemType)
-                  sprintf(line+offset, " %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d",
-                    td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
-                    td->p2p[1].connIndex, td->p2p[1].nWarps, td->p2p[1].warpStart, td->p2p[1].ngroups, td->p2p[1].peer, comm->busId, comm->nRanks);
+                  sprintf(line+offset, " Send %d -> Recv %d connIdx/nc/cb/sLL/rLL %d/%d/%d/%d/%d busId %lx nRanks %d",
+                    td->p2p.sendRank, td->p2p.recvRank, td->p2p.connIndex, td->p2p.nP2pChannels, td->p2p.channelBase,
+                    td->p2p.sendProtoLL, td->p2p.recvProtoLL, comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceKernelEndType:
                 sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);

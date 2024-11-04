@@ -52,42 +52,30 @@
 
   #define traceKernelLaunch(launch_type) { \
     INC_COLL_TRACE \
-    collTrace->funcIndex = ncclShmem.work.header.funcIndex; \
+    collTrace->funcIndex = ncclShmem.funcId; \
     __trace_hwreg()\
-    if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
-      struct ncclWorkElemP2p *p2pElems = ncclShmem.work.p2pElems; \
-      collTrace->p2p[0].connIndex = 0; \
-      collTrace->p2pOpCount[0] = p2pElems[0].opCount; \
-      collTrace->p2p[0].ngroups = p2pElems[0].ngroups; \
-      collTrace->p2p[0].nWarps = p2pElems[0].nWarps; \
-      collTrace->p2p[0].warpStart = p2pElems[0].warpStart; \
-      collTrace->p2p[0].peer = p2pElems[0].p2pType == ncclWorkP2pTypeRecv ? (uint16_t)(p2pElems[0].peer) : -1; \
-      collTrace->p2p[1].connIndex = 0; \
-      collTrace->p2pOpCount[1] = p2pElems[1].opCount; \
-      collTrace->p2p[1].ngroups = p2pElems[1].ngroups; \
-      collTrace->p2p[1].nWarps = p2pElems[1].nWarps; \
-      collTrace->p2p[1].warpStart = p2pElems[1].warpStart; \
-      collTrace->p2p[1].peer = p2pElems[1].p2pType == ncclWorkP2pTypeSend ? (uint16_t)(p2pElems[1].peer) : -1; \
+    if (ncclShmem.workType == ncclDevWorkTypeP2p) { \
+      struct ncclDevWorkP2p *p2pWork = (struct ncclDevWorkP2p*)ncclShmem.workStorage; \
+      collTrace->p2p.sendRank = p2pWork->sendRank; \
+      collTrace->p2p.recvRank = p2pWork->recvRank; \
+      collTrace->p2p.nP2pChannels = p2pWork->nP2pChannels; \
+      collTrace->p2p.nSendChannels = p2pWork->nSendChannels; \
+      collTrace->p2p.nRecvChannels = p2pWork->nRecvChannels; \
+      collTrace->p2p.channelBase = p2pWork->channelBase; \
+      collTrace->p2p.connIndex = p2pWork->connIndex; \
+      collTrace->p2p.sendProtoLL = p2pWork->sendProtoLL; \
+      collTrace->p2p.recvProtoLL = p2pWork->recvProtoLL; \
       collTrace->type = (launch_type) | ncclCollTraceP2pElemType; \
-    } else if (ncclShmem.work.header.type == ncclWorkTypeColl) { \
-      struct ncclWorkElem *elems = ncclShmem.work.elems; \
-      collTrace->opCount = elems[0].opCount; \
-      collTrace->coll.nWarps = elems[0].nWarps; \
-      collTrace->coll.bid = elems[0].bid; \
-      collTrace->coll.nChannels = elems[0].nChannels; \
+    } else if (ncclShmem.workType == ncclDevWorkTypeColl) { \
+      struct ncclDevWorkColl *collWork = (struct ncclDevWorkColl*)ncclShmem.workStorage; \
+      collTrace->coll.nWarps = collWork->nWarps; \
+      collTrace->coll.nChannels = collWork->channelHi-collWork->channelLo+1; \
+      collTrace->coll.root = collWork->root; \
       collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
     } \
   }
   #define traceKernelEnd(end_type)  { \
     INC_COLL_TRACE \
-    if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
-      struct ncclWorkElemP2p *p2pElems = ncclShmem.work.p2pElems; \
-      collTrace->p2pOpCount[0] = p2pElems[0].opCount; \
-      collTrace->p2pOpCount[1] = p2pElems[1].opCount; \
-    } else if (ncclShmem.work.header.type == ncclWorkTypeColl) { \
-      struct ncclWorkElem *elems = ncclShmem.work.elems; \
-      collTrace->opCount = elems[0].opCount; \
-    } \
     collTrace->type = end_type; \
   }
   #define traceData(data2, data4, data8_0, data8_1) { \
@@ -519,6 +507,8 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   }
 
   while (true) {
+    if (tid == 0) __insert_timestamp(__LINE__);
+    
     if (0 <= SpecializedFnId && ncclShmem.funcId == (unsigned)SpecializedFnId) {
       SpecializedRunWorkBatch().run();
     } else {

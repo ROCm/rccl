@@ -802,20 +802,7 @@ static ncclResult_t scheduleCollTasksToPlan(
       }
     }
 
-    int loIdx = devWork->channelLo / 64;
-    int loOffset = devWork->channelLo % 64;
-    int hiIdx = devWork->channelHi / 64;
-    int hiOffset = devWork->channelHi % 64;
-
-    if (loIdx == hiIdx)
-      plan->channelMask.masks[loIdx] |= ((2ull<<hiOffset)-(1ull<<loOffset));
-    else {
-      plan->channelMask.masks[loIdx] |= (~0ull<<loOffset);
-      plan->channelMask.masks[hiIdx] |= (2ull<<hiOffset)-1;
-      for (int i = loIdx+1; i < hiIdx; i++)
-        plan->channelMask.masks[i] = ~0ull;
-    }
-    // plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
+    plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     plan->threadPerBlock = std::max(plan->threadPerBlock, 3*plan->comm->WarpSize);
     if (!plan->kernelSpecialized) {
       plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
@@ -880,7 +867,7 @@ static ncclResult_t addP2pToPlan(
   bool proxySameProcess[2] = {true, true};
   uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound);
 
-  if (comm->p2pNet && sendBytes > rcclParamP2pNetThreshold() && recvBytes > rcclParamP2pNetThreshold())
+  if (comm->p2pNet && (sendBytes > rcclParamP2pNetThreshold() || recvBytes > rcclParamP2pNetThreshold()))
     connIndex = NCCL_CONN_IDX_P2P_NET;
   
   if (!selfSend) {
@@ -1625,7 +1612,7 @@ static ncclResult_t updateCollCostTable(
   ) {
   float (*table)[NCCL_NUM_PROTOCOLS] = (float (*)[NCCL_NUM_PROTOCOLS])collCostTable;
 
-  if (comm->nRanks == 1) {
+  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot) {
     table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = 0.0;
     return ncclSuccess;
   }

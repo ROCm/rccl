@@ -24,7 +24,7 @@ option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "File/folder reorg with backward 
 option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on this machine"  OFF)
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
-option(COLLTRACE                               "Collective Trace Option"                       OFF)
+option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)

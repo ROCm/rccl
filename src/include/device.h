@@ -425,24 +425,25 @@ struct ncclCollTrace {
   int16_t funcIndex;
   uint32_t data_0;
   uint64_t timeStamp;
-  union {
-    uint64_t opCount;
-    uint32_t p2pOpCount[2];
-  };
+  uint64_t opCount;
   union {
     uint64_t data_1;
     struct {
       uint8_t nWarps;
-      uint8_t bid;
       uint8_t nChannels;
+      uint8_t root;
     } coll;
     struct {
-      int16_t peer;
-      uint8_t ngroups:4;
-      uint8_t connIndex:4;
-      uint8_t warpStart:4;
-      uint8_t nWarps:4;
-    } p2p[2];
+      uint8_t sendRank;
+      uint8_t recvRank;
+      uint8_t nP2pChannels;
+      uint8_t nSendChannels;
+      uint8_t nRecvChannels;
+      uint8_t channelBase;
+      uint8_t connIndex;
+      uint8_t sendProtoLL:1;
+      uint8_t recvProtoLL:1;
+    } p2p;
   };
 };
 static_assert(sizeof(struct ncclCollTrace) == 8*sizeof(int), "ncclCollTrace must have a pow2 size");
