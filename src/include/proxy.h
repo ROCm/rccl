@@ -58,6 +58,9 @@ struct ncclProxyOp {
   uint8_t* sendbuff;
   uint8_t* recvbuff;
 
+  int nextRank;
+  int prevRank;
+
   union ncclProxyOpSpecifics specifics;
 
   struct ncclProxyOp *enqNext;
@@ -129,6 +132,10 @@ struct ncclProxyArgs {
   struct ncclProxyArgs** proxyAppendPtr;
 
   union ncclProxyOpSpecifics specifics;
+
+  int prevRank;
+  int nextRank;
+  int send;
 };
 #define NCCL_MAX_NETDEVS 128
 

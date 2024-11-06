@@ -243,27 +243,30 @@ ncclResult_t getOpIndex(struct ncclProxyArgs* op, struct ncclProxyProgressState*
 }
 
 ncclResult_t printProxyOp(struct ncclProxyArgs* op, int poolIndex, int opIndex) {
-  printf("[%d-%d|%ld| %s", poolIndex, opIndex, op->opCount, op->pattern == ncclPatternSend ? "Send" : op->pattern == ncclPatternRecv ? "Recv" : "Coll");
+  int peer = op->send ? op->nextRank : op->prevRank;
+  int isColl = (op->pattern != ncclPatternSend && op->pattern != ncclPatternRecv);
+  printf("[%d-%d|%ld| %s", poolIndex, opIndex, op->opCount, isColl ? "Coll->" : "");
+  printf("%s", op->send ? "Send" : "Recv");
   for (int s=0; s<op->nsubs; s++) {
     struct ncclProxySubArgs* sub = op->subs+s;
     if (op->state == ncclProxyOpProgress) {
       char status = ' ';
-      if (op->pattern == ncclPatternRecv) {
+      if (! op->send) {
         if (sub->posted < sub->nsteps && sub->posted < sub->done + NCCL_STEPS) status = 'I'; // Init
         else if (sub->received < sub->posted) status = 'R'; // Receiving
         else if (sub->received < sub->transmitted) status = 'R'; // Receiving
         else if (sub->transmitted < sub->received) status = 'F'; // Flushing
         else if (sub->done < sub->transmitted) status = 'G'; // Waiting on GPU
         else status = 'D'; // Done
-      } else if (op->pattern == ncclPatternSend) {
+      } else {
         if (sub->posted < sub->nsteps && sub->posted < sub->done + NCCL_STEPS) status = 'I'; // Init
         else if (sub->transmitted < sub->posted) status = 'G'; // Waiting on GPU
         else if (sub->done < sub->transmitted) status = 'S'; // Sending
         else status = 'D'; // Done
       }
-      printf(" %d%c/%d", sub->peer, status, sub->channelId);
+      printf(" %d%c/%d", peer, status, sub->channelId);
     } else {
-      printf(" %d/%d", sub->peer, sub->channelId);
+      printf(" %d/%d", peer, sub->channelId);
     }
   }
   printf("]");
@@ -397,6 +400,9 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   args->state = ncclProxyOpReady;
   args->progress = op->connection->tcomm->proxyProgress;
   args->proxyAppendPtr = op->connection->proxyAppendPtr;
+  args->send = op->connection->send;
+  args->prevRank = op->prevRank;
+  args->nextRank = op->nextRank;
   return ncclSuccess;
 }
 
@@ -548,9 +554,13 @@ ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* op, bool
   case ncclPatternPipelineTo: {
       struct ncclRing* ring = &channel->ring;
       if (NeedProxy(proxyRecv, op->pattern, op->root, ring, comm->nRanks)) {
+        op->prevRank = ring->prev;
+        op->nextRank = ring->next;
         NCCLCHECK(SaveProxy(comm, channel, proxyRecv, ring->prev, op, op->connIndex, justInquire));
       }
       if (NeedProxy(proxySend, op->pattern, op->root, ring, comm->nRanks)) {
+        op->prevRank = ring->prev;
+        op->nextRank = ring->next;
         NCCLCHECK(SaveProxy(comm, channel, proxySend, ring->next, op, op->connIndex, justInquire));
       }
     } break;
