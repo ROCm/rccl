@@ -8,24 +8,23 @@
 RCCL documentation
 ******************
 
-The ROCm Communication Collectives Library (RCCL) is a stand-alone library that provides multi-GPU and multi-node collective communication primitives optimized for AMD GPUs.
-It implements routines such as ``all-reduce``, ``all-gather``, ``reduce``, ``broadcast``, ``reduce-scatter``, ``gather``, ``scatter``, ``all-to-allv``, and ``all-to-all`` as well as direct point-to-point (GPU-to-GPU) send and receive operations. It has been optimized to achieve high bandwidth on platforms using PCIe, xGMI as well as networking using InfiniBand Verbs or TCP/IP sockets. RCCL supports an arbitrary number of GPUs installed in a single node or multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
+The ROCm Communication Collectives Library (RCCL) is a stand-alone library
+that provides multi-GPU and multi-node collective communication primitives
+optimized for AMD GPUs. It uses PCIe and xGMI high-speed interconnects.
+To learn more, see :doc:`what-is-rccl`
 
-The collective operations are implemented using Ring and Tree algorithms, and have been optimized for throughput and latency by leveraging topology awareness, high-speed interconnects, and RDMA based collectives. For best performance, small operations can be either batched into larger operations or aggregated through the API.
-
-RCCL utilizes PCIe and xGMI high-speed interconnects for intra-node communication as well as InfiniBand, RoCE, and TCP/IP for inter-node communication. It supports an arbitrary number of GPUs installed in a single-node or multi-node platform and can be easily integrated into single- or multi-process (e.g., MPI) applications.
-
-You can access RCCL code on the `RCCL GitHub repository <https://github.com/ROCm/rccl>`_.
-
-The documentation is structured as follows:
+The RCCL public repository is located at `<https://github.com/ROCm/rccl>`_.
 
 .. grid:: 2
   :gutter: 3
 
-  .. grid-item-card:: Installation
+  .. grid-item-card:: Install
 
-    * :ref:`install`
-       
+    * :ref:`RCCL installation guide <install>`
+
+.. grid:: 2
+  :gutter: 3
+
   .. grid-item-card:: How to
 
     * :ref:`using-nccl`
@@ -35,8 +34,8 @@ The documentation is structured as follows:
     * :ref:`Library specification<library-specification>`
     * :ref:`api-library`
        
-To contribute to the documentation refer to
+To contribute to the documentation, see
 `Contributing to ROCm  <https://rocm.docs.amd.com/en/latest/contribute/contributing.html>`_.
 
-Licensing information can be found on the
+You can find licensing information on the
 `Licensing <https://rocm.docs.amd.com/en/latest/about/license.html>`_ page.
