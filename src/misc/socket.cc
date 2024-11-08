@@ -15,6 +15,9 @@
 #include <sys/syscall.h>
 #include "param.h"
 
+RCCL_PARAM(SocketReuseAddr, "SOCKET_REUSEADDR", 0);
+RCCL_PARAM(SocketLinger, "SOCKET_LINGER", -1);
+
 static ncclResult_t socketProgressOpt(int op, struct ncclSocket* sock, void* ptr, int size, int* offset, int block, int* closed) {
   int bytes = 0;
   *closed = 0;
@@ -726,6 +729,17 @@ ncclResult_t ncclSocketInit(struct ncclSocket* sock, union ncclSocketAddress* ad
       WARN("ncclSocketInit: Socket creation failed : %s", strerror(errno));
       ret = ncclSystemError;
       goto fail;
+    }
+
+    // [RCCL] Runtime socket options
+    if (rcclParamSocketReuseAddr()) {
+      int opt = 1;
+      SYSCHECKGOTO(setsockopt(sock->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)), ret, fail);
+    }
+    auto lingerParam = rcclParamSocketLinger();
+    if (lingerParam > -1) {
+      linger linger_opt = { 1, (int)lingerParam };
+      SYSCHECKGOTO(setsockopt(sock->fd, SOL_SOCKET, SO_LINGER, &linger_opt, sizeof(linger_opt)), ret, fail);
     }
   } else {
     memset(&sock->addr, 0, sizeof(union ncclSocketAddress));
