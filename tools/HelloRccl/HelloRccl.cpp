@@ -28,7 +28,7 @@ THE SOFTWARE.
 #include <string>
 #include <chrono>
 #include <hip/hip_runtime.h>
-#include <rccl.h>
+#include <rccl/rccl.h>
 #include "HelloRccl.hpp"
 
 
