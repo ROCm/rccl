@@ -265,7 +265,7 @@ ncclResult_t collNetCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncc
 ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
   int netDev, useGdr = 0, proxy;
 
-  NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &netDev, &proxy));
+  NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, NULL, &netDev, &proxy));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 1, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Coll %02d : %d [send] via COLLNET/%s/%d%s", channelId, myInfo->rank, "SHARP", netDev, useGdr ? "/GDRDMA" : "");
@@ -275,7 +275,7 @@ ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
 ncclResult_t collNetRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
   int netDev, useGdr = 0, proxy;
 
-  NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &netDev, &proxy));
+  NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, NULL, &netDev,  &proxy));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netDev, 0, &useGdr));
 
   INFO(NCCL_INIT|NCCL_NET,"Coll %02d : %d [receive] via COLLNET/%s/%d%s", channelId, myInfo->rank, "SHARP", netDev, useGdr ? "/GDRDMA" : "");

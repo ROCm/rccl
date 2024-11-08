@@ -1,6 +1,7 @@
 /*************************************************************************
  * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Modifications Copyright (c) 2019-2022 GigaIO Networks, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -983,6 +984,9 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
     if (graph->nChannels) return ncclSuccess;
     // try to match 4H4P
     NCCLCHECK(parse4H4P(system, graph));
+    if (graph->nChannels) return ncclSuccess;
+
+    NCCLCHECK(parseGIOTopos(system, graph));
   }
   if (graph->nChannels) return ncclSuccess;
 

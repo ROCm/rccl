@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2024 GigaIO Networks, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -29,5 +30,6 @@ ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGrap
 ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, const char *ringBase);
+ncclResult_t parseGIOTopos(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 
 #endif
