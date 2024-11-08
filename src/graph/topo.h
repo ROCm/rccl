@@ -121,6 +121,8 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_FORCE_INTRA 16
 #define RCCL_TOPO_XGMI_ALL  32
 
+#define GCN_ARCH_NAME_LEN 16
+
 struct ncclTopoNode {
   int type;
   int64_t id;
@@ -131,7 +133,7 @@ struct ncclTopoNode {
       int rank;
       int cudaCompCap;
       int gdrSupport;
-      const char* gcn;
+      char gcn[GCN_ARCH_NAME_LEN];
       hipDeviceArch_t arch;
       int cu;
     }gpu;
@@ -200,8 +202,8 @@ ncclResult_t ncclTopoPrintPaths(struct ncclTopoSystem* system);
 ncclResult_t ncclTopoLoadSystem(const char* xmlTopoFile, struct ncclTopoSystem* system);
 ncclResult_t ncclTopoGetIntermediateRank(struct ncclTopoSystem* system, int rank, int64_t netId, int* intermediateRank);
 
-#define NCCL_TOPO_XML_MAX_NODES 256
-#define NCCL_GRAPH_XML_MAX_NODES 4096
+#define NCCL_TOPO_XML_MAX_NODES 8192
+#define NCCL_GRAPH_XML_MAX_NODES 8192
 ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem** topoSystem, uint64_t localHostHash);
 ncclResult_t ncclTopoGetGraphFromXml(struct ncclXmlNode *xmlGraphs, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* nChannels);
 ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs, struct ncclTopoSystem* system, struct ncclXml *xml);

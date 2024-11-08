@@ -20,7 +20,7 @@ Replayer is a dubugging tool designed to analyze and replay collective logs obta
 - Replays collective calls based on the recorded data.
 - Skips faulty group calls during replay.
 - Supports various MPI ranks and GPU configurations.
-- Supports multi-node environment. 
+- Supports multi-node environment.
 
 *Note: RCCL Replayer executes collective calls with dummy data.*
 
@@ -53,6 +53,19 @@ Depending on the MPI library used and your installation path, you may need to se
 
 
 ## Usage
+
+First Collect per-rank logs from the run by adding the following environment variables:
+This prevents any race-conditions that might cause ranks to interupt other ranks lines of output.
+
+```bash
+   NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=COLL NCCL_DEBUG_FILE=some_name_here.%h.%p.log
+```
+
+Secondly, combine all the logs into a single file which will be the input to the replayer:
+
+```bash
+  cat some_name_here_*.log > some_name_here.log
+```
 
 After successfully building the replayer, you can run it using the following command:
 

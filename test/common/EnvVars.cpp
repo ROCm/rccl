@@ -123,6 +123,73 @@ namespace RcclUnitTesting
     return 0;
   }
 
+  ncclResult_t busIdToInt64(const char* busId, int64_t* id) {
+    char hexStr[17];  // Longest possible int64 hex string + null terminator.
+    int hexOffset = 0;
+    for (int i = 0; hexOffset < sizeof(hexStr) - 1; i++) {
+      char c = busId[i];
+      if (c == ':') continue;
+      if (c == '.') break; //ignore everything after . as they belong to same physical pci
+      if ((c >= '0' && c <= '9') ||
+          (c >= 'A' && c <= 'F') ||
+          (c >= 'a' && c <= 'f')) {
+        hexStr[hexOffset++] = busId[i];
+      } else break;
+    }
+    hexStr[hexOffset] = '\0';
+    *id = strtol(hexStr, NULL, 16);
+    return ncclSuccess;
+  }
+
+  int getDevicePriority (std::vector<int> *gpuPriorityOrder){
+    // Prepare parent->child pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+      ERROR("Unable to create parent->child pipe for getting the device priority vector.\n");
+      return TEST_FAIL;
+    }
+    pid_t pid = fork();
+    if (0 == pid) {
+      std::vector<int> result;
+      try {
+          int numDev;
+          hipGetDeviceCount(&numDev);
+          std::unordered_map<int64_t, std::vector<int>> uniqueIdToGpuIndexes;
+          for(int dev=0;dev<numDev;dev++){
+            char busIdStr[] = "00000000:00:00.0";
+            int64_t busId;
+            hipDeviceGetPCIBusId(busIdStr, sizeof(busIdStr), dev);
+            busIdToInt64(busIdStr, &busId);
+            uniqueIdToGpuIndexes[busId].push_back(dev);
+          }
+          std::vector<std::pair<int64_t, std::vector<int>>> sortedIds(uniqueIdToGpuIndexes.begin(), uniqueIdToGpuIndexes.end());
+          std::sort(sortedIds.begin(), sortedIds.end(), [](const auto& a, const auto& b) {
+              return a.second.size() > b.second.size();
+          });
+          for (const auto& pair : sortedIds) {
+              result.insert(result.end(), pair.second.begin(), pair.second.end());
+          }
+      } catch (const std::exception& e) {
+          std::cerr << "Error: " << e.what() << std::endl;
+          return 1;
+      }
+      if (write(pipefd[1], result.data(), gpuPriorityOrder->size() * sizeof(int)) != gpuPriorityOrder->size() * sizeof(int)) return TEST_FAIL;
+      close(pipefd[0]);
+      close(pipefd[1]);
+      exit(EXIT_SUCCESS);
+    } 
+    else {
+      int status;
+      if (read(pipefd[0], gpuPriorityOrder->data(), gpuPriorityOrder->size() * sizeof(int)) != gpuPriorityOrder->size() * sizeof(int)) return TEST_FAIL;
+      waitpid(pid, &status, 0);
+      assert(!status);
+      close(pipefd[0]);
+      close(pipefd[1]);
+    }
+    return TEST_SUCCESS;
+    return 0;
+  }
+
 
   EnvVars::EnvVars()
   {
@@ -151,10 +218,18 @@ namespace RcclUnitTesting
     // Total number of reduction ops
     int numOps = ncclNumOps;
 
+    gpuPriorityOrder.resize(numDetectedGpus);
+    for(int i=0;i<numDetectedGpus;i++){
+      gpuPriorityOrder[i] = i;
+    }
     bool isCpxMode = false;
     if(isGfx94) {
       getDeviceMode(&isCpxMode);
+      if(isCpxMode) {
+        getDevicePriority(&gpuPriorityOrder);
+      }
     }
+
     // Test only pow2 number of GPUs for cpx mode to reduce the runtime for UT
     onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , isCpxMode); // Default value set based on whether system is in CPX mode. UT_POW2_GPUS set by user overrides it.
 
@@ -233,6 +308,11 @@ namespace RcclUnitTesting
   std::vector<int> const& EnvVars::GetNumGpusList()
   {
     return numGpusList;
+  }
+
+  std::vector<int> const& EnvVars::GetGpuPriorityOrder()
+  {
+    return gpuPriorityOrder;
   }
 
   std::vector<int> const& EnvVars::GetIsMultiProcessList()
