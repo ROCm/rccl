@@ -431,6 +431,7 @@ struct ncclCollTrace {
     struct {
       uint8_t nWarps;
       uint8_t nChannels;
+      uint8_t bid;
       uint8_t root;
     } coll;
     struct {

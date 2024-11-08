@@ -70,6 +70,7 @@
       struct ncclDevWorkColl *collWork = (struct ncclDevWorkColl*)ncclShmem.workStorage; \
       collTrace->coll.nWarps = collWork->nWarps; \
       collTrace->coll.nChannels = collWork->channelHi-collWork->channelLo+1; \
+      collTrace->coll.bid = ncclShmem.channelId - collWork->channelLo; \
       collTrace->coll.root = collWork->root; \
       collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
     } \
@@ -522,7 +523,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     if (ncclShmem.nextBatchIx == -1) break;
     int batchIx = ncclShmem.nextBatchIx;
     __synclds();
-    loadWorkBatchToShmem(tid, tn, args, batchIx);
+    loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
 
     // Check whether the last operation was aborted and make sure all threads exit
     bool aborted = false;
