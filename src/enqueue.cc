@@ -31,15 +31,18 @@ struct ncclKernelMatch {
 };
 
 #ifdef ENABLE_COLLTRACE
-#define ncclGetKernelIndex(p_comm) ((p_comm)->collTraceThread ? 1 : 0)
-static ncclKernelMatch const ncclKerns[2] = {
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + (p_comm)->collTraceThread ? 2 : 0)
+static ncclKernelMatch const ncclKerns[4] = {
   {(void *)ncclDevKernel_Generic, true},
+  {(void *)ncclDevKernel_Generic_4, true},
   {(void *)ncclDevKernelDebug_Generic, true},
+  {(void *)ncclDevKernelDebug_Generic_4, true}
 };
 #else
-#define ncclGetKernelIndex(p_comm) (0)
-static ncclKernelMatch const ncclKerns[1] = {
-  {(void*)ncclDevKernel_Generic, true}
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
+static ncclKernelMatch const ncclKerns[2] = {
+  {(void*)ncclDevKernel_Generic, true},
+  {(void*)ncclDevKernel_Generic_4, true}
 };
 #endif
 
@@ -53,20 +56,10 @@ static ncclResult_t initCollProxyOp(struct ncclInfo* collInfo, int channelId, ui
 static ncclResult_t getTunerInfo(struct ncclInfo* collInfo, int collNetSupport, int nvlsSupport, int numPipeOps);
 static ncclResult_t topoGetAlgoInfo(struct ncclInfo* collInfo, int collNetSupport, int nvlsSupport, int numPipeOps);
 static ncclResult_t getChannnelThreadInfo(struct ncclInfo* collInfo);
-static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo, int unroll);
+static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo);
 static ncclResult_t getPatternInfo(struct ncclInfo* collInfo);
 static ncclResult_t getLoopInfo(struct ncclInfo* collInfo);
 static ncclResult_t getCollNetSupport(struct ncclInfo* info, int* collNetSupport);
-
-int getUnrollFactor(struct ncclComm* comm) {
-  hipDeviceProp_t devProp;
-  CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx908") || (IsArchMatch(devProp.gcnArchName, "gfx94")
-    && devProp.multiProcessorCount > 80))
-    return NCCL_UNROLL_2;
-  else
-    return NCCL_UNROLL_4;
-}
 
 // Returns maximum kernel stack size of all CUDA kernels
 ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
@@ -186,7 +179,7 @@ static ncclResult_t appendWorkElemP2p(
     struct ncclComm* comm, struct ncclKernelPlan* plan, int channelId,
     struct ncclWorkElemP2p const *elem, bool fuseOk
   ) {
-  int funcIndex = ncclDevFuncId_P2p(plan->unroll);
+  int funcIndex = ncclDevFuncId_P2p();
   if (funcIndex < 0) {
     WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
     return ncclInvalidUsage;
@@ -843,7 +836,7 @@ static ncclResult_t scheduleCollTasksToPlan(
         NCCLCHECK(getTunerInfo(aggInfo, collNetSupport, nvlsSupport, 1));
         NCCLCHECK(topoGetAlgoInfo(aggInfo, collNetSupport, nvlsSupport, 1));
         NCCLCHECK(getChannnelThreadInfo(aggInfo));
-        NCCLCHECK(computeCollWorkFunc(aggInfo, plan->unroll));
+        NCCLCHECK(computeCollWorkFunc(aggInfo));
         NCCLCHECK(getPatternInfo(aggInfo));
 
         // Try to assign algo and proto to all possible collectives
@@ -1322,7 +1315,6 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
       plan->comm = comm;
       plan->reclaimer.fn = reclaimPlan;
       plan->persistent = persistent;
-      plan->unroll = getUnrollFactor(comm);
 
       // Non-persistent kernels fill up at most half of our fifo per kernel.
       int nWorkBudget = plan->persistent ? INT_MAX : comm->workFifoDepth/2;
@@ -1755,8 +1747,8 @@ static ncclResult_t getPatternInfo(struct ncclInfo* collInfo) {
 
 RCCL_PARAM(IntraNetThreshold, "INTRANET_THRESHOLD", 8388608);
 
-static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo, int unroll) {
-  collInfo->workFuncIndex = ncclDevFuncId(collInfo->coll, collInfo->opFull.op, collInfo->datatype, collInfo->algorithm, collInfo->protocol, unroll);
+static ncclResult_t computeCollWorkFunc(struct ncclInfo* collInfo) {
+  collInfo->workFuncIndex = ncclDevFuncId(collInfo->coll, collInfo->opFull.op, collInfo->datatype, collInfo->algorithm, collInfo->protocol);
   if (collInfo->workFuncIndex < 0) {
     WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
     return ncclInvalidUsage;
