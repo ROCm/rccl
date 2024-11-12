@@ -162,7 +162,7 @@ def calc_unroll_for_local_arch():
   # Homogeneous system is required to build for only 1 varient of unroll factor
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
-    if ("gfx908" == gfx_name or "gfx94" in gfx_name) and cu_count > 80:
+    if "gfx908" == gfx_name or ("gfx94" in gfx_name and cu_count > 80):
       return 2
     else:
       return 4
@@ -334,20 +334,20 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("nullptr};\n")
   out("\n")
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
-  index = 0
+  index4 = 0
   for fn in primary_funcs:
     coll, algo, proto, redop, ty, unroll = fn
     if unroll != "4": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
       out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
-      out("/*%4d*/ %s,\n#else\n" % (index, sym))
+      out("/*%4d*/ %s,\n#else\n" % (index4, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("/*%4d*/ %s,\n#endif\n" % (index, sym_ll))
+      out("/*%4d*/ %s,\n#endif\n" % (index4, sym_ll))
     else:
-      out("/*%4d*/ %s,\n" % (index, sym))
-    index += 1
+      out("/*%4d*/ %s,\n" % (index4, sym))
+    index4 += 1
   out("nullptr};\n")
   out("\n")
   
@@ -386,7 +386,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       "  void call4(unsigned short funcIndex) noexcept { ncclDevFuncTable_4[f](); }\n"
       "};\n")
     out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_4(unsigned short funcIndex) noexcept {\n")
-    out(f"  Caller4<0, {index}>::call4(funcIndex);\n")
+    out(f"  Caller4<0, {index4}>::call4(funcIndex);\n")
     out("}\n\n")
 
 # Generate <gensrc>/device_table.cpp
@@ -399,7 +399,8 @@ if is_colltrace:
     out("\n")
     
     out("const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
-    for fn in primary_funcs[:len(primary_funcs)//2]:
+    for fn in primary_funcs:
+      if fn[5] == "4": continue
       out('   "%s",\n' % paste("_", "ncclDevFunc", *fn[:-1]))
     for ty in all_tys:
       out(f'   "ncclDevFunc_OneRankReduce_PreMulSum_{ty}",\n')
