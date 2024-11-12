@@ -116,7 +116,7 @@ namespace RcclUnitTesting
         std::vector<bool>           const inPlaceList     = {false};
         std::vector<bool>           const managedMemList  = {false};
         std::vector<bool>           const useHipGraphList = {false, true};
-        std::vector<char *>         const channelList     = {"84", "112"};
+        std::vector<const char *>   const channelList     = {"84", "112"};
         bool                        const enableSweep     = false; 
         for (auto channel : channelList) {
           setenv("NCCL_MIN_NCHANNELS", channel, 1);
@@ -193,7 +193,8 @@ namespace RcclUnitTesting
     for (int isMultiProcess : testBed.ev.GetIsMultiProcessList())
     {
       int const numProcesses = isMultiProcess ? totalRanks : 1;
-      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks));
+      const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
+      testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
 
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       {

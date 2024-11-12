@@ -193,7 +193,8 @@ namespace RcclUnitTesting
 
   void TestBed::InitComms(int const numGpus, int const numCollectivesInGroup, int const numStreamsPerGroup, int const numGroupCalls, bool const useBlocking)
   {
-    InitComms(TestBed::GetDeviceIdsList(1, numGpus), TestBed::GetNumCollsPerGroup(numCollectivesInGroup, numGroupCalls), TestBed::GetNumStreamsPerGroup(numStreamsPerGroup, numGroupCalls), numGroupCalls, useBlocking);
+     const std::vector<int>& gpuPriorityOrder = ev.GetGpuPriorityOrder();
+     InitComms(GetDeviceIdsList(1, numGpus, gpuPriorityOrder), TestBed::GetNumCollsPerGroup(numCollectivesInGroup, numGroupCalls), TestBed::GetNumStreamsPerGroup(numStreamsPerGroup, numGroupCalls), numGroupCalls, useBlocking);
   }
 
   void TestBed::SetCollectiveArgs(ncclFunc_t      const funcType,
@@ -562,21 +563,23 @@ namespace RcclUnitTesting
   }
 
   std::vector<std::vector<int>> TestBed::GetDeviceIdsList(int const numProcesses,
-                                                          int const numGpus)
+                                                          int const numGpus,
+                                                          const std::vector<int>& gpuPriorityOrder)
   {
-    return GetDeviceIdsList(numProcesses, numGpus, 1);
+    return GetDeviceIdsList(numProcesses, numGpus, 1, gpuPriorityOrder);
   }
 
   std::vector<std::vector<int>> TestBed::GetDeviceIdsList(int const numProcesses,
                                                           int const numGpus,
-                                                          int const ranksPerGpu)
+                                                          int const ranksPerGpu,
+                                                          const std::vector<int>& gpuPriorityOrder)
   {
     std::vector<std::vector<int>> result(numProcesses);
     int ntasks = numProcesses == 1 ? numGpus : 1;
     int k=0;
     for (int i = 0; i < numProcesses; i++)
       for (int j = 0; j < ntasks * ranksPerGpu; j++) {
-        result[i].push_back(k%numGpus);
+        result[i].push_back(gpuPriorityOrder[k%numGpus]);
         k++;
       }
     return result;
@@ -668,7 +671,8 @@ namespace RcclUnitTesting
       if(enableSweep == false && (numGpus < 8 || numRanks < 8)) {
         continue;
       }
-      this->InitComms(TestBed::GetDeviceIdsList(numChildren, numGpus, ranksPerGpu));
+      const std::vector<int>& gpuPriorityOrder = ev.GetGpuPriorityOrder();
+      this->InitComms(this->GetDeviceIdsList(numChildren, numGpus, ranksPerGpu, gpuPriorityOrder));
       if (testing::Test::HasFailure())
       {
         isCorrect = false;
