@@ -9,10 +9,14 @@ subtrees:
   entries:
   - file: install/installation
     title: Installation guide
+  - file: install/building-installing
+    title: Building and installing from source
 
 - caption: How to 
   entries:
   - file: how-to/using-nccl
+    title: Using the NCCL Net plugin
+  - file: how-to/rccl-usage-tips
 
 - caption: API reference 
   entries:
