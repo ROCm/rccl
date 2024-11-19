@@ -9,6 +9,8 @@ subtrees:
   entries:
   - file: install/installation
     title: Installation guide
+  - file: install/docker-install
+    title: Running RCCL using Docker
   - file: install/building-installing
     title: Building and installing from source
 

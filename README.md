@@ -127,11 +127,6 @@ $ mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG
 
 For more information on rccl-tests options, refer to the [Usage](https://github.com/ROCm/rccl-tests#usage) section of rccl-tests.
 
-
-## Enabling peer-to-peer transport
-
-In order to enable peer-to-peer access on machines with PCIe-connected GPUs, the HSA environment variable `HSA_FORCE_FINE_GRAIN_PCIE=1` is required to be set, on top of requiring GPUs that support peer-to-peer access and proper large BAR addressing support.
-
 ## Tests
 
 There are rccl unit tests implemented with the Googletest framework in RCCL.  The rccl unit tests require Googletest 1.10 or higher to build and execute properly (installed with the -d option to install.sh).
@@ -152,31 +147,6 @@ will run only AllReduce correctness tests with float16 datatype. A list of avail
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCm/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
 
-## NPKit
-
-RCCL integrates [NPKit](https://github.com/microsoft/npkit), a profiler framework that enables collecting fine-grained trace events in RCCL components, especially in giant collective GPU kernels.
-
-Please check [NPKit sample workflow for RCCL](https://github.com/microsoft/NPKit/tree/main/rccl_samples) as a fully automated usage example. It also provides good templates for the following manual instructions.
-
-To manually build RCCL with NPKit enabled, pass `-DNPKIT_FLAGS="-DENABLE_NPKIT -DENABLE_NPKIT_...(other NPKit compile-time switches)"` with cmake command. All NPKit compile-time switches are declared in the RCCL code base as macros with prefix `ENABLE_NPKIT_`, and they control which information will be collected. Also note that currently NPKit only supports collecting non-overlapped events on GPU, and `-DNPKIT_FLAGS` should follow this rule.
-
-To manually run RCCL with NPKit enabled, environment variable `NPKIT_DUMP_DIR` needs to be set as the NPKit event dump directory. Also note that currently NPKit only supports 1 GPU per process.
-
-To manually analyze NPKit dump results, please leverage [npkit_trace_generator.py](https://github.com/microsoft/NPKit/blob/main/rccl_samples/npkit_trace_generator.py).
-
-## MSCCL/MSCCL++
-RCCL integrates [MSCCL](https://github.com/Azure/msccl) and [MSCCL++](https://github.com/microsoft/mscclpp) to leverage the highly efficient GPU-GPU communication primitives for collective operations. Thanks to Microsoft Corporation for collaborating with us in this project.
-
-MSCCL uses XMLs for different collective algorithms on different architectures. RCCL collectives can leverage those algorithms once the corresponding XML has been provided by the user. The XML files contain the sequence of send-recv and reduction operations to be executed by the kernel. On MI300X, MSCCL is enabled by default. On other platforms, the users may have to enable this by setting `RCCL_MSCCL_FORCE_ENABLE=1`. By default, MSCCL will only be used if every rank belongs to a unique process; to disable this restriction for multi-threaded or single-threaded configurations, set `RCCL_MSCCL_ENABLE_SINGLE_PROCESS=1`.
-
-On the other hand, RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. Users need to set the RCCL environment variable `RCCL_MSCCLPP_ENABLE=1` to run RCCL workload with MSCCL++ support. It is also possible to set the message size threshold for using MSCCL++ by using the environment variable `RCCL_MSCCLPP_THRESHOLD`. Once `RCCL_MSCCLPP_THRESHOLD` (the default value is 1MB) is set, RCCL will invoke MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
-
-If some restrictions are not met, it will fall back to MSCCL or RCCL. The following are restrictions on using MSCCL++:
-- Message size must be a non-zero multiple of 32 bytes
-- Does not support `hipMallocManaged` buffers
-- Allreduce only supports `float16`, `int32`, `uint32`, `float32`, and `bfloat16` data types
-- Allreduce only supports the `sum` op
-
 ## Library and API Documentation
 
 Please refer to the [RCCL Documentation Site](https://rocm.docs.amd.com/projects/rccl/en/latest/) for current documentation.
@@ -190,17 +160,6 @@ cd docs
 pip3 install -r sphinx/requirements.txt
 python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 ```
-
-### Improving performance on MI300 when using less than 8 GPUs
-
-On a system with 8\*MI300X GPUs, each pair of GPUs are connected with dedicated XGMI links in a fully-connected topology. So, for collective operations, one can achieve good performance when all 8 GPUs (and all XGMI links) are used. When using less than 8 GPUs, one can only achieve a fraction of the potential bandwidth on the system.
-
-But, if your workload warrants using less than 8 MI300 GPUs on a system, you can set the run-time variable `NCCL_MIN_NCHANNELS` to increase the number of channels.\
-E.g.: `export NCCL_MIN_NCHANNELS=32`
-
-Increasing the number of channels can be beneficial to performance, but it also increases GPU utilization for collective operations.
-
-Additionally, we have pre-defined higher number of channels when using only 2 GPUs or 4 GPUs on a 8\*MI300 system. Here, RCCL will use **32 channels** for the 2 MI300 GPUs scenario and **24 channels** for the 4 MI300 GPUs scenario.
 
 ## Copyright
 

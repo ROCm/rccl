@@ -42,9 +42,12 @@ Microsoft Corporation collaborated with AMD for this project.
 
 MSCCL uses XMLs for different collective algorithms on different architectures. 
 RCCL collectives can leverage these algorithms after the user provides the corresponding XML. 
-The XML files contain sequences of send-recv and reduction operations for the kernel to run. 
+The XML files contain sequences of send-recv and reduction operations for the kernel to run.
+
 MSCCL is enabled by default on the AMD Instinct™ MI300X accelerator. On other platforms, users might have to enable it 
-using the setting ``RCCL_MSCCL_FORCE_ENABLE=1``.
+using the setting ``RCCL_MSCCL_FORCE_ENABLE=1``. By default, MSCCL is only used if every rank belongs 
+to a unique process. To disable this restriction for multi-threaded or single-threaded configurations,
+use the setting ``RCCL_MSCCL_ENABLE_SINGLE_PROCESS=1``.
 
 RCCL allreduce and allgather collectives can leverage the efficient MSCCL++ communication kernels 
 for certain message sizes. MSCCL++ support is available whenever MSCCL support is available. 
@@ -52,11 +55,19 @@ To run a RCCL workload with MSCCL++ support, set the following RCCL environment 
 
 .. code-block:: shell
 
-   RCCL_ENABLE_MSCCLPP=1
+   RCCL_MSCCLPP_ENABLE=1
 
 To set the message size threshold for using MSCCL++, use the environment variable ``RCCL_MSCCLPP_THRESHOLD``,
 which has a default value of 1MB. After ``RCCL_MSCCLPP_THRESHOLD`` has been set, 
 RCCL invokes MSCCL++ kernels for all message sizes less than or equal to the specified threshold.
+
+The following restrictions apply when using MSCCL++. If these restrictions are not met, 
+operations fall back to using MSCCL or RCCL. 
+
+*  The message size must be a non-zero multiple of 32 bytes
+*  It does not support ``hipMallocManaged`` buffers
+*  Allreduce only supports the ``float16``, ``int32``, ``uint32``, ``float32``, and ``bfloat16`` data types
+*  Allreduce only supports the sum operation
 
 Enabling peer-to-peer transport
 ===============================

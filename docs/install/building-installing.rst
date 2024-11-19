@@ -1,6 +1,6 @@
 .. meta::
    :description: Information on how to build the RCCL library from source code
-   :keywords: RCCL, ROCm, library, API, build
+   :keywords: RCCL, ROCm, library, API, build, install
 
 .. _building-from-source:
 
@@ -27,19 +27,25 @@ To build the library from source, follow these steps:
 
 .. code-block:: shell
 
-    $ git clone https://github.com/ROCm/rccl.git
-    $ cd rccl
-    $ mkdir build
-    $ cd build
-    $ cmake ..
-    $ make -j 16      # Or some other suitable number of parallel jobs
+    git clone --recursive https://github.com/ROCm/rccl.git
+    cd rccl
+    mkdir build
+    cd build
+    cmake ..
+    make -j 16      # Or some other suitable number of parallel jobs
+
+If you have already cloned the repository, you can checkout the external submodules manually.
+
+.. code-block:: shell
+
+    git submodule update --init --recursive --depth=1
 
 You can substitute a different installation path by providing the path as a parameter
 to ``CMAKE_INSTALL_PREFIX``, for example:
 
 .. code-block:: shell
 
-    $ cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+    cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
 
 .. note::
 
@@ -54,9 +60,9 @@ use this command to build the package:
 
 .. code-block:: shell
 
-    $ cd rccl/build
-    $ make package
-    $ sudo dpkg -i *.deb
+    cd rccl/build
+    make package
+    sudo dpkg -i *.deb
 
 .. note::
    

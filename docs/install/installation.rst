@@ -1,6 +1,6 @@
 .. meta::
-   :description: RCCL is a stand-alone library that provides multi-GPU and multi-node collective communication primitives optimized for AMD GPUs
-   :keywords: RCCL, ROCm, library, API
+   :description: Instruction on how to install the RCCL library for collective communication primitives using the quick start install script
+   :keywords: RCCL, ROCm, library, API, install
 
 .. _install:
 
