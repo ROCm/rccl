@@ -552,64 +552,58 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 // Map the rowIdx to funcIdx
 extern int const ncclDevFuncRowToId[];
 
-// `ncclDevFuncId()` needs to be in sync with 'ALL_COLLS' in generate.py
-inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int unroll) {
+// `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
+inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
   int row = 0;
   do {
     // RING / <all_protos> / Sum / int8_t
     if (coll == ncclFuncAllGather) {
-      row += proto * NCCL_NUM_UNROLLS + unroll;
+      row += proto;
       break;
     }
-    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS;
+    row += NCCL_NUM_PROTOCOLS;
 
     // <all_algos> / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncAllReduce) {
-      row += ((((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) * NCCL_NUM_UNROLLS + unroll) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto) * NCCL_NUM_UNROLLS;
+      row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
       break;
     }
-    row += NCCL_NUM_UNROLLS * (NCCL_NUM_ALGORITHMS - 4) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += (NCCL_NUM_ALGORITHMS - 4) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
-    if (coll == ncclFuncAllToAllPivot) {
-      row += unroll;
-      break;
-    }
-    row += NCCL_NUM_UNROLLS;
+    if (coll == ncclFuncAllToAllPivot) break;
+    row += 1;
 
     // RING / <all_protos> / Sum / int8_t
     if (coll == ncclFuncBroadcast) {
-      row += proto * NCCL_NUM_UNROLLS + unroll;
+      row += proto;
       break;
     }
-    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS;
+    row += NCCL_NUM_PROTOCOLS;
 
     // RING / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncReduce) {
-      row += (((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) * NCCL_NUM_UNROLLS + unroll) - NCCL_NUM_FLOATS * proto * NCCL_NUM_UNROLLS; 
+      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto; 
       break;
     }
-    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncReduceScatter) {
-      row += (((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) * NCCL_NUM_UNROLLS + unroll) - NCCL_NUM_FLOATS * proto * NCCL_NUM_UNROLLS;
+      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto;
       break;
     }
-    row += NCCL_NUM_UNROLLS * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
-    if (coll == ncclFuncSendRecv) {
-      row += unroll;
-      break;
-    }
-    row += NCCL_NUM_UNROLLS;
+    if (coll == ncclFuncSendRecv) break;
+    row += 1;
 
   } while (false);
 
   return ncclDevFuncRowToId[row];
 }
 
-inline int ncclDevFuncId_P2p(int unroll) { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - NCCL_NUM_ONERANK - (unroll > 0 ? 0 : 1) - 1]; }
+inline int ncclDevFuncId_P2p() { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - NCCL_NUM_ONERANK - 1]; }
 
 #endif

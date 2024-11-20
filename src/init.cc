@@ -93,6 +93,17 @@ static uint64_t hashUniqueId(ncclUniqueId const &id) {
   return h;
 }
 
+ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
+  hipDeviceProp_t devProp;
+  CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
+  if(IsArchMatch(devProp.gcnArchName, "gfx908") || (IsArchMatch(devProp.gcnArchName, "gfx94")
+    && devProp.multiProcessorCount > 80))
+    comm->unroll = NCCL_UNROLL_2;
+  else
+    comm->unroll = NCCL_UNROLL_4;
+  return ncclSuccess;
+}
+
 #ifdef ENABLE_MSCCLPP
 size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
   return (size_t)hashUniqueId(uniqueId);
@@ -559,6 +570,8 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
 
   // RCCL: create persistent stream for calloc
   CUDACHECK(hipStreamCreateWithFlags(&comm->sideStream, hipStreamNonBlocking));
+  // RCCL: determine and set unroll factor for comm
+  NCCLCHECK(commSetUnrollFactor(comm));
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
 
