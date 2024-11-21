@@ -1,7 +1,7 @@
 # Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 # Set to where RCCL is installed
-RCCL_INSTALL=../../build/debug
+RCCL_INSTALL=../../build/release
 
 HIP_PATH?= $(wildcard /opt/rocm)
 ifeq (,$(HIP_PATH))

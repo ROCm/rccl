@@ -1,1 +1,0 @@
-LD_LIBRARY_PATH=$PWD/../../build/ valgrind --leak-check=full --track-origins=yes  ./HelloRccl 1 # 
