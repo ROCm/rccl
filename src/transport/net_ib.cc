@@ -510,10 +510,6 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
           ncclIbMergedDevs[mergedDev].speed += ncclIbDevs[ncclNIbDevs].speed;
           ncclNIbDevs++;
           nPorts++;
-          // [RCCL]
-          // The following call is unnecessary. It will non zero return value
-          // pthread_detach(ncclIbAsyncThread);
-          // [/RCCL]
         }
         if (nPorts == 0 && ncclSuccess != wrap_ibv_close_device(context)) { ret = ncclInternalError; goto fail; }
       }
