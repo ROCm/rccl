@@ -1,7 +1,7 @@
 # Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
 
 # Set to where RCCL is installed
-RCCL_INSTALL=${PWD}/../../build
+RCCL_INSTALL=${PWD}/../../build/debug/
 
 
 HIP_PATH?= $(wildcard /opt/rocm)
