@@ -408,8 +408,8 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
       }
 
       // Detect IB cards
-      int nIbDevs;
-      struct ibv_device** devices;
+      int nIbDevs = 0;
+      struct ibv_device** devices = NULL;
 
       // Check if user defined which IB device:port to use
       char* userIbEnv = getenv("NCCL_IB_HCA");
@@ -434,7 +434,12 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
         memset(&devAttr, 0, sizeof(devAttr));
         if (ncclSuccess != wrap_ibv_query_device(context, &devAttr)) {
           WARN("NET/IB : Unable to query device %s", devices[d]->name);
-          if (ncclSuccess != wrap_ibv_close_device(context)) { ret = ncclInternalError; goto fail; }
+          if (ncclSuccess != wrap_ibv_close_device(context))
+          {
+            if(ncclSuccess != wrap_ibv_free_device_list(devices)){WARN("NET/IB : Unable to free device list");}
+            ret = ncclInternalError;
+            goto fail;
+          }
           continue;
         }
         for (int port_num = 1; port_num <= devAttr.phys_port_cnt; port_num++) {
@@ -506,7 +511,8 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
           ncclNIbDevs++;
           nPorts++;
           // [RCCL]
-          pthread_detach(ncclIbAsyncThread);
+          // The following call is unnecessary. It will non zero return value
+          // pthread_detach(ncclIbAsyncThread);
           // [/RCCL]
         }
         if (nPorts == 0 && ncclSuccess != wrap_ibv_close_device(context)) { ret = ncclInternalError; goto fail; }
