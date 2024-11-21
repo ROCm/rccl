@@ -1,9 +1,14 @@
 root: index
 subtrees:
 
-- caption: Installation 
+- entries:
+  - file: what-is-rccl.rst
+    title: What is RCCL?
+
+- caption: Install 
   entries:
   - file: install/installation
+    title: Installation guide
 
 - caption: How to 
   entries:

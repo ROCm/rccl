@@ -162,7 +162,7 @@ def calc_unroll_for_local_arch():
   # Homogeneous system is required to build for only 1 varient of unroll factor
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
-    if ("gfx908" == gfx_name or "gfx94" in gfx_name) and cu_count > 80:
+    if "gfx908" == gfx_name or ("gfx94" in gfx_name and cu_count > 80):
       return 2
     else:
       return 4
@@ -258,12 +258,12 @@ def equivalent_primary(coll, algo, proto, redop, ty, unroll):
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
 def enumerate_func_rows():
-  for coll in all_colls:
-    for algo in all_algos:
-      for proto in all_protos:
-        for redop in all_redops:
-          for ty in all_tys:
-            for unroll in all_unroll:
+  for unroll in all_unroll:
+    for coll in all_colls:
+      for algo in all_algos:
+        for proto in all_protos:
+          for redop in all_redops:
+            for ty in all_tys:
               if func_validate(coll, algo, proto, redop, ty):
                 yield (coll, algo, proto, redop, ty, unroll)
 
@@ -272,12 +272,12 @@ def custom_sort_key(fn):
     coll, algo, proto, redop, ty, unroll = fn
     
     return (
+        all_unroll.index(unroll),
         all_colls.index(coll),
         all_algos.index(algo),
         all_protos.index(proto),
         all_redops.index(redop),
-        all_tys.index(ty),
-        all_unroll.index(unroll)
+        all_tys.index(ty)
     )
 
 ################################################################################
@@ -319,6 +319,8 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable[] = {\n")
   index = 0
   for fn in primary_funcs:
+    coll, algo, proto, redop, ty, unroll = fn
+    if unroll != "2": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
       out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
@@ -329,6 +331,23 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     else:
       out("/*%4d*/ %s,\n" % (index, sym))
     index += 1
+  out("nullptr};\n")
+  out("\n")
+  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
+  index4 = 0
+  for fn in primary_funcs:
+    coll, algo, proto, redop, ty, unroll = fn
+    if unroll != "4": continue
+    sym = paste("_", "ncclDevFunc", *fn)
+    if fn[2] == "LL128":
+      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      out("/*%4d*/ %s,\n#else\n" % (index4, sym))
+      fn_ll = fn[:2] + ("LL",) + fn[3:]
+      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
+      out("/*%4d*/ %s,\n#endif\n" % (index4, sym_ll))
+    else:
+      out("/*%4d*/ %s,\n" % (index4, sym))
+    index4 += 1
   out("nullptr};\n")
   out("\n")
   
@@ -351,6 +370,24 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
     out(f"  Caller<0, {index}>::call(funcIndex);\n")
     out("}\n\n")
+    out("template<unsigned short f, unsigned short l>\n"
+      "struct Caller4 {\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call4(unsigned short funcIndex) noexcept\n"
+      "  {\n"
+      "    constexpr unsigned short m = f + (l - f) / 2;\n"
+      "    return (funcIndex < m) ? Caller4<f, m>::call4(funcIndex) : Caller4<m, l>::call4(funcIndex);\n"
+      "  }\n"
+      "};\n"
+      "\n"
+      "template<unsigned short f>\n"
+      "struct Caller4<f, f + 1>{\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call4(unsigned short funcIndex) noexcept { ncclDevFuncTable_4[f](); }\n"
+      "};\n")
+    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_4(unsigned short funcIndex) noexcept {\n")
+    out(f"  Caller4<0, {index4}>::call4(funcIndex);\n")
+    out("}\n\n")
 
 # Generate <gensrc>/device_table.cpp
 if is_colltrace:
@@ -361,9 +398,13 @@ if is_colltrace:
     out('#include "nccl_common.h"\n#include "device.h"\n')
     out("\n")
     
+    seen_fns = set()
     out("const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
     for fn in primary_funcs:
-      out('   "%s",\n' % paste("_", "ncclDevFunc", *fn))
+      fn_no_unroll = fn[:-1]
+      if fn_no_unroll not in seen_fns:
+        out('   "%s",\n' % paste("_", "ncclDevFunc", *fn_no_unroll))
+        seen_fns.add(fn_no_unroll)
     for ty in all_tys:
       out(f'   "ncclDevFunc_OneRankReduce_PreMulSum_{ty}",\n')
     out("};\n")
@@ -379,11 +420,11 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   # The mapping from function rows to valid primary function ids.
   out("extern int const ncclDevFuncRowToId[] = {\n")
   index = 0
-  for fn in func_rows:
+  for fn in func_rows[:len(func_rows)//2]:
     fn_id, comment = -1, ""
     if fn is not None:
       fn_id = primary_to_index[equivalent_primary(*fn)]
-      comment = " // " + paste(" ", *fn)
+      comment = " // " + paste(" ", *fn[:-1])
     out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
     index += 1
   out(f"{index}")

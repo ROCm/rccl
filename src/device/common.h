@@ -227,7 +227,7 @@ static __forceinline__ __device__ void ncclRedopPtrDeref(struct ncclWorkElem* we
   }
 }
 
-template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE>
+template<int SpecializedFnId, typename SpecializedRunWork, bool COLLTRACE, int COLL_UNROLL>
 __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead) {
   const int tid = threadIdx.x;
   int x = tid;
@@ -346,9 +346,15 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
       SpecializedRunWork().run(&ncclShmem.work);
     } else {
 #ifdef USE_INDIRECT_FUNCTION_CALL
-      ncclDevFuncTable[ncclShmem.work.header.funcIndex]();
+      if (COLL_UNROLL == 4)
+        ncclDevFuncTable_4[ncclShmem.work.header.funcIndex]();
+      else
+        ncclDevFuncTable[ncclShmem.work.header.funcIndex]();
 #else
-      NCCL_CALL_FUNCTIONS(ncclShmem.work.header.funcIndex);
+      if (COLL_UNROLL == 4)
+        NCCL_CALL_FUNCTIONS_4(ncclShmem.work.header.funcIndex);
+      else
+        NCCL_CALL_FUNCTIONS(ncclShmem.work.header.funcIndex);
 #endif
     }
 
@@ -379,8 +385,10 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
 }
 
 __global__ void ncclDevKernel_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
+__global__ void ncclDevKernel_Generic_4(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #ifdef ENABLE_COLLTRACE
 __global__ void ncclDevKernelDebug_Generic(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
+__global__ void ncclDevKernelDebug_Generic_4(struct ncclDevComm* comm, struct channelMasks channelMask, struct ncclWork* workHead);
 #endif
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
