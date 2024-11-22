@@ -1117,6 +1117,9 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_87, /* 43 */
 };
 
+// This environment variable allows disabling of the reversal the graph parsing
+RCCL_PARAM(ModelReversalDisable, "MODEL_REVERSAL_DISABLE", 0);
+
 /* Parse user defined rings. Format is like :
  * "0 1|1 0|0 1 2 3|3 2 1 0|N0 0 2 3 1 N1|1 3 2 0|0 1 2 3 4 5 6 7|N2 7 6 5 4 3 2 1 0 N1"
  * Network interfaces can be optionally specified by N prefix.
@@ -1133,6 +1136,9 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
   int net_offset = 0, net_count = 0;
   int ngpus = system->nodes[GPU].count;
   int nnets = system->nodes[NET].count;
+
+  if (rcclParamModelReversalDisable) reverse = 0;
+
   do {
     if (str[offset] == 'N') {
       if (status == 0) {
