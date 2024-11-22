@@ -20,6 +20,13 @@ subtrees:
     title: Using the NCCL Net plugin
   - file: how-to/rccl-usage-tips
 
+- caption: Examples
+  entries:
+  - url: https://github.com/ROCm/rccl/tree/develop/ext-tuner/example
+    title: RCCL Tuner plugin examples
+  - url: https://github.com/ROCm/rccl/tree/develop/ext-net/example
+    title: NCCL Net plugin examples
+
 - caption: API reference 
   entries:
   - file: api-reference/library-specification
