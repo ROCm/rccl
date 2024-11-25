@@ -1137,7 +1137,7 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
   int ngpus = system->nodes[GPU].count;
   int nnets = system->nodes[NET].count;
 
-  if (rcclParamModelReversalDisable) reverse = 0;
+  if (rcclParamModelReversalDisable()) reverse = 0;
 
   do {
     if (str[offset] == 'N') {
