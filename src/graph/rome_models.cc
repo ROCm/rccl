@@ -2223,7 +2223,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     //printf("No solution in %.2fms\n", t);
     return ncclSuccess;
   }
-  for (int m = 0; m<ngpus; m++) rdm[m] = devids[g16[i]];
+  for (int m = 0; m<ngpus; m++) rdm[m] = devids[g16[m]];
 
   char line[1024];
   //sprintf(line, "Found matching Rome model index %d in %.2fms with GPU mapping: ", i, t);
