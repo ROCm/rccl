@@ -10,6 +10,7 @@ Installing RCCL using the install script
 
 To quickly install RCCL using the install script, follow these steps.
 For instructions on building RCCL from the source code, see :doc:`building-installing`.
+For additional tips, see :doc:`../how-to/rccl-usage-tips`.
 
 Requirements
 ============
@@ -27,8 +28,8 @@ For ROCm installation instructions, see :doc:`rocm-install-on-linux:install/nati
 
 Use the `install.sh helper script <https://github.com/ROCm/rccl/blob/develop/install.sh>`_,
 located in the root directory of the RCCL repository,
-to build and install RCCL with a single command. It uses hard-coded configurations that can be specified directly 
-when using cmake. However, it's a great way to get started quickly and provides an 
+to build and install RCCL with a single command. It uses hard-coded configurations that can be specified directly
+when using cmake. However, it's a great way to get started quickly and provides an
 example of how to build and install RCCL.
 
 Building the library using the install script:
@@ -79,6 +80,6 @@ The RCCL build and installation helper script options are as follows:
 
 .. tip::
 
-    By default, the RCCL install script builds all the GPU targets that are defined in ``DEFAULT_GPUS`` in `CMakeLists.txt <https://github.com/ROCm/rccl/blob/develop/CMakeLists.txt>`_. 
-    To target specific GPUs and potentially reduce the build time, use ``--amdgpu_targets`` along with 
+    By default, the RCCL install script builds all the GPU targets that are defined in ``DEFAULT_GPUS`` in `CMakeLists.txt <https://github.com/ROCm/rccl/blob/develop/CMakeLists.txt>`_.
+    To target specific GPUs and potentially reduce the build time, use ``--amdgpu_targets`` along with
     a semicolon (``;``) separated string list of the GPU targets.

@@ -66,15 +66,15 @@ use this command to build the package:
 
 .. note::
    
-   The RCCL package install process requires ``sudo`` or root access because it creates a directory 
+   The RCCL package install process requires ``sudo`` or root access because it creates a directory
    named ``rccl`` in ``/opt/rocm/``. This is an optional step. RCCL can be used directly by including the path containing ``librccl.so``.
 
 Testing RCCL
 ============
 
-The RCCL unit tests are implemented using the Googletest framework in RCCL. These unit tests require Googletest 1.10 
+The RCCL unit tests are implemented using the Googletest framework in RCCL. These unit tests require Googletest 1.10
 or higher to build and run (this dependency can be installed using the ``-d`` option for ``install.sh``).
-To run the RCCL unit tests, go to the ``build`` folder and the ``test`` subfolder, 
+To run the RCCL unit tests, go to the ``build`` folder and the ``test`` subfolder,
 then run the appropriate RCCL unit test executables.
 
 The RCCL unit test names follow this format:
@@ -83,16 +83,16 @@ The RCCL unit test names follow this format:
 
     CollectiveCall.[Type of test]
 
-Filtering of the RCCL unit tests can be done using environment variables 
+Filtering of the RCCL unit tests can be done using environment variables
 and by passing the ``--gtest_filter`` command line flag:
 
 .. code-block:: shell
 
     UT_DATATYPES=ncclBfloat16 UT_REDOPS=prod ./rccl-UnitTests --gtest_filter="AllReduce.C*"
 
-This command runs only the ``AllReduce`` correctness tests with the ``float16`` datatype. 
-A list of the available environment variables for filtering appears at the top of every run. 
-See the `Googletest documentation <https://google.github.io/googletest/advanced.html#running-a-subset-of-the-tests>`_ 
+This command runs only the ``AllReduce`` correctness tests with the ``float16`` datatype.
+A list of the available environment variables for filtering appears at the top of every run.
+See the `Googletest documentation <https://google.github.io/googletest/advanced.html#running-a-subset-of-the-tests>`_
 for more information on how to form advanced filters.
 
 There are also other performance and error-checking tests for RCCL. They are maintained separately at `<https://github.com/ROCm/rccl-tests>`_.

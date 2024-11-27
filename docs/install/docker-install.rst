@@ -22,7 +22,7 @@ To build the Docker image and run the container, follow these steps.
 
       docker build -t rccl-tests -f Dockerfile.ubuntu --pull .
 
-   The base Docker image, rccl repository, and rccl-tests repository can be modified 
+   The base Docker image, rccl repository, and rccl-tests repository can be modified
    by using ``--build-args`` in the ``docker build`` command above. For example, to use a different base Docker image,
    use this command:
 

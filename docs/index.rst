@@ -24,10 +24,6 @@ The RCCL public repository is located at `<https://github.com/ROCm/rccl>`_.
     * :doc:`Running RCCL using Docker <./install/docker-install>`
     * :doc:`Building and installing RCCL from source code <./install/building-installing>`
 
-
-.. grid:: 2
-  :gutter: 3
-
   .. grid-item-card:: How to
 
     * :doc:`Using the NCCL Net plugin <./how-to/using-nccl>`
