@@ -57,13 +57,13 @@
     __trace_hwreg()\
     if (ncclShmem.work.header.type == ncclWorkTypeP2p) { \
       struct ncclWorkElemP2p *p2pElems = ncclShmem.work.p2pElems; \
-      collTrace->p2p[0].connIndex = 0; \
+      collTrace->p2p[0].connIndex = p2pElems[0].connIndex; \
       collTrace->p2pOpCount[0] = p2pElems[0].opCount; \
       collTrace->p2p[0].ngroups = p2pElems[0].ngroups; \
       collTrace->p2p[0].nWarps = p2pElems[0].nWarps; \
       collTrace->p2p[0].warpStart = p2pElems[0].warpStart; \
       collTrace->p2p[0].peer = p2pElems[0].p2pType == ncclWorkP2pTypeRecv ? (uint16_t)(p2pElems[0].peer) : -1; \
-      collTrace->p2p[1].connIndex = 0; \
+      collTrace->p2p[1].connIndex = p2pElems[1].connIndex; \
       collTrace->p2pOpCount[1] = p2pElems[1].opCount; \
       collTrace->p2p[1].ngroups = p2pElems[1].ngroups; \
       collTrace->p2p[1].nWarps = p2pElems[1].nWarps; \
@@ -74,8 +74,6 @@
       struct ncclWorkElem *elems = ncclShmem.work.elems; \
       collTrace->opCount = elems[0].opCount; \
       collTrace->coll.nWarps = elems[0].nWarps; \
-      collTrace->coll.bid = elems[0].bid; \
-      collTrace->coll.nChannels = elems[0].nChannels; \
       collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
     } \
   }

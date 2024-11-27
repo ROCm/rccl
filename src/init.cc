@@ -260,7 +260,7 @@ void *ncclCommThreadMain(void *arg) {
             sprintf(line, "## [%012.6f] [%02d:%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->opCount);
           offset = strlen(line);
           if (type == ncclCollTraceCollElemType) {
-            sprintf(line+offset, " CE %s nw %d bi %d nc %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
+            sprintf(line+offset, " CE %s nw %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, comm->busId, comm->nRanks);
           } else if (type == ncclCollTraceP2pElemType) {
             sprintf(line+offset, " PE %s %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d", funcNames[fIdx],
               td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
@@ -275,7 +275,7 @@ void *ncclCommThreadMain(void *arg) {
                   sprintf(line+offset, " CL %s", funcNames[fIdx]);
                 offset = strlen(line);
                 if ((type&0xf0) == ncclCollTraceCollElemType)
-                  sprintf(line+offset, " nw %d bi %d nc %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, comm->busId, comm->nRanks);
+                  sprintf(line+offset, " nw %d busId %lx nRanks %d", td->coll.nWarps, comm->busId, comm->nRanks);
                 else if ((type&0xf0) == ncclCollTraceP2pElemType)
                   sprintf(line+offset, " %d -> %d/%d/%d/%d conn/nw/ws/ng %d/%d/%d/%d -> %d busId %lx nRanks %d",
                     td->p2p[0].peer, td->p2p[0].connIndex, td->p2p[0].nWarps, td->p2p[0].warpStart, td->p2p[0].ngroups,
