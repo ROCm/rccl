@@ -101,11 +101,7 @@ private:
     #endif
     // volatile is faster than acquire but not as correct. Make sure reduceCopy
     // loads data using volatile so it doesn't see stale data in L1.
-#if defined(__gfx1200__) || defined(__gfx1201__)
     return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
-#else
-    return __atomic_load_n(ptr, __ATOMIC_RELAXED);
-#endif
   }
 
   template <int DirectRecv, int DirectSend, int Recv, int Send, int Src, int Dst>
@@ -166,11 +162,7 @@ private:
   template<int Recv, int Send>
   inline __device__ void postPeer(bool dataStored) {
     if (Send && (flags & RolePostSend) && dataStored)
-#ifdef __GFX9__
-    __threadfence();
-#else
-    __threadfence_system();
-#endif
+      __threadfence_system();
 
     if ((flags & Send*RolePostSend) && next_hdp_reg)
       STORE((unsigned int *)next_hdp_reg, 0x1);
