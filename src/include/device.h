@@ -387,8 +387,6 @@ struct ncclCollTrace {
     uint64_t data_1;
     struct {
       uint8_t nWarps;
-      uint8_t bid;
-      uint8_t nChannels;
     } coll;
     struct {
       int16_t peer;
