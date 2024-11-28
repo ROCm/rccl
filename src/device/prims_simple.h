@@ -178,6 +178,7 @@ private:
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
       STORE(connStepPtr, step);
+      traceData(__LINE__, threadIdx.x, (uint64_t)connStepPtr, step);
     }
   }
 

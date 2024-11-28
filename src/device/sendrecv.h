@@ -210,6 +210,9 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
         runRecv<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
 #elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
         runRecv<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
+        if (tid%WARP_SIZE == 0) traceData(__LINE__, threadIdx.x,
+          reinterpret_cast<uint64_t>(uint64_t(args->buffHi32)<<32 | args->buffLo32),
+          reinterpret_cast<uint64_t>(uint64_t(args->countHi32)<<32 | args->countLo32));
 #else
         runRecv<ProtoSimple<1,1>>(tid, nthreads, group, args);
 #endif
@@ -222,6 +225,9 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
         runSend<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
 #elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
         runSend<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
+        if (tid%WARP_SIZE == 0) traceData(__LINE__, threadIdx.x,
+          reinterpret_cast<uint64_t>(uint64_t(args->buffHi32)<<32 | args->buffLo32),
+          reinterpret_cast<uint64_t>(uint64_t(args->countHi32)<<32 | args->countLo32));
 #else
         runSend<ProtoSimple<1,1>>(tid, nthreads, group, args);
 #endif
