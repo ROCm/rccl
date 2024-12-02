@@ -26,6 +26,7 @@ The RCCL public repository is located at `<https://github.com/ROCm/rccl>`_.
 
   .. grid-item-card:: How to
 
+    * :doc:`Using the RCCL Tuner plugin <./how-to/using-rccl-tuner-plugin-api>`
     * :doc:`Using the NCCL Net plugin <./how-to/using-nccl>`
     * :doc:`RCCL usage tips <./how-to/rccl-usage-tips>`
 
