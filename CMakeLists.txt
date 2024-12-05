@@ -294,6 +294,11 @@ if (HAVE_KERNARG_PRELOAD)
   message(STATUS "Kernarg preloading to SGPR enabled")
 endif()
 
+check_cxx_compiler_flag("-parallel-jobs=12" HAVE_PARALLEL_JOBS)
+if (HAVE_PARALLEL_JOBS)
+  message(STATUS "Parallel jobs enabled")
+endif()
+
 ## Disable building MSCCL++ if the build environment is invalid
 ## Currently MSCCL++ is supported only on gfx942
 if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST GPU_TARGETS OR "gfx942:xnack-" IN_LIST GPU_TARGETS OR "gfx942:xnack+" IN_LIST GPU_TARGETS))
@@ -727,7 +732,9 @@ if(LL128_ENABLED)
 endif()
 
 ## Set RCCL compile options
-target_compile_options(rccl PRIVATE -parallel-jobs=12)
+if (HAVE_PARALLEL_JOBS)
+  target_compile_options(rccl PRIVATE -parallel-jobs=12)
+endif()
 target_compile_options(rccl PRIVATE -Werror=uninitialized -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -fgpu-rdc)               # Generate relocatable device code (required for extern __shared__)
@@ -805,12 +812,14 @@ else()
   endif()
 endif()
 ## Reserve 16GB for each linker job. Limit max number of linker jobs to 16
-math(EXPR num_linker_jobs "(${memory_in_gb} + 15) / 16")
-if (${num_linker_jobs} GREATER_EQUAL "16")
-  set(num_linker_jobs "16")
+if (HAVE_PARALLEL_JOBS)
+  math(EXPR num_linker_jobs "(${memory_in_gb} + 15) / 16")
+  if (${num_linker_jobs} GREATER_EQUAL "16")
+    set(num_linker_jobs "16")
+  endif()
+  message(STATUS "Use ${num_linker_jobs} jobs for linking")
+  target_link_options(rccl PRIVATE -parallel-jobs=${num_linker_jobs})       # Use multiple threads to link
 endif()
-message(STATUS "Use ${num_linker_jobs} jobs for linking")
-target_link_options(rccl PRIVATE -parallel-jobs=${num_linker_jobs})       # Use multiple threads to link
 if(BUILD_ADDRESS_SANITIZER)
   target_link_options(rccl PRIVATE -fuse-ld=lld)
 endif()
