@@ -249,7 +249,11 @@ static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, netId, 0, &req.useGdr));
 
   // Determine whether we need to flush the GDR buffer on recv or not
-  if (req.useGdr) NCCLCHECK(ncclTopoNeedFlush(comm->topo, myInfo->busId, &req.needFlush));
+  if (req.useGdr) {
+    NCCLCHECK(ncclTopoNeedFlush(comm->topo, myInfo->busId, &req.needFlush));
+    CUDACHECK(hipDeviceGetAttribute((int*)&req.curr_hdp_reg, hipDeviceAttributeHdpMemFlushCntl, myInfo->cudaDev));
+    recv->conn.curr_hdp_reg = req.curr_hdp_reg;
+  }
 
   // We don't support PXN on receive yet
   tpProxyRank = comm->topParentRanks[myInfo->rank];
@@ -1538,6 +1542,8 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
           if (totalSize > 0 && p == NCCL_PROTO_SIMPLE && needFlush) {
             // GDRCOPY support
             struct recvNetResources* resources = (struct recvNetResources*) (subGroup->connection->transportResources);
+            if (resources->curr_hdp_reg) *resources->curr_hdp_reg = 0x1;
+            __sync_synchronize();
             if (resources->gdcFlush) {
 #if defined (__x86_64__)
               // Force a PCI-E read from GPU memory
