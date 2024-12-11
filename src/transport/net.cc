@@ -1355,6 +1355,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
 }
 
 RCCL_PARAM(NetHdpFlush, "NET_HDP_FLUSH", 1);
+RCCL_PARAM(NetGdrFlush, "NET_GDR_FLUSH", 1);
 
 static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct ncclProxyArgs* args) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
@@ -1546,8 +1547,13 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
             // GDRCOPY support
             struct recvNetResources* resources = (struct recvNetResources*) (subGroup->connection->transportResources);
             if (rcclParamNetHdpFlush() && resources->curr_hdp_reg) {
+              static bool once = true;
               *resources->curr_hdp_reg = 0x1;
               __sync_synchronize();
+              if (once) {
+                once = false;
+                INFO(NCCL_INIT, "%s: flushed HDP %p", __func__, resources->curr_hdp_reg);
+              }
             }
             if (resources->gdcFlush) {
 #if defined (__x86_64__)
@@ -1557,8 +1563,9 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
               WARN("NET: GDR Flush only supported on x86_64");
               return ncclInternalError;
 #endif
-            } else {
+            } else if (rcclParamNetGdrFlush()) {
               int subCount = 0;
+              static bool once = true;
               for (int i=0; i<subGroup->groupSize; i++) {
                 struct ncclProxySubArgs* sub = subGroup + i;
                 if (step < sub->nsteps) {
@@ -1575,6 +1582,10 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
               }
               struct recvNetResources* resources = (struct recvNetResources*) (subGroup->connection->transportResources);
               NCCLCHECK(proxyState->ncclNet->iflush(resources->netRecvComm, subCount, ptrs, sizes, mhandles, subGroup->requests+(step%NCCL_STEPS)));
+              if (once) {
+                once = false;
+                INFO(NCCL_INIT, "%s: issued GDR flush", __func__);
+              }
             }
           }
           args->idle = 0;
