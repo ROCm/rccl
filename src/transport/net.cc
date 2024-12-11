@@ -1354,6 +1354,8 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
   return ncclSuccess;
 }
 
+RCCL_PARAM(NetHdpFlush, "NET_HDP_FLUSH", 1);
+
 static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct ncclProxyArgs* args) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
   g_npkit_net_poll_cnt++;
@@ -1543,8 +1545,10 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
           if (totalSize > 0 && p == NCCL_PROTO_SIMPLE && needFlush) {
             // GDRCOPY support
             struct recvNetResources* resources = (struct recvNetResources*) (subGroup->connection->transportResources);
-            if (resources->curr_hdp_reg) *resources->curr_hdp_reg = 0x1;
-            __sync_synchronize();
+            if (rcclParamNetHdpFlush() && resources->curr_hdp_reg) {
+              *resources->curr_hdp_reg = 0x1;
+              __sync_synchronize();
+            }
             if (resources->gdcFlush) {
 #if defined (__x86_64__)
               // Force a PCI-E read from GPU memory
