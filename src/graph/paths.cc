@@ -450,7 +450,7 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int6
 }
 
 // Set to 0 to disable the flush on Hopper when using GDR
-NCCL_PARAM(NetForceFlush, "NET_FORCE_FLUSH", 0);
+NCCL_PARAM(NetForceFlush, "NET_FORCE_FLUSH", 1);
 
 // Determine whether we need to flush the GDR recv buffers
 ncclResult_t ncclTopoNeedFlush(struct ncclTopoSystem* system, int64_t busId, int* flush) {
@@ -458,7 +458,7 @@ ncclResult_t ncclTopoNeedFlush(struct ncclTopoSystem* system, int64_t busId, int
   NCCLCHECK(ncclTopoIdToIndex(system, GPU, busId, &g));
   struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  *flush = 1;
+  *flush = ncclParamNetForceFlush();
 #else
   // Flush is required on Ampere and earlier
   *flush = gpu->gpu.cudaCompCap < 90 ? 1 : ncclParamNetForceFlush();
