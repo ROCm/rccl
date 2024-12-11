@@ -148,7 +148,9 @@ namespace RcclUnitTesting
 
     for (int i = 0; i < numElements; i++)
     {
-      int    valueI = (globalRank + i) % 256;
+      // Due to floating-point math not being commutative, the ordering in which ranks are added will matter.
+      // For lower-precision data types, we initialize all ranks to the same value to avoid this
+      int    valueI = (dataType == ncclFp8E4M3 || dataType == ncclFp8E5M2)? (i % 16) :(globalRank + i) % 256;
       double valueF = 1.0L/((double)valueI+1.0L);
       temp.Set(dataType, i, valueI, valueF);
     }
