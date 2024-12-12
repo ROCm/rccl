@@ -1558,7 +1558,12 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
             if (resources->gdcFlush) {
 #if defined (__x86_64__)
               // Force a PCI-E read from GPU memory
+              static bool once = true;
               asm volatile ("mov (%0), %%eax" :: "l"(resources->gdcFlush) : "%eax");
+              if (once) {
+                once = false;
+                INFO(NCCL_INIT, "%s: issued GDC flush", __func__);
+              }
 #else
               WARN("NET: GDR Flush only supported on x86_64");
               return ncclInternalError;
