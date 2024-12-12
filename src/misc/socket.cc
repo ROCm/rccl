@@ -736,9 +736,9 @@ ncclResult_t ncclSocketInit(struct ncclSocket* sock, union ncclSocketAddress* ad
       int opt = 1;
       SYSCHECKGOTO(setsockopt(sock->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)), ret, fail);
     }
-    auto lingerParam = rcclParamSocketLinger();
+    int lingerParam = (int)rcclParamSocketLinger();
     if (lingerParam > -1) {
-      linger linger_opt = { 1, (int)lingerParam };
+      linger linger_opt = { 1, lingerParam };
       SYSCHECKGOTO(setsockopt(sock->fd, SOL_SOCKET, SO_LINGER, &linger_opt, sizeof(linger_opt)), ret, fail);
     }
   } else {
