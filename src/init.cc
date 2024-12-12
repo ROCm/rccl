@@ -122,7 +122,7 @@ static constexpr int64_t defaultEnableMscclpp = 0;
 RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
 
 // GDRCOPY support: Off by default
-NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
+NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 1);
 
 // GDRCOPY support
 gdr_t ncclGdrCopy = NULL;
