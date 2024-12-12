@@ -1548,11 +1548,11 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
             struct recvNetResources* resources = (struct recvNetResources*) (subGroup->connection->transportResources);
             if (rcclParamNetHdpFlush() && resources->curr_hdp_reg) {
               static bool once = true;
-              *resources->curr_hdp_reg = 0x1;
-              __sync_synchronize();
+              __atomic_store_n(resources->curr_hdp_reg, 0x1, __ATOMIC_RELAXED);
+              int val = __atomic_load_n(resources->curr_hdp_reg, __ATOMIC_ACQUIRE);
               if (once) {
                 once = false;
-                INFO(NCCL_INIT, "%s: flushed HDP %p", __func__, resources->curr_hdp_reg);
+                INFO(NCCL_INIT, "%s: flushed HDP %p val %d", __func__, resources->curr_hdp_reg, val);
               }
             }
             if (resources->gdcFlush) {
