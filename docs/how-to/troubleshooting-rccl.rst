@@ -90,7 +90,7 @@ details about the platform and system. Some issues to consider include:
 
    *  Build or run the develop branch version of RCCL and see if the problem persists.
    *  Try an earlier RCCL version (minor or major).
-   *  If you recently changed the ROCm runtime configuration, KFD/driver, or compiler,
+   *  If you recently changed the ROCm runtime configuration, AMD Kernel-mode GPU Driver (KMD), or compiler,
       rerun the test with the previous configuration.
 
 .. _collecting-rccl-info:
