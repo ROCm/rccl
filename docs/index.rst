@@ -29,6 +29,7 @@ The documentation is structured as follows:
   .. grid-item-card:: How to
 
     * :ref:`using-nccl`
+    * :doc:`Troubleshoot RCCL <./how-to/troubleshooting-rccl>`
        
   .. grid-item-card:: API reference
 

@@ -8,6 +8,8 @@ subtrees:
 - caption: How to 
   entries:
   - file: how-to/using-nccl
+  - file: how-to/troubleshooting-rccl
+    title: Troubleshoot RCCL
 
 - caption: API reference 
   entries:
