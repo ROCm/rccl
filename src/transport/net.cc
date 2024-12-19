@@ -1355,7 +1355,6 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
 }
 
 RCCL_PARAM(NetHdpFlush, "NET_HDP_FLUSH", 1);
-RCCL_PARAM(NetGdrFlush, "NET_GDR_FLUSH", 1);
 
 static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct ncclProxyArgs* args) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
@@ -1568,7 +1567,7 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
               WARN("NET: GDR Flush only supported on x86_64");
               return ncclInternalError;
 #endif
-            } else if (rcclParamNetGdrFlush()) {
+            } else {
               int subCount = 0;
               static bool once = true;
               for (int i=0; i<subGroup->groupSize; i++) {
