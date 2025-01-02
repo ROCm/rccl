@@ -68,9 +68,13 @@ if(ENABLE_MSCCLPP)
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 	execute_process(
-           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
-           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-        )
+	   COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+	   WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
+	execute_process(
+	   COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
+	   WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
 
         message(STATUS "Building mscclpp only for gfx942.")
 
@@ -98,13 +102,18 @@ if(ENABLE_MSCCLPP)
 
         find_package(mscclpp_nccl REQUIRED)
 	execute_process(
-    		COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
-        	WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-    	)
-	execute_process(
-           COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+           COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+	execute_process(
+	   COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+	   WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
+	execute_process(
+	   COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
+	   WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
+
     endif()
 
     execute_process(COMMAND objcopy
