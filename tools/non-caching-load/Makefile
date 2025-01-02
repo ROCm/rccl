@@ -9,8 +9,8 @@ HIP_PATH=../../..
 endif
 HIPCC=$(HIP_PATH)/bin/hipcc
 
-EXE=non-caching-store
-CXXFLAGS = -std=c++11 -O3 -I../../src/include  -I../../src/device -I$(RCCL_INSTALL)/include -L$(RCCL_INSTALL) -lrccl
+EXE=non-caching-load
+CXXFLAGS = -std=c++11 -O3 -I../../src/include  -I../../src/device -I$(RCCL_INSTALL) -L$(RCCL_INSTALL) -lrccl
 
 all: $(EXE)
 

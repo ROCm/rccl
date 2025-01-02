@@ -31,3 +31,4 @@ __host__ __device__ T __non_caching_store_vec4(const T val, const T* p)
 }
 
 #endif
+
