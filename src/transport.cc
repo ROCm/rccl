@@ -263,6 +263,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     }
   }
 
+  CUDACHECKGOTO(cudaStreamSynchronize(comm->sharedRes->hostStream.cudaStream), ret, fail);
+
   if (timeReported) {
     struct timeval now;
     gettimeofday(&now, NULL);
