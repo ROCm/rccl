@@ -38,6 +38,12 @@ extern "C" {
   /* See ncclAllGather. */
   ncclResult_t  mscclpp_ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
       ncclDataType_t datatype, mscclppComm_t comm, hipStream_t stream);
+
+  ncclResult_t mscclpp_ncclCommRegister(mscclppComm_t comm, void* buff, size_t size, void** handle);
+
+  ncclResult_t mscclpp_ncclCommDeregister(mscclppComm_t comm, void* handle);
+
+  ncclResult_t mscclpp_ncclBuffIsRegistered(mscclppComm_t comm, const void* buff, size_t count, bool* registered);
 }
 
 namespace std {

@@ -30,3 +30,6 @@ ncclRedOpDestroy mscclpp_ncclRedOpDestroy
 ncclReduce mscclpp_ncclReduce
 ncclReduceScatter mscclpp_ncclReduceScatter
 ncclSend mscclpp_ncclSend
+ncclCommRegister mscclpp_ncclCommRegister
+ncclCommDeregister mscclpp_ncclCommDeregister
+ncclBuffIsRegistered mscclpp_ncclBuffIsRegistered
