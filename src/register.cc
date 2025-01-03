@@ -10,7 +10,9 @@
 #include "net.h"
 #include "register.h"
 #include "api_trace.h"
+#ifdef ENABLE_MSCCLPP
 #include "mscclpp/mscclpp_nccl.h"
+#endif
 
 ncclResult_t ncclNetDeregister(struct ncclComm* comm, struct ncclReg* reg) {
   struct ncclRegCache* cache = &comm->regCache;
