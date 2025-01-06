@@ -11,15 +11,35 @@ index 7f50792..b8b146d 100644
 + */
 +ncclResult_t ncclCommRegister(ncclComm_t comm, void* buff, size_t size, void** handle);
 +ncclResult_t ncclCommDeregister(ncclComm_t comm, void* handle);
-+ncclResult_t ncclBuffIsRegistered(ncclComm_t comm, const void* buff, size_t count, bool* registered);
++
  /*
   * Send
   *
 diff --git a/apps/nccl/src/nccl.cu b/apps/nccl/src/nccl.cu
-index a697be2..d8497e7 100644
+index a697be2..1d4af61 100644
 --- a/apps/nccl/src/nccl.cu
 +++ b/apps/nccl/src/nccl.cu
-@@ -577,6 +577,67 @@ NCCL_API ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t
+@@ -65,6 +65,7 @@ struct ncclComm {
+   std::unordered_map<channelKey, ChannelInfo> channelInInfos;
+   std::unordered_map<channelKey, ChannelInfo> channelOutInfos;
+   std::unordered_map<channelKey, ChannelInfo> channelScratchInfos;
++  std::unordered_map<void*, channelKey> handleKeys;
+   std::shared_ptr<char> scratchBuff;
+   std::vector<mscclpp::RegisteredMemory> remoteScratchRegMemories;
+ 
+@@ -73,6 +74,11 @@ struct ncclComm {
+   uint32_t buffFlag;
+ };
+ 
++struct handleInfo {
++  void * buff;
++  cudaIpcMemHandle_t ipcHandle;
++};
++
+ static size_t ncclTypeSize(ncclDataType_t type) {
+   switch (type) {
+     case ncclInt8:
+@@ -577,6 +583,87 @@ NCCL_API ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t
    return ncclSuccess;
  }
  
@@ -63,27 +83,47 @@ index a697be2..d8497e7 100644
 +      ChannelInfo channelInfo{outChannels, outChannels, setupSmChannelDeviceHandles(outChannels), setupSmChannelDeviceHandles(outChannels)};
 +      recvIt = comm->channelOutInfos.emplace(buffKey, channelInfo).first;
 +  }
-+  *handle = (void*) buffBasePtr;
++
++  cudaIpcMemHandle_t ipcHandle;
++  MSCCLPP_CUDATHROW(cudaIpcGetMemHandle(&ipcHandle, buffBasePtr));
++
++  struct handleInfo *p = (struct handleInfo *) malloc(sizeof(struct handleInfo));
++  p->buff = buffBasePtr;
++  p->ipcHandle = ipcHandle;
++  *handle = p;
++
++  auto it = comm->handleKeys.find(*handle);
++  if (it == comm->handleKeys.end()) {
++     comm->handleKeys[*handle] = buffKey;
++  }
 +
 +  return ncclSuccess;
 +}
 +
 +NCCL_API ncclResult_t ncclCommDeregister(ncclComm_t comm, void* handle) {
-+        if (comm && handle) {
-+                handle = nullptr;
-+        }
-+        return ncclSuccess;
-+}
++  if (comm && handle) {
++     channelKey buffKey = comm->handleKeys[handle];
 +
-+NCCL_API ncclResult_t ncclBuffIsRegistered(ncclComm_t comm, const void* buff, size_t count, bool* registered){
-+  size_t buffBytes;
-+  CUdeviceptr buffBasePtr;
-+  MSCCLPP_CUTHROW(cuMemGetAddressRange(&buffBasePtr, &buffBytes, (CUdeviceptr)buff));
-+  channelKey buffKey{(void*)buffBasePtr, buffBytes};
-+  auto buffIt = comm->channelScratchInfos.find(buffKey);
-+  *registered =  buffIt != comm->channelScratchInfos.end();
++     auto scratchIt = comm->channelScratchInfos.find(buffKey);
++     if (scratchIt != comm->channelScratchInfos.end()) {
++        comm->channelScratchInfos.erase(scratchIt);
++     }
++
++     auto inIt = comm->channelInInfos.find(buffKey);
++     if (inIt != comm->channelInInfos.end()) {
++        comm->channelInInfos.erase(inIt);
++     }
++
++     auto outIt = comm->channelOutInfos.find(buffKey);
++     if (outIt != comm->channelOutInfos.end()) {
++        comm->channelOutInfos.erase(outIt);
++     }
++
++     free(handle);
++  }
 +  return ncclSuccess;
 +}
++
  NCCL_API ncclResult_t ncclSend(const void*, size_t, ncclDataType_t, int, ncclComm_t, cudaStream_t) {
    // TODO: implement this function
    return ncclInternalError;
