@@ -2,7 +2,7 @@ diff --git a/apps/nccl/include/nccl.h b/apps/nccl/include/nccl.h
 index 7f50792..b8b146d 100644
 --- a/apps/nccl/include/nccl.h
 +++ b/apps/nccl/include/nccl.h
-@@ -344,6 +344,12 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
+@@ -344,6 +344,13 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
  ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount, ncclDataType_t datatype,
                              ncclComm_t comm, cudaStream_t stream);
  
@@ -12,6 +12,7 @@ index 7f50792..b8b146d 100644
 +ncclResult_t ncclCommRegister(ncclComm_t comm, void* buff, size_t size, void** handle);
 +ncclResult_t ncclCommDeregister(ncclComm_t comm, void* handle);
 +ncclResult_t ncclBuffIsRegistered(ncclComm_t comm, const void* buff, size_t count, bool* registered);
++size_t ncclBufferSize(ncclComm_t comm, void* handle);
  /*
   * Send
   *
@@ -39,7 +40,7 @@ index a697be2..1d4af61 100644
  static size_t ncclTypeSize(ncclDataType_t type) {
    switch (type) {
      case ncclInt8:
-@@ -577,6 +583,96 @@ NCCL_API ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t
+@@ -577,6 +583,104 @@ NCCL_API ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t
    return ncclSuccess;
  }
  
@@ -132,6 +133,14 @@ index a697be2..1d4af61 100644
 +  auto buffIt = comm->channelScratchInfos.find(buffKey);
 +  *registered =  buffIt != comm->channelScratchInfos.end();
 +  return ncclSuccess;
++}
++size_t
++ncclBufferSize(ncclComm_t comm, void* handle){
++  if (!(comm && handle)){
++    return 0;
++  }
++  auto buffKeyIt = comm->handleKeys.find(handle);
++  return buffKeyIt != comm->handleKeys.end() ? buffKeyIt->second.bytes : 0;
 +}
  NCCL_API ncclResult_t ncclSend(const void*, size_t, ncclDataType_t, int, ncclComm_t, cudaStream_t) {
    // TODO: implement this function
