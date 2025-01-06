@@ -11,7 +11,7 @@ index 7f50792..b8b146d 100644
 + */
 +ncclResult_t ncclCommRegister(ncclComm_t comm, void* buff, size_t size, void** handle);
 +ncclResult_t ncclCommDeregister(ncclComm_t comm, void* handle);
-+
++ncclResult_t ncclBuffIsRegistered(ncclComm_t comm, const void* buff, size_t count, bool* registered);
  /*
   * Send
   *
@@ -39,7 +39,7 @@ index a697be2..1d4af61 100644
  static size_t ncclTypeSize(ncclDataType_t type) {
    switch (type) {
      case ncclInt8:
-@@ -577,6 +583,87 @@ NCCL_API ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t
+@@ -577,6 +583,96 @@ NCCL_API ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t
    return ncclSuccess;
  }
  
@@ -124,6 +124,15 @@ index a697be2..1d4af61 100644
 +  return ncclSuccess;
 +}
 +
++NCCL_API ncclResult_t ncclBuffIsRegistered(ncclComm_t comm, const void* buff, size_t count, bool* registered){
++  size_t buffBytes;
++  CUdeviceptr buffBasePtr;
++  MSCCLPP_CUTHROW(cuMemGetAddressRange(&buffBasePtr, &buffBytes, (CUdeviceptr)buff));
++  channelKey buffKey{(void*)buffBasePtr, buffBytes};
++  auto buffIt = comm->channelScratchInfos.find(buffKey);
++  *registered =  buffIt != comm->channelScratchInfos.end();
++  return ncclSuccess;
++}
  NCCL_API ncclResult_t ncclSend(const void*, size_t, ncclDataType_t, int, ncclComm_t, cudaStream_t) {
    // TODO: implement this function
    return ncclInternalError;
