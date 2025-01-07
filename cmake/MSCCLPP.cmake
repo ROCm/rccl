@@ -71,6 +71,10 @@ if(ENABLE_MSCCLPP)
            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
         message(STATUS "Building mscclpp only for gfx942.")
 
@@ -104,6 +108,10 @@ if(ENABLE_MSCCLPP)
 	execute_process(
            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
     endif()
 
