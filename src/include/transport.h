@@ -48,7 +48,7 @@ struct ncclPeerInfo {
   // MNNVL support
   nvmlGpuFabricInfoV_t fabricInfo;
 };
-
+#define CHANNEL_MASK_OFFSET(nranks, connIndex) (nranks * (connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0))
 #define CONNECT_SIZE 128
 struct ncclConnect {
   char data[CONNECT_SIZE];

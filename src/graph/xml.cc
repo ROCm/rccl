@@ -766,7 +766,11 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, uint32_t rocmDev
   NCCLCHECK(xmlGetAttrInt(gpuNode, "arch", &arch.value));
 
   struct ncclXmlNode* nvlNode = NULL;
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  NCCLCHECK(xmlGetSub(gpuNode, "xgmi", &nvlNode));
+#else
   NCCLCHECK(xmlGetSub(gpuNode, "nvlink", &nvlNode));
+#endif
   if (nvlNode == NULL) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     const char* busId;

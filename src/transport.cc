@@ -62,13 +62,13 @@ ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, int channelId, int n
     int peer = peerRecv[i];
     if (peer == -1 || peer >= comm->nRanks || peer == comm->rank || channel->peers[peer]->recv[connIndex].connected) continue;
     //comm->connectRecv[peer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)] |= mask;
-    comm->connectRecv[peer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)].masks[channel->id / 64] |= mask;
+    comm->connectRecv[peer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)].masks[channel->id / 64] |= mask;
   }
   for (int i=0; i<nsend; i++) {
     int peer = peerSend[i];
     if (peer == -1 || peer >= comm->nRanks || peer == comm->rank || channel->peers[peer]->send[connIndex].connected) continue;
     //comm->connectSend[peer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)] |= mask;
-    comm->connectSend[peer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)].masks[channel->id / 64] |= mask;
+    comm->connectSend[peer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)].masks[channel->id / 64] |= mask;
   }
   return ncclSuccess;
 }
@@ -117,8 +117,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int sendPeer = (comm->rank + i) % comm->nRanks;
     /*uint64_t recvMask = comm->connectRecv[recvPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
     uint64_t sendMask = comm->connectSend[sendPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];*/
-    struct channelMasks recvMask = comm->connectRecv[recvPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
-    struct channelMasks sendMask = comm->connectSend[sendPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
+    struct channelMasks recvMask = comm->connectRecv[recvPeer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)];
+    struct channelMasks sendMask = comm->connectSend[sendPeer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)];
 
     // Data[i] contains all ncclConnect information for all send and receive connections with a given send and recv peer
     // This data is packed in the array based on the number of sendChannels and recvChannels connected with these peers
@@ -188,8 +188,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
           int sendPeer = (comm->rank + j) % comm->nRanks;
           /*uint64_t recvMask = comm->connectRecv[recvPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
           uint64_t sendMask = comm->connectSend[sendPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];*/
-	  struct channelMasks recvMask = comm->connectRecv[recvPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
-      	  struct channelMasks sendMask = comm->connectSend[sendPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)];
+	        struct channelMasks recvMask = comm->connectRecv[recvPeer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)];
+      	  struct channelMasks sendMask = comm->connectSend[sendPeer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)];
 
           int p = j-(done+1);
           int sendDataOffset = 0;
@@ -263,6 +263,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     }
   }
 
+  CUDACHECKGOTO(cudaStreamSynchronize(comm->sharedRes->hostStream.cudaStream), ret, fail);
+
   if (timeReported) {
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -299,7 +301,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
         NCCLCHECKGOTO(bootstrapRecv(comm->bootstrap, sendPeer, bootstrapTag, &flag, sizeof(int)), ret, fail);
       }
     }
-    comm->connectRecv[recvPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)].masks[j] = comm->connectSend[sendPeer+comm->nRanks*(connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0)].masks[j] = 0UL;
+    comm->connectRecv[recvPeer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)].masks[j] = comm->connectSend[sendPeer+CHANNEL_MASK_OFFSET(comm->nRanks, connIndex)].masks[j] = 0UL;
     }
   }
 

@@ -586,7 +586,8 @@ ncclResult_t ncclIbGdrSupport() {
     // or created under a different path like `/sys/kernel/` or `/sys/` (depending on your ib_peer_mem module)
     const char* memory_peers_paths[] = {"/sys/kernel/mm/memory_peers/amdkfd/version",
                                   "/sys/kernel/memory_peers/amdkfd/version",
-                                  "/sys/memory_peers/amdkfd/version"};
+                                  "/sys/memory_peers/amdkfd/version",
+                                  NULL};
     int i = 0;
 
     while (memory_peers_paths[i]) {
