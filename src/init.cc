@@ -218,6 +218,7 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
 }
 
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
+RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
 
 #ifdef ENABLE_COLLTRACE
 // Should be in sync with 'ALL_COLLS' in Generator.cmake
@@ -231,16 +232,14 @@ void *ncclCommThreadMain(void *arg) {
   do {
     int numActiveChans = MAXCHANNELS;
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
-      int tail = comm->collTraceTail[channel].tail%COLLTRACE_NUM_ITEMS;
+      int tail = comm->collTraceTail[channel].tail;
       int count;
-      if (head[channel] <= tail)
-        count = tail - head[channel];
-      else
-        count = COLLTRACE_NUM_ITEMS + head[channel] - tail;
+      count = tail - head[channel];
       if (count == 0) {
         numActiveChans--;
         continue;
       }
+      count = count%COLLTRACE_NUM_ITEMS;
       for (int i = 0; i < count; i++) {
         volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel];
         uint8_t type = td->type;
@@ -296,14 +295,16 @@ void *ncclCommThreadMain(void *arg) {
         INFO(NCCL_COLL, "%s", line);
         td->type = ncclCollTraceNotReady;
         head[channel] ++;
-        head[channel] %= COLLTRACE_NUM_ITEMS;
       }
     }
     if (comm->collTraceExit && numActiveChans == 0)
       break;
     usleep(1000); //sleep 1ms
   } while(true);
-  pthread_exit(NULL);
+  if (comm->collTraceThread)
+    pthread_exit(NULL);
+  else
+    return 0;
 }
 #endif
 
@@ -398,7 +399,12 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
 #ifdef ENABLE_COLLTRACE
   comm->collTraceExit = 1;
-  if (comm->collTraceThread) pthread_join(comm->collTraceThread, NULL);
+  if (comm->collTraceEnabled) {
+    if (comm->collTraceThread)
+      pthread_join(comm->collTraceThread, NULL);
+    else
+      ncclCommThreadMain((void *)comm);
+  }
   NCCLCHECK(ncclCudaHostFree((void *)comm->collTrace));
   NCCLCHECK(ncclCudaHostFree((void *)comm->collTraceTail));
 #endif
@@ -579,10 +585,14 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   NCCLCHECK(ncclCudaHostCalloc(&comm->collTraceTail, MAXCHANNELS));
   NCCLCHECK(ncclCudaHostCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
   comm->collTraceExit = 0;
-  if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable())
-    pthread_create(&comm->collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
-  else
-    comm->collTraceThread = 0;
+  comm->collTraceEnabled = false; // we can enable colltrace without starting a thread
+  if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable()) {
+    comm->collTraceEnabled = true;
+    if (rcclParamKernelCollTraceThreadEnable())
+      pthread_create(&comm->collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
+    else
+      comm->collTraceThread = 0;
+  }
 #endif
   comm->collNetSupport = 0;
   memset(comm->collNetSupportMatrix, 0, sizeof(comm->collNetSupportMatrix));
