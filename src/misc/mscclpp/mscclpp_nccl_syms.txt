@@ -32,5 +32,3 @@ ncclReduceScatter mscclpp_ncclReduceScatter
 ncclSend mscclpp_ncclSend
 ncclCommRegister mscclpp_ncclCommRegister
 ncclCommDeregister mscclpp_ncclCommDeregister
-ncclBuffIsRegistered mscclpp_ncclBuffIsRegistered
-ncclBufferSize mscclpp_ncclBufferSize

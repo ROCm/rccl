@@ -186,7 +186,7 @@ ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
     
     if (comm->mscclCompatible){
       //if size is zero, registration failed, we don't want RCCL deregistration code to trigger and cause failure
-      const size_t size = mscclpp_ncclBufferSize(comm->mscclpp_comm, handle);
+      const size_t size = mscclpp_BufferSize(comm->mscclpp_comm, handle);
       if(size > 0 && (size & 31) == 0 && size <= comm->mscclpp_threshold)
         NCCLCHECK(mscclpp_ncclCommDeregister(comm->mscclpp_comm, handle));
     }

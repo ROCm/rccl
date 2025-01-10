@@ -524,10 +524,8 @@ ncclResult_t mscclEnqueueCheck(
           NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
         }
 
-        bool sendBuffRegistered = false; 
-        bool recvBuffRegistered = false; 
-        mscclpp_ncclBuffIsRegistered(comm->mscclpp_comm, sendBuff, count, &sendBuffRegistered);
-        mscclpp_ncclBuffIsRegistered(comm->mscclpp_comm, recvBuff, count, &recvBuffRegistered);
+        const bool sendBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, sendBuff, count); 
+        const bool recvBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, recvBuff, count);
         const bool graphMode = threadLocalStatus.captureStatus != mscclNoCapture;
         const bool buffsRegistedNonGraphMode = !graphMode && sendBuffRegistered && recvBuffRegistered;
 
@@ -572,10 +570,8 @@ ncclResult_t mscclEnqueueCheck(
           NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
         }
 
-        bool sendBuffRegistered = false; 
-        bool recvBuffRegistered = false; 
-        mscclpp_ncclBuffIsRegistered(comm->mscclpp_comm, sendBuff, count, &sendBuffRegistered);
-        mscclpp_ncclBuffIsRegistered(comm->mscclpp_comm, recvBuff, count, &recvBuffRegistered);
+        const bool sendBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, sendBuff, count); 
+        const bool recvBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, recvBuff, count);
         const bool graphMode = threadLocalStatus.captureStatus != mscclNoCapture;
         const bool buffsRegistedNonGraphMode = !graphMode && sendBuffRegistered && recvBuffRegistered;
 
