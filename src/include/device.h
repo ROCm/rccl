@@ -298,7 +298,7 @@ struct ncclWorkElemP2p {
     };
   };
   uint8_t reg:1;
-  uint16_t opCount:12;
+  uint16_t opCount:15;
   // Important not to use any fields with greater than 4-byte alignment since
   // we need sizeof(ncclWorkElemP2p)==28, but that would be padded up to 32 if
   // there were 8-byte fields.
@@ -378,7 +378,8 @@ struct ncclCollTrace {
   uint8_t bid;
   int16_t funcIndex;
   uint32_t data_0;
-  uint64_t timeStamp;
+  uint8_t channelId;
+  uint64_t timeStamp:56;
   union {
     uint64_t opCount;
     uint32_t p2pOpCount[2];
