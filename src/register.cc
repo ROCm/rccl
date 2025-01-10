@@ -169,13 +169,11 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
       else{
         WARN("MSCCL++: Cannot register user-buffers on managed memory");
       }
+      return ncclSuccess;
     }
-    else
-    #endif
-    {
-       INFO(NCCL_INIT, "RCCL: ncclCommRegister");
-      NCCLCHECK(ncclRegister(comm, buff, size, handle));
-    }
+  #endif
+  INFO(NCCL_INIT, "RCCL: ncclCommRegister");
+  NCCLCHECK(ncclRegister(comm, buff, size, handle));
   return ncclSuccess;
 }
 
@@ -183,37 +181,36 @@ NCCL_API(ncclResult_t, ncclCommDeregister, const ncclComm_t comm, void* handle);
 ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
 
   #ifdef ENABLE_MSCCLPP
-    
-    if (comm->mscclCompatible){
+    if (comm->mscclCompatible) {
       //if size is zero, registration failed, we don't want RCCL deregistration code to trigger and cause failure
       const size_t size = mscclpp_ncclBufferSize(comm->mscclpp_comm, handle);
-      if(size > 0 && (size & 31) == 0 && size <= comm->mscclpp_threshold)
+      if (size > 0 && (size & 31) == 0 && size <= comm->mscclpp_threshold) {
         NCCLCHECK(mscclpp_ncclCommDeregister(comm->mscclpp_comm, handle));
+        return ncclSuccess;
+      }
     }
-    else
   #endif
-    {
-      NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
-      struct ncclReg* reg = (struct ncclReg*)handle;
-      struct ncclRegCache* cache = &comm->regCache;
-      int slot;
-      for (slot=0; slot<cache->population && cache->slots[slot] != reg; slot++);
-      if (slot == cache->population) {
-        WARN("Deregister: Could not find handle");
-        return ncclInvalidUsage;
-      }
-      if (--reg->refs) return ncclSuccess;
-      NCCLCHECK(ncclNetDeregister(comm, reg));
-      if (reg->state & NVLS_REG_COMPLETE) {
-        NCCLCHECK(ncclNvlsDeregBuffer(&reg->mcHandle, reg->regAddr, reg->dev, reg->regSize));
-        reg->regAddr = (CUdeviceptr)NULL;
-      }
-      if (reg->state & COLLNET_REG_COMPLETE) {
-        NCCLCHECK(ncclCollnetDeregBuffer(comm, reg->proxyconn, reg->collnetHandle));
-      }
-      free(reg);
-      memmove(cache->slots+slot, cache->slots+slot+1, (cache->population-slot-1)*sizeof(struct ncclReg*));
-      cache->population -= 1;
-    }
+
+  NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
+  struct ncclReg* reg = (struct ncclReg*)handle;
+  struct ncclRegCache* cache = &comm->regCache;
+  int slot;
+  for (slot=0; slot<cache->population && cache->slots[slot] != reg; slot++);
+  if (slot == cache->population) {
+    WARN("Deregister: Could not find handle");
+    return ncclInvalidUsage;
+  }
+  if (--reg->refs) return ncclSuccess;
+  NCCLCHECK(ncclNetDeregister(comm, reg));
+  if (reg->state & NVLS_REG_COMPLETE) {
+    NCCLCHECK(ncclNvlsDeregBuffer(&reg->mcHandle, reg->regAddr, reg->dev, reg->regSize));
+    reg->regAddr = (CUdeviceptr)NULL;
+  }
+  if (reg->state & COLLNET_REG_COMPLETE) {
+    NCCLCHECK(ncclCollnetDeregBuffer(comm, reg->proxyconn, reg->collnetHandle));
+  }
+  free(reg);
+  memmove(cache->slots+slot, cache->slots+slot+1, (cache->population-slot-1)*sizeof(struct ncclReg*));
+  cache->population -= 1;
   return ncclSuccess;
 }
