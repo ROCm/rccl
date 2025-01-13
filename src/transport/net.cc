@@ -1167,7 +1167,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
             int sharedBuffSlot = sub->posted%maxDepth;
             int offset;
             NCCLCHECK(sharedBuffersGet(proxyState, sub->channelId, sharedBuffSlot*args->nsubs+s, &offset, NULL));
-            resources->recvMem->connFifo[buffSlot].offset = offset;
+            __atomic_store_n(&resources->recvMem->connFifo[buffSlot].offset, offset, __ATOMIC_RELAXED);
             __sync_synchronize();
           }
           volatile uint64_t* sendHead = resources->gdcSync ? resources->gdcSync : &resources->sendMem->head;
@@ -1435,7 +1435,7 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
               int sharedBuffSlot = sub->posted%maxDepth;
               int offset;
               NCCLCHECK(sharedBuffersGet(proxyState, sub->channelId, sharedBuffSlot*args->nsubs+s+i, &offset, sizes+subCount));
-              connFifo[buffSlot].offset = offset;
+              __atomic_store_n(&connFifo[buffSlot].offset, offset, __ATOMIC_RELAXED);
               ptrs[subCount] = localBuff+offset;
             }
           } else {

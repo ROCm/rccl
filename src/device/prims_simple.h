@@ -56,6 +56,7 @@ class Primitives<
   uint32_t* next_hdp_reg;
   void*    mhandle;
   void*    netDeviceHandle;
+  int repeat;
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -116,7 +117,7 @@ private:
     if (((flags & (Recv*RoleWaitRecv)) && !noRecvWait) ||
         ((flags & (Send*RoleWaitSend)) && !noSendWait)) {
       int spins = 0;
-      static int repeat = 100;
+      repeat = 50;
       while (connStepCache + (isSendNotRecv ? NCCL_STEPS : 0) < step + StepPerSlice) {
         __builtin_amdgcn_s_sleep(1);
         connStepCache = loadStepValue(connStepPtr);
