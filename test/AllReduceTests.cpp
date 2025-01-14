@@ -242,4 +242,66 @@ namespace RcclUnitTesting
     }
     testBed.Finalize();
   }
+
+  TEST(AllReduce, UBR3)
+  {          
+    setenv("UT_PROCESS_MASK", "2", 1);
+    const int nranks = 8;
+    std::vector<pid_t> children(nranks);
+    std::vector<std::vector<int>> childPipes(nranks, std::vector<int>(2,0));
+    std::vector<bool> ResultsCorrect(nranks, false);
+    ncclUniqueId id;
+
+    size_t count = 32;
+    std::vector<int> data(count, 0);
+    std::vector<int> expected(count, 0);
+    for (int i = 0; i < count; ++i){
+        data[i] = i;
+        expected[i] = i * nranks;
+    }
+    
+    for(int r = 0; r < nranks; ++r){
+      if(pipe(childPipes[r].data()) == -1)
+        printf("child %i pipe Failed\n", r);
+    } 
+    
+    auto createNCCLid = [&](int rank){
+        ncclGetUniqueId(&id);
+        close(childPipes[rank][0]);
+        write(childPipes[rank][1], &id, sizeof(ncclUniqueId));
+        close(childPipes[rank][1]);
+    };
+
+    auto getNCCLidFromParent = [&](int rank){
+      close(childPipes[rank][1]); //close write to child0
+      read(childPipes[rank][0], &id, sizeof(ncclUniqueId));
+      close(childPipes[rank][0]);
+    };
+
+    auto getAndDistributeNCCLid = [&](int nranks){
+      close(childPipes[0][1]); //close write to child0
+      read(childPipes[0][0], &id, sizeof(ncclUniqueId)); //read from child0
+      for(int r = 1; r < nranks; ++r){
+        write(childPipes[r][1], &id, sizeof(ncclUniqueId));
+        close(childPipes[r][1]);
+      }
+    };
+
+    for(int r = 0; r < nranks; ++r){
+      children[r] = fork();
+      if(children[r] == 0){
+        //child processes
+        if(r == 0)
+          createNCCLid(r);
+        else
+          getNCCLidFromParent(r);
+        call_RCCL(id, r, nranks);
+        break;
+      }
+    }
+
+    getAndDistributeNCCLid(nranks);
+    for(int r = 0; r < nranks; ++r)
+      wait(NULL); // Wait for all children
+  }
 }

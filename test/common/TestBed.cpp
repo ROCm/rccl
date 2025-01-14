@@ -47,6 +47,49 @@
 
 namespace RcclUnitTesting
 {
+
+   void call_RCCL(ncclUniqueId id, int myRank, int nRanks){
+    HIPCALL(hipSetDevice(myRank));
+    hipStream_t stream;
+    HIPCALL(hipStreamCreate(&stream));
+    ncclComm_t comm;
+    NCCLCHECK(ncclCommInitRank(&comm, nRanks, id, myRank));
+    int *sendbuff;
+    int *recvbuff;
+    void *sendRegHandle;
+    void *recvRegHandle;
+    size_t count = 32;
+
+    NCCLCHECK(ncclMemAlloc((void **)&sendbuff, count * sizeof(int)));
+    NCCLCHECK(ncclMemAlloc((void **)&recvbuff, count * sizeof(int)));
+
+    NCCLCHECK(ncclCommRegister(comm, sendbuff, count * sizeof(int), &sendRegHandle));
+    NCCLCHECK(ncclCommRegister(comm, recvbuff, count * sizeof(int), &recvRegHandle));
+
+    std::vector<int> data(count, 0);
+    HIPCALL(hipMemcpy(recvbuff, data.data(), sizeof(int) * count, hipMemcpyHostToDevice));
+
+    for (int i = 0; i < count; ++i)
+        data[i] = i;
+
+    HIPCALL(hipMemcpy(sendbuff, data.data(), sizeof(int) * count, hipMemcpyHostToDevice));
+    NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, count, ncclInt, ncclSum, comm, stream));
+    HIPCALL(hipStreamSynchronize(stream));
+    HIPCALL(hipMemcpy(data.data(), recvbuff, sizeof(int) * count, hipMemcpyDeviceToHost));
+    
+    for(int i = 0; i < count; ++i)
+        ASSERT_EQ(data[i], i*nRanks); 
+    
+    NCCLCHECK(ncclCommDeregister(comm, sendRegHandle));
+    NCCLCHECK(ncclCommDeregister(comm, recvRegHandle));
+
+    NCCLCHECK(ncclMemFree(sendbuff));
+    NCCLCHECK(ncclMemFree(recvbuff));
+    ncclCommDestroy(comm);
+  }
+
+
+
   TestBed::TestBed() :
     numDevicesAvailable(0),
     numActiveChildren(0),
