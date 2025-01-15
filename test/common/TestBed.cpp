@@ -48,37 +48,46 @@
 namespace RcclUnitTesting
 {
 
-   void call_RCCL(ncclUniqueId id, int myRank, int nRanks){
-    HIPCALL(hipSetDevice(myRank));
+   void call_RCCL(ncclUniqueId id, int collID, int rank, int nranks, std::vector<int>& send, std::vector<int>& recv, bool managed){
+    HIPCALL(hipSetDevice(rank));
     hipStream_t stream;
     HIPCALL(hipStreamCreate(&stream));
     ncclComm_t comm;
-    NCCLCHECK(ncclCommInitRank(&comm, nRanks, id, myRank));
+    NCCLCHECK(ncclCommInitRank(&comm, nranks, id, rank));
     int *sendbuff;
     int *recvbuff;
     void *sendRegHandle;
     void *recvRegHandle;
-    size_t count = 32;
-
-    NCCLCHECK(ncclMemAlloc((void **)&sendbuff, count * sizeof(int)));
-    NCCLCHECK(ncclMemAlloc((void **)&recvbuff, count * sizeof(int)));
-
-    NCCLCHECK(ncclCommRegister(comm, sendbuff, count * sizeof(int), &sendRegHandle));
-    NCCLCHECK(ncclCommRegister(comm, recvbuff, count * sizeof(int), &recvRegHandle));
-
-    std::vector<int> data(count, 0);
-    HIPCALL(hipMemcpy(recvbuff, data.data(), sizeof(int) * count, hipMemcpyHostToDevice));
-
-    for (int i = 0; i < count; ++i)
-        data[i] = i;
-
-    HIPCALL(hipMemcpy(sendbuff, data.data(), sizeof(int) * count, hipMemcpyHostToDevice));
-    NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, count, ncclInt, ncclSum, comm, stream));
-    HIPCALL(hipStreamSynchronize(stream));
-    HIPCALL(hipMemcpy(data.data(), recvbuff, sizeof(int) * count, hipMemcpyDeviceToHost));
     
-    for(int i = 0; i < count; ++i)
-        ASSERT_EQ(data[i], i*nRanks); 
+    if(!managed){
+      NCCLCHECK(ncclMemAlloc((void **)&sendbuff, send.size() * sizeof(int)));
+      NCCLCHECK(ncclMemAlloc((void **)&recvbuff, recv.size() * sizeof(int)));
+    }
+    else{
+      NCCLCHECK(hipMallocManaged((void **)&sendbuff, send.size() * sizeof(int)));
+      NCCLCHECK(hipMallocManaged((void **)&recvbuff, recv.size() * sizeof(int)));
+    }    
+
+    
+   
+    NCCLCHECK(ncclCommRegister(comm, sendbuff, send.size() * sizeof(int), &sendRegHandle));
+    NCCLCHECK(ncclCommRegister(comm, recvbuff, recv.size() * sizeof(int), &recvRegHandle));
+
+    HIPCALL(hipMemcpy(sendbuff, send.data(), sizeof(int) * send.size(), hipMemcpyHostToDevice));
+    HIPCALL(hipMemcpy(recvbuff, recv.data(), sizeof(int) * recv.size(), hipMemcpyHostToDevice));
+
+    switch(collID){
+      case ncclCollReduce:
+        NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, send.size(), ncclInt, ncclSum, comm, stream));
+        break;
+      case ncclCollAllGather:
+        NCCLCHECK(ncclAllGather(sendbuff, recvbuff, send.size(), ncclInt, comm, stream));
+        break;
+      default: exit(0);
+    }
+
+    HIPCALL(hipStreamSynchronize(stream));
+    HIPCALL(hipMemcpy(recv.data(), recvbuff, sizeof(int) * recv.size(), hipMemcpyDeviceToHost));
     
     NCCLCHECK(ncclCommDeregister(comm, sendRegHandle));
     NCCLCHECK(ncclCommDeregister(comm, recvRegHandle));
@@ -87,8 +96,6 @@ namespace RcclUnitTesting
     NCCLCHECK(ncclMemFree(recvbuff));
     ncclCommDestroy(comm);
   }
-
-
 
   TestBed::TestBed() :
     numDevicesAvailable(0),
