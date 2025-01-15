@@ -323,6 +323,7 @@ namespace RcclUnitTesting
     std::vector<int> sendBuff(count, 0);
     std::vector<int> recvBuff(count, 0);
     std::vector<int> expected(count, 0);
+    const bool useManagedMem = true;
 
     for (int i = 0; i < count; ++i){
         sendBuff[i] = i;
@@ -365,7 +366,7 @@ namespace RcclUnitTesting
         else
           getNCCLidFromParent(r);
         
-        call_RCCL(id, ncclCollReduce, r, nranks, sendBuff, recvBuff);
+        call_RCCL(id, ncclCollReduce, r, nranks, sendBuff, recvBuff, useManagedMem);
         for(int i = 0; i < recvBuff.size(); ++i)
           ASSERT_EQ(recvBuff[i], expected[i]);
         break;

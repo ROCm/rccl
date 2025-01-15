@@ -64,8 +64,8 @@ namespace RcclUnitTesting
       NCCLCHECK(ncclMemAlloc((void **)&recvbuff, recv.size() * sizeof(int)));
     }
     else{
-      NCCLCHECK(hipMallocManaged((void **)&sendbuff, send.size() * sizeof(int)));
-      NCCLCHECK(hipMallocManaged((void **)&recvbuff, recv.size() * sizeof(int)));
+      HIPCALL(hipMallocManaged((void **)&sendbuff, send.size() * sizeof(int)));
+      HIPCALL(hipMallocManaged((void **)&recvbuff, recv.size() * sizeof(int)));
     }    
 
     
