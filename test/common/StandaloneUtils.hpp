@@ -28,7 +28,7 @@
 #define MAX_STACK_SIZE 448
 
 #ifdef ENABLE_LL128
-#define MAX_STACK_SIZE_gfx90a 296
+#define MAX_STACK_SIZE_gfx90a 320
 #else
 #define MAX_STACK_SIZE_gfx90a MAX_STACK_SIZE
 #endif
