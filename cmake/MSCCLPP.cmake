@@ -57,6 +57,7 @@ if(ENABLE_MSCCLPP)
         # Ensure the source code is checked out
         set(MSCCLPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp CACHE PATH "")
         if(NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt)
+            message(STATUS "Checking out microsoft/mscclpp")
             execute_process(
                 COMMAND git submodule update --init --recursive
                 WORKING_DIRECTORY ${MSCCLPP_SOURCE}
@@ -83,6 +84,7 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
+        message(STATUS "Building mscclpp only for gfx942.")
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
         mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
         mscclpp_cmake_arg(HIP_COMPILER)
@@ -96,7 +98,7 @@ if(ENABLE_MSCCLPP)
                          #GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
                          #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
+                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
