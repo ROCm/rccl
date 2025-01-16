@@ -63,24 +63,64 @@ if(ENABLE_MSCCLPP)
                 WORKING_DIRECTORY ${MSCCLPP_SOURCE}
             )
         endif()
+
+        message ("cpx patch ABOUT TO BE APPLIED A1")
         execute_process(
            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-        )
-	execute_process(
-            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
-            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+           OUTPUT_VARIABLE APPLY_OUTPUT
+           ERROR_VARIABLE APPLY_ERROR
+           RESULT_VARIABLE APPLY_RESULT
         )
 
+        if(APPLY_RESULT)
+            message(FATAL_ERROR "git apply failed: ${APPLY_ERROR}")
+        endif()
+        message(STATUS "patching output: ${APPLY_OUTPUT}")
+
+
+        message ("read-allred patch ABOUT TO BE APPLIED B1")
+	    execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            OUTPUT_VARIABLE APPLY_OUTPUT
+            ERROR_VARIABLE APPLY_ERROR
+            RESULT_VARIABLE APPLY_RESULT
+        )
+
+        if(APPLY_RESULT)
+            message(FATAL_ERROR "git apply failed: ${APPLY_ERROR}")
+        endif()
+        message(STATUS "patching output: ${APPLY_OUTPUT}")
+
+
+        message ("mscclpp_ibv_access_relaxed_ordering patch ABOUT TO BE APPLIED C1")
         execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            OUTPUT_VARIABLE APPLY_OUTPUT
+            ERROR_VARIABLE APPLY_ERROR
+            RESULT_VARIABLE APPLY_RESULT
         )
 
+        if(APPLY_RESULT)
+            message(FATAL_ERROR "git apply failed: ${APPLY_ERROR}")
+        endif()
+        message(STATUS "patching output: ${APPLY_OUTPUT}")
+
+        message ("mem-reg patch ABOUT TO BE APPLIED D1")
         execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            OUTPUT_VARIABLE APPLY_OUTPUT
+            ERROR_VARIABLE APPLY_ERROR
+            RESULT_VARIABLE APPLY_RESULT
         )
+
+        if(APPLY_RESULT)
+            message(FATAL_ERROR "git apply failed: ${APPLY_ERROR}")
+        endif()
+        message(STATUS "patching output: ${APPLY_OUTPUT}")
 
         message(STATUS "Building mscclpp only for gfx942.")
 
@@ -94,8 +134,8 @@ if(ENABLE_MSCCLPP)
         endif()
 
         download_project(PROJ                mscclpp_nccl
-                         # GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
-                         # GIT_TAG             1e82dd444fc1ed8b7add354eebaab8a94e67d5fc
+                         #GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
+                         #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
                          CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
                          LOG_DOWNLOAD        FALSE
@@ -106,25 +146,32 @@ if(ENABLE_MSCCLPP)
                          SOURCE_DIR          ${MSCCLPP_SOURCE}
         )
 
+     
         find_package(mscclpp_nccl REQUIRED)
-	execute_process(
+        message ("cpx patch ABOUT TO BE APPLIED A2")
+	    execute_process(
            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+        
+        message ("read-allred patch ABOUT TO BE APPLIED B2")
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-
+        
+        message ("mscclpp_ibv_access_relaxed_ordering patch ABOUT TO BE APPLIED C2")
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-
+        
+        message ("mem-reg patch ABOUT TO BE APPLIED D2")
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+
     endif()
 
     execute_process(COMMAND objcopy
