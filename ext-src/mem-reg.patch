@@ -1,10 +1,10 @@
 diff --git a/apps/nccl/include/nccl.h b/apps/nccl/include/nccl.h
-index 7f50792..b8b146d 100644
+index bfdb226..7fd07a8 100644
 --- a/apps/nccl/include/nccl.h
 +++ b/apps/nccl/include/nccl.h
-@@ -344,6 +344,13 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
- ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount, ncclDataType_t datatype,
-                             ncclComm_t comm, cudaStream_t stream);
+@@ -167,6 +167,14 @@ ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
+ ncclResult_t ncclCommUserRank(const ncclComm_t comm, int* rank);
+ ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
  
 +/*
 + * Register/Deregister
@@ -13,14 +13,15 @@ index 7f50792..b8b146d 100644
 +ncclResult_t ncclCommDeregister(ncclComm_t comm, void* handle);
 +bool mscclpp_BuffIsRegistered(ncclComm_t comm, const void* buff, size_t count);
 +size_t mscclpp_BufferSize(ncclComm_t comm, void* handle);
- /*
-  * Send
-  *
++
+ /* Reduction operation selector */
+ typedef enum { ncclNumOps_dummy = 5 } ncclRedOp_dummy_t;
+ typedef enum {
 diff --git a/apps/nccl/src/nccl.cu b/apps/nccl/src/nccl.cu
-index a697be2..1d4af61 100644
+index 022d398..2a39643 100644
 --- a/apps/nccl/src/nccl.cu
 +++ b/apps/nccl/src/nccl.cu
-@@ -65,6 +65,7 @@ struct ncclComm {
+@@ -85,6 +85,7 @@ struct ncclComm {
    std::unordered_map<channelKey, ChannelInfo> channelInInfos;
    std::unordered_map<channelKey, ChannelInfo> channelOutInfos;
    std::unordered_map<channelKey, ChannelInfo> channelScratchInfos;
@@ -28,7 +29,7 @@ index a697be2..1d4af61 100644
    std::shared_ptr<char> scratchBuff;
    std::vector<mscclpp::RegisteredMemory> remoteScratchRegMemories;
  
-@@ -73,6 +74,11 @@ struct ncclComm {
+@@ -92,6 +93,11 @@ struct ncclComm {
    uint32_t buffFlag;
  };
  
@@ -40,8 +41,8 @@ index a697be2..1d4af61 100644
  static size_t ncclTypeSize(ncclDataType_t type) {
    switch (type) {
      case ncclInt8:
-@@ -577,6 +583,104 @@ NCCL_API ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t
-   return ncclSuccess;
+@@ -561,6 +567,105 @@ NCCL_API ncclResult_t ncclRedOpDestroy(ncclRedOp_t, ncclComm_t) {
+   return ncclInternalError;
  }
  
 +NCCL_API ncclResult_t ncclCommRegister(ncclComm_t comm, void* buff, size_t size, void** handle) {
@@ -142,6 +143,7 @@ index a697be2..1d4af61 100644
 +  auto buffKeyIt = comm->handleKeys.find(handle);
 +  return buffKeyIt != comm->handleKeys.end() ? buffKeyIt->second.bytes : 0;
 +}
- NCCL_API ncclResult_t ncclSend(const void*, size_t, ncclDataType_t, int, ncclComm_t, cudaStream_t) {
++
+ NCCL_API ncclResult_t ncclReduce(const void*, void*, size_t, ncclDataType_t, ncclRedOp_t, int, ncclComm_t,
+                                  cudaStream_t) {
    // TODO: implement this function
-   return ncclInternalError;

@@ -32,3 +32,5 @@ ncclReduceScatter mscclpp_ncclReduceScatter
 ncclSend mscclpp_ncclSend
 ncclCommRegister mscclpp_ncclCommRegister
 ncclCommDeregister mscclpp_ncclCommDeregister
+ncclMemAlloc mscclpp_ncclMemAlloc
+ncclMemFree mscclpp_ncclMemFree

@@ -398,7 +398,7 @@ index 015e0a2..f8ba6d6 100644
  constexpr int SCRATCH_SIZE = 2 * 1024 * 1024 * 70;  // double buffer * 35 thread-blocks * 8 ranks * 256KB = 70MB
  
 diff --git a/apps/nccl/src/nccl.cu b/apps/nccl/src/nccl.cu
-index f91d15e..b09d011 100644
+index f91d15e..022d398 100644
 --- a/apps/nccl/src/nccl.cu
 +++ b/apps/nccl/src/nccl.cu
 @@ -70,7 +70,9 @@ struct hash<channelKey> {
@@ -419,7 +419,7 @@ index f91d15e..b09d011 100644
  
    // Creating the channels
    if (count * ncclTypeSize(datatype) <= (1 << 20)) {
-@@ -220,7 +223,7 @@ static ncclResult_t ncclAllReduceFallback(const void* sendbuff, void* recvbuff,
+@@ -220,19 +223,24 @@ static ncclResult_t ncclAllReduceFallback(const void* sendbuff, void* recvbuff,
      if (sendIt == comm->channelScratchInfos.end()) {
        std::vector<mscclpp::SmChannel> channels =
            setupSmChannels(comm, comm->remoteScratchRegMemories, const_cast<void*>((void*)sendBasePtr));
@@ -428,7 +428,12 @@ index f91d15e..b09d011 100644
        sendIt = comm->channelScratchInfos.emplace(sendKey, channelInfo).first;
      }
  
-@@ -232,7 +235,12 @@ static ncclResult_t ncclAllReduceFallback(const void* sendbuff, void* recvbuff,
+     smChannels = sendIt->second.smChannelDeviceHandles.get();
+   } else {
+     std::vector<mscclpp::RegisteredMemory> remoteMemories;
+-
++    std::vector<mscclpp::RegisteredMemory> remoteMemories1;
+     auto sendIt = comm->channelInInfos.find(sendKey);
      if (sendIt == comm->channelInInfos.end()) {
        std::vector<mscclpp::SmChannel> channels =
            setupSmChannels(comm, comm->remoteScratchRegMemories, const_cast<void*>((void*)sendBasePtr));
@@ -490,6 +495,15 @@ index f91d15e..b09d011 100644
        break;
      default:
        WARN("datatype is invalid");
+@@ -315,7 +324,7 @@ static ncclResult_t ncclAllGatherFallback(const void* sendbuff, void* recvbuff,
+     std::vector<mscclpp::DeviceHandle<mscclpp::SmChannel>> smChannelDeviceHandles;
+     std::transform(channels.begin(), channels.end(), std::back_inserter(smChannelDeviceHandles),
+                    [](const mscclpp::SmChannel& smChannel) { return mscclpp::deviceHandle(smChannel); });
+-    ChannelInfo channelInfo{channels, setupSmChannelDeviceHandles(channels)};
++    ChannelInfo channelInfo{channels, channels, setupSmChannelDeviceHandles(channels), setupSmChannelDeviceHandles(channels)};
+     it = comm->channelOutInfos.emplace(recvKey, channelInfo).first;
+   }
+ 
 @@ -597,7 +606,7 @@ NCCL_API ncclResult_t ncclBroadcastFallback(const void* sendbuff, void* recvbuff
      std::vector<mscclpp::DeviceHandle<mscclpp::SmChannel>> smChannelDeviceHandles;
      std::transform(channels.begin(), channels.end(), std::back_inserter(smChannelDeviceHandles),
@@ -499,3 +513,20 @@ index f91d15e..b09d011 100644
      it = comm->channelOutInfos.emplace(recvKey, channelInfo).first;
    }
  
+@@ -805,16 +814,6 @@ NCCL_API ncclResult_t ncclGroupEnd() {
+   return ncclSuccess;
+ }
+ 
+-NCCL_API ncclResult_t ncclCommRegister(const ncclComm_t, void*, size_t, void**) {
+-  // TODO: Implementation
+-  return ncclSuccess;
+-}
+-
+-NCCL_API ncclResult_t ncclCommDeregister(const ncclComm_t, void*) {
+-  // TODO: Implementation
+-  return ncclSuccess;
+-}
+-
+ ncclResult_t ncclMemAlloc(void** ptr, size_t size) {
+   if (ptr == nullptr || size == 0) {
+     WARN("ptr is nullptr or size is 0");

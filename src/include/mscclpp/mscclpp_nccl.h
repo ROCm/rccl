@@ -46,6 +46,10 @@ extern "C" {
   bool mscclpp_BuffIsRegistered(mscclppComm_t comm, const void* buff, size_t count);
 
   size_t mscclpp_BufferSize(mscclppComm_t comm, void* handle);
+
+  ncclResult_t mscclpp_ncclMemAlloc(void** ptr, size_t size);
+
+  ncclResult_t mscclpp_ncclMemFree(void* ptr);
 }
 
 namespace std {
