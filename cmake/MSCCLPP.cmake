@@ -53,7 +53,7 @@ if(ENABLE_MSCCLPP)
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
     find_package(mscclpp_nccl)
 
-    if(NOT mscclpp_nccl_FOUND)
+    #if(NOT mscclpp_nccl_FOUND)
         # Ensure the source code is checked out
         set(MSCCLPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp CACHE PATH "")
         if(NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt)
@@ -128,7 +128,7 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-    endif()
+    #endif()
 
     execute_process(COMMAND objcopy
                     --redefine-syms=${CMAKE_CURRENT_SOURCE_DIR}/src/misc/mscclpp/mscclpp_nccl_syms.txt
