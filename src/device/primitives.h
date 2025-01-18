@@ -25,7 +25,19 @@
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       atomicAdd((unsigned long long *)barriers, 1); \
-      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(1); \
+      int spins = 0; \
+      int rate_limit = 50; \
+      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) { \
+        spins++; \
+        if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
+          spins = 0; \
+        } \
+        if (spins == 0 && rate_limit > 0) { \
+          rate_limit --; \
+          traceData(__LINE__, threadIdx.x, *barriers, barrier_next[w]); \
+        } \
+        __builtin_amdgcn_s_sleep(1); \
+      } \
       __asm__ __volatile__("s_wakeup"); \
     } \
   } \
