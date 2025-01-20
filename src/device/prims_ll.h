@@ -616,7 +616,7 @@ private:
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group),
     stepLines(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
     auto *channel = &ncclShmem.channel;
-    barriers = &ncclShmem.groups[group].barrier;
+    barriers = ncclShmem.groups[group].barrier;
     barrier_next = ncclShmem.groups[group].barrier_next;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
     int nrecv=0, nsend=0;

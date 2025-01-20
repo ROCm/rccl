@@ -673,7 +673,7 @@ private:
     stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_) {
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
-    barriers = &ncclShmem.groups[group].barrier;
+    barriers = ncclShmem.groups[group].barrier;
     barrier_next = ncclShmem.groups[group].barrier_next;
     this->nworkers = nthreads;
 

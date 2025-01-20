@@ -24,17 +24,23 @@
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
-      atomicAdd((unsigned long long *)barriers, 1); \
+      atomicAdd((unsigned long long *)&barriers[w%2], 1); \
+      atomicAdd((unsigned long long *)&barriers[(w+1)%2], 1); \
       int spins = 0; \
       int rate_limit = 50; \
-      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) { \
+      while (atomicAdd((unsigned long long *)&barriers[0], 0) < barrier_next[w] && \
+        atomicAdd((unsigned long long *)&barriers[1], 0) < barrier_next[w]) { \
         spins++; \
         if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
+          if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
+            ncclShmem.aborted = 1; \
+            break; \
+          } \
           spins = 0; \
         } \
         if (spins == 0 && rate_limit > 0) { \
           rate_limit --; \
-          traceData(__LINE__, threadIdx.x, *barriers, barrier_next[w]); \
+          traceData(__LINE__, threadIdx.x, barriers[0]+(barriers[1]<<32), barrier_next[w]); \
         } \
         __builtin_amdgcn_s_sleep(1); \
       } \
