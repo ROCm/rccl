@@ -573,7 +573,7 @@ ncclResult_t mscclEnqueueCheck(
         const bool sendBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, sendBuff); 
         const bool recvBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, recvBuff);
         const bool graphMode = threadLocalStatus.captureStatus != mscclNoCapture;
-        const bool buffsRegistedNonGraphMode = !graphMode && sendBuffRegistered && recvBuffRegistered;
+        const bool buffsRegisteredNonGraphMode = !graphMode && sendBuffRegistered && recvBuffRegistered;
 
         /* check if one rank per GPU and graph mode is enabled */
         if ((graphMode || buffsRegistedNonGraphMode) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
