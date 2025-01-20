@@ -506,6 +506,7 @@ public:
     flagThread((tid%4)==3), group(group),
     stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)) {
     auto *channel = &ncclShmem.channel;
+    if (tid == 0) ncclShmem.groups[group].warpStart = threadIdx.x/WARP_SIZE;
     barriers = ncclShmem.groups[group].barrier;
     barrier_next = ncclShmem.groups[group].barrier_next;
     int nrecv=0, nsend=0;
