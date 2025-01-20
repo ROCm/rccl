@@ -1,24 +1,20 @@
 diff --git a/apps/nccl/include/nccl.h b/apps/nccl/include/nccl.h
-index bfdb226..7fd07a8 100644
+index bfdb226..70d15cf 100644
 --- a/apps/nccl/include/nccl.h
 +++ b/apps/nccl/include/nccl.h
-@@ -167,6 +167,14 @@ ncclResult_t pncclCommCuDevice(const ncclComm_t comm, int* device);
- ncclResult_t ncclCommUserRank(const ncclComm_t comm, int* rank);
- ncclResult_t pncclCommUserRank(const ncclComm_t comm, int* rank);
+@@ -370,6 +370,10 @@ ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatyp
+ ncclResult_t pncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer, ncclComm_t comm,
+                        cudaStream_t stream);
  
-+/*
-+ * Register/Deregister
-+ */
-+ncclResult_t ncclCommRegister(ncclComm_t comm, void* buff, size_t size, void** handle);
 +ncclResult_t ncclCommDeregister(ncclComm_t comm, void* handle);
-+bool mscclpp_BuffIsRegistered(ncclComm_t comm, const void* buff, size_t count);
++bool mscclpp_BuffIsRegistered(ncclComm_t comm, const void* buff);
 +size_t mscclpp_BufferSize(ncclComm_t comm, void* handle);
 +
- /* Reduction operation selector */
- typedef enum { ncclNumOps_dummy = 5 } ncclRedOp_dummy_t;
- typedef enum {
+ /*
+  * Receive
+  *
 diff --git a/apps/nccl/src/nccl.cu b/apps/nccl/src/nccl.cu
-index 022d398..2a39643 100644
+index 022d398..468fcf2 100644
 --- a/apps/nccl/src/nccl.cu
 +++ b/apps/nccl/src/nccl.cu
 @@ -85,6 +85,7 @@ struct ncclComm {
@@ -41,7 +37,7 @@ index 022d398..2a39643 100644
  static size_t ncclTypeSize(ncclDataType_t type) {
    switch (type) {
      case ncclInt8:
-@@ -561,6 +567,105 @@ NCCL_API ncclResult_t ncclRedOpDestroy(ncclRedOp_t, ncclComm_t) {
+@@ -561,6 +567,107 @@ NCCL_API ncclResult_t ncclRedOpDestroy(ncclRedOp_t, ncclComm_t) {
    return ncclInternalError;
  }
  
@@ -126,7 +122,9 @@ index 022d398..2a39643 100644
 +  return ncclSuccess;
 +}
 +
-+bool mscclpp_BuffIsRegistered(ncclComm_t comm, const void* buff, size_t count){
++bool mscclpp_BuffIsRegistered(ncclComm_t comm, const void* buff){
++  if(buff == nullptr)
++    return false;
 +  size_t buffBytes;
 +  CUdeviceptr buffBasePtr;
 +  MSCCLPP_CUTHROW(cuMemGetAddressRange(&buffBasePtr, &buffBytes, (CUdeviceptr)buff));
