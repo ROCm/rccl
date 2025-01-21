@@ -15,6 +15,7 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __builtin_amdgcn_s_barrier(); \
@@ -28,7 +29,7 @@
       int rate_limit = 50; \
       for (int i = 0; i < nthreads/WARP_SIZE; i++) { \
         uint8_t warp = ncclShmem.groups[group].warpStart + i; \
-        while (atomicAdd((unsigned long long *)&barriers[warp], 0) < barrier_next) { \
+        while (__hip_atomic_load(barriers+warp, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
           spins++; \
           if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
             if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
@@ -48,7 +49,42 @@
     } \
   } \
 } while (0)
-
+#else
+#define barrier_by_group() do { \
+  if (nthreads == NCCL_MAX_NTHREADS) { \
+    __threadfence(); __builtin_amdgcn_s_barrier(); \
+  } else { \
+    const int w = threadIdx.x/WARP_SIZE; \
+    const int wid = threadIdx.x%WARP_SIZE; \
+    __threadfence(); \
+    if (wid == 0) { \
+      barrier_next += 1; \
+      barriers[w] += 1; \
+      int spins = 0; \
+      int rate_limit = 50; \
+      for (int i = 0; i < nthreads/WARP_SIZE; i++) { \
+        uint8_t warp = ncclShmem.groups[group].warpStart + i; \
+        while (__hip_atomic_load(barriers+warp, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
+          spins++; \
+          if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
+            if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
+              ncclShmem.aborted = 1; \
+              break; \
+            } \
+            spins = 0; \
+          } \
+          if (spins == 0 && rate_limit > 0) { \
+            rate_limit --; \
+            traceData(__LINE__, threadIdx.x, barriers[warp]+((uint64_t)warp<<32), barrier_next); \
+          } \
+          __builtin_amdgcn_s_sleep(1); \
+        } \
+        __asm__ __volatile__("s_wakeup"); \
+      } \
+    } \
+  } \
+} while (0)
+#endif
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral
  * enums (e.g. NCCL_PROTO_LL) because for SIMPLE we need to carry a few extra
