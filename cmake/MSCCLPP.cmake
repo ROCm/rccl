@@ -56,11 +56,12 @@ if(ENABLE_MSCCLPP)
     #if(NOT mscclpp_nccl_FOUND)
         # Ensure the source code is checked out
         set(MSCCLPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp CACHE PATH "")
-        if(NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt)
-            message(STATUS "Checking out microsoft/mscclpp")
+        set(JSON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json CACHE PATH "")
+        if((NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt) OR (NOT EXISTS ${JSON_SOURCE}/CMakeLists.txt))
+            message(STATUS "Checking out external code")
             execute_process(
                 COMMAND git submodule update --init --recursive
-                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             )
         endif()
 
@@ -69,7 +70,7 @@ if(ENABLE_MSCCLPP)
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	    execute_process(
+        execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
@@ -98,7 +99,7 @@ if(ENABLE_MSCCLPP)
                          #GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
                          #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
+                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
@@ -109,7 +110,7 @@ if(ENABLE_MSCCLPP)
 
      
         find_package(mscclpp_nccl REQUIRED)
-	    execute_process(
+        execute_process(
            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
