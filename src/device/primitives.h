@@ -22,13 +22,13 @@
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
-      barrier_next[w] += 1; \
+      barrier_next += 1; \
       barriers[w] += 1; \
       int spins = 0; \
       int rate_limit = 50; \
       for (int i = 0; i < nthreads/WARP_SIZE; i++) { \
         uint8_t warp = ncclShmem.groups[group].warpStart + i; \
-        while (atomicAdd((unsigned long long *)&barriers[warp], 0) < barrier_next[w]) { \
+        while (atomicAdd((unsigned long long *)&barriers[warp], 0) < barrier_next) { \
           spins++; \
           if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
             if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
@@ -39,7 +39,7 @@
           } \
           if (spins == 0 && rate_limit > 0) { \
             rate_limit --; \
-            traceData(__LINE__, threadIdx.x, barriers[warp], barrier_next[warp]); \
+            traceData(__LINE__, threadIdx.x, barriers[warp]+((uint64_t)warp<<32), barrier_next); \
           } \
           __builtin_amdgcn_s_sleep(1); \
         } \

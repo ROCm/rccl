@@ -52,7 +52,7 @@ class Primitives<
   uint64_t connStepCache; // Cache last seen value of (*connStepPtr)
   int      connStepSize; // Connection step size
   uint64_t* barriers;
-  uint64_t* barrier_next;
+  uint64_t barrier_next;
   uint32_t* next_hdp_reg;
   void*    mhandle;
   void*    netDeviceHandle;
@@ -674,8 +674,9 @@ private:
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     if (tid == 0) ncclShmem.groups[group].warpStart = threadIdx.x/WARP_SIZE;
-    barriers = ncclShmem.groups[group].barrier;
-    barrier_next = ncclShmem.groups[group].barrier_next;
+    barriers = ncclShmem.barrier;
+    if (tid%WARP_SIZE == 0) barriers[threadIdx.x/WARP_SIZE] = 0;
+    barrier_next = 0;
     this->nworkers = nthreads;
 
     int nrecv=0, nsend=0;
