@@ -29,6 +29,7 @@ option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"   
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
+option(MSCCLPP_HIDE_WARNINGS                   "Silence warnings when building mscclpp"        ON)
 option(ROCTX                                   "Enable ROCTX"                                  OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)

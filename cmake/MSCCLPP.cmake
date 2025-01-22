@@ -64,6 +64,14 @@ if(ENABLE_MSCCLPP)
             )
         endif()
 
+        if(MSCCLPP_HIDE_WARNINGS)
+            execute_process(
+                COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no_cpp_warnings.patch
+                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            )
+            set(HIDE_WARNINGS_ARG "-DCMAKE_CXX_FLAGS=-Wno-everything")
+        endif()
+
         execute_process(
            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
@@ -98,7 +106,7 @@ if(ENABLE_MSCCLPP)
                          #GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
                          #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
+                         CMAKE_ARGS          "${HIDE_WARNINGS_ARG}" -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
@@ -109,6 +117,13 @@ if(ENABLE_MSCCLPP)
 
      
         find_package(mscclpp_nccl REQUIRED)
+        if(MSCCLPP_HIDE_WARNINGS)
+            execute_process(
+                COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no_cpp_warnings.patch
+                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            )
+        endif()
+
 	    execute_process(
            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
