@@ -24,12 +24,12 @@
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
       barrier_next += 1; \
-      barriers[w] += 1; \
+      __hip_atomic_store(barriers+w, barrier_next, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
       int spins = 0; \
       int rate_limit = 50; \
       for (int i = 0; i < nthreads/WARP_SIZE; i++) { \
         uint8_t warp = ncclShmem.groups[group].warpStart + i; \
-        while (__hip_atomic_load(barriers+warp, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
+        while (__hip_atomic_load(barriers+warp, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
           spins++; \
           if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
             if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
@@ -59,12 +59,12 @@
     __threadfence(); \
     if (wid == 0) { \
       barrier_next += 1; \
-      barriers[w] += 1; \
+      __hip_atomic_store(barriers+w, barrier_next, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
       int spins = 0; \
       int rate_limit = 50; \
       for (int i = 0; i < nthreads/WARP_SIZE; i++) { \
         uint8_t warp = ncclShmem.groups[group].warpStart + i; \
-        while (__hip_atomic_load(barriers+warp, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
+        while (__hip_atomic_load(barriers+warp, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
           spins++; \
           if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
             if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
