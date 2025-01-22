@@ -59,35 +59,51 @@ namespace RcclUnitTesting
     void *sendRegHandle;
     void *recvRegHandle;
     
+
+    size_t sendSize = 0;
+    size_t recvSize = 0;
+
+     switch(collID){
+      case ncclCollAllReduce:
+        sendSize = send.size();
+        recvSize = recv.size();
+        break;
+      case ncclCollAllGather:
+        sendSize = send.size();
+        recvSize = nranks*send.size();
+        break;
+      default: exit(0);
+    }
+
     if(!managed){
-      NCCLCHECK(ncclMemAlloc((void **)&sendbuff, send.size() * sizeof(int)));
-      NCCLCHECK(ncclMemAlloc((void **)&recvbuff, recv.size() * sizeof(int)));
+      NCCLCHECK(ncclMemAlloc((void **)&sendbuff, sendSize * sizeof(int)));
+      NCCLCHECK(ncclMemAlloc((void **)&recvbuff, recvSize * sizeof(int)));
     }
     else{
-      HIPCALL(hipMallocManaged((void **)&sendbuff, send.size() * sizeof(int)));
-      HIPCALL(hipMallocManaged((void **)&recvbuff, recv.size() * sizeof(int)));
+      HIPCALL(hipMallocManaged((void **)&sendbuff, sendSize * sizeof(int)));
+      HIPCALL(hipMallocManaged((void **)&recvbuff, recvSize * sizeof(int)));
     }    
 
     
    
-    NCCLCHECK(ncclCommRegister(comm, sendbuff, send.size() * sizeof(int), &sendRegHandle));
-    NCCLCHECK(ncclCommRegister(comm, recvbuff, recv.size() * sizeof(int), &recvRegHandle));
+    NCCLCHECK(ncclCommRegister(comm, sendbuff, sendSize * sizeof(int), &sendRegHandle));
+    NCCLCHECK(ncclCommRegister(comm, recvbuff, recvSize * sizeof(int), &recvRegHandle));
 
-    HIPCALL(hipMemcpy(sendbuff, send.data(), sizeof(int) * send.size(), hipMemcpyHostToDevice));
-    HIPCALL(hipMemcpy(recvbuff, recv.data(), sizeof(int) * recv.size(), hipMemcpyHostToDevice));
+    HIPCALL(hipMemcpy(sendbuff, send.data(), sizeof(int) * sendSize, hipMemcpyHostToDevice));
+    HIPCALL(hipMemcpy(recvbuff, recv.data(), sizeof(int) *recvSize, hipMemcpyHostToDevice));
 
     switch(collID){
-      case ncclCollReduce:
-        NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, send.size(), ncclInt, ncclSum, comm, stream));
+      case ncclCollAllReduce:
+        NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, sendSize, ncclInt, ncclSum, comm, stream));
         break;
       case ncclCollAllGather:
-        NCCLCHECK(ncclAllGather(sendbuff, recvbuff, send.size(), ncclInt, comm, stream));
+        NCCLCHECK(ncclAllGather(sendbuff, recvbuff, sendSize, ncclInt, comm, stream));
         break;
       default: exit(0);
     }
 
     HIPCALL(hipStreamSynchronize(stream));
-    HIPCALL(hipMemcpy(recv.data(), recvbuff, sizeof(int) * recv.size(), hipMemcpyDeviceToHost));
+    HIPCALL(hipMemcpy(recv.data(), recvbuff, sizeof(int) * recvSize, hipMemcpyDeviceToHost));
     
     NCCLCHECK(ncclCommDeregister(comm, sendRegHandle));
     NCCLCHECK(ncclCommDeregister(comm, recvRegHandle));

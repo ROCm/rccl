@@ -298,7 +298,7 @@ namespace RcclUnitTesting
         else
           getNCCLidFromParent(r);
 
-        call_RCCL(id, ncclCollReduce, r, nranks, sendBuff, recvBuff);
+        call_RCCL(id, ncclCollAllReduce, r, nranks, sendBuff, recvBuff);
         for(int i = 0; i < recvBuff.size(); ++i)
           ASSERT_EQ(recvBuff[i], expected[i]);
         break;
@@ -366,7 +366,7 @@ namespace RcclUnitTesting
         else
           getNCCLidFromParent(r);
         
-        call_RCCL(id, ncclCollReduce, r, nranks, sendBuff, recvBuff, useManagedMem);
+        call_RCCL(id, ncclCollAllReduce, r, nranks, sendBuff, recvBuff, useManagedMem);
         for(int i = 0; i < recvBuff.size(); ++i)
           ASSERT_EQ(recvBuff[i], expected[i]);
         break;
