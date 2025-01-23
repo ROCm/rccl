@@ -135,10 +135,12 @@ endif()
 set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
 set(CMAKE_CXX_STANDARD   14)   # We use C++14 features, this will add compile option: -std=c++14
 set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++14 instead, which has some issues.
-list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA
-            ${ROCM_PATH}
-            ${ROCM_PATH}/hip
-            ${ROCM_PATH}/llvm)
+if(ROCM_PATH)
+  list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA
+              ${ROCM_PATH}
+              ${ROCM_PATH}/hip
+              ${ROCM_PATH}/llvm)
+endif()
 
 # Check for required dependencies
 #==================================================================================================
@@ -171,10 +173,15 @@ execute_process(
 message(STATUS "${COMPILER_EXE_NAME} HIP version:    ${hip_version_string}")
 
 ## Check for ROCm version
-execute_process(
-  COMMAND         bash "-c" "cat ${ROCM_PATH}/.info/version"
-  OUTPUT_VARIABLE rocm_version_string
-)
+set(EXPLICIT_ROCM_VERSION "" CACHE STRING "Explicit ROCM version to compile to (auto detect if empty)")
+if(EXPLICIT_ROCM_VERSION)
+  set(rocm_version_string "${EXPLICIT_ROCM_VERSION}")
+elseif(ROCM_PATH)
+  message(STATUS "Reading ROCM version from ${ROCM_PATH}/.info/version")
+  file(READ "${ROCM_PATH}/.info/version" rocm_version_string)
+else()
+  message(FATAL_ERROR "Could not determine ROCM version (set EXPLICIT_ROCM_VERSION or set ROCM_PATH to a valid installation)")
+endif()
 string(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" rocm_version_matches ${rocm_version_string})
 if (rocm_version_matches)
     set(ROCM_MAJOR_VERSION ${CMAKE_MATCH_1})
@@ -203,7 +210,7 @@ unset(CMAKE_REQUIRED_LIBRARIES)
 
 ### Check for indirect function call support
 if(ENABLE_IFC)
-  if(${hip_version_string} VERSION_GREATER_EQUAL "5.5.30201")
+  if("${hip_version_string}" VERSION_GREATER_EQUAL "5.5.30201")
     set(IFC_ENABLED ON)
     message(STATUS "Indirect function call enabled")
   else()
@@ -215,7 +222,7 @@ else()
 endif()
 
 ## Check for LL128 support
-if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+if("${hip_version_string}" VERSION_GREATER_EQUAL "6.1.33591")
   set(LL128_ENABLED ON)
   message(STATUS "RCCL LL128 protocol enabled")
 else()
@@ -597,6 +604,9 @@ endif()
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
 find_program(hipify-perl_executable hipify-perl)
+if(NOT hipify-perl_executable)
+  message(FATAL_ERROR "hipify-perl not found")
+endif()
 set(HIPIFY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipify")
 
 ## Loop over each source file to hipify
@@ -727,7 +737,7 @@ if(${HIP_CONTIGUOUS_MEMORY})
 else()
   message(STATUS "HIP_CONTIGUOUS_MEMORY disabled")
 endif()
-if(${hip_version_string} VERSION_GREATER_EQUAL "5.7.31920")
+if("${hip_version_string}" VERSION_GREATER_EQUAL "5.7.31920")
   target_compile_definitions(rccl PRIVATE HIP_UNCACHED_MEMORY)
   message(STATUS "HIP_UNCACHED_MEMORY enabled")
 else()
