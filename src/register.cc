@@ -9,6 +9,7 @@
 #include "comm.h"
 #include "net.h"
 #include "register.h"
+#include "transport.h"
 #include "api_trace.h"
 #ifdef ENABLE_MSCCLPP
 #include "mscclpp/mscclpp_nccl.h"
@@ -83,6 +84,7 @@ ncclResult_t ncclNetRegister(struct ncclComm* comm, void* addr, size_t size, str
     }
   }
 end:
+  INFO(NCCL_INIT, "Register ptr %p size %ld on %d net devices", addr, size, reg->nDevs);
   ncclDebugNoWarn = 0;
   if (ret != ncclSuccess) NCCLCHECK(ncclNetDeregister(comm, reg));
   return ret;

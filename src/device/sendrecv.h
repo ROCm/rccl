@@ -13,15 +13,17 @@
 #endif
 
 template<typename T, typename RedOp>
-struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  template<typename Proto>
-  __device__ void runSend(const int tid, const int nthreads, const uint8_t group, struct ncclWorkElemP2p* args) {
-    void* buff = reinterpret_cast<void*>(uintptr_t(args->buffHi32)<<32 | args->buffLo32);
-    ssize_t count = reinterpret_cast<size_t>(size_t(args->countHi32)<<32 | args->countLo32);
+struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
+  static_assert(sizeof(T)==1, "SendRecv only works on single byte types T.");
 
+  template<typename Proto>
+  __device__ void runSend(int tid, int tn, int group, struct ncclDevWorkP2p* work) {
+    size_t bytes = work->sendBytes;
+    int chunkSize = u32fp8Decode(work->sendChunkSize_u32fp8);
+  
 #if defined(ENABLE_NPKIT)
     bool isNpKitThread = (tid == 0);
-    int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + group;
+    int npKitCtxIdx = blockIdx.x + group;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -38,53 +40,10 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     }
 #endif
 
-    if (args->peer == ncclShmem.comm.rank) {
-      struct ncclWorkElemP2p* recvArgs = args-1;
-      void* recvBuff = reinterpret_cast<void*>(uintptr_t(recvArgs->buffHi32)<<32 | recvArgs->buffLo32);
-      if (buff != recvBuff) {
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_RECV_LOCAL_COPY_ENTRY)
-        if (isNpKitThread) {
-          NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_LOCAL_COPY_ENTRY, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-              ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY)
-        if (isNpKitThread) {
-          NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-              ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        }
-#endif
-
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
-        reduceCopy<COLL_UNROLL*2, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
-          (tid, nthreads, 0, nullptr, false, 1, &buff, 1, &recvBuff, count);
-#else
-        reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
-          (tid, nthreads, 0, nullptr, false, 1, &buff, 1, &recvBuff, count);
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT)
-        if (isNpKitThread) {
-          NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-              ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_RECV_LOCAL_COPY_EXIT)
-        if (isNpKitThread) {
-          NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_LOCAL_COPY_EXIT, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-              ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        }
-#endif
-      }
-    } else {
-      int chunkSize = args->chunkSize/sizeof(T);
-      if (args->proto == NCCL_PROTO_LL) chunkSize /= 2;
-      int const peer = args->peer;
-      Primitives<T, RedOp, FanAsymmetric<0, 1>, 0, Proto, 1> prims
-        (tid, nthreads, nullptr, &peer, buff, nullptr, /*redOpArg(ignored)=*/0, group, args->connIndex, args->connIndex, nullptr, args, ncclShmem.comm.p2pChunkSize/sizeof(T));
+    Primitives<T, RedOp, FanAsymmetric<0, 1>, 0, Proto, 1>
+      prims(tid, tn, nullptr, &work->sendRank, work->sendAddr, nullptr,
+            /*redOpArg(ignored)=*/0, group, work->connIndex, work->connIndex, nullptr,
+            /*userBufferMode=*/work->sendRegistered, ncclShmem.comm.p2pChunkSize);
 
 #if defined(ENABLE_NPKIT)
       if (isNpKitThread) {
@@ -94,34 +53,35 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_RECV_SEND_ENTRY)
       if (isNpKitThread) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_SEND_ENTRY, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_SEND_ENTRY, bytes*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
             ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
         prims.npKitDataProcessTotalTime = 0;
       }
 #endif
 
-      size_t offset = 0;
-      do {
-        int nelem = min(size_t(chunkSize), count-offset);
-        prims.directSend(offset, offset, nelem);
-        offset += nelem;
-      } while(offset < count && args->reg == 0);
+    size_t cursor = 0;
+    do {
+      int n = min(size_t(chunkSize), bytes-cursor);
+      prims.directSend(cursor, cursor, n);
+      cursor += n;
+    } while (cursor < bytes && work->sendRegistered == 0);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_RECV_SEND_EXIT)
       if (isNpKitThread) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_SEND_EXIT, count*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
+        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_SEND_EXIT, bytes*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
             ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
       }
 #endif
-
-    }
   }
 
   template<typename Proto>
-  __device__ void runRecv(const int tid, const int nthreads, const uint8_t group, struct ncclWorkElemP2p* args) {
+  __device__ void runRecv(int tid, int tn, int group, struct ncclDevWorkP2p* work) {
+    size_t bytes = work->recvBytes;
+    int chunkSize = u32fp8Decode(work->recvChunkSize_u32fp8);
+
 #if defined(ENABLE_NPKIT)
     bool isNpKitThread = (tid == 0);
-    int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + group;
+    int npKitCtxIdx = blockIdx.x + group;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -138,14 +98,10 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     }
 #endif
 
-    if (args->peer != ncclShmem.comm.rank) {
-      void* buff = reinterpret_cast<void*>(uintptr_t(args->buffHi32)<<32 | args->buffLo32);
-      ssize_t count = reinterpret_cast<size_t>(size_t(args->countHi32)<<32 | args->countLo32);
-      int chunkSize = args->chunkSize/sizeof(T);
-      if (args->proto == NCCL_PROTO_LL) chunkSize /= 2; // This is to account for chunkEffectiveSize
-      int const peer = args->peer;
-      Primitives<T, RedOp, FanAsymmetric<1, 0>, 0, Proto, 1> prims
-        (tid, nthreads, &peer, nullptr, nullptr, buff, /*redOpArg(ignored)=*/0, group, args->connIndex, args->connIndex, nullptr, args, ncclShmem.comm.p2pChunkSize/sizeof(T));
+    Primitives<T, RedOp, FanAsymmetric<1, 0>, 0, Proto, 1>
+      prims(tid, tn, &work->recvRank, nullptr, nullptr, work->recvAddr,
+            /*redOpArg(ignored)=*/0, group, work->connIndex, work->connIndex, nullptr,
+            /*userBufferMode=*/work->recvRegistered, ncclShmem.comm.p2pChunkSize);
 
 #if defined(ENABLE_NPKIT)
       if (isNpKitThread) {
@@ -155,75 +111,165 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_RECV_RECV_ENTRY)
       if (isNpKitThread) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_RECV_ENTRY, count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_RECV_ENTRY, bytes*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
             ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
         prims.npKitDataProcessTotalTime = 0;
       }
 #endif
 
-      size_t offset = 0;
-      do {
-        int nelem = min(size_t(chunkSize), count-offset);
-        prims.directRecv(offset, nelem);
-        offset += nelem;
-      } while(offset < count && args->reg == 0);
+    size_t cursor = 0;
+    do {
+      int n = min(size_t(chunkSize), bytes-cursor);
+      prims.directRecv(cursor, n);
+      cursor += n;
+    } while (cursor < bytes && work->recvRegistered == 0);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_RECV_RECV_EXIT)
       if (isNpKitThread) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_RECV_EXIT, count*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
+        NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_RECV_RECV_EXIT, bytes*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
             ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
       }
 #endif
-
-    }
   }
 
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
-  __device__  void run(ncclWork *work) {
+  __device__  void run() {
 #else
-  __device__  __attribute__((noinline)) void run(ncclWork *work) {
+  __device__  __attribute__((noinline)) void run() {
 #endif
-    struct ncclWorkElemP2p* args = work->p2pElems;
-    int ngroups = args->ngroups;
-    int tid = threadIdx.x;
-    int wid = tid / WARP_SIZE;
-    // This has to work even for groups of 2.5 warps (which is 8 groups, and means 3
-    // warps for send, 2 warps for recv).
-    // warpStarts were rounded thanks to int division, but for group number we need to round the other way around
-    // So we mirror wid then mirror again the group.
-    #define NWARPS (NCCL_MAX_NTHREADS/WARP_SIZE)
-    uint8_t group = ngroups-1- (NWARPS-1-wid) * ngroups / NWARPS;
-    args += group;
-    tid -= args->warpStart * WARP_SIZE;
-    int nthreads = args->nWarps * WARP_SIZE;
+    const int tid = threadIdx.x;
+    const int tn = blockDim.x;
+    const int wid = tid/WARP_SIZE;
+    const int nWarps = tn/WARP_SIZE;
+    const int lane = tid%WARP_SIZE;
 
-    if (args->p2pType == ncclWorkP2pTypeUnused) return;
-    if (tid >= nthreads || args->peer == -1) return;
+    struct Shared {
+      uint32_t workSendMask; // bitmasks of which work indices have send/recv
+      uint32_t workRecvMask;
+    };
+    Shared* shared = (Shared*)ncclScratchForWarp(0);
 
-    // Select Proto here
-    // This is to allow the same kernel to run multiple primitives on different warps (thread groups)
-    if ((group%2) == 0) {
-      if (args->proto == NCCL_PROTO_LL) {
-        runRecv<ProtoLL>(tid, nthreads, group, args);
+    struct ncclDevWorkP2p* works = (ncclDevWorkP2p*)ncclShmem.workStorage;
+    int nWorks = ncclShmem.nWorks;
+
+    if (wid == 0) {
+      // Modify the memory range of each work[] to reflect this channel's
+      // partition of the work. Since integer divides are very heavy it's
+      // best to do them all in one warp.
+      int workIx = lane%16;
+      int isSend = lane < 16 ? 0 : 1;
+      bool hasWork = false;
+      if (workIx < nWorks) {
+        struct ncclDevWorkP2p* work = &works[workIx];
+        size_t bytes = isSend ? work->sendBytes : work->recvBytes;
+        int nParts = isSend ? work->nSendChannels : work->nRecvChannels;
+        int part = ncclP2pChannelToPart(work->nP2pChannels, work->channelBase, ncclShmem.channelId, ncclShmem.comm.p2pnChannelsPerPeer);
+        hasWork = (part < nParts);
+        if (nParts != 0) {
+          size_t partBeg, partEnd;
+          ncclP2pPartBounds(nParts, part, bytes, &partBeg, &partEnd);
+          (isSend ? work->sendAddr : work->recvAddr) = (char*)(isSend ? work->sendAddr : work->recvAddr) + partBeg;
+          (isSend ? work->sendBytes : work->recvBytes) = partEnd - partBeg;
+        }
+      }
+      uint32_t mask = __ballot(hasWork);
+      if (lane == 0) {
+        shared->workSendMask = mask>>16;
+        shared->workRecvMask = mask & 0xffff;
+      }
+    }
+
+    // The fastest way to compute a warp uniform division x/y in [0,32) is to
+    // use each lane to guess a solution and count the ones that don't exceed
+    // the numerator:
+    //   __popc(__ballot_sync(~0u, y*(lane+1) <= x))
+    // That takes 1/3 the time of standard division and about 3/4 the time of
+    // approximate floating point division:
+    //   __float2int_rd(__fdividef(float(x),float(y))).
+
+    // nWarpPerWork = nWarps/nWorks
+    int nWarpPerWork = __popcll(__ballot(nWorks*(lane+1) <= nWarps));
+    int nRecvWarpPerWork = nWarpPerWork/2;
+    int nSendWarpPerWork = nWarpPerWork - nRecvWarpPerWork;
+    // This might reduce nWarpPerWork which is probably desirable. It is better
+    // to have a balanced number of reading and writing threads even if that
+    // leaves warps unused.
+    nWarpPerWork = nSendWarpPerWork + nRecvWarpPerWork;
+    // The work index this warp belongs to: workIx = wid/nWarpPerWork
+    int workIx = __popcll(__ballot((lane+1)*nWarpPerWork <= wid));
+
+    __syncthreads(); // Wait for works[] and shared->* to be updated by warp=0
+
+    uint32_t workSendMask = shared->workSendMask;
+    uint32_t workRecvMask = shared->workRecvMask;
+
+    __syncthreads(); // release scratch space used by shared->*
+    if (nWorks <= workIx) return;
+
+    // Thread range for whole work (send & recv combined)
+    int subtid = tid - workIx*nWarpPerWork*WARP_SIZE;
+    int subtn = nWarpPerWork*WARP_SIZE;
+
+    // A send primtive of sufficient size requires 2 cuda barrier ids.
+    constexpr int nSendWarpsForExtraGroup = NCCL_SIMPLE_EXTRA_GROUP_IF_NTHREADS_GE/WARP_SIZE;
+    // Count up all group ids used below this workIx:
+    int group, extra;
+    // Each recv gets one group id:
+    group = __popcll(workRecvMask & ((1<<workIx)-1));
+    // Sends accompanying recvs get one and maybe an extra:
+    extra = (nSendWarpPerWork >= nSendWarpsForExtraGroup) ? 1 : 0;
+    group += __popcll((workSendMask & workRecvMask) & ((1<<workIx)-1))*(1+extra);
+    // Sends without recvs use more warps so compute extra accordingly:
+    extra = (nWarpPerWork >= nSendWarpsForExtraGroup) ? 1 : 0;
+    group += __popcll((workSendMask & ~workRecvMask) & ((1<<workIx)-1))*(1+extra);
+
+    struct ncclDevWorkP2p* work = &works[workIx];
+    bool hasSend = 1 & (workSendMask>>workIx);
+    bool hasRecv = 1 & (workRecvMask>>workIx);
+    bool isCopy = work->sendRank == ncclShmem.comm.rank;
+    bool isSend = !hasRecv || (hasSend && subtid < nSendWarpPerWork*WARP_SIZE);
+
+    if (!isCopy && hasSend && hasRecv) {
+      // Translate thread ids to reflect just this send or recv as opposed to whole work.
+      if (isSend) {
+        subtn = nSendWarpPerWork*WARP_SIZE;
+      } else {
+        subtid -= nSendWarpPerWork*WARP_SIZE;
+        subtn = nRecvWarpPerWork*WARP_SIZE;
+        group += 1 + (nSendWarpPerWork >= nSendWarpsForExtraGroup ? 1 : 0);
+      }
+    }
+
+    if (isCopy) {
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+      reduceCopy<COLL_UNROLL*2, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
+        (subtid, subtn, 0, nullptr, false, 1, &work->sendAddr, 1, &work->recvAddr, (ssize_t)work->sendBytes);
+#else
+      reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
+        (subtid, subtn, 0, nullptr, false, 1, &work->sendAddr, 1, &work->recvAddr, (ssize_t)work->sendBytes);
+#endif
+    } else if (isSend) {
+      if (work->sendProtoLL) {
+        runSend<ProtoLL>(subtid, subtn, group, work);
       } else {
 #if defined(__gfx90a__)
-        runRecv<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
+        runSend<ProtoSimple<1,1,8>>(subtid, subtn, group, work);
 #elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
-        runRecv<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
+        runSend<ProtoSimple<1,1,4>>(subtid, subtn, group, work);
 #else
-        runRecv<ProtoSimple<1,1>>(tid, nthreads, group, args);
+        runSend<ProtoSimple<1,1>>(subtid, subtn, group, work);
 #endif
       }
     } else {
-      if (args->proto == NCCL_PROTO_LL) {
-        runSend<ProtoLL>(tid, nthreads, group, args);
+      if (work->recvProtoLL) {
+        runRecv<ProtoLL>(subtid, subtn, group, work);
       } else {
 #if defined(__gfx90a__)
-        runSend<ProtoSimple<1,1,8>>(tid, nthreads, group, args);
+        runRecv<ProtoSimple<1,1,8>>(subtid, subtn, group, work);
 #elif defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
-        runSend<ProtoSimple<1,1,4>>(tid, nthreads, group, args);
+        runRecv<ProtoSimple<1,1,4>>(subtid, subtn, group, work);
 #else
-        runSend<ProtoSimple<1,1>>(tid, nthreads, group, args);
+        runRecv<ProtoSimple<1,1>>(subtid, subtn, group, work);
 #endif
       }
     }

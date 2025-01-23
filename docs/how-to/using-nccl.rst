@@ -204,6 +204,17 @@ Initialization
       supports ``dmabuf``, it should set ``ptrSupport`` to ``NCCL_PTR_HOST|NCCL_PTR_CUDA|NCCL_PTR_DMABUF`` and
       provide a ``regMrDmaBuf`` function.
 
+   *  The ``regIsGlobal`` field allows NCCL to register buffers in advance, for example, using a loopback connection.
+      Later, it also lets NCCL expect that a subsequent registration on a buffer from a previous registration
+      will happen nearly immediately, because the buffer is already known by the network adapter. A typical
+      implementation maintains a registration cache, with the call to ``ncclCommRegister`` creating the
+      initial entry in the cache using ``regMr()`` on a loopback connection. Any later call to the NCCL
+      system can call ``regMr()`` again on the real connection, with the real buffer (which could be at a
+      different offset within the original buffer, with a smaller size, for example). It
+      could then call ``deregMr()`` immediately afterwards.
+      The ``ncclCommDeregister`` call should issue the final call to ``deregMr()`` and effectively remove the mapping
+      on the network adapter.
+
    *  The ``speed`` field indicates the speed of the network port in Mbps (10^6 bits per second).
       This ensures proper optimization of flows within the node.
 

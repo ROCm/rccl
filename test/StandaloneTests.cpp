@@ -269,7 +269,7 @@ namespace RcclUnitTesting
     const char* mainKernel = "ncclDevKernel";
 
     // Look for the .co files
-    std::vector<std::string> coFileList = splitString(executeCommand("find ../ -type f -name \"*.co\""), '\n');
+    std::vector<std::string> coFileList = splitString(executeCommand("find ../ -type f -name \"librccl*.co\""), '\n');
 
     // Check if the .co files exist in the build directory
     if (coFileList.empty())
