@@ -53,6 +53,7 @@ if(BUILD_TESTS)
     common/PtrUnion.cpp
     common/TestBed.cpp
     common/TestBedChild.cpp
+    common/StandaloneUtils.cpp
     )
 
   add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})

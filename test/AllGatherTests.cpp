@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "TestBed.hpp"
+#include "StandaloneUtils.hpp"
 
 namespace RcclUnitTesting
 {

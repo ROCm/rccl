@@ -32,7 +32,7 @@ namespace RcclUnitTesting
     }                                                           \
 } while(0)
 
-  void call_RCCL(ncclUniqueId id, int collID, int rank, int nranks, std::vector<int>& send, std::vector<int>& recv, bool managed = false);
+  //void call_RCCL(ncclUniqueId id, int collID, int rank, int nranks, std::vector<int>& send, std::vector<int>& recv, bool managed = false);
   // This class facilitates testing RCCL collectives across various process / device configurations
   //
   class TestBed

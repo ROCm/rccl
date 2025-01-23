@@ -48,70 +48,7 @@
 namespace RcclUnitTesting
 {
 
-   void call_RCCL(ncclUniqueId id, int collID, int rank, int nranks, std::vector<int>& send, std::vector<int>& recv, bool managed){
-    HIPCALL(hipSetDevice(rank));
-    hipStream_t stream;
-    HIPCALL(hipStreamCreate(&stream));
-    ncclComm_t comm;
-    NCCLCHECK(ncclCommInitRank(&comm, nranks, id, rank));
-    int *sendbuff;
-    int *recvbuff;
-    void *sendRegHandle;
-    void *recvRegHandle;
-    
-
-    size_t sendSize = 0;
-    size_t recvSize = 0;
-
-     switch(collID){
-      case ncclCollAllReduce:
-        sendSize = send.size();
-        recvSize = recv.size();
-        break;
-      case ncclCollAllGather:
-        sendSize = send.size();
-        recvSize = nranks*send.size();
-        break;
-      default: exit(0);
-    }
-
-    if(!managed){
-      NCCLCHECK(ncclMemAlloc((void **)&sendbuff, sendSize * sizeof(int)));
-      NCCLCHECK(ncclMemAlloc((void **)&recvbuff, recvSize * sizeof(int)));
-    }
-    else{
-      HIPCALL(hipMallocManaged((void **)&sendbuff, sendSize * sizeof(int)));
-      HIPCALL(hipMallocManaged((void **)&recvbuff, recvSize * sizeof(int)));
-    }    
-
-    
    
-    NCCLCHECK(ncclCommRegister(comm, sendbuff, sendSize * sizeof(int), &sendRegHandle));
-    NCCLCHECK(ncclCommRegister(comm, recvbuff, recvSize * sizeof(int), &recvRegHandle));
-
-    HIPCALL(hipMemcpy(sendbuff, send.data(), sizeof(int) * sendSize, hipMemcpyHostToDevice));
-    HIPCALL(hipMemcpy(recvbuff, recv.data(), sizeof(int) *recvSize, hipMemcpyHostToDevice));
-
-    switch(collID){
-      case ncclCollAllReduce:
-        NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, sendSize, ncclInt, ncclSum, comm, stream));
-        break;
-      case ncclCollAllGather:
-        NCCLCHECK(ncclAllGather(sendbuff, recvbuff, sendSize, ncclInt, comm, stream));
-        break;
-      default: exit(0);
-    }
-
-    HIPCALL(hipStreamSynchronize(stream));
-    HIPCALL(hipMemcpy(recv.data(), recvbuff, sizeof(int) * recvSize, hipMemcpyDeviceToHost));
-    
-    NCCLCHECK(ncclCommDeregister(comm, sendRegHandle));
-    NCCLCHECK(ncclCommDeregister(comm, recvRegHandle));
-
-    NCCLCHECK(ncclMemFree(sendbuff));
-    NCCLCHECK(ncclMemFree(recvbuff));
-    ncclCommDestroy(comm);
-  }
 
   TestBed::TestBed() :
     numDevicesAvailable(0),
