@@ -434,7 +434,6 @@ static ncclResult_t mscclFallBackSavedParams() {
           param.p.root, param.comm, param.stream));
         break;
       case mscclFuncAllReduce:
-          INFO(NCCL_INIT, "fallback ncclReduce");
         NCCLCHECK(ncclAllReduce(param.p.sendBuff, param.p.recvBuff, param.p.count, param.p.dataType,
           param.p.op, param.comm, param.stream));
         break;
@@ -443,7 +442,6 @@ static ncclResult_t mscclFallBackSavedParams() {
           param.p.op, param.comm, param.stream));
         break;
       case mscclFuncAllGather:
-        INFO(NCCL_INIT, "fallback ncclAllGather");
         NCCLCHECK(ncclAllGather(param.p.sendBuff, param.p.recvBuff, param.p.count, param.p.dataType,
           param.comm, param.stream));
         break;

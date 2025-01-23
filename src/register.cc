@@ -172,7 +172,6 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
       else{
         WARN("MSCCL++: Cannot register user-buffers on managed memory. RCCL user-buffer registration will occur.");
       }
-      return ncclSuccess;
     }
   #endif
   INFO(NCCL_INIT, "RCCL: ncclCommRegister");
