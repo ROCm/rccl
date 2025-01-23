@@ -40,7 +40,7 @@
           } \
           if (spins == 0 && rate_limit > 0) { \
             rate_limit --; \
-            traceData(__LINE__, threadIdx.x, barriers[warp]+((uint64_t)warp<<32), barrier_next); \
+            traceData(__LINE__, threadIdx.x, __hip_atomic_load(barriers+warp, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP)+((uint64_t)warp<<32), barrier_next); \
           } \
           __builtin_amdgcn_s_sleep(1); \
         } \
@@ -75,7 +75,7 @@
           } \
           if (spins == 0 && rate_limit > 0) { \
             rate_limit --; \
-            traceData(__LINE__, threadIdx.x, barriers[warp]+((uint64_t)warp<<32), barrier_next); \
+            traceData(__LINE__, threadIdx.x, __hip_atomic_load(barriers+warp, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP)+((uint64_t)warp<<32), barrier_next); \
           } \
           __builtin_amdgcn_s_sleep(1); \
         } \

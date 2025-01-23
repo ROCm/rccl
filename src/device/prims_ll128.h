@@ -508,7 +508,7 @@ public:
     auto *channel = &ncclShmem.channel;
     if (tid == 0) ncclShmem.groups[group].warpStart = threadIdx.x/WARP_SIZE;
     barriers = ncclShmem.barrier;
-    if (tid%WARP_SIZE == 0) barriers[threadIdx.x/WARP_SIZE] = 0;
+    if (tid%WARP_SIZE == 0 && threadIdx.x/WARP_SIZE < NCCL_MAX_GROUPS) barriers[threadIdx.x/WARP_SIZE] = 0;
     barrier_next = 0;
     int nrecv=0, nsend=0;
     while (nrecv < MaxRecv && recvPeers[nrecv] >= 0) {
