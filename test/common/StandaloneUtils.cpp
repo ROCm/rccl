@@ -73,7 +73,61 @@ ArchInfo parseMetadata(const std::vector<std::string>& list) {
 namespace RcclUnitTesting
 {
 
-void call_RCCL(ncclUniqueId id, int collID, int rank, int nranks, std::vector<int>& send, std::vector<int>& recv, bool managed){
+void fork_and_launch_rccl(int nranks,  int collID, const std::vector<int>& sendBuff, std::vector<int>& recvBuff, const std::vector<int>& expected, bool use_managed_mem){
+    std::vector<pid_t> children(nranks);
+    std::vector<std::vector<int>> childPipes(nranks, std::vector<int>(2,0));
+    ncclUniqueId id;
+
+    for(int r = 0; r < nranks; ++r){
+      if(pipe(childPipes[r].data()) == -1)
+        ERROR("child %i pipe Failed\n", r);
+    } 
+
+    auto createNCCLid = [&](int rank){
+        ncclGetUniqueId(&id);
+        close(childPipes[rank][0]);
+        write(childPipes[rank][1], &id, sizeof(ncclUniqueId));
+        close(childPipes[rank][1]);
+    };
+
+    auto getNCCLidFromParent = [&](int rank){
+      close(childPipes[rank][1]); //close write to child0
+      read(childPipes[rank][0], &id, sizeof(ncclUniqueId));
+      close(childPipes[rank][0]);
+    };
+
+    auto getAndDistributeNCCLid = [&](int nranks){
+      close(childPipes[0][1]); //close write to child0
+      read(childPipes[0][0], &id, sizeof(ncclUniqueId)); //read from child0
+      for(int r = 1; r < nranks; ++r){
+        write(childPipes[r][1], &id, sizeof(ncclUniqueId));
+        close(childPipes[r][1]);
+      }
+    };
+
+    for(int r = 0; r < nranks; ++r){
+      children[r] = fork();
+      if(children[r] == 0){
+        //child processes
+        if(r == 0)
+          createNCCLid(r);
+        else
+          getNCCLidFromParent(r);
+
+        call_rccl(id, collID, r, nranks, sendBuff, recvBuff, use_managed_mem);
+        for(int i = 0; i < recvBuff.size(); ++i)
+          ASSERT_EQ(recvBuff[i], expected[i]);
+        break;
+      }
+    }
+
+    getAndDistributeNCCLid(nranks);
+    for(int r = 0; r < nranks; ++r)
+      wait(NULL); // Wait for all children
+}
+
+
+void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vector<int>& send, std::vector<int>& recv, bool use_managed_mem){
     switch(collID){
         case ncclCollAllReduce:
         break;
@@ -110,7 +164,7 @@ void call_RCCL(ncclUniqueId id, int collID, int rank, int nranks, std::vector<in
       default: exit(0);
     }
 
-    if(!managed){
+    if(!use_managed_mem){
       NCCLCHECK(ncclMemAlloc((void **)&sendbuff, sendSize * sizeof(int)));
       NCCLCHECK(ncclMemAlloc((void **)&recvbuff, recvSize * sizeof(int)));
     }
