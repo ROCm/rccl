@@ -110,6 +110,8 @@ struct ncclShmemGroup {
   void* userOutput;
   void* srcs[NCCL_MAX_ARITY+1];
   void* dsts[NCCL_MAX_ARITY+1];
+  uint64_t barrier[NCCL_MAX_GROUPS];
+  uint64_t barrier_next[NCCL_MAX_GROUPS];
   uint8_t warpStart;
   union {
     unpackGroupShmem unpack;
@@ -121,7 +123,6 @@ struct ncclShmemGroup {
 
 struct ncclShmemData {
   struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
-  uint64_t barrier[NCCL_MAX_GROUPS];
   uint64_t redOpArgs[NCCL_MAX_ARITY+1];
   int channelId;
   int aborted;
@@ -260,10 +261,12 @@ __forceinline__ __device__ void ncclKernelMain(struct ncclDevComm* comm, struct 
     }
     break;
   case 1:
-    if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
-      ncclShmem.barrier[(tid-WARP_SIZE)%NCCL_MAX_GROUPS] = 0;
+    if (tid < WARP_SIZE + NCCL_MAX_GROUPS*NCCL_MAX_GROUPS)
+      ncclShmem.groups[(tid-WARP_SIZE)/NCCL_MAX_GROUPS].barrier[(tid-WARP_SIZE)%NCCL_MAX_GROUPS] = 0;
     break;
   case 2:
+    if (tid < 2*WARP_SIZE + NCCL_MAX_GROUPS*NCCL_MAX_GROUPS)
+      ncclShmem.groups[(tid-2*WARP_SIZE)/NCCL_MAX_GROUPS].barrier_next[(tid-2*WARP_SIZE)%NCCL_MAX_GROUPS] = 0;
     break;
   case 3:
     /* set abort flag to 0 */

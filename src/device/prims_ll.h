@@ -66,7 +66,7 @@ private:
   inline __device__ uint32_t sendFlag(int i) { return NCCL_LL_FLAG(sendStep[i]+1); }
 
   uint64_t* barriers;
-  uint64_t barrier_next;
+  uint64_t* barrier_next;
 
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
@@ -617,9 +617,8 @@ private:
     stepLines(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
     auto *channel = &ncclShmem.channel;
     if (tid == 0) ncclShmem.groups[group].warpStart = threadIdx.x/WARP_SIZE;
-    barriers = ncclShmem.barrier;
-    if (tid%WARP_SIZE == 0 && threadIdx.x/WARP_SIZE < NCCL_MAX_GROUPS) barriers[threadIdx.x/WARP_SIZE] = 0;
-    barrier_next = 0;
+    barriers = ncclShmem.groups[group].barrier;
+    barrier_next = ncclShmem.groups[group].barrier_next;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
     int nrecv=0, nsend=0;
     // We compare with Fan::MaxRecv here because this->MaxRecv is always at least 1
