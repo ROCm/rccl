@@ -305,7 +305,7 @@ if (HAVE_PARALLEL_JOBS)
 endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
-## Currently MSCCL++ is supported only on gfx942
+## Currently MSCCL++ is supported only on gfx942, and only on Ubuntu
 if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST COMPILING_TARGETS OR "gfx942:xnack-" IN_LIST COMPILING_TARGETS OR "gfx942:xnack+" IN_LIST COMPILING_TARGETS))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
@@ -313,6 +313,11 @@ endif()
 if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration only supported on ROCm 6.2 or greater; disabling MSCCL++ build")
+endif()
+cmake_host_system_information(RESULT HOST_OS_NAME QUERY DISTRIB_NAME)
+if (ENABLE_MSCCLPP AND NOT(${HOST_OS_NAME} STREQUAL "Ubuntu"))
+  set(ENABLE_MSCCLPP OFF)
+  message(WARNING "MSCCL++ integration only supported on Ubuntu; disabling MSCCL++ build")
 endif()
 
 # Determine version from makefiles/version.mk and fill in templates
