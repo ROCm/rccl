@@ -15,7 +15,7 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if 0
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __builtin_amdgcn_s_barrier(); \
