@@ -251,7 +251,6 @@ ncclResult_t printProxyOp(struct ncclProxyArgs* op, int poolIndex, int opIndex) 
   fprintf(stderr, "%s", op->send ? "Send" : "Recv");
   for (int s=0; s<op->nsubs; s++) {
     struct ncclProxySubArgs* sub = op->subs+s;
-    fprintf(stderr, " (%zd)", sub->nbytes);
     if (op->state == ncclProxyOpProgress) {
       char status = ' ';
       if (op->pattern == ncclPatternRecv) { // ncclRecv
@@ -266,20 +265,11 @@ ncclResult_t printProxyOp(struct ncclProxyArgs* op, int poolIndex, int opIndex) 
         else if (sub->transmitted < sub->posted) status = 'G'; // Waiting on GPU
         else if (sub->done < sub->transmitted) status = 'S'; // Sending
         else status = 'D'; // Done
-      } else if (op->send) { // Send within a collective operation
-        if (sub->posted < sub->nsteps && sub->posted < sub->done + NCCL_STEPS) status = 'I'; // Init
-        else if (sub->transmitted < sub->posted) status = 'G'; // Waiting on GPU
-        else if (sub->done < sub->transmitted) status = 'S'; // Sending
-        else status = 'D'; // Done
-      } else { // Recv within a collective operation
-	if (sub->posted < sub->nsteps && sub->posted < sub->done + NCCL_STEPS) status = 'I'; // Init
-        else if (sub->received < sub->posted) status = 'R'; // Receiving
-        else if (sub->received < sub->transmitted) status = 'R'; // Receiving
-        else if (sub->transmitted < sub->received) status = 'F'; // Flushing
-        else if (sub->done < sub->transmitted) status = 'G'; // Waiting on GPU
-        else status = 'D'; // Done
+      } else {
+	// Send or recv within a collective. Dump raw state data.
+	fprintf(stderr, " nb:%zd ns:%d p:%lu t:%lu r:%lu, d:%lu ",sub->nbytes,sub->nsteps, sub->posted, sub->transmitted, sub->received, sub->done);
       }
-      fprintf(stderr, "[%c] peer:%d channel:%d", status, peer, sub->channelId);
+      fprintf(stderr, "%c peer:%d chan:%d ", status, peer, sub->channelId);
     } else {
         if (op->state == ncclProxyOpNone) fprintf(stderr, "\t[]");
         else if (op->state == ncclProxyOpReady) fprintf(stderr, "\t[R]");
