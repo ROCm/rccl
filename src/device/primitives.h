@@ -40,7 +40,9 @@
           } \
           if (spins == 0 && rate_limit > 0) { \
             rate_limit --; \
-            traceData(__LINE__, threadIdx.x, __hip_atomic_load(barriers+warpIter, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP)+((uint64_t)warpIter<<32), barrier_next[w]); \
+            uint64_t tmp = __hip_atomic_load(barriers + warpIter, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_WORKGROUP) \
+              + ((uint64_t)group<<48) + ((uint64_t)warpIter<<32) + (((uint64_t)ncclShmem.groups[group].warpStart)<<16); \
+            traceData(_LINE_, threadIdx.x, tmp, barrier_next[w] + ((uint64_t)i<<32)); \
           } \
           __builtin_amdgcn_s_sleep(1); \
         } \

@@ -43,7 +43,7 @@ class Primitives<
   Fan fan;
   int index; // Peer index I'm responsible for
   int flags;
-  int group;
+  const int group;
   uint64_t step;
   struct ncclConnFifo* connFifo = NULL;
   T* connEltsFifo;
