@@ -1,0 +1,31 @@
+diff --git a/apps/nccl/src/nccl.cu b/apps/nccl/src/nccl.cu
+index 3daadf8..6b6aa83 100644
+--- a/apps/nccl/src/nccl.cu
++++ b/apps/nccl/src/nccl.cu
+@@ -2,7 +2,7 @@
+ // Licensed under the MIT license.
+ 
+ #include <algorithm>
+-#include <filesystem>
++#include <boost/filesystem.hpp>
+ #include <mscclpp/concurrency_device.hpp>
+ #include <mscclpp/core.hpp>
+ #include <mscclpp/env.hpp>
+@@ -417,13 +417,13 @@ NCCL_API ncclResult_t ncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueI
+ 
+   const std::string& collectiveDir = mscclpp::env()->executionPlanDir;
+   if (collectiveDir != "") {
+-    if (!std::filesystem::is_directory(collectiveDir)) {
++    if (!boost::filesystem::is_directory(collectiveDir)) {
+       WARN("The value of the environment variable %s is not a directory", collectiveDir.c_str());
+       return ncclInvalidArgument;
+     }
+-    for (const auto& entry : std::filesystem::directory_iterator(collectiveDir)) {
+-      if (entry.is_regular_file()) {
+-        auto plan = loadExecutionPlan(entry.path());
++    for (const auto& entry : boost::filesystem::directory_iterator(collectiveDir)) {
++      if (boost::filesystem::is_regular_file(entry.status())) {
++        auto plan = loadExecutionPlan(entry.path().string());
+         commPtr->executionPlans[plan.first].push_back(plan.second);
+       }
+     }

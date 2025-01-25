@@ -85,6 +85,14 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
+        cmake_host_system_information(RESULT HOST_OS_NAME QUERY DISTRIB_NAME)
+        if(${HOST_OS_NAME} STREQUAL "SLES")
+            execute_process(
+                COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/sles-cpp-filesystem.patch
+                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            )
+        endif()
+
         message(STATUS "Building mscclpp only for gfx942.")
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
         mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
@@ -128,6 +136,12 @@ if(ENABLE_MSCCLPP)
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+        if(${HOST_OS_NAME} STREQUAL "SLES")
+            execute_process(
+                COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/sles-cpp-filesystem.patch
+                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            )
+        endif()
 
     #endif()
 
