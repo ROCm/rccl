@@ -5,6 +5,8 @@
  ************************************************************************/
 
 #include "roctx.h"
+#include "param.h"
+#include "debug.h"
 
 std::map<uint64_t, roctxPayloadEntryType> nvtxToRoctx {
   {NVTX_PAYLOAD_ENTRY_TYPE_INT, ROCTX_PAYLOAD_ENTRY_TYPE_INT},

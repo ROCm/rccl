@@ -16,7 +16,6 @@
 #endif
 #include "nvtx3/nvtx3.hpp"
 #include "device.h"
-#include "utils.h"
 
 #define MAX_MESSAGE_LENGTH 1024
 #define NVTX_PAYLOAD_ENTRY_TYPE_REDOP 11 + NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START
