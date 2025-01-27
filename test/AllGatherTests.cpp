@@ -124,7 +124,6 @@ namespace RcclUnitTesting
 
   TEST(AllGather, UserBufferRegistration)
   {          
-    setenv("UT_PROCESS_MASK", "2", 1);
     const int nranks = 8;
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
@@ -133,14 +132,17 @@ namespace RcclUnitTesting
 
     for (int i = 0; i < count; ++i){
         sendBuff[i] = i;
-        expected[i] = i * nranks;
     }
+
+    for(int r = 0; r < nranks; ++r)
+      for (int i = 0; i < count; ++i)
+        expected[r*count + i] = sendBuff[i];
+
     fork_and_launch_rccl(nranks, ncclCollAllGather, sendBuff, recvBuff, expected);
   }
 
   TEST(AllGather, ManagedMemUserBufferRegistration)
   {          
-    setenv("UT_PROCESS_MASK", "2", 1);
     const int nranks = 8;
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
@@ -149,8 +151,12 @@ namespace RcclUnitTesting
     const bool use_managed_mem = true;
     for (int i = 0; i < count; ++i){
         sendBuff[i] = i;
-        expected[i] = i * nranks;
     }
+
+    for(int r = 0; r < nranks; ++r)
+      for (int i = 0; i < count; ++i)
+        expected[r*count + i] = sendBuff[i];
+
     fork_and_launch_rccl(nranks, ncclCollAllGather, sendBuff, recvBuff, expected, use_managed_mem);
   }
 }
