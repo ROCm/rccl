@@ -128,7 +128,7 @@ namespace RcclUnitTesting
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
     std::vector<int> recvBuff(count, 0);
-    std::vector<int> expected(count, 0);
+    std::vector<int> expected(nranks*count, 0);
 
     for (int i = 0; i < count; ++i){
         sendBuff[i] = i;
@@ -147,7 +147,7 @@ namespace RcclUnitTesting
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
     std::vector<int> recvBuff(count, 0);
-    std::vector<int> expected(count, 0);
+    std::vector<int> expected(nranks*count, 0);
     const bool use_managed_mem = true;
     for (int i = 0; i < count; ++i){
         sendBuff[i] = i;
