@@ -74,7 +74,7 @@ namespace RcclUnitTesting
 {
 
 void fork_and_launch_rccl(int nranks,  int collID, const std::vector<int>& sendBuff, std::vector<int>& recvBuff, const std::vector<int>& expected, bool use_managed_mem){
-    std::vector<pid_t> children(nranks);
+    std::vector<pid_t> children(nranks, 0);
     std::vector<std::vector<int>> childPipes(nranks, std::vector<int>(2,0));
     ncclUniqueId id;
 
@@ -108,6 +108,11 @@ void fork_and_launch_rccl(int nranks,  int collID, const std::vector<int>& sendB
     for(int r = 0; r < nranks; ++r){
       children[r] = fork();
       if(children[r] == 0){
+        int ngpus = 0;
+        HIPCALL(hipGetDeviceCount(&ngpus));
+        if(ngpus != nranks){
+          exit(0);
+        }
         //child processes
         if(r == 0)
           createNCCLid(r);
@@ -115,17 +120,18 @@ void fork_and_launch_rccl(int nranks,  int collID, const std::vector<int>& sendB
           getNCCLidFromParent(r);
 
         call_rccl(id, collID, r, nranks, sendBuff, recvBuff, use_managed_mem);
-        for(int i = 0; i < recvBuff.size(); ++i)
+        for(int i = 0; i < recvBuff.size(); ++i){
           ASSERT_EQ(recvBuff[i], expected[i]);
-        break;
+        }
+        exit(0);
       }
     }
 
     getAndDistributeNCCLid(nranks);
+    
     for(int r = 0; r < nranks; ++r)
       wait(NULL); // Wait for all children
 }
-
 
 void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vector<int>& send, std::vector<int>& recv, bool use_managed_mem){
     switch(collID){
@@ -142,6 +148,9 @@ void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vec
     hipStream_t stream;
     HIPCALL(hipStreamCreate(&stream));
     ncclComm_t comm;
+    
+    
+
     NCCLCHECK(ncclCommInitRank(&comm, nranks, id, rank));
     int *sendbuff;
     int *recvbuff;
@@ -149,6 +158,7 @@ void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vec
     void *recvRegHandle;
     
 
+    
     size_t sendSize = 0;
     size_t recvSize = 0;
 
@@ -165,15 +175,13 @@ void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vec
     }
 
     if(!use_managed_mem){
-      NCCLCHECK(ncclMemAlloc((void **)&sendbuff, sendSize * sizeof(int)));
-      NCCLCHECK(ncclMemAlloc((void **)&recvbuff, recvSize * sizeof(int)));
+      HIPCALL(hipMalloc((void **)&sendbuff, sendSize * sizeof(int)));
+      HIPCALL(hipMalloc((void **)&recvbuff, recvSize * sizeof(int)));
     }
     else{
       HIPCALL(hipMallocManaged((void **)&sendbuff, sendSize * sizeof(int)));
       HIPCALL(hipMallocManaged((void **)&recvbuff, recvSize * sizeof(int)));
     }    
-
-    
    
     NCCLCHECK(ncclCommRegister(comm, sendbuff, sendSize * sizeof(int), &sendRegHandle));
     NCCLCHECK(ncclCommRegister(comm, recvbuff, recvSize * sizeof(int), &recvRegHandle));
@@ -197,8 +205,8 @@ void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vec
     NCCLCHECK(ncclCommDeregister(comm, sendRegHandle));
     NCCLCHECK(ncclCommDeregister(comm, recvRegHandle));
 
-    NCCLCHECK(ncclMemFree(sendbuff));
-    NCCLCHECK(ncclMemFree(recvbuff));
+    HIPCALL(hipFree(sendbuff));
+    HIPCALL(hipFree(recvbuff));
     ncclCommDestroy(comm);
   }
 

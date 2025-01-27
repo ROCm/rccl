@@ -245,7 +245,6 @@ namespace RcclUnitTesting
 
   TEST(AllReduce, UserBufferRegistration)
   {          
-    setenv("UT_PROCESS_MASK", "2", 1);
     const int nranks = 8;
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
@@ -261,7 +260,6 @@ namespace RcclUnitTesting
 
   TEST(AllReduce, ManagedMemUserBufferRegistration)
   {          
-    setenv("UT_PROCESS_MASK", "2", 1);
     const int nranks = 8;
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
