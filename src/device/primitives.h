@@ -21,7 +21,6 @@
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
-    __threadfence_block(); \
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       __hip_atomic_fetch_add(barriers, 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
