@@ -15,50 +15,13 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
-#if 0
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __builtin_amdgcn_s_barrier(); \
+    __threadfence_block(); __builtin_amdgcn_s_barrier(); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
-    if (wid == 0) { \
-      barrier_next[w] += 1; \
-      __hip_atomic_store(barriers+w, barrier_next[w], __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
-      int spins = 0; \
-      int rate_limit = 50; \
-      for (int i = 0; i < nthreads/WARP_SIZE; i++) { \
-        uint8_t warpIter = ncclShmem.groups[group].warpStart + i; \
-        while (__hip_atomic_load(barriers+warpIter, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next[w]) { \
-          spins++; \
-          if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
-            if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
-              ncclShmem.aborted = 1; \
-              break; \
-            } \
-            spins = 0; \
-          } \
-          if (spins == 0 && rate_limit > 0) { \
-            rate_limit --; \
-            uint64_t tmp = __hip_atomic_load(barriers + warpIter, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_WORKGROUP) \
-              + ((uint64_t)group<<48) + ((uint64_t)warpIter<<32) + (((uint64_t)ncclShmem.groups[group].warpStart)<<16); \
-            traceData(__LINE__, threadIdx.x, tmp, barrier_next[w] + ((uint64_t)i<<32)); \
-          } \
-          __builtin_amdgcn_s_sleep(1); \
-        } \
-        __asm__ __volatile__("s_wakeup"); \
-      } \
-    } \
-  } \
-} while (0)
-#else
-#define barrier_by_group() do { \
-  if (nthreads == NCCL_MAX_NTHREADS) { \
-    __threadfence(); __builtin_amdgcn_s_barrier(); \
-  } else { \
-    const int w = threadIdx.x/WARP_SIZE; \
-    const int wid = threadIdx.x%WARP_SIZE; \
-    __threadfence(); \
+    __threadfence_block(); \
     if (wid == 0) { \
       barrier_next[w] += nthreads/WARP_SIZE; \
       __hip_atomic_fetch_add(barriers, 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
@@ -83,7 +46,7 @@
     } \
   } \
 } while (0)
-#endif
+
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral
  * enums (e.g. NCCL_PROTO_LL) because for SIMPLE we need to carry a few extra
