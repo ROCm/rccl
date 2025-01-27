@@ -315,6 +315,17 @@ if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   message(WARNING "MSCCL++ integration only supported on ROCm 6.2 or greater; disabling MSCCL++ build")
 endif()
 
+# Check for ROCTX
+if(ROCTX)
+  find_library(ROCTX_LIB NAMES roctx64)
+  if(ROCTX_LIB)
+    set(ROCTX_ENABLE ON)
+    message(STATUS "ROCTX library found: ${ROCTX_LIB}")
+  else()
+    message(WARNING "ROCTX library not found. Skipping ROCTX linking.")
+  endif()
+endif()
+
 # Determine version from makefiles/version.mk and fill in templates
 #==================================================================================================
 ## parse version from Makefile NCCL_MAJOR, NCCL_MINOR, NCCL_PATCH must exist
@@ -696,7 +707,7 @@ endif()
 if(PROFILE)
   target_compile_definitions(rccl PRIVATE ENABLE_PROFILING)
 endif()
-if(ROCTX)
+if(ROCTX_ENABLE)
   target_compile_definitions(rccl PRIVATE ROCTX_ENABLE)
 else()
   target_compile_definitions(rccl PRIVATE NVTX_NO_IMPL)
@@ -798,10 +809,10 @@ if (HAVE_BFD)
     target_link_libraries(rccl PRIVATE iberty z)
   endif()
 endif()
-if (ROCTX)
+if (ROCTX_ENABLE)
   target_link_libraries(rccl PRIVATE -lroctx64)
 endif()
-target_link_libraries(rccl PRIVATE -fgpu-rdc)             # Required when linking relocatable device code
+target_link_libraries(rccl PRIVATE   -fgpu-rdc)             # Required when linking relocatable device code
 target_link_libraries(rccl PRIVATE   Threads::Threads)
 target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
