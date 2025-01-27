@@ -9,7 +9,11 @@
 #include "comm.h"
 #include "net.h"
 #include "register.h"
+#include "transport.h"
 #include "api_trace.h"
+#ifdef ENABLE_MSCCLPP
+#include "mscclpp/mscclpp_nccl.h"
+#endif
 
 ncclResult_t ncclNetDeregister(struct ncclComm* comm, struct ncclReg* reg) {
   struct ncclRegCache* cache = &comm->regCache;
@@ -80,6 +84,7 @@ ncclResult_t ncclNetRegister(struct ncclComm* comm, void* addr, size_t size, str
     }
   }
 end:
+  INFO(NCCL_INIT, "Register ptr %p size %ld on %d net devices", addr, size, reg->nDevs);
   ncclDebugNoWarn = 0;
   if (ret != ncclSuccess) NCCLCHECK(ncclNetDeregister(comm, reg));
   return ret;
@@ -155,12 +160,36 @@ NCCL_API(ncclResult_t, ncclCommRegister, const ncclComm_t comm, void* buff, size
 ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t size, void** handle) {
   NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   if (comm->checkPointers) NCCLCHECK(CudaPtrCheck(buff, comm, "buff", "ncclCommRegister"));
+  #ifdef ENABLE_MSCCLPP
+    if (comm->mscclCompatible && size > 0 && (size & 31) == 0 && size <= comm->mscclpp_threshold){
+      bool isManagedBuffer = false; 
+      CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(buff)));
+      if(!isManagedBuffer){
+        INFO(NCCL_INIT, "MSCCL++: ncclCommRegister");
+        NCCLCHECK(mscclpp_ncclCommRegister(comm->mscclpp_comm, buff, size, handle));
+        return ncclSuccess;
+      }
+      else{
+        WARN("MSCCL++: Cannot register user-buffers on managed memory. RCCL user-buffer registration will occur.");
+      }
+    }
+  #endif
+  INFO(NCCL_INIT, "RCCL: ncclCommRegister");
   NCCLCHECK(ncclRegister(comm, buff, size, handle));
   return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclCommDeregister, const ncclComm_t comm, void* handle);
 ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
+
+  #ifdef ENABLE_MSCCLPP
+    const size_t size = mscclpp_BufferSize(comm->mscclpp_comm, handle);
+    if (comm->mscclCompatible && size > 0 && (size & 31) == 0 && size <= comm->mscclpp_threshold) {
+        NCCLCHECK(mscclpp_ncclCommDeregister(comm->mscclpp_comm, handle));
+      return ncclSuccess;
+    }
+  #endif
+
   NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   struct ncclReg* reg = (struct ncclReg*)handle;
   struct ncclRegCache* cache = &comm->regCache;

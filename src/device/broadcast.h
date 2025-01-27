@@ -11,24 +11,25 @@
 namespace {
   template<typename T, typename RedOp, typename Proto>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx940__) && !defined(__gfx941__) && !defined(__gfx942__)
-  __device__ void runRing(ncclWorkElem *args) {
+  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #else
-  __device__ __attribute__((noinline)) void runRing(ncclWorkElem *args) {
+  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    const int tid = threadIdx.x;
-    const int nthreads = (int)args->nWarps * WARP_SIZE;
+    const int bid = ncclShmem.channelId - work->channelLo;
     ncclRing *ring = &ncclShmem.channel.ring;
     const int rank = ring->userRanks[0];
     const int nextRank = ring->userRanks[1];
-    const int root = args->root;
-    const size_t chunkCount = args->chunkCount;
-    const size_t channelCount = args->workCount;
-    const size_t gridOffset = args->workOffset;
+    const int root = work->root;
+    size_t size;
+    size_t chunkCount;
+    size_t channelCount;
+    size_t gridOffset;
+    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
     size_t offset;
     int nelem;
 
 #if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = gridOffset / channelCount;
+    int npKitCtxIdx = bid;
 #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
@@ -47,15 +48,15 @@ namespace {
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_BROADCAST_RING_ENTRY)
     if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_BROADCAST_RING_ENTRY, args->count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+      NpKit::CollectGpuEvent(NPKIT_EVENT_BROADCAST_RING_ENTRY, size*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
 
-    T *inputBuf = (T*)args->sendbuff;
-    T *outputBuf = (T*)args->recvbuff;
+    T *inputBuf = (T*)work->sendbuff;
+    T *outputBuf = (T*)work->recvbuff;
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0>
-      prims(tid, nthreads, &ring->prev, &ring->next, inputBuf, outputBuf, args->redOpArg, 0, args->connIndex, args->connIndex);
+      prims(tid, nthreads, &ring->prev, &ring->next, inputBuf, outputBuf, work->redOpArg, 0, work->connIndex, work->connIndex);
 
 #if defined(ENABLE_NPKIT)
     if (tid == 0) {
@@ -81,7 +82,7 @@ namespace {
     }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_BROADCAST_RING_EXIT)
     if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_BROADCAST_RING_EXIT, args->count*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
+      NpKit::CollectGpuEvent(NPKIT_EVENT_BROADCAST_RING_EXIT, size*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
@@ -89,23 +90,23 @@ namespace {
 }
 
 template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(ncclWorkElem *args) {
+struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
     using Proto = ProtoSimple<BROADCAST_CHUNKSTEPS/BROADCAST_SLICESTEPS, BROADCAST_SLICESTEPS>;
-    runRing<T, RedOp, Proto>(args);
+    runRing<T, RedOp, Proto>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
-  __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL>(args);
+struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+    runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
-  __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runRing<T, RedOp, ProtoLL128>(args);
+struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+    runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };

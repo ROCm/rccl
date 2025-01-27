@@ -2,6 +2,16 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## Unreleased - RCCL 2.22.3 for ROCm 6.4.0
+
+### Added
+
+* `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters
+
+### Changed
+
+* Compatibility with NCCL 2.22.3
+
 ## RCCL 2.21.5 for ROCm 6.3.1
 
 ### Added

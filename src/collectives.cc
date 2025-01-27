@@ -13,6 +13,73 @@
 
 #include "msccl/msccl_lifecycle.h"
 
+const char* ncclFuncToString(ncclFunc_t fn) {
+  switch (fn) {
+  case ncclFuncAllGather: return "AllGather";
+  case ncclFuncAllReduce: return "AllReduce";
+  case ncclFuncBroadcast: return "Broadcast";
+  case ncclFuncRecv: return "Recv";
+  case ncclFuncReduce: return "Reduce";
+  case ncclFuncReduceScatter: return "ReduceScatter";
+  case ncclFuncSendRecv: return "SendRecv";
+  case ncclFuncSend: return "Send";
+  default: return "Invalid";
+  }
+}
+
+const char* ncclDevRedOpToString(ncclDevRedOp_t op) {
+  switch (op) {
+  case ncclDevSum: return "Sum";
+  case ncclDevProd: return "Prod";
+  case ncclDevMinMax: return "MinMax";
+  case ncclDevPreMulSum: return "PreMulSum";
+  case ncclDevSumPostDiv: return "SumPostDiv";
+  default: return "Unknown";
+  }
+}
+
+const char* ncclDatatypeToString(ncclDataType_t type) {
+  switch (type) {
+  case ncclInt8: return "ncclInt8";
+  case ncclInt32: return "ncclInt32";
+  case ncclUint32: return "ncclUint32";
+  case ncclInt64: return "ncclInt64";
+  case ncclUint64: return "ncclUint64";
+#if defined(RCCL_FLOAT8)
+  case ncclFp8E4M3: return "ncclFp8E4M3";
+  case ncclFp8E5M2: return "ncclFp8E5M2";
+#endif
+  case ncclFloat16: return "ncclFloat16";
+  case ncclFloat32: return "ncclFloat32";
+  case ncclFloat64: return "ncclFloat64";
+#if defined(RCCL_BFLOAT16)
+  case ncclBfloat16: return "ncclBfloat16";
+#endif
+  default: return "Unknown";
+  }
+}
+
+const char* ncclAlgoToString(int algo) {
+  switch (algo) {
+  case NCCL_ALGO_TREE: return "TREE";
+  case NCCL_ALGO_RING: return "RING";
+  case NCCL_ALGO_COLLNET_DIRECT: return "COLLNET_DIRECT";
+  case NCCL_ALGO_COLLNET_CHAIN: return "COLLNET_CHAIN";
+  case NCCL_ALGO_NVLS: return "NVLS";
+  case NCCL_ALGO_NVLS_TREE: return "NVLS_TREE";
+  default: return "Unknown";
+  }
+}
+
+const char* ncclProtoToString(int proto) {
+  switch (proto) {
+  case NCCL_PROTO_LL: return "LL";
+  case NCCL_PROTO_LL128: return "LL128";
+  case NCCL_PROTO_SIMPLE: return "SIMPLE";
+  default: return "Unknown";
+  }
+}
+
 NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 
@@ -70,6 +137,8 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   return ncclSuccess;
 }
 
+RCCL_PARAM(AllToAllPivotEnable, "ALL_TO_ALL_PIVOT_ENABLE", 0);
+
 NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream);
 
@@ -93,7 +162,7 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
   size_t rankAlign = rankOffset & ((~rankOffset) + 1);
   // Determine Pivot A2A support now that we know number of channels
   if (comm->topo->pivotA2AEnabled && comm->nChannels >= comm->topo->pivotA2ANumBiRings * 2 &&
-      rankOffset >= 744 * 1024 && rankAlign != 4) {
+      rankOffset >= 744 * 1024 && rankAlign != 4 && rcclParamAllToAllPivotEnable()) {
     struct ncclInfo info = { ncclFuncAllToAllPivot, "AllToAllPivot",
       sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream, /* Args */
       ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS };

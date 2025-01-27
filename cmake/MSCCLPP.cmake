@@ -53,31 +53,39 @@ if(ENABLE_MSCCLPP)
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
     find_package(mscclpp_nccl)
 
-    if(NOT mscclpp_nccl_FOUND)
+    #if(NOT mscclpp_nccl_FOUND)
         # Ensure the source code is checked out
         set(MSCCLPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp CACHE PATH "")
-        if(NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt)
-            message(STATUS "Checking out microsoft/mscclpp")
+        set(JSON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json CACHE PATH "")
+        if((NOT EXISTS ${MSCCLPP_SOURCE}/CMakeLists.txt) OR (NOT EXISTS ${JSON_SOURCE}/CMakeLists.txt))
+            message(STATUS "Checking out external code")
             execute_process(
                 COMMAND git submodule update --init --recursive
-                WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             )
         endif()
+
         execute_process(
            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-	execute_process(
-           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
-           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+
         execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-        message(STATUS "Building mscclpp only for gfx942.")
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
+        message(STATUS "Building mscclpp only for gfx942.")
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
         mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
         mscclpp_cmake_arg(HIP_COMPILER)
@@ -88,10 +96,10 @@ if(ENABLE_MSCCLPP)
         endif()
 
         download_project(PROJ                mscclpp_nccl
-                         # GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
-                         # GIT_TAG             1e82dd444fc1ed8b7add354eebaab8a94e67d5fc
+                         #GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
+                         #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DBYPASS_GPU_CHECK=ON -DUSE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_APPS_NCCL=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${CMAKE_CURRENT_SOURCE_DIR}/ext-src/json
+                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
@@ -100,20 +108,28 @@ if(ENABLE_MSCCLPP)
                          SOURCE_DIR          ${MSCCLPP_SOURCE}
         )
 
+     
         find_package(mscclpp_nccl REQUIRED)
-	execute_process(
-    		COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
-        	WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-    	)
-	execute_process(
-           COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+        execute_process(
+           COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+        
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+        
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-    endif()
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
+    #endif()
 
     execute_process(COMMAND objcopy
                     --redefine-syms=${CMAKE_CURRENT_SOURCE_DIR}/src/misc/mscclpp/mscclpp_nccl_syms.txt

@@ -425,12 +425,13 @@ set(SRC_FILES
   src/graph/tuning.cc
   src/graph/xml.cc
   src/graph/xml.h
-  src/include/align.h
   src/include/alloc.h
+  src/include/alt_rsmi.h
   src/include/archinfo.h
   src/include/api_trace.h
   src/include/argcheck.h
   src/include/BfdBacktrace.hpp
+  src/include/bitops.h
   src/include/bootstrap.h
   src/include/channel.h
   src/include/checks.h
@@ -489,30 +490,40 @@ set(SRC_FILES
   src/include/npkit/npkit.h
   src/include/npkit/npkit_event.h
   src/include/npkit/npkit_struct.h
+  src/include/nvtx3/nvToolsExt.h
+  src/include/nvtx3/nvToolsExtCounters.h
   src/include/nvtx3/nvToolsExtCuda.h
   src/include/nvtx3/nvToolsExtCudaRt.h
-  src/include/nvtx3/nvToolsExt.h
+  src/include/nvtx3/nvToolsExtMem.h
+  src/include/nvtx3/nvToolsExtMemCudaRt.h
   src/include/nvtx3/nvToolsExtOpenCL.h
   src/include/nvtx3/nvToolsExtPayload.h
+  src/include/nvtx3/nvToolsExtPayloadHelper.h
+  src/include/nvtx3/nvToolsExtSemanticsCounters.h
+  src/include/nvtx3/nvToolsExtSemanticsScope.h
   src/include/nvtx3/nvToolsExtSync.h
   src/include/nvtx3/nvtx3.hpp
-  src/include/nvtx3/nvtxDetail/nvtxImplCore.h
-  src/include/nvtx3/nvtxDetail/nvtxImplCudaRt_v3.h
-  src/include/nvtx3/nvtxDetail/nvtxImplCuda_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxExtHelperMacros.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImpl.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplCounters_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplMem_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplMemCudaRt_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplPayload_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtInit.h
+  src/include/nvtx3/nvtxDetail/nvtxExtPayloadHelperInternal.h
+  src/include/nvtx3/nvtxDetail/nvtxExtPayloadTypeInfo.h
+  src/include/nvtx3/nvtxDetail/nvtxExtTypes.h
   src/include/nvtx3/nvtxDetail/nvtxImpl.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCore.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCuda_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCudaRt_v3.h
   src/include/nvtx3/nvtxDetail/nvtxImplOpenCL_v3.h
   src/include/nvtx3/nvtxDetail/nvtxImplSync_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxInit.h
   src/include/nvtx3/nvtxDetail/nvtxInitDecls.h
   src/include/nvtx3/nvtxDetail/nvtxInitDefs.h
-  src/include/nvtx3/nvtxDetail/nvtxInit.h
   src/include/nvtx3/nvtxDetail/nvtxLinkOnce.h
   src/include/nvtx3/nvtxDetail/nvtxTypes.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtImpl.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtImplPayload_v1.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtInit.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtPayloadTypeInfo.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtTypes.h
-  src/include/alt_rsmi.h
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
@@ -542,6 +553,7 @@ set(SRC_FILES
   src/misc/msccl/msccl_setup.cc
   src/misc/msccl/msccl_status.cc
   src/transport/coll_net.cc
+  src/transport/generic.cc
   src/transport/net.cc
   src/transport/net_ib.cc
   src/transport/net_socket.cc
