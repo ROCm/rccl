@@ -47,9 +47,6 @@
 
 namespace RcclUnitTesting
 {
-
-   
-
   TestBed::TestBed() :
     numDevicesAvailable(0),
     numActiveChildren(0),
