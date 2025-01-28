@@ -999,7 +999,7 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
   pthread_mutex_unlock(&ibDev->lock);
 
   // CQ is sized to accommodate the max SQ + RQ WQE completions. If each SQ WQE could be signaled, then,
-  // for each QP, there can be 2*MAX_REQUESTS completions for SQ and MAX_REQUESTS completions for RQ. 
+  // for each QP, there can be 2*MAX_REQUESTS completions for SQ and MAX_REQUESTS completions for RQ.
   NCCLCHECK(wrap_ibv_create_cq(&base->cq, ibDev->context, 3*MAX_REQUESTS*ncclParamIbQpsPerConn(), NULL, NULL, 0));
 
   return ncclSuccess;
@@ -1755,6 +1755,8 @@ ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot) {
     struct ibv_send_wr* bad_wr;
     NCCLCHECK(wrap_ibv_post_send(qp->qp, comm->wrs, &bad_wr));
 
+    LOG_SEND_WR(comm->wrs, qp->qp->qp_num, comm->devs[qp->devIndex].base.ibDevN, comm->devs[qp->remDevIdx].base.ibDevN);
+
     for (int r=0; r<nreqs; r++) {
       int chunkSize = DIVUP(DIVUP(reqs[r]->send.size, nqps), align) * align;
       reqs[r]->send.offset += chunkSize;
@@ -1927,6 +1929,7 @@ ncclResult_t ncclIbPostFifo(struct ncclIbRecvComm* comm, int n, void** data, int
 
   struct ibv_send_wr* bad_wr;
   NCCLCHECK(wrap_ibv_post_send(ctsQp->qp, &wr, &bad_wr));
+  LOG_SEND_WR(&wr, ctsQp->qp->qp_num, comm->devs[ctsQp->devIndex].base.ibDevN, comm->devs[ctsQp->remDevIdx].base.ibDevN);
   comm->remFifo.fifoTail++;
 
   return ncclSuccess;
