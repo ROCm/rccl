@@ -35,12 +35,6 @@ extern char ncclLastError[];
 #define TRACE(...)
 #endif
 
-#ifdef LOG_VERBS
-
-#else
-
-#endif
-
 void ncclSetThreadName(pthread_t thread, const char *fmt, ...);
 
 #endif
