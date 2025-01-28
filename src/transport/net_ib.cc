@@ -1755,13 +1755,15 @@ ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot) {
     struct ibv_send_wr* bad_wr;
     NCCLCHECK(wrap_ibv_post_send(qp->qp, comm->wrs, &bad_wr));
 
-    LOG_SEND_WR(comm->wrs, qp->qp->qp_num, comm->devs[qp->devIndex].base.ibDevN, comm->devs[qp->remDevIdx].base.ibDevN);
-
     for (int r=0; r<nreqs; r++) {
       int chunkSize = DIVUP(DIVUP(reqs[r]->send.size, nqps), align) * align;
       reqs[r]->send.offset += chunkSize;
       comm->sges[r].addr += chunkSize;
       comm->wrs[r].wr.rdma.remote_addr += chunkSize;
+      TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
+         comm->wrs[r].wr_id, r, qp->qp->qp_num, comm->devs[qp->devIndex].base.ibDevN, comm->devs[qp->remDevIdx].base.ibDevN, comm->wrs[r].opcode, comm->wrs[r].send_flags,
+         comm->wrs[r].imm_data, comm->wrs[r].wr.rdma.remote_addr, comm->wrs[r].wr.rdma.rkey,comm->wrs[r].sg_list ? comm->wrs[r].sg_list->length : 0,
+         comm->wrs[r].sg_list ? comm->wrs[r].sg_list->lkey : 0);
     }
 
     // Select the next qpIndex
@@ -1929,7 +1931,10 @@ ncclResult_t ncclIbPostFifo(struct ncclIbRecvComm* comm, int n, void** data, int
 
   struct ibv_send_wr* bad_wr;
   NCCLCHECK(wrap_ibv_post_send(ctsQp->qp, &wr, &bad_wr));
-  LOG_SEND_WR(&wr, ctsQp->qp->qp_num, comm->devs[ctsQp->devIndex].base.ibDevN, comm->devs[ctsQp->remDevIdx].base.ibDevN);
+  TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
+        wr.wr_id, 0, ctsQp->qp->qp_num, comm->devs[ctsQp->devIndex].base.ibDevN, comm->devs[ctsQp->remDevIdx].base.ibDevN, wr.opcode, wr.send_flags, wr.imm_data, wr.wr.rdma.remote_addr,
+        wr.wr.rdma.rkey, wr.sg_list ? wr.sg_list->length : 0, wr.sg_list ? wr.sg_list->lkey : 0);
+
   comm->remFifo.fifoTail++;
 
   return ncclSuccess;
