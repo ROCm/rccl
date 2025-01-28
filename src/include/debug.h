@@ -15,6 +15,7 @@
 
 // Conform to pthread and NVTX standard
 #define NCCL_THREAD_NAMELEN 16
+
 extern int ncclDebugLevel;
 extern FILE *ncclDebugFile;
 
