@@ -8,6 +8,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters
 * Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will print out traces for fifo and data ibv_post_sends
+* Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`)
 
 ### Changed
 
