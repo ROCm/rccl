@@ -1367,7 +1367,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
   return ncclSuccess;
 }
 
-RCCL_PARAM(NetHdpFlush, "NET_HDP_FLUSH", 1);
+RCCL_PARAM(NetHdpFlush, "NET_HDP_FLUSH", 0);
 
 static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct ncclProxyArgs* args) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
