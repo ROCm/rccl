@@ -787,6 +787,8 @@ struct ncclIbDevInfo {
 
   //remote dev info
   union ibv_gid remoteGid;
+
+  int ibv_dev_index;
 };
 
 // Struct containing everything needed to establish connections
@@ -1189,7 +1191,7 @@ ib_connect_check:
     devInfo->ib_port       = ibDev->portNum;
     devInfo->mtu           = ibDev->portAttr.active_mtu;
     devInfo->lid           = ibDev->portAttr.lid;
-
+    devInfo->ibv_dev_index = commDev->base.ibDevN;
     // Prepare my fifo
     NCCLCHECK(wrap_ibv_reg_mr(&commDev->fifoMr, commDev->base.pd, comm->fifo, sizeof(struct ncclIbSendFifo)*MAX_REQUESTS*NCCL_NET_IB_MAX_RECVS, IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ));
     devInfo->fifoRkey = commDev->fifoMr->rkey;
@@ -1269,7 +1271,6 @@ ib_connect:
     comm->base.remDevs[i] = remMeta.devs[i];
     comm->base.remDevs[i].remoteGid.global.interface_id = comm->base.remDevs[i].gid.global.interface_id;
     comm->base.remDevs[i].remoteGid.global.subnet_prefix = comm->base.remDevs[i].gid.global.subnet_prefix;
-
     // Retain remote sizes fifo info and prepare RDMA ops
     comm->remSizesFifo.rkeys[i] = remMeta.devs[i].fifoRkey;
     comm->remSizesFifo.addr = remMeta.fifoAddr;
@@ -1473,6 +1474,7 @@ ib_recv:
     meta.devs[i].ib_port    = ibDev->portNum;
     meta.devs[i].gid.global.subnet_prefix       = rCommDev->base.gidInfo.localGid.global.subnet_prefix;
     meta.devs[i].gid.global.interface_id        = rCommDev->base.gidInfo.localGid.global.interface_id;
+    meta.devs[i].ibv_dev_index                  = rCommDev->base.ibDevN;
 
     // Adjust the MTU
     remMeta.devs[i].mtu    = (enum ibv_mtu) std::min(remMeta.devs[i].mtu, ibDev->portAttr.active_mtu);
@@ -1760,10 +1762,11 @@ ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot) {
       reqs[r]->send.offset += chunkSize;
       comm->sges[r].addr += chunkSize;
       comm->wrs[r].wr.rdma.remote_addr += chunkSize;
-      TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
-         comm->wrs[r].wr_id, r, qp->qp->qp_num, comm->devs[qp->devIndex].base.ibDevN, comm->devs[qp->remDevIdx].base.ibDevN, comm->wrs[r].opcode, comm->wrs[r].send_flags,
-         comm->wrs[r].imm_data, comm->wrs[r].wr.rdma.remote_addr, comm->wrs[r].wr.rdma.rkey,comm->wrs[r].sg_list ? comm->wrs[r].sg_list->length : 0,
-         comm->wrs[r].sg_list ? comm->wrs[r].sg_list->lkey : 0);
+
+      TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, dlid=%d, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
+         comm->wrs[r].wr_id, r, qp->qp->qp_num, comm->devs[qp->devIndex].base.ibDevN , comm->base.remDevs[qp->remDevIdx].ibv_dev_index, comm->base.remDevs[qp->remDevIdx].lid,
+         comm->wrs[r].opcode, comm->wrs[r].send_flags, comm->wrs[r].imm_data, comm->wrs[r].wr.rdma.remote_addr,
+         comm->wrs[r].wr.rdma.rkey,comm->wrs[r].sg_list ? comm->wrs[r].sg_list->length : 0, comm->wrs[r].sg_list ? comm->wrs[r].sg_list->lkey : 0);
     }
 
     // Select the next qpIndex
@@ -1931,9 +1934,10 @@ ncclResult_t ncclIbPostFifo(struct ncclIbRecvComm* comm, int n, void** data, int
 
   struct ibv_send_wr* bad_wr;
   NCCLCHECK(wrap_ibv_post_send(ctsQp->qp, &wr, &bad_wr));
-  TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
-        wr.wr_id, 0, ctsQp->qp->qp_num, comm->devs[ctsQp->devIndex].base.ibDevN, comm->devs[ctsQp->remDevIdx].base.ibDevN, wr.opcode, wr.send_flags, wr.imm_data, wr.wr.rdma.remote_addr,
-        wr.wr.rdma.rkey, wr.sg_list ? wr.sg_list->length : 0, wr.sg_list ? wr.sg_list->lkey : 0);
+
+  TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, dlid=%lu, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
+        wr.wr_id, 0, ctsQp->qp->qp_num, comm->devs[ctsQp->devIndex].base.ibDevN, comm->base.remDevs[ctsQp->remDevIdx].ibv_dev_index, comm->base.remDevs[ctsQp->remDevIdx].lid,
+        wr.opcode, wr.send_flags, wr.imm_data, wr.wr.rdma.remote_addr, wr.wr.rdma.rkey, wr.sg_list ? wr.sg_list->length : 0, wr.sg_list ? wr.sg_list->lkey : 0);
 
   comm->remFifo.fifoTail++;
 
