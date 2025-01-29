@@ -2010,8 +2010,8 @@ static ncclResult_t hostToDevRedOp(
     hip_bfloat16 bf16;
 #endif
 #if defined(RCCL_FLOAT8)
-    rccl_float8 fp8_e4m3;
-    rccl_bfloat8 fp8_e5m2;
+    __hip_fp8_e4m3 fp8_e4m3;
+    __hip_fp8_e5m2  fp8_e5m2;
 #endif
     void *ptr;
   };
@@ -2057,11 +2057,11 @@ static ncclResult_t hostToDevRedOp(
 #if defined(RCCL_FLOAT8)
     case ncclFp8E4M3:
       opFull->op = ncclDevPreMulSum;
-      fp8_e4m3 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
+      fp8_e4m3 = static_cast<__hip_fp8_e4m3>(float(1.0/comm->nRanks));
       break;
     case ncclFp8E5M2:
       opFull->op = ncclDevPreMulSum;
-      fp8_e5m2 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
+      fp8_e5m2 = static_cast<__hip_fp8_e5m2>(float(1.0/comm->nRanks));
       break;
 #endif
     case ncclFloat32:

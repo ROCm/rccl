@@ -26,9 +26,9 @@ struct IsFloatingPoint<hip_bfloat16>: std::true_type {};
 #endif
 #if defined(RCCL_FLOAT8)
 template<>
-struct IsFloatingPoint<rccl_float8>: std::true_type {};
+struct IsFloatingPoint<__hip_fp8_e4m3>: std::true_type {};
 template<>
-struct IsFloatingPoint<rccl_bfloat8>: std::true_type {};
+struct IsFloatingPoint<__hip_fp8_e5m2>: std::true_type {};
 #endif
 template<>
 struct IsFloatingPoint<float>: std::true_type {};
@@ -286,12 +286,12 @@ SPECIALIZE_REDUCE(FuncMinMax, half, 1, half, fn.isMinNotMax ? __hmin(x, y) : __h
 #endif
 
 #if defined(RCCL_FLOAT8)
-  SPECIALIZE_REDUCE(FuncSum, rccl_float8, 1, rccl_float8, rccl_float8(float(x) + float(y)))
-  SPECIALIZE_REDUCE(FuncProd, rccl_float8, 1, rccl_float8, rccl_float8(float(x) * float(y)))
-  SPECIALIZE_REDUCE(FuncMinMax, rccl_float8, 1, rccl_float8, rccl_float8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
-  SPECIALIZE_REDUCE(FuncSum, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) + float(y)))
-  SPECIALIZE_REDUCE(FuncProd, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) * float(y)))
-  SPECIALIZE_REDUCE(FuncMinMax, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+  SPECIALIZE_REDUCE(FuncSum, __hip_fp8_e4m3, 1, __hip_fp8_e4m3, __hip_fp8_e4m3(float(x) + float(y)))
+  SPECIALIZE_REDUCE(FuncProd, __hip_fp8_e4m3, 1, __hip_fp8_e4m3, __hip_fp8_e4m3(float(x) * float(y)))
+  SPECIALIZE_REDUCE(FuncMinMax, __hip_fp8_e4m3, 1, __hip_fp8_e4m3, __hip_fp8_e4m3(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+  SPECIALIZE_REDUCE(FuncSum, __hip_fp8_e5m2, 1, __hip_fp8_e5m2, __hip_fp8_e5m2(float(x) + float(y)))
+  SPECIALIZE_REDUCE(FuncProd, __hip_fp8_e5m2, 1, __hip_fp8_e5m2, __hip_fp8_e5m2(float(x) * float(y)))
+  SPECIALIZE_REDUCE(FuncMinMax, __hip_fp8_e5m2, 1, __hip_fp8_e5m2, __hip_fp8_e5m2(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
 #endif
 
 #undef SPECIALIZE_REDUCE
@@ -442,30 +442,30 @@ struct FuncPreMulSum<half> {
 
 #if defined(RCCL_FLOAT8)
   template<>
-  struct FuncPreMulSum<rccl_float8> {
+  struct FuncPreMulSum<__hip_fp8_e4m3> {
     // Change these to switch between all prescale, all postscale, or both by sqrt(N).
     // Obviously, the only invalid combination is both true. An improvement would be
     // make this parameterized as a build time setting and passed here through
     // preprocessor definitions.
-    using EltType = rccl_float8;
+    using EltType = __hip_fp8_e4m3;
     float scalar;
     __device__ FuncPreMulSum(uint64_t opArg=0) {
-      union { uint64_t u64; rccl_float8 val; };
+      union { uint64_t u64; __hip_fp8_e4m3 val; };
       u64 = opArg;
       scalar = (float)(val);
     }
   };
 
   template<>
-  struct FuncPreMulSum<rccl_bfloat8> {
+  struct FuncPreMulSum<__hip_fp8_e5m2> {
     // Change these to switch between all prescale, all postscale, or both by sqrt(N).
     // Obviously, the only invalid combination is both true. An improvement would be
     // make this parameterized as a build time setting and passed here through
     // preprocessor definitions.
-    using EltType = rccl_bfloat8;
+    using EltType = __hip_fp8_e5m2;
     float scalar;
     __device__ FuncPreMulSum(uint64_t opArg=0) {
-      union { uint64_t u64; rccl_bfloat8 val; };
+      union { uint64_t u64; __hip_fp8_e5m2  val; };
       u64 = opArg;
       scalar = (float)(val);
     }
@@ -541,24 +541,24 @@ struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
 
 #if defined(RCCL_FLOAT8)
   template<>
-  struct Apply_PreOp<FuncPreMulSum<rccl_float8>, /*EltPerPack=*/1> {
+  struct Apply_PreOp<FuncPreMulSum<__hip_fp8_e4m3>, /*EltPerPack=*/1> {
     static constexpr bool IsIdentity = false;
 
-    __device__ static BytePack<sizeof(rccl_float8)> preOp(
-        FuncPreMulSum<rccl_float8> fn, BytePack<sizeof(rccl_float8)> a
+    __device__ static BytePack<sizeof(__hip_fp8_e4m3)> preOp(
+        FuncPreMulSum<__hip_fp8_e4m3> fn, BytePack<sizeof(__hip_fp8_e4m3)> a
       ) {
-        return toPack<rccl_float8>(rccl_float8(float(fromPack<rccl_float8>(a)) * float(fn.scalar)));
+        return toPack<__hip_fp8_e4m3>(__hip_fp8_e4m3(float(fromPack<__hip_fp8_e4m3>(a)) * float(fn.scalar)));
     }
   };
 
   template<>
-  struct Apply_PreOp<FuncPreMulSum<rccl_bfloat8>, /*EltPerPack=*/1> {
+  struct Apply_PreOp<FuncPreMulSum<__hip_fp8_e5m2>, /*EltPerPack=*/1> {
     static constexpr bool IsIdentity = false;
 
-    __device__ static BytePack<sizeof(rccl_bfloat8)> preOp(
-        FuncPreMulSum<rccl_bfloat8> fn, BytePack<sizeof(rccl_bfloat8)> a
+    __device__ static BytePack<sizeof(__hip_fp8_e5m2)> preOp(
+        FuncPreMulSum<__hip_fp8_e5m2> fn, BytePack<sizeof(__hip_fp8_e5m2)> a
       ) {
-        return toPack<rccl_bfloat8>(rccl_bfloat8(float(fromPack<rccl_bfloat8>(a)) * float(fn.scalar)));
+        return toPack<__hip_fp8_e5m2>(__hip_fp8_e5m2(float(fromPack<__hip_fp8_e5m2>(a)) * float(fn.scalar)));
     }
   };
 #endif

@@ -471,8 +471,8 @@ ty_to_cxx = {
   "f32": "float",
   "f64": "double",
   "bf16": "hip_bfloat16",
-  "f8":  "rccl_float8",
-  "bf8": "rccl_bfloat8",
+  "f8":  "__hip_fp8_e4m3",
+  "bf8": "__hip_fp8_e5m2",
 }
 
 # Generate each <gensrc>/<impl>.cpp:

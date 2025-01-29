@@ -36,19 +36,19 @@ namespace RcclUnitTesting
   //       being supported on GPU only and not host
   union PtrUnion
   {
-    void*          ptr;
-    int8_t*        I1; // ncclInt8
-    uint8_t*       U1; // ncclUint8
-    int32_t*       I4; // ncclInt32
-    uint32_t*      U4; // ncclUint32
-    int64_t*       I8; // ncclInt64
-    uint64_t*      U8; // ncclUint64
-    __half*        F2; // ncclFloat16
-    rccl_float8*   F1; // ncclFp8E4M3
-    float*         F4; // ncclFloat32
-    double*        F8; // ncclFloat64
-    rccl_bfloat8*  B1; // ncclFp8E5M2
-    hip_bfloat16*  B2; // ncclBfloat16
+    void*               ptr;
+    int8_t*             I1; // ncclInt8
+    uint8_t*            U1; // ncclUint8
+    int32_t*            I4; // ncclInt32
+    uint32_t*           U4; // ncclUint32
+    int64_t*            I8; // ncclInt64
+    uint64_t*           U8; // ncclUint64
+    __half*             F2; // ncclFloat16
+    __hip_fp8_e4m3*     F1; // ncclFp8E4M3
+    float*              F4; // ncclFloat32
+    double*             F8; // ncclFloat64
+    __hip_fp8_e5m2*     B1; // ncclFp8E5M2
+    hip_bfloat16*       B2; // ncclBfloat16
 
     constexpr PtrUnion() : ptr(nullptr) {}
 

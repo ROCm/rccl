@@ -104,19 +104,19 @@ char const mscclFuncNames[ncclNumFuncs][32] =
 
 union PtrUnion
 {
-  void*          ptr;
-  int8_t*        I1; // ncclInt8
-  uint8_t*       U1; // ncclUint8
-  int32_t*       I4; // ncclInt32
-  uint32_t*      U4; // ncclUint32
-  int64_t*       I8; // ncclInt64
-  uint64_t*      U8; // ncclUint64
-  __half*        F2; // ncclFloat16
-  rccl_float8*   F1; // ncclFp8E4M3
-  float*         F4; // ncclFloat32
-  double*        F8; // ncclFloat64
-  rccl_bfloat8*  B1; // ncclFp8E5M2
-  hip_bfloat16*  B2; // ncclBfloat16
+  void*               ptr;
+  int8_t*             I1; // ncclInt8
+  uint8_t*            U1; // ncclUint8
+  int32_t*            I4; // ncclInt32
+  uint32_t*           U4; // ncclUint32
+  int64_t*            I8; // ncclInt64
+  uint64_t*           U8; // ncclUint64
+  __half*             F2; // ncclFloat16
+  __hip_fp8_e4m3*     F1; // ncclFp8E4M3
+  float*              F4; // ncclFloat32
+  double*             F8; // ncclFloat64
+  __hip_fp8_e5m2*     B1; // ncclFp8E5M2
+  hip_bfloat16*       B2; // ncclBfloat16
 
   constexpr PtrUnion() : ptr(nullptr) {}
 };
@@ -239,11 +239,11 @@ void SetPtr(PtrUnion& ptrUnion, ncclDataType_t const dataType, int const idx, in
     case ncclUint32:   ptrUnion.U4[idx] = valueI; break;
     case ncclInt64:    ptrUnion.I8[idx] = valueI; break;
     case ncclUint64:   ptrUnion.U8[idx] = valueI; break;
-    case ncclFp8E4M3:  ptrUnion.F1[idx] = rccl_float8(valueF); break;
+    case ncclFp8E4M3:  ptrUnion.F1[idx] = __hip_fp8_e4m3(valueF); break;
     case ncclFloat16:  ptrUnion.F2[idx] = __float2half(static_cast<float>(valueF)); break;
     case ncclFloat32:  ptrUnion.F4[idx] = valueF; break;
     case ncclFloat64:  ptrUnion.F8[idx] = valueF; break;
-    case ncclFp8E5M2:  ptrUnion.B1[idx] = rccl_bfloat8(valueF); break;
+    case ncclFp8E5M2:  ptrUnion.B1[idx] = __hip_fp8_e5m2(valueF); break;
     case ncclBfloat16: ptrUnion.B2[idx] = hip_bfloat16(static_cast<float>(valueF)); break;
     default:
       printf("Unsupported datatype (%s)\n", DataTypeToName(dataType).c_str());
@@ -340,11 +340,11 @@ void Reduce(PtrUnion& ptrUnion, PtrUnion const& otherPtrUnion, size_t const numE
     case ncclUint32:   ptrUnion.U4[idx] = ReduceOp(op, ptrUnion.U4[idx], otherPtrUnion.U4[idx]); break;
     case ncclInt64:    ptrUnion.I8[idx] = ReduceOp(op, ptrUnion.I8[idx], otherPtrUnion.I8[idx]); break;
     case ncclUint64:   ptrUnion.U8[idx] = ReduceOp(op, ptrUnion.U8[idx], otherPtrUnion.U8[idx]); break;
-    case ncclFp8E4M3:  ptrUnion.F1[idx] = rccl_float8(ReduceOp(op, float(ptrUnion.F1[idx]), float(otherPtrUnion.F1[idx]))); break;
+    case ncclFp8E4M3:  ptrUnion.F1[idx] = __hip_fp8_e4m3(ReduceOp(op, float(ptrUnion.F1[idx]), float(otherPtrUnion.F1[idx]))); break;
     case ncclFloat16:  ptrUnion.F2[idx] = __float2half(ReduceOp(op, __half2float(ptrUnion.F2[idx]), __half2float(otherPtrUnion.F2[idx]))); break;
     case ncclFloat32:  ptrUnion.F4[idx] = ReduceOp(op, ptrUnion.F4[idx], otherPtrUnion.F4[idx]); break;
     case ncclFloat64:  ptrUnion.F8[idx] = ReduceOp(op, ptrUnion.F8[idx], otherPtrUnion.F8[idx]); break;
-    case ncclFp8E5M2:  ptrUnion.B1[idx] = rccl_bfloat8(ReduceOp(op, float(ptrUnion.B1[idx]), float(otherPtrUnion.B1[idx]))); break;
+    case ncclFp8E5M2:  ptrUnion.B1[idx] = __hip_fp8_e5m2(ReduceOp(op, float(ptrUnion.B1[idx]), float(otherPtrUnion.B1[idx]))); break;
     case ncclBfloat16: ptrUnion.B2[idx] = ReduceOp(op, ptrUnion.B2[idx], otherPtrUnion.B2[idx]); break;
     default:
       printf("Unsupported datatype (%s)\n", DataTypeToName(dataType).c_str());
@@ -365,11 +365,11 @@ void DivideByInt(PtrUnion& ptrUnion, ncclDataType_t const dataType, size_t const
     case ncclUint32:   ptrUnion.U4[idx] /= divisor; break;
     case ncclInt64:    ptrUnion.I8[idx] /= divisor; break;
     case ncclUint64:   ptrUnion.U8[idx] /= divisor; break;
-    case ncclFp8E4M3:  ptrUnion.F1[idx] = (rccl_float8((float)(ptrUnion.F1[idx]) / divisor)); break;
+    case ncclFp8E4M3:  ptrUnion.F1[idx] = (__hip_fp8_e4m3((float)(ptrUnion.F1[idx]) / divisor)); break;
     case ncclFloat16:  ptrUnion.F2[idx] = __float2half(__half2float(ptrUnion.F2[idx])/divisor); break;
     case ncclFloat32:  ptrUnion.F4[idx] /= divisor; break;
     case ncclFloat64:  ptrUnion.F8[idx] /= divisor; break;
-    case ncclFp8E5M2:  ptrUnion.B1[idx] = (rccl_bfloat8((float)(ptrUnion.B1[idx]) / divisor)); break;
+    case ncclFp8E5M2:  ptrUnion.B1[idx] = (__hip_fp8_e5m2((float)(ptrUnion.B1[idx]) / divisor)); break;
     case ncclBfloat16: ptrUnion.B2[idx] = (hip_bfloat16((float)(ptrUnion.B2[idx]) / divisor)); break;
     default:
       printf("Unsupported datatype (%s)\n", DataTypeToName(dataType).c_str());

@@ -179,11 +179,11 @@ namespace RcclUnitTesting
     case ncclUint32:   U4[idx] = valueI; break;
     case ncclInt64:    I8[idx] = valueI; break;
     case ncclUint64:   U8[idx] = valueI; break;
-    case ncclFp8E4M3:  F1[idx] = rccl_float8(valueF); break;
+    case ncclFp8E4M3:  F1[idx] = __hip_fp8_e4m3(valueF); break;
     case ncclFloat16:  F2[idx] = __float2half(static_cast<float>(valueF)); break;
     case ncclFloat32:  F4[idx] = valueF; break;
     case ncclFloat64:  F8[idx] = valueF; break;
-    case ncclFp8E5M2:  B1[idx] = rccl_bfloat8(valueF); break;
+    case ncclFp8E5M2:  B1[idx] = __hip_fp8_e5m2(valueF); break;
     case ncclBfloat16: B2[idx] = hip_bfloat16(static_cast<float>(valueF)); break;
     default:
       ERROR("Unsupported datatype\n");
@@ -234,11 +234,11 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] *= scalarsPerRank.U4[rank]; break;
       case ncclInt64:    I8[idx] *= scalarsPerRank.I8[rank]; break;
       case ncclUint64:   U8[idx] *= scalarsPerRank.U8[rank]; break;
-      case ncclFp8E4M3:  F1[idx]  = rccl_float8(F1[idx] * scalarsPerRank.F1[rank]); break;
+      case ncclFp8E4M3:  F1[idx]  = __hip_fp8_e4m3(F1[idx] * scalarsPerRank.F1[rank]); break;
       case ncclFloat16:  F2[idx]  = __float2half(__half2float(F2[idx]) * __half2float(scalarsPerRank.F2[rank])); break;
       case ncclFloat32:  F4[idx] *= scalarsPerRank.F4[rank]; break;
       case ncclFloat64:  F8[idx] *= scalarsPerRank.F8[rank]; break;
-      case ncclFp8E5M2:  B1[idx]  = rccl_bfloat8(B1[idx] * scalarsPerRank.B1[rank]); break;
+      case ncclFp8E5M2:  B1[idx]  = __hip_fp8_e5m2(B1[idx] * scalarsPerRank.B1[rank]); break;
       case ncclBfloat16: B2[idx] *= scalarsPerRank.B2[rank]; break;
       default:
         ERROR("Unsupported datatype\n");
@@ -269,11 +269,11 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] = ReduceOp(op, U4[idx], inputCpu.U4[idx]); break;
       case ncclInt64:    I8[idx] = ReduceOp(op, I8[idx], inputCpu.I8[idx]); break;
       case ncclUint64:   U8[idx] = ReduceOp(op, U8[idx], inputCpu.U8[idx]); break;
-      case ncclFp8E4M3:  F1[idx] = rccl_float8(ReduceOp(op, float(F1[idx]), float(inputCpu.F1[idx]))); break;
+      case ncclFp8E4M3:  F1[idx] = __hip_fp8_e4m3(ReduceOp(op, float(F1[idx]), float(inputCpu.F1[idx]))); break;
       case ncclFloat16:  F2[idx] = __float2half(ReduceOp(op, __half2float(F2[idx]), __half2float(inputCpu.F2[idx]))); break;
       case ncclFloat32:  F4[idx] = ReduceOp(op, F4[idx], inputCpu.F4[idx]); break;
       case ncclFloat64:  F8[idx] = ReduceOp(op, F8[idx], inputCpu.F8[idx]); break;
-      case ncclFp8E5M2:  B1[idx] = rccl_bfloat8(ReduceOp(op, float(B1[idx]), float(inputCpu.B1[idx]))); break;
+      case ncclFp8E5M2:  B1[idx] = __hip_fp8_e5m2(ReduceOp(op, float(B1[idx]), float(inputCpu.B1[idx]))); break;
       case ncclBfloat16: B2[idx] = ReduceOp(op, B2[idx], inputCpu.B2[idx]); break;
       default:
         ERROR("Unsupported datatype\n");
@@ -298,11 +298,11 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] /= divisor; break;
       case ncclInt64:    I8[idx] /= divisor; break;
       case ncclUint64:   U8[idx] /= divisor; break;
-      case ncclFp8E4M3:  F1[idx] = (rccl_float8((float)(F1[idx]) / divisor)); break;
+      case ncclFp8E4M3:  F1[idx] = (__hip_fp8_e4m3((float)(F1[idx]) / divisor)); break;
       case ncclFloat16:  F2[idx] = __float2half(__half2float(F2[idx])/divisor); break;
       case ncclFloat32:  F4[idx] /= divisor; break;
       case ncclFloat64:  F8[idx] /= divisor; break;
-      case ncclFp8E5M2:  B1[idx] = (rccl_bfloat8((float)(B1[idx]) / divisor)); break;
+      case ncclFp8E5M2:  B1[idx] = (__hip_fp8_e5m2((float)(B1[idx]) / divisor)); break;
       case ncclBfloat16: B2[idx] = (hip_bfloat16((float)(B2[idx]) / divisor)); break;
       default:
         ERROR("Unsupported datatype\n");
