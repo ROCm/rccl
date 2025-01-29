@@ -4,7 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "TestBed.hpp"
-#include "StandaloneUtils.hpp"
+#include "CallCollectiveForked.hpp"
 
 namespace RcclUnitTesting
 {
@@ -138,7 +138,7 @@ namespace RcclUnitTesting
       for (int i = 0; i < count; ++i)
         expected[r*count + i] = sendBuff[i];
 
-    fork_and_launch_rccl(nranks, ncclCollAllGather, sendBuff, recvBuff, expected);
+    callCollectiveForked(nranks, ncclCollAllGather, sendBuff, recvBuff, expected);
   }
 
   TEST(AllGather, ManagedMemUserBufferRegistration)
@@ -157,6 +157,6 @@ namespace RcclUnitTesting
       for (int i = 0; i < count; ++i)
         expected[r*count + i] = sendBuff[i];
 
-    fork_and_launch_rccl(nranks, ncclCollAllGather, sendBuff, recvBuff, expected, use_managed_mem);
+    callCollectiveForked(nranks, ncclCollAllGather, sendBuff, recvBuff, expected, use_managed_mem);
   }
 }

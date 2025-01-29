@@ -47,6 +47,7 @@ if(BUILD_TESTS)
     SendRecvTests.cpp
     StandaloneTests.cpp
     common/main.cpp
+    common/CallCollectiveForked.cpp
     common/CollectiveArgs.cpp
     common/EnvVars.cpp
     common/PrepDataFuncs.cpp

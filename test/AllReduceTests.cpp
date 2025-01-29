@@ -4,7 +4,8 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "TestBed.hpp"
-#include "StandaloneUtils.hpp"
+#include "CallCollectiveForked.hpp"
+
 namespace RcclUnitTesting
 {
   TEST(AllReduce, OutOfPlace)
@@ -255,7 +256,7 @@ namespace RcclUnitTesting
         sendBuff[i] = i;
         expected[i] = i * nranks;
     }
-    fork_and_launch_rccl(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected);
+    callCollectiveForked(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected);
   }
 
   TEST(AllReduce, ManagedMemUserBufferRegistration)
@@ -270,6 +271,6 @@ namespace RcclUnitTesting
         sendBuff[i] = i;
         expected[i] = i * nranks;
     }
-    fork_and_launch_rccl(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected, use_managed_mem);
+    callCollectiveForked(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected, use_managed_mem);
   }
 }

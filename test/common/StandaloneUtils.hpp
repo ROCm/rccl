@@ -1,11 +1,10 @@
 #ifndef STANDALONE_UTILS_H
 #define STANDALONE_UTILS_H
 
-#include <iostream>
 #include <cstdio>
-#include <regex>
 #include <vector>
-#include <gtest/gtest.h>
+#include <string>
+#include <rccl/rccl.h>
 
 #define HIPCALL(cmd)                                                                          \
     do {                                                                                      \
@@ -35,27 +34,22 @@
 #define MAX_STACK_SIZE_gfx90a MAX_STACK_SIZE
 #endif
 
-struct KernelInfo {
-    std::string name;
-    int privateSegmentFixedSize = 0;
-};
-
-struct ArchInfo {
-    std::string archName;
-    std::vector<KernelInfo> kernels;
-};
-
-std::string executeCommand(const char* cmd);
-
-std::vector<std::string> splitString(const std::string& str, char delimiter);
-
-
-ArchInfo parseMetadata(const std::vector<std::string>& list);
-
 namespace RcclUnitTesting
 {
-    void fork_and_launch_rccl(int nranks, int collID, const std::vector<int>& sendBuff, std::vector<int>& recvBuff, const std::vector<int>& expected, bool use_managed_mem = false);
-    void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vector<int>& send, std::vector<int>& recv, bool use_managed_mem = false);
+    struct KernelInfo {
+        std::string name;
+        int privateSegmentFixedSize = 0;
+    };
 
+    struct ArchInfo {
+        std::string archName;
+        std::vector<KernelInfo> kernels;
+    };
+
+    std::string executeCommand(const char* cmd);
+
+    std::vector<std::string> splitString(const std::string& str, char delimiter);
+
+    ArchInfo parseMetadata(const std::vector<std::string>& list);
 }
 #endif
