@@ -48,14 +48,17 @@ ncclResult_t mscclRunAlgo_impl(
   struct NvtxParamsMsccl {
     size_t bytes;
     ncclRedOp_t op;
+    ncclDataType_t dataType;
   };
   // Just pass the size of one send/recv messages and not the total bytes sent/received.
   constexpr nvtxPayloadSchemaEntry_t MscclSchema[] = {
     {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"},
     {0, NVTX_PAYLOAD_ENTRY_NCCL_REDOP, "Reduction operation", nullptr, 0, 
-      offsetof(NvtxParamsMsccl, op)}
+      offsetof(NvtxParamsMsccl, op)},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsMsccl, dataType)}
   };
-  NvtxParamsMsccl payload{count * ncclTypeSize(dataType), op};
+  NvtxParamsMsccl payload{count * ncclTypeSize(dataType), op, dataType};
   NVTX3_FUNC_WITH_PARAMS(MSCCL, MscclSchema, payload)
   
   mscclStatus& status = mscclGetStatus(comm->rank);

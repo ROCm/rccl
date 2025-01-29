@@ -255,6 +255,11 @@
 #define NVTX_PAYLOAD_ENTRY_TYPE_TF32       52
 
 /**
+ * Generic data type
+ */
+#define NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE   53
+
+/**
  * Data types are as defined by NVTXv3 core.
  */
 #define NVTX_PAYLOAD_ENTRY_TYPE_CATEGORY   68 /* uint32_t */

@@ -85,12 +85,18 @@ NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size
 
 ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream) {
+  struct NvtxParamsAllGather {
+    size_t bytes;
+    ncclDataType_t datatype;
+  };
   // Just pass the size of one message and not the total bytes sent/received.
   constexpr nvtxPayloadSchemaEntry_t AllGatherSchema[] = {
-    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"}
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsAllGather, datatype)}
   };
-  size_t msgsize = sendcount * ncclTypeSize(datatype);
-  NVTX3_FUNC_WITH_PARAMS(AllGather, AllGatherSchema, msgsize)
+  NvtxParamsAllGather payload{sendcount * ncclTypeSize(datatype), datatype};
+  NVTX3_FUNC_WITH_PARAMS(AllGather, AllGatherSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -114,14 +120,16 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   struct NvtxParamsAllReduce {
     size_t bytes;
     ncclRedOp_t op;
+    ncclDataType_t datatype;
   };
   // Just pass the size of one message and not the total bytes sent/received.
   static constexpr nvtxPayloadSchemaEntry_t AllReduceSchema[] = {
     {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"},
-    {0, NVTX_PAYLOAD_ENTRY_NCCL_REDOP, "Reduction operation", nullptr, 0,
-      offsetof(NvtxParamsAllReduce, op)}
+    {0, NVTX_PAYLOAD_ENTRY_NCCL_REDOP, "Reduction operation", nullptr, 0, offsetof(NvtxParamsAllReduce, op)},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsAllReduce, datatype)}
   };
-  NvtxParamsAllReduce payload{count * ncclTypeSize(datatype), op};
+  NvtxParamsAllReduce payload{count * ncclTypeSize(datatype), op, datatype};
   NVTX3_FUNC_WITH_PARAMS(AllReduce, AllReduceSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -145,12 +153,18 @@ NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_
 
 ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream) {
+  struct NvtxParamsAllToAll {
+    size_t bytes;
+    ncclDataType_t datatype;
+  };
   // Just pass the size of one message and not the total bytes sent/received.
   constexpr nvtxPayloadSchemaEntry_t AllToAllSchema[] = {
-    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"}
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsAllToAll, datatype)}
   };
-  size_t msgsize = count * ncclTypeSize(datatype);
-  NVTX3_FUNC_WITH_PARAMS(AllToAll, AllToAllSchema, msgsize)
+  NvtxParamsAllToAll payload{count * ncclTypeSize(datatype), datatype};
+  NVTX3_FUNC_WITH_PARAMS(AllToAll, AllToAllSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -192,13 +206,17 @@ ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[],
   struct NvtxParamsAllToAllv {
     size_t sendbytes;
     size_t recvbytes;
+    ncclDataType_t datatype;
   };
   // Just pass the size of one send/recv messages and not the total bytes sent/received.
   constexpr nvtxPayloadSchemaEntry_t AllToAllvSchema[] = {
     {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes] (Send)"},
-    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes] (Recv)"}
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes] (Recv)", nullptr, 0, 
+      offsetof(NvtxParamsAllToAllv, recvbytes)},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsAllToAllv, datatype)}
   };
-  NvtxParamsAllToAllv payload{sendcounts[comm->rank] * ncclTypeSize(datatype), recvcounts[comm->rank] * ncclTypeSize(datatype)};
+  NvtxParamsAllToAllv payload{sendcounts[comm->rank] * ncclTypeSize(datatype), recvcounts[comm->rank] * ncclTypeSize(datatype), datatype};
   NVTX3_FUNC_WITH_PARAMS(AllToAllv, AllToAllvSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -238,12 +256,15 @@ ncclResult_t ncclBroadcast_impl(const void* sendbuff, void* recvbuff, size_t cou
   struct NvtxParamsBroadcast {
     size_t bytes;
     int root;
+    ncclDataType_t datatype;
   };
   constexpr nvtxPayloadSchemaEntry_t BroadcastSchema[] = {
     {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Bytes"},
-    {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Root", nullptr, 0, offsetof(NvtxParamsBroadcast, root)}
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Root", nullptr, 0, offsetof(NvtxParamsBroadcast, root)},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsBroadcast, datatype)}
   };
-  NvtxParamsBroadcast payload{count * ncclTypeSize(datatype), root};
+  NvtxParamsBroadcast payload{count * ncclTypeSize(datatype), root, datatype};
   NVTX3_FUNC_WITH_PARAMS(Broadcast, BroadcastSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -275,12 +296,15 @@ ncclResult_t ncclGather_impl(const void* sendbuff, void* recvbuff, size_t sendco
     struct NvtxParamsGather {
       size_t bytes;
       int root;
+      ncclDataType_t datatype;
     };
     constexpr nvtxPayloadSchemaEntry_t GatherSchema[] = {
       {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Bytes"},
-      {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Root", nullptr, 0, offsetof(NvtxParamsGather, root)}
+      {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Root", nullptr, 0, offsetof(NvtxParamsGather, root)},
+      {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+        offsetof(NvtxParamsGather, datatype)}
     };
-    NvtxParamsGather payload{sendcount * ncclTypeSize(datatype), root};
+    NvtxParamsGather payload{sendcount * ncclTypeSize(datatype), root, datatype};
     NVTX3_FUNC_WITH_PARAMS(Gather, GatherSchema, payload)
 
     if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -314,14 +338,17 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
     size_t bytes;
     int root;
     ncclRedOp_t op;
+    ncclDataType_t datatype;
   };
   constexpr nvtxPayloadSchemaEntry_t ReduceSchema[] = {
     {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"},
     {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Root", nullptr, 0, offsetof(NvtxParamsReduce, root)},
     {0, NVTX_PAYLOAD_ENTRY_NCCL_REDOP, "Reduction operation", nullptr, 0,
-      offsetof(NvtxParamsReduce, op)}
+      offsetof(NvtxParamsReduce, op)},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsReduce, datatype)}
   };
-  NvtxParamsReduce payload{count * ncclTypeSize(datatype), root, op};
+  NvtxParamsReduce payload{count * ncclTypeSize(datatype), root, op, datatype};
   NVTX3_FUNC_WITH_PARAMS(Reduce, ReduceSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -346,13 +373,16 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
   struct NvtxParamsReduceScatter {
     size_t bytes;
     ncclRedOp_t op;
+    ncclDataType_t datatype;
   };
   constexpr nvtxPayloadSchemaEntry_t ReduceScatterSchema[] = {
     {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"},
     {0, NVTX_PAYLOAD_ENTRY_NCCL_REDOP, "Reduction operation", nullptr, 0,
-      offsetof(NvtxParamsReduceScatter, op)}
+      offsetof(NvtxParamsReduceScatter, op)},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsReduceScatter, datatype)}
   };
-  NvtxParamsReduceScatter payload{recvcount * ncclTypeSize(datatype), op};
+  NvtxParamsReduceScatter payload{recvcount * ncclTypeSize(datatype), op, datatype};
   NVTX3_FUNC_WITH_PARAMS(ReduceScatter, ReduceScatterSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -377,12 +407,15 @@ ncclResult_t ncclScatter_impl(const void* sendbuff, void* recvbuff, size_t recvc
     struct NvtxParamsScatter {
       size_t bytes;
       int root;
+      ncclDataType_t datatype;
     };
     constexpr nvtxPayloadSchemaEntry_t ScatterSchema[] = {
       {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Bytes"},
-      {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Root", nullptr, 0, offsetof(NvtxParamsScatter, root)}
+      {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Root", nullptr, 0, offsetof(NvtxParamsScatter, root)},
+      {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+        offsetof(NvtxParamsScatter, datatype)}
     };
-    NvtxParamsScatter payload{recvcount * ncclTypeSize(datatype), root};
+    NvtxParamsScatter payload{recvcount * ncclTypeSize(datatype), root, datatype};
     NVTX3_FUNC_WITH_PARAMS(Scatter, ScatterSchema, payload)
     
     if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -410,10 +443,13 @@ ncclResult_t ncclScatter_impl(const void* sendbuff, void* recvbuff, size_t recvc
 struct NvtxParamsSendRecv {
     size_t bytes;
     int peer;
+    ncclDataType_t datatype;
 };
 constexpr const nvtxPayloadSchemaEntry_t SendRecvSchema[] = {
     {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Bytes"},
-    {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Peer rank", nullptr, 0, offsetof(NvtxParamsSendRecv, peer)}
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_INT, "Peer rank", nullptr, 0, offsetof(NvtxParamsSendRecv, peer)},
+    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
+      offsetof(NvtxParamsSendRecv, datatype)}
 };
 
 NCCL_API(ncclResult_t, ncclSend, const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
@@ -422,7 +458,7 @@ NCCL_API(ncclResult_t, ncclSend, const void* sendbuff, size_t count, ncclDataTyp
 
 ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
-  NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
+  NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer, datatype};
   NVTX3_FUNC_WITH_PARAMS(Send, SendRecvSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
@@ -447,7 +483,7 @@ NCCL_API(ncclResult_t, ncclRecv, void* recvbuff, size_t count, ncclDataType_t da
 
 ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
-  NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer};
+  NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer, datatype};
   NVTX3_FUNC_WITH_PARAMS(Recv, SendRecvSchema, payload)
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {

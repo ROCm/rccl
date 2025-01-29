@@ -32,6 +32,7 @@ enum roctxPayloadEntryType {
   ROCTX_PAYLOAD_ENTRY_TYPE_INT,
   ROCTX_PAYLOAD_ENTRY_TYPE_SIZE,
   ROCTX_PAYLOAD_ENTRY_TYPE_REDOP,
+  ROCTX_PAYLOAD_ENTRY_TYPE_DATATYPE,
   ROCTX_PAYLOAD_NUM_ENTRY_TYPES
 };
 
@@ -58,6 +59,7 @@ struct roctxPayloadSchemaEntryInfo {
     int typeInt;
     size_t typeSize;
     ncclDevRedOp_t typeRedOp;
+    ncclDataType_t typeDataType;
   } payload;
 };
 
@@ -88,6 +90,7 @@ typedef roctxPayloadInfo* roctxPayloadInfo_t;
 
 extern const char* roctxEntryTypeStr[ROCTX_PAYLOAD_NUM_ENTRY_TYPES];
 extern const char* ncclRedOpStr[ncclNumDevRedOps];
+extern const char* ncclDataTypeStr[ncclNumTypes];
 
 /**
  * \brief Maps nvtx types to roctx types.
