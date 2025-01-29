@@ -819,10 +819,11 @@ if (${memory_max_string} MATCHES "^[0-9]+")
   math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024 * 1024)")
 else()
   execute_process(
-    COMMAND bash "-c" "cat /sys/fs/cgroup/memory/memory.limit_in_bytes"
+    COMMAND bash "-c" "free | grep -o '[[:digit:]]*' | head -1"
     OUTPUT_VARIABLE memory_max_string)
+  ## memory_max_string holds the free memory in KB  
   if (${memory_max_string} MATCHES "^[0-9]+")
-    math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024 * 1024)")
+    math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024)") ## KB to GB conversion
   else()
     cmake_host_system_information(RESULT memory_max_string QUERY AVAILABLE_PHYSICAL_MEMORY )
     math(EXPR memory_in_gb "${memory_max_string} / 1024")
