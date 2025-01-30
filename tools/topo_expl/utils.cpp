@@ -224,9 +224,9 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
 
 ncclResult_t ncclTopoGetSystem(const char* xmlTopoFile, struct ncclTopoSystem** system) {
   struct ncclXml* xml;
-  NCCLCHECK(ncclCalloc(&xml, 1));
+  NCCLCHECK(xmlAlloc(&xml, NCCL_GRAPH_XML_MAX_NODES));
   NCCLCHECK(ncclTopoGetXmlFromFile(xmlTopoFile, xml, 0));
-  NCCLCHECK(ncclTopoGetSystemFromXml(xml, system));
+  NCCLCHECK(ncclTopoGetSystemFromXml(xml, system, 0));
   free(xml);
   return ncclSuccess;
 }
@@ -1092,7 +1092,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
 
   NCCLCHECKGOTO(ncclCalloc(&rings, nranks*MAXCHANNELS), ret, fail);
 
-  NCCLCHECKGOTO(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, graphs, nc), ret, fail);
+  NCCLCHECKGOTO(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, graphs, NULL, nc), ret, fail);
   if (comm->topo->treeDefined) NCCLCHECK(ncclTreeBasePostset(comm, &treeGraph));
 
   // AllGather3 - end
@@ -1356,5 +1356,13 @@ bool mscclForceEnabled() {
 }
 
 ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
+  return ncclSuccess;
+}
+
+uint64_t getHostHash(void) {
+  return 0xdeadbeef;
+}
+
+ncclResult_t bootstrapIntraNodeAllGather(void* commState, int *ranks, int rank, int nranks, void* allData, int size) {
   return ncclSuccess;
 }

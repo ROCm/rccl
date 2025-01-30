@@ -15,6 +15,9 @@
 #include <sys/syscall.h>
 #include "param.h"
 
+RCCL_PARAM(SocketReuseAddr, "SOCKET_REUSEADDR", 0);
+RCCL_PARAM(SocketLinger, "SOCKET_LINGER", -1);
+
 static ncclResult_t socketProgressOpt(int op, struct ncclSocket* sock, void* ptr, int size, int* offset, int block, int* closed) {
   int bytes = 0;
   *closed = 0;
@@ -36,7 +39,7 @@ static ncclResult_t socketProgressOpt(int op, struct ncclSocket* sock, void* ptr
       }
     }
     (*offset) += bytes;
-    if (sock->abortFlag && __atomic_load_n(sock->abortFlag, __ATOMIC_RELAXED)) {
+    if (sock->abortFlag && __atomic_load_n(sock->abortFlag, __ATOMIC_ACQUIRE)) {
       INFO(NCCL_NET, "socketProgressOpt: abort called");
       return ncclInternalError;
     }
@@ -620,12 +623,12 @@ ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
   do {
     NCCLCHECK(socketProgressState(sock));
   } while (sock->asyncFlag == 0 &&
-      (sock->abortFlag == NULL || __atomic_load_n(sock->abortFlag, __ATOMIC_RELAXED) == 0) &&
+      (sock->abortFlag == NULL || __atomic_load_n(sock->abortFlag, __ATOMIC_ACQUIRE) == 0) &&
       (sock->state == ncclSocketStateConnecting ||
        sock->state == ncclSocketStateConnectPolling ||
        sock->state == ncclSocketStateConnected));
 
-  if (sock->abortFlag && __atomic_load_n(sock->abortFlag, __ATOMIC_RELAXED)) return ncclInternalError;
+  if (sock->abortFlag && __atomic_load_n(sock->abortFlag, __ATOMIC_ACQUIRE)) return ncclInternalError;
 
   switch (sock->state) {
     case ncclSocketStateConnecting:
@@ -667,11 +670,11 @@ ncclResult_t ncclSocketAccept(struct ncclSocket* sock, struct ncclSocket* listen
   do {
     NCCLCHECKGOTO(socketProgressState(sock), ret, exit);
   } while (sock->asyncFlag == 0 &&
-      (sock->abortFlag == NULL || __atomic_load_n(sock->abortFlag, __ATOMIC_RELAXED) == 0) &&
+      (sock->abortFlag == NULL || __atomic_load_n(sock->abortFlag, __ATOMIC_ACQUIRE) == 0) &&
       (sock->state == ncclSocketStateAccepting ||
        sock->state == ncclSocketStateAccepted));
 
-  if (sock->abortFlag && __atomic_load_n(sock->abortFlag, __ATOMIC_RELAXED)) return ncclInternalError;
+  if (sock->abortFlag && __atomic_load_n(sock->abortFlag, __ATOMIC_ACQUIRE)) return ncclInternalError;
 
   switch (sock->state) {
     case ncclSocketStateAccepting:
@@ -726,6 +729,17 @@ ncclResult_t ncclSocketInit(struct ncclSocket* sock, union ncclSocketAddress* ad
       WARN("ncclSocketInit: Socket creation failed : %s", strerror(errno));
       ret = ncclSystemError;
       goto fail;
+    }
+
+    // [RCCL] Runtime socket options
+    if (rcclParamSocketReuseAddr()) {
+      int opt = 1;
+      SYSCHECKGOTO(setsockopt(sock->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)), ret, fail);
+    }
+    int lingerParam = (int)rcclParamSocketLinger();
+    if (lingerParam > -1) {
+      linger linger_opt = { 1, lingerParam };
+      SYSCHECKGOTO(setsockopt(sock->fd, SOL_SOCKET, SO_LINGER, &linger_opt, sizeof(linger_opt)), ret, fail);
     }
   } else {
     memset(&sock->addr, 0, sizeof(union ncclSocketAddress));

@@ -78,7 +78,7 @@ private:
   if (nthreads != WARP_SIZE)
     barrier_by_group();
 #else
-   asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15-group));
+   barrier_sync(15-group, nthreads);
 #endif
   }
 
@@ -498,7 +498,8 @@ public:
   __device__ Primitives(
       const int tid, const int nthreads, int const *recvPeers, int const *sendPeers,
       void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint8_t group=0,
-      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclWorkElem* e = nullptr, int stepSize_=0
+      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclDevWorkColl* e = nullptr,
+      bool userBufReg=false, int stepSize_=0
     ):
     redOp(redOpArg),
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE),

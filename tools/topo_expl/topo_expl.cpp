@@ -161,6 +161,8 @@ NodeModelDesc model_descs[] = {
   {5, "topo_8p_940.xml",        "5 nodes gfx940 8P"},
   {2, "topo_8p_942.xml",        "2 nodes gfx942 8P"},
   {2, "topo_8p_942_1.xml",      "2 nodes gfx942 8P Alt."},
+  {1, "topo_16p_gio-1s-1rp-cascade.xml", "GigaIO 16P gfx942"},
+  {1, "topo_16p_gio-3s-1rp-split-flat.xml", "GigaIO 16P gfx942 1rp-split"},
 };
 
 NCCL_PARAM(MaxCTAs, "MAX_CTAS", MAXCHANNELS);

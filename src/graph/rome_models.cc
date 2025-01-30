@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2024 GigaIO Networks, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1117,8 +1118,13 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_87, /* 43 */
 };
 
+// This environment variable allows disabling of the reversal the graph parsing
+RCCL_PARAM(ModelReversalDisable, "MODEL_REVERSAL_DISABLE", 0);
+
 /* Parse user defined rings. Format is like :
  * "0 1|1 0|0 1 2 3|3 2 1 0|N0 0 2 3 1 N1|1 3 2 0|0 1 2 3 4 5 6 7|N2 7 6 5 4 3 2 1 0 N1"
+ * GPUs are numberd from 0 to ngpus, represening GPU-index for the current communicator
+ * gpu_map translates between GPU-index and rocm-smi index
  * Network interfaces can be optionally specified by N prefix.
  * Rings with a non-matching number of gpus are ignored so we can provide
  * rings for multiple cases.
@@ -1133,6 +1139,9 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
   int net_offset = 0, net_count = 0;
   int ngpus = system->nodes[GPU].count;
   int nnets = system->nodes[NET].count;
+
+  if (rcclParamModelReversalDisable()) reverse = 0;
+
   do {
     if (str[offset] == 'N') {
       if (status == 0) {
@@ -1181,7 +1190,7 @@ ncclResult_t parseGraph(const char* str, struct ncclTopoSystem* system, struct n
             // Ignore if gpus are duplicate
             for (int i=0; i<r; i++)
               if (gpus[i] == g) goto newchannel;
-            // remap if needed
+            // find rocm-smi id if needed
             if (gpu_map) g = gpu_map[g];
             // Translate gpu numbers into ranks
             int j = 0;
@@ -1481,7 +1490,8 @@ ncclResult_t parseChordalRing(struct ncclTopoSystem* system, struct ncclTopoGrap
 }
 
 
-static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo, char *pattern) {
+static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRomeModel* romeTopo,
+                                    char *pattern, int *devids) {
   pattern[0] = 0; // pattern will be NULL for invalid topology
   romeTopo->nGpus = system->nodes[GPU].count;
   romeTopo->nCpus = system->nodes[CPU].count;
@@ -1562,13 +1572,9 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     int count = 0;
     for (n = 0; n < romeTopo->nGpus; n++) {
       romeTopo->connMatrix[i*romeTopo->nGpus+n] = 0;
-      struct ncclTopoLink* link;
-      for (link = node->links; link->remNode; link++) {
-        if (link->remNode->gpu.dev == n) break;
-      }
-      if (!link->remNode) continue;
-      if (link->type != LINK_NVL) continue;
-      romeTopo->connMatrix[i*romeTopo->nGpus+n] = link->bw/ncclTopoXGMISpeed(node->gpu.gcn);
+      struct ncclTopoLinkList *path = node->paths[GPU] + gpu_scores[n].g;
+      if (path->type != LINK_NVL) continue;
+      romeTopo->connMatrix[i*romeTopo->nGpus+n] = path->bw/ncclTopoXGMISpeed(node->gpu.gcn);
       count ++;
     }
     if (romeTopo->nLinks < count) romeTopo->nLinks = count;
@@ -1601,6 +1607,10 @@ static ncclResult_t parseRomeSystem(struct ncclTopoSystem* system, struct rcclRo
     pattern[i*2+1] = '0' + n;
   }
   pattern[romeTopo->nCpus*2] = 0;
+
+  if (devids)
+    for (int i = 0; i<romeTopo->nGpus; i++)
+       devids[i] = gpu_scores[i].dev;
 
   // compute gdr level matrix
   for (int i = 0; i < romeTopo->nNics; i++) {
@@ -1752,7 +1762,6 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   constexpr int NUMA_PERMUTE_COUNT = 24;
   constexpr int TOTAL_PERMUTE_COUNT = (NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT);
 
-  static char ringRemap[256];
   int i;
 
   const int ngpus = system->nodes[GPU].count;
@@ -1762,7 +1771,8 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   // number of GPUs and NICs on each numa node is used as first screening pattern
   struct rcclRomeModel romeTopo;
   char pattern[256];
-  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern));
+  int devids[NUMA_CPUS * NUMA_GPUS];
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern, devids));
 
   // only match for system with 8 GPUs and 2 CPUs
   if (ngpus != 8 || ncpus != NUMA_CPUS) return ncclSuccess;
@@ -1776,7 +1786,7 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
-  std::vector<int> r(ngpus), g(ngpus);
+  std::vector<int> r(ngpus), g(ngpus), rdm(ngpus);
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
     if (romeTopo.nCpus != romeTopoModels[i].nCpus || romeTopo.nGpus != romeTopoModels[i].nGpus ||
       romeTopo.nNics != romeTopoModels[i].nNics || romeTopo.nLinks != romeTopoModels[i].nLinks) continue;
@@ -1848,13 +1858,14 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     //printf("No solution in %.2fms\n", t);
     return ncclSuccess;
   }
+  for (int m = 0; m<ngpus; m++) rdm[m] = devids[g8[m]];
 
   char line[1024];
   //sprintf(line, "Found matching Rome model index %d in %.2fms with GPU mapping: ", i, t);
   sprintf(line, "Found matching Rome model index %d with GPU mapping: ", i);
   int offset = strlen(line);
   for (int k = 0; k < ngpus; k++) {
-    sprintf(line+offset, "%d ", g8[k]);
+    sprintf(line+offset, "%d ", rdm[k]);
     offset = strlen(line);
   }
   if (nnets > 1) {
@@ -1875,35 +1886,35 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     // Attempt to use rail-optimized rings if they exist
     if (system->nHosts % 2 == 0) {
       // For even number of nodes, alternate forward/reverse on ringBase
-      NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g8, nnets > 1 ? n : NULL, system->hostIdx % 2));
+      NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm.data(), nnets > 1 ? n : NULL, system->hostIdx % 2));
     }
     else {
       // For odd number of nodes, check first to see if ringTail1 and ringTail2 are defined
       if (system->nHosts == 1 || romeTopoModels[i].ringTail1 == nullptr || romeTopoModels[i].ringTail2 == nullptr) {
         if (system->nHosts > 1)
           INFO(NCCL_GRAPH, "[WARN] Dropping back due to lack of support for odd-number of nodes for model index %d\n", i);
-        NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g8, nnets > 1 ? n : NULL, system->hostIdx % 2));
+        NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm.data(), nnets > 1 ? n : NULL, system->hostIdx % 2));
       }
       else
       {
         if (system->hostIdx == (system->nHosts - 1)) {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail1, system, graph, g8, nnets > 1 ? n : NULL, 0));
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail1, system, graph, rdm.data(), nnets > 1 ? n : NULL, 0));
         } else if (system->hostIdx == (system->nHosts - 2)) {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, g8, nnets > 1 ? n : NULL, 0));
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, rdm.data(), nnets > 1 ? n : NULL, 0));
         } else {
-          NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g8, nnets > 1 ? n : NULL, system->hostIdx % 2));
+          NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm.data(), nnets > 1 ? n : NULL, system->hostIdx % 2));
         }
       }
     }
     break;
   case NCCL_TOPO_PATTERN_BALANCED_TREE:
     if (romeTopoModels[i].treeBase != nullptr) {
-      NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g8));
+      NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, rdm.data()));
       if (graph->nChannels) return ncclSuccess;
     }
 
     // Fall back to tree from ringBase
-    NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g8, nnets > 1 ? n : NULL, 0));
+    NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm.data(), nnets > 1 ? n : NULL, 0));
     // Override GDR distance if requested
     if (checkOption(romeTopoModels[i].options, "netOverride")) {
       for (int i = 0; i < system->nodes[NET].count; i++) {
@@ -1930,7 +1941,6 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
 }
 
 ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, const char *ringBase) {
-  static char ringRemap[64];
   int i;
 
   int ngpus = system->nodes[GPU].count;
@@ -1950,7 +1960,8 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   // number of GPUs and NICs on each numa node is used as first screening pattern
   struct rcclRomeModel romeTopo;
   char pattern[256];
-  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern));
+  int devids[NCCL_TOPO_MAX_NODES];
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern, devids));
 
   // recognize system as Rome 4P2H even if no matching model
   if (ngpus > 4 && romeTopo.nLinks) system->type |= RCCL_TOPO_4P2H_ROME;
@@ -1958,7 +1969,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   // detect multiple NICs per GPU
   int nnetspergpu = (nnets%ngpus == 0) ? nnets/ngpus : 0;
 
-  int g[NCCL_TOPO_MAX_NODES], n[NCCL_TOPO_MAX_NODES];
+  int g[NCCL_TOPO_MAX_NODES], n[NCCL_TOPO_MAX_NODES], rdm[NCCL_TOPO_MAX_NODES];
   int time = 0;
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
@@ -2032,13 +2043,14 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     //printf("No solution in %.2fms (%d iter)\n", t, time);
     return ncclSuccess;
   }
+  for (int m = 0; m<ngpus; m++) rdm[m] = devids[g[m]];
 
   char line[1024];
   //sprintf(line, "Found matching Rome model index %d in %.2fms (%d iter) with GPU mapping: ", i, t, time);
   sprintf(line, "Found matching Rome model index %d with GPU mapping: ", i);
   int offset = strlen(line);
   for (int k = 0; k < ngpus; k++) {
-    sprintf(line+offset, "%d ", g[k]);
+    sprintf(line+offset, "%d ", rdm[k]);
     offset = strlen(line);
   }
   if (nnets > 1) {
@@ -2058,23 +2070,23 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     // Attempt to use rail-optimized rings if they exist
     if (system->nHosts % 2 == 0) {
       // For even number of nodes, alternate forward/reverse on ringBase
-      NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+      NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm, nnets > 1 ? n : NULL, system->hostIdx % 2));
     }
     else {
       // For odd number of nodes, check first to see if ringTail1 and ringTail2 are defined
       if (system->nHosts == 1 || romeTopoModels[i].ringTail1 == nullptr || romeTopoModels[i].ringTail2 == nullptr) {
         if (system->nHosts > 1)
           INFO(NCCL_GRAPH, "[WARN] Dropping back due to lack of support for odd-number of nodes for model index %d\n", i);
-        NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+        NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm, nnets > 1 ? n : NULL, system->hostIdx % 2));
       }
       else
       {
         if (system->hostIdx == (system->nHosts - 1)) {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail1, system, graph, g, nnets > 1 ? n : NULL, 0));
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail1, system, graph, rdm, nnets > 1 ? n : NULL, 0));
         } else if (system->hostIdx == (system->nHosts - 2)) {
-          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, g, nnets > 1 ? n : NULL, 0));
+          NCCLCHECK(parseGraph(romeTopoModels[i].ringTail2, system, graph, rdm, nnets > 1 ? n : NULL, 0));
         } else {
-          NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, system->hostIdx % 2));
+          NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm, nnets > 1 ? n : NULL, system->hostIdx % 2));
         }
       }
     }
@@ -2086,7 +2098,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
 
     // Fall back to tree from ringBase
-    NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, g, nnets > 1 ? n : NULL, 0));
+    NCCLCHECK(parseGraph(ringBase != nullptr ? ringBase : romeTopoModels[i].ringBase, system, graph, rdm, nnets > 1 ? n : NULL, 0));
     // Override GDR distance if requested
     if (checkOption(romeTopoModels[i].options, "netOverride")) {
       for (int i = 0; i < system->nodes[NET].count; i++) {
@@ -2115,7 +2127,6 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   constexpr int NUMA_PERMUTE_COUNT = 24;
   constexpr int TOTAL_PERMUTE_COUNT = (NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT*NUMA_PERMUTE_COUNT);
 
-  static char ringRemap[256];
   int i;
 
   const int ngpus = system->nodes[GPU].count;
@@ -2131,13 +2142,14 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   // number of GPUs and NICs on each numa node is used as first screening pattern
   struct rcclRomeModel romeTopo;
   char pattern[256];
-  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern));
+  int devids[NUMA_CPUS*NUMA_GPUS];
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern, devids));
 
   // only match for system with 16 GPUs
   if (ngpus != 16 || ncpus != NUMA_CPUS) return ncclSuccess;
 
   int gcnt = 0;
-  int *g16, n[NCCL_TOPO_MAX_NODES];
+  int *g16, n[NCCL_TOPO_MAX_NODES], rdm[NUMA_GPUS*NUMA_CPUS];
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
   struct timeval tvs, tve;
   gettimeofday(&tvs, NULL);
@@ -2217,13 +2229,14 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     //printf("No solution in %.2fms\n", t);
     return ncclSuccess;
   }
+  for (int m = 0; m<ngpus; m++) rdm[m] = devids[g16[m]];
 
   char line[1024];
   //sprintf(line, "Found matching Rome model index %d in %.2fms with GPU mapping: ", i, t);
   sprintf(line, "Found matching Rome model index %d with GPU mapping: ", i);
   int offset = strlen(line);
   for (int k = 0; k < ngpus; k++) {
-    sprintf(line+offset, "%d ", g16[k]);
+    sprintf(line+offset, "%d ", rdm[k]);
     offset = strlen(line);
   }
   if (nnets > 1) {
@@ -2238,20 +2251,55 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   system->type |= RCCL_TOPO_16P1H;
   parseOptions(system, romeTopoModels[i].options);
 
-  // create 16P1H based on reference and remapped ids
-  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, g16, nnets > 1 ? n : NULL, false));
 
-  if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, g16));
+  // create 16P1H based on reference and remapped ids
+  NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, rdm, nnets > 1 ? n : NULL, false));
+
+  if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, rdm));
   // clean up
   free(all_gpu_permutations);
+  return ncclSuccess;
+}
+
+ncclResult_t find_gpu_hives(int *g_hives, int *ng_hives, struct rcclRomeModel *romeTopo) {
+  const int ngpus = romeTopo->nGpus;
+  const int gpus_per_hive = romeTopo->nLinks + 1;
+  const int nhives = ngpus / gpus_per_hive;
+
+  int i;
+  for (i = 0; i < ngpus; i++) {
+    int j, h;
+    for (j = 0; j < nhives; j++) {
+      if (ng_hives[j]) {
+        if (romeTopo->connMatrix[i*ngpus+g_hives[j*gpus_per_hive]]) {
+          g_hives[j*gpus_per_hive+ng_hives[j]] = i;
+          ng_hives[j] ++;
+          break;
+        }
+      }
+    }
+    if (j >= nhives) {
+      for (h = 0; h < nhives; h++) {
+        if (ng_hives[h] == 0) {
+          g_hives[h*gpus_per_hive] = i;
+          ng_hives[h]++;
+          break;
+        }
+      }
+      if (h >= nhives)
+        return ncclInternalError;
+    }
+  }
+  for (int i = 0; i < nhives; i++) {
+    if (ng_hives[i] != gpus_per_hive)
+      return ncclInternalError;
+  }
   return ncclSuccess;
 }
 
 ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   constexpr int NUM_HIVES = 4;
   constexpr int HIVE_GPUS = 4;
-
-  static char ringRemap[256];
 
   const int ngpus = system->nodes[GPU].count;
   const int nnets = system->nodes[NET].count;
@@ -2265,13 +2313,15 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
   // number of GPUs and NICs on each numa node is used as first screening pattern
   struct rcclRomeModel romeTopo;
   char pattern[256];
-  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern));
+  int devids[HIVE_GPUS*NUM_HIVES];
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern, devids));
 
   // only match for system with 16 GPUs
   if (ngpus != NUM_HIVES*HIVE_GPUS || nnets != NUM_HIVES*HIVE_GPUS) return ncclSuccess;
 
   std::vector<int> g_hives(ngpus), n_hives(nnets);
   int ng_hives[NUM_HIVES];
+  int rdm[NUM_HIVES*HIVE_GPUS];
 
   // try to sort GPUs into hives
   for (int i = 0; i < NUM_HIVES; i++)
@@ -2280,36 +2330,17 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
     n_hives[i] = -1;
   for (int i = 0; i < ngpus; i++)
     g_hives[i] = -1;
-  for (int i = 0; i < ngpus; i++) {
-    int j, h;
-    for (j = 0; j < NUM_HIVES; j++) {
-      if (ng_hives[j]) {
-        if (romeTopo.connMatrix[i*ngpus+g_hives[j*HIVE_GPUS]]) {
-          g_hives[j*HIVE_GPUS+ng_hives[j]] = i;
-          ng_hives[j]++;
-          break;
-        }
-      }
-    }
-    if (j >= NUM_HIVES) {
-      for (h = 0; h < NUM_HIVES; h++) {
-        if (ng_hives[h] == 0) {
-          g_hives[h*HIVE_GPUS] = i;
-          ng_hives[h]++;
-          break;
-        }
-      }
-      if (h >= NUM_HIVES)
-        return ncclSuccess;
-    }
-  }
+
+  if (find_gpu_hives(g_hives.data(), ng_hives, &romeTopo))
+    return ncclSuccess;
+
   for (int i = 0; i < NUM_HIVES; i++)
     if (ng_hives[i] != 4) return ncclSuccess;
   // remap NET ids
   for (int i = 0; i < nnets; i++) {
     int j;
     for (j = 0; j < ngpus; j++) {
-      if(romeTopo.gdrLevel[i*nnets+g_hives[j]] == 3) {
+      if(romeTopo.gdrLevel[i*nnets+g_hives[j]] == PATH_PIX) {
         n_hives[j] = i;
         break;
       }
@@ -2321,11 +2352,14 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
     if (n_hives[i] == -1) return ncclSuccess;
   for (int i = 0; i < ngpus; i++)
     if (g_hives[i] == -1) return ncclSuccess;
+
+  for (int m = 0; m<ngpus; m++) rdm[m] = devids[g_hives[m]];
+
   char line[1024];
   sprintf(line, "Found matching Rome model 4P4H with GPU mapping: ");
   int offset = strlen(line);
   for (int k = 0; k < ngpus; k++) {
-    sprintf(line+offset, "%d ", g_hives[k]);
+    sprintf(line+offset, "%d ", rdm[k]);
     offset = strlen(line);
   }
   if (nnets > 1) {
@@ -2341,6 +2375,86 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
     system->type |= RCCL_TOPO_4P2H_ROME;
   parseOptions(system, rome_model_68.options);
   // create 4P4H based on reference and remapped ids
-  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, g_hives.data(), n_hives.data(), false));
+  NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, rdm, n_hives.data(), false));
+  return ncclSuccess;
+}
+
+static struct rcclRomeModel gio16gColumbaModel = {
+  .nGpus = 16, .nCpus = 2, .nNics = 0, .nLinks = 7,
+  .gpuIds = { 0x24000, 0x2a000, 0x37000, 0x3d000, 0x4a000, 0x50000, 0x5d000, 0x63000, 0xaf000, 0xb5000, 0xc2000, 0xc8000, 0xd5000, 0xdb000, 0xe8000, 0xee000, },
+  .nicIds = { },
+  .gpuNuma = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, },
+  .nicNuma = { },
+  .connMatrix = { 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                  1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                  1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                  1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                  1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                  1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                  1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                  1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+                  0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1,
+                  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1,
+                  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1,
+                  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1,
+                  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1,
+                  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1,
+                  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, },
+  .gdrLevel = { },
+  .pattern = "8080",
+  .ringBase = "0 1 2 3 4 5 7 6 12 13 14 15 8 9 11 10"
+            "| 2 7 3 5 1 6 0 4 14 9 15 10 13 11 12 8"
+            "| 1 3 0 7 4 6 2 5 13 15 11 8 10 14 12 9"
+            "| 3 6 5 0 2 4 1 7 15 12 10 9 13 8 14 11"
+            "| 10 11 9 8 15 14 13 12 6 7 5 4 3 2 1 0"
+            "| 8 12 11 13 10 15 9 14 4 0 6 1 5 3 7 2"
+            "| 9 12 14 10 8 11 15 13 5 2 6 4 7 0 3 1"
+            "| 11 14 8 13 9 10 12 15 7 1 4 2 0 5 6 3",
+  .options = "",
+};
+
+ncclResult_t parseGIOTopos(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
+  ncclResult_t r;
+  constexpr int NGPUS = 16;
+  constexpr int NHIVES = 2;
+  constexpr int GPUS_PER_HIVE = NGPUS/NHIVES;
+  const int ngpus = system->nodes[GPU].count;
+  const int ncpus = system->nodes[CPU].count;
+  const int nnets = system->nodes[NET].count;
+
+  if (ngpus < NGPUS || ncpus > 2 || nnets != 0)
+    return ncclSuccess;
+
+  struct rcclRomeModel romeTopo;
+  char pattern[256];
+  int devids[NGPUS];
+  NCCLCHECK(parseRomeSystem(system, &romeTopo, pattern, devids));
+
+  if (romeTopo.nLinks + 1 != GPUS_PER_HIVE)
+    return ncclSuccess;
+
+  int g_hives[NGPUS], ng_hives[NHIVES], rdm[NGPUS];
+  memset(ng_hives, 0, sizeof(ng_hives));
+  memset(g_hives, -1, sizeof(g_hives));
+  NCCLCHECKGOTO(find_gpu_hives(g_hives, ng_hives, &romeTopo), r, exit);
+
+  for (int m = 0; m<ngpus; m++) rdm[m] = devids[g_hives[m]];
+
+  char line[1024];
+  int offset;
+  sprintf(line, "Found GigaIO rome topo, gpu_mapping: ");
+  offset = strlen(line);
+  for (int k = 0; k < ngpus; k++) {
+    sprintf(line+offset, "%d ", g_hives[k]);
+    offset = strlen(line);
+  }
+  INFO(NCCL_GRAPH,"%s", line);
+
+  system->type |= RCCL_TOPO_4P2H_ROME;
+
+  NCCLCHECKGOTO(parseGraph(gio16gColumbaModel.ringBase, system, graph, rdm, NULL, false), r, exit);
+
+exit:
   return ncclSuccess;
 }

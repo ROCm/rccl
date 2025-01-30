@@ -29,7 +29,7 @@ option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"   
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
-option(ROCTX                                   "Enable ROCTX"                                  OFF)
+option(ROCTX                                   "Enable ROCTX"                                  ON)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
@@ -68,33 +68,38 @@ if (BUILD_LOCAL_GPU_TARGET_ONLY)
 endif()
 
 # Determine which GPU architectures to build for
-set(AMDGPU_TARGETS "${DEFAULT_GPUS}" CACHE STRING "Target default GPUs if AMDGPU_TARGETS is not defined.")
+set(GPU_TARGETS "${DEFAULT_GPUS}" CACHE STRING "Target default GPUs if GPU_TARGETS is not defined.")
 
 # Modify GPU architectures for Address Sanitizer builds by appending "xnack+"
 if (BUILD_ADDRESS_SANITIZER)
   SET(amdgpu_targets "")
-  foreach(amdgpu_target IN LISTS AMDGPU_TARGETS)
+  foreach(amdgpu_target IN LISTS GPU_TARGETS)
     if(NOT amdgpu_target STREQUAL "")
-      list(APPEND amdgpu_targets "${amdgpu_target}:xnack+")
+      string(FIND "${amdgpu_target}" ":xnack+" HAS_XNACK_SUFFIX)
+      if(HAS_XNACK_SUFFIX EQUAL -1)
+        list(APPEND amdgpu_targets "${amdgpu_target}:xnack+")
+      else()
+        list(APPEND amdgpu_targets "${amdgpu_target}")
+      endif()
     endif()
   endforeach()
-  SET(AMDGPU_TARGETS "${amdgpu_targets}" CACHE STRING "Modified GPU list for Address-Sanitizer enabled build." FORCE)
+  SET(GPU_TARGETS "${amdgpu_targets}" CACHE STRING "Modified GPU list for Address-Sanitizer enabled build." FORCE)
 endif()
 
-# Check if clang compiler can offload to AMDGPU_TARGETS
+# Check if clang compiler can offload to GPU_TARGETS
 if (COMMAND rocm_check_target_ids)
-  message(STATUS "Checking for ROCm support for GPU targets: " "${AMDGPU_TARGETS}")
-  rocm_check_target_ids(SUPPORTED_GPUS TARGETS ${AMDGPU_TARGETS})
+  message(STATUS "Checking for ROCm support for GPU targets: " "${GPU_TARGETS}")
+  rocm_check_target_ids(SUPPORTED_GPUS TARGETS ${GPU_TARGETS})
 else()
   message(WARNING "Unable to check for supported GPU targets. Falling back to default GPUs.")
   set(SUPPORTED_GPUS ${DEFAULT_GPUS})
 endif()
 
-set(GPU_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
-message(STATUS "Compiling for ${GPU_TARGETS}")
+set(COMPILING_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
+message(STATUS "Compiling for ${COMPILING_TARGETS}")
 
-## NOTE: Reload rocm-cmake in order to update GPU_TARGETS
-include(cmake/Dependencies.cmake) # Reloading to use desired GPU_TARGETS instead of defaults
+## NOTE: Reload rocm-cmake in order to update COMPILING_TARGETS
+include(cmake/Dependencies.cmake) # Reloading to use desired COMPILING_TARGETS instead of defaults
 
 # Try to establish ROCM_PATH (for find_package)
 #==================================================================================================
@@ -294,15 +299,36 @@ if (HAVE_KERNARG_PRELOAD)
   message(STATUS "Kernarg preloading to SGPR enabled")
 endif()
 
+check_cxx_compiler_flag("-parallel-jobs=12" HAVE_PARALLEL_JOBS)
+if (HAVE_PARALLEL_JOBS)
+  message(STATUS "Parallel jobs enabled")
+endif()
+
 ## Disable building MSCCL++ if the build environment is invalid
-## Currently MSCCL++ is supported only on gfx942
-if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST GPU_TARGETS OR "gfx942:xnack-" IN_LIST GPU_TARGETS OR "gfx942:xnack+" IN_LIST GPU_TARGETS))
+## Currently MSCCL++ is supported only on gfx942, and only on Ubuntu and CentOS
+if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST COMPILING_TARGETS OR "gfx942:xnack-" IN_LIST COMPILING_TARGETS OR "gfx942:xnack+" IN_LIST COMPILING_TARGETS))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
 endif()
 if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration only supported on ROCm 6.2 or greater; disabling MSCCL++ build")
+endif()
+cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID)
+if (ENABLE_MSCCLPP AND NOT(${HOST_OS_ID} STREQUAL "ubuntu" OR ${HOST_OS_ID} STREQUAL "centos"))
+  set(ENABLE_MSCCLPP OFF)
+  message(WARNING "MSCCL++ integration not supported on this OS (${HOST_OS_ID}); disabling MSCCL++ build")
+endif()
+
+# Check for ROCTX
+if(ROCTX)
+  find_library(ROCTX_LIB NAMES roctx64)
+  if(ROCTX_LIB)
+    set(ROCTX_ENABLE ON)
+    message(STATUS "ROCTX library found: ${ROCTX_LIB}")
+  else()
+    message(WARNING "ROCTX library not found. Skipping ROCTX linking.")
+  endif()
 endif()
 
 # Determine version from makefiles/version.mk and fill in templates
@@ -415,12 +441,13 @@ set(SRC_FILES
   src/graph/tuning.cc
   src/graph/xml.cc
   src/graph/xml.h
-  src/include/align.h
   src/include/alloc.h
+  src/include/alt_rsmi.h
   src/include/archinfo.h
   src/include/api_trace.h
   src/include/argcheck.h
   src/include/BfdBacktrace.hpp
+  src/include/bitops.h
   src/include/bootstrap.h
   src/include/channel.h
   src/include/checks.h
@@ -479,30 +506,40 @@ set(SRC_FILES
   src/include/npkit/npkit.h
   src/include/npkit/npkit_event.h
   src/include/npkit/npkit_struct.h
+  src/include/nvtx3/nvToolsExt.h
+  src/include/nvtx3/nvToolsExtCounters.h
   src/include/nvtx3/nvToolsExtCuda.h
   src/include/nvtx3/nvToolsExtCudaRt.h
-  src/include/nvtx3/nvToolsExt.h
+  src/include/nvtx3/nvToolsExtMem.h
+  src/include/nvtx3/nvToolsExtMemCudaRt.h
   src/include/nvtx3/nvToolsExtOpenCL.h
   src/include/nvtx3/nvToolsExtPayload.h
+  src/include/nvtx3/nvToolsExtPayloadHelper.h
+  src/include/nvtx3/nvToolsExtSemanticsCounters.h
+  src/include/nvtx3/nvToolsExtSemanticsScope.h
   src/include/nvtx3/nvToolsExtSync.h
   src/include/nvtx3/nvtx3.hpp
-  src/include/nvtx3/nvtxDetail/nvtxImplCore.h
-  src/include/nvtx3/nvtxDetail/nvtxImplCudaRt_v3.h
-  src/include/nvtx3/nvtxDetail/nvtxImplCuda_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxExtHelperMacros.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImpl.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplCounters_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplMem_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplMemCudaRt_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtImplPayload_v1.h
+  src/include/nvtx3/nvtxDetail/nvtxExtInit.h
+  src/include/nvtx3/nvtxDetail/nvtxExtPayloadHelperInternal.h
+  src/include/nvtx3/nvtxDetail/nvtxExtPayloadTypeInfo.h
+  src/include/nvtx3/nvtxDetail/nvtxExtTypes.h
   src/include/nvtx3/nvtxDetail/nvtxImpl.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCore.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCuda_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxImplCudaRt_v3.h
   src/include/nvtx3/nvtxDetail/nvtxImplOpenCL_v3.h
   src/include/nvtx3/nvtxDetail/nvtxImplSync_v3.h
+  src/include/nvtx3/nvtxDetail/nvtxInit.h
   src/include/nvtx3/nvtxDetail/nvtxInitDecls.h
   src/include/nvtx3/nvtxDetail/nvtxInitDefs.h
-  src/include/nvtx3/nvtxDetail/nvtxInit.h
   src/include/nvtx3/nvtxDetail/nvtxLinkOnce.h
   src/include/nvtx3/nvtxDetail/nvtxTypes.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtImpl.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtImplPayload_v1.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtInit.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtPayloadTypeInfo.h
-  src/include/nvtx3/nvtxExtDetail/nvtxExtTypes.h
-  src/include/alt_rsmi.h
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
@@ -532,6 +569,7 @@ set(SRC_FILES
   src/misc/msccl/msccl_setup.cc
   src/misc/msccl/msccl_status.cc
   src/transport/coll_net.cc
+  src/transport/generic.cc
   src/transport/net.cc
   src/transport/net_ib.cc
   src/transport/net_socket.cc
@@ -674,9 +712,10 @@ endif()
 if(PROFILE)
   target_compile_definitions(rccl PRIVATE ENABLE_PROFILING)
 endif()
-if(NOT ROCTX)
+if(ROCTX_ENABLE)
+  target_compile_definitions(rccl PRIVATE ROCTX_ENABLE)
+else()
   target_compile_definitions(rccl PRIVATE NVTX_NO_IMPL)
-  target_compile_definitions(rccl PRIVATE ROCTX_NO_IMPL)
   target_compile_definitions(rccl PRIVATE NVTX_DISABLE)
 endif()
 if(TRACE)
@@ -727,7 +766,9 @@ if(LL128_ENABLED)
 endif()
 
 ## Set RCCL compile options
-target_compile_options(rccl PRIVATE -parallel-jobs=12)
+if (HAVE_PARALLEL_JOBS)
+  target_compile_options(rccl PRIVATE -parallel-jobs=12)
+endif()
 target_compile_options(rccl PRIVATE -Werror=uninitialized -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -fgpu-rdc)               # Generate relocatable device code (required for extern __shared__)
@@ -737,7 +778,7 @@ if (HAVE_KERNARG_PRELOAD)
 endif()
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
-#foreach(target ${GPU_TARGETS})
+#foreach(target ${COMPILING_TARGETS})
 #  target_compile_options(rccl PRIVATE --offload-arch=${target})
 #endforeach()
 
@@ -773,10 +814,10 @@ if (HAVE_BFD)
     target_link_libraries(rccl PRIVATE iberty z)
   endif()
 endif()
-if (ROCTX)
+if (ROCTX_ENABLE)
   target_link_libraries(rccl PRIVATE -lroctx64)
 endif()
-target_link_libraries(rccl PRIVATE -fgpu-rdc)             # Required when linking relocatable device code
+target_link_libraries(rccl PRIVATE   -fgpu-rdc)             # Required when linking relocatable device code
 target_link_libraries(rccl PRIVATE   Threads::Threads)
 target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
@@ -805,12 +846,14 @@ else()
   endif()
 endif()
 ## Reserve 16GB for each linker job. Limit max number of linker jobs to 16
-math(EXPR num_linker_jobs "(${memory_in_gb} + 15) / 16")
-if (${num_linker_jobs} GREATER_EQUAL "16")
-  set(num_linker_jobs "16")
+if (HAVE_PARALLEL_JOBS)
+  math(EXPR num_linker_jobs "(${memory_in_gb} + 15) / 16")
+  if (${num_linker_jobs} GREATER_EQUAL "16")
+    set(num_linker_jobs "16")
+  endif()
+  message(STATUS "Use ${num_linker_jobs} jobs for linking")
+  target_link_options(rccl PRIVATE -parallel-jobs=${num_linker_jobs})       # Use multiple threads to link
 endif()
-message(STATUS "Use ${num_linker_jobs} jobs for linking")
-target_link_options(rccl PRIVATE -parallel-jobs=${num_linker_jobs})       # Use multiple threads to link
 if(BUILD_ADDRESS_SANITIZER)
   target_link_options(rccl PRIVATE -fuse-ld=lld)
 endif()
@@ -824,7 +867,7 @@ else()
   message(STATUS "Building shared RCCL library")
 endif()
 if (HAVE_KERNARG_PRELOAD)
-  target_link_options(rccl PRIVATE -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16)
+  target_link_options(rccl PRIVATE "SHELL:-Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
 endif()
 
 if(ENABLE_MSCCLPP)
@@ -859,7 +902,7 @@ if(NOT BUILD_SHARED_LIBS)
     endif()
   endforeach()
 
-  foreach(target ${GPU_TARGETS})
+  foreach(target ${COMPILING_TARGETS})
     list(APPEND static_link_flags --offload-arch=${target})
   endforeach()
   list(JOIN static_link_flags " " flags_str)

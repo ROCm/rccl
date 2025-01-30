@@ -28,7 +28,7 @@ mscclpp_enabled=true
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
 openmp_test_enabled=false
-roctx_enabled=false
+roctx_enabled=true
 run_tests=false
 run_tests_all=false
 time_trace=false
@@ -41,22 +41,22 @@ function display_help()
     echo "RCCL build & installation helper script"
     echo " Options:"
     echo "       --address-sanitizer     Build with address sanitizer enabled"
-    echo "    -d|--dependencies          Install RCCL depdencencies"
+    echo "    -d|--dependencies          Install RCCL dependencies"
     echo "       --debug                 Build debug library"
     echo "       --enable_backtrace      Build with custom backtrace support"
     echo "       --disable-colltrace     Build without collective trace"
     echo "       --disable-msccl-kernel  Build without MSCCL kernels"
     echo "       --disable-mscclpp       Build without MSCCL++ support"
+    echo "       --disable-roctx         Build without ROCTX logging"
     echo "    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
     echo "    -j|--jobs                  Specify how many parallel compilation jobs to run ($num_parallel_jobs by default)"
     echo "    -l|--local_gpu_only        Only compile for local GPU architecture"
-    echo "       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)"
+    echo "       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, separate by ';' (builds for all supported GPU architectures by default)"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
     echo "       --openmp-test-enable    Enable OpenMP in rccl unit tests"
-    echo "       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)"
     echo "    -p|--package_build         Build RCCL package"
     echo "       --prefix                Specify custom directory to install RCCL to (default: \`/opt/rocm\`)"
     echo "       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
@@ -97,6 +97,7 @@ while true; do
          --disable-colltrace)        collective_trace=false;                                                                           shift ;;
          --disable-msccl-kernel)     msccl_kernel_enabled=false;                                                                       shift ;;
          --disable-mscclpp)          mscclpp_enabled=false;                                                                            shift ;;
+         --disable-roctx)            roctx_enabled=false;                                                                              shift ;;
     -f | --fast)                     build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;                    shift ;;
     -h | --help)                     display_help;                                                                                     exit 0 ;;
     -i | --install)                  install_library=true;                                                                             shift ;;
@@ -106,7 +107,6 @@ while true; do
          --no_clean)                 clean_build=false;                                                                                shift ;;
          --npkit-enable)             npkit_enabled=true;                                                                               shift ;;
          --openmp-test-enable)       openmp_test_enabled=true;                                                                         shift ;;
-         --roctx-enable)             roctx_enabled=true;                                                                               shift ;;
     -p | --package_build)            build_package=true;                                                                               shift ;;
          --prefix)                   install_library=true; install_prefix=${2};                                                        shift 2 ;;
          --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                                                      shift ;;
@@ -219,7 +219,7 @@ fi
 
 # Build for specified GPU target(s) only
 if [[ ! -z "${build_amdgpu_targets}" ]]; then
-    cmake_common_options="${cmake_common_options} -DAMDGPU_TARGETS=${build_amdgpu_targets}"
+    cmake_common_options="${cmake_common_options} -DGPU_TARGETS=${build_amdgpu_targets}"
 fi
 
 # shared vs static
@@ -251,9 +251,9 @@ if [[ "${install_library}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DCMAKE_INSTALL_PREFIX=${install_prefix}"
 fi
 
-# Enable ROCTX
-if [[ "${roctx_enabled}" == true ]]; then
-    cmake_common_options="${cmake_common_options} -DROCTX=ON"
+# Disable ROCTX
+if [[ "${roctx_enabled}" == false ]]; then
+    cmake_common_options="${cmake_common_options} -DROCTX=OFF"
 fi
 
 # Enable OpenMP in unit tests
