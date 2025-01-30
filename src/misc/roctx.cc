@@ -1,10 +1,12 @@
 /*************************************************************************
- * Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
 #include "roctx.h"
+#include "param.h"
+#include "debug.h"
 
 std::map<uint64_t, roctxPayloadEntryType> nvtxToRoctx {
   {NVTX_PAYLOAD_ENTRY_TYPE_INT, ROCTX_PAYLOAD_ENTRY_TYPE_INT},
@@ -15,21 +17,17 @@ const char* roctxEntryTypeStr[ROCTX_PAYLOAD_NUM_ENTRY_TYPES] = {"ROCTX_PAYLOAD_E
 const char* ncclRedOpStr[ncclNumDevRedOps]                   = { "Sum", "Prod", "MinMax", "PreMulSum", "SumPostDiv" };
 
 void roctxAlloc(roctxPayloadInfo_t payloadInfo, const size_t numEntries) {
-#ifndef ROCTX_NO_IMPL
   // Allocate enough memory for numEntries in payloadEntries
   payloadInfo->payloadEntries = (roctxPayloadSchemaEntryInfo*)malloc(numEntries * sizeof(roctxPayloadSchemaEntryInfo));
 
   // Allocate memory for the message that will be constructed
   payloadInfo->message = (char*)malloc(MAX_MESSAGE_LENGTH * sizeof(char));
-#endif
 }
 
 void roctxFree(roctxPayloadInfo_t payloadInfo) {
-#ifndef ROCTX_NO_IMPL
   // Free all the dynamically allocated resources by roctx
   if (payloadInfo->payloadEntries) free(payloadInfo->payloadEntries);
   if (payloadInfo->message) free((void*)payloadInfo->message);
-#endif
 }
 
 void extractPayloadInfo(const nvtxPayloadSchemaEntry_t* schema, const nvtxPayloadData_t* data, const size_t numEntries,
@@ -96,4 +94,42 @@ void stringify(roctxPayloadInfo_t payloadInfo) {
   }
 
   snprintf(payloadInfo->message + offset, MAX_MESSAGE_LENGTH - offset, "}");
+}
+
+RCCL_PARAM(LogRoctx, "LOG_ROCTX", 0);
+
+roctx_scoped_range_in::roctx_scoped_range_in(const nvtxPayloadSchemaEntry_t* schema, const nvtxPayloadData_t* data, 
+                                const size_t numEntries, const char* schemaName) noexcept {
+  if (rcclParamLogRoctx()) {
+    roctxAlloc(&payloadInfo, numEntries);
+    extractPayloadInfo(schema, data, numEntries, schemaName, &payloadInfo);
+#ifdef ROCTX_ENABLE
+    roctxRangePushA(payloadInfo.message);
+#else
+    WARN("ROCTX_ENABLE is not defined. Please rebuild with -DROCTX_ENABLE=ON");
+#endif
+  }
+}
+
+roctx_scoped_range_in::roctx_scoped_range_in(const char* message) noexcept {
+  if (rcclParamLogRoctx()) {
+#ifdef ROCTX_ENABLE
+    roctxRangePushA(message);
+#else
+    WARN("ROCTX_ENABLE is not defined. Please rebuild with -DROCTX_ENABLE=ON");
+#endif
+  }
+}
+
+roctx_scoped_range_in::roctx_scoped_range_in() noexcept : roctx_scoped_range_in{""} {/*no impl*/}
+
+roctx_scoped_range_in::~roctx_scoped_range_in() noexcept {
+  if (rcclParamLogRoctx()) {
+#ifdef ROCTX_ENABLE
+    roctxRangePop();
+#else
+    WARN("ROCTX_ENABLE is not defined. Please rebuild with -DROCTX_ENABLE=ON");
+#endif
+    roctxFree(&payloadInfo);
+  }
 }

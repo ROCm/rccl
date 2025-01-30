@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -11,7 +11,7 @@
 #include <string.h>
 #include <map>
 
-#ifndef ROCTX_NO_IMPL
+#ifdef ROCTX_ENABLE
 #include <roctracer/roctx.h>
 #endif
 #include "nvtx3/nvtx3.hpp"
@@ -126,40 +126,23 @@ public:
    * 'numEntries', and 'schemaName'
   */
   explicit roctx_scoped_range_in(const nvtxPayloadSchemaEntry_t* schema, const nvtxPayloadData_t* data, 
-                                const size_t numEntries, const char* schemaName) noexcept
-  {
-#ifndef ROCTX_NO_IMPL
-    roctxAlloc(&payloadInfo, numEntries);
-    extractPayloadInfo(schema, data, numEntries, schemaName, &payloadInfo);
-    roctxRangePushA(payloadInfo.message);
-#endif
-  }
+                                const size_t numEntries, const char* schemaName) noexcept;
 
   /**
    * Construct a 'roctx_scoped_range_in' with the specified 'message'
   */
-  explicit roctx_scoped_range_in(const char* message) noexcept
-  {
-#ifndef ROCTX_NO_IMPL
-    roctxRangePushA(message);
-#endif
-  }
+  explicit roctx_scoped_range_in(const char* message) noexcept;
 
   /**
    * Default constructor 'roctx_scoped_range_in'
   */
-  roctx_scoped_range_in() noexcept : roctx_scoped_range_in{""} {/*no impl*/}
+  roctx_scoped_range_in() noexcept;
 
   /**
    * Destroy the roctx_scoped_range_in, ending the ROCTX range event.
    */
-  ~roctx_scoped_range_in() noexcept
-  {
-#ifndef ROCTX_NO_IMPL
-    roctxRangePop();
-    roctxFree(&payloadInfo);
-#endif
-  }
+  ~roctx_scoped_range_in() noexcept;
+
 private:
   roctxPayloadInfo payloadInfo;
 };
