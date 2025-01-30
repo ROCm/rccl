@@ -329,8 +329,8 @@ static ncclResult_t hostToDevRedOp(
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, float, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, double, fullOps), \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, hip_bfloat16, fullOps), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, __hip_fp8_e4m3,   fullOps), \
-  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, __hip_fp8_e5m2,  fullOps)
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, __hip_fp8_e4m3, fullOps), \
+  MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, __hip_fp8_e5m2, fullOps)
 
 #define MSCCL_KERNEL_ENTRY_DEVREDOP_NOFLOAT(devredop, fullOps) \
   MSCCL_KERNEL_ENTRY_DEVREDOP_TYPE(devredop, int8_t, fullOps), \

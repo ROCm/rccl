@@ -20,52 +20,51 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#ifndef HIP_INCLUDE_HIP_HIP_FP8_H
-#define HIP_INCLUDE_HIP_HIP_FP8_H
+#ifndef ROCBLAS_FLOAT8_H
+#define ROCBLAS_FLOAT8_H
 
-#include <hip/hip_common.h>
 
-#if defined(__HIP_PLATFORM_AMD__) && !defined(__HIP_PLATFORM_NVIDIA__)
-// We only have fnuz defs for now, which are not supported by other platforms
-    #if __has_include(<hip/amd_detail/amd_hip_fp8.h>)
-        #include <hip/amd_detail/amd_hip_fp8.h>
+#if __has_include(<hip/hip_fp8.h>)
+    #include <hip/hip_fp8.h>
+        
+    inline std::ostream& operator<<(std::ostream& os, const __hip_fp8_e4m3& f8)
+    {
+        return os << float(f8);
+    }
+
+    inline std::ostream& operator<<(std::ostream& os, const __hip_fp8_e5m2& bf8)
+    {
+        return os << float(bf8);
+    }
+
+    inline __host__ __device__ float operator*(__hip_fp8_e4m3 a, __hip_fp8_e4m3 b)
+    {
+        return float(a) * float(b);
+    }
+
+    inline __host__ __device__ float operator*(__hip_fp8_e5m2 a, __hip_fp8_e5m2 b)
+    {
+        return float(a) * float(b);
+    }
+
+    inline __host__ __device__ float operator*(__hip_fp8_e4m3 a, float b)
+    {
+        return float(a) * float(b);
+    }
+
+    inline __host__ __device__ float operator*(__hip_fp8_e5m2 a, float b)
+    {
+        return float(a) * float(b);
+    }
     // For older versions of ROCm that do not include hip_fp8.h,
     // we provide a local version of the header file as a fallback.
-    #else
-        #include <amd_hip_fp8.h>
-    #endif
+#else
+    #include <hip/hip_bfloat16.h>
+    #include "hip_fp8_rccl.h"
+
+    typedef rccl_float8 __hip_fp8_e4m3;
+    typedef rccl_bfloat8 __hip_fp8_e5m2;
 #endif
 
 
-
-inline std::ostream& operator<<(std::ostream& os, const __hip_fp8_e4m3& f8)
-{
-    return os << float(f8);
-}
-
-inline std::ostream& operator<<(std::ostream& os, const __hip_fp8_e5m2& bf8)
-{
-    return os << float(bf8);
-}
-
-inline __host__ __device__ float operator*(__hip_fp8_e4m3 a, __hip_fp8_e4m3 b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(__hip_fp8_e5m2 a, __hip_fp8_e5m2 b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(__hip_fp8_e4m3 a, float b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(__hip_fp8_e5m2 a, float b)
-{
-    return float(a) * float(b);
-}
-
-#endif  // HIP_INCLUDE_HIP_HIP_FP8_H
+#endif  // ROCBLAS_FLOAT8_H

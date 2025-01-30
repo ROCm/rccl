@@ -469,7 +469,7 @@ set(SRC_FILES
   src/include/rccl_vars.h
   src/include/register.h
   src/include/rccl_float8.h
-  src/include/amd_hip_fp8.h
+  src/include/hip_fp8_rccl.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
   src/include/roctx.h
