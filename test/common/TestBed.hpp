@@ -10,9 +10,7 @@
 #include "TestBedChild.hpp"
 #include "EnvVars.hpp"
 #include <gtest/gtest.h>
-#ifndef _GLIBCXX_IOMANIP
 #include <iomanip>
-#endif
 
 namespace RcclUnitTesting
 {
