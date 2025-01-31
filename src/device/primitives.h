@@ -15,9 +15,15 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#define __THREAD_FENCE __threadfence_block()
+#else
+#define __THREAD_FENCE __threadfence()
+#endif
+
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __threadfence_block(); __builtin_amdgcn_s_barrier(); \
+    __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
@@ -26,7 +32,7 @@
       __hip_atomic_fetch_add(barriers, 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
       int spins = 0; \
       int rate_limit = 50; \
-      __threadfence_block(); \
+      __THREAD_FENCE; \
       while (__hip_atomic_load(barriers, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next[w]) { \
         spins++; \
         if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
