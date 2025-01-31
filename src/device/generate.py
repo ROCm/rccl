@@ -137,7 +137,7 @@ def calc_unroll_for_local_arch():
   if not is_local_arch_only: 
     return
 
-  res = subprocess.run(['rocminfo'], capture_output=True, text=True)
+  res = subprocess.run(['rocminfo'], stdout=subprocess.PIPE, universal_newlines=True)
   rocminfo_output = res.stdout
   
   # Parse rocminfo binary output
