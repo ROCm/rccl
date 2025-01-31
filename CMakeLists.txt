@@ -3,7 +3,7 @@
 
 # CMake version minimum requirements
 #==================================================================================================
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 
 # CMake Toolchain file to define compilers and path to ROCm
 #==================================================================================================
