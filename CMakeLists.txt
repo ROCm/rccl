@@ -314,7 +314,12 @@ if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration only supported on ROCm 6.2 or greater; disabling MSCCL++ build")
 endif()
-cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID)
+# cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID) ## Requires cmake 3.22
+execute_process(
+  COMMAND bash -c "grep '^ID=' /etc/os-release | cut -d'=' -f2"
+  OUTPUT_VARIABLE HOST_OS_ID
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 if (ENABLE_MSCCLPP AND NOT(${HOST_OS_ID} STREQUAL "ubuntu" OR ${HOST_OS_ID} STREQUAL "centos"))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration not supported on this OS (${HOST_OS_ID}); disabling MSCCL++ build")
