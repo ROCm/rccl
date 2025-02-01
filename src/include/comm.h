@@ -233,11 +233,13 @@ struct ncclTaskColl {
 
   void* sendMhandle;
   void* recvMhandle;
+  uint64_t opCount;
 };
 struct ncclTaskP2p {
   struct ncclTaskP2p* next;
   void* buff;
   size_t bytes;
+  uint64_t opCount;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

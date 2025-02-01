@@ -46,7 +46,8 @@
     uint32_t pos = atomicAdd(&ncclShmem.collTraceTail->tail, 1)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
     collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x;
+    collTrace->bid = blockIdx.x; \
+    collTrace->channelId = ncclShmem.channelId;
     // TODO: switch to atomicInc after llvm crash is fixed
     // uint32_t pos = atomicInc(&ncclShmem.collTraceTail->tail, COLLTRACE_NUM_ITEMS)
 
@@ -65,6 +66,8 @@
       collTrace->p2p.connIndex = p2pWork->connIndex; \
       collTrace->p2p.sendProtoLL = p2pWork->sendProtoLL; \
       collTrace->p2p.recvProtoLL = p2pWork->recvProtoLL; \
+      collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
+      collTrace->p2pOpCount[1] = p2pWork->recvOpCount; \
       collTrace->type = (launch_type) | ncclCollTraceP2pElemType; \
     } else if (ncclShmem.workType == ncclDevWorkTypeColl) { \
       struct ncclDevWorkColl *collWork = (struct ncclDevWorkColl*)ncclShmem.workStorage; \
@@ -72,6 +75,7 @@
       collTrace->coll.nChannels = collWork->channelHi-collWork->channelLo+1; \
       collTrace->coll.bid = ncclShmem.channelId - collWork->channelLo; \
       collTrace->coll.root = collWork->root; \
+      collTrace->opCount = collWork->opCount; \
       collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
     } \
   }

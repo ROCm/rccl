@@ -566,6 +566,7 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
     devWork.oneNode = (comm->nNodes == 1);
     devWork.regUsed = task->regBufType;
     devWork.pivotA2ANumBiRings = comm->topo->pivotA2ANumBiRings;
+    devWork.opCount = task->opCount;
 
     struct ncclWorkList* workNode;
     switch (task->regBufType) {
@@ -867,7 +868,8 @@ static ncclResult_t addP2pToPlan(
     struct ncclComm* comm, struct ncclKernelPlan* plan,
     int nChannelsMin, int nChannelsMax, int p2pRound,
     int sendRank, void* sendAddr, ssize_t sendBytes,
-    int recvRank, void* recvAddr, ssize_t recvBytes
+    int recvRank, void* recvAddr, ssize_t recvBytes,
+    uint64_t sendOpCount, uint64_t recvOpCount
   ) {
   int connIndex = 1;
   bool selfSend = (sendRank == comm->rank);
@@ -976,6 +978,8 @@ static ncclResult_t addP2pToPlan(
   work->recvAddr = recvAddr;
   work->recvBytes = recvBytes==-1 ? 0 : recvBytes;
   work->connIndex = connIndex;
+  work->sendOpCount = sendOpCount;
+  work->recvOpCount = recvOpCount;
 
   struct ncclProxyOp proxyOps[2] = {};
   int nProxyOps = selfSend ? 0 : 2;
@@ -1112,7 +1116,8 @@ static ncclResult_t scheduleP2pTasksToPlan(
         if (!testBudget(budget, plan->nWorkBatches+nChannelsMax, plan->workBytes + sizeof(struct ncclDevWorkP2p))) {
           return ncclSuccess;
         }
-        NCCLCHECK(addP2pToPlan(comm, plan, nChannelsMin, nChannelsMax, round, sendRank, sendBuff, sendBytes, recvRank, recvBuff, recvBytes));
+        NCCLCHECK(addP2pToPlan(comm, plan, nChannelsMin, nChannelsMax, round, sendRank, sendBuff, sendBytes, recvRank, recvBuff, recvBytes,
+          send ? send->opCount : 0, recv ? recv->opCount : 0));
         if (send != nullptr) {
           ncclIntruQueueDequeue(&peers[sendRank].sendQueue);
           comm->planner.nTasksP2p -= 1;
@@ -2106,6 +2111,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
     struct ncclTaskP2p* p2p = ncclMemoryStackAlloc<struct ncclTaskP2p>(&comm->memScoped);
     p2p->buff = (void*)info->recvbuff;
     p2p->bytes = nBytes;
+    p2p->opCount = comm->opCount;
     ncclIntruQueueEnqueue(
       isSendNotRecv ? &planner->peers[peer].sendQueue : &planner->peers[peer].recvQueue,
       p2p);
@@ -2182,6 +2188,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->opDev = opDev; // C++ struct assignment
       t->chunkSteps = info->chunkSteps;
       t->sliceSteps = info->sliceSteps;
+      t->opCount = comm->opCount;
 
       planner->nTasksColl += 1;
       ncclTaskCollSorterInsert(&planner->collSorter, t, t->trafficBytes);

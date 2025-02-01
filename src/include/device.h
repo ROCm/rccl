@@ -234,6 +234,7 @@ struct alignas(16) ncclDevWorkP2p {
   void *sendAddr, *recvAddr;
   size_t sendBytes, recvBytes;
   int sendRank, recvRank;
+  uint64_t sendOpCount, recvOpCount;
   // From the part index, nP2pChannels, and channelBase the device code can
   // calculate which part of the transfer a channel is responsible for.
   uint8_t nP2pChannels; // Always equal to comm->p2pnChannels
@@ -298,6 +299,7 @@ struct alignas(16) ncclDevWorkColl {
     } collnet;
   };
   uint64_t redOpArg;
+  uint64_t opCount;
 };
 
 
@@ -418,8 +420,12 @@ struct ncclCollTrace {
   uint8_t bid;
   int16_t funcIndex;
   uint32_t data_0;
-  uint64_t timeStamp;
-  uint64_t opCount;
+  uint8_t channelId;
+  uint64_t timeStamp:56;
+  union {
+    uint64_t opCount;
+    uint32_t p2pOpCount[2];
+  };
   union {
     uint64_t data_1;
     struct {
