@@ -110,6 +110,7 @@ if(NOT DEFINED ROCM_PATH)
 else()
   message(STATUS "ROCM_PATH found: ${ROCM_PATH}")
 endif()
+set(ENV{ROCM_PATH} ${ROCM_PATH})
 
 if("${CMAKE_CXX_COMPILER}" MATCHES ".*amdclang\\+\\+")
   message(STATUS "Compiling with amdclang++")
