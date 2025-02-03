@@ -24,7 +24,7 @@ Quick start RCCL build
 ======================
 
 RCCL directly depends on the HIP runtime plus the HIP-Clang compiler, which are part of the ROCm software stack.
-For ROCm installation instructions, see :doc:`rocm-install-on-linux:install/native-install/index`.
+For ROCm installation instructions, see the :doc:`package manager installation guide <rocm-install-on-linux:install/install-methods/package-manager-index>`.
 
 Use the `install.sh helper script <https://github.com/ROCm/rccl/blob/develop/install.sh>`_,
 located in the root directory of the RCCL repository,
