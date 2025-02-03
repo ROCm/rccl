@@ -63,7 +63,8 @@
       collTrace->p2p.nSendChannels = p2pWork->nSendChannels; \
       collTrace->p2p.nRecvChannels = p2pWork->nRecvChannels; \
       collTrace->p2p.channelBase = p2pWork->channelBase; \
-      collTrace->p2p.connIndex = p2pWork->connIndex; \
+      collTrace->p2p.sendConnIndex = p2pWork->sendConnIndex; \
+      collTrace->p2p.recvConnIndex = p2pWork->recvConnIndex; \
       collTrace->p2p.sendProtoLL = p2pWork->sendProtoLL; \
       collTrace->p2p.recvProtoLL = p2pWork->recvProtoLL; \
       collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \

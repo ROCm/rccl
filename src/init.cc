@@ -260,9 +260,9 @@ void *ncclCommThreadMain(void *arg) {
           if (type == ncclCollTraceCollElemType) {
             sprintf(line+offset, " CE %s nw %d bi %d nc %d root %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
           } else if (type == ncclCollTraceP2pElemType) {
-            sprintf(line+offset, " Send %d -> Recv %d connIdx/nc/cb/sLL/rLL %d/%d/%d/%d/%d busId %lx nRanks %d",
-              td->p2p.sendRank, td->p2p.recvRank, td->p2p.connIndex, td->p2p.nP2pChannels, td->p2p.channelBase,
-              td->p2p.sendProtoLL, td->p2p.recvProtoLL, comm->busId, comm->nRanks);
+            sprintf(line+offset, " Send %d -> %d/%d connIdx/LL %d/%d -> Recv %d nc %d cb %d busId %lx nRanks %d",
+              td->p2p.sendRank, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRank, td->p2p.nP2pChannels, td->p2p.channelBase,
+              comm->busId, comm->nRanks);
           } else {
             switch (type&0xf) {
               case ncclCollTraceKernelLaunchType:
@@ -275,9 +275,9 @@ void *ncclCommThreadMain(void *arg) {
                 if ((type&0xf0) == ncclCollTraceCollElemType)
                   sprintf(line+offset, " nw %d bi %d nc %d root %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
                 else if ((type&0xf0) == ncclCollTraceP2pElemType)
-                  sprintf(line+offset, " Send %d -> Recv %d connIdx/nc/cb/sLL/rLL %d/%d/%d/%d/%d busId %lx nRanks %d",
-                    td->p2p.sendRank, td->p2p.recvRank, td->p2p.connIndex, td->p2p.nP2pChannels, td->p2p.channelBase,
-                    td->p2p.sendProtoLL, td->p2p.recvProtoLL, comm->busId, comm->nRanks);
+                  sprintf(line+offset, " Send %d -> %d/%d ConnIdx/LL %d/%d -> Recv %d nc %d cb %d busId %lx nRanks %d",
+                    td->p2p.sendRank, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRank, td->p2p.nP2pChannels, td->p2p.channelBase,
+                    comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceKernelEndType:
                 sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);
