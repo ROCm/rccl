@@ -161,7 +161,7 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
   NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   if (comm->checkPointers) NCCLCHECK(CudaPtrCheck(buff, comm, "buff", "ncclCommRegister"));
   #ifdef ENABLE_MSCCLPP
-    if (comm->mscclCompatible){
+    if (comm->mscclCompatible && size > 0){
       bool isManagedBuffer = false; 
       CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(buff)));
       if(!isManagedBuffer){
