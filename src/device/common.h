@@ -120,8 +120,6 @@ struct ncclShmemGroup {
   int32_t dstSizes[NCCL_MAX_ARITY+1];
 };
 
-#define LDS_NUM_EVENTS 64
-
 struct ncclShmemData {
   struct ncclDevKernelArgs args;
   int channelId;
@@ -150,10 +148,6 @@ struct ncclShmemData {
 #endif
 #ifdef ENABLE_PROFILING
   struct ncclProf prof;
-#endif
-#if defined(ENABLE_NPKIT)
-  NpKitEvent event_buffer[LDS_NUM_EVENTS];
-  uint64_t event_buffer_head;
 #endif
 };
 
