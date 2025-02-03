@@ -25,14 +25,14 @@
 namespace RcclUnitTesting
 {
 
-void call_rccl(ncclUniqueId id, int collID, int rank, int nranks, const std::vector<int>& send, std::vector<int>& recv, bool use_managed_mem){
+void callCollective(ncclUniqueId id, int collID, int rank, int nranks, const std::vector<int>& send, std::vector<int>& recv, bool use_managed_mem){
     switch(collID){
         case ncclCollAllReduce:
         case ncclCollAllGather:
         break;
 
         default:
-            ERROR("This collective is not implemented for call_RCCL routine");
+            ERROR("This collective is not implemented for callCollective routine");
     }
     
     HIPCALL(hipSetDevice(rank));
@@ -147,7 +147,7 @@ void callCollectiveForked(int nranks,  int collID, const std::vector<int>& sendB
         else
           getNCCLidFromParent(r);
 
-        call_rccl(id, collID, r, nranks, sendBuff, recvBuff, use_managed_mem);
+        callCollective(id, collID, r, nranks, sendBuff, recvBuff, use_managed_mem);
         for(int i = 0; i < recvBuff.size(); ++i){
           ASSERT_EQ(recvBuff[i], expected[i]);
         }
