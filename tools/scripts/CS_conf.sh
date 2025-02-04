@@ -3,28 +3,27 @@
 
 ##################################################### README #####################################################
 
+# This script only requires 1 input arguement, it is the path to the rccl-tests repo. EX: /path/to/rccl-tests/
 
+# Things to check before running this script, if things from the below list it is fine the script will still continue to
+# run but it may produce an error on the missing parts.
 
+# 1. UCX bin folder is on path or in default location under opt
+# 2. OMPI bin folder is on path or in default location under opt
+# 3. RCCL is either built and added to path or default loction is on path
+# 4. RCCL-Tests are built
+# 5. rocm-smi is on path
+# 6. hipconfig is on path
+# 7. rocminfo is on path
+# 8. ibstatus is on path
+# 9. ibv_devices is on path
+# 10. ibv_devinfo is on path
+# 11. ibstat device GUIDs
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# All output will be in a folder called conf-script-output that will be created in the same directory as the script
 
 ##################################################### end README #####################################################
+
 
 
 ##################################################### define necessary functions #####################################################
@@ -48,7 +47,7 @@ function try() {
     if [ $exit_status -ne 0 ]; then
         catch "${func_call}" "${output}" "${func_name}"
     else
-        echo "${output}" > "${file_output}"
+        echo "${output}" > "conf-script-output/${file_output}"
         echo "${func_name} was successful. Output saved to ${file_output}"
     fi
 }
@@ -141,6 +140,13 @@ run_rccl_tests() {
 
 ##################################################### end define necessary functions #####################################################
 
+
+
+##################################################### setup output folder #####################################################
+
+mkdir conf-script-output
+
+##################################################### end setup output folder #####################################################
 
 
 
@@ -245,6 +251,3 @@ try "ACS_info" ACSinfo
 echo ""
 
 ##################################################### end query system with functions and commands for config info #####################################################
-
-
-# I think after I'm down I need to have all logs output to a folder, just a note to remind myself to do so
