@@ -244,7 +244,7 @@ ncclResult_t getOpIndex(struct ncclProxyArgs* op, struct ncclProxyProgressState*
 }
 
 ncclResult_t printProxyOp(struct ncclProxyArgs* op, int poolIndex, int opIndex) {
-  int peer = op->send ? op->nextRank : op->prevRank;
+  int peer = op->peer;
   bool isColl = (op->pattern != ncclPatternRecv) && (op->pattern != ncclPatternSend);
 
   fprintf(stderr, "%p [%d-%d|%ld| %s",op, poolIndex, opIndex, op->opCount, isColl ? "Coll->" : "");
@@ -412,8 +412,7 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   args->progress = op->connection->tcomm->proxyProgress;
   args->proxyAppendPtr = op->connection->proxyAppendPtr;
   args->send = op->connection->send;
-  args->prevRank = op->prevRank;
-  args->nextRank = op->nextRank;
+  args->peer = op->peer;
   args->retry_total = 0;
   return ncclSuccess;
 }
@@ -544,6 +543,7 @@ static ncclResult_t SaveProxy(struct ncclComm* comm, struct ncclChannel* channel
 
   if (justInquire) *justInquire = true;
   else {
+    op->peer = peer;
     NCCLCHECK(ncclLocalOpAppend(comm, &connector->proxyConn, op));
   }
   return ncclSuccess;
@@ -566,13 +566,9 @@ ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* op, bool
   case ncclPatternPipelineTo: {
       struct ncclRing* ring = &channel->ring;
       if (NeedProxy(proxyRecv, op->pattern, op->root, ring, comm->nRanks)) {
-        op->prevRank = ring->prev;
-        op->nextRank = ring->next;
         NCCLCHECK(SaveProxy(comm, channel, proxyRecv, ring->prev, op, op->connIndex, justInquire));
       }
       if (NeedProxy(proxySend, op->pattern, op->root, ring, comm->nRanks)) {
-        op->prevRank = ring->prev;
-        op->nextRank = ring->next;
         NCCLCHECK(SaveProxy(comm, channel, proxySend, ring->next, op, op->connIndex, justInquire));
       }
     } break;
