@@ -369,7 +369,7 @@ private:
     // worker perf is the limiter, perf-wise this loop is effectively unentered,
     // hence just a single branch insn.
     #pragma unroll 1
-    while (false) {
+    while (slice < SlicePerChunk) {
       sliceSize = sliceSize < nelem-offset ? sliceSize : nelem-offset;
       { // Only workers could have Wait roles so we know the slice must be empty
         // since we've exited the loop above.
