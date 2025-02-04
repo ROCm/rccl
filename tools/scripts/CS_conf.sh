@@ -1,6 +1,34 @@
 #!/bin/bash
 
 
+##################################################### README #####################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##################################################### end README #####################################################
+
+
+##################################################### define necessary functions #####################################################
+
 function try() {
     local func_name="$1"
     local func_call="$2"
@@ -72,6 +100,52 @@ function ACSinfo()
 
 }
 
+# Function to get rccl and rccl-tests version
+run_rccl_tests() {
+
+    local rccl_tests_dir="$1"
+
+    # Get rccl-tests branch and version information
+    local rccl_tests_branch=$(git -C "${rccl_tests_dir}" rev-parse --abbrev-ref HEAD)
+    local rccl_tests_version=$(git -C "${rccl_tests_dir}" log -1 --format="%H")
+
+    # Set the flag to display RCCL version during the run
+    export NCCL_DEBUG=VERSION
+
+
+    # Run the rccl-tests
+    # Replace this line with the actual command to run rccl-tests in your environment
+
+    local output_file="rccl_tests_output.txt"
+
+    $1/build/all_reduce_perf -b 8 -e 16M -f 8 -g 2 > "${output_file}"
+
+    # Unset the flag after execution
+    unset NCCL_DEBUG
+
+    # Extract RCCL, HIP, and ROCm versions from the output file
+    local rccl_version=$(grep "RCCL version" "${output_file}" | awk '{print $4}')
+    local hip_version=$(grep "HIP version" "${output_file}" | awk -F ': ' '{print $2}')
+    local rocm_version=$(grep "ROCm version" "${output_file}" | awk -F ': ' '{print $2}')
+
+
+    # Display extracted version information
+    echo "RCCL Version: ${rccl_version}"
+    echo "HIP Version: ${hip_version}"
+    echo "ROCm Version: ${rocm_version}"
+
+    # Display rccl-tests branch and version information
+    echo "RCCL-Tests Branch: ${rccl_tests_branch}"
+    echo "RCCL-Tests Version: ${rccl_tests_version}"
+}
+
+##################################################### end define necessary functions #####################################################
+
+
+
+
+##################################################### query system with functions and commands for config info #####################################################
+
 # ROCm version
 try "ROCm_version" rocmver
 echo ""
@@ -84,13 +158,9 @@ echo ""
 try "hip_version" hipconfig --version
 echo ""
 
-# echo "6. RCCL version" ############################################ TO DO
-
-# echo ""
-
-# echo "7. RCCL-Tests version"
-
-# echo "" ################################################################ END TO DO
+# RCCL version and RCCL tests version
+try "RCCL_and_RCCL_tests_version" run_rccl_tests $1
+echo ""
 
 # UCX version
 try "UCX_version" /opt/ucx/bin/ucx_info -v
@@ -173,5 +243,8 @@ echo ""
 # Access control service info
 try "ACS_info" ACSinfo
 echo ""
+
+##################################################### end query system with functions and commands for config info #####################################################
+
 
 # I think after I'm down I need to have all logs output to a folder, just a note to remind myself to do so
