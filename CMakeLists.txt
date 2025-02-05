@@ -83,7 +83,7 @@ if (BUILD_ADDRESS_SANITIZER)
       endif()
     endif()
   endforeach()
-  SET(GPU_TARGETS "${amdgpu_targets}" CACHE STRING "Modified GPU list for Address-Sanitizer enabled build." FORCE)
+  SET(GPU_TARGETS "${amdgpu_targets}")
 endif()
 
 # Check if clang compiler can offload to GPU_TARGETS
@@ -95,11 +95,11 @@ else()
   set(SUPPORTED_GPUS ${DEFAULT_GPUS})
 endif()
 
-set(COMPILING_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
-message(STATUS "Compiling for ${COMPILING_TARGETS}")
+set(GPU_TARGETS "${SUPPORTED_GPUS}")
+message(STATUS "Compiling for ${GPU_TARGETS}")
 
-## NOTE: Reload rocm-cmake in order to update COMPILING_TARGETS
-include(cmake/Dependencies.cmake) # Reloading to use desired COMPILING_TARGETS instead of defaults
+## NOTE: Reload rocm-cmake in order to update GPU_TARGETS
+include(cmake/Dependencies.cmake) # Reloading to use desired GPU_TARGETS instead of defaults
 
 # Try to establish ROCM_PATH (for find_package)
 #==================================================================================================
@@ -307,7 +307,7 @@ endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
 ## Currently MSCCL++ is supported only on gfx942, and only on Ubuntu and CentOS
-if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST COMPILING_TARGETS OR "gfx942:xnack-" IN_LIST COMPILING_TARGETS OR "gfx942:xnack+" IN_LIST COMPILING_TARGETS))
+if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST GPU_TARGETS OR "gfx942:xnack-" IN_LIST GPU_TARGETS OR "gfx942:xnack+" IN_LIST GPU_TARGETS))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
 endif()
@@ -779,7 +779,7 @@ if (HAVE_KERNARG_PRELOAD)
 endif()
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
-#foreach(target ${COMPILING_TARGETS})
+#foreach(target ${GPU_TARGETS})
 #  target_compile_options(rccl PRIVATE --offload-arch=${target})
 #endforeach()
 
@@ -904,7 +904,7 @@ if(NOT BUILD_SHARED_LIBS)
     endif()
   endforeach()
 
-  foreach(target ${COMPILING_TARGETS})
+  foreach(target ${GPU_TARGETS})
     list(APPEND static_link_flags --offload-arch=${target})
   endforeach()
   list(JOIN static_link_flags " " flags_str)
