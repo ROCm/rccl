@@ -935,7 +935,7 @@ void *ncclProxyMonitor(void *args) {
 
 static ncclResult_t ncclProxyMonitorCreate() {
   int *interval = (int*) malloc(sizeof(int));
-  *interval = 1;
+  *interval = 60;
   if(proxyMonitorInit == 1) return ncclSuccess;
 
   proxyMonitorInit = 1;
