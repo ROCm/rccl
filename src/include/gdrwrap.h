@@ -13,6 +13,7 @@
 #include <stdint.h> // for standard [u]intX_t types
 #include <stdio.h>
 #include <stdlib.h>
+#include "archinfo.h"
 
 // These can be used if the GDR library isn't thread safe
 #include <pthread.h>
@@ -160,8 +161,21 @@ typedef struct gdr_mem_desc {
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 static gdr_t ncclGdrInit() {
-  INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation");
-  return (gdr_t)0x12345678L;
+  cudaDeviceProp devProp;
+  char gcnArchNameSubstr[128];
+  cudaError_t err = cudaGetDeviceProperties(&devProp, 0);
+  if (err != cudaSuccess) {
+    WARN("Failed to GetDeviceProperties for device");
+    return NULL;
+  }
+  GcnArchNameFormat(devProp.gcnArchName, gcnArchNameSubstr);
+  if (IsArchMatch(gcnArchNameSubstr, "gfx94")) {
+    INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation on %s", gcnArchNameSubstr);
+    return (gdr_t)0x12345678L;
+  } else {
+    INFO(NCCL_INIT, "Disabled GDRCopy equivalent memory allocation on %s due to GPU architecture", gcnArchNameSubstr);
+    return NULL;
+  }
 }
 
 template <typename T>
@@ -209,7 +223,7 @@ static ncclResult_t ncclGdrCudaCopy(void *gdrHandle, T* dst, T* src, size_t nele
 
 static ncclResult_t ncclGdrCudaFree(void* gdrHandle) {
   gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle;
-  CUDACHECK(hipFree(md->gdrDevMem));
+  CUDACHECK(cudaFree(md->gdrDevMem));
   free(md);
 
   return ncclSuccess;
