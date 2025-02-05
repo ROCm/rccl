@@ -269,7 +269,7 @@ ncclResult_t printProxyOp(struct ncclProxyArgs* op, int poolIndex, int opIndex) 
 	// Send or recv within a collective. Dump raw state data.
 	fprintf(stderr, " nb:%zd ns:%d p:%lu t:%lu r:%lu, d:%lu ",sub->nbytes,sub->nsteps, sub->posted, sub->transmitted, sub->received, sub->done);
       }
-      fprintf(stderr, "%c peer:%d chan:%d ", status, peer, sub->channelId);
+      fprintf(stderr, "%c peer:%d chan:%d myrank:%d", status, peer, sub->channelId, op->rank);
     } else {
         if (op->state == ncclProxyOpNone) fprintf(stderr, "\t[]");
         else if (op->state == ncclProxyOpReady) fprintf(stderr, "\t[R]");
@@ -544,6 +544,7 @@ static ncclResult_t SaveProxy(struct ncclComm* comm, struct ncclChannel* channel
   if (justInquire) *justInquire = true;
   else {
     op->peer = peer;
+    op->rank = comm->rank;
     NCCLCHECK(ncclLocalOpAppend(comm, &connector->proxyConn, op));
   }
   return ncclSuccess;

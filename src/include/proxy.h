@@ -75,6 +75,7 @@ struct ncclProxyOp {
   uint8_t* recvbuff;
 
   int peer;
+  int rank;
 
   union ncclProxyOpSpecifics specifics;
 
@@ -149,6 +150,7 @@ struct ncclProxyArgs {
   union ncclProxyOpSpecifics specifics;
 
   int peer;
+  int rank;
   int send;
   int retry_total;
 };
