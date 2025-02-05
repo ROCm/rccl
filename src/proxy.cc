@@ -21,6 +21,10 @@
 #include <unistd.h>
 #include <sys/time.h>
 
+static ncclProxyProgressState* ncclLastProxyState;
+static pthread_t proxyMonitorThread;
+int proxyMonitorInit = 0;
+
 static bool NeedProxy(int type, int pattern, int root, struct ncclRing* ring, int nranks) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice) return true;
 
@@ -767,7 +771,6 @@ process_nextops:
 }
 
 #include <signal.h>
-static ncclProxyProgressState* ncclLastProxyState;
 void ncclDumpProxyState(int signal) {
   fprintf(stderr, "received signal %d...\n", signal);
   dumpProxyState(ncclLastProxyState);
@@ -915,6 +918,38 @@ ncclResult_t ncclProxyProgressDestroy(struct ncclProxyState* proxyState) {
   TIME_PRINT("Proxy");
   return ncclSuccess;
 }
+
+void *ncclProxyMonitor(void *args) {
+  int interval = *(int*) args;
+  int elapsed = 0;
+  while (proxyMonitorInit) {
+    if (elapsed > interval) {
+      dumpProxyState(ncclLastProxyState);
+      elapsed = 0;
+    }
+    sleep(3);
+    elapsed += 3;
+  }
+  return args;
+}
+
+static ncclResult_t ncclProxyMonitorCreate() {
+  int *interval = (int*) malloc(sizeof(int));
+  *interval = 1;
+  if(proxyMonitorInit == 1) return ncclSuccess;
+
+  proxyMonitorInit = 1;
+  pthread_create(&proxyMonitorThread, NULL, ncclProxyMonitor, interval);
+  INFO(NCCL_INIT, "created proxy monitoring thread...");
+  return ncclSuccess;
+}
+
+ncclResult_t ncclProxyMonitorDestroy() {
+  proxyMonitorInit = 0;
+  pthread_join(proxyMonitorThread, NULL);
+  return ncclSuccess;
+}
+
 
 #define NCCL_PROXY_CONN_POOL_SIZE_POW2 7
 #define NCCL_PROXY_CONN_POOL_SIZE (1<<(NCCL_PROXY_CONN_POOL_SIZE_POW2))
@@ -1674,6 +1709,9 @@ ncclResult_t ncclProxyCreate(struct ncclComm* comm) {
     INFO(NCCL_PROXY, "UDS: Creating service thread comm %p rank %d", comm, comm->rank);
     pthread_create(&comm->proxyState->threadUDS, NULL, ncclProxyServiceUDS, comm->proxyState);
     ncclSetThreadName(comm->proxyState->threadUDS, "NCCL UDS Service %2d", comm->cudaDev);
+
+    // Monitoring
+    ncclProxyMonitorCreate();
   }
   return ncclSuccess;
 }
@@ -1721,6 +1759,7 @@ ncclResult_t ncclProxyStop(struct ncclComm* comm) {
     }
   }
 
+  ncclProxyMonitorDestroy();
   return ncclSuccess;
 }
 
