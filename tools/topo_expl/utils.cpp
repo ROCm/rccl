@@ -245,7 +245,7 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelId) {
   int nRanks = comm->nRanks;
   int nPeers = nRanks + 1 /* Collnet */ + comm->localRanks /* NVLS */;
   channel->id = channelId;
-  channel->workFifoSent = 0;
+  channel->workFifoProduced = 0;
 
   struct ncclSharedResources* sharedRes = comm->sharedRes;
 
