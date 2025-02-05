@@ -871,7 +871,7 @@ static ncclResult_t addP2pToPlan(
     int recvRank, void* recvAddr, ssize_t recvBytes,
     uint64_t sendOpCount, uint64_t recvOpCount
   ) {
-  int connIndex = 1;
+  int connIndex[2] = {1, 1};
   bool selfSend = (sendRank == comm->rank);
   // recv: dir=0, send: dir=1
   void* addrs[2] = {recvAddr, sendAddr};
@@ -881,8 +881,12 @@ static ncclResult_t addP2pToPlan(
   bool proxySameProcess[2] = {true, true};
   uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound);
 
-  if (comm->p2pNet && (sendBytes > rcclParamP2pNetThreshold() || recvBytes > rcclParamP2pNetThreshold()))
-    connIndex = NCCL_CONN_IDX_P2P_NET;
+  if (comm->p2pNet) {
+    for (int dir = 0; dir <= 1; dir++) {
+      if (bytes[dir] > rcclParamP2pNetThreshold())
+        connIndex[dir] = NCCL_CONN_IDX_P2P_NET;
+    }
+  }
   
   if (!selfSend) {
     for (int part=0; part < nChannelsMax; part++) {
@@ -890,8 +894,8 @@ static ncclResult_t addP2pToPlan(
       struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
       for (int dir=0; dir <= 1; dir++) {
         int peerRank = dir ? sendRank : recvRank;
-        struct ncclConnector* conn = dir ? &channelPeers[peerRank]->send[connIndex]
-                                         : &channelPeers[peerRank]->recv[connIndex];
+        struct ncclConnector* conn = dir ? &channelPeers[peerRank]->send[connIndex[dir]]
+                                         : &channelPeers[peerRank]->recv[connIndex[dir]];
         protoLL[dir] &= conn->conn.buffs[NCCL_PROTO_LL] != nullptr && !IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx12");
         network[dir] |= conn->transportComm == (dir ? &netTransport.send : &netTransport.recv);
         proxySameProcess[dir] &= conn->proxyConn.sameProcess;
@@ -970,6 +974,8 @@ static ncclResult_t addP2pToPlan(
   work->sendRank = sendRank;
   work->sendAddr = sendAddr;
   work->sendBytes = sendBytes==-1 ? 0 : sendBytes;
+  work->sendConnIndex = connIndex[1];
+  work->sendOpCount = sendOpCount;
   work->nRecvChannels = nChannels[0];
   work->recvProtoLL = protoLL[0];
   work->recvRegistered = registered[0];
@@ -977,8 +983,7 @@ static ncclResult_t addP2pToPlan(
   work->recvRank = recvRank;
   work->recvAddr = recvAddr;
   work->recvBytes = recvBytes==-1 ? 0 : recvBytes;
-  work->connIndex = connIndex;
-  work->sendOpCount = sendOpCount;
+  work->recvConnIndex = connIndex[0];
   work->recvOpCount = recvOpCount;
 
   struct ncclProxyOp proxyOps[2] = {};
@@ -994,7 +999,7 @@ static ncclResult_t addP2pToPlan(
     op->pattern = dir ? ncclPatternSend : ncclPatternRecv;
     op->chunkSize = chunkSize[dir];
     op->reg = registered[dir];
-    op->connIndex = connIndex;
+    op->connIndex = connIndex[dir];
     // The following are modified per channel part in addWorkToChannels():
     // op->buffer, op->nbytes, op->nsteps = ...;
   }

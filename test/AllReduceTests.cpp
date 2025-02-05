@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "TestBed.hpp"
+#include "CallCollectiveForked.hpp"
 
 namespace RcclUnitTesting
 {
@@ -241,5 +242,35 @@ namespace RcclUnitTesting
       testBed.DestroyComms();
     }
     testBed.Finalize();
+  }
+
+  TEST(AllReduce, UserBufferRegistration)
+  {          
+    const int nranks = 8;
+    size_t count = 2048;
+    std::vector<int> sendBuff(count, 0);
+    std::vector<int> recvBuff(count, 0);
+    std::vector<int> expected(count, 0);
+
+    for (int i = 0; i < count; ++i){
+        sendBuff[i] = i;
+        expected[i] = i * nranks;
+    }
+    callCollectiveForked(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected);
+  }
+
+  TEST(AllReduce, ManagedMemUserBufferRegistration)
+  {          
+    const int nranks = 8;
+    size_t count = 2048;
+    std::vector<int> sendBuff(count, 0);
+    std::vector<int> recvBuff(count, 0);
+    std::vector<int> expected(count, 0);
+    const bool use_managed_mem = true;
+    for (int i = 0; i < count; ++i){
+        sendBuff[i] = i;
+        expected[i] = i * nranks;
+    }
+    callCollectiveForked(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected, use_managed_mem);
   }
 }

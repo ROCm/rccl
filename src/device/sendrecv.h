@@ -42,7 +42,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 
     Primitives<T, RedOp, FanAsymmetric<0, 1>, 0, Proto, 1>
       prims(tid, tn, nullptr, &work->sendRank, work->sendAddr, nullptr,
-            /*redOpArg(ignored)=*/0, group, work->connIndex, work->connIndex, nullptr,
+            /*redOpArg(ignored)=*/0, group, work->sendConnIndex, work->sendConnIndex, nullptr,
             /*userBufferMode=*/work->sendRegistered, ncclShmem.comm.p2pChunkSize);
 
 #if defined(ENABLE_NPKIT)
@@ -100,7 +100,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 
     Primitives<T, RedOp, FanAsymmetric<1, 0>, 0, Proto, 1>
       prims(tid, tn, &work->recvRank, nullptr, nullptr, work->recvAddr,
-            /*redOpArg(ignored)=*/0, group, work->connIndex, work->connIndex, nullptr,
+            /*redOpArg(ignored)=*/0, group, work->recvConnIndex, work->recvConnIndex, nullptr,
             /*userBufferMode=*/work->recvRegistered, ncclShmem.comm.p2pChunkSize);
 
 #if defined(ENABLE_NPKIT)

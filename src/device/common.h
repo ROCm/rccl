@@ -63,7 +63,8 @@
       collTrace->p2p.nSendChannels = p2pWork->nSendChannels; \
       collTrace->p2p.nRecvChannels = p2pWork->nRecvChannels; \
       collTrace->p2p.channelBase = p2pWork->channelBase; \
-      collTrace->p2p.connIndex = p2pWork->connIndex; \
+      collTrace->p2p.sendConnIndex = p2pWork->sendConnIndex; \
+      collTrace->p2p.recvConnIndex = p2pWork->recvConnIndex; \
       collTrace->p2p.sendProtoLL = p2pWork->sendProtoLL; \
       collTrace->p2p.recvProtoLL = p2pWork->recvProtoLL; \
       collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
@@ -113,7 +114,6 @@ struct ncclShmemGroup {
   void* srcs[NCCL_MAX_ARITY+1];
   void* dsts[NCCL_MAX_ARITY+1];
   uint64_t barrier;
-  uint64_t barrier_next[NCCL_MAX_GROUPS];
   union {
     unpackGroupShmem unpack;
   } devicePlugin;
@@ -472,8 +472,6 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       ncclShmem.groups[tid-WARP_SIZE].barrier = 0;
     break;
   case 2:
-    if (tid < 2*WARP_SIZE + NCCL_MAX_GROUPS*NCCL_MAX_GROUPS)
-      ncclShmem.groups[(tid-2*WARP_SIZE)/NCCL_MAX_GROUPS].barrier_next[(tid-2*WARP_SIZE)%NCCL_MAX_GROUPS] = 0;
     break;
   case 3:
     /* set abort flag to 0 */
@@ -549,6 +547,15 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 
     if (ncclShmem.nextBatchIx == -1) break;
     int batchIx = ncclShmem.nextBatchIx;
+    __synclds();
+    switch (tid/WARP_SIZE) {
+      case 1:
+        if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
+          ncclShmem.groups[tid-WARP_SIZE].barrier = 0;
+        break;
+      default:
+        break;
+    }
     __synclds();
     loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
 

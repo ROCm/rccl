@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "TestBed.hpp"
+#include "CallCollectiveForked.hpp"
 
 namespace RcclUnitTesting
 {
@@ -119,5 +120,43 @@ namespace RcclUnitTesting
     testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
                            inPlaceList, managedMemList, useHipGraphList);
     testBed.Finalize();
+  }
+
+  TEST(AllGather, UserBufferRegistration)
+  {          
+    const int nranks = 8;
+    size_t count = 2048;
+    std::vector<int> sendBuff(count, 0);
+    std::vector<int> recvBuff(count, 0);
+    std::vector<int> expected(nranks*count, 0);
+
+    for (int i = 0; i < count; ++i){
+        sendBuff[i] = i;
+    }
+
+    for(int r = 0; r < nranks; ++r)
+      for (int i = 0; i < count; ++i)
+        expected[r*count + i] = sendBuff[i];
+
+    callCollectiveForked(nranks, ncclCollAllGather, sendBuff, recvBuff, expected);
+  }
+
+  TEST(AllGather, ManagedMemUserBufferRegistration)
+  {          
+    const int nranks = 8;
+    size_t count = 2048;
+    std::vector<int> sendBuff(count, 0);
+    std::vector<int> recvBuff(count, 0);
+    std::vector<int> expected(nranks*count, 0);
+    const bool use_managed_mem = true;
+    for (int i = 0; i < count; ++i){
+        sendBuff[i] = i;
+    }
+
+    for(int r = 0; r < nranks; ++r)
+      for (int i = 0; i < count; ++i)
+        expected[r*count + i] = sendBuff[i];
+
+    callCollectiveForked(nranks, ncclCollAllGather, sendBuff, recvBuff, expected, use_managed_mem);
   }
 }

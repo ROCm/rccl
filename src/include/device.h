@@ -247,7 +247,7 @@ struct alignas(16) ncclDevWorkP2p {
   uint8_t sendProtoLL:1, recvProtoLL:1;
   uint8_t sendRegistered:1, recvRegistered:1;
 
-  uint8_t connIndex:2;
+  uint8_t sendConnIndex:2, recvConnIndex:2;
 };
 
 // Compute the subset of the data transfer corresponding to the given part index.
@@ -441,7 +441,8 @@ struct ncclCollTrace {
       uint8_t nSendChannels;
       uint8_t nRecvChannels;
       uint8_t channelBase;
-      uint8_t connIndex;
+      uint8_t sendConnIndex:2;
+      uint8_t recvConnIndex:2;
       uint8_t sendProtoLL:1;
       uint8_t recvProtoLL:1;
     } p2p;
