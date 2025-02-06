@@ -21,9 +21,12 @@
 #include <unistd.h>
 #include <sys/time.h>
 
+/* RCCL Proxy Monitor */
+RCCL_PARAM(ProxyMonitorInterval, "PROXY_MONITOR_INTERVAL", 0);
 static ncclProxyProgressState* ncclLastProxyState;
 static pthread_t proxyMonitorThread;
 int proxyMonitorInit = 0;
+/**/
 
 static bool NeedProxy(int type, int pattern, int root, struct ncclRing* ring, int nranks) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice) return true;
@@ -273,7 +276,7 @@ ncclResult_t printProxyOp(struct ncclProxyArgs* op, int poolIndex, int opIndex) 
 	// Send or recv within a collective. Dump raw state data.
 	fprintf(stderr, " nb:%zd ns:%d p:%lu t:%lu r:%lu, d:%lu ",sub->nbytes,sub->nsteps, sub->posted, sub->transmitted, sub->received, sub->done);
       }
-      fprintf(stderr, "%c peer:%d chan:%d myrank:%d", status, peer, sub->channelId, op->rank);
+      fprintf(stderr, "%c peer:%d chan:%d myrank:%d tail=%zd gputail=%zd proto=%d ", status, peer, sub->channelId, op->rank, op->tail, op->gputail, op->protocol);
     } else {
         if (op->state == ncclProxyOpNone) fprintf(stderr, "\t[]");
         else if (op->state == ncclProxyOpReady) fprintf(stderr, "\t[R]");
@@ -549,6 +552,8 @@ static ncclResult_t SaveProxy(struct ncclComm* comm, struct ncclChannel* channel
   else {
     op->peer = peer;
     op->rank = comm->rank;
+    op->tail = 0;
+    op->gputail = 0;
     NCCLCHECK(ncclLocalOpAppend(comm, &connector->proxyConn, op));
   }
   return ncclSuccess;
@@ -919,32 +924,38 @@ ncclResult_t ncclProxyProgressDestroy(struct ncclProxyState* proxyState) {
   return ncclSuccess;
 }
 
-void *ncclProxyMonitor(void *args) {
+void *rcclProxyMonitor(void *args) {
   int interval = *(int*) args;
   int elapsed = 0;
+
   while (proxyMonitorInit) {
     if (elapsed > interval) {
       dumpProxyState(ncclLastProxyState);
       elapsed = 0;
     }
-    sleep(3);
-    elapsed += 3;
+    sleep(1);
+    elapsed += 1;
   }
-  return args;
+
+  free(args);
+  return NULL;
 }
 
-static ncclResult_t ncclProxyMonitorCreate() {
-  int *interval = (int*) malloc(sizeof(int));
-  *interval = 60;
+static ncclResult_t rcclProxyMonitorCreate() {
+  if(rcclParamProxyMonitorInterval() <= 0) return ncclSuccess;
   if(proxyMonitorInit == 1) return ncclSuccess;
 
+  int *interval = (int*) malloc(sizeof(int));
+
+  *interval = rcclParamProxyMonitorInterval();
+
   proxyMonitorInit = 1;
-  pthread_create(&proxyMonitorThread, NULL, ncclProxyMonitor, interval);
+  pthread_create(&proxyMonitorThread, NULL, rcclProxyMonitor, interval);
   INFO(NCCL_INIT, "created proxy monitoring thread...");
   return ncclSuccess;
 }
 
-ncclResult_t ncclProxyMonitorDestroy() {
+ncclResult_t rcclProxyMonitorDestroy() {
   proxyMonitorInit = 0;
   pthread_join(proxyMonitorThread, NULL);
   return ncclSuccess;
@@ -1711,7 +1722,7 @@ ncclResult_t ncclProxyCreate(struct ncclComm* comm) {
     ncclSetThreadName(comm->proxyState->threadUDS, "NCCL UDS Service %2d", comm->cudaDev);
 
     // Monitoring
-    ncclProxyMonitorCreate();
+    rcclProxyMonitorCreate();
   }
   return ncclSuccess;
 }
@@ -1759,7 +1770,7 @@ ncclResult_t ncclProxyStop(struct ncclComm* comm) {
     }
   }
 
-  ncclProxyMonitorDestroy();
+  rcclProxyMonitorDestroy();
   return ncclSuccess;
 }
 

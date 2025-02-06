@@ -76,6 +76,8 @@ struct ncclProxyOp {
 
   int peer;
   int rank;
+  uint64_t tail;
+  uint64_t gputail;
 
   union ncclProxyOpSpecifics specifics;
 
@@ -152,6 +154,8 @@ struct ncclProxyArgs {
   int peer;
   int rank;
   int send;
+  uint64_t tail;
+  uint64_t gputail;
   int retry_total;
 };
 #define NCCL_MAX_NETDEVS 128
