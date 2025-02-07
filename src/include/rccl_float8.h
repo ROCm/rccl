@@ -38,7 +38,9 @@ typedef struct
     uint8_t data;
 } rccl_bfloat8;
 
-#elif ROCM_VERSION >= 60300 // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
+// __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
+#elif ROCM_VERSION >= 60300
+
 #include <hip/hip_fp8.h>
 
 #if HIP_FP8_TYPE_OCP
@@ -78,9 +80,9 @@ inline __host__ __device__ float operator*(rccl_bfloat8 a, float b)
 {
     return float(a) * float(b);
 }
+
 // For older versions of ROCm that do not include hip_fp8.h,
 // we provide a local version of the header file as a fallback.
-
 #else
 
 #define HIP_HOST_DEVICE __host__ __device__
@@ -1059,6 +1061,6 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 
 // =================================================================================================
 
-#endif // __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
+#endif
 
 #endif // ROCBLAS_FLOAT8_H
