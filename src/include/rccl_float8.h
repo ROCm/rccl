@@ -1061,4 +1061,4 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 
 #endif
 
-#endif  // ROCBLAS_FLOAT8_H
+#endif // ROCBLAS_FLOAT8_H
