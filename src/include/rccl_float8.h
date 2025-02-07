@@ -25,7 +25,7 @@
 
 #include <stdint.h>
 
-#if __cplusplus < 201103L || !defined(__HIP__)
+#if __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
 /*! \brief Struct to represent a 8 bit floating-point number. */
 
 typedef struct
@@ -1059,6 +1059,6 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 
 // =================================================================================================
 
-#endif
+#endif // __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
 
 #endif // ROCBLAS_FLOAT8_H
