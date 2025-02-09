@@ -584,8 +584,6 @@ int getTreeNodeParity(int treeDir, int nNodes, int node)
   return ((childTypes[treeDir] + 1) + getTreeNodeParity(treeDir, nNodes, parentNodes[treeDir])) % 2;
 }
 
-RCCL_PARAM(OutputRails, "OUTPUT_RAILS", 0);
-
 // [RCCL] Build rail-optimized trees
 ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent, int* treeToChild0, int* treeToChild1, int* treePatterns)
 {
@@ -697,25 +695,11 @@ ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent,
       }
     }
   }
-
-  if (rcclParamOutputRails()) {
-      char color[8][16] =
-      {"red", "orange", "yellow", "yellowgreen", "green", "cyan", "deepskyblue", "violet"};
-
-    for (int i = 0; i < nChannels * 2; i++) {
-      INFO(NCCL_GRAPH, "[RAIL] %d.%d [style=filled, fillcolor=%s]\n", i, rank, color[rank % 8]);
-      for (int j = 0; j < 3; j++) {
-        if (comm->channels[i].tree.down[j] != -1) {
-          INFO(NCCL_GRAPH, "[RAIL] %d.%d->%d.%d [style=%s]\n", i, rank, i, comm->channels[i].tree.down[j], j == 0 ? "solid" : "dotted");
-        }
-      }
-    }
-  }
-
   return ncclSuccess;
 }
 
 NCCL_PARAM(UnpackDoubleNChannels, "UNPACK_DOUBLE_NCHANNELS", 1);
+RCCL_PARAM(OutputTrees, "OUTPUT_TREES", 0);
 
 ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns, struct ncclTopoRanks** allTopoRanks, int* rings, struct ncclTopoGraph** graphs, struct ncclComm* parent, int nc) {
   // Gather data from all ranks
@@ -785,6 +769,22 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     NCCLCHECK(connectRailOptimizedTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
   } else {
     NCCLCHECK(connectTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
+  }
+
+  // Dump graphviz-friendly trees
+  if (rcclParamOutputTrees()) {
+    int rank = comm->rank;
+    char color[8][16] =
+      {"red", "orange", "yellow", "yellowgreen", "green", "cyan", "deepskyblue", "violet"};
+
+    for (int i = 0; i < comm->nChannels * 2; i++) {
+      INFO(NCCL_GRAPH, "[TREE] %d.%d [style=filled, fillcolor=%s]\n", i, rank, color[rank % comm->localRanks]);
+      for (int j = 0; j < 3; j++) {
+        if (comm->channels[i].tree.down[j] != -1) {
+          INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=%s,width=10]\n", i, rank, i, comm->channels[i].tree.down[j], j == 0 ? "solid" : "dotted");
+        }
+      }
+    }
   }
 
   // Only use full MAXCHANNELS for gfx94x

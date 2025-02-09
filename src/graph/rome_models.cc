@@ -1792,6 +1792,8 @@ int checkAlltoallWidth(struct rcclRomeModel *romeTopo) {
   return width;
 }
 
+RCCL_PARAM(DisableRailTrees, "DISABLE_RAIL_TREES", 0);
+
 ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, const char *ringBase) {
   constexpr int NUMA_CPUS = 2;
   constexpr int NUMA_GPUS = 4;
@@ -1947,7 +1949,7 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
 
     // Check if rail-optimized trees have been defined
     system->useRailOptimizedTrees = false;
-    if (romeTopoModels[i].treeRail != nullptr) {
+    if (romeTopoModels[i].treeRail != nullptr && !rcclParamDisableRailTrees()) {
 
       // If so, parse the lines in advanced
       // These lines will be modified appropriately during ncclTopoPostset
