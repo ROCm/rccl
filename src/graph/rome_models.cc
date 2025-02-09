@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 #include "core.h"
+#include "comm.h"
 #include "graph.h"
 #include "topo.h"
 #include "xml.h"
@@ -48,8 +49,7 @@ struct rcclRomeModel {
   const char *ringTail1;  // Lines to use for node N-1 if the total number of nodes is odd
   const char *options;
   const char *treeBase;
-
-
+  const char *treeRail;
 };
 
 static struct rcclRomeModel rome_model_22 = {
@@ -815,6 +815,42 @@ static struct rcclRomeModel rome_model_81 = {
                 "N1 1 0 2 4 3 5 7 6 N6|",
 
   .options    = "noCpuCheck=1,tuning=5,disableNumaMatching=1",
+
+  .treeRail   =  "0 1 2 4 3 6 5 7|"
+                 "1 0 4 7 3 5 2 6|"
+                 "2 3 0 5 6 1 7 4|"
+                 "3 2 7 0 6 4 1 5|"
+                 "4 5 1 6 0 3 7 2|"
+                 "5 4 6 2 0 7 1 3|"
+                 "6 7 5 3 4 0 2 1|"
+                 "7 6 3 1 4 2 5 0|"
+
+                 "2 3 0 5 6 1 7 4|"
+                 "3 2 7 0 6 4 1 5|"
+                 "4 5 1 6 0 3 7 2|"
+                 "5 4 6 2 0 7 1 3|"
+                 "6 7 5 3 4 0 2 1|"
+                 "7 6 3 1 4 2 5 0|"
+                 "0 1 2 4 3 6 5 7|"
+                 "1 0 4 7 3 5 2 6|"
+
+                 "4 5 1 6 0 3 7 2|"
+                 "5 4 6 2 0 7 1 3|"
+                 "6 7 5 3 4 0 2 1|"
+                 "7 6 3 1 4 2 5 0|"
+                 "0 1 2 4 3 6 5 7|"
+                 "1 0 4 7 3 5 2 6|"
+                 "2 3 0 5 6 1 7 4|"
+                 "3 2 7 0 6 4 1 5|"
+
+                 "6 7 5 3 4 0 2 1|"
+                 "7 6 3 1 4 2 5 0|"
+                 "0 1 2 4 3 6 5 7|"
+                 "1 0 4 7 3 5 2 6|"
+                 "2 3 0 5 6 1 7 4|"
+                 "3 2 7 0 6 4 1 5|"
+                 "4 5 1 6 0 3 7 2|"
+                 "5 4 6 2 0 7 1 3|",
 };
 
 static struct rcclRomeModel rome_model_84 = {
@@ -1908,6 +1944,21 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     }
     break;
   case NCCL_TOPO_PATTERN_BALANCED_TREE:
+
+    // Check if rail-optimized trees have been defined
+    system->useRailOptimizedTrees = false;
+    if (romeTopoModels[i].treeRail != nullptr) {
+
+      // If so, parse the lines in advanced
+      // These lines will be modified appropriately during ncclTopoPostset
+      NCCLCHECK(parseGraph(romeTopoModels[i].treeRail, system, graph, g8, nnets > 1 ? n : NULL, 0));
+      if (graph->nChannels) {
+        system->useRailOptimizedTrees = true;
+        return ncclSuccess;
+      }
+    }
+
+    // Fall back to looking for tree configuration from treeBase
     if (romeTopoModels[i].treeBase != nullptr) {
       NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, rdm.data()));
       if (graph->nChannels) return ncclSuccess;
