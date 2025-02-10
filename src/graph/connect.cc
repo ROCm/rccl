@@ -709,6 +709,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   int nChannels = comm->nChannels;
   int minHeadNum = INT_MAX;
   int shared = parent && parent->nvlsSupport  && parent->config.splitShare;
+
   NCCLCHECK(ncclCalloc(&ringRecv, nNodes*MAXCHANNELS));
   NCCLCHECK(ncclCalloc(&ringSend, nNodes*MAXCHANNELS));
   NCCLCHECK(ncclCalloc(&ringPrev, nranks*MAXCHANNELS));
@@ -778,10 +779,10 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
       {"red", "orange", "yellow", "yellowgreen", "green", "cyan", "deepskyblue", "violet"};
 
     for (int i = 0; i < comm->nChannels * 2; i++) {
-      INFO(NCCL_GRAPH, "[TREE] %d.%d [style=filled, fillcolor=%s]\n", i, rank, color[rank % comm->localRanks]);
+      INFO(NCCL_GRAPH, "[TREE] %d.%d [style=filled, fillcolor=%s]", i, rank, color[rank % comm->localRanks]);
       for (int j = 0; j < 3; j++) {
         if (comm->channels[i].tree.down[j] != -1) {
-          INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=%s,width=10]\n", i, rank, i, comm->channels[i].tree.down[j], j == 0 ? "solid" : "dotted");
+          INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=%s,width=10]", i, rank, i, comm->channels[i].tree.down[j], j == 0 ? "solid" : "dotted");
         }
       }
     }
