@@ -108,7 +108,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
   bool timeReported = false;
 
   int count = 0;
-  int num = MAXCHANNELS/64;
+  int num = (MAXCHANNELS+64-1)/64;
 
   NCCLCHECKGOTO(ncclStrongStreamAcquireUncaptured(&comm->sharedRes->hostStream), ret, fail);
   // First time initialization
@@ -288,7 +288,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int sendPeer = (comm->rank + i) % comm->nRanks;
     int flag = 0;
 
-    for (int j = 0; j < MAXCHANNELS/64; j++) {
+    for (int j = 0; j < (MAXCHANNELS+64-1)/64; j++) {
     if (recvPeer != sendPeer) {
       if (comm->connectSend[sendPeer].masks[j] != 0UL)
         NCCLCHECKGOTO(bootstrapSend(comm->bootstrap, sendPeer, bootstrapTag, &flag, sizeof(int)), ret, fail);

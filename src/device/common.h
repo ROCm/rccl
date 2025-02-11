@@ -429,7 +429,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   int tn = blockDim.x;
   int x = tid;
   int total = 0, y;
-  int num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
+  int num = (MAXCHANNELS+64-1)/64 > 0 ? (MAXCHANNELS+64-1)/64 : 1;
 
   // Copy kernel args to shmem and then only read those. Otherwise the compiler
   // will end up putting the args into thread local stack which is very wasteful.

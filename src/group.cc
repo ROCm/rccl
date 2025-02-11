@@ -293,7 +293,7 @@ static void groupCleanup(struct ncclComm** groupCommHeadPtr, struct ncclComm** g
     // is needed.
     comm->preconnectNext = reinterpret_cast<struct ncclComm*>(0x1);
     for (int i = 0; i < comm->nRanks; i++) {
-      for (int j = 0; j < MAXCHANNELS/64; j++) {
+      for (int j = 0; j < (MAXCHANNELS+64-1)/64; j++) {
       	comm->connectSend[i].masks[j] = 0UL;
       	comm->connectRecv[i].masks[j] = 0UL;
       }

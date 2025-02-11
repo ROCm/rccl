@@ -212,7 +212,7 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   struct ncclDevWorkBatch* batchPrev[MAXCHANNELS] = {}; // {0...}
   struct ncclDevWorkBatch* batchZero = (struct ncclDevWorkBatch*)(plan->kernelArgs+1);
   int batchIx = 0;
-  for (int maskIdx = 0; maskIdx < MAXCHANNELS/64; maskIdx++) {
+  for (int maskIdx = 0; maskIdx < (MAXCHANNELS+64-1)/64; maskIdx++) {
     while (hasBatchMask.masks[maskIdx] != 0) {
       uint64_t tmpMask = hasBatchMask.masks[maskIdx]; // channels with a batch for this round.
       do {
@@ -1473,7 +1473,7 @@ NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   struct ncclKernelPlanner* planner = &comm->planner;
   int nChannels = 0;
-  for (int i = 0; i < MAXCHANNELS/64; i++)
+  for (int i = 0; i < (MAXCHANNELS+64-1)/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
   dim3 grid = {(unsigned)nChannels, 1, 1};
