@@ -68,7 +68,7 @@ union ncclLLFifoLine {
 };
 
 #define WARP_SIZE warpSize
-#define MAXCHANNELS 256
+#define MAXCHANNELS 224
 #define CHANNEL_LIMIT 16
 #define NCCL_MAX_LOCAL_RANKS 64
 #define NCCL_MAX_NTHREADS 256
@@ -517,7 +517,7 @@ enum ncclDevWorkStorageType: uint8_t {
 };
 
 struct channelMasks {
-  uint64_t masks[MAXCHANNELS/64];
+  uint64_t masks[(MAXCHANNELS+64-1)/64];
 };
 
 struct alignas(16) ncclDevKernelArgs {

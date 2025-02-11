@@ -582,11 +582,11 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #endif
 }
 
-__global__ void ncclDevKernel_Generic(ncclDevKernelArgs5K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs5K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernel_Generic(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
 #ifdef ENABLE_COLLTRACE
-__global__ void ncclDevKernelDebug_Generic(ncclDevKernelArgs5K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs5K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernelDebug_Generic(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
 #endif
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
