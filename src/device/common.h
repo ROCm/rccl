@@ -43,7 +43,7 @@
 #endif
 #ifdef ENABLE_COLLTRACE
   #define INC_COLL_TRACE \
-    uint32_t pos = atomicAdd(&ncclShmem.collTraceTail->tail, 1)%COLLTRACE_NUM_ITEMS; \
+    uint32_t pos = __hip_atomic_fetch_add(&ncclShmem.collTraceTail->tail, 1, __ATOMIC_SEQ_CST, __HIP_MEMORY_SCOPE_WORKGROUP)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
     collTrace->timeStamp = wall_clock64(); \
     collTrace->bid = blockIdx.x; \

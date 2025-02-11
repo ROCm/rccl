@@ -51,6 +51,7 @@ THE SOFTWARE.
 NodeModel *node_model;
 extern ncclNet_t* ncclNet;
 
+int64_t ncclParamWorkArgsBytes() { return INT64_MAX; }
 
 char* getCmdOption(char ** begin, char ** end, const std::string & option) {
     char ** itr = std::find(begin, end, option);
@@ -66,103 +67,75 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 }
 
 typedef struct NodeModelDesc {
-    int         num_nodes;
     const char *filename;
     const char *description;
 } NodeModelDesc;
 
 NodeModelDesc model_descs[] = {
-  {1, "topo_4p1h.xml",          "single node VEGA20 4P1H"},
-  {1, "topo_4p1h_1.xml",        "single node VEGA20 4P1H Alt. Model"},
-  {1, "topo_4p2h.xml",          "single node VEGA20 4P2H"},
-  {1, "topo_4p3l.xml",          "single node gfx908 4P3L"},
-  {1, "topo_8p6l.xml",          "single node gfx908 8P6L"},
-  {1, "topo_8p_pcie.xml",       "single node 8 VEGA20 PCIe"},
-  {4, "topo_8p_pcie.xml",       "4 nodes with 8 GPUs PCIe 1 NIC"},
-  {4, "topo_8p_pcie_1.xml",     "4 nodes with 8 GPUs PCIe 1 NIC 2nd PLX Bridge"},
-  {4, "topo_8p_pcie_2nic.xml",  "4 nodes with 8 GPUs PCIe 2 NIC"},
-  {2, "topo_4p1h.xml",          "2 nodes VEGA20 4P1H"},
-  {4, "topo_4p2h.xml",          "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC"},
-  {4, "topo_4p2h_1.xml",        "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 1 NIC 2nd Hive"},
-  {4, "topo_4p2h_2nic.xml",     "4 nodes with 8 VEGA20 GPUs XGMI 4P2H 2 NIC"},
-  {1, "topo_8p_rome.xml",       "single node 8 VEGA20 Rome"},
-  {4, "topo_8p6l.xml",          "4 nodes gfx908 8P6L 1 NIC 2nd Hive"},
-  {4, "topo_8p6l_1nic.xml",     "4 nodes gfx908 8P6L 1 NIC"},
-  {4, "topo_8p6l_2nic.xml",     "4 nodes gfx908 8P6L 2 NICs"},
-  {4, "topo_8p6l_3nic.xml",     "4 nodes gfx908 8P6L 3 NICs"},
-  {4, "topo_8p6l_4nic.xml",     "4 nodes gfx908 8P6L 4 NICs"},
-  {4, "topo_8p6l_5nic.xml",     "4 nodes gfx908 8P6L 5 NICs"},
-  {4, "topo_8p6l_6nic.xml",     "4 nodes gfx908 8P6L 6 NICs"},
-  {1, "topo_8p_rome_n2.xml",    "single node 8 VEGA20 Rome NPS=2"},
-  {4, "topo_8p_rome_n2.xml",    "4 nodes 8 VEGA20 Rome NPS=2"},
-  {1, "topo_8p_rome_n2_1.xml",  "single node 8 VEGA20 Rome NPS=2 Alt. Model"},
-  {1, "topo_8p_ts1.xml",        "single node 8 VEGA20 TS1"},
-  {4, "topo_8p_ts1.xml",        "4 nodes 8 VEGA20 TS1"},
-  {1, "topo_8p_ts1_1.xml",      "single node 8 VEGA20 TS1 Alt. Model"},
-  {4, "topo_8p_ts1_1.xml",      "4 nodes 8 VEGA20 TS1 Alt. Model"},
-  {1, "topo_4p3l_2h.xml",       "single node 8 gfx908 Rome"},
-  {4, "topo_4p3l_2h.xml",       "4 nodes 8 gfx908 Rome"},
-  {1, "topo_8p_ts1_n4.xml",     "single node 8 VEGA20 TS1 NPS=4"},
-  {4, "topo_8p_ts1_n4.xml",     "4 nodes 8 VEGA20 TS1 NPS=4"},
-  {1, "topo_8p_ts1_n4_1.xml",   "single node 8 VEGA20 TS1 NPS=4 Alt. Model"},
-  {4, "topo_8p_ts1_n4_1.xml",   "4 nodes 8 VEGA20 TS1 NPS=4 Alt. Model"},
-  {1, "topo_4p3l_ia.xml",       "single node 8 gfx908"},
-  {4, "topo_4p3l_ia.xml",       "4 nodes 8 gfx908"},
-  {4, "topo_8p_rome_n2_2.xml",  "4 nodes 8 VEGA20 Rome NPS=2 Alt. Model 2 NET/IF"},
-  {4, "topo_8p_ts1_n4_2.xml",   "4 nodes 8 VEGA20 TS1 NPS=4 3 NET/IF"},
-  {1, "topo_8p_rome_n4.xml",    "single node 8 VEGA20 Rome NPS=4"},
-  {1, "topo_4p3l_n2.xml",       "single node 8 gfx908 Rome"},
-  {4, "topo_4p3l_n2.xml",       "4 nodes 8 gfx908 Rome"},
-  {1, "topo_4p3l_n4.xml",       "single node 8 gfx908 Rome NPS=4"},
-  {4, "topo_4p3l_n4.xml",       "4 nodes 8 gfx908 Rome NPS=4"},
-  {1, "topo_4p3l_n2_1.xml",     "single node 8 gfx908 Rome"},
-  {4, "topo_4p3l_n2_1.xml",     "4 nodes 8 gfx908 Rome"},
-  {1, "topo_8p_rome_n4_1.xml",  "single node 8 gfx908 Rome NPS=4"},
-  {4, "topo_8p_rome_n4_1.xml",  "4 nodes node 8 gfx908 Rome NPS=4"},
-  {2, "topo_8p_rome_pcie.xml",  "2 nodes node 8 VEGA20 PCIe"},
-  {1, "topo_8p_rome_4nics.xml", "single node 8 gfx908 Rome 4 NICs"},
-  {4, "topo_8p_rome_4nics.xml", "4 nodes node 8 gfx908 Rome 4 NICs"},
-  {4, "topo_collnet_n1.xml",    "4 nodes collnet 1 NICs"},
-  {4, "topo_collnet_n4.xml",    "4 nodes collnet 4 NICs"},
-  {1, "topo_8p_90a.xml",        "single node gfx90a"},
-  {4, "topo_8p_rome_4n_1.xml",  "4 nodes node 8 gfx908 Rome 4 NICs NPS=4"},
-  {4, "topo_collnet_n4.xml",    "4 nodes collnet 4 NICs for multiple SAT"},
-  {1, "topo_8p_rome_vm1.xml",   "single node 8 gfx908 Rome VM"},
-  {1, "topo_16p1h.xml",         "single node 16P1H"},
-  {4, "topo_8p_rome_4n_2.xml",  "4 nodes 8 gfx908 Rome 4 NICs NPS=4 Alt. Model"},
-  {1, "topo_8p_90a_1.xml",      "single node gfx90a Alt. Model"},
-  {4, "topo_16p1h.xml",         "4 nodes 16P1H"},
-  {4, "topo_3p_pcie.xml",       "4 nodes 3P"},
-  {4, "topo_3p_pcie_1.xml",     "4 nodes 3P Alt. Model"},
-  {1, "topo_8p_4nics.xml",      "single nodes 8P 4 NICs"},
-  {4, "topo_8p_4nics.xml",      "4 nodes 8P 4 NICs"},
-  {1, "topo_16p1h_vm.xml",      "single node 16P1H VM"},
-  {4, "topo_16p1h_vm.xml",      "4 nodes 16P1H VM"},
-  {1, "topo_8p1h.xml",          "single node 8P1H"},
-  {4, "topo_8p1h.xml",          "4 nodes 8P1H"},
-  {1, "topo_4p4h.xml",          "single node gfx908 4P4H"},
-  {1, "topo_8p1h_n1.xml",       "single node 8P1H"},
-  {4, "topo_8p1h_n1.xml",       "4 nodes 8P1H"},
-  {1, "topo_8p1h_1.xml",        "single node 8P1H Alt."},
-  {4, "topo_8p1h_1.xml",        "4 nodes 8P1H Alt."},
-  {1, "topo_8p1h_2.xml",        "single node 8P1H Alt."},
-  {4, "topo_8p1h_3.xml",        "4 nodes 8P1H Alt."},
-  {1, "topo_8p1h_4.xml",        "Single node 8P1H Alt."},
-  {2, "topo_8p1h_4.xml",        "2 nodes 8P1H Alt."},
-  {1, "topo_8p1h_5.xml",        "Single node 8P1H Alt."},
-  {2, "topo_8p1h_5.xml",        "2 nodes 8P1H Alt."},
-  {1, "topo_8p_940.xml",        "Single node gfx940 8P"},
-  {2, "topo_4p_940.xml",        "2 nodes gfx940 4P"},
-  {4, "topo_8p_940.xml",        "4 nodes gfx940 8P"},
-  {1, "topo_8p_940vm.xml",      "single node gfx940 VM"},
-  {2, "topo_8p_940vm.xml",      "2 nodes gfx940 VM"},
-  {2, "topo_8p_940_16n.xml",    "2 nodes gfx940 16 NICs"},
-  {2, "topo_8p1h_6.xml",        "2 nodes 8P1H Alt."},
-  {5, "topo_8p_940.xml",        "5 nodes gfx940 8P"},
-  {2, "topo_8p_942.xml",        "2 nodes gfx942 8P"},
-  {2, "topo_8p_942_1.xml",      "2 nodes gfx942 8P Alt."},
-  {1, "topo_16p_gio-1s-1rp-cascade.xml", "GigaIO 16P gfx942"},
-  {1, "topo_16p_gio-3s-1rp-split-flat.xml", "GigaIO 16P gfx942 1rp-split"},
+  // GFX 906
+  {"topo_4p1h.xml",                      " 4gfx906 1H2XGMI  1NIC 1Intel A"},
+  {"topo_4p1h_1.xml",                    " 4gfx906 1H2XGMI  2NIC 2Intel A"},
+  {"topo_8p_rome.xml",                   " 8gfx906 2H2XGMI  1NIC 2AMD   A"},
+  {"topo_8p_rome_n2.xml",                " 8gfx906 2H2XGMI  1NIC 4AMD   A"},
+  {"topo_8p_rome_n4.xml",                " 8gfx906 2H2XGMI  1NIC 7AMD   A"},
+  {"topo_4p2h.xml",                      " 8gfx906 2H2XGMI  1NIC 1Intel A"},
+  {"topo_4p2h_1.xml",                    " 8gfx906 2H2XGMI  1NIC 1Intel B"},
+  {"topo_4p2h_2nic.xml",                 " 8gfx906 2H2XGMI  2NIC 1Intel A"},
+  {"topo_8p_rome_n2_1.xml",              " 8gfx906 2H2XGMI  2NIC 4AMD   A"},
+  {"topo_8p_rome_n2_2.xml",              " 8gfx906 2H2XGMI  2NIC 4AMD   B"},
+  {"topo_8p_ts1.xml",                    " 8gfx906 2H2XGMI  2NIC 4AMD   C"},
+  {"topo_8p_ts1_1.xml",                  " 8gfx906 2H2XGMI  2NIC 4AMD   D"},
+  {"topo_8p_ts1_n4.xml",                 " 8gfx906 2H2XGMI  2NIC 8AMD   A"},
+  {"topo_8p_ts1_n4_1.xml",               " 8gfx906 2H2XGMI  2NIC 8AMD   B"},
+  {"topo_8p_ts1_n4_2.xml",               " 8gfx906 2H2XGMI  3NIC 8AMD   C"},
+  {"topo_8p_pcie.xml",                   " 8gfx906 PCIe     1NIC 1Intel A"},
+  {"topo_8p_pcie_1.xml",                 " 8gfx906 PCIe     1NIC 1Intel B"},
+  {"topo_8p_pcie_2nic.xml",              " 8gfx906 PCIe     2NIC 1Intel A"},
+  {"topo_8p_rome_pcie.xml",              " 8gfx906 PCIe     2NIC 2AMD2  A"},
+  // GFX 908
+  {"topo_4p3l.xml",                      " 4gfx908 1H3XGMI  2NIC 1Intel A"},
+  {"topo_8p6l.xml",                      " 8gfx908 1H6XGMI  1NIC 2AMD   A"},
+  {"topo_8p6l_1nic.xml",                 " 8gfx908 1H6XGMI  1NIC 2AMD   B"},
+  {"topo_8p6l_2nic.xml",                 " 8gfx908 1H6XGMI  2NIC 2AMD   A"},
+  {"topo_8p6l_3nic.xml",                 " 8gfx908 1H6XGMI  3NIC 2AMD   A"},
+  {"topo_8p6l_4nic.xml",                 " 8gfx908 1H6XGMI  4NIC 2AMD   A"},
+  {"topo_8p6l_5nic.xml",                 " 8gfx908 1H6XGMI  5NIC 2AMD   A"},
+  {"topo_8p6l_6nic.xml",                 " 8gfx908 1H6XGMI  6NIC 2AMD   A"},
+  {"topo_4p3l_ia.xml",                   " 8gfx908 2H3XGMI  1NIC 1Intel A"},
+  {"topo_4p3l_2h.xml",                   " 8gfx908 2H3XGMI  1NIC 4AMD   A"},
+  {"topo_4p3l_n2.xml",                   " 8gfx908 2H3XGMI  1NIC 4AMD   B"},
+  {"topo_4p3l_n2_1.xml",                 " 8gfx908 2H3XGMI  1NIC 4AMD   C"},
+  {"topo_collnet_n1.xml",                " 8gfx908 2H3XGMI  1NIC 4AMD   D"},
+  {"topo_8p_rome_vm1.xml",               " 8gfx908 2H3XGMI  1NIC 4AMD   E"},
+  {"topo_4p3l_n4.xml",                   " 8gfx908 2H3XGMI  1NIC 7AMD   A"},
+  {"topo_8p_rome_n4_1.xml",              " 8gfx908 2H3XGMI  1NIC 7AMD   B"},
+  {"topo_8p_rome_4nics.xml",             " 8gfx908 2H3XGMI  4NIC 4AMD   A"},
+  {"topo_collnet_n4.xml",                " 8gfx908 2H3XGMI  4NIC 4AMD   B"},
+  {"topo_8p_rome_4n_1.xml",              " 8gfx908 2H3XGMI  4NIC 4AMD   C"},
+  {"topo_8p_rome_4n_2.xml",              " 8gfx908 2H3XGMI  4NIC 4AMD   D"},
+  {"topo_8p_4nics.xml",                  " 8gfx908 2H3XGMI  4NIC 4AMD   E"},
+  {"topo_4p4h.xml",                      "16gfx908 2H3XGMI 16NIC 1AMD   A"},
+  // GFX 910
+  {"topo_3p_pcie.xml",                   " 3gfx910 PCIe     1NIC 2AMD   A"},
+  {"topo_3p_pcie_1.xml",                 " 3gfx910 PCIe     1NIC 2AMD   B"},
+  {"topo_8p_90a.xml",                    " 8gfx910 2H3XGMI  1NIC 1AMD   A"},
+  {"topo_8p_90a_1.xml",                  " 8gfx910 2H3XGMI  1NIC 3AMD   A"},
+  {"topo_8p1h_2.xml",                    " 8gfx910 2H3XGMI  2NIC 4AMD   A"},
+  {"topo_8p1h.xml",                      " 8gfx910 2H3XGMI  4NIC 2AMD   A"},
+  {"topo_8p1h_n1.xml",                   " 8gfx910 2H3XGMI  4NIC 2AMD   B"},
+  {"topo_8p1h_1.xml",                    " 8gfx910 2H3XGMI  4NIC 2AMD   C"},
+  {"topo_8p1h_3.xml",                    " 8gfx910 2H3XGMI  4NIC 4AMD   A"},
+  {"topo_8p1h_4.xml",                    " 8gfx910 2H3XGMI  8NIC 2AMD   A"},
+  {"topo_8p1h_5.xml",                    " 8gfx910 2H3XGMI  8NIC 2AMD   B"},
+  {"topo_16p1h.xml",                     "16gfx910 2H3XGMI  8NIC 4AMD   A"},
+  {"topo_16p1h_vm.xml",                  "16gfx910 2H3XGMI  8NIC 4AMD   B"},
+  // GFX 940
+  {"topo_4p_940.xml",                    " 4gfx940 1H3XGMI  4NIC 4AMD2  A"},
+  // GFX 942
+  {"topo_8p_940.xml",                    " 8gfx942 1H7XGMI  8NIC 2Intel A"},
+  {"topo_8p_940vm.xml",                  " 8gfx942 1H7XGMI  8NIC 2Intel B"},
+  {"topo_16p_gio-1s-1rp-cascade.xml",    "16gfx942 2H7XGMI  1NIC 2AMD   A"},
+  {"topo_16p_gio-3s-1rp-split-flat.xml", "16gfx942 2H7XGMI  1NIC 2AMD   B"},
 };
 
 NCCL_PARAM(MaxCTAs, "MAX_CTAS", MAXCHANNELS);
@@ -179,7 +152,7 @@ int main(int argc,char* argv[])
     printf("Usage: ./topo_expl -m model_id [-n numNodes=1]\n");
     printf("List of model_id:\n");
     for (int i = 0; i < num_models; i++)
-      printf("  %d: %s\n", i, model_descs[i].description);
+      printf("  %2d: %s\n", i, model_descs[i].description);
     exit(0);
   }
 
@@ -199,7 +172,7 @@ int main(int argc,char* argv[])
   initCollNet();
 
   NodeModelDesc *desc = &model_descs[model_id];
-  int numNodes = desc->num_nodes;
+  int numNodes = 1;
   if (cmdOptionExists(argv, argv + argc, "-n")) {
     char *numNodesStr = getCmdOption(argv, argv + argc, "-n");
     if (numNodesStr)
@@ -289,27 +262,27 @@ int main(int argc,char* argv[])
     float minTime = 3600000000.0;
     info.comm = &comm[0];
     info.coll = ncclFuncAllReduce;
-    info.nBytes = len;
     // Find algorithm / protocol.
-    info.algorithm = -1;
-    info.protocol = -1;
+    int algorithm = -1;
+    int protocol = -1;
     int nAlgos = NCCL_NUM_ALGORITHMS;
     for (int a=0; a<nAlgos; a++) {
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         float time;
-        NCCLCHECK(ncclTopoGetAlgoTime(&info, a, p, 1, &time));
+        bool backup;
+        NCCLCHECK(ncclTopoGetAlgoTime(info.comm, info.coll, a, p, len, 1, &time, &backup));
         if (time >= 0 && time < minTime) {
-          info.algorithm = a;
-          info.protocol = p;
+          algorithm = a;
+          protocol = p;
           minTime = time;
         }
       }
     }
-    if (info.algorithm == -1 || info.protocol == -1) {
+    if (algorithm == -1 || protocol == -1) {
       WARN("Error : no algorithm/protocol available");
       return ncclInternalError;
     }
-    INFO(NCCL_TUNING, "%10ld %s %s time %f", info.nBytes, ncclAlgoStr[info.algorithm], ncclProtoStr[info.protocol], minTime);
+    INFO(NCCL_TUNING, "%10ld %s %s time %f", len, ncclAlgoStr[algorithm], ncclProtoStr[protocol], minTime);
   }
 
   for (int i = 0; i < nranks; i++) {
