@@ -290,8 +290,6 @@ static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* 
   const int nChannels = (comm->nChannels > channelLimit) ? comm->nChannels / 2 : comm->nChannels;
   const int nNodes = comm->nNodes, node = comm->node;
 
-  printf("[DEBUG] channelLimit %d nChannels = %d commChannels = %d\n", channelLimit, nChannels, comm->nChannels);
-
   // Compute tree depth. Not an exact value but a good approximation in most
   // cases
   int depth = comm->nRanks/nNodes - 1 + log2i(nNodes);
@@ -648,11 +646,11 @@ ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent,
     int child1Parity = getTreeNodeParity(treeDir, nNodes, child1Node);
 
     // Loop over pairs of complimentary channels
-    for (int ch0 = 0, ch1 = 1; ch0 < nChannels; ch0 += 2, ch1 += 2) {
+    for (int ch = 0; ch < nChannels; ch += 2) {
+      int ch0 = treeDir * nChannels + ch;
+      int ch1 = ch0 + 1;
 
-      ncclChannel* channel[2] = {&comm->channels[treeDir * nChannels + ch0],
-                                 &comm->channels[treeDir * nChannels + ch1]};
-
+      ncclChannel* channel[2] = {&comm->channels[ch0], &comm->channels[ch1]};
       channel[0]->tree.depth = channel[1]->tree.depth = depth;
 
       // Determine ranks that connect to other nodes for each of the two channels
@@ -698,7 +696,7 @@ ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent,
         if (rank == rankToParent[i] ||
             rank == rankToChild0[i] ||
             rank == rankToChild1[i]) {
-          INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", treeDir * nChannels + (i == 0 ? ch0 : ch1),
+          INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", (i == 0 ? ch0 : ch1),
                channel[i]->tree.up, rank,
                channel[i]->tree.down[0],
                channel[i]->tree.down[1],
@@ -792,13 +790,14 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
     for (int i = 0; i < comm->nChannels; i++) {
       INFO(NCCL_GRAPH, "[TREE] %d.%d [style=filled, fillcolor=%s]", i, rank, color[rank % comm->localRanks]);
-      /*
-      if (comm->channels[i].tree.up != -1)
-        INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=solid,width=10,color=red]", i, rank, i, comm->channels[i].tree.up);
-      */
       for (int j = 0; j < 3; j++) {
         if (comm->channels[i].tree.down[j] != -1) {
-          INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=%s,width=10]", i, rank, i, comm->channels[i].tree.down[j], j == 0 ? "solid" : "dotted");
+	  bool sameNode = (comm->rankToNode[rank] == comm->rankToNode[comm->channels[i].tree.down[j]]);
+          INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=%s,width=10,color=%s,label=\"%s\"]",
+	       i, rank, i, comm->channels[i].tree.down[j],
+	       sameNode ? "solid" : "dashed",
+	       sameNode ? "black" : color[rank % comm->localRanks],
+	       sameNode ? ""  : (std::string("N") + std::to_string(graphs[NCCL_ALGO_TREE]->inter[i*2+1])).c_str());
         }
       }
     }
