@@ -290,6 +290,8 @@ static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* 
   const int nChannels = (comm->nChannels > channelLimit) ? comm->nChannels / 2 : comm->nChannels;
   const int nNodes = comm->nNodes, node = comm->node;
 
+  printf("[DEBUG] channelLimit %d nChannels = %d commChannels = %d\n", channelLimit, nChannels, comm->nChannels);
+
   // Compute tree depth. Not an exact value but a good approximation in most
   // cases
   int depth = comm->nRanks/nNodes - 1 + log2i(nNodes);
@@ -585,7 +587,8 @@ int getTreeNodeParity(int treeDir, int nNodes, int node)
 }
 
 // [RCCL] Build rail-optimized trees
-ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent, int* treeToChild0, int* treeToChild1, int* treePatterns)
+ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent, int* treeToChild0, int* treeToChild1,
+                                       struct ncclTopoGraph* treeGraph)
 {
   INFO(NCCL_GRAPH, "Building rail-optimized trees for %d nodes", comm->nNodes);
 
@@ -618,9 +621,10 @@ ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent,
                         AB  BA BA   AB  BA  AB AB   BA
   */
 
-  const int nChannels = (comm->nChannels);
+  const int nChannels = (comm->nChannels / 2);
   const int nNodes = comm->nNodes, node = comm->node, rank = comm->rank;
   const int depth = comm->nRanks/nNodes - 1 + log2i(nNodes);
+  const int nGpus = comm->topo->nodes[GPU].count;
 
   // Compute parent/child nodes for this current node, for uptree and downtree
   int parentNodes[2], child0Nodes[2], child1Nodes[2], childTypes[2];
@@ -662,6 +666,14 @@ ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent,
         std::swap(rankToParent[0], rankToParent[1]);
         std::swap(rankToChild0[0], rankToChild0[1]);
         std::swap(rankToChild1[0], rankToChild1[1]);
+
+        // Swap NICs
+        std::swap(treeGraph->inter[ch0 * 2    ], treeGraph->inter[ch1 * 2    ]);
+        std::swap(treeGraph->inter[ch0 * 2 + 1], treeGraph->inter[ch1 * 2 + 1]);
+
+        // Swap lines
+        for (int j = 0; j < nGpus; j++)
+          std::swap(treeGraph->intra[ch0 * nGpus + j], treeGraph->intra[ch1 * nGpus + j]);
       }
 
       // Connect ranks that connect to other nodes for each of the two channels
@@ -767,7 +779,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
   // [RCCL] Connect rail-optimized trees
   if (comm->topo->useRailOptimizedTrees) {
-    NCCLCHECK(connectRailOptimizedTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
+    NCCLCHECK(connectRailOptimizedTrees(comm, treeToParent, treeToChild0, treeToChild1, graphs[NCCL_ALGO_TREE]));
   } else {
     NCCLCHECK(connectTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
   }
@@ -778,8 +790,12 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     char color[8][16] =
       {"red", "orange", "yellow", "yellowgreen", "green", "cyan", "deepskyblue", "violet"};
 
-    for (int i = 0; i < comm->nChannels * 2; i++) {
+    for (int i = 0; i < comm->nChannels; i++) {
       INFO(NCCL_GRAPH, "[TREE] %d.%d [style=filled, fillcolor=%s]", i, rank, color[rank % comm->localRanks]);
+      /*
+      if (comm->channels[i].tree.up != -1)
+        INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=solid,width=10,color=red]", i, rank, i, comm->channels[i].tree.up);
+      */
       for (int j = 0; j < 3; j++) {
         if (comm->channels[i].tree.down[j] != -1) {
           INFO(NCCL_GRAPH, "[TREE] %d.%d->%d.%d [style=%s,width=10]", i, rank, i, comm->channels[i].tree.down[j], j == 0 ? "solid" : "dotted");
