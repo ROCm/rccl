@@ -239,7 +239,7 @@ void *ncclCommThreadMain(void *arg) {
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
       int tail = comm->collTraceTail[channel].tail;
       int count;
-      count = tail == 0 ? 0 : tail - head[channel];
+      count = tail - head[channel];
       if (count == 0) {
         numActiveChans--;
         continue;
