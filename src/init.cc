@@ -231,14 +231,14 @@ void *ncclCommThreadMain(void *arg) {
     if (tail < COLLTRACE_NUM_ITEMS)
       head[channel] = 0;
     else
-      head[channel] = tail - COLLTRACE_NUM_ITEMS + 1;
+      head[channel] = tail - COLLTRACE_NUM_ITEMS;
   }
   do {
     int numActiveChans = MAXCHANNELS;
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
       int tail = comm->collTraceTail[channel].tail;
       int count;
-      count = tail == 0 ? 0 : tail - head[channel] + 1;
+      count = tail == 0 ? 0 : tail - head[channel];
       if (count == 0) {
         numActiveChans--;
         continue;
