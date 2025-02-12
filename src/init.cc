@@ -217,6 +217,7 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
 }
 
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
+RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
 
 #ifdef ENABLE_COLLTRACE
 // Should be in sync with 'ALL_COLLS' in Generator.cmake
@@ -248,7 +249,7 @@ void *ncclCommThreadMain(void *arg) {
         head[channel] ++;
         uint8_t type = td->type;
         if (type == ncclCollTraceNotReady)
-          break;
+          continue;
         char line[1024];
         int offset = 0;
         uint16_t fIdx = td->funcIndex;
@@ -600,7 +601,10 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   comm->collTraceEnabled = false; // we can enable colltrace without starting a thread
   if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable()) {
     comm->collTraceEnabled = true;
-    comm->collTraceThread = 0;
+    if (rcclParamKernelCollTraceThreadEnable())
+      pthread_create(&comm->collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
+    else
+      comm->collTraceThread = 0;
   }
 #endif
   comm->collNetSupport = 0;

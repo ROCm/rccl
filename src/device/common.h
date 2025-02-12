@@ -83,7 +83,16 @@
   }
   #define traceKernelEnd(end_type)  { \
     INC_COLL_TRACE \
-    collTrace->type = end_type; \
+    if (ncclShmem.workType == ncclDevWorkTypeP2p) { \
+      struct ncclDevWorkP2p *p2pWork = (struct ncclDevWorkP2p*)ncclShmem.workStorage; \
+      collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
+      collTrace->p2pOpCount[1] = p2pWork->recvOpCount; \
+      collTrace->type = (end_type) | ncclCollTraceP2pElemType; \
+    } else if (ncclShmem.workType == ncclDevWorkTypeColl) { \
+      struct ncclDevWorkColl *collWork = (struct ncclDevWorkColl*)ncclShmem.workStorage; \
+      collTrace->opCount = collWork->opCount; \
+      collTrace->type = (end_type) | ncclCollTraceCollElemType; \
+    } \
   }
   #define traceData(data2, data4, data8_0, data8_1) { \
     INC_COLL_TRACE \
