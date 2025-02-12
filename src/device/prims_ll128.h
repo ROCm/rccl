@@ -113,53 +113,60 @@ private:
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    if (sendConnTailPtr) { STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1); }
+    if (sendConnTailPtr) {
+#if __CUDA_ARCH__ >= 900
+      __threadfence_system();
+#else
+      __threadfence();
+#endif
+      STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1);
+    }
   }
 
   template<int WordPerThread>
   __device__ __forceinline__ void loadRegsBegin(uint64_t(&regs)[WordPerThread], T const *src, int eltN) {
     constexpr int EltPer16B = 16/sizeof(T);
-    /* We are aligned to 16 bytes, so load directly to registers no shmem.
-     * Flag threads load half as much data which gets shuffled to the even
-     * registers during Finish. The point of splitting into two phases is to
-     * defer that shuffle, which incurs a dependency stall, until after other
-     * memops are launched by the caller.
-     */
-    #pragma unroll
-    for(int g=0; g < WordPerThread/2; g++) {
-      int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
-      if(!flagThread || g%2==0) {
-        if(ix*EltPer16B < eltN) {
-          if(reinterpret_cast<uintptr_t>(src)%4 == 0) {
-            regs[2*g+0] = __builtin_nontemporal_load((uint64_t*)(src + ix*EltPer16B));
-            regs[2*g+1] = __builtin_nontemporal_load((uint64_t*)(src + ix*EltPer16B)+1);
-          } else {
-            union {
-              uint64_t regs64[WordPerThread];
-              uint32_t regs32[WordPerThread*2];
-              uint16_t regs16[WordPerThread*4];
-              uint8_t regs8[WordPerThread*8];
-            };
-            if (sizeof(T) == 8) {
-              uint64_t *src64 = (uint64_t*)(src+ix*EltPer16B);
-              for (int i=0; i < 2; i++)
-                regs64[2*g+i] = __builtin_nontemporal_load(src64+i);
-            } else if (sizeof(T) == 4) {
-              uint32_t *src32 = (uint32_t*)(src+ix*EltPer16B);
-              for (int i=0; i < 2*sizeof(uint64_t)/sizeof(T); i++)
-                regs32[2*g+i] = __builtin_nontemporal_load(src32+i);
-            } else if (sizeof(T) == 2) {
-              uint16_t *src16 = (uint16_t*)(src+ix*EltPer16B);
-              for (int i=0; i < 2*sizeof(uint64_t)/sizeof(T); i++)
-                regs16[2*g+i] = __builtin_nontemporal_load(src16+i);
-            } else if (sizeof(T) == 1) {
-              uint8_t *src8 = (uint8_t*)(src+ix*EltPer16B);
-              for (int i=0; i < 2*sizeof(uint64_t)/sizeof(T); i++)
-                regs8[2*g+i] = __builtin_nontemporal_load(src8+i);
-            }
-            regs[2*g+0] = regs64[2*g+0];
-            regs[2*g+1] = regs64[2*g+1];
-          }
+    if(reinterpret_cast<uintptr_t>(src)%16 == 0) {
+      /* We are aligned to 16 bytes, so load directly to registers no shmem.
+       * Flag threads load half as much data which gets shuffled to the even
+       * registers during Finish. The point of splitting into two phases is to
+       * defer that shuffle, which incurs a dependency stall, until after other
+       * memops are launched by the caller.
+       */
+      #pragma unroll
+      for(int g=0; g < WordPerThread/2; g++) {
+        int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
+        if(!flagThread || g%2==0) {
+          if(ix*EltPer16B < eltN)
+            load128((uint64_t*)(src + ix*EltPer16B), regs[2*g+0], regs[2*g+1]);
+        }
+      }
+    }
+    else {
+      // Not aligned. Stage the smallest 16 byte aligned region subsuming the
+      // buffer into shmem.
+      int misalignment = reinterpret_cast<uintptr_t>(src) % 16;
+      uint64_t *src8 = reinterpret_cast<uint64_t*>(reinterpret_cast<uintptr_t>(src) & -uintptr_t(16));
+      uint64_t *shm8 = shmemCvtPtr((uint64_t*)ncclScratchForWarp(warpInBlock));
+      #pragma unroll
+      for(int g=0; g < WordPerThread/2; g++)
+        if((g*WARP_SIZE + wid)*16 < misalignment + eltN*sizeof(T))
+          load128(src8 + 2*(g*WARP_SIZE + wid), regs[2*g+0], regs[2*g+1]);
+      #pragma unroll
+      for(int g=0; g < WordPerThread/2; g++)
+        storeShmem128(shm8 + 2*(g*WARP_SIZE + wid), regs[2*g+0], regs[2*g+1]);
+
+      __syncwarp();
+
+      // Now load from shmem stage to regs. Preserve the same pre-shuffled layout
+      // as the aligned case since Finish() will be applied regardless.
+      T *shm = (T*)shm8 + misalignment/sizeof(T);
+      #pragma unroll
+      for(int g=0; g < WordPerThread/2; g++) {
+        int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
+        if(!flagThread || g%2==0) {
+          if(ix*EltPer16B < eltN)
+            loadShmemMisaligned128(shm + ix*EltPer16B, regs[2*g+0], regs[2*g+1]);
         }
       }
     }
@@ -183,44 +190,25 @@ private:
       if (flagThread) regs[2*g-1] = regs[2*g];
     }
     // Write to dst if 4-byte aligned, shmem otherwise.
-    int misalignment = reinterpret_cast<uintptr_t>(dst)%4;
+    int misalignment = reinterpret_cast<uintptr_t>(dst)%16;
+    uint64_t *shm8 = shmemCvtPtr((uint64_t*)ncclScratchForWarp(warpInBlock));
     #pragma unroll
     for(int g=0; g < WordPerThread/2; g++) {
       int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
       if (!flagThread || g%2==0) {
-        if(misalignment == 0 && (ix+1)*EltPer16B <= eltN) {
-          __builtin_nontemporal_store(regs[2*g+0], (uint64_t*)(dst + ix*EltPer16B));
-          __builtin_nontemporal_store(regs[2*g+1], (uint64_t*)(dst + ix*EltPer16B)+1);
-        } else {
-          union {
-            uint64_t regs64[WordPerThread];
-            uint32_t regs32[WordPerThread*2];
-            uint16_t regs16[WordPerThread*4];
-            uint8_t regs8[WordPerThread*8];
-          };
-          regs64[2*g+0] = regs[2*g+0];
-          regs64[2*g+1] = regs[2*g+1];
-          int remaining = eltN - ix*EltPer16B;
-          if (sizeof(T) == 8) {
-            uint64_t *dst64 = (uint64_t*)(dst+ix*EltPer16B);
-            for (int i=0; i < 2 && i < remaining; i++)
-              __builtin_nontemporal_store(regs64[2*g+i], dst64+i);
-          } else if (sizeof(T) == 4) {
-            uint32_t *dst32 = (uint32_t*)(dst+ix*EltPer16B);
-            for (int i=0; i < 2*sizeof(uint64_t)/sizeof(T) && i < remaining; i++)
-              __builtin_nontemporal_store(regs32[2*g+i], dst32+i);
-          } else if (sizeof(T) == 2) {
-            uint16_t *dst16 = (uint16_t*)(dst+ix*EltPer16B);
-            for (int i=0; i < 2*sizeof(uint64_t)/sizeof(T) && i < remaining; i++)
-              __builtin_nontemporal_store(regs16[2*g+i], dst16+i);
-          } else if (sizeof(T) == 1) {
-            uint8_t *dst8 = (uint8_t*)(dst+ix*EltPer16B);
-            for (int i=0; i < 2*sizeof(uint64_t)/sizeof(T) && i < remaining; i++)
-              __builtin_nontemporal_store(regs8[2*g+i], dst8+i);
-          }
-        }
+        if(misalignment == 0 && (ix+1)*EltPer16B <= eltN)
+          store128((uint64_t*)(dst + ix*EltPer16B), regs[2*g+0], regs[2*g+1]);
+        else
+          storeShmem128(shm8+2*ix, regs[2*g+0], regs[2*g+1]);
       }
     }
+    __syncwarp();
+    // Write rest from shmem to dst. No need to coalesce stores to 16-bytes,
+    // the hardware keeps up fine.
+    T *shm = (T*)ncclScratchForWarp(warpInBlock);
+    int skip = misalignment == 0 ? eltN & -EltPer16B : 0;
+    for(int i=skip+wid; i < eltN; i += WARP_SIZE)
+      dst[i] = shm[i];
   }
 
   #define WARP_MASK 0xffffffff
@@ -241,12 +229,14 @@ private:
         needReload = false;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          vr[u] = __builtin_nontemporal_load(ptr+u*WARP_SIZE);
-          vr[u+1] = __builtin_nontemporal_load(ptr+u*WARP_SIZE+1);
+          load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
           needReload |= flagThread && (vr[u+1] != flag);
         }
         needReload &= (0 == checkAbort(spins, 0, 0));
       } while (__any(needReload));
+      #pragma unroll
+      for (int u=0; u<ELEMS_PER_THREAD; u+=2)
+        load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
     }
 
     /************* Finish register load **************/
@@ -267,7 +257,6 @@ private:
     /************************ Recv rest *********************/
     if (RECV) {
       { // Consume data from first recv
-        uint64_t* ptr = recvPtr(0)+ll128Offset;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
           v[u]   = SRC ? applyReduce(redOp, vr[u], v[u]) : vr[u];
@@ -284,12 +273,15 @@ private:
           needReload = false;
           #pragma unroll
           for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-            vr[u] = __builtin_nontemporal_load(ptr+u*WARP_SIZE);
-            vr[u+1] = __builtin_nontemporal_load(ptr+u*WARP_SIZE+1);
+            load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
             needReload |= flagThread && (vr[u+1] != flag);
           }
           needReload &= (0 == checkAbort(spins, i, 0));
         } while (__any(needReload));
+
+        #pragma unroll
+        for (int u=0; u<ELEMS_PER_THREAD; u+=2)
+          load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
 
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
@@ -318,16 +310,14 @@ private:
         uint64_t* ptr = sendPtr(i)+ll128Offset;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-          __builtin_nontemporal_store(v[u], ptr+u*WARP_SIZE);
-          __builtin_nontemporal_store(flagThread ? flag : v[u+1], ptr+u*WARP_SIZE+1);
+          store128(ptr+u*WARP_SIZE, v[u], flagThread ? flag : v[u+1]);
         }
       }
       uint64_t flag = sendFlag(0);
       uint64_t* ptr = sendPtr(0)+ll128Offset;
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
-        __builtin_nontemporal_store(v[u], ptr+u*WARP_SIZE);
-        __builtin_nontemporal_store(flagThread ? flag : v[u+1], ptr+u*WARP_SIZE+1);
+        store128(ptr+u*WARP_SIZE, v[u], flagThread ? flag : v[u+1]);
       }
     }
     /********************** End Send ************************/
