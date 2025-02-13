@@ -3,6 +3,13 @@ import time
 import os
 import re
 
+
+# Function to center the titles in the detailed section
+def centered_title(title, width, fill_char=" "):
+    padding_width = (width - len(title)) // 2
+    return f'{fill_char*padding_width}{title}{fill_char*padding_width}\n'
+
+
 # Function to run a CLI command and return its output
 def run_cli_command(command):
     try:
@@ -40,11 +47,24 @@ def get_os_version():
 def get_ROCm_version():
     result = run_cli_command('cat /opt/rocm/.info/version')
     if result.stdout:
-        summary = result.stdout
+        summary = result.stdout.strip()
     else:
         summary = "Missing Data"
     return summary, result
 
+
+# Get Vram Version
+def get_Vram_version():
+    result = run_cli_command('rocm-smi --showmeminfo vram')
+    if result.stdout:
+        summary = "Memory Usage in Vram Information section"
+    else:
+        summary = "Missing Data"
+    return summary, result
+
+
+
+# Gather all data and build summary table and detailed output format
 def get_config():
     # Run the commands and store the command outputs
 
@@ -56,23 +76,36 @@ def get_config():
     ROCm_summary, ROCm_result = get_ROCm_version()
     ROCm_status = status_check(ROCm_summary, ROCm_result)
 
+    # Vram info
+    vram_summary, vram_result = get_Vram_version()
+    vram_status = status_check(vram_summary, vram_result)
+
+    
+
 
     # Create the summary table
     summary_table = (
-        f"\n\n{'='*60}\n"
+        f"\n\n{'='*80}\n"
         f"{'Component':<17}| {'Status':<13} | Value\n"
-        f"{'='*60}\n"
+        f"{'='*80}\n"
         f"OS Version{' ':<7}| {os_status:<13} | {os_summary}\n"
         f"ROCm Version{' ':<5}| {ROCm_status:<13} | {ROCm_summary}\n"
-        f"{'='*60}\n\n\n"
+        f"Vram Version{' ':<5}| {vram_status:<13} | {vram_summary}\n"
+        f"{'='*80}\n\n\n"
     )
 
+
+
     # Combine details
+    details_width = 120
     details = (
-        f"{'='*30} OS info {'='*30}\n\n"
-        f"{os_result.stdout}{os_result.stderr}\n\n"
-        f"{'='*30} ROCm Version {'='*30}\n\n"
-        f"{ROCm_result.stdout}{ROCm_result.stderr}\n\n"
+    f"Detailed Output:\n"
+    f"{centered_title('OS info', details_width, '=')}\n"
+    f"{os_result.stdout.strip()}{os_result.stderr.strip()}\n\n"
+    f"{centered_title('ROCm Version', details_width, '=')}\n"
+    f"{ROCm_result.stdout.strip()}{ROCm_result.stderr.strip()}\n\n"
+    f"{centered_title('Vram Information', details_width, '=')}\n\n"
+        f"{vram_result.stdout.strip()}{vram_result.stderr.strip()}\n\n"
     )
     return summary_table, details
 
@@ -92,11 +125,12 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
-    
-    
+
+
+
 # list of stuff to add
-# ROCm version
+# OS version done
+# ROCm version done
 # GPU VRAM info
 # HIP version
 
