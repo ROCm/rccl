@@ -4,6 +4,11 @@ import os
 import re
 
 
+class CommandResult:
+    def __init__(self, stdout, stderr):
+        self.stdout = stdout
+        self.stderr = stderr
+        
 # Function to center the titles in the detailed section
 def centered_title(title, width, fill_char=" "):
     padding_width = (width - len(title)) // 2
@@ -31,6 +36,20 @@ def status_check(summary, result):
             status = "WARN"
             break
     return status
+
+# Check if a directory is on path or LD_LIBRARY_PATH
+def PATH_and_LD_LIBRARY_PATH(dir):
+    try:
+        path = os.environ.get('PATH')
+        LD_path = os.environ.get('LD_LIBRARY_PATH')
+    except Exception as e:
+        return False
+    pattern = re.escape(dir)
+    match_path = re.search(pattern, path)
+    match_LD_path = re.search(pattern, LD_path)
+    if match_LD_path and match_path:
+        return True
+    return False
 
 
 # Get OS version
@@ -70,6 +89,41 @@ def get_Vram_info():
         summary = "Missing Data"
     return summary, result
 
+# Get UCX version
+def ucx_version():
+    path_check = PATH_and_LD_LIBRARY_PATH(dir="ucx")
+    if path_check:
+        result = run_cli_command('ucx_info -v')
+        match = re.search(r"Library version: (\d+\.\d+\.\d+)", result.stdout)
+        if match:
+            summary = match.group(1)
+        else:
+            summary = "Missing Data"
+        return summary, result
+    else:
+        stdout = ""
+        stderr = "Error: UCX not on PATH or LD_LIBRARY_PATH"
+        result = CommandResult(stdout=stdout,stderr=stderr)
+        summary = "UCX not on PATH or LD_LIBRARY_PATH"
+        return summary, result
+
+# Get MPI version
+def mpi_version():
+    path_check = PATH_and_LD_LIBRARY_PATH(dir="ompi")
+    if path_check:
+        result = run_cli_command('mpirun --version')
+        match = re.search(r"mpirun \(Open MPI\) \d+\.\d+\.\d+", result.stdout)
+        if match:
+            summary = match.group()
+        else:
+            summary = "Missing Data"
+        return summary, result
+    else:
+        stdout = ""
+        stderr = "Error: ompi4 or ompi5 (only 1 is required) not on PATH or LD_LIBRARY_PATH"
+        result = CommandResult(stdout=stdout,stderr=stderr)
+        summary = "ompi4 or ompi5 (only 1 is required) not on PATH or LD_LIBRARY_PATH"
+        return summary, result
 
 
 
@@ -90,8 +144,16 @@ def get_config():
     HIP_status = status_check(HIP_summary, HIP_result)
 
     # Vram info
-    vram_summary, vram_result = get_Vram_info()
-    vram_status = status_check(vram_summary, vram_result)
+    Vram_summary, Vram_result = get_Vram_info()
+    Vram_status = status_check(Vram_summary, Vram_result)
+
+    # UCX Version
+    ucx_summary, ucx_result = ucx_version()
+    ucx_status = status_check(ucx_summary, ucx_result)
+
+    # MPI Version
+    mpi_summary, mpi_result = mpi_version()
+    mpi_status = status_check(mpi_summary, mpi_result)
 
 
     # Create the summary table
@@ -102,7 +164,9 @@ def get_config():
         f"OS Version{' ':<10}| {os_status:<13} | {os_summary}\n"
         f"ROCm Version{' ':<8}| {ROCm_status:<13} | {ROCm_summary}\n"
         f"HIP Version{' ':<9}| {HIP_status:<13} | {HIP_summary}\n"
-        f"Vram Information{' ':<4}| {vram_status:<13} | {vram_summary}\n"
+        f"Vram Information{' ':<4}| {Vram_status:<13} | {Vram_summary}\n"
+        f"UCX Version{' ':<9}| {ucx_status:<13} | {ucx_summary}\n"
+        f"MPI Version{' ':<9}| {mpi_status:<13} | {mpi_summary}\n"
         f"{'='*119}\n\n\n"
     )
 
@@ -119,7 +183,11 @@ def get_config():
     f"{centered_title('HIP Version', details_width, '=')}\n"
     f"{HIP_result.stdout.strip()}{HIP_result.stderr.strip()}\n\n"
     f"{centered_title('Vram Information', details_width, '=')}\n"
-    f"{vram_result.stdout.strip()}{vram_result.stderr.strip()}\n\n"
+    f"{Vram_result.stdout.strip()}{Vram_result.stderr.strip()}\n\n"
+    f"{centered_title('UCX Version', details_width, '=')}\n"
+    f"{ucx_result.stdout.strip()}{ucx_result.stderr.strip()}\n\n"
+    f"{centered_title('MPI Version', details_width, '=')}\n"
+    f"{mpi_result.stdout.strip()}{mpi_result.stderr.strip()}\n\n"
     )
     return summary_table, details
 
@@ -148,9 +216,10 @@ if __name__ == '__main__':
 # GPU VRAM info done
 # HIP version done
 
-# UCX version
-# MPI version4
-# MPI version5
+# PATH
+# UCX version done
+# MPI version4 done
+# MPI version5 done
 # ^
 # Note from Nilesh applies to 3 above
 # these need to change... the /opt/ paths are mostly unique to our setup... other users might have UCX/OMPI at different paths
