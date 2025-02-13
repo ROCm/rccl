@@ -52,15 +52,24 @@ def get_ROCm_version():
         summary = "Missing Data"
     return summary, result
 
+# Get HIP Version
+def get_HIP_version():
+    result = run_cli_command('hipconfig --version')
+    if result.stdout:
+        summary = result.stdout.strip()
+    else:
+        summary = "Missing Data"
+    return summary, result
 
-# Get Vram Version
-def get_Vram_version():
+# Get Vram Information
+def get_Vram_info():
     result = run_cli_command('rocm-smi --showmeminfo vram')
     if result.stdout:
         summary = "Memory Usage in Vram Information section"
     else:
         summary = "Missing Data"
     return summary, result
+
 
 
 
@@ -76,21 +85,24 @@ def get_config():
     ROCm_summary, ROCm_result = get_ROCm_version()
     ROCm_status = status_check(ROCm_summary, ROCm_result)
 
-    # Vram info
-    vram_summary, vram_result = get_Vram_version()
-    vram_status = status_check(vram_summary, vram_result)
+    # HIP Version
+    HIP_summary, HIP_result = get_HIP_version()
+    HIP_status = status_check(HIP_summary, HIP_result)
 
-    
+    # Vram info
+    vram_summary, vram_result = get_Vram_info()
+    vram_status = status_check(vram_summary, vram_result)
 
 
     # Create the summary table
     summary_table = (
         f"\n\n{'='*80}\n"
-        f"{'Component':<17}| {'Status':<13} | Value\n"
+        f"{'Component':<20}| {'Status':<13} | Value\n"
         f"{'='*80}\n"
-        f"OS Version{' ':<7}| {os_status:<13} | {os_summary}\n"
-        f"ROCm Version{' ':<5}| {ROCm_status:<13} | {ROCm_summary}\n"
-        f"Vram Version{' ':<5}| {vram_status:<13} | {vram_summary}\n"
+        f"OS Version{' ':<10}| {os_status:<13} | {os_summary}\n"
+        f"ROCm Version{' ':<8}| {ROCm_status:<13} | {ROCm_summary}\n"
+        f"HIP Version{' ':<9}| {HIP_status:<13} | {HIP_summary}\n"
+        f"Vram Information{' ':<4}| {vram_status:<13} | {vram_summary}\n"
         f"{'='*80}\n\n\n"
     )
 
@@ -104,8 +116,10 @@ def get_config():
     f"{os_result.stdout.strip()}{os_result.stderr.strip()}\n\n"
     f"{centered_title('ROCm Version', details_width, '=')}\n"
     f"{ROCm_result.stdout.strip()}{ROCm_result.stderr.strip()}\n\n"
-    f"{centered_title('Vram Information', details_width, '=')}\n\n"
-        f"{vram_result.stdout.strip()}{vram_result.stderr.strip()}\n\n"
+    f"{centered_title('HIP Version', details_width, '=')}\n"
+    f"{HIP_result.stdout.strip()}{HIP_result.stderr.strip()}\n\n"
+    f"{centered_title('Vram Information', details_width, '=')}\n"
+    f"{vram_result.stdout.strip()}{vram_result.stderr.strip()}\n\n"
     )
     return summary_table, details
 
