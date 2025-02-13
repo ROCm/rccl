@@ -8,7 +8,7 @@ class CommandResult:
     def __init__(self, stdout, stderr):
         self.stdout = stdout
         self.stderr = stderr
-        
+
 # Function to center the titles in the detailed section
 def centered_title(title, width, fill_char=" "):
     padding_width = (width - len(title)) // 2
@@ -84,7 +84,7 @@ def get_HIP_version():
 def get_Vram_info():
     result = run_cli_command('rocm-smi --showmeminfo vram')
     if result.stdout:
-        summary = "Memory Usage in Vram Information section"
+        summary = "Memory Usage is detailed in the Vram Information section"
     else:
         summary = "Missing Data"
     return summary, result
@@ -125,6 +125,50 @@ def mpi_version():
         summary = "ompi4 or ompi5 (only 1 is required) not on PATH or LD_LIBRARY_PATH"
         return summary, result
 
+# Get Linux kernel version
+def get_Linux_kernel_version():
+    result = run_cli_command('uname -r')
+    if result.stdout:
+        summary = result.stdout.strip()
+    else:
+        summary = "Missing Data"
+    return summary, result
+
+# Get Resource limits
+def get_resource_limits_info():
+    result = run_cli_command('ulimit -a')
+    if result.stdout:
+        summary = "Output is detailed in the Resource limits section"
+    else:
+        summary = "Missing Data"
+    return summary, result
+
+# Get Environment config
+def get_Environment_config_info():
+    result = run_cli_command('env')
+    if result.stdout:
+        summary = "Output is detailed in the Environment Config section"
+    else:
+        summary = "Missing Data"
+    return summary, result
+
+# Get Rdma link info
+def get_rdma_link_info():
+    result = run_cli_command('rdma link')
+    if result.stdout:
+        summary = "Output is detailed in the rdma link section"
+    else:
+        summary = "Missing Data"
+    return summary, result
+
+# Get NUMA Balancing
+def get_NUMA_balancing_info():
+    result = run_cli_command('cat /proc/sys/kernel/numa_balancing')
+    if result.stdout:
+        summary = result.stdout 
+    else:
+        summary = "Missing Data"
+    return summary, result
 
 
 # Gather all data and build summary table and detailed output format
@@ -155,18 +199,42 @@ def get_config():
     mpi_summary, mpi_result = mpi_version()
     mpi_status = status_check(mpi_summary, mpi_result)
 
+    # Linux kernel version
+    Lkv_summary, Lkv_result = get_Linux_kernel_version()
+    Lkv_status = status_check(Lkv_summary, Lkv_result)
+
+    # Resource limits
+    rlv_summary, rlv_result = get_resource_limits_info()
+    rlv_status = status_check(rlv_summary, rlv_result)
+
+    # Environment config
+    env_summary, env_result = get_Environment_config_info()
+    env_status = status_check(env_summary, env_result)
+
+    # Rdma link info
+    rdl_summary, rdl_result = get_rdma_link_info()
+    rdl_status = status_check(rdl_summary, rdl_result)
+    
+    # NUMA Balancing info
+    nb_summary, nb_result = get_NUMA_balancing_info()
+    nb_status = status_check(nb_summary, nb_result)
 
     # Create the summary table
     summary_table = (
         f"\n\n{'='*119}\n"
-        f"{'Component':<20}| {'Status':<13} | Value\n"
+        f"{'Component':<30}| {'Status':<13} | Value\n"
         f"{'='*119}\n"
-        f"OS Version{' ':<10}| {os_status:<13} | {os_summary}\n"
-        f"ROCm Version{' ':<8}| {ROCm_status:<13} | {ROCm_summary}\n"
-        f"HIP Version{' ':<9}| {HIP_status:<13} | {HIP_summary}\n"
-        f"Vram Information{' ':<4}| {Vram_status:<13} | {Vram_summary}\n"
-        f"UCX Version{' ':<9}| {ucx_status:<13} | {ucx_summary}\n"
-        f"MPI Version{' ':<9}| {mpi_status:<13} | {mpi_summary}\n"
+        f"OS Version{' ':<20}| {os_status:<13} | {os_summary}\n"
+        f"ROCm Version{' ':<18}| {ROCm_status:<13} | {ROCm_summary}\n"
+        f"HIP Version{' ':<19}| {HIP_status:<13} | {HIP_summary}\n"
+        f"Vram Information{' ':<14}| {Vram_status:<13} | {Vram_summary}\n"
+        f"UCX Version{' ':<19}| {ucx_status:<13} | {ucx_summary}\n"
+        f"MPI Version{' ':<19}| {mpi_status:<13} | {mpi_summary}\n"
+        f"Linux Kernel Version{' ':<10}| {Lkv_status:<13} | {Lkv_summary}\n"
+        f"Resource limits{' ':<15}| {rlv_status:<13} | {rlv_summary}\n"
+        f"Environment Configuration{' ':<5}| {env_status:<13} | {env_summary}\n"
+        f"RDMA Link Information{' ':<9}| {rdl_status:<13} | {rdl_summary}\n"
+        f"NUMA Balancing Information{' ':<4}| {nb_status:<13} | {nb_summary}\n"
         f"{'='*119}\n\n\n"
     )
 
@@ -188,6 +256,16 @@ def get_config():
     f"{ucx_result.stdout.strip()}{ucx_result.stderr.strip()}\n\n"
     f"{centered_title('MPI Version', details_width, '=')}\n"
     f"{mpi_result.stdout.strip()}{mpi_result.stderr.strip()}\n\n"
+    f"{centered_title('Linux Kernel Version', details_width, '=')}\n"
+    f"{Lkv_result.stdout.strip()}{Lkv_result.stderr.strip()}\n\n"
+    f"{centered_title('Resource limits', details_width, '=')}\n"
+    f"{rlv_result.stdout.strip()}{rlv_result.stderr.strip()}\n\n"
+    f"{centered_title('Environment Configuration', details_width, '=')}\n"
+    f"{env_result.stdout.strip()}{env_result.stderr.strip()}\n\n"
+    f"{centered_title('RDMA Link Information', details_width, '=')}\n"
+    f"{rdl_result.stdout.strip()}{rdl_result.stderr.strip()}\n\n"
+    f"{centered_title('NUMA Balancing Information', details_width, '=')}\n"
+    f"{nb_result.stdout.strip()}{nb_result.stderr.strip()}\n\n"
     )
     return summary_table, details
 
@@ -226,11 +304,11 @@ if __name__ == '__main__':
 # the key is that UCX and OMPI should be a part of PATH and LD_LIBRARY_PATH -- first this needs to be checked, and if true, you can simply query ucx_info -v and mpirun --version
 # also, we don't need both OMPI4 and OMPI5 check -- usually there's only one of these as part of the env.
 
-# Linux kernel version
-# ulimit -a
-# Environment Variable Config
-# Rdma link info
-# Query Numa balancing status
+# Linux kernel version done
+# ulimit -a done
+# Environment Variable Config done
+# Rdma link info done
+# Query Numa balancing status done
 
 
 # Infiniband device info
