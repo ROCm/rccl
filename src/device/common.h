@@ -47,6 +47,7 @@
     struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
     collTrace->timeStamp = wall_clock64(); \
     collTrace->bid = blockIdx.x; \
+    collTrace->tid = threadIdx.x; \
     collTrace->channelId = ncclShmem.channelId;
     // TODO: switch to atomicInc after llvm crash is fixed
     // uint32_t pos = atomicInc(&ncclShmem.collTraceTail->tail, COLLTRACE_NUM_ITEMS)
@@ -82,7 +83,16 @@
   }
   #define traceKernelEnd(end_type)  { \
     INC_COLL_TRACE \
-    collTrace->type = end_type; \
+    if (ncclShmem.workType == ncclDevWorkTypeP2p) { \
+      struct ncclDevWorkP2p *p2pWork = (struct ncclDevWorkP2p*)ncclShmem.workStorage; \
+      collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
+      collTrace->p2pOpCount[1] = p2pWork->recvOpCount; \
+      collTrace->type = (end_type) | ncclCollTraceP2pElemType; \
+    } else if (ncclShmem.workType == ncclDevWorkTypeColl) { \
+      struct ncclDevWorkColl *collWork = (struct ncclDevWorkColl*)ncclShmem.workStorage; \
+      collTrace->opCount = collWork->opCount; \
+      collTrace->type = (end_type) | ncclCollTraceCollElemType; \
+    } \
   }
   #define traceData(data2, data4, data8_0, data8_1) { \
     INC_COLL_TRACE \
@@ -519,7 +529,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   }
 #endif
   if (tid == 0) __insert_timestamp(__LINE__);
-  if (COLLTRACE && tid == 0) traceKernelLaunch(ncclCollTraceKernelLaunchType);
+  if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceKernelLaunchType);
 
   if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {
     // ncclShmem.workConsumed written by loadWorkBatchToShmem before __syncthreads()
@@ -569,9 +579,9 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     }
     if (aborted) break;
 
-    if (COLLTRACE && tid == 0) traceKernelLaunch(ncclCollTraceCollLaunchType);
+    if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceCollLaunchType);
   }
-  if (COLLTRACE && tid == 0) traceKernelEnd(ncclCollTraceKernelEndType);
+  if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelEnd(ncclCollTraceKernelEndType);
 
 #ifdef ENABLE_PROFILING
   if (ncclShmem.comm.devProf->seq < PROFILE_NUM_LAUNCHES) {
