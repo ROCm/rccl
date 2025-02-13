@@ -28,7 +28,7 @@ def status_check(summary, result):
     # List of errors to check
     error_list = [r'No such file or directory', r'Command not found', r'Permission denied', r'cannot access', r'error']
     status = "OK"
-    if summary == "Missing Data":
+    if summary == "Unable to detect":
         status = "WARN"
     for error in error_list:
         match = re.search(error, result.stderr, re.IGNORECASE)
@@ -59,7 +59,7 @@ def get_os_version():
     if match:
         summary = match.group(1)
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get ROCm Version
@@ -68,7 +68,7 @@ def get_ROCm_version():
     if result.stdout:
         summary = result.stdout.strip()
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get HIP Version
@@ -77,7 +77,7 @@ def get_HIP_version():
     if result.stdout:
         summary = result.stdout.strip()
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get Vram Information
@@ -86,7 +86,7 @@ def get_Vram_info():
     if result.stdout:
         summary = "Memory Usage is detailed in the Vram Information section"
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get UCX version
@@ -98,7 +98,7 @@ def ucx_version():
         if match:
             summary = match.group(1)
         else:
-            summary = "Missing Data"
+            summary = "Unable to detect"
         return summary, result
     else:
         stdout = ""
@@ -116,7 +116,7 @@ def mpi_version():
         if match:
             summary = match.group()
         else:
-            summary = "Missing Data"
+            summary = "Unable to detect"
         return summary, result
     else:
         stdout = ""
@@ -131,7 +131,7 @@ def get_Linux_kernel_version():
     if result.stdout:
         summary = result.stdout.strip()
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get Resource limits
@@ -140,7 +140,7 @@ def get_resource_limits_info():
     if result.stdout:
         summary = "Output is detailed in the Resource limits section"
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get Environment config
@@ -149,7 +149,7 @@ def get_Environment_config_info():
     if result.stdout:
         summary = "Output is detailed in the Environment Config section"
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get Rdma link info
@@ -158,16 +158,125 @@ def get_rdma_link_info():
     if result.stdout:
         summary = "Output is detailed in the rdma link section"
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
     return summary, result
 
 # Get NUMA Balancing
 def get_NUMA_balancing_info():
     result = run_cli_command('cat /proc/sys/kernel/numa_balancing')
     if result.stdout:
-        summary = result.stdout 
+        summary = result.stdout.strip()
     else:
-        summary = "Missing Data"
+        summary = "Unable to detect"
+    return summary, result
+
+# Get IB status ########################## UPDATE to NIC STATUS in summary and include data in value
+def get_ib_status():
+    result = run_cli_command('ibstatus')
+    if result.stdout:
+        summary = "Output is detailed in the IBstatus section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get Device GUIDs
+def get_device_GUIDs():
+    result = run_cli_command('ibv_devices')
+    if result.stdout:
+        summary = "Output is detailed in the IBdevices section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get IB device info
+def get_ib_devinfo():
+    result = run_cli_command('ibv_devinfo')
+    if result.stdout:
+        summary = "Output is detailed in the IBdevinfo section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get IBstat info
+def get_ibstat():
+    result = run_cli_command('ibstat')
+    if result.stdout:
+        summary = "Output is detailed in the IBstat section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get AMDKFD (GPU Driver version)
+def get_gpu_driver():
+    result = run_cli_command('dkms status | grep "amdgpu"')
+    if result.stdout:
+        pattern = r"^.*amdgpu.*$"
+        matching_lines = re.findall(pattern, result.stdout, flags=re.MULTILINE)
+        summary = matching_lines[0] + ", WARN = maybe >1 driver check below"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get DKMS module info
+def get_dkms_status():
+    result = run_cli_command('dkms status')
+    if result.stdout:
+        summary = "DKMS information is detailed in the DKMS Status section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get IP A
+def get_IP_addr():
+    result = run_cli_command('ip a')
+    if result.stdout:
+        summary = "IP address information is detailed in the IP Addr section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get IP Link
+def get_IP_link():
+    result = run_cli_command('ip link')
+    if result.stdout:
+        summary = "IP link information is detailed in the IP Link section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get IP route
+def get_IP_route():
+    result = run_cli_command('ip route')
+    if result.stdout:
+        summary = "IP Route information is detailed in the IP Route section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get ACS info ####################### no output for this command ask about it
+def get_acs_info():
+    result = run_cli_command('lspci -vvv | grep ACSCtl')
+    if result.stdout:
+        summary = "ACS information is detailed in the ACS section"
+    else:
+        summary = "Unable to detect"
+    return summary, result
+
+# Get rocminfo ################# Ask how to differentiate which GPUs are which by CU and name
+def get_rocminfo():
+    result = run_cli_command('rocminfo')
+    if result.stdout:
+        gpu_names = []
+        compute_units = []
+        gpu_pattern = re.compile(r"Name:\s+(gfx\d+).*?Compute Unit:\s+(\d+)", re.DOTALL)
+        matches = gpu_pattern.findall(result.stdout)
+        for match in matches:
+            gpu_names.append(match[0])
+            compute_units.append(int(match[1]))
+        num_gpus = len(gpu_names)
+        summary = f"Found {num_gpus} GPUs"
+    else:
+        summary = "Unable to detect"
     return summary, result
 
 
@@ -214,10 +323,60 @@ def get_config():
     # Rdma link info
     rdl_summary, rdl_result = get_rdma_link_info()
     rdl_status = status_check(rdl_summary, rdl_result)
-    
+
     # NUMA Balancing info
     nb_summary, nb_result = get_NUMA_balancing_info()
     nb_status = status_check(nb_summary, nb_result)
+
+    # IB status info
+    ibs_summary, ibs_result = get_ib_status()
+    ibs_status = status_check(ibs_summary, ibs_result)
+
+    # Device GUIDs
+    GUIDs_summary, GUIDs_result = get_device_GUIDs()
+    GUIDs_status = status_check(GUIDs_summary, GUIDs_result)
+
+    # IB device info
+    ib_dev_summary, ib_dev_result = get_ib_devinfo()
+    ib_dev_status = status_check(ib_dev_summary, ib_dev_result)
+
+    # IBstat info
+    ib_stat_summary, ib_stat_result = get_ibstat()
+    ib_stat_status = status_check(ib_stat_summary, ib_stat_result)
+
+    # AMD GPU driver version
+    GPU_driver_summary, GPU_driver_result = get_gpu_driver()
+    pattern = r"^.*amdgpu.*$"
+    matching_lines = re.findall(pattern, GPU_driver_result.stdout, flags=re.MULTILINE)
+    if len(matching_lines) > 1:
+        GPU_driver_status = "WARN"
+    else:
+        GPU_driver_status = status_check(GPU_driver_summary, GPU_driver_result)
+
+    # DKMS module info
+    dkms_summary, dkms_result = get_dkms_status()
+    dkms_status = status_check(dkms_summary, dkms_result)
+
+    # IP addr info
+    ip_addr_summary, ip_addr_result = get_IP_addr()
+    ip_addr_status = status_check(ip_addr_summary, ip_addr_result)
+
+    # IP link info
+    ip_link_summary, ip_link_result = get_IP_link()
+    ip_link_status = status_check(ip_link_summary, ip_link_result)
+
+    # IP route info
+    ip_route_summary, ip_route_result = get_IP_route()
+    ip_route_status = status_check(ip_route_summary, ip_route_result)
+
+    # IP ACS info
+    acs_summary, acs_result = get_acs_info()
+    acs_status = status_check(acs_summary, acs_result)
+
+    # ROCM info
+    rocm_info_summary, rocm_info_result = get_rocminfo()
+    rocm_info_status = status_check(rocm_info_summary, rocm_info_result)
+
 
     # Create the summary table
     summary_table = (
@@ -235,6 +394,17 @@ def get_config():
         f"Environment Configuration{' ':<5}| {env_status:<13} | {env_summary}\n"
         f"RDMA Link Information{' ':<9}| {rdl_status:<13} | {rdl_summary}\n"
         f"NUMA Balancing Information{' ':<4}| {nb_status:<13} | {nb_summary}\n"
+        f"IBstatus Information{' ':<10}| {ibs_status:<13} | {ibs_summary}\n"
+        f"Device GUIDs Information{' ':<6}| {GUIDs_status:<13} | {GUIDs_summary}\n"
+        f"IB device Information{' ':<9}| {ib_dev_status:<13} | {ib_dev_summary}\n"
+        f"IBstat Information{' ':<12}| {ib_stat_status:<13} | {ib_stat_summary}\n"
+        f"AMD GPU driver version{' ':<8}| {GPU_driver_status:<13} | {GPU_driver_summary}\n"
+        f"DKMS Module Information{' ':<7}| {dkms_status:<13} | {dkms_summary}\n"
+        f"IP Address Information{' ':<8}| {ip_addr_status:<13} | {ip_addr_summary}\n"
+        f"IP Link Information{' ':<11}| {ip_link_status:<13} | {ip_link_summary}\n"
+        f"IP Route Information{' ':<10}| {ip_route_status:<13} | {ip_route_summary}\n"
+        f"ACS Disabled{' ':<18}| {acs_status:<13} | {acs_summary}\n"
+        f"Node Status{' ':<19}| {rocm_info_status:<13} | {rocm_info_summary}\n"
         f"{'='*119}\n\n\n"
     )
 
@@ -266,6 +436,28 @@ def get_config():
     f"{rdl_result.stdout.strip()}{rdl_result.stderr.strip()}\n\n"
     f"{centered_title('NUMA Balancing Information', details_width, '=')}\n"
     f"{nb_result.stdout.strip()}{nb_result.stderr.strip()}\n\n"
+    f"{centered_title('IBstatus Information', details_width, '=')}\n"
+    f"{ibs_result.stdout.strip()}{ibs_result.stderr.strip()}\n\n"
+    f"{centered_title('IBdevices', details_width, '=')}\n"
+    f"{GUIDs_result.stdout.strip()}{GUIDs_result.stderr.strip()}\n\n"
+    f"{centered_title('IBdevinfo', details_width, '=')}\n"
+    f"{ib_dev_result.stdout.strip()}{ib_dev_result.stderr.strip()}\n\n"
+    f"{centered_title('IBstat', details_width, '=')}\n"
+    f"{ib_stat_result.stdout.strip()}{ib_stat_result.stderr.strip()}\n\n"
+    f"{centered_title('GPU Driver Version', details_width, '=')}\n"
+    f"{GPU_driver_result.stdout.strip()}{GPU_driver_result.stderr.strip()}\n\n"
+    f"{centered_title('DKMS Status', details_width, '=')}\n"
+    f"{dkms_result.stdout.strip()}{dkms_result.stderr.strip()}\n\n"
+    f"{centered_title('IP Addr', details_width, '=')}\n"
+    f"{ip_addr_result.stdout.strip()}{ip_addr_result.stderr.strip()}\n\n"
+    f"{centered_title('IP Link', details_width, '=')}\n"
+    f"{ip_link_result.stdout.strip()}{ip_link_result.stderr.strip()}\n\n"
+    f"{centered_title('IP Route', details_width, '=')}\n"
+    f"{ip_route_result.stdout.strip()}{ip_route_result.stderr.strip()}\n\n"
+    f"{centered_title('ACS', details_width, '=')}\n"
+    f"{acs_result.stdout.strip()}{acs_result.stderr.strip()}\n\n"
+    f"{centered_title('ROCm Information', details_width, '=')}\n"
+    f"{rocm_info_result.stdout.strip()}{rocm_info_result.stderr.strip()}\n\n"
     )
     return summary_table, details
 
@@ -311,24 +503,24 @@ if __name__ == '__main__':
 # Query Numa balancing status done
 
 
-# Infiniband device info
+# Network Interface Controller (NIC) info 
 
-# ibstatus
-# ibv_devices
-# IB_devinfo
-# ibstat
-# AMDKFD (GPU Driver version) for this one just use DKMS status and put the remainder in the details section
+# ibstatus done
+# ibv_devices done
+# IB_devinfo done
+# ibstat done
+# AMDKFD (GPU Driver version) for this one just use DKMS status and put the remainder in the details section done
 
 
 # Network information
 
-# ip a
+# ip a done
 
-# ip link
+# ip link done
 
-# ip route
+# ip route done
 
-# ACSinfo
+# ACSinfo done
 
 # rocminfo
 # Another note from Nilesh
