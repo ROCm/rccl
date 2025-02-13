@@ -42,6 +42,9 @@ def PATH_and_LD_LIBRARY_PATH(dir):
     try:
         path = os.environ.get('PATH')
         LD_path = os.environ.get('LD_LIBRARY_PATH')
+        pattern = re.escape(dir)
+        match_path = re.search(pattern, path)
+        match_LD_path = re.search(pattern, LD_path)
     except Exception as e:
         return False
     pattern = re.escape(dir)
@@ -170,11 +173,19 @@ def get_NUMA_balancing_info():
         summary = "Unable to detect"
     return summary, result
 
-# Get IB status ########################## UPDATE to NIC STATUS in summary and include data in value
+# Get IB status ########################## Ask what the output of Broadcom nic looks like and if it will work with this regex
 def get_ib_status():
     result = run_cli_command('ibstatus')
     if result.stdout:
-        summary = "Output is detailed in the IBstatus section"
+        pattern = r"Infiniband device '[^']+' port \d+ status:\s+default gid:\s+[^ ]+\s+base lid:\s+[^ ]+\s+sm lid:\s+[^ ]+\s+state:\s+\d+: ACTIVE\s+phys state:\s+\d+: LinkUp\s+rate:\s+(\d+) Gb/sec \([^)]+\)\s+link_layer:\s+InfiniBand"
+        matches = re.findall(pattern, result.stdout)
+        num_ib_devices = len(matches)
+        rate_same = all(x == matches[0] for x in matches)
+        if rate_same:
+            summary = f"Detected {num_ib_devices} active IB devices running at {matches[0]} Gb/sec"
+        else:
+            summary = f"Detected {num_ib_devices} active IB devices running at various rates the peak being {max(matches)} Gb/sec"
+
     else:
         summary = "Unable to detect"
     return summary, result
@@ -394,7 +405,7 @@ def get_config():
         f"Environment Configuration{' ':<5}| {env_status:<13} | {env_summary}\n"
         f"RDMA Link Information{' ':<9}| {rdl_status:<13} | {rdl_summary}\n"
         f"NUMA Balancing Information{' ':<4}| {nb_status:<13} | {nb_summary}\n"
-        f"IBstatus Information{' ':<10}| {ibs_status:<13} | {ibs_summary}\n"
+        f"NIC Status{' ':<20}| {ibs_status:<13} | {ibs_summary}\n"
         f"Device GUIDs Information{' ':<6}| {GUIDs_status:<13} | {GUIDs_summary}\n"
         f"IB device Information{' ':<9}| {ib_dev_status:<13} | {ib_dev_summary}\n"
         f"IBstat Information{' ':<12}| {ib_stat_status:<13} | {ib_stat_summary}\n"
@@ -436,7 +447,7 @@ def get_config():
     f"{rdl_result.stdout.strip()}{rdl_result.stderr.strip()}\n\n"
     f"{centered_title('NUMA Balancing Information', details_width, '=')}\n"
     f"{nb_result.stdout.strip()}{nb_result.stderr.strip()}\n\n"
-    f"{centered_title('IBstatus Information', details_width, '=')}\n"
+    f"{centered_title('Network Interface Controller (NIC) Information', details_width, '=')}\n"
     f"{ibs_result.stdout.strip()}{ibs_result.stderr.strip()}\n\n"
     f"{centered_title('IBdevices', details_width, '=')}\n"
     f"{GUIDs_result.stdout.strip()}{GUIDs_result.stderr.strip()}\n\n"
@@ -478,51 +489,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-
-
-# list of stuff to add
-# OS version done
-# ROCm version done
-# GPU VRAM info done
-# HIP version done
-
-# PATH
-# UCX version done
-# MPI version4 done
-# MPI version5 done
-# ^
-# Note from Nilesh applies to 3 above
-# these need to change... the /opt/ paths are mostly unique to our setup... other users might have UCX/OMPI at different paths
-# the key is that UCX and OMPI should be a part of PATH and LD_LIBRARY_PATH -- first this needs to be checked, and if true, you can simply query ucx_info -v and mpirun --version
-# also, we don't need both OMPI4 and OMPI5 check -- usually there's only one of these as part of the env.
-
-# Linux kernel version done
-# ulimit -a done
-# Environment Variable Config done
-# Rdma link info done
-# Query Numa balancing status done
-
-
-# Network Interface Controller (NIC) info 
-
-# ibstatus done
-# ibv_devices done
-# IB_devinfo done
-# ibstat done
-# AMDKFD (GPU Driver version) for this one just use DKMS status and put the remainder in the details section done
-
-
-# Network information
-
-# ip a done
-
-# ip link done
-
-# ip route done
-
-# ACSinfo done
-
-# rocminfo
-# Another note from Nilesh
-# rocminfo you need to parse three things -- no. of GPUs, GPU type (gfx___), and Compute Unit count
-# -- we can then use this info to parse in the summary one line like "Found 8 MI300X GPUs" or "Found 8 MI308 GPUs"
