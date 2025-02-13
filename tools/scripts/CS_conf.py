@@ -173,13 +173,16 @@ def get_NUMA_balancing_info():
         summary = "Unable to detect"
     return summary, result
 
-# Get IB status ########################## Ask what the output of Broadcom nic looks like and if it will work with this regex
+# Get IB status
 def get_ib_status():
     result = run_cli_command('ibstatus')
     if result.stdout:
-        pattern = r"Infiniband device '[^']+' port \d+ status:\s+default gid:\s+[^ ]+\s+base lid:\s+[^ ]+\s+sm lid:\s+[^ ]+\s+state:\s+\d+: ACTIVE\s+phys state:\s+\d+: LinkUp\s+rate:\s+(\d+) Gb/sec \([^)]+\)\s+link_layer:\s+InfiniBand"
+        pattern = r"Infiniband device '[^']+' port \d+ status:\s+default gid:\s+[^ ]+\s+base lid:\s+[^ ]+\s+sm lid:\s+[^ ]+\s+state:\s+\d+: ACTIVE\s+phys state:\s+\d+: LinkUp\s+rate:\s+(\d+) Gb/sec \([^)]+\)\s+link_layer:\s+"
         matches = re.findall(pattern, result.stdout)
         num_ib_devices = len(matches)
+        if num_ib_devices == 0:
+            summary = f"Detected {num_ib_devices} active IB devices running"
+            return summary, result
         rate_same = all(x == matches[0] for x in matches)
         if rate_same:
             summary = f"Detected {num_ib_devices} active IB devices running at {matches[0]} Gb/sec"
@@ -223,6 +226,9 @@ def get_gpu_driver():
     if result.stdout:
         pattern = r"^.*amdgpu.*$"
         matching_lines = re.findall(pattern, result.stdout, flags=re.MULTILINE)
+        if len(matching_lines) == 0:
+            summary ="No gpu driver detected"
+            return summary, result
         summary = matching_lines[0] + ", WARN = maybe >1 driver check below"
     else:
         summary = "Unable to detect"
@@ -266,9 +272,14 @@ def get_IP_route():
 
 # Get ACS info ####################### no output for this command ask about it
 def get_acs_info():
-    result = run_cli_command('lspci -vvv | grep ACSCtl')
+    result = run_cli_command('sudo lspci -vvv | grep ACSCtl')
     if result.stdout:
-        summary = "ACS information is detailed in the ACS section"
+        pattern = r"SrcValid\+"
+        matches = re.findall(pattern, result.stdout)
+        if len(matches) != 0:
+            summary = "ACS has not been disabled"
+        else:
+            summary= "ACS has been disabled"
     else:
         summary = "Unable to detect"
     return summary, result
