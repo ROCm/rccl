@@ -25,7 +25,7 @@
 
 #include <stdint.h>
 
-#if __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
+#if __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
 /*! \brief Struct to represent a 8 bit floating-point number. */
 
 typedef struct
@@ -38,52 +38,7 @@ typedef struct
     uint8_t data;
 } rccl_bfloat8;
 
-// __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
-#elif ROCM_VERSION >= 60200
-
-#include <hip/hip_fp8.h>
-
-#if HIP_FP8_TYPE_OCP
-typedef __hip_fp8_e4m3 rccl_float8;
-typedef __hip_fp8_e5m2 rccl_bfloat8;
-#else
-typedef __hip_fp8_e4m3_fnuz rccl_float8;
-typedef __hip_fp8_e5m2_fnuz rccl_bfloat8;
-#endif
-    
-inline std::ostream& operator<<(std::ostream& os, const rccl_float8& f8)
-{
-    return os << float(f8);
-}
-
-inline std::ostream& operator<<(std::ostream& os, const rccl_bfloat8& bf8)
-{
-    return os << float(bf8);
-}
-
-inline __host__ __device__ float operator*(rccl_float8 a, rccl_float8 b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(rccl_bfloat8 a, rccl_bfloat8 b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(rccl_float8 a, float b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(rccl_bfloat8 a, float b)
-{
-    return float(a) * float(b);
-}
-
-// For older versions of ROCm that do not include hip_fp8.h,
-// we provide a local version of the header file as a fallback.
-#else
+#else // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
 
 #define HIP_HOST_DEVICE __host__ __device__
 #define HIP_HOST __host__
@@ -1061,6 +1016,6 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 
 // =================================================================================================
 
-#endif
+#endif // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
 
 #endif // ROCBLAS_FLOAT8_H
