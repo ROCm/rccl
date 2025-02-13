@@ -96,14 +96,14 @@ def get_config():
 
     # Create the summary table
     summary_table = (
-        f"\n\n{'='*80}\n"
+        f"\n\n{'='*119}\n"
         f"{'Component':<20}| {'Status':<13} | Value\n"
-        f"{'='*80}\n"
+        f"{'='*119}\n"
         f"OS Version{' ':<10}| {os_status:<13} | {os_summary}\n"
         f"ROCm Version{' ':<8}| {ROCm_status:<13} | {ROCm_summary}\n"
         f"HIP Version{' ':<9}| {HIP_status:<13} | {HIP_summary}\n"
         f"Vram Information{' ':<4}| {vram_status:<13} | {vram_summary}\n"
-        f"{'='*80}\n\n\n"
+        f"{'='*119}\n\n\n"
     )
 
 
@@ -145,8 +145,8 @@ if __name__ == '__main__':
 # list of stuff to add
 # OS version done
 # ROCm version done
-# GPU VRAM info
-# HIP version
+# GPU VRAM info done
+# HIP version done
 
 # UCX version
 # MPI version4
