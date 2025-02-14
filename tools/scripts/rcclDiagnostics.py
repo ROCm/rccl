@@ -583,7 +583,7 @@ def get_config(root_enabled):
         f"ACS Disabled{' ':<18}| {acs_status:<13} | {acs_summary}\n"
         f"Node Status{' ':<19}| {rocm_info_status:<13} | {rocm_info_summary}\n"
         f"File Descriptor Information{' ':<3}| {limits_status:<13} | {limits_summary}\n"
-        f"{'='*119}\n\n\n"
+        f"{'='*119}"
     )
 
 
@@ -591,7 +591,7 @@ def get_config(root_enabled):
     # Combine details
     details_width = 120
     details = (
-    f"Detailed Output:\n"
+    f"\n\n\nDetailed Output:\n"
     f"{centered_title('Host Name', details_width, '=')}\n"
     f"{hostname_result.stdout.strip()}{hostname_result.stderr.strip()}\n\n"
     f"{centered_title('OS info', details_width, '=')}\n"
