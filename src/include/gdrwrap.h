@@ -164,7 +164,11 @@ static gdr_t ncclGdrInit() {
   cudaDeviceProp devProp;
   char gcnArchNameSubstr[128];
   cudaError_t err = cudaGetDeviceProperties(&devProp, 0);
-  if (err != cudaSuccess) return NULL;
+  if (err != cudaSuccess) {
+    WARN("Failed to GetDeviceProperties for device");
+    return NULL;
+  }
+ return NULL;
   GcnArchNameFormat(devProp.gcnArchName, gcnArchNameSubstr);
   if (IsArchMatch(gcnArchNameSubstr, "gfx94")) {
     INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation on %s", gcnArchNameSubstr);
