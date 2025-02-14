@@ -427,7 +427,7 @@ def checklimits():
         file_descriptors = int(result.stdout)
         locked_mem = str(result2.stdout).strip()
         if file_descriptors >= 1048576 and locked_mem == "unlimited":
-            summary = "Max file descriptors and locked memory are set correctly"
+            summary = "Limits set correctly"
             stdout = "ulimit -n output:\n" + result.stdout + "\n" + "ulimit -l output:\n" + result2.stdout
             results = CommandResult(stdout=stdout, stderr="")
             return summary, results
