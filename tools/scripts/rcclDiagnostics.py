@@ -655,7 +655,8 @@ def main():
 
     # Print summary out to cli
     print(summary_table)
-    
+    current_directory = os.getcwd()
+    print("Detailed output file is at: " + current_directory + "/" + file_name)
     # Write the summary table and details to the output file
     with open(file_name, "w") as file:
         file.write(summary_table)
