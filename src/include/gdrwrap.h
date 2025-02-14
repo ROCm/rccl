@@ -220,7 +220,7 @@ static ncclResult_t ncclGdrCudaCopy(void *gdrHandle, T* dst, T* src, size_t nele
 
 static ncclResult_t ncclGdrCudaFree(void* gdrHandle) {
   gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle;
-  CUDACHECK(hipFree(md->gdrDevMem));
+  CUDACHECK(cudaFree(md->gdrDevMem));
   free(md);
 
   return ncclSuccess;
