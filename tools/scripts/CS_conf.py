@@ -507,7 +507,9 @@ def main():
 
     summary_table, details = get_config()
 
-
+    # Print summary out to cli
+    print(summary_table)
+    
     # Write the summary table and details to the output file
     with open(file_name, "w") as file:
         file.write(summary_table)
