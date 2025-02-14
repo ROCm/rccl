@@ -10,9 +10,9 @@
 # default 
 # python3 rccl_system_info_collector.py
 
-# when running with acs flag
-# sudo python3 rccl_system_info_collector.py --acs
-# Note: Running the script without sudo will not check if ACS is disable or not, sudo is needed to gather all system configuration information.
+# when you require acs output
+# sudo python3 rccl_system_info_collector.py
+# Note: Running the script without sudo will not check if ACS is disabled or not, sudo is needed to complete system configuration information but the script will skip what it can't get.
 
 # The script will gather essential system configuration information, such as OS information, network information, driver versions, etc., to help with debugging RCCL issues. It will generate a report in a readable format, which you can share with the support team or use for troubleshooting.
 
@@ -42,15 +42,14 @@ Usage\n
 To run the script and gather the configuration information, execute the following command:\n
 - default\n
   python3 rccl_system_info_collector.py\n
-- when running with acs flag\n
-  sudo python3 rccl_system_info_collector.py --acs\n
-Note: Running the script without sudo will not check if ACS is disabled or not, sudo is needed to gather all system configuration information.\n
+- when you require acs output\n
+  sudo python3 rccl_system_info_collector.py\n
+Note: Running the script without sudo will not check if ACS is disabled or not, sudo is needed to complete system configuration information but the script will skip what it can't get.\n
 The script will gather essential system configuration information, such as OS information, network information, driver versions, etc., to help with debugging RCCL issues. It will generate a report in a readable format, which you can share with the support team or use for troubleshooting.\n
     '''
     parser = argparse.ArgumentParser(description=textwrap.dedent(readme), formatter_class=argparse.RawDescriptionHelpFormatter)
 
     # Add option flags
-    parser.add_argument('-a','--acs', help='Check for ACS status (requires root access)', required=False, action='store_true')
 
     return parser.parse_args()
 
@@ -329,7 +328,7 @@ def get_IP_route():
 
 # Get ACS info
 def get_acs_info():
-    result = run_cli_command('sudo lspci -vvv | grep ACSCtl')
+    result = run_cli_command('lspci -vvv | grep ACSCtl')
     if result.stdout:
         pattern = r"SrcValid\+"
         matches = re.findall(pattern, result.stdout)
@@ -541,7 +540,7 @@ def get_config(root_enabled):
         acs_summary, acs_result = get_acs_info()
         acs_status = status_check(acs_summary, acs_result)
     else:
-        acs_summary = "This field requires the acs flag to be set when running the script and root access"
+        acs_summary = "Requires script to be run with root access"
         acs_result = CommandResult(stdout="",stderr="Error: " + acs_summary)
         acs_status = "SKIPPED"
 
@@ -646,11 +645,13 @@ def get_config(root_enabled):
 
 def main():
     args = parse_arguments()
-    root_enabled = args.acs
     hostname = os.uname().nodename
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_name = f"config.{hostname}.{timestamp}.txt"
-
+    if os.geteuid() == 0:
+        root_enabled = True
+    else:
+        root_enabled = False
     summary_table, details = get_config(root_enabled)
 
     # Print summary out to cli
