@@ -270,7 +270,7 @@ def get_IP_route():
         summary = "Unable to detect"
     return summary, result
 
-# Get ACS info ####################### no output for this command ask about it
+# Get ACS info
 def get_acs_info():
     result = run_cli_command('sudo lspci -vvv | grep ACSCtl')
     if result.stdout:
