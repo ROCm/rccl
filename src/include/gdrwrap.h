@@ -168,7 +168,6 @@ static gdr_t ncclGdrInit() {
     WARN("Failed to GetDeviceProperties for device");
     return NULL;
   }
- return NULL;
   GcnArchNameFormat(devProp.gcnArchName, gcnArchNameSubstr);
   if (IsArchMatch(gcnArchNameSubstr, "gfx94")) {
     INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation on %s", gcnArchNameSubstr);
