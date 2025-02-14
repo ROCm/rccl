@@ -368,6 +368,79 @@ def get_rocminfo():
         summary = "Unable to detect"
     return summary, result
 
+def checklimits_from_file():
+    summary = ""
+    try:
+        with open('/etc/security/limits.conf', 'r') as file:
+            lines = file.read().splitlines()
+    
+        # Reverse lines list to check for the last occurrence (to avoid overwriting)
+        lines.reverse()
+    
+        limit_soft_nofile_line = '* soft nofile 1048576'
+        limit_hard_nofile_line = '* hard nofile 1048576'
+        limit_soft_memlock_line = '* soft memlock unlimited'
+        limit_hard_memlock_line = '* hard memlock unlimited'
+    
+        lines_to_check = [
+            limit_soft_nofile_line,
+            limit_hard_nofile_line,
+            limit_soft_memlock_line,
+            limit_hard_memlock_line,
+        ]
+    
+        missing_lines = []
+    
+        for line in lines_to_check:
+            if line not in lines:
+                missing_lines.append(line)
+    
+        if missing_lines:
+            summary = "Limits not set"
+            error = ""
+            for missing_line in missing_lines:
+                error += missing_line + "\n"
+            results = CommandResult(stdout="",stderr="Error: The following lines are missing in /etc/security/limits.conf:" + error)
+            return summary, results
+        else:
+            print("All required lines are present in /etc/security/limits.conf.")
+            summary = "Limits set correctly"
+            results = CommandResult(stdout="All required lines are present in /etc/security/limits.conf.",stderr="")
+            return summary, results
+
+    except FileNotFoundError:
+        summary = "Unable to detect"
+        results = CommandResult(stdout="",stderr="Error: File /etc/security/limits.conf not found on this system.")
+        return summary, results
+    except Exception as e:
+        summary = "Unable to detect"
+        results = CommandResult(stdout="",stderr=f"Error opening or reading /etc/security/limits.conf: {str(e)}")
+        return summary, results
+
+
+
+# Check max file descriptors and max lock memory
+def checklimits():
+    result = run_cli_command('ulimit -n')
+    result2 = run_cli_command('ulimit -l')
+    if result.stdout and result2.stdout:
+        file_descriptors = int(result.stdout)
+        locked_mem = str(result2.stdout).strip()
+        if file_descriptors >= 1048576 and locked_mem == "unlimited":
+            summary = "Max file descriptors and locked memory are set correctly"
+            stdout = "ulimit -n output:\n" + result.stdout + "\n" + "ulimit -l output:\n" + result2.stdout
+            results = CommandResult(stdout=stdout, stderr="")
+            return summary, results
+        else:
+            summary, results = checklimits_from_file()
+            return summary, results
+               
+        
+    else:
+        summary, results = checklimits_from_file()
+        return summary, results
+
+
 
 # Gather all data and build summary table and detailed output format
 def get_config(root_enabled):
@@ -475,6 +548,10 @@ def get_config(root_enabled):
     # ROCM info
     rocm_info_summary, rocm_info_result = get_rocminfo()
     rocm_info_status = status_check(rocm_info_summary, rocm_info_result)
+    
+    # Check max file descriptors and max lock memory
+    limits_summary, limits_result = checklimits()
+    limits_status = status_check(limits_summary, limits_result)
 
 
     # Create the summary table
@@ -505,6 +582,7 @@ def get_config(root_enabled):
         f"IP Route Information{' ':<10}| {ip_route_status:<13} | {ip_route_summary}\n"
         f"ACS Disabled{' ':<18}| {acs_status:<13} | {acs_summary}\n"
         f"Node Status{' ':<19}| {rocm_info_status:<13} | {rocm_info_summary}\n"
+        f"File Descriptor Information{' ':<3}| {limits_status:<13} | {limits_summary}\n"
         f"{'='*119}\n\n\n"
     )
 
@@ -560,6 +638,8 @@ def get_config(root_enabled):
     f"{acs_result.stdout.strip()}{acs_result.stderr.strip()}\n\n"
     f"{centered_title('ROCm Information', details_width, '=')}\n"
     f"{rocm_info_result.stdout.strip()}{rocm_info_result.stderr.strip()}\n\n"
+    f"{centered_title('File Descriptor Limits', details_width, '=')}\n"
+    f"{limits_result.stdout.strip()}{limits_result.stderr.strip()}\n\n"
     )
     return summary_table, details
 
