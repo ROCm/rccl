@@ -468,7 +468,7 @@ def get_config(root_enabled):
         acs_summary, acs_result = get_acs_info()
         acs_status = status_check(acs_summary, acs_result)
     else:
-        acs_summary = "This field require the acs flag to be set when running the script and root access"
+        acs_summary = "This field requires the acs flag to be set when running the script and root access"
         acs_result = CommandResult(stdout="",stderr="Error: " + acs_summary)
         acs_status = "SKIPPED"
 
