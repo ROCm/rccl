@@ -54,6 +54,14 @@ def PATH_and_LD_LIBRARY_PATH(dir):
         return True
     return False
 
+# Get hostname
+def get_hostname():
+    result = run_cli_command('hostname')
+    if result.stdout:
+        summary = result.stdout.strip()
+    else:
+        summary = "Unable to detect"
+    return summary, result
 
 # Get OS version
 def get_os_version():
@@ -306,6 +314,11 @@ def get_rocminfo():
 def get_config():
     # Run the commands and store the command outputs
 
+
+    # Hostname
+    hostname_summary, hostname_result = get_hostname()
+    hostname_status = status_check(hostname_summary, hostname_result)
+    
     # OS version
     os_summary, os_result = get_os_version()
     os_status = status_check(os_summary, os_result)
@@ -405,6 +418,7 @@ def get_config():
         f"\n\n{'='*119}\n"
         f"{'Component':<30}| {'Status':<13} | Value\n"
         f"{'='*119}\n"
+        f"Host Name{' ':<21}| {hostname_status:<13} | {hostname_summary}\n"
         f"OS Version{' ':<20}| {os_status:<13} | {os_summary}\n"
         f"ROCm Version{' ':<18}| {ROCm_status:<13} | {ROCm_summary}\n"
         f"HIP Version{' ':<19}| {HIP_status:<13} | {HIP_summary}\n"
@@ -436,6 +450,8 @@ def get_config():
     details_width = 120
     details = (
     f"Detailed Output:\n"
+    f"{centered_title('Host Name', details_width, '=')}\n"
+    f"{hostname_result.stdout.strip()}{hostname_result.stderr.strip()}\n\n"
     f"{centered_title('OS info', details_width, '=')}\n"
     f"{os_result.stdout.strip()}{os_result.stderr.strip()}\n\n"
     f"{centered_title('ROCm Version', details_width, '=')}\n"
