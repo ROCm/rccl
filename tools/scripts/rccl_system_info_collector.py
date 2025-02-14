@@ -1,19 +1,20 @@
 ## README
+# This script gathers configuration information from your system to help identify and debug any issues when running the ROCm Communication Collectives Library (RCCL). Please ensure that python3 is installed on your system and added to your system's PATH environment variable.
 
+# Prerequisites
+# python3 (make sure it's added to the PATH)
+# Sudo access on the system if you want ACS info
 
+# Usage
+# To run the script and gather the configuration information, execute the following command:
+# default 
+# python3 rccl_system_info_collector.py
 
+# when running with acs flag
+# sudo python3 rccl_system_info_collector.py --acs
+# Note: Running the script without sudo will not check if ACS is disable or not, sudo is needed to gather all system configuration information.
 
-
-
-
-
-
-
-
-
-
-
-
+# The script will gather essential system configuration information, such as OS information, network information, driver versions, etc., to help with debugging RCCL issues. It will generate a report in a readable format, which you can share with the support team or use for troubleshooting.
 
 
 import subprocess
@@ -21,6 +22,7 @@ import time
 import os
 import re
 import argparse
+import textwrap
 
 
 class CommandResult:
@@ -31,10 +33,24 @@ class CommandResult:
 # Function to Parse arguements
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='')
+    readme = '''\
+This script gathers configuration information from your system to help identify and debug any issues when running the ROCm Communication Collectives Library (RCCL). Please ensure that python3 is installed on your system and added to your system's PATH environment variable.\n
+Prerequisites\n
+- python3 (make sure it's added to the PATH)\n
+- Sudo access on the system if you want ACS info\n
+Usage\n
+To run the script and gather the configuration information, execute the following command:\n
+- default\n
+  python3 rccl_system_info_collector.py\n
+- when running with acs flag\n
+  sudo python3 rccl_system_info_collector.py --acs\n
+Note: Running the script without sudo will not check if ACS is disabled or not, sudo is needed to gather all system configuration information.\n
+The script will gather essential system configuration information, such as OS information, network information, driver versions, etc., to help with debugging RCCL issues. It will generate a report in a readable format, which you can share with the support team or use for troubleshooting.\n
+    '''
+    parser = argparse.ArgumentParser(description=textwrap.dedent(readme), formatter_class=argparse.RawDescriptionHelpFormatter)
 
     # Add option flags
-    parser.add_argument('--ACS', help='Check for ACS status (requires root access):', required=False)
+    parser.add_argument('-a','--acs', help='Check for ACS status (requires root access)', required=False, action='store_true')
 
     return parser.parse_args()
 
@@ -344,7 +360,7 @@ def get_rocminfo():
 
 
 # Gather all data and build summary table and detailed output format
-def get_config():
+def get_config(root_enabled):
     # Run the commands and store the command outputs
 
 
@@ -437,9 +453,14 @@ def get_config():
     ip_route_summary, ip_route_result = get_IP_route()
     ip_route_status = status_check(ip_route_summary, ip_route_result)
 
-    # IP ACS info
-    acs_summary, acs_result = get_acs_info()
-    acs_status = status_check(acs_summary, acs_result)
+    # ACS info
+    if root_enabled:
+        acs_summary, acs_result = get_acs_info()
+        acs_status = status_check(acs_summary, acs_result)
+    else:
+        acs_summary = "This field require the acs flag to be set when running the script and root access"
+        acs_result = CommandResult(stdout="",stderr="Error: " + acs_summary)
+        acs_status = "SKIPPED"
 
     # ROCM info
     rocm_info_summary, rocm_info_result = get_rocminfo()
@@ -535,11 +556,12 @@ def get_config():
 
 def main():
     args = parse_arguments()
+    root_enabled = args.acs
     hostname = os.uname().nodename
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_name = f"config.{hostname}.{timestamp}.txt"
 
-    summary_table, details = get_config()
+    summary_table, details = get_config(root_enabled)
 
     # Print summary out to cli
     print(summary_table)
