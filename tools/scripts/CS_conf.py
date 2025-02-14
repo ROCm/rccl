@@ -1,13 +1,46 @@
+## README
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import subprocess
 import time
 import os
 import re
+import argparse
 
 
 class CommandResult:
     def __init__(self, stdout, stderr):
         self.stdout = stdout
         self.stderr = stderr
+
+# Function to Parse arguements
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='')
+
+    # Add option flags
+    parser.add_argument('--ACS', help='Check for ACS status (requires root access):', required=False)
+
+    return parser.parse_args()
+
+
+
+
 
 # Function to center the titles in the detailed section
 def centered_title(title, width, fill_char=" "):
@@ -501,6 +534,7 @@ def get_config():
 
 
 def main():
+    args = parse_arguments()
     hostname = os.uname().nodename
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_name = f"config.{hostname}.{timestamp}.txt"
