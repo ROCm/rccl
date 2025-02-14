@@ -341,19 +341,29 @@ def get_acs_info():
         summary = "Unable to detect"
     return summary, result
 
-# Get rocminfo ################# Ask how to differentiate which GPUs are which by CU and name
+# Get rocminfo 
 def get_rocminfo():
     result = run_cli_command('rocminfo')
     if result.stdout:
-        gpu_names = []
-        compute_units = []
-        gpu_pattern = re.compile(r"Name:\s+(gfx\d+).*?Compute Unit:\s+(\d+)", re.DOTALL)
+        gpu_pattern = re.compile(r"Name:\s+(gfx\d+)(?:.*?Marketing Name:\s+([^\n]+))?.*?Compute Unit:\s+(\d+)", re.DOTALL)
         matches = gpu_pattern.findall(result.stdout)
-        for match in matches:
-            gpu_names.append(match[0])
-            compute_units.append(int(match[1]))
-        num_gpus = len(gpu_names)
-        summary = f"Found {num_gpus} GPUs"
+        num_gpus = len(matches)
+        valid_marketing_names = ["MI300X", "MI200", "MI300A", "MI308"]
+        gpu_name = ""
+        for name in valid_marketing_names:
+            if name in matches[0][1]:
+                gpu_name = name
+                break
+        if gpu_name == "":
+            if "gfx942" == matches[0][0] and 304 == int(matches[0][2]):
+                gpu_name = "MI300X"
+            elif "gfx942" == matches[0][0] and 80 == int(matches[0][2]):
+                gpu_name = "MI308"
+            elif "gfx942" == matches[0][0] and 228 == int(matches[0][2]):
+                gpu_name = "MI300A"
+            elif "gfx90a" == matches[0][0] and 228 == int(matches[0][2]):
+                gpu_name = "MI200"
+        summary = f"Found {num_gpus} {gpu_name} GPUs"
     else:
         summary = "Unable to detect"
     return summary, result
