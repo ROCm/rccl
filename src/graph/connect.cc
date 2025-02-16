@@ -585,8 +585,7 @@ int getTreeNodeParity(int treeDir, int nNodes, int node)
 }
 
 // [RCCL] Build rail-optimized trees
-ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent, int* treeToChild0, int* treeToChild1,
-                                       struct ncclTopoGraph* treeGraph)
+ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent, int* treeToChild0, int* treeToChild1)
 {
   INFO(NCCL_GRAPH, "Building rail-optimized trees for %d nodes", comm->nNodes);
 
@@ -623,6 +622,7 @@ ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent,
   const int nNodes = comm->nNodes, node = comm->node, rank = comm->rank;
   const int depth = comm->nRanks/nNodes - 1 + log2i(nNodes);
   const int nGpus = comm->topo->nodes[GPU].count;
+  struct ncclTopoGraph* treeGraph = &comm->graphs[NCCL_ALGO_TREE];
 
   // Compute parent/child nodes for this current node, for uptree and downtree
   int parentNodes[2], child0Nodes[2], child1Nodes[2], childTypes[2];
@@ -777,7 +777,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
   // [RCCL] Connect rail-optimized trees
   if (comm->topo->useRailOptimizedTrees) {
-    NCCLCHECK(connectRailOptimizedTrees(comm, treeToParent, treeToChild0, treeToChild1, graphs[NCCL_ALGO_TREE]));
+    NCCLCHECK(connectRailOptimizedTrees(comm, treeToParent, treeToChild0, treeToChild1));
   } else {
     NCCLCHECK(connectTrees(comm, treeToParent, treeToChild0, treeToChild1, treePatterns));
   }
