@@ -560,8 +560,8 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       default:
         break;
     }
-    __synclds();
     loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
+    __synclds();
 
     // Check whether the last operation was aborted and make sure all threads exit
     bool aborted = false;
