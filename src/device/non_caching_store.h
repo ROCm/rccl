@@ -45,7 +45,6 @@ __host__ __device__ T __non_caching_store(const T val, const T* p)
         break;
     default: __builtin_trap();
     }
-    asm volatile("s_endpgm");
 
     #undef STORE4
     #undef STORE3

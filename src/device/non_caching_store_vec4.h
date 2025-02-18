@@ -23,7 +23,6 @@ __host__ __device__ T __non_caching_store_vec4(const T val, const T* p)
     #define STORE ST " %0 %1 %2 " BITS
 
     asm volatile(STORE :: "v"(0), "v"(val) , "s"(p));
-    asm volatile("s_endpgm");
    
     #undef STORE
     #undef BITS
