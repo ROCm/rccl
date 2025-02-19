@@ -71,6 +71,30 @@ def run_cli_command(command):
     except Exception as e:
         return f"Error: {str(e)}"
 
+def run_rccl_tests(rccl_tests_dir):
+    # Get rccl-tests branch and version information
+    rccl_tests_branch = subprocess.check_output(["git", "-C", rccl_tests_dir, "rev-parse", "--abbrev-ref", "HEAD"]).decode("utf-8").strip()
+    rccl_tests_version = subprocess.check_output(["git", "-C", rccl_tests_dir, "log", "-1", "--format=%H"]).decode("utf-8").strip()
+
+    # Set the flag to display RCCL version during the run
+    os.environ["NCCL_DEBUG"] = "VERSION"
+
+    # Run the rccl-tests
+    result = subprocess.run([os.path.join(rccl_tests_dir, "build", "all_reduce_perf"), "-b", "8", "-e", "8", "-g", "1"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # Unset the flag after execution
+    del os.environ["NCCL_DEBUG"]
+
+    # Extract RCCL, HIP, and ROCm versions from the output file
+
+    rccl_version = re.search("RCCL version (.+)", result.stdout).group(1)
+    hip_version = re.search("HIP version: (.+)", result.stdout).group(1)
+    rocm_version = re.search("ROCm version: (.+)", result.stdout).group(1)
+    print(rccl_version)
+    print(hip_version)
+    print(rocm_version)
+
+
 # Get the status of a particular command
 def status_check(summary, result):
     # List of errors to check
