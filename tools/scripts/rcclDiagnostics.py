@@ -347,7 +347,7 @@ def get_rocminfo():
         gpu_pattern = re.compile(r"Name:\s+(gfx\d+)(?:.*?Marketing Name:\s+([^\n]+))?.*?Compute Unit:\s+(\d+)", re.DOTALL)
         matches = gpu_pattern.findall(result.stdout)
         num_gpus = len(matches)
-        valid_marketing_names = ["MI300X", "MI300A", "MI300", "MI250X/MI250" "MI200"]
+        valid_marketing_names = ["MI300X", "MI300A", "MI300", "MI250X/MI250", "MI200"]
         gpu_name = ""
         for name in valid_marketing_names:
             if name in matches[0][1]:
