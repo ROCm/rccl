@@ -86,13 +86,11 @@ def run_rccl_tests(rccl_tests_dir):
     del os.environ["NCCL_DEBUG"]
 
     # Extract RCCL, HIP, and ROCm versions from the output file
-
-    rccl_version = re.search("RCCL version (.+)", result.stdout).group(1)
-    hip_version = re.search("HIP version: (.+)", result.stdout).group(1)
-    rocm_version = re.search("ROCm version: (.+)", result.stdout).group(1)
-    print(rccl_version)
-    print(hip_version)
-    print(rocm_version)
+    rccl_version = re.search("RCCL version : (.+)", result.stdout).group(1)
+    hip_version = re.search("HIP version  : (.+)", result.stdout).group(1)
+    rocm_version = re.search("ROCm version : (.+)", result.stdout).group(1)
+    rccl_tests = rccl_tests_branch + "+" + rccl_tests_version
+    print(rccl_tests)
 
 
 # Get the status of a particular command
