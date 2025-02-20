@@ -279,7 +279,28 @@ SPECIALIZE_REDUCE(FuncMinMax, half, 1, half, fn.isMinNotMax ? __hmin(x, y) : __h
   SPECIALIZE_REDUCE(FuncMinMax, __nv_bfloat16, 1, __nv_bfloat16, fn.isMinNotMax ? __hmin(x, y) : __hmax(x, y))
   SPECIALIZE_REDUCE(FuncMinMax, __nv_bfloat16, 2, __nv_bfloat162, fn.isMinNotMax ? __hmin2(x, y) : __hmax2(x, y))
 #else
-  SPECIALIZE_REDUCE(FuncSum, hip_bfloat16, 1, hip_bfloat16, (hip_bfloat16)((float)(x) + (float)(y)))
+
+
+inline __device__ float bhalf2float(hip_bfloat16 x)
+{
+    uint32_t tmp = (uint32_t)(x) << 16;
+    return __builtin_bit_cast(float, tmp);
+}
+
+inline __device__ hip_bfloat16 float2bhalf(float x)
+{
+    uint16_t tmp = __builtin_bit_cast(int32_t, x) >> 16;
+    return __builtin_bit_cast(hip_bfloat16, tmp);
+}
+
+inline __device__ hip_bfloat16 add_bf16_rtz(hip_bfloat16 x, hip_bfloat16 y)
+{
+    float tmp = bhalf2float(x) + bhalf2float(y);
+    return float2bhalf(tmp);
+}
+
+/*SPECIALIZE_REDUCE(FuncSum, hip_bfloat16, 1, hip_bfloat16, (hip_bfloat16)((float)(x) + (float)(y)))*/
+  SPECIALIZE_REDUCE(FuncSum, hip_bfloat16, 1, hip_bfloat16, add_bf16_rtz(x, y));
   SPECIALIZE_REDUCE(FuncProd, hip_bfloat16, 1, hip_bfloat16, (hip_bfloat16)((float)(x) * (float)(y)))
   SPECIALIZE_REDUCE(FuncMinMax, hip_bfloat16, 1, hip_bfloat16, (hip_bfloat16)(fn.isMinNotMax ? fminf((float)(x), (float)(y)) : fmaxf((float)(x), (float)(y))))
 #endif
