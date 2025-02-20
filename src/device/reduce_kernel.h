@@ -283,13 +283,13 @@ SPECIALIZE_REDUCE(FuncMinMax, half, 1, half, fn.isMinNotMax ? __hmin(x, y) : __h
 
 inline __device__ float bhalf2float(hip_bfloat16 x)
 {
-    uint32_t tmp = (uint32_t)(x) << 16;
-    return __builtin_bit_cast(float, tmp);
+    uint32_t tmp = __builtin_bit_cast(uint16_t, x);
+    return __builtin_bit_cast(float, tmp << 16);
 }
 
 inline __device__ hip_bfloat16 float2bhalf(float x)
 {
-    uint16_t tmp = __builtin_bit_cast(int32_t, x) >> 16;
+    uint16_t tmp = __builtin_bit_cast(uint32_t, x) >> 16;
     return __builtin_bit_cast(hip_bfloat16, tmp);
 }
 
