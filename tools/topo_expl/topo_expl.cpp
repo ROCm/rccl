@@ -179,7 +179,7 @@ int main(int argc,char* argv[])
     printf("Usage: ./topo_expl -m model_id [-n numNodes=1]\n");
     printf("List of model_id:\n");
     for (int i = 0; i < num_models; i++)
-      printf("  %d: %s\n", i, model_descs[i].description);
+      printf("  %d: %24s [%s]\n", i, model_descs[i].description, model_descs[i].filename);
     exit(0);
   }
 
