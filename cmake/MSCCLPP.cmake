@@ -85,7 +85,7 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	execute_process(
+	    execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
@@ -137,11 +137,16 @@ if(ENABLE_MSCCLPP)
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-	execute_process(
+
+        execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/roce-support.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
     #endif()
 
     execute_process(COMMAND objcopy
