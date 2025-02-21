@@ -90,6 +90,10 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/roce-support.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
         message(STATUS "Building mscclpp only for gfx942.")
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
         mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
@@ -113,18 +117,18 @@ if(ENABLE_MSCCLPP)
                          SOURCE_DIR          ${MSCCLPP_SOURCE}
         )
 
-     
+
         find_package(mscclpp_nccl REQUIRED)
         execute_process(
            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-        
+
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-        
+
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}

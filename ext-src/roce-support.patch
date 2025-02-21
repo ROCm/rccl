@@ -1,0 +1,594 @@
+diff --git a/include/mscclpp/env.hpp b/include/mscclpp/env.hpp
+index 6708628b..3f96b31f 100644
+--- a/include/mscclpp/env.hpp
++++ b/include/mscclpp/env.hpp
+@@ -30,6 +30,7 @@ class Env {
+   const std::string executionPlanDir;
+   const std::string npkitDumpDir;
+   const bool cudaIpcUseDefaultStream;
++  const int ibGidIndex;
+
+  private:
+   Env();
+diff --git a/src/env.cpp b/src/env.cpp
+index 625de0ad..bc08274c 100644
+--- a/src/env.cpp
++++ b/src/env.cpp
+@@ -19,8 +19,9 @@ T readEnv(const std::string &envName, const T &defaultValue) {
+     return atoi(envCstr);
+   } else if constexpr (std::is_same_v<T, bool>) {
+     return (std::string(envCstr) != "0");
++  } else {
++    return T(envCstr);
+   }
+-  return T(envCstr);
+ }
+
+ template <typename T>
+@@ -61,7 +62,8 @@ Env::Env()
+       commId(readEnv<std::string>("MSCCLPP_COMM_ID", "")),
+       executionPlanDir(readEnv<std::string>("MSCCLPP_EXECUTION_PLAN_DIR", "")),
+       npkitDumpDir(readEnv<std::string>("MSCCLPP_NPKIT_DUMP_DIR", "")),
+-      cudaIpcUseDefaultStream(readEnv<bool>("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", false)) {}
++      cudaIpcUseDefaultStream(readEnv<bool>("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", false)),
++      ibGidIndex(readEnv<int>("MSCCLPP_IB_GID_INDEX", 0))  {}
+
+ std::shared_ptr<Env> env() {
+   static std::shared_ptr<Env> globalEnv = std::shared_ptr<Env>(new Env());
+@@ -80,6 +82,7 @@ std::shared_ptr<Env> env() {
+     logEnv("MSCCLPP_EXECUTION_PLAN_DIR", globalEnv->executionPlanDir);
+     logEnv("MSCCLPP_NPKIT_DUMP_DIR", globalEnv->npkitDumpDir);
+     logEnv("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", globalEnv->cudaIpcUseDefaultStream);
++    logEnv("MSCCLPP_IB_GID_INDEX", globalEnv->ibGidIndex);
+   }
+   return globalEnv;
+ }
+diff --git a/src/ib.cc b/src/ib.cc
+index 542527e3..3dcac674 100644
+--- a/src/ib.cc
++++ b/src/ib.cc
+@@ -40,6 +40,42 @@ namespace mscclpp {
+
+ #if defined(USE_IBVERBS)
+
++MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int* numDevices) {
++  struct ibv_device** devices = IBVerbs::ibv_get_device_list(numDevices);
++  int count = *numDevices;
++  std::vector<std::string> activeDevices;
++  for (int i = 0; i < count; ++i) {
++    struct ibv_context* ctx = IBVerbs::ibv_open_device(devices[i]);
++    if (ctx == nullptr) {
++      continue;
++    }
++
++    struct ibv_device_attr devAttr;
++    if (IBVerbs::ibv_query_device(ctx, &devAttr) != 0) {
++      IBVerbs::ibv_close_device(ctx);
++      continue;
++    }
++
++    bool hasActivePort = false;
++    for (uint8_t port = 1; port <= devAttr.phys_port_cnt; ++port) {
++      struct ibv_port_attr portAttr;
++      if (IBVerbs::ibv_query_port_w(ctx, port, &portAttr) == 0 &&
++          portAttr.state == IBV_PORT_ACTIVE &&
++          (portAttr.link_layer == IBV_LINK_LAYER_ETHERNET || portAttr.link_layer == IBV_LINK_LAYER_INFINIBAND)) {
++        hasActivePort = true;
++        break;
++      }
++    }
++
++    if (hasActivePort) {
++      activeDevices.push_back(devices[i]->name);
++    }
++    IBVerbs::ibv_close_device(ctx);
++  }
++  IBVerbs::ibv_free_device_list(devices);
++  return activeDevices;
++}
++
+ IbMr::IbMr(ibv_pd* pd, void* buff, std::size_t size) : buff(buff) {
+   if (size == 0) {
+     throw std::invalid_argument("invalid size: " + std::to_string(size));
+@@ -118,7 +154,7 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
+
+   if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND || this->info.is_grh) {
+     union ibv_gid gid;
+-    if (IBVerbs::ibv_query_gid(ctx, port, 0, &gid) != 0) {
++    if (IBVerbs::ibv_query_gid(ctx, port, env()->ibGidIndex, &gid) != 0) {
+       std::stringstream err;
+       err << "ibv_query_gid failed (errno " << errno << ")";
+       throw mscclpp::IbError(err.str(), errno);
+@@ -164,7 +200,7 @@ void IbQp::rtr(const IbQpInfo& info) {
+     qp_attr.ah_attr.grh.dgid.global.subnet_prefix = info.spn;
+     qp_attr.ah_attr.grh.dgid.global.interface_id = info.iid;
+     qp_attr.ah_attr.grh.flow_label = 0;
+-    qp_attr.ah_attr.grh.sgid_index = 0;
++    qp_attr.ah_attr.grh.sgid_index = env()->ibGidIndex;
+     qp_attr.ah_attr.grh.hop_limit = 255;
+     qp_attr.ah_attr.grh.traffic_class = 0;
+   } else {
+@@ -313,6 +349,7 @@ IbCtx::IbCtx(const std::string& devName) : devName(devName) {
+       break;
+     }
+   }
++  //freeIbDeviceListWithActivePorts(devices, num);
+   IBVerbs::ibv_free_device_list(devices);
+   if (this->ctx == nullptr) {
+     std::stringstream err;
+@@ -385,7 +422,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
+
+ MSCCLPP_API_CPP int getIBDeviceCount() {
+   int num;
+-  IBVerbs::ibv_get_device_list(&num);
++  auto const& dev = getActiveIbDeviceNames(&num);
+   return num;
+ }
+
+@@ -442,20 +479,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
+   }
+
+   int num;
+-  struct ibv_device** devices = IBVerbs::ibv_get_device_list(&num);
++  auto const& devices = getActiveIbDeviceNames(&num);
+   if (ibTransportIndex >= num) {
+     std::stringstream ss;
+     ss << "IB transport out of range: " << ibTransportIndex << " >= " << num;
+     throw Error(ss.str(), ErrorCode::InvalidUsage);
+   }
+-  return devices[ibTransportIndex]->name;
++  return devices[ibTransportIndex];
+ }
+
+ MSCCLPP_API_CPP Transport getIBTransportByDeviceName(const std::string& ibDeviceName) {
+   int num;
+-  struct ibv_device** devices = IBVerbs::ibv_get_device_list(&num);
++  auto const& devices = getActiveIbDeviceNames(&num);
+   for (int i = 0; i < num; ++i) {
+-    if (ibDeviceName == devices[i]->name) {
++    if (ibDeviceName == devices[i]) {
+       switch (i) {  // TODO: get rid of this ugly switch
+         case 0:
+           return Transport::IB0;
+@@ -489,6 +526,10 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport) { return ""; }
+
+ MSCCLPP_API_CPP Transport getIBTransportByDeviceName(const std::string&) { return Transport::Unknown; }
+
++MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int* numDevices) { *numDevices = 0; return std::vector<std::string>(); }
++
++MSCCLPP_API_CPP void freeIbDeviceListWithActivePorts(ibv_device** list, int numDevices) { }
++
+ #endif  // !defined(USE_IBVERBS)
+
+ }  // namespace mscclpp
+
+From 38c2fdeb1c256dd16453dd91454498664322423c Mon Sep 17 00:00:00 2001
+From: Mustafa Abduljabbar <mustafa.abduljabbar@amd.com>
+Date: Thu, 20 Feb 2025 12:52:13 -0600
+Subject: [PATCH 2/6] Remove unused function
+
+---
+ src/ib.cc | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/ib.cc b/src/ib.cc
+index 3dcac674..14b50837 100644
+--- a/src/ib.cc
++++ b/src/ib.cc
+@@ -528,8 +528,6 @@ MSCCLPP_API_CPP Transport getIBTransportByDeviceName(const std::string&) { retur
+
+ MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int* numDevices) { *numDevices = 0; return std::vector<std::string>(); }
+
+-MSCCLPP_API_CPP void freeIbDeviceListWithActivePorts(ibv_device** list, int numDevices) { }
+-
+ #endif  // !defined(USE_IBVERBS)
+
+ }  // namespace mscclpp
+
+From db3a0e167e086a20778c6f5fccb180cb60a78f3e Mon Sep 17 00:00:00 2001
+From: Mustafa Abduljabbar <mustafa.abduljabbar@amd.com>
+Date: Thu, 20 Feb 2025 13:03:27 -0600
+Subject: [PATCH 3/6] Simplify active ports device logic
+
+---
+ src/ib.cc          | 45 +++++++++++----------------------------------
+ src/include/ib.hpp |  2 +-
+ 2 files changed, 12 insertions(+), 35 deletions(-)
+
+diff --git a/src/ib.cc b/src/ib.cc
+index 14b50837..2f251850 100644
+--- a/src/ib.cc
++++ b/src/ib.cc
+@@ -40,38 +40,16 @@ namespace mscclpp {
+
+ #if defined(USE_IBVERBS)
+
+-MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int* numDevices) {
+-  struct ibv_device** devices = IBVerbs::ibv_get_device_list(numDevices);
+-  int count = *numDevices;
++MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int& numActiveDevices) {
++  int count;
++  struct ibv_device** devices = IBVerbs::ibv_get_device_list(&count);
+   std::vector<std::string> activeDevices;
+   for (int i = 0; i < count; ++i) {
+-    struct ibv_context* ctx = IBVerbs::ibv_open_device(devices[i]);
+-    if (ctx == nullptr) {
+-      continue;
+-    }
+-
+-    struct ibv_device_attr devAttr;
+-    if (IBVerbs::ibv_query_device(ctx, &devAttr) != 0) {
+-      IBVerbs::ibv_close_device(ctx);
+-      continue;
+-    }
+-
+-    bool hasActivePort = false;
+-    for (uint8_t port = 1; port <= devAttr.phys_port_cnt; ++port) {
+-      struct ibv_port_attr portAttr;
+-      if (IBVerbs::ibv_query_port_w(ctx, port, &portAttr) == 0 &&
+-          portAttr.state == IBV_PORT_ACTIVE &&
+-          (portAttr.link_layer == IBV_LINK_LAYER_ETHERNET || portAttr.link_layer == IBV_LINK_LAYER_INFINIBAND)) {
+-        hasActivePort = true;
+-        break;
+-      }
+-    }
+-
+-    if (hasActivePort) {
+-      activeDevices.push_back(devices[i]->name);
+-    }
+-    IBVerbs::ibv_close_device(ctx);
++    IbCtx ctx(devices[i]->name);
++    if(ctx.getAnyActivePort() < 0) continue;
++    activeDevices.push_back(devices[i]->name);
+   }
++  numActiveDevices = activeDevices.size();
+   IBVerbs::ibv_free_device_list(devices);
+   return activeDevices;
+ }
+@@ -349,7 +327,6 @@ IbCtx::IbCtx(const std::string& devName) : devName(devName) {
+       break;
+     }
+   }
+-  //freeIbDeviceListWithActivePorts(devices, num);
+   IBVerbs::ibv_free_device_list(devices);
+   if (this->ctx == nullptr) {
+     std::stringstream err;
+@@ -422,7 +399,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
+
+ MSCCLPP_API_CPP int getIBDeviceCount() {
+   int num;
+-  auto const& dev = getActiveIbDeviceNames(&num);
++  auto const& dev = getActiveIbDeviceNames(num);
+   return num;
+ }
+
+@@ -479,7 +456,7 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
+   }
+
+   int num;
+-  auto const& devices = getActiveIbDeviceNames(&num);
++  auto const& devices = getActiveIbDeviceNames(num);
+   if (ibTransportIndex >= num) {
+     std::stringstream ss;
+     ss << "IB transport out of range: " << ibTransportIndex << " >= " << num;
+@@ -490,7 +467,7 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
+
+ MSCCLPP_API_CPP Transport getIBTransportByDeviceName(const std::string& ibDeviceName) {
+   int num;
+-  auto const& devices = getActiveIbDeviceNames(&num);
++  auto const& devices = getActiveIbDeviceNames(num);
+   for (int i = 0; i < num; ++i) {
+     if (ibDeviceName == devices[i]) {
+       switch (i) {  // TODO: get rid of this ugly switch
+@@ -526,7 +503,7 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport) { return ""; }
+
+ MSCCLPP_API_CPP Transport getIBTransportByDeviceName(const std::string&) { return Transport::Unknown; }
+
+-MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int* numDevices) { *numDevices = 0; return std::vector<std::string>(); }
++MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int& numActiveDevices) { *numDevices = 0; return std::vector<std::string>(); }
+
+ #endif  // !defined(USE_IBVERBS)
+
+diff --git a/src/include/ib.hpp b/src/include/ib.hpp
+index 4d852998..643e9d3b 100644
+--- a/src/include/ib.hpp
++++ b/src/include/ib.hpp
+@@ -132,9 +132,9 @@ class IbCtx {
+
+   const std::string& getDevName() const { return this->devName; };
+
++  int getAnyActivePort() const;
+  private:
+   bool isPortUsable(int port) const;
+-  int getAnyActivePort() const;
+
+   const std::string devName;
+   ibv_context* ctx;
+
+From 55432f765ed680a891292218d88ee0a99040bdc4 Mon Sep 17 00:00:00 2001
+From: Mustafa Abduljabbar <mustafa.abduljabbar@amd.com>
+Date: Fri, 21 Feb 2025 07:37:25 -0600
+Subject: [PATCH 4/6] Add support for bootstrapping over Ethernet interface
+
+---
+ src/bootstrap/socket.cc | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/bootstrap/socket.cc b/src/bootstrap/socket.cc
+index 8c012c28..5dc43b6f 100644
+--- a/src/bootstrap/socket.cc
++++ b/src/bootstrap/socket.cc
+@@ -327,6 +327,8 @@ int FindInterfaces(char* ifNames, union SocketAddress* ifAddrs, int ifNameMaxSiz
+         nIfs = FindInterfaceMatchSubnet(ifNames, ifAddrs, &idAddr, ifNameMaxSize, maxIfs);
+       }
+     }
++    // Look for Ethernet if no IB interface was found
++    if (nIfs == 0) nIfs = findInterfaces("en", ifNames, ifAddrs, sock_family, ifNameMaxSize, maxIfs);
+     // Then look for anything else (but not docker or lo)
+     if (nIfs == 0) nIfs = findInterfaces("^docker,lo", ifNames, ifAddrs, sock_family, ifNameMaxSize, maxIfs);
+     // Finally look for docker, then lo.
+
+From d7b9b00d0a1644de24eb803e41ca25de0a4f43cb Mon Sep 17 00:00:00 2001
+From: Mustafa Abduljabbar <mustafa.abduljabbar@amd.com>
+Date: Fri, 21 Feb 2025 08:57:06 -0600
+Subject: [PATCH 5/6] handle case when ibverbs is not available
+
+---
+ src/ib.cc | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/ib.cc b/src/ib.cc
+index 2f251850..6e53b55b 100644
+--- a/src/ib.cc
++++ b/src/ib.cc
+@@ -42,8 +42,12 @@ namespace mscclpp {
+
+ MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int& numActiveDevices) {
+   int count;
+-  struct ibv_device** devices = IBVerbs::ibv_get_device_list(&count);
+   std::vector<std::string> activeDevices;
++  struct ibv_device** devices = IBVerbs::ibv_get_device_list(&count);
++  if(!devices) {
++    numActiveDevices = 0;
++    return activeDevices;
++  }
+   for (int i = 0; i < count; ++i) {
+     IbCtx ctx(devices[i]->name);
+     if(ctx.getAnyActivePort() < 0) continue;
+
+From 995751f777abec0c2a516d9b60b78b2ae00ccd9b Mon Sep 17 00:00:00 2001
+From: Mustafa Abduljabbar <mustafa.abduljabbar@amd.com>
+Date: Fri, 21 Feb 2025 16:16:51 -0600
+Subject: [PATCH 6/6] Add auto GID index detection
+
+---
+ src/env.cpp        |   2 +-
+ src/ib.cc          | 153 +++++++++++++++++++++++++++++++++++++++++++--
+ src/include/ib.hpp |   1 +
+ 3 files changed, 150 insertions(+), 6 deletions(-)
+
+diff --git a/src/env.cpp b/src/env.cpp
+index bc08274c..bcb847e5 100644
+--- a/src/env.cpp
++++ b/src/env.cpp
+@@ -63,7 +63,7 @@ Env::Env()
+       executionPlanDir(readEnv<std::string>("MSCCLPP_EXECUTION_PLAN_DIR", "")),
+       npkitDumpDir(readEnv<std::string>("MSCCLPP_NPKIT_DUMP_DIR", "")),
+       cudaIpcUseDefaultStream(readEnv<bool>("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", false)),
+-      ibGidIndex(readEnv<int>("MSCCLPP_IB_GID_INDEX", 0))  {}
++      ibGidIndex(readEnv<int>("MSCCLPP_IB_GID_INDEX", -1))  {}
+
+ std::shared_ptr<Env> env() {
+   static std::shared_ptr<Env> globalEnv = std::shared_ptr<Env>(new Env());
+diff --git a/src/ib.cc b/src/ib.cc
+index 6e53b55b..64bee944 100644
+--- a/src/ib.cc
++++ b/src/ib.cc
+@@ -20,6 +20,8 @@
+ #include "debug.h"
+ #if defined(USE_IBVERBS)
+ #include "ibverbs_wrapper.hpp"
++#include <arpa/inet.h>
++#include <fcntl.h>
+ #endif  // defined(USE_IBVERBS)
+
+ #if !defined(__HIP_PLATFORM_AMD__)
+@@ -40,7 +42,7 @@ namespace mscclpp {
+
+ #if defined(USE_IBVERBS)
+
+-MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int& numActiveDevices) {
++static std::vector<std::string> getActiveIbDeviceNames(int& numActiveDevices) {
+   int count;
+   std::vector<std::string> activeDevices;
+   struct ibv_device** devices = IBVerbs::ibv_get_device_list(&count);
+@@ -58,6 +60,148 @@ MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int& numActiveDe
+   return activeDevices;
+ }
+
++static bool isConfiguredGid(union ibv_gid* gid)
++{
++  const struct in6_addr *a = (struct in6_addr *)gid->raw;
++  int trailer = (a->s6_addr32[1] | a->s6_addr32[2] | a->s6_addr32[3]);
++  if (((a->s6_addr32[0] | trailer) == 0UL) ||
++      ((a->s6_addr32[0] == htonl(0xfe800000)) && (trailer == 0UL))) {
++    return false;
++  }
++  return true;
++}
++
++static bool isLinkLocalGid(union ibv_gid const& gid)
++{
++  const struct in6_addr *a = (struct in6_addr *) gid.raw;
++  if (a->s6_addr32[0] == htonl(0xfe800000) && a->s6_addr32[1] == 0UL) {
++    return true;
++  }
++  return false;
++}
++
++static int getRoceVersionNumber(struct ibv_context* const& context, int const& portNum, int const& gidIndex)
++{
++  char const* deviceName = ibv_get_device_name(context->device);
++  char gidRoceVerStr[16]      = {};
++  char roceTypePath[PATH_MAX] = {};
++
++  sprintf(roceTypePath, "/sys/class/infiniband/%s/ports/%d/gid_attrs/types/%d",
++          deviceName, portNum, gidIndex);
++
++
++  int fd = open(roceTypePath, O_RDONLY);
++  if (fd == -1) {
++    std::stringstream err;
++    err << "Failed while opening RoCE file path " << roceTypePath;
++    throw mscclpp::Error(err.str(), ErrorCode::InternalError);
++  }
++
++  int ret = read(fd, gidRoceVerStr, 15);
++  close(fd);
++
++  if (ret == -1) {
++    std::stringstream err;
++    err << "Failed while reading RoCE version";
++    throw mscclpp::Error(err.str(), ErrorCode::InternalError);
++  }
++
++  if (strlen(gidRoceVerStr)) {
++    if (strncmp(gidRoceVerStr, "IB/RoCE v1", strlen("IB/RoCE v1")) == 0
++        || strncmp(gidRoceVerStr, "RoCE v1", strlen("RoCE v1")) == 0) {
++      return 1;
++    }
++    else if (strncmp(gidRoceVerStr, "RoCE v2", strlen("RoCE v2")) == 0) {
++      return 2;
++    }
++  }
++  return -1;
++}
++
++static bool isIPv4MappedIPv6(const union ibv_gid &gid)
++{
++  // look for ::ffff:x.x.x.x format
++  // From Broadcom documentation
++  // https://techdocs.broadcom.com/us/en/storage-and-ethernet-connectivity/ethernet-nic-controllers/bcm957xxx/adapters/frequently-asked-questions1.html
++  // "The IPv4 address is really an IPv4 address mapped into the IPv6 address space.
++  // This can be identified by 80 “0” bits, followed by 16 “1” bits (“FFFF” in hexadecimal)
++  // followed by the original 32-bit IPv4 address."
++  return (gid.global.subnet_prefix == 0    &&
++          gid.raw[8]               == 0    &&
++          gid.raw[9]               == 0    &&
++          gid.raw[10]              == 0xff &&
++          gid.raw[11]              == 0xff);
++}
++
++static uint8_t getGidIndex(struct ibv_context* context, int const& ibPort, int const& gidTblLen)
++{
++  union ibv_gid gid;
++  int roceV2Ipv4MappedIndex = -1;
++  int roceV1Ipv4MappedIndex = -1;
++  int roceV2Ipv6Index = -1;
++  int roceV1Ipv6Index = -1;
++  int rocev2LinkLocalIndex = -1;
++  int rocev1LinkLocalIndex = -1;
++
++  for (int i = 0; i < gidTblLen; ++i) {
++    if (ibv_query_gid(context, ibPort , i, &gid) != 0) continue;
++    if (!isConfiguredGid(&gid)) continue;
++    int gidCurrRoceVersion;
++    gidCurrRoceVersion = getRoceVersionNumber(context, ibPort, i);
++    if(gidCurrRoceVersion < 1) continue;
++    if (isIPv4MappedIPv6(gid)) {
++      if (gidCurrRoceVersion == 2) {
++        roceV2Ipv4MappedIndex = i;  // Highest priority
++      } else {
++        roceV1Ipv4MappedIndex = i;
++      }
++    } else if (!isLinkLocalGid(gid)) {
++      if (gidCurrRoceVersion == 2) {
++        roceV2Ipv6Index = i;
++      } else {
++        roceV1Ipv6Index = i;
++      }
++    } else {
++      if (gidCurrRoceVersion == 2) {
++        rocev2LinkLocalIndex = i;
++      } else {
++        rocev1LinkLocalIndex = i;
++      }
++    }
++  }
++
++  // Select the best available GID based on priority
++  // * Priority Order:
++  // * 1. RoCE v2 (IPv4-mapped): ::ffff:192.168.x.x
++  // * 2. RoCE v2 (Not IPv4-mapped)
++  // * 3. RoCE v1 (IPv4-mapped)
++  // * 4. RoCE v1 (Not IPv4-mapped)
++  // * 5. RoCE v2 (Link-local): fe80::/10
++  // * 6. RoCE v1 (Link-local)
++  int gidIndex = -1;
++  if (roceV2Ipv4MappedIndex != -1) {
++    gidIndex = roceV2Ipv4MappedIndex;
++  } else if (roceV2Ipv6Index != -1) {
++    gidIndex = roceV2Ipv6Index;
++  } else if (roceV1Ipv4MappedIndex != -1) {
++    gidIndex = roceV1Ipv4MappedIndex;
++  } else if (roceV1Ipv6Index != -1) {
++    gidIndex = roceV1Ipv6Index;
++  } else if (rocev2LinkLocalIndex != -1) {
++    gidIndex = rocev2LinkLocalIndex;
++  } else if (rocev1LinkLocalIndex != -1) {
++    gidIndex = rocev1LinkLocalIndex;
++  } else {
++    std::stringstream err;
++    err << "Auto GetGidIndex failed. Try setting MSCCLPP_IB_GID_INDEX directly";
++    throw mscclpp::Error(err.str(), ErrorCode::SystemError);
++  }
++  if(gidIndex >= UINT8_MAX || gidIndex < 0) {
++    throw mscclpp::Error("Invalid auto-deteced gidIndex : " + std::to_string(gidIndex), ErrorCode::SystemError);
++  }
++  return static_cast<uint8_t>(gidIndex);
++}
++
+ IbMr::IbMr(ibv_pd* pd, void* buff, std::size_t size) : buff(buff) {
+   if (size == 0) {
+     throw std::invalid_argument("invalid size: " + std::to_string(size));
+@@ -135,8 +279,9 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
+   this->info.is_grh = (portAttr.flags & IBV_QPF_GRH_REQUIRED);
+
+   if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND || this->info.is_grh) {
++    this->info.gidIndex = (env()->ibGidIndex < 0) ? getGidIndex(ctx, port, portAttr.gid_tbl_len) : env()->ibGidIndex;
+     union ibv_gid gid;
+-    if (IBVerbs::ibv_query_gid(ctx, port, env()->ibGidIndex, &gid) != 0) {
++    if (IBVerbs::ibv_query_gid(ctx, port, this->info.gidIndex, &gid) != 0) {
+       std::stringstream err;
+       err << "ibv_query_gid failed (errno " << errno << ")";
+       throw mscclpp::IbError(err.str(), errno);
+@@ -182,7 +327,7 @@ void IbQp::rtr(const IbQpInfo& info) {
+     qp_attr.ah_attr.grh.dgid.global.subnet_prefix = info.spn;
+     qp_attr.ah_attr.grh.dgid.global.interface_id = info.iid;
+     qp_attr.ah_attr.grh.flow_label = 0;
+-    qp_attr.ah_attr.grh.sgid_index = env()->ibGidIndex;
++    qp_attr.ah_attr.grh.sgid_index = this->info.gidIndex;
+     qp_attr.ah_attr.grh.hop_limit = 255;
+     qp_attr.ah_attr.grh.traffic_class = 0;
+   } else {
+@@ -507,8 +652,6 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport) { return ""; }
+
+ MSCCLPP_API_CPP Transport getIBTransportByDeviceName(const std::string&) { return Transport::Unknown; }
+
+-MSCCLPP_API_CPP std::vector<std::string> getActiveIbDeviceNames(int& numActiveDevices) { *numDevices = 0; return std::vector<std::string>(); }
+-
+ #endif  // !defined(USE_IBVERBS)
+
+ }  // namespace mscclpp
+diff --git a/src/include/ib.hpp b/src/include/ib.hpp
+index 643e9d3b..cca642f6 100644
+--- a/src/include/ib.hpp
++++ b/src/include/ib.hpp
+@@ -54,6 +54,7 @@ struct IbQpInfo {
+   int mtu;
+   uint64_t iid;
+   bool is_grh;
++  uint8_t gidIndex;
+ };
+
+ enum class WsStatus {
