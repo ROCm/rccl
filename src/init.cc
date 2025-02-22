@@ -226,8 +226,14 @@ void *ncclCommThreadMain(void *arg) {
   int head[MAXCHANNELS];
   double vega_gpu_rtc_freq;
 
-  memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
+  for (int channel = 0; channel < MAXCHANNELS; channel++) {
+    int tail = comm->collTraceTail[channel].tail;
+    if (tail < COLLTRACE_NUM_ITEMS)
+      head[channel] = 0;
+    else
+      head[channel] = tail - COLLTRACE_NUM_ITEMS;
+  }
   do {
     int numActiveChans = MAXCHANNELS;
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
@@ -238,24 +244,23 @@ void *ncclCommThreadMain(void *arg) {
         numActiveChans--;
         continue;
       }
-      count = count%COLLTRACE_NUM_ITEMS;
       for (int i = 0; i < count; i++) {
-        volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel];
+        volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel]%COLLTRACE_NUM_ITEMS;
+        head[channel] ++;
         uint8_t type = td->type;
         if (type == ncclCollTraceNotReady)
-          break;
+          continue;
         char line[1024];
         int offset = 0;
         uint16_t fIdx = td->funcIndex;
         if (type == ncclCollTraceDataType) {
-          sprintf(line, "## [%012.6f] [%02d:%02d:%02d] L:%04d DT %08x %016lx %016lx",
-            (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId,
-            fIdx, td->data_0, td->opCount, td->data_1);
+          sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] L:%04d DT %08x %016lx %016lx",
+            (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid,             fIdx, td->data_0, td->opCount, td->data_1);
         } else {
           if (type & ncclCollTraceP2pElemType)
-            sprintf(line, "## [%012.6f] [%02d:%02d:%02d] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->p2pOpCount[0], td->p2pOpCount[1]);
-          else if (type & ncclCollTraceCollElemType)
-            sprintf(line, "## [%012.6f] [%02d:%02d:%02d] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->opCount);
+            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid, td->p2pOpCount[0], td->p2pOpCount[1]);
+          else
+            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid, td->opCount);
           offset = strlen(line);
           if (type == ncclCollTraceCollElemType) {
             sprintf(line+offset, " CE %s nw %d bi %d nc %d root %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
@@ -293,7 +298,6 @@ void *ncclCommThreadMain(void *arg) {
         }
         INFO(NCCL_COLL, "%s", line);
         td->type = ncclCollTraceNotReady;
-        head[channel] ++;
       }
     }
     if (comm->collTraceExit && numActiveChans == 0)
@@ -405,8 +409,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
     else
       ncclCommThreadMain((void *)comm);
   }
-  NCCLCHECK(ncclCudaHostFree((void *)comm->collTrace));
-  NCCLCHECK(ncclCudaHostFree((void *)comm->collTraceTail));
+  NCCLCHECK(ncclCudaFree((void *)comm->collTrace));
+  NCCLCHECK(ncclCudaFree((void *)comm->collTraceTail));
 #endif
 
   free(comm->peerInfo);
@@ -591,8 +595,8 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
 
 #ifdef ENABLE_COLLTRACE
-  NCCLCHECK(ncclCudaHostCalloc(&comm->collTraceTail, MAXCHANNELS));
-  NCCLCHECK(ncclCudaHostCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->collTraceTail, MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
   comm->collTraceExit = 0;
   comm->collTraceEnabled = false; // we can enable colltrace without starting a thread
   if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable()) {
