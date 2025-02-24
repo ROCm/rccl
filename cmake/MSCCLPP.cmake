@@ -85,7 +85,7 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-   	    execute_process(
+   	execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
@@ -95,10 +95,10 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	      execute_process(
-	          COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
-	          WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	      )
+	execute_process(
+	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
+	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
 
 
         message(STATUS "Building mscclpp only for gfx942.")
