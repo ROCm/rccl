@@ -324,7 +324,7 @@ if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
 endif()
 # cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID) ## Requires cmake 3.22
 execute_process(
-  COMMAND bash -c "grep '^ID=' /etc/os-release | cut -d'=' -f2"
+  COMMAND bash -c "grep '^ID=' /etc/os-release | cut -d'=' -f2 | cut -d'\"' -f2"
   OUTPUT_VARIABLE HOST_OS_ID
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
