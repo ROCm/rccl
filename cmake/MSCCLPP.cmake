@@ -127,7 +127,7 @@ if(ENABLE_MSCCLPP)
 
         find_package(mscclpp_nccl REQUIRED)
 
-    	  execute_process(
+    	execute_process(
            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
