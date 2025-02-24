@@ -71,25 +71,32 @@ def run_cli_command(command):
 	except Exception as e:
 		return f"Error: {str(e)}"
 
-def get_rccl_version(rocm_path):
+def get_rccl_version(rccl_path):
 	try:
 		# Construct the full path to the shared object file
-		librccl_path = os.path.join(rocm_path, 'librccl.so')
-
+		librccl_path = rccl_path + '/lib/librccl.so'
 		# Extract RCCL version
-		rccl_version_result = subprocess.run(f'strings {librccl_path} | grep "RCCL version"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
-		rccl_version = rccl_version_result.stdout.strip()
+		cmd = f'strings {librccl_path} | grep "RCCL version"'
+		rccl_version_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+		rccl_version = rccl_version_result.stdout.replace("RCCL version : ", "").strip()
 
 		# Extract commit hash
-		commit_hash_result = subprocess.run(f'strings {librccl_path} | grep -E "[A-Za-z]\:[0-9a-z]{7}$"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+		cmd2 = f'strings {librccl_path} | grep -E "[A-Za-z]\:[0-9a-z]{{7}}$"'
+		commit_hash_result = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
 		commit_hash = commit_hash_result.stdout.strip()
 
-		print(f"RCCL Version: {rccl_version}")
+		print(f"{rccl_version}")
 		print(f"Commit Hash: {commit_hash}")
 
 	except Exception as e:
-		print(f"Error: {str(e)}")
+		result = CommandResult(stdout="", stderr=f"Error: {str(e)},\n Please set the RCCL_PATH environment to the directory containing the lib folder.")
+	result = CommandResult(stdout=commit_hash+"+"+rccl_version, stderr="")
 
+	if result.stdout:
+		summary = result.stdout.strip()
+	else:
+		summary = "Unable to detect"
+	return summary, result
 
 # Get the status of a particular command
 def status_check(summary, result):
@@ -573,6 +580,17 @@ def get_config(root_enabled):
 	limits_status = status_check(limits_summary, limits_result)
 
 
+	# Get rccl version
+	rccl_path = os.getenv('RCCL_PATH')
+	if rccl_path is None:
+		rccl_version_summary = "Error: RCCL_PATH environment variable is not set"
+		rccl_version_result = CommandResult(stdout="", stderr=rccl_version_summary)
+		rccl_version_status = status_check(rccl_version_summary, rccl_version_result)
+	else:
+		rccl_version_summary, rccl_version_result = get_rccl_version(rccl_path="/opt/rocm/")
+		rccl_version_status = status_check(rccl_version_summary, rccl_version_result)
+
+
 	# Create the summary table
 	summary_table = (
 		f"\n\n{'='*119}\n"
@@ -582,6 +600,7 @@ def get_config(root_enabled):
 		f"OS Version{' ':<20}| {os_status:<13} | {os_summary}\n"
 		f"ROCm Version{' ':<18}| {ROCm_status:<13} | {ROCm_summary}\n"
 		f"HIP Version{' ':<19}| {HIP_status:<13} | {HIP_summary}\n"
+  		f"RCCL Version{' ':<18}| {rccl_version_status:<13} | {rccl_version_summary}\n"
 		f"Vram Information{' ':<14}| {Vram_status:<13} | {Vram_summary}\n"
 		f"UCX Version{' ':<19}| {ucx_status:<13} | {ucx_summary}\n"
 		f"MPI Version{' ':<19}| {mpi_status:<13} | {mpi_summary}\n"
@@ -619,6 +638,8 @@ def get_config(root_enabled):
 	f"{ROCm_result.stdout.strip()}{ROCm_result.stderr.strip()}\n\n"
 	f"{centered_title('HIP Version', details_width, '=')}\n"
 	f"{HIP_result.stdout.strip()}{HIP_result.stderr.strip()}\n\n"
+	f"{centered_title('RCCL Version', details_width, '=')}\n"
+	f"{rccl_version_result.stdout.strip()}{rccl_version_result.stderr.strip()}\n\n"
 	f"{centered_title('Vram Information', details_width, '=')}\n"
 	f"{Vram_result.stdout.strip()}{Vram_result.stderr.strip()}\n\n"
 	f"{centered_title('UCX Version', details_width, '=')}\n"
