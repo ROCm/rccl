@@ -62,7 +62,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p>:
   inline __device__ uint64_t sendFlag(int i) { return sendStep[i]+1; }
 
   uint64_t* barriers;
-  uint64_t* barrier_next;
+  uint64_t barrier_next = 0;
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -508,7 +508,6 @@ public:
     stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)) {
     auto *channel = &ncclShmem.channel;
     barriers = &ncclShmem.groups[group].barrier;
-    barrier_next = ncclShmem.groups[group].barrier_next;
     int nrecv=0, nsend=0;
     while (nrecv < MaxRecv && recvPeers[nrecv] >= 0) {
       loadRecvConn(&channel->peers[recvPeers[nrecv]]->recv[connIndexRecv], nrecv);

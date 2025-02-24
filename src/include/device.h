@@ -419,7 +419,8 @@ struct ncclCollTrace {
   uint8_t type;
   uint8_t bid;
   int16_t funcIndex;
-  uint32_t data_0;
+  uint32_t data_0:24;
+  uint8_t tid;
   uint8_t channelId;
   uint64_t timeStamp:56;
   union {
