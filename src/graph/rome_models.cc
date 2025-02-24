@@ -1776,36 +1776,47 @@ static bool permuteGpuIds(int *g, int n, int last, struct rcclRomeModel* ref, st
   return false;
 }
 
-static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel* ref, struct rcclRomeModel* topo, int* time, bool ignore_numa) {
-  (*time) ++;
-  if (s == last) {
-    int i, j;
-    // match NET numa
-    if (!ignore_numa) {
-      for (i = 0; i < ref->nNics; i++) {
-        if (ref->nicNuma[i] != topo->nicNuma[n[i]]) break;
+static bool permuteNetIdsDP(int mask, int pos, int N, int *n, int *g,
+                            struct rcclRomeModel* ref, struct rcclRomeModel* topo,
+                            bool ignore_numa, std::vector<int>& dp) {
+  if (dp[mask] != -1)
+    return dp[mask] == 1;
+  // Base case: all NICs assigned.
+  if (pos == N) {
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < ref->nGpus; j++) {
+        if (topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXN)
+          continue;
+        if (ref->gdrLevel[i*ref->nGpus+j] != topo->gdrLevel[n[i]*ref->nGpus+g[j]]) {
+          dp[mask] = 0;
+          return false;
+        }
       }
-      if (i < ref->nNics) return false;
     }
-    // match gdr level
-    for (i = 0; i < ref->nNics; i++) {
-      for (j = 0; j < ref->nGpus; j++) {
-        // enabling PXN override paths over PHB and SYS
-        if (topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXN) continue;
-        if (ref->gdrLevel[i*ref->nGpus+j] != topo->gdrLevel[n[i]*ref->nGpus+g[j]]) break;
-      }
-      if (j < ref->nGpus) break;
-    }
-    if (i < ref->nNics) return false;
+    dp[mask] = 1;
     return true;
-  } else {
-    for (int i = s; i <= last; i++) {
-      std::swap(n[s], n[i]);
-      if (permuteNetIds(n, g, s+1, last, ref, topo, time, ignore_numa)) return true;
-      std::swap(n[s], n[i]);
+  }
+  for (int i = 0; i < N; i++) {
+    if (mask & (1 << i))
+      continue;
+    if (!ignore_numa && ref->nicNuma[pos] != topo->nicNuma[i])
+      continue;
+    n[pos] = i;
+    if (permuteNetIdsDP(mask | (1 << i), pos + 1, N, n, g, ref, topo, ignore_numa, dp)) {
+      dp[mask] = 1;
+      return true;
     }
   }
+  dp[mask] = 0;
   return false;
+}
+
+static bool permuteNetIds(int *n, int *g, int s, int last,
+                          struct rcclRomeModel* ref, struct rcclRomeModel* topo,
+                          int* time, bool ignore_numa) {
+  int N = ref->nNics;
+  std::vector<int> dp(1 << N, -1);
+  return permuteNetIdsDP(0, 0, N, n, g, ref, topo, ignore_numa, dp);
 }
 
 int checkAlltoallWidth(struct rcclRomeModel *romeTopo) {
