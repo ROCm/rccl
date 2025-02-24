@@ -1,7 +1,7 @@
-diff --git include/mscclpp/env.hpp include/mscclpp/env.hpp
+diff --git a/include/mscclpp/env.hpp b/include/mscclpp/env.hpp
 index 6708628..3f96b31 100644
---- include/mscclpp/env.hpp
-+++ include/mscclpp/env.hpp
+--- a/include/mscclpp/env.hpp
++++ b/include/mscclpp/env.hpp
 @@ -30,6 +30,7 @@ class Env {
    const std::string executionPlanDir;
    const std::string npkitDumpDir;
@@ -10,10 +10,10 @@ index 6708628..3f96b31 100644
  
   private:
    Env();
-diff --git src/bootstrap/socket.cc src/bootstrap/socket.cc
+diff --git a/src/bootstrap/socket.cc b/src/bootstrap/socket.cc
 index 8c012c2..5dc43b6 100644
---- src/bootstrap/socket.cc
-+++ src/bootstrap/socket.cc
+--- a/src/bootstrap/socket.cc
++++ b/src/bootstrap/socket.cc
 @@ -327,6 +327,8 @@ int FindInterfaces(char* ifNames, union SocketAddress* ifAddrs, int ifNameMaxSiz
          nIfs = FindInterfaceMatchSubnet(ifNames, ifAddrs, &idAddr, ifNameMaxSize, maxIfs);
        }
@@ -23,10 +23,10 @@ index 8c012c2..5dc43b6 100644
      // Then look for anything else (but not docker or lo)
      if (nIfs == 0) nIfs = findInterfaces("^docker,lo", ifNames, ifAddrs, sock_family, ifNameMaxSize, maxIfs);
      // Finally look for docker, then lo.
-diff --git src/env.cpp src/env.cpp
+diff --git a/src/env.cpp b/src/env.cpp
 index 625de0a..bcb847e 100644
---- src/env.cpp
-+++ src/env.cpp
+--- a/src/env.cpp
++++ b/src/env.cpp
 @@ -19,8 +19,9 @@ T readEnv(const std::string &envName, const T &defaultValue) {
      return atoi(envCstr);
    } else if constexpr (std::is_same_v<T, bool>) {
@@ -56,10 +56,10 @@ index 625de0a..bcb847e 100644
    }
    return globalEnv;
  }
-diff --git src/ib.cc src/ib.cc
+diff --git a/src/ib.cc b/src/ib.cc
 index 542527e..64bee94 100644
---- src/ib.cc
-+++ src/ib.cc
+--- a/src/ib.cc
++++ b/src/ib.cc
 @@ -20,6 +20,8 @@
  #include "debug.h"
  #if defined(USE_IBVERBS)
@@ -290,10 +290,10 @@ index 542527e..64bee94 100644
        switch (i) {  // TODO: get rid of this ugly switch
          case 0:
            return Transport::IB0;
-diff --git src/include/ib.hpp src/include/ib.hpp
+diff --git a/src/include/ib.hpp b/src/include/ib.hpp
 index 4d85299..cca642f 100644
---- src/include/ib.hpp
-+++ src/include/ib.hpp
+--- a/src/include/ib.hpp
++++ b/src/include/ib.hpp
 @@ -54,6 +54,7 @@ struct IbQpInfo {
    int mtu;
    uint64_t iid;
