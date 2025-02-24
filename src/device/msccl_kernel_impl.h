@@ -108,7 +108,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   threadBlockCopy(
     (uint32_t *)&mscclShmem.mscclTB, (uint32_t *)(algo->mscclTBs + bid),
     sizeof(struct mscclThreadBlock) / sizeof(uint32_t), tid, nthreads);
-  __synclds(); // publish mscclShmem.mscclTB.channelId
+  __syncthreads(); // publish mscclShmem.mscclTB.channelId
 
   // initialize ncclShmem and mscclShmem.work
   int channelId = mscclShmem.mscclTB.channelId;
@@ -146,7 +146,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
     }
     if (bytes) copyToShmem8(tid%WARP_SIZE, dst, src, bytes);
   }
-  __synclds(); // publish shmem
+  __syncthreads(); // publish shmem
 
 #if defined(ENABLE_NPKIT)
   int npKitCtxIdx = bid;

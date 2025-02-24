@@ -369,30 +369,34 @@ def get_acs_info():
 
 # Get rocminfo
 def get_rocminfo():
-	result = run_cli_command('rocminfo')
-	if result.stdout:
-		gpu_pattern = re.compile(r"Name:\s+(gfx\d+)(?:.*?Marketing Name:\s+([^\n]+))?.*?Compute Unit:\s+(\d+)", re.DOTALL)
-		matches = gpu_pattern.findall(result.stdout)
-		num_gpus = len(matches)
-		valid_marketing_names = ["MI300X", "MI200", "MI300A", "MI308"]
-		gpu_name = ""
-		for name in valid_marketing_names:
-			if name in matches[0][1]:
-				gpu_name = name
-				break
-		if gpu_name == "":
-			if "gfx942" == matches[0][0] and 304 == int(matches[0][2]):
-				gpu_name = "MI300X"
-			elif "gfx942" == matches[0][0] and 80 == int(matches[0][2]):
-				gpu_name = "MI308"
-			elif "gfx942" == matches[0][0] and 228 == int(matches[0][2]):
-				gpu_name = "MI300A"
-			elif "gfx90a" == matches[0][0] and 228 == int(matches[0][2]):
-				gpu_name = "MI200"
-		summary = f"Found {num_gpus} {gpu_name} GPUs"
-	else:
-		summary = "Unable to detect"
-	return summary, result
+    result = run_cli_command('rocminfo')
+    if result.stdout:
+        gpu_pattern = re.compile(r"Name:\s+(gfx\d+)(?:.*?Marketing Name:\s+([^\n]+))?.*?Compute Unit:\s+(\d+)", re.DOTALL)
+        matches = gpu_pattern.findall(result.stdout)
+        num_gpus = len(matches)
+        valid_marketing_names = ["MI300X", "MI300A", "MI300", "MI250X/MI250", "MI200"]
+        gpu_name = ""
+        for name in valid_marketing_names:
+            if name in matches[0][1]:
+                gpu_name = name
+                break
+        if gpu_name == "":
+            if "gfx942" == matches[0][0]:
+                if 304 == int(matches[0][2]):
+                    gpu_name = "MI300X"
+                elif 228 == int(matches[0][2]):
+                    gpu_name = "MI300A"
+                else:
+                    gpu_name = f"MI300 with {int(matches[0][2])} CUs"
+            elif "gfx90a" == matches[0][0]:
+                if 104 <= int(matches[0][2]):
+                    gpu_name = "MI250X/MI250"
+                else:
+                    gpu_name = f"MI200 with {int(matches[0][2])} CUs"
+        summary = f"Found {num_gpus} {gpu_name} GPUs"
+    else:
+        summary = "Unable to detect"
+    return summary, result
 
 def checklimits_from_file():
 	summary = ""
@@ -600,7 +604,7 @@ def get_config(root_enabled):
 		f"OS Version{' ':<20}| {os_status:<13} | {os_summary}\n"
 		f"ROCm Version{' ':<18}| {ROCm_status:<13} | {ROCm_summary}\n"
 		f"HIP Version{' ':<19}| {HIP_status:<13} | {HIP_summary}\n"
-  		f"RCCL Version{' ':<18}| {rccl_version_status:<13} | {rccl_version_summary}\n"
+		f"RCCL Version{' ':<18}| {rccl_version_status:<13} | {rccl_version_summary}\n"
 		f"Vram Information{' ':<14}| {Vram_status:<13} | {Vram_summary}\n"
 		f"UCX Version{' ':<19}| {ucx_status:<13} | {ucx_summary}\n"
 		f"MPI Version{' ':<19}| {mpi_status:<13} | {mpi_summary}\n"
