@@ -947,6 +947,8 @@ static_assert((offsetof(struct ncclIbSendComm, wrs) % 32) == 0, "wrs must be 32-
 
 struct ncclIbGpuFlush {
   struct ibv_mr* hostMr;
+  struct ibv_mr* gpuMr;
+  int* gpuFlushGpuMem;
   struct ibv_sge sge;
   struct ncclIbQp qp;
 };
@@ -1324,6 +1326,7 @@ ib_send_ready:
 }
 
 NCCL_PARAM(IbGdrFlushDisable, "GDR_FLUSH_DISABLE", 0);
+RCCL_PARAM(IbGdrFlushGpuMem, "GDR_FLUSH_GPU_MEM", 1);
 
 ncclResult_t ncclIbAccept(void* listenComm, void** recvComm, ncclNetDeviceHandle_t** /*recvDevComm*/) {
   struct ncclIbListenComm* lComm = (struct ncclIbListenComm*)listenComm;
@@ -1452,11 +1455,22 @@ ib_recv:
 
     // Allocate Flush dummy buffer for GPU Direct RDMA
     if (rComm->flushEnabled) {
+      if (rcclParamIbGdrFlushGpuMem()) {
+#if defined(HIP_UNCACHED_MEMORY)
+        NCCLCHECK(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocUncached));
+#else
+        NCCLCHECK(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocFinegrained));
+#endif
+        NCCLCHECK(wrap_ibv_reg_mr(&rCommDev->gpuFlush.gpuMr, rCommDev->base.pd, rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ));
+      } else {
+        rCommDev->gpuFlush.gpuFlushGpuMem = nullptr;
+        rCommDev->gpuFlush.gpuMr = nullptr;
+      }
       NCCLCHECK(wrap_ibv_reg_mr(&rCommDev->gpuFlush.hostMr, rCommDev->base.pd, &rComm->gpuFlushHostMem, sizeof(int), IBV_ACCESS_LOCAL_WRITE));
       rCommDev->gpuFlush.sge.addr = (uint64_t)&rComm->gpuFlushHostMem;
       rCommDev->gpuFlush.sge.length = 1;
       rCommDev->gpuFlush.sge.lkey = rCommDev->gpuFlush.hostMr->lkey;
-      NCCLCHECK(ncclIbCreateQp(ibDev->portNum, &rCommDev->base, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ, &rCommDev->gpuFlush.qp));
+      NCCLCHECK(ncclIbCreateQp(ibDev->portNum, &rCommDev->base, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE, &rCommDev->gpuFlush.qp));
       struct ncclIbDevInfo devInfo;
       devInfo.lid         = ibDev->portAttr.lid;
       devInfo.link_layer  = ibDev->portAttr.link_layer;
@@ -2008,13 +2022,30 @@ ncclResult_t ncclIbIflush(void* recvComm, int n, void** data, int* sizes, void**
     struct ibv_send_wr wr;
     memset(&wr, 0, sizeof(wr));
     wr.wr_id = req - comm->base.reqs;
-
-    wr.wr.rdma.remote_addr = (uint64_t)data[last];
-    wr.wr.rdma.rkey = mhandle->mrs[i]->rkey;
+    if (rcclParamIbGdrFlushGpuMem()) {
+      wr.wr.rdma.remote_addr = (uint64_t)(comm->devs[i].gpuFlush.gpuFlushGpuMem);
+      wr.wr.rdma.rkey = comm->devs[i].gpuFlush.gpuMr->rkey;
+      wr.sg_list = &comm->devs[i].gpuFlush.sge;
+      wr.num_sge = 1;
+      wr.opcode = IBV_WR_RDMA_WRITE;
+      wr.send_flags = 0;
+      struct ibv_send_wr* bad_wr;
+      NCCLCHECK(wrap_ibv_post_send(comm->devs[i].gpuFlush.qp.qp, &wr, &bad_wr));
+    }
+    memset(&wr, 0, sizeof(wr));
+    wr.wr_id = req - comm->base.reqs;
+    if (rcclParamIbGdrFlushGpuMem()) {
+      wr.wr.rdma.remote_addr = (uint64_t)(comm->devs[i].gpuFlush.gpuFlushGpuMem);
+      wr.wr.rdma.rkey = comm->devs[i].gpuFlush.gpuMr->rkey;
+    } else {
+      wr.wr.rdma.remote_addr = (uint64_t)data[last];
+      wr.wr.rdma.rkey = mhandle->mrs[i]->rkey;
+    }
     wr.sg_list = &comm->devs[i].gpuFlush.sge;
     wr.num_sge = 1;
     wr.opcode = IBV_WR_RDMA_READ;
     wr.send_flags = IBV_SEND_SIGNALED;
+
 
     TIME_START(4);
     struct ibv_send_wr* bad_wr;
@@ -2148,6 +2179,12 @@ ncclResult_t ncclIbCloseRecv(void* recvComm) {
     for (int i = 0; i < comm->base.ndevs; i++) {
       struct ncclIbRecvCommDev* commDev = comm->devs + i;
       if (comm->flushEnabled) {
+        if (commDev->gpuFlush.gpuFlushGpuMem != nullptr) {
+          NCCLCHECK(ncclCudaFree(commDev->gpuFlush.gpuFlushGpuMem));
+          commDev->gpuFlush.gpuFlushGpuMem = nullptr;
+          if (commDev->gpuFlush.gpuMr != nullptr) NCCLCHECK(wrap_ibv_dereg_mr(commDev->gpuFlush.gpuMr));
+          commDev->gpuFlush.gpuMr = nullptr;
+        }
         if (commDev->gpuFlush.qp.qp != NULL) NCCLCHECK(wrap_ibv_destroy_qp(commDev->gpuFlush.qp.qp));
         if (commDev->gpuFlush.hostMr != NULL) NCCLCHECK(wrap_ibv_dereg_mr(commDev->gpuFlush.hostMr));
       }
