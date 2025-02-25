@@ -31,6 +31,7 @@
 #define VEGA_XGMI_WIDTH 24.0
 #define MI200_XGMI_WIDTH 36.0
 #define GFX94X_XGMI_WIDTH 48.0
+#define GFX95X_XGMI_WIDTH 48.0
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, so GPU
 // to GPU traffic consumes more PCI bandwidth.
@@ -263,6 +264,8 @@ static float ncclTopoXGMISpeed(const char* gcn) {
     return MI200_XGMI_WIDTH;
   else if (IsArchMatch(gcn, "gfx94"))
     return GFX94X_XGMI_WIDTH;
+  else if (IsArchMatch(gcn, "gfx95"))
+    return GFX95X_XGMI_WIDTH;
   else
     return VEGA_XGMI_WIDTH;
 }

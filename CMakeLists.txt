@@ -41,6 +41,7 @@ set(DEFAULT_GPUS
       gfx908
       gfx90a
       gfx942
+      gfx950
       gfx1030
       gfx1100
       gfx1101
@@ -313,10 +314,20 @@ if (HAVE_PARALLEL_JOBS)
 endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
-## Currently MSCCL++ is supported only on gfx942, and only on Ubuntu and CentOS
-if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST GPU_TARGETS OR "gfx942:xnack-" IN_LIST GPU_TARGETS OR "gfx942:xnack+" IN_LIST GPU_TARGETS))
+## Currently MSCCL++ is supported only on gfx942 and gfx950, and only on Ubuntu and CentOS
+set(MSCCLPP_SUPPORTED_ARCHS "gfx942" "gfx942:xnack-" "gfx942:xnack+" "gfx950" "gfx950:xnack-" "gfx950:xnack+")
+# Check if any of the supported architectures are in GPU_TARGETS
+set(ARCH_MATCH_FOUND OFF)
+foreach(ARCH ${MSCCLPP_SUPPORTED_ARCHS})
+  if(ARCH IN_LIST GPU_TARGETS)
+    set(ARCH_MATCH_FOUND ON)
+    break()
+  endif()
+endforeach()
+
+if (ENABLE_MSCCLPP AND NOT ARCH_MATCH_FOUND)
   set(ENABLE_MSCCLPP OFF)
-  message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
+  message(WARNING "Can only build MSCCL++ for supported GPU_TARGETS (${MSCCLPP_SUPPORTED_ARCHS}); disabling MSCCL++ build")
 endif()
 if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   set(ENABLE_MSCCLPP OFF)

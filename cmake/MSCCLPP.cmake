@@ -95,21 +95,22 @@ if(ENABLE_MSCCLPP)
 	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
 	)
 
-        message(STATUS "Building mscclpp only for gfx942.")
+        message(STATUS "Building mscclpp only for supported variants:gfx942,gfx950")
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
         mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
         mscclpp_cmake_arg(HIP_COMPILER)
 
-        set(GFX942_VARIANT "gfx942")
+        #gfx950 change is added for testing assuming cmake args are space separated values for list
+        set(GFX_VARIANT "gfx942 gfx950")
         if(BUILD_ADDRESS_SANITIZER)
-            set(GFX942_VARIANT "gfx942:xnack+")
+            set(GFX_VARIANT "gfx942:xnack+ gfx950:xnack+")
         endif()
 
         download_project(PROJ                mscclpp_nccl
                          #GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
                          #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX942_VARIANT} -DGPU_TARGETS=${GFX942_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}
+                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX_VARIANT} -DGPU_TARGETS=${GFX_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE

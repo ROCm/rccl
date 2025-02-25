@@ -656,7 +656,7 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm
     }
   }
 
-  // Special handling of gfx94x
+  // Special handling of gfx94x and gfx950
 
 #if !defined(TOPO_EXPL)
   char strValue[1024];
@@ -666,7 +666,7 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm
     int arch, vendor, model;
     NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
     if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_INTEL &&
-      IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") &&
+      (IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") || IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) &&
       ((system->nodes[GPU].count == 8 && system->nodes[NET].count == 8 && system->nodes[GPU].count == system->nRanks) ||
       (system->nodes[GPU].count != system->nRanks))) {
       if (!rcclPathOverride(system, 0x100000) && !rcclPathOverride(system, 0x1000))
@@ -843,7 +843,7 @@ static ncclResult_t ncclTopoGetNchannels(struct ncclComm* comm, int g /*local gp
     path = system->nodes[GPU].nodes[peer].paths[GPU]+g;
     if (path->type == PATH_NVL) {
       float nvlBw = ncclTopoXGMISpeed(system->nodes[GPU].nodes[g].gpu.gcn);
-      *nChannels = (IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") ? 4 : 2)*std::max(1, (int)(path->bw / nvlBw));
+      *nChannels = ((IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx94") || IsArchMatch(system->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) ? 4 : 2)*std::max(1, (int)(path->bw / nvlBw));
     } else {
       *nChannels = 2;
     }
@@ -906,7 +906,7 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     // Round to next pow2 nChannelsPerPeer and nChannels
     comm->p2pnChannelsPerPeer = (ncclParamNChannelsPerPeer() == -2 ? pow2Up(minChannels) : ncclParamNChannelsPerPeer());
     // Doubling P2P channels per peer on single node
-    if (comm->topo->nodes[GPU].count == comm->topo->nRanks && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94")) comm->p2pnChannelsPerPeer *= 2;
+    if (comm->topo->nodes[GPU].count == comm->topo->nRanks && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950"))) comm->p2pnChannelsPerPeer *= 2;
     comm->p2pnChannels = std::min(pow2Up(comm->p2pnChannels), 4*CHANNEL_LIMIT);
   }
 

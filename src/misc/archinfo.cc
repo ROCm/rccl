@@ -48,6 +48,8 @@ void convertGcnArchToGcnArchName(const char* gcnArch, const char** gcnArchName) 
     *gcnArchName = "gfx941";
   else if (strcmp(gcnArch, "942") == 0)
     *gcnArchName = "gfx942";
+  else if (strcmp(gcnArch, "950") == 0)
+    *gcnArchName = "gfx950";
   else
     *gcnArchName = gcnArch;
 }
@@ -64,6 +66,8 @@ double GetDeviceWallClockRateInKhz(int deviceId) {
   char gcn[256];
   GetGcnArchName(deviceId, gcn);
   if (strncmp("gfx94", gcn, 5) == 0)
+    return 1.0E5;
+  else if(strncmp("gfx950", gcn, 6) == 0)
     return 1.0E5;
   else
     return 2.5E4;
