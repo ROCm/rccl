@@ -57,7 +57,7 @@ index 625de0a..bcb847e 100644
    return globalEnv;
  }
 diff --git a/src/ib.cc b/src/ib.cc
-index 542527e..7cddc55 100644
+index 542527e..7da3708 100644
 --- a/src/ib.cc
 +++ b/src/ib.cc
 @@ -20,6 +20,8 @@
@@ -224,7 +224,28 @@ index 542527e..7cddc55 100644
      qp_attr.ah_attr.grh.hop_limit = 255;
      qp_attr.ah_attr.grh.traffic_class = 0;
    } else {
-@@ -385,7 +516,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
+@@ -290,7 +421,19 @@ void IbQp::postSend() {
+ int IbQp::pollCq() {
+   int wcNum = IBVerbs::ibv_poll_cq(this->cq, this->maxCqPollNum, this->wcs->data());
+   if (wcNum > 0) {
+-    this->numSignaledPostedItems -= wcNum;
++    for (int i = 0; i < wcNum; ++i) {
++      if ((*this->wcs)[i].status != IBV_WC_SUCCESS) {
++        std::stringstream err;
++        err << "Work completion at index " << i << " failed with status " << (*this->wcs)[i].status
++            << " (" << IBVerbs::ibv_wc_status_str((*this->wcs)[i].status) << ")";
++        throw mscclpp::IbError(err.str(), (*this->wcs)[i].status);
++      }
++      this->numSignaledPostedItems--;
++    }
++  } else if (wcNum < 0) {
++    std::stringstream err;
++    err << "ibv_poll_cq failed with negative completion";
++    throw mscclpp::IbError(err.str(), errno);
+   }
+   return wcNum;
+ }
+@@ -385,7 +528,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
  
  MSCCLPP_API_CPP int getIBDeviceCount() {
    int num;
@@ -233,7 +254,7 @@ index 542527e..7cddc55 100644
    return num;
  }
  
-@@ -442,20 +573,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
+@@ -442,20 +585,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
    }
  
    int num;
@@ -304,3 +325,53 @@ index 4d85299..3018d54 100644
  }  // namespace mscclpp
  
  #endif  // MSCCLPP_IB_HPP_
+diff --git a/src/include/ibverbs_wrapper.hpp b/src/include/ibverbs_wrapper.hpp
+index fe67268..76f948a 100644
+--- a/src/include/ibverbs_wrapper.hpp
++++ b/src/include/ibverbs_wrapper.hpp
+@@ -40,11 +40,12 @@ struct IBVerbs {
+     ibv_destroy_qp_lib = (ibv_destroy_qp_t)dlsym(handle, "ibv_destroy_qp");
+     ibv_query_port_lib = (ibv_query_port_t)dlsym(handle, "ibv_query_port");
+     ibv_reg_mr_iova2_lib = (ibv_reg_mr_iova2_t)dlsym(handle, "ibv_reg_mr_iova2");
++    ibv_wc_status_str_lib = (ibv_wc_status_str_t)dlsym(handle, "ibv_wc_status_str");
+ 
+     if (!ibv_get_device_list_lib || !ibv_free_device_list_lib || !ibv_alloc_pd_lib || !ibv_dealloc_pd_lib ||
+         !ibv_open_device_lib || !ibv_close_device_lib || !ibv_query_device_lib || !ibv_create_cq_lib ||
+         !ibv_create_qp_lib || !ibv_destroy_cq_lib || !ibv_reg_mr_lib || !ibv_dereg_mr_lib || !ibv_query_gid_lib ||
+-        !ibv_reg_mr_iova2_lib || !ibv_modify_qp_lib || !ibv_destroy_qp_lib || !ibv_query_port_lib) {
++        !ibv_reg_mr_iova2_lib || !ibv_modify_qp_lib || !ibv_destroy_qp_lib || !ibv_query_port_lib || !ibv_wc_status_str_lib) {
+       throw mscclpp::IbError("Failed to load one or more function in the ibibverbs library: " + std::string(dlerror()),
+                              errno);
+       dlclose(handle);
+@@ -214,6 +215,15 @@ struct IBVerbs {
+     return nullptr;
+   }
+ 
++  static const char* ibv_wc_status_str(enum ibv_wc_status status) {
++    if (!initialized) initialize();
++    if (ibv_wc_status_str_lib) {
++      return ibv_wc_status_str_lib(status);
++    }
++    return nullptr;
++  }
++
++
+   // Static method to clean up
+   static void cleanup() {
+     if (handle) {
+@@ -245,6 +255,7 @@ struct IBVerbs {
+   typedef int (*ibv_query_port_t)(struct ibv_context*, uint8_t, struct ibv_port_attr*);
+   typedef struct ibv_mr* (*ibv_reg_mr_iova2_t)(struct ibv_pd* pd, void* addr, size_t length, uint64_t iova,
+                                                unsigned int access);
++  typedef const char* (*ibv_wc_status_str_t)(enum ibv_wc_status);
+ 
+   static inline ibv_get_device_list_t ibv_get_device_list_lib;
+   static inline ibv_free_device_list_t ibv_free_device_list_lib = nullptr;
+@@ -263,6 +274,7 @@ struct IBVerbs {
+   static inline ibv_destroy_qp_t ibv_destroy_qp_lib = nullptr;
+   static inline ibv_query_port_t ibv_query_port_lib = nullptr;
+   static inline ibv_reg_mr_iova2_t ibv_reg_mr_iova2_lib = nullptr;
++  static inline ibv_wc_status_str_t ibv_wc_status_str_lib = nullptr;
+ 
+   static inline bool initialized = false;
+ };
