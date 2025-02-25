@@ -85,7 +85,7 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	    execute_process(
+   	execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
@@ -94,6 +94,13 @@ if(ENABLE_MSCCLPP)
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/roce-support.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+
+	execute_process(
+	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
+	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
+
+
         message(STATUS "Building mscclpp only for gfx942.")
         mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
         mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
@@ -119,20 +126,22 @@ if(ENABLE_MSCCLPP)
 
 
         find_package(mscclpp_nccl REQUIRED)
-        execute_process(
+
+    	execute_process(
            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-
+        
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
-
+        
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
@@ -143,6 +152,11 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+        
         execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/roce-support.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
