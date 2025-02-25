@@ -57,7 +57,7 @@ index 625de0a..bcb847e 100644
    return globalEnv;
  }
 diff --git a/src/ib.cc b/src/ib.cc
-index 542527e..64bee94 100644
+index 542527e..7cddc55 100644
 --- a/src/ib.cc
 +++ b/src/ib.cc
 @@ -20,6 +20,8 @@
@@ -69,7 +69,7 @@ index 542527e..64bee94 100644
  #endif  // defined(USE_IBVERBS)
  
  #if !defined(__HIP_PLATFORM_AMD__)
-@@ -40,6 +42,166 @@ namespace mscclpp {
+@@ -40,6 +42,134 @@ namespace mscclpp {
  
  #if defined(USE_IBVERBS)
  
@@ -164,65 +164,33 @@ index 542527e..64bee94 100644
 +          gid.raw[11]              == 0xff);
 +}
 +
++
 +static uint8_t getGidIndex(struct ibv_context* context, int const& ibPort, int const& gidTblLen)
 +{
 +  union ibv_gid gid;
-+  int roceV2Ipv4MappedIndex = -1;
-+  int roceV1Ipv4MappedIndex = -1;
-+  int roceV2Ipv6Index = -1;
-+  int roceV1Ipv6Index = -1;
-+  int rocev2LinkLocalIndex = -1;
-+  int rocev1LinkLocalIndex = -1;
-+
++  GidPriority highestPriority = GidPriority::UNKNOWN;
++  int gidIndex = -1;
 +  for (int i = 0; i < gidTblLen; ++i) {
 +    if (ibv_query_gid(context, ibPort , i, &gid) != 0) continue;
 +    if (!isConfiguredGid(&gid)) continue;
 +    int gidCurrRoceVersion;
 +    gidCurrRoceVersion = getRoceVersionNumber(context, ibPort, i);
 +    if(gidCurrRoceVersion < 1) continue;
++    GidPriority currPriority;
 +    if (isIPv4MappedIPv6(gid)) {
-+      if (gidCurrRoceVersion == 2) {
-+        roceV2Ipv4MappedIndex = i;  // Highest priority
-+      } else {
-+        roceV1Ipv4MappedIndex = i;
-+      }
++      currPriority = (gidCurrRoceVersion == 2) ? GidPriority::ROCEV2_IPV4 : GidPriority::ROCEV1_IPV4;
 +    } else if (!isLinkLocalGid(gid)) {
-+      if (gidCurrRoceVersion == 2) {
-+        roceV2Ipv6Index = i;
-+      } else {
-+        roceV1Ipv6Index = i;
-+      }
++      currPriority = (gidCurrRoceVersion == 2) ? GidPriority::ROCEV2_IPV6 : GidPriority::ROCEV1_IPV6;
 +    } else {
-+      if (gidCurrRoceVersion == 2) {
-+        rocev2LinkLocalIndex = i;
-+      } else {
-+        rocev1LinkLocalIndex = i;
-+      }
++      currPriority = (gidCurrRoceVersion == 2) ? GidPriority::ROCEV2_LINK_LOCAL : GidPriority::ROCEV1_LINK_LOCAL;
++    }
++    if(currPriority > highestPriority) {
++      highestPriority = currPriority;
++      gidIndex = i;
 +    }
 +  }
 +
-+  // Select the best available GID based on priority
-+  // * Priority Order:
-+  // * 1. RoCE v2 (IPv4-mapped): ::ffff:192.168.x.x
-+  // * 2. RoCE v2 (Not IPv4-mapped)
-+  // * 3. RoCE v1 (IPv4-mapped)
-+  // * 4. RoCE v1 (Not IPv4-mapped)
-+  // * 5. RoCE v2 (Link-local): fe80::/10
-+  // * 6. RoCE v1 (Link-local)
-+  int gidIndex = -1;
-+  if (roceV2Ipv4MappedIndex != -1) {
-+    gidIndex = roceV2Ipv4MappedIndex;
-+  } else if (roceV2Ipv6Index != -1) {
-+    gidIndex = roceV2Ipv6Index;
-+  } else if (roceV1Ipv4MappedIndex != -1) {
-+    gidIndex = roceV1Ipv4MappedIndex;
-+  } else if (roceV1Ipv6Index != -1) {
-+    gidIndex = roceV1Ipv6Index;
-+  } else if (rocev2LinkLocalIndex != -1) {
-+    gidIndex = rocev2LinkLocalIndex;
-+  } else if (rocev1LinkLocalIndex != -1) {
-+    gidIndex = rocev1LinkLocalIndex;
-+  } else {
++  if(highestPriority == GidPriority::UNKNOWN){
 +    std::stringstream err;
 +    err << "Auto GetGidIndex failed. Try setting MSCCLPP_IB_GID_INDEX directly";
 +    throw mscclpp::Error(err.str(), ErrorCode::SystemError);
@@ -236,7 +204,7 @@ index 542527e..64bee94 100644
  IbMr::IbMr(ibv_pd* pd, void* buff, std::size_t size) : buff(buff) {
    if (size == 0) {
      throw std::invalid_argument("invalid size: " + std::to_string(size));
-@@ -117,8 +279,9 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
+@@ -117,8 +247,9 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
    this->info.is_grh = (portAttr.flags & IBV_QPF_GRH_REQUIRED);
  
    if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND || this->info.is_grh) {
@@ -247,7 +215,7 @@ index 542527e..64bee94 100644
        std::stringstream err;
        err << "ibv_query_gid failed (errno " << errno << ")";
        throw mscclpp::IbError(err.str(), errno);
-@@ -164,7 +327,7 @@ void IbQp::rtr(const IbQpInfo& info) {
+@@ -164,7 +295,7 @@ void IbQp::rtr(const IbQpInfo& info) {
      qp_attr.ah_attr.grh.dgid.global.subnet_prefix = info.spn;
      qp_attr.ah_attr.grh.dgid.global.interface_id = info.iid;
      qp_attr.ah_attr.grh.flow_label = 0;
@@ -256,7 +224,7 @@ index 542527e..64bee94 100644
      qp_attr.ah_attr.grh.hop_limit = 255;
      qp_attr.ah_attr.grh.traffic_class = 0;
    } else {
-@@ -385,7 +548,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
+@@ -385,7 +516,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
  
  MSCCLPP_API_CPP int getIBDeviceCount() {
    int num;
@@ -265,7 +233,7 @@ index 542527e..64bee94 100644
    return num;
  }
  
-@@ -442,20 +605,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
+@@ -442,20 +573,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
    }
  
    int num;
@@ -291,7 +259,7 @@ index 542527e..64bee94 100644
          case 0:
            return Transport::IB0;
 diff --git a/src/include/ib.hpp b/src/include/ib.hpp
-index 4d85299..cca642f 100644
+index 4d85299..3018d54 100644
 --- a/src/include/ib.hpp
 +++ b/src/include/ib.hpp
 @@ -54,6 +54,7 @@ struct IbQpInfo {
@@ -313,3 +281,26 @@ index 4d85299..cca642f 100644
  
    const std::string devName;
    ibv_context* ctx;
+@@ -142,7 +143,21 @@ class IbCtx {
+   std::list<std::unique_ptr<IbQp>> qps;
+   std::list<std::unique_ptr<IbMr>> mrs;
+ };
+-
++/**
++  * Enumeration of GID priority
++  *
++  * @note These are the GID types ordered in priority from lowest (0) to highest
++  */
++enum GidPriority
++{
++  UNKNOWN           = -1,                      ///< Default
++  ROCEV1_LINK_LOCAL = 0,                       ///< RoCEv1 Link-local
++  ROCEV2_LINK_LOCAL = 1,                       ///< RoCEv2 Link-local fe80::/10
++  ROCEV1_IPV6       = 2,                       ///< RoCEv1 IPv6
++  ROCEV2_IPV6       = 3,                       ///< RoCEv2 IPv6
++  ROCEV1_IPV4       = 4,                       ///< RoCEv1 IPv4-mapped IPv6
++  ROCEV2_IPV4       = 5,                       ///< RoCEv2 IPv4-mapped IPv6 ::ffff:192.168.x.x
++};
+ }  // namespace mscclpp
+ 
+ #endif  // MSCCLPP_IB_HPP_
