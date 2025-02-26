@@ -316,23 +316,29 @@ endif()
 ## Disable building MSCCL++ if the build environment is invalid
 ## Currently MSCCL++ is supported only on gfx942 and gfx950, and only on Ubuntu and CentOS
 set(MSCCLPP_SUPPORTED_ARCHS "gfx942" "gfx942:xnack-" "gfx942:xnack+" "gfx950" "gfx950:xnack-" "gfx950:xnack+")
+
 # Check if any of the supported architectures are in GPU_TARGETS
 set(ARCH_MATCH_FOUND OFF)
-foreach(ARCH ${MSCCLPP_SUPPORTED_ARCHS})
-  if(ARCH IN_LIST GPU_TARGETS)
+set(MSCCLPP_GPU_TARGETS "")
+foreach(ARCH IN LISTS GPU_TARGETS)
+  if(ARCH IN_LIST MSCCLPP_SUPPORTED_ARCHS)
     set(ARCH_MATCH_FOUND ON)
-    break()
+    list(APPEND MSCCLPP_GPU_TARGETS "${ARCH}")
   endif()
 endforeach()
+set(MSCCLPP_GPU_TARGETS "${MSCCLPP_GPU_TARGETS}" CACHE STRING "GPU Targets supported by MSCCL++" FORCE)
 
 if (ENABLE_MSCCLPP AND NOT ARCH_MATCH_FOUND)
   set(ENABLE_MSCCLPP OFF)
-  message(WARNING "Can only build MSCCL++ for supported GPU_TARGETS (${MSCCLPP_SUPPORTED_ARCHS}); disabling MSCCL++ build")
+  message(WARNING "Can only build MSCCL++ for supported GPU_TARGETS: ${MSCCLPP_SUPPORTED_ARCHS}; current GPU_TARGETS: ${GPU_TARGETS}; so disabling MSCCL++ build")
 endif()
+
+# MSCCL++ is only supported on ROCm 6.2.0 or newer
 if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   set(ENABLE_MSCCLPP OFF)
-  message(WARNING "MSCCL++ integration only supported on ROCm 6.2 or greater; disabling MSCCL++ build")
+  message(WARNING "MSCCL++ integration only supported on ROCm 6.2.0 or greater; disabling MSCCL++ build")
 endif()
+
 # cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID) ## Requires cmake 3.22
 execute_process(
   COMMAND bash -c "grep '^ID=' /etc/os-release | cut -d'=' -f2 | cut -d'\"' -f2"

@@ -32,18 +32,6 @@
 # For downloading, building, and installing required dependencies
 include(cmake/DownloadProject.cmake)
 
-function(mscclpp_cmake_arg NAME)
-    string (REPLACE ";" "$<SEMICOLON>" ARG_VALUE "${${NAME}}") # Replace ; with non-escapable SEMICOLON symbol to avoid CMake errors
-    string(STRIP "${ARG_VALUE}" ARG_VALUE) # Eliminate whitespace, reducing to empty string if necessary
-
-    # Only add a cmake argument if it has a value
-    set(${NAME}_ARG "-D${NAME}=\"${ARG_VALUE}\"" PARENT_SCOPE)
-    if("${ARG_VALUE}" STREQUAL "")
-        set(${NAME}_ARG "" PARENT_SCOPE)
-    endif()
-endfunction()
-
-
 if(ENABLE_MSCCLPP)
     # Try to find the mscclpp install
     set(MSCCLPP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/ext/mscclpp CACHE PATH "")
@@ -66,8 +54,8 @@ if(ENABLE_MSCCLPP)
         endif()
 
         execute_process(
-           COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
-           WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
         execute_process(
@@ -85,37 +73,54 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	execute_process(
+        execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
+        execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/reg-fix.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-        message(STATUS "Building mscclpp only for supported variants:gfx942,gfx950")
-        mscclpp_cmake_arg(CMAKE_PREFIX_PATH)
-        mscclpp_cmake_arg(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
-        mscclpp_cmake_arg(HIP_COMPILER)
+        set(CMAKE_INHERITED_ARGS "")
+        set(CMAKE_ARGS_LIST "CMAKE_PREFIX_PATH;CMAKE_INSTALL_RPATH_USE_LINK_PATH;HIP_COMPILER")
+        foreach(arg IN LISTS CMAKE_ARGS_LIST)
+            if(DEFINED ${arg})
+                string(REPLACE ";" "%" ARG_VALUE "${${arg}}") # Replace ; with new list separator symbol % to avoid CMake errors
+                string(STRIP "${ARG_VALUE}" ARG_VALUE) # Eliminate whitespace, reducing to empty string if necessary
 
-        #gfx950 change is added for testing assuming cmake args are space separated values for list
-        set(GFX_VARIANT "gfx942 gfx950")
-        if(BUILD_ADDRESS_SANITIZER)
-            set(GFX_VARIANT "gfx942:xnack+ gfx950:xnack+")
+                # Only add a cmake argument if it has a value
+                if("${ARG_VALUE}" STREQUAL "")
+                    continue()
+                endif()
+                string(APPEND CMAKE_INHERITED_ARGS "-D${arg}=\"${ARG_VALUE}\" ")
+            endif()
+        endforeach()
+
+        if(NOT DEFINED CACHE{MSCCLPP_GPU_TARGETS})
+            message(STATUS "Building MSCCL++ only for supported variants: gfx942;gfx950")
+            set(MSCCLPP_GPU_TARGETS "gfx942;gfx950")
+            if(BUILD_ADDRESS_SANITIZER)
+                set(MSCCLPP_GPU_TARGETS "gfx942:xnack+;gfx950:xnack+")
+            endif()
+        else()
+            message(STATUS "Building MSCCL++ for ${MSCCLPP_GPU_TARGETS}")
         endif()
+
+        string(REPLACE ";" "%" MSCCLPP_GPU_TARGETS "${MSCCLPP_GPU_TARGETS}")
 
         download_project(PROJ                mscclpp_nccl
                          #GIT_REPOSITORY      https://github.com/microsoft/mscclpp.git
                          #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
-                         CMAKE_ARGS          -DAMDGPU_TARGETS=${GFX_VARIANT} -DGPU_TARGETS=${GFX_VARIANT} -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> "${CMAKE_PREFIX_PATH_ARG}" -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INSTALL_RPATH_USE_LINK_PATH_ARG}" "${HIP_COMPILER_ARG}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}
+                         LIST_SEPARATOR      %
+                         CMAKE_ARGS          "-DGPU_TARGETS=${MSCCLPP_GPU_TARGETS}" -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INHERITED_ARGS}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}
                          LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
@@ -124,43 +129,42 @@ if(ENABLE_MSCCLPP)
                          SOURCE_DIR          ${MSCCLPP_SOURCE}
         )
 
-     
         find_package(mscclpp_nccl REQUIRED)
 
-	execute_process(
+        execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/reg-fix.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
- 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
-        
-	execute_process(
-	   COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
-	   WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
     #endif()
 
