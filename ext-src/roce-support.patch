@@ -57,10 +57,10 @@ index 625de0a..bcb847e 100644
    return globalEnv;
  }
 diff --git a/src/ib.cc b/src/ib.cc
-index 542527e..7da3708 100644
+index 542527e..36a34e8 100644
 --- a/src/ib.cc
 +++ b/src/ib.cc
-@@ -20,6 +20,8 @@
+@@ -20,26 +20,199 @@
  #include "debug.h"
  #if defined(USE_IBVERBS)
  #include "ibverbs_wrapper.hpp"
@@ -68,8 +68,71 @@ index 542527e..7da3708 100644
 +#include <fcntl.h>
  #endif  // defined(USE_IBVERBS)
  
- #if !defined(__HIP_PLATFORM_AMD__)
-@@ -40,6 +42,134 @@ namespace mscclpp {
+-#if !defined(__HIP_PLATFORM_AMD__)
++// Check if nvidia/amd_peermem kernel module is loaded
++static bool checkPeerMemLoaded() {
++#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
++  static int moduleLoaded = -1;
++  if (moduleLoaded == -1) {
++    // Check for `memory_peers` directory containing `amdkfd/version`
++    // This `memory_peers` directory is created by NIC-GPU driver interaction
++    // On Linux kernel 5.15.0 (e.g. Ubuntu 22.04), `memory_peers` is created under `/sys/kernel/mm/`
++    // However, on newer kernels like Ubuntu 24.04.1 (Linux kernel 6.8.0) or Ubuntu 22.04.4 HWE (Linux kernel 6.5.0),
++    // this `memory_peers` directory is either not created (go to else-if condition)
++    // or created under a different path like `/sys/kernel/` or `/sys/` (depending on your ib_peer_mem module)
++    std::vector<std::string> memory_peers_paths = {"/sys/kernel/mm/memory_peers/amdkfd/version",
++                                                   "/sys/kernel/memory_peers/amdkfd/version",
++                                                   "/sys/memory_peers/amdkfd/version"};
++
++    moduleLoaded = 0;
++    for (const auto& path : memory_peers_paths) {
++      if (access(path.c_str(), F_OK) == 0) {
++        moduleLoaded = 1;
++        INFO(MSCCLPP_NET,"Found %s", path.c_str());
++        break;
++      }
++    }
+ 
+-// Check if nvidia_peermem kernel module is loaded
+-static bool checkNvPeerMemLoaded() {
++    if (moduleLoaded == 0) {
++      // Check for `ib_register_peer_memory_client` symbol in `/proc/kallsyms`
++      // if your system uses native OS ib_peer module
++      char buf[256];
++      FILE *fp = NULL;
++      fp = fopen("/proc/kallsyms", "r");
++
++      if (fp == NULL) {
++        INFO(MSCCLPP_NET,"Could not open /proc/kallsyms");
++      } else {
++        while (fgets(buf, sizeof(buf), fp) != NULL) {
++          if (strstr(buf, "t ib_register_peer_memory_client") != NULL ||
++              strstr(buf, "T ib_register_peer_memory_client") != NULL) {
++            moduleLoaded = 1;
++            INFO(MSCCLPP_NET,"Found ib_register_peer_memory_client in /proc/kallsyms");
++            break;
++          }
++        }
++      }
++    }
++  }
++  return (moduleLoaded == 1);
++#else
+   std::ifstream file("/proc/modules");
+   std::string line;
+   while (std::getline(file, line)) {
+-    if (line.find("nvidia_peermem") != std::string::npos) return true;
++    if (line.find("nvidia_peermem") != std::string::npos) {
++      return true;
++    }
+   }
+   return false;
++#endif
+ }
+-
+-#endif  // !defined(__HIP_PLATFORM_AMD__)
+-
+ namespace mscclpp {
  
  #if defined(USE_IBVERBS)
  
@@ -204,7 +267,16 @@ index 542527e..7da3708 100644
  IbMr::IbMr(ibv_pd* pd, void* buff, std::size_t size) : buff(buff) {
    if (size == 0) {
      throw std::invalid_argument("invalid size: " + std::to_string(size));
-@@ -117,8 +247,9 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
+@@ -106,7 +279,7 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
+   struct ibv_port_attr portAttr;
+   if (IBVerbs::ibv_query_port_w(ctx, port, &portAttr) != 0) {
+     std::stringstream err;
+-    err << "ibv_query_port failed (errno " << errno << ")";
++    err << "ibv_query_port failed (errno " << errno << ", port << " << port << ")";
+     throw mscclpp::IbError(err.str(), errno);
+   }
+   this->info.lid = portAttr.lid;
+@@ -117,8 +290,9 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
    this->info.is_grh = (portAttr.flags & IBV_QPF_GRH_REQUIRED);
  
    if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND || this->info.is_grh) {
@@ -215,7 +287,7 @@ index 542527e..7da3708 100644
        std::stringstream err;
        err << "ibv_query_gid failed (errno " << errno << ")";
        throw mscclpp::IbError(err.str(), errno);
-@@ -164,7 +295,7 @@ void IbQp::rtr(const IbQpInfo& info) {
+@@ -164,7 +338,7 @@ void IbQp::rtr(const IbQpInfo& info) {
      qp_attr.ah_attr.grh.dgid.global.subnet_prefix = info.spn;
      qp_attr.ah_attr.grh.dgid.global.interface_id = info.iid;
      qp_attr.ah_attr.grh.flow_label = 0;
@@ -224,7 +296,7 @@ index 542527e..7da3708 100644
      qp_attr.ah_attr.grh.hop_limit = 255;
      qp_attr.ah_attr.grh.traffic_class = 0;
    } else {
-@@ -290,7 +421,19 @@ void IbQp::postSend() {
+@@ -290,7 +464,19 @@ void IbQp::postSend() {
  int IbQp::pollCq() {
    int wcNum = IBVerbs::ibv_poll_cq(this->cq, this->maxCqPollNum, this->wcs->data());
    if (wcNum > 0) {
@@ -245,7 +317,22 @@ index 542527e..7da3708 100644
    }
    return wcNum;
  }
-@@ -385,7 +528,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
+@@ -300,11 +486,10 @@ int IbQp::getWcStatus(int idx) const { return (*this->wcs)[idx].status; }
+ int IbQp::getNumCqItems() const { return this->numSignaledPostedItems; }
+ 
+ IbCtx::IbCtx(const std::string& devName) : devName(devName) {
+-#if !defined(__HIP_PLATFORM_AMD__)
+-  if (!checkNvPeerMemLoaded()) {
+-    throw mscclpp::Error("nvidia_peermem kernel module is not loaded", ErrorCode::InternalError);
++  if (!checkPeerMemLoaded()) {
++    throw mscclpp::Error("nvidia/amd_peermem kernel module is not loaded", ErrorCode::InternalError);
+   }
+-#endif  // !defined(__HIP_PLATFORM_AMD__)
++
+   int num;
+   struct ibv_device** devices = IBVerbs::ibv_get_device_list(&num);
+   for (int i = 0; i < num; ++i) {
+@@ -385,7 +570,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
  
  MSCCLPP_API_CPP int getIBDeviceCount() {
    int num;
@@ -254,7 +341,7 @@ index 542527e..7da3708 100644
    return num;
  }
  
-@@ -442,20 +585,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
+@@ -442,20 +627,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
    }
  
    int num;
