@@ -161,6 +161,7 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
   NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   if (comm->checkPointers) NCCLCHECK(CudaPtrCheck(buff, comm, "buff", "ncclCommRegister"));
   #ifdef ENABLE_MSCCLPP
+  if (comm->mscclppCompatible) {
     if (comm->mscclCompatible && size > 0){
       bool isManagedBuffer = false; 
       CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(buff)));
@@ -173,6 +174,7 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
         WARN("MSCCL++: Cannot register user-buffers on managed memory. RCCL user-buffer registration will occur.");
       }
     }
+  }
   #endif
   INFO(NCCL_INIT, "RCCL: ncclCommRegister");
   NCCLCHECK(ncclRegister(comm, buff, size, handle));
@@ -183,11 +185,13 @@ NCCL_API(ncclResult_t, ncclCommDeregister, const ncclComm_t comm, void* handle);
 ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
 
   #ifdef ENABLE_MSCCLPP
+  if (comm->mscclppCompatible) {
     const size_t size = mscclpp_BufferSize(comm->mscclpp_comm, handle);
     if (comm->mscclCompatible && size > 0) {
         NCCLCHECK(mscclpp_ncclCommDeregister(comm->mscclpp_comm, handle));
       return ncclSuccess;
     }
+  }
   #endif
 
   NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
