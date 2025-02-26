@@ -1326,7 +1326,7 @@ ib_send_ready:
 }
 
 NCCL_PARAM(IbGdrFlushDisable, "GDR_FLUSH_DISABLE", 0);
-RCCL_PARAM(IbGdrFlushGpuMem, "GDR_FLUSH_GPU_MEM", 1);
+RCCL_PARAM(IbGdrFlushGpuMemNoRelaxedOrdering, "GDR_FLUSH_GPU_MEM_NO_RELAXED_ORDERING", 1);
 
 ncclResult_t ncclIbAccept(void* listenComm, void** recvComm, ncclNetDeviceHandle_t** /*recvDevComm*/) {
   struct ncclIbListenComm* lComm = (struct ncclIbListenComm*)listenComm;
@@ -1455,7 +1455,7 @@ ib_recv:
 
     // Allocate Flush dummy buffer for GPU Direct RDMA
     if (rComm->flushEnabled) {
-      if (rcclParamIbGdrFlushGpuMem()) {
+      if (rcclParamIbGdrFlushGpuMemNoRelaxedOrdering()) {
 #if defined(HIP_UNCACHED_MEMORY)
         NCCLCHECK(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocUncached));
 #else
@@ -2022,7 +2022,7 @@ ncclResult_t ncclIbIflush(void* recvComm, int n, void** data, int* sizes, void**
     struct ibv_send_wr wr;
     memset(&wr, 0, sizeof(wr));
     wr.wr_id = req - comm->base.reqs;
-    if (rcclParamIbGdrFlushGpuMem()) {
+    if (rcclParamIbGdrFlushGpuMemNoRelaxedOrdering()) {
       wr.wr.rdma.remote_addr = (uint64_t)(comm->devs[i].gpuFlush.gpuFlushGpuMem);
       wr.wr.rdma.rkey = comm->devs[i].gpuFlush.gpuMr->rkey;
       wr.sg_list = &comm->devs[i].gpuFlush.sge;
@@ -2034,7 +2034,7 @@ ncclResult_t ncclIbIflush(void* recvComm, int n, void** data, int* sizes, void**
     }
     memset(&wr, 0, sizeof(wr));
     wr.wr_id = req - comm->base.reqs;
-    if (rcclParamIbGdrFlushGpuMem()) {
+    if (rcclParamIbGdrFlushGpuMemNoRelaxedOrdering()) {
       wr.wr.rdma.remote_addr = (uint64_t)(comm->devs[i].gpuFlush.gpuFlushGpuMem);
       wr.wr.rdma.rkey = comm->devs[i].gpuFlush.gpuMr->rkey;
     } else {
@@ -2045,7 +2045,6 @@ ncclResult_t ncclIbIflush(void* recvComm, int n, void** data, int* sizes, void**
     wr.num_sge = 1;
     wr.opcode = IBV_WR_RDMA_READ;
     wr.send_flags = IBV_SEND_SIGNALED;
-
 
     TIME_START(4);
     struct ibv_send_wr* bad_wr;
