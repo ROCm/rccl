@@ -164,7 +164,7 @@ def calc_unroll_for_local_arch():
   # Homogeneous system is required to build for only 1 varient of unroll factor
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
-    if "gfx908" == gfx_name or (("gfx94" in gfx_name or "gfx95" in gfx_name) and cu_count > 80):
+    if "gfx908" == gfx_name or (gfx_name in ["gfx942", "gfx950"] and cu_count > 80):
       return 2
     else:
       return 4
