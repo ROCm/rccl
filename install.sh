@@ -39,7 +39,7 @@ time_trace=false
 # #################################################
 function display_help()
 {
-    echo "RCCL build & installation helper script"
+    echo "RCCL Build & installation helper script"
     echo " Options:"
     echo "       --address-sanitizer     Build with address sanitizer enabled"
     echo "    -d|--dependencies          Install RCCL dependencies"
