@@ -381,7 +381,7 @@ struct rccl_float8
         return i8data;
     }
 
-#endif // __gfx940__
+#endif // __gfx942__
 
     // constructor from float
 #if defined(__gfx942__) || defined(__gfx950__)
@@ -402,7 +402,7 @@ struct rccl_float8
     // Host only implementation using s/w simulation
     explicit HIP_HOST
 #else
-    // both Host and DEVICE for non-gfx940 using s/w simulation
+    // both Host and DEVICE for non-gfx942 using s/w simulation
     explicit HIP_HOST_DEVICE
 #endif
         rccl_float8(float                        v,
@@ -460,7 +460,7 @@ struct rccl_float8
     }
 
     explicit inline HIP_HOST operator float() const
-#else // non gfx940
+#else // non gfx942
     explicit inline HIP_HOST_DEVICE operator float() const
 #endif
     {
@@ -548,7 +548,7 @@ struct rccl_bfloat8
         return i8data;
     }
 
-#endif // __gfx940__
+#endif // __gfx942__
 
     // constructor from float
 #if defined(__gfx942__) || defined(__gfx950__)
@@ -569,7 +569,7 @@ struct rccl_bfloat8
     // Host only implementation using s/w simulation
     explicit HIP_HOST
 #else
-    // both Host and DEVICE for non-gfx940 using s/w simulation
+    // both Host and DEVICE for non-gfx942 using s/w simulation
     explicit HIP_HOST_DEVICE
 #endif
         rccl_bfloat8(float                        v,
@@ -627,7 +627,7 @@ struct rccl_bfloat8
     }
 
     explicit inline HIP_HOST operator float() const
-#else // non gfx940
+#else // non gfx942
     explicit inline HIP_HOST_DEVICE operator float() const
 #endif
     {
@@ -969,7 +969,7 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng = 0)
     return a;
 }
 
-// Use h/w intrinsic and optimized version when __gfx940__
+// Use h/w intrinsic and optimized version when __gfx942__
 template <
     typename T,
     typename Ta,
@@ -988,12 +988,12 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
     else
         val.data = rccl_bfloat8::cast_to_bf8_from_f32<stochastic_rounding>(float(a), rng);
     return val;
-#else // non gfx940
+#else // non gfx942
     return T(float(a),
              stochastic_rounding ? T::rocblas_hip_f8_rounding_mode::stochastic
                                  : T::rocblas_hip_f8_rounding_mode::standard,
              rng);
-#endif // __gfx940__
+#endif // __gfx942__
 }
 
 // NOTE NOTE: The above code is good if we don't consider HIP-GEMM code and only consider the quantization
