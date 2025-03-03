@@ -34,7 +34,7 @@ THE SOFTWARE.
     } while (0)
 
 // Macro for collecting HW_REG_XCC_ID
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
+#if defined(__gfx942__) || defined(__gfx950__)
 #define GetXccId(val) \
   asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (val));
 #else

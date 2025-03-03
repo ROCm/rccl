@@ -42,10 +42,6 @@ void convertGcnArchToGcnArchName(const char* gcnArch, const char** gcnArchName) 
     *gcnArchName = "gfx908";
   else if (strcmp(gcnArch, "910") == 0)
     *gcnArchName = "gfx90a";
-  else if (strcmp(gcnArch, "940") == 0)
-    *gcnArchName = "gfx940";
-  else if (strcmp(gcnArch, "941") == 0)
-    *gcnArchName = "gfx941";
   else if (strcmp(gcnArch, "942") == 0)
     *gcnArchName = "gfx942";
   else if (strcmp(gcnArch, "950") == 0)
