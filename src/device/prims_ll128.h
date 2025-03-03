@@ -267,7 +267,6 @@ private:
     /************************ Recv rest *********************/
     if (RECV) {
       { // Consume data from first recv
-        uint64_t* ptr = recvPtr(0)+ll128Offset;
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
           v[u]   = SRC ? applyReduce(redOp, vr[u], v[u]) : vr[u];
