@@ -1,12 +1,13 @@
 diff --git a/include/mscclpp/env.hpp b/include/mscclpp/env.hpp
-index 6708628..3f96b31 100644
+index 6708628..3131b9f 100644
 --- a/include/mscclpp/env.hpp
 +++ b/include/mscclpp/env.hpp
-@@ -30,6 +30,7 @@ class Env {
+@@ -30,6 +30,8 @@ class Env {
    const std::string executionPlanDir;
    const std::string npkitDumpDir;
    const bool cudaIpcUseDefaultStream;
 +  const int ibGidIndex;
++  const int ibTrafficClass;
  
   private:
    Env();
@@ -24,7 +25,7 @@ index 8c012c2..5dc43b6 100644
      if (nIfs == 0) nIfs = findInterfaces("^docker,lo", ifNames, ifAddrs, sock_family, ifNameMaxSize, maxIfs);
      // Finally look for docker, then lo.
 diff --git a/src/env.cpp b/src/env.cpp
-index 625de0a..bcb847e 100644
+index 625de0a..d42de37 100644
 --- a/src/env.cpp
 +++ b/src/env.cpp
 @@ -19,8 +19,9 @@ T readEnv(const std::string &envName, const T &defaultValue) {
@@ -38,26 +39,28 @@ index 625de0a..bcb847e 100644
  }
  
  template <typename T>
-@@ -61,7 +62,8 @@ Env::Env()
+@@ -61,7 +62,9 @@ Env::Env()
        commId(readEnv<std::string>("MSCCLPP_COMM_ID", "")),
        executionPlanDir(readEnv<std::string>("MSCCLPP_EXECUTION_PLAN_DIR", "")),
        npkitDumpDir(readEnv<std::string>("MSCCLPP_NPKIT_DUMP_DIR", "")),
 -      cudaIpcUseDefaultStream(readEnv<bool>("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", false)) {}
 +      cudaIpcUseDefaultStream(readEnv<bool>("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", false)),
-+      ibGidIndex(readEnv<int>("MSCCLPP_IB_GID_INDEX", -1))  {}
++      ibGidIndex(readEnv<int>("MSCCLPP_IB_GID_INDEX", -1)),
++      ibTrafficClass(readEnv<int>("MSCCLPP_IB_TC", 0)) {}
  
  std::shared_ptr<Env> env() {
    static std::shared_ptr<Env> globalEnv = std::shared_ptr<Env>(new Env());
-@@ -80,6 +82,7 @@ std::shared_ptr<Env> env() {
+@@ -80,6 +83,8 @@ std::shared_ptr<Env> env() {
      logEnv("MSCCLPP_EXECUTION_PLAN_DIR", globalEnv->executionPlanDir);
      logEnv("MSCCLPP_NPKIT_DUMP_DIR", globalEnv->npkitDumpDir);
      logEnv("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", globalEnv->cudaIpcUseDefaultStream);
 +    logEnv("MSCCLPP_IB_GID_INDEX", globalEnv->ibGidIndex);
++    logEnv("MSCCLPP_IB_TC", globalEnv->ibTrafficClass);
    }
    return globalEnv;
  }
 diff --git a/src/ib.cc b/src/ib.cc
-index 542527e..7c939df 100644
+index 542527e..7ebfa3f 100644
 --- a/src/ib.cc
 +++ b/src/ib.cc
 @@ -20,26 +20,200 @@
@@ -301,15 +304,18 @@ index 542527e..7c939df 100644
        std::stringstream err;
        err << "ibv_query_gid failed (errno " << errno << ")";
        throw mscclpp::IbError(err.str(), errno);
-@@ -164,7 +333,7 @@ void IbQp::rtr(const IbQpInfo& info) {
+@@ -164,9 +333,9 @@ void IbQp::rtr(const IbQpInfo& info) {
      qp_attr.ah_attr.grh.dgid.global.subnet_prefix = info.spn;
      qp_attr.ah_attr.grh.dgid.global.interface_id = info.iid;
      qp_attr.ah_attr.grh.flow_label = 0;
 -    qp_attr.ah_attr.grh.sgid_index = 0;
 +    qp_attr.ah_attr.grh.sgid_index = this->info.gidIndex;
      qp_attr.ah_attr.grh.hop_limit = 255;
-     qp_attr.ah_attr.grh.traffic_class = 0;
+-    qp_attr.ah_attr.grh.traffic_class = 0;
++    qp_attr.ah_attr.grh.traffic_class = env()->ibTrafficClass;
    } else {
+     qp_attr.ah_attr.is_global = 0;
+   }
 @@ -290,7 +459,19 @@ void IbQp::postSend() {
  int IbQp::pollCq() {
    int wcNum = IBVerbs::ibv_poll_cq(this->cq, this->maxCqPollNum, this->wcs->data());
