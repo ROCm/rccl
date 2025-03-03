@@ -15,7 +15,7 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
+#if defined(__gfx942__) || defined(__gfx950__)
 #define __THREAD_FENCE __threadfence_block()
 #else
 #define __THREAD_FENCE __threadfence()

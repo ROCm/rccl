@@ -152,7 +152,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   int npKitCtxIdx = bid;
   int xcc_id = 0;
   if (tid == 0) {
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
+#if defined(__gfx942__) || defined(__gfx950__)
     asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xcc_id));
 #endif
   }

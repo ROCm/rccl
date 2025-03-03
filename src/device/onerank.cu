@@ -11,7 +11,7 @@
 #include "common.h"
 #include <cuda_runtime.h>
 
-#if defined(__gfx908__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
+#if defined(__gfx908__) || defined(__gfx942__) || defined(__gfx950__)
 #define COLL_UNROLL 2
 #else
 #define COLL_UNROLL 4
