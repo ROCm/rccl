@@ -23,7 +23,7 @@ namespace {
     ncclRing *ring = &ncclShmem.channel.ring;
     int ringIx = ring->index;
     const int nranks = ncclShmem.comm.nRanks;
-    const int bid = ncclShmem.channelId - work->channelLo;
+    [[maybe_unused]] const int bid = ncclShmem.channelId - work->channelLo;
     ssize_t size;
     ssize_t gridOffset;
     ssize_t channelCount;
@@ -214,7 +214,7 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    const int bid = ncclShmem.channelId - work->channelLo;
+    [[maybe_unused]] const int bid = ncclShmem.channelId - work->channelLo;
     ncclTree *tree = &ncclShmem.channel.tree;
     size_t size;
     size_t gridOffset;
@@ -362,7 +362,7 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runTreeSplit(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    const int bid = ncclShmem.channelId - work->channelLo;
+    [[maybe_unused]] const int bid = ncclShmem.channelId - work->channelLo;
     ncclTree *tree = &ncclShmem.channel.tree;
     size_t size;
     size_t gridOffset;
