@@ -352,6 +352,7 @@ static struct tuningModel rcclTuningModel[] = {
 #define HOPPER_COMPCAP_IDX 2
 
 // LL128 max BW per channel
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 static const double llMaxBws[3][3] = {
   /* Volta-N1/Intel-N2/Intel-N4) */ {39.0, 39.0, 20.4},
   /* Ampere-N1/AMD-N2/AMD-N4) */ {87.7, 22.5 /*avg of ring & tree*/, 19.0},
@@ -373,6 +374,7 @@ static const double perChMaxTreeBws[3][3] = {
   /* Ampere (N1/N2/N4) */ {24.0, 23.6, 17.8},
   /* Hopper (N1/N2/N4) */ {38.7, 41.4, 36.0},
 };
+#endif
 
 NCCL_PARAM(PatEnable, "PAT_ENABLE", 2);
 static int ncclPatEnable(struct ncclComm* comm) {
@@ -393,7 +395,7 @@ static float getNetOverhead(struct ncclComm* comm) {
   return 1.0;
 }
 
-ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph** graphs) {
+ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, const int minCompCap, const int maxCompCap, struct ncclTopoGraph** graphs) {
   int simpleDefaultThreads = (graphs[NCCL_ALGO_RING]->bwIntra*graphs[NCCL_ALGO_RING]->nChannels <= PCI_BW) ? 256 : NCCL_SIMPLE_MAX_NTHREADS;
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] =
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
@@ -418,22 +420,13 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     getNthreads("NCCL_LL128_NTHREADS", ncclParamLl128Nthreads(), NCCL_LL128_MAX_NTHREADS/4, NCCL_LL128_MAX_NTHREADS, NCCL_LL128_MAX_NTHREADS);
 #endif
 
-  int nNodes = comm->nNodes;
-  int nRanks = comm->nRanks;
+  const int nNodes = comm->nNodes;
+  const int nRanks = comm->nRanks;
   if (nRanks <= 1) return ncclSuccess;
 
-  int compCapIndex = minCompCap >= 90 ? HOPPER_COMPCAP_IDX : minCompCap >= 80 ? AMPERE_COMPCAP_IDX : VOLTA_COMPCAP_IDX;
-  int index2 = nNodes <= 2 ? nNodes-1 : 2;
-  // LL: for single node, we look at GPU type; for multi-node, we look at CPU type
-  int index1 = nNodes == 1 ? compCapIndex :
-               (comm->cpuVendor == NCCL_TOPO_CPU_VENDOR_AMD || comm->cpuVendor == NCCL_TOPO_CPU_VENDOR_MIXED) ? 1 : 0;
-  double llMaxBw = llMaxBws[index1][index2];
-  double perChMaxTreeBw = perChMaxTreeBws[compCapIndex][index2];
-  double perChMaxRingLL128Bw = perChMaxRingLL128Bws[compCapIndex][index2];
-  double perChMaxTreeLL128Bw = perChMaxTreeLL128Bws[compCapIndex][index2];
   // De-penalize Tree/Simple latency on Power systems to favor Tree than Ring
   //if (comm->cpuArch == NCCL_TOPO_CPU_ARCH_POWER) hwLat[NCCL_HW_PCI][NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = hwLat[NCCL_HW_PCI][NCCL_ALGO_RING][NCCL_PROTO_SIMPLE];
-  float ppn = (float)nRanks / nNodes;
+  const float ppn = (float)nRanks / nNodes;
 
   int intraHw[NCCL_NUM_ALGORITHMS], hw[NCCL_NUM_ALGORITHMS];
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) intraHw[a] = graphs[a]->typeIntra == LINK_NVL ? NCCL_HW_NVLINK : NCCL_HW_PCI;
@@ -476,6 +469,15 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
           busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[1][a][p];
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL && (coll == ncclFuncBroadcast || coll == ncclFuncReduce) && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) && comm->topo->nodes[GPU].count == comm->topo->nRanks) { busBw = busBw * 1.65; }
 #else
+        const int compCapIndex = minCompCap >= 90 ? HOPPER_COMPCAP_IDX : minCompCap >= 80 ? AMPERE_COMPCAP_IDX : VOLTA_COMPCAP_IDX;
+        const int index2 = nNodes <= 2 ? nNodes-1 : 2;
+        // LL: for single node, we look at GPU type; for multi-node, we look at CPU type
+        const int index1 = nNodes == 1 ? compCapIndex :
+                    (comm->cpuVendor == NCCL_TOPO_CPU_VENDOR_AMD || comm->cpuVendor == NCCL_TOPO_CPU_VENDOR_MIXED) ? 1 : 0;
+        const double llMaxBw = llMaxBws[index1][index2];
+        const double perChMaxTreeBw = perChMaxTreeBws[compCapIndex][index2];
+        const double perChMaxRingLL128Bw = perChMaxRingLL128Bws[compCapIndex][index2];
+        const double perChMaxTreeLL128Bw = perChMaxTreeLL128Bws[compCapIndex][index2];
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL) { busBw = std::min(llMaxBw, busBw * .5); }
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL128) busBw = std::min(busBw * (0.92 /*120.0/128.0*/), graphs[a]->nChannels*perChMaxRingLL128Bw);
         if (a == NCCL_ALGO_TREE && coll == ncclFuncAllReduce) busBw = std::min(busBw*.92, graphs[a]->nChannels*perChMaxTreeBw);
@@ -753,11 +755,13 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
 // Trees are not perfectly sticking to the model for medium sizes. Applying a static correction
 // factor is not ideal but works quite well. Powers of two, 64 B to 256MB.
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
   { 1.0, 1.0, 1.0, 1.0,  .9,  .8,  .7,  .7,  .7,  .7,  .6,  .5,  .4,  .4,  .5,  .6,  .7,  .8,  .9, 1.0, 1.0, 1.0, 1.0 },
   { 1.0, 1.0, 1.0, 1.0, 1.0,  .9,  .8,  .8,  .8,  .7,  .6,  .6,  .6,  .6,  .6,  .6,  .8,  .9,  .9,  .9,  .9, 1.0, 1.0 },
   {  .9,  .9,  .9,  .9,  .9,  .9,  .9,  .8,  .7,  .6,  .6,  .5,  .5,  .5,  .5,  .6,  .7,  .8,  .7,  .7,  .8,  .9,  .9 }
 };
+#endif
 
 ncclResult_t ncclTopoGetAlgoTime(struct ncclComm* comm, int coll, int algorithm, int protocol, size_t nBytes, int numPipeOps, float* time) {
   float bw = comm->bandwidths[coll][algorithm][protocol];

@@ -141,7 +141,7 @@ private:
   __device__ uint64_t readLL(int offset, int i) {
     union ncclLLFifoLine* src = recvPtr(i) + offset;
     uint32_t flag = recvFlag(i);
-    uint32_t data1, flag1, data2, flag2;
+    [[maybe_unused]] uint32_t data1, flag1, data2, flag2;
     int spins = 0;
 
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))

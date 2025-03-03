@@ -1070,9 +1070,11 @@ static ncclResult_t p2pProxyRegister(struct ncclProxyConnection* connection, str
   struct p2pIpcExpInfo* ipcExpInfo = (struct p2pIpcExpInfo*)reqBuff;
   void* regAddr = NULL;
   ncclResult_t ret = ncclSuccess;
+#if CUDART_VERSION >= 11030
   bool mapped = false;
   bool imported = false;
   CUmemGenericAllocationHandle handle;
+#endif
 
   assert(sizeof(struct p2pIpcExpInfo) == reqSize);
   assert(sizeof(void*) == respSize);

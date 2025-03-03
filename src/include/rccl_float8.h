@@ -73,7 +73,7 @@ namespace rocblas_hip_f8_impl
         else
             x = reinterpret_cast<uint16_t&>(_x);
 
-        uint32_t y, head, mantissa;
+        uint32_t head, mantissa;
         int      exponent, bias;
         uint32_t sign;
 

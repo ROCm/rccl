@@ -16,7 +16,6 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    const int bid = ncclShmem.channelId - work->channelLo;
     ncclRing *ring = &ncclShmem.channel.ring;
     const int *ringRanks = ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
@@ -28,6 +27,7 @@ namespace {
     int rankDest;
 
 #if defined(ENABLE_NPKIT)
+    const int bid = ncclShmem.channelId - work->channelLo;
     int npKitCtxIdx = bid;
 #endif
 

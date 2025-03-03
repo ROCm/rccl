@@ -25,7 +25,6 @@
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
-    const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
       barrier_next += nthreads/WARP_SIZE; \

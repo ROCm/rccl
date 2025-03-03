@@ -180,11 +180,8 @@ static gdr_t ncclGdrInit() {
 
 template <typename T>
 static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** gdrHandle, hipStream_t stream) {
-  gdr_info_t info;
   size_t mapSize;
-  gdr_mh_t mh;
   char *devMem;
-  void *gdrMap;
 
   mapSize = ncclSizeOfT<T>()*nelem;
 
@@ -216,7 +213,6 @@ static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** 
 
 template <typename T>
 static ncclResult_t ncclGdrCudaCopy(void *gdrHandle, T* dst, T* src, size_t nelem) {
-  gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle;
   memcpy(dst, src, nelem*sizeof(T));
   return ncclSuccess;
 }
@@ -261,7 +257,6 @@ error:
 
 template <typename T>
 static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** gdrHandle) {
-  gdr_info_t info;
   size_t mapSize;
   gdr_mh_t mh;
   char *devMem;

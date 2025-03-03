@@ -701,7 +701,6 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   int nRanks = comm->nRanks;
   struct ncclDevCommAndChannels tmpCommAndChans;
   struct ncclDevCommAndChannels *devCommAndChans = NULL;
-  struct ncclNvmlCCStatus ccStatus;
   bool ccEnable = false;
 
   NCCLCHECKGOTO(ncclStrongStreamAcquireUncaptured(&comm->sharedRes->deviceStream), ret, fail);
@@ -727,6 +726,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   comm->workArgsBytes = std::min<size_t>(ncclParamWorkArgsBytes(), ncclMaxKernelArgsSize(comm->cudaArch));
 
 #if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
+  struct ncclNvmlCCStatus ccStatus;
   memset(&ccStatus, 0, sizeof(ccStatus));
   ccEnable = (ncclSuccess == ncclNvmlGetCCStatus(&ccStatus)) && (ccStatus.CCEnabled || ccStatus.multiGpuProtectedPCIE);
   if (ccEnable) {
@@ -1908,9 +1908,6 @@ fail:
 static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   struct ncclCommInitRankAsyncJob* job = (struct ncclCommInitRankAsyncJob*)job_;
   ncclComm_t comm = job->comm;
-#ifdef ENABLE_MSCCLPP
-  ncclUniqueId origUniqueId = *job->commId;
-#endif
   ncclResult_t res = ncclSuccess;
   int archMajor, archMinor;
   size_t maxLocalSizeBytes = 0;
@@ -1920,8 +1917,6 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   double sum_timers = 0;
   uint64_t timers[TIMERS_INIT_COUNT] = {0};
   unsigned long long commIdHash;
-  int64_t stackSize;
-  hipDeviceProp_t devProp;
 
   timers[TIMER_INIT_TOTAL] = clockNano();
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);
@@ -1934,17 +1929,20 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // Set the maximum kernel stack size of all kernels to avoid
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
-  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx942") && !IsArchMatch(devProp.gcnArchName,"gfx950")) {
-    stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
-    if (stackSize == 0) {
-      if (IsArchMatch(devProp.gcnArchName,"gfx906"))
-        stackSize = 1024;
-      else
-        stackSize = 512;
+  {
+    hipDeviceProp_t devProp;
+    CUDACHECK(hipGetDeviceProperties(&devProp, 0));
+    if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx942") && !IsArchMatch(devProp.gcnArchName,"gfx950")) {
+      auto stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
+      if (stackSize == 0) {
+        if (IsArchMatch(devProp.gcnArchName,"gfx906"))
+          stackSize = 1024;
+        else
+          stackSize = 512;
+      }
+      INFO(NCCL_INIT, "Setting cudaLimitStackSize to %zi maxLocalSizeBytes %zi", stackSize, maxLocalSizeBytes);
+      CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, stackSize));
     }
-    INFO(NCCL_INIT, "Setting cudaLimitStackSize to %zi maxLocalSizeBytes %zi", stackSize, maxLocalSizeBytes);
-    CUDACHECKIGNORE(cudaDeviceSetLimit(cudaLimitStackSize, stackSize));
   }
 #endif
   if (maxLocalSizeBytes > 0 && ncclParamSetStackSize() == 1) {

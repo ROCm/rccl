@@ -818,6 +818,7 @@ endif()
 target_compile_options(rccl PRIVATE -Werror=uninitialized)
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
+target_compile_options(rccl PRIVATE -Werror=unused-variable)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -fgpu-rdc)               # Generate relocatable device code (required for extern __shared__)
 target_compile_options(rccl PRIVATE -fvisibility=hidden)     # Set symbol visibility to hidden by default

@@ -495,10 +495,10 @@ ncclResult_t ncclTopoNeedFlush(struct ncclComm* comm, int netDev, int rank, int*
   int g;
   struct ncclTopoSystem* system = comm->topo;
   NCCLCHECK(ncclTopoRankToIndex(system, rank, &g));
-  struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   *flush = 1;
 #else
+  struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
   // Flush is required on Ampere and earlier
   if (gpu->gpu.cudaCompCap >= 90) *flush = 0;
 #endif

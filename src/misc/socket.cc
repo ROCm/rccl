@@ -662,8 +662,6 @@ ncclResult_t ncclSocketReady(struct ncclSocket* sock, int *running) {
 }
 
 ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
-  char line[SOCKET_NAME_MAXLEN+1];
-
   if (sock == NULL) {
     WARN("ncclSocketConnect: pass NULL socket");
     return ncclInvalidArgument;
@@ -678,7 +676,12 @@ ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
     if (sock->state == ncclSocketStateError) return ncclRemoteError;
     return ncclInternalError;
   }
-  TRACE(NCCL_INIT|NCCL_NET,"Connecting to socket %s", ncclSocketToString(&sock->addr, line));
+  {
+    #ifdef ENABLE_TRACE
+    char line[SOCKET_NAME_MAXLEN+1];
+    #endif
+    TRACE(NCCL_INIT|NCCL_NET,"Connecting to socket %s", ncclSocketToString(&sock->addr, line));
+  }
 
   sock->state = ncclSocketStateConnecting;
   sock->finalizeCounter = 0;

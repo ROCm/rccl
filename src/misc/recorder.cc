@@ -311,7 +311,6 @@ ncclResult_t Recorder::record(rcclApiCall& call)
   #if ROCM_VERSION >= 60100
     hipStreamCaptureStatus status;
     hipGraph_t graphCaptured;
-    unsigned long long graphID = 0;
     CUDACHECK(hipStreamGetCaptureInfo_v2(call.stream, &status, &(call.graphID), &graphCaptured)); // shouldnt we need dependency?
 
     if (status == hipStreamCaptureStatusActive) // when graph launched this should be disabled
