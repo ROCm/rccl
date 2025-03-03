@@ -598,6 +598,7 @@ struct ncclComm {
   bool mscclppCompatible;
   struct mscclppComm* mscclpp_comm;
   size_t mscclpp_threshold;
+  bool mscclppForceEnable;
 #endif
 
   // Whether this comm is compatible with MSCCL

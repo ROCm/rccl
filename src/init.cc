@@ -121,6 +121,7 @@ static constexpr int64_t defaultEnableMscclpp = 0;
 #endif
 
 RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
+RCCL_PARAM(MscclppForceEnabled, "MSCCLPP_FORCE_ENABLE", 0);
 
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 1);
@@ -1945,6 +1946,11 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
         TRACE_CALL("mscclpp_ncclCommInitRank (*comm=%p, nranks=%d, commId=hash:0x%llx, myrank=%d)", comm->mscclpp_comm, job->nranks, mscclppUniqueIdHash, job->myrank);
         mscclpp_commToUniqueIdMap[comm->mscclpp_comm] = mscclppUniqueId;
         ncclCommToUniqueIdMap[comm] = job->commId;
+	if (rcclParamMscclppForceEnabled()) {
+		comm->mscclppForceEnable = true;
+	} else {
+		comm->mscclppForceEnable = false;	
+	}
       } else {
         WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
       }
