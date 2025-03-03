@@ -1,13 +1,14 @@
 diff --git a/include/mscclpp/env.hpp b/include/mscclpp/env.hpp
-index 6708628..3131b9f 100644
+index 6708628..ea9eedc 100644
 --- a/include/mscclpp/env.hpp
 +++ b/include/mscclpp/env.hpp
-@@ -30,6 +30,8 @@ class Env {
+@@ -30,6 +30,9 @@ class Env {
    const std::string executionPlanDir;
    const std::string npkitDumpDir;
    const bool cudaIpcUseDefaultStream;
 +  const int ibGidIndex;
 +  const int ibTrafficClass;
++  const bool ibAllowLinkLocalGid;
  
   private:
    Env();
@@ -25,7 +26,7 @@ index 8c012c2..5dc43b6 100644
      if (nIfs == 0) nIfs = findInterfaces("^docker,lo", ifNames, ifAddrs, sock_family, ifNameMaxSize, maxIfs);
      // Finally look for docker, then lo.
 diff --git a/src/env.cpp b/src/env.cpp
-index 625de0a..d42de37 100644
+index 625de0a..89baa8b 100644
 --- a/src/env.cpp
 +++ b/src/env.cpp
 @@ -19,8 +19,9 @@ T readEnv(const std::string &envName, const T &defaultValue) {
@@ -39,31 +40,33 @@ index 625de0a..d42de37 100644
  }
  
  template <typename T>
-@@ -61,7 +62,9 @@ Env::Env()
+@@ -61,7 +62,10 @@ Env::Env()
        commId(readEnv<std::string>("MSCCLPP_COMM_ID", "")),
        executionPlanDir(readEnv<std::string>("MSCCLPP_EXECUTION_PLAN_DIR", "")),
        npkitDumpDir(readEnv<std::string>("MSCCLPP_NPKIT_DUMP_DIR", "")),
 -      cudaIpcUseDefaultStream(readEnv<bool>("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", false)) {}
 +      cudaIpcUseDefaultStream(readEnv<bool>("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", false)),
 +      ibGidIndex(readEnv<int>("MSCCLPP_IB_GID_INDEX", -1)),
-+      ibTrafficClass(readEnv<int>("MSCCLPP_IB_TC", 0)) {}
++      ibTrafficClass(readEnv<int>("MSCCLPP_IB_TC", 0)),
++      ibAllowLinkLocalGid(readEnv<bool>("MSCCLPP_IB_ALLOW_LINKLOCAL_GID", false)) {}
  
  std::shared_ptr<Env> env() {
    static std::shared_ptr<Env> globalEnv = std::shared_ptr<Env>(new Env());
-@@ -80,6 +83,8 @@ std::shared_ptr<Env> env() {
+@@ -80,6 +84,9 @@ std::shared_ptr<Env> env() {
      logEnv("MSCCLPP_EXECUTION_PLAN_DIR", globalEnv->executionPlanDir);
      logEnv("MSCCLPP_NPKIT_DUMP_DIR", globalEnv->npkitDumpDir);
      logEnv("MSCCLPP_CUDAIPC_USE_DEFAULT_STREAM", globalEnv->cudaIpcUseDefaultStream);
 +    logEnv("MSCCLPP_IB_GID_INDEX", globalEnv->ibGidIndex);
 +    logEnv("MSCCLPP_IB_TC", globalEnv->ibTrafficClass);
++    logEnv("MSCCLPP_IB_ALLOW_LINKLOCAL_GID", globalEnv->ibAllowLinkLocalGid);
    }
    return globalEnv;
  }
 diff --git a/src/ib.cc b/src/ib.cc
-index 542527e..7ebfa3f 100644
+index 542527e..89b2bec 100644
 --- a/src/ib.cc
 +++ b/src/ib.cc
-@@ -20,26 +20,200 @@
+@@ -20,26 +20,201 @@
  #include "debug.h"
  #if defined(USE_IBVERBS)
  #include "ibverbs_wrapper.hpp"
@@ -251,6 +254,7 @@ index 542527e..7ebfa3f 100644
 +    } else {
 +      currPriority = (gidCurrRoceVersion == 2) ? GidPriority::ROCEV2_LINK_LOCAL : GidPriority::ROCEV1_LINK_LOCAL;
 +    }
++    if(!env()->ibAllowLinkLocalGid && currPriority <= GidPriority::ROCEV2_LINK_LOCAL) continue;
 +    if(currPriority > highestPriority) {
 +      highestPriority = currPriority;
 +      gidIndex = i;
@@ -271,7 +275,7 @@ index 542527e..7ebfa3f 100644
  IbMr::IbMr(ibv_pd* pd, void* buff, std::size_t size) : buff(buff) {
    if (size == 0) {
      throw std::invalid_argument("invalid size: " + std::to_string(size));
-@@ -74,7 +248,7 @@ const void* IbMr::getBuff() const { return this->buff; }
+@@ -74,7 +249,7 @@ const void* IbMr::getBuff() const { return this->buff; }
  
  uint32_t IbMr::getLkey() const { return this->mr->lkey; }
  
@@ -280,7 +284,7 @@ index 542527e..7ebfa3f 100644
             int maxWrPerSend)
      : numSignaledPostedItems(0), numSignaledStagedItems(0), maxCqPollNum(maxCqPollNum), maxWrPerSend(maxWrPerSend) {
    this->cq = IBVerbs::ibv_create_cq(ctx, maxCqSize, nullptr, nullptr, 0);
-@@ -103,12 +277,6 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
+@@ -103,12 +278,6 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
      throw mscclpp::IbError(err.str(), errno);
    }
  
@@ -293,7 +297,7 @@ index 542527e..7ebfa3f 100644
    this->info.lid = portAttr.lid;
    this->info.port = port;
    this->info.linkLayer = portAttr.link_layer;
-@@ -117,8 +285,9 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
+@@ -117,8 +286,9 @@ IbQp::IbQp(ibv_context* ctx, ibv_pd* pd, int port, int maxCqSize, int maxCqPollN
    this->info.is_grh = (portAttr.flags & IBV_QPF_GRH_REQUIRED);
  
    if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND || this->info.is_grh) {
@@ -304,7 +308,7 @@ index 542527e..7ebfa3f 100644
        std::stringstream err;
        err << "ibv_query_gid failed (errno " << errno << ")";
        throw mscclpp::IbError(err.str(), errno);
-@@ -164,9 +333,9 @@ void IbQp::rtr(const IbQpInfo& info) {
+@@ -164,9 +334,9 @@ void IbQp::rtr(const IbQpInfo& info) {
      qp_attr.ah_attr.grh.dgid.global.subnet_prefix = info.spn;
      qp_attr.ah_attr.grh.dgid.global.interface_id = info.iid;
      qp_attr.ah_attr.grh.flow_label = 0;
@@ -316,7 +320,7 @@ index 542527e..7ebfa3f 100644
    } else {
      qp_attr.ah_attr.is_global = 0;
    }
-@@ -290,7 +459,19 @@ void IbQp::postSend() {
+@@ -290,7 +460,19 @@ void IbQp::postSend() {
  int IbQp::pollCq() {
    int wcNum = IBVerbs::ibv_poll_cq(this->cq, this->maxCqPollNum, this->wcs->data());
    if (wcNum > 0) {
@@ -337,7 +341,7 @@ index 542527e..7ebfa3f 100644
    }
    return wcNum;
  }
-@@ -300,11 +481,10 @@ int IbQp::getWcStatus(int idx) const { return (*this->wcs)[idx].status; }
+@@ -300,11 +482,10 @@ int IbQp::getWcStatus(int idx) const { return (*this->wcs)[idx].status; }
  int IbQp::getNumCqItems() const { return this->numSignaledPostedItems; }
  
  IbCtx::IbCtx(const std::string& devName) : devName(devName) {
@@ -352,7 +356,7 @@ index 542527e..7ebfa3f 100644
    int num;
    struct ibv_device** devices = IBVerbs::ibv_get_device_list(&num);
    for (int i = 0; i < num; ++i) {
-@@ -338,8 +518,7 @@ IbCtx::~IbCtx() {
+@@ -338,8 +519,7 @@ IbCtx::~IbCtx() {
    }
  }
  
@@ -362,7 +366,7 @@ index 542527e..7ebfa3f 100644
    if (IBVerbs::ibv_query_port_w(this->ctx, port, &portAttr) != 0) {
      std::stringstream err;
      err << "ibv_query_port failed (errno " << errno << ", port << " << port << ")";
-@@ -349,7 +528,7 @@ bool IbCtx::isPortUsable(int port) const {
+@@ -349,7 +529,7 @@ bool IbCtx::isPortUsable(int port) const {
           (portAttr.link_layer == IBV_LINK_LAYER_ETHERNET || portAttr.link_layer == IBV_LINK_LAYER_INFINIBAND);
  }
  
@@ -371,7 +375,7 @@ index 542527e..7ebfa3f 100644
    struct ibv_device_attr devAttr;
    if (IBVerbs::ibv_query_device(this->ctx, &devAttr) != 0) {
      std::stringstream err;
-@@ -357,7 +536,7 @@ int IbCtx::getAnyActivePort() const {
+@@ -357,7 +537,7 @@ int IbCtx::getAnyActivePort() const {
      throw mscclpp::IbError(err.str(), errno);
    }
    for (uint8_t port = 1; port <= devAttr.phys_port_cnt; ++port) {
@@ -380,7 +384,7 @@ index 542527e..7ebfa3f 100644
        return port;
      }
    }
-@@ -366,15 +545,16 @@ int IbCtx::getAnyActivePort() const {
+@@ -366,15 +546,16 @@ int IbCtx::getAnyActivePort() const {
  
  IbQp* IbCtx::createQp(int maxCqSize, int maxCqPollNum, int maxSendWr, int maxRecvWr, int maxWrPerSend,
                        int port /*=-1*/) {
@@ -400,7 +404,7 @@ index 542527e..7ebfa3f 100644
    return qps.back().get();
  }
  
-@@ -385,7 +565,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
+@@ -385,7 +566,7 @@ const IbMr* IbCtx::registerMr(void* buff, std::size_t size) {
  
  MSCCLPP_API_CPP int getIBDeviceCount() {
    int num;
@@ -409,7 +413,7 @@ index 542527e..7ebfa3f 100644
    return num;
  }
  
-@@ -442,20 +622,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
+@@ -442,20 +623,20 @@ MSCCLPP_API_CPP std::string getIBDeviceName(Transport ibTransport) {
    }
  
    int num;
