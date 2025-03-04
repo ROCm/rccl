@@ -805,6 +805,12 @@ static ncclResult_t scheduleCollTasksToPlan(
         }
         proxyOp->channelId = c;
         proxyOp->opCount = proxyOpId;
+        proxyOp->connIndex = 0;
+        if (task->protocol == NCCL_PROTO_SIMPLE && task->algorithm == NCCL_ALGO_RING) {
+          if (comm->useIntraNet && nBytes > rcclParamIntraNetThreshold()) {
+            proxyOp->connIndex = NCCL_CONN_IDX_P2P_NET;
+          }
+        }
         addWorkBatchToPlan(comm, plan, c, workNode->workType, task->devFuncId, plan->workBytes);
         NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
       }
@@ -1989,13 +1995,6 @@ static ncclResult_t calcCollChunking(
     proxyOp->specifics.collnetDirect.node = comm->node;
     if (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) {
       proxyOp->specifics.collnetDirect.sizePerRank = info->count*ncclTypeSize(info->datatype);
-    }
-  }
-
-  proxyOp->connIndex = 0;
-  if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) {
-    if (comm->useIntraNet && nBytes > rcclParamIntraNetThreshold()) {
-      proxyOp->connIndex = NCCL_CONN_IDX_P2P_NET;
     }
   }
 
