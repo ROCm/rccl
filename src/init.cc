@@ -1631,6 +1631,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     }
     NCCLCHECKGOTO(ncclTransportRingConnect(comm), ret, fail);
 
+    // Connect NET for intranode use
+    if (comm->graphs[NCCL_ALGO_RING].nIntraChannels && rcclParamP2pNetDisable() == 0) {
+      comm->useIntraNet = 1;
+      for (int c = 0; c < comm->nChannels; c++) {
+        struct ncclChannel* channel = comm->channels+c;
+        if (comm->nRanks == 1) continue;
+        NCCLCHECKGOTO(ncclTransportP2pConnect(comm, c, 1, &channel->ring.prev, 1, &channel->ring.next, NCCL_CONN_IDX_P2P_NET), ret, fail);
+      }
+      NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &comm->graphs[NCCL_ALGO_RING], NCCL_CONN_IDX_P2P_NET), ret, fail);
+    }
+
     // Connect Trees
     NCCLCHECKGOTO(ncclTransportTreeConnect(comm), ret, fail);
 
