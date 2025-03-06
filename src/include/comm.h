@@ -585,6 +585,10 @@ struct ncclComm {
   bool collTraceEnabled;
 #endif
 
+#ifdef ENABLE_FAULT_INJECTION
+  uint64_t faults;
+#endif
+
   ncclConfig_t config;
   // initState is to more conveniently reclaim resources when errors happen.
   ncclResult_t initState;

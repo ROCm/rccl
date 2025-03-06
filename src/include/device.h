@@ -433,7 +433,8 @@ struct ncclCollTrace {
   uint8_t type;
   uint8_t bid;
   int16_t funcIndex;
-  uint32_t data_0:24;
+  uint16_t data_0;
+  uint8_t batchIx;
   uint8_t tid;
   uint8_t channelId;
   uint64_t timeStamp:56;
@@ -452,7 +453,6 @@ struct ncclCollTrace {
     struct {
       uint8_t sendRank;
       uint8_t recvRank;
-      uint8_t nP2pChannels;
       uint8_t nSendChannels;
       uint8_t nRecvChannels;
       uint8_t channelBase;
@@ -460,6 +460,8 @@ struct ncclCollTrace {
       uint8_t recvConnIndex:2;
       uint8_t sendProtoLL:1;
       uint8_t recvProtoLL:1;
+      uint8_t sendRegistered:1;
+      uint8_t recvRegistered:1;
     } p2p;
   };
 };
@@ -518,7 +520,15 @@ struct ncclDevComm {
 #ifdef ENABLE_PROFILING
   struct ncclProf* devProf;
 #endif
+
+#ifdef ENABLE_FAULT_INJECTION
+  uint64_t faults;
+#endif
 };
+
+#ifdef ENABLE_FAULT_INJECTION
+#define RANDOM_DELAY_ON_WARP_START 0x1L
+#endif
 
 struct alignas(16) ncclDevCommAndChannels {
   struct ncclDevComm comm;

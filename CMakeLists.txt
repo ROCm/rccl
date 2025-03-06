@@ -33,6 +33,7 @@ option(ROCTX                                   "Enable ROCTX"                   
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
+option(FAULT_INJECTION                         "Enable fault injection"                        ON)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -651,14 +652,26 @@ foreach(SRC_FILE ${SRC_FILES})
   list(APPEND HIP_SOURCES ${HIP_FILE})
 
   # Create a custom command to create hipified source code
-  add_custom_command(
-    OUTPUT ${HIP_FILE}
-    COMMAND mkdir -p ${HIP_FILE_DIR}
-            && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
-            && ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/add_unroll.sh ${HIP_FILE}
-    MAIN_DEPENDENCY ${SRC_FILE}
-    COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
-  )
+  if (FAULT_INJECTION)
+    add_custom_command(
+      OUTPUT ${HIP_FILE}
+      COMMAND mkdir -p ${HIP_FILE_DIR}
+              && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
+              && ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/add_unroll.sh ${HIP_FILE}
+              && ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/add_faults.sh ${HIP_FILE}
+      MAIN_DEPENDENCY ${SRC_FILE}
+      COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
+    )
+  else()
+    add_custom_command(
+      OUTPUT ${HIP_FILE}
+      COMMAND mkdir -p ${HIP_FILE_DIR}
+              && ${hipify-perl_executable} -quiet-warnings ${CMAKE_SOURCE_DIR}/${SRC_FILE} -o ${HIP_FILE}
+              && ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/add_unroll.sh ${HIP_FILE}
+      MAIN_DEPENDENCY ${SRC_FILE}
+      COMMENT "Hipifying ${SRC_FILE} -> ${HIP_FILE}"
+    )
+  endif()
 endforeach()
 
 # Generate device/host tables and all the collective functions that are going to be in librccl.so
@@ -820,6 +833,10 @@ if(BUILD_ADDRESS_SANITIZER)
 endif()
 if(TIMETRACE)
   target_compile_options(rccl PRIVATE -ftime-trace)
+endif()
+if (FAULT_INJECTION)
+  target_compile_definitions(rccl PRIVATE ENABLE_FAULT_INJECTION)
+  message(STATUS "Fault injection enabled")
 endif()
 
 ## Set RCCL linked library directories

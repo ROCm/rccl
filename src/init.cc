@@ -265,8 +265,8 @@ void *ncclCommThreadMain(void *arg) {
           if (type == ncclCollTraceCollElemType) {
             sprintf(line+offset, " CE %s nw %d bi %d nc %d root %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
           } else if (type == ncclCollTraceP2pElemType) {
-            sprintf(line+offset, " Send %d -> %d/%d connIdx/LL %d/%d -> Recv %d nc %d cb %d busId %lx nRanks %d",
-              td->p2p.sendRank, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRank, td->p2p.nP2pChannels, td->p2p.channelBase,
+            sprintf(line+offset, " Recv %d -> %d/%d/%d/%d ConnIdx/LL/Reg/nc %d/%d/%d/%d -> Send %d cb %d busId %lx nRanks %d",
+              td->p2p.recvRank, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRegistered, td->p2p.nRecvChannels, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.sendRegistered, td->p2p.nSendChannels, td->p2p.sendRank, td->p2p.channelBase,
               comm->busId, comm->nRanks);
           } else {
             switch (type&0xf) {
@@ -275,13 +275,13 @@ void *ncclCommThreadMain(void *arg) {
                 if ((type&0xf) == ncclCollTraceKernelLaunchType)
                   sprintf(line+offset, " KL HWID %8x %s", td->data_0, funcNames[fIdx]);
                 else if ((type&0xf) == ncclCollTraceCollLaunchType)
-                  sprintf(line+offset, " CL %s", funcNames[fIdx]);
+                  sprintf(line+offset, " CL %d %s", td->batchIx, funcNames[fIdx]);
                 offset = strlen(line);
                 if ((type&0xf0) == ncclCollTraceCollElemType)
                   sprintf(line+offset, " nw %d bi %d nc %d root %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
                 else if ((type&0xf0) == ncclCollTraceP2pElemType)
-                  sprintf(line+offset, " Send %d -> %d/%d ConnIdx/LL %d/%d -> Recv %d nc %d cb %d busId %lx nRanks %d",
-                    td->p2p.sendRank, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRank, td->p2p.nP2pChannels, td->p2p.channelBase,
+                  sprintf(line+offset, " Recv %d -> %d/%d/%d/%d ConnIdx/LL/Reg/nc %d/%d/%d/%d -> Send %d cb %d busId %lx nRanks %d",
+                    td->p2p.recvRank, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRegistered, td->p2p.nRecvChannels, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.sendRegistered, td->p2p.nSendChannels, td->p2p.sendRank, td->p2p.channelBase,
                     comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceKernelEndType:
@@ -543,6 +543,8 @@ exit:
   return ret;
 }
 
+RCCL_PARAM(InjectFaults, "INJECT_FAULTS", 0);
+
 static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, int ndev, int rank) {
   if (ndev < 1) {
     WARN("invalid device count (%d) requested", ndev);
@@ -607,6 +609,16 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
       comm->collTraceThread = 0;
   }
 #endif
+
+  if (rcclParamInjectFaults() != 0) {
+#ifdef ENABLE_FAULT_INJECTION
+    comm->faults = rcclParamInjectFaults();
+    if (comm->rank == 0) INFO(NCCL_INIT, "Enabled RCCL faults injection with value 0x%lx", comm->faults);
+#else
+    WARN("Ignore faults injection of value 0x%lx as RCCL is not compiled to support it", rcclParamInjectFaults());
+#endif
+  }
+
   comm->collNetSupport = 0;
   memset(comm->collNetSupportMatrix, 0, sizeof(comm->collNetSupportMatrix));
 
@@ -760,6 +772,10 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
 #ifdef ENABLE_PROFILING
   NCCLCHECK(ncclCudaCalloc(&tmpCommAndChans.comm.devProf, MAXCHANNELS*PROFILE_NUM_LAUNCHES, comm->sideStream));
+#endif
+
+#ifdef ENABLE_FAULT_INJECTION
+  tmpCommAndChans.comm.faults = comm->faults;
 #endif
 
   NCCLCHECKGOTO(ncclCudaMemcpyAsync(devCommAndChans, &tmpCommAndChans, 1, comm->sharedRes->deviceStream.cudaStream), ret, fail);
