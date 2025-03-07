@@ -1765,17 +1765,11 @@ static ncclResult_t topoGetAlgoInfo(
     }
     info->nMaxChannels = nc;
     if (!userTuneInput) {
-      // always respect user settings
-      if (nBytes <= 2200008) {
-        info->protocol = NCCL_PROTO_LL;
-        info->algorithm = NCCL_ALGO_TREE;
-        info->nMaxChannels = std::min(24, comm->nChannels);
-      } else {
         info->protocol = NCCL_PROTO_SIMPLE;
         info->algorithm = NCCL_ALGO_RING;
-      }
     }
-  } else if (info->func == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
+  }
+  else if (info->func == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
     info->algorithm = NCCL_ALGO_TREE;
     info->nMaxChannels = nc;
   } else {

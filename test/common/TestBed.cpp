@@ -681,6 +681,14 @@ namespace RcclUnitTesting
 
       for (int ftIdx = 0; ftIdx < funcTypes.size()      && isCorrect; ++ftIdx)
       for (int dtIdx = 0; dtIdx < dataTypes.size()      && isCorrect; ++dtIdx)
+      {
+      //Skipping AllReduce FP8 test on 9 to 16 ranks (gfx90a).
+      if(ev.isGfx90 && numRanks > 8 && funcTypes[ftIdx] == ncclCollAllReduce
+                    && (dataTypes[dtIdx] == ncclFp8E4M3
+                    || dataTypes[dtIdx] == ncclFp8E5M2))
+      {
+            continue;
+      }
       for (int rdIdx = 0; rdIdx < redOps.size()         && isCorrect; ++rdIdx)
       for (int rtIdx = 0; rtIdx < roots.size()          && isCorrect; ++rtIdx)
       for (int ipIdx = 0; ipIdx < inPlaceList.size()    && isCorrect; ++ipIdx)
@@ -764,6 +772,7 @@ namespace RcclUnitTesting
         }
         this->DeallocateMem();
       }
+    }
       this->DestroyComms();
     }
   }

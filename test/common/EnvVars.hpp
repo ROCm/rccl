@@ -32,6 +32,7 @@ namespace RcclUnitTesting
     bool useMultithreading; // Multi-thread single-process ranks   [UT_MULTITHREAD]
     bool isGfx94;        // Detects if architecture is gfx94
     bool isGfx12;        // Detects if architecture is gfx12
+    bool isGfx90;        // Detects if architecture is gfx90
 
     // Constructor that parses and collects environment variables
     EnvVars();
