@@ -428,6 +428,10 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
   static int shownIbHcaEnv = 0;
   if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
 
+  // Detect IB cards
+  int nIbDevs = 0;
+  struct ibv_device** devices = NULL;
+
   if (ncclNIbDevs == -1) {
     pthread_mutex_lock(&ncclIbLock);
     wrap_ibv_fork_init();
@@ -438,11 +442,7 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
         WARN("NET/IB : No IP interface found.");
         ret = ncclInternalError;
         goto fail;
-      }
-
-      // Detect IB cards
-      int nIbDevs = 0;
-      struct ibv_device** devices = NULL;
+      }   
 
       // Check if user defined which IB device:port to use
       char* userIbEnv = getenv("NCCL_IB_HCA");
@@ -457,8 +457,8 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
       if (ncclSuccess != wrap_ibv_get_device_list(&devices, &nIbDevs)) { ret = ncclInternalError; goto fail; }
 
       // Should NCCL merge multi-port devices into one?
-      int mergeNics;
-      mergeNics = ncclParamIbMergeNics();
+      int mergeNics = ncclParamIbMergeNics();
+
 build_ib_list:
       for (int d=0; d<nIbDevs && ncclNIbDevs<MAX_IB_DEVS; d++) {
         struct ibv_context * context;
@@ -473,7 +473,6 @@ build_ib_list:
           WARN("NET/IB : Unable to query device %s", devices[d]->name);
           if (ncclSuccess != wrap_ibv_close_device(context))
           {
-            if(ncclSuccess != wrap_ibv_free_device_list(devices)){WARN("NET/IB : Unable to free device list");}
             ret = ncclInternalError;
             goto fail;
           }
@@ -564,8 +563,7 @@ build_ib_list:
           }
         }
       }
-
-      if (nIbDevs && (ncclSuccess != wrap_ibv_free_device_list(devices))) { ret = ncclInternalError; goto fail; };
+      if (ncclSuccess != wrap_ibv_free_device_list(devices)) { ret = ncclInternalError; goto fail;}
     }
     if (ncclNIbDevs == 0) {
       INFO(NCCL_INIT|NCCL_NET, "NET/IB : No device found.");
@@ -602,6 +600,7 @@ build_ib_list:
   }
   return ncclSuccess;
 fail:
+  if(ncclSuccess != wrap_ibv_free_device_list(devices)){WARN("NET/IB : Unable to free device list");}
   pthread_mutex_unlock(&ncclIbLock);
   return ret;
 }
