@@ -161,7 +161,7 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
   NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   if (comm->checkPointers) NCCLCHECK(CudaPtrCheck(buff, comm, "buff", "ncclCommRegister"));
   #ifdef ENABLE_MSCCLPP
-    if (comm->mscclCompatible && size > 0 && (size & 31) == 0 && size <= comm->mscclpp_threshold){
+    if (comm->mscclCompatible && size > 0){
       bool isManagedBuffer = false; 
       CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(buff)));
       if(!isManagedBuffer){
@@ -184,7 +184,7 @@ ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
 
   #ifdef ENABLE_MSCCLPP
     const size_t size = mscclpp_BufferSize(comm->mscclpp_comm, handle);
-    if (comm->mscclCompatible && size > 0 && (size & 31) == 0 && size <= comm->mscclpp_threshold) {
+    if (comm->mscclCompatible && size > 0) {
         NCCLCHECK(mscclpp_ncclCommDeregister(comm->mscclpp_comm, handle));
       return ncclSuccess;
     }

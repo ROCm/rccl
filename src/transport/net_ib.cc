@@ -788,6 +788,8 @@ struct ncclIbDevInfo {
 
   //remote dev info
   union ibv_gid remoteGid;
+
+  int ibv_dev_index;
 };
 
 // Struct containing everything needed to establish connections
@@ -946,6 +948,8 @@ static_assert((offsetof(struct ncclIbSendComm, wrs) % 32) == 0, "wrs must be 32-
 
 struct ncclIbGpuFlush {
   struct ibv_mr* hostMr;
+  struct ibv_mr* gpuMr;
+  int* gpuFlushGpuMem;
   struct ibv_sge sge;
   struct ncclIbQp qp;
 };
@@ -1000,7 +1004,7 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
   pthread_mutex_unlock(&ibDev->lock);
 
   // CQ is sized to accommodate the max SQ + RQ WQE completions. If each SQ WQE could be signaled, then,
-  // for each QP, there can be 2*MAX_REQUESTS completions for SQ and MAX_REQUESTS completions for RQ. 
+  // for each QP, there can be 2*MAX_REQUESTS completions for SQ and MAX_REQUESTS completions for RQ.
   NCCLCHECK(wrap_ibv_create_cq(&base->cq, ibDev->context, 3*MAX_REQUESTS*ncclParamIbQpsPerConn(), NULL, NULL, 0));
 
   return ncclSuccess;
@@ -1190,7 +1194,7 @@ ib_connect_check:
     devInfo->ib_port       = ibDev->portNum;
     devInfo->mtu           = ibDev->portAttr.active_mtu;
     devInfo->lid           = ibDev->portAttr.lid;
-
+    devInfo->ibv_dev_index = commDev->base.ibDevN;
     // Prepare my fifo
     NCCLCHECK(wrap_ibv_reg_mr(&commDev->fifoMr, commDev->base.pd, comm->fifo, sizeof(struct ncclIbSendFifo)*MAX_REQUESTS*NCCL_NET_IB_MAX_RECVS, IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ));
     devInfo->fifoRkey = commDev->fifoMr->rkey;
@@ -1270,7 +1274,6 @@ ib_connect:
     comm->base.remDevs[i] = remMeta.devs[i];
     comm->base.remDevs[i].remoteGid.global.interface_id = comm->base.remDevs[i].gid.global.interface_id;
     comm->base.remDevs[i].remoteGid.global.subnet_prefix = comm->base.remDevs[i].gid.global.subnet_prefix;
-
     // Retain remote sizes fifo info and prepare RDMA ops
     comm->remSizesFifo.rkeys[i] = remMeta.devs[i].fifoRkey;
     comm->remSizesFifo.addr = remMeta.fifoAddr;
@@ -1324,6 +1327,7 @@ ib_send_ready:
 }
 
 NCCL_PARAM(IbGdrFlushDisable, "GDR_FLUSH_DISABLE", 0);
+RCCL_PARAM(IbGdrFlushGpuMemNoRelaxedOrdering, "GDR_FLUSH_GPU_MEM_NO_RELAXED_ORDERING", 1);
 
 ncclResult_t ncclIbAccept(void* listenComm, void** recvComm, ncclNetDeviceHandle_t** /*recvDevComm*/) {
   struct ncclIbListenComm* lComm = (struct ncclIbListenComm*)listenComm;
@@ -1452,11 +1456,22 @@ ib_recv:
 
     // Allocate Flush dummy buffer for GPU Direct RDMA
     if (rComm->flushEnabled) {
+      if (rcclParamIbGdrFlushGpuMemNoRelaxedOrdering()) {
+#if defined(HIP_UNCACHED_MEMORY)
+        NCCLCHECK(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocUncached));
+#else
+        NCCLCHECK(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocFinegrained));
+#endif
+        NCCLCHECK(wrap_ibv_reg_mr(&rCommDev->gpuFlush.gpuMr, rCommDev->base.pd, rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ));
+      } else {
+        rCommDev->gpuFlush.gpuFlushGpuMem = nullptr;
+        rCommDev->gpuFlush.gpuMr = nullptr;
+      }
       NCCLCHECK(wrap_ibv_reg_mr(&rCommDev->gpuFlush.hostMr, rCommDev->base.pd, &rComm->gpuFlushHostMem, sizeof(int), IBV_ACCESS_LOCAL_WRITE));
       rCommDev->gpuFlush.sge.addr = (uint64_t)&rComm->gpuFlushHostMem;
       rCommDev->gpuFlush.sge.length = 1;
       rCommDev->gpuFlush.sge.lkey = rCommDev->gpuFlush.hostMr->lkey;
-      NCCLCHECK(ncclIbCreateQp(ibDev->portNum, &rCommDev->base, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ, &rCommDev->gpuFlush.qp));
+      NCCLCHECK(ncclIbCreateQp(ibDev->portNum, &rCommDev->base, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE, &rCommDev->gpuFlush.qp));
       struct ncclIbDevInfo devInfo;
       devInfo.lid         = ibDev->portAttr.lid;
       devInfo.link_layer  = ibDev->portAttr.link_layer;
@@ -1474,6 +1489,7 @@ ib_recv:
     meta.devs[i].ib_port    = ibDev->portNum;
     meta.devs[i].gid.global.subnet_prefix       = rCommDev->base.gidInfo.localGid.global.subnet_prefix;
     meta.devs[i].gid.global.interface_id        = rCommDev->base.gidInfo.localGid.global.interface_id;
+    meta.devs[i].ibv_dev_index                  = rCommDev->base.ibDevN;
 
     // Adjust the MTU
     remMeta.devs[i].mtu    = (enum ibv_mtu) std::min(remMeta.devs[i].mtu, ibDev->portAttr.active_mtu);
@@ -1761,6 +1777,11 @@ ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot) {
       reqs[r]->send.offset += chunkSize;
       comm->sges[r].addr += chunkSize;
       comm->wrs[r].wr.rdma.remote_addr += chunkSize;
+
+      TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, dlid=%d, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
+         comm->wrs[r].wr_id, r, qp->qp->qp_num, comm->devs[qp->devIndex].base.ibDevN , comm->base.remDevs[qp->remDevIdx].ibv_dev_index, comm->base.remDevs[qp->remDevIdx].lid,
+         comm->wrs[r].opcode, comm->wrs[r].send_flags, comm->wrs[r].imm_data, comm->wrs[r].wr.rdma.remote_addr,
+         comm->wrs[r].wr.rdma.rkey,comm->wrs[r].sg_list ? comm->wrs[r].sg_list->length : 0, comm->wrs[r].sg_list ? comm->wrs[r].sg_list->lkey : 0);
     }
 
     // Select the next qpIndex
@@ -1928,6 +1949,11 @@ ncclResult_t ncclIbPostFifo(struct ncclIbRecvComm* comm, int n, void** data, int
 
   struct ibv_send_wr* bad_wr;
   NCCLCHECK(wrap_ibv_post_send(ctsQp->qp, &wr, &bad_wr));
+
+  TRACE(NCCL_VERBS, "Posted send wr_id=%lu, wr_indx=%d, qp_num=%d, src_nic=%d, dst_nic=%d, dlid=%lu, opcode=%d, send_flags=%d, imm_data=%d, remote_addr=%lx, rkey=%x, length=%d, lkey=%x",
+        wr.wr_id, 0, ctsQp->qp->qp_num, comm->devs[ctsQp->devIndex].base.ibDevN, comm->base.remDevs[ctsQp->remDevIdx].ibv_dev_index, comm->base.remDevs[ctsQp->remDevIdx].lid,
+        wr.opcode, wr.send_flags, wr.imm_data, wr.wr.rdma.remote_addr, wr.wr.rdma.rkey, wr.sg_list ? wr.sg_list->length : 0, wr.sg_list ? wr.sg_list->lkey : 0);
+
   comm->remFifo.fifoTail++;
 
   return ncclSuccess;
@@ -1997,9 +2023,25 @@ ncclResult_t ncclIbIflush(void* recvComm, int n, void** data, int* sizes, void**
     struct ibv_send_wr wr;
     memset(&wr, 0, sizeof(wr));
     wr.wr_id = req - comm->base.reqs;
-
-    wr.wr.rdma.remote_addr = (uint64_t)data[last];
-    wr.wr.rdma.rkey = mhandle->mrs[i]->rkey;
+    if (rcclParamIbGdrFlushGpuMemNoRelaxedOrdering()) {
+      wr.wr.rdma.remote_addr = (uint64_t)(comm->devs[i].gpuFlush.gpuFlushGpuMem);
+      wr.wr.rdma.rkey = comm->devs[i].gpuFlush.gpuMr->rkey;
+      wr.sg_list = &comm->devs[i].gpuFlush.sge;
+      wr.num_sge = 1;
+      wr.opcode = IBV_WR_RDMA_WRITE;
+      wr.send_flags = 0;
+      struct ibv_send_wr* bad_wr;
+      NCCLCHECK(wrap_ibv_post_send(comm->devs[i].gpuFlush.qp.qp, &wr, &bad_wr));
+    }
+    memset(&wr, 0, sizeof(wr));
+    wr.wr_id = req - comm->base.reqs;
+    if (rcclParamIbGdrFlushGpuMemNoRelaxedOrdering()) {
+      wr.wr.rdma.remote_addr = (uint64_t)(comm->devs[i].gpuFlush.gpuFlushGpuMem);
+      wr.wr.rdma.rkey = comm->devs[i].gpuFlush.gpuMr->rkey;
+    } else {
+      wr.wr.rdma.remote_addr = (uint64_t)data[last];
+      wr.wr.rdma.rkey = mhandle->mrs[i]->rkey;
+    }
     wr.sg_list = &comm->devs[i].gpuFlush.sge;
     wr.num_sge = 1;
     wr.opcode = IBV_WR_RDMA_READ;
@@ -2137,6 +2179,12 @@ ncclResult_t ncclIbCloseRecv(void* recvComm) {
     for (int i = 0; i < comm->base.ndevs; i++) {
       struct ncclIbRecvCommDev* commDev = comm->devs + i;
       if (comm->flushEnabled) {
+        if (commDev->gpuFlush.gpuFlushGpuMem != nullptr) {
+          NCCLCHECK(ncclCudaFree(commDev->gpuFlush.gpuFlushGpuMem));
+          commDev->gpuFlush.gpuFlushGpuMem = nullptr;
+          if (commDev->gpuFlush.gpuMr != nullptr) NCCLCHECK(wrap_ibv_dereg_mr(commDev->gpuFlush.gpuMr));
+          commDev->gpuFlush.gpuMr = nullptr;
+        }
         if (commDev->gpuFlush.qp.qp != NULL) NCCLCHECK(wrap_ibv_destroy_qp(commDev->gpuFlush.qp.qp));
         if (commDev->gpuFlush.hostMr != NULL) NCCLCHECK(wrap_ibv_dereg_mr(commDev->gpuFlush.hostMr));
       }

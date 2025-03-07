@@ -116,7 +116,7 @@ index 022d398..468fcf2 100644
 +     if (outIt != comm->channelOutInfos.end()) {
 +        comm->channelOutInfos.erase(outIt);
 +     }
-+
++     comm->handleKeys.erase(handle);
 +     free(handle);
 +  }
 +  return ncclSuccess;

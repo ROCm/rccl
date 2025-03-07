@@ -47,12 +47,14 @@ if(BUILD_TESTS)
     SendRecvTests.cpp
     StandaloneTests.cpp
     common/main.cpp
+    common/CallCollectiveForked.cpp
     common/CollectiveArgs.cpp
     common/EnvVars.cpp
     common/PrepDataFuncs.cpp
     common/PtrUnion.cpp
     common/TestBed.cpp
     common/TestBedChild.cpp
+    common/StandaloneUtils.cpp
     )
 
   add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})

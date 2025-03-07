@@ -23,6 +23,7 @@ enable_ninja=""
 install_dependencies=false
 install_library=false
 install_prefix="${ROCM_PATH}"
+log_trace=false
 msccl_kernel_enabled=true
 mscclpp_enabled=true
 num_parallel_jobs=$(nproc)
@@ -56,6 +57,7 @@ function display_help()
     echo "       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, separate by ';' (builds for all supported GPU architectures by default)"
     echo "       --no_clean              Don't delete files if they already exist"
     echo "       --npkit-enable          Compile with npkit enabled"
+    echo "       --log-trace             Build with log trace enabled (i.e. NCCL_DEBUG=TRACE)"
     echo "       --openmp-test-enable    Enable OpenMP in rccl unit tests"
     echo "    -p|--package_build         Build RCCL package"
     echo "       --prefix                Specify custom directory to install RCCL to (default: \`/opt/rocm\`)"
@@ -75,7 +77,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ "$?" -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,disable-mscclpp,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,disable-mscclpp,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,log-trace,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -106,6 +108,7 @@ while true; do
          --amdgpu_targets)           build_amdgpu_targets=${2};                                                                        shift 2 ;;
          --no_clean)                 clean_build=false;                                                                                shift ;;
          --npkit-enable)             npkit_enabled=true;                                                                               shift ;;
+         --log-trace)                log_trace=true;                                                                                   shift ;;
          --openmp-test-enable)       openmp_test_enabled=true;                                                                         shift ;;
     -p | --package_build)            build_package=true;                                                                               shift ;;
          --prefix)                   install_library=true; install_prefix=${2};                                                        shift 2 ;;
@@ -251,6 +254,11 @@ if [[ "${install_library}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DCMAKE_INSTALL_PREFIX=${install_prefix}"
 fi
 
+# Enable trace debug level
+if [[ "${log_trace}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DTRACE=ON"
+fi
+
 # Disable ROCTX
 if [[ "${roctx_enabled}" == false ]]; then
     cmake_common_options="${cmake_common_options} -DROCTX=OFF"
@@ -369,6 +377,14 @@ if [[ "${npkit_enabled}" == true ]]; then
     -DENABLE_NPKIT_EVENT_MSCCL_INIT_EXIT \
     -DENABLE_NPKIT_EVENT_BROADCAST_RING_ENTRY \
     -DENABLE_NPKIT_EVENT_BROADCAST_RING_EXIT \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_ENTRY \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_EXIT \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_SEND_ENTRY \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_SEND_EXIT \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_RECV_REDUCE_SEND_ENTRY \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_RECV_REDUCE_SEND_EXIT \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_RECV_REDUCE_COPY_ENTRY \
+    -DENABLE_NPKIT_EVENT_REDUCE_SCATTER_RING_RECV_REDUCE_COPY_EXIT \
     -DENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME"
 fi
 

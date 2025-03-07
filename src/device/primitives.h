@@ -15,38 +15,43 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
-#define barrier_by_group() do { \
-  if (nthreads == NCCL_MAX_NTHREADS) { \
-    __builtin_amdgcn_s_barrier(); \
-  } else { \
-    const int w = threadIdx.x/WARP_SIZE; \
-    const int wid = threadIdx.x%WARP_SIZE; \
-    if (wid == 0) { \
-      barrier_next[w] += nthreads/WARP_SIZE; \
-      atomicAdd((unsigned long long *)barriers, 1); \
-      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(1); \
-      __asm__ __volatile__("s_wakeup"); \
-    } \
-  } \
-} while (0)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
+#define __THREAD_FENCE __threadfence_block()
 #else
+#define __THREAD_FENCE __threadfence()
+#endif
+
 #define barrier_by_group() do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
-    __threadfence(); __builtin_amdgcn_s_barrier(); \
+    __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
-    __threadfence(); \
     if (wid == 0) { \
-      barrier_next[w] += nthreads/WARP_SIZE; \
-      atomicAdd((unsigned long long *)barriers, 1); \
-      while (atomicAdd((unsigned long long *)barriers, 0) < barrier_next[w]) __builtin_amdgcn_s_sleep(1); \
+      barrier_next += nthreads/WARP_SIZE; \
+      __hip_atomic_fetch_add(barriers, 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
+      int spins = 0; \
+      int rate_limit = 50; \
+      __THREAD_FENCE; \
+      while (__hip_atomic_load(barriers, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
+        spins++; \
+        if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
+          if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
+            ncclShmem.aborted = 1; \
+            break; \
+          } \
+          spins = 0; \
+        } \
+        if (spins == 0 && rate_limit > 0) { \
+          rate_limit --; \
+          traceData(__LINE__, threadIdx.x, __hip_atomic_load(barriers, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP), barrier_next); \
+        } \
+        __builtin_amdgcn_s_sleep(1); \
+      } \
       __asm__ __volatile__("s_wakeup"); \
     } \
   } \
 } while (0)
-#endif
 
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral

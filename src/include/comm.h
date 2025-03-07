@@ -233,11 +233,13 @@ struct ncclTaskColl {
 
   void* sendMhandle;
   void* recvMhandle;
+  uint64_t opCount;
 };
 struct ncclTaskP2p {
   struct ncclTaskP2p* next;
   void* buff;
   size_t bytes;
+  uint64_t opCount;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -580,6 +582,7 @@ struct ncclComm {
   union ncclCollTraceTail *collTraceTail;
   pthread_t collTraceThread;
   volatile bool collTraceExit;
+  bool collTraceEnabled;
 #endif
 
   ncclConfig_t config;
@@ -595,6 +598,7 @@ struct ncclComm {
   bool mscclppCompatible;
   struct mscclppComm* mscclpp_comm;
   size_t mscclpp_threshold;
+  bool mscclppForceEnable;
 #endif
 
   // Whether this comm is compatible with MSCCL

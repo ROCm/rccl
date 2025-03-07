@@ -3,7 +3,7 @@
 
 # CMake version minimum requirements
 #==================================================================================================
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 
 # CMake Toolchain file to define compilers and path to ROCm
 #==================================================================================================
@@ -41,6 +41,7 @@ set(DEFAULT_GPUS
       gfx908
       gfx90a
       gfx942
+      gfx950
       gfx1030
       gfx1100
       gfx1101
@@ -83,7 +84,7 @@ if (BUILD_ADDRESS_SANITIZER)
       endif()
     endif()
   endforeach()
-  SET(GPU_TARGETS "${amdgpu_targets}" CACHE STRING "Modified GPU list for Address-Sanitizer enabled build." FORCE)
+  SET(GPU_TARGETS "${amdgpu_targets}")
 endif()
 
 # Check if clang compiler can offload to GPU_TARGETS
@@ -95,11 +96,11 @@ else()
   set(SUPPORTED_GPUS ${DEFAULT_GPUS})
 endif()
 
-set(COMPILING_TARGETS "${SUPPORTED_GPUS}" CACHE STRING "GPU targets to compile for.")
-message(STATUS "Compiling for ${COMPILING_TARGETS}")
+set(GPU_TARGETS "${SUPPORTED_GPUS}")
+message(STATUS "Compiling for ${GPU_TARGETS}")
 
-## NOTE: Reload rocm-cmake in order to update COMPILING_TARGETS
-include(cmake/Dependencies.cmake) # Reloading to use desired COMPILING_TARGETS instead of defaults
+## NOTE: Reload rocm-cmake in order to update GPU_TARGETS
+include(cmake/Dependencies.cmake) # Reloading to use desired GPU_TARGETS instead of defaults
 
 # Try to establish ROCM_PATH (for find_package)
 #==================================================================================================
@@ -110,6 +111,7 @@ if(NOT DEFINED ROCM_PATH)
 else()
   message(STATUS "ROCM_PATH found: ${ROCM_PATH}")
 endif()
+set(ENV{ROCM_PATH} ${ROCM_PATH})
 
 if("${CMAKE_CXX_COMPILER}" MATCHES ".*amdclang\\+\\+")
   message(STATUS "Compiling with amdclang++")
@@ -135,10 +137,12 @@ endif()
 set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
 set(CMAKE_CXX_STANDARD   14)   # We use C++14 features, this will add compile option: -std=c++14
 set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++14 instead, which has some issues.
-list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA
-            ${ROCM_PATH}
-            ${ROCM_PATH}/hip
-            ${ROCM_PATH}/llvm)
+if(ROCM_PATH)
+  list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA
+              ${ROCM_PATH}
+              ${ROCM_PATH}/hip
+              ${ROCM_PATH}/llvm)
+endif()
 
 # Check for required dependencies
 #==================================================================================================
@@ -171,10 +175,15 @@ execute_process(
 message(STATUS "${COMPILER_EXE_NAME} HIP version:    ${hip_version_string}")
 
 ## Check for ROCm version
-execute_process(
-  COMMAND         bash "-c" "cat ${ROCM_PATH}/.info/version"
-  OUTPUT_VARIABLE rocm_version_string
-)
+set(EXPLICIT_ROCM_VERSION "" CACHE STRING "Explicit ROCM version to compile to (auto detect if empty)")
+if(EXPLICIT_ROCM_VERSION)
+  set(rocm_version_string "${EXPLICIT_ROCM_VERSION}")
+elseif(ROCM_PATH)
+  message(STATUS "Reading ROCM version from ${ROCM_PATH}/.info/version")
+  file(READ "${ROCM_PATH}/.info/version" rocm_version_string)
+else()
+  message(FATAL_ERROR "Could not determine ROCM version (set EXPLICIT_ROCM_VERSION or set ROCM_PATH to a valid installation)")
+endif()
 string(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" rocm_version_matches ${rocm_version_string})
 if (rocm_version_matches)
     set(ROCM_MAJOR_VERSION ${CMAKE_MATCH_1})
@@ -203,7 +212,7 @@ unset(CMAKE_REQUIRED_LIBRARIES)
 
 ### Check for indirect function call support
 if(ENABLE_IFC)
-  if(${hip_version_string} VERSION_GREATER_EQUAL "5.5.30201")
+  if("${hip_version_string}" VERSION_GREATER_EQUAL "5.5.30201")
     set(IFC_ENABLED ON)
     message(STATUS "Indirect function call enabled")
   else()
@@ -215,7 +224,7 @@ else()
 endif()
 
 ## Check for LL128 support
-if(${hip_version_string} VERSION_GREATER_EQUAL "6.1.33591")
+if("${hip_version_string}" VERSION_GREATER_EQUAL "6.1.33591")
   set(LL128_ENABLED ON)
   message(STATUS "RCCL LL128 protocol enabled")
 else()
@@ -305,16 +314,37 @@ if (HAVE_PARALLEL_JOBS)
 endif()
 
 ## Disable building MSCCL++ if the build environment is invalid
-## Currently MSCCL++ is supported only on gfx942, and only on Ubuntu and CentOS
-if (ENABLE_MSCCLPP AND NOT ("gfx942" IN_LIST COMPILING_TARGETS OR "gfx942:xnack-" IN_LIST COMPILING_TARGETS OR "gfx942:xnack+" IN_LIST COMPILING_TARGETS))
+## Currently MSCCL++ is supported only on gfx942 and gfx950, and only on Ubuntu and CentOS
+set(MSCCLPP_SUPPORTED_ARCHS "gfx942" "gfx942:xnack-" "gfx942:xnack+" "gfx950" "gfx950:xnack-" "gfx950:xnack+")
+
+# Check if any of the supported architectures are in GPU_TARGETS
+set(ARCH_MATCH_FOUND OFF)
+set(MSCCLPP_GPU_TARGETS "")
+foreach(ARCH IN LISTS GPU_TARGETS)
+  if(ARCH IN_LIST MSCCLPP_SUPPORTED_ARCHS)
+    set(ARCH_MATCH_FOUND ON)
+    list(APPEND MSCCLPP_GPU_TARGETS "${ARCH}")
+  endif()
+endforeach()
+set(MSCCLPP_GPU_TARGETS "${MSCCLPP_GPU_TARGETS}" CACHE STRING "GPU Targets supported by MSCCL++" FORCE)
+
+if (ENABLE_MSCCLPP AND NOT ARCH_MATCH_FOUND)
   set(ENABLE_MSCCLPP OFF)
-  message(WARNING "Can only build MSCCL++ for gfx942; disabling MSCCL++ build")
+  message(WARNING "Can only build MSCCL++ for supported GPU_TARGETS: ${MSCCLPP_SUPPORTED_ARCHS}; current GPU_TARGETS: ${GPU_TARGETS}; so disabling MSCCL++ build")
 endif()
+
+# MSCCL++ is only supported on ROCm 6.2.0 or newer
 if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   set(ENABLE_MSCCLPP OFF)
-  message(WARNING "MSCCL++ integration only supported on ROCm 6.2 or greater; disabling MSCCL++ build")
+  message(WARNING "MSCCL++ integration only supported on ROCm 6.2.0 or greater; disabling MSCCL++ build")
 endif()
-cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID)
+
+# cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID) ## Requires cmake 3.22
+execute_process(
+  COMMAND bash -c "grep '^ID=' /etc/os-release | cut -d'=' -f2 | cut -d'\"' -f2"
+  OUTPUT_VARIABLE HOST_OS_ID
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 if (ENABLE_MSCCLPP AND NOT(${HOST_OS_ID} STREQUAL "ubuntu" OR ${HOST_OS_ID} STREQUAL "centos"))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration not supported on this OS (${HOST_OS_ID}); disabling MSCCL++ build")
@@ -597,6 +627,9 @@ endif()
 # Hipify source files (copy of source generated into hipify directory)
 #==================================================================================================
 find_program(hipify-perl_executable hipify-perl)
+if(NOT hipify-perl_executable)
+  message(FATAL_ERROR "hipify-perl not found")
+endif()
 set(HIPIFY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipify")
 
 ## Loop over each source file to hipify
@@ -639,7 +672,7 @@ set(GEN_DIR "${HIPIFY_DIR}/gensrc")
 
 # Execute the python script to generate required files
 execute_process(
-    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     RESULT_VARIABLE gen_py_result
     ERROR_VARIABLE gen_py_error
@@ -727,7 +760,7 @@ if(${HIP_CONTIGUOUS_MEMORY})
 else()
   message(STATUS "HIP_CONTIGUOUS_MEMORY disabled")
 endif()
-if(${hip_version_string} VERSION_GREATER_EQUAL "5.7.31920")
+if("${hip_version_string}" VERSION_GREATER_EQUAL "5.7.31920")
   target_compile_definitions(rccl PRIVATE HIP_UNCACHED_MEMORY)
   message(STATUS "HIP_UNCACHED_MEMORY enabled")
 else()
@@ -778,7 +811,7 @@ if (HAVE_KERNARG_PRELOAD)
 endif()
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
-#foreach(target ${COMPILING_TARGETS})
+#foreach(target ${GPU_TARGETS})
 #  target_compile_options(rccl PRIVATE --offload-arch=${target})
 #endforeach()
 
@@ -836,10 +869,11 @@ if (${memory_max_string} MATCHES "^[0-9]+")
   math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024 * 1024)")
 else()
   execute_process(
-    COMMAND bash "-c" "cat /sys/fs/cgroup/memory/memory.limit_in_bytes"
+    COMMAND bash "-c" "free | grep -o '[[:digit:]]*' | head -1"
     OUTPUT_VARIABLE memory_max_string)
+  ## memory_max_string holds the free memory in KB  
   if (${memory_max_string} MATCHES "^[0-9]+")
-    math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024 * 1024)")
+    math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024)") ## KB to GB conversion
   else()
     cmake_host_system_information(RESULT memory_max_string QUERY AVAILABLE_PHYSICAL_MEMORY )
     math(EXPR memory_in_gb "${memory_max_string} / 1024")
@@ -902,7 +936,7 @@ if(NOT BUILD_SHARED_LIBS)
     endif()
   endforeach()
 
-  foreach(target ${COMPILING_TARGETS})
+  foreach(target ${GPU_TARGETS})
     list(APPEND static_link_flags --offload-arch=${target})
   endforeach()
   list(JOIN static_link_flags " " flags_str)

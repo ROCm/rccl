@@ -344,7 +344,7 @@ struct rccl_float8
     // default constructor
     HIP_HOST_DEVICE rccl_float8() = default;
 
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
 
     template <bool stochastic_rounding = false>
@@ -384,7 +384,7 @@ struct rccl_float8
 #endif // __gfx940__
 
     // constructor from float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
 
     // NOTE: ON-DEVICE... always optimal bias
     explicit HIP_DEVICE rccl_float8(float                        v,
@@ -446,7 +446,7 @@ struct rccl_float8
     }
 
     // convert to float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
     // upcast using device specific intrinsic
     explicit inline HIP_DEVICE operator float() const
     {
@@ -511,7 +511,7 @@ struct rccl_bfloat8
     // default constructor
     HIP_HOST_DEVICE rccl_bfloat8() = default;
 
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
 
     template <bool stochastic_rounding = false>
@@ -551,7 +551,7 @@ struct rccl_bfloat8
 #endif // __gfx940__
 
     // constructor from float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
 
     // NOTE: ON-DEVICE... always optimal bias
     explicit HIP_DEVICE rccl_bfloat8(float                        v,
@@ -613,7 +613,7 @@ struct rccl_bfloat8
     }
 
     // convert to float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
     // upcast using device specific intrinsic
     explicit inline HIP_DEVICE operator float() const
     {
@@ -980,7 +980,7 @@ template <
     = 0>
 inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 {
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__)
     // NOTE: we are directly calling cast_to_f8_from_f32 instead of constructor to optimize away one runtime branch
     T val;
     if(std::is_same<T, rccl_float8>::value)

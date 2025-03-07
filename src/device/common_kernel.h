@@ -23,7 +23,7 @@ inline __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 
 inline __device__ int loadInt(int* ptr) {
   int v;
-  v = atomicAdd((unsigned long long *)ptr, 0);
+  v = __atomic_load_n(ptr, __ATOMIC_RELAXED);
   return v;
 }
 

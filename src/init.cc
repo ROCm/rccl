@@ -97,7 +97,7 @@ static uint64_t hashUniqueId(ncclUniqueId const &id) {
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx908") || (IsArchMatch(devProp.gcnArchName, "gfx94")
+  if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx94") || IsArchMatch(devProp.gcnArchName, "gfx950"))
     && devProp.multiProcessorCount > 80))
     comm->unroll = NCCL_UNROLL_2;
   else
@@ -121,9 +121,10 @@ static constexpr int64_t defaultEnableMscclpp = 0;
 #endif
 
 RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
+RCCL_PARAM(MscclppForceEnabled, "MSCCLPP_FORCE_ENABLE", 0);
 
 // GDRCOPY support: Off by default
-NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
+NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 1);
 
 // GDRCOPY support
 gdr_t ncclGdrCopy = NULL;
@@ -217,6 +218,7 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
 }
 
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
+RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
 
 #ifdef ENABLE_COLLTRACE
 // Should be in sync with 'ALL_COLLS' in Generator.cmake
@@ -225,42 +227,48 @@ void *ncclCommThreadMain(void *arg) {
   int head[MAXCHANNELS];
   double vega_gpu_rtc_freq;
 
-  memset(head, 0, sizeof(int)*MAXCHANNELS);
   vega_gpu_rtc_freq = GetDeviceWallClockRateInKhz(comm->cudaDev) * 1.0E3;
+  for (int channel = 0; channel < MAXCHANNELS; channel++) {
+    int tail = comm->collTraceTail[channel].tail;
+    if (tail < COLLTRACE_NUM_ITEMS)
+      head[channel] = 0;
+    else
+      head[channel] = tail - COLLTRACE_NUM_ITEMS;
+  }
   do {
     int numActiveChans = MAXCHANNELS;
     for (int channel = 0; channel < MAXCHANNELS; channel++) {
-      int tail = comm->collTraceTail[channel].tail%COLLTRACE_NUM_ITEMS;
+      int tail = comm->collTraceTail[channel].tail;
       int count;
-      if (head[channel] <= tail)
-        count = tail - head[channel];
-      else
-        count = COLLTRACE_NUM_ITEMS + head[channel] - tail;
+      count = tail - head[channel];
       if (count == 0) {
         numActiveChans--;
         continue;
       }
       for (int i = 0; i < count; i++) {
-        volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel];
+        volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel]%COLLTRACE_NUM_ITEMS;
+        head[channel] ++;
         uint8_t type = td->type;
         if (type == ncclCollTraceNotReady)
-          break;
+          continue;
         char line[1024];
         int offset = 0;
         uint16_t fIdx = td->funcIndex;
         if (type == ncclCollTraceDataType) {
-          sprintf(line, "## [%012.6f] [%02d:%02d] L:%04d DT %08x %016lx %016lx",
-            (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid,
-            fIdx, td->data_0, td->opCount, td->data_1);
+          sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] L:%04d DT %08x %016lx %016lx",
+            (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid,             fIdx, td->data_0, td->opCount, td->data_1);
         } else {
-          sprintf(line, "## [%012.6f] [%02d:%02d]", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid);
+          if (type & ncclCollTraceP2pElemType)
+            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid, td->p2pOpCount[0], td->p2pOpCount[1]);
+          else
+            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid, td->opCount);
           offset = strlen(line);
           if (type == ncclCollTraceCollElemType) {
             sprintf(line+offset, " CE %s nw %d bi %d nc %d root %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
           } else if (type == ncclCollTraceP2pElemType) {
-            sprintf(line+offset, " Send %d -> Recv %d connIdx/nc/cb/sLL/rLL %d/%d/%d/%d/%d busId %lx nRanks %d",
-              td->p2p.sendRank, td->p2p.recvRank, td->p2p.connIndex, td->p2p.nP2pChannels, td->p2p.channelBase,
-              td->p2p.sendProtoLL, td->p2p.recvProtoLL, comm->busId, comm->nRanks);
+            sprintf(line+offset, " Send %d -> %d/%d connIdx/LL %d/%d -> Recv %d nc %d cb %d busId %lx nRanks %d",
+              td->p2p.sendRank, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRank, td->p2p.nP2pChannels, td->p2p.channelBase,
+              comm->busId, comm->nRanks);
           } else {
             switch (type&0xf) {
               case ncclCollTraceKernelLaunchType:
@@ -273,9 +281,9 @@ void *ncclCommThreadMain(void *arg) {
                 if ((type&0xf0) == ncclCollTraceCollElemType)
                   sprintf(line+offset, " nw %d bi %d nc %d root %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
                 else if ((type&0xf0) == ncclCollTraceP2pElemType)
-                  sprintf(line+offset, " Send %d -> Recv %d connIdx/nc/cb/sLL/rLL %d/%d/%d/%d/%d busId %lx nRanks %d",
-                    td->p2p.sendRank, td->p2p.recvRank, td->p2p.connIndex, td->p2p.nP2pChannels, td->p2p.channelBase,
-                    td->p2p.sendProtoLL, td->p2p.recvProtoLL, comm->busId, comm->nRanks);
+                  sprintf(line+offset, " Send %d -> %d/%d ConnIdx/LL %d/%d -> Recv %d nc %d cb %d busId %lx nRanks %d",
+                    td->p2p.sendRank, td->p2p.sendConnIndex, td->p2p.sendProtoLL, td->p2p.recvConnIndex, td->p2p.recvProtoLL, td->p2p.recvRank, td->p2p.nP2pChannels, td->p2p.channelBase,
+                    comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceKernelEndType:
                 sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);
@@ -291,15 +299,16 @@ void *ncclCommThreadMain(void *arg) {
         }
         INFO(NCCL_COLL, "%s", line);
         td->type = ncclCollTraceNotReady;
-        head[channel] ++;
-        head[channel] %= COLLTRACE_NUM_ITEMS;
       }
     }
     if (comm->collTraceExit && numActiveChans == 0)
       break;
     usleep(1000); //sleep 1ms
   } while(true);
-  pthread_exit(NULL);
+  if (comm->collTraceThread)
+    pthread_exit(NULL);
+  else
+    return 0;
 }
 #endif
 
@@ -395,9 +404,14 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
 #ifdef ENABLE_COLLTRACE
   comm->collTraceExit = 1;
-  if (comm->collTraceThread) pthread_join(comm->collTraceThread, NULL);
-  NCCLCHECK(ncclCudaHostFree((void *)comm->collTrace));
-  NCCLCHECK(ncclCudaHostFree((void *)comm->collTraceTail));
+  if (comm->collTraceEnabled) {
+    if (comm->collTraceThread)
+      pthread_join(comm->collTraceThread, NULL);
+    else
+      ncclCommThreadMain((void *)comm);
+  }
+  NCCLCHECK(ncclCudaFree((void *)comm->collTrace));
+  NCCLCHECK(ncclCudaFree((void *)comm->collTraceTail));
 #endif
 
   free(comm->peerInfo);
@@ -582,13 +596,17 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
 
 #ifdef ENABLE_COLLTRACE
-  NCCLCHECK(ncclCudaHostCalloc(&comm->collTraceTail, MAXCHANNELS));
-  NCCLCHECK(ncclCudaHostCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->collTraceTail, MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
   comm->collTraceExit = 0;
-  if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable())
-    pthread_create(&comm->collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
-  else
-    comm->collTraceThread = 0;
+  comm->collTraceEnabled = false; // we can enable colltrace without starting a thread
+  if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable()) {
+    comm->collTraceEnabled = true;
+    if (rcclParamKernelCollTraceThreadEnable())
+      pthread_create(&comm->collTraceThread, NULL, ncclCommThreadMain, (void *)comm);
+    else
+      comm->collTraceThread = 0;
+  }
 #endif
   comm->collNetSupport = 0;
   memset(comm->collNetSupportMatrix, 0, sizeof(comm->collNetSupportMatrix));
@@ -1320,7 +1338,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph->nChannels);
   if (ringGraph->nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx94")) {
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx94") || IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
@@ -1614,6 +1632,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     }
     NCCLCHECKGOTO(ncclTransportRingConnect(comm), ret, fail);
 
+    // Connect NET for intranode use
+    if (comm->graphs[NCCL_ALGO_RING].nIntraChannels && rcclParamP2pNetDisable() == 0) {
+      comm->useIntraNet = 1;
+      for (int c = 0; c < comm->nChannels; c++) {
+        struct ncclChannel* channel = comm->channels+c;
+        if (comm->nRanks == 1) continue;
+        NCCLCHECKGOTO(ncclTransportP2pConnect(comm, c, 1, &channel->ring.prev, 1, &channel->ring.next, NCCL_CONN_IDX_P2P_NET), ret, fail);
+      }
+      NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &comm->graphs[NCCL_ALGO_RING], NCCL_CONN_IDX_P2P_NET), ret, fail);
+    }
+
     // Connect Trees
     NCCLCHECKGOTO(ncclTransportTreeConnect(comm), ret, fail);
 
@@ -1660,11 +1689,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
         uint8_t recvBase = ncclP2pChannelBaseForRound(comm, recvRound);
         for (int c=0; c<comm->p2pnChannelsPerPeer; c++) {
           int channelId;
-          channelId = ncclP2pChannelForPart(comm->p2pnChannels, sendBase, c, comm->p2pnChannelsPerPeer);
+          channelId = ncclP2pChannelForPart(comm->p2pnChannels, sendBase, c, comm->p2pnChannelsPerPeer, comm->nNodes);
           if (comm->channels[channelId].peers[peer]->send[1].connected == 0) {
             comm->connectSend[peer].masks[channelId/64] |= (1UL<<(channelId%64));
           }
-          channelId = ncclP2pChannelForPart(comm->p2pnChannels, recvBase, c, comm->p2pnChannelsPerPeer);
+          channelId = ncclP2pChannelForPart(comm->p2pnChannels, recvBase, c, comm->p2pnChannelsPerPeer, comm->nNodes);
           if (comm->channels[channelId].peers[peer]->recv[1].connected == 0) {
             comm->connectRecv[peer].masks[channelId/64] |= (1UL<<(channelId%64));
           }
@@ -1841,7 +1870,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
   CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx94")) {
+  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx94") && !IsArchMatch(devProp.gcnArchName,"gfx950")) {
     stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
     if (stackSize == 0) {
       if (IsArchMatch(devProp.gcnArchName,"gfx906"))
@@ -1907,7 +1936,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled()) && mscclppCommCompatible(comm)) {
       hipDeviceProp_t devProp;
       CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
-      comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94");
+      comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94") || IsArchMatch(devProp.gcnArchName, "gfx950");
       if (comm->mscclppCompatible) {
         bool mapContainsId = (mscclpp_uniqueIdMap.count(job->commId) > 0);
         auto& mscclppUniqueId = mscclpp_uniqueIdMap[job->commId];
@@ -1928,6 +1957,11 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
         TRACE_CALL("mscclpp_ncclCommInitRank (*comm=%p, nranks=%d, commId=hash:0x%llx, myrank=%d)", comm->mscclpp_comm, job->nranks, mscclppUniqueIdHash, job->myrank);
         mscclpp_commToUniqueIdMap[comm->mscclpp_comm] = mscclppUniqueId;
         ncclCommToUniqueIdMap[comm] = job->commId;
+	if (rcclParamMscclppForceEnabled()) {
+		comm->mscclppForceEnable = true;
+	} else {
+		comm->mscclppForceEnable = false;	
+	}
       } else {
         WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
       }

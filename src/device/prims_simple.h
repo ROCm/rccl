@@ -43,7 +43,7 @@ class Primitives<
   Fan fan;
   int index; // Peer index I'm responsible for
   int flags;
-  int group;
+  const int group;
   uint64_t step;
   struct ncclConnFifo* connFifo = NULL;
   T* connEltsFifo;
@@ -54,7 +54,8 @@ class Primitives<
   void*    netDeviceHandle;
   uint32_t* next_hdp_reg;
   uint64_t* barriers;
-  uint64_t* barrier_next;
+  uint64_t barrier_next = 0;
+  int repeat;
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -113,12 +114,16 @@ private:
     if (((flags & (Recv*RoleWaitRecv)) && !noRecvWait) ||
         ((flags & (Send*RoleWaitSend)) && !noSendWait)) {
       int spins = 0;
+      repeat = 50;
       while (connStepCache + (isSendNotRecv ? NCCL_STEPS : 0) < step + StepPerSlice) {
         __builtin_amdgcn_s_sleep(1);
         connStepCache = loadStepValue(connStepPtr);
         if (checkAbort(spins)) break;
         //if (spins == 0) printf("r=%d b=%d t=%d SPUN OUT got=%d want=%d\n", ncclShmem.comm.rank, blockIdx.x, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
-        if (spins == 0) traceData(__LINE__, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
+        if (spins == 0 && repeat > 0) {
+          repeat --;
+          traceData(__LINE__, threadIdx.x, int(connStepCache + (isSendNotRecv ? NCCL_STEPS : 0)), int(step+StepPerSlice));
+        }
       }
       __asm__ __volatile__("s_wakeup");
     }
@@ -666,7 +671,6 @@ private:
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     barriers = &ncclShmem.groups[group].barrier;
-    barrier_next = ncclShmem.groups[group].barrier_next;
     this->nworkers = nthreads;
 
     int nrecv=0, nsend=0;

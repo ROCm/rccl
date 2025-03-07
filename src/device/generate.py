@@ -137,7 +137,9 @@ def calc_unroll_for_local_arch():
   if not is_local_arch_only: 
     return
 
-  res = subprocess.run(['rocminfo'], capture_output=True, text=True)
+  rocminfo_path = os.environ.get('ROCM_PATH') + "/bin/rocminfo"
+
+  res = subprocess.run([rocminfo_path], stdout=subprocess.PIPE, universal_newlines=True)
   rocminfo_output = res.stdout
   
   # Parse rocminfo binary output
@@ -162,7 +164,7 @@ def calc_unroll_for_local_arch():
   # Homogeneous system is required to build for only 1 varient of unroll factor
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
-    if "gfx908" == gfx_name or ("gfx94" in gfx_name and cu_count > 80):
+    if "gfx908" == gfx_name or (gfx_name in ["gfx942", "gfx950"] and cu_count > 80):
       return 2
     else:
       return 4

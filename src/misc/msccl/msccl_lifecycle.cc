@@ -519,33 +519,33 @@ ncclResult_t mscclEnqueueCheck(
     case mscclNoGroup:
 #ifdef ENABLE_MSCCLPP
       if (comm->mscclppCompatible) {
-        if (threadLocalStatus.captureStatus == mscclUnknownCaptureStatus) {
-          INFO(NCCL_COLL, "MSCCL++: reading capture status");
-          NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
-        }
+        INFO(NCCL_COLL, "MSCCL++: reading capture status");
+        NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
 
         const bool sendBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, sendBuff); 
         const bool recvBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, recvBuff);
         const bool graphMode = threadLocalStatus.captureStatus != mscclNoCapture;
-        const bool buffsRegisteredNonGraphMode = !graphMode && sendBuffRegistered && recvBuffRegistered;
+        const bool buffsRegistered = sendBuffRegistered && recvBuffRegistered;
 
         /* check if one rank per GPU and graph mode is enabled */
-        if ((graphMode || buffsRegisteredNonGraphMode) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
+        if ((graphMode || buffsRegistered || comm->mscclppForceEnable) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
           bool isManagedBuffer = false;
           if (sendBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(sendBuff)));
           if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
 
           if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
           else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && isMscclppAllReduceSupported(dataType, op)) {
-            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-              "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
+            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p graphMode %d ubr %d",
+              "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream, 
+	      	graphMode, buffsRegistered);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
             threadLocalStatus.savedSchedulerParams.clear();
             break;
           }
           else if (func == mscclFuncAllGather && nBytes * comm->nRanks <= comm->mscclpp_threshold) {
-            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-              "mscclpp_ncclAllGather", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
+            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p graphMode %d ubr %d",
+              "mscclpp_ncclAllGather", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream, 
+	      	graphMode, buffsRegistered);
             NCCLCHECK(mscclpp_ncclAllGather(sendBuff, recvBuff, count, dataType, comm->mscclpp_comm, stream));
             threadLocalStatus.savedSchedulerParams.clear();
             break;
@@ -565,33 +565,33 @@ ncclResult_t mscclEnqueueCheck(
     case mscclGroupSupportedOp:
 #ifdef ENABLE_MSCCLPP
       if (comm->mscclppCompatible) {
-        if (threadLocalStatus.captureStatus == mscclUnknownCaptureStatus) {
-          INFO(NCCL_COLL, "MSCCL++: reading capture status");
-          NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
-        }
+	INFO(NCCL_COLL, "MSCCL++: reading capture status");
+        NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
 
         const bool sendBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, sendBuff); 
         const bool recvBuffRegistered = mscclpp_BuffIsRegistered(comm->mscclpp_comm, recvBuff);
         const bool graphMode = threadLocalStatus.captureStatus != mscclNoCapture;
-        const bool buffsRegisteredNonGraphMode = !graphMode && sendBuffRegistered && recvBuffRegistered;
+        const bool buffsRegistered = sendBuffRegistered && recvBuffRegistered;
 
         /* check if one rank per GPU and graph mode is enabled */
-        if ((graphMode || buffsRegisteredNonGraphMode) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
+        if ((graphMode || buffsRegistered || comm->mscclppForceEnable) && comm->mscclCompatible && nBytes > 0 && (nBytes & 31) == 0) {
           bool isManagedBuffer = false;
           if (sendBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(sendBuff)));
           if (!isManagedBuffer && recvBuff) CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(recvBuff)));
 
           if (isManagedBuffer) { /* MSCCL++ not enabled for managed memory buffers */ }
           else if (func == mscclFuncAllReduce && nBytes <= comm->mscclpp_threshold && isMscclppAllReduceSupported(dataType, op)) {
-            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-              "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
+            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p graphMode %d ubr %d",
+              "mscclpp_ncclAllReduce", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream, 
+	      	graphMode, buffsRegistered);
             NCCLCHECK(mscclpp_ncclAllReduce(sendBuff, recvBuff, count, dataType, op, comm->mscclpp_comm, stream));
             threadLocalStatus.savedSchedulerParams.clear();
             break;
           }
           else if (func == mscclFuncAllGather && nBytes * comm->nRanks <= comm->mscclpp_threshold) {
-            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-              "mscclpp_ncclAllGather", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream);
+            INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p graphMode %d ubr %d" ,
+              "mscclpp_ncclAllGather", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream, 
+	      	graphMode, buffsRegistered);
             NCCLCHECK(mscclpp_ncclAllGather(sendBuff, recvBuff, count, dataType, comm->mscclpp_comm, stream));
             threadLocalStatus.savedSchedulerParams.clear();
             break;

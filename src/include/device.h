@@ -234,6 +234,7 @@ struct alignas(16) ncclDevWorkP2p {
   void *sendAddr, *recvAddr;
   size_t sendBytes, recvBytes;
   int sendRank, recvRank;
+  uint64_t sendOpCount, recvOpCount;
   // From the part index, nP2pChannels, and channelBase the device code can
   // calculate which part of the transfer a channel is responsible for.
   uint8_t nP2pChannels; // Always equal to comm->p2pnChannels
@@ -246,7 +247,7 @@ struct alignas(16) ncclDevWorkP2p {
   uint8_t sendProtoLL:1, recvProtoLL:1;
   uint8_t sendRegistered:1, recvRegistered:1;
 
-  uint8_t connIndex:2;
+  uint8_t sendConnIndex:2, recvConnIndex:2;
 };
 
 // Compute the subset of the data transfer corresponding to the given part index.
@@ -266,11 +267,25 @@ inline __host__ uint8_t ncclP2pChannelBaseForRound(struct ncclComm* comm, int p2
 
 // ncclP2pChannelToPart and ncclP2pChannelForPart are inverses. The device code
 // uses ncclP2pChannelToPart to determine which part "this" channel is responsible for.
-inline __host__ int ncclP2pChannelForPart(int nP2pChannels, int base, int part, int nParts) {
-  return (base * nParts + part) & (nP2pChannels-1);
+inline __host__ int ncclP2pChannelForPart(int nP2pChannels, int base, int part, int nParts, int nNodes) {
+  if (nNodes > 1) {
+    // Only works because nP2pChannels is pow2
+    int nChannelsLog2 = countOneBits(nP2pChannels-1);
+    int delta = reverseBits(part, nChannelsLog2);
+    return (base + delta) & (nP2pChannels-1);
+  } else {
+    return (base * nParts + part) & (nP2pChannels-1);
+  }
 }
-inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int channel, int nParts) {
-  return (channel - base * nParts) & (nParts-1);
+inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int channel, int nParts, int nNodes) {
+  if (nNodes > 1) {
+    // Only works because nP2pChannels is pow2
+    int nChannelsLog2 = countOneBits(nP2pChannels-1);
+    int delta = (channel-base) & (nP2pChannels-1);
+    return reverseBits(delta, nChannelsLog2);
+  } else {
+    return (channel - base * nParts) & (nParts-1);
+  }
 }
 
 struct alignas(16) ncclDevWorkColl {
@@ -298,6 +313,7 @@ struct alignas(16) ncclDevWorkColl {
     } collnet;
   };
   uint64_t redOpArg;
+  uint64_t opCount;
 };
 
 
@@ -417,9 +433,14 @@ struct ncclCollTrace {
   uint8_t type;
   uint8_t bid;
   int16_t funcIndex;
-  uint32_t data_0;
-  uint64_t timeStamp;
-  uint64_t opCount;
+  uint32_t data_0:24;
+  uint8_t tid;
+  uint8_t channelId;
+  uint64_t timeStamp:56;
+  union {
+    uint64_t opCount;
+    uint32_t p2pOpCount[2];
+  };
   union {
     uint64_t data_1;
     struct {
@@ -435,7 +456,8 @@ struct ncclCollTrace {
       uint8_t nSendChannels;
       uint8_t nRecvChannels;
       uint8_t channelBase;
-      uint8_t connIndex;
+      uint8_t sendConnIndex:2;
+      uint8_t recvConnIndex:2;
       uint8_t sendProtoLL:1;
       uint8_t recvProtoLL:1;
     } p2p;

@@ -31,7 +31,7 @@ if(list_result EQUAL 0)
 
     ## Extract file paths for the selected gfx archs
     foreach(line ${cmd_output})
-        if(line MATCHES "(gfx90a|gfx940|gfx941|gfx942)")
+        if(line MATCHES "(gfx90a|gfx940|gfx941|gfx942|gfx950)")
             string(REGEX MATCH "\\file://(.*)" file_match ${line})
             if(file_match)
                 list(APPEND file_paths ${file_match})
