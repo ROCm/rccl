@@ -695,7 +695,7 @@ namespace RcclUnitTesting
                                                     &numInputElements,
                                                     &numOutputElements);
           optionalArgs.redOp = redOps[rdIdx];
-          optionalArgs.root = roots[rtIdx];
+          optionalArgs.root = roots[rtIdx] % this->numActiveRanks;
           this->SetCollectiveArgs(funcTypes[ftIdx],
                                   dataTypes[dtIdx],
                                   numInputElements,
