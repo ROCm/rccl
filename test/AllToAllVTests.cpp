@@ -5,7 +5,7 @@
  ************************************************************************/
 
  // Note: InPlace is not supported for All-To-Allv
- 
+
 #include "TestBed.hpp"
 
 namespace RcclUnitTesting
@@ -14,7 +14,8 @@ namespace RcclUnitTesting
   void PrepareCounts(int const totalRanks, int const chunkSize,
                      OptionalColArgs& options,
                      std::vector<size_t>& numInputElements,
-                     std::vector<size_t>& numOutputElements)
+                     std::vector<size_t>& numOutputElements,
+                     int percentZeroElement = 0)
   {
     numInputElements.clear();
     numOutputElements.clear();
@@ -30,8 +31,25 @@ namespace RcclUnitTesting
       int const recvIdx = recvRank * totalRanks + sendRank;
 
       // Each pair sends slightly different amounts of elements (based on chunkSize)
-      int const numElements = (1 + sendRank + recvRank) * chunkSize;
+      int numElements = (1 + sendRank + recvRank) * chunkSize;
       options.sendcounts[sendIdx]  = options.recvcounts[recvIdx] = numElements;
+    }
+
+    // Psuedo-randomly zero out some of the sends
+    int s = 0, r = 0;
+    double zeroStride = (percentZeroElement <= 0)   ? (totalRanks * totalRanks + 1) :
+                        (percentZeroElement >= 100) ? 1.0
+                                                    : 100.0 / percentZeroElement;
+    double zeroTarget = zeroStride;
+    for (int i = 1; i <= totalRanks * totalRanks; i++) {
+      if (i >= zeroTarget) {
+        options.sendcounts[s * totalRanks + r] = options.recvcounts[r * totalRanks + s] = 0;
+        zeroTarget += zeroStride;
+      }
+      int next = ((s*totalRanks+(r+(s*s)%7/2)%totalRanks) + totalRanks-1) % (totalRanks*totalRanks);
+      s = next / totalRanks;
+      r = ((next % totalRanks) - (s*s)%7/2) % totalRanks;
+      if (r < 0) r += totalRanks;
     }
 
     // Compute displacements
@@ -79,7 +97,7 @@ namespace RcclUnitTesting
       // Prepare AllToAllV options
       std::vector<size_t> numInputElements;
       std::vector<size_t> numOutputElements;
-      PrepareCounts(totalRanks, 256, options, numInputElements, numOutputElements);
+      PrepareCounts(totalRanks, 256, options, numInputElements, numOutputElements, 40);
 
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       {
@@ -137,7 +155,7 @@ namespace RcclUnitTesting
       // Prepare AllToAllV options
       std::vector<size_t> numInputElements;
       std::vector<size_t> numOutputElements;
-      PrepareCounts(totalRanks, 256, options, numInputElements, numOutputElements);
+      PrepareCounts(totalRanks, 256, options, numInputElements, numOutputElements, 60);
 
       for (int dataIdx = 0; dataIdx < dataTypes.size() && isCorrect; ++dataIdx)
       {
