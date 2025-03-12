@@ -192,6 +192,7 @@ struct ncclTopoSystem {
 
   // [RCCL] Track hostIdx to support rail-optimized rings/trees
   int hostIdx;
+  bool useRailOptimizedTrees;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
