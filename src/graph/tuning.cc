@@ -372,10 +372,14 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
         // Various model refinements
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-        if (nNodes <= 2)
-          busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[0][a][p];
-        else
-          busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[1][a][p];
+        if(coll == ncclFuncReduceScatter && p == NCCL_PROTO_LL && nNodes >=2 && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94"))) {
+          busBw *= 0.28;
+        } else {
+          if (nNodes <= 2)
+            busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[0][a][p];
+          else
+            busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[1][a][p];
+        }
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL && (coll == ncclFuncBroadcast || coll == ncclFuncReduce) && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) && comm->topo->nodes[GPU].count == comm->topo->nRanks) { busBw = busBw * 1.65; }
 #else
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL) { busBw = std::min(llMaxBw, busBw * .5); }
