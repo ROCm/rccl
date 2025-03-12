@@ -573,10 +573,9 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #endif
     }
 
-    __syncthreads();
     if (ncclShmem.nextBatchIx == -1) break;
     int batchIx = ncclShmem.nextBatchIx;
-    //__syncthreads();
+    __syncthreads();
     switch (tid/WARP_SIZE) {
       case 1:
         if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
