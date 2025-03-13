@@ -679,9 +679,10 @@ private:
     this->fan = Fan(nrecv, nsend);
 
     constexpr int ThreadPerSync =
-      MaxSend >= 16 || MaxRecv >= 16 ? 32 : // NVLS may have an arity > 8. In that case increase the size of the groups
-      MaxSend >= 8 || MaxRecv >= 8 ? 16 :
-      8; // Allows for all roles (WaitRecv/WaitSend/PostRecv/PostSend) within a single warp
+      MaxSend >= 16 || MaxRecv >= 16 ? 64 : // NVLS may have an arity > 8. In that case increase the size of the groups
+      MaxSend >= 8 || MaxRecv >= 8 ? 32 :
+      16; // Allows for all roles (WaitRecv/WaitSend/PostRecv/PostSend) within a single warp
+
     static_assert(MaxSend <= ThreadPerSync && MaxRecv <= ThreadPerSync, "Not enough threads to cover all peers");
 
     index = -1;
