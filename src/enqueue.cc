@@ -1712,7 +1712,7 @@ static ncclResult_t topoGetAlgoInfo(
     time = backupTime;
   }
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  // Honor user input for protocl choice
+  // Honor user input for protocol choice
   static int userProtocolInput = -2;
   if (userProtocolInput == -2) {
     const char *protoStr = getenv("NCCL_PROTO");
@@ -1721,7 +1721,7 @@ static ncclResult_t topoGetAlgoInfo(
   if(!userProtocolInput && comm->nNodes >= 2 && info->func == ncclFuncReduceScatter && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
     // Keep it simple unless otherwise required
     info->protocol = NCCL_PROTO_SIMPLE;
-    // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocl choice
+    // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
     size_t sizePerRank = nBytes / comm->nRanks;
 
     if(sizePerRank <= rcclParamRsLLMaxSizePerRank() && sizePerRank >= rcclParamRsLLMinSizePerRank()) {
