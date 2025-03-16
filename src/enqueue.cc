@@ -1657,7 +1657,10 @@ static ncclResult_t updateCollCostTable(
     /* now we only support single-node NVLS allgather and reducescatter */
     if (a == NCCL_ALGO_NVLS && (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) && comm->nNodes > 1) continue;
     for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-      if (p == NCCL_PROTO_LL128 && comm->topo->type != RCCL_TOPO_XGMI_ALL) continue;
+      if (p == NCCL_PROTO_LL128 && !(comm->topo->type & RCCL_TOPO_XGMI_ALL)) {
+        table[a][p] = NCCL_ALGO_PROTO_IGNORE;
+        continue;
+      }
       bool backup;
       float time;
       NCCLCHECK(ncclTopoGetAlgoTime(comm, info->func, a, p, nBytes, numPipeOps, &time, &backup));
