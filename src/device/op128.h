@@ -54,12 +54,12 @@ inline __device__ void loadShmemMisaligned128(T *ptr, uint64_t &v0, uint64_t &v1
   else if(sizeof(T) == 4) {
     #pragma unroll
     for(int e=0; e < 4; e++)
-      tmp4[e] = __builtin_nontemporal_load(ptr+e);
+      tmp4[e] = __builtin_nontemporal_load(reinterpret_cast<uint32_t*>(ptr)+e);
   }
   else /*sizeof(T)==8*/ {
     #pragma unroll
     for(int e=0; e < 2; e++)
-      tmp8[e] = __builtin_nontemporal_load(ptr+e);
+      tmp8[e] = __builtin_nontemporal_load(reinterpret_cast<uint64_t*>(ptr)+e);
   }
   v0 = tmp8[0];
   v1 = tmp8[1];
