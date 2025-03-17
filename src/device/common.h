@@ -167,7 +167,7 @@ extern __shared__ ncclShmemData ncclShmem;
 
 #ifdef ENABLE_FAULT_INJECTION
 __device__ inline void insert_random_delay_per_warp() {
-  if (ncclShmem.faults & RANDOM_DELAY_ON_WARP_START) {
+  if ((ncclShmem.faults & RANDOM_DELAY_ON_WARP_START) && (threadIdx.x%WARP_SIZE == 0)) {
     switch ((wall_clock64()>>(threadIdx.x/WARP_SIZE*2))&0x3) {
       case 0:
         __builtin_amdgcn_s_sleep(0);
