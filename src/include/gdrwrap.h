@@ -169,7 +169,7 @@ static gdr_t ncclGdrInit() {
     return NULL;
   }
   GcnArchNameFormat(devProp.gcnArchName, gcnArchNameSubstr);
-  if (IsArchMatch(gcnArchNameSubstr, "gfx94")) {
+  if (IsArchMatch(gcnArchNameSubstr, "gfx942")) {
     INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation on %s", gcnArchNameSubstr);
     return (gdr_t)0x12345678L;
   } else {

@@ -360,7 +360,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       if (coll == ncclFuncAllGather && a != NCCL_ALGO_RING && a != NCCL_ALGO_NVLS && a != NCCL_ALGO_COLLNET_DIRECT) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-        if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_SIMPLE && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) && comm->topo->nodes[GPU].count == comm->topo->nRanks) continue;
+        if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_SIMPLE && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) && comm->topo->nodes[GPU].count == comm->topo->nRanks) continue;
         if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && p != NCCL_PROTO_SIMPLE) continue;
         int collnet = (a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) ? 1 : 0;
         float bw = nNodes <= 2 || collnet ? graphs[a]->bwIntra : graphs[a]->bwInter;
@@ -376,7 +376,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
           busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[0][a][p];
         else
           busBw *= rcclTuningModel[comm->topo->tuning].bwRatio[1][a][p];
-        if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL && (coll == ncclFuncBroadcast || coll == ncclFuncReduce) && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx94") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) && comm->topo->nodes[GPU].count == comm->topo->nRanks) { busBw = busBw * 1.65; }
+        if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL && (coll == ncclFuncBroadcast || coll == ncclFuncReduce) && (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) && comm->topo->nodes[GPU].count == comm->topo->nRanks) { busBw = busBw * 1.65; }
 #else
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL) { busBw = std::min(llMaxBw, busBw * .5); }
         if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL128) busBw = std::min(busBw * (ppn < 2 ? 0.7 : 0.92 /*120.0/128.0*/), graphs[a]->nChannels*perChMaxRingLL128Bw);
