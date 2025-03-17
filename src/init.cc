@@ -124,7 +124,7 @@ RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
 RCCL_PARAM(MscclppForceEnabled, "MSCCLPP_FORCE_ENABLE", 0);
 
 // GDRCOPY support: Off by default
-NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 1);
+NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
 
 // GDRCOPY support
 gdr_t ncclGdrCopy = NULL;
