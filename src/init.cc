@@ -97,7 +97,7 @@ static uint64_t hashUniqueId(ncclUniqueId const &id) {
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx94") || IsArchMatch(devProp.gcnArchName, "gfx950"))
+  if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx942") || IsArchMatch(devProp.gcnArchName, "gfx950"))
     && devProp.multiProcessorCount > 80))
     comm->unroll = NCCL_UNROLL_2;
   else
@@ -1338,7 +1338,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph->nChannels);
   if (ringGraph->nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx94")) {
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
@@ -1873,7 +1873,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
   CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx94") && !IsArchMatch(devProp.gcnArchName,"gfx950")) {
+  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx942") && !IsArchMatch(devProp.gcnArchName,"gfx950")) {
     stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
     if (stackSize == 0) {
       if (IsArchMatch(devProp.gcnArchName,"gfx906"))
@@ -1939,7 +1939,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled()) && mscclppCommCompatible(comm)) {
       hipDeviceProp_t devProp;
       CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
-      comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx94") || IsArchMatch(devProp.gcnArchName, "gfx950");
+      comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx942") || IsArchMatch(devProp.gcnArchName, "gfx950");
       if (comm->mscclppCompatible) {
         bool mapContainsId = (mscclpp_uniqueIdMap.count(job->commId) > 0);
         auto& mscclppUniqueId = mscclpp_uniqueIdMap[job->commId];
