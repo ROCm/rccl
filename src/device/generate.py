@@ -308,7 +308,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   for fn in primary_funcs:
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      out("#if (defined(__gfx90a__) || defined(__gfx942__)) && defined(ENABLE_LL128)\n")
       out("%s %s();\n#else\n" % (func_declaration, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
@@ -325,7 +325,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     if unroll != "2": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      out("#if (defined(__gfx90a__) || defined(__gfx942__)) && defined(ENABLE_LL128)\n")
       out("/*%4d*/ %s,\n#else\n" % (index, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
@@ -342,7 +342,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     if unroll != "4": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      out("#if (defined(__gfx90a__) || defined(__gfx942__)) && defined(ENABLE_LL128)\n")
       out("/*%4d*/ %s,\n#else\n" % (index4, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
@@ -494,7 +494,7 @@ for name in name_to_funcs.keys():
       (coll, algo, proto, redop, ty, unroll) = fn
       sym = paste("_", coll, algo, proto, redop, ty, unroll)
       if proto == "LL128":
-        out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+        out("#if (defined(__gfx90a__) || defined(__gfx942__)) && defined(ENABLE_LL128)\n")
       out(
         "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],

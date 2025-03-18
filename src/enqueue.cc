@@ -805,6 +805,12 @@ static ncclResult_t scheduleCollTasksToPlan(
         }
         proxyOp->channelId = c;
         proxyOp->opCount = proxyOpId;
+        proxyOp->connIndex = 0;
+        if (task->protocol == NCCL_PROTO_SIMPLE && task->algorithm == NCCL_ALGO_RING) {
+          if (comm->useIntraNet && nBytes > rcclParamIntraNetThreshold()) {
+            proxyOp->connIndex = NCCL_CONN_IDX_P2P_NET;
+          }
+        }
         addWorkBatchToPlan(comm, plan, c, workNode->workType, task->devFuncId, plan->workBytes);
         NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
       }
@@ -887,7 +893,7 @@ static ncclResult_t addP2pToPlan(
         connIndex[dir] = NCCL_CONN_IDX_P2P_NET;
     }
   }
-  
+
   if (!selfSend) {
     for (int part=0; part < nChannelsMax; part++) {
       int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes);
@@ -1651,7 +1657,10 @@ static ncclResult_t updateCollCostTable(
     /* now we only support single-node NVLS allgather and reducescatter */
     if (a == NCCL_ALGO_NVLS && (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) && comm->nNodes > 1) continue;
     for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-      if (p == NCCL_PROTO_LL128 && comm->topo->type != RCCL_TOPO_XGMI_ALL) continue;
+      if (p == NCCL_PROTO_LL128 && !(comm->topo->type & RCCL_TOPO_XGMI_ALL)) {
+        table[a][p] = NCCL_ALGO_PROTO_IGNORE;
+        continue;
+      }
       bool backup;
       float time;
       NCCLCHECK(ncclTopoGetAlgoTime(comm, info->func, a, p, nBytes, numPipeOps, &time, &backup));
@@ -1669,6 +1678,14 @@ static ncclResult_t updateCollCostTable(
 
   return ncclSuccess;
 }
+
+// The following parameters are based on the observation that LL and LL128
+// performance is determined by how much data goes out of a GPU
+// TODO: these numbers can be part of topo detection.
+RCCL_PARAM(RsLLMinSizePerRank,    "REDUCE_SCATTER_LL_MIN_SIZE_PER_RANK", 0);
+RCCL_PARAM(RsLLMaxSizePerRank,    "REDUCE_SCATTER_LL_MAX_SIZE_PER_RANK", 655360);
+RCCL_PARAM(RsLL128MinSizePerRank, "REDUCE_SCATTER_LL128_MIN_SIZE_PER_RANK", 131072);
+RCCL_PARAM(RsLL128MaxSizePerRank, "REDUCE_SCATTER_LL128_MAX_SIZE_PER_RANK", 3211264);
 
 static ncclResult_t topoGetAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes,
@@ -1703,6 +1720,32 @@ static ncclResult_t topoGetAlgoInfo(
     info->protocol = backupProto;
     time = backupTime;
   }
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  // Honor user input for protocol choice
+  static int userProtocolInput = -2;
+  if (userProtocolInput == -2) {
+    const char *protoStr = getenv("NCCL_PROTO");
+    userProtocolInput = !protoStr ? 0 : 1;
+  }
+  if(!userProtocolInput && comm->nNodes >= 2 && info->func == ncclFuncReduceScatter && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
+    // Keep it simple unless otherwise required
+    info->protocol = NCCL_PROTO_SIMPLE;
+    // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
+    size_t sizePerRank = nBytes / comm->nRanks;
+
+    if(sizePerRank <= rcclParamRsLLMaxSizePerRank() && sizePerRank >= rcclParamRsLLMinSizePerRank()) {
+      info->protocol = NCCL_PROTO_LL;
+    }
+#if defined(ENABLE_LL128)
+    // LL128 RS performance is better than LL when enabled, so the next condition overrides the previous LL choice
+    if(comm->topo->ll128Enabled) {
+      if(sizePerRank <= rcclParamRsLL128MaxSizePerRank() && sizePerRank >= rcclParamRsLL128MinSizePerRank()) {
+        info->protocol = NCCL_PROTO_LL128;
+      }
+    }
+#endif
+  }
+#endif
   if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
@@ -1989,13 +2032,6 @@ static ncclResult_t calcCollChunking(
     proxyOp->specifics.collnetDirect.node = comm->node;
     if (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) {
       proxyOp->specifics.collnetDirect.sizePerRank = info->count*ncclTypeSize(info->datatype);
-    }
-  }
-
-  proxyOp->connIndex = 0;
-  if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) {
-    if (comm->useIntraNet && nBytes > rcclParamIntraNetThreshold()) {
-      proxyOp->connIndex = NCCL_CONN_IDX_P2P_NET;
     }
   }
 
