@@ -6,7 +6,7 @@ index 712468d..9197847 100644
  option(MSCCLPP_USE_ROCM "Use AMD/ROCm." OFF)
  option(MSCCLPP_BYPASS_GPU_CHECK "Bypass GPU check." OFF)
  option(MSCCLPP_NPKIT_FLAGS "Enable NPKIT" OFF)
-+option(CLIP_ENABLED "Enabling clip on add_elements" OFF)
++option(MSCCLPP_CLIP_ENABLED "Enabling clip on add_elements" OFF)
  
  if(MSCCLPP_BYPASS_GPU_CHECK)
      if(MSCCLPP_USE_CUDA)
@@ -14,8 +14,8 @@ index 712468d..9197847 100644
  if(MSCCLPP_NPKIT_FLAGS)
      target_compile_definitions(mscclpp_obj PRIVATE ${MSCCLPP_NPKIT_FLAGS})
  endif()
-+if(CLIP_ENABLED)
-+    target_compile_definitions(mscclpp_obj PUBLIC CLIP_ENABLED)
++if(MSCCLPP_CLIP_ENABLED)
++    target_compile_definitions(mscclpp_obj PUBLIC MSCCLPP_CLIP_ENABLED)
 +endif()
  
  # libmscclpp
@@ -29,7 +29,7 @@ index a14dfbc..3d0604c 100644
  template <typename T>
  __forceinline__ __device__ T add_elements(T a, T b) {
 -  return clip(a + b);
-+  #ifdef CLIP_ENABLED
++  #ifdef MSCCLPP_CLIP_ENABLED
 +   return clip(a + b);
 +  #else
 +   return a + b;
@@ -39,7 +39,7 @@ index a14dfbc..3d0604c 100644
  template <>
  __forceinline__ __device__ __half2 add_elements(__half2 a, __half2 b) {
 -  return clip(__hadd2(a, b));
-+  #ifdef CLIP_ENABLED
++  #ifdef MSCCLPP_CLIP_ENABLED
 +   return clip(__hadd2(a, b));
 +  #else
 +    return __hadd2(a, b);
@@ -49,10 +49,10 @@ index a14dfbc..3d0604c 100644
  template <>
  __forceinline__ __device__ __bfloat162 add_elements(__bfloat162 a, __bfloat162 b) {
 -  return clip(__hadd2(a, b));
-+  #ifdef CLIP_ENABLED
++  #ifdef MSCCLPP_CLIP_ENABLED
 +    return clip(__hadd2(a, b));
 +  #else
-+    return __hadd2(a, b);
++   return __hadd2(a, b);
 +  #endif
  }
  
