@@ -44,12 +44,17 @@ typedef struct
 
 #include <hip/hip_fp8.h>
 
-#if (defined(__gfx950__) && HIP_FP8_TYPE_OCP)
+#if (defined(__gfx950__) || defined(__gfx1200__) || defined(__gfx1201__) ||  (defined(__gfx1100__) || defined(__gfx1101__)))//HIP_FP8_TYPE_OCP is enabled.
 typedef __hip_fp8_e4m3 rccl_float8;
 typedef __hip_fp8_e5m2 rccl_bfloat8;
-#else
+//HIP_FP8_TYPE_FNUZ is enabled.
+#elif (defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__))
 typedef __hip_fp8_e4m3_fnuz rccl_float8;
 typedef __hip_fp8_e5m2_fnuz rccl_bfloat8;
+//HIP_FP8_TYPE_OCP and HIP_FP8_TYPE_FNUZ are enabled.
+#else
+typedef __hip_fp8_e4m3 rccl_float8;
+typedef __hip_fp8_e5m2 rccl_bfloat8;
 #endif
     
 inline std::ostream& operator<<(std::ostream& os, const rccl_float8& f8)
