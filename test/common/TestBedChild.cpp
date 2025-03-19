@@ -395,8 +395,10 @@ namespace RcclUnitTesting
       {
         CollectiveArgs& collArg = this->collArgs[groupId][localRank][collIdx];
         CHECK_CALL(collArg.AllocateMem(inPlace, useManagedMem, userRegistered));
-        if (collArg.userRegistered && (collArg.funcType == ncclCollSend || collArg.funcType == ncclCollRecv))
-          CHILD_NCCL_CALL(ncclCommRegister(this->comms[localRank], collArg.inputGpu.ptr, collArg.numInputBytesAllocated, &(collArg.commRegHandle)),"ncclCommRegister");
+        if (collArg.userRegistered){
+          CHILD_NCCL_CALL(ncclCommRegister(this->comms[localRank], collArg.inputGpu.ptr, collArg.numInputBytesAllocated, &(collArg.commRegHandleSend)),"ncclCommRegister");
+          CHILD_NCCL_CALL(ncclCommRegister(this->comms[localRank], collArg.outputGpu.ptr, collArg.numOutputBytesAllocated, &(collArg.commRegHandleRecv)),"ncclCommRegister");
+        }
         if (this->verbose) INFO("Rank %d on child %d allocates memory for collective %d in group %d on device %d (%s,%s,%s) Input: %p Output %p\n",
                                 globalRank, this->childId, collIdx, groupId, this->deviceIds[localRank],
                                 inPlace ? "in-place" : "out-of-place",
@@ -896,10 +898,12 @@ namespace RcclUnitTesting
           INFO("Child %d release memory for collective %d in group %d (Input: %p Output %p\n",
                this->childId, collIdx, groupId, collArg.inputGpu.ptr, collArg.outputGpu.ptr);
         }
-        if (collArg.userRegistered && (collArg.funcType == ncclCollSend || collArg.funcType == ncclCollRecv))
+        if (collArg.userRegistered)
         {
-          CHILD_NCCL_CALL(ncclCommDeregister(this->comms[localRank], collArg.commRegHandle), "ncclCommDeregister");
+          CHILD_NCCL_CALL(ncclCommDeregister(this->comms[localRank], collArg.commRegHandleSend), "ncclCommDeregister");
+          CHILD_NCCL_CALL(ncclCommDeregister(this->comms[localRank], collArg.commRegHandleRecv), "ncclCommDeregister");
         }
+        
 
         CHECK_CALL(collArg.DeallocateMem());
       }

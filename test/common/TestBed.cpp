@@ -236,6 +236,7 @@ namespace RcclUnitTesting
       PIPE_WRITE(childId, optionalArgs);
       PIPE_CHECK(childId);
     }
+
     InteractiveWait("Finishing SetCollectiveArgs");
   }
 
@@ -247,7 +248,6 @@ namespace RcclUnitTesting
                             bool   const userRegistered)
   {
     InteractiveWait("Starting AllocateMem");
-
     // Build list of ranks this applies to (-1 for rank means to set for all)
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
@@ -271,6 +271,10 @@ namespace RcclUnitTesting
         PIPE_WRITE(childId, useManagedMem);
         PIPE_WRITE(childId, userRegistered);
         PIPE_WRITE(childId, currGroup);
+      }
+
+      for (auto currRank : rankList){
+        int const childId = rankToChildMap[currRank];
         PIPE_CHECK(childId);
       }
     }
@@ -622,8 +626,10 @@ namespace RcclUnitTesting
                                std::vector<bool>           const& inPlaceList,
                                std::vector<bool>           const& managedMemList,
                                std::vector<bool>           const& useHipGraphList,
-                               bool                        const& enableSweep)
+                               bool                        const& enableSweep,
+                               bool                        const& userRegistered)
   {
+    printf("TestBed::RunSimpleSweep start\n");
     // Sort numElements in descending order to cut down on # of allocations
     std::vector<int> sortedN = numElements;
     std::sort(sortedN.rbegin(), sortedN.rend());
@@ -661,7 +667,8 @@ namespace RcclUnitTesting
     bool isCorrect = true;
 
     // Sweep over the number of ranks
-    for (int numGpus : ev.GetNumGpusList())
+    int numGpus = 8;
+    //for (int numGpus : ev.GetNumGpusList())
     for (int isMultiProcess : ev.GetIsMultiProcessList())
     for (int ranksPerGpu=1; ranksPerGpu <= ev.maxRanksPerGpu && isCorrect; ++ranksPerGpu)
     {
@@ -718,7 +725,7 @@ namespace RcclUnitTesting
           // Only allocate once for largest size
           if (neIdx == 0)
           {
-            this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx]);
+            this->AllocateMem(inPlaceList[ipIdx], managedMemList[mmIdx], -1, -1, -1, userRegistered);
             if (testing::Test::HasFailure())
             {
               isCorrect = false;

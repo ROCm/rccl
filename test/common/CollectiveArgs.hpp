@@ -116,7 +116,8 @@ namespace RcclUnitTesting
     bool           inPlace;
     bool           useManagedMem;
     bool           userRegistered;
-    void*          commRegHandle;
+    void*          commRegHandleSend;
+    void*          commRegHandleRecv;
     size_t         numInputBytesAllocated;
     size_t         numOutputBytesAllocated;
     size_t         numInputElementsAllocated;
