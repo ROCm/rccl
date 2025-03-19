@@ -129,11 +129,10 @@ NodeModelDesc model_descs[] = {
   {"topo_8p1h_5.xml",                    " 8gfx910 2H3XGMI  8NIC 2AMD   B"},
   {"topo_16p1h.xml",                     "16gfx910 2H3XGMI  8NIC 4AMD   A"},
   {"topo_16p1h_vm.xml",                  "16gfx910 2H3XGMI  8NIC 4AMD   B"},
-  // GFX 940
-  {"topo_4p_940.xml",                    " 4gfx940 1H3XGMI  4NIC 4AMD2  A"},
   // GFX 942
-  {"topo_8p_940.xml",                    " 8gfx942 1H7XGMI  8NIC 2Intel A"},
-  {"topo_8p_940vm.xml",                  " 8gfx942 1H7XGMI  8NIC 2Intel B"},
+  {"topo_4p_942.xml",                    " 4gfx942 1H3XGMI  4NIC 4AMD2  A"},
+  {"topo_8p_942.xml",                    " 8gfx942 1H7XGMI  8NIC 2Intel A"},
+  {"topo_8p_942vm.xml",                  " 8gfx942 1H7XGMI  8NIC 2Intel B"},
   {"topo_16p_gio-1s-1rp-cascade.xml",    "16gfx942 2H7XGMI  1NIC 2AMD   A"},
   {"topo_16p_gio-3s-1rp-split-flat.xml", "16gfx942 2H7XGMI  1NIC 2AMD   B"},
 };
