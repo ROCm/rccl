@@ -253,10 +253,11 @@ namespace RcclUnitTesting
 
   TEST(AllReduce, UserBufferRegistration_TestBed)
   {
+    //This test requites env variable UT_PROCESS_MASK=2 because of reliance to msccl++
+    //conditionally run if multi-process only
+    setenv("UT_PROCESS_MASK", "2", 1);
     TestBed testBed;
-    //testBed.ev.processMask = (1<<1);//UT_MULTI_PROCESS  //i still have to manually set, or place above testBed
     testBed.ev.maxRanksPerGpu = 1;
-    testBed.ev.maxGpus = 2;
     testBed.ev.verbose = false;
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
@@ -269,31 +270,12 @@ namespace RcclUnitTesting
     std::vector<bool>           const useHipGraphList = {false};
     bool                        const  userRegistered  = true;
     bool                        const  enableSweep = true;
-    testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
-                           inPlaceList, managedMemList, useHipGraphList, enableSweep, userRegistered);
-    testBed.Finalize();
-  }
 
-  TEST(AllReduce, UBR2)
-  {
-    TestBed testBed;
-    //testBed.ev.processMask = (1<<1);//UT_MULTI_PROCESS  //i still have to manually set, or place above testBed
-    testBed.ev.maxRanksPerGpu = 1;
-    testBed.ev.maxGpus = 2;
-    testBed.ev.verbose = false;
-    // Configuration
-    std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclInt32};
-    std::vector<ncclRedOp_t>    const redOps          = {ncclSum};
-    std::vector<int>            const roots           = {0};
-    std::vector<int>            const numElements     = {20971520};
-    std::vector<bool>           const inPlaceList     = {false};
-    std::vector<bool>           const managedMemList  = {false};
-    std::vector<bool>           const useHipGraphList = {false};
-    bool                        const  userRegistered  = false;
-    bool                        const  enableSweep = true;
     testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
-                           inPlaceList, managedMemList, useHipGraphList, enableSweep, userRegistered);
+        inPlaceList, managedMemList, useHipGraphList, enableSweep, userRegistered);
+
+    
     testBed.Finalize();
+    unsetenv("UT_PROCESS_MASK");
   }
 }

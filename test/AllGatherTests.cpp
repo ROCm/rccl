@@ -159,4 +159,27 @@ namespace RcclUnitTesting
 
     callCollectiveForked(nranks, ncclCollAllGather, sendBuff, recvBuff, expected, use_managed_mem);
   }
+
+  TEST(AllGather, UserBufferRegistration_TestBed)
+  {
+    setenv("UT_PROCESS_MASK", "2", 1);
+    //This test requites env variable UT_PROCESS_MASK=2 because of reliance to msccl++
+    TestBed testBed;
+    testBed.ev.maxRanksPerGpu = 1;
+    // Configuration
+    std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllGather};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat32};
+    std::vector<ncclRedOp_t>    const redOps          = {ncclSum};
+    std::vector<int>            const roots           = {0};
+    std::vector<int>            const numElements     = {1048576, 500};
+    std::vector<bool>           const inPlaceList     = {false};
+    std::vector<bool>           const managedMemList  = {false};
+    std::vector<bool>           const useHipGraphList = {false};
+    bool                        const  userRegistered  = true;
+    bool                        const  enableSweep = true;
+    testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
+                           inPlaceList, managedMemList, useHipGraphList, enableSweep, userRegistered);
+    testBed.Finalize();
+    unsetenv("UT_PROCESS_MASK");
+  }
 }

@@ -629,7 +629,6 @@ namespace RcclUnitTesting
                                bool                        const& enableSweep,
                                bool                        const& userRegistered)
   {
-    printf("TestBed::RunSimpleSweep start\n");
     // Sort numElements in descending order to cut down on # of allocations
     std::vector<int> sortedN = numElements;
     std::sort(sortedN.rbegin(), sortedN.rend());
@@ -667,8 +666,7 @@ namespace RcclUnitTesting
     bool isCorrect = true;
 
     // Sweep over the number of ranks
-    int numGpus = 8;
-    //for (int numGpus : ev.GetNumGpusList())
+    for (int numGpus : ev.GetNumGpusList())
     for (int isMultiProcess : ev.GetIsMultiProcessList())
     for (int ranksPerGpu=1; ranksPerGpu <= ev.maxRanksPerGpu && isCorrect; ++ranksPerGpu)
     {
