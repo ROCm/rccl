@@ -71,8 +71,6 @@ struct tuningModel {
   float bwRatio [2][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
-  // This should be arch. dependent
-  // When more collectives impacted, a third dimension can be added
   size_t llProtoThresholds[RCCL_LL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][2];
 };
 
