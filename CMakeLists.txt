@@ -423,22 +423,6 @@ set(SRC_FILES
   src/proxy.cc
   src/register.cc
   src/transport.cc
-# src/clique/AllReduceCliqueKernel.h
-# src/clique/CliqueCommon.h
-# src/clique/CliqueManager.cc
-# src/clique/CliqueManager.h
-# src/clique/CliqueShmNames.h
-# src/clique/HandleCache.cc
-# src/clique/HandleCache.h
-# src/clique/HandleShm.cc
-# src/clique/HandleShm.h
-# src/clique/Hash.cc
-# src/clique/Hash.h
-# src/clique/MsgQueue.cc
-# src/clique/MsgQueue.h
-# src/clique/SharedMemHelper.h
-# src/clique/ShmObject.cc
-# src/clique/ShmObject.h
   src/device/all_gather.h
   src/device/all_reduce.h
   src/device/alltoall_pivot.h
@@ -871,7 +855,7 @@ else()
   execute_process(
     COMMAND bash "-c" "free | grep -o '[[:digit:]]*' | head -1"
     OUTPUT_VARIABLE memory_max_string)
-  ## memory_max_string holds the free memory in KB  
+  ## memory_max_string holds the free memory in KB
   if (${memory_max_string} MATCHES "^[0-9]+")
     math(EXPR memory_in_gb "${memory_max_string} / (1024 * 1024)") ## KB to GB conversion
   else()

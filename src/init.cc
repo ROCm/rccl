@@ -43,7 +43,6 @@
 #include "git_version.h"
 #include "rccl_vars.h"
 #include "hip_rocm_version_info.h"
-//#include "clique/CliqueManager.h"
 //#include <hsa/hsa_ext_amd.h>
 #ifdef ENABLE_MSCCLPP
 #include "mscclpp/mscclpp_nccl.h"
@@ -485,7 +484,6 @@ static ncclResult_t commFree(ncclComm_t comm) {
   return ncclSuccess;
 }
 
-RCCL_PARAM(CliqueIgnoreTopo, "CLIQUE_IGNORE_TOPO", 0);
 RCCL_PARAM(P2pNetDisable, "P2P_NET_DISABLE", 0);
 RCCL_PARAM(PivotAlltoallEnable, "PIVOT_ALLTOALL_ENABLE", 1);
 RCCL_PARAM(LL128ForceEnable, "LL128_FORCE_ENABLE", 0);
@@ -1562,7 +1560,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   } else {
     NCCLCHECKGOTO(ncclProxyCreate(comm), ret, fail);
   }
-  
+
   timers[TIMER_INIT_CONNECT] = clockNano();
   do { // Build p2p schedule
     int node = comm->node;
@@ -1963,7 +1961,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 	if (rcclParamMscclppForceEnabled()) {
 		comm->mscclppForceEnable = true;
 	} else {
-		comm->mscclppForceEnable = false;	
+		comm->mscclppForceEnable = false;
 	}
       } else {
         WARN("MSCCL++: Cannot enable MSCCL++ on %s architecture", devProp.gcnArchName);
@@ -2394,7 +2392,7 @@ static ncclResult_t commDestroySync(struct ncclAsyncJob* job_) {
     // And keep polling until all graphs referencing us die.
     while (comm->persistentRefs != 0) {
       NCCLCHECKGOTO(ncclCommPollCallbacks(comm, /*waitSome=*/true), ret, fail);
-    }  
+    }
   }
 
   if ((ret = ncclProxyStop(comm)) != ncclSuccess) {

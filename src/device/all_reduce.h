@@ -1059,7 +1059,6 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
     runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
-    //LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, work);
   }
 };
 
@@ -1067,6 +1066,5 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
     runTreeSplit<T, RedOp, ProtoLL128>(tid, nthreads, work);
-    //LAUNCH_CLIQUE_KERNEL(AllReduceCliqueSplitKernel, RedOp, T, worrk);
   }
 };

@@ -118,7 +118,7 @@ namespace RcclUnitTesting
         std::vector<bool>           const managedMemList  = {false};
         std::vector<bool>           const useHipGraphList = {false, true};
         std::vector<const char *>   const channelList     = {"84", "112"};
-        bool                        const enableSweep     = false; 
+        bool                        const enableSweep     = false;
         for (auto channel : channelList) {
           setenv("NCCL_MIN_NCHANNELS", channel, 1);
           testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
@@ -147,30 +147,6 @@ namespace RcclUnitTesting
     testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
                            inPlaceList, managedMemList, useHipGraphList);
     testBed.Finalize();
-  }
-
-  TEST(AllReduce, DISABLED_Clique)
-  {
-    // Set clique env var prior to TestBed
-    setenv("RCCL_ENABLE_CLIQUE", "1", 1);
-
-    TestBed testBed;
-
-    // Configuration
-    std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = testBed.GetAllSupportedDataTypes();
-    std::vector<ncclRedOp_t>    const redOps          = testBed.GetAllSupportedRedOps();
-    std::vector<int>            const roots           = {0};
-    std::vector<int>            const numElements     = {1048576, 1024};
-    std::vector<bool>           const inPlaceList     = {false, true};
-    std::vector<bool>           const managedMemList  = {false};
-    std::vector<bool>           const useHipGraphList = {false, true};
-
-    testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
-                           inPlaceList, managedMemList, useHipGraphList);
-    testBed.Finalize();
-
-    unsetenv("RCCL_ENABLE_CLIQUE");
   }
 
   // This tests using custom pre-mult scalars reductions
@@ -245,7 +221,7 @@ namespace RcclUnitTesting
   }
 
   TEST(AllReduce, UserBufferRegistration)
-  {          
+  {
     const int nranks = 8;
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
@@ -260,7 +236,7 @@ namespace RcclUnitTesting
   }
 
   TEST(AllReduce, ManagedMemUserBufferRegistration)
-  {          
+  {
     const int nranks = 8;
     size_t count = 2048;
     std::vector<int> sendBuff(count, 0);
