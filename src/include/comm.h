@@ -486,6 +486,7 @@ struct ncclComm {
   float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float ringbdw[NCCL_NUM_FUNCTIONS][NCCL_NUM_PROTOCOLS];
   int maxThreads[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  size_t minMaxLLThresholds[NCCL_NUM_FUNCTIONS][NCCL_NUM_PROTOCOLS - 1][2];
 
   /* This attribute can indicate the states of communicators and return code of
    * asynchronous NCCL operations. */
