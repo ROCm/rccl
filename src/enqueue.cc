@@ -1726,13 +1726,13 @@ static ncclResult_t topoGetAlgoInfo(
     // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
     size_t sizePerRank = nBytes / comm->nRanks;
 
-    if(sizePerRank <= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL][0] && sizePerRank >= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL][1]) {
+    if(sizePerRank <= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL][1] && sizePerRank >= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL][0]) {
       info->protocol = NCCL_PROTO_LL;
     }
 #if defined(ENABLE_LL128)
     // LL128 RS performance is better than LL when enabled, so the next condition overrides the previous LL choice
     if(comm->topo->ll128Enabled) {
-      if(sizePerRank <= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL128][0] && sizePerRank >= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL128][1]) {
+      if(sizePerRank <= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL128][1] && sizePerRank >= comm->minMaxLLThresholds[info->func][NCCL_PROTO_LL128][0]) {
         info->protocol = NCCL_PROTO_LL128;
       }
     }
