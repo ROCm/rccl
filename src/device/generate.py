@@ -327,7 +327,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     if unroll != "1": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if defined(__gfx90a__) && defined(ENABLE_LL128)\n")
+      out("#if (defined(__gfx90a__) || defined(__gfx942__)) && defined(ENABLE_LL128)\n")
       out("/*%4d*/ %s,\n#else\n" % (index1, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
