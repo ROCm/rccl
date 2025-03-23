@@ -59,7 +59,7 @@ jobs:
     parameters:
       componentName: rccl
       testDir: $(Build.SourcesDirectory)/build/test
-      testExecutable: 'LD_LIBRARY_PATH=$(Build.SourcesDirectory)/build NCCL_DEBUG=INFO RCCL_ENABLE_SIGNALHANDLER=1 ./rccl-UnitTests'
+      testExecutable: 'LD_LIBRARY_PATH=$(Build.SourcesDirectory)/build:${LD_LIBRARY_PATH} NCCL_DEBUG=INFO RCCL_ENABLE_SIGNALHANDLER=1 ./rccl-UnitTests'
       testParameters: '--gtest_output=xml:./test_output.xml --gtest_color=yes'
   - ${{ each pytestScript in parameters.pytestList }}:
     - task: Bash@3
