@@ -65,7 +65,7 @@ stages:
       parameters:
         componentName: rccl
         testDir: $(Build.SourcesDirectory)/build/test
-        testExecutable: './rccl-UnitTests'
+        testExecutable: 'LD_LIBRARY_PATH=$(Build.SourcesDirectory)/build:${LD_LIBRARY_PATH} NCCL_DEBUG=INFO RCCL_ENABLE_SIGNALHANDLER=1 ./rccl-UnitTests'
         testParameters: '--gtest_output=xml:./test_output.xml --gtest_color=yes'
     - ${{ each pytestScript in parameters.pytestList }}:
       - task: Bash@3
@@ -74,4 +74,4 @@ stages:
         inputs:
           targetType: inline
           workingDirectory: $(Build.SourcesDirectory)/$(pytestFolder)
-          script: pytest test_${{ pytestScript }}.py
+          script: pytest ${{ pytestScript }}.py
