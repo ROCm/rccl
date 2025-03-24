@@ -238,11 +238,24 @@ __device__ __forceinline__ void reduceCopy(
     }
   }
 
+#if defined(__gfx90a__)
+  if (MinSrcs > 1) {
+    reduceCopyPacks<RedFn, T, Unroll/2*(16/sizeof(T))/2, sizeof(T),
+    MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
+    (nThreads, thread, redArg, preOpArgs, postOp,
+     nSrcs, srcPtrFn, nDsts, dstPtrFn, nBytesBehind, nBytesAhead);
+  } else {
+    reduceCopyPacks<RedFn, T, Unroll*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
+    MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
+    (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
+     nSrcs, srcPtrFn, nDsts, dstPtrFn, /*&*/nBytesBehind, /*&*/nBytesAhead);
+  }
+#else
   reduceCopyPacks<RedFn, T, Unroll*(16/sizeof(T))/2, /*BytePerPack=*/sizeof(T),
     MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
     (nThreads, /*&*/thread, redArg, preOpArgs, postOp,
      nSrcs, srcPtrFn, nDsts, dstPtrFn, /*&*/nBytesBehind, /*&*/nBytesAhead);
-
+#endif
   if (nBytesAhead == 0) return;
 
   reduceCopyPacks<RedFn, T, /*Unroll=*/1, /*BytePerPack=*/sizeof(T),
