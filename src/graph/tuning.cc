@@ -265,7 +265,7 @@ static struct tuningModel tuning_model_5 {
 
   .llProtoRanges = {
     /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
+    /*AllGather*/     {/* LL (Min/Max) */ {0, 98304} , /* LL128 (Min/Max) */ {98304, 5046272}},
   },
 };
 
