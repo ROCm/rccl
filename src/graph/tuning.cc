@@ -103,10 +103,7 @@ static struct tuningModel tuning_model_0 {
     { 1.0, 0.8, 0.2, 1.0, 1.0, 0.3, 1.0, 0.1, 0.1, 0.2, 0.2, 0.1, 0.5, 1.0, 0.8, 0.8, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
 
-  .llProtoRanges = {
-    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-  },
+  .llProtoRanges = {0},
 };
 
 static struct tuningModel tuning_model_1 {
@@ -138,10 +135,7 @@ static struct tuningModel tuning_model_1 {
     { 0.3, 1.0, 0.3, 0.1, 0.1, 0.1, 0.3, 0.7, 1.0, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.3, 0.5, 0.9, 1.0, 1.0, 1.0, 1.0, },
   },
 
-  .llProtoRanges = {
-    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-  },
+  .llProtoRanges = {0},
 };
 
 static struct tuningModel tuning_model_2 {
@@ -173,10 +167,7 @@ static struct tuningModel tuning_model_2 {
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.5, 0.6, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
 
-  .llProtoRanges = {
-    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-  },
+  .llProtoRanges = {0},
 };
 
 static struct tuningModel tuning_model_3 {
@@ -208,10 +199,7 @@ static struct tuningModel tuning_model_3 {
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.5, 1.0, 0.1, 0.3, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.3, 0.4, 0.7, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
 
-  .llProtoRanges = {
-    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-  },
+  .llProtoRanges = {0},
 };
 
 static struct tuningModel tuning_model_4 {
@@ -243,10 +231,7 @@ static struct tuningModel tuning_model_4 {
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 0.8, 0.5, 0.1, 0.7, 0.2, 0.4, 0.4, 0.6, 0.7, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
 
-  .llProtoRanges = {
-    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-  },
+  .llProtoRanges = {0},
 };
 
 static struct tuningModel tuning_model_5 {
