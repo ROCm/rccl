@@ -1723,14 +1723,12 @@ static ncclResult_t topoGetAlgoInfo(
   if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
     auto llMin = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][0];
     auto llMax = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][1];
-    bool llSet = llMax > llMin;
 
     auto ll128Min = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][0];
     auto ll128Max = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1];
-    bool ll128Set = ll128Max > ll128Min;
 
     // Only override model choices if min/max cutoff points are set in the tuning models
-    if(ll128Set || llSet) {
+    if((ll128Max > ll128Min) || (llMax > llMin)) {
       // Keep it simple unless otherwise required
       info->protocol = NCCL_PROTO_SIMPLE;
     }
