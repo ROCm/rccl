@@ -1731,6 +1731,9 @@ static ncclResult_t topoGetAlgoInfo(
     if((ll128Max > ll128Min) || (llMax > llMin)) {
       // Keep it simple unless otherwise required
       info->protocol = NCCL_PROTO_SIMPLE;
+    } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && comm->rank == 0) {
+      // Warn that model detection for MI300 (or others) did not work as expected
+      WARN("LL cutoff points not detected for a supported arch %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
     }
     // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
     size_t sizePerRank = nBytes / comm->nRanks;
