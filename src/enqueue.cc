@@ -1721,18 +1721,29 @@ static ncclResult_t topoGetAlgoInfo(
   }
 
   if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
-    // Keep it simple unless otherwise required
-    info->protocol = NCCL_PROTO_SIMPLE;
+    auto llMin = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][0];
+    auto llMax = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][1];
+    bool llSet = llMax > llMin;
+
+    auto ll128Min = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][0];
+    auto ll128Max = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1];
+    bool ll128Set = ll128Max > ll128Min;
+
+    // Only override model choices if min/max cutoff points are set in the tuning models
+    if(ll128Set || llSet) {
+      // Keep it simple unless otherwise required
+      info->protocol = NCCL_PROTO_SIMPLE;
+    }
     // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
     size_t sizePerRank = nBytes / comm->nRanks;
 
-    if(sizePerRank <= comm->minMaxLLRange[info->func][NCCL_PROTO_LL][1] && sizePerRank >= comm->minMaxLLRange[info->func][NCCL_PROTO_LL][0]) {
+    if(sizePerRank <= llMax && sizePerRank > llMin) {
       info->protocol = NCCL_PROTO_LL;
     }
 #if defined(ENABLE_LL128)
     // When applicable, LL128 RS performance is better than LL, so the next condition overrides the previous LL choice
     if(comm->topo->ll128Enabled) {
-      if(sizePerRank <= comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1] && sizePerRank >= comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][0]) {
+      if(sizePerRank <= ll128Max && sizePerRank > ll128Min) {
         info->protocol = NCCL_PROTO_LL128;
       }
     }
