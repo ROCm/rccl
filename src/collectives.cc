@@ -45,16 +45,12 @@ const char* ncclDatatypeToString(ncclDataType_t type) {
   case ncclUint32: return "ncclUint32";
   case ncclInt64: return "ncclInt64";
   case ncclUint64: return "ncclUint64";
-#if defined(RCCL_FLOAT8)
-  case ncclFp8E4M3: return "ncclFp8E4M3";
-  case ncclFp8E5M2: return "ncclFp8E5M2";
-#endif
   case ncclFloat16: return "ncclFloat16";
   case ncclFloat32: return "ncclFloat32";
   case ncclFloat64: return "ncclFloat64";
-#if defined(RCCL_BFLOAT16)
   case ncclBfloat16: return "ncclBfloat16";
-#endif
+  case ncclFloat8e4m3: return "ncclFloat8e4m3";
+  case ncclFloat8e5m2: return "ncclFloat8e5m2";
   default: return "Unknown";
   }
 }

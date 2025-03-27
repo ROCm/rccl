@@ -289,12 +289,29 @@ SPECIALIZE_REDUCE(FuncMinMax, half, 1, half, fn.isMinNotMax ? __hmin(x, y) : __h
 #endif
 
 #if defined(RCCL_FLOAT8)
+#if __CUDA_ARCH__ >= 900
+  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e4m3, 1, __nv_fp8_e4m3, __nv_fp8_e4m3(__hadd(__half(x),__half(y))))
+  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e4m3, 2, __nv_fp8x2_e4m3, __nv_fp8x2_e4m3(__hadd2(__half2(x),__half2(y))))
+  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e4m3, 1, __nv_fp8_e4m3, __nv_fp8_e4m3(__hmul(__half(x),__half(y))))
+  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e4m3, 2, __nv_fp8x2_e4m3, __nv_fp8x2_e4m3(__hmul2(__half2(x),__half2(y))))
+  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e4m3, 1, __nv_fp8_e4m3, __nv_fp8_e4m3(fn.isMinNotMax ? __hmin(__half(x),__half(y)) : __hmax(__half(x),__half(y))))
+  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e4m3, 2, __nv_fp8x2_e4m3, __nv_fp8x2_e4m3(fn.isMinNotMax ? __hmin2(__half2(x),__half2(y)) : __hmax2(__half2(x),__half2(y))))
+
+  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e5m2, 1, __nv_fp8_e5m2, __nv_fp8_e5m2(__hadd(__half(x),__half(y))))
+  SPECIALIZE_REDUCE(FuncSum, __nv_fp8_e5m2, 2, __nv_fp8x2_e5m2, __nv_fp8x2_e5m2(__hadd2(__half2(x),__half2(y))))
+  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e5m2, 1, __nv_fp8_e5m2, __nv_fp8_e5m2(__hmul(__half(x),__half(y))))
+  SPECIALIZE_REDUCE(FuncProd, __nv_fp8_e5m2, 2, __nv_fp8x2_e5m2, __nv_fp8x2_e5m2(__hmul2(__half2(x),__half2(y))))
+  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e5m2, 1, __nv_fp8_e5m2, __nv_fp8_e5m2(fn.isMinNotMax ? __hmin(__half(x), __half(y)) : __hmax(__half(x), __half(y))))
+  SPECIALIZE_REDUCE(FuncMinMax, __nv_fp8_e5m2, 2, __nv_fp8x2_e5m2, __nv_fp8x2_e5m2(fn.isMinNotMax ? __hmin2(__half2(x), __half2(y)) : __hmax2(__half2(x), __half2(y))))
+#else
   SPECIALIZE_REDUCE(FuncSum, rccl_float8, 1, rccl_float8, rccl_float8(float(x) + float(y)))
   SPECIALIZE_REDUCE(FuncProd, rccl_float8, 1, rccl_float8, rccl_float8(float(x) * float(y)))
   SPECIALIZE_REDUCE(FuncMinMax, rccl_float8, 1, rccl_float8, rccl_float8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+  
   SPECIALIZE_REDUCE(FuncSum, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) + float(y)))
   SPECIALIZE_REDUCE(FuncProd, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) * float(y)))
   SPECIALIZE_REDUCE(FuncMinMax, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+#endif
 #endif
 
 #undef SPECIALIZE_REDUCE
@@ -450,6 +467,31 @@ struct FuncPreMulSum<half> {
 #endif
 
 #if defined(RCCL_FLOAT8)
+#if __CUDA_ARCH__ >= 900
+  template<>
+  struct FuncPreMulSum<__nv_fp8_e4m3> {
+    using EltType = __nv_fp8_e4m3;
+    __half2 scalar2;
+    __device__ FuncPreMulSum(uint64_t opArg) {
+      union { uint64_t u64; __nv_fp8_storage_t val; };
+      u64 = opArg;
+      scalar2.x = __half(__nv_cvt_fp8_to_halfraw(val, __NV_E4M3));
+      scalar2.y = scalar2.x;
+    }
+  };
+
+  template<>
+  struct FuncPreMulSum<__nv_fp8_e5m2> {
+    using EltType = __nv_fp8_e5m2;
+    __half2 scalar2;
+    __device__ FuncPreMulSum(uint64_t opArg) {
+      union { uint64_t u64; __nv_fp8_storage_t val; };
+      u64 = opArg;
+      scalar2.x = __half(__nv_cvt_fp8_to_halfraw(val, __NV_E5M2));
+      scalar2.y = scalar2.x;
+    }
+  };
+#else
   template<>
   struct FuncPreMulSum<rccl_float8> {
     // Change these to switch between all prescale, all postscale, or both by sqrt(N).
@@ -479,6 +521,7 @@ struct FuncPreMulSum<half> {
       scalar = (float)(val);
     }
   };
+#endif
 #endif
 
 template<typename T>
@@ -548,7 +591,49 @@ struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
   #endif
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+// Apply_PreOp of FuncPreMulSum for fp8.
+
 #if defined(RCCL_FLOAT8)
+#if __CUDA_ARCH__ >= 900
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<__nv_fp8_e4m3>, /*EltPerPack=*/1> {
+    static constexpr bool IsIdentity = false;
+    __device__ static BytePack<sizeof(__nv_fp8_e4m3)> preOp(
+        FuncPreMulSum<__nv_fp8_e4m3> fn, BytePack<sizeof(__nv_fp8_e4m3)> a
+      ) {
+      return toPack<__nv_fp8_e4m3>(__nv_fp8_e4m3(__hmul(__half(fromPack<__nv_fp8_e4m3>(a)), fn.scalar2.x)));
+    }
+  };
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<__nv_fp8_e4m3>, /*EltPerPack=*/2> {
+    static constexpr bool IsIdentity = false;
+    __device__ static BytePack<sizeof(__nv_fp8x2_e4m3)> preOp(
+        FuncPreMulSum<__nv_fp8_e4m3> fn, BytePack<sizeof(__nv_fp8x2_e4m3)> a
+      ) {
+      return toPack<__nv_fp8x2_e4m3>(__nv_fp8x2_e4m3(__hmul2(__half2(fromPack<__nv_fp8x2_e4m3>(a)), fn.scalar2)));
+    }
+  };
+
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<__nv_fp8_e5m2>, /*EltPerPack=*/1> {
+    static constexpr bool IsIdentity = false;
+    __device__ static BytePack<sizeof(__nv_fp8_e5m2)> preOp(
+        FuncPreMulSum<__nv_fp8_e5m2> fn, BytePack<sizeof(__nv_fp8_e5m2)> a
+      ) {
+      return toPack<__nv_fp8_e5m2>(__nv_fp8_e5m2(__hmul(__half(fromPack<__nv_fp8_e5m2>(a)), fn.scalar2.x)));
+    }
+  };
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<__nv_fp8_e5m2>, /*EltPerPack=*/2> {
+    static constexpr bool IsIdentity = false;
+    __device__ static BytePack<sizeof(__nv_fp8x2_e5m2)> preOp(
+        FuncPreMulSum<__nv_fp8_e5m2> fn, BytePack<sizeof(__nv_fp8x2_e5m2)> a
+      ) {
+      return toPack<__nv_fp8x2_e5m2>(__nv_fp8x2_e5m2(__hmul2(__half2(fromPack<__nv_fp8x2_e5m2>(a)), fn.scalar2)));
+    }
+  };
+#else
   template<>
   struct Apply_PreOp<FuncPreMulSum<rccl_float8>, /*EltPerPack=*/1> {
     static constexpr bool IsIdentity = false;
@@ -570,6 +655,7 @@ struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
         return toPack<rccl_bfloat8>(rccl_bfloat8(float(fromPack<rccl_bfloat8>(a)) * float(fn.scalar)));
     }
   };
+#endif
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////

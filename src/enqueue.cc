@@ -2353,11 +2353,11 @@ static ncclResult_t hostToDevRedOp(
       break;
 #endif
 #if defined(RCCL_FLOAT8)
-    case ncclFp8E4M3:
+    case ncclFloat8e4m3:
       opFull->op = ncclDevPreMulSum;
       fp8_e4m3 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
       break;
-    case ncclFp8E5M2:
+    case ncclFloat8e5m2:
       opFull->op = ncclDevPreMulSum;
       fp8_e5m2 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
       break;
