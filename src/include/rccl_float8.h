@@ -39,6 +39,12 @@ typedef struct
 } rccl_bfloat8;
 
 #else // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
+#if 0 //HIP_VERSION >= 6020000
+#include <hip/hip_fp8.h>
+#else
+#define HIP_FP8_TYPE_OCP 0
+#define HIP_FP8_TYPE_FNUZ 0
+#endif
 
 #define HIP_HOST_DEVICE __host__ __device__
 #define HIP_HOST __host__
@@ -332,7 +338,8 @@ namespace rocblas_hip_f8_impl
 static __device__ bool rocblas_hip_f8_bias_mode_bit_device = true;
 static bool            rocblas_hip_f8_bias_mode_bit_host   = true;
 
-struct rccl_float8
+template<bool IsFnuz>
+struct rccl_float8_bc
 {
     uint8_t data;
     enum class rocblas_hip_f8_rounding_mode
@@ -342,7 +349,7 @@ struct rccl_float8
     };
 
     // default constructor
-    HIP_HOST_DEVICE rccl_float8() = default;
+    HIP_HOST_DEVICE rccl_float8_bc() = default;
 
 #if defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
@@ -387,7 +394,7 @@ struct rccl_float8
 #if defined(__gfx942__) || defined(__gfx950__)
 
     // NOTE: ON-DEVICE... always optimal bias
-    explicit HIP_DEVICE rccl_float8(float                        v,
+    explicit HIP_DEVICE rccl_float8_bc(float                        v,
                                    rocblas_hip_f8_rounding_mode rm
                                    = rocblas_hip_f8_rounding_mode::standard,
                                    uint32_t rng = 0)
@@ -405,7 +412,7 @@ struct rccl_float8
     // both Host and DEVICE for non-gfx942 using s/w simulation
     explicit HIP_HOST_DEVICE
 #endif
-        rccl_float8(float                        v,
+        rccl_float8_bc(float                        v,
                    rocblas_hip_f8_rounding_mode rm  = rocblas_hip_f8_rounding_mode::standard,
                    uint32_t                     rng = 0)
     {
@@ -421,27 +428,27 @@ struct rccl_float8
     }
 
     // Constructor from half
-    explicit HIP_HOST_DEVICE rccl_float8(_Float16                     v,
+    explicit HIP_HOST_DEVICE rccl_float8_bc(_Float16                     v,
                                         rocblas_hip_f8_rounding_mode rm
                                         = rocblas_hip_f8_rounding_mode::standard,
                                         uint32_t rng = 0)
-        : rccl_float8((float)v, rm, rng)
+        : rccl_float8_bc((float)v, rm, rng)
     {
     }
     // constructor from int
-    explicit HIP_HOST_DEVICE rccl_float8(int                          v,
+    explicit HIP_HOST_DEVICE rccl_float8_bc(int                          v,
                                         rocblas_hip_f8_rounding_mode rm
                                         = rocblas_hip_f8_rounding_mode::standard,
                                         uint32_t rng = 0)
-        : rccl_float8((float)v, rm, rng)
+        : rccl_float8_bc((float)v, rm, rng)
     {
     }
     // constructor from double
-    explicit HIP_HOST_DEVICE rccl_float8(double                       v,
+    explicit HIP_HOST_DEVICE rccl_float8_bc(double                       v,
                                         rocblas_hip_f8_rounding_mode rm
                                         = rocblas_hip_f8_rounding_mode::standard,
                                         uint32_t rng = 0)
-        : rccl_float8((float)v, rm, rng)
+        : rccl_float8_bc((float)v, rm, rng)
     {
     }
 
@@ -492,14 +499,15 @@ struct rccl_float8
     }
 
     // assignment overloading only from the same F8 types
-    inline __host__ __device__ rccl_float8& operator=(const rccl_float8& a)
+    inline __host__ __device__ rccl_float8_bc& operator=(const rccl_float8_bc& a)
     {
         data = a.data;
         return *this;
     }
 };
 
-struct rccl_bfloat8
+template<bool IsFnuz>
+struct rccl_bfloat8_bc
 {
     uint8_t data;
     enum class rocblas_hip_f8_rounding_mode
@@ -509,7 +517,7 @@ struct rccl_bfloat8
     };
 
     // default constructor
-    HIP_HOST_DEVICE rccl_bfloat8() = default;
+    HIP_HOST_DEVICE rccl_bfloat8_bc() = default;
 
 #if defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
@@ -554,7 +562,7 @@ struct rccl_bfloat8
 #if defined(__gfx942__) || defined(__gfx950__)
 
     // NOTE: ON-DEVICE... always optimal bias
-    explicit HIP_DEVICE rccl_bfloat8(float                        v,
+    explicit HIP_DEVICE rccl_bfloat8_bc(float                        v,
                                     rocblas_hip_f8_rounding_mode rm
                                     = rocblas_hip_f8_rounding_mode::standard,
                                     uint32_t rng = 0)
@@ -572,7 +580,7 @@ struct rccl_bfloat8
     // both Host and DEVICE for non-gfx942 using s/w simulation
     explicit HIP_HOST_DEVICE
 #endif
-        rccl_bfloat8(float                        v,
+        rccl_bfloat8_bc(float                        v,
                     rocblas_hip_f8_rounding_mode rm  = rocblas_hip_f8_rounding_mode::standard,
                     uint32_t                     rng = 0)
     {
@@ -588,27 +596,27 @@ struct rccl_bfloat8
     }
 
     // Constructor from half
-    explicit HIP_HOST_DEVICE rccl_bfloat8(_Float16                     v,
+    explicit HIP_HOST_DEVICE rccl_bfloat8_bc(_Float16                     v,
                                          rocblas_hip_f8_rounding_mode rm
                                          = rocblas_hip_f8_rounding_mode::standard,
                                          uint32_t rng = 0)
-        : rccl_bfloat8((float)v, rm, rng)
+        : rccl_bfloat8_bc((float)v, rm, rng)
     {
     }
     // constructor from int
-    explicit HIP_HOST_DEVICE rccl_bfloat8(int                          v,
+    explicit HIP_HOST_DEVICE rccl_bfloat8_bc(int                          v,
                                          rocblas_hip_f8_rounding_mode rm
                                          = rocblas_hip_f8_rounding_mode::standard,
                                          uint32_t rng = 0)
-        : rccl_bfloat8((float)v, rm, rng)
+        : rccl_bfloat8_bc((float)v, rm, rng)
     {
     }
     // constructor from double
-    explicit HIP_HOST_DEVICE rccl_bfloat8(double                       v,
+    explicit HIP_HOST_DEVICE rccl_bfloat8_bc(double                       v,
                                          rocblas_hip_f8_rounding_mode rm
                                          = rocblas_hip_f8_rounding_mode::standard,
                                          uint32_t rng = 0)
-        : rccl_bfloat8((float)v, rm, rng)
+        : rccl_bfloat8_bc((float)v, rm, rng)
     {
     }
 
@@ -659,300 +667,210 @@ struct rccl_bfloat8
     }
 
     // assignment overloading only from the same F8 types
-    inline __host__ __device__ rccl_bfloat8& operator=(const rccl_bfloat8& a)
+    inline __host__ __device__ rccl_bfloat8_bc& operator=(const rccl_bfloat8_bc& a)
     {
         data = a.data;
         return *this;
     }
 };
 
-namespace std
-{
-    inline rccl_float8 sin(rccl_float8 a)
-    {
-        return rccl_float8(sinf(float(a)));
-    }
-    inline rccl_float8 cos(rccl_float8 a)
-    {
-        return rccl_float8(cosf(float(a)));
-    }
-    inline rccl_bfloat8 sin(rccl_bfloat8 a)
-    {
-        return rccl_bfloat8(sinf(float(a)));
-    }
-    inline rccl_bfloat8 cos(rccl_bfloat8 a)
-    {
-        return rccl_bfloat8(cosf(float(a)));
-    }
-    __device__ __host__ constexpr rccl_float8 real(const rccl_float8& a)
-    {
-        return a;
-    }
-    __device__ __host__ constexpr rccl_bfloat8 real(const rccl_bfloat8& a)
-    {
-        return a;
-    }
-}
-
-// Special operator overloading
-inline std::ostream& operator<<(std::ostream& os, const rccl_float8& f8)
-{
-    return os << float(f8);
-}
-
-inline std::ostream& operator<<(std::ostream& os, const rccl_bfloat8& bf8)
-{
-    return os << float(bf8);
-}
-
-// all + operator overloading with mixed types
-// mixed types, always converts to f32, does computation in f32, and returns float
-inline __host__ __device__ float operator+(const float fa, rccl_float8 b)
-{
-    return (fa + float(b));
-}
-
-inline __host__ __device__ float operator+(const float fa, rccl_bfloat8 b)
-{
-    return (fa + float(b));
-}
-
-inline __host__ __device__ float operator+(rccl_float8 a, const float fb)
-{
-    return (float(a) + fb);
-}
-
-inline __host__ __device__ float operator+(rccl_bfloat8 a, const float fb)
-{
-    return (float(a) + fb);
-}
-
-inline __host__ __device__ float operator+(rccl_float8 a, rccl_bfloat8 b)
-{
-    return (float(a) + float(b));
-}
-
-inline __host__ __device__ float operator+(rccl_bfloat8 a, rccl_float8 b)
-{
-    return (float(a) + float(b));
-}
-
-inline __host__ __device__ rccl_float8 operator+(rccl_float8 a, rccl_float8 b)
-{
-    return rccl_float8(float(a) + float(b));
-}
-
-inline __host__ __device__ rccl_bfloat8 operator+(rccl_bfloat8 a, rccl_bfloat8 b)
-{
-    return rccl_bfloat8(float(a) + float(b));
-}
-
-inline __host__ __device__ rccl_float8& operator+=(rccl_float8& a, rccl_float8 b)
-{
-    return a = rccl_float8(float(a) + float(b));
-}
-
-inline __host__ __device__ rccl_bfloat8& operator+=(rccl_bfloat8& a, rccl_bfloat8 b)
-{
-    return a = rccl_bfloat8(float(a) + float(b));
-}
-
-// overloading multiplication, always returns float,
-inline __host__ __device__ float operator*(rccl_float8 a, rccl_float8 b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(float a, rccl_float8 b)
-{
-    return (a * float(b));
-}
-
-inline __host__ __device__ float operator*(rccl_float8 a, float b)
-{
-    return (float(a) * b);
-}
-
-inline __host__ __device__ float operator*(int32_t a, rccl_float8 b)
-{
-    return ((float)a * float(b));
-}
-
-inline __host__ __device__ float operator*(double a, rccl_float8 b)
-{
-    return ((float)a * float(b));
-}
-
-inline __host__ __device__ float operator*(rccl_bfloat8 a, rccl_bfloat8 b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(float a, rccl_bfloat8 b)
-{
-    return (a * float(b));
-}
-
-inline __host__ __device__ float operator*(rccl_bfloat8 a, float b)
-{
-    return (float(a) * b);
-}
-
-inline __host__ __device__ float operator*(int32_t a, rccl_bfloat8 b)
-{
-    return ((float)a * float(b));
-}
-
-inline __host__ __device__ float operator*(double a, rccl_bfloat8 b)
-{
-    return ((float)a * float(b));
-}
-
-// overloading for mixed f8 and bf8 types
-inline __host__ __device__ float operator*(rccl_float8 a, rccl_bfloat8 b)
-{
-    return float(a) * float(b);
-}
-
-inline __host__ __device__ float operator*(rccl_bfloat8 a, rccl_float8 b)
-{
-    return float(a) * float(b);
-}
-
-// all - operator overloading with mixed types
-// mixed types, always converts to f32, does computation in f32, and returns float
-inline __host__ __device__ float operator-(const float fa, rccl_float8 b)
-{
-    return (fa - float(b));
-}
-
-inline __host__ __device__ float operator-(const float fa, rccl_bfloat8 b)
-{
-    return (fa - float(b));
-}
-
-inline __host__ __device__ float operator-(rccl_float8 a, const float fb)
-{
-    return (float(a) - fb);
-}
-
-inline __host__ __device__ float operator-(rccl_bfloat8 a, const float fb)
-{
-    return (float(a) - fb);
-}
-
-inline __host__ __device__ float operator-(rccl_float8 a, rccl_bfloat8 b)
-{
-    return (float(a) - float(b));
-}
-
-inline __host__ __device__ float operator-(rccl_bfloat8 a, rccl_float8 b)
-{
-    return (float(a) - float(b));
-}
-
-inline __host__ __device__ rccl_float8 operator-(rccl_float8 a, rccl_float8 b)
-{
-    return rccl_float8(float(a) - float(b));
-}
-
-inline __host__ __device__ rccl_bfloat8 operator-(rccl_bfloat8 a, rccl_bfloat8 b)
-{
-    return rccl_bfloat8(float(a) - float(b));
-}
-
-inline __host__ __device__ rccl_float8& operator-=(rccl_float8& a, rccl_float8 b)
-{
-    return a = rccl_float8(float(a) - float(b));
-}
-
-inline __host__ __device__ rccl_bfloat8& operator-=(rccl_bfloat8& a, rccl_bfloat8 b)
-{
-    return a = rccl_bfloat8(float(a) - float(b));
-}
-
-// overloading division, always returns float,
-inline __host__ __device__ float operator/(rccl_float8 a, rccl_float8 b)
-{
-    return float(a) / float(b);
-}
-
-inline __host__ __device__ float operator/(float a, rccl_float8 b)
-{
-    return (a / float(b));
-}
-
-inline __host__ __device__ float operator/(rccl_float8 a, float b)
-{
-    return (float(a) / b);
-}
-
-inline __host__ __device__ float operator/(int32_t a, rccl_float8 b)
-{
-    return ((float)a / float(b));
-}
-
-inline __host__ __device__ float operator/(double a, rccl_float8 b)
-{
-    return ((float)a / float(b));
-}
-
-inline __host__ __device__ float operator/(rccl_bfloat8 a, rccl_bfloat8 b)
-{
-    return float(a) / float(b);
-}
-
-inline __host__ __device__ float operator/(float a, rccl_bfloat8 b)
-{
-    return (a / float(b));
-}
-
-inline __host__ __device__ float operator/(rccl_bfloat8 a, float b)
-{
-    return (float(a) / b);
-}
-
-inline __host__ __device__ float operator/(int32_t a, rccl_bfloat8 b)
-{
-    return ((float)a / float(b));
-}
-
-inline __host__ __device__ float operator/(double a, rccl_bfloat8 b)
-{
-    return ((float)a / float(b));
-}
-
-// overloading for mixed f8 and bf8 types
-inline __host__ __device__ float operator/(rccl_float8 a, rccl_bfloat8 b)
-{
-    return float(a) / float(b);
-}
-
-inline __host__ __device__ float operator/(rccl_bfloat8 a, rccl_float8 b)
-{
-    return float(a) / float(b);
-}
+//namespace std
+//{
+//    inline rccl_float8_bc sin(rccl_float8_bc a)
+//    {
+//        return rccl_float8_bc(sinf(float(a)));
+//    }
+//    inline rccl_float8_bc cos(rccl_float8_bc a)
+//    {
+//        return rccl_float8_bc(cosf(float(a)));
+//    }
+//    inline rccl_bfloat8_bc sin(rccl_bfloat8_bc a)
+//    {
+//        return rccl_bfloat8_bc(sinf(float(a)));
+//    }
+//    inline rccl_bfloat8_bc cos(rccl_bfloat8_bc a)
+//    {
+//        return rccl_bfloat8_bc(cosf(float(a)));
+//    }
+//    __device__ __host__ constexpr rccl_float8_bc real(const rccl_float8_bc& a)
+//    {
+//        return a;
+//    }
+//    __device__ __host__ constexpr rccl_bfloat8_bc real(const rccl_bfloat8_bc& a)
+//    {
+//        return a;
+//    }
+//}
 
 // overloading for compare
-inline __host__ __device__ bool operator==(rccl_float8 a, rccl_float8 b)
+template <bool IsFnuz>
+inline __host__ __device__ bool operator==(rccl_float8_bc<IsFnuz> a, rccl_float8_bc<IsFnuz> b)
 {
     return (a.data == b.data);
 }
 
-inline __host__ __device__ bool operator==(rccl_bfloat8 a, rccl_bfloat8 b)
+template <bool IsFnuz>
+inline __host__ __device__ bool operator==(rccl_bfloat8_bc<IsFnuz> a, rccl_bfloat8_bc<IsFnuz> b)
 {
     return (a.data == b.data);
 }
 
-inline __host__ __device__ bool operator!=(rccl_float8 a, rccl_float8 b)
+template <bool IsFnuz>
+inline __host__ __device__ bool operator!=(rccl_float8_bc<IsFnuz> a, rccl_float8_bc<IsFnuz> b)
 {
     return (a.data != b.data);
 }
 
-inline __host__ __device__ bool operator!=(rccl_bfloat8 a, rccl_bfloat8 b)
+template <bool IsFnuz>
+inline __host__ __device__ bool operator!=(rccl_bfloat8_bc<IsFnuz> a, rccl_bfloat8_bc<IsFnuz> b)
 {
     return (a.data != b.data);
 }
+
+#if HIP_FP8_TYPE_OCP
+typedef __hip_fp8_e4m3 rccl_float8;
+typedef __hip_fp8_e5m2 rccl_bfloat8;
+#else
+typedef rccl_float8_bc<false> rccl_float8;
+typedef rccl_bfloat8_bc<false> rccl_bfloat8;
+#endif
+
+#define RCCL_FLOAT8_OPERATORS(TYPE) \
+/* Special operator overloading */ \
+inline std::ostream& operator<<(std::ostream& os, const TYPE& f8) \
+{ \
+    return os << float(f8); \
+} \
+\
+/* all + operator overloading with mixed types */ \
+/* mixed types, always converts to f32, does computation in f32, and returns float */ \
+inline __host__ __device__ float operator+(const float fa, TYPE b) \
+{ \
+    return (fa + float(b)); \
+} \
+\
+inline __host__ __device__ float operator+(TYPE a, const float fb) \
+{ \
+    return (float(a) + fb); \
+} \
+\
+inline __host__ __device__ TYPE operator+(TYPE a, TYPE b) \
+{ \
+    return TYPE(float(a) + float(b)); \
+} \
+ \
+inline __host__ __device__ TYPE& operator+=(TYPE& a, TYPE b) \
+{ \
+    return a = TYPE(float(a) + float(b)); \
+} \
+ \
+/* overloading multiplication, always returns float, */ \
+inline __host__ __device__ float operator*(TYPE a, TYPE b) \
+{ \
+    return float(a) * float(b); \
+} \
+ \
+inline __host__ __device__ float operator*(float a, TYPE b) \
+{ \
+    return (a * float(b)); \
+} \
+ \
+inline __host__ __device__ float operator*(TYPE a, float b) \
+{ \
+    return (float(a) * b); \
+} \
+ \
+inline __host__ __device__ float operator*(int32_t a, TYPE b) \
+{ \
+    return ((float)a * float(b)); \
+} \
+ \
+inline __host__ __device__ float operator*(double a, TYPE b) \
+{ \
+    return ((float)a * float(b)); \
+} \
+ \
+/* all - operator overloading with mixed types */ \
+/* mixed types, always converts to f32, does computation in f32, and returns float */ \
+inline __host__ __device__ float operator-(const float fa, TYPE b) \
+{ \
+    return (fa - float(b)); \
+} \
+ \
+inline __host__ __device__ float operator-(TYPE a, const float fb) \
+{ \
+    return (float(a) - fb); \
+} \
+ \
+inline __host__ __device__ TYPE operator-(TYPE a, TYPE b) \
+{ \
+    return TYPE(float(a) - float(b)); \
+} \
+ \
+inline __host__ __device__ TYPE& operator-=(TYPE& a, TYPE b) \
+{ \
+    return a = TYPE(float(a) - float(b)); \
+} \
+ \
+/* overloading division, always returns float, */ \
+inline __host__ __device__ float operator/(TYPE a, TYPE b) \
+{ \
+    return float(a) / float(b); \
+} \
+ \
+inline __host__ __device__ float operator/(float a, TYPE b) \
+{ \
+    return (a / float(b)); \
+} \
+ \
+inline __host__ __device__ float operator/(TYPE a, float b) \
+{ \
+    return (float(a) / b); \
+} \
+ \
+inline __host__ __device__ float operator/(int32_t a, TYPE b) \
+{ \
+    return ((float)a / float(b)); \
+} \
+ \
+inline __host__ __device__ float operator/(double a, TYPE b) \
+{ \
+    return ((float)a / float(b)); \
+}
+
+#define RCCL_FLOAT8_MIXED_OPERATORS_1(TYPE1, TYPE2) \
+/* overloading for mixed f8 and bf8 types */ \
+inline __host__ __device__ float operator*(TYPE1 a, TYPE2 b) \
+{ \
+    return float(a) * float(b); \
+} \
+ \
+inline __host__ __device__ float operator+(TYPE1 a, TYPE2 b) \
+{ \
+    return (float(a) + float(b)); \
+} \
+ \
+inline __host__ __device__ float operator-(TYPE1 a, TYPE2 b) \
+{ \
+    return (float(a) - float(b)); \
+} \
+ \
+inline __host__ __device__ float operator/(TYPE1 a, TYPE2 b) \
+{ \
+    return float(a) / float(b); \
+}
+
+#define RCCL_FLOAT8_MIXED_OPERATORS(TYPE1, TYPE2) \
+RCCL_FLOAT8_MIXED_OPERATORS_1(TYPE1, TYPE2) \
+RCCL_FLOAT8_MIXED_OPERATORS_1(TYPE2, TYPE1)
+
+RCCL_FLOAT8_OPERATORS(rccl_float8)
+RCCL_FLOAT8_OPERATORS(rccl_bfloat8)
+RCCL_FLOAT8_MIXED_OPERATORS(rccl_float8, rccl_bfloat8)
+
+#undef RCCL_FLOAT8_OPERATORS
+#undef RCCL_FLOAT8_MIXED_OPERATORS
+#undef RCCL_FLOAT8_MIXED_OPERATORS_1
 
 // ================ Explicit downcasting to support different rounding (RNE, SR) ===============
 // NOTE: we going to remove all assignment operator overloading from other types and enforce
