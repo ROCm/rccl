@@ -29,6 +29,10 @@ template<>
 struct IsFloatingPoint<rccl_float8>: std::true_type {};
 template<>
 struct IsFloatingPoint<rccl_bfloat8>: std::true_type {};
+template<>
+struct IsFloatingPoint<rccl_float8_fnuz>: std::true_type {};
+template<>
+struct IsFloatingPoint<rccl_bfloat8_fnuz>: std::true_type {};
 #endif
 template<>
 struct IsFloatingPoint<float>: std::true_type {};
@@ -311,6 +315,14 @@ SPECIALIZE_REDUCE(FuncMinMax, half, 1, half, fn.isMinNotMax ? __hmin(x, y) : __h
   SPECIALIZE_REDUCE(FuncSum, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) + float(y)))
   SPECIALIZE_REDUCE(FuncProd, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(float(x) * float(y)))
   SPECIALIZE_REDUCE(FuncMinMax, rccl_bfloat8, 1, rccl_bfloat8, rccl_bfloat8(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+
+  SPECIALIZE_REDUCE(FuncSum, rccl_float8_fnuz, 1, rccl_float8_fnuz, rccl_float8_fnuz(float(x) + float(y)))
+  SPECIALIZE_REDUCE(FuncProd, rccl_float8_fnuz, 1, rccl_float8_fnuz, rccl_float8_fnuz(float(x) * float(y)))
+  SPECIALIZE_REDUCE(FuncMinMax, rccl_float8_fnuz, 1, rccl_float8_fnuz, rccl_float8_fnuz(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
+  
+  SPECIALIZE_REDUCE(FuncSum, rccl_bfloat8_fnuz, 1, rccl_bfloat8_fnuz, rccl_bfloat8_fnuz(float(x) + float(y)))
+  SPECIALIZE_REDUCE(FuncProd, rccl_bfloat8_fnuz, 1, rccl_bfloat8_fnuz, rccl_bfloat8_fnuz(float(x) * float(y)))
+  SPECIALIZE_REDUCE(FuncMinMax, rccl_bfloat8_fnuz, 1, rccl_bfloat8_fnuz, rccl_bfloat8_fnuz(fn.isMinNotMax ? fminf(float(x), float(y)) : fmaxf(float(x), float(y))))
 #endif
 #endif
 
@@ -521,6 +533,36 @@ struct FuncPreMulSum<half> {
       scalar = (float)(val);
     }
   };
+
+  template<>
+  struct FuncPreMulSum<rccl_float8_fnuz> {
+    // Change these to switch between all prescale, all postscale, or both by sqrt(N).
+    // Obviously, the only invalid combination is both true. An improvement would be
+    // make this parameterized as a build time setting and passed here through
+    // preprocessor definitions.
+    using EltType = rccl_float8_fnuz;
+    float scalar;
+    __device__ FuncPreMulSum(uint64_t opArg=0) {
+      union { uint64_t u64; rccl_float8_fnuz val; };
+      u64 = opArg;
+      scalar = (float)(val);
+    }
+  };
+
+  template<>
+  struct FuncPreMulSum<rccl_bfloat8_fnuz> {
+    // Change these to switch between all prescale, all postscale, or both by sqrt(N).
+    // Obviously, the only invalid combination is both true. An improvement would be
+    // make this parameterized as a build time setting and passed here through
+    // preprocessor definitions.
+    using EltType = rccl_bfloat8_fnuz;
+    float scalar;
+    __device__ FuncPreMulSum(uint64_t opArg=0) {
+      union { uint64_t u64; rccl_bfloat8_fnuz val; };
+      u64 = opArg;
+      scalar = (float)(val);
+    }
+  };
 #endif
 #endif
 
@@ -653,6 +695,28 @@ struct Apply_PreOp<FuncPreMulSum<half>, /*EltPerPack=*/1> {
         FuncPreMulSum<rccl_bfloat8> fn, BytePack<sizeof(rccl_bfloat8)> a
       ) {
         return toPack<rccl_bfloat8>(rccl_bfloat8(float(fromPack<rccl_bfloat8>(a)) * float(fn.scalar)));
+    }
+  };
+
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<rccl_float8_fnuz>, /*EltPerPack=*/1> {
+    static constexpr bool IsIdentity = false;
+
+    __device__ static BytePack<sizeof(rccl_float8_fnuz)> preOp(
+        FuncPreMulSum<rccl_float8_fnuz> fn, BytePack<sizeof(rccl_float8_fnuz)> a
+      ) {
+        return toPack<rccl_float8_fnuz>(rccl_float8_fnuz(float(fromPack<rccl_float8_fnuz>(a)) * float(fn.scalar)));
+    }
+  };
+
+  template<>
+  struct Apply_PreOp<FuncPreMulSum<rccl_bfloat8_fnuz>, /*EltPerPack=*/1> {
+    static constexpr bool IsIdentity = false;
+
+    __device__ static BytePack<sizeof(rccl_bfloat8_fnuz)> preOp(
+        FuncPreMulSum<rccl_bfloat8_fnuz> fn, BytePack<sizeof(rccl_bfloat8_fnuz)> a
+      ) {
+        return toPack<rccl_bfloat8_fnuz>(rccl_bfloat8_fnuz(float(fromPack<rccl_bfloat8_fnuz>(a)) * float(fn.scalar)));
     }
   };
 #endif

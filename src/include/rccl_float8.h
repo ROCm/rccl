@@ -735,6 +735,14 @@ typedef rccl_float8_bc<false> rccl_float8;
 typedef rccl_bfloat8_bc<false> rccl_bfloat8;
 #endif
 
+#if HIP_FP8_TYPE_FNUZ
+typedef __hip_fp8_e4m3_fnuz rccl_float8_fnuz;
+typedef __hip_fp8_e5m2_fnuz rccl_bfloat8_fnuz;
+#else
+typedef rccl_float8_bc<true> rccl_float8_fnuz;
+typedef rccl_bfloat8_bc<true> rccl_bfloat8_fnuz;
+#endif
+
 #define RCCL_FLOAT8_OPERATORS(TYPE) \
 /* Special operator overloading */ \
 inline std::ostream& operator<<(std::ostream& os, const TYPE& f8) \
@@ -866,7 +874,14 @@ RCCL_FLOAT8_MIXED_OPERATORS_1(TYPE2, TYPE1)
 
 RCCL_FLOAT8_OPERATORS(rccl_float8)
 RCCL_FLOAT8_OPERATORS(rccl_bfloat8)
+RCCL_FLOAT8_OPERATORS(rccl_float8_fnuz)
+RCCL_FLOAT8_OPERATORS(rccl_bfloat8_fnuz)
 RCCL_FLOAT8_MIXED_OPERATORS(rccl_float8, rccl_bfloat8)
+RCCL_FLOAT8_MIXED_OPERATORS(rccl_float8, rccl_float8_fnuz)
+RCCL_FLOAT8_MIXED_OPERATORS(rccl_float8, rccl_bfloat8_fnuz)
+RCCL_FLOAT8_MIXED_OPERATORS(rccl_bfloat8, rccl_float8_fnuz)
+RCCL_FLOAT8_MIXED_OPERATORS(rccl_bfloat8, rccl_bfloat8_fnuz)
+RCCL_FLOAT8_MIXED_OPERATORS(rccl_float8_fnuz, rccl_bfloat8_fnuz)
 
 #undef RCCL_FLOAT8_OPERATORS
 #undef RCCL_FLOAT8_MIXED_OPERATORS

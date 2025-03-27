@@ -228,6 +228,8 @@ static ncclResult_t hostToDevRedOp(
     #if defined(RCCL_FLOAT8)
       rccl_float8 fp8_e4m3;
       rccl_bfloat8 fp8_e5m2;
+      rccl_float8_fnuz fp8_e4m3_fnuz;
+      rccl_bfloat8_fnuz fp8_e5m2_fnuz;
     #endif
     float f32;
     double f64;
