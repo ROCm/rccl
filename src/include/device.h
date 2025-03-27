@@ -664,13 +664,7 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
   case ncclInt64:
   case ncclUint64:
   case ncclFloat16:
-#if defined(RCCL_BFLOAT16)
   case ncclBfloat16:
-#endif
-#if defined(RCCL_FLOAT8)
-  case ncclFp8E4M3:
-  case ncclFp8E5M2:
-#endif
     return devRedOp == ncclDevSum || devRedOp == ncclDevMinMax;
   case ncclFloat:
   case ncclDouble:

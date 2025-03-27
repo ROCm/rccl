@@ -2260,22 +2260,17 @@ static ncclResult_t hostToDevRedOp(
     ncclDevRedOpFull *opFull, ncclRedOp_t op, ncclDataType_t datatype, ncclComm *comm
   ) {
   union {
-    int8_t i8;
-    uint8_t u8;
-    int32_t i32;
-    uint32_t u32;
-    int64_t i64;
-    uint64_t u64;
-    half f16;
-    float f32;
-    double f64;
-#if defined(RCCL_BFLOAT16)
-    hip_bfloat16 bf16;
-#endif
-#if defined(RCCL_FLOAT8)
-    rccl_float8 fp8_e4m3;
-    rccl_bfloat8 fp8_e5m2;
-#endif
+    int8_t   i8; uint8_t   u8;
+    int32_t i32; uint32_t u32;
+    int64_t i64; uint64_t u64;
+    __half f16; float f32; double f64;
+    #if defined(RCCL_BFLOAT16)
+      hip_bfloat16 bf16;
+    #endif
+    #if defined(RCCL_FLOAT8)
+      rccl_float8 f8;
+      rccl_bfloat8 bf8;
+    #endif
     void *ptr;
   };
   u64 = 0;
@@ -2308,26 +2303,26 @@ static ncclResult_t hostToDevRedOp(
       opFull->op = ncclDevSumPostDiv;
       u64 = comm->nRanks;
       break;
+    #if defined(RCCL_FLOAT8)
+    case ncclFloat8e4m3:
+      opFull->op = ncclDevPreMulSum;
+      f8 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
+      break;
+    case ncclFloat8e5m2:
+      opFull->op = ncclDevPreMulSum;
+      bf8 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
+      break;
+    #endif
     case ncclFloat16:
       opFull->op = ncclDevPreMulSum;
       f16 = __float2half(float(1.0/comm->nRanks)); // __double2half not supported pre CUDA 11.x
       break;
-#if defined(RCCL_BFLOAT16)
+    #if defined(RCCL_BFLOAT16)
     case ncclBfloat16:
       opFull->op = ncclDevPreMulSum;
       bf16 = (hip_bfloat16)(float(1.0/comm->nRanks));
       break;
-#endif
-#if defined(RCCL_FLOAT8)
-    case ncclFp8E4M3:
-      opFull->op = ncclDevPreMulSum;
-      fp8_e4m3 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
-      break;
-    case ncclFp8E5M2:
-      opFull->op = ncclDevPreMulSum;
-      fp8_e5m2 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
-      break;
-#endif
+    #endif
     case ncclFloat32:
       opFull->op = ncclDevPreMulSum;
       f32 = float(1.0/comm->nRanks);

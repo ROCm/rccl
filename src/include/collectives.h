@@ -38,15 +38,11 @@ inline int ncclTypeSize(ncclDataType_t type) {
   switch (type) {
   case ncclInt8:
   case ncclUint8:
-#if defined(RCCL_FLOAT8)
-  case ncclFp8E4M3:
-  case ncclFp8E5M2:
-#endif
+  case ncclFloat8e4m3:
+  case ncclFloat8e5m2:
     return 1;
   case ncclFloat16:
-#if defined(RCCL_BFLOAT16)
   case ncclBfloat16:
-#endif
     return 2;
   case ncclInt32:
   case ncclUint32:

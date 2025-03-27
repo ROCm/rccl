@@ -608,7 +608,7 @@ namespace RcclUnitTesting
     ss << "(" << (inPlace ? "IP" : "OP") << ","
        << (managedMem ? "MM" : "GM") << ","
        << (useHipGraph ? "GL" : "NL") <<") ";
-    ss << std::setfill(' ') << std::setw(12) << ncclDataTypeNames[dataType] << " ";
+    ss << std::setfill(' ') << std::setw(14) << ncclDataTypeNames[dataType] << " ";
     if (CollectiveArgs::UsesReduce(funcType)) ss << std::setfill(' ') << std::setw(7) << ncclRedOpNames[redOp] << " ";
     if (CollectiveArgs::UsesRoot(funcType)) ss << "Root " << root << " ";
     return ss.str();
@@ -684,8 +684,8 @@ namespace RcclUnitTesting
       {
       //Skipping AllReduce FP8 test on 9 to 16 ranks (gfx90a).
       if(ev.isGfx90 && numRanks > 8 && funcTypes[ftIdx] == ncclCollAllReduce
-                    && (dataTypes[dtIdx] == ncclFp8E4M3
-                    || dataTypes[dtIdx] == ncclFp8E5M2))
+                    && (dataTypes[dtIdx] == ncclFloat8e4m3
+                    || dataTypes[dtIdx] == ncclFloat8e5m2))
       {
             continue;
       }
