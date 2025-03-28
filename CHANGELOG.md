@@ -2,6 +2,17 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## Unreleased - RCCL 2.22.3 for ROCm 6.5.0
+
+### Added
+
+* Added new GPU target `gfx950`
+* Added support for `unroll=1` in device-code generation to improve performance
+
+### Known issue
+
+* Using more than 64 channels can cause a segmentation fault when multiple different collectives are used in the same `ncclGroup()` call
+
 ## Unreleased - RCCL 2.22.3 for ROCm 6.4.0
 
 ### Added
