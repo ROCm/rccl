@@ -679,6 +679,10 @@ extern int const ncclDevFuncRowToId[];
 
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
 inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
+  constexpr int numTypes = ncclNumTypes + 2; // [RCCL] account for FNUZ FP8 types not being part of ncclDataType_t
+  //if (rccl_float8_useFnuz && (type == ncclFloat8e4m3 || type == ncclFloat8e5m2)) {
+  //  type += 2;
+  //}
   int row = 0;
   do {
     // RING / <all_protos> / Sum / int8_t
@@ -690,10 +694,10 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
     // <all_algos> / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncAllReduce) {
-      row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
+      row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * numTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
       break;
     }
-    row += (NCCL_NUM_ALGORITHMS - 5) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += (NCCL_NUM_ALGORITHMS - 5) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * numTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
     if (coll == ncclFuncAllToAllPivot) break;
@@ -708,17 +712,17 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
     // RING / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncReduce) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto; 
+      row += ((proto * ncclNumDevRedOps + devRedOp) * numTypes + type) - NCCL_NUM_FLOATS * proto; 
       break;
     }
-    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * numTypes - NCCL_NUM_FLOATS);
 
     // RING / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncReduceScatter) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto;
+      row += ((proto * ncclNumDevRedOps + devRedOp) * numTypes + type) - NCCL_NUM_FLOATS * proto;
       break;
     }
-    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * numTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
     if (coll == ncclFuncSendRecv) break;

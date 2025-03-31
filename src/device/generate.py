@@ -6,7 +6,7 @@ import subprocess
 # Order of redops, tys, protos, algos must match src/include/device.h
 all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
-all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16", "f8", "bf8"]
+all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16", "f8e4m3", "f8e5m2", "f8e4m3_fnuz", "f8e5m2_fnuz"]
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING"]
 all_unroll = ["1", "2", "4"]
@@ -510,8 +510,10 @@ ty_to_cxx = {
   "f32": "float",
   "f64": "double",
   "bf16": "hip_bfloat16",
-  "f8":  "rccl_float8",
-  "bf8": "rccl_bfloat8",
+  "f8e4m3": "rccl_float8",
+  "f8e5m2": "rccl_bfloat8",
+  "f8e4m3_fnuz": "rccl_float8_fnuz",
+  "f8e5m2_fnuz": "rccl_bfloat8_fnuz"
 }
 
 # Generate each <gensrc>/<impl>.cpp:
