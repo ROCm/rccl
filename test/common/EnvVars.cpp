@@ -204,7 +204,7 @@ namespace RcclUnitTesting
     getArchInfo(&isGfx12, "gfx12");
 
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
-    minGpus        = GetEnvVar("UT_MIN_GPUS"    , 2);
+    minGpus        = GetEnvVar("UT_MIN_GPUS"    , 1);
     maxGpus        = GetEnvVar("UT_MAX_GPUS"    , numDetectedGpus);
     processMask    = GetEnvVar("UT_PROCESS_MASK", UT_SINGLE_PROCESS | UT_MULTI_PROCESS);
     verbose        = GetEnvVar("UT_VERBOSE"     , 0);
