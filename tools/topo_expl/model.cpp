@@ -92,7 +92,7 @@ ncclResult_t p2pCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGrap
 
   // Check topology / p2p level.
   int intermediateRank;
-  NCCLCHECK(ncclTopoCheckP2p(comm->topo, info1->busId, info2->busId, ret, NULL, &intermediateRank));
+  NCCLCHECK(ncclTopoCheckP2p(comm->topo, info1->rank, info2->rank, ret, NULL, &intermediateRank));
   if (*ret == 0) return ncclSuccess;
   if (intermediateRank != -1) {
     if (useMemcpy) *ret = 0;
@@ -101,7 +101,7 @@ ncclResult_t p2pCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGrap
 
   // Check if NET would work better
   int useNet = 0;
-  NCCLCHECK(ncclTopoCheckNet(comm->topo, info1->busId, info2->busId, &useNet));
+  NCCLCHECK(ncclTopoCheckNet(comm->topo, info1->rank, info2->rank, &useNet));
   if (useNet) {
     *ret = 0;
     return ncclSuccess;
@@ -151,7 +151,7 @@ ncclResult_t shmCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGrap
   if (ncclParamShmDisable() == 1) return ncclSuccess;
 
   int useNet = 0;
-  NCCLCHECK(ncclTopoCheckNet(comm->topo, info1->busId, info2->busId, &useNet));
+  NCCLCHECK(ncclTopoCheckNet(comm->topo, info1->rank, info2->rank, &useNet));
   if (useNet) return ncclSuccess;
 
   // Same host?
