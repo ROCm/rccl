@@ -71,7 +71,7 @@ namespace RcclUnitTesting
     , printValues(printValues)
     , useRankThreading(useRankThreading)
   {
-    PtrUnion::SetFloat8Fnuz(useFloat8Fnuz);
+    rccl_float8_useFnuz = useFloat8Fnuz;
   }
 
   int TestBedChild::InitPipes()

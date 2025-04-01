@@ -73,23 +73,17 @@ ncclResult_t ncclLaunchOneRank(void* dst, void const* src, size_t nElts, struct 
   case ncclUint64:   kernel = (void const*)&oneRankReduce<FuncPreMulSum<uint64_t>>; break;
 #if defined(RCCL_FLOAT8)
   case ncclFloat8e4m3:
-  {
     if (rccl_float8_useFnuz) {
-      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_float8_fnuz>>;
+      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_float8_fnuz>>; break;
     } else {
-      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_float8>>;
+      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_float8>>; break;
     }
-    break;
-  }
   case ncclFloat8e5m2:
-  {
     if (rccl_float8_useFnuz) {
-      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat8_fnuz>>;
+      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat8_fnuz>>; break;
     } else {
-      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat8>>;
+      kernel = (void const*)&oneRankReduce<FuncPreMulSum<rccl_bfloat8>>; break;
     }
-    break;
-  }
 #endif
   case ncclFloat16:  kernel = (void const*)&oneRankReduce<FuncPreMulSum<half>>; break;
 #if defined(RCCL_BFLOAT16)

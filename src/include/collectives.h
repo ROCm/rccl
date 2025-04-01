@@ -42,9 +42,7 @@ inline int ncclTypeSize(ncclDataType_t type) {
   case ncclFloat8e5m2:
     return 1;
   case ncclFloat16:
-#if defined(RCCL_BFLOAT16)
   case ncclBfloat16:
-#endif
     return 2;
   case ncclInt32:
   case ncclUint32:

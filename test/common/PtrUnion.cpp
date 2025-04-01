@@ -6,10 +6,11 @@
 
 #include "PtrUnion.hpp"
 #include "api_trace.h"
+
+bool rccl_float8_useFnuz = false;
+
 namespace RcclUnitTesting
 {
-  static bool PtrUnion_Float8UseFnuz = false;
-
   size_t DataTypeToBytes(ncclDataType_t const dataType)
   {
     switch (dataType)
@@ -182,26 +183,20 @@ namespace RcclUnitTesting
     case ncclInt64:    I8[idx] = valueI; break;
     case ncclUint64:   U8[idx] = valueI; break;
     case ncclFloat8e4m3:
-    {
-      if (PtrUnion_Float8UseFnuz) {
-        F1z[idx] = rccl_float8_fnuz(valueF);
+      if (rccl_float8_useFnuz) {
+        F1z[idx] = rccl_float8_fnuz(valueF); break;
       } else {
-        F1[idx] = rccl_float8(valueF);
+        F1[idx] = rccl_float8(valueF); break;
       }
-      break;
-    }
     case ncclFloat16:  F2[idx] = __float2half(static_cast<float>(valueF)); break;
     case ncclFloat32:  F4[idx] = valueF; break;
     case ncclFloat64:  F8[idx] = valueF; break;
     case ncclFloat8e5m2:
-    {
-      if (PtrUnion_Float8UseFnuz) {
-        B1z[idx] = rccl_bfloat8_fnuz(valueF);
+      if (rccl_float8_useFnuz) {
+        B1z[idx] = rccl_bfloat8_fnuz(valueF); break;
       } else {
-        B1[idx] = rccl_bfloat8(valueF);
+        B1[idx] = rccl_bfloat8(valueF); break;
       }
-      break;
-    }
     case ncclBfloat16: B2[idx] = hip_bfloat16(static_cast<float>(valueF)); break;
     default:
       ERROR("Unsupported datatype\n");
@@ -220,11 +215,11 @@ namespace RcclUnitTesting
     case ncclUint32:   valueI = U4[idx]; break;
     case ncclInt64:    valueI = I8[idx]; break;
     case ncclUint64:   valueI = U8[idx]; break;
-    case ncclFloat8e4m3:  valueF = PtrUnion_Float8UseFnuz ? float(F1z[idx]) : float(F1[idx]); break; 
+    case ncclFloat8e4m3:  valueF = rccl_float8_useFnuz ? float(F1z[idx]) : float(F1[idx]); break; 
     case ncclFloat16:  valueF = __half2float(F2[idx]); break;
     case ncclFloat32:  valueF = F4[idx]; break;
     case ncclFloat64:  valueF = F8[idx]; break;
-    case ncclFloat8e5m2:  valueF = PtrUnion_Float8UseFnuz ? float(B1z[idx]) : float(B1[idx]); break; 
+    case ncclFloat8e5m2:  valueF = rccl_float8_useFnuz ? float(B1z[idx]) : float(B1[idx]); break; 
     case ncclBfloat16: valueF = B2[idx]; break;
     default:
       ERROR("Unsupported datatype\n");
@@ -253,26 +248,20 @@ namespace RcclUnitTesting
       case ncclInt64:    I8[idx] *= scalarsPerRank.I8[rank]; break;
       case ncclUint64:   U8[idx] *= scalarsPerRank.U8[rank]; break;
       case ncclFloat8e4m3:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          F1z[idx] = rccl_float8_fnuz(F1z[idx] * scalarsPerRank.F1z[rank]);
+        if (rccl_float8_useFnuz) {
+          F1z[idx] = rccl_float8_fnuz(F1z[idx] * scalarsPerRank.F1z[rank]); break;
         } else {
-          F1[idx]  = rccl_float8(F1[idx] * scalarsPerRank.F1[rank]);
+          F1[idx]  = rccl_float8(F1[idx] * scalarsPerRank.F1[rank]); break;
         }
-        break;
-      }
       case ncclFloat16:  F2[idx]  = __float2half(__half2float(F2[idx]) * __half2float(scalarsPerRank.F2[rank])); break;
       case ncclFloat32:  F4[idx] *= scalarsPerRank.F4[rank]; break;
       case ncclFloat64:  F8[idx] *= scalarsPerRank.F8[rank]; break;
       case ncclFloat8e5m2:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          B1z[idx] = rccl_bfloat8_fnuz(B1z[idx] * scalarsPerRank.B1z[rank]);
+        if (rccl_float8_useFnuz) {
+          B1z[idx] = rccl_bfloat8_fnuz(B1z[idx] * scalarsPerRank.B1z[rank]); break;
         } else {
-          B1[idx]  = rccl_bfloat8(B1[idx] * scalarsPerRank.B1[rank]);
+          B1[idx]  = rccl_bfloat8(B1[idx] * scalarsPerRank.B1[rank]); break;
         }
-        break;
-      }
       case ncclBfloat16: B2[idx] *= scalarsPerRank.B2[rank]; break;
       default:
         ERROR("Unsupported datatype\n");
@@ -304,26 +293,20 @@ namespace RcclUnitTesting
       case ncclInt64:    I8[idx] = ReduceOp(op, I8[idx], inputCpu.I8[idx]); break;
       case ncclUint64:   U8[idx] = ReduceOp(op, U8[idx], inputCpu.U8[idx]); break;
       case ncclFloat8e4m3:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          F1z[idx] = rccl_float8_fnuz(ReduceOp(op, float(F1z[idx]), float(inputCpu.F1z[idx])));
+        if (rccl_float8_useFnuz) {
+          F1z[idx] = rccl_float8_fnuz(ReduceOp(op, float(F1z[idx]), float(inputCpu.F1z[idx]))); break;
         } else {
-          F1[idx] = rccl_float8(ReduceOp(op, float(F1[idx]), float(inputCpu.F1[idx])));
+          F1[idx] = rccl_float8(ReduceOp(op, float(F1[idx]), float(inputCpu.F1[idx]))); break;
         }
-        break;
-      }
       case ncclFloat16:  F2[idx] = __float2half(ReduceOp(op, __half2float(F2[idx]), __half2float(inputCpu.F2[idx]))); break;
       case ncclFloat32:  F4[idx] = ReduceOp(op, F4[idx], inputCpu.F4[idx]); break;
       case ncclFloat64:  F8[idx] = ReduceOp(op, F8[idx], inputCpu.F8[idx]); break;
       case ncclFloat8e5m2:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          B1z[idx] = rccl_bfloat8_fnuz(ReduceOp(op, float(B1z[idx]), float(inputCpu.B1z[idx])));
+        if (rccl_float8_useFnuz) {
+          B1z[idx] = rccl_bfloat8_fnuz(ReduceOp(op, float(B1z[idx]), float(inputCpu.B1z[idx]))); break;
         } else {
-          B1[idx] = rccl_bfloat8(ReduceOp(op, float(B1[idx]), float(inputCpu.B1[idx])));
+          B1[idx] = rccl_bfloat8(ReduceOp(op, float(B1[idx]), float(inputCpu.B1[idx]))); break;
         }
-        break;
-      }
       case ncclBfloat16: B2[idx] = ReduceOp(op, B2[idx], inputCpu.B2[idx]); break;
       default:
         ERROR("Unsupported datatype\n");
@@ -349,26 +332,20 @@ namespace RcclUnitTesting
       case ncclInt64:    I8[idx] /= divisor; break;
       case ncclUint64:   U8[idx] /= divisor; break;
       case ncclFloat8e4m3:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          F1z[idx] = (rccl_float8_fnuz((float)(F1z[idx]) / divisor));
+        if (rccl_float8_useFnuz) {
+          F1z[idx] = (rccl_float8_fnuz((float)(F1z[idx]) / divisor)); break;
         } else {
-          F1[idx] = (rccl_float8((float)(F1[idx]) / divisor));
+          F1[idx] = (rccl_float8((float)(F1[idx]) / divisor)); break;
         }
-        break;
-      }
       case ncclFloat16:  F2[idx] = __float2half(__half2float(F2[idx])/divisor); break;
       case ncclFloat32:  F4[idx] /= divisor; break;
       case ncclFloat64:  F8[idx] /= divisor; break;
       case ncclFloat8e5m2:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          B1z[idx] = (rccl_bfloat8_fnuz((float)(B1z[idx]) / divisor));
+        if (rccl_float8_useFnuz) {
+          B1z[idx] = (rccl_bfloat8_fnuz((float)(B1z[idx]) / divisor)); break;
         } else {
-          B1[idx] = (rccl_bfloat8((float)(B1[idx]) / divisor));
+          B1[idx] = (rccl_bfloat8((float)(B1[idx]) / divisor)); break;
         }
-        break;
-      }
       case ncclBfloat16: B2[idx] = (hip_bfloat16((float)(B2[idx]) / divisor)); break;
       default:
         ERROR("Unsupported datatype\n");
@@ -397,26 +374,20 @@ namespace RcclUnitTesting
       case ncclInt64:   isMatch = (I8[idx] == expected.I8[idx]); break;
       case ncclUint64:  isMatch = (U8[idx] == expected.U8[idx]); break;
       case ncclFloat8e4m3:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          isMatch = (fabs(float(F1z[idx]) - float(expected.F1z[idx])) < 9e-2);
+        if (rccl_float8_useFnuz) {
+          isMatch = (fabs(float(F1z[idx]) - float(expected.F1z[idx])) < 9e-2); break;
         } else {
-          isMatch = (fabs(float(F1[idx]) - float(expected.F1[idx])) < 9e-2);
+          isMatch = (fabs(float(F1[idx]) - float(expected.F1[idx])) < 9e-2); break;
         }
-        break;
-      }
       case ncclFloat16: isMatch = (fabs(__half2float(F2[idx]) - __half2float(expected.F2[idx])) < 9e-2); break;
       case ncclFloat32: isMatch = (fabs(F4[idx] - expected.F4[idx]) < 1e-5); break;
       case ncclFloat64: isMatch = (fabs(F8[idx] - expected.F8[idx]) < 1e-12); break;
       case ncclFloat8e5m2:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          isMatch = (fabs(float(B1z[idx]) - float(expected.B1z[idx])) < 9e-2);
+        if (rccl_float8_useFnuz) {
+          isMatch = (fabs(float(B1z[idx]) - float(expected.B1z[idx])) < 9e-2); break;
         } else {
-          isMatch = (fabs(float(B1[idx]) - float(expected.B1[idx])) < 9e-2);
+          isMatch = (fabs(float(B1[idx]) - float(expected.B1[idx])) < 9e-2); break;
         }
-        break;
-      }
       case ncclBfloat16: isMatch = (fabs((float)B2[idx] - (float)expected.B2[idx]) < 9e-2); break;
       default:
         ERROR("Unsupported datatype\n");
@@ -442,14 +413,11 @@ namespace RcclUnitTesting
       case ncclUint64:
         ERROR("Expected output: %lu.  Actual output: %lu at index %lu\n", expected.U8[idx], U8[idx], idx); break;
       case ncclFloat8e4m3:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.F1z[idx], (float)F1z[idx], idx);
+        if (rccl_float8_useFnuz) {
+          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.F1z[idx], (float)F1z[idx], idx); break;
         } else {
-          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.F1[idx], (float)F1[idx], idx);
+          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.F1[idx], (float)F1[idx], idx); break;
         }
-        break;
-      }
       case ncclFloat16:
         ERROR("Expected output: %f.  Actual output: %f at index %lu\n", __half2float(expected.F2[idx]), __half2float(F2[idx]), idx); break;
       case ncclFloat32:
@@ -457,14 +425,11 @@ namespace RcclUnitTesting
       case ncclFloat64:
         ERROR("Expected output: %lf.  Actual output: %lf at index %lu\n", expected.F8[idx], F8[idx], idx); break;
       case ncclFloat8e5m2:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.B1z[idx], (float)B1z[idx], idx);
+        if (rccl_float8_useFnuz) {
+          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.B1z[idx], (float)B1z[idx], idx); break;
         } else {
-          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.B1[idx], (float)B1[idx], idx);
+          ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.B1[idx], (float)B1[idx], idx); break;
         }
-        break;
-      }
       case ncclBfloat16:
         ERROR("Expected output: %f.  Actual output: %f at index %lu\n", (float)expected.B2[idx], (float)B2[idx], idx); break;
       default:
@@ -490,34 +455,24 @@ namespace RcclUnitTesting
       case ncclInt64:    ss << I8[i]; break;
       case ncclUint64:   ss << U8[i]; break;
       case ncclFloat8e4m3:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          ss << (float)F1z[i];
+        if (rccl_float8_useFnuz) {
+          ss << (float)F1z[i]; break;
         } else {
-          ss << (float)F1[i];
+          ss << (float)F1[i]; break;
         }
-        break;
-      }
       case ncclFloat16:  ss << __half2float(F2[i]); break;
       case ncclFloat32:  ss << F4[i]; break;
       case ncclFloat64:  ss << F8[i]; break;
       case ncclFloat8e5m2:
-      {
-        if (PtrUnion_Float8UseFnuz) {
-          ss << (float)B1z[i];
+        if (rccl_float8_useFnuz) {
+          ss << (float)B1z[i]; break;
         } else {
-          ss << (float)B1[i];
+          ss << (float)B1[i]; break;
         }
-        break;
-      }
       case ncclBfloat16: ss << (float)B2[i]; break;
       default: break;
       }
     }
     return ss.str();
-  }
-
-  void PtrUnion::SetFloat8Fnuz(bool const useFnuz) {
-    PtrUnion_Float8UseFnuz = useFnuz;
   }
 }

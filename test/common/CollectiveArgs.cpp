@@ -201,10 +201,20 @@ namespace RcclUnitTesting
         case ncclUint32:     ss << scalarsPerRank.U4[this->globalRank]; break;
         case ncclInt64:      ss << scalarsPerRank.I8[this->globalRank]; break;
         case ncclUint64:     ss << scalarsPerRank.U8[this->globalRank]; break;
-        case ncclFloat8e4m3: ss << scalarsPerRank.F1[this->globalRank]; break;
+        case ncclFloat8e4m3:
+          if (rccl_float8_useFnuz) {
+            ss << scalarsPerRank.F1z[this->globalRank]; break;
+          } else {
+            ss << scalarsPerRank.F1[this->globalRank]; break;
+          }
         case ncclFloat32:    ss << scalarsPerRank.F4[this->globalRank]; break;
         case ncclFloat64:    ss << scalarsPerRank.F8[this->globalRank]; break;
-        case ncclFloat8e5m2: ss << scalarsPerRank.B1[this->globalRank]; break;
+        case ncclFloat8e5m2:
+          if (rccl_float8_useFnuz) {
+            ss << scalarsPerRank.B1z[this->globalRank]; break;
+          } else {
+            ss << scalarsPerRank.B1[this->globalRank]; break;
+          }
         case ncclBfloat16:   ss << scalarsPerRank.B2[this->globalRank]; break;
         default:             ss << "(UNKNOWN)";
         }

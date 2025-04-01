@@ -674,34 +674,6 @@ struct rccl_bfloat8_bc
     }
 };
 
-//namespace std
-//{
-//    inline rccl_float8_bc sin(rccl_float8_bc a)
-//    {
-//        return rccl_float8_bc(sinf(float(a)));
-//    }
-//    inline rccl_float8_bc cos(rccl_float8_bc a)
-//    {
-//        return rccl_float8_bc(cosf(float(a)));
-//    }
-//    inline rccl_bfloat8_bc sin(rccl_bfloat8_bc a)
-//    {
-//        return rccl_bfloat8_bc(sinf(float(a)));
-//    }
-//    inline rccl_bfloat8_bc cos(rccl_bfloat8_bc a)
-//    {
-//        return rccl_bfloat8_bc(cosf(float(a)));
-//    }
-//    __device__ __host__ constexpr rccl_float8_bc real(const rccl_float8_bc& a)
-//    {
-//        return a;
-//    }
-//    __device__ __host__ constexpr rccl_bfloat8_bc real(const rccl_bfloat8_bc& a)
-//    {
-//        return a;
-//    }
-//}
-
 // overloading for compare
 template <bool IsFnuz>
 inline __host__ __device__ bool operator==(rccl_float8_bc<IsFnuz> a, rccl_float8_bc<IsFnuz> b)
