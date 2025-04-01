@@ -55,7 +55,7 @@ typedef enum {
   ncclNumFuncs = 9
 } ncclFunc_t;
 
-#define NCCL_NUM_ALGORITHMS 6 // Tree/Ring/CollNet*
+#define NCCL_NUM_ALGORITHMS 7 // Tree/Ring/CollNet*
 #define NCCL_ALGO_UNDEF -1
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
@@ -63,6 +63,7 @@ typedef enum {
 #define NCCL_ALGO_COLLNET_CHAIN 3
 #define NCCL_ALGO_NVLS 4
 #define NCCL_ALGO_NVLS_TREE 5
+#define NCCL_ALGO_PAT 6
 
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
 #define NCCL_PROTO_UNDEF -1
@@ -72,9 +73,10 @@ typedef enum {
 
 #define NCCL_ALGO_PROTO_IGNORE -1.0
 
-#define NCCL_NUM_UNROLLS 2 // 2/4
-#define NCCL_UNROLL_2 0
-#define NCCL_UNROLL_4 1
+#define NCCL_NUM_UNROLLS 3 // 1/2/4
+#define NCCL_UNROLL_1 0
+#define NCCL_UNROLL_2 1
+#define NCCL_UNROLL_4 2
 
 #define NCCL_NUM_FLOATS 6 // half/float/double/rccl_bfloat16/rccl_float8/rccl_bfloat8
 #endif

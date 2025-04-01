@@ -172,6 +172,10 @@ int ncclCuMemEnable() {
   return 0;
 }
 
+int ncclCuMemHostEnable() {
+  return 0;
+}
+
 ncclResult_t rocmLibraryInit() {
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;

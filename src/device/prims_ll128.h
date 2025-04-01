@@ -264,6 +264,8 @@ private:
         }
       }
 
+      // Yes, for some template arguments this code will be unreachable.  That's fine.
+      // coverity[dead_error_line]
       for (int i=1; i<MaxRecv && i<fan.nrecv(); i++) {
         uint64_t flag = recvFlag(i);
         uint64_t* ptr = recvPtr(i)+ll128Offset;
@@ -305,6 +307,8 @@ private:
 #endif
     /************************ Send **************************/
     if (SEND) {
+      // Yes, for some template arguments this code will be unreachable.  That's fine.
+      // coverity[dead_error_line]
       for (int i=1; i<MaxSend && i<fan.nsend(); i++) {
         uint64_t flag = sendFlag(i);
         uint64_t* ptr = sendPtr(i)+ll128Offset;
@@ -489,7 +493,7 @@ public:
       const int tid, const int nthreads, int const *recvPeers, int const *sendPeers,
       void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint8_t group=0,
       uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclDevWorkColl* e = nullptr,
-      bool userBufReg=false, int stepSize_=0
+      bool ipcReg = false, bool netReg = false, int stepSize_ = 0
     ):
     redOp(redOpArg),
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE),
@@ -508,7 +512,11 @@ public:
       nsend++;
     }
     this->fan = Fan(nrecv, nsend);
+    // Coverity reports recvConn and sendConn being possibly NULL at this point but that won't actually
+    // happen given the two "while" loops just above.
+    // coverity[var_deref_model:FALSE]
     loadRecvSync();
+    // coverity[var_deref_model:FALSE]
     loadSendSync();
     setDataPtrs(inputBuf, outputBuf);
   }

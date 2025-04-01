@@ -424,6 +424,8 @@ static ncclResult_t connectCollNet(struct ncclComm* comm, struct ncclTopoGraph* 
       }
     }
     channel->collnetDirect.nHeads = nHeads;
+    // nHeads should always be greater than 0.
+    // coverity[divide_by_zero]
     channel->collnetDirect.shift = (rank%localRanks)%nHeads; // Shift by intraRank so that leaves don't send to same head simultaneously
     channel->collnetDirect.depth = (nUp == 0 && nDown == 0) ? 1 : 2;
     sprintf(line+strlen(line), "nUp %d nHeads %d ", nUp, nHeads);
@@ -713,21 +715,23 @@ RCCL_PARAM(OutputTrees, "OUTPUT_TREES", 0);
 
 ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns, struct ncclTopoRanks** allTopoRanks, int* rings, struct ncclTopoGraph** graphs, struct ncclComm* parent, int nc) {
   // Gather data from all ranks
-  int *ringRecv, *ringSend, *ringPrev, *ringNext, *treeToParent, *treeToChild0, *treeToChild1, *nvlsHeads;
+  ncclResult_t ret = ncclSuccess;
+  int *ringRecv = NULL, *ringSend = NULL, *ringPrev = NULL, *ringNext = NULL, *treeToParent = NULL, *treeToChild0 = NULL, *treeToChild1 = NULL, *nvlsHeads = NULL;
   int nranks = comm->nRanks;
   int nNodes = comm->nNodes;
   int nChannels = comm->nChannels;
   int minHeadNum = INT_MAX;
   int shared = parent && parent->nvlsSupport  && parent->config.splitShare;
-
+  int maxChannels;
+  int minNchannels, maxNchannels;
   NCCLCHECK(ncclCalloc(&ringRecv, nNodes*MAXCHANNELS));
-  NCCLCHECK(ncclCalloc(&ringSend, nNodes*MAXCHANNELS));
-  NCCLCHECK(ncclCalloc(&ringPrev, nranks*MAXCHANNELS));
-  NCCLCHECK(ncclCalloc(&ringNext, nranks*MAXCHANNELS));
-  NCCLCHECK(ncclCalloc(&treeToParent, nNodes*MAXCHANNELS));
-  NCCLCHECK(ncclCalloc(&treeToChild0, nNodes*MAXCHANNELS));
-  NCCLCHECK(ncclCalloc(&treeToChild1, nNodes*MAXCHANNELS));
-  NCCLCHECK(ncclCalloc(&nvlsHeads, nNodes*MAXCHANNELS));
+  NCCLCHECKGOTO(ncclCalloc(&ringSend, nNodes*MAXCHANNELS), ret, fail);
+  NCCLCHECKGOTO(ncclCalloc(&ringPrev, nranks*MAXCHANNELS), ret, fail);
+  NCCLCHECKGOTO(ncclCalloc(&ringNext, nranks*MAXCHANNELS), ret, fail);
+  NCCLCHECKGOTO(ncclCalloc(&treeToParent, nNodes*MAXCHANNELS), ret, fail);
+  NCCLCHECKGOTO(ncclCalloc(&treeToChild0, nNodes*MAXCHANNELS), ret, fail);
+  NCCLCHECKGOTO(ncclCalloc(&treeToChild1, nNodes*MAXCHANNELS), ret, fail);
+  NCCLCHECKGOTO(ncclCalloc(&nvlsHeads, nNodes*MAXCHANNELS), ret, fail);
 
   // Alternate rings to avoid crossing rails
   if (graphs[NCCL_ALGO_RING]->crossNic && (nChannels % 2) == 0) {
@@ -804,7 +808,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   }
 
   // Only use full MAXCHANNELS for gfx94x and gfx950
-  int maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) ?
+  maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) ?
     ((comm->topo->nodes[GPU].nodes[0].gpu.cu == 80 || comm->topo->nodes[GPU].nodes[0].gpu.cu == 20 || comm->topo->nodes[GPU].nodes[0].gpu.cu == 38)
       ? comm->topo->nodes[GPU].nodes[0].gpu.cu : MAXCHANNELS) : 2*CHANNEL_LIMIT;
 
@@ -817,7 +821,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   if (nChannels <= maxChannels/2) memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
 
   // Get number of channels after duplication
-  int maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
+  maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
   nc = std::min(maxNchannels/comm->nChannels, nc);
   nc *= comm->nChannels;
 
@@ -845,7 +849,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
       int collNetNchannels = std::min(maxChannels, nChannels+nChannels/2);
       nChannels = comm->nChannels = copyChannels(comm, nChannels, collNetNchannels, ringPrev, ringNext);
     }
-    NCCLCHECK(connectCollNet(comm, graphs[NCCL_ALGO_COLLNET_DIRECT]));
+    NCCLCHECKGOTO(connectCollNet(comm, graphs[NCCL_ALGO_COLLNET_DIRECT]), ret, fail);
   }
 
   // Use 4 compute channels per search channel to reach peak BW on <8 PPN
@@ -859,7 +863,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
      nChannels = comm->nChannels = copyChannels(comm, nChannels, 2*nChannels, ringPrev, ringNext);
   }
 
-  int minNchannels = ncclMinNchannels();
+  minNchannels = ncclMinNchannels();
   if (comm->nNodes > 1) {
     minNchannels = std::min(64, minNchannels);
   }
@@ -900,7 +904,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   if (comm->nChannels < comm->nvlsChannels) {
     nChannels = comm->nChannels = copyChannels(comm, comm->nChannels, comm->nvlsChannels, ringPrev, ringNext);
   }
-  NCCLCHECK(connectNvls(comm, nvlsHeads, minHeadNum));
+  NCCLCHECKGOTO(connectNvls(comm, nvlsHeads, minHeadNum), ret, fail);
 #endif
   if (shared && comm->nChannels > parent->sharedRes->tpNChannels) {
     nChannels = comm->nChannels = parent->sharedRes->tpNChannels;
@@ -908,16 +912,18 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   }
 
   // Create rings array and check all is fine
-  NCCLCHECK(ncclBuildRings(nChannels, rings, comm->rank, comm->nRanks, ringPrev, ringNext));
+  NCCLCHECKGOTO(ncclBuildRings(nChannels, rings, comm->rank, comm->nRanks, ringPrev, ringNext), ret, fail);
 
-  free(ringRecv);
-  free(ringSend);
-  free(ringPrev);
-  free(ringNext);
-  free(treeToParent);
-  free(treeToChild0);
-  free(treeToChild1);
-  free(nvlsHeads);
-
-  return ncclSuccess;
+exit:
+  if (ringRecv) free(ringRecv);
+  if (ringSend) free(ringSend);
+  if (ringPrev) free(ringPrev);
+  if (ringNext) free(ringNext);
+  if (treeToParent) free(treeToParent);
+  if (treeToChild0) free(treeToChild0);
+  if (treeToChild1) free(treeToChild1);
+  if (nvlsHeads) free(nvlsHeads);
+  return ret;
+fail:
+  goto exit;
 }

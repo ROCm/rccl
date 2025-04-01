@@ -36,7 +36,7 @@ struct ncclConnector;
 struct ncclComm;
 
 #define CHANNEL_MASK_OFFSET(nranks, connIndex) (nranks * (connIndex == NCCL_CONN_IDX_P2P_NET ? NCCL_CONN_IDX_P2P_NET : 0))
-#define CONNECT_SIZE 128
+#define CONNECT_SIZE 256
 struct ncclConnect {
   char data[CONNECT_SIZE];
 };
@@ -77,7 +77,6 @@ struct ncclCollNetSharedRes {
   void* resources;
   int nChannels;
   size_t buffSize;
-  int intraHighestTransportType;
 };
 
 struct ncclTransportComm {
@@ -95,13 +94,14 @@ struct ncclTransportComm {
 
 struct ncclTransport {
   const char name[8];
-  ncclResult_t (*canConnect)(int*, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo*, struct ncclPeerInfo*);
+  ncclResult_t (*canConnect)(int*, struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo*, struct ncclPeerInfo*);
   struct ncclTransportComm send;
   struct ncclTransportComm recv;
 };
 
 ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, int channelId, int nrecv, int* peerRecv, int nsend, int* peerSend, int connIndex);
 ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex, int* highestTransportType=NULL, bool* needsProxy=NULL);
+ncclResult_t ncclTransportCheckP2pType(struct ncclComm* comm, bool* intraNodeP2pSupport, bool* directMode);
 
 ncclResult_t ncclNvlsInit(struct ncclComm* comm);
 ncclResult_t ncclNvlsSetup(struct ncclComm* comm, struct ncclComm* parent);
@@ -113,7 +113,7 @@ ncclResult_t ncclNvlsDeregBuffer(CUmemGenericAllocationHandle *mcHandler, CUdevi
 ncclResult_t ncclNvlsFree(struct ncclComm* comm);
 
 enum { collNetRecv=0, collNetSend=1 };
-int ncclTransportCollNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collNetGraph, struct ncclChannel* channel, int masterRank, int masterPeer, int collNetGraphChannelId, int type, ncclConnect* connect);
+bool ncclTransportCollNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collNetGraph, struct ncclChannel* channel, int masterRank, int masterPeer, int collNetGraphChannelId, int type, ncclConnect* connect);
 ncclResult_t ncclTransportCollNetCheck(struct ncclComm* comm, int collNetSetupFail);
 ncclResult_t ncclTransportCollNetFree(struct ncclComm* comm);
 ncclResult_t ncclCollnetLocalRegisterBuffer(struct ncclComm* comm, const void* userbuff, size_t buffSize, int type, int* outRegBufUsed, void** outHandle);
@@ -122,6 +122,7 @@ ncclResult_t ncclCollnetDeregBuffer(struct ncclComm* comm, struct ncclProxyConne
 
 ncclResult_t ncclTransportRingConnect(struct ncclComm* comm);
 ncclResult_t ncclTransportTreeConnect(struct ncclComm* comm);
+ncclResult_t ncclTransportPatConnect(struct ncclComm* comm);
 
 ncclResult_t ncclCollNetSetup(ncclComm_t comm, ncclComm_t parent, struct ncclTopoGraph* graphs[]);
 ncclResult_t ncclCollNetChainBufferSetup(ncclComm_t comm);

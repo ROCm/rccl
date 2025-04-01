@@ -17,32 +17,35 @@
 #endif
 
 // Define all NCCL-provided static schema IDs here (avoid duplicates).
-#define NVTX_SID_CommInitRank  0
-#define NVTX_SID_CommInitAll   1
-#define NVTX_SID_CommDestroy   2 // same schema as NVTX_SID_CommInitRank
-#define NVTX_SID_CommAbort     3 // same schema as NVTX_SID_CommInitRank
-#define NVTX_SID_AllGather     4
-#define NVTX_SID_AllReduce     5
-#define NVTX_SID_AllToAll      6
-#define NVTX_SID_AllToAllv     7
-#define NVTX_SID_Broadcast     8
-#define NVTX_SID_Gather        9
-#define NVTX_SID_MSCCL         10
-#define NVTX_SID_ReduceScatter 11
-#define NVTX_SID_Reduce        12
-#define NVTX_SID_Scatter       13
-#define NVTX_SID_Send          14
-#define NVTX_SID_Recv          15
+#define NVTX_SID_CommInitRank         0
+#define NVTX_SID_CommInitAll          1
+#define NVTX_SID_CommDestroy          2 // same schema as NVTX_SID_CommInitRank
+#define NVTX_SID_CommAbort            3 // same schema as NVTX_SID_CommInitRank
+#define NVTX_SID_AllGather            4
+#define NVTX_SID_AllReduce            5
+#define NVTX_SID_AllToAll             6
+#define NVTX_SID_AllToAllv            7
+#define NVTX_SID_Broadcast            8
+#define NVTX_SID_Gather               9
+#define NVTX_SID_MSCCL                10
+#define NVTX_SID_ReduceScatter        11
+#define NVTX_SID_Reduce               12
+#define NVTX_SID_Scatter              13
+#define NVTX_SID_Send                 14
+#define NVTX_SID_Recv                 15
+#define NVTX_SID_CommInitRankConfig   16 // same schema as NVTX_SID_CommInitRank
+#define NVTX_SID_CommInitRankScalable 17 // same schema as NVTX_SID_CommInitRank
+#define NVTX_SID_CommSplit            18
 
 // Define static schema ID for the reduction operation.
-#define NVTX_PAYLOAD_ENTRY_NCCL_REDOP 11 + NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START
+#define NVTX_PAYLOAD_ENTRY_NCCL_REDOP 14 + NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START
 
 extern const nvtxDomainHandle_t ncclNvtxDomainHandle;
 
 struct nccl_domain{static constexpr char const* name{"NCCL"};};
 
 class payload_schema {
- public:
+public:
   explicit payload_schema(const nvtxPayloadSchemaEntry_t entries[], size_t numEntries, const uint64_t schemaId, const char* schemaName = nullptr) noexcept
   {
     schema_attr.name = schemaName;
@@ -59,7 +62,7 @@ class payload_schema {
   payload_schema(payload_schema&&) = default;
   payload_schema& operator=(payload_schema&&) = default;
 
- private:
+private:
   nvtxPayloadSchemaAttr_t schema_attr{
     NVTX_PAYLOAD_SCHEMA_ATTR_TYPE |
     NVTX_PAYLOAD_SCHEMA_ATTR_ENTRIES |

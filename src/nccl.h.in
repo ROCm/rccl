@@ -268,6 +268,23 @@ ncclResult_t pncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *new
 /*! @endcond */
 /*! @} */
 
+ /*! @brief      Creates a new communicator (multi thread/process version), similar to ncclCommInitRankConfig.
+     @details    Allows to use more than one ncclUniqueId (up to one per rank), 
+                 indicated by nId, to accelerate the init operation.
+                 The number of ncclUniqueIds and their order must be the same for every rank.
+     @return     Result code. See @ref rccl_result_code for more details.
+ 
+     @param[out] newcomm       Pointer to new communicator
+     @param[in]  nranks        Total number of ranks participating in this communicator
+     @param[in]  myrank        Current rank
+     @param[in]  nId           Number of unique IDs
+     @param[in]  commIds       List of unique IDs
+     @param[in]  config        Config file for new communicator. May be NULL to inherit from comm */
+ncclResult_t ncclCommInitRankScalable(ncclComm_t* newcomm, int nranks, int myrank, int nId, ncclUniqueId* commIds, ncclConfig_t* config);
+ /*! @cond       include_hidden */
+ncclResult_t pncclCommInitRankScalable(ncclComm_t* newcomm, int nranks, int myrank, int nId, ncclUniqueId* commIds, ncclConfig_t* config);
+ /*! @endcond */
+
 /*! @defgroup   rccl_api_errcheck Error Checking Calls
     @details    API calls that check for errors
     @{ */
@@ -277,6 +294,7 @@ ncclResult_t pncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *new
     @return     String containing description of result code.
 
     @param[in]  result        Result code to get description for */
+/* Returns a string for each error code. */
 const char*  ncclGetErrorString(ncclResult_t result);
 /*! @cond       include_hidden */
 const char* pncclGetErrorString(ncclResult_t result);

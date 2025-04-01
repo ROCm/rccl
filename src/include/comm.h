@@ -18,6 +18,7 @@
 #include "register.h"
 #include "graph.h"
 #include "nvmlwrap.h"
+#include "profiler.h"
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
@@ -110,6 +111,11 @@ struct ncclCommCallback {
   struct ncclCommCallback* next;
   ncclResult_t(*fn)(struct ncclComm* comm, struct ncclCommCallback* cb);
 };
+struct ncclCommEventCallback {
+  struct ncclCommEventCallback* next;
+  cudaEvent_t event;
+  ncclResult_t(*fn)(struct ncclComm* comm, struct ncclCommEventCallback* cb);
+};
 
 struct ncclSharedResources {
   int refCount;
@@ -179,6 +185,56 @@ struct ncclCollnetHandleList {
   struct ncclProxyConnector* proxyconn;
 };
 
+struct ncclTaskColl {
+  struct ncclTaskColl* next;
+  ncclFunc_t func;
+  void const* sendbuff;
+  void* recvbuff;
+  size_t count;
+  int root;
+  ncclDataType_t datatype;
+  ncclRedOp_t opHost;
+  struct ncclDevRedOpFull opDev;
+  int chunkSteps, sliceSteps;
+  // Computed later:
+  size_t trafficBytes;
+  int32_t nMaxChannels:8;
+  int32_t nWarps:8;
+  int32_t algorithm:8, protocol:8;
+  uint32_t isCollnet:1, isNvls:1;
+  uint32_t devFuncId:30;
+  enum ncclRegBufferType regBufType;
+  uint64_t opCount;
+  // number of elements in planner->ipcMemQueue associated with this collective
+  int nCleanupQueueElts;
+
+  void* sendMhandle;
+  void* recvMhandle;
+  // index for IPC record lookup
+  uintptr_t sendbuffOffset;
+  uintptr_t recvbuffOffset;
+  uintptr_t* sendbuffRmtAddrs;
+  uintptr_t* recvbuffRmtAddrs;
+
+  // Profiler plugin
+  int eActivationMask;
+  void* eventHandle;
+};
+struct ncclTaskP2p {
+  struct ncclTaskP2p* next;
+  ncclFunc_t func;
+  void* buff;
+  size_t count;
+  ncclDataType_t datatype;
+  int root;
+  size_t bytes;
+  uint64_t opCount;
+
+  // Profiler plugin
+  int eActivationMask;
+  void* eventHandle;
+};
+
 struct ncclKernelPlan {
   // A kernel plan is also a callback that reclaims itself. Hence this must
   // be the first member.
@@ -204,42 +260,12 @@ struct ncclKernelPlan {
   struct ncclIntruQueue<struct ncclCommCallback, &ncclCommCallback::next> cleanupQueue;
   void* workBufPersistent;
 
+  struct ncclIntruQueue<struct ncclTaskP2p, &ncclTaskP2p::next> p2pTaskQueue;
+  struct ncclIntruQueue<struct ncclTaskColl, &ncclTaskColl::next> collTaskQueue;
   struct ncclIntruQueue<struct ncclProxyOp, &ncclProxyOp::enqNext> proxyOpQueue;
-};
 
-////////////////////////////////////////////////////////////////////////////////
-
-struct ncclTaskColl {
-  struct ncclTaskColl* next;
-  ncclFunc_t func;
-  void const* sendbuff;
-  void* recvbuff;
-  size_t count;
-  int root;
-  ncclDataType_t datatype;
-  ncclRedOp_t opHost;
-  struct ncclDevRedOpFull opDev;
-  int chunkSteps, sliceSteps;
-  // Computed later:
-  size_t trafficBytes;
-  int32_t nMaxChannels:8;
-  int32_t nWarps:8;
-  int32_t algorithm:8, protocol:8;
-  uint32_t isCollnet:1, isNvls:1;
-  uint32_t devFuncId:30;
-  enum ncclRegBufferType regBufType;
-  // number of elements in planner->ipcMemQueue associated with this collective
-  int nCleanupQueueElts;
-
-  void* sendMhandle;
-  void* recvMhandle;
-  uint64_t opCount;
-};
-struct ncclTaskP2p {
-  struct ncclTaskP2p* next;
-  void* buff;
-  size_t bytes;
-  uint64_t opCount;
+  // Profiler plugin
+  void* groupEventHandle;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -395,6 +421,7 @@ struct ncclPeerInfo {
   // MNNVL support
   nvmlGpuFabricInfoV_t fabricInfo;
   int cuMemSupport;
+  int version;
 };
 
 struct ncclComm {
@@ -410,6 +437,8 @@ struct ncclComm {
   struct ncclChannel channels[MAXCHANNELS];
   struct ncclPeerInfo* peerInfo;
   struct ncclTopoSystem* topo;
+  struct ncclProxyConnector* gproxyConn;
+  struct ncclIntruQueue<struct ncclCommCallback, &ncclCommCallback::next> legacyRegCleanupQueue;
 
   int netPluginLoaded;
   ncclNet_t* ncclNet;
@@ -422,10 +451,12 @@ struct ncclComm {
   struct ncclTopoGraph graphs[NCCL_NUM_ALGORITHMS];
   bool initAlgoChannels[NCCL_NUM_ALGORITHMS];
   bool runtimeConn; // if dynamic connection is supported
+  bool directMode;
   int cuMemSupport;
 
   uint64_t magic; // Magic number for all network communication. Not a security key -- only goal is to detect mismatches.
 
+  const char* commName;
   uint64_t commHash;
   int rank;    // my rank in the communicator
   int nRanks;  // number of GPUs in communicator
@@ -489,7 +520,7 @@ struct ncclComm {
   uint64_t minMaxLLRange[NCCL_NUM_FUNCTIONS][NCCL_NUM_PROTOCOLS - 1][2];
 
   /* This attribute can indicate the states of communicators and return code of
-   * asynchronous NCCL operations. */
+  * asynchronous NCCL operations. */
   ncclResult_t asyncResult;
 
   // Flag to ask NCCL kernels to abort
@@ -538,7 +569,7 @@ struct ncclComm {
   int collNetSupport;
   bool collNetRegSupport;
   uint8_t collNetSupportMatrix[4/*sum,prod,max,min*/][ncclNumTypes];
-  int intraHighestTransportType;
+  bool intraNodeP2pSupport;
   int* collNetHeads;
   int collNetHeadsNum;
   int* collNetDenseToUserRank;
@@ -553,6 +584,8 @@ struct ncclComm {
   struct ncclNvlsSharedRes* nvlsResources;
 
   // pools backed by comm->memPermanent
+  struct ncclMemoryPool memPool_ncclTaskColl;
+  struct ncclMemoryPool memPool_ncclTaskP2p;
   struct ncclMemoryPool memPool_ncclProxyOp;
   struct ncclMemoryPool memPool_ncclKernelPlan;
 
@@ -567,6 +600,13 @@ struct ncclComm {
   struct ncclKernelPlanner planner;
 
   hipStream_t sideStream; // [RCCL] Cached non-captured stream
+  
+  cudaMemPool_t memPool;
+  // Queue of events and associated callbacks for cleaning up asynchronous work.
+  // Using this is preferable to using CUDA host callbacks because host callbacks
+  // won't allow the work following the callback to run until the callback completes,
+  // which comes at expense to perf.
+  struct ncclIntruQueue<struct ncclCommEventCallback, &ncclCommEventCallback::next> eventCallbackQueue;
 
   // user-created reduction ops
   int userRedOpCapacity, userRedOpFreeHead;
@@ -615,6 +655,11 @@ struct ncclComm {
   int tunerPluginLoaded;
   ncclTuner_t* tuner;
   void *tunerContext;
+
+  // Profiler plugin
+  void* profilerContext;
+  uint64_t seqNumber[NCCL_NUM_FUNCTIONS];
+
   // buffer registration cache
   struct ncclRegCache regCache;
   uint64_t endMagic;
@@ -645,6 +690,27 @@ inline ncclResult_t ncclCommPollCallbacks(struct ncclComm* comm, bool waitSome) 
     cb = next;
   }
   NCCLCHECK(result);
+  return ncclSuccess;
+}
+
+inline ncclResult_t ncclCommPollEventCallbacks(struct ncclComm *comm) {
+  ncclResult_t result = ncclSuccess;
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+  while (true) {
+    struct ncclCommEventCallback* cb = ncclIntruQueueHead(&comm->eventCallbackQueue);
+    if (cb == nullptr) break;
+    cudaError_t ok = cudaEventSynchronize(cb->event);
+    if (ok == cudaErrorNotReady) break;
+    ncclIntruQueueDequeue(&comm->eventCallbackQueue);
+    if (ok == cudaSuccess) {
+      NCCLCHECKGOTO(cb->fn(comm, cb), result, finish);
+    } else {
+      CUDACHECKGOTO(ok, result, finish);
+    }
+  }
+finish:
+  cudaThreadExchangeStreamCaptureMode(&mode);
   return ncclSuccess;
 }
 

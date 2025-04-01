@@ -67,7 +67,7 @@ namespace {
           }
 
           // final step: recv
-          prims.directRecv(recv_offset + prims_offset, prims_nelem);
+          prims.directRecv(recv_offset + prims_offset, recv_offset + prims_offset, prims_nelem);
         }
       }
     }

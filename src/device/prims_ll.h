@@ -169,7 +169,7 @@ private:
     uint64_t val64 = (uint64_t)(i4.data1) + (((uint64_t)i4.data2) << 32);
 #else
     do {
-      asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(data1), "=r"(flag1), "=r"(data2), "=r"(flag2) : "l"(&src->i4));
+      asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(data1), "=r"(flag1), "=r"(data2), "=r"(flag2) : "l"(&src->i4) : "memory");
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
@@ -192,6 +192,8 @@ private:
   __device__ void readLLBeginAll(int offset, ncclLLFifoLine(&line)[MaxRecv]) {
     #pragma unroll
     for (int i=BeginIx; i < MaxRecv; i++) {
+      // Yes, for some template arguments this code will be unreachable.  That's fine.
+      // coverity[dead_error_line]
       if (i < fan.nrecv()) {
         union ncclLLFifoLine* src = recvPtr(i) + offset;
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
@@ -203,7 +205,7 @@ private:
         line[i].v[1] = __builtin_nontemporal_load(src->v+1);
 #endif
 #else
-        asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
+        asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
 #endif
       }
     }
@@ -230,7 +232,7 @@ private:
       line[i].v[1] = __builtin_nontemporal_load(src->v+1);
 #endif
 #else
-      asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
+      asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
 #endif
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
@@ -259,7 +261,7 @@ private:
     __builtin_nontemporal_store(i4.v[0], dst->v);
     __builtin_nontemporal_store(i4.v[1], dst->v+1);
 #else
-    asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag));
+    asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
 #endif
   }
 
@@ -301,13 +303,13 @@ private:
 #endif
 #else
     if(sizeof(U) == 1)
-      asm("ld.volatile.global.b8 %0,[%1];" : "=r"(u4) : "l"(src));
+      asm volatile("ld.volatile.global.b8 %0,[%1];" : "=r"(u4) : "l"(src) : "memory");
     else if(sizeof(U) == 2)
-      asm("ld.volatile.global.b16 %0,[%1];" : "=h"(u2) : "l"(src));
+      asm volatile("ld.volatile.global.b16 %0,[%1];" : "=h"(u2) : "l"(src) : "memory");
     else if(sizeof(U) == 4)
-      asm("ld.volatile.global.b32 %0,[%1];" : "=r"(u4) : "l"(src));
+      asm volatile("ld.volatile.global.b32 %0,[%1];" : "=r"(u4) : "l"(src) : "memory");
     else
-      asm("ld.volatile.global.b64 %0,[%1];" : "=l"(u8) : "l"(src));
+      asm volatile("ld.volatile.global.b64 %0,[%1];" : "=l"(u8) : "l"(src) : "memory");
 #endif
     return elt;
   }
@@ -333,13 +335,13 @@ private:
       __builtin_nontemporal_store(u8, (uint64_t*)dst);
 #else
     if(sizeof(U) == 1)
-      asm("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4));
+      asm volatile("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4) : "memory");
     else if(sizeof(U) == 2)
-      asm("st.volatile.global.b16 [%0],%1;" :: "l"(dst), "h"(u2));
+      asm volatile("st.volatile.global.b16 [%0],%1;" :: "l"(dst), "h"(u2) : "memory");
     else if(sizeof(U) == 4)
-      asm("st.volatile.global.b32 [%0],%1;" :: "l"(dst), "r"(u4));
+      asm volatile("st.volatile.global.b32 [%0],%1;" :: "l"(dst), "r"(u4) : "memory");
     else
-      asm("st.volatile.global.b64 [%0],%1;" :: "l"(dst), "l"(u8));
+      asm volatile("st.volatile.global.b64 [%0],%1;" :: "l"(dst), "l"(u8) : "memory");
 #endif
   }
 
@@ -363,6 +365,8 @@ private:
       else {
         #pragma unroll
         for(int i=0; i < EltPerLine; i++) {
+          // Yes, for some template arguments this code will be unreachable.  That's fine.
+          // coverity[dead_error_line]
           if(i==0 || i < eltN)
             elt[i] = load(src + i);
         }
@@ -387,6 +391,8 @@ private:
     u8 = val;
     #pragma unroll
     for(int i=0; i < EltPerLine; i++) {
+      // Yes, for some template arguments this code will be unreachable.  That's fine.
+      // coverity[dead_error_line]
       if (i==0 || i < eltN)
         //store(dst+i, elt[i]);
         dst[i] = elt[i];
@@ -460,6 +466,8 @@ private:
       if (RECV) {
         data = !SRC ? peerData : applyReduce(redOp, peerData, data);
         #pragma unroll MaxRecv
+        // Yes, for some template arguments this code will be unreachable.  That's fine.
+        // coverity[dead_error_line]
         for (int i=1; i < MaxRecv && i < fan.nrecv(); i++) {
           peerData = readLLFinish(offset, line, i);
           data = applyReduce(redOp, peerData, data);
@@ -470,6 +478,8 @@ private:
 
       // Send : inter-node, then intra-node, then local
       if (SEND) {
+        // Yes, for some template arguments this code will be unreachable.  That's fine.
+        // coverity[dead_error_line]
         for (int i=1; i < MaxSend && i < fan.nsend(); i++)
           storeLL(sendPtr(i)+offset, data, sendFlag(i));
         storeLL(sendPtr(0)+offset, data, sendFlag(0));
@@ -502,6 +512,8 @@ private:
       postRecv();
     }
     if (SEND) {
+      // Yes, for some template arguments this code will be unreachable.  That's fine.
+      // coverity[dead_error_line]
       for (int i=1; i < MaxSend && i < fan.nsend(); i++)
         incSend(i, offset);
       incSend(0, offset);
@@ -610,12 +622,12 @@ private:
     }
   }
 
- public:
+public:
   __device__  Primitives(
       const int tid, const int nthreads, int const *recvPeers, int const *sendPeers,
       void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint8_t group=0,
-      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclWorkElem* e = nullptr,
-      bool userBufReg=false, int stepSize_=0
+      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclDevWorkColl* e = nullptr,
+      bool ipcReg = false, bool netReg = false, int stepSize_ = 0
     ):
     redOp(redOpArg),
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group),
@@ -625,16 +637,23 @@ private:
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
     int nrecv=0, nsend=0;
     // We compare with Fan::MaxRecv here because this->MaxRecv is always at least 1
+    // Yes, for some template arguments this code will be unreachable.  That's fine.
+    // coverity[dead_error_line]
     while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) {
       loadRecvConn(&channel->peers[recvPeers[nrecv]]->recv[connIndexRecv], nrecv);
       nrecv++;
     }
+    // coverity[dead_error_line]
     while (nsend < MaxSend && sendPeers[nsend] >= 0) {
       loadSendConn(&channel->peers[sendPeers[nsend]]->send[connIndexSend], nsend);
       nsend++;
     }
     this->fan = Fan(nrecv, nsend);
+    // Coverity reports recvConn and sendConn being possibly NULL at this point but that won't actually
+    // happen given the two "while" loops just above.
+    // coverity[var_deref_model:FALSE]
     loadRecvSync();
+    // coverity[var_deref_model:FALSE]
     loadSendSync();
     setDataPtrs(inputBuf, outputBuf);
   }

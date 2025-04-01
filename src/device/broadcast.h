@@ -55,8 +55,11 @@ namespace {
 
     T *inputBuf = (T*)work->sendbuff;
     T *outputBuf = (T*)work->recvbuff;
+    // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
+    // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
+    // coverity[callee_ptr_arith:FALSE]
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0>
-      prims(tid, nthreads, &ring->prev, &ring->next, inputBuf, outputBuf, work->redOpArg, 0, work->connIndex, work->connIndex);
+      prims(tid, nthreads, &ring->prev, &ring->next, inputBuf, outputBuf, work->redOpArg, 0, work->connIndex, work->connIndex, work);
 
 #if defined(ENABLE_NPKIT)
     if (tid == 0) {
@@ -70,14 +73,14 @@ namespace {
 
       if (rank == root) {
         if (inputBuf == outputBuf) {
-          prims.send(offset, nelem);
+          prims.directSend(offset, offset, nelem);
         } else {
-          prims.copySend(offset, offset, nelem);
+          prims.directCopySend(offset, offset, nelem);
         }
       } else if (nextRank == root) {
-        prims.recv(offset, nelem);
+        prims.directRecv(offset, offset, nelem);
       } else {
-        prims.recvCopySend(offset, nelem);
+        prims.directRecvCopyDirectSend(offset, nelem);
       }
     }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_BROADCAST_RING_EXIT)

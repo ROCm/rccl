@@ -147,6 +147,9 @@ struct BytePackOf<BytePack<0>> {
 template<typename T>
 __device__ __forceinline__ typename BytePackOf<T>::Pack toPack(T value)  {
   union { typename BytePackOf<T>::Pack p; T v; };
+  // Coverity recommends the use of std::move here but, given that T is a POD
+  // scalar, a plain copy will be just as efficient.
+  // coverity[copy_assignment_call]
   v = value;
   return p;
 }
@@ -212,7 +215,7 @@ template<> __device__ __forceinline__ void st_global<0>(uintptr_t addr, BytePack
 //   template<> \
 //   __device__ __forceinline__ BytePack<bytes> ld_relaxed_gpu_global<bytes>(uintptr_t addr) { \
 //     data_cxx_ty tmp; \
-//     asm("ld." PTX_relaxed_gpu ".global." #data_ptx_ty " %0, [%1];" : "="#data_reg_ty(tmp) : "l"(addr)); \
+//     asm volatile("ld." PTX_relaxed_gpu ".global." #data_ptx_ty " %0, [%1];" : "="#data_reg_ty(tmp) : "l"(addr) : "memory"); \
 //     BytePack<bytes> ans; \
 //     ans.native = tmp; \
 //     return ans; \
@@ -266,14 +269,14 @@ DEFINE_ld_st_16__space(global, uintptr_t, l)
 // template<>
 // __device__ __forceinline__ BytePack<16> ld_relaxed_gpu_global<16>(uintptr_t addr) {
 //   BytePack<16> ans;
-//   asm("ld." PTX_relaxed_gpu ".global.v2.b64 {%0,%1}, [%2];" : "=l"(ans.u64[0]), "=l"(ans.u64[1]) : "l"(addr));
+//   asm volatile("ld." PTX_relaxed_gpu ".global.v2.b64 {%0,%1}, [%2];" : "=l"(ans.u64[0]), "=l"(ans.u64[1]) : "l"(addr) : "memory");
 //   return ans;
 // }
 // template<>
 // __device__ __forceinline__ void st_relaxed_gpu_global<16>(uintptr_t addr, BytePack<16> value) {
 //   asm volatile("st." PTX_relaxed_gpu ".global.v2.b64 [%0], {%1,%2};" :: "l"(addr), "l"(value.u64[0]), "l"(value.u64[1]) : "memory");
 // }
-//
+
 // #undef PTX_relaxed_gpu
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -291,12 +294,12 @@ __device__ __forceinline__ uint64_t ld_relaxed_sys_global(uint64_t *ptr) {
 }
 
 // __device__ __forceinline__ uint64_t ld_relaxed_gpu_global(uint64_t *ptr) {
-//   uint64_t ans;
-//   #if __CUDA_ARCH__ >= 700
-//     asm("ld.relaxed.gpu.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)));
-//   #else
-//     asm("ld.volatile.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)));
-//   #endif
+  // uint64_t ans;
+  // #if __CUDA_ARCH__ >= 700
+  //   asm volatile("ld.relaxed.gpu.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)) : "memory");
+  // #else
+  //   asm volatile("ld.volatile.global.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)) : "memory");
+  // #endif
 //   return ans;
 // }
 

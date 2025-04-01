@@ -54,9 +54,9 @@ struct ncclDevRedOpFull {
 
 union ncclLLFifoLine {
   /* Flags have to be *after* data, because otherwise, an incomplete receive
-     from the network may receive the flag but not the data.
-     Note this is assuming that either we receive contiguous chunks of data
-     (sockets) or data is written with an atomicity of 8 bytes (IB/RDMA). */
+    from the network may receive the flag but not the data.
+    Note this is assuming that either we receive contiguous chunks of data
+    (sockets) or data is written with an atomicity of 8 bytes (IB/RDMA). */
   struct {
     uint32_t data1;
     uint32_t flag1;
@@ -144,6 +144,8 @@ struct ncclConnInfo {
 };
 
 struct ncclProxyConnector {
+  bool initialized;
+  int rank;
   int tpRank;
   int tpLocalRank;
   int sameProcess;
@@ -157,6 +159,8 @@ struct ncclConnector {
   struct ncclTransportComm* transportComm;
   void* transportResources;
   struct ncclConnInfo conn;
+  int sendMemSameProcess;
+  int recvMemSameProcess;
 };
 
 struct ncclRing {
@@ -247,6 +251,8 @@ struct alignas(16) ncclDevWorkP2p {
   uint8_t sendProtoLL:1, recvProtoLL:1;
   uint8_t sendRegistered:1, recvRegistered:1;
 
+  uint8_t sendIpcReg:1, recvIpcReg:1;
+
   uint8_t sendConnIndex:2, recvConnIndex:2;
 };
 
@@ -298,6 +304,10 @@ struct alignas(16) ncclDevWorkColl {
   uint16_t pivotA2ANumBiRings;
   void* recvbuff;
   void* sendbuff;
+  uintptr_t sendbuffOffset;
+  uintptr_t recvbuffOffset;
+  uintptr_t* sendbuffRmtAddrs;
+  uintptr_t* recvbuffRmtAddrs;
   union {
     // Continuous-byte-distribution scheduling. The lo and hi channels are of
     // different size than the channels in the middle.
@@ -319,9 +329,9 @@ struct alignas(16) ncclDevWorkColl {
 
 __host__ __device__ constexpr int ncclProtoGrainSize(int proto) {
   return proto == NCCL_PROTO_LL ? 16 :
-         proto == NCCL_PROTO_LL128 ? WARP_SIZE*NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS*NCCL_LL128_DATAELEMS*sizeof(uint64_t) :
-         proto == NCCL_PROTO_SIMPLE ? 512 :
-         -1;
+        proto == NCCL_PROTO_LL128 ? WARP_SIZE*NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS*NCCL_LL128_DATAELEMS*sizeof(uint64_t) :
+        proto == NCCL_PROTO_SIMPLE ? 512 :
+        -1;
 }
 
 template<typename Int>
@@ -367,7 +377,7 @@ enum ncclDevWorkType: uint8_t {
 
 constexpr size_t ncclDevWorkSize(enum ncclDevWorkType type) {
   return type == ncclDevWorkTypeP2p ? sizeof(ncclDevWorkP2p) :
-         type == ncclDevWorkTypeColl ? sizeof(ncclDevWorkColl) : sizeof(ncclDevWorkCollReg);
+        type == ncclDevWorkTypeColl ? sizeof(ncclDevWorkColl) : sizeof(ncclDevWorkCollReg);
 }
 
 #define NCCL_MAX_DEV_WORK_BATCH_BYTES 128
@@ -493,6 +503,7 @@ struct ncclDevComm {
   int nNodes;
   int buffSizes[NCCL_NUM_PROTOCOLS];
   int p2pChunkSize;
+  int isNvlink;
   int p2pnChannelsPerPeer;
 
   // Work fifo return credits
@@ -505,6 +516,8 @@ struct ncclDevComm {
 
   // Channels, device side
   struct ncclDevChannel* channels/*[MAXCHANNELS]*/;
+
+  int* rankToLocalRank;
 
 #if defined(ENABLE_NPKIT)
   NpKitEventCollectContext* npKitEventCollectContexts;
@@ -686,7 +699,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
       row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
       break;
     }
-    row += (NCCL_NUM_ALGORITHMS - 4) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += (NCCL_NUM_ALGORITHMS - 5) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
     // RING / SIMPLE / Sum / int8_t
     if (coll == ncclFuncAllToAllPivot) break;

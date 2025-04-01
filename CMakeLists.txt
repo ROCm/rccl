@@ -487,6 +487,7 @@ set(SRC_FILES
   src/include/ipcsocket.h
   src/include/nccl_common.h
   src/include/nccl_net.h
+  src/include/nccl_profiler.h
   src/include/nccl_tuner.h
   src/include/net_device.h
   src/include/net.h
@@ -504,6 +505,7 @@ set(SRC_FILES
   src/include/rocmwrap.h
   src/include/roctx.h
   src/include/shm.h
+  src/include/shmutils.h
   src/include/signals.h
   src/include/socket.h
   src/include/strongstream.h
