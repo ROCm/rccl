@@ -949,6 +949,8 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 
 // =================================================================================================
 
+extern bool rccl_float8_useFnuz;
+
 #endif // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
 
 #endif // ROCBLAS_FLOAT8_H

@@ -2357,11 +2357,19 @@ static ncclResult_t hostToDevRedOp(
 #if defined(RCCL_FLOAT8)
     case ncclFloat8e4m3:
       opFull->op = ncclDevPreMulSum;
-      fp8_e4m3 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
+      if (rccl_float8_useFnuz) {
+        fp8_e4m3_fnuz = static_cast<rccl_float8_fnuz>(float(1.0/comm->nRanks));
+      } else {
+        fp8_e4m3 = static_cast<rccl_float8>(float(1.0/comm->nRanks));
+      }
       break;
     case ncclFloat8e5m2:
       opFull->op = ncclDevPreMulSum;
-      fp8_e5m2 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
+      if (rccl_float8_useFnuz) {
+        fp8_e5m2_fnuz = static_cast<rccl_bfloat8_fnuz>(float(1.0/comm->nRanks));
+      } else {
+        fp8_e5m2 = static_cast<rccl_bfloat8>(float(1.0/comm->nRanks));
+      }
       break;
 #endif
     case ncclFloat32:

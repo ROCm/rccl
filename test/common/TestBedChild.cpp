@@ -65,12 +65,13 @@ static int getThreadId()
 
 namespace RcclUnitTesting
 {
-  TestBedChild::TestBedChild(int const childId, bool const verbose, int const printValues, bool const useRankThreading)
+  TestBedChild::TestBedChild(int const childId, bool const verbose, int const printValues, bool const useRankThreading, bool const useFloat8Fnuz)
+    : childId(childId)
+    , verbose(verbose)
+    , printValues(printValues)
+    , useRankThreading(useRankThreading)
   {
-    this->childId = childId;
-    this->verbose = verbose;
-    this->printValues = printValues;
-    this->useRankThreading = useRankThreading;
+    PtrUnion::SetFloat8Fnuz(useFloat8Fnuz);
   }
 
   int TestBedChild::InitPipes()

@@ -127,6 +127,9 @@ NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
 // GDRCOPY support
 gdr_t ncclGdrCopy = NULL;
 
+// RCCL_FLOAT8 support
+bool rccl_float8_useFnuz = false;
+
 ncclResult_t initGdrCopy() {
   if (ncclParamGdrCopyEnable() == 1) {
     ncclGdrCopy = ncclGdrInit();
@@ -1926,8 +1929,12 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   NCCLCHECK(ncclInitKernelsForDevice(cudaArch, &maxLocalSizeBytes));
   // Set the maximum kernel stack size of all kernels to avoid
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
-#ifdef USE_INDIRECT_FUNCTION_CALL
   CUDACHECK(hipGetDeviceProperties(&devProp, 0));
+  if (IsArchMatch(devProp.gcnArchName, "gfx942")) {
+    INFO(NCCL_INIT, "On gfx942 architecture, using FNUZ FP8 types");
+    rccl_float8_useFnuz = true;
+  }
+#ifdef USE_INDIRECT_FUNCTION_CALL
   if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx942") && !IsArchMatch(devProp.gcnArchName,"gfx950")) {
     stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
     if (stackSize == 0) {

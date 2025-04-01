@@ -81,7 +81,7 @@ namespace RcclUnitTesting
     std::vector<std::vector<std::vector<bool>>> graphEnabled; 
 
     // Constructor
-    TestBedChild(int const childId, bool const verbose, int const printValues, bool const useRankThreading);
+    TestBedChild(int const childId, bool const verbose, int const printValues, bool const useRankThreading, bool const useFloat8Fnuz);
 
     // Prepare parent/child communication pipes - to be executed by parent process
     int InitPipes();

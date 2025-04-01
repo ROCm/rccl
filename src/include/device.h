@@ -680,9 +680,9 @@ extern int const ncclDevFuncRowToId[];
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
 inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
   constexpr int numTypes = ncclNumTypes + 2; // [RCCL] account for FNUZ FP8 types not being part of ncclDataType_t
-  //if (rccl_float8_useFnuz && (type == ncclFloat8e4m3 || type == ncclFloat8e5m2)) {
-  //  type += 2;
-  //}
+  if (rccl_float8_useFnuz && (type == ncclFloat8e4m3 || type == ncclFloat8e5m2)) {
+    type += 2;
+  }
   int row = 0;
   do {
     // RING / <all_protos> / Sum / int8_t

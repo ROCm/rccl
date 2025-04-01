@@ -101,5 +101,7 @@ namespace RcclUnitTesting
     // Output to string (for debug)
     std::string ToString(ncclDataType_t const  dataType,
                          size_t         const  numElements) const;
+    
+    static void SetFloat8Fnuz(bool const useFnuz);
   };
 }

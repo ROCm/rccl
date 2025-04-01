@@ -232,6 +232,9 @@ namespace RcclUnitTesting
       }
     }
 
+    // FNUZ fp8 types only used on gfx942
+    PtrUnion::SetFloat8Fnuz(isGfx94);
+
     // Test only pow2 number of GPUs for cpx mode to reduce the runtime for UT
     onlyPow2Gpus   = GetEnvVar("UT_POW2_GPUS"   , isCpxMode); // Default value set based on whether system is in CPX mode. UT_POW2_GPUS set by user overrides it.
 
