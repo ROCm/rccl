@@ -39,7 +39,7 @@ typedef struct
 } rccl_bfloat8;
 
 #else // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
-#if 0 //HIP_VERSION >= 6020000
+#if HIP_VERSION >= 6020000
 #include <hip/hip_fp8.h>
 #else
 #define HIP_FP8_TYPE_OCP 0
