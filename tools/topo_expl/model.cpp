@@ -78,7 +78,7 @@ int busIdToCudaDev(int64_t busId) {
 static int useMemcpy = 0;
 
 /* Determine if two peers can communicate with P2P */
-ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
+ncclResult_t p2pCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
   if (!info1->hasFineGrain || !info2->hasFineGrain)  {
     *ret = 0;
     return ncclSuccess;
@@ -92,7 +92,7 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 
   // Check topology / p2p level.
   int intermediateRank;
-  NCCLCHECK(ncclTopoCheckP2p(topo, info1->busId, info2->busId, ret, NULL, &intermediateRank));
+  NCCLCHECK(ncclTopoCheckP2p(comm->topo, info1->busId, info2->busId, ret, NULL, &intermediateRank));
   if (*ret == 0) return ncclSuccess;
   if (intermediateRank != -1) {
     if (useMemcpy) *ret = 0;
@@ -101,7 +101,7 @@ ncclResult_t p2pCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 
   // Check if NET would work better
   int useNet = 0;
-  NCCLCHECK(ncclTopoCheckNet(topo, info1->busId, info2->busId, &useNet));
+  NCCLCHECK(ncclTopoCheckNet(comm->topo, info1->busId, info2->busId, &useNet));
   if (useNet) {
     *ret = 0;
     return ncclSuccess;
@@ -146,12 +146,12 @@ struct ncclTransport p2pTransport = {
 NCCL_PARAM(ShmDisable, "SHM_DISABLE", 0);
 
 /* Determine if two peers can communicate with SHM */
-ncclResult_t shmCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
+ncclResult_t shmCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
   *ret = 0;
   if (ncclParamShmDisable() == 1) return ncclSuccess;
 
   int useNet = 0;
-  NCCLCHECK(ncclTopoCheckNet(topo, info1->busId, info2->busId, &useNet));
+  NCCLCHECK(ncclTopoCheckNet(comm->topo, info1->busId, info2->busId, &useNet));
   if (useNet) return ncclSuccess;
 
   // Same host?
@@ -197,7 +197,7 @@ struct setupReq {
 };
 
 /* Determine if two peers can communicate with NET */
-ncclResult_t netCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
+ncclResult_t netCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
   *ret = 1;
   return ncclSuccess;
 }
@@ -257,7 +257,7 @@ struct ncclTransport netTransport = {
 };
 
 /* Determine if two peers can communicate with NET */
-ncclResult_t collNetCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
+ncclResult_t collNetCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
   *ret = 1;
   return ncclSuccess;
 }
