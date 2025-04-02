@@ -710,7 +710,7 @@ inline ncclResult_t ncclCommPollEventCallbacks(struct ncclComm *comm) {
     }
   }
 finish:
-  cudaThreadExchangeStreamCaptureMode(&mode);
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return ncclSuccess;
 }
 
