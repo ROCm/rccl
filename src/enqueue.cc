@@ -1946,7 +1946,7 @@ static ncclResult_t topoGetAlgoInfo(
     userProtocolInput = !protoStr ? 0 : 1;
   }
 
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
+  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce)) {
     auto llMin = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][0];
     auto llMax = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][1];
 
@@ -1954,19 +1954,29 @@ static ncclResult_t topoGetAlgoInfo(
     auto ll128Max = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1];
 
     // Only override model choices if min/max cutoff points are set in the tuning models
-    if((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
+    if ((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
       // Keep it simple unless otherwise required
       info->protocol = NCCL_PROTO_SIMPLE;
-      // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
+      // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice in RS and AG cases
       size_t sizePerRank = nBytes / comm->nRanks;
 
-      if(sizePerRank <= llMax && sizePerRank > llMin) {
+      if (info->func == ncclFuncAllReduce) {
+        if (nBytes <= llMax && nBytes > llMin) {
+          info->protocol = NCCL_PROTO_LL;
+        }
+      }
+      else if (sizePerRank <= llMax && sizePerRank > llMin) {
         info->protocol = NCCL_PROTO_LL;
       }
 #if defined(ENABLE_LL128)
       // When applicable, LL128 RS performance is better than LL, so the next condition overrides the previous LL choice
-      if(comm->topo->ll128Enabled) {
-        if(sizePerRank <= ll128Max && sizePerRank > ll128Min) {
+      if (comm->topo->ll128Enabled) {
+        if (info->func == ncclFuncAllReduce) {
+          if (nBytes <= (ll128Max+(log2i(comm->nNodes)-1)*3145728) && nBytes > ll128Min) {
+            info->protocol = NCCL_PROTO_LL128;
+          }
+        }
+        else if (sizePerRank <= ll128Max && sizePerRank > ll128Min) {
           info->protocol = NCCL_PROTO_LL128;
         }
       }
