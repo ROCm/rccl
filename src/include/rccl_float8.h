@@ -39,7 +39,7 @@ typedef struct
 } rccl_bfloat8;
 
 #else // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
-#if HIP_VERSION >= 6020000
+#if HIP_VERSION >= 60200000
 #include <hip/hip_fp8.h>
 #else
 #define HIP_FP8_TYPE_OCP 0
@@ -858,66 +858,6 @@ RCCL_FLOAT8_MIXED_OPERATORS(rccl_float8_fnuz, rccl_bfloat8_fnuz)
 #undef RCCL_FLOAT8_OPERATORS
 #undef RCCL_FLOAT8_MIXED_OPERATORS
 #undef RCCL_FLOAT8_MIXED_OPERATORS_1
-
-// ================ Explicit downcasting to support different rounding (RNE, SR) ===============
-// NOTE: we going to remove all assignment operator overloading from other types and enforce
-// this explicit_downcast function to make any roudning behavior default
-// We have to explicitly call this function with SR flag
-
-template <typename T,
-          typename Ta,
-          bool stochastic_rounding,
-          typename std::enable_if<std::is_same<T, Ta>{}, int>::type = 0>
-inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng = 0)
-{
-    // same type, no conversion
-    return a;
-}
-
-// Use h/w intrinsic and optimized version when __gfx942__
-template <
-    typename T,
-    typename Ta,
-    bool stochastic_rounding,
-    typename std::enable_if<(!(std::is_same<T, Ta>{})
-                             && (std::is_same<T, rccl_float8>{} || std::is_same<T, rccl_bfloat8>{})),
-                            int>::type
-    = 0>
-inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
-{
-#if defined(__gfx942__) || defined(__gfx950__)
-    // NOTE: we are directly calling cast_to_f8_from_f32 instead of constructor to optimize away one runtime branch
-    T val;
-    if(std::is_same<T, rccl_float8>::value)
-        val.data = rccl_float8::cast_to_f8_from_f32<stochastic_rounding>(float(a), rng);
-    else
-        val.data = rccl_bfloat8::cast_to_bf8_from_f32<stochastic_rounding>(float(a), rng);
-    return val;
-#else // non gfx942
-    return T(float(a),
-             stochastic_rounding ? T::rocblas_hip_f8_rounding_mode::stochastic
-                                 : T::rocblas_hip_f8_rounding_mode::standard,
-             rng);
-#endif // __gfx942__
-}
-
-// NOTE NOTE: The above code is good if we don't consider HIP-GEMM code and only consider the quantization
-// However, if we need HIP-GEMM for fall-back, we would need explicit_cast handles Tacc=f32 to To=f16/bf16 conversion
-template <
-    typename T,
-    typename Ta,
-    bool stochastic_rounding,
-    typename std::enable_if<(!(std::is_same<T, Ta>{})
-                             && !(std::is_same<T, rccl_float8>{} || std::is_same<T, rccl_bfloat8>{})),
-                            int>::type
-    = 0>
-inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
-{
-    // the return type is not a F8 types, no SR for those types
-    // not sure if we have direct conversion, so converting to float first
-    // no effect if the input type is float
-    return T(float(a));
-}
 
 // =================================================================================================
 
