@@ -1954,9 +1954,23 @@ static ncclResult_t topoGetAlgoInfo(
     auto ll128Max = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1];
 
     // Only override model choices if min/max cutoff points are set in the tuning models
-    if((ll128Max > ll128Min) || (llMax > llMin)) {
+    if((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
       // Keep it simple unless otherwise required
       info->protocol = NCCL_PROTO_SIMPLE;
+      // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
+      size_t sizePerRank = nBytes / comm->nRanks;
+
+      if(sizePerRank <= llMax && sizePerRank > llMin) {
+        info->protocol = NCCL_PROTO_LL;
+      }
+#if defined(ENABLE_LL128)
+      // When applicable, LL128 RS performance is better than LL, so the next condition overrides the previous LL choice
+      if(comm->topo->ll128Enabled) {
+        if(sizePerRank <= ll128Max && sizePerRank > ll128Min) {
+          info->protocol = NCCL_PROTO_LL128;
+        }
+      }
+#endif
     } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
       // Warn that model detection for MI300 (or future others) did not work as expected
       // Add supported archs to this condition as they come (e.g. gfx950)
@@ -1967,20 +1981,6 @@ static ncclResult_t topoGetAlgoInfo(
         failedWarn = true;
       }
     }
-    // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
-    size_t sizePerRank = nBytes / comm->nRanks;
-
-    if(sizePerRank <= llMax && sizePerRank > llMin) {
-      info->protocol = NCCL_PROTO_LL;
-    }
-#if defined(ENABLE_LL128)
-    // When applicable, LL128 RS performance is better than LL, so the next condition overrides the previous LL choice
-    if(comm->topo->ll128Enabled) {
-      if(sizePerRank <= ll128Max && sizePerRank > ll128Min) {
-        info->protocol = NCCL_PROTO_LL128;
-      }
-    }
-#endif
   }
 #endif
   if (comm->rank == 0) INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %d proto %d time %f", ncclFuncToString(info->func), nBytes, info->algorithm, info->protocol, time);
