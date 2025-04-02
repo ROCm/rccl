@@ -599,7 +599,7 @@ struct ncclComm {
   struct ncclKernelPlanner planner;
 
   hipStream_t sideStream; // [RCCL] Cached non-captured stream
-  
+
   cudaMemPool_t memPool;
   // Queue of events and associated callbacks for cleaning up asynchronous work.
   // Using this is preferable to using CUDA host callbacks because host callbacks
@@ -709,7 +709,7 @@ inline ncclResult_t ncclCommPollEventCallbacks(struct ncclComm *comm) {
     }
   }
 finish:
-  cudaThreadExchangeStreamCaptureMode(&mode);
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return ncclSuccess;
 }
 
