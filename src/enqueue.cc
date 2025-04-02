@@ -1673,14 +1673,6 @@ static ncclResult_t updateCollCostTable(
   return ncclSuccess;
 }
 
-// The following parameters are based on the observation that LL and LL128
-// performance is determined by how much data goes out of a GPU
-// TODO: these numbers can be part of topo detection.
-RCCL_PARAM(RsLLMinSizePerRank,    "REDUCE_SCATTER_LL_MIN_SIZE_PER_RANK", 0);
-RCCL_PARAM(RsLLMaxSizePerRank,    "REDUCE_SCATTER_LL_MAX_SIZE_PER_RANK", 655360);
-RCCL_PARAM(RsLL128MinSizePerRank, "REDUCE_SCATTER_LL128_MIN_SIZE_PER_RANK", 131072);
-RCCL_PARAM(RsLL128MaxSizePerRank, "REDUCE_SCATTER_LL128_MAX_SIZE_PER_RANK", 3211264);
-
 static ncclResult_t topoGetAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes,
     float** collCostTable, int backupAlgo, int backupProto, float backupTime, ncclSimInfo_t* simInfo
@@ -1721,23 +1713,42 @@ static ncclResult_t topoGetAlgoInfo(
     const char *protoStr = getenv("NCCL_PROTO");
     userProtocolInput = !protoStr ? 0 : 1;
   }
-  if(!userProtocolInput && comm->nNodes >= 2 && info->func == ncclFuncReduceScatter && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
-    // Keep it simple unless otherwise required
-    info->protocol = NCCL_PROTO_SIMPLE;
-    // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
-    size_t sizePerRank = nBytes / comm->nRanks;
 
-    if(sizePerRank <= rcclParamRsLLMaxSizePerRank() && sizePerRank >= rcclParamRsLLMinSizePerRank()) {
-      info->protocol = NCCL_PROTO_LL;
-    }
+  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
+    auto llMin = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][0];
+    auto llMax = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][1];
+
+    auto ll128Min = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][0];
+    auto ll128Max = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1];
+
+    // Only override model choices if min/max cutoff points are set in the tuning models
+    if((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
+      // Keep it simple unless otherwise required
+      info->protocol = NCCL_PROTO_SIMPLE;
+      // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
+      size_t sizePerRank = nBytes / comm->nRanks;
+
+      if(sizePerRank <= llMax && sizePerRank > llMin) {
+        info->protocol = NCCL_PROTO_LL;
+      }
 #if defined(ENABLE_LL128)
-    // LL128 RS performance is better than LL when enabled, so the next condition overrides the previous LL choice
-    if(comm->topo->ll128Enabled) {
-      if(sizePerRank <= rcclParamRsLL128MaxSizePerRank() && sizePerRank >= rcclParamRsLL128MinSizePerRank()) {
-        info->protocol = NCCL_PROTO_LL128;
+      // When applicable, LL128 RS performance is better than LL, so the next condition overrides the previous LL choice
+      if(comm->topo->ll128Enabled) {
+        if(sizePerRank <= ll128Max && sizePerRank > ll128Min) {
+          info->protocol = NCCL_PROTO_LL128;
+        }
+      }
+#endif
+    } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
+      // Warn that model detection for MI300 (or future others) did not work as expected
+      // Add supported archs to this condition as they come (e.g. gfx950)
+      // Also make sure the tuning_model and model detection are updated for new archs
+      static bool failedWarn = false;
+      if (!failedWarn) {
+        WARN("LL cutoff points not detected for a supported arch %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
+        failedWarn = true;
       }
     }
-#endif
   }
 #endif
   if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
