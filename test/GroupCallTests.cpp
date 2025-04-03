@@ -14,13 +14,43 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce, ncclCollAllReduce, ncclCollAllReduce};
-    std::vector<ncclRedOp_t>    const redOps          = {ncclSum, ncclSum, ncclSum};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat, ncclFloat, ncclFloat};
+    std::vector<ncclRedOp_t>    const testRedOps      = {ncclSum, ncclSum, ncclSum};
+    std::vector<ncclDataType_t> const testDataTypes   = {ncclFloat, ncclFloat, ncclFloat};
     std::vector<int>            const numElements     = {1048576, 384 * 1024, 384};
 
     int                         const numCollPerGroup = numElements.size();
     bool                        const inPlace         = false;
     bool                        const useManagedMem   = false;
+
+    // Filter out any unsupported datatypes, in case only subset has been compiled for
+    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
+    std::vector<ncclDataType_t> dataTypes;
+    for (auto dt : testDataTypes)
+    {
+      for (int i = 0; i < supportedDataTypes.size(); ++i)
+      {
+        if (supportedDataTypes[i] == dt)
+        {
+          dataTypes.push_back(dt);
+          break;
+        }
+      }
+    }
+
+    // Filter out any unsupported reduction ops, in case only subset has been compiled for
+    std::vector<ncclRedOp_t> const& supportedOps = testBed.GetAllSupportedRedOps();
+    std::vector<ncclRedOp_t> redOps;
+    for (auto redop : testRedOps)
+    {
+      for (int i = 0; i < supportedOps.size(); ++i)
+      {
+        if (supportedOps[i] == redop)
+        {
+          redOps.push_back(redop);
+          break;
+        }
+      }
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -127,13 +157,43 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce, ncclCollAllReduce, ncclCollAllReduce};
-    std::vector<ncclRedOp_t>    const redOps          = {ncclSum, ncclSum, ncclSum};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat32, ncclFloat64};
+    std::vector<ncclRedOp_t>    const testRedOps      = {ncclSum, ncclSum, ncclSum};
+    std::vector<ncclDataType_t> const testDataTypes   = {ncclFloat16, ncclFloat32, ncclFloat64};
     std::vector<int>            const numElements     = {1048576, 384 * 1024, 384};
 
     int                         const numCollPerGroup = numElements.size();
     bool                        const inPlace         = false;
     bool                        const useManagedMem   = false;
+
+    // Filter out any unsupported datatypes, in case only subset has been compiled for
+    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
+    std::vector<ncclDataType_t> dataTypes;
+    for (auto dt : testDataTypes)
+    {
+      for (int i = 0; i < supportedDataTypes.size(); ++i)
+      {
+        if (supportedDataTypes[i] == dt)
+        {
+          dataTypes.push_back(dt);
+          break;
+        }
+      }
+    }
+
+    // Filter out any unsupported reduction ops, in case only subset has been compiled for
+    std::vector<ncclRedOp_t> const& supportedOps = testBed.GetAllSupportedRedOps();
+    std::vector<ncclRedOp_t> redOps;
+    for (auto redop : testRedOps)
+    {
+      for (int i = 0; i < supportedOps.size(); ++i)
+      {
+        if (supportedOps[i] == redop)
+        {
+          redOps.push_back(redop);
+          break;
+        }
+      }
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -230,8 +290,8 @@ namespace RcclUnitTesting
                                                                      {ncclCollAllToAll, ncclCollGather},
                                                                      {ncclCollBroadcast, ncclCollReduceScatter}};
     std::vector<std::vector<int>>        const numElements        = {{1250, 1048576}, {384, 384 * 1024}, {1048576, 127}};
-    std::vector<ncclDataType_t>          const dataTypes          = {ncclFloat16, ncclFloat32, ncclBfloat16};
-    std::vector<ncclRedOp_t>             const redops             = {ncclSum, ncclProd, ncclMax};
+    std::vector<ncclDataType_t>          const testDataTypes      = {ncclFloat16, ncclFloat32, ncclBfloat16};
+    std::vector<ncclRedOp_t>             const testRedOps         = {ncclSum, ncclProd, ncclMax};
     std::vector<int>                     const numCollsPerGroup   = {2, 2, 2};
     std::vector<int>                     const numStreamsPerGroup = {1, 1, 1};
     std::vector<bool>                    const useHipGraphList    = {true, false, true};
@@ -240,6 +300,36 @@ namespace RcclUnitTesting
     bool                                 const useBlocking        = true;
     int                                  const numGroupCalls      = groupCalls.size();
     int                                  const numIterations      = 10;
+
+    // Filter out any unsupported datatypes, in case only subset has been compiled for
+    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
+    std::vector<ncclDataType_t> dataTypes;
+    for (auto dt : testDataTypes)
+    {
+      for (int i = 0; i < supportedDataTypes.size(); ++i)
+      {
+        if (supportedDataTypes[i] == dt)
+        {
+          dataTypes.push_back(dt);
+          break;
+        }
+      }
+    }
+
+    // Filter out any unsupported reduction ops, in case only subset has been compiled for
+    std::vector<ncclRedOp_t> const& supportedOps = testBed.GetAllSupportedRedOps();
+    std::vector<ncclRedOp_t> redOps;
+    for (auto redop : testRedOps)
+    {
+      for (int i = 0; i < supportedOps.size(); ++i)
+      {
+        if (supportedOps[i] == redop)
+        {
+          redOps.push_back(redop);
+          break;
+        }
+      }
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -258,7 +348,7 @@ namespace RcclUnitTesting
       {
         std::vector<ncclFunc_t> funcTypes = groupCalls[groupCallIdx];
         OptionalColArgs options;
-        options.redOp = redops[groupCallIdx];
+        options.redOp = redOps[groupCallIdx];
         options.root  = 0;
 
         for (int collIdx = 0; collIdx < numCollsPerGroup[groupCallIdx]; ++collIdx)

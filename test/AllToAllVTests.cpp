@@ -79,12 +79,27 @@ namespace RcclUnitTesting
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat64, ncclFloat16};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclInt32, ncclFloat64, ncclFloat16};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  useHipGraph     = false;
 
     OptionalColArgs options;
+
+    // Filter out any unsupported datatypes, in case only subset has been compiled for
+    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
+    std::vector<ncclDataType_t> dataTypes;
+    for (auto dt : testDataTypes)
+    {
+      for (int i = 0; i < supportedDataTypes.size(); ++i)
+      {
+        if (supportedDataTypes[i] == dt)
+        {
+          dataTypes.push_back(dt);
+          break;
+        }
+      }
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -137,12 +152,27 @@ namespace RcclUnitTesting
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclFloat32, ncclInt8};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclFloat32, ncclInt8};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  useHipGraph     = false;
 
     OptionalColArgs options;
+
+    // Filter out any unsupported datatypes, in case only subset has been compiled for
+    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
+    std::vector<ncclDataType_t> dataTypes;
+    for (auto dt : testDataTypes)
+    {
+      for (int i = 0; i < supportedDataTypes.size(); ++i)
+      {
+        if (supportedDataTypes[i] == dt)
+        {
+          dataTypes.push_back(dt);
+          break;
+        }
+      }
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
