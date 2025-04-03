@@ -303,7 +303,12 @@ int main(int argc,char* argv[])
 
       NCCLCHECK(rcclGetAlgoInfo(&comm[0], &info, 0, 0, 1));
       uint64_t len = rcclFuncMaxSendRecvCount(info.func, comm[0].nRanks, count);
-      INFO(NCCL_TUNING, "%10ld %s %s %s maxChannels %d ", len, ncclFuncStr[info.func], ncclAlgoStr[info.algorithm], ncclProtoStr[info.protocol], info.nMaxChannels);
+      printf("| %-15ld | %-15s | %-10s | %-10s | %-12d |\n",
+         len,
+         ncclFuncStr[info.func],
+         ncclAlgoStr[info.algorithm],
+         ncclProtoStr[info.protocol],
+         info.nMaxChannels);
     }
   }
 
