@@ -656,6 +656,9 @@ namespace RcclUnitTesting
         }
       }
     }
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
 
     // Filter out any unsupported reduction ops, in case only subset has been compiled for
     std::vector<ncclRedOp_t> const& supportedOps = this->GetAllSupportedRedOps();
@@ -670,6 +673,9 @@ namespace RcclUnitTesting
           break;
         }
       }
+    }
+    if (redOps.empty()) {
+      GTEST_SKIP() << "Skipping... test reduction opertions excluded by UT_REDOPS.";
     }
 
     bool isCorrect = true;

@@ -100,6 +100,9 @@ namespace RcclUnitTesting
         }
       }
     }
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -172,6 +175,9 @@ namespace RcclUnitTesting
           break;
         }
       }
+    }
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
     }
 
     bool isCorrect = true;
