@@ -1958,25 +1958,20 @@ static ncclResult_t topoGetAlgoInfo(
       // Keep it simple unless otherwise required
       info->protocol = NCCL_PROTO_SIMPLE;
       // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice in RS and AG cases
-      size_t sizePerRank = nBytes / comm->nRanks;
-
-      if (info->func == ncclFuncAllReduce) {
-        if (nBytes <= llMax && nBytes > llMin) {
-          info->protocol = NCCL_PROTO_LL;
-        }
-      }
-      else if (sizePerRank <= llMax && sizePerRank > llMin) {
+      // For AG, this is the send size per rank
+      // For RS, this is the recv size per rank
+      // For AR, this is the send/recv size per rank
+      size_t sizePerRank = (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)? nBytes / comm->nRanks : nBytes;
+      if (sizePerRank <= llMax && sizePerRank > llMin) {
         info->protocol = NCCL_PROTO_LL;
       }
 #if defined(ENABLE_LL128)
-      // When applicable, LL128 RS performance is better than LL, so the next condition overrides the previous LL choice
+      // When LL128 is performant, the next condition overrides the previous LL choice
       if (comm->topo->ll128Enabled) {
         if (info->func == ncclFuncAllReduce) {
-          if (nBytes <= (ll128Max+(log2i(comm->nNodes)-1)*3145728) && nBytes > ll128Min) {
-            info->protocol = NCCL_PROTO_LL128;
-          }
+          ll128Max += (log2i(comm->nNodes) - 1) * 3145728;
         }
-        else if (sizePerRank <= ll128Max && sizePerRank > ll128Min) {
+        if (sizePerRank <= ll128Max && sizePerRank > ll128Min) {
           info->protocol = NCCL_PROTO_LL128;
         }
       }
