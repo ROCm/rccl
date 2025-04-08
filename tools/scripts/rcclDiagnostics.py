@@ -100,9 +100,6 @@ def get_rccl_version(rccl_path):
 		)
 		commit_hash = commit_hash_result.stdout.strip()
 
-		print(f"{rccl_version}")
-		print(f"Commit Hash: {commit_hash}")
-
 	except Exception as e:
 		result = CommandResult(
 			stdout="",
