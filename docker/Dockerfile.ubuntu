@@ -98,7 +98,7 @@ RUN wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.6.tar.g
 
 ## building RCCL
 RUN git clone --recurse-submodules -b "${RCCL_BRANCH}" "${RCCL_REPO}" ./rccl_develop \
-    && cd ./rccl \
+    && cd ./rccl_develop \
     && ./install.sh --amdgpu_targets=${GPU_TARGETS}
 ENV RCCL_INSTALL_PREFIX=${WORKDIR}/rccl_develop/build/release
 
