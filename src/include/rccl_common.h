@@ -53,5 +53,12 @@ inline rcclTunableIndex_t rcclGetTunableIndex(ncclFunc_t const& func) {
   }
 }
 
+inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, int const& nRanks) {
+  // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice for the impacted collectives
+  // For AG, this is the send size per rank
+  // For RS, this is the recv size per rank
+  // For AR, this is the send/recv size per rank
+  return (func == ncclFuncReduceScatter || func == ncclFuncAllGather) ? nBytes / nRanks : nBytes;
+}
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
 #endif

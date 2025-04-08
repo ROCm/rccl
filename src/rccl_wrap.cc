@@ -44,11 +44,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     if ((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
       // Keep it simple unless otherwise required
       info->protocol = NCCL_PROTO_SIMPLE;
-      // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice in RS and AG cases
-      // For AG, this is the send size per rank
-      // For RS, this is the recv size per rank
-      // For AR, this is the send/recv size per rank
-      size_t sizePerRank = (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)? nBytes / comm->nRanks : nBytes;
+      size_t sizePerRank = rcclGetSizePerRank(info->func, nBytes, comm->nRanks);
       if (sizePerRank <= llMax && sizePerRank > llMin) {
         info->protocol = NCCL_PROTO_LL;
       }
