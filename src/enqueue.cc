@@ -1939,55 +1939,7 @@ static ncclResult_t topoGetAlgoInfo(
     time = backupTime;
   }
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  // Honor user input for protocol choice
-  static int userProtocolInput = -2;
-  if (userProtocolInput == -2) {
-    const char *protoStr = getenv("NCCL_PROTO");
-    userProtocolInput = !protoStr ? 0 : 1;
-  }
-
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce)) {
-    auto tunableIndex = getRcclTunableIndex(info->func);
-    auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
-    auto llMax = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MAX_IDX];
-
-    auto ll128Min = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_MIN_IDX];
-    auto ll128Max = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_MAX_IDX];
-
-    // Only override model choices if min/max cutoff points are set in the tuning models
-    if ((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
-      // Keep it simple unless otherwise required
-      info->protocol = NCCL_PROTO_SIMPLE;
-      // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice in RS and AG cases
-      // For AG, this is the send size per rank
-      // For RS, this is the recv size per rank
-      // For AR, this is the send/recv size per rank
-      size_t sizePerRank = (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)? nBytes / comm->nRanks : nBytes;
-      if (sizePerRank <= llMax && sizePerRank > llMin) {
-        info->protocol = NCCL_PROTO_LL;
-      }
-#if defined(ENABLE_LL128)
-      // When LL128 is performant, the next condition overrides the previous LL choice
-      if (comm->topo->ll128Enabled) {
-        if (info->func == ncclFuncAllReduce) {
-          ll128Max += (log2i(comm->nNodes) - 1) * comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_FACTOR_IDX];
-        }
-        if (sizePerRank <= ll128Max && sizePerRank > ll128Min) {
-          info->protocol = NCCL_PROTO_LL128;
-        }
-      }
-#endif
-    } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
-      // Warn that model detection for MI300 (or future others) did not work as expected
-      // Add supported archs to this condition as they come (e.g. gfx950)
-      // Also make sure the tuning_model and model detection are updated for new archs
-      static bool failedWarn = false;
-      if (!failedWarn) {
-        WARN("LL cutoff points not detected for a supported arch %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
-        failedWarn = true;
-      }
-    }
-  }
+  rcclUpdateCollectiveProtocol(comm, nBytes, info);
 #endif
   if (comm->rank == 0) INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %d proto %d time %f", ncclFuncToString(info->func), nBytes, info->algorithm, info->protocol, time);
   if (simInfo) simInfo->estimatedTime = time;

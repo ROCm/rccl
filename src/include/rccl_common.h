@@ -19,23 +19,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
 #ifndef RCCL_COMMON_H_
 #define RCCL_COMMON_H_
 #include "nccl_common.h"
 
-#define RCCL_TUNABLE_COLLS 4 // LL/LL64/LL128 tunable Collectives
-#define RCCL_RS_TUNABLE 0       // reduce_scatter index
-#define RCCL_AG_TUNABLE 1       // all_gather index
-#define RCCL_AR_TUNABLE 2       // all_reduce index
-#define RCCL_RE_TUNABLE 3       // reduce index
+#define RCCL_TUNABLE_COLLS 4        // LL/LL64/LL128 tunable Collective count
+#define RCCL_RS_TUNABLE 0           // reduce_scatter index
+#define RCCL_AG_TUNABLE 1           // all_gather index
+#define RCCL_AR_TUNABLE 2           // all_reduce index
+#define RCCL_RE_TUNABLE 3           // reduce index
 #define RCCL_LL_LIMITS_UNDEFINED 0
 #define RCCL_PROTOCOL_ENTRY_SIZE 3
 #define RCCL_PROTOCOL_MIN_IDX 0
 #define RCCL_PROTOCOL_MAX_IDX 1
 #define RCCL_PROTOCOL_FACTOR_IDX 2
 
-inline int getRcclTunableIndex(ncclFunc_t& func) {
+inline int rcclGetTunableIndex(ncclFunc_t const& func) {
   switch (func) {
     case ncclFuncReduceScatter:
       return RCCL_RS_TUNABLE;
@@ -50,4 +49,5 @@ inline int getRcclTunableIndex(ncclFunc_t& func) {
   }
 }
 
+void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
 #endif

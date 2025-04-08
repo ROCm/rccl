@@ -422,6 +422,7 @@ set(SRC_FILES
   src/net.cc
   src/msccl.cc
   src/proxy.cc
+  src/rccl_wrap.cc
   src/register.cc
   src/transport.cc
   src/device/all_gather.h
