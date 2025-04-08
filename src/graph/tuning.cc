@@ -263,11 +263,9 @@ static struct tuningModel tuning_model_5 {
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.8, 1.0, 1.0, 1.0, },
   },
 
-  .llProtoRanges = {
-    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360,  1} ,  /* LL128 (Min/Max) */ {131072, 3211264, 1}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 98304,   1} ,  /* LL128 (Min/Max) */ {98304, 5046272, 1}},
-    /*AllReduce*/     {/* LL (Min/Max) */ {0, 1048576, 1} ,  /* LL128 (Min/Max) */ {1048576, 9437184, 3145728}},
-  },
+  .llProtoRanges[RCCL_RS_TUNABLE] = /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360,  1} ,  /* LL128 (Min/Max) */ {131072, 3211264, 1}},
+  .llProtoRanges[RCCL_AG_TUNABLE] = /*AllGather*/     {/* LL (Min/Max) */ {0, 98304,   1} ,  /* LL128 (Min/Max) */ {98304, 5046272, 1}},
+  .llProtoRanges[RCCL_AR_TUNABLE] = /*AllReduce*/     {/* LL (Min/Max) */ {0, 1048576, 1} ,  /* LL128 (Min/Max) */ {1048576, 9437184, 3145728}},
 };
 
 static struct tuningModel rcclTuningModel[] = {
