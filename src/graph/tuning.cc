@@ -71,7 +71,7 @@ struct tuningModel {
   float bwRatio [2][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
-  uint64_t llProtoRanges[RCCL_LL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][2];
+  uint64_t llProtoRanges[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
 };
 
 static struct tuningModel tuning_model_0 {
@@ -264,9 +264,9 @@ static struct tuningModel tuning_model_5 {
   },
 
   .llProtoRanges = {
-    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360} , /* LL128 (Min/Max) */ {131072, 3211264}},
-    /*AllGather*/     {/* LL (Min/Max) */ {0, 98304} , /* LL128 (Min/Max) */ {98304, 5046272}},
-    /*AllReduce*/     {/* LL (Min/Max) */ {0, 1048576} , /* LL128 (Min/Max) */ {1048576, 9437184}},
+    /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360,  1} ,  /* LL128 (Min/Max) */ {131072, 3211264, 1}},
+    /*AllGather*/     {/* LL (Min/Max) */ {0, 98304,   1} ,  /* LL128 (Min/Max) */ {98304, 5046272, 1}},
+    /*AllReduce*/     {/* LL (Min/Max) */ {0, 1048576, 1} ,  /* LL128 (Min/Max) */ {1048576, 9437184, 3145728}},
   },
 };
 
@@ -373,17 +373,9 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) intraHw[a] = graphs[a]->typeIntra == LINK_NVL ? NCCL_HW_NVLINK : NCCL_HW_PCI;
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) hw[a] = nNodes == 1 ? intraHw[a] : NCCL_HW_NET;
 
-  memcpy(comm->minMaxLLRange[ncclFuncReduceScatter],
-        rcclTuningModel[comm->topo->tuning].llProtoRanges[RCCL_RS_TUNABLE],
-        sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges[RCCL_RS_TUNABLE]));
-
-  memcpy(comm->minMaxLLRange[ncclFuncAllGather],
-        rcclTuningModel[comm->topo->tuning].llProtoRanges[RCCL_AG_TUNABLE],
-        sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges[RCCL_AG_TUNABLE]));
-
-  memcpy(comm->minMaxLLRange[ncclFuncAllReduce],
-        rcclTuningModel[comm->topo->tuning].llProtoRanges[RCCL_AR_TUNABLE],
-        sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges[RCCL_AR_TUNABLE]));
+  memcpy(comm->minMaxLLRange,
+        rcclTuningModel[comm->topo->tuning].llProtoRanges,
+        sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges));
 
   for (int coll=0; coll<NCCL_NUM_FUNCTIONS; coll++) {
     int nsteps = coll == ncclFuncAllReduce ? 2*(nRanks-1) :

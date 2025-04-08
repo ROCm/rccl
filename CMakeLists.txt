@@ -499,6 +499,7 @@ set(SRC_FILES
   src/include/profiler.h
   src/include/proxy.h
   src/include/rccl_vars.h
+  src/include/rccl_common.h
   src/include/register.h
   src/include/rccl_float8.h
   src/include/rocm_smi_wrap.h

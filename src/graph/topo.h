@@ -123,12 +123,6 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_FORCE_INTRA 16
 #define RCCL_TOPO_XGMI_ALL  32
 
-#define RCCL_LL_TUNABLE_COLLS 4 // LL/LL64/LL128 tunable Collectives
-#define RCCL_RS_TUNABLE 0       // reduce_scatter index
-#define RCCL_AG_TUNABLE 1       // all_gather index
-#define RCCL_AR_TUNABLE 2       // all_reduce index
-#define RCCL_RE_TUNABLE 3       // reduce index
-#define RCCL_LL_LIMITS_UNDEFINED 0
 
 #define GCN_ARCH_NAME_LEN 16
 

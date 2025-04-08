@@ -19,6 +19,7 @@
 #include "graph.h"
 #include "nvmlwrap.h"
 #include "profiler.h"
+#include "rccl_common.h"
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
@@ -517,7 +518,7 @@ struct ncclComm {
   float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float ringbdw[NCCL_NUM_FUNCTIONS][NCCL_NUM_PROTOCOLS];
   int maxThreads[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
-  uint64_t minMaxLLRange[NCCL_NUM_FUNCTIONS][NCCL_NUM_PROTOCOLS - 1][2];
+  uint64_t minMaxLLRange[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
 
   /* This attribute can indicate the states of communicators and return code of
   * asynchronous NCCL operations. */

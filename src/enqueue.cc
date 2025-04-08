@@ -1947,11 +1947,12 @@ static ncclResult_t topoGetAlgoInfo(
   }
 
   if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce)) {
-    auto llMin = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][0];
-    auto llMax = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][1];
+    auto tunableIndex = getRcclTunableIndex(info->func);
+    auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
+    auto llMax = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MAX_IDX];
 
-    auto ll128Min = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][0];
-    auto ll128Max = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1];
+    auto ll128Min = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_MIN_IDX];
+    auto ll128Max = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_MAX_IDX];
 
     // Only override model choices if min/max cutoff points are set in the tuning models
     if ((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
@@ -1969,7 +1970,7 @@ static ncclResult_t topoGetAlgoInfo(
       // When LL128 is performant, the next condition overrides the previous LL choice
       if (comm->topo->ll128Enabled) {
         if (info->func == ncclFuncAllReduce) {
-          ll128Max += (log2i(comm->nNodes) - 1) * 3145728;
+          ll128Max += (log2i(comm->nNodes) - 1) * comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_FACTOR_IDX];
         }
         if (sizePerRank <= ll128Max && sizePerRank > ll128Min) {
           info->protocol = NCCL_PROTO_LL128;
@@ -1991,7 +1992,6 @@ static ncclResult_t topoGetAlgoInfo(
   if (comm->rank == 0) INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %d proto %d time %f", ncclFuncToString(info->func), nBytes, info->algorithm, info->protocol, time);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
-
   int nc = comm->nChannels;
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
