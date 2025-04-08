@@ -1938,9 +1938,7 @@ static ncclResult_t topoGetAlgoInfo(
     info->protocol = backupProto;
     time = backupTime;
   }
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   rcclUpdateCollectiveProtocol(comm, nBytes, info);
-#endif
   if (comm->rank == 0) INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %d proto %d time %f", ncclFuncToString(info->func), nBytes, info->algorithm, info->protocol, time);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
