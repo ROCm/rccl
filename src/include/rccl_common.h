@@ -23,18 +23,22 @@ THE SOFTWARE.
 #define RCCL_COMMON_H_
 #include "nccl_common.h"
 
-#define RCCL_TUNABLE_COLLS 4        // LL/LL64/LL128 tunable Collective count
-#define RCCL_RS_TUNABLE 0           // reduce_scatter index
-#define RCCL_AG_TUNABLE 1           // all_gather index
-#define RCCL_AR_TUNABLE 2           // all_reduce index
-#define RCCL_RE_TUNABLE 3           // reduce index
+typedef enum RcclTunableColls {
+  RCCL_UNSUPPORTED_TUNABLE = -1,
+  RCCL_RS_TUNABLE = 0,    // reduce_scatter index
+  RCCL_AG_TUNABLE = 1,    // all_gather index
+  RCCL_AR_TUNABLE = 2,    // all_reduce index
+  RCCL_RE_TUNABLE = 3,    // reduce index
+  RCCL_TUNABLE_COLLS = 4  // LL/LL64/LL128 tunable collectives count
+} rcclTunableIndex_t;
+
 #define RCCL_LL_LIMITS_UNDEFINED 0
 #define RCCL_PROTOCOL_ENTRY_SIZE 3
 #define RCCL_PROTOCOL_MIN_IDX 0
 #define RCCL_PROTOCOL_MAX_IDX 1
 #define RCCL_PROTOCOL_FACTOR_IDX 2
 
-inline int rcclGetTunableIndex(ncclFunc_t const& func) {
+inline rcclTunableIndex_t rcclGetTunableIndex(ncclFunc_t const& func) {
   switch (func) {
     case ncclFuncReduceScatter:
       return RCCL_RS_TUNABLE;
@@ -45,7 +49,7 @@ inline int rcclGetTunableIndex(ncclFunc_t const& func) {
     case ncclFuncReduce:
       return RCCL_RE_TUNABLE;
     default:
-      return -1; // Invalid or unsupported function
+      return RCCL_UNSUPPORTED_TUNABLE; // Invalid or unsupported function
   }
 }
 
