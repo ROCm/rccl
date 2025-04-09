@@ -4,7 +4,7 @@
 
 Assuming you have docker installed on your system:
 
-#### To build the docker image :
+### To build the docker image :
 
 By default, the given Dockerfile uses `docker.io/rocm/dev-ubuntu-22.04:latest` as the base docker image, and then installs RCCL (develop branch) and RCCL-Tests (develop branch), targetting `gfx942` GPUs.
 ```shell
@@ -16,13 +16,13 @@ The base docker image, rccl repo, rccl-tests repo, and GPU targets can be modifi
 $ docker build -t rccl-tests -f Dockerfile.ubuntu --build-arg="ROCM_IMAGE_NAME=rocm/dev-ubuntu-20.04" --build-arg="ROCM_IMAGE_TAG=6.2" --build-arg="GPU_TARGETS=gfx90a" --pull .
 ```
 
-#### To start an interactive docker container on a system with AMD GPUs :
+### To start an interactive docker container on a system with AMD GPUs :
 
 ```shell
 $ docker run --privileged --rm --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --network=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it rccl-tests /bin/bash
 ```
 
-#### To run rccl-tests (all\_reduce\_perf) on 8 AMD GPUs (inside the docker container) :
+### To run rccl-tests (all\_reduce\_perf) on 8 AMD GPUs (inside the docker container) :
 
 If using ROCm 6.3.x or older
 ```shell
@@ -35,6 +35,7 @@ $ mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG
 ```
 
 For more information on rccl-tests options, refer to the [Usage](https://github.com/ROCm/rccl-tests#usage) section of rccl-tests.
+
 
 ## Copyright
 
