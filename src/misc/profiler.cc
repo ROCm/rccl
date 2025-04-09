@@ -11,6 +11,7 @@
 #include "utils.h"
 #include "proxy.h"
 #include "profiler.h"
+#include <dlfcn.h>
 
 static pthread_mutex_t profilerLock = PTHREAD_MUTEX_INITIALIZER;
 static int profilerPluginRefCount;
