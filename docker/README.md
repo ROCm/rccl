@@ -19,7 +19,7 @@ $ docker build -t rccl-tests -f Dockerfile.ubuntu --build-arg="ROCM_IMAGE_NAME=r
 ### To start an interactive docker container on a system with AMD GPUs :
 
 ```shell
-$ docker run --privileged --rm --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --network=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it rccl-tests /bin/bash
+$ docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --network=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it rccl-tests /bin/bash
 ```
 
 ### To run rccl-tests (all\_reduce\_perf) on 8 AMD GPUs (inside the docker container) :
