@@ -24,6 +24,12 @@ $ docker run --privileged --rm --device=/dev/kfd --device=/dev/dri --group-add v
 
 #### To run rccl-tests (all\_reduce\_perf) on 8 AMD GPUs (inside the docker container) :
 
+If using ROCm 6.3.x or older
+```shell
+$ mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG=VERSION -x HSA_NO_SCRATCH_RECLAIM=1 /workspace/rccl-tests/build/all_reduce_perf -b 1 -e 16G -f 2 -g 1
+```
+
+If using ROCm 6.4.0 or newer
 ```shell
 $ mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG=VERSION /workspace/rccl-tests/build/all_reduce_perf -b 1 -e 16G -f 2 -g 1
 ```
