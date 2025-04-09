@@ -23,7 +23,7 @@ To build the Docker image and run the container, follow these steps.
       docker build -t rccl-tests -f Dockerfile.ubuntu --pull .
 
    The base Docker image, rccl repository, rccl-tests repository, and GPU targets can be modified
-   by using ``--build-args`` in the ``docker build`` command above. For example, to use a different base Docker image for MI250,
+   by using ``--build-args`` in the ``docker build`` command above. For example, to use a different base Docker image for the MI250 GPU,
    use this command:
 
    .. code-block:: shell
