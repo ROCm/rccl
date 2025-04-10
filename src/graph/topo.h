@@ -123,6 +123,7 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_FORCE_INTRA 16
 #define RCCL_TOPO_XGMI_ALL  32
 
+
 #define GCN_ARCH_NAME_LEN 16
 
 struct ncclTopoNode {

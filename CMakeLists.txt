@@ -422,6 +422,7 @@ set(SRC_FILES
   src/net.cc
   src/msccl.cc
   src/proxy.cc
+  src/rccl_wrap.cc
   src/register.cc
   src/transport.cc
   src/device/all_gather.h
@@ -498,6 +499,7 @@ set(SRC_FILES
   src/include/param.h
   src/include/profiler.h
   src/include/proxy.h
+  src/include/rccl_common.h
   src/include/rccl_vars.h
   src/include/register.h
   src/include/rccl_float8.h

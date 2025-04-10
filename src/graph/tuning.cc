@@ -64,11 +64,14 @@ static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = {
 #define NCCL_HW_PCI 1
 #define NCCL_HW_NET 2
 
+
+
 struct tuningModel {
   float hwLat [3][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float bwRatio [2][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
+  uint64_t llProtoRanges[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
 };
 
 static struct tuningModel tuning_model_0 {
@@ -99,6 +102,8 @@ static struct tuningModel tuning_model_0 {
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, 0.7, 0.5, 0.4, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, },
     { 1.0, 0.8, 0.2, 1.0, 1.0, 0.3, 1.0, 0.1, 0.1, 0.2, 0.2, 0.1, 0.5, 1.0, 0.8, 0.8, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
+
+  .llProtoRanges = {RCCL_LL_LIMITS_UNDEFINED},
 };
 
 static struct tuningModel tuning_model_1 {
@@ -129,6 +134,8 @@ static struct tuningModel tuning_model_1 {
     { 1.0, 0.5, 1.0, 1.0, 0.6, 0.7, 1.0, 1.0, 0.2, 1.0, 0.9, 0.7, 1.0, 1.0, 1.0, 0.9, 0.9, 0.8, 0.8, 0.7, 0.6, 0.5, 0.5, 0.3, 0.2, 0.1, 0.1, },
     { 0.3, 1.0, 0.3, 0.1, 0.1, 0.1, 0.3, 0.7, 1.0, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.3, 0.5, 0.9, 1.0, 1.0, 1.0, 1.0, },
   },
+
+  .llProtoRanges = {RCCL_LL_LIMITS_UNDEFINED},
 };
 
 static struct tuningModel tuning_model_2 {
@@ -159,6 +166,8 @@ static struct tuningModel tuning_model_2 {
     { 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.4, 1.0, 1.0, 1.0, 1.0, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.5, 0.6, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
+
+  .llProtoRanges = {RCCL_LL_LIMITS_UNDEFINED},
 };
 
 static struct tuningModel tuning_model_3 {
@@ -189,6 +198,8 @@ static struct tuningModel tuning_model_3 {
     { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.5, 1.0, 0.1, 0.3, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.3, 0.4, 0.7, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
+
+  .llProtoRanges = {RCCL_LL_LIMITS_UNDEFINED},
 };
 
 static struct tuningModel tuning_model_4 {
@@ -219,6 +230,8 @@ static struct tuningModel tuning_model_4 {
     { 0.4, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.2, 0.2, 0.1, 0.3, 1.0, 1.0, 0.7, 0.8, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.5, 0.4, 0.3, 0.3, },
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 0.8, 0.5, 0.1, 0.7, 0.2, 0.4, 0.4, 0.6, 0.7, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
   },
+
+  .llProtoRanges = {RCCL_LL_LIMITS_UNDEFINED},
 };
 
 static struct tuningModel tuning_model_5 {
@@ -241,14 +254,18 @@ static struct tuningModel tuning_model_5 {
   .treeCorrectionFactor = {
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 0.6, 1.0, 0.9, 1.0, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 0.6, 1.0, 0.9, 1.0, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.7, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.7, 1.0, 1.0, 1.0, 1.0, 1.0, 0.7, 0.7, 0.5, 0.6, 0.6, 0.6, },
   },
 
   .ringCorrectionFactor = {
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.2, 1.0, 0.4, 0.4, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
     { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.2, 1.0, 0.4, 0.4, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, },
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.8, 1.0, 1.0, 1.0, },
+    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.8, 1.0, 1.0, 1.0, },
   },
+
+  .llProtoRanges[RCCL_RS_TUNABLE] = /*ReduceScatter*/ {/* LL (Min/Max) */ {0, 655360,  1} ,  /* LL128 (Min/Max) */ {131072, 3211264, 1}},
+  .llProtoRanges[RCCL_AG_TUNABLE] = /*AllGather*/     {/* LL (Min/Max) */ {0, 98304,   1} ,  /* LL128 (Min/Max) */ {98304, 5046272, 1}},
+  .llProtoRanges[RCCL_AR_TUNABLE] = /*AllReduce*/     {/* LL (Min/Max) */ {0, 1048576, 1} ,  /* LL128 (Min/Max) */ {1048576, 9437184, 3145728}},
 };
 
 static struct tuningModel rcclTuningModel[] = {
@@ -353,6 +370,10 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   int intraHw[NCCL_NUM_ALGORITHMS], hw[NCCL_NUM_ALGORITHMS];
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) intraHw[a] = graphs[a]->typeIntra == LINK_NVL ? NCCL_HW_NVLINK : NCCL_HW_PCI;
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) hw[a] = nNodes == 1 ? intraHw[a] : NCCL_HW_NET;
+
+  memcpy(comm->minMaxLLRange,
+        rcclTuningModel[comm->topo->tuning].llProtoRanges,
+        sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges));
 
   for (int coll=0; coll<NCCL_NUM_FUNCTIONS; coll++) {
     int nsteps = coll == ncclFuncAllReduce ? 2*(nRanks-1) :

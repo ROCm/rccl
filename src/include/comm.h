@@ -19,6 +19,7 @@
 #include "graph.h"
 #include "nvmlwrap.h"
 #include "profiler.h"
+#include "rccl_common.h"
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
@@ -517,6 +518,7 @@ struct ncclComm {
   float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float ringbdw[NCCL_NUM_FUNCTIONS][NCCL_NUM_PROTOCOLS];
   int maxThreads[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  uint64_t minMaxLLRange[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
 
   /* This attribute can indicate the states of communicators and return code of
   * asynchronous NCCL operations. */
@@ -599,7 +601,7 @@ struct ncclComm {
   struct ncclKernelPlanner planner;
 
   hipStream_t sideStream; // [RCCL] Cached non-captured stream
-  
+
   cudaMemPool_t memPool;
   // Queue of events and associated callbacks for cleaning up asynchronous work.
   // Using this is preferable to using CUDA host callbacks because host callbacks
@@ -709,7 +711,7 @@ inline ncclResult_t ncclCommPollEventCallbacks(struct ncclComm *comm) {
     }
   }
 finish:
-  cudaThreadExchangeStreamCaptureMode(&mode);
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return ncclSuccess;
 }
 

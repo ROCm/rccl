@@ -1903,14 +1903,6 @@ static ncclResult_t updateCollCostTable(
   return ncclSuccess;
 }
 
-// The following parameters are based on the observation that LL and LL128
-// performance is determined by how much data goes out of a GPU
-// TODO: these numbers can be part of topo detection.
-RCCL_PARAM(RsLLMinSizePerRank,    "REDUCE_SCATTER_LL_MIN_SIZE_PER_RANK", 0);
-RCCL_PARAM(RsLLMaxSizePerRank,    "REDUCE_SCATTER_LL_MAX_SIZE_PER_RANK", 655360);
-RCCL_PARAM(RsLL128MinSizePerRank, "REDUCE_SCATTER_LL128_MIN_SIZE_PER_RANK", 131072);
-RCCL_PARAM(RsLL128MaxSizePerRank, "REDUCE_SCATTER_LL128_MAX_SIZE_PER_RANK", 3211264);
-
 static ncclResult_t topoGetAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes,
     float** collCostTable, int backupAlgo, int backupProto, float backupTime, ncclSimInfo_t* simInfo
@@ -1946,36 +1938,10 @@ static ncclResult_t topoGetAlgoInfo(
     info->protocol = backupProto;
     time = backupTime;
   }
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  // Honor user input for protocol choice
-  static int userProtocolInput = -2;
-  if (userProtocolInput == -2) {
-    const char *protoStr = getenv("NCCL_PROTO");
-    userProtocolInput = !protoStr ? 0 : 1;
-  }
-  if(!userProtocolInput && comm->nNodes >= 2 && info->func == ncclFuncReduceScatter && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
-    // Keep it simple unless otherwise required
-    info->protocol = NCCL_PROTO_SIMPLE;
-    // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
-    size_t sizePerRank = nBytes / comm->nRanks;
-
-    if(sizePerRank <= rcclParamRsLLMaxSizePerRank() && sizePerRank >= rcclParamRsLLMinSizePerRank()) {
-      info->protocol = NCCL_PROTO_LL;
-    }
-#if defined(ENABLE_LL128)
-    // LL128 RS performance is better than LL when enabled, so the next condition overrides the previous LL choice
-    if(comm->topo->ll128Enabled) {
-      if(sizePerRank <= rcclParamRsLL128MaxSizePerRank() && sizePerRank >= rcclParamRsLL128MinSizePerRank()) {
-        info->protocol = NCCL_PROTO_LL128;
-      }
-    }
-#endif
-  }
-#endif
+  rcclUpdateCollectiveProtocol(comm, nBytes, info);
   if (comm->rank == 0) INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %d proto %d time %f", ncclFuncToString(info->func), nBytes, info->algorithm, info->protocol, time);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
-
   int nc = comm->nChannels;
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
