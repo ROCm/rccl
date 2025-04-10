@@ -1712,55 +1712,10 @@ static ncclResult_t topoGetAlgoInfo(
     info->protocol = backupProto;
     time = backupTime;
   }
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  // Honor user input for protocol choice
-  static int userProtocolInput = -2;
-  if (userProtocolInput == -2) {
-    const char *protoStr = getenv("NCCL_PROTO");
-    userProtocolInput = !protoStr ? 0 : 1;
-  }
-
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
-    auto llMin = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][0];
-    auto llMax = comm->minMaxLLRange[info->func][NCCL_PROTO_LL][1];
-
-    auto ll128Min = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][0];
-    auto ll128Max = comm->minMaxLLRange[info->func][NCCL_PROTO_LL128][1];
-
-    // Only override model choices if min/max cutoff points are set in the tuning models
-    if((ll128Max != RCCL_LL_LIMITS_UNDEFINED) || (llMax != RCCL_LL_LIMITS_UNDEFINED)) {
-      // Keep it simple unless otherwise required
-      info->protocol = NCCL_PROTO_SIMPLE;
-      // Normalize the comparison to sizePerRank as this is essentially what matters in determining protocol choice
-      size_t sizePerRank = nBytes / comm->nRanks;
-
-      if(sizePerRank <= llMax && sizePerRank > llMin) {
-        info->protocol = NCCL_PROTO_LL;
-      }
-#if defined(ENABLE_LL128)
-      // When applicable, LL128 RS performance is better than LL, so the next condition overrides the previous LL choice
-      if(comm->topo->ll128Enabled) {
-        if(sizePerRank <= ll128Max && sizePerRank > ll128Min) {
-          info->protocol = NCCL_PROTO_LL128;
-        }
-      }
-#endif
-    } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
-      // Warn that model detection for MI300 (or future others) did not work as expected
-      // Add supported archs to this condition as they come (e.g. gfx950)
-      // Also make sure the tuning_model and model detection are updated for new archs
-      static bool failedWarn = false;
-      if (!failedWarn) {
-        WARN("LL cutoff points not detected for a supported arch %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
-        failedWarn = true;
-      }
-    }
-  }
-#endif
-  if (comm->rank == 0) INFO(NCCL_TUNING, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
+  rcclUpdateCollectiveProtocol(comm, nBytes, info);
+  if (comm->rank == 0) INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %d proto %d time %f", ncclFuncToString(info->func), nBytes, info->algorithm, info->protocol, time);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
-
   int nc = comm->nChannels;
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
