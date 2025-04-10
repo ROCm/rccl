@@ -1,5 +1,5 @@
 diff --git a/apps/nccl/src/allreduce.hpp b/apps/nccl/src/allreduce.hpp
-index 9f46ff9..d6db21f 100644
+index 9f46ff9..63bb633 100644
 --- a/apps/nccl/src/allreduce.hpp
 +++ b/apps/nccl/src/allreduce.hpp
 @@ -199,11 +199,18 @@ template <typename T>
@@ -96,15 +96,17 @@ index 9f46ff9..d6db21f 100644
    static uint32_t flag = 1;
  
    nRanksPerNode = (worldSize < nRanksPerNode) ? worldSize : nRanksPerNode;
-@@ -986,7 +1015,7 @@ cudaError_t allreduce(T* buff, T* scratch, T* resultBuff, mscclpp::DeviceHandle<
+@@ -986,8 +1015,8 @@ cudaError_t allreduce(T* buff, T* scratch, T* resultBuff, mscclpp::DeviceHandle<
      int nBlocks = nRanksPerNode - 1;
      int nThreadsPerBlock = 32;
      allreduceAllToAll<<<nBlocks, nThreadsPerBlock, 0, stream>>>(buff, scratch, resultBuff, smChannels,
 -		    channelInOffset, channelScratchOffset, rank, nRanksPerNode, worldSize, nelems, flag++);
+-  } else if (sizeof(T) * nelems <= (1 << 20)) {
 +		    channelInOffset, channelScratchOffset, rank, nRanksPerNode, worldSize, nelems, deviceFlag, syncer);
-   } else if (sizeof(T) * nelems <= (1 << 20)) {
++  } else if (sizeof(T) * nelems <= (1 << 18)) {
      int nBlocks = 4*(nRanksPerNode - 1);
      int nThreadsPerBlock = 1024;
+     if (nelems >= 8192) {
 @@ -998,11 +1027,11 @@ cudaError_t allreduce(T* buff, T* scratch, T* resultBuff, mscclpp::DeviceHandle<
      size_t NpkitSharedMemSize = NPKIT_SHM_NUM_EVENTS * sizeof(NpKitEvent);
      allreduce7<<<nBlocks, nThreadsPerBlock, NpkitSharedMemSize, stream>>>(
@@ -120,7 +122,7 @@ index 9f46ff9..d6db21f 100644
    } else {
      int nBlocks = 8 * (nRanksPerNode - 1);
 diff --git a/apps/nccl/src/nccl.cu b/apps/nccl/src/nccl.cu
-index b8d04d4..482bac7 100644
+index b8d04d4..40ffe3e 100644
 --- a/apps/nccl/src/nccl.cu
 +++ b/apps/nccl/src/nccl.cu
 @@ -93,6 +93,8 @@ struct ncclComm {
@@ -132,6 +134,15 @@ index b8d04d4..482bac7 100644
  };
  
  struct handleInfo {
+@@ -228,7 +230,7 @@ static ncclResult_t ncclAllReduceFallback(const void* sendbuff, void* recvbuff,
+   size_t bytes = count * ncclTypeSize(datatype);
+ 
+   // Creating the channels
+-  if (count * ncclTypeSize(datatype) <= (1 << 20)) {
++  if (count * ncclTypeSize(datatype) <= (1 << 18)) {
+     auto sendIt = comm->channelScratchInfos.find(sendKey);
+     if (sendIt == comm->channelScratchInfos.end()) {
+       std::vector<mscclpp::SmChannel> channels =
 @@ -286,24 +288,28 @@ static ncclResult_t ncclAllReduceFallback(const void* sendbuff, void* recvbuff,
    switch (datatype) {
      case ncclFloat16:
