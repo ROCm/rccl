@@ -47,7 +47,7 @@ THE SOFTWARE.
 #include "utils.h"
 #include "topo.h"
 #include "graph.h"
-#include "rccl_wrap.h"
+#include "rccl_common.h"
 
 NodeModel *node_model;
 extern ncclNet_t* ncclNet;

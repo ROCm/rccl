@@ -22,7 +22,7 @@ THE SOFTWARE.
 #ifndef RCCL_COMMON_H_
 #define RCCL_COMMON_H_
 #include "nccl_common.h"
-
+#include "nccl.h"
 typedef enum RcclTunableColls {
   RCCL_UNSUPPORTED_TUNABLE = -1,
   RCCL_RS_TUNABLE = 0,    // reduce_scatter index
@@ -61,4 +61,13 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
   return (func == ncclFuncReduceScatter || func == ncclFuncAllGather) ? nBytes / nRanks : nBytes;
 }
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
+
+
+ncclResult_t rcclGetAlgoInfo(
+  struct ncclComm* comm, struct ncclTaskColl* task,
+  int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL
+);
+
+size_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count);
+
 #endif
