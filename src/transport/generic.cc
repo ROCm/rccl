@@ -1,3 +1,9 @@
+/*************************************************************************
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved..
+ *
+ * See LICENSE.txt for license information
+ ************************************************************************/
+
 #include "comm.h"
 #include "transport.h"
 
