@@ -1,3 +1,9 @@
+/*************************************************************************
+ * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * See LICENSE.txt for license information
+ ************************************************************************/
+
 #include "CallCollectiveForked.hpp"
 #include "CollectiveArgs.hpp"
 #include <rccl/rccl.h>
