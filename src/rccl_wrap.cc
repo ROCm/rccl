@@ -78,11 +78,20 @@ extern ncclResult_t getAlgoInfo(
     int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL
 );
 
-ncclResult_t rcclGetAlgoInfo(
-    struct ncclComm* comm, struct ncclTaskColl* task,
-    int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo) {
-    return getAlgoInfo(comm, task, collNetSupport, nvlsSupport, numPipeOps, simInfo);
+ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
+                             int collNetSupport, int nvlsSupport, int numPipeOps,
+                             int* algo, int* protocol, int* maxChannels) {
+  struct ncclTaskColl task;
+  task.func = coll;
+  task.count = count;
+  task.datatype = dataType;
+  NCCLCHECK(getAlgoInfo(comm, &task, collNetSupport, nvlsSupport, numPipeOps));
+  *algo = task.algorithm;
+  *protocol = task.protocol;
+  *maxChannels = task.nMaxChannels;
+  return ncclSuccess;
 }
+
 
 size_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
     return ncclFuncMaxSendRecvCount(func, nRanks, count);

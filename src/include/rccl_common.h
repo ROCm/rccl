@@ -63,10 +63,9 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
 
 
-ncclResult_t rcclGetAlgoInfo(
-  struct ncclComm* comm, struct ncclTaskColl* task,
-  int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL
-);
+ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
+                             int collNetSupport, int nvlsSupport, int numPipeOps,
+                             int* algo, int* protocol, int* maxChannels);
 
 size_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count);
 
