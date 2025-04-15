@@ -81,6 +81,10 @@ extern ncclResult_t getAlgoInfo(
 ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
                              int collNetSupport, int nvlsSupport, int numPipeOps,
                              int* algo, int* protocol, int* maxChannels) {
+#ifndef RCCL_EXPOSE_STATIC
+  WARN("Attempting to use internal logic while required static functions are not exposed. Rebuild with RCCL_EXPOSE_STATIC enabled");
+  return ncclInvalidUsage;
+#else
   struct ncclTaskColl task;
   task.func = coll;
   task.count = count;
@@ -90,9 +94,15 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   *protocol = task.protocol;
   *maxChannels = task.nMaxChannels;
   return ncclSuccess;
+#endif
 }
 
 
 size_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
-    return ncclFuncMaxSendRecvCount(func, nRanks, count);
+#ifndef RCCL_EXPOSE_STATIC
+  WARN("Attempting to use internal logic while required static functions are not exposed. Rebuild with RCCL_EXPOSE_STATIC enabled");
+  return 0;
+#else
+  return ncclFuncMaxSendRecvCount(func, nRanks, count);
+#endif
 }
