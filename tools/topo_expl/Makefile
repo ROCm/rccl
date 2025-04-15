@@ -29,6 +29,8 @@ hipify:
 	cp -a ../../src/misc/archinfo.cc hipify_rccl/graph/
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/device/include/*.h
+	sed -i "s/template<typename T, typename RedOp>/template<typename T, typename RedOp, int COLL_UNROLL>/g" "hipify_rccl/device/include/common.h"
+	sed -i "s/\\(struct RunWorkBatch<ncclFunc[^>]*\\)>*/\\1, COLL_UNROLL>/" "hipify_rccl/device/include/common.h"
 	hipify-perl -inplace -quiet-warnings hipify_rccl/graph/*
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/network/unpack/*
 	hipify-perl -inplace -quiet-warnings hipify_rccl/*.cc
