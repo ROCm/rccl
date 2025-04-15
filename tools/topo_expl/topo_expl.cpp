@@ -256,7 +256,6 @@ int main(int argc,char* argv[])
     assert(node_model!=0);
     initTransportsRank_3(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i], nvlsGraph[i]);
   }
-  std::cout << "Running tuning model choices for algorithm/protocol combinations..." << std::endl;
   for (uint64_t len = 8; len <= 4294967296L; len *= 2) {
     struct ncclInfo info;
     float minTime = 3600000000.0;
