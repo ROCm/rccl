@@ -409,8 +409,8 @@ template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int COL
 struct RunWorkBatch;
 
 // Specialized for P2p in sendrecv.h
-template<typename T, typename RedOp, int COLL_UNROLL>
-struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, COLL_UNROLL>;
+template<typename T, typename RedOp>
+struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE>;
 
 // Specialized here for non-P2p (Coll and CollReg)
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int COLL_UNROLL>
