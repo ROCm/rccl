@@ -125,7 +125,11 @@ union alignas(16) BytePack<16> {
   uint64_t u64[2];
   ulong2 ul2, native;
 #if !defined(USE_INDIRECT_FUNCTION_CALL) || defined(__gfx942__) || defined(__gfx950__)
-  inline __device__ BytePack<16>& operator=(BytePack<16> other) {
+  inline __device__ BytePack<16>() = default;
+  inline __device__ BytePack<16>(const BytePack<16>& other) {
+    *this = other;
+  }
+  inline __device__ BytePack<16>& operator=(const BytePack<16>& other) {
     u64[0] = other.u64[0];
     u64[1] = other.u64[1];
     return *this;
