@@ -323,6 +323,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
 
     devWork.sendbuff = (void*)task->sendbuff;
     devWork.recvbuff = (void*)task->recvbuff;
+    devWork.acc = (void*)task->acc;
     devWork.sendbuffOffset = task->sendbuffOffset;
     devWork.recvbuffOffset = task->recvbuffOffset;
     devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
@@ -2315,6 +2316,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->chunkSteps = info->chunkSteps;
       t->sliceSteps = info->sliceSteps;
       t->opCount = comm->opCount;
+      t->acc = info->acc;
 
       planner->nTasksColl += 1;
       ncclTaskCollSorterInsert(&planner->collSorter, t, t->trafficBytes);
@@ -2364,8 +2366,8 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   }
   NCCLCHECKGOTO(ArgsCheck(info), ret, fail);
 
-  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zu datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
-        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
+  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p acc %p count %zu datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
+        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->acc, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream,
         info->comm->planner.nTasksP2p + info->comm->planner.nTasksColl,
         info->comm->localRankToRank[info->comm->localRank]);

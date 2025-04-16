@@ -92,6 +92,7 @@ struct rcclApiCall {
   uint64_t              opCount = 0;
   const void*           sendbuff = NULL;
   void*                 recvbuff = NULL;
+  const void*           acc = NULL;
   size_t                count = 0;
   ncclDataType_t        datatype;
   ncclRedOp_t           op;

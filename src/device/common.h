@@ -121,8 +121,10 @@ struct ncclShmemGroup {
   ncclConnInfo *sendConns[NCCL_MAX_ARITY];
   void* userInput;
   void* userOutput;
+  void* userAcc;
   void* srcs[NCCL_MAX_ARITY+1];
   void* dsts[NCCL_MAX_ARITY+1];
+  void* acc;
   uint64_t barrier;
   union {
     unpackGroupShmem unpack;

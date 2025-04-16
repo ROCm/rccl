@@ -61,6 +61,10 @@ typedef ncclResult_t (*ncclAllReduce_fn_t)(const void* sendbuff, void* recvbuff,
                                            size_t count, ncclDataType_t datatype,
                                            ncclRedOp_t op, struct ncclComm* comm,
                                            hipStream_t stream);
+typedef ncclResult_t (*ncclAllReduceWithBias_fn_t)(const void* sendbuff, void* recvbuff,
+                                           size_t count, ncclDataType_t datatype,
+                                           ncclRedOp_t op, struct ncclComm* comm,
+                                           hipStream_t stream, const void* acc);
 typedef ncclResult_t (*ncclAllToAll_fn_t)(const void* sendbuff, void* recvbuff,
                                           size_t count, ncclDataType_t datatype,
                                           ncclComm_t comm, hipStream_t stream);
@@ -194,6 +198,7 @@ typedef struct rcclApiFuncTable
     mscclUnloadAlgo_fn_t          mscclUnloadAlgo_fn;
     ncclCommRegister_fn_t         ncclCommRegister_fn;
     ncclCommDeregister_fn_t       ncclCommDeregister_fn;
+    ncclAllReduceWithBias_fn_t    ncclAllReduceWithBias_fn;
 
 } rcclApiFuncTable;
 

@@ -293,6 +293,7 @@ struct alignas(16) ncclDevWorkColl {
   uint16_t pivotA2ANumBiRings;
   void* recvbuff;
   void* sendbuff;
+  void *acc;
   uintptr_t sendbuffOffset;
   uintptr_t recvbuffOffset;
   uintptr_t* sendbuffRmtAddrs;
