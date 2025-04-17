@@ -67,6 +67,8 @@
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
+using namespace rccl;
+
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "AllGather", "AllReduce", "AllToAllPivot", "Broadcast", "Reduce", "ReduceScatter", "SendRecv"};
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNetDirect", "CollNetChain", "NVLS", "NVLSTree", "PAT" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
@@ -188,6 +190,7 @@ static ncclResult_t ncclInit() {
 
 NCCL_API(ncclResult_t, ncclGetVersion, int* version);
 ncclResult_t ncclGetVersion_impl(int* version) {
+  Recorder::instance().record("GetVersion");
   if (version == NULL) return ncclInvalidArgument;
   *version = NCCL_VERSION_CODE;
   return ncclSuccess;
@@ -204,6 +207,7 @@ ncclResult_t ncclGetUniqueId_impl(ncclUniqueId* out) {
   memset(out, 0, sizeof(*out));
   // copy to avoid alignment mismatch
   memcpy(out, &handle, sizeof(handle));
+  Recorder::instance().record(rrGetUniqueId, -1, -1, out);
   TRACE_CALL("ncclGetUniqueId(0x%llx)", (unsigned long long)hashUniqueId(*out));
   return ncclSuccess;
 }
@@ -2328,6 +2332,9 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, int nId
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, ncclCommInitRankFunc, NULL, ncclCommInitJobFree, comm), res, fail);
 
 exit:
+  // for loggin only, not ready for replaying
+  // !recording at sink
+  NCCLCHECK(Recorder::instance().record(rrCommInitDev, nranks, myrank, commId, comm, cudaDev));
   return ncclGroupErrCheck(res);
 fail:
   if (comm) {
@@ -2354,6 +2361,7 @@ constexpr nvtxPayloadSchemaEntry_t CommInitRankSchema[] = {
 
 NCCL_API(ncclResult_t, ncclCommInitRank, ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank);
 ncclResult_t ncclCommInitRank_impl(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank) {
+  NCCLCHECK(Recorder::instance().record(rrCommInitRank, nranks, myrank, &commId));
   // Load the CUDA driver and dlsym hooks (can fail on old drivers)
   rocmLibraryInit();
 
@@ -2370,6 +2378,7 @@ ncclResult_t ncclCommInitRank_impl(ncclComm_t* newcomm, int nranks, ncclUniqueId
 
 NCCL_API(ncclResult_t, ncclCommInitAll, ncclComm_t* comms, int ndev, const int* devlist);
 ncclResult_t ncclCommInitAll_impl(ncclComm_t* comms, int ndev, const int* devlist) {
+  Recorder::instance().record(comms, ndev, devlist);
   ncclResult_t ret = ncclSuccess;
   int totalnDev;
   int *gpuFlags = NULL;
@@ -2446,6 +2455,7 @@ ncclResult_t ncclCommSetAsyncError(ncclComm_t comm, ncclResult_t nextState) {
 
 NCCL_API(ncclResult_t, ncclCommInitRankConfig, ncclComm_t* comm, int nranks, ncclUniqueId commId, int myrank, ncclConfig_t *config);
 ncclResult_t ncclCommInitRankConfig_impl(ncclComm_t *newcomm, int nranks, ncclUniqueId commId, int myrank, ncclConfig_t *config) {
+  Recorder::instance().record(rrCommInitRankConfig, nranks, myrank, &commId, config);
   int cudaDev;
   ncclResult_t ret = ncclSuccess;
   ncclConfig_t internalConfig = NCCL_CONFIG_INITIALIZER;
@@ -2595,6 +2605,7 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
 
 NCCL_API(ncclResult_t, ncclCommFinalize, ncclComm_t comm);
 ncclResult_t ncclCommFinalize_impl(ncclComm_t comm) {
+  NCCLCHECK(Recorder::instance().record(rrCommFinalize, comm));
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   ncclResult_t ret = ncclSuccess;
   struct ncclCommFinalizeAsyncJob *job = NULL;
@@ -2683,6 +2694,7 @@ static ncclResult_t commReclaim(struct ncclAsyncJob* job_) {
 
 NCCL_API(ncclResult_t, ncclCommDestroy, ncclComm_t comm);
 ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
+  NCCLCHECK(Recorder::instance().record(rrCommDestroy, comm));
   if (comm == NULL) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
@@ -2740,6 +2752,7 @@ fail:
 
 NCCL_API(ncclResult_t, ncclCommAbort, ncclComm_t comm);
 ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
+  NCCLCHECK(Recorder::instance().record(rrCommAbort, comm));
   if (comm == NULL) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
@@ -2853,6 +2866,10 @@ ncclResult_t ncclCommSplit_impl(ncclComm_t comm, int color, int key, ncclComm_t 
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, ncclCommInitRankFunc, NULL, free, comm), res, fail);
 
 exit:
+  // for loggin only, not ready for replaying
+  // TODO: further integrate overloaded record header
+  // !recording at sink
+  Recorder::instance().record(rrCommSplit, color, key, (ncclUniqueId*)comm, config, *newcomm);
   cudaSetDevice(oldDev);
   (void)ncclGroupErrCheck(res);
   NCCLCHECK(ncclGroupEndInternal());
@@ -2872,6 +2889,7 @@ fail:
 
 NCCL_API(const char*, ncclGetErrorString, ncclResult_t code);
 const char* ncclGetErrorString_impl(ncclResult_t code) {
+  Recorder::instance().record("GetErrorString");
   switch (code) {
     case ncclSuccess                : return "no error";
     case ncclUnhandledCudaError     : return "unhandled cuda error (run with NCCL_DEBUG=INFO for details)";
@@ -2890,11 +2908,13 @@ const char* ncclGetErrorString_impl(ncclResult_t code) {
  */
 NCCL_API(const char*, ncclGetLastError, const ncclComm_t comm);
 const char* ncclGetLastError_impl(ncclComm_t comm) {
+  Recorder::instance().record("GetLastEror");
   return ncclLastError;
 }
 
 NCCL_API(ncclResult_t, ncclCommGetAsyncError, ncclComm_t comm, ncclResult_t *asyncError);
 ncclResult_t ncclCommGetAsyncError_impl(ncclComm_t comm, ncclResult_t *asyncError) {
+  Recorder::instance().record("GetAsyncError");
   NCCLCHECK(CommCheck(comm, "ncclGetAsyncError", "comm"));
   NCCLCHECK(PtrCheck(asyncError, "ncclGetAsyncError", "asyncError"));
 
@@ -2905,6 +2925,7 @@ ncclResult_t ncclCommGetAsyncError_impl(ncclComm_t comm, ncclResult_t *asyncErro
 
 NCCL_API(ncclResult_t, ncclCommCount, const ncclComm_t comm, int* count);
 ncclResult_t ncclCommCount_impl(const ncclComm_t comm, int* count) {
+  Recorder::instance().record("CommCount");
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
   NCCLCHECK(CommCheck(comm, "CommCount", "comm"));
@@ -2919,6 +2940,7 @@ ncclResult_t ncclCommCount_impl(const ncclComm_t comm, int* count) {
 
 NCCL_API(ncclResult_t, ncclCommCuDevice, const ncclComm_t comm, int* devid);
 ncclResult_t ncclCommCuDevice_impl(const ncclComm_t comm, int* devid) {
+  Recorder::instance().record("CuDevice");
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
   NCCLCHECK(CommCheck(comm, "CommCuDevice", "comm"));
@@ -2932,6 +2954,7 @@ ncclResult_t ncclCommCuDevice_impl(const ncclComm_t comm, int* devid) {
 
 NCCL_API(ncclResult_t, ncclCommUserRank, const ncclComm_t comm, int* rank);
 ncclResult_t ncclCommUserRank_impl(const ncclComm_t comm, int* rank) {
+  Recorder::instance().record("CommUserRank");
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
   NCCLCHECK(CommCheck(comm, "CommUserRank", "comm"));
@@ -3035,6 +3058,7 @@ fallback:
   CUDACHECKGOTO(cudaMalloc(ptr, size), ret, fail);
 
 exit:
+  NCCLCHECK(Recorder::instance().record(rrMemAlloc, *ptr, size));
   return ret;
 fail:
   goto exit;
@@ -3042,6 +3066,7 @@ fail:
 
 NCCL_API(ncclResult_t, ncclMemFree, void *ptr);
 ncclResult_t  ncclMemFree_impl(void *ptr) {
+  NCCLCHECK(Recorder::instance().record(rrMemFree, ptr));
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   ncclResult_t ret = ncclSuccess;
   int saveDevice;

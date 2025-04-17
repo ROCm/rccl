@@ -15,6 +15,8 @@
 #include "mscclpp/mscclpp_nccl.h"
 #endif
 
+using namespace rccl;
+
 ncclResult_t ncclNetDeregister(struct ncclComm* comm, struct ncclReg* reg) {
   struct ncclRegCache* cache = &comm->regCache;
   ncclDebugNoWarn = NCCL_NET;
@@ -162,6 +164,8 @@ ncclResult_t ncclRegCleanup(struct ncclComm* comm) {
 
 NCCL_API(ncclResult_t, ncclCommRegister, const ncclComm_t comm, void* buff, size_t size, void** handle);
 ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t size, void** handle) {
+  ncclResult_t ret = ncclSuccess;
+
   NCCLCHECK(CommCheck(comm, "ncclCommRegister", "comm"));
   if (comm->checkPointers) NCCLCHECK(CudaPtrCheck(buff, comm, "buff", "ncclCommRegister"));
   #ifdef ENABLE_MSCCLPP
@@ -171,8 +175,7 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
       CUDACHECK(hipPointerGetAttribute(&isManagedBuffer, HIP_POINTER_ATTRIBUTE_IS_MANAGED, const_cast<void*>(buff)));
       if(!isManagedBuffer){
         INFO(NCCL_INIT, "MSCCL++: ncclCommRegister");
-        NCCLCHECK(mscclpp_ncclCommRegister(comm->mscclpp_comm, buff, size, handle));
-        return ncclSuccess;
+        NCCLCHECKGOTO(mscclpp_ncclCommRegister(comm->mscclpp_comm, buff, size, handle), ret, end);
       }
       else{
         WARN("MSCCL++: Cannot register user-buffers on managed memory. RCCL user-buffer registration will occur.");
@@ -181,12 +184,17 @@ ncclResult_t ncclCommRegister_impl(const ncclComm_t comm, void* buff, size_t siz
   }
   #endif
   INFO(NCCL_INIT, "RCCL: ncclCommRegister");
-  NCCLCHECK(ncclRegister(comm, buff, size, handle));
-  return ncclSuccess;
+  NCCLCHECKGOTO(ncclRegister(comm, buff, size, handle), ret, end);
+
+end:
+  // !recording at sink
+  NCCLCHECK(Recorder::instance().record(rrCommRegister, comm, *handle, buff, size));
+  return ret;
 }
 
 NCCL_API(ncclResult_t, ncclCommDeregister, const ncclComm_t comm, void* handle);
 ncclResult_t ncclCommDeregister_impl(const ncclComm_t comm, void* handle) {
+  NCCLCHECK(Recorder::instance().record(rrCommDeregister, comm, handle));
 
   #ifdef ENABLE_MSCCLPP
   if (comm->mscclppCompatible) {

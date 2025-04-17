@@ -25,6 +25,8 @@
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
 
+using namespace rccl;
+
 struct ncclKernelMatch {
   void* kernelFn;
   bool specialized;
@@ -2560,12 +2562,16 @@ ncclResult_t ncclRedOpCreatePreMulSum_impl(ncclRedOp_t *op, void *scalar, ncclDa
   }
   *op = ncclRedOp_t(int(ncclNumOps) + ix);
   *op = ncclUserRedOpMangle(comm, *op);
+
+  // ! recording at sink
+  NCCLCHECK(Recorder::instance().record(rrRedOpCreatePreMulSum, *op, comm, datatype, residence, scalar));
   TRACE_CALL("ncclRedOpCreatePreMulSum(%d,%p,%d,%d,%p)", *op, scalar, datatype, residence, comm);
   return ncclSuccess;
 }
 
 NCCL_API(ncclResult_t, ncclRedOpDestroy, ncclRedOp_t op, ncclComm_t comm);
 ncclResult_t ncclRedOpDestroy_impl(ncclRedOp_t op, ncclComm_t comm) {
+  NCCLCHECK(Recorder::instance().record(rrRedOpDestroy, op, comm));
   if (0 <= int(op) && int(op) < int(ncclNumOps)) {
     WARN("ncclRedOpDestroy : operator is a NCCL builtin.");
     return ncclInvalidArgument;

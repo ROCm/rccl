@@ -46,6 +46,7 @@ if(BUILD_TESTS)
     ScatterTests.cpp
     SendRecvTests.cpp
     StandaloneTests.cpp
+    _RecorderTests.cpp
     common/main.cpp
     common/CallCollectiveForked.cpp
     common/CollectiveArgs.cpp
@@ -55,6 +56,7 @@ if(BUILD_TESTS)
     common/TestBed.cpp
     common/TestBedChild.cpp
     common/StandaloneUtils.cpp
+    ../src/misc/recorder.cc
     )
 
   add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})

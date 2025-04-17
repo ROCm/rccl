@@ -11,8 +11,11 @@
 #include <cstdio>
 #include <cstdlib>
 
+using namespace rccl;
+
 NCCL_API(ncclResult_t, mscclLoadAlgo, const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
 ncclResult_t mscclLoadAlgo_impl(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank) {
+  Recorder::instance().record("mscclLoadAlgo");
   mscclStatus& status = mscclGetStatus(rank);
 
   if (status.freeAlgoHandles.size() == 0) {
@@ -45,6 +48,7 @@ ncclResult_t mscclRunAlgo_impl(
     void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
     size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
     mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream) {
+  Recorder::instance().record("mscclRunAlgo");
   struct NvtxParamsMsccl {
     size_t bytes;
     ncclRedOp_t op;
@@ -91,5 +95,6 @@ ncclResult_t mscclRunAlgo_impl(
 NCCL_API(ncclResult_t, mscclUnloadAlgo, mscclAlgoHandle_t mscclAlgoHandle);
 ncclResult_t mscclUnloadAlgo_impl(mscclAlgoHandle_t mscclAlgoHandle) {
   // deprecated
+  Recorder::instance().record("mscclUnloadAlgo");
   return ncclSuccess;
 }
