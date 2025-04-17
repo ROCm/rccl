@@ -661,7 +661,7 @@ struct rccl_bfloat8
         return data == 0x80;
     }
     
-	// Explicitly define a copy constructor because copy assignment is defined
+    // Explicitly define a copy constructor because copy assignment is defined
     constexpr inline __host__ __device__ rccl_bfloat8(const rccl_bfloat8& a) : data(a.data) {}
 
     // assignment overloading only from the same F8 types
