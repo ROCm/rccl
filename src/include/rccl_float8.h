@@ -492,7 +492,7 @@ struct rccl_float8
     }
 
     // Explicitly define a copy constructor because copy assignment is defined
-    constexpr rccl_float8(const rccl_float8& o) : data(o.data) {}
+    constexpr inline __host__ __device__ rccl_float8(const rccl_float8& o) : data(o.data) {}
 
     // assignment overloading only from the same F8 types
     inline __host__ __device__ rccl_float8& operator=(const rccl_float8& a)
