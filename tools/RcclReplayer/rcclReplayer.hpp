@@ -35,7 +35,6 @@
     }                                                           \
   } while(0)
 
-using namespace std::chrono;
 struct LineItem
 {
   int           pid;
@@ -43,8 +42,6 @@ struct LineItem
   int           cudaDev;
   //int         graph;
   int           groupDepth;
-  time_point<high_resolution_clock>
-                timestamp; //would this be portable/parsable...?
 
   int           coll;
   uint64_t      opCount;

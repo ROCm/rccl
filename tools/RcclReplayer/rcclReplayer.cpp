@@ -201,8 +201,6 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
 
     if (li.coll == 10 || li.coll == 11)
     {
-      //rank?
-
       continue;
     }
     // if need hostname will parse together with num of line in output

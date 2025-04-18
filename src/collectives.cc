@@ -106,7 +106,9 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
     ALLGATHER_CHUNKSTEPS, ALLGATHER_SLICESTEPS };
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrAllGather, info));
+  }
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -144,7 +146,9 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
     ALLREDUCE_CHUNKSTEPS, ALLREDUCE_SLICESTEPS };
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrAllReduce, info));
+  }
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -166,7 +170,9 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
   ncclComm_t comm, hipStream_t stream) {
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrAllToAll, sendbuff, recvbuff, count, datatype, comm, stream));
+  }
 
   struct NvtxParamsAllToAll {
     size_t bytes;
@@ -220,7 +226,9 @@ ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[],
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream) {
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrAllToAllv, sendbuff, recvbuff, 0, datatype, comm, stream, -1, sendcounts, sdispls, recvcounts, rdispls));
+  }
 
   struct NvtxParamsAllToAllv {
     size_t sendbytes;
@@ -291,7 +299,9 @@ ncclResult_t ncclBroadcast_impl(const void* sendbuff, void* recvbuff, size_t cou
     BROADCAST_CHUNKSTEPS, BROADCAST_SLICESTEPS };
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrBroadcast, info));
+  }
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -332,7 +342,9 @@ ncclResult_t ncclGather_impl(const void* sendbuff, void* recvbuff, size_t sendco
     NVTX3_FUNC_WITH_PARAMS(Gather, GatherSchema, payload)
 
     if (!mscclIsCaller()) // when msccl falls back to
+    {
       NCCLCHECK(Recorder::instance().record(rrGather, sendbuff, recvbuff, sendcount, datatype, comm, stream, root));
+    }
 
     if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
       return mscclEnqueueCheck(
@@ -383,7 +395,9 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
     REDUCE_CHUNKSTEPS, REDUCE_SLICESTEPS };
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrReduce, info));
+  }
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -421,7 +435,9 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
     REDUCESCATTER_CHUNKSTEPS, REDUCESCATTER_SLICESTEPS };
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrReduceScatter, info));
+  }
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -454,7 +470,9 @@ ncclResult_t ncclScatter_impl(const void* sendbuff, void* recvbuff, size_t recvc
     NVTX3_FUNC_WITH_PARAMS(Scatter, ScatterSchema, payload)
 
     if (!mscclIsCaller()) // when msccl falls back to
+    {
       NCCLCHECK(Recorder::instance().record(rrScatter, sendbuff, recvbuff, recvcount, datatype, comm, stream, root));
+    }
 
     if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
       return mscclEnqueueCheck(
@@ -504,7 +522,9 @@ ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t da
     1, 1 };
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrSend, info));
+  }
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
@@ -533,7 +553,9 @@ ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype
     1, 1 };
 
   if (!mscclIsCaller()) // when msccl falls back to
+  {
     NCCLCHECK(Recorder::instance().record(rrRecv, info));
+  }
 
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
