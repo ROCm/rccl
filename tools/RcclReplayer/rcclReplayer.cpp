@@ -180,7 +180,6 @@ void dataToCsv(GroupCall const& gc, std::ofstream &datafile, double runTime)
 
 void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls& cc)
 {
-  //bool verbose = isFirstRank && (getenv("VERBOSE") != NULL);
   cc.globalRankComms.clear();
   cc.globalRankComms.resize(cc.numGlobalRanks);
   cc.groupCalls.clear();
