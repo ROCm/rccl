@@ -1,3 +1,7 @@
+# Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
+#
+# See LICENSE.txt for license information
+
 ## README
 # This script gathers configuration information from your system to help identify and debug any issues when running the ROCm Communication Collectives Library (RCCL). Please ensure that python3 is installed on your system and added to your system's PATH environment variable.
 

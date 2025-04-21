@@ -13,6 +13,8 @@
 
 #include "msccl/msccl_lifecycle.h"
 
+using namespace rccl;
+
 const char* ncclFuncToString(ncclFunc_t fn) {
   switch (fn) {
   case ncclFuncAllGather: return "AllGather";
@@ -99,15 +101,21 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
   NvtxParamsAllGather payload{sendcount * ncclTypeSize(datatype), datatype};
   NVTX3_FUNC_WITH_PARAMS(AllGather, AllGatherSchema, payload)
 
+  struct ncclInfo info = { ncclFuncAllGather, "AllGather",
+    sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+    ALLGATHER_CHUNKSTEPS, ALLGATHER_SLICESTEPS };
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrAllGather, info));
+  }
+
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
   }
 
-  struct ncclInfo info = { ncclFuncAllGather, "AllGather",
-    sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
-    ALLGATHER_CHUNKSTEPS, ALLGATHER_SLICESTEPS };
   NCCLCHECK(ncclEnqueueCheck(&info));
   return ncclSuccess;
 }
@@ -133,15 +141,21 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   NvtxParamsAllReduce payload{count * ncclTypeSize(datatype), op, datatype};
   NVTX3_FUNC_WITH_PARAMS(AllReduce, AllReduceSchema, payload)
 
+  struct ncclInfo info = { ncclFuncAllReduce, "AllReduce",
+    sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
+    ALLREDUCE_CHUNKSTEPS, ALLREDUCE_SLICESTEPS };
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrAllReduce, info));
+  }
+
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
   }
 
-  struct ncclInfo info = { ncclFuncAllReduce, "AllReduce",
-    sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
-    ALLREDUCE_CHUNKSTEPS, ALLREDUCE_SLICESTEPS };
   NCCLCHECK(ncclEnqueueCheck(&info));
   return ncclSuccess;
 }
@@ -154,6 +168,12 @@ NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_
 
 ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream) {
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrAllToAll, sendbuff, recvbuff, count, datatype, comm, stream));
+  }
+
   struct NvtxParamsAllToAll {
     size_t bytes;
     ncclDataType_t datatype;
@@ -204,6 +224,12 @@ NCCL_API(ncclResult_t, ncclAllToAllv, const void *sendbuff, const size_t sendcou
 ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[], const size_t sdispls[],
     void *recvbuff, const size_t recvcounts[], const size_t rdispls[],
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream) {
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrAllToAllv, sendbuff, recvbuff, 0, datatype, comm, stream, -1, sendcounts, sdispls, recvcounts, rdispls));
+  }
+
   struct NvtxParamsAllToAllv {
     size_t sendbytes;
     size_t recvbytes;
@@ -268,15 +294,21 @@ ncclResult_t ncclBroadcast_impl(const void* sendbuff, void* recvbuff, size_t cou
   NvtxParamsBroadcast payload{count * ncclTypeSize(datatype), root, datatype};
   NVTX3_FUNC_WITH_PARAMS(Broadcast, BroadcastSchema, payload)
 
+  struct ncclInfo info = { ncclFuncBroadcast, "Broadcast",
+    sendbuff, recvbuff, count, datatype, ncclSum, root, comm, stream, /* Args */
+    BROADCAST_CHUNKSTEPS, BROADCAST_SLICESTEPS };
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrBroadcast, info));
+  }
+
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, root, 0, ncclSum, mscclFuncBroadcast, comm, stream);
   }
 
-  struct ncclInfo info = { ncclFuncBroadcast, "Broadcast",
-    sendbuff, recvbuff, count, datatype, ncclSum, root, comm, stream, /* Args */
-    BROADCAST_CHUNKSTEPS, BROADCAST_SLICESTEPS };
   NCCLCHECK(ncclEnqueueCheck(&info));
   return ncclSuccess;
 }
@@ -285,6 +317,7 @@ NCCL_API(ncclResult_t, ncclBcast, void* buff, size_t count, ncclDataType_t datat
     ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclBcast(void* buff, size_t count, ncclDataType_t datatype, int root,
     ncclComm_t comm, cudaStream_t stream) {
+  NCCLCHECK(Recorder::instance().record(rrBcast, buff, buff, count, datatype, comm, stream, root));
   NCCLCHECK(ncclBroadcast(buff, buff, count, datatype, root, comm, stream));
   return ncclSuccess;
 }
@@ -307,6 +340,11 @@ ncclResult_t ncclGather_impl(const void* sendbuff, void* recvbuff, size_t sendco
     };
     NvtxParamsGather payload{sendcount * ncclTypeSize(datatype), root, datatype};
     NVTX3_FUNC_WITH_PARAMS(Gather, GatherSchema, payload)
+
+    if (!mscclIsCaller()) // when msccl falls back to
+    {
+      NCCLCHECK(Recorder::instance().record(rrGather, sendbuff, recvbuff, sendcount, datatype, comm, stream, root));
+    }
 
     if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
       return mscclEnqueueCheck(
@@ -352,15 +390,21 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
   NvtxParamsReduce payload{count * ncclTypeSize(datatype), root, op, datatype};
   NVTX3_FUNC_WITH_PARAMS(Reduce, ReduceSchema, payload)
 
+  struct ncclInfo info = { ncclFuncReduce, "Reduce",
+    sendbuff, recvbuff, count, datatype, op, root, comm, stream, /* Args */
+    REDUCE_CHUNKSTEPS, REDUCE_SLICESTEPS };
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrReduce, info));
+  }
+
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, root, 0, op, mscclFuncReduce, comm, stream);
   }
 
-  struct ncclInfo info = { ncclFuncReduce, "Reduce",
-    sendbuff, recvbuff, count, datatype, op, root, comm, stream, /* Args */
-    REDUCE_CHUNKSTEPS, REDUCE_SLICESTEPS };
   NCCLCHECK(ncclEnqueueCheck(&info));
   return ncclSuccess;
 }
@@ -386,15 +430,21 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
   NvtxParamsReduceScatter payload{recvcount * ncclTypeSize(datatype), op, datatype};
   NVTX3_FUNC_WITH_PARAMS(ReduceScatter, ReduceScatterSchema, payload)
 
+  struct ncclInfo info = { ncclFuncReduceScatter, "ReduceScatter",
+    sendbuff, recvbuff, recvcount, datatype, op, 0, comm, stream, /* Args */
+    REDUCESCATTER_CHUNKSTEPS, REDUCESCATTER_SLICESTEPS };
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrReduceScatter, info));
+  }
+
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       recvcount, datatype, 0, 0, op, mscclFuncReduceScatter, comm, stream);
   }
 
-  struct ncclInfo info = { ncclFuncReduceScatter, "ReduceScatter",
-    sendbuff, recvbuff, recvcount, datatype, op, 0, comm, stream, /* Args */
-    REDUCESCATTER_CHUNKSTEPS, REDUCESCATTER_SLICESTEPS };
   NCCLCHECK(ncclEnqueueCheck(&info));
   return ncclSuccess;
 }
@@ -418,7 +468,12 @@ ncclResult_t ncclScatter_impl(const void* sendbuff, void* recvbuff, size_t recvc
     };
     NvtxParamsScatter payload{recvcount * ncclTypeSize(datatype), root, datatype};
     NVTX3_FUNC_WITH_PARAMS(Scatter, ScatterSchema, payload)
-    
+
+    if (!mscclIsCaller()) // when msccl falls back to
+    {
+      NCCLCHECK(Recorder::instance().record(rrScatter, sendbuff, recvbuff, recvcount, datatype, comm, stream, root));
+    }
+
     if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
       return mscclEnqueueCheck(
         sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
@@ -462,15 +517,21 @@ ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t da
   NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer, datatype};
   NVTX3_FUNC_WITH_PARAMS(Send, SendRecvSchema, payload)
 
+  struct ncclInfo info = { ncclFuncSend, "Send",
+    NULL, (void*)sendbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
+    1, 1 };
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrSend, info));
+  }
+
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, nullptr, nullptr, nullptr,
       count, datatype, 0, peer, ncclSum, mscclFuncSend, comm, stream);
   }
 
-  struct ncclInfo info = { ncclFuncSend, "Send",
-    NULL, (void*)sendbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
-    1, 1 };
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
   NCCLCHECKGOTO(ncclEnqueueCheck(&info), ret, exit);
@@ -487,15 +548,21 @@ ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype
   NvtxParamsSendRecv payload{count * ncclTypeSize(datatype), peer, datatype};
   NVTX3_FUNC_WITH_PARAMS(Recv, SendRecvSchema, payload)
 
+  struct ncclInfo info = { ncclFuncRecv, "Recv",
+    NULL, recvbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
+    1, 1 };
+
+  if (!mscclIsCaller()) // when msccl falls back to
+  {
+    NCCLCHECK(Recorder::instance().record(rrRecv, info));
+  }
+
   if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       nullptr, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, peer, ncclSum, mscclFuncRecv, comm, stream);
   }
 
-  struct ncclInfo info = { ncclFuncRecv, "Recv",
-    NULL, recvbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
-    1, 1 };
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
   NCCLCHECKGOTO(ncclEnqueueCheck(&info), ret, exit);

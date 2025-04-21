@@ -506,6 +506,7 @@ set(SRC_FILES
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
   src/include/roctx.h
+  src/include/recorder.h
   src/include/shm.h
   src/include/shmutils.h
   src/include/signals.h
@@ -577,6 +578,7 @@ set(SRC_FILES
   src/misc/rocm_smi_wrap.cc
   src/misc/rocmwrap.cc
   src/misc/roctx.cc
+  src/misc/recorder.cc
   src/misc/shmutils.cc
   src/misc/signals.cc
   src/misc/socket.cc

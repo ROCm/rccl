@@ -180,31 +180,36 @@ void dataToCsv(GroupCall const& gc, std::ofstream &datafile, double runTime)
 
 void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls& cc)
 {
-  bool verbose = isFirstRank && (getenv("VERBOSE") != NULL);
   cc.globalRankComms.clear();
   cc.globalRankComms.resize(cc.numGlobalRanks);
   cc.groupCalls.clear();
 
-  FILE* fp = fopen(logFilename, "r");
+  std::ifstream fp(logFilename, std::ios::binary);
   if (!fp) {
     printf("[ERROR] Unable to open file %s\n", logFilename);
     exit(-1);
   }
 
-  char line[2048];
-  LineItem li;
+  constexpr size_t size = sizeof(LineItem) + 1;
+  char line[size]; //size of collectivecall struct
   int lineNum = 0;
 
-  while (fgets(line, 2048, fp)) {
-    ++lineNum;
+  while (fp.getline(line, size))
+  {
+    LineItem li = *((LineItem*)line);
 
-    //Ignore invalid lines and collectives
-    if (!ParseLineItem(line, li) || li.nRanks != cc.numGlobalRanks) continue;
+    if (li.coll == 10 || li.coll == 11)
+    {
+      continue;
+    }
+    // if need hostname will parse together with num of line in output
+    // Ignore invalid lines and collectives
+    if (li.nRanks != cc.numGlobalRanks) continue;
 
     // Figure out commIdx for this globalrank
     int commIdx = -1;
     for (auto i = 0; i < cc.globalRankComms[li.globalRank].size(); i++) {
-      if (!strcmp(cc.globalRankComms[li.globalRank][i].c_str(), li.comm)) {
+      if (cc.globalRankComms[li.globalRank][i] != li.comm) {
         commIdx = i;
         break;
       }
@@ -215,8 +220,8 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
     }
 
     TaskInfo taskInfo;
-    taskInfo.funcType = GetFuncType(li.opName);
-    taskInfo.inPlace  = !strcmp(li.sendbuff, li.recvbuff);
+    taskInfo.funcType = (ncclFunc_t) li.coll;
+    taskInfo.inPlace  = li.sendbuff == li.recvbuff;
     taskInfo.count    = li.count;
     taskInfo.datatype = (ncclDataType_t) li.datatype;
     taskInfo.op       = (ncclRedOp_t) li.op;
@@ -229,7 +234,7 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
       if (gc.opCount != li.opCount) continue;
       if (gc.rankData.count(li.globalRank)) {
         RankData& rd = gc.rankData[li.globalRank];
-        if (rd.commIdx != commIdx || rd.tasks.size() != li.task)
+        if (rd.commIdx != commIdx || rd.tasks.size() != li.nTasks)
           continue;
 
         rd.tasks.push_back(taskInfo);
@@ -237,7 +242,7 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
         break;
       }
       // Rank has no tasks - make sure this is task 0
-      else if (li.task == 0) {
+      else if (li.nTasks == 0) {
         gc.rankData[li.globalRank].lineNum = lineNum;
         gc.rankData[li.globalRank].commIdx = commIdx;
         gc.rankData[li.globalRank].tasks.push_back(taskInfo);
@@ -248,7 +253,7 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
 
     // If no collectives were found, create new one
     if (!found) {
-      if (li.task != 0) {
+      if (li.nTasks != 0) {
         if (isFirstRank) printf("[WARN] Was unable to find corresponding collective for line %d\n", lineNum);
       }
 
@@ -260,7 +265,7 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
       cc.groupCalls.push_back(gc);
     }
   }
-  fclose(fp);
+  fp.close();
 
   // Validate group calls
   // - For non Send/Recv, check that all ranks participate with same parameters count
@@ -373,18 +378,6 @@ void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls
         printf("[INFO] Scatter pattern detected and replaced with scatter collective\n");
     }
   }
-}
-
-bool ParseLineItem(char const* line, LineItem& li)
-{
-  return sscanf(line,
-                "%[^:]:%d:%d [%d] NCCL INFO %[^:]: opCount %x sendbuff %s "
-                "recvbuff %s count %lu datatype %d op %d root %d comm %s "
-                "[nranks=%d] stream %p task %d globalrank %d",
-                li.hostname, &li.pid, &li.tid, &li.cudaDev, li.opName,
-                &li.opCount, li.sendbuff, li.recvbuff,
-                &li.count, &li.datatype, &li.op, &li.root, li.comm,
-                &li.nRanks, &li.stream, &li.task, &li.globalRank) == 17;
 }
 
 double ReplayRccl(CollectiveCalls& cc, int groupIdx, int& numInvalid)
@@ -565,6 +558,12 @@ void ExecuteCollective(TaskInfo& task, ncclComm_t const& comm, hipStream_t strea
     break;
   case ncclCollRecv:
     NCCL_CALL(ncclRecv(task.outputGpu.ptr, task.count, task.datatype, task.root, comm, stream));
+    break;
+  case ncclStartGroup:
+    NCCL_CALL(ncclGroupStart());
+    break;
+  case ncclEndGroup:
+    NCCL_CALL(ncclGroupEnd());
     break;
   default:
     printf("Error: unsupported collective\n");

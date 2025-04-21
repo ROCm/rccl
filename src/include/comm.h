@@ -20,6 +20,7 @@
 #include "nvmlwrap.h"
 #include "profiler.h"
 #include "rccl_common.h"
+#include "recorder.h"
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
