@@ -177,7 +177,7 @@ namespace RcclUnitTesting
       close(pipefd[0]);
       close(pipefd[1]);
       exit(EXIT_SUCCESS);
-    } 
+    }
     else {
       int status;
       if (read(pipefd[0], gpuPriorityOrder->data(), gpuPriorityOrder->size() * sizeof(int)) != gpuPriorityOrder->size() * sizeof(int)) return TEST_FAIL;
@@ -205,6 +205,7 @@ namespace RcclUnitTesting
     isGfx90 = false;
     getArchInfo(&isGfx90, "gfx90");
 
+    debugPause     = GetEnvVar("UT_DEBUG_PAUSE" , 0);
     showNames      = GetEnvVar("UT_SHOW_NAMES"  , 1);
     minGpus        = GetEnvVar("UT_MIN_GPUS"    , 1);
     maxGpus        = GetEnvVar("UT_MAX_GPUS"    , numDetectedGpus);
@@ -348,6 +349,7 @@ namespace RcclUnitTesting
   {
     std::vector<std::tuple<std::string, int, std::string>> supported =
       {
+        std::make_tuple("UT_DEBUG_PAUSE"      , debugPause    , "Pause for debugger attach"),
         std::make_tuple("UT_SHOW_NAMES"       , showNames     , "Show test case names"),
         std::make_tuple("UT_MIN_GPUS"         , minGpus       , "Minimum number of GPUs to use"),
         std::make_tuple("UT_MAX_GPUS"         , maxGpus       , "Maximum number of GPUs to use"),

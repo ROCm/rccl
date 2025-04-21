@@ -18,6 +18,7 @@ namespace RcclUnitTesting
   class EnvVars
   {
   public:
+    bool debugPause;     // Pause for debugger attach              [UT_DEBUG_PAUSE]
     bool showNames;      // List test case names during run        [UT_SHOW_NAMES]
     int  minGpus;        // Set the minimum number of GPUs to use  [UT_MIN_GPUS]
     int  maxGpus;        // Set the maximum number of GPUs to use  [UT_MAX_GPUS]
@@ -30,6 +31,7 @@ namespace RcclUnitTesting
     bool useInteractive; // Run in interactive mode                [UT_INTERACTIVE]
     int  timeoutUs;      // Set timeout for child in microseconds  [UT_TIMEOUT_US]
     bool useMultithreading; // Multi-thread single-process ranks   [UT_MULTITHREAD]
+
     bool isGfx94;        // Detects if architecture is gfx94
     bool isGfx12;        // Detects if architecture is gfx12
     bool isGfx90;        // Detects if architecture is gfx90
