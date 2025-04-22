@@ -261,7 +261,7 @@ namespace RcclUnitTesting
     testBed.ev.verbose = false;
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclInt32};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclInt32, ncclBfloat16};
     std::vector<ncclRedOp_t>    const redOps          = {ncclSum};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {20971520};
