@@ -38,6 +38,16 @@ typedef enum RcclTunableColls {
 #define RCCL_PROTOCOL_MAX_IDX 1
 #define RCCL_PROTOCOL_FACTOR_IDX 2
 
+#ifdef RCCL_EXPOSE_STATIC
+#define RCCL_STATIC_EXPOSE_CHECK()
+#else
+#define RCCL_STATIC_EXPOSE_CHECK() \
+  do { \
+    WARN("Attempting to use internal logic while required static functions are not exposed. Rebuild with RCCL_EXPOSE_STATIC enabled"); \
+    return ncclInvalidUsage; \
+  } while (0)
+#endif
+
 inline rcclTunableIndex_t rcclGetTunableIndex(ncclFunc_t const& func) {
   switch (func) {
     case ncclFuncReduceScatter:
@@ -67,6 +77,6 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
                              int collNetSupport, int nvlsSupport, int numPipeOps,
                              int* algo, int* protocol, int* maxChannels);
 
-size_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count);
+ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount);
 
 #endif

@@ -291,21 +291,23 @@ int main(int argc,char* argv[])
     ncclFuncAllGather
   };
 
-  std::cout << "Running production choices for algorithm/protocol/maxChannels" << std::endl;
+  std::cout << "Running fp32 production choices for algorithm/protocol/maxChannels" << std::endl;
   // RCCL tuning results
-  printf("| %-15s | %-15s | %-10s | %-10s | %-12s |\n", "Size(B)", "Collective", "Algorithm", "Protocol", "Max Channels");
-  printf("|-----------------|-----------------|------------|------------|--------------|\n");
+  printf("| %-15s | %-15s | %-15s | %-10s | %-10s | %-12s |\n", "Max Size(B)", "Count", "Collective", "Algorithm", "Protocol", "Max Channels");
+  printf("|-----------------|-----------------|-----------------|------------|------------|--------------|\n");
   for(int i = 0; i < ncclFuncTypes.size(); ++i) {
     for (uint64_t count = 8; count <= 1073741824L; count *= 2) { // Up to 1 gigabyte
       int algo, proto, nChannels;
       NCCLCHECK(rcclGetAlgoInfo(&comm[0], ncclFuncTypes[i], count, ncclFloat32 , 0, 0, 1, &algo, &proto, &nChannels));
-      uint64_t len = rcclFuncMaxSendRecvCount(ncclFuncTypes[i], comm[0].nRanks, count) * sizeof(float);
-      printf("| %-15ld | %-15s | %-10s | %-10s | %-12d |\n",
-         len,
-         ncclFuncStr[ncclFuncTypes[i]],
-         ncclAlgoStr[algo],
-         ncclProtoStr[proto],
-         nChannels);
+      uint64_t maxCount;
+      NCCLCHECK(rcclFuncMaxSendRecvCount(ncclFuncTypes[i], comm[0].nRanks, count, maxCount));
+      printf("| %-15ld | %-15ld | %-15s | %-10s | %-10s | %-12d |\n",
+        maxCount * sizeof(float),
+        count,
+        ncclFuncStr[ncclFuncTypes[i]],
+        ncclAlgoStr[algo],
+        ncclProtoStr[proto],
+        nChannels);
     }
   }
 
