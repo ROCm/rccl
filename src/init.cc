@@ -115,11 +115,9 @@ bool operator ==(const ncclUniqueId& a, const ncclUniqueId& b) {
 }
 
 RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(1024*1024));
-static constexpr int64_t defaultEnableMscclpp = 1;
-#else
-static constexpr int64_t defaultEnableMscclpp = 0;
 #endif
 
+static constexpr int64_t defaultEnableMscclpp = 0;
 RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
 
 // GDRCOPY support: Off by default
