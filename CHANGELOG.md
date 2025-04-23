@@ -19,6 +19,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
   environment variable `RCCL_DISABLE_RAIL_TREES=1`.
 * Additional debug information about how the trees are built can be logged to the GRAPH logging subsys by setting
   `RCCL_OUTPUT_TREES=1`.
+* MSCCL++ is now disabled by default. To enable, set `RCCL_MSCCLPP_ENABLE=1`.
 
 ## RCCL 2.21.5 for ROCm 6.3.1
 
