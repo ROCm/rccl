@@ -794,7 +794,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
   comm->topo->pivotA2AEnabled = false;
   comm->topo->pivotA2ANumBiRings = 0;
   // LL128
-  comm->topo->ll128Enabled = true;
+  comm->topo->ll128Enabled = false;
   // Topology hint for MSCCL internal scheduler about whether to enable MSCCL
   comm->topo->mscclEnabled = false;
   // Topology hint if tree has been defined by model or User
