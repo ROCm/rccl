@@ -383,6 +383,7 @@ constexpr size_t ncclDevWorkSize(enum ncclDevWorkType type) {
 #define NCCL_MAX_DEV_WORK_BATCH_BYTES 128
 #define NCCL_MAX_DEV_WORK_BATCH_COLLS (NCCL_MAX_DEV_WORK_BATCH_BYTES/sizeof(ncclDevWorkColl))
 #define NCCL_MAX_DEV_WORK_P2P_PER_BATCH 1
+#define NCCL_MAX_DEV_WORK_P2P_ELEMENTS 2
 struct alignas(16) ncclDevWorkBatch {
   union {
     struct {

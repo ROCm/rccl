@@ -120,6 +120,19 @@ namespace RcclUnitTesting
       }
     }
 
+    // If debugging is enabled, pause here to allow users to attach debugger
+    if (ev.debugPause) {
+      INFO("============================================================\n");
+      INFO(" Pausing for debug attach: (e.g. sudo rocgdb -p <PID>)\n");
+      INFO("============================================================\n");
+      for (int childId = 0; childId < this->numActiveChildren; ++childId) {
+        INFO(" Child %02d: processID: %d\n", childId, childList[childId]->pid);
+      }
+      INFO("============================================================\n");
+      INFO("<Press enter to continue>\n");
+      scanf("%*c");
+    }
+
     // Determine number of unique GPUs being used.
     std::set<int> unique_devices;
     for (auto a:  this->rankToDeviceMap)
@@ -252,7 +265,7 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
-    
+
     // Build list of groups this applies to (-1 for groupId means to set for all)
     std::vector<int> groupList;
     for (int i = 0; i < this->numGroupCalls; ++i)
@@ -287,7 +300,7 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
-    
+
     // Build list of groups this applies to (-1 for groupId means to set for all)
     std::vector<int> groupList;
     for (int i = 0; i < this->numGroupCalls; ++i)
@@ -311,7 +324,7 @@ namespace RcclUnitTesting
     InteractiveWait("Finishing PrepareData");
   }
 
-  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks, int const groupId, 
+  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks, int const groupId,
                                    bool const useHipGraph)
   {
     InteractiveWait("Starting ExecuteCollectives");
@@ -367,7 +380,7 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
-    
+
     // Build list of groups this applies to (-1 for groupId means to set for all)
     std::vector<int> groupList;
     for (int i = 0; i < this->numGroupCalls; ++i)
@@ -408,7 +421,7 @@ namespace RcclUnitTesting
       if (groupId == -1 || groupId == i) groupList.push_back(i);
 
     int const cmd = TestBedChild::CHILD_LAUNCH_GRAPHS;
-    for (auto currGroup : groupList) 
+    for (auto currGroup : groupList)
     {
       for (int childId = 0; childId < this->numActiveChildren; ++childId)
       {
@@ -550,7 +563,7 @@ namespace RcclUnitTesting
     return ev.GetAllSupportedDataTypes();
   }
 
-  std::vector<int> const TestBed::GetNumCollsPerGroup(int numCollectivesInGroup, 
+  std::vector<int> const TestBed::GetNumCollsPerGroup(int numCollectivesInGroup,
                                                        int numGroupCalls)
   {
     return std::vector<int>(numGroupCalls, numCollectivesInGroup);

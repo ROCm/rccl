@@ -1,6 +1,5 @@
 #pragma once
 #include <map>
-#include <chrono>
 #include <cstring>
 
 #include <rccl/rccl.h>
@@ -37,25 +36,23 @@
 
 struct LineItem
 {
-  int           pid;
-  int           tid;
-  int           cudaDev;
-  //int         graph;
-  int           groupDepth;
-
-  int           coll;
-  uint64_t      opCount;
-  void*         sendbuff;
-  void*         recvbuff;
-  size_t        count;
-  int           datatype;
-  int           op;
-  int           root;
-  void*         comm;
-  int           nRanks;
-  void*         stream;
-  int           nTasks;
-  int           globalRank;
+  char   hostname[MPI_MAX_PROCESSOR_NAME];
+  int    pid;
+  int    tid;
+  int    cudaDev;
+  char   opName[32];
+  int    opCount;
+  char   sendbuff[32];
+  char   recvbuff[32];
+  size_t count;
+  int    datatype;
+  int    op;
+  int    root;
+  char   comm[32];
+  int    nRanks;
+  void*  stream;
+  int    task;
+  int    globalRank;
 };
 
 // Enumeration of all collective functions currently supported
@@ -72,9 +69,7 @@ typedef enum
   ncclCollAllToAllv,
   ncclCollSend,
   ncclCollRecv,
-  ncclNumFuncs,
-  ncclStartGroup = 10;
-  ncclEndGroup = 11;
+  ncclNumFuncs
 } ncclFunc_t;
 
 char const ncclFuncNames[ncclNumFuncs][32] =
@@ -149,8 +144,8 @@ struct RankData
 
 struct GroupCall
 {
-  bool		isValid;
-  uint64_t	opCount;
+  bool isValid;
+  int opCount;
   std::map<int, RankData> rankData;
 };
 
@@ -158,7 +153,7 @@ struct CollectiveCalls
 {
   int numGlobalRanks;
   int numGpusPerMpiRank;
-  std::vector<std::vector<void*>> globalRankComms;  // Set of comms used by each global rank
+  std::vector<std::vector<std::string>> globalRankComms;  // Set of comms used by each global rank
   std::vector<GroupCall>                groupCalls;       // List of group calls for each global rank
 
   int localGpuOffset;                                     // First local GPU device idx for this MPI process
@@ -388,6 +383,9 @@ bool IsRootUsed(ncclFunc_t funcType) {
   return (funcType == ncclCollBroadcast || funcType == ncclCollReduce ||
           funcType == ncclCollGather    || funcType == ncclCollScatter);
 }
+
+// parse the logs and assign them into lineItem
+bool ParseLineItem(char const* line, LineItem& li);
 
 // this covers grouping the logs based on opCount and task number,
 // validatation of the groupCalls for both non-send/recv collectives and send/recv

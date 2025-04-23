@@ -14,7 +14,6 @@
 #include "reduce_kernel.h"
 #include "device_table.h"
 #include "network/unpack/unpack_defs.h"
-
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
 #define __syncwarp()

@@ -71,3 +71,31 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     }
   }
 }
+
+extern size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count);
+extern ncclResult_t getAlgoInfo(
+    struct ncclComm* comm, struct ncclTaskColl* task,
+    int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL
+);
+
+ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
+                             int collNetSupport, int nvlsSupport, int numPipeOps,
+                             int* algo, int* protocol, int* maxChannels) {
+  RCCL_STATIC_EXPOSE_CHECK();
+  struct ncclTaskColl task;
+  task.func = coll;
+  task.count = count;
+  task.datatype = dataType;
+  NCCLCHECK(getAlgoInfo(comm, &task, collNetSupport, nvlsSupport, numPipeOps));
+  *algo = task.algorithm;
+  *protocol = task.protocol;
+  *maxChannels = task.nMaxChannels;
+  return ncclSuccess;
+}
+
+
+ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount) {
+  RCCL_STATIC_EXPOSE_CHECK();
+  maxCount = ncclFuncMaxSendRecvCount(func, nRanks, count);
+  return ncclSuccess;
+}

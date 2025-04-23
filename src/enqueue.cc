@@ -111,7 +111,7 @@ static inline size_t ncclFuncSendCount(ncclFunc_t func, int nRanks, size_t count
 static inline size_t ncclFuncRecvCount(ncclFunc_t func, int nRanks, size_t count) {
   return func == ncclFuncAllGather ? nRanks*count : count;
 }
-static inline size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
+rccl_static_inline size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
   return func == ncclFuncAllGather || func == ncclFuncReduceScatter ? nRanks*count : count;
 }
 
@@ -569,7 +569,7 @@ static ncclResult_t registerP2pBuffer(struct ncclComm* comm, void* userbuff, int
 }
 
 static ncclResult_t getCollNetSupport(struct ncclComm* comm, struct ncclTaskColl* task, int* collNetSupport);
-static ncclResult_t getAlgoInfo(
+rccl_static ncclResult_t getAlgoInfo(
   struct ncclComm* comm, struct ncclTaskColl* task,
   int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL
 );
@@ -2022,7 +2022,7 @@ static ncclResult_t topoGetAlgoInfo(
 // Call the plugin first. Let it set algo+proto, and/or nChannels.
 // Then, topoGetAlgoInfo will set algo/proto if not set, then nChannels and nThreads based on algo/proto.
 // Finally, nChannels will be overriden by the plugin setting.
-static ncclResult_t getAlgoInfo(
+rccl_static ncclResult_t getAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* info,
     int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo/* = NULL*/
   ) {
