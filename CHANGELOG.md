@@ -4,7 +4,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased - RCCL 2.23.4 for ROCm 6.4.1
 
-### Added
+### Resolved issues
 
 * Fixed the accuracy issue of MSCCLPP `allreduc7` kernel in graph mode
 
