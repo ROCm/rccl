@@ -133,7 +133,7 @@ Using the RCCL Replayer
 The RCCL Replayer is a debugging tool designed to analyze and replay the collective logs obtained from RCCL runs. 
 It can be helpful when trying to reproduce problems, because it uses dummy data and doesn't have any dependencies 
 on non-RCCL calls. For more information, 
-see `RCCL Replayer GitHub documentation <https://github.com/ROCm/rccl/tree/develop/tools/rccl_replayer>`_.
+see `RCCL Replayer GitHub documentation <https://github.com/ROCm/rccl/tree/develop/tools/RcclReplayer>`_.
 
 You must build the RCCL Replayer before you can use it. To build it, run these commands. Ensure ``MPI_DIR`` is set to 
 the path where MPI is installed.
