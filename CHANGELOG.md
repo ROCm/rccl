@@ -13,7 +13,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Thread thresholds for LL/LL128 are selected in Tuning Models for the MI300X. This impacts the number of channels used for AG and RS. Tuning model values are ignored if `NCCL_THREAD_THRESHOLDS` is set.
 * Multi-node tuning for AllGather, AllReduce, and ReduceScatter that leverages LL/LL64/LL128 protocol to use nontemporal vector load/store for tunable message size ranges.
 * LL/LL128 usage ranges for AR, AG, and RS are part of the tuning models, which enable architecture-specific tuning in conjunction with the existing Rome Models scheme in RCCL.
-* We expose two new APIs as part of an initiative to separate RCCL code. These APIs are `rcclGetAlgoInfo` and `rcclFuncMaxSendRecvCount`. However, user-level invocation requires that RCCL is built with `RCCL_EXPOSE_STATIC` enabled.
+* Two new APIs are exposed as part of an initiative to separate RCCL code. These APIs are `rcclGetAlgoInfo` and `rcclFuncMaxSendRecvCount`. However, user-level invocation requires that RCCL be built with `RCCL_EXPOSE_STATIC` enabled.
 
 ### Resolved issues
 * Suboptimal algorithmic switching point for AllReduce on MI300x
