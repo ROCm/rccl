@@ -72,6 +72,23 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
   }
 }
 
+void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold) {
+  // Honor user input for thread thresholds
+  static int userThreadThresholdInput = -2;
+  if (userThreadThresholdInput == -2) {
+    const char *inputStr = getenv("NCCL_THREAD_THRESHOLDS");
+    userThreadThresholdInput = !inputStr ? 0 : 1;
+  }
+
+  if(!userThreadThresholdInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
+    auto tunableIndex = rcclGetTunableIndex(info->func);
+    auto tunedThreshold = comm->minMaxLLRange[tunableIndex][info->protocol][RCCL_PROTOCOL_THREAD_THRESHOLD_IDX];
+    if(tunedThreshold != RCCL_LL_LIMITS_UNDEFINED) {
+      threadThreshold = tunedThreshold * comm->nRanks;
+    }
+  }
+}
+
 extern size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count);
 extern ncclResult_t getAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* task,
