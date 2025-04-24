@@ -21,7 +21,8 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will generate traces for fifo and data ibv_post_sends
 * Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`)
 * Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
-  environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is 12292 * sizeof(datatype) * nGPUs 
+  environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is 12292 * sizeof(datatype) * nGPUs
+* Thread thresholds for LL/LL128 is selected in Tuning Models for MI300x. It currently impacts the number of channels used for AG and RS. Tuning model values are ignored if `NCCL_THREAD_THRESHOLDS` is set
 
 ### Changed
 
