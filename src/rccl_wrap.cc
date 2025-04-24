@@ -74,13 +74,19 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
 
 void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold) {
   // Honor user input for thread thresholds
-  static int userThreadThresholdInput = -2;
-  if (userThreadThresholdInput == -2) {
+  static int userChannelControlInput = -2;
+  if (userChannelControlInput == -2) {
     const char *inputStr = getenv("NCCL_THREAD_THRESHOLDS");
-    userThreadThresholdInput = !inputStr ? 0 : 1;
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MAX_NCHANNELS");
+    }
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MIN_NCHANNELS");
+    }
+    userChannelControlInput = !inputStr ? 0 : 1;
   }
 
-  if(!userThreadThresholdInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
+  if(!userChannelControlInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto tunedThreshold = comm->minMaxLLRange[tunableIndex][info->protocol][RCCL_PROTOCOL_THREAD_THRESHOLD_IDX];
     if(tunedThreshold != RCCL_LL_LIMITS_UNDEFINED) {
