@@ -193,21 +193,18 @@ private:
     for (int g=1; g < WordPerThread/2; g+=2) {
       if (flagThread) regs[2*g-1] = regs[2*g];
     }
-    int ix[WordPerThread/2];
-    #pragma unroll
-    for(int g=0; g < WordPerThread/2; g++) {
-      ix[g] = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
-    }
+
     // Write to dst if 4-byte aligned, shmem otherwise.
     int misalignment = reinterpret_cast<uintptr_t>(dst)%16;
     uint64_t *shm8 = shmemCvtPtr((uint64_t*)ncclScratchForWarp(warpInBlock));
     #pragma unroll
     for(int g=0; g < WordPerThread/2; g++) {
+      int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
       if (!flagThread || g%2==0) {
-        if(misalignment == 0 && (ix[g]+1)*EltPer16B <= eltN)
-          store128((uint64_t*)(dst + ix[g] *EltPer16B), regs[2*g+0], regs[2*g+1]);
+        if(misalignment == 0 && (ix+1)*EltPer16B <= eltN)
+          store128((uint64_t*)(dst + ix *EltPer16B), regs[2*g+0], regs[2*g+1]);
         else
-          storeShmem128(shm8+2*ix[g], regs[2*g+0], regs[2*g+1]);
+          storeShmem128(shm8+2*ix, regs[2*g+0], regs[2*g+1]);
       }
     }
     __syncwarp();
