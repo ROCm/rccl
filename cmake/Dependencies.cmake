@@ -70,6 +70,8 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
         message(FATAL_ERROR "Cannot find gtest library installation path.")
     find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
     endif()
+elseif(GTest_FOUND AND BUILD_TESTS)
+  set(GTEST_BOTH_LIBRARIES "GTest::gtest;GTest::gtest_main")
 endif()
 
 # Find or download/install rocm-cmake project
