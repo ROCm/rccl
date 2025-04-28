@@ -94,9 +94,14 @@ if(ENABLE_MSCCLPP)
 	)
 
 	execute_process(
-            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/device-flag.patch
-            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-        )
+	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/device-flag.patch
+	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
+
+	execute_process(
+	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/clang-format.patch
+	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
 
         set(CMAKE_INHERITED_ARGS "")
         set(CMAKE_ARGS_LIST "CMAKE_PREFIX_PATH;CMAKE_INSTALL_RPATH_USE_LINK_PATH;HIP_COMPILER")
@@ -142,9 +147,14 @@ if(ENABLE_MSCCLPP)
         find_package(mscclpp_nccl REQUIRED)
 
 	execute_process(
-            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/device-flag.patch
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/clang-format.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
+
+	execute_process(
+	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/device-flag.patch
+	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
 
 	execute_process(
 	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no-cache.patch
