@@ -10,7 +10,7 @@ CXXFLAGS = -g -ffunction-sections -fdata-sections -Wl,--gc-sections -fgpu-rdc -I
 
 files = $(EXE).cpp model.cpp utils.cpp hipify_rccl/graph/topo.cc hipify_rccl/graph/rings.cc hipify_rccl/graph/paths.cc hipify_rccl/graph/trees.cc ../../src/misc/param.cc \
 	hipify_rccl/graph/search.cc hipify_rccl/graph/connect.cc hipify_rccl/graph/tuning.cc hipify_rccl/graph/xml.cc ../../src/misc/nvmlwrap_stub.cc hipify_rccl/graph/rome_models.cc hipify_rccl/graph/archinfo.cc \
-	hipify_rccl/collectives.cc hipify_rccl/enqueue.cc ../../src/rccl_wrap.cc
+	hipify_rccl/collectives.cc hipify_rccl/register.cc hipify_rccl/enqueue.cc ../../src/rccl_wrap.cc
 
 all: hipify $(EXE)
 
@@ -25,6 +25,7 @@ hipify:
 	cp -a ../../src/device/*.h hipify_rccl/device/include
 	cp -a ../../src/device/network/unpack/*.h hipify_rccl/include/network/unpack
 	cp -a ../../src/enqueue.cc hipify_rccl/
+	cp -a ../../src/register/register.cc hipify_rccl/
 	cp -a ../../src/collectives.cc hipify_rccl/
 	cp -a ../../src/misc/archinfo.cc hipify_rccl/graph/
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/*.h

@@ -33,7 +33,7 @@ static inline size_t ncclFuncSendCount(ncclFunc_t func, int nRanks, size_t count
 static inline size_t ncclFuncRecvCount(ncclFunc_t func, int nRanks, size_t count) {
   return func == ncclFuncAllGather ? nRanks*count : count;
 }
-rccl_static_inline size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
+rccl_static inline size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
   return func == ncclFuncAllGather || func == ncclFuncReduceScatter ? nRanks*count : count;
 }
 
