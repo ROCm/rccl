@@ -298,13 +298,8 @@ ncclResult_t ncclTopoCheckP2p(struct ncclComm* comm, struct ncclTopoSystem* syst
     }
   }
 
-  // By default don't use P2P across CPU Host Bridges and further apart
-  int p2pLevel = PATH_PXB;
-
-  int arch, vendor, model;
-  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-  // Allow P2P between pairs of GPUs on AMD systems
-  if ((arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD) && system->nodes[GPU].count <= 2) p2pLevel = PATH_SYS;
+  // In general, use P2P whenever we can.
+  int p2pLevel = PATH_SYS;
 
   // User override
   if (ncclTopoUserP2pLevel == -1)
@@ -314,6 +309,16 @@ ncclResult_t ncclTopoCheckP2p(struct ncclComm* comm, struct ncclTopoSystem* syst
     goto compare;
   }
 
+  // Don't use P2P through ARM CPUs
+  int arch, vendor, model;
+  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+  if (arch == NCCL_TOPO_CPU_ARCH_ARM) p2pLevel = PATH_PXB;
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_INTEL) {
+    p2pLevel = PATH_PXB;
+  }
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_ZHAOXIN) {
+    p2pLevel = PATH_PXB;
+  }
 
 compare:
   // Compute the PCI distance and compare with the p2pLevel.

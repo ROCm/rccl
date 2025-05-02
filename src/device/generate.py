@@ -9,7 +9,7 @@ all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING"]
-all_unroll = ["1", "2", "4"]
+all_unroll = ["2", "4"]
 
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
 
@@ -164,9 +164,7 @@ def calc_unroll_for_local_arch():
   # Homogeneous system is required to build for only 1 varient of unroll factor
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
-    if "gfx950" == gfx_name:
-        return 1
-    elif "gfx908" == gfx_name or ("gfx942" == gfx_name and cu_count > 80):
+    if "gfx908" == gfx_name or (gfx_name in ["gfx942", "gfx950"] and cu_count > 80):
       return 2
     else:
       return 4
@@ -320,38 +318,21 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("\n")
 
   out("typedef void(*ncclDevFuncPtr_t)();\n\n")
-  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_1[] = {\n")
-  index1 = 0
-  for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
-    if unroll != "1": continue
-    sym = paste("_", "ncclDevFunc", *fn)
-    if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__)) && defined(ENABLE_LL128)\n")
-      out("/*%4d*/ %s,\n#else\n" % (index1, sym))
-      fn_ll = fn[:2] + ("LL",) + fn[3:]
-      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("/*%4d*/ %s,\n#endif\n" % (index1, sym_ll))
-    else:
-      out("/*%4d*/ %s,\n" % (index1, sym))
-    index1 += 1
-  out("nullptr};\n")
-  out("\n")
-  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_2[] = {\n")
-  index2 = 0
+  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable[] = {\n")
+  index = 0
   for fn in primary_funcs:
     coll, algo, proto, redop, ty, unroll = fn
     if unroll != "2": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
       out("#if (defined(__gfx90a__) || defined(__gfx942__)) && defined(ENABLE_LL128)\n")
-      out("/*%4d*/ %s,\n#else\n" % (index2, sym))
+      out("/*%4d*/ %s,\n#else\n" % (index, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("/*%4d*/ %s,\n#endif\n" % (index2, sym_ll))
+      out("/*%4d*/ %s,\n#endif\n" % (index, sym_ll))
     else:
-      out("/*%4d*/ %s,\n" % (index2, sym))
-    index2 += 1
+      out("/*%4d*/ %s,\n" % (index, sym))
+    index += 1
   out("nullptr};\n")
   out("\n")
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
@@ -374,40 +355,22 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   
   if not is_ifc:
     out("template<unsigned short f, unsigned short l>\n"
-      "struct Caller1 {\n"
+      "struct Caller {\n"
       "  static __forceinline__ __device__ __host__\n"
-      "  void call1(unsigned short funcIndex) noexcept\n"
+      "  void call(unsigned short funcIndex) noexcept\n"
       "  {\n"
       "    constexpr unsigned short m = f + (l - f) / 2;\n"
-      "    return (funcIndex < m) ? Caller1<f, m>::call1(funcIndex) : Caller1<m, l>::call1(funcIndex);\n"
+      "    return (funcIndex < m) ? Caller<f, m>::call(funcIndex) : Caller<m, l>::call(funcIndex);\n"
       "  }\n"
       "};\n"
       "\n"
       "template<unsigned short f>\n"
-      "struct Caller1<f, f + 1>{\n"
+      "struct Caller<f, f + 1>{\n"
       "  static __forceinline__ __device__ __host__\n"
-      "  void call1(unsigned short funcIndex) noexcept { ncclDevFuncTable_1[f](); }\n"
+      "  void call(unsigned short funcIndex) noexcept { ncclDevFuncTable[f](); }\n"
       "};\n")
-    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_1(unsigned short funcIndex) noexcept {\n")
-    out(f"  Caller1<0, {index1}>::call1(funcIndex);\n")
-    out("}\n\n")
-    out("template<unsigned short f, unsigned short l>\n"
-      "struct Caller2 {\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call2(unsigned short funcIndex) noexcept\n"
-      "  {\n"
-      "    constexpr unsigned short m = f + (l - f) / 2;\n"
-      "    return (funcIndex < m) ? Caller2<f, m>::call2(funcIndex) : Caller2<m, l>::call2(funcIndex);\n"
-      "  }\n"
-      "};\n"
-      "\n"
-      "template<unsigned short f>\n"
-      "struct Caller2<f, f + 1>{\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call2(unsigned short funcIndex) noexcept { ncclDevFuncTable_2[f](); }\n"
-      "};\n")
-    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_2(unsigned short funcIndex) noexcept {\n")
-    out(f"  Caller2<0, {index2}>::call2(funcIndex);\n")
+    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
+    out(f"  Caller<0, {index}>::call(funcIndex);\n")
     out("}\n\n")
     out("template<unsigned short f, unsigned short l>\n"
       "struct Caller4 {\n"
@@ -459,7 +422,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   # The mapping from function rows to valid primary function ids.
   out("extern int const ncclDevFuncRowToId[] = {\n")
   index = 0
-  for fn in func_rows[:len(func_rows)//3]:
+  for fn in func_rows[:len(func_rows)//2]:
     fn_id, comment = -1, ""
     if fn is not None:
       fn_id = primary_to_index[equivalent_primary(*fn)]

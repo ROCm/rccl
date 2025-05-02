@@ -2,11 +2,11 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.22.3 for ROCm 6.5.0
+## Unreleased - RCCL 2.24.3 for ROCm 6.5.0
 
 ### Added
 
-* Added new GPU target `gfx950`
+* Added new GPU target `gfx950`.
 * Added support for `unroll=1` in device-code generation to improve performance
 * Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
   environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
@@ -15,20 +15,44 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * LL/LL128 usage ranges for AR, AG, and RS are part of the tuning models, which enable architecture-specific tuning in conjunction with the existing Rome Models scheme in RCCL.
 * Two new APIs are exposed as part of an initiative to separate RCCL code. These APIs are `rcclGetAlgoInfo` and `rcclFuncMaxSendRecvCount`. However, user-level invocation requires that RCCL be built with `RCCL_EXPOSE_STATIC` enabled.
 
+### Changed
+
+* Compatibility with NCCL 2.24.3
+
 ### Resolved issues
 * Suboptimal algorithmic switching point for AllReduce on MI300x
   
 ### Known issue
 
-* Using more than 64 channels can cause a segmentation fault when multiple different collectives are used in the same `ncclGroup()` call
+* Using more than 64 channels can cause a segmentation fault when multiple collectives are used in the same `ncclGroup()` call.
+
+## Unreleased - RCCL 2.23.4 for ROCm 6.4.1
+
+### Added
+
+* Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
+  environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
+* Added synchronization before destroying proxy thread to fix a rare hang caused by early termination.
+* `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters
+* Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will generate traces for fifo and data ibv_post_sends
+* Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`)
+
+### Changed
+
+* Compatibility with NCCL 2.23.4
+
+### Resolved issues
+
+* Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
+* Fixed IntraNet performance.
 
 ## RCCL 2.22.3 for ROCm 6.4.0
 
 ### Added
 
-* `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters
-* Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will generate traces for fifo and data ibv_post_sends
-* Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`)
+* `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters.
+* Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will generate traces for fifo and data `ibv_post_sends`.
+* Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`).
 
 ### Changed
 
