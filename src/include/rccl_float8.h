@@ -47,7 +47,7 @@ typedef struct
 #if   __HIP_DEVICE_COMPILE__ && (defined(__gfx950__) || defined(__gfx1200__) || defined(__gfx1201__) ||  (defined(__gfx1100__) || defined(__gfx1101__)))//HIP_FP8_TYPE_OCP is enabled.
 typedef __hip_fp8_e4m3 rccl_float8;
 typedef __hip_fp8_e5m2 rccl_bfloat8;
-#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx940__))
+#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__))
 typedef __hip_fp8_e4m3_fnuz rccl_float8;
 typedef __hip_fp8_e5m2_fnuz rccl_bfloat8;
 #else
