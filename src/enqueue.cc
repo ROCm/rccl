@@ -817,7 +817,7 @@ static ncclResult_t addP2pToPlan(
 
   if (!selfSend) {
     for (int part=0; part < nChannelsMax; part++) {
-      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes);
+      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax);
       struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
       for (int dir=0; dir <= 1; dir++) {
         int peerRank = dir ? sendRank : recvRank;
@@ -869,7 +869,7 @@ static ncclResult_t addP2pToPlan(
         int regFlag = 0;
         NCCLCHECK(ncclCalloc(&handles[dir], nChannelsMax));
         for (int part = 0; part < nChannelsMax; part++) {
-          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes);
+          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax);
           struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
           int peerRank = dir ? sendRank : recvRank;
           struct ncclConnector* conn = dir ? &channelPeers[peerRank]->send[connIndex[dir]]
@@ -883,7 +883,7 @@ static ncclResult_t addP2pToPlan(
     } else if (bytes[dir] > 0 && addrs[dir] && protocol[dir] == NCCL_PROTO_SIMPLE && !selfSend) {
       int peerRank = dir ? sendRank : recvRank;
       int regFlag = 0;
-      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, 0, nChannelsMax, comm->nNodes);
+      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, 0, nChannelsMax);
       struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
       struct ncclConnector* conn = dir ? &channelPeers[peerRank]->send[connIndex[dir]]
         : &channelPeers[peerRank]->recv[connIndex[dir]];
@@ -967,7 +967,7 @@ static ncclResult_t addP2pToPlan(
 
   nChannelsMax = std::max(nChannels[0], nChannels[1]);
   for (int part=0; part < nChannelsMax; part++) {
-    int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, comm->p2pnChannelsPerPeer, comm->nNodes);
+    int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, comm->p2pnChannelsPerPeer);
     plan->channelMask.masks[channelId/64] |= uint64_t(1)<<(channelId%64);
     // Add batch first.
     int funcIdx = ncclDevFuncId_P2p();
@@ -2233,7 +2233,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
         }
         uint8_t base = ncclP2pChannelBaseForRound(comm, round);
         for (int c=0; c < comm->p2pnChannelsPerPeer; c++) {
-          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c, comm->p2pnChannelsPerPeer, comm->nNodes);
+          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c, comm->p2pnChannelsPerPeer);
           if (isSendNotRecv) {
             if (comm->channels[channelId].peers[peer]->send[1].connected == 0) { // P2P uses only 1 connector
               //comm->connectSend[peer] |= (1UL<<channelId);
