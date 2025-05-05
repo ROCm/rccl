@@ -299,4 +299,75 @@ namespace RcclUnitTesting
       }
     }
   }
+  /**
+   * \brief Verify the device associated with communicator in both single and multi-device scenarios
+   * ******************************************************************************************/
+  TEST(Standalone, CommCuDevice_Check)
+  {
+    int numDevices;
+    HIPCALL(hipGetDeviceCount(&numDevices));
+    if (numDevices < 1) {
+      GTEST_SKIP() << "No devices available.";
+    }
+
+    // Test single comm initialization
+    ncclComm_t comm;
+    ncclUniqueId id;
+    NCCLCHECK(ncclGetUniqueId(&id));
+    HIPCALL(hipSetDevice(0));
+    NCCLCHECK(ncclCommInitRank(&comm, 1, id, 0));
+
+    // Verify device assignment
+    int device;
+    NCCLCHECK(ncclCommCuDevice(comm, &device));
+    ASSERT_EQ(device, 0);
+    NCCLCHECK(ncclCommDestroy(comm));
+
+    // Test multi-device scenario if available
+    if (numDevices > 1) {
+      std::vector<ncclComm_t> comms(numDevices);
+
+      // Initialize all communicators at once
+      NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
+
+      // Verify device assignments
+      for (int i = 0; i < numDevices; i++) {
+        int assignedDevice;
+        NCCLCHECK(ncclCommCuDevice(comms[i], &assignedDevice));
+        ASSERT_EQ(assignedDevice, i);
+      }
+
+      // Clean up
+      for (int i = 0; i < numDevices; i++) {
+        NCCLCHECK(ncclCommDestroy(comms[i]));
+      }
+    }
+  }
+
+  /**
+   * \brief verifies that ncclCommUserRank correctly fails when provided with an invalid (null) communicator handle
+   * ******************************************************************************************/
+  TEST(Standalone, SplitComms_RankCheck_Basic_Failure) {
+    // Check for multi-gpu
+    int numDevices;
+    HIPCALL(hipGetDeviceCount(&numDevices));
+    if (numDevices < 2) {
+        GTEST_SKIP() << "This test requires at least 2 devices.";
+    }
+
+    // Initialize the original comms
+    std::vector<ncclComm_t> comms(numDevices);
+    NCCLCHECK(ncclCommInitAll(comms.data(), numDevices, nullptr));
+
+    // Create an invalid comm handle that will cause a failure
+    ncclComm_t invalidComm = nullptr;
+
+    // This NCCL_CHECK will fail because we're trying to query rank from a null communicator
+    int rank;
+    NCCLCHECK(ncclCommUserRank(invalidComm, &rank));
+
+    // Clean up comms
+    for (auto& comm : comms)
+      NCCLCHECK(ncclCommDestroy(comm));
+  }
 }

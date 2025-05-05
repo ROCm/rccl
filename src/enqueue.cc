@@ -34,20 +34,17 @@ struct ncclKernelMatch {
 };
 
 #ifdef ENABLE_COLLTRACE
-#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
-static ncclKernelMatch const ncclKerns[6] = {
-  {(void *)ncclDevKernel_Generic_1, true},
-  {(void *)ncclDevKernel_Generic_2, true},
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 2 : 0))
+static ncclKernelMatch const ncclKerns[4] = {
+  {(void *)ncclDevKernel_Generic, true},
   {(void *)ncclDevKernel_Generic_4, true},
-  {(void *)ncclDevKernelDebug_Generic_1, true},
-  {(void *)ncclDevKernelDebug_Generic_2, true},
+  {(void *)ncclDevKernelDebug_Generic, true},
   {(void *)ncclDevKernelDebug_Generic_4, true}
 };
 #else
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
-static ncclKernelMatch const ncclKerns[3] = {
-  {(void*)ncclDevKernel_Generic_1, true},
-  {(void*)ncclDevKernel_Generic_2, true},
+static ncclKernelMatch const ncclKerns[2] = {
+  {(void*)ncclDevKernel_Generic, true},
   {(void*)ncclDevKernel_Generic_4, true}
 };
 #endif

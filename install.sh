@@ -26,6 +26,7 @@ install_prefix="${ROCM_PATH}"
 log_trace=false
 msccl_kernel_enabled=true
 mscclpp_enabled=true
+enable_mscclpp_clip=false
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
 openmp_test_enabled=false
@@ -48,6 +49,7 @@ function display_help()
     echo "       --disable-colltrace     Build without collective trace"
     echo "       --disable-msccl-kernel  Build without MSCCL kernels"
     echo "       --disable-mscclpp       Build without MSCCL++ support"
+    echo "       --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines"
     echo "       --disable-roctx         Build without ROCTX logging"
     echo "    -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)"
     echo "    -h|--help                  Prints this help message"
@@ -77,7 +79,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ "$?" -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,disable-mscclpp,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,log-trace,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options dfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable_backtrace,disable-colltrace,disable-msccl-kernel,disable-mscclpp,enable-mscclpp-clip,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,log-trace,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -99,6 +101,7 @@ while true; do
          --disable-colltrace)        collective_trace=false;                                                                           shift ;;
          --disable-msccl-kernel)     msccl_kernel_enabled=false;                                                                       shift ;;
          --disable-mscclpp)          mscclpp_enabled=false;                                                                            shift ;;
+         --enable-mscclpp-clip)      enable_mscclpp_clip=true;                                                                         shift ;;
          --disable-roctx)            roctx_enabled=false;                                                                              shift ;;
     -f | --fast)                     build_local_gpu_only=true; collective_trace=false; msccl_kernel_enabled=false;                    shift ;;
     -h | --help)                     display_help;                                                                                     exit 0 ;;
@@ -242,6 +245,10 @@ fi
 
 if [[ "${mscclpp_enabled}" == false ]]; then
     cmake_common_options="${cmake_common_options} -DENABLE_MSCCLPP=OFF"
+fi
+
+if [[ "${enable_mscclpp_clip}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DENABLE_MSCCLPP_CLIP=ON"
 fi
 
 # Install dependencies
