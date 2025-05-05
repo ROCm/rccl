@@ -40,18 +40,16 @@ typedef struct
 } rccl_bfloat8;
 
 // __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
-#elif HIP_VERSION >= 6020000
+#elif HIP_VERSION >= 60200000
 
 #include <hip/hip_fp8.h>
 
-#if (defined(__gfx950__) || defined(__gfx1200__) || defined(__gfx1201__) ||  (defined(__gfx1100__) || defined(__gfx1101__)))//HIP_FP8_TYPE_OCP is enabled.
+#if   __HIP_DEVICE_COMPILE__ && (defined(__gfx950__) || defined(__gfx1200__) || defined(__gfx1201__) ||  (defined(__gfx1100__) || defined(__gfx1101__)))//HIP_FP8_TYPE_OCP is enabled.
 typedef __hip_fp8_e4m3 rccl_float8;
 typedef __hip_fp8_e5m2 rccl_bfloat8;
-//HIP_FP8_TYPE_FNUZ is enabled.
-#elif (defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__))
+#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx940__))
 typedef __hip_fp8_e4m3_fnuz rccl_float8;
 typedef __hip_fp8_e5m2_fnuz rccl_bfloat8;
-//HIP_FP8_TYPE_OCP and HIP_FP8_TYPE_FNUZ are enabled.
 #else
 typedef __hip_fp8_e4m3 rccl_float8;
 typedef __hip_fp8_e5m2 rccl_bfloat8;
