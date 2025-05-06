@@ -268,8 +268,7 @@ int main(int argc,char* argv[])
     for (int a=0; a<nAlgos; a++) {
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         float time;
-        bool backup;
-        NCCLCHECK(ncclTopoGetAlgoTime(info.comm, info.coll, a, p, len, 1, &time, &backup));
+        NCCLCHECK(ncclTopoGetAlgoTime(info.comm, info.coll, a, p, len, 1, &time));
         if (time >= 0 && time < minTime) {
           algorithm = a;
           protocol = p;

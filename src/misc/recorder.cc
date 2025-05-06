@@ -152,6 +152,7 @@ void Recorder::write(const rcclApiCall &call)
       outputFile << std::endl;
       indent(2 + 2 * depth, outputFile);
       outputFile << "}";
+      lastcall = call.type;
       return ;
     }
 

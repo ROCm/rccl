@@ -298,13 +298,8 @@ ncclResult_t ncclTopoCheckP2p(struct ncclComm* comm, struct ncclTopoSystem* syst
     }
   }
 
-  // By default don't use P2P across CPU Host Bridges and further apart
-  int p2pLevel = PATH_PXB;
-
-  int arch, vendor, model;
-  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-  // Allow P2P between pairs of GPUs on AMD systems
-  if ((arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD) && system->nodes[GPU].count <= 2) p2pLevel = PATH_SYS;
+  // In general, use P2P whenever we can.
+  int p2pLevel = PATH_SYS;
 
   // User override
   if (ncclTopoUserP2pLevel == -1)
@@ -314,6 +309,16 @@ ncclResult_t ncclTopoCheckP2p(struct ncclComm* comm, struct ncclTopoSystem* syst
     goto compare;
   }
 
+  // Don't use P2P through ARM CPUs
+  int arch, vendor, model;
+  NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
+  if (arch == NCCL_TOPO_CPU_ARCH_ARM) p2pLevel = PATH_PXB;
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_INTEL) {
+    p2pLevel = PATH_PXB;
+  }
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_ZHAOXIN) {
+    p2pLevel = PATH_PXB;
+  }
 
 compare:
   // Compute the PCI distance and compare with the p2pLevel.
@@ -975,14 +980,37 @@ ncclResult_t ncclTopoGetNvbGpus(struct ncclTopoSystem* system, int rank, int* nr
   return ncclSuccess;
 }
 
-int ncclTopoPathAllNVLink(struct ncclTopoSystem* system) {
-  int minPath = PATH_DIS;
+ncclResult_t ncclTopoGetGpuMinPath(struct ncclTopoSystem* system, int type, int* min) {
+  int minPath = PATH_SYS;
   for (int i=0; i<system->nodes[GPU].count; i++) {
-    struct ncclTopoLinkList* paths = system->nodes[GPU].nodes[i].paths[GPU];
-    for (int j=0; j<system->nodes[GPU].count; j++) {
-      if (i == j) continue;
+    struct ncclTopoLinkList* paths = system->nodes[GPU].nodes[i].paths[type];
+    if (paths == NULL) continue;
+    for (int j=0; j<system->nodes[type].count; j++) {
+      if (type == GPU && i == j) continue;
       minPath = std::min(minPath, paths[j].type);
     }
   }
-  return minPath >= PATH_PIX ? 0 : 1;
+  *min = minPath;
+  return ncclSuccess;
+}
+
+ncclResult_t ncclTopoGetGpuMaxPath(struct ncclTopoSystem* system, int type, int* max) {
+  int maxPath = PATH_LOC;
+  for (int i=0; i<system->nodes[GPU].count; i++) {
+    struct ncclTopoLinkList* paths = system->nodes[GPU].nodes[i].paths[type];
+    if (paths == NULL) continue;
+    for (int j=0; j<system->nodes[type].count; j++) {
+      if (type == GPU && i == j) continue;
+      maxPath = std::max(maxPath, paths[j].type);
+    }
+  }
+  *max = maxPath;
+  return ncclSuccess;
+}
+
+ncclResult_t ncclTopoPathAllNVLink(struct ncclTopoSystem* system, int* allNvLink) {
+  int maxPath;
+  NCCLCHECK(ncclTopoGetGpuMaxPath(system, GPU, &maxPath));
+  *allNvLink = maxPath >= PATH_PIX ? 0 : 1;
+  return ncclSuccess;
 }

@@ -36,6 +36,7 @@ index f0e4d85..5060723 100644
  
  template <typename T>
 @@ -552,7 +564,7 @@ __global__ void __launch_bounds__(512, 1)
+
  
  
  template <typename T>

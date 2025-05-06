@@ -8,6 +8,7 @@
 #include "msccl/msccl_setup.h"
 #include "msccl/msccl_status.h"
 #include "api_trace.h"
+#include "nvtx_payload_schemas.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -49,21 +50,8 @@ ncclResult_t mscclRunAlgo_impl(
     size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
     mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream) {
   Recorder::instance().record("mscclRunAlgo");
-  struct NvtxParamsMsccl {
-    size_t bytes;
-    ncclRedOp_t op;
-    ncclDataType_t dataType;
-  };
-  // Just pass the size of one send/recv messages and not the total bytes sent/received.
-  constexpr nvtxPayloadSchemaEntry_t MscclSchema[] = {
-    {0, NVTX_PAYLOAD_ENTRY_TYPE_SIZE, "Message size [bytes]"},
-    {0, NVTX_PAYLOAD_ENTRY_NCCL_REDOP, "Reduction operation", nullptr, 0, 
-      offsetof(NvtxParamsMsccl, op)},
-    {0, NVTX_PAYLOAD_ENTRY_TYPE_DATATYPE, "Data type", nullptr, 0, 
-      offsetof(NvtxParamsMsccl, dataType)}
-  };
-  NvtxParamsMsccl payload{count * ncclTypeSize(dataType), op, dataType};
-  NVTX3_FUNC_WITH_PARAMS(MSCCL, MscclSchema, payload)
+  NVTX3_FUNC_WITH_PARAMS(MSCCL, NcclNvtxParamsMSCCL,
+    NVTX3_PAYLOAD(comm ? comm->commHash : 0, count * ncclTypeSize(dataType), op, dataType));
   
   mscclStatus& status = mscclGetStatus(comm->rank);
   struct mscclAlgo* hostAlgo = status.hostAlgos[mscclAlgoHandle];

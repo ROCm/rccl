@@ -13,7 +13,10 @@ struct nccl_domain{static constexpr char const* name{"NCCL"};};
 
 #define NVTX3_FUNC_RANGE_IN(domain)
 #define nvtxNameOsThreadA(syscall, thread)
-#define NVTX3_FUNC_WITH_PARAMS(ID, S, P)
+#define NVTX3_FUNC_WITH_PARAMS(N, T, P)
+#define NVTX3_PAYLOAD(...) __VA_ARGS__
+#define NVTX3_RANGE(T)
+#define NVTX3_RANGE_ADD_PAYLOAD(N, S, P)
 
 #define NVTX_PAYLOAD_ENTRY_NCCL_REDOP 11
 

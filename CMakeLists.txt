@@ -27,6 +27,7 @@ option(BUILD_TESTS                             "Build unit test programs"       
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
+option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++"                                OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  ON)
@@ -419,6 +420,7 @@ set(SRC_FILES
   src/group.cc
   src/init.cc
   src/init_nvtx.cc
+  src/mnnvl.cc
   src/net.cc
   src/msccl.cc
   src/proxy.cc
@@ -485,6 +487,7 @@ set(SRC_FILES
   src/include/ibvwrap.h
   src/include/info.h
   src/include/ipcsocket.h
+  src/include/mnnvl.h
   src/include/nccl_common.h
   src/include/nccl_net.h
   src/include/nccl_profiler.h
@@ -493,6 +496,7 @@ set(SRC_FILES
   src/include/net.h
   src/include/nvmlwrap.h
   src/include/nvtx.h
+  src/include/nvtx_payload_schemas.h
   src/include/nvtx_stub.h
   src/include/p2p.h
   src/include/param.h
