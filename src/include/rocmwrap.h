@@ -70,6 +70,9 @@ DECLARE_ROCM_PFN_EXTERN(hsa_status_string);
 extern int ncclCuMemEnable();
 extern int ncclCuMemHostEnable();
 
+// Handle type used for cuMemCreate()
+extern CUmemAllocationHandleType ncclCuMemHandleType;
+
 ncclResult_t rocmLibraryInit(void);
 
 extern bool ncclCudaLaunchBlocking; // initialized by ncclCudaLibraryInit()

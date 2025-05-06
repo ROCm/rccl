@@ -24,6 +24,8 @@ DECLARE_ROCM_PFN(hsa_init);
 DECLARE_ROCM_PFN(hsa_system_get_info);
 DECLARE_ROCM_PFN(hsa_status_string);
 
+// Handle type used for cuMemCreate()
+CUmemAllocationHandleType ncclCuMemHandleType = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
 
 static void *hsaLib;
 static uint16_t version_major, version_minor;

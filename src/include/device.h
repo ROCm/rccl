@@ -70,7 +70,7 @@ union ncclLLFifoLine {
 #define WARP_SIZE warpSize
 #define MAXCHANNELS 128
 #define CHANNEL_LIMIT 16
-#define NCCL_MAX_LOCAL_RANKS 64
+#define NCCL_MAX_LOCAL_RANKS 72
 #define NCCL_MAX_NTHREADS 256
 #define NCCL_MIN_NTHREADS (4*WARP_SIZE)
 #define NCCL_SIMPLE_MAX_NTHREADS NCCL_MAX_NTHREADS
@@ -204,8 +204,6 @@ struct ncclNvls {
   int down;
   int treeUp;
   int treeDown[NCCL_MAX_NVLS_TREE_ARITY];
-  int node;
-  int nNodes;
 };
 
 #if __CUDA_ARCH__ >= 900

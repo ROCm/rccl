@@ -228,14 +228,13 @@ static inline ncclResult_t ncclCuMemFreeAddr(void *ptr) {
   return result;
 }
 
-static inline ncclResult_t ncclCuMemAlloc(void **ptr, CUmemGenericAllocationHandle *handlep, size_t size) {
+static inline ncclResult_t ncclCuMemAlloc(void **ptr, CUmemGenericAllocationHandle *handlep, CUmemAllocationHandleType type, size_t size) {
   ncclResult_t result = ncclSuccess;
   size_t granularity = 0;
   CUdevice currentDev;
   CUmemAllocationProp prop = {};
   CUmemAccessDesc accessDesc = {};
   CUmemGenericAllocationHandle handle;
-  CUmemAllocationHandleType type = ncclCuMemHandleType;
   int cudaDev;
   int flag = 0;
   CUDACHECK(cudaGetDevice(&cudaDev));
@@ -284,7 +283,7 @@ static inline ncclResult_t ncclCuMemFree(void *ptr) {
 
 extern int ncclCuMemEnable();
 
-static inline ncclResult_t ncclCuMemAlloc(void **ptr, void *handlep, size_t size) {
+static inline ncclResult_t ncclCuMemAlloc(void **ptr, void *handlep, int type, size_t size) {
   WARN("CUMEM not supported prior to CUDA 11.3");
   return ncclInternalError;
 }

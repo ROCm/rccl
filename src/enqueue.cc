@@ -52,25 +52,22 @@ static ncclKernelMatch const ncclKerns[2] = {
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
-ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
+ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* maxStackSize) {
   constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
   ncclResult_t result = ncclSuccess;
+  int print = 0;
 
   if (maxStackSize) *maxStackSize = 0;
   int carveout = ncclParamL1SharedMemoryCarveout();
+  int ncclMaxSharedMem = ncclShmemDynamicSize(cudaArch);
 
-  // Keep track if we already visited a function pointer.
-  void* lru[2] = {nullptr, nullptr};
-  for (int i=0; i < KernelCount; i++) {
-    void* fn = ncclKerns[i].kernelFn;
-    if (fn == lru[0] || fn == lru[1]) goto next_kernel;
-    lru[1] = lru[0];
-    lru[0] = fn;
+  for (int k=0; k < KernelCount; k++) {
+    void* fn = ncclKerns[k].kernelFn;
+    cudaFuncAttributes attr = {0};
+    if (fn == nullptr) continue;
 
+    CUDACHECKGOTO(cudaFuncGetAttributes(&attr, fn), result, ignore0);
     if (maxStackSize) {
-      cudaFuncAttributes attr = {0};
-      if (cudaFuncGetAttributes(&attr, fn) != cudaSuccess)
-        WARN("Failed to get kernel attributes");
       if (attr.localSizeBytes > *maxStackSize) *maxStackSize = attr.localSizeBytes;
     ignore0:;
     }
@@ -81,10 +78,17 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
         result, ignore1);
     ignore1:;
     }
-
-    if (ncclShmemDynamicSize(cudaArch) != 0) {
+    if (ncclMaxSharedMem != 0) {
+      int sharedMemSize = ncclMaxSharedMem;
+      if (sharedMemSize > (maxSharedMem-attr.sharedSizeBytes)) {
+        if (print++ == 0)
+          INFO(NCCL_INIT, "ncclMaxSharedMem %d exceeds device/fn maxSharedMem %zu",
+               sharedMemSize, maxSharedMem-attr.sharedSizeBytes);
+        // Reduce requested MaxDynamicSharedMemorySize attribute
+        sharedMemSize = maxSharedMem - attr.sharedSizeBytes;
+      }
       CUDACHECKGOTO(cudaFuncSetAttribute(fn,
-        cudaFuncAttributeMaxDynamicSharedMemorySize, ncclShmemDynamicSize(cudaArch)),
+        cudaFuncAttributeMaxDynamicSharedMemorySize, sharedMemSize),
         result, next_kernel);
     }
   next_kernel:;
@@ -1520,7 +1524,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   NCCLCHECK(ncclCudaDriverVersion(&driverVersion));
   if (driverVersion >= 11080) {
     int compCap = comm->compCap;
-    unsigned int clusterSize = (compCap == 90) ? comm->config.cgaClusterSize : 0;
+    unsigned int clusterSize = (compCap >= 90) ? comm->config.cgaClusterSize : 0;
 
     CUlaunchConfig launchConfig = {0};
     CUlaunchAttribute launchAttrs[3];
@@ -1674,7 +1678,7 @@ static ncclResult_t updateCollCostTable(
     if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1 && info->func != ncclFuncAllGather) continue;
     if (a == NCCL_ALGO_NVLS && collNetSupport != 1 && comm->nNodes > 1) continue;
     /* now we only support single-node NVLS allgather and reducescatter */
-    if (a == NCCL_ALGO_NVLS && (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) && comm->nNodes > 1) continue;
+    if (a == NCCL_ALGO_NVLS && (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) && (comm->nNodes > 1 || comm->nRanks > NCCL_MAX_NVLS_ARITY)) continue;
     /* Tree reduceScatter doesn't support scaling yet */
     if (a == NCCL_ALGO_PAT && info->func == ncclFuncReduceScatter
         && (info->opDev.op == ncclDevPreMulSum || info->opDev.op == ncclDevSumPostDiv)) continue;
