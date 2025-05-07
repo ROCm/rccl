@@ -23,7 +23,7 @@ THE SOFTWARE.
 #include "rccl_common.h"
 #include "comm.h"
 #include "graph/topo.h"
-
+#include "enqueue.h"
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
@@ -95,7 +95,6 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
   }
 }
 
-extern size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count);
 extern ncclResult_t getAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* task,
     int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL

@@ -988,14 +988,19 @@ float speedArrayIntra[] = { 40.0, 30.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 
 float speedArrayInter[] = { 48.0, 30.0, 28.0, 24.0, 20.0, 18.0, 15.0, 12.0, 10.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #define NSPEEDSINTRA (sizeof(speedArrayIntra)/sizeof(float))
 #define NSPEEDSINTER (sizeof(speedArrayInter)/sizeof(float))
+#endif
 
 float sm90SpeedArrayIntra[] = { 60.0, 50.0, 40.0, 30.0, 24.0, 20.0, 15.0, 12.0, 11.0, 6.0, 3.0 };
 float sm90SpeedArrayInter[] = { 48.0, 45.0, 42.0, 40.0, 30.0, 24.0, 22.0, 20.0, 17.5, 15.0, 12.0, 6.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
 #define NSPEEDSINTRA_SM90 (sizeof(sm90SpeedArrayIntra)/sizeof(float))
 #define NSPEEDSINTER_SM90 (sizeof(sm90SpeedArrayInter)/sizeof(float))
-#endif
 
 RCCL_PARAM(ModelMatchingDisable, "MODEL_MATCHING_DISABLE", 0);
+
+float sm100SpeedArrayIntra[] = { 90.0, 80.0, 70.0, 60.0, 50.0, 40.0, 30.0, 24.0, 20.0, 19.0 };
+float sm100SpeedArrayInter[] = { 48.0, 45.0, 42.0, 40.0, 30.0, 24.0, 22.0, 20.0, 17.5, 15.0, 12.0, 6.0, 3.0, 2.4, 1.2, 0.24, 0.12 };
+#define NSPEEDSINTRA_SM100 (sizeof(sm100SpeedArrayIntra)/sizeof(float))
+#define NSPEEDSINTER_SM100 (sizeof(sm100SpeedArrayInter)/sizeof(float))
 
 ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   int ngpus = system->nodes[GPU].count;
@@ -1006,8 +1011,20 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   graph->crossNic = crossNic == 1 ? 1 : 0;
   graph->bwIntra = graph->bwInter = 0;
   graph->latencyInter = 0;
-  graph->typeIntra = ngpus == 1 ? PATH_LOC : PATH_NVL;
-  graph->typeInter = PATH_PIX;
+  int minTypeIntra = PATH_LOC, minTypeInter = PATH_PIX;
+  int maxTypeIntra = PATH_SYS, maxTypeInter = PATH_SYS;
+  if (ngpus > 1) {
+    NCCLCHECK(ncclTopoGetGpuMinPath(system, GPU, &minTypeIntra));
+    NCCLCHECK(ncclTopoGetGpuMaxPath(system, GPU, &maxTypeIntra));
+  }
+  if (system->nodes[NET].count > 0) {
+    NCCLCHECK(ncclTopoGetGpuMinPath(system, NET, &minTypeInter));
+    NCCLCHECK(ncclTopoGetGpuMaxPath(system, NET, &maxTypeInter));
+    maxTypeIntra = maxTypeInter;
+  }
+
+  graph->typeIntra = minTypeIntra;
+  graph->typeInter = minTypeInter;
   graph->nChannels = 0;
   graph->nIntraChannels = 0;
   memset(graph->intraNets, 0, MAXCHANNELS*NCCL_TOPO_MAX_NODES*2*sizeof(int));
@@ -1080,14 +1097,14 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   NCCLCHECK(ncclTopoGetCompCap(system, &ccMin, NULL));
   if (graph->pattern == NCCL_TOPO_PATTERN_NVLS && (system->nodes[NVS].count == 0 || ccMin < 90)) return ncclSuccess;
   // NVLS and COLLNET_DIRECT search must have ngpus heads at most.
-  if (graph->pattern == NCCL_TOPO_PATTERN_NVLS || graph->pattern == NCCL_TOPO_PATTERN_COLLNET_DIRECT)
-    graph->maxChannels = system->nodes[GPU].count;
+  if (graph->pattern == NCCL_TOPO_PATTERN_NVLS) graph->maxChannels = std::min(NCCL_MAX_NVLS_ARITY, system->nodes[GPU].count);
+  if (graph->pattern == NCCL_TOPO_PATTERN_COLLNET_DIRECT) graph->maxChannels = std::min(NCCL_MAX_DIRECT_ARITY+1, system->nodes[GPU].count);
 
   if (ngpus == 1) if (graph->pattern != NCCL_TOPO_PATTERN_RING) graph->pattern = NCCL_TOPO_PATTERN_TREE;
 
   if (system->nodes[NET].count == 0 && graph->pattern == NCCL_TOPO_PATTERN_NVLS) {
     // Force intra-node NVLS algorithm to pull evenly from all GPUs.
-    graph->minChannels = graph->maxChannels = system->nodes[GPU].count;
+    graph->minChannels = graph->maxChannels;
   }
 
   struct ncclTopoGraph tmpGraph;
@@ -1097,11 +1114,11 @@ ncclResult_t ncclTopoCompute(ncclTopoSystem* system, struct ncclTopoGraph* graph
   int nspeeds = 0;
   float* speedArray = NULL;
   if (system->nodes[NET].count == 0) {
-    nspeeds = NSPEEDSINTRA;
-    speedArray = speedArrayIntra;
+    nspeeds = ccMin >= 100 ? NSPEEDSINTRA_SM100 : (ccMin >= 90 ? NSPEEDSINTRA_SM90 : NSPEEDSINTRA);
+    speedArray = ccMin >= 100 ? sm100SpeedArrayIntra : (ccMin >= 90 ? sm90SpeedArrayIntra : speedArrayIntra);
   } else {
-    nspeeds = NSPEEDSINTER;
-    speedArray = speedArrayInter;
+    nspeeds = ccMin >= 100 ? NSPEEDSINTER_SM100 : (ccMin >= 90 ? NSPEEDSINTER_SM90 : NSPEEDSINTER);
+    speedArray = ccMin >= 100 ? sm100SpeedArrayInter : (ccMin >= 90 ? sm90SpeedArrayInter : speedArrayInter);
   }
   int pass = 1;
   int speedIndex = 0;
@@ -1156,18 +1173,18 @@ search:
     }
     tmpGraph.pattern = graph->pattern;
 
-    int maxTypeIntra = system->nodes[NET].count > 0 ? tmpGraph.typeInter : PATH_SYS;
-    if (tmpGraph.typeIntra < maxTypeIntra && (graph->nChannels == 0 || tmpGraph.typeIntra < graph->typeIntra)) {
+    int maxIntra = system->nodes[NET].count > 0 ? tmpGraph.typeInter : maxTypeIntra;
+    if (tmpGraph.typeIntra < maxIntra && (graph->nChannels == 0 || tmpGraph.typeIntra < graph->typeIntra)) {
       tmpGraph.typeIntra += 1;
       goto search;
     }
-    tmpGraph.typeIntra = ngpus == 1 ? PATH_LOC : PATH_NVL;
+    tmpGraph.typeIntra = minTypeIntra;
 
-    if (system->nodes[NET].count > 0 && tmpGraph.typeInter < PATH_SYS && (graph->nChannels == 0 || tmpGraph.typeInter < graph->typeInter || tmpGraph.typeInter < PATH_PXN)) {
+    if (system->nodes[NET].count > 0 && tmpGraph.typeInter < maxTypeInter && (graph->nChannels == 0 || tmpGraph.typeInter < graph->typeInter || tmpGraph.typeInter < PATH_PXN)) {
       tmpGraph.typeInter += 1;
       goto search;
     }
-    tmpGraph.typeInter = PATH_PIX;
+    tmpGraph.typeInter = minTypeInter;
 
     if (crossNic == 2 && tmpGraph.crossNic == 0
         && (graph->pattern == NCCL_TOPO_PATTERN_RING || graph->pattern == NCCL_TOPO_PATTERN_BALANCED_TREE)) {
