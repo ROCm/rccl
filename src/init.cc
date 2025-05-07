@@ -258,12 +258,12 @@ void *ncclCommThreadMain(void *arg) {
       for (int i = 0; i < count; i++) {
         volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel]%COLLTRACE_NUM_ITEMS;
         head[channel] ++;
-        uint8_t type = td->type;
+        const uint8_t type = td->type;
         if (type == ncclCollTraceNotReady)
           continue;
         char line[1024];
         int offset = 0;
-        uint16_t fIdx = td->funcIndex;
+        const uint16_t fIdx = td->funcIndex;
         if (type == ncclCollTraceDataType) {
           sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] L:%04d DT %08x %016lx %016lx",
             (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid,             fIdx, td->data_0, td->opCount, td->data_1);
@@ -284,9 +284,9 @@ void *ncclCommThreadMain(void *arg) {
               case ncclCollTraceKernelLaunchType:
               case ncclCollTraceCollLaunchType:
                 if ((type&0xf) == ncclCollTraceKernelLaunchType)
-                  sprintf(line+offset, " KL HWID %8x %s", td->data_0, funcNames[fIdx]);
+                  sprintf(line+offset, " KL %s [%02d:%02d-%02d:%02x] HWID %8x ", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, td->data_0);
                 else if ((type&0xf) == ncclCollTraceCollLaunchType)
-                  sprintf(line+offset, " CL %d %s", td->batchIx, funcNames[fIdx]);
+                  sprintf(line+offset, " CL %s [%02d:%02d-%02d:%02x] %d ", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, td->batchIx);
                 offset = strlen(line);
                 if ((type&0xf0) == ncclCollTraceCollElemType)
                   sprintf(line+offset, " nw %d bi %d nc %d root %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
@@ -296,10 +296,10 @@ void *ncclCommThreadMain(void *arg) {
                     comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceKernelEndType:
-                sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);
+                sprintf(line+offset, " KE %s [%02d:%02d-%02d:%02x] busId %lx nRanks %d", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceAbortType:
-                sprintf(line+offset, " Abort");
+                sprintf(line+offset, " KA %s [%02d:%02d-%02d:%02x]", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid);
                 break;
               default:
                 sprintf(line+offset, " unknown collective trace data type");
@@ -307,7 +307,7 @@ void *ncclCommThreadMain(void *arg) {
             }
           }
         }
-        INFO(NCCL_COLL, "%s", line);
+        INFO(NCCL_COLL, "%s td->type:%d", line, type);
         td->type = ncclCollTraceNotReady;
       }
     }
