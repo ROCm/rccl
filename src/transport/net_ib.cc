@@ -1688,9 +1688,9 @@ ib_recv:
     NCCLCHECKGOTO(ncclIbRtsQp(qp->qp), ret, fail);
   }
 
-  rComm->flushEnabled = ((ncclIbGdrSupport() == ncclSuccess || ncclIbDmaBufSupport(lComm->dev) == ncclSuccess)
-                            && (ncclParamIbGdrFlushDisable() == 0)) ? 1 : 0;
-  useDmaBuf  = (ncclIbDmaBufSupport(lComm->dev) == ncclSuccess);               
+  useDmaBuf  = (ncclIbDmaBufSupport(lComm->dev) == ncclSuccess);
+  rComm->flushEnabled = ((ncclIbGdrSupport() == ncclSuccess || useDmaBuf)
+                            && (ncclParamIbGdrFlushDisable() == 0)) ? 1 : 0;              
   for (int i = 0; i < rComm->base.vProps.ndevs; i++) {
     rCommDev = rComm->devs + i;
     ibDev = ncclIbDevs + rCommDev->base.ibDevN;
