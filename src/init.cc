@@ -140,15 +140,6 @@ static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
 static void initOnceFunc() {
   initEnv();
   initGdrCopy();
-  char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
-  int hipRuntimeVersion = 0;
-  // hipVer is an integer e.g., "6.2.41133" -> 60241133
-  CUDACHECKGOTO(hipRuntimeGetVersion(&hipRuntimeVersion), initResult, exit);
-  if ((hsaScratchEnv && hsaScratchEnv== "1") || hipRuntimeVersion >= 64000000){
-    INFO(NCCL_INIT, "HSA_NO_SCRATCH_RECLAIM : %s, hipVer:%d", hsaScratchEnv, hipRuntimeVersion);
-  }else{
-    WARN("HSA_NO_SCRATCH_RECLAIM is not set with rocm older than 6.4, this has perf impact!");
-  }
   // Always initialize bootstrap network
   NCCLCHECKGOTO(bootstrapNetInit(), initResult, exit);
 
@@ -191,6 +182,15 @@ static ncclResult_t ncclInit() {
         WARN("Missing \"HSA_FORCE_FINE_GRAIN_PCIE=1\" from environment which can lead to low RCCL performance, system instablity or hang!");
 #endif
     }
+  const char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
+  int hipRuntimeVersion = 0;
+  // hipVer is an integer e.g., 6.2.41133 -> 60241134
+  CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
+  if ((hsaScratchEnv && strcmp(hsaScratchEnv,"1") == 0) || hipRuntimeVersion >= 64000000){
+    INFO(NCCL_INIT, "HSA_NO_SCRATCH_RECLAIM : %s, hipVer:%d", hsaScratchEnv, hipRuntimeVersion);
+  }else{
+    WARN("HSA_NO_SCRATCH_RECLAIM is not set with rocm older than 6.4,, rocm ver:%d", hipRuntimeVersion);
+  }
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;
 }
