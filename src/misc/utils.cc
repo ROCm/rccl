@@ -8,7 +8,7 @@
 #include "core.h"
 
 #include "nvmlwrap.h"
-
+#include <unistd.h>
 #include <stdlib.h>
 
 // Get current Compute Capability

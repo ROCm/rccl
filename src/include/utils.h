@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <new>
 #include <type_traits>
-#include <unistd.h>
 int ncclCudaCompCap();
 
 // PCI Bus ID <-> int64 conversion functions
