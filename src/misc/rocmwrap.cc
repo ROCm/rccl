@@ -155,7 +155,7 @@ static void initOnceFunc() {
       else goto error;
     }
   }
-  
+
   /*
    * Required to initialize the ROCr Driver.
    * Multiple calls of hsa_init() will return immediately
