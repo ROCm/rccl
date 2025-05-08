@@ -140,6 +140,12 @@ static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
 static void initOnceFunc() {
   initEnv();
   initGdrCopy();
+  char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
+  if (hsaScratchEnv){
+    INFO(NCCL_INIT, "HSA_NO_SCRATCH_RECLAIM : %s", hsaScratchEnv);
+  }else{
+    WARN("HSA_NO_SCRATCH_RECLAIM is not set. HSA scratch reclaim will be enabled with perf overhead with rocm<6.4!");
+  }
   // Always initialize bootstrap network
   NCCLCHECKGOTO(bootstrapNetInit(), initResult, exit);
 
