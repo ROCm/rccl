@@ -793,7 +793,8 @@ static void ibDmaBufSupportInitOnce(){
   ncclIbDev* ibDev = ncclIbDevs + mergedDev->vProps.devs[0];
   struct ibv_pd* pd;
   struct ibv_context* ctx = ibDev->context;
-  rocmLibraryInit();
+  res = rocmLibraryInit();
+  if (res != ncclSuccess) goto failure;
   NCCLCHECKGOTO(wrap_ibv_alloc_pd(&pd, ctx), res, failure);
   // Test kernel DMA-BUF support with a dummy call (fd=-1)
   (void)wrap_direct_ibv_reg_dmabuf_mr(pd, 0ULL /*offset*/, 0ULL /*len*/, 0ULL /*iova*/, -1 /*fd*/, 0 /*flags*/);
@@ -1621,7 +1622,7 @@ ib_recv:
   struct ncclIbRecvCommDev* rCommDev;
   struct ncclIbDevInfo* remDevInfo;
   struct ncclIbQp* qp;
-  bool useDMABuff; 
+  bool useDmaBuf; 
 
   mergedDev = ncclIbMergedDevs + lComm->dev;
   rComm->base.nRemDevs = remMeta.ndevs;
@@ -1689,7 +1690,7 @@ ib_recv:
 
   rComm->flushEnabled = ((ncclIbGdrSupport() == ncclSuccess || ncclIbDmaBufSupport(lComm->dev) == ncclSuccess)
                             && (ncclParamIbGdrFlushDisable() == 0)) ? 1 : 0;
-  useDMABuff  = (ncclIbDmaBufSupport(lComm->dev) == ncclSuccess);               
+  useDmaBuf  = (ncclIbDmaBufSupport(lComm->dev) == ncclSuccess);               
   for (int i = 0; i < rComm->base.vProps.ndevs; i++) {
     rCommDev = rComm->devs + i;
     ibDev = ncclIbDevs + rCommDev->base.ibDevN;
@@ -1708,7 +1709,7 @@ ib_recv:
 #else
         NCCLCHECKGOTO(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocFinegrained), ret, fail);
 #endif
-        if (useDMABuff)
+        if (useDmaBuf)
         {
           uint64_t export_offset = 0;
           void *aligned_ptr = NULL;
