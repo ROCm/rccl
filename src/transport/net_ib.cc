@@ -1071,6 +1071,7 @@ struct ncclIbGpuFlush {
   int* gpuFlushGpuMem;
   struct ibv_sge sge;
   struct ncclIbQp qp;
+  int dmabuf_fd;
 };
 
 struct ncclIbRemFifo {
@@ -1707,16 +1708,20 @@ ib_recv:
         NCCLCHECKGOTO(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocFinegrained), ret, fail);
 #endif
         //NCCLCHECKGOTO(wrap_ibv_reg_mr(&rCommDev->gpuFlush.gpuMr, rCommDev->base.pd, rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ), ret, fail);
-        int dmabuf_fd = -1;
         uint64_t export_offset = 0;
         void *aligned_ptr = NULL;
         size_t aligned_size = 0;
         get_aligned_ptr_and_size(rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int) /*devicebuffersize*/, &aligned_ptr, &aligned_size);
-        hsa_status_t export_status = pfn_hsa_amd_portable_export_dmabuf(aligned_ptr, aligned_size, &dmabuf_fd, &export_offset);
-        NCCLCHECKGOTO(wrap_ibv_reg_dmabuf_mr(&rCommDev->gpuFlush.gpuMr,rCommDev->base.pd,export_offset, sizeof(int),(uint64_t)rCommDev->gpuFlush.gpuFlushGpuMem /*iova*/,dmabuf_fd, IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ), ret, fail);
+        hsa_status_t export_status = pfn_hsa_amd_portable_export_dmabuf(aligned_ptr, aligned_size, &rCommDev->gpuFlush.dmabuf_fd, &export_offset);
+        if(rCommDev->gpuFlush.dmabuf_fd < 0 || export_status != HSA_STATUS_SUCCESS){
+          WARN("Failed to export DMA BUF");
+          goto fail;
+        }
+        NCCLCHECKGOTO(wrap_ibv_reg_dmabuf_mr(&rCommDev->gpuFlush.gpuMr,rCommDev->base.pd,export_offset, sizeof(int),(uint64_t)rCommDev->gpuFlush.gpuFlushGpuMem /*iova*/,rCommDev->gpuFlush.dmabuf_fd, IBV_ACCESS_LOCAL_WRITE|IBV_ACCESS_REMOTE_WRITE|IBV_ACCESS_REMOTE_READ), ret, fail);
       } else {
         rCommDev->gpuFlush.gpuFlushGpuMem = nullptr;
         rCommDev->gpuFlush.gpuMr = nullptr;
+        rCommDev->gpuFlush.dmabuf_fd = -1;
       }
       NCCLCHECKGOTO(wrap_ibv_reg_mr(&rCommDev->gpuFlush.hostMr, rCommDev->base.pd, &rComm->gpuFlushHostMem, sizeof(int), IBV_ACCESS_LOCAL_WRITE), ret, fail);
       rCommDev->gpuFlush.sge.addr = (uint64_t)&rComm->gpuFlushHostMem;
@@ -2453,6 +2458,7 @@ ncclResult_t ncclIbCloseRecv(void* recvComm) {
           commDev->gpuFlush.gpuFlushGpuMem = nullptr;
           if (commDev->gpuFlush.gpuMr != nullptr) NCCLCHECK(wrap_ibv_dereg_mr(commDev->gpuFlush.gpuMr));
           commDev->gpuFlush.gpuMr = nullptr;
+          if(commDev->gpuFlush.dmabuf_fd > 0) { close(commDev->gpuFlush.dmabuf_fd);}
         }
         if (commDev->gpuFlush.qp.qp != NULL) NCCLCHECK(wrap_ibv_destroy_qp(commDev->gpuFlush.qp.qp));
         if (commDev->gpuFlush.hostMr != NULL) NCCLCHECK(wrap_ibv_dereg_mr(commDev->gpuFlush.hostMr));
