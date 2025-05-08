@@ -300,8 +300,7 @@ size_t get_sc_page_size() {
   return ps;
 }
 
-void get_aligned_ptr_and_size(const void *ptr, const size_t bufsize, void **aligned_ptr, size_t *aligned_size)
-{
+void get_aligned_ptr_and_size(const void *ptr, const size_t bufsize, void **aligned_ptr, size_t *aligned_size) {
   if (!aligned_ptr || !aligned_size) return;
   const size_t page_size = get_sc_page_size();
   uintptr_t aligned_ptr_local = (uintptr_t)ptr & ~(page_size - 1);
