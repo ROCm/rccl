@@ -141,10 +141,13 @@ static void initOnceFunc() {
   initEnv();
   initGdrCopy();
   char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
-  if (hsaScratchEnv){
-    INFO(NCCL_INIT, "HSA_NO_SCRATCH_RECLAIM : %s", hsaScratchEnv);
+  int hipRuntimeVersion = 0;
+  // hipVer is an integer e.g., "6.2.41133" -> 60241133
+  CUDACHECKGOTO(hipRuntimeGetVersion(&hipRuntimeVersion), initResult, exit);
+  if ((hsaScratchEnv && hsaScratchEnv== "1") || hipRuntimeVersion >= 64000000){
+    INFO(NCCL_INIT, "HSA_NO_SCRATCH_RECLAIM : %s, hipVer:%d", hsaScratchEnv, hipRuntimeVersion);
   }else{
-    WARN("HSA_NO_SCRATCH_RECLAIM is not set. HSA scratch reclaim will be enabled with perf overhead with rocm<6.4!");
+    WARN("HSA_NO_SCRATCH_RECLAIM is not set with rocm older than 6.4, this has perf impact!");
   }
   // Always initialize bootstrap network
   NCCLCHECKGOTO(bootstrapNetInit(), initResult, exit);
