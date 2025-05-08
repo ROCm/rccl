@@ -100,12 +100,7 @@ static void initOnceFunc() {
     //goto error;
   //}
 
-  /* DMA-BUF support */
-  //ROCm support
-  if (ncclParamDmaBufEnable() == 0 ) {
-    INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
-    goto error;
-  }
+  
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
   if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) {
     INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
@@ -155,14 +150,17 @@ static void initOnceFunc() {
       else goto error;
     }
   }
-
   /*
    * Required to initialize the ROCr Driver.
    * Multiple calls of hsa_init() will return immediately
    * without making any relevant change
    */
   pfn_hsa_init();
-
+  /* DMA-BUF support */
+  //ROCm support
+  if (ncclParamDmaBufEnable() == 0 ) {
+    WARN("Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
+  }
   initResult = ncclSuccess;
   return;
 
