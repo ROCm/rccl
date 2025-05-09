@@ -118,10 +118,6 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   struct ncclInfo info = { ncclFuncAllReduce, "AllReduce",
     sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
     ALLREDUCE_CHUNKSTEPS, comm -> topo -> nHosts == 1 ? ALLREDUCE_SLICESTEPS_SINGLE_NODE : ALLREDUCE_SLICESTEPS };
-  if (comm -> topo -> nHosts == 1){
-    info.sliceSteps = ALLREDUCE_CHUNKSTEPS;
-    //printf("RCCL: Adjusting AllReduce slice steps to %d\n", info.sliceSteps);
-  }
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
