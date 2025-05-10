@@ -119,14 +119,13 @@ bool isRankHere(const char* s, int start, int end, int rank) {
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
-  int x=0, y=0;
+  int x=0;
   for (int i=0;  treeGraph->treeBase[i][0]!=0; i++)
   {
     x=i+1;
   }
   if( treeGraph->treeBase[0][0] == 0) return ncclSuccess;
   int nChannels = comm->nChannels;
-  int localRanks = comm->topo->nodes[GPU].count;
   //new tree
   for (int c=0; c<nChannels; c++) { // in here
     int buff = c%x;
@@ -260,10 +259,10 @@ static ncclResult_t connectRings(struct ncclComm* comm, int* ringRecv, int* ring
   return ncclSuccess;
 }
 
-static ncclResult_t getIndexes(int* ranks, int* indexes, int nNodes) {
- for (int n=0; n<nNodes; n++) indexes[n] = ranks[n];
- return ncclSuccess;
-}
+// static ncclResult_t getIndexes(int* ranks, int* indexes, int nNodes) {
+//  for (int n=0; n<nNodes; n++) indexes[n] = ranks[n];
+//  return ncclSuccess;
+// }
 
 static ncclResult_t setTreeUp(struct ncclTree* tree, int* indexes, int u) {
   if (u == -1) return ncclSuccess;
@@ -436,6 +435,7 @@ static ncclResult_t connectCollNet(struct ncclComm* comm, struct ncclTopoGraph* 
   return ncclSuccess;
 }
 
+#if CUDART_VERSION >= 12010
 static ncclResult_t connectNvls(struct ncclComm* comm, int* nvlsHeads, int nHeads) {
   int headRank = -1;
   if (nHeads == 0) {
@@ -515,6 +515,7 @@ static ncclResult_t connectNvls(struct ncclComm* comm, int* nvlsHeads, int nHead
       nvls1->treeDown[0], nvls1->treeDown[1], nvls1->treeDown[2], comm->rank, nvls1->treeUp);
   return ncclSuccess;
 }
+#endif
 
 // Legacy naming
 NCCL_PARAM(MinNrings, "MIN_NRINGS", -2);

@@ -221,7 +221,7 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
 
 ncclResult_t ncclTopoGetCompCap(struct ncclTopoSystem* system, int* ccMin, int* ccMax);
 
-static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, int64_t id, int* index) {
+inline ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, int64_t id, int* index) {
   *index = -1;
   for (int i=0; i<system->nodes[type].count; i++) {
     if (system->nodes[type].nodes[i].id == id) {
@@ -232,7 +232,7 @@ static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, i
   return ncclInternalError;
 }
 
-static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank, int* index) {
+inline ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank, int* index) {
   *index = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
     if (system->nodes[GPU].nodes[i].gpu.rank == rank) {
@@ -243,7 +243,7 @@ static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank,
   return ncclInternalError;
 }
 
-static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, int* rank) {
+inline ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, int* rank) {
   *rank = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
     if (NCCL_TOPO_ID_SYSTEM_ID(system->nodes[GPU].nodes[i].id) != system->systemId) continue; // Only consider GPUs on our node
@@ -255,7 +255,7 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
   return ncclInternalError;
 }
 
-static ncclResult_t ncclTopoIdToNetDev(struct ncclTopoSystem* system, int64_t id, int* netDev) {
+inline ncclResult_t ncclTopoIdToNetDev(struct ncclTopoSystem* system, int64_t id, int* netDev) {
   *netDev = -1;
   for (int i=0; i<system->nodes[NET].count; i++) {
     if (system->nodes[NET].nodes[i].id == id) {
@@ -268,7 +268,7 @@ static ncclResult_t ncclTopoIdToNetDev(struct ncclTopoSystem* system, int64_t id
 }
 
 // Returns XGMI speed in GB/s
-static float ncclTopoXGMISpeed(const char* gcn) {
+inline float ncclTopoXGMISpeed(const char* gcn) {
   if (IsArchMatch(gcn, "gfx90a"))
     return MI200_XGMI_WIDTH;
   else if (IsArchMatch(gcn, "gfx942"))
@@ -280,7 +280,7 @@ static float ncclTopoXGMISpeed(const char* gcn) {
 }
 
 // Returns NVLink bw in GB/s
-static float ncclTopoNVLinkBw(int cudaCompCap) {
+inline float ncclTopoNVLinkBw(int cudaCompCap) {
   return
     cudaCompCap >= 100 ? SM100_NVLINK_BW :
     cudaCompCap >= 90 ? SM90_NVLINK_BW :
@@ -292,10 +292,10 @@ static float ncclTopoNVLinkBw(int cudaCompCap) {
 }
 
 // Mirror bits
-static bool isPow2(int val) {
+inline bool isPow2(int val) {
   return (val & (val-1)) == 0;
 }
-static int mirrorBits(int val, int pow2) {
+inline int mirrorBits(int val, int pow2) {
   int mirror = 0;
   for (int b=1, mb=(pow2>>1); b<pow2; b<<=1, mb>>=1) if (val & b) mirror |= mb;
   return mirror;
