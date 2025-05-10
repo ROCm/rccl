@@ -189,7 +189,7 @@ static ncclResult_t ncclInit() {
   if ((hsaScratchEnv && strcmp(hsaScratchEnv,"1") == 0) || hipRuntimeVersion >= 60400000){
     INFO(NCCL_INIT, "HSA_NO_SCRATCH_RECLAIM : %s, hipVer:%d", hsaScratchEnv, hipRuntimeVersion);
   }else{
-    WARN("HSA_NO_SCRATCH_RECLAIM is not set with rocm older than 6.4,, rocm ver:%d", hipRuntimeVersion);
+    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit for rocm older than 6.4,, rocm ver:%d", hipRuntimeVersion);
   }
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;
