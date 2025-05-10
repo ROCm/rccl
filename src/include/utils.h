@@ -39,7 +39,7 @@ struct netIf {
 int parseStringList(const char* string, struct netIf* ifList, int maxList);
 bool matchIfList(const char* string, int port, struct netIf* ifList, int listSize, bool matchExact);
 
-static long log2i(long n) {
+inline long log2i(long n) {
   return log2Down(n);
 }
 
