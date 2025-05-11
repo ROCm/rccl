@@ -4,6 +4,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased - RCCL 2.24.3 for ROCm 6.5.0
 
+### Fixed
+* Resolved issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
+
 ### Added
 
 * Added new GPU target `gfx950`.
@@ -11,10 +14,6 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Changed
 
 * Compatibility with NCCL 2.24.3
-
-### Known issue
-
-* Using more than 64 channels can cause a segmentation fault when multiple collectives are used in the same `ncclGroup()` call.
 
 ## Unreleased - RCCL 2.23.4 for ROCm 6.4.1
 
