@@ -4,8 +4,8 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased - RCCL 2.24.3 for ROCm 6.5.0
 
-### Fixed
-* Resolved issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
+### Resolved issues
+* Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
 
 ### Added
 
