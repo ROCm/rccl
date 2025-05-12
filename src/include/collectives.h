@@ -15,7 +15,9 @@
 #define NCCL_MAX_NET_SIZE (1024*1024*1024L) // Rather than send INT_MAX which is 2G-1, send a power of two.
 
 // CHUNKSIZE must be a multiple of SLICESIZE
-// RCCL: This the default value for multinode.  If single node, then we adjust this in collectives.cc.
+// RCCL: Benchmarking on single node for MI300X showed improved throughput for single node always using
+// a single slice, so we have separate configurations for single node and multi-node.  Single node configs
+// are suffixed with _SINGLE_NODE.
 #define ALLREDUCE_SLICESTEPS (NCCL_STEPS/4)
 #define ALLREDUCE_SLICESTEPS_SINGLE_NODE (NCCL_STEPS/2)
 
