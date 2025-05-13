@@ -20,7 +20,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Added
 
-* Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
+* Added MSCCL support for multinode MI300/MI350 (i.e., 16 and 32 GPUs). To enable, set the
   environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
 * Added synchronization before destroying proxy thread to fix a rare hang caused by early termination.
 
