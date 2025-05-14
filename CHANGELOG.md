@@ -4,6 +4,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased - RCCL 2.24.3 for ROCm 6.5.0
 
+### Resolved issues
+* Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
+
 ### Added
 
 * Added new GPU target `gfx950`.
@@ -19,18 +22,11 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * Compatibility with NCCL 2.24.3
 
-### Resolved issues
-* Suboptimal algorithmic switching point for AllReduce on MI300x
-  
-### Known issue
-
-* Using more than 64 channels can cause a segmentation fault when multiple collectives are used in the same `ncclGroup()` call.
-
 ## Unreleased - RCCL 2.23.4 for ROCm 6.4.1
 
 ### Added
 
-* Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
+* Added MSCCL support for multinode MI300/MI350 (i.e., 16 and 32 GPUs). To enable, set the
   environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
 * Added synchronization before destroying proxy thread to fix a rare hang caused by early termination.
 

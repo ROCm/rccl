@@ -76,6 +76,7 @@
   }
   #define traceKernelEnd(end_type)  { \
     INC_COLL_TRACE \
+    collTrace->funcIndex = ncclShmem.funcId;\
     if (ncclShmem.workType == ncclDevWorkTypeP2p) { \
       struct ncclDevWorkP2p *p2pWork = (struct ncclDevWorkP2p*)ncclShmem.workStorage; \
       collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
@@ -95,10 +96,16 @@
     collTrace->data_1 = data8_1; \
     collTrace->type = ncclCollTraceDataType; \
   }
+  #define traceAbort(){\
+    INC_COLL_TRACE\
+    collTrace->funcIndex = ncclShmem.funcId;\
+    collTrace->type = ncclCollTraceAbortType;\
+  }
 #else
 #define traceKernelLaunch(launch_type, batchIx)
 #define traceKernelEnd(end_type)
 #define traceData(data2, data4, data8_0, data8_1)
+#define traceAbort()
 #endif
 
 #if __CUDA_ARCH__ >= 700
@@ -600,8 +607,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       // ncclShmem.workConsumed written by loadWorkBatchToShmem before barrier_red_or()
       ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
     }
-    if (aborted) break;
-
+    if (aborted) {
+      if(COLLTRACE && tid%WARP_SIZE == 0) traceAbort();
+      break;
+    }
     if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceCollLaunchType, batchIx);
   }
   if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelEnd(ncclCollTraceKernelEndType);

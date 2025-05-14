@@ -25,7 +25,7 @@ namespace RcclUnitTesting
    * ******************************************************************************************/
   TEST(Recorder, ParseJson)
   {
-    setenv("RCCL_REPLAY_FILE", "test.json", 1);
+    setenv("RCCL_REPLAY_FILE", "/tmp/test.json", 1);
 
     int pid = getpid();
     hipStream_t stream;
@@ -40,7 +40,7 @@ namespace RcclUnitTesting
     char entry[4096];
     //parse the outfile
     std::string filename = "test" + std::to_string(pid) + ".json";
-    std::ifstream fp("test" + std::to_string(pid) + ".json");
+    std::ifstream fp("/tmp/test" + std::to_string(pid) + ".json");
     fp.getline(entry, 4096);
     fp.getline(entry, 4096);
     fp.getline(entry, 4096);
