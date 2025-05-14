@@ -6,6 +6,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Resolved issues
 * Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
+* Suboptimal algorithmic switching point for AllReduce on MI300x
 
 ### Added
 
