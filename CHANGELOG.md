@@ -40,6 +40,11 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
 * Fixed IntraNet performance.
 
+### Known issues
+
+* When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault.
+  The recommended workaround is to disable MSCCL with `export RCCL_MSCCL_ENABLE=0`.
+
 ## RCCL 2.22.3 for ROCm 6.4.0
 
 ### Added
