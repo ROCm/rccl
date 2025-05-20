@@ -186,12 +186,16 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
     if (isNetOffload)
       runRing<T, RedOp, ProtoSimple<1, 1>, true>(tid, nthreads, work);
     else{
+      #ifdef __gfx942__ // Use a single slice for a single node on gfx942 (MI300X & MI300A).  Otherwise, use the default.
       if(work->oneNode){
         runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS_SINGLE_NODE, ALLGATHER_SLICESTEPS_SINGLE_NODE>, false>(tid, nthreads, work);
       }
       else{
+      #endif
         runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS>, false>(tid, nthreads, work);
-      }
+      #ifdef __gfx942__ // See above comment about single slice for a single node on gfx942 (MI300X & MI300A).
+      } 
+      #endif
     }
   }
 };
