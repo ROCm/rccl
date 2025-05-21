@@ -95,7 +95,7 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_LL128_MAX_NTHREADS 256
 #define NCCL_LL128_ELEMS_PER_THREAD 28
 
-#define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 16
+#define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 4
 #define NCCL_LL128_SHMEM_SIZE (NCCL_LL128_SHMEM_ELEMS_PER_THREAD*NCCL_LL128_MAX_NTHREADS)
 
 #define NCCL_P2P_WRITE 0x01
@@ -698,7 +698,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
 
     // RING / <all_protos> / <all_redops> / <all_types>
     if (coll == ncclFuncReduce) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto;
+      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto; 
       break;
     }
     row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);

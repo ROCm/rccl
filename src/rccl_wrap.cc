@@ -72,29 +72,6 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
   }
 }
 
-void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold) {
-  // Honor user input for thread thresholds
-  static int userChannelControlInput = -2;
-  if (userChannelControlInput == -2) {
-    const char *inputStr = getenv("NCCL_THREAD_THRESHOLDS");
-    if (!inputStr) {
-      inputStr = getenv("NCCL_MAX_NCHANNELS");
-    }
-    if (!inputStr) {
-      inputStr = getenv("NCCL_MIN_NCHANNELS");
-    }
-    userChannelControlInput = !inputStr ? 0 : 1;
-  }
-
-  if(!userChannelControlInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
-    auto tunableIndex = rcclGetTunableIndex(info->func);
-    auto tunedThreshold = comm->minMaxLLRange[tunableIndex][info->protocol][RCCL_PROTOCOL_THREAD_THRESHOLD_IDX];
-    if(tunedThreshold != RCCL_LL_LIMITS_UNDEFINED) {
-      threadThreshold = tunedThreshold * comm->nRanks;
-    }
-  }
-}
-
 extern ncclResult_t getAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* task,
     int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL

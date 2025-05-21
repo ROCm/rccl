@@ -6,18 +6,10 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Resolved issues
 * Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
-* Suboptimal algorithmic switching point for AllReduce on MI300x
 
 ### Added
 
 * Added new GPU target `gfx950`.
-* Added support for `unroll=1` in device-code generation to improve performance
-* Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
-  environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
-* Thread thresholds for LL/LL128 are selected in Tuning Models for the MI300X. This impacts the number of channels used for AG and RS. Channel tuning model is bypassed if `NCCL_THREAD_THRESHOLDS`, `NCCL_MIN_NCHANNELS', or 'NCCL_MAX_NCHANNELS` are set.
-* Multi-node tuning for AllGather, AllReduce, and ReduceScatter that leverages LL/LL64/LL128 protocol to use nontemporal vector load/store for tunable message size ranges.
-* LL/LL128 usage ranges for AR, AG, and RS are part of the tuning models, which enable architecture-specific tuning in conjunction with the existing Rome Models scheme in RCCL.
-* Two new APIs are exposed as part of an initiative to separate RCCL code. These APIs are `rcclGetAlgoInfo` and `rcclFuncMaxSendRecvCount`. However, user-level invocation requires that RCCL be built with `RCCL_EXPOSE_STATIC` enabled.
 
 ### Changed
 
