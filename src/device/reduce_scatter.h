@@ -131,7 +131,7 @@ namespace {
   }
 }
 
-#ifdef __gfx942__ // Use a single slice for a single node on gfx942 (MI300X, MI300A, MI308, MI325).  Otherwise, use the default.
+#ifdef __gfx942__ // Use a single slice for a single node on gfx942 (MI300X, MI300A, MI325).  Otherwise, use the default.
 #define rcclReduceScatterRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->oneNode){ \
     using Proto = ProtoSimple<REDUCESCATTER_CHUNKSTEPS/REDUCESCATTER_SLICESTEPS_SINGLE_NODE, REDUCESCATTER_SLICESTEPS_SINGLE_NODE>; \
