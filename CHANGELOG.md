@@ -25,7 +25,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
 * Fixed IntraNet performance.
-* Fixed a rare hang caused by early termination due to proxy thread synchronization issue.
+* Fixed an issue where, in rare circumstances, the application could stop responding due to a proxy thread synchronization issue.
 
 ### Known issues
 
