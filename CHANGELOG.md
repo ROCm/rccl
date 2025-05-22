@@ -2,7 +2,7 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.24.3 for ROCm 6.5.0
+## Unreleased - RCCL 2.24.3 for ROCm 7.0.0
 
 ### Resolved issues
 * Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
@@ -10,27 +10,21 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Added
 
 * Added new GPU target `gfx950`.
-
-### Changed
-
-* Compatibility with NCCL 2.24.3
-
-## Unreleased - RCCL 2.23.4 for ROCm 6.4.1
-
-### Added
-
 * Added MSCCL support for multinode gfx942/gfx950 (i.e., 16 and 32 GPUs). To enable, set the
   environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
-* Added synchronization before destroying proxy thread to fix a rare hang caused by early termination.
 
 ### Changed
 
 * Compatibility with NCCL 2.23.4
+* Compatibility with NCCL 2.24.3
+
+## RCCL 2.22.3 for ROCm 6.4.1
 
 ### Resolved issues
 
 * Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
 * Fixed IntraNet performance.
+* Fixed a rare hang caused by early termination due to proxy thread synchronization issue.
 
 ### Known issues
 
