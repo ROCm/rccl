@@ -264,13 +264,16 @@ ncclResult_t mscclInit(ncclComm_t comm) {
         auto &m = status.algoMetas[i];
         if (m.nRanks == comm->nRanks) {
           // Load algorithms
-          if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()) {
+          mscclAlgoHandle_t mscclAlgoHandle;
+          {
             static std::mutex loadAlgoMutex;
             std::lock_guard<std::mutex> lock(loadAlgoMutex);
-            NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
+            if (status.rankToAlgoHandles[i].find(comm->rank) == status.rankToAlgoHandles[i].end()){
+              NCCLCHECK(mscclLoadAlgo(m.filePath.c_str(), &(status.rankToAlgoHandles[i][comm->rank]), comm->rank));
+            }
+            // Connect algorithms
+            mscclAlgoHandle = status.rankToAlgoHandles[i][comm->rank];
           }
-          // Connect algorithms
-          mscclAlgoHandle_t mscclAlgoHandle = status.rankToAlgoHandles[i][comm->rank];
           if (status.connectedAlgos[comm].find(mscclAlgoHandle) == status.connectedAlgos[comm].end()) {
             NCCLCHECK(mscclSetupConnections(status.hostAlgos[mscclAlgoHandle], comm));
             status.connectedAlgos[comm].insert(mscclAlgoHandle);
@@ -278,17 +281,20 @@ ncclResult_t mscclInit(ncclComm_t comm) {
         }
       }
     }
+    {
+      static std::mutex mscclInitMutex;
+      std::lock_guard<std::mutex> lock(mscclInitMutex);
+      if (mscclInitialized(comm->rank)){
+        return ncclSuccess;
+      }
 
-    if (mscclInitialized(comm->rank)) {
-      return ncclSuccess;
+      status.workIndex = 1;
+      NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
+      status.lastStream = nullptr;
+      NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
+
+      mscclSetInitialized(comm->rank);
     }
-
-    status.workIndex = 1;
-    NCCLCHECK(ncclCudaCalloc(&status.syncFlags, MSCCL_MAX_NUM_THREAD_BLOCKS));
-    status.lastStream = nullptr;
-    NCCLCHECK(mscclInitWorkFifoStatus(&(status.defaultWorkFifoStatus)));
-
-    mscclSetInitialized(comm->rank);
   }
 
   INFO(NCCL_INIT, "MSCCL: Initialization finished, localSize %ld", mscclKernMaxLocalSize());
