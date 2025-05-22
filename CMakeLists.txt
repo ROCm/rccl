@@ -823,6 +823,9 @@ target_compile_options(rccl PRIVATE -Werror=uninitialized)
 
 if (ROCM_VERSION VERSION_GREATER_EQUAL "60200") 
   target_compile_options(rccl PRIVATE --offload-compress)      # Compress the binary
+  message(STATUS "--offload-compress enabled - ROCm version >= 6.2.0")
+else()
+  message(STATUS "--offload-compress disabled - ROCm version < 6.2.0")
 endif()
 
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
