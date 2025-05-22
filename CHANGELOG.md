@@ -18,7 +18,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault.
   The recommended workaround is to disable MSCCL with `export RCCL_MSCCL_ENABLE=0`.
-* Within the RCCL-UnitTests test suite, failures occur in tests ending with the `.ManagedMem` and `.ManagedMemGraph` suffixes. These failures only affect the test results and do not affect the RCCL component itself. This issue will be resolved in the next major release.
+* Within the RCCL-UnitTests test suite, failures occur in tests ending with the `ManagedMem` and `ManagedMemGraph` suffixes. These failures only affect the test results and do not affect the RCCL component itself. This issue will be resolved in the next major release.
 
 ## RCCL 2.22.3 for ROCm 6.4.0
 
