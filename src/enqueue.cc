@@ -214,12 +214,16 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   struct channelMasks hasBatchMask = plan->channelMask;
   struct ncclDevWorkBatch* batchPrev[MAXCHANNELS] = {}; // {0...}
   struct ncclDevWorkBatch* batchZero = (struct ncclDevWorkBatch*)(plan->kernelArgs+1);
+
+  // [RCCL] Preparing batchZero slightly different to support > 64 Channels
+  //        Need to ensure that all channels are processed first before dealing with
+  //        adding additional batches
   int batchIx = 0;
-  for (int maskIdx = 0; maskIdx < MAXCHANNELS/64; maskIdx++) {
-    while (hasBatchMask.masks[maskIdx] != 0) {
-      uint64_t tmpMask = hasBatchMask.masks[maskIdx]; // channels with a batch for this round.
-      do {
-        int c = popFirstOneBit(&tmpMask) + maskIdx * 64;
+  int done = 0;
+  while (!done) {
+    done = 1;
+    for (int c = 0; c < MAXCHANNELS; c++) {
+      if (hasBatchMask.masks[c / 64] & (1ULL << (c%64))) {
         if (!ncclIntruQueueEmpty(&wipChannels[c].workBatchQueue)) {
           struct ncclWorkBatchList* batchNode = ncclIntruQueueDequeue(&wipChannels[c].workBatchQueue);
           if (batchPrev[c] != nullptr) {
@@ -229,9 +233,11 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
           batchZero[batchIx++] = batchNode->batch;
         }
         if (ncclIntruQueueEmpty(&wipChannels[c].workBatchQueue)) {
-          hasBatchMask.masks[maskIdx] ^= 1ull<<(c%64);
+          hasBatchMask.masks[c / 64] ^= (1ULL << (c%64));
+        } else {
+          done = 0;
         }
-      } while (tmpMask != 0);
+      }
     }
   }
 
@@ -2131,7 +2137,7 @@ static ncclResult_t hostToDevRedOp(
   uint64_t allBits = uint64_t(-1)>>(64-nbits);
   uint64_t signBit = allBits^(allBits>>1);
   bool datatype_signed = false;
-  
+
   switch (int(op)) {
   case ncclSum:  opFull->op = ncclDevSum;  break;
   case ncclProd: opFull->op = ncclDevProd; break;

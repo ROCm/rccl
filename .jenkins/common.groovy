@@ -29,7 +29,6 @@ def runTestCommand (platform, project, gfilter, envars)
             """
 
    platform.runCommand(this, command)
-   junit "${project.paths.project_build_prefix}/build/release/test/*.xml"
 }
 
 def runPackageCommand(platform, project, jobName)

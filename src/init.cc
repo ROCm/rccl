@@ -186,6 +186,13 @@ static ncclResult_t ncclInit() {
         WARN("Missing \"HSA_FORCE_FINE_GRAIN_PCIE=1\" from environment which can lead to low RCCL performance, system instablity or hang!");
 #endif
     }
+  const char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
+  int hipRuntimeVersion = 0;
+  // hipVer is an integer e.g., 6.2.41133 -> 60241133
+  CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
+  if ((!hsaScratchEnv || strcmp(hsaScratchEnv,"1") != 0) && hipRuntimeVersion < 60400000){
+    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit for rocm older than 6.4,, rocm ver:%d", hipRuntimeVersion);
+  }
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;
 }
