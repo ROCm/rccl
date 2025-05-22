@@ -249,6 +249,8 @@ ncclResult_t mscclInit(ncclComm_t comm) {
 
     // freeAlgoHandles and needsProxy are initialized globally once and before algorithm pre-processing and connection
     if (!mscclInitialized(comm->rank)) {
+      static std::mutex initMutex;
+      std::lock_guard<std::mutex> lock(initMutex);
       status.freeAlgoHandles.resize(MSCCL_MAX_NUM_ALGOS);
       for (int i = 0; i < MSCCL_MAX_NUM_ALGOS; i++) {
         status.freeAlgoHandles[i] = MSCCL_MAX_NUM_ALGOS - i - 1;
