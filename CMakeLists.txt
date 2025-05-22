@@ -819,7 +819,6 @@ endif()
 if (HAVE_PARALLEL_JOBS)
   target_compile_options(rccl PRIVATE -parallel-jobs=12)
 endif()
-target_compile_options(rccl PRIVATE -Werror=uninitialized)
 
 if (ROCM_VERSION VERSION_GREATER_EQUAL "60200") 
   target_compile_options(rccl PRIVATE --offload-compress)      # Compress the binary
@@ -828,6 +827,7 @@ else()
   message(STATUS "--offload-compress disabled - ROCm version < 6.2.0")
 endif()
 
+target_compile_options(rccl PRIVATE -Werror=uninitialized)
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
