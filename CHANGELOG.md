@@ -5,6 +5,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## Unreleased - RCCL 2.25.1 for ROCm 7.0.0
 
 ### Resolved issues
+
 * Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
 * Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
 
