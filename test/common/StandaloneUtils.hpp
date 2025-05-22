@@ -25,7 +25,7 @@
     }                                                           \
 } while(0)
 
-#define MAX_STACK_SIZE 520
+#define MAX_STACK_SIZE 570
 
 #ifdef ENABLE_LL128
 #define MAX_STACK_SIZE_gfx90a 360
