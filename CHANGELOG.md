@@ -2,19 +2,31 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.22.3 for ROCm 6.4.1
+## Unreleased - RCCL 2.22.3 for ROCm 6.4.2
+
+
+
+## RCCL 2.22.3 for ROCm 6.4.1
 
 ### Resolved issues
 
 * Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
+* Fixed IntraNet performance.
+* Fixed a rare hang caused by early termination due to proxy thread synchronization issue.
 
-## Unreleased - RCCL 2.22.3 for ROCm 6.4.0
+### Known issues
+
+* When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault.
+  The recommended workaround is to disable MSCCL with `export RCCL_MSCCL_ENABLE=0`.
+* Within the RCCL-UnitTests test suite, failures occur in tests ending with the `.ManagedMem` and `.ManagedMemGraph` suffixes. These failures only affect the test results and do not affect the RCCL component itself. This issue will be resolved in the next major release.
+
+## RCCL 2.22.3 for ROCm 6.4.0
 
 ### Added
 
-* `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters
-* Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will generate traces for fifo and data ibv_post_sends
-* Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`)
+* `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters.
+* Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will generate traces for fifo and data `ibv_post_sends`.
+* Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`).
 
 ### Changed
 
@@ -25,7 +37,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
   environment variable `RCCL_DISABLE_RAIL_TREES=1`.
 * Additional debug information about how the trees are built can be logged to the GRAPH logging subsys by setting
   `RCCL_OUTPUT_TREES=1`.
-* MSCCL++ is now disabled by default. To enable, set `RCCL_MSCCLPP_ENABLE=1`.
+* Added documentation about the NPS4 and CPX partition modes performance benefits on the MI300X.
 
 ## RCCL 2.21.5 for ROCm 6.3.1
 
