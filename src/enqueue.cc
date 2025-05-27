@@ -1769,6 +1769,7 @@ static ncclResult_t topoGetAlgoInfo(
     // NVLS should not need more than 16 channels to get peak BW.
     nc = comm->nvlsChannels;
   } else {
+    rcclUpdateThreadThreshold(comm, nBytes, info, threadThreshold);
     // Ring/Tree channel tuning
     while (nBytes < nc * nt * threadThreshold) {
       if (nc >= 2) nc--;
