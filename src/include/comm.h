@@ -543,6 +543,7 @@ struct ncclComm {
   uint32_t p2pNet;
   uint32_t useIntraNet;
   bool hasFineGrain;
+  bool mi300A = false; // true if this is MI300A GPU
 
   // Device side of the communicator (for cudaFree's)
   struct ncclDevComm* devComm; // actually = &ncclDevCommAndChannels::comm
