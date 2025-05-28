@@ -558,7 +558,7 @@ namespace {
   }
 }
 
-#ifdef __gfx942__ // Use a single slice per simple primitive for a single node on some gfx942 devices
+#ifdef __GFX9__ // Use a single slice per simple primitive for a single node on some GFX9 devices
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \

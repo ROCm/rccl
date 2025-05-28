@@ -1345,7 +1345,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
-    // RCCL: Only use one slice per primitive on MI300X if running on a single node
+    // RCCL: Only use one slice per primitive on some single node gfx9xx systems
     comm->rcclUseOneSlice = !managed && nNodes == 1;
     if (managed && nNodes > 1) {
       // This forces the minimum channels to 24

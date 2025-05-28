@@ -131,7 +131,7 @@ namespace {
   }
 }
 
-#ifdef __gfx942__ // Use a single slice per simple primitive for a single node on some gfx942 devices
+#ifdef __GFX9__ // Use a single slice per simple primitive for a single node on some GFX9 devices
 #define rcclReduceScatterRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<REDUCESCATTER_CHUNKSTEPS/REDUCESCATTER_SLICESTEPS_SINGLE_NODE, REDUCESCATTER_SLICESTEPS_SINGLE_NODE>; \
