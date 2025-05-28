@@ -175,9 +175,9 @@ namespace {
   }
 }
 
-#ifdef __gfx942__ // Use a single slice for a single node on gfx942 (MI300X, MI300A, MI325).  Otherwise, use the default.
+#ifdef __gfx942__ // Use a single slice per simple primitive for a single node on some gfx942 devices
 #define rcclAllGatherRunRingSimpleProtoImpl(tid, nthreads, work) \
-  if((!work->mi300A) && work->oneNode){ \
+  if(work->rcclUseOneSlice){ \
     runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS_SINGLE_NODE, ALLGATHER_SLICESTEPS_SINGLE_NODE>, false>(tid, nthreads, work); \
   } else{ \
     runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS>, false>(tid, nthreads, work); \

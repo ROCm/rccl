@@ -1345,7 +1345,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
-    comm->mi300A = managed;
+    // RCCL: Only use one slice per primitive on MI300X if running on a single node
+    comm->rcclUseOneSlice = !managed && nNodes == 1;
     if (managed && nNodes > 1) {
       // This forces the minimum channels to 24
       allGather3Data[rank].nc = 6;
