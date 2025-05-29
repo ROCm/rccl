@@ -8,15 +8,15 @@
 
 #include "msccl/msccl_struct.h"
 
-bool mscclInitialized(int rank);
+bool mscclInitialized(const ncclComm_t comm);
 
-void mscclSetInitialized(int rank, bool initialized = true);
+void mscclSetInitialized(const ncclComm_t comm, bool initialized = true);
 
-void mscclRemoveRank(int rank);
+void mscclRemoveRank(const ncclComm_t comm);
 
-mscclStatus& mscclGetStatus(int rank);
+mscclStatus& mscclGetStatus(const ncclComm_t comm);
 
-mscclSavedProxyArgs& mscclGetSavedProxyArgs(int rank);
+mscclSavedProxyArgs& mscclGetSavedProxyArgs(const ncclComm_t comm);
 
 mscclThreadLocalStatus& mscclGetThreadLocalStatus();
 

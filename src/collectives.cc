@@ -96,7 +96,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
     NCCLCHECK(Recorder::instance().record(rrAllGather, info));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
@@ -123,7 +123,7 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
     NCCLCHECK(Recorder::instance().record(rrAllReduce, info));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
@@ -148,7 +148,7 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
     NCCLCHECK(Recorder::instance().record(rrAllToAll, sendbuff, recvbuff, count, datatype, comm, stream));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, 0, ncclSum, mscclFuncAllToAll, comm, stream);
@@ -194,7 +194,7 @@ ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[],
     NCCLCHECK(Recorder::instance().record(rrAllToAllv, sendbuff, recvbuff, 0, datatype, comm, stream, -1, sendcounts, sdispls, recvcounts, rdispls));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, sendcounts, sdispls, recvbuff, recvcounts, rdispls,
       0, datatype, 0, 0, ncclSum, mscclFuncAllToAllv, comm, stream);
@@ -240,7 +240,7 @@ ncclResult_t ncclBroadcast_impl(const void* sendbuff, void* recvbuff, size_t cou
     NCCLCHECK(Recorder::instance().record(rrBroadcast, info));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, root, 0, ncclSum, mscclFuncBroadcast, comm, stream);
@@ -270,7 +270,7 @@ ncclResult_t ncclGather_impl(const void* sendbuff, void* recvbuff, size_t sendco
     NCCLCHECK(Recorder::instance().record(rrGather, sendbuff, recvbuff, sendcount, datatype, comm, stream, root));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       sendcount, datatype, root, 0, ncclSum, mscclFuncGather, comm, stream);
@@ -309,7 +309,7 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
     NCCLCHECK(Recorder::instance().record(rrReduce, info));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, root, 0, op, mscclFuncReduce, comm, stream);
@@ -336,7 +336,7 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
     NCCLCHECK(Recorder::instance().record(rrReduceScatter, info));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       recvcount, datatype, 0, 0, op, mscclFuncReduceScatter, comm, stream);
@@ -359,7 +359,7 @@ ncclResult_t ncclScatter_impl(const void* sendbuff, void* recvbuff, size_t recvc
     NCCLCHECK(Recorder::instance().record(rrScatter, sendbuff, recvbuff, recvcount, datatype, comm, stream, root));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       recvcount, datatype, root, 0, ncclSum, mscclFuncScatter, comm, stream);
@@ -399,7 +399,7 @@ ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t da
     NCCLCHECK(Recorder::instance().record(rrSend, info));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, nullptr, nullptr, nullptr,
       count, datatype, 0, peer, ncclSum, mscclFuncSend, comm, stream);
@@ -425,7 +425,7 @@ ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype
     NCCLCHECK(Recorder::instance().record(rrRecv, info));
   }
 
-  if (mscclAvailable(comm->rank) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       nullptr, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, peer, ncclSum, mscclFuncRecv, comm, stream);
