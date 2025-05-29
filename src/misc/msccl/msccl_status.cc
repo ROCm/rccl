@@ -4,10 +4,9 @@
  ************************************************************************/
 
 #include "msccl/msccl_status.h"
-// #include "msccl/msccl_struct.h"
-// #include "rccl/rccl.h"
+#include "msccl/msccl_struct.h"
 
-// #include "debug.h"
+#include "debug.h"
 #include "comm.h"
 #include <memory>
 #include <mutex>
