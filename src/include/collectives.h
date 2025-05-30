@@ -15,11 +15,17 @@
 #define NCCL_MAX_NET_SIZE (1024*1024*1024L) // Rather than send INT_MAX which is 2G-1, send a power of two.
 
 // CHUNKSIZE must be a multiple of SLICESIZE
+// RCCL: Benchmarking on single node for MI300X showed improved throughput for single node always using
+// a single slice, so we have separate configurations for single node and multi-node.  Single node configs
+// are suffixed with _SINGLE_NODE.
 #define ALLREDUCE_SLICESTEPS (NCCL_STEPS/4)
+#define ALLREDUCE_SLICESTEPS_SINGLE_NODE (NCCL_STEPS/2)
 #define ALLREDUCE_CHUNKSTEPS (NCCL_STEPS/2)
 #define ALLGATHER_SLICESTEPS (NCCL_STEPS/4)
+#define ALLGATHER_SLICESTEPS_SINGLE_NODE (NCCL_STEPS/2)
 #define ALLGATHER_CHUNKSTEPS (NCCL_STEPS/2)
 #define REDUCESCATTER_SLICESTEPS (NCCL_STEPS/4)
+#define REDUCESCATTER_SLICESTEPS_SINGLE_NODE (NCCL_STEPS/2)
 #define REDUCESCATTER_CHUNKSTEPS (NCCL_STEPS/2)
 #define BROADCAST_SLICESTEPS 1
 #define BROADCAST_CHUNKSTEPS 1
@@ -29,6 +35,10 @@
 #define NCCL_MAX_NET_SIZE (1024*1024*1024L) // Rather than send INT_MAX which is 2G-1, send a power of two.
 #define ALLTOALL_PIVOT_SLICESTEPS 2
 #define ALLTOALL_PIVOT_CHUNKSTEPS 4
+
+static_assert(ALLREDUCE_CHUNKSTEPS == ALLREDUCE_SLICESTEPS_SINGLE_NODE, "ALLREDUCE_CHUNKSTEPS must be equal to ALLREDUCE_SLICESTEPS_SINGLE_NODE");
+static_assert(ALLGATHER_CHUNKSTEPS == ALLGATHER_SLICESTEPS_SINGLE_NODE, "ALLGATHER_CHUNKSTEPS must be equal to ALLGATHER_SLICESTEPS_SINGLE_NODE");
+static_assert(REDUCESCATTER_CHUNKSTEPS == REDUCESCATTER_SLICESTEPS_SINGLE_NODE, "REDUCESCATTER_CHUNKSTEPS must be equal to REDUCESCATTER_SLICESTEPS_SINGLE_NODE");
 
 const char* ncclFuncToString(ncclFunc_t op);
 const char* ncclDevRedOpToString(ncclDevRedOp_t op);
