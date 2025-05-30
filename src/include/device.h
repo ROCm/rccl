@@ -67,7 +67,12 @@ union ncclLLFifoLine {
   int4 i4;
 };
 
-#define WARP_SIZE warpSize
+#if defined(__GFX9__)
+#define WARP_SIZE 64
+#else
+#define WARP_SIZE 32
+#endif
+
 #define MAXCHANNELS 128
 #define CHANNEL_LIMIT 16
 #define NCCL_MAX_LOCAL_RANKS 72
@@ -316,7 +321,7 @@ struct alignas(16) ncclDevWorkColl {
 };
 
 
-__host__ __device__ constexpr int ncclProtoGrainSize(int proto) {
+__device__ constexpr int ncclProtoGrainSize(int proto) {
   return proto == NCCL_PROTO_LL ? 16 :
         proto == NCCL_PROTO_LL128 ? WARP_SIZE*NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS*NCCL_LL128_DATAELEMS*sizeof(uint64_t) :
         proto == NCCL_PROTO_SIMPLE ? 512 :

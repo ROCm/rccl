@@ -52,6 +52,13 @@ static ncclKernelMatch const ncclKerns[3] = {
 };
 #endif
 
+static int rcclProtoGrainSize(int proto, ncclComm *comm){
+  return proto == NCCL_PROTO_LL ? 16 :
+        proto == NCCL_PROTO_LL128 ? comm->WarpSize*NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS*NCCL_LL128_DATAELEMS*sizeof(uint64_t) :
+        proto == NCCL_PROTO_SIMPLE ? 512 :
+        -1;
+}
+
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
@@ -197,7 +204,7 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   size_t workBytes = plan->workBytes;
   size_t batchBytes = plan->nWorkBatches*sizeof(struct ncclDevWorkBatch);
 
-  plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MIN_NTHREADS);
+  plan->threadPerBlock = std::max(plan->threadPerBlock, 4*comm->WarpSize /*NCCL_MIN_NTHREADS*/);
 
   // If we can fit everything into the kernel args we do so.
   if (sizeof(ncclDevKernelArgs) + batchBytes + workBytes <= comm->workArgsBytes) {
@@ -668,7 +675,8 @@ static ncclResult_t scheduleCollTasksToPlan(
       }
 
       uint32_t chunkSize, directFlags=0;
-      size_t grainSize = ncclProtoGrainSize(task->protocol);
+      size_t grainSize = rcclProtoGrainSize(task->protocol, comm);
+
       if (countLo != 0) {
         NCCLCHECK(calcCollChunking(comm, task, /*nChannels=*/1, globalBytesPerElement*countLo, &chunkSize, &directFlags, &proxyOpLo));
         devWork->cbd.chunkGrainsLo = chunkSize/grainSize;
@@ -775,9 +783,9 @@ static ncclResult_t scheduleCollTasksToPlan(
           ncclProtoToString(task->protocol),
           (long)task->count, task->devFuncId, devWork->channelLo, devWork->channelHi,
           (long)devWork->cbd.countLo, (long)devWork->cbd.countMid, (long)devWork->cbd.countHi,
-          int(devWork->cbd.chunkGrainsLo*ncclProtoGrainSize(task->protocol)),
-          int(devWork->cbd.chunkGrainsMid*ncclProtoGrainSize(task->protocol)),
-          int(devWork->cbd.chunkGrainsHi*ncclProtoGrainSize(task->protocol)));
+          int(devWork->cbd.chunkGrainsLo*rcclProtoGrainSize(task->protocol, comm)),
+          int(devWork->cbd.chunkGrainsMid*rcclProtoGrainSize(task->protocol, comm)),
+          int(devWork->cbd.chunkGrainsHi*rcclProtoGrainSize(task->protocol), comm));
       }
     }
 
@@ -1789,11 +1797,11 @@ static ncclResult_t topoGetAlgoInfo(
     }
   }
   if (info->protocol == NCCL_PROTO_SIMPLE) {
-    if (info->algorithm == NCCL_ALGO_RING) nt += WARP_SIZE; // Extra warp for sync
+    if (info->algorithm == NCCL_ALGO_RING) nt += comm->WarpSize; // Extra warp for sync
     // More threads or sync warps needed due to split thread model
-    if (info->algorithm == NCCL_ALGO_TREE) nt += 4*WARP_SIZE;
+    if (info->algorithm == NCCL_ALGO_TREE) nt += 4*comm->WarpSize;
   }
-  nt = nt/WARP_SIZE < 3 ? 3*WARP_SIZE : nt;
+  nt = nt/comm->WarpSize < 3 ? 3*comm->WarpSize : nt;
 #endif
   if (info->func == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
     static int userTuneInput = -2;
@@ -1825,7 +1833,7 @@ static ncclResult_t topoGetAlgoInfo(
   }
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT) nt = NCCL_MAX_NTHREADS;
-  info->nWarps = nt/WARP_SIZE;
+  info->nWarps = nt/comm->WarpSize;
   return ncclSuccess;
 }
 
@@ -1870,7 +1878,7 @@ static ncclResult_t calcCollChunking(
     /*outputs*/uint32_t* outChunkSize, uint32_t* outDirectFlags, struct ncclProxyOp* proxyOp
   ) {
   ncclPattern_t pattern;
-  size_t grainSize = ncclProtoGrainSize(info->protocol);
+  size_t grainSize = rcclProtoGrainSize(info->protocol, comm);
 
   switch (info->func) {
   case ncclFuncBroadcast:
