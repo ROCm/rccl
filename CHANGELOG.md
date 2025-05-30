@@ -2,36 +2,40 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.24.3 for ROCm 6.5.0
+## Unreleased - RCCL 2.25.1 for ROCm 7.0.0
+
+### Resolved issues
+
+* Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
+* Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
 
 ### Added
 
 * Added new GPU target `gfx950`.
-
-### Changed
-
-* Compatibility with NCCL 2.24.3
-
-### Known issue
-
-* Using more than 64 channels can cause a segmentation fault when multiple collectives are used in the same `ncclGroup()` call.
-
-## Unreleased - RCCL 2.23.4 for ROCm 6.4.1
-
-### Added
-
-* Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
+* Added support for `unroll=1` in device-code generation to improve performance
+* Set a default of 112 channels for a single node with `8 * gfx950`
+* Added MSCCL support for multinode gfx942/gfx950 (i.e., 16 and 32 GPUs). To enable, set the
   environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
-* Added synchronization before destroying proxy thread to fix a rare hang caused by early termination.
 
 ### Changed
 
 * Compatibility with NCCL 2.23.4
+* Compatibility with NCCL 2.24.3
+* Compatibility with NCCL 2.25.1
+
+## RCCL 2.22.3 for ROCm 6.4.1
 
 ### Resolved issues
 
 * Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
 * Fixed IntraNet performance.
+* Fixed an issue where, in rare circumstances, the application could stop responding due to a proxy thread synchronization issue.
+
+### Known issues
+
+* When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault.
+  The recommended workaround is to disable MSCCL with `export RCCL_MSCCL_ENABLE=0`.
+* Within the RCCL-UnitTests test suite, failures occur in tests ending with the `ManagedMem` and `ManagedMemGraph` suffixes. These failures only affect the test results and do not affect the RCCL component itself. This issue will be resolved in the next major release.
 
 ## RCCL 2.22.3 for ROCm 6.4.0
 

@@ -70,7 +70,7 @@ union ncclLLFifoLine {
 #define WARP_SIZE warpSize
 #define MAXCHANNELS 128
 #define CHANNEL_LIMIT 16
-#define NCCL_MAX_LOCAL_RANKS 64
+#define NCCL_MAX_LOCAL_RANKS 72
 #define NCCL_MAX_NTHREADS 256
 #define NCCL_MIN_NTHREADS (4*WARP_SIZE)
 #define NCCL_SIMPLE_MAX_NTHREADS NCCL_MAX_NTHREADS
@@ -204,8 +204,6 @@ struct ncclNvls {
   int down;
   int treeUp;
   int treeDown[NCCL_MAX_NVLS_TREE_ARITY];
-  int node;
-  int nNodes;
 };
 
 #if __CUDA_ARCH__ >= 900
@@ -276,7 +274,7 @@ struct alignas(16) ncclDevWorkColl {
   //   nChannels == (channelHi - channelLo) + 1
   uint32_t channelLo:8, channelHi:8;
   uint32_t nWarps:8;
-  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1;
+  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1;
   uint32_t root:30, connIndex:2;
   uint16_t pivotA2ANumBiRings;
   void* recvbuff;

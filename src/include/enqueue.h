@@ -17,7 +17,7 @@
 #define NCCL_SIMPLE_ALIGNMENT (WARP_SIZE * 8LL * 16LL)
 #define NCCL_BYTES_ALIGNMENT 16
 
-ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize);
+ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* maxStackSize);
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info);
 ncclResult_t ncclLaunchPrepare(struct ncclComm* comm);
 ncclResult_t ncclLaunchKernelBefore_NoUncapturedCuda(struct ncclComm* comm, struct ncclKernelPlan* plan);
@@ -33,7 +33,7 @@ static inline size_t ncclFuncSendCount(ncclFunc_t func, int nRanks, size_t count
 static inline size_t ncclFuncRecvCount(ncclFunc_t func, int nRanks, size_t count) {
   return func == ncclFuncAllGather ? nRanks*count : count;
 }
-rccl_static_inline size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
+rccl_static inline size_t ncclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count) {
   return func == ncclFuncAllGather || func == ncclFuncReduceScatter ? nRanks*count : count;
 }
 

@@ -558,11 +558,25 @@ namespace {
   }
 }
 
+#if defined(__gfx942__) || defined(__gfx950__) // Use a single slice per simple primitive for a single node on some GFX9 devices.
+#define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
+  if(work->rcclUseOneSlice){ \
+    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
+    runRing<T, RedOp, Proto>(tid, nthreads, work); \
+  } else{ \
+    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>; \
+    runRing<T, RedOp, Proto>(tid, nthreads, work); \
+  }
+#else
+#define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
+  using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>; \
+  runRing<T, RedOp, Proto>(tid, nthreads, work);
+#endif
+
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>;
-    runRing<T, RedOp, Proto>(tid, nthreads, work);
+   rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work);    
   }
 };
 
@@ -767,7 +781,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
           int nelem = work->regUsed ? 0 : min(loopCount, channelCount - elemOffset);
           prims.gather(offset, nelem, chunkSize, chunkSize, -1, 0);
         }
-      } else if (tid < tidEndReduce) {
+      } else if (tid < tidEndReduce && nvls->headRank != -1) {
         // Reduce, broadcast through NVLS
         using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 1>;
         Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>

@@ -34,17 +34,20 @@ struct ncclKernelMatch {
 };
 
 #ifdef ENABLE_COLLTRACE
-#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 2 : 0))
-static ncclKernelMatch const ncclKerns[4] = {
-  {(void *)ncclDevKernel_Generic, true},
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
+static ncclKernelMatch const ncclKerns[6] = {
+  {(void *)ncclDevKernel_Generic_1, true},
+  {(void *)ncclDevKernel_Generic_2, true},
   {(void *)ncclDevKernel_Generic_4, true},
-  {(void *)ncclDevKernelDebug_Generic, true},
+  {(void *)ncclDevKernelDebug_Generic_1, true},
+  {(void *)ncclDevKernelDebug_Generic_2, true},
   {(void *)ncclDevKernelDebug_Generic_4, true}
 };
 #else
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
-static ncclKernelMatch const ncclKerns[2] = {
-  {(void*)ncclDevKernel_Generic, true},
+static ncclKernelMatch const ncclKerns[3] = {
+  {(void*)ncclDevKernel_Generic_1, true},
+  {(void*)ncclDevKernel_Generic_2, true},
   {(void*)ncclDevKernel_Generic_4, true}
 };
 #endif
@@ -52,25 +55,22 @@ static ncclKernelMatch const ncclKerns[2] = {
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
-ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
+ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* maxStackSize) {
   constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
   ncclResult_t result = ncclSuccess;
+  int print = 0;
 
   if (maxStackSize) *maxStackSize = 0;
   int carveout = ncclParamL1SharedMemoryCarveout();
+  int ncclMaxSharedMem = ncclShmemDynamicSize(cudaArch);
 
-  // Keep track if we already visited a function pointer.
-  void* lru[2] = {nullptr, nullptr};
-  for (int i=0; i < KernelCount; i++) {
-    void* fn = ncclKerns[i].kernelFn;
-    if (fn == lru[0] || fn == lru[1]) goto next_kernel;
-    lru[1] = lru[0];
-    lru[0] = fn;
+  for (int k=0; k < KernelCount; k++) {
+    void* fn = ncclKerns[k].kernelFn;
+    cudaFuncAttributes attr = {0};
+    if (fn == nullptr) continue;
 
+    CUDACHECKGOTO(cudaFuncGetAttributes(&attr, fn), result, ignore0);
     if (maxStackSize) {
-      cudaFuncAttributes attr = {0};
-      if (cudaFuncGetAttributes(&attr, fn) != cudaSuccess)
-        WARN("Failed to get kernel attributes");
       if (attr.localSizeBytes > *maxStackSize) *maxStackSize = attr.localSizeBytes;
     ignore0:;
     }
@@ -81,10 +81,17 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
         result, ignore1);
     ignore1:;
     }
-
-    if (ncclShmemDynamicSize(cudaArch) != 0) {
+    if (ncclMaxSharedMem != 0) {
+      int sharedMemSize = ncclMaxSharedMem;
+      if (sharedMemSize > (maxSharedMem-attr.sharedSizeBytes)) {
+        if (print++ == 0)
+          INFO(NCCL_INIT, "ncclMaxSharedMem %d exceeds device/fn maxSharedMem %zu",
+               sharedMemSize, maxSharedMem-attr.sharedSizeBytes);
+        // Reduce requested MaxDynamicSharedMemorySize attribute
+        sharedMemSize = maxSharedMem - attr.sharedSizeBytes;
+      }
       CUDACHECKGOTO(cudaFuncSetAttribute(fn,
-        cudaFuncAttributeMaxDynamicSharedMemorySize, ncclShmemDynamicSize(cudaArch)),
+        cudaFuncAttributeMaxDynamicSharedMemorySize, sharedMemSize),
         result, next_kernel);
     }
   next_kernel:;
@@ -210,12 +217,16 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   struct channelMasks hasBatchMask = plan->channelMask;
   struct ncclDevWorkBatch* batchPrev[MAXCHANNELS] = {}; // {0...}
   struct ncclDevWorkBatch* batchZero = (struct ncclDevWorkBatch*)(plan->kernelArgs+1);
+
+  // [RCCL] Preparing batchZero slightly different to support > 64 Channels
+  //        Need to ensure that all channels are processed first before dealing with
+  //        adding additional batches
   int batchIx = 0;
-  for (int maskIdx = 0; maskIdx < MAXCHANNELS/64; maskIdx++) {
-    while (hasBatchMask.masks[maskIdx] != 0) {
-      uint64_t tmpMask = hasBatchMask.masks[maskIdx]; // channels with a batch for this round.
-      do {
-        int c = popFirstOneBit(&tmpMask) + maskIdx * 64;
+  int done = 0;
+  while (!done) {
+    done = 1;
+    for (int c = 0; c < MAXCHANNELS; c++) {
+      if (hasBatchMask.masks[c / 64] & (1ULL << (c%64))) {
         if (!ncclIntruQueueEmpty(&wipChannels[c].workBatchQueue)) {
           struct ncclWorkBatchList* batchNode = ncclIntruQueueDequeue(&wipChannels[c].workBatchQueue);
           if (batchPrev[c] != nullptr) {
@@ -225,9 +236,11 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
           batchZero[batchIx++] = batchNode->batch;
         }
         if (ncclIntruQueueEmpty(&wipChannels[c].workBatchQueue)) {
-          hasBatchMask.masks[maskIdx] ^= 1ull<<(c%64);
+          hasBatchMask.masks[c / 64] ^= (1ULL << (c%64));
+        } else {
+          done = 0;
         }
-      } while (tmpMask != 0);
+      }
     }
   }
 
@@ -319,6 +332,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.redOpArg = task->opDev.scalarArg;
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
+    devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     if (task->regBufType & NCCL_NET_REG_BUFFER)
@@ -1520,7 +1534,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   NCCLCHECK(ncclCudaDriverVersion(&driverVersion));
   if (driverVersion >= 11080) {
     int compCap = comm->compCap;
-    unsigned int clusterSize = (compCap == 90) ? comm->config.cgaClusterSize : 0;
+    unsigned int clusterSize = (compCap >= 90) ? comm->config.cgaClusterSize : 0;
 
     CUlaunchConfig launchConfig = {0};
     CUlaunchAttribute launchAttrs[3];
@@ -1674,7 +1688,7 @@ static ncclResult_t updateCollCostTable(
     if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1 && info->func != ncclFuncAllGather) continue;
     if (a == NCCL_ALGO_NVLS && collNetSupport != 1 && comm->nNodes > 1) continue;
     /* now we only support single-node NVLS allgather and reducescatter */
-    if (a == NCCL_ALGO_NVLS && (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) && comm->nNodes > 1) continue;
+    if (a == NCCL_ALGO_NVLS && (info->func == ncclFuncAllGather || info->func == ncclFuncReduceScatter) && (comm->nNodes > 1 || comm->nRanks > NCCL_MAX_NVLS_ARITY)) continue;
     /* Tree reduceScatter doesn't support scaling yet */
     if (a == NCCL_ALGO_PAT && info->func == ncclFuncReduceScatter
         && (info->opDev.op == ncclDevPreMulSum || info->opDev.op == ncclDevSumPostDiv)) continue;
@@ -2127,7 +2141,7 @@ static ncclResult_t hostToDevRedOp(
   uint64_t allBits = uint64_t(-1)>>(64-nbits);
   uint64_t signBit = allBits^(allBits>>1);
   bool datatype_signed = false;
-  
+
   switch (int(op)) {
   case ncclSum:  opFull->op = ncclDevSum;  break;
   case ncclProd: opFull->op = ncclDevProd; break;
