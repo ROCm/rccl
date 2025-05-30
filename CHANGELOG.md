@@ -8,6 +8,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
 * Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
+* Switched to linear channel mapping on multi-node for better performance on AINICs.
 
 ### Added
 
