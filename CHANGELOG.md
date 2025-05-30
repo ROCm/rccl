@@ -8,7 +8,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
 * Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
-* Fixed the known issue "When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault." with a design change to use comm instead of rank for mscclStatus. The Global map for comm -> mscclStatus is still not thread safe but should be explicitly handled by mutexes for read writes. This is tested for correctness, but we plan to use a thread safe map data structure in upcoming changes.
+* Fixed the known issue "When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault." with a design change to use `comm` instead of `rank` for `mscclStatus`. The Global map for `comm` to `mscclStatus` is still not thread safe but should be explicitly handled by mutexes for read writes. This is tested for correctness, but there is a plan to use a thread-safe map data structure in upcoming changes.
 
 
 ### Added
