@@ -15,13 +15,7 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
 
-#if defined(__gfx942__) || defined(__gfx950__)
-#define __THREAD_FENCE __threadfence_block()
-#else
-#define __THREAD_FENCE __threadfence()
-#endif
-
-#define barrier_by_group() do { \
+#define barrier_by_group_common(__THREAD_FENCE) do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
@@ -52,6 +46,9 @@
     } \
   } \
 } while (0)
+
+#define barrier_by_group() barrier_by_group_common(__threadfence())
+#define barrier_by_group_block() barrier_by_group_common(__threadfence_block())
 
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral
