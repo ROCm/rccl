@@ -4,7 +4,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased - RCCL 2.22.3 for ROCm 6.4.2
 
+### Added
 
+* Added support for the LL128 protocol on gfx942.
 
 ## RCCL 2.22.3 for ROCm 6.4.1
 
