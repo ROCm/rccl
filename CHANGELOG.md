@@ -17,7 +17,6 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Set a default of 112 channels for a single node with `8 * gfx950`
 * Added MSCCL support for multinode gfx942/gfx950 (i.e., 16 and 32 GPUs). To enable, set the
   environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
-* Added support for the LL128 protocol on gfx942.
 
 ### Changed
 
