@@ -62,7 +62,10 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
 
   if (maxStackSize) *maxStackSize = 0;
   int carveout = ncclParamL1SharedMemoryCarveout();
-  int ncclMaxSharedMem = ncclShmemDynamicSize(cudaArch);
+
+  int warpsize;
+  CUDACHECK(hipDeviceGetAttribute(&warpsize, hipDeviceAttributeWarpSize, comm->cudaDev));
+  int ncclMaxSharedMem = ncclShmemDynamicSize(cudaArch, warpsize);
 
   for (int k=0; k < KernelCount; k++) {
     void* fn = ncclKerns[k].kernelFn;
@@ -1516,7 +1519,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   void* sym = plan->kernelFn;
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
-  int smem = ncclShmemDynamicSize(comm->cudaArch);
+  int smem = ncclShmemDynamicSize(comm->cudaArch, comm->warpSize);
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
