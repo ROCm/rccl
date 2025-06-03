@@ -53,10 +53,12 @@ static ncclKernelMatch const ncclKerns[3] = {
 #endif
 
 static int rcclProtoGrainSize(int proto, ncclComm *comm){
-  return proto == NCCL_PROTO_LL ? 16 :
-        proto == NCCL_PROTO_LL128 ? comm->WarpSize*NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS*NCCL_LL128_DATAELEMS*sizeof(uint64_t) :
-        proto == NCCL_PROTO_SIMPLE ? 512 :
-        -1;
+  switch (proto) {
+    case NCCL_PROTO_LL: return 16;
+    case NCCL_PROTO_LL128: return comm->WarpSize*(NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS)*NCCL_LL128_DATAELEMS*sizeof(uint64_t);
+    case NCCL_PROTO_SIMPLE: return 512;
+    default: return -1;
+  }
 }
 
 /* Copy of ncclShmemScratchWarpSize */
