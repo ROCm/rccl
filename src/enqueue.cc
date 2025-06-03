@@ -116,6 +116,10 @@ static inline int ncclFuncTrafficPerByte(ncclFunc_t func, int nRanks) {
 /*****************************************************************************/
 static ncclResult_t addProxyOpIfNeeded(struct ncclComm* comm, struct ncclKernelPlan* plan, struct ncclProxyOp* op) {
   bool needed = true;
+  if (ncclParamEnableProxyTrace()) {
+    op->traceKey.commHash = comm->commHash;
+    op->traceKey.opCount = comm->opCount;
+  }
   NCCLCHECK(ncclProxySaveOp(comm, op, &needed));
   if (needed) {
     struct ncclProxyOp* q = ncclMemoryPoolAlloc<struct ncclProxyOp>(&comm->memPool_ncclProxyOp, &comm->memPermanent);
@@ -975,6 +979,9 @@ static ncclResult_t addP2pToPlan(
     op->task.p2p = p2pTasks[dir];
     op->rank = comm->rank;
     op->connIndex = connIndex[dir];
+    if (ncclParamEnableProxyTrace()) {
+      op->coll =  dir ? ncclFuncSend : ncclFuncRecvs;
+    }
     // The following are modified per channel part in addWorkToChannels():
     // op->buffer, op->nbytes, op->nsteps = ...;
   }
@@ -996,7 +1003,9 @@ static ncclResult_t addP2pToPlan(
       int nParts = dir ? work->nSendChannels : work->nRecvChannels;
       void* addr = dir ? work->sendAddr : work->recvAddr;
       size_t bytes = dir ? work->sendBytes : work->recvBytes;
-
+      if (ncclParamEnableProxyTrace()) {
+        proxyOps[dir].totalBytes = bytes;
+      }
       proxyOps[dir].recvbuff = nullptr;
       if (nParts <= part) {
         proxyOps[dir].nsteps = 0;

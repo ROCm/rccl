@@ -398,6 +398,14 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   sub->profilerContext = op->profilerContext;
   sub->ringAlgo = op->ringAlgo;
   args->nsubs = subIndex+1;
+  if (ncclParamEnableProxyTrace()) {
+    sub->traceKey = op->traceKey;
+    sub->traceInfo.funcIdx = op->coll;
+    sub->traceInfo.protocol = op->protocol;
+    sub->traceInfo.pattern = op->pattern;
+    sub->traceInfo.totalBytes = op->totalBytes;
+    sub->traceInfo.chunkSize = op->chunkSize;
+  }
   if (subIndex) {
     if ((args->sliceSteps != op->sliceSteps) ||
         (args->chunkSteps != op->chunkSteps) ||

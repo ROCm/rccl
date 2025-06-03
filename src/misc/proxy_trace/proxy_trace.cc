@@ -4,28 +4,28 @@
 #include <folly/logging/xlog.h>
 
 constexpr int32_t kFinishedProxyOpItems = 32;
-static std::map<facebook::rccl::ProxyOpStepStatus, std::string>
+static std::map<facebook_rccl::ProxyOpStepStatus, std::string>
     proxyStepStatusStrMap = {
-        {facebook::rccl::ProxyOpStepStatus::INIT, "INIT"},
-        {facebook::rccl::ProxyOpStepStatus::POSTING, "POSTING"},
-        {facebook::rccl::ProxyOpStepStatus::SENDING, "SENDING"},
-        {facebook::rccl::ProxyOpStepStatus::RECEIVING, "RECEIVING"},
-        {facebook::rccl::ProxyOpStepStatus::WAITING_GPU, "WAITING_GPU"},
-        {facebook::rccl::ProxyOpStepStatus::FLUSHING, "FLUSHING"},
-        {facebook::rccl::ProxyOpStepStatus::DONE, "DONE"},
-        {facebook::rccl::ProxyOpStepStatus::UNINITIALIZED, "ILLEGAL"},
+        {facebook_rccl::ProxyOpStepStatus::INIT, "INIT"},
+        {facebook_rccl::ProxyOpStepStatus::POSTING, "POSTING"},
+        {facebook_rccl::ProxyOpStepStatus::SENDING, "SENDING"},
+        {facebook_rccl::ProxyOpStepStatus::RECEIVING, "RECEIVING"},
+        {facebook_rccl::ProxyOpStepStatus::WAITING_GPU, "WAITING_GPU"},
+        {facebook_rccl::ProxyOpStepStatus::FLUSHING, "FLUSHING"},
+        {facebook_rccl::ProxyOpStepStatus::DONE, "DONE"},
+        {facebook_rccl::ProxyOpStepStatus::UNINITIALIZED, "ILLEGAL"},
 };
 
-void facebook::rccl::ProxyTrace::resetAll() {
+void facebook_rccl::ProxyTrace::resetAll() {
   activeOps.clear();
   activeOpIdTracker.clear();
   myRank = -1;
   initialized = false;
 }
 
-bool facebook::rccl::ProxyTrace::checkActiveOpExist(uint64_t commHash,
-                                                    uint64_t opCount,
-                                                    uint32_t proxyOpId) const {
+bool facebook_rccl::ProxyTrace::checkActiveOpExist(uint64_t commHash,
+                                                   uint64_t opCount,
+                                                   uint32_t proxyOpId) const {
   return (activeOps.find(commHash) != activeOps.end() &&
           activeOps.at(commHash).find(opCount) !=
               activeOps.at(commHash).end() &&
@@ -35,20 +35,20 @@ bool facebook::rccl::ProxyTrace::checkActiveOpExist(uint64_t commHash,
 
 // Get a unique proxyOpId for a given commHash:opCount
 // If the opCount is not found, create a new entry for it and return 0
-int64_t facebook::rccl::ProxyTrace::getOrCreateProxyOpId(uint64_t commHash,
-                                                         uint64_t opCount) {
+int64_t facebook_rccl::ProxyTrace::getOrCreateProxyOpId(uint64_t commHash,
+                                                        uint64_t opCount) {
   return activeOpIdTracker[commHash][opCount];
 }
 
-facebook::rccl::ProxyTraceOp *
-facebook::rccl::ProxyTrace::getProxyTraceOpPtr(const ProxyTraceRecordKey &key) {
+facebook_rccl::ProxyTraceOp *
+facebook_rccl::ProxyTrace::getProxyTraceOpPtr(const ProxyTraceRecordKey &key) {
   if (checkActiveOpExist(key.commHash, key.opCount, key.proxyOpId)) {
     return &(activeOps.at(key.commHash).at(key.opCount).at(key.proxyOpId));
   }
   return nullptr;
 }
 
-void facebook::rccl::ProxyTrace::checkOpCompleted(
+void facebook_rccl::ProxyTrace::checkOpCompleted(
     const ProxyTraceRecordKey &key) {
   if (checkActiveOpExist(key.commHash, key.opCount, key.proxyOpId)) {
     auto &traceOp = activeOps[key.commHash][key.opCount][key.proxyOpId];
@@ -74,13 +74,13 @@ void facebook::rccl::ProxyTrace::checkOpCompleted(
   }
 }
 
-void facebook::rccl::ProxyTrace::addNewProxyTraceOpImpl(
+void facebook_rccl::ProxyTrace::addNewProxyTraceOpImpl(
     const ProxyTraceRecordKey &key, const ProxyTraceExtraInfo &extraInfo,
     ProxyOpType opType, int channelId, int nSteps, uint32_t nbytes,
     int peerRank) {
   if (nSteps > 0 &&
       !checkActiveOpExist(key.commHash, key.opCount, key.proxyOpId)) {
-    auto traceOp = facebook::rccl::ProxyTraceOp();
+    auto traceOp = facebook_rccl::ProxyTraceOp();
     traceOp.opType = opType;
     traceOp.traceKey = key;
     traceOp.extraInfo = extraInfo;
@@ -107,7 +107,7 @@ void facebook::rccl::ProxyTrace::addNewProxyTraceOpImpl(
 }
 
 #define NCCL_STEPS 8
-void facebook::rccl::ProxyTraceOp::computeStatus() {
+void facebook_rccl::ProxyTraceOp::computeStatus() {
   ProxyOpStepStatus newStatus;
   if (opType == ProxyOpType::RECV) {
     if (posted < nSteps && posted < done + NCCL_STEPS)
@@ -136,7 +136,7 @@ void facebook::rccl::ProxyTraceOp::computeStatus() {
 }
 #undef NCCL_STEPS
 
-std::string facebook::rccl::ProxyTrace::dump(uint64_t commHash) {
+std::string facebook_rccl::ProxyTrace::dump(uint64_t commHash) {
   std::string result = fmt::format("commDump for commHash:{}\n", commHash);
   std::map<std::string, std::string> sortedDumpStrMap;
   for (auto &opCountMap : activeOps.at(commHash)) {
@@ -153,7 +153,7 @@ std::string facebook::rccl::ProxyTrace::dump(uint64_t commHash) {
   return result;
 }
 
-std::string facebook::rccl::ProxyTrace::dump() {
+std::string facebook_rccl::ProxyTrace::dump() {
   std::string result = "commDump for all active ops ";
   result += fmt::format("mapSizeMB:{:.2f}\n", getMapSizeMB());
 
@@ -179,7 +179,7 @@ std::string facebook::rccl::ProxyTrace::dump() {
   return result;
 }
 
-std::string facebook::rccl::ProxyTraceOp::str() {
+std::string facebook_rccl::ProxyTraceOp::str() {
   computeStatus();
   std::string ret = fmt::format(
       "createT:{}, lastT:{}, cntNm:{}, {}, {}, {}->{}({}), "
@@ -199,13 +199,13 @@ std::string facebook::rccl::ProxyTraceOp::str() {
   return ret;
 }
 
-float facebook::rccl::ProxyTrace::getMapSizeMB() const {
+float facebook_rccl::ProxyTrace::getMapSizeMB() const {
   float size = 0;
   for (const auto &[commHash, opCountMap] : activeOps) {
     for (const auto &[opCount, proxyOpMap] : opCountMap) {
       size += proxyOpMap.size() *
               (sizeof(ProxyTraceOp) +
-               sizeof(std::unique_ptr<facebook::rccl::ProxyTraceOp>));
+               sizeof(std::unique_ptr<facebook_rccl::ProxyTraceOp>));
     }
   }
   for (const auto &[keyStr, proxyOpStr] : finishedOps) {
@@ -214,12 +214,12 @@ float facebook::rccl::ProxyTrace::getMapSizeMB() const {
   return size / 1024.0 / 1024.0;
 }
 
-void facebook::rccl::proxyTraceInit(struct ncclProxyState *proxyStatePtr,
-                                    int32_t rank, uint64_t commHash) {
+void facebook_rccl::proxyTraceInit(struct ncclProxyState *proxyStatePtr,
+                                   int32_t rank, uint64_t commHash) {
   if (proxyStatePtr) {
     if (proxyStatePtr->proxyTrace == nullptr) {
       proxyStatePtr->proxyTrace =
-          std::make_unique<facebook::rccl::ProxyTrace>(rank);
+          std::make_unique<facebook_rccl::ProxyTrace>(rank);
     }
     if (!proxyStatePtr->proxyTrace->initialized) {
       XLOG(INFO) << "Initializing ProxyTrace, rank: " << rank

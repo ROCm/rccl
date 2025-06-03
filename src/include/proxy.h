@@ -109,6 +109,11 @@ struct ncclProxyOp {
   void *profilerContext;
 
   struct ncclProxyOp *enqNext;
+  // Used to track total real bytes of this op
+  uint32_t totalBytes;
+  // Used to fetch/update the proxyOp in ProxyTrace map
+  facebook_rccl::ProxyTraceRecordKey traceKey;
+  facebook_rccl::ProxyTraceExtraInfo traceInfo;
 };
 
 struct ncclProxySubArgs {
@@ -159,6 +164,9 @@ struct ncclProxySubArgs {
   int npKitSizesFifo[NCCL_STEPS];
   uint64_t timestamp[NCCL_STEPS];
 #endif
+  // Used to fetch/update the proxyOp in ProxyTrace map
+  facebook_rccl::ProxyTraceRecordKey traceKey;
+  facebook_rccl::ProxyTraceExtraInfo traceInfo;
 };
 
 struct ncclProxyArgs {
@@ -354,7 +362,7 @@ struct ncclProxyState {
   struct ncclExpectedProxyResponse *expectedResponses;
 
   // A handle to the proxy traces
-  std::unique_ptr<facebook::rccl::ProxyTrace> proxyTrace;
+  std::unique_ptr<facebook_rccl::ProxyTrace> proxyTrace;
 };
 
 enum proxyConnectState {

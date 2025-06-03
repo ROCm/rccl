@@ -1,6 +1,4 @@
 #pragma once
-
-#include "proxy.h"
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -167,9 +165,7 @@ private:
 };
 
 void proxyTraceInit(struct ncclProxyState *proxyStatePtr, int32_t rank,
-                    uint64_t commHash)
-
-} // namespace facebook_rccl
+                    uint64_t commHash);
 
 void updateProxyOpCounter(std::unique_ptr<ProxyTrace> &proxyTraceObj,
                           const ProxyTraceRecordKey &traceKey,
@@ -177,3 +173,5 @@ void updateProxyOpCounter(std::unique_ptr<ProxyTrace> &proxyTraceObj,
 
 void addNewProxyOp(std::unique_ptr<ProxyTrace> &proxyTraceObj,
                    const ncclProxySubArgs *sub);
+
+} // namespace facebook_rccl
