@@ -89,7 +89,9 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
   int carveout = ncclParamL1SharedMemoryCarveout();
 
   int WarpSize = -1;
-  CUDACHECK(hipDeviceGetAttribute(&WarpSize, hipDeviceAttributeWarpSize, 0));
+  int cudaDev = -1;
+  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipDeviceGetAttribute(&WarpSize, hipDeviceAttributeWarpSize, cudaDev));
   int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
   for (int k=0; k < KernelCount; k++) {

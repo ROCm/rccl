@@ -67,10 +67,19 @@ union ncclLLFifoLine {
   int4 i4;
 };
 
-#if defined(__GFX9__)
-#define WARP_SIZE 64
+#if __HIP_DEVICE_COMPILE__
+  #if defined(__GFX9__)
+  #define WARP_SIZE 64
+  #else
+  #define WARP_SIZE 32
+  #endif
 #else
-#define WARP_SIZE 32
+ /* IMPORTANT:
+  * WARP_SIZE should NEVER be referenced by host code in RCCL. It is defined here
+  * solely as a workaround to allow RCCL to compile, since the host still compiles __device__ functions,
+  * and WARP_SIZE needs to be defined. These __device__ functions will not be called from the host.
+  * The host warp size is handled in src/enqueue.cc by calling hipDeviceGetAttributes(). */
+  #define WARP_SIZE 32
 #endif
 
 #define MAXCHANNELS 128
