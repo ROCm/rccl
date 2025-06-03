@@ -59,6 +59,22 @@ static int rcclProtoGrainSize(int proto, ncclComm *comm){
         -1;
 }
 
+/* Copy of ncclShmemScratchWarpSize */
+constexpr int rcclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSize = 32) {
+  return (max_constexpr<int>(
+      /*LL    */0,
+      /*LL128 */(NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WarpSize)*sizeof(uint64_t),
+      /*SIMPLE*/(ncclCollUnroll(cudaArch)*WarpSize + 1)*16,
+      // NVLS needs an extra 16B to read unaligned data.
+      /*NVLS  */WarpSize*(cudaArch >= 900 ? ncclNvlsUnrollBytes(cudaArch) : 0) + 16
+    ) + 15) & -16; // pad to 16 bytes
+}
+
+/* Copy of ncclShmemDynamicSize */
+constexpr int rcclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSize = 32) {
+  return cudaArch < 700 ? 0 : rcclShmemScratchWarpSize(cudaArch, WarpSize)*(NCCL_MAX_NTHREADS/WarpSize);
+}
+
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
@@ -69,7 +85,10 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
 
   if (maxStackSize) *maxStackSize = 0;
   int carveout = ncclParamL1SharedMemoryCarveout();
-  int ncclMaxSharedMem = ncclShmemDynamicSize(cudaArch);
+
+  int WarpSize = -1;
+  CUDACHECK(hipDeviceGetAttribute(&WarpSize, hipDeviceAttributeWarpSize, 0));
+  int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
   for (int k=0; k < KernelCount; k++) {
     void* fn = ncclKerns[k].kernelFn;
@@ -1524,7 +1543,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   void* sym = plan->kernelFn;
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
-  int smem = ncclShmemDynamicSize(comm->cudaArch);
+  int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
