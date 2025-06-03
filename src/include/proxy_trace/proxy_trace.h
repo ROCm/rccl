@@ -101,9 +101,6 @@ struct ProxyTraceOp {
   std::string str();
 };
 
-struct ncclProxyArgs;
-struct ncclProxySubArgs;
-
 using ProxyActiveOpMap = std::unordered_map<
     uint64_t /* commHash*/,
     std::unordered_map<int64_t /* opCount*/,
@@ -164,7 +161,7 @@ private:
   std::deque<std::pair<std::string, std::string>> finishedOps;
 };
 
-void proxyTraceInit(struct ncclProxyState *proxyStatePtr, int32_t rank,
+void proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace, int32_t rank,
                     uint64_t commHash);
 
 void updateProxyOpCounter(std::unique_ptr<ProxyTrace> &proxyTraceObj,
@@ -172,6 +169,6 @@ void updateProxyOpCounter(std::unique_ptr<ProxyTrace> &proxyTraceObj,
                           ProxyCounterTypes counter, int64_t val);
 
 void addNewProxyOp(std::unique_ptr<ProxyTrace> &proxyTraceObj,
-                   const ncclProxySubArgs *sub);
+                   ProxyOpType opType, const struct ncclProxySubArgs *sub);
 
 } // namespace facebook_rccl

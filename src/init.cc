@@ -56,8 +56,6 @@
 #include "msccl/msccl_lifecycle.h"
 #include "msccl/msccl_status.h"
 
-#include <folly/logging/xlog.h>
-
 #ifndef STR2
 #define STR2(v) #v
 #endif
@@ -219,10 +217,6 @@ static ncclResult_t ncclInit() {
          hipRuntimeVersion);
   }
   pthread_once(&initOnceControl, initOnceFunc);
-
-  // init folly log to INFO level by default
-  folly::LoggerDB::get().setLevel("", folly::LogLevel::INFO);
-  return initResult;
 }
 
 NCCL_API(ncclResult_t, ncclGetVersion, int *version);
@@ -262,7 +256,8 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
   comm->rank = comm->cudaDev = comm->busId = comm->nRanks = -1;
   comm->startMagic = comm->endMagic = 0;
 }
-
+RCCL_PARAM_DECLARE(EnableProxyTrace);
+RCCL_PARAM(EnableProxyTrace, "ENABLE_PROXY_TRACE", 0);
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
 

@@ -1,10 +1,11 @@
 #include "proxy_trace/proxy_trace.h"
-
+#include "debug.h"
+#include "proxy.h"
 #include <fmt/format.h>
-#include <folly/logging/xlog.h>
+#include <map>
 
 constexpr int32_t kFinishedProxyOpItems = 32;
-static std::map<facebook_rccl::ProxyOpStepStatus, std::string>
+static std::unordered_map<facebook_rccl::ProxyOpStepStatus, std::string>
     proxyStepStatusStrMap = {
         {facebook_rccl::ProxyOpStepStatus::INIT, "INIT"},
         {facebook_rccl::ProxyOpStepStatus::POSTING, "POSTING"},
@@ -53,24 +54,21 @@ void facebook_rccl::ProxyTrace::checkOpCompleted(
   if (checkActiveOpExist(key.commHash, key.opCount, key.proxyOpId)) {
     auto &traceOp = activeOps[key.commHash][key.opCount][key.proxyOpId];
     // Remove finished proxyOp or colls to avoid memory leak
-    if (traceOp.done == traceOp.nSteps) {
+    if (traceOp.counters[facebook_rccl::ProxyCounterTypes::DONE] ==
+        traceOp.nSteps) {
       traceOp.status = ProxyOpStepStatus::DONE;
       if (finishedOps.size() >= kFinishedProxyOpItems) {
         finishedOps.pop_front();
       }
       finishedOps.push_back({key.str(), traceOp.str()});
       activeOps[key.commHash][key.opCount].erase(key.proxyOpId);
-      XLOG(DBG) << "[proxy-debug] ProxyTraceOp done " << key.str();
       if (activeOps[key.commHash][key.opCount].empty()) {
         activeOps[key.commHash].erase(key.opCount);
         activeOpIdTracker[key.commHash].erase(key.opCount);
-        XLOG(DBG) << "[proxy] opCount <" << key.commHash << "," << key.opCount
-                  << "> done" << ", mapSizeMB:" << std::fixed
-                  << std::setprecision(2) << getMapSizeMB();
       }
     }
   } else {
-    XLOG(WARN) << "[proxy] ProxyTraceOp not found " << key.str();
+    WARN("[proxyTrace] ProxyTraceOp %s not found", key.str().c_str());
   }
 }
 
@@ -92,23 +90,20 @@ void facebook_rccl::ProxyTrace::addNewProxyTraceOpImpl(
     traceOp.startTs = std::chrono::high_resolution_clock::now();
     traceOp.status = ProxyOpStepStatus::INIT;
     activeOpIdTracker[key.commHash][key.opCount]++;
-    XLOG(DBG) << "[proxy] add " << traceOp.traceKey.str() << " ,"
-              << traceOp.extraInfo.str() << " ,opType:"
-              << (traceOp.opType == ProxyOpType::SEND ? "S" : "R")
-              << " ,chan:" << traceOp.channelId << " ,nSteps:" << traceOp.nSteps
-              << " ,nbytes:" << traceOp.nbytes << " ,peer:" << traceOp.peerRank
-              << " ,mapSizeMB:" << std::fixed << std::setprecision(2)
-              << getMapSizeMB();
     activeOps[key.commHash][key.opCount].emplace(key.proxyOpId,
                                                  std::move(traceOp));
   } else if (nSteps == 0) {
-    XLOG(WARN) << "nSteps is 0, ignored << " << key.str();
+    INFO(NCCL_PROXY, "nSteps is 0, ignored %s", key.str().c_str());
   }
 }
 
 #define NCCL_STEPS 8
 void facebook_rccl::ProxyTraceOp::computeStatus() {
   ProxyOpStepStatus newStatus;
+  int posted = counters[facebook_rccl::ProxyCounterTypes::POSTED];
+  int received = counters[facebook_rccl::ProxyCounterTypes::RECEIVED];
+  int transmitted = counters[facebook_rccl::ProxyCounterTypes::TRANSMITTED];
+  int done = counters[facebook_rccl::ProxyCounterTypes::DONE];
   if (opType == ProxyOpType::RECV) {
     if (posted < nSteps && posted < done + NCCL_STEPS)
       newStatus = ProxyOpStepStatus::POSTING; // Init
@@ -191,11 +186,17 @@ std::string facebook_rccl::ProxyTraceOp::str() {
       std::chrono::duration_cast<std::chrono::milliseconds>(
           lastUpdateTs.time_since_epoch())
           .count(),
-      lastUpdatingCounterName.substr(0, 3), traceKey.str(), extraInfo.str(),
-      myRank, peerRank, opType == ProxyOpType::SEND ? "S" : "R", channelId,
-      proxyStepStatusStrMap[status], nSteps, nbytes, posted, kernelCopyReady,
-      tailOrHead, recvTail, fifoSzOrHeadCache, transmitted, flushed, received,
-      done);
+      lastUpdatingCounter, traceKey.str(), extraInfo.str(), myRank, peerRank,
+      opType == ProxyOpType::SEND ? "S" : "R", channelId,
+      proxyStepStatusStrMap[status], nSteps, nbytes,
+      counters[ProxyCounterTypes::POSTED],
+      counters[ProxyCounterTypes::KERNEL_COPY_READY],
+      counters[ProxyCounterTypes::TAIL_OR_HEAD],
+      counters[ProxyCounterTypes::RECV_TAIL],
+      counters[ProxyCounterTypes::FIFO_SZ_OR_HEAD_CACHE],
+      counters[ProxyCounterTypes::TRANSMITTED],
+      counters[ProxyCounterTypes::FLUSHED],
+      counters[ProxyCounterTypes::RECEIVED], counters[ProxyCounterTypes::DONE]);
   return ret;
 }
 
@@ -214,22 +215,20 @@ float facebook_rccl::ProxyTrace::getMapSizeMB() const {
   return size / 1024.0 / 1024.0;
 }
 
-void facebook_rccl::proxyTraceInit(struct ncclProxyState *proxyStatePtr,
-                                   int32_t rank, uint64_t commHash) {
-  if (proxyStatePtr) {
-    if (proxyStatePtr->proxyTrace == nullptr) {
-      proxyStatePtr->proxyTrace =
-          std::make_unique<facebook_rccl::ProxyTrace>(rank);
-    }
-    if (!proxyStatePtr->proxyTrace->initialized) {
-      XLOG(INFO) << "Initializing ProxyTrace, rank: " << rank
-                 << ", commHash: " << commHash;
-      proxyTrace->initialized = true;
-    } else {
-      XLOG(INFO) << "ProxyTrace already initialized, rank: " << rank
-                 << ", commHash: " << commHash;
-    }
+ncclResult_t
+facebook_rccl::proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace,
+                              int32_t rank, uint64_t commHash) {
+  if (proxyTrace) {
+    WARN("[proxyTrace] Initializing non-empty proxyTrace! rank: %d, commHash: "
+         "%lu",
+         rank, commHash);
+    return ncclInvalidArgument;
   }
+  INFO(NCCL_PROXY, "Initializing ProxyTrace, rank: %d, commHash: %lu", rank,
+       commHash);
+  proxyTrace = std::make_unique<facebook_rccl::ProxyTrace>(rank);
+  proxyTrace->initialized = true;
+  return ncclSuccess;
 }
 
 void facebook_rccl::updateProxyOpCounter(
