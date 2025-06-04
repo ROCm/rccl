@@ -135,7 +135,7 @@ ncclMemFree_impl(void* ptr);
 
 ncclResult_t
 mscclLoadAlgo_impl(const char* mscclAlgoFilePath, mscclAlgoHandle_t* mscclAlgoHandle,
-                   int rank);
+                   const ncclComm_t comm);
 
 ncclResult_t
 mscclRunAlgo_impl(const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
@@ -380,7 +380,7 @@ NCCL_API(ncclResult_t, ncclMemAlloc, void** ptr, size_t size);
 NCCL_API(ncclResult_t, ncclMemFree, void* ptr);
 
 NCCL_API(ncclResult_t, mscclLoadAlgo, const char* mscclAlgoFilePath,
-         mscclAlgoHandle_t* mscclAlgoHandle, int rank);
+         mscclAlgoHandle_t* mscclAlgoHandle, const ncclComm_t comm);
 
 NCCL_API(ncclResult_t, mscclRunAlgo, const void* sendBuff, const size_t sendCounts[],
          const size_t sDisPls[], void* recvBuff, const size_t recvCounts[],
@@ -620,10 +620,10 @@ ncclMemFree(void* ptr)
 }
 
 ncclResult_t
-mscclLoadAlgo(const char* mscclAlgoFilePath, mscclAlgoHandle_t* mscclAlgoHandle, int rank)
+mscclLoadAlgo(const char* mscclAlgoFilePath, mscclAlgoHandle_t* mscclAlgoHandle, const ncclComm_t comm)
 {
     return ::rccl::RcclGetFunctionTable()->mscclLoadAlgo_fn(mscclAlgoFilePath,
-                                                            mscclAlgoHandle, rank);
+                                                            mscclAlgoHandle, comm);
 }
 
 ncclResult_t

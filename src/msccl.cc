@@ -14,10 +14,10 @@
 
 using namespace rccl;
 
-NCCL_API(ncclResult_t, mscclLoadAlgo, const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
-ncclResult_t mscclLoadAlgo_impl(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank) {
+NCCL_API(ncclResult_t, mscclLoadAlgo, const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, const ncclComm_t comm);
+ncclResult_t mscclLoadAlgo_impl(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, const ncclComm_t comm) {
   Recorder::instance().record("mscclLoadAlgo");
-  mscclStatus& status = mscclGetStatus(rank);
+  mscclStatus& status = mscclGetStatus(comm);
 
   if (status.freeAlgoHandles.size() == 0) {
     WARN("MSCCL: MSCCL_MAX_NUM_ALGOS (%d) limit reached", MSCCL_MAX_NUM_ALGOS);
@@ -28,7 +28,7 @@ ncclResult_t mscclLoadAlgo_impl(const char *mscclAlgoFilePath, mscclAlgoHandle_t
 
   struct mscclAlgo* hostAlgo;
   NCCLCHECK(ncclCalloc(&hostAlgo, 1));
-  NCCLCHECK(mscclGetAlgoFromXmlFile(mscclAlgoFilePath, hostAlgo, rank));
+  NCCLCHECK(mscclGetAlgoFromXmlFile(mscclAlgoFilePath, hostAlgo, comm->rank));
   status.hostAlgos[*mscclAlgoHandle] = hostAlgo;
 
   struct mscclAlgo* devAlgo;
@@ -53,7 +53,7 @@ ncclResult_t mscclRunAlgo_impl(
   NVTX3_FUNC_WITH_PARAMS(MSCCL, NcclNvtxParamsMSCCL,
     NVTX3_PAYLOAD(comm ? comm->commHash : 0, count * ncclTypeSize(dataType), op, dataType));
   
-  mscclStatus& status = mscclGetStatus(comm->rank);
+  mscclStatus& status = mscclGetStatus(comm);
   struct mscclAlgo* hostAlgo = status.hostAlgos[mscclAlgoHandle];
   struct mscclAlgo* devAlgo = status.devAlgos[mscclAlgoHandle];
 
@@ -65,13 +65,13 @@ ncclResult_t mscclRunAlgo_impl(
 
   CUDACHECK(hipSetDevice(comm->cudaDev)); 
 
-  NCCLCHECK(mscclGetCaptureStatus(comm->rank, stream));
+  NCCLCHECK(mscclGetCaptureStatus(comm, stream));
 
   NCCLCHECK(mscclSetupCount(hostAlgo, comm, count, dataType));
 
   NCCLCHECK(mscclSetupScratch(hostAlgo, stream));
 
-  NCCLCHECK(mscclSetupSyncFlags(comm->rank, stream));
+  NCCLCHECK(mscclSetupSyncFlags(comm, stream));
 
   NCCLCHECK(mscclSetupProxy(hostAlgo, comm, stream));
 
