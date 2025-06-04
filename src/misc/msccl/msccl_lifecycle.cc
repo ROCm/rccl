@@ -30,7 +30,6 @@
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 RCCL_PARAM(MscclEnableSingleProcess, "MSCCL_ENABLE_SINGLE_PROCESS", 1);
-static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 
 bool mscclEnabled() {
 #ifdef COMPILE_MSCCL_KERNEL

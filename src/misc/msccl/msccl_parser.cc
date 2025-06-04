@@ -15,6 +15,59 @@
 #include "collectives.h"
 #include "msccl/msccl_parser.h"
 
+static ncclResult_t mscclXmlGetAttrIndex(struct mscclXmlNode* node, const char* attrName, int* index) {
+  *index = -1;
+  const int nAttrs = node->nAttrs;
+  for (int a=0; a<nAttrs; a++) {
+    if (strncmp(node->attrs[a].key, attrName, MAX_STR_LEN) == 0) {
+      *index = a;
+      return ncclSuccess;
+    }
+  }
+  return ncclSuccess;
+}
+
+static ncclResult_t mscclXmlGetAttr(struct mscclXmlNode* node, const char* attrName, const char** value) {
+  int index;
+  NCCLCHECK(mscclXmlGetAttrIndex(node, attrName, &index));
+  *value = index == -1 ? NULL : node->attrs[index].value;
+  return ncclSuccess;
+}
+
+static ncclResult_t mscclXmlGetAttrStr(struct mscclXmlNode* node, const char* attrName, const char** value) {
+  NCCLCHECK(mscclXmlGetAttr(node, attrName, value));
+  if (*value == NULL) {
+    WARN("Attribute %s of node %s not found", attrName, node->name);
+    return ncclInternalError;
+  }
+  return ncclSuccess;
+}
+static ncclResult_t mscclXmlGetAttrInt(struct mscclXmlNode* node, const char* attrName, int* value) {
+  const char* str;
+  NCCLCHECK(mscclXmlGetAttrStr(node, attrName, &str));
+  *value = strtol(str, NULL, 0);
+  return ncclSuccess;
+}
+
+static ncclResult_t mscclXmlGetAttrInt64(struct mscclXmlNode* node, const char* attrName, int64_t* value) {
+  const char* str;
+  NCCLCHECK(mscclXmlGetAttrStr(node, attrName, &str));
+  *value = strtoll(str, NULL, 0);
+  return ncclSuccess;
+}
+
+static ncclResult_t mscclXmlFindTag(struct mscclXml* xml, const char* tagName, struct mscclXmlNode** node) {
+  *node = NULL;
+  for (int i=0; i<xml->maxIndex; i++) {
+    struct mscclXmlNode* n = xml->nodes+i;
+    if (strcmp(n->name, tagName) == 0) {
+      *node = n;
+      return ncclSuccess;
+    }
+  }
+  return ncclSuccess;
+}
+
 ncclResult_t mscclXmlGetChar(FILE* file, char* c) {
   if (fread(c, 1, 1, file) == 0) {
     WARN("XML Parse : Unexpected EOF");
@@ -708,7 +761,6 @@ ncclResult_t mscclXmlLoadSingleNode(FILE* file, struct mscclXmlNode* node) {
 }
 
 ncclResult_t mscclAlgoMetaXmlLoad(const char* xmlFilePath, struct mscclXmlNode* node) {
-  ncclResult_t ret = ncclSuccess;
   FILE* file = fopen(xmlFilePath, "r");
   if (file == NULL) {
     fprintf(stderr, "Could not open MSCCL XML algorithm file %s : %s", xmlFilePath, strerror(errno));
