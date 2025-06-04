@@ -8,7 +8,7 @@
 
 #include "enqueue.h"
 #include "argcheck.h"
-#include "coll_net.h"
+// #include "coll_net.h"
 #include "graph/topo.h"
 #include <hip/hip_runtime.h>
 #include <hip/hip_ext.h>

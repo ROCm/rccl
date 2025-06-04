@@ -2,6 +2,7 @@
 #include "transport.h"
 #include "enqueue.h"
 
+#if CUDART_VERSION >= 11030
 static ncclResult_t registerCheckP2PConnection(struct ncclComm* comm, struct ncclConnector* conn, struct ncclTopoGraph* graph, int peer, bool* needReg) {
   if (conn->connected) {
     if (conn->conn.flags & (NCCL_P2P_READ | NCCL_P2P_WRITE)) {
@@ -23,6 +24,7 @@ static ncclResult_t registerCheckP2PConnection(struct ncclComm* comm, struct ncc
   }
   return ncclSuccess;
 }
+#endif
 
 ncclResult_t ncclRegisterCollNvlsBuffers(
     struct ncclComm* comm, struct ncclTaskColl* info,
