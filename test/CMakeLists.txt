@@ -31,6 +31,15 @@ if(BUILD_TESTS)
 
   include_directories(${GTEST_INCLUDE_DIRS} ./common)
 
+  include(FetchContent)
+
+  FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt
+    GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281) # 10.2.1
+  FetchContent_MakeAvailable(fmt)
+
+
   # Collect testing framework source files
   set(TEST_SOURCE_FILES
     AllGatherTests.cpp
@@ -57,6 +66,8 @@ if(BUILD_TESTS)
     common/TestBedChild.cpp
     common/StandaloneUtils.cpp
     ../src/misc/recorder.cc
+    proxy_trace/ProxyTraceUnitTests.cpp
+    ../src/misc/proxy_trace/proxy_trace.cc
     )
 
   add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})
@@ -85,6 +96,7 @@ if(BUILD_TESTS)
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
   target_link_libraries(rccl-UnitTests PRIVATE Threads::Threads)
   target_link_libraries(rccl-UnitTests PRIVATE dl)
+  target_link_libraries(rccl-UnitTests PRIVATE fmt::fmt)
   if(OPENMP_TESTS_ENABLED)
     target_link_libraries(rccl-UnitTests PRIVATE "${OpenMP_CXX_FLAGS}")
   endif()

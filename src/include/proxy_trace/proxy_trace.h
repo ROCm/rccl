@@ -160,15 +160,16 @@ private:
   // A record is a pair of traceKey.str() and ProxyTraceOp.str()
   std::deque<std::pair<std::string, std::string>> finishedOps;
 };
-
-void proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace, int32_t rank,
-                    uint64_t commHash);
+struct ncclProxySubArgs;
+void proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace,
+                            int32_t rank, uint64_t commHash);
 
 void updateProxyOpCounter(std::unique_ptr<ProxyTrace> &proxyTraceObj,
-                          const ProxyTraceRecordKey &traceKey,
-                          ProxyCounterTypes counter, int64_t val);
+                                  const ProxyTraceRecordKey &traceKey,
+                                  ProxyCounterTypes counter, int64_t val);
 
-void addNewProxyOp(std::unique_ptr<ProxyTrace> &proxyTraceObj,
-                   ProxyOpType opType, const struct ncclProxySubArgs *sub);
-
+void addNewProxyOp(
+    std::unique_ptr<ProxyTrace> &proxyTraceObj, ProxyTraceRecordKey &key,
+    const ProxyTraceExtraInfo &extraInfo, ProxyOpType opType, int channelId,
+    int nSteps, uint32_t nbytes, int peerRank);
 } // namespace facebook_rccl

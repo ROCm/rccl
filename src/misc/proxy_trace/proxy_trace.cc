@@ -186,8 +186,8 @@ std::string facebook_rccl::ProxyTraceOp::str() {
       std::chrono::duration_cast<std::chrono::milliseconds>(
           lastUpdateTs.time_since_epoch())
           .count(),
-      lastUpdatingCounter, traceKey.str(), extraInfo.str(), myRank, peerRank,
-      opType == ProxyOpType::SEND ? "S" : "R", channelId,
+      static_cast<int>(lastUpdatingCounter), traceKey.str(), extraInfo.str(),
+      myRank, peerRank, opType == ProxyOpType::SEND ? "S" : "R", channelId,
       proxyStepStatusStrMap[status], nSteps, nbytes,
       counters[ProxyCounterTypes::POSTED],
       counters[ProxyCounterTypes::KERNEL_COPY_READY],
@@ -215,20 +215,18 @@ float facebook_rccl::ProxyTrace::getMapSizeMB() const {
   return size / 1024.0 / 1024.0;
 }
 
-ncclResult_t
-facebook_rccl::proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace,
-                              int32_t rank, uint64_t commHash) {
+void facebook_rccl::proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace,
+                                   int32_t rank, uint64_t commHash) {
   if (proxyTrace) {
     WARN("[proxyTrace] Initializing non-empty proxyTrace! rank: %d, commHash: "
          "%lu",
          rank, commHash);
-    return ncclInvalidArgument;
+    return;
   }
   INFO(NCCL_PROXY, "Initializing ProxyTrace, rank: %d, commHash: %lu", rank,
        commHash);
   proxyTrace = std::make_unique<facebook_rccl::ProxyTrace>(rank);
   proxyTrace->initialized = true;
-  return ncclSuccess;
 }
 
 void facebook_rccl::updateProxyOpCounter(
@@ -247,17 +245,14 @@ void facebook_rccl::updateProxyOpCounter(
 }
 
 void facebook_rccl::addNewProxyOp(std::unique_ptr<ProxyTrace> &proxyTraceObj,
-                                  ProxyOpType opType,
-                                  const ncclProxySubArgs *subArg) {
+                                  ProxyTraceRecordKey &key,
+                                  const ProxyTraceExtraInfo &extraInfo,
+                                  ProxyOpType opType, int channelId, int nSteps,
+                                  uint32_t nbytes, int peerRank) {
   if (proxyTraceObj) {
-    auto traceOpPtr = proxyTraceObj->getProxyTraceOpPtr(subArg->traceKey);
-    if (traceOpPtr) {
-      auto opId = tracer->getOrCreateProxyOpId(sub->traceKey.commHash,
-                                               sub->traceKey.opCount);
-      subArg->traceKey.proxyOpId = opId;
-      tracer->addNewProxyTraceOpImpl(subArg->traceKey, subArg->traceInfo,
-                                     opType, subArg->channelId, subArg->nsteps,
-                                     subArg->nbytes, subArg->peer);
-    }
+    auto opId = proxyTraceObj->getOrCreateProxyOpId(key.commHash, key.opCount);
+    key.proxyOpId = opId;
+    proxyTraceObj->addNewProxyTraceOpImpl(key, extraInfo, opType, channelId,
+                                          nSteps, nbytes, peerRank);
   }
 }

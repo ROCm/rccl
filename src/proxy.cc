@@ -1821,7 +1821,7 @@ ncclResult_t ncclProxyInit(struct ncclComm* comm, struct ncclSocket* sock, union
   comm->proxyState->listenSock = sock;
   comm->proxyState->peerAddresses = peerAddresses;
   comm->proxyState->peerAddressesUDS = peerAddressesUDS;
-  if (ncclParamEnableProxyTrace()) {
+  if (rcclParamEnableProxyTrace()) {
     facebook_rccl::proxyTraceInit(comm->proxyState->proxyTrace, comm->rank, comm->commHash);
   }
 
