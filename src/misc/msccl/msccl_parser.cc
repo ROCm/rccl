@@ -772,7 +772,6 @@ ncclResult_t mscclAlgoMetaXmlLoad(const char* xmlFilePath, struct mscclXmlNode* 
 }
 
 ncclResult_t mscclGetAlgoMetaFromXmlFile(const char* str, struct mscclAlgoMeta* algoMeta) {
-  ncclResult_t ret = ncclSuccess;
   struct mscclXmlNode* node;
   node = (struct mscclXmlNode *)malloc(sizeof(struct mscclXmlNode));
   NCCLCHECK(mscclAlgoMetaXmlLoad(str, node));
