@@ -410,6 +410,14 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(comm->connectSend);
   free(comm->connectRecv);
 
+  if (rcclParamEnableProxyTrace) {
+    WARN("ProxyTrace:");
+    if (comm->proxyState && comm->proxyState->proxyTrace){
+      WARN("%s", comm->proxyState->proxyTrace->dump().c_str());
+    }
+  }
+  
+
 #ifdef ENABLE_PROFILING
   struct ncclProf *prof, *prof_seq;
   prof = (struct ncclProf*)malloc(sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES);
