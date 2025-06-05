@@ -6,6 +6,7 @@
 #SBATCH --partition=gt
 
 set -e
+module load rocm/6.3.0
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build

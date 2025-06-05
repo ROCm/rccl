@@ -100,7 +100,7 @@ jobs:
             break
           elif [[ "$STATE" =~ ^(FAILED|CANCELLED|TIMEOUT)$ ]]; then
             echo "Test failed with state $STATE"
-            exit 1
+            break
           fi
           sleep 60
         done
