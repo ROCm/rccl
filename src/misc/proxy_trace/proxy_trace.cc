@@ -4,9 +4,10 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
- 
+
 #include "proxy_trace/proxy_trace.h"
 #include "debug.h"
+#include "device.h"
 #include "proxy.h"
 #include <fmt/format.h>
 #include <map>
@@ -104,7 +105,6 @@ void facebook_rccl::ProxyTrace::addNewProxyTraceOpImpl(
   }
 }
 
-#define NCCL_STEPS 8
 void facebook_rccl::ProxyTraceOp::computeStatus() {
   ProxyOpStepStatus newStatus;
   int posted = counters[facebook_rccl::ProxyCounterTypes::POSTED];
@@ -136,7 +136,6 @@ void facebook_rccl::ProxyTraceOp::computeStatus() {
   }
   this->status = newStatus;
 }
-#undef NCCL_STEPS
 
 std::string facebook_rccl::ProxyTrace::dump(uint64_t commHash) {
   std::string result = fmt::format("commDump for commHash:{}\n", commHash);
