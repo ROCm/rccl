@@ -4,15 +4,13 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
- 
+
 #include "proxy.h"
 #include "proxy_trace/proxy_trace.h"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <unistd.h>
 namespace RcclUnitTesting {
-
-#define NCCL_STEPS 8
 
 class ProxyTraceTestFixture : public ::testing::Test {
 public:
