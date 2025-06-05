@@ -3,7 +3,7 @@
 #SBATCH --output=rccl-build-%j.out
 #SBATCH --error=rccl-build-%j.err
 #SBATCH --time=60
-#SBATCH --partition=compute
+#SBATCH --partition=gt
 
 set -e
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
