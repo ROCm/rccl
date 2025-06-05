@@ -57,8 +57,10 @@ jobs:
         done
 
         echo "Waiting for final status via sacct..."
+        LOOP_COUNT=0
+        MAX_LOOPS=30  # Maximum of 30 loops (30 minutes)
         while true; do
-          STATE=$(sacct -j $BUILD_JOB_ID --format=State --noheader | awk '{print $1}')
+          STATE=$(sacct -j $BUILD_JOB_ID --format=State --noheader | awk 'NF { print $1; exit }' | xargs)
           echo "##[section]Build job state: $STATE"
           if [[ "$STATE" == "COMPLETED" ]]; then
             break
@@ -67,6 +69,11 @@ jobs:
             break
           fi
           sleep 60
+          LOOP_COUNT=$((LOOP_COUNT + 1))
+          if [ $LOOP_COUNT -ge $MAX_LOOPS ]; then
+            echo "Time limit reached while waiting for final status."
+            exit 1  # Exit with an error code if time limit is reached
+          fi
         done
   - task: Bash@3
     displayName: Build Logs
@@ -93,8 +100,10 @@ jobs:
         done
 
         echo "Waiting for final status via sacct..."
+        LOOP_COUNT=0
+        MAX_LOOPS=180  # Maximum of 180 loops (180 minutes)
         while true; do
-          STATE=$(sacct -j $TEST_JOB_ID --format=State --noheader | awk '{print $1}')
+          STATE=$(sacct -j $TEST_JOB_ID --format=State --noheader | awk 'NF { print $1; exit }' | xargs)
           echo "##[section]Test job state: $STATE"
           if [[ "$STATE" == "COMPLETED" ]]; then
             break
@@ -103,6 +112,11 @@ jobs:
             break
           fi
           sleep 60
+          LOOP_COUNT=$((LOOP_COUNT + 1))
+          if [ $LOOP_COUNT -ge $MAX_LOOPS ]; then
+            echo "Time limit reached while waiting for final status."
+            exit 1  # Exit with an error code if time limit is reached
+          fi
         done
   - task: Bash@3
     displayName: Test Logs
