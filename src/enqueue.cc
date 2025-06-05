@@ -227,7 +227,7 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   size_t workBytes = plan->workBytes;
   size_t batchBytes = plan->nWorkBatches*sizeof(struct ncclDevWorkBatch);
 
-  plan->threadPerBlock = std::max(plan->threadPerBlock, 4*comm->WarpSize /*NCCL_MIN_NTHREADS*/);
+  plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*NCCL_MIN_NTHREADS*/);
 
   // If we can fit everything into the kernel args we do so.
   if (sizeof(ncclDevKernelArgs) + batchBytes + workBytes <= comm->workArgsBytes) {
@@ -781,7 +781,7 @@ static ncclResult_t scheduleCollTasksToPlan(
       plan->channelMask.masks[maskIdx] |= (1ull<<relativeIdx);
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
-    plan->threadPerBlock = std::max(plan->threadPerBlock, 3*plan->comm->WarpSize);
+    plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
     if (!plan->kernelSpecialized) {
       plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
       plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
