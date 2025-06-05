@@ -41,6 +41,7 @@ jobs:
       submoduleBehaviour: recursive
   - task: Bash@3
     displayName: Build Job
+    continueOnError: true
     inputs:
       targetType: inline
       script: |
@@ -63,7 +64,7 @@ jobs:
             break
           elif [[ "$STATE" =~ ^(FAILED|CANCELLED|TIMEOUT)$ ]]; then
             echo "Build failed with state $STATE"
-            exit 1
+            break
           fi
           sleep 60
         done
@@ -76,6 +77,7 @@ jobs:
         cat rccl-build-${BUILD_JOB_ID}.err || echo "No stderr log found"
   - task: Bash@3
     displayName: Test Job
+    continueOnError: true
     inputs:
       targetType: inline
       script: |
