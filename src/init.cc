@@ -235,6 +235,9 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
   comm->startMagic = comm->endMagic = 0;
 }
 
+RCCL_PARAM_DECLARE(EnableProxyTrace);
+RCCL_PARAM(EnableProxyTrace, "ENABLE_PROXY_TRACE", 0);
+
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
 
