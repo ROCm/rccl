@@ -662,7 +662,9 @@ ncclResult_t ncclSocketReady(struct ncclSocket* sock, int *running) {
 }
 
 ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
+#ifdef ENABLE_TRACE
   char line[SOCKET_NAME_MAXLEN+1];
+#endif
 
   if (sock == NULL) {
     WARN("ncclSocketConnect: pass NULL socket");

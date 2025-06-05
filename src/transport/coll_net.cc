@@ -1283,8 +1283,8 @@ static ncclResult_t sendProxyRegBuffer(struct ncclProxyConnection* connection, s
     (void)close(dmabuf_fd);
     needReg = false;
   }
-#endif
 peermem:
+#endif
   if (needReg) {
     NCCLCHECKGOTO(proxyState->ncclCollNet->regMr(resources->collNetComm, (void*)info->buffer, info->size, NCCL_PTR_CUDA, &handle), ret, fail);
   }
@@ -1316,8 +1316,8 @@ static ncclResult_t recvProxyRegBuffer(struct ncclProxyConnection* connection, s
     (void)close(dmabuf_fd);
     needReg = false;
   }
-#endif
 peermem:
+#endif
   if (needReg) {
     NCCLCHECKGOTO(proxyState->ncclCollNet->regMr(resources->collNetComm, (void*)info->buffer, info->size, NCCL_PTR_CUDA, &handle), ret, fail);
   }
