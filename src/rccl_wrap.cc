@@ -61,7 +61,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
 #endif
     } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
                IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
-      // Warn that model detection for MI300 (or future others) did not work as expected
+      // Warn that model detection for the above listed architectures did not work as expected
       // Add supported archs to this condition as they come
       // Also make sure the tuning_model and model detection are updated for new archs
       static bool failedWarn = false;
