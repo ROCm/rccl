@@ -421,7 +421,7 @@ fi
 # Initiate RCCL CMake
 # Passing NPKIT_FLAGS separately (not as part of ${cmake_common_options}) as
 # ${npkit_options} need to be passed "as-is" i.e. with `-D` to CMakeLists.txt
-${cmake_executable} ${cmake_common_options} -DNPKIT_FLAGS="${npkit_options}" -DONLY_FUNCS="${ONLY_FUNCS}" ../../.
+${cmake_executable} ${cmake_common_options} -DNPKIT_FLAGS="${npkit_options}" -DUNROLL="${UNROLL}" -DONLY_FUNCS="${ONLY_FUNCS}" ../../.
 check_exit_code "$?"
 
 # Enable verbose output from Makefile

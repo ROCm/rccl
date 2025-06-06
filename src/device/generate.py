@@ -11,8 +11,6 @@ all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING"]
 all_unroll = ["1", "2", "4"]
 
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
-
 ################################################################################
 # The first command line argument is the path to the directory to generate and
 # populate.
@@ -62,6 +60,13 @@ else:
 #                         --- or ---
 # make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * float"
 # make ONLY_FUNCS="AllReduce RING/TREE LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|AllGather RING LL/SIMPLE Sum int8_t|AllToAllPivot RING SIMPLE Sum int8_t|Broadcast RING LL/SIMPLE Sum int8_t|Reduce RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|ReduceScatter RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|SendRecv RING SIMPLE Sum int8_t"
+#
+#
+# # Specify UNROLL to limit unroll factor for device-code generation
+# make UNROLL=<1/2/4>
+#
+#
+# # UNROLL and ONLY_FUNCS can be used together for debugging
 
 # Paste all non-None arguments together with `sep`.
 def paste(sep, *args):
@@ -70,15 +75,26 @@ def paste(sep, *args):
 is_ifc             = 1 if sys.argv[2] == "ON" else 0
 is_colltrace       = 1 if sys.argv[3] == "ON" else 0
 is_msccl_kernels   = 1 if sys.argv[4] == "ON" else 0
-is_local_arch_only = 1 if sys.argv[5] == "ON" else 0
 
-func_pattern = sys.argv[6:7]
-if func_pattern and func_pattern[0]:
-  func_pattern = func_pattern[0]
-else:
-  func_pattern = "AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
+unroll_and_onlyFuncs = sys.argv[5:]
+func_pattern = "AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
+
+# check if UNROLL and/or ONLY_FUNC are defined
+if unroll_and_onlyFuncs:
+  arg = unroll_and_onlyFuncs[0]
+
+  # Set UNROLL only if digit and part of `all_unroll`
+  if arg.isdigit() and arg in all_unroll:
+    all_unroll = [arg]
+  else:
+    func_pattern = arg
+
+  if len(unroll_and_onlyFuncs) == 2:
+    func_pattern = unroll_and_onlyFuncs[1]
 
 ################################################################################
+
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
 
 algos_of_coll = {
   "AllGather":     ["RING"],
