@@ -45,18 +45,6 @@ jobs:
     inputs:
       targetType: inline
       script: |
-
-        which module
-
-        MODULES_INIT_SCRIPT_PATH=$(bash -lc 'echo $MODULESHOME/init/bash')
-
-        if [[ ! -f "$MODULES_INIT_SCRIPT_PATH" ]]; then
-          echo "ERROR: Modules init script not found at $MODULES_INIT_SCRIPT_PATH"
-          exit 1
-        fi
-
-        echo "Modules init script found at $MODULES_INIT_SCRIPT_PATH"
-
         echo "Submitting build job..."
         BUILD_JOB_ID=$(sbatch --export=MODULES_INIT_SCRIPT=$MODULES_INIT_SCRIPT_PATH --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/build.sh)
         echo "Submitted build job: $BUILD_JOB_ID"
@@ -106,15 +94,6 @@ jobs:
     inputs:
       targetType: inline
       script: |
-        MODULES_INIT_SCRIPT_PATH=$(bash -lc 'echo $MODULESHOME/init/bash')
-
-        if [[ ! -f "$MODULES_INIT_SCRIPT_PATH" ]]; then
-          echo "ERROR: Modules init script not found at $MODULES_INIT_SCRIPT_PATH"
-          exit 1
-        fi
-
-        echo "Modules init script found at $MODULES_INIT_SCRIPT_PATH"
-
         echo "Submitting test job..."
         TEST_JOB_ID=$(sbatch --export=MODULES_INIT_SCRIPT=$MODULES_INIT_SCRIPT_PATH --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
         echo "Submitted test job: $TEST_JOB_ID"

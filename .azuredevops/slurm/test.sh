@@ -6,12 +6,7 @@
 #SBATCH --partition=gt
 
 set -e
-if [[ -n "$MODULES_INIT_SCRIPT" && -f "$MODULES_INIT_SCRIPT" ]]; then
-  source "$MODULES_INIT_SCRIPT"
-  module load rocm/6.3.0
-else
-  echo "ERROR: Modules init script '$MODULES_INIT_SCRIPT' not found in job environment."
-  exit 1
-fi
+source /usr/share/Modules/init/bash
+module load rocm/6.3.0
 cd "${SLURM_SUBMIT_DIR:-$PWD}/build/test"
 ./rccl-UnitTests --gtest_output=xml:./test_output.xml --gtest_color=yes
