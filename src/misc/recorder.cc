@@ -659,7 +659,7 @@ void parseJsonEntry(const char* entry, std::vector<rcclApiCall>& calls)
     assert(sscanf(str.c_str() + end + 3, (coll_fmt.substr(5) + ctxt_fmt).c_str(),
                   &call.opCount, &call.sendbuff, &call.recvbuff, &call.acc, &call.count, &call.datatype, &call.op, &call.root,
                   &call.comm, &call.nRanks, &call.stream, &call.nTasks, &call.globalRank, &call.timestamp, &call.tid,
-                  &call.hipDev, &call.graphCaptured, &call.graphID) == 17);
+                  &call.hipDev, &call.graphCaptured, &call.graphID) == 18);
   }
   calls.push_back(call);
 }
