@@ -86,9 +86,13 @@ struct rcclApiCall {
   double                timestamp = -1;
   unsigned long long    graphID = 0;
   int                   graphCaptured = -1;
+  void*                 sendPtrBase = NULL;
+  void*                 recvPtrBase = NULL;
+  size_t                sendPtrExtent = 0;
+  size_t                recvPtrExtent = 0;
 
 // explicit data from header
-  rcclCall_t            type; // in adjacent to op Name ^
+  rcclCall_t            type;
   uint64_t              opCount = 0;
   const void*           sendbuff = NULL;
   void*                 recvbuff = NULL;
@@ -97,8 +101,8 @@ struct rcclApiCall {
   ncclRedOp_t           op;
   int                   root = -1;
   int                   nRanks = -1;
-  ncclComm_t            comm;
-  hipStream_t           stream;
+  ncclComm_t            comm = NULL;
+  hipStream_t           stream = NULL;
   int                   nTasks = -1;
   int                   globalRank = -1;
   uint64_t              commId = 0;
@@ -110,14 +114,15 @@ struct rcclApiCall {
 
 class Recorder {
  private:
-  std::ofstream         outputFile; //1 per process
+  std::ofstream         outputFile; // 1 per process
   int                   output_json = 0; // 0 is to binary, 1 to json
   std::string           filename;
   int                   logLevel = -1;
 
   //std::string           hostname;
   int                   pid = -1;
-  int                   numCall = 0; //for debugging only
+  int                   numCall = 0; // reserved for future record format/debug
+  bool                  skipped = false; // number of sendrecv calls to skip for gather/scatter/a2a(v)
   static __thread int   rcclReplayThreadIdx;
   static int            depth; // for indentation purpose, will need thread safty later
 
@@ -134,6 +139,7 @@ class Recorder {
 
  public:
   static Recorder&      instance();
+  void                  skip(bool b);
   void                  record(const char* name); // non-replayable calls
   ncclResult_t          record(rcclApiCall& call);
   ncclResult_t          record(rcclCall_t type, const ncclInfo& info); // collective

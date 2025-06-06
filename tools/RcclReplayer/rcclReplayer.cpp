@@ -2,14 +2,565 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 #include <chrono>
 #include <mpi.h>
 #include <fstream>
+#include <unordered_set>
 
 #include "rcclReplayer.hpp"
 
+#include <dirent.h>
+#include <stdio.h>
+
+using namespace rccl;
+
+static int json_format = 0; // binary by default
+
+// move to inside class or kept as static var
+static constexpr size_t rcclCallSize = sizeof(rcclApiCall);
+static char line[rcclCallSize]; // size of collectivecall struct
+static int lineNum = 0;
+static ncclUniqueId uniqueId;
+
+// assuming shared file system or similar
+// should this be replayer or in main
+static int ParseLogFormat(const char* logFormat, std::string& filename, std::string& extension)
+{
+  int json_format = 0;
+  size_t dot;
+  if ((dot = std::string(logFormat).find(".")) != std::string::npos)
+  {
+    filename = std::string(logFormat).substr(0, dot);
+    extension = std::string(logFormat).substr(dot);
+    if (extension.compare(".json") == 0)
+    {
+      json_format = 1;
+    }
+  } else {
+    filename = std::string(logFormat);
+  }
+  return json_format;
+  // TODO: modularize and reuse this snippet from recorder
+}
+
+Replayer::Replayer(const std::string& logname, int json_format, int rank, int size) : myRank(rank),
+                                                                                      numGlobalRanks(size)
+{
+  log.open(logname, json_format ? std::ifstream::in : std::ifstream::binary);
+}
+
+void Replayer::parse()
+{
+  while (log.read(line, rcclCallSize)) // istream::get fail here when running into newline
+  {
+    rcclApiCall call = *((rcclApiCall*) line);
+
+    if (call.sendPtrBase)
+    {
+      if (!dMemMap.contains(call.sendPtrBase))
+      {
+        dMemMap[call.sendPtrBase].size = call.sendPtrExtent;
+      }
+      dMemMap[call.sendPtrBase].lastLineUsed = lineNum;
+    }
+    if (call.recvPtrBase)
+    {
+      if (!dMemMap.contains(call.recvPtrBase))
+      {
+        dMemMap[call.recvPtrBase].size = call.recvPtrExtent;
+      }
+      dMemMap[call.recvPtrBase].lastLineUsed = lineNum;
+    }
+    if (call.stream)
+    {
+      streams[call.stream].second = lineNum;
+    }
+
+    switch (call.type) {
+    case rrGroupStart:
+    case rrGroupEnd:
+    case rrGroupSimulatedEnd: // TODO
+    case rrCommInitRank:
+    /// case rrCommInitRankConfig:   <-- these all should depend on CommInitDev
+    case rrCommSplit: // <-- not covered for now dealt with in replay time
+    case rrCommFinalize:
+    case rrCommDestroy:
+    case rrCommAbort:
+    case rrCommRegister:
+    case rrCommDeregister: // I think commDeregister is not affected by handle in both way?
+    case rrMemFree:
+    case rrRedOpCreatePreMulSum:
+    case rrRedOpDestroy:
+    case rrOtherCall:
+    {
+      break; // no op
+    }
+  // Communicator
+    case rrGetUniqueId:
+    {
+      idRankMap[call.commId];
+      break;
+    }
+    
+    case rrCommInitDev:             // which should capture all comm - uniqueID relations
+    {
+      Ids.push_back(call.commId);
+      // for debugging might want a reverse map
+      break;
+    }
+    case rrCommInitAll:
+    {
+      if (call.sendbuff)
+      {
+        log.ignore(call.root * sizeof(int));
+      }
+      break;
+    }
+
+  // Memory allocation
+    //integrate these later
+    case rrMemAlloc:
+    {
+      // Replayer will not free this without explicit ncclMemFree
+      dMemMap[call.recvbuff].size = call.count;
+      break;
+    }
+
+    case rrAllToAllv:
+    {
+      log.ignore(4 * call.nRanks * sizeof(size_t)); // will allocate s/rdispls/count each time
+    }
+    default: // collectives
+    {
+      /*  if capturing:
+       *    if first time (start.empty)
+       *      init stream
+       *      push this line for replayer later
+       *    increment depth
+       *  else
+       *    use internal counter to separate diff graph launch
+       */
+      if (call.graphCaptured == 1)
+      {
+        if (!graphLife.contains(call.graphID))
+        {
+          graphLife[call.graphID].starts.insert(lineNum);
+          graphLife[call.graphID].stream = call.stream;
+        }
+        graphLife[call.graphID].depth++;
+        graphLife[call.graphID].counter++;
+        graphLife[call.graphID].end = lineNum; // in case the graph never gets launched
+      } else if (call.graphID) {
+        if (graphLife[call.graphID].counter == graphLife[call.graphID].depth)
+        {
+          graphLife[call.graphID].starts.insert(lineNum);
+        }
+        graphLife[call.graphID].counter--;
+        if (graphLife[call.graphID].counter == 0)
+        {
+          graphLife[call.graphID].end = lineNum; // we currently sync graph after its last launch
+                                                 // for convenience of graph destroy, may later
+                                                 // need a comm->graphs map so that CommReclaim dont hang
+          graphLife[call.graphID].counter = graphLife[call.graphID].depth;
+        }
+      }
+    }
+    }
+    lineNum++;
+  }
+
+  // exchange communicator info
+  std::vector<int> comm_count(numGlobalRanks);
+  comm_count[myRank] = Ids.size();
+  MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, comm_count.data(), 1, MPI_INT, MPI_COMM_WORLD);
+
+  std::vector<int> displs(comm_count.size() + 1, 0);
+  std::inclusive_scan(comm_count.begin(), comm_count.end(), displs.begin() + 1);
+  int aggragatedCommCount = std::reduce(comm_count.begin(), comm_count.end());
+  /*
+   *                  rank1, comm_count[1]xID  r2, comm_count[2]  r3 ...  r4 ...
+   *  AllRankCommIds [------------------------+-----------------+-------+---------+....]
+   */
+  std::vector<uint64_t> AllRankCommIds(aggragatedCommCount);
+  MPI_Allgatherv(Ids.data(), Ids.size(), MPI_UINT64_T,
+                 AllRankCommIds.data(), comm_count.data(), displs.data(), MPI_UINT64_T, MPI_COMM_WORLD);
+
+  int k = 0;
+  for (int i = 0; i < numGlobalRanks; i++)
+  {
+    if (i == myRank)
+    {
+      k += Ids.size();
+      continue;
+    }
+    for (int j = 0; j < comm_count[i]; j++)
+    {
+      if (idRankMap.contains(AllRankCommIds[k]))
+      {
+        idRankMap[AllRankCommIds[k]].push_back(i);
+      }
+      k++;
+    }
+  }
+
+  lineNum = 0;
+  log.clear();
+  log.seekg(0, std::ios_base::beg);
+  // TODO: print out resources here allocated if requested
+}
+
+void Replayer::replay()
+{
+  while (log.read(line, rcclCallSize))
+  {
+    rcclApiCall call = *((rcclApiCall*) line);
+    printf("[INFO    ] Rank %d - Line %d : %s\n", myRank, lineNum, rcclCallStr[call.type]);
+    HIP_CALL(hipSetDevice(call.hipDev));
+    void *sbuffer = NULL, *rbuffer = NULL;
+
+    if (call.type < rrGroupStart)
+    {
+      if ((call.sendPtrBase && !dMemMap.contains(call.sendPtrBase)) || (call.recvPtrBase && !dMemMap.contains(call.recvPtrBase)))
+      {
+        printf("[ERROR   ] Rank %d - Line %d : Unknown buffer in collectives\n", myRank, lineNum);
+        exit(1);
+      }
+
+      if (call.sendPtrBase)
+      {
+        if (!dMemMap[call.sendPtrBase].base)
+        {
+          HIP_CALL(hipMalloc(&dMemMap[call.sendPtrBase].base, dMemMap[call.sendPtrBase].size));
+        }
+        std::ptrdiff_t diff = (char*)call.sendbuff - (char*)call.sendPtrBase;
+        sbuffer = (char*)dMemMap[call.sendPtrBase].base + diff;
+      }
+      if (call.recvPtrBase)
+      {
+        if (!dMemMap[call.recvPtrBase].base)
+        {
+          HIP_CALL(hipMalloc(&dMemMap[call.recvPtrBase].base, dMemMap[call.recvPtrBase].size));
+        }
+        std::ptrdiff_t diff = (char*)call.recvbuff - (char*)call.recvPtrBase;
+        rbuffer = (char*)dMemMap[call.recvPtrBase].base + diff;
+      }
+
+      //stream
+      if (call.stream && !streams[call.stream].first)
+      {
+        HIP_CALL(hipStreamCreate(&streams[call.stream].first));
+      }
+
+      //graph
+      /*
+       *  if capturing
+       *    if firstime (line in start)
+       *      stream capture begin
+       *    else if stream differ from initial capturing stream
+       *      //create dependency
+       *    if depth reached // after call execution switch
+       *      conclude graph
+       *  else (launching)
+       */
+      if (call.graphCaptured == 1)
+      {
+        graphLife[call.graphID].counter--;
+        if (graphLife[call.graphID].starts.contains(lineNum))
+        {
+          HIP_CALL(hipStreamBeginCapture(streams[call.stream].first, hipStreamCaptureModeGlobal));
+          printf("[INFO    ] Rank %d - Line %d : starting capture graph %llu\n", myRank, lineNum, call.graphID);
+        } else if (graphLife[call.graphID].stream != call.stream) {
+          printf("[WARNING ] \x1b[31mRank %d - Line %d : multi-stream graph may not replay original dependency accurately\x1b[0m\n", myRank, lineNum);
+          hipEvent_t event;
+          HIP_CALL(hipEventCreate(&event));
+          graphLife[call.graphID].events.push_back(event);
+          HIP_CALL(hipEventRecord(event, streams[graphLife[call.graphID].stream].first));
+          HIP_CALL(hipStreamWaitEvent(streams[call.stream].first, event));
+        }    
+      } else if (call.graphID) {
+        if (graphLife[call.graphID].starts.contains(lineNum))
+        {
+          printf("[INFO    ] Rank %d - Line %d : launching graph %llu\n", myRank, lineNum, call.graphID);
+          HIP_CALL(hipGraphLaunch(graphLife[call.graphID].graphExec, streams[call.stream].first));
+        }
+        printf("[INFO    ] Rank %d - Line %d : being played by previous graph %llu\n", myRank, lineNum, call.graphID);
+        goto cleanup;
+      }
+    }
+
+    switch (call.type) {
+    case rrGroupSimulatedEnd: // TODO: cannot test atm
+    /// case rrCommInitRankConfig:   <-- these all should depend on CommInitDev
+    case rrRedOpCreatePreMulSum:
+    case rrRedOpDestroy:
+    case rrOtherCall:
+    {
+      printf("[ERROR   ] Rank %d - Line %d : Unexpected call: %s\n", myRank, lineNum, rcclCallStr[call.type]);
+      exit(1);
+    }
+
+    // To be integrated later
+    case rrCommFinalize:
+    {
+      NCCL_CALL(ncclCommFinalize(commMap[call.comm]));
+      break;
+    }
+    case rrCommDestroy:
+    {
+      NCCL_CALL(ncclCommDestroy(commMap[call.comm]));
+      break;
+    }
+    case rrCommAbort:
+    {
+      NCCL_CALL(ncclCommAbort(commMap[call.comm]));
+      break;
+    }
+
+    case rrGroupStart:
+    {
+      NCCL_CALL(ncclGroupStart());
+      break;
+    }
+    case rrGroupEnd:
+    {
+      NCCL_CALL(ncclGroupEnd());
+      break;
+    }
+
+    case rrGetUniqueId:
+    {
+      NCCL_CALL(ncclGetUniqueId(&uniqueId));
+      idMap[call.commId] = uniqueId;
+      break;
+    }
+    case rrCommInitRank:
+    {
+      lastCall = rrCommInitRank;
+      break;
+    }
+    /// case rrCommInitRankConfig:
+    case rrCommInitDev:
+    {
+      if (lastCall == rrCommInitAll) // no other calls between ncclCommInitAll and ncclCommInitRankDev
+      {                              // nor ncclCommInitRankDev not proceeded by ncclCommInitAll/Rank()
+        goto cleanup;
+      }
+      // set device
+      // TODO: double check this, since some version of NCCL theres a reset to original device
+      HIP_CALL(hipSetDevice(call.root));
+
+      if (!idMap.contains(call.commId))
+      {
+        MPI_Recv(&uniqueId, sizeof(ncclUniqueId), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      } else {
+        for (int rank : idRankMap[call.commId])
+        {
+          MPI_Send(&idMap[call.commId], sizeof(ncclUniqueId), MPI_BYTE, rank, 0, MPI_COMM_WORLD);
+        }
+        uniqueId = idMap[call.commId]; // <- double check in case of bug/communicator init hang
+      }
+      ncclComm_t comm;
+      NCCL_CALL(ncclCommInitRank(&comm, call.nRanks, uniqueId, call.globalRank));
+      commMap[call.comm] = comm;
+      break;
+    }
+    case rrCommInitAll:
+    {
+      int ndev = call.root;
+      int *devlist = NULL;
+      if (call.sendbuff)
+      {
+        std::vector<int> devices(ndev);
+        log.read((char*)devices.data(), ndev * sizeof(int));
+        devlist = devices.data();
+      }
+      ncclComm_t comm;
+      NCCL_CALL(ncclCommInitAll(&comm, ndev, devlist));
+      commMap[call.comm] = comm;
+      break;
+    }
+    case rrCommSplit:
+    {
+      int color = call.nRanks;
+      int key = call.globalRank;
+      // TODO: parse config later
+      ncclComm_t newcomm;
+      ncclComm_t comm = (ncclComm_t) call.commId;
+      NCCL_CALL(ncclCommSplit(commMap[comm], color, key, &newcomm, NULL));
+      commMap[call.comm/*original newcomm to commSplit call*/] = newcomm;
+      break;
+    }
+
+
+    case rrCommRegister:
+    {
+      if (!dMemMap.contains(call.sendPtrBase) || !commMap.contains(call.comm))
+      {
+        printf("[ERROR   ] Rank %d - Line %d : Unknown buffer for CommRegister\n", myRank, lineNum);
+        exit(1);
+      }
+      if (!dMemMap[call.sendPtrBase].base)
+      {
+        HIP_CALL(hipMalloc(&dMemMap[call.sendPtrBase].base, dMemMap[call.sendPtrBase].size));
+      }
+      sbuffer = (char*)dMemMap[call.sendPtrBase].base + (std::ptrdiff_t)((char*)call.sendbuff - (char*)call.sendPtrBase);
+      NCCL_CALL(ncclCommRegister(commMap[call.comm], sbuffer, dMemMap[call.sendPtrBase].size, &handleMap[call.recvbuff]));
+      break;
+    }
+    case rrCommDeregister:
+    {
+      NCCL_CALL(ncclCommDeregister(commMap[call.comm], handleMap[call.recvbuff]));
+      break;
+    }
+    case rrMemAlloc:
+    {
+      NCCL_CALL(ncclMemAlloc(&dMemMap[call.recvbuff].base, call.count));
+      break ;
+    }
+    case rrMemFree:
+    {
+      NCCL_CALL(ncclMemFree(dMemMap[call.recvbuff].base));
+      break;
+    }
+
+    // TODO: further simplify switch base on common parameters
+    // no op or root
+    case rrAllToAll:
+    {
+      NCCL_CALL(ncclAllToAll(sbuffer, rbuffer, call.count, call.datatype, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    case rrAllGather:
+    {
+      NCCL_CALL(ncclAllGather(sbuffer, rbuffer, call.count, call.datatype, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    // op root
+    case rrReduce:
+    {
+      NCCL_CALL(ncclReduce(sbuffer, rbuffer, call.count, call.datatype, call.op, call.root, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    // root
+    case rrBroadcast:
+    {
+      NCCL_CALL(ncclBroadcast(sbuffer, rbuffer, call.count, call.datatype, call.root, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    case rrScatter:
+    {
+      NCCL_CALL(ncclScatter(sbuffer, rbuffer, call.count, call.datatype, call.root, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    case rrGather:
+    {
+      NCCL_CALL(ncclGather(sbuffer, rbuffer, call.count, call.datatype, call.root, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    // root -
+    case rrBcast:
+    {
+      NCCL_CALL(ncclBcast(rbuffer, call.count, call.datatype, call.root, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    case rrSend:
+    {
+      NCCL_CALL(ncclSend(rbuffer, call.count, call.datatype, call.root, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    case rrRecv:
+    {
+      NCCL_CALL(ncclRecv(rbuffer, call.count, call.datatype, call.root, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    // op
+    case rrReduceScatter:
+    {
+      NCCL_CALL(ncclReduceScatter(sbuffer, rbuffer, call.count, call.datatype, call.op, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    case rrAllReduce:
+    {
+      NCCL_CALL(ncclAllReduce(sbuffer, rbuffer, call.count, call.datatype, call.op, commMap[call.comm], streams[call.stream].first));
+      break;
+    }
+    // a2av
+    case rrAllToAllv:
+    {
+      // timer pause here
+      // assuming blocking for now
+      int size = call.nRanks;
+      std::vector<size_t> sendcounts(size), sdispls(size), recvcounts(size), rdispls(size);
+      log.read((char*)sendcounts.data(), size * sizeof(size_t));
+      log.read((char*)sdispls.data(), size * sizeof(size_t));
+      log.read((char*)recvcounts.data(), size * sizeof(size_t));
+      log.read((char*)rdispls.data(), size * sizeof(size_t));
+      
+      NCCL_CALL(ncclAllToAllv(sbuffer, sendcounts.data(), sdispls.data(), rbuffer, recvcounts.data(), rdispls.data(),
+                              call.datatype, commMap[call.comm], streams[call.stream].first));
+      HIP_CALL(hipStreamSynchronize(streams[call.stream].first)); // TODO: remove
+      break;
+    }
+    } //switch
+    printf("[INFO    ] Rank %d - Line %d : %s called\n", myRank, lineNum, rcclCallStr[call.type]);
+    lastCall = call.type;
+
+    if (call.graphCaptured == 1)
+    {
+      // TODO: This requires further testing
+      if (graphLife[call.graphID].stream != call.stream)
+      {
+        hipEvent_t event;
+        HIP_CALL(hipEventCreate(&event));
+        graphLife[call.graphID].events.push_back(event);
+        HIP_CALL(hipEventRecord(event, streams[call.stream].first));
+        HIP_CALL(hipStreamWaitEvent(streams[graphLife[call.graphID].stream].first, event));
+      }
+      if (graphLife[call.graphID].counter == 0)
+      {
+	hipGraphNode_t temp;
+	char errbuff[3000];
+        HIP_CALL(hipStreamEndCapture(streams[graphLife[call.graphID].stream].first, &graphLife[call.graphID].graph));
+        // TODO: confirm with clr behavior of graphInstantiate in face of failure
+        HIP_CALL(hipGraphInstantiate(&graphLife[call.graphID].graphExec, graphLife[call.graphID].graph, &temp, errbuff, 3000));
+        for (hipEvent_t e : graphLife[call.graphID].events)
+        {
+          HIP_CALL(hipEventDestroy(e));
+        }
+      }
+    }
+
+cleanup:
+    printf("[INFO    ] Rank %d - Line %d : cleaning up\n", myRank, lineNum);
+    
+    // Free resources if possible
+    if (call.sendPtrBase && lineNum == dMemMap[call.sendPtrBase].lastLineUsed) {
+      // TODO: free contains a sync, may need a second thought
+      //       also this may proceed commDeregister in case of UBR thus susceptible to change in implementation
+      HIP_CALL(hipFree(dMemMap[call.sendPtrBase].base));
+      dMemMap[call.sendPtrBase].base = NULL; // in case of in place ops
+    }
+    if (call.recvPtrBase && lineNum == dMemMap[call.recvPtrBase].lastLineUsed && dMemMap[call.recvPtrBase].base) {
+      HIP_CALL(hipFree(dMemMap[call.recvPtrBase].base));
+    }
+    if (call.graphID && lineNum == graphLife[call.graphID].end) {
+      HIP_CALL(hipStreamSynchronize(streams[call.stream].first));
+      HIP_CALL(hipGraphExecDestroy(graphLife[call.graphID].graphExec));
+      HIP_CALL(hipGraphDestroy(graphLife[call.graphID].graph));
+    }
+    if (call.stream && lineNum == streams[call.stream].second)
+    {
+      HIP_CALL(hipStreamSynchronize(streams[call.stream].first)); // ?
+      HIP_CALL(hipStreamDestroy(streams[call.stream].first));
+    }
+    lineNum++; // change for a2av
+  }
+}
+
 int main(int argc, char **argv)
 {
+  unsetenv("RCCL_REPLAY_FILE");
   MPI_Init(&argc, &argv);
   if (argc <= 1) {
     printf("Usage: %s logfile [numGpusPerMpiRank = 1]\n", argv[0]);
@@ -24,735 +575,97 @@ int main(int argc, char **argv)
   // Parse command line arguments
   char* logFilename       = argv[1];
   int   numGpusPerMpiRank = (argc > 2 ? atoi(argv[2]) : 1);
-  int   parseOnly         = (argc > 3 ? atoi(argv[3]) : 0);
-
-  CollectiveCalls collCalls;
-  collCalls.firstGlobalRank = mpiRank * numGpusPerMpiRank;
-  collCalls.numGlobalRanks  = numMpiRanks * numGpusPerMpiRank;
+  /// int   parseOnly         = (argc > 3 ? atoi(argv[3]) : 0);
+  assert(numGpusPerMpiRank == 1);
 
   // Figure out starting GPU index to use based on hostname
-  int nameLen;
-  char name[MPI_MAX_PROCESSOR_NAME];
-  std::vector<char> allnames(numMpiRanks * MPI_MAX_PROCESSOR_NAME, 0);
-  MPI_Get_processor_name(name, &nameLen);
-  MPI_Allgather(name, MPI_MAX_PROCESSOR_NAME, MPI_CHAR,
-                allnames.data(), MPI_MAX_PROCESSOR_NAME, MPI_CHAR, MPI_COMM_WORLD);
+  int nameLen, pid;
+  char hostname[MPI_MAX_PROCESSOR_NAME];
+  MPI_Get_processor_name(hostname, &nameLen);
 
-  // Offset local gpu device index based on number of previous ranks on the same host
-  collCalls.localGpuOffset  = 0;
-  for (int rank = 0; rank < mpiRank; rank++) {
-    if (!strcmp(name, allnames.data() + (rank * MPI_MAX_PROCESSOR_NAME)))
-      collCalls.localGpuOffset += numGpusPerMpiRank;
-  }
-  if (mpiRank == 0)
-    printf("RCCL Replayer: %d x %d = %d total ranks\n", numMpiRanks, numGpusPerMpiRank, collCalls.numGlobalRanks);
-  printf("Rank %d [%s] LocalGpuOffset: %d GlobalRankFirst %d GlobalRankLast %d\n",
-         mpiRank, name, collCalls.localGpuOffset, collCalls.firstGlobalRank, collCalls.firstGlobalRank + numGpusPerMpiRank - 1);
+  std::string output_file, output_extension;
+  int json_format = ParseLogFormat(logFilename, output_file, output_extension);
+  assert(json_format == 0);
 
-  // Parse collectives from logfile
-  if (parseOnly) collCalls.numGlobalRanks = parseOnly;
-  ParseCollectives(logFilename, mpiRank == 0, collCalls);
-  if (collCalls.groupCalls.size() == 0) {
-    MPI_Finalize();
-    return 0;
-  }
-  if (parseOnly) return 0;
+  // Only root handles file-rank assignment to avoid file handle pressure
+  if (mpiRank != 0)
+  {
+    MPI_Gather(hostname, MPI_MAX_PROCESSOR_NAME, MPI_CHAR,
+               NULL, 0, MPI_DATATYPE_NULL, 0, MPI_COMM_WORLD);
 
-  // Setup all communicators
-  if (mpiRank == 0) printf("Preparing %d communicator(s) per rank\n", collCalls.numCommsPerRank);
-  collCalls.localRankComms.resize(numGpusPerMpiRank, std::vector<ncclComm_t>(collCalls.numCommsPerRank));
-  collCalls.localRankStreams.resize(numGpusPerMpiRank, std::vector<hipStream_t>(collCalls.numCommsPerRank));
+    MPI_Scatter(NULL, 0, MPI_DATATYPE_NULL,
+                hostname, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatter(NULL, 0, MPI_DATATYPE_NULL,
+                &pid, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  } else {
+    std::vector<char> allhosts(numMpiRanks * MPI_MAX_PROCESSOR_NAME, 0);
+    std::vector<int> pids(numMpiRanks * sizeof(int), 0);
 
-  for (int commIdx = 0; commIdx < collCalls.numCommsPerRank; commIdx++) {
-    // Create a unique ID and broadcast it to all ranks
-    ncclUniqueId uniqueId;
-    if (mpiRank == 0) ncclGetUniqueId(&uniqueId);
-    MPI_Bcast(&uniqueId, sizeof(ncclUniqueId), MPI_BYTE, 0, MPI_COMM_WORLD);
+    MPI_Gather(hostname, MPI_MAX_PROCESSOR_NAME, MPI_CHAR,
+               allhosts.data(), MPI_MAX_PROCESSOR_NAME, MPI_CHAR, 0, MPI_COMM_WORLD);
 
-    // Initialize comms and strams
-    NCCL_CALL(ncclGroupStart());
-    for (int i = 0; i < numGpusPerMpiRank; i++) {
-      HIP_CALL(hipSetDevice(collCalls.localGpuOffset + i));
-      NCCL_CALL(ncclCommInitRank(&collCalls.localRankComms[i][commIdx], collCalls.numGlobalRanks, uniqueId, collCalls.firstGlobalRank + i));
-      HIP_CALL(hipStreamCreate(&collCalls.localRankStreams[i][commIdx]));
+    // All hostnames in the recorded program
+    std::unordered_set<std::string> hostnames;
+    for (int i = 0; i < numMpiRanks; i++)
+    {
+      hostnames.insert(std::string(allhosts.data() + i * MPI_MAX_PROCESSOR_NAME)); // assuming null terminator included
     }
-    NCCL_CALL(ncclGroupEnd());
-  }
-  printf("Rank %d Done setting up communicators\n", mpiRank);
 
-  int numSkippedCalls = 0;
-  int numInvalid = 0;
-  double runTime;
-  std::ofstream datafile;
-  datafile.open("replayer_data.csv");
-  if (!datafile.is_open()) {
-    printf("[ERROR] Unable to open file replayer_data.csv\n");
-    exit(-1);
-  }
-  datafile << "callNumber, functionName, inPlace, count(numElements), datatype, op, root, time(msec), groupCallBusBandwidth(GB/s)\n";
-  auto start = std::chrono::high_resolution_clock::now();
-  for (size_t i = 0; i < collCalls.groupCalls.size(); i++) {
-    MPI_Barrier(MPI_COMM_WORLD);
-    if (collCalls.groupCalls[i].isValid) {
-      if (mpiRank == 0)
-      {
-        printf("Running Collective Call %lu of %lu\n", i+1, collCalls.groupCalls.size());
-        PrintGroupCall(collCalls.groupCalls[i]);
-      }
-      double runTime = ReplayRccl(collCalls, i, numInvalid);
-      if (mpiRank == 0) {
-        dataToCsv(collCalls.groupCalls[i], datafile, runTime);
-      }
-    } else {
-      if (mpiRank == 0) {
-        printf("[ERROR] in group call: (skipping...)\n");
-        for (auto const& rd : collCalls.groupCalls[i].rankData) {
-          printf("  - Rank %02d: comm %d in line %d\n", rd.first, rd.second.commIdx, rd.second.lineNum);
-          for (int task = 0; task < rd.second.tasks.size(); task++) {
-            TaskInfo ti = rd.second.tasks[task];
-            printf("  - Task %02d: %32s inPlace=%d count=%lu datatype=%d op=%d root=%d\n",
-                   task, ncclFuncNames[ti.funcType], ti.inPlace, ti.count, ti.datatype, ti.op, ti.root);
-          }
+    // Register all hostnames and pid from recorder logs
+    std::unordered_map<std::string, std::vector<int>> logHosts;
+    int file_pid, a = 0/*counter*/;
+    DIR *d;
+    struct dirent *dir;
+    if (d = opendir(".")) {
+      while ((dir = readdir(d)) != NULL) {
+        // MPI_MAX_PROCESSOR_NAME = 256
+        if (sscanf(dir->d_name, (output_file + ".%d.%256[^.]" + output_extension).c_str(), &file_pid, hostname) == 2)
+        {
+          logHosts[std::string(hostname)].push_back(file_pid);
+          a++;
         }
       }
-      numSkippedCalls++;
+      closedir(d);
     }
-  }
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> duration = end - start;
-  datafile.close();
-
-  // Destroy all communicators
-  for (int commIdx = 0; commIdx < collCalls.numCommsPerRank; commIdx++) {
-    for (int i = 0; i < numGpusPerMpiRank; i++) {
-      NCCL_CALL(ncclCommDestroy(collCalls.localRankComms[i][commIdx]));
-      HIP_CALL(hipStreamDestroy(collCalls.localRankStreams[i][commIdx]));
+    // Double check number of nodes and number of processes match for recorder and replayer
+    assert(logHosts.size() == hostnames.size());
+    assert(a == numMpiRanks);
+    // Assign mapping of replayer hostname to recorder hostname
+    std::unordered_map<std::string, std::string> hostAssignment;
+    auto it = logHosts.begin();
+    for (const auto &host : hostnames)
+    {
+      hostAssignment[host] = (*it).first;
+      it++;
     }
+    for (int i = 0; i < numMpiRanks; i++)
+    {
+      std::string host(allhosts.data() + i * MPI_MAX_PROCESSOR_NAME);
+      strcpy(allhosts.data() + i * MPI_MAX_PROCESSOR_NAME, hostAssignment[host].c_str());
+      pids[i] = logHosts[hostAssignment[host]].back();
+      logHosts[hostAssignment[host]].pop_back();
+    }
+
+    // Distribute the target log for each rank (pid and hostname)
+    MPI_Scatter(allhosts.data(), MPI_MAX_PROCESSOR_NAME, MPI_CHAR,
+                hostname, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatter(pids.data(), 1, MPI_INT,
+                &pid, 1, MPI_INT, 0, MPI_COMM_WORLD);
   }
 
-  if (mpiRank == 0) printf("Executed group calls: %zu\n", collCalls.groupCalls.size() - numSkippedCalls);
-  if (mpiRank == 0) printf("Skipped group calls: %d\n", numSkippedCalls);
+  // Initialize Replayer
+  std::string logfile = output_file + "." + std::to_string(pid) + "." +
+                        std::string(hostname) + output_extension; /// perhaps another func for assemble logname
+  std::cout << mpiRank << " : " << logfile<<std::endl;
+  Replayer replayer(logfile, json_format, mpiRank, numMpiRanks);
 
-  // Data validation failures during group calls
-  if (mpiRank == 0) printf("Failed group calls: %d\n", numInvalid); 
+  if (mpiRank == 0)
+    printf("RCCL Replayer version 0: %d ranks x %d gpu/Rank\n", numMpiRanks, numGpusPerMpiRank);
+  printf("Rank %d [%s]\n", mpiRank, hostname);
 
-  // Time it takes to execute all the group calls
-  if (mpiRank == 0) printf("Execution Time: %f seconds\n", duration.count());
-  printf("MPI Rank %d Success\n", mpiRank);
-
+  replayer.parse();
+  printf("Rank %d parsing completed, starting replay\n", mpiRank);
+  replayer.replay();
   MPI_Finalize();
   return 0;
-}
-
-void PrintGroupCall(GroupCall const& gc)
-{
-  printf("OpCount: %d\n", gc.opCount);
-
-  for (auto rd : gc.rankData) {
-    printf("  - Rank %02d: comm %d\n", rd.first, rd.second.commIdx);
-
-    for (int task = 0; task < rd.second.tasks.size(); task++) {
-      TaskInfo ti = rd.second.tasks[task];
-      std::string funcName = (ti.funcType == ncclCollSend || ti.funcType == ncclCollRecv) ? "Send/Recv" : ncclFuncNames[ti.funcType];
-      printf("  - Task %02d: %32s inPlace=%d count=%lu datatype=%d op=%d root=%d\n",
-             task, funcName.c_str(), ti.inPlace, ti.count, ti.datatype, ti.op, ti.root);
-    }
-  }
-}
-
-
-void dataToCsv(GroupCall const& gc, std::ofstream &datafile, double runTime)
-{
-  auto rd = *(gc.rankData.begin());
-  TaskInfo ti = rd.second.tasks[0];
-  std::string funcName = (ti.funcType == ncclCollSend || ti.funcType == ncclCollRecv) ? "Send/Recv" : ncclFuncNames[ti.funcType];
-  double n = (double) (ti.count);
-  double S = (double) (n * (double)DataTypeToBytes(ti.datatype));
-  double t = (double) (runTime/1000); //milliseconds to seconds
-  double busBw = (S/t);
-  if (funcName == "AllReduce") busBw *= (2*(n- 1)/n);
-  else if (funcName == "ReduceScatter" || funcName == "AllGather") busBw *= ((n-1)/n);
-  busBw /= (1e9); //in gb/s
-  std::string dataTypeName = DataTypeToName(ti.datatype);
-  std::string redOp = RedOpToName(ti.op);
-  datafile << gc.opCount << ", " << funcName.c_str() << ", " << ti.inPlace << ", " << ti.count << ", " << dataTypeName << ", " << redOp << ", " << ti.root << ", " << runTime << ", " << busBw << "\n";
-}
-
-void ParseCollectives(char const* logFilename, bool isFirstRank, CollectiveCalls& cc)
-{
-  bool verbose = isFirstRank && (getenv("VERBOSE") != NULL);
-  cc.globalRankComms.clear();
-  cc.globalRankComms.resize(cc.numGlobalRanks);
-  cc.groupCalls.clear();
-
-  FILE* fp = fopen(logFilename, "r");
-  if (!fp) {
-    printf("[ERROR] Unable to open file %s\n", logFilename);
-    exit(-1);
-  }
-
-  char line[2048];
-  LineItem li;
-  int lineNum = 0;
-
-  while (fgets(line, 2048, fp)) {
-    ++lineNum;
-
-    //Ignore invalid lines and collectives
-    if (!ParseLineItem(line, li) || li.nRanks != cc.numGlobalRanks) continue;
-
-    // Figure out commIdx for this globalrank
-    int commIdx = -1;
-    for (auto i = 0; i < cc.globalRankComms[li.globalRank].size(); i++) {
-      if (!strcmp(cc.globalRankComms[li.globalRank][i].c_str(), li.comm)) {
-        commIdx = i;
-        break;
-      }
-    }
-    if (commIdx == -1) {
-      commIdx = cc.globalRankComms[li.globalRank].size();
-      cc.globalRankComms[li.globalRank].push_back(li.comm);
-    }
-
-    TaskInfo taskInfo;
-    taskInfo.funcType = GetFuncType(li.opName);
-    taskInfo.inPlace  = !strcmp(li.sendbuff, li.recvbuff);
-    taskInfo.count    = li.count;
-    taskInfo.datatype = (ncclDataType_t) li.datatype;
-    taskInfo.op       = (ncclRedOp_t) li.op;
-    taskInfo.root     = li.root;
-
-    // Find the appropriate GroupCall that this task belongs to
-    // If it doesn't exist yet, then create it
-    bool found = false;
-    for (auto& gc : cc.groupCalls) {
-      if (gc.opCount != li.opCount) continue;
-      if (gc.rankData.count(li.globalRank)) {
-        RankData& rd = gc.rankData[li.globalRank];
-        if (rd.commIdx != commIdx || rd.tasks.size() != li.task)
-          continue;
-
-        rd.tasks.push_back(taskInfo);
-        found = true;
-        break;
-      }
-      // Rank has no tasks - make sure this is task 0
-      else if (li.task == 0) {
-        gc.rankData[li.globalRank].lineNum = lineNum;
-        gc.rankData[li.globalRank].commIdx = commIdx;
-        gc.rankData[li.globalRank].tasks.push_back(taskInfo);
-        found = true;
-        break;
-      }
-    }
-
-    // If no collectives were found, create new one
-    if (!found) {
-      if (li.task != 0) {
-        if (isFirstRank) printf("[WARN] Was unable to find corresponding collective for line %d\n", lineNum);
-      }
-
-      GroupCall gc;
-      gc.opCount = li.opCount;
-      gc.rankData[li.globalRank].commIdx = commIdx;
-      gc.rankData[li.globalRank].lineNum = lineNum;
-      gc.rankData[li.globalRank].tasks.push_back(taskInfo);
-      cc.groupCalls.push_back(gc);
-    }
-  }
-  fclose(fp);
-
-  // Validate group calls
-  // - For non Send/Recv, check that all ranks participate with same parameters count
-  // - For Send/Recv, check that pairs of Send/Recv calls exist
-  if (isFirstRank) printf("Found %lu groupCalls\n", cc.groupCalls.size());
-  for (int i = 0; i < cc.groupCalls.size(); i++) {
-    GroupCall& gc = cc.groupCalls[i];
-    std::map<std::tuple<std::string, size_t, int, int>, std::vector<int>> arrivalCounter;
-
-    gc.isValid = true;
-
-    for (auto rd : gc.rankData) {
-      for (int task = 0; task < rd.second.tasks.size(); task++) {
-        TaskInfo ti = rd.second.tasks[task];
-
-        std::string funcName = (ti.funcType == ncclCollSend || ti.funcType == ncclCollRecv) ? "Send/Recv" : ncclFuncNames[ti.funcType];
-        std::tuple<std::string, size_t, int, int> key(funcName, ti.count, ti.datatype, ti.op);
-
-        auto& rankVector = arrivalCounter[key];
-        if (rankVector.size() < cc.numGlobalRanks)
-          rankVector.resize(cc.numGlobalRanks);
-
-        // rankVector<int> in arrivalCount represents the rank information
-        // Count the number of tasks that are going to be executed by each rank. This is to validate the group call later on.
-        // Nom-Send/Recv rank counts (rankVector<int> elements) should be equal at the end, and for Send/Recv, all the elements of rankVector<int> should be equal to 0
-        if (ti.funcType == ncclCollRecv) {
-          rankVector[ti.root]--;
-        } else {
-          rankVector[rd.first]++;
-        }
-      }
-    }
-
-    // Iterate through the map variable and report/validate the results
-    for (const auto& e : arrivalCounter) {
-      int maxVal;
-      std::string funcName = std::get<0>(e.first);
-      size_t      count    = std::get<1>(e.first);
-      int const   datatype = std::get<2>(e.first);
-      int const   op       = std::get<3>(e.first);
-
-      bool isp2p = (funcName == "Send/Recv");
-      if (!isp2p) maxVal = *std::max_element(e.second.begin(), e.second.end());
-
-      // Validate all the ranks have required amount of collective call (task)
-      for (int i = 0; i < e.second.size(); i++) {
-        if (e.second[i] != (isp2p ? 0 : maxVal)) {
-          std::string warning = (isp2p ? (e.second[i] > 0 ? "[WARN] Missing Recv" : "[WARN] Missing Send") : "[WARN] Missing " + std::string(funcName))
-            + " count=" + std::to_string(count) + " datatype=" + std::to_string(datatype) + " op=" + std::to_string(op) + " at rank [" + std::to_string(i) + "]";
-          if(isFirstRank) printf("%s\n", warning.c_str());
-
-          gc.isValid = false;
-        }
-      }
-    }
-  }
-
-  // Check number of comms per rank
-  cc.numCommsPerRank = cc.globalRankComms[0].size();
-  for (int i = 1; i < cc.numGlobalRanks; i++) {
-    if (cc.numCommsPerRank != cc.globalRankComms[i].size()) {
-      printf("[ERROR] Replayer currently only supports identical number of communicators across all ranks\n");
-      printf("[ERROR] Rank %d has %lu communicators (expecting %d)\n", i, cc.globalRankComms[i].size(), cc.numCommsPerRank);
-      exit(1);
-    }
-  }
-
-  // Detect and replace scatter patterns
-  for (auto& gc : cc.groupCalls) {
-    if (!gc.isValid) continue;
-    int scatterRoot = -1;
-    bool isScatter = true;
-    for (auto& [rank, rankData] : gc.rankData) {
-      int sendCount = 0, recvCount = 0;
-      for (const auto& task : rankData.tasks) {
-        if (task.funcType == ncclCollSend) 
-          sendCount++;
-        else if (task.funcType == ncclCollRecv) 
-          recvCount++; 
-      }
-      if (sendCount == cc.numGlobalRanks && recvCount == 1) {
-        if (scatterRoot == -1) {
-          // Root is the first rank that matches the condition
-          scatterRoot = rank;
-        } else {
-          isScatter = false;
-          break;
-        }
-      } else if (recvCount != 1 || sendCount != 0) {
-        // Non-root ranks must only recv and not send
-        isScatter = false;
-        break;
-      }
-    }
-
-    // Replace send/recv calls with scatter call for the group call
-    if (isScatter) {
-      TaskInfo scatterTask;
-      scatterTask.funcType = ncclCollScatter;
-      scatterTask.count = gc.rankData[scatterRoot].tasks[0].count;
-      scatterTask.datatype = gc.rankData[scatterRoot].tasks[0].datatype;
-      scatterTask.root = scatterRoot;
-
-      for (auto& [rank, rankData] : gc.rankData) {
-        rankData.tasks.clear();
-        rankData.tasks.push_back(scatterTask);
-      }
-
-      if (isFirstRank)
-        printf("[INFO] Scatter pattern detected and replaced with scatter collective\n");
-    }
-  }
-}
-
-bool ParseLineItem(char const* line, LineItem& li)
-{
-  return sscanf(line,
-                "%[^:]:%d:%d [%d] NCCL INFO %[^:]: opCount %x sendbuff %s "
-                "recvbuff %s count %lu datatype %d op %d root %d comm %s "
-                "[nranks=%d] stream %p task %d globalrank %d",
-                li.hostname, &li.pid, &li.tid, &li.cudaDev, li.opName,
-                &li.opCount, li.sendbuff, li.recvbuff,
-                &li.count, &li.datatype, &li.op, &li.root, li.comm,
-                &li.nRanks, &li.stream, &li.task, &li.globalRank) == 17;
-}
-
-double ReplayRccl(CollectiveCalls& cc, int groupIdx, int& numInvalid)
-{
-  int numLocalRanks = cc.localRankComms.size();
-
-  for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
-    int globalRank = cc.firstGlobalRank + localIdx;
-    if (cc.groupCalls[groupIdx].rankData.count(globalRank) == 0) continue;
-    HIP_CALL(hipSetDevice(cc.localGpuOffset + localIdx));
-
-    RankData& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);
-    int numTasks = rankData.tasks.size();
-
-    for (int taskId = 0; taskId < numTasks; taskId++) {
-      TaskInfo& task = rankData.tasks[taskId];
-
-      // Each task has a size based on the type of collective (funcType)
-      std::pair<size_t, size_t> numBytes = GetSize(task, cc.numGlobalRanks);
-
-      if (task.inPlace) {
-        numBytes.first = std::max(numBytes.first, numBytes.second);
-        numBytes.second = numBytes.first;
-      }
-
-      // Allocate memory
-      AllocateMem(task.inputGpu, numBytes.first, true);
-      AllocateMem(task.outputCpu, numBytes.second);
-      AllocateMem(task.expected, numBytes.second);
-
-      if (!task.inPlace) {
-        AllocateMem(task.outputGpu, numBytes.second, true);
-      } else {
-        task.outputGpu = task.inputGpu;
-      }
-
-      // Prepare input/output for each task based on collective type
-      PrepareDataFunc(task, globalRank, cc.numGlobalRanks);
-
-      HIP_CALL(hipDeviceSynchronize());
-    }
-  }
-
-  // Execute the collective call (task)
-  std::chrono::time_point start = std::chrono::high_resolution_clock::now();
-  NCCL_CALL(ncclGroupStart());
-  for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
-    int globalRank = cc.firstGlobalRank + localIdx;
-    if (cc.groupCalls[groupIdx].rankData.count(globalRank) == 0) continue;
-
-    RankData& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);
-    int numTasks = rankData.tasks.size();
-    int commIdx = rankData.commIdx;
-    for (int taskId = 0; taskId < numTasks; taskId++) {
-      TaskInfo& task = rankData.tasks[taskId];
-      ExecuteCollective(task, cc.localRankComms[localIdx][commIdx], cc.localRankStreams[localIdx][commIdx]);
-    }
-  }
-  NCCL_CALL(ncclGroupEnd());
-
-  // Synchronize devices and free memory
-  for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
-    int globalRank = cc.firstGlobalRank + localIdx;
-    if (cc.groupCalls[groupIdx].rankData.count(globalRank) == 0) continue;
-
-    RankData const& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);
-    int commIdx = rankData.commIdx;
-    HIP_CALL(hipStreamSynchronize(cc.localRankStreams[localIdx][commIdx]));
-  }
-
-  std::chrono::time_point end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> duration = (end - start);
-  double runTime = duration.count();
-  runTime *= 1000; //convering into milliseconds
-
-  // Data validation
-  bool isValid = true;
-  for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
-    int globalRank = cc.firstGlobalRank + localIdx;
-    RankData& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);
-    int numTasks = rankData.tasks.size();
-    for (int taskId = 0; taskId < numTasks; taskId++) {
-      TaskInfo& task = rankData.tasks[taskId];
-      
-      // Only need Recv to validate
-      if (task.funcType == ncclCollSend) break;
-      // Ignore non-root ranks
-      if (IsRootUsed(task.funcType) && task.root != globalRank) break;
-
-      std::pair<size_t, size_t> numBytes = GetSize(task, cc.numGlobalRanks);
-      if (task.inPlace) {
-        numBytes.first = std::max(numBytes.first, numBytes.second);
-        numBytes.second = numBytes.first;
-      }
-      HIP_CALL(hipMemcpy(task.outputCpu.ptr, task.outputGpu.ptr, numBytes.second, hipMemcpyDeviceToHost));
-      if (!IsEqual(task.outputCpu, task.expected, task.datatype, task.count, globalRank)) {
-        isValid = false;
-        break; // Check other ranks
-      }
-    }
-  }
-
-  if (!isValid) numInvalid++;
-
-  // Free memory
-  for (int localIdx = 0; localIdx < numLocalRanks; localIdx++) {
-    int globalRank = cc.firstGlobalRank + localIdx;
-    RankData& rankData = cc.groupCalls[groupIdx].rankData.at(globalRank);
-    int numTasks = rankData.tasks.size();
-    for (int taskId = 0; taskId < numTasks; taskId++) {
-      TaskInfo& task = rankData.tasks[taskId];
-      FreeMem(task.inputGpu, true);
-      if (!task.inPlace) FreeMem(task.outputGpu, true);
-      FreeMem(task.outputCpu);
-      FreeMem(task.expected);
-    }
-  }
-  return runTime;
-}
-
-// GetSize will return a pair of bytes where first element in pair represents bytesSent and the second bytesRecv
-std::pair<size_t, size_t> GetSize(TaskInfo taskInfo, int numGlobalRanks) {
-  size_t sendNumBytes, recvNumBytes;
-
-  switch (taskInfo.funcType) {
-  case ncclCollBroadcast: case ncclCollReduce: case ncclCollAllReduce:
-    sendNumBytes = taskInfo.count * DataTypeToBytes(taskInfo.datatype);
-    recvNumBytes = sendNumBytes;
-    break;
-  case ncclCollAllGather: case ncclCollGather:
-    sendNumBytes = taskInfo.count * DataTypeToBytes(taskInfo.datatype);
-    recvNumBytes = numGlobalRanks * sendNumBytes;
-    break;
-  case ncclCollReduceScatter: case ncclCollScatter:
-    recvNumBytes = taskInfo.count * DataTypeToBytes(taskInfo.datatype);
-    sendNumBytes = numGlobalRanks * recvNumBytes;
-    break;
-  case ncclCollAllToAll:
-    sendNumBytes = numGlobalRanks * taskInfo.count * DataTypeToBytes(taskInfo.datatype);
-    recvNumBytes = sendNumBytes;
-    break;
-  default:
-    sendNumBytes = taskInfo.count * DataTypeToBytes(taskInfo.datatype);
-    recvNumBytes = sendNumBytes;
-  }
-  return std::make_pair(sendNumBytes, recvNumBytes);
-}
-
-void ExecuteCollective(TaskInfo& task, ncclComm_t const& comm, hipStream_t stream)
-{
-  switch (task.funcType) {
-  case ncclCollAllGather:
-    NCCL_CALL(ncclAllGather(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, comm, stream));
-    break;
-  case ncclCollAllReduce:
-    NCCL_CALL(ncclAllReduce(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, task.op, comm, stream));
-    break;
-  case ncclCollBroadcast:
-    NCCL_CALL(ncclBroadcast(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, task.root, comm, stream));
-    break;
-  case ncclCollReduce:
-    NCCL_CALL(ncclReduce(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, task.op, task.root, comm, stream));
-    break;
-  case ncclCollReduceScatter:
-    NCCL_CALL(ncclReduceScatter(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, task.op, comm, stream));
-    break;
-  case ncclCollGather:
-    NCCL_CALL(ncclGather(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, task.root, comm, stream));
-    break;
-  case ncclCollScatter:
-    NCCL_CALL(ncclScatter(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, task.root, comm, stream));
-    break;
-  case ncclCollAllToAll:
-    NCCL_CALL(ncclAllToAll(task.inputGpu.ptr, task.outputGpu.ptr, task.count, task.datatype, comm, stream));
-    break;
-  case ncclCollSend:
-    NCCL_CALL(ncclSend(task.inputGpu.ptr, task.count, task.datatype, task.root, comm, stream));
-    break;
-  case ncclCollRecv:
-    NCCL_CALL(ncclRecv(task.outputGpu.ptr, task.count, task.datatype, task.root, comm, stream));
-    break;
-  default:
-    printf("Error: unsupported collective\n");
-    exit(1);
-  }
-}
-
-void AllocateMem(PtrUnion& ptrUnion, size_t const numBytes, bool isGpu) {
-  if (numBytes) {
-    if (isGpu) {
-      HIP_CALL(hipMalloc(&ptrUnion.ptr, numBytes));
-      HIP_CALL(hipMemset(ptrUnion.ptr, 0, numBytes));
-      HIP_CALL(hipStreamSynchronize(NULL));
-    } else {
-      ptrUnion.ptr = calloc(numBytes, 1);
-      memset(ptrUnion.ptr, 0, numBytes);
-      if (!ptrUnion.ptr) {
-        printf("Unable to allocate memory (%lu bytes)\n", numBytes);
-      }
-    }
-  }
-}
-
-void FreeMem(PtrUnion& ptrUnion, bool isGpu) {
-  if (ptrUnion.ptr != nullptr) {
-    if (isGpu)
-      HIP_CALL(hipFree(ptrUnion.ptr));
-    else
-      free(ptrUnion.ptr);
-    ptrUnion.ptr = nullptr;
-  }
-}
-
-void FillPattern(PtrUnion& ptrUnion, ncclDataType_t const dataType, size_t const numElements, int globalRank, bool isGpu) {
-  PtrUnion temp;
-  size_t const numBytes = numElements * DataTypeToBytes(dataType);
-
-  if (isGpu)
-    AllocateMem(temp, numBytes);
-  else
-    temp.ptr = ptrUnion.ptr;
-
-  for (int i = 0; i < numElements; i++) {
-    int valueI = (globalRank + i) % 256;
-    double valueF = 1.0L/((double)valueI+1.0L);
-    SetPtr(temp, dataType, i, valueI, valueF);
-  }
-
-  if (isGpu) {
-    HIP_CALL(hipMemcpy(ptrUnion.ptr, temp.ptr, numBytes, hipMemcpyHostToDevice));
-    FreeMem(temp);
-  }
-}
-
-void PrepareDataFunc(TaskInfo& taskInfo, int globalRank, int totalRanks)
-{
-  switch (taskInfo.funcType)
-  {
-  case ncclCollBroadcast:     PrepData_Broadcast(taskInfo, globalRank);                 break;
-  case ncclCollReduce:        PrepData_Reduce(taskInfo, globalRank, totalRanks, false); break;
-  case ncclCollAllGather:     PrepData_Gather(taskInfo, globalRank, totalRanks, true);  break;
-  case ncclCollReduceScatter: PrepData_ReduceScatter(taskInfo, globalRank, totalRanks); break;
-  case ncclCollAllReduce:     PrepData_Reduce(taskInfo, globalRank, totalRanks, true);  break;
-  case ncclCollGather:        PrepData_Gather(taskInfo, globalRank, totalRanks, false); break;
-  case ncclCollScatter:       PrepData_Scatter(taskInfo, globalRank, totalRanks);       break;
-  case ncclCollAllToAll:      PrepData_AlltoAll(taskInfo, globalRank, totalRanks);      break;
-  case ncclCollSend:          PrepData_Send(taskInfo, globalRank);                      break;
-  case ncclCollRecv:          PrepData_Recv(taskInfo, globalRank);                      break;
-  default:
-    printf("Error: unsupported collective\n");
-    exit(1);
-  }
-}
-
-void PrepData_Broadcast(TaskInfo& taskInfo, int globalRank) {
-  // Only root needs input pattern
-  if (globalRank == taskInfo.root)
-    FillPattern(taskInfo.inputGpu, taskInfo.datatype, taskInfo.count, taskInfo.root, true);
-
-  // Otherwise all other ranks expected output is the same as input of root
-  FillPattern(taskInfo.expected, taskInfo.datatype, taskInfo.count, taskInfo.root);
-}
-
-void PrepData_Reduce(TaskInfo& taskInfo, int globalRank, int totalRanks, bool isAllReduce) {
-  size_t const numBytes = taskInfo.count * DataTypeToBytes(taskInfo.datatype);
-
-  // If average or custom reduction operator is used, perform a summation instead
-  ncclRedOp_t const tempOp = (taskInfo.op >= ncclAvg ? ncclSum : taskInfo.op);
-
-  for (int rank = 0; rank < totalRanks; ++rank) {
-    FillPattern(taskInfo.outputCpu, taskInfo.datatype, taskInfo.count, rank);
-    if (rank == globalRank)
-      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, taskInfo.outputCpu.ptr, numBytes, hipMemcpyHostToDevice));
-    if (isAllReduce || taskInfo.root == globalRank) {
-      if (rank == 0)
-        memcpy(taskInfo.expected.ptr, taskInfo.outputCpu.ptr, numBytes);
-      else
-        Reduce(taskInfo.expected, taskInfo.outputCpu, taskInfo.count, taskInfo.datatype, tempOp);
-    }
-  }
-
-  if (taskInfo.op == ncclAvg && (isAllReduce || taskInfo.root == globalRank))
-    DivideByInt(taskInfo.expected, taskInfo.datatype, taskInfo.count, totalRanks);
-}
-
-void PrepData_ReduceScatter(TaskInfo& taskInfo, int globalRank, int totalRanks) {
-  int const numInputElements = taskInfo.count * totalRanks;
-  int const numOutputElements = taskInfo.count;
-  std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
-
-  PtrUnion tempInputCpu;
-  PtrUnion tempResultCpu;
-  AllocateMem(tempInputCpu, numBytes.first);
-  AllocateMem(tempResultCpu, numBytes.first);
-
-  // If average or custom reduction operator is used, perform a summation instead
-  ncclRedOp_t const tempOp = (taskInfo.op >= ncclAvg ? ncclSum : taskInfo.op);
-
-  for (int rank = 0; rank < totalRanks; ++rank) {
-    FillPattern(tempInputCpu, taskInfo.datatype, numInputElements, rank);
-    if (rank == globalRank)
-      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, tempInputCpu.ptr, numBytes.first, hipMemcpyHostToDevice));
-    if (rank == 0)
-      memcpy(tempResultCpu.ptr, tempInputCpu.ptr, numBytes.first);
-    else
-      Reduce(tempResultCpu, tempInputCpu, numInputElements, taskInfo.datatype, tempOp);
-  }
-
-  if (taskInfo.op == ncclAvg)
-    DivideByInt(tempResultCpu, taskInfo.datatype, numInputElements, totalRanks);
-  
-  memcpy(taskInfo.expected.I1, tempResultCpu.I1 + globalRank * numBytes.second, numBytes.second);
-  FreeMem(tempInputCpu);
-  FreeMem(tempResultCpu);
-}
-
-void PrepData_Gather(TaskInfo& taskInfo, int globalRank, int totalRanks, bool isAllGather) {
-  int numInputElements = taskInfo.count;
-  int numOutputElements = totalRanks * taskInfo.count;
-  std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
-
-  for (int rank = 0; rank < totalRanks; ++rank) {
-    FillPattern(taskInfo.outputCpu, taskInfo.datatype, numInputElements, rank);
-    if (rank == globalRank)
-      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, taskInfo.outputCpu.ptr, numBytes.first, hipMemcpyHostToDevice));
-    if (isAllGather || taskInfo.root == globalRank)
-      memcpy(taskInfo.expected.I1 + (rank * numBytes.first), taskInfo.outputCpu.ptr, numBytes.first);
-  }
-}
-
-void PrepData_Scatter(TaskInfo& taskInfo, int globalRank, int totalRanks) {
-  int const numInputElements = taskInfo.count * totalRanks;
-  int const numOutputElements = taskInfo.count;
-  std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
-
-  PtrUnion tempInput;
-  AllocateMem(tempInput, numBytes.first);
-
-  FillPattern(tempInput, taskInfo.datatype, numInputElements, taskInfo.root);
-
-  if (globalRank == taskInfo.root)
-    HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, tempInput.ptr, numBytes.first, hipMemcpyHostToDevice));
-  
-  memcpy(taskInfo.expected.U1, tempInput.U1 + globalRank * numBytes.second, numBytes.second);
-
-  FreeMem(tempInput);
-}
-
-void PrepData_AlltoAll(TaskInfo& taskInfo, int globalRank, int totalRanks) {
-  int const numInputElements = taskInfo.count * totalRanks;
-  int const numOutputElements = numInputElements;
-  std::pair<size_t, size_t> numBytes = GetSize(taskInfo, totalRanks);
-  size_t const numBytesPerRank = numBytes.first / totalRanks;
-
-  for (int rank = 0; rank < totalRanks; ++rank) {
-    FillPattern(taskInfo.outputCpu, taskInfo.datatype, numInputElements, rank);
-
-    if (rank == globalRank)
-      HIP_CALL(hipMemcpy(taskInfo.inputGpu.ptr, taskInfo.outputCpu.ptr, numBytes.first, hipMemcpyHostToDevice));
-    
-    memcpy(taskInfo.expected.U1 + numBytesPerRank * rank, taskInfo.outputCpu.U1 + numBytesPerRank * globalRank, numBytesPerRank);
-  }
-}
-
-void PrepData_Send(TaskInfo& taskInfo, int globalRank) {
-  FillPattern(taskInfo.inputGpu, taskInfo.datatype, taskInfo.count, globalRank, true);
-}
-
-void PrepData_Recv(TaskInfo& taskInfo, int globalRank) {
-  FillPattern(taskInfo.expected, taskInfo.datatype, taskInfo.count, globalRank);
 }
