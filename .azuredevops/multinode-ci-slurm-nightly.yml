@@ -45,6 +45,9 @@ jobs:
     inputs:
       targetType: inline
       script: |
+
+        which module
+
         MODULES_INIT_SCRIPT_PATH=$(bash -lc 'echo $MODULESHOME/init/bash')
 
         if [[ ! -f "$MODULES_INIT_SCRIPT_PATH" ]]; then
