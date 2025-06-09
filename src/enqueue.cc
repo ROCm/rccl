@@ -783,7 +783,11 @@ static ncclResult_t scheduleCollTasksToPlan(
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
     if (!plan->kernelSpecialized) {
+#ifdef ENABLE_COLLTRACE
       plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
+#else
+      plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
+#endif
       plan->kernelSpecialized = true;
     }
 
@@ -1084,7 +1088,11 @@ static ncclResult_t scheduleP2pTasksToPlan(
 
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
   if (!plan->kernelSpecialized) {
+#ifdef ENABLE_COLLTRACE
     plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
+#else
+    plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
+#endif
     plan->kernelSpecialized = true;
   }
 
