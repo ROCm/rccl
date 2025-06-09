@@ -49,6 +49,7 @@ void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* tas
     }
   }
   // Fall back to default unroll
+  WARN("Requested RCCL_UNROLL_FACTOR: %d does not exist in `rcclKernelTable`. Falling back to default unroll: %d", unroll, rcclKernelTable[firstKernel].unroll);
   return rcclKernelTable[firstKernel].funcPtr;
 }
 
