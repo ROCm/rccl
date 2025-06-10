@@ -86,16 +86,16 @@ struct rcclApiCall {
   double                timestamp = -1;
   unsigned long long    graphID = 0;
   int                   graphCaptured = -1;
-  void*                 sendPtrBase = NULL;
-  void*                 recvPtrBase = NULL;
-  size_t                sendPtrExtent = 0;
-  size_t                recvPtrExtent = 0;
 
 // explicit data from header
   rcclCall_t            type;
   uint64_t              opCount = 0;
   const void*           sendbuff = NULL;
   void*                 recvbuff = NULL;
+  void*                 sendPtrBase = NULL;
+  void*                 recvPtrBase = NULL;
+  size_t                sendPtrExtent = 0;
+  size_t                recvPtrExtent = 0;
   size_t                count = 0;
   ncclDataType_t        datatype;
   ncclRedOp_t           op;

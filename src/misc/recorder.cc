@@ -79,8 +79,8 @@ Recorder::Recorder()
   }
 
   logLevel = getenv("RCCL_LOG_LEVEL") ? std::stoi(getenv("RCCL_LOG_LEVEL")) : 1;
-  char hostname[1024];
-  getHostName(hostname, 1024, '.');
+  char hostname[256];
+  gethostname(hostname, 256);
   pid = getpid();
   output_json = 0;
 
@@ -570,11 +570,10 @@ void Recorder::record(ncclComm_t* comms, int ndev, const int* devlist)
       for (int i = 0; i < call.root - 1; i++)
         outputFile << devlist[i] << ", ";
       outputFile << devlist[call.root - 1] << "]";
-      outputFile.flush();
     } else {
       outputFile.write((char*)devlist, sizeof(int) * ndev);
-      outputFile.flush();
     }
+    outputFile.flush();
   }
 }
 
