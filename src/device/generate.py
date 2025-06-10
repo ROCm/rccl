@@ -11,6 +11,8 @@ all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING"]
 all_unroll = ["1", "2", "4"]
 
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
+
 ################################################################################
 # The first command line argument is the path to the directory to generate and
 # populate.
@@ -30,7 +32,7 @@ else:
 # developing device code. The regex supports non-space containing globs '*',
 # and union 'a|b'. The string representing the function has the form:
 #
-# <coll> <algo> <proto> <redop> <type>
+# <coll> <algo> <proto> <redop> <type> <unroll>
 #
 # The possible values for redop, type, algo, proto can be found in the all_<foo>
 # lists at the top of this file.
@@ -43,30 +45,28 @@ else:
 # # Only AllReduce and Reduce
 # make ONLY_FUNCS="AllReduce|Reduce"
 #
+# # Only AllGather with unroll=4
+# make ONLY_FUNCS="AllGather * * * * 4"
+#
 # # Only non-reductions:
 # make ONLY_FUNCS="AllGather * *|Broadcast * *|SendRecv"
 #
 # # Only AllReduce Sum int32_t (but all algos, protos)
 # make ONLY_FUNCS="AllReduce * * Sum int32_t"
 #
-# # Only AllReduce RING Max float (but all protos)
+# # Only AllReduce RING Max float (but all protos and unrolls)
 # make ONLY_FUNCS="AllReduce RING * Max float"
 #
-# # AllReduce TREE LL128 Prod rccl_bfloat16
-# make ONLY_FUNCS="AllReduce TREE LL128 Prod rccl_bfloat16"
+# # AllReduce TREE LL128 Prod rccl_bfloat16 unroll=1
+# make ONLY_FUNCS="AllReduce TREE LL128 Prod rccl_bfloat16 1"
 #
-# # AllReduce RING SIMPLE and ReduceScatter RING LL float (but all redops, types for AllReduce and all redops for ReduceScatter)
-# make ONLY_FUNCS="AllReduce RING SIMPLE * *|ReduceScatter RING LL * float"
+# # AllReduce RING SIMPLE and ReduceScatter RING LL float (but all redops, types, unrolls for AllReduce and all redops, unrolls for ReduceScatter)
+# make ONLY_FUNCS="AllReduce RING SIMPLE * *|ReduceScatter RING LL * float *"
 #                         --- or ---
-# make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * float"
-# make ONLY_FUNCS="AllReduce RING/TREE LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|AllGather RING LL/SIMPLE Sum int8_t|AllToAllPivot RING SIMPLE Sum int8_t|Broadcast RING LL/SIMPLE Sum int8_t|Reduce RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|ReduceScatter RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8|SendRecv RING SIMPLE Sum int8_t"
+# make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * float *"
+# make ONLY_FUNCS="AllReduce RING/TREE LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8 1/2/4|AllGather RING LL/SIMPLE Sum int8_t 1/2/4|AllToAllPivot RING SIMPLE Sum int8_t 1/2/4|Broadcast RING LL/SIMPLE Sum int8_t 1/2/4|Reduce RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8 1/2/4|ReduceScatter RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8 1/2/4|SendRecv RING SIMPLE Sum int8_t 1/2/4"
 #
-#
-# # Specify UNROLL to limit unroll factor for device-code generation
-# make UNROLL=<1/2/4>
-#
-#
-# # UNROLL and ONLY_FUNCS can be used together for debugging
+# # ONLY_FUNCS can be used together for debugging
 
 # Paste all non-None arguments together with `sep`.
 def paste(sep, *args):
@@ -76,25 +76,13 @@ is_ifc             = 1 if sys.argv[2] == "ON" else 0
 is_colltrace       = 1 if sys.argv[3] == "ON" else 0
 is_msccl_kernels   = 1 if sys.argv[4] == "ON" else 0
 
-unroll_and_onlyFuncs = sys.argv[5:]
-func_pattern = "AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
-
-# check if UNROLL and/or ONLY_FUNC are defined
-if unroll_and_onlyFuncs:
-  arg = unroll_and_onlyFuncs[0]
-
-  # Set UNROLL only if digit and part of `all_unroll`
-  if arg.isdigit() and arg in all_unroll:
-    all_unroll = [arg]
-  else:
-    func_pattern = arg
-
-  if len(unroll_and_onlyFuncs) == 2:
-    func_pattern = unroll_and_onlyFuncs[1]
+func_pattern = sys.argv[5:]
+if func_pattern and func_pattern[0]:
+  func_pattern = func_pattern[0]
+else:
+  func_pattern = "AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
 
 ################################################################################
-
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
 
 algos_of_coll = {
   "AllGather":     ["RING"],
@@ -149,11 +137,13 @@ coll_lower_to_camel = {coll_camel_to_lower[x]: x for x in coll_camel_to_lower}
 
 ################################################################################
 
+seen_unroll = []
+
 # Helper function to check if the conditions for the collective is being met
-def func_validate(coll, algo, proto, redop, ty):
+def func_validate(coll, algo, proto, redop, ty, unroll):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
-  if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll]:
+  if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll:
     return False
   return True
 
@@ -172,7 +162,7 @@ def func_filter(function_params, current_idx, item_list=None):
       if current_idx == 0:
         raise ValueError("Error: Paramter 'COLL' can not be type all '*'.")
 
-      # all_params list must be in the same order as function_params --> <coll> <algo> <proto> <redop> <type>
+      # all_params list must be in the same order as function_params --> <coll> <algo> <proto> <redop> <type> <unroll>
       # Get the current list from all_params
       current_list = all_params[current_idx]
 
@@ -203,7 +193,9 @@ def func_filter(function_params, current_idx, item_list=None):
   else:
     coll, algo, proto, redop, ty, unroll = item_list
 
-    if func_validate(coll, algo, proto, redop, ty):
+    if func_validate(coll, algo, proto, redop, ty, unroll):
+      if not unroll in seen_unroll:
+        seen_unroll.append(unroll)
       yield(coll, algo, proto, redop, ty, unroll)
 
 # Parse ONLY_FUNCS input and feed it to func_filter
@@ -242,10 +234,10 @@ def enumerate_func_rows():
         for proto in all_protos:
           for redop in all_redops:
             for ty in all_tys:
-              if func_validate(coll, algo, proto, redop, ty):
+              if func_validate(coll, algo, proto, redop, ty, unroll):
                 yield (coll, algo, proto, redop, ty, unroll)
 
-# Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
+# Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty> <unroll>
 def custom_sort_key(fn):
     coll, algo, proto, redop, ty, unroll = fn
 
@@ -297,7 +289,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
 
   # Generate function tables per unroll factor
   tableIdx = 0
-  for curr_unroll in all_unroll:
+  for curr_unroll in seen_unroll:
     out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_%s[] = {\n" % curr_unroll)
     tableIdx = 0
     for fn in primary_funcs:
@@ -329,18 +321,19 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       "};\n"
       "\n")
 
-    for curr_unroll in all_unroll:
+    for curr_unroll in seen_unroll:
       out("template<unsigned short f>\n")
       out("struct Caller<%s, f, f + 1>{\n" % curr_unroll)
       out("  static __forceinline__ __device__ __host__\n");
       out("  void call(unsigned short funcIndex) noexcept { ncclDevFuncTable_%s[f](); }\n" % curr_unroll)
       out("};\n")
 
+  out("\n")
   # Create NCCL_CALL_FUNCTION helper function that will call the appropriate device function
   out("template <int unroll>\n"
       "__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
   if is_ifc:
-    for curr_unroll in all_unroll:
+    for curr_unroll in seen_unroll:
       out("  if (unroll == %s) { ncclDevFuncTable_%s[funcIndex]();\n" % (curr_unroll, curr_unroll))
   else:
     out(f"  Caller<unroll, 0, {tableIdx}>::call(funcIndex);\n")
@@ -366,10 +359,10 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
 
   out("/* This table contains all the __global__ functions that were compiled */\n");
   out("static struct rcclKernelItem rcclKernelTable[] = {\n")
-  for unroll in all_unroll:
+  for unroll in seen_unroll:
     out("  {(void*)&(rcclGenericKernel<%s, false>), %s},\n" % (unroll, unroll))
   out("#ifdef ENABLE_COLLTRACE\n")
-  for unroll in all_unroll:
+  for unroll in seen_unroll:
     out("  {(void*)&(rcclGenericKernel<%s, true>), %s},\n" % (unroll, unroll))
   out("#endif\n");
   out("};\n\n");
@@ -405,10 +398,13 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   # The mapping from function rows to valid primary function ids.
   out("extern int const ncclDevFuncRowToId[] = {\n")
   index = 0
-  for fn in func_rows[:len(func_rows)//2]:
+  offset = len(func_rows)//len(all_unroll)
+  start = all_unroll.index(seen_unroll[0]) * offset
+  end = start + offset
+  for fn in func_rows[start:end]:
     fn_id, comment = -1, ""
     if fn is not None:
-      fn_id = primary_to_index[equivalent_primary(*fn)]
+      fn_id = primary_to_index[equivalent_primary(*fn)] % offset if primary_to_index[equivalent_primary(*fn)] != -1 else -1
       comment = " // " + paste(" ", *fn[:-1])
     out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
     index += 1
