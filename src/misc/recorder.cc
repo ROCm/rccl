@@ -520,7 +520,7 @@ void Recorder::record(int groupDepth, ncclSimInfo_t *siminfo)
                        siminfo->size, siminfo->magic, siminfo->version, siminfo->estimatedTime, call.timestamp);
     outputFile.write(buffer, len);
   } // no tid for groupCall
-  // else flush
+  // TODO: else flush siminfo in binary
   outputFile.flush();
 }
 
@@ -547,7 +547,7 @@ void Recorder::record(rcclCall_t type, int size, int rank, ncclUniqueId* commId,
     outputFile.write(buffer, len);
     outputFile.flush();
   }
-  // else flush
+  // TODO: else flush ncclConfig in binary
 }
 
 void Recorder::record(ncclComm_t* comms, int ndev, const int* devlist)
