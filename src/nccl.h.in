@@ -764,7 +764,7 @@ typedef int mscclAlgoHandle_t;
 
     @param[in]  mscclAlgoFilePath  Path to MSCCL algorithm file
     @param[out] mscclAlgoHandle    Returned handle to MSCCL algorithm
-    @param[in]  rank               Current rank */Add commentMore actions
+    @param[in]  rank               Current rank */
 ncclResult_t  mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
 /*! @cond       include_hidden */
 ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
