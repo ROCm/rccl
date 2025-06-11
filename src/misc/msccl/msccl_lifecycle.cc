@@ -441,9 +441,6 @@ static ncclResult_t _mscclRunAlgo(
     void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
     size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
     mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream) {
-  NVTX3_FUNC_WITH_PARAMS(MSCCL, NcclNvtxParamsMSCCL,
-    NVTX3_PAYLOAD(comm ? comm->commHash : 0, count * ncclTypeSize(dataType), op, dataType));
-  
   mscclStatus& status = mscclGetStatus(comm);
   struct mscclAlgo* hostAlgo = status.hostAlgos[mscclAlgoHandle];
   struct mscclAlgo* devAlgo = status.devAlgos[mscclAlgoHandle];

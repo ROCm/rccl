@@ -34,6 +34,8 @@ ncclResult_t mscclRunAlgo_impl(
     mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream) {
   // deprecated
   Recorder::instance().record("mscclRunAlgo");
+  NVTX3_FUNC_WITH_PARAMS(MSCCL, NcclNvtxParamsMSCCL,
+    NVTX3_PAYLOAD(comm ? comm->commHash : 0, count * ncclTypeSize(dataType), op, dataType));
   WARN("mscclRunAlgo is deprecated. Function call has no effect.");
   return ncclSuccess;
 }
