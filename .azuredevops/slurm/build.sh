@@ -5,9 +5,7 @@
 #SBATCH --time=60
 #SBATCH --partition=gt
 
-set -e
-source /usr/share/Modules/init/bash
-module load rocm/6.3.0
+module list
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
