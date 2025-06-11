@@ -54,7 +54,8 @@ jobs:
       targetType: inline
       script: |
         echo "Submitting build job..."
-        BUILD_JOB_ID=$(sbatch --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/build.sh)
+        module load rocm/6.3.0
+        BUILD_JOB_ID=$(sbatch < $(Build.SourcesDirectory)/.azuredevops/slurm/build.sh)
         echo "Submitted build job: $BUILD_JOB_ID"
         echo "##vso[task.setvariable variable=BUILD_JOB_ID]$BUILD_JOB_ID"
 
@@ -88,7 +89,13 @@ jobs:
     inputs:
       targetType: inline
       script: |
+        echo "================================================="
+        echo "Standard Output"
+        echo "================================================="
         cat rccl-build-${BUILD_JOB_ID}.out || echo "No stdout log found"
+        echo "================================================="
+        echo "Standard Error"
+        echo "================================================="
         cat rccl-build-${BUILD_JOB_ID}.err || echo "No stderr log found"
   - task: Bash@3
     displayName: Test Job
@@ -97,7 +104,8 @@ jobs:
       targetType: inline
       script: |
         echo "Submitting test job..."
-        TEST_JOB_ID=$(sbatch --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
+        module load rocm/6.3.0
+        TEST_JOB_ID=$(sbatch < $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
         echo "Submitted test job: $TEST_JOB_ID"
         echo "##vso[task.setvariable variable=TEST_JOB_ID]$TEST_JOB_ID"
 
@@ -131,7 +139,13 @@ jobs:
     inputs:
       targetType: inline
       script: |
+        echo "================================================="
+        echo "Standard Output"
+        echo "================================================="
         cat rccl-test-${TEST_JOB_ID}.out || echo "No stdout log found"
+        echo "================================================="
+        echo "Standard Error"
+        echo "================================================="
         cat rccl-test-${TEST_JOB_ID}.err || echo "No stderr log found"
   - task: PublishPipelineArtifact@1
     displayName: Upload test XML results

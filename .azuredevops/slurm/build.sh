@@ -5,11 +5,10 @@
 #SBATCH --time=60
 #SBATCH --partition=gt
 
-set -e
-module load rocm/6.3.0
+module list
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON ..
-cmake --build . -- -j32
+cmake --build . -- -j $SLURM_CPUS_ON_NODE
 cmake --build . --target install

@@ -5,7 +5,6 @@
 #SBATCH --time=60
 #SBATCH --partition=gt
 
-set -e
-module load rocm/6.3.0
+module list
 cd "${SLURM_SUBMIT_DIR:-$PWD}/build/test"
 ./rccl-UnitTests --gtest_output=xml:./test_output.xml --gtest_color=yes
