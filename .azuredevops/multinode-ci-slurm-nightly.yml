@@ -46,6 +46,7 @@ jobs:
       targetType: inline
       script: |
         sbatch < $(Build.SourcesDirectory)/.azuredevops/slurm/sample.sh
+        sleep 60
         cat test_module.out
   - task: Bash@3
     displayName: Build Job
