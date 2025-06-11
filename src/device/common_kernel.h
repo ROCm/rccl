@@ -248,7 +248,6 @@ __device__ __forceinline__ void reduceCopyPacksWithBias(
   uintptr_t minDsts[MinDsts + !MinDsts];
   uintptr_t accPtr = cvta_to_global(accPtrFn()) + threadBytesBehind;
   BytePack<BytePerPack> bias[Unroll];
-  bool biasLoaded = false;
 
   #pragma unroll
   for (int s=0; s < MinSrcs; s++) {
@@ -284,7 +283,6 @@ __device__ __forceinline__ void reduceCopyPacksWithBias(
         }
         minSrcs[0] += WARP_SIZE*BytePerPack;
       }
-      biasLoaded = true;
     }
 
     #pragma unroll Unroll
@@ -303,15 +301,9 @@ __device__ __forceinline__ void reduceCopyPacksWithBias(
         } else {
           // Use volatile loads in case credits are polled for with volatile (instead of acquire).
           tmp[u] = ld_volatile_global<BytePerPack>(minSrcs[s]);
-          if (!biasLoaded && s == 1) {
-            // coverity[dead_error_condition]
-            bias[u] = ld_volatile_global<BytePerPack>(accPtr);
-            accPtr += WARP_SIZE*BytePerPack;
-          }
         }
         minSrcs[s] += WARP_SIZE*BytePerPack;
       }
-      biasLoaded = true;
       #pragma unroll Unroll
       for (int u=0; u < Unroll; u++) {
         // coverity[dead_error_line]
@@ -357,13 +349,8 @@ __device__ __forceinline__ void reduceCopyPacksWithBias(
         if (d < MultimemDsts) {
           multimem_st_global(minDsts[d], acc[u]);
         } else {
-          if (d == 0) {
-            if (!biasLoaded) {
-              bias[u] = ld_volatile_global<BytePerPack>(accPtr);
-              accPtr += WARP_SIZE*BytePerPack;
-            }
+          if (d == 0)
             st_global<BytePerPack>(minDsts[d], applyReduce(redFn, acc[u], bias[u]));
-          }
           else
             st_global<BytePerPack>(minDsts[d], acc[u]);
         }
