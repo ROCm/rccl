@@ -155,7 +155,7 @@ jobs:
       targetType: inline
       script: |
         echo "================================================="
-        echo  Output"
+        echo "Output"
         echo "================================================="
         cat rccl-test-${TEST_JOB_ID}.out || echo "No log found"
   - task: PublishPipelineArtifact@1
