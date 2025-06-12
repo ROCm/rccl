@@ -2,36 +2,47 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.24.3 for ROCm 6.5.0
+## Unreleased - RCCL 2.25.1 for ROCm 7.0.0
+
+### Resolved issues
+
+* Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
+* Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
+* Suboptimal algorithmic switching point for AllReduce on MI300x.
+* Fixed the known issue "When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault." with a design change to use `comm` instead of `rank` for `mscclStatus`. The Global map for `comm` to `mscclStatus` is still not thread safe but should be explicitly handled by mutexes for read writes. This is tested for correctness, but there is a plan to use a thread-safe map data structure in upcoming changes.
 
 ### Added
 
 * Added new GPU target `gfx950`.
-
-### Changed
-
-* Compatibility with NCCL 2.24.3
-
-### Known issue
-
-* Using more than 64 channels can cause a segmentation fault when multiple collectives are used in the same `ncclGroup()` call.
-
-## Unreleased - RCCL 2.23.4 for ROCm 6.4.1
-
-### Added
-
-* Added MSCCL support for AllGather single node and multinode (i.e., 8, 16 and 32 GPUs). To enable on multinode, set the
-  environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
-* Added synchronization before destroying proxy thread to fix a rare hang caused by early termination.
+* Added support for `unroll=1` in device-code generation to improve performance.
+* Set a default of 112 channels for a single node with `8 * gfx950`.
+* Enabled LL128 protocol on `gfx950`.
+* Adding ability to choose unroll factor at runtime via `RCCL_UNROLL_FACTOR`.  This can be set at runtime to 1, 2, or 4.  This change currently increases compilation and linking time because it triples the number of kernels generated.
+* Added MSCCL support for AllGather multinode gfx942/gfx950 (i.e., 16 and 32 GPUs). To enable, set the environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
+* Thread thresholds for LL/LL128 are selected in Tuning Models for the MI300X. This impacts the number of channels used for AG and RS. Channel tuning model is bypassed if `NCCL_THREAD_THRESHOLDS`, `NCCL_MIN_NCHANNELS', or 'NCCL_MAX_NCHANNELS` are set.
+* Multi-node tuning for AllGather, AllReduce, and ReduceScatter that leverages LL/LL64/LL128 protocol to use nontemporal vector load/store for tunable message size ranges.
+* LL/LL128 usage ranges for AR, AG, and RS are part of the tuning models, which enable architecture-specific tuning in conjunction with the existing Rome Models scheme in RCCL.
+* Two new APIs are exposed as part of an initiative to separate RCCL code. These APIs are `rcclGetAlgoInfo` and `rcclFuncMaxSendRecvCount`. However, user-level invocation requires that RCCL be built with `RCCL_EXPOSE_STATIC` enabled.
 
 ### Changed
 
 * Compatibility with NCCL 2.23.4
+* Compatibility with NCCL 2.24.3
+* Compatibility with NCCL 2.25.1
+
+## RCCL 2.22.3 for ROCm 6.4.1
 
 ### Resolved issues
 
 * Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
 * Fixed IntraNet performance.
+* Fixed an issue where, in rare circumstances, the application could stop responding due to a proxy thread synchronization issue.
+
+### Known issues
+
+* When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault.
+  The recommended workaround is to disable MSCCL with `export RCCL_MSCCL_ENABLE=0`.
+* Within the RCCL-UnitTests test suite, failures occur in tests ending with the `ManagedMem` and `ManagedMemGraph` suffixes. These failures only affect the test results and do not affect the RCCL component itself. This issue will be resolved in the next major release.
 
 ## RCCL 2.22.3 for ROCm 6.4.0
 

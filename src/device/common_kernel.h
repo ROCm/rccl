@@ -263,9 +263,29 @@ __device__ __forceinline__ void reduceCopy(
     }
   }
 
+/*
+ * For gfx90a,
+* Before we had `Unroll/2*(16/sizeof(T))/2`, which does not work with unroll=1
+* as unroll=1; `Unroll/2` = 0, which results in the above expression to 0, and is not supported
+* This was reformulated to `(Unroll*4 + sizeof(T) - 1)/sizeof(T)`
+*
+* Before: `Unroll/2*(16/sizeof(T))/2`
+*         sizeof(T)
+* unroll  1   2   4   8
+*   4     16  8   4   2
+*   2     8   4   2   1
+*   1     0   0   0   0
+*
+* After: `(Unroll*4 + sizeof(T) - 1)/sizeof(T)`
+*         sizeof(T)
+* unroll  1   2   4   8
+*   4     16  8   4   2
+*   2     8   4   2   1
+*   1     4   2   1   1
+*/
 #if defined(__gfx90a__)
   if (MinSrcs > 1) {
-    reduceCopyPacks<RedFn, T, Unroll/2*(16/sizeof(T))/2, sizeof(T),
+    reduceCopyPacks<RedFn, T, (Unroll*4 + sizeof(T) - 1)/sizeof(T), sizeof(T),
     MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs>
     (nThreads, thread, redArg, preOpArgs, postOp,
      nSrcs, srcPtrFn, nDsts, dstPtrFn, nBytesBehind, nBytesAhead);

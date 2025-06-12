@@ -481,6 +481,7 @@ struct ncclComm {
 
   int node;
   int nNodes;
+  int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
   int localRank;
   int localRanks;
   int maxLocalRanks;

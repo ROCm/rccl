@@ -100,17 +100,17 @@ RUN wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.6.tar.g
 
 
 ## building RCCL
-ENV RCCL_INSTALL_PREFIX=${WORKDIR}/rccl_develop/build/release
-RUN git clone --recurse-submodules -b "${RCCL_BRANCH}" "${RCCL_REPO}" ./rccl_develop \
-    && cd ./rccl_develop \
-    && ./install.sh --amdgpu_targets=${GPU_TARGETS}
+ENV RCCL_INSTALL_PREFIX=${WORKDIR}/rccl/install
+RUN git clone --recurse-submodules -b "${RCCL_BRANCH}" "${RCCL_REPO}" \
+    && cd ./rccl \
+    && ./install.sh --amdgpu_targets=${GPU_TARGETS} --prefix=${RCCL_INSTALL_PREFIX}
 
 ## building RCCL-Tests
 RUN git clone -b "${RCCL_TESTS_BRANCH}" "${RCCL_TESTS_REPO}" ./rccl-tests \
     && cd ./rccl-tests \
     && mkdir build \
     && cd build \
-    && CXX=${ROCM_PATH}/bin/amdclang++ MPI_HOME=${MPI_INSTALL_PREFIX} cmake -DCMAKE_BUILD_TYPE=Release -DUSE_MPI=ON -DAMDGPU_TARGETS=${GPU_TARGETS} .. \
+    && cmake -DCMAKE_BUILD_TYPE=Release -DUSE_MPI=ON -DCMAKE_PREFIX_PATH="${RCCL_INSTALL_PREFIX};${MPI_INSTALL_PREFIX}" -DGPU_TARGETS=${GPU_TARGETS} .. \
     && make -j16
 
 

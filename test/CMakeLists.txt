@@ -56,8 +56,16 @@ if(BUILD_TESTS)
     common/TestBed.cpp
     common/TestBedChild.cpp
     common/StandaloneUtils.cpp
-    ../src/misc/recorder.cc
     )
+
+  # Append a file if BUILD_TESTS is ON and build type is not Debug
+  # Visibility is hidden by default, so we need to explicitly add the recorder.cc file
+  # to the unit tests to ensure it is included for unit test execution
+  if(BUILD_TESTS AND NOT CMAKE_BUILD_TYPE MATCHES "Debug")
+    list(APPEND TEST_SOURCE_FILES
+      ../src/misc/recorder.cc
+    )
+  endif()
 
   add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})
 

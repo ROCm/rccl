@@ -8,7 +8,9 @@
 #include <rccl/rccl.h>
 
 #include "RcclMockFuncs.hpp"
-//#include "TestBed.hpp"
+#include "comm.h"
+
+#include <thread>
 
 namespace RcclUnitTesting
 {
@@ -25,14 +27,14 @@ namespace RcclUnitTesting
    * ******************************************************************************************/
   TEST(Recorder, ParseJson)
   {
-    setenv("RCCL_REPLAY_FILE", "test.json", 1);
+    setenv("RCCL_REPLAY_FILE", "/tmp/test.json", 1);
 
     int pid = getpid();
     hipStream_t stream;
     hipStreamCreate(&stream);
 
     int array[] = {2, 3, 5};
-    ncclComm comm{.nRanks = 1, .localRank = 1, .localRankToRank = array, .opCount = 8, .planner = {.nTasksColl = 13, .nTasksP2p = 21}};  
+    ncclComm comm{.nRanks = 1, .localRank = 1, .localRankToRank = array, .opCount = 8, .planner = {.nTasksColl = 13, .nTasksP2p = 21}};
     rccl::rcclApiCall call(rccl::rrAllToAllv, {.sendbuff = (void*)0x7f22f9600000, .recvbuff = (void*)0x7f22f9601000, .count = 0, .datatype = ncclFloat32, .comm = &comm, .stream = stream});
     rccl::Recorder::instance().record(call);
 
@@ -40,7 +42,7 @@ namespace RcclUnitTesting
     char entry[4096];
     //parse the outfile
     std::string filename = "test" + std::to_string(pid) + ".json";
-    std::ifstream fp("test" + std::to_string(pid) + ".json");
+    std::ifstream fp("/tmp/test" + std::to_string(pid) + ".json");
     fp.getline(entry, 4096);
     fp.getline(entry, 4096);
     fp.getline(entry, 4096);

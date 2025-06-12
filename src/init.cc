@@ -98,14 +98,34 @@ static uint64_t hashUniqueId(ncclUniqueId const &id) {
   return h;
 }
 
+//RCCL runtime param to set Unroll Factor
+RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", 0);
+
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx942") || IsArchMatch(devProp.gcnArchName, "gfx950"))
-    && devProp.multiProcessorCount > 80))
-    comm->unroll = NCCL_UNROLL_2;
-  else
-    comm->unroll = NCCL_UNROLL_4;
+
+  //If RCCL runtime param is set, it will override defaults
+  if (rcclParamUnrollFactor() != 0) {
+    comm->unroll = rcclParamUnrollFactor();
+    INFO(NCCL_INIT, "RCCL Unroll Factor (user-defined): %d", comm->unroll);
+  }
+  else {
+    if (IsArchMatch(devProp.gcnArchName, "gfx950")) {
+      //on gfx950, use unroll=1 for single-node and unroll=2 for multi-node
+      if (comm->nNodes == 1)
+        comm->unroll = 1;
+      else
+        comm->unroll = 2;
+    }
+    else if((IsArchMatch(devProp.gcnArchName, "gfx908")) ||
+            (IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80))
+      //on MI300X and gfx908, use unroll=2
+      comm->unroll = 2;
+    else
+      comm->unroll = 4;
+    INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll);
+  }
   return ncclSuccess;
 }
 
@@ -186,6 +206,13 @@ static ncclResult_t ncclInit() {
         WARN("Missing \"HSA_FORCE_FINE_GRAIN_PCIE=1\" from environment which can lead to low RCCL performance, system instablity or hang!");
 #endif
     }
+  const char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
+  int hipRuntimeVersion = 0;
+  // hipVer is an integer e.g., 6.2.41133 -> 60241133
+  CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
+  if ((!hsaScratchEnv || strcmp(hsaScratchEnv,"1") != 0) && hipRuntimeVersion < 60400000){
+    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit for rocm older than 6.4,, rocm ver:%d", hipRuntimeVersion);
+  }
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;
 }
@@ -258,12 +285,12 @@ void *ncclCommThreadMain(void *arg) {
       for (int i = 0; i < count; i++) {
         volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel]%COLLTRACE_NUM_ITEMS;
         head[channel] ++;
-        uint8_t type = td->type;
+        const uint8_t type = td->type;
         if (type == ncclCollTraceNotReady)
           continue;
         char line[1024];
         int offset = 0;
-        uint16_t fIdx = td->funcIndex;
+        const uint16_t fIdx = td->funcIndex;
         if (type == ncclCollTraceDataType) {
           sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] L:%04d DT %08x %016lx %016lx",
             (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid,             fIdx, td->data_0, td->opCount, td->data_1);
@@ -284,9 +311,9 @@ void *ncclCommThreadMain(void *arg) {
               case ncclCollTraceKernelLaunchType:
               case ncclCollTraceCollLaunchType:
                 if ((type&0xf) == ncclCollTraceKernelLaunchType)
-                  sprintf(line+offset, " KL HWID %8x %s", td->data_0, funcNames[fIdx]);
+                  sprintf(line+offset, " KL %s [%02d:%02d-%02d:%02x] HWID %8x ", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, td->data_0);
                 else if ((type&0xf) == ncclCollTraceCollLaunchType)
-                  sprintf(line+offset, " CL %d %s", td->batchIx, funcNames[fIdx]);
+                  sprintf(line+offset, " CL %s [%02d:%02d-%02d:%02x] %d ", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, td->batchIx);
                 offset = strlen(line);
                 if ((type&0xf0) == ncclCollTraceCollElemType)
                   sprintf(line+offset, " nw %d bi %d nc %d root %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
@@ -296,10 +323,10 @@ void *ncclCommThreadMain(void *arg) {
                     comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceKernelEndType:
-                sprintf(line+offset, " KE busId %lx nRanks %d", comm->busId, comm->nRanks);
+                sprintf(line+offset, " KE %s [%02d:%02d-%02d:%02x] busId %lx nRanks %d", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceAbortType:
-                sprintf(line+offset, " Abort");
+                sprintf(line+offset, " KA %s [%02d:%02d-%02d:%02x]", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid);
                 break;
               default:
                 sprintf(line+offset, " unknown collective trace data type");
@@ -307,7 +334,7 @@ void *ncclCommThreadMain(void *arg) {
             }
           }
         }
-        INFO(NCCL_COLL, "%s", line);
+        INFO(NCCL_COLL, "%s td->type:%d", line, type);
         td->type = ncclCollTraceNotReady;
       }
     }
@@ -509,7 +536,7 @@ NCCL_PARAM(AggChannelSize, "AGG_CHANNEL_SIZE", -2);
 NCCL_PARAM(DisableGraphHelper, "GRAPH_HELPER_DISABLE", 0);
 // GDRCOPY support: FIFO_ENABLE when enabled locates a workFifo in CUDA memory
 NCCL_PARAM(GdrCopyFifoEnable, "GDRCOPY_FIFO_ENABLE", 1);
-#define NCCL_WORK_FIFO_BYTES_DEFAULT (1<<20)
+#define NCCL_WORK_FIFO_BYTES_DEFAULT (1<<22)
 NCCL_PARAM(WorkFifoBytes, "WORK_FIFO_BYTES", NCCL_WORK_FIFO_BYTES_DEFAULT);
 NCCL_PARAM(WorkArgsBytes, "WORK_ARGS_BYTES", INT64_MAX);
 enum ncclLaunchMode ncclParamLaunchMode;
@@ -609,8 +636,6 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
 
   // RCCL: create persistent stream for calloc
   CUDACHECK(hipStreamCreateWithFlags(&comm->sideStream, hipStreamNonBlocking));
-  // RCCL: determine and set unroll factor for comm
-  NCCLCHECK(commSetUnrollFactor(comm));
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
 
@@ -1341,10 +1366,12 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph->nChannels);
   if (ringGraph->nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
+    // RCCL: Only use one slice per primitive on some single node gfx9xx systems
+    comm->rcclUseOneSlice = !managed && nNodes == 1;
     if (managed && nNodes > 1) {
       // This forces the minimum channels to 24
       allGather3Data[rank].nc = 6;
@@ -1357,6 +1384,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
         // NCCL_MIN_NCHANNELS=24
         allGather3Data[rank].nc = 4;
     }
+  }
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
+    allGather3Data[rank].nc = 4;
   }
 
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
@@ -1732,7 +1762,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled())) {
     NCCLCHECK(mscclInit(comm));
-    mscclStatus& status = mscclGetStatus(comm->rank);
+    mscclStatus& status = mscclGetStatus(comm);
     status.needsProxy |= mscclNeedsProxy;
   }
 
@@ -1931,6 +1961,9 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   comm->cudaArch = cudaArch;
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent, timers), res, fail);
+
+  // RCCL: determine and set unroll factor for comm
+  NCCLCHECK(commSetUnrollFactor(comm));
 
 #ifdef ENABLE_MSCCLPP
   if (job->parent) {
@@ -2517,7 +2550,7 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
     NCCLCHECK(ncclTunerPluginUnload(comm));
   }
   if (mscclEnabled() && (mscclEnabledForTopo || mscclForceEnabled())) {
-    NCCLCHECK(mscclTeardown(comm->rank));
+    NCCLCHECK(mscclTeardown(comm));
   }
   NCCLCHECK(commFree(comm));
 

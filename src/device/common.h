@@ -11,8 +11,8 @@
 #include "collectives.h"
 #include "device.h"
 #include "op128.h"
-#include "reduce_kernel.h"
 #include "device_table.h"
+#include "reduce_kernel.h"
 #include "network/unpack/unpack_defs.h"
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
@@ -76,6 +76,7 @@
   }
   #define traceKernelEnd(end_type)  { \
     INC_COLL_TRACE \
+    collTrace->funcIndex = ncclShmem.funcId;\
     if (ncclShmem.workType == ncclDevWorkTypeP2p) { \
       struct ncclDevWorkP2p *p2pWork = (struct ncclDevWorkP2p*)ncclShmem.workStorage; \
       collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
@@ -95,10 +96,16 @@
     collTrace->data_1 = data8_1; \
     collTrace->type = ncclCollTraceDataType; \
   }
+  #define traceAbort(){\
+    INC_COLL_TRACE\
+    collTrace->funcIndex = ncclShmem.funcId;\
+    collTrace->type = ncclCollTraceAbortType;\
+  }
 #else
 #define traceKernelLaunch(launch_type, batchIx)
 #define traceKernelEnd(end_type)
 #define traceData(data2, data4, data8_0, data8_1)
+#define traceAbort()
 #endif
 
 #if __CUDA_ARCH__ >= 700
@@ -565,17 +572,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     if (0 <= SpecializedFnId && ncclShmem.funcId == (unsigned)SpecializedFnId) {
       SpecializedRunWorkBatch().run();
     } else {
-#ifdef USE_INDIRECT_FUNCTION_CALL
-      if (COLL_UNROLL == 4)
-        ncclDevFuncTable_4[ncclShmem.funcId]();
-      else
-        ncclDevFuncTable[ncclShmem.funcId]();
-#else
-      if (COLL_UNROLL == 4)
-        NCCL_CALL_FUNCTIONS_4(ncclShmem.funcId);
-      else
-        NCCL_CALL_FUNCTIONS(ncclShmem.funcId);
-#endif
+      NCCL_CALL_FUNCTIONS<COLL_UNROLL>(ncclShmem.funcId);
     }
 
     if (ncclShmem.nextBatchIx == -1) break;
@@ -600,8 +597,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       // ncclShmem.workConsumed written by loadWorkBatchToShmem before barrier_red_or()
       ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
     }
-    if (aborted) break;
-
+    if (aborted) {
+      if(COLLTRACE && tid%WARP_SIZE == 0) traceAbort();
+      break;
+    }
     if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceCollLaunchType, batchIx);
   }
   if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelEnd(ncclCollTraceKernelEndType);
@@ -614,13 +613,6 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   }
 #endif
 }
-
-__global__ void ncclDevKernel_Generic(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-#ifdef ENABLE_COLLTRACE
-__global__ void ncclDevKernelDebug_Generic(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-#endif
 
 #define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, specializedFnId) \
   __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}

@@ -151,16 +151,15 @@ if(ENABLE_MSCCLPP)
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-    
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no-cache.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
-
 	execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/device-flag.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
     )
+
+    execute_process(
+	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no-cache.patch
+	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+	)
     
 	execute_process(
 	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/reg-fix.patch
