@@ -86,17 +86,47 @@ jobs:
         done
   - task: Bash@3
     displayName: Build Logs
+    continueOnError: true  # Allow pipeline to continue even if this step "fails"
     inputs:
       targetType: inline
       script: |
+        LOG_STDOUT="rccl-build-${BUILD_JOB_ID}.out"
+        LOG_STDERR="rccl-build-${BUILD_JOB_ID}.err"
+        HAD_ERROR=0
+
         echo "================================================="
         echo "Standard Output"
         echo "================================================="
-        cat rccl-build-${BUILD_JOB_ID}.out || echo "No stdout log found"
+        if [[ -f "$LOG_STDOUT" ]]; then
+          cat "$LOG_STDOUT"
+          if grep -E -i 'CMake Error|FAILED|error:|make: \*\*\*' "$LOG_STDOUT"; then
+            echo "##vso[task.logissue type=error]Detected build error(s) in stdout log"
+            HAD_ERROR=1
+          fi
+        else
+          echo "##vso[task.logissue type=error]No stdout log found"
+          HAD_ERROR=1
+        fi
+
         echo "================================================="
         echo "Standard Error"
         echo "================================================="
-        cat rccl-build-${BUILD_JOB_ID}.err || echo "No stderr log found"
+        if [[ -f "$LOG_STDERR" ]]; then
+          cat "$LOG_STDERR"
+          if grep -E -i 'CMake Error|FAILED|error:|make: \*\*\*' "$LOG_STDERR"; then
+            echo "##vso[task.logissue type=error]Detected build error(s) in stderr log"
+            HAD_ERROR=1
+          fi
+        else
+          echo "##vso[task.logissue type=error]No stderr log found"
+          HAD_ERROR=1
+        fi
+
+        if [[ "$HAD_ERROR" -eq 1 ]]; then
+          echo "##vso[task.complete result=SucceededWithIssues;]Build logs contain error messages"
+        else
+          echo "Build logs parsed — no critical errors found."
+        fi
   - task: Bash@3
     displayName: Test Job
     continueOnError: true
