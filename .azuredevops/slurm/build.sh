@@ -9,10 +9,9 @@
 
 source /etc/profile.d/lmod.sh
 module load rocm/6.4.0
-module list
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
-cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON ..
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
 cmake --build . -- -j $SLURM_CPUS_ON_NODE
 cmake --build . --target install
