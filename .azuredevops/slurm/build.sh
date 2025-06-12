@@ -29,5 +29,5 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
 cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
-cmake --build . -- -j $SLURM_CPUS_ON_NODE
+cmake --build .
 cmake --build . --target install
