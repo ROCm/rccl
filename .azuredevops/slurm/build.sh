@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=rccl-build
 #SBATCH --output=rccl-build-%j.out
-#SBATCH --error=rccl-build-%j.err
+#SBATCH --error=rccl-build-%j.out
 #SBATCH --time=60
 #SBATCH --nodes=1
 #SBATCH --exclusive
@@ -28,6 +28,6 @@ ninja --version
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
+cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
 cmake --build .
 cmake --build . --target install

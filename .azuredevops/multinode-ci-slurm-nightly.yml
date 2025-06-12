@@ -55,7 +55,8 @@ jobs:
       targetType: inline
       script: |
         echo "Submitting build job..."
-        BUILD_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/build.sh)
+        mkdir -p $(Build.BinariesDirectory)
+        BUILD_JOB_ID=$(sbatch --export=ALL,BINARIES_DIR=$(Build.BinariesDirectory) --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/build.sh)
         echo "Submitted build job: $BUILD_JOB_ID"
         echo "##vso[task.setvariable variable=BUILD_JOB_ID]$BUILD_JOB_ID"
 
@@ -91,34 +92,19 @@ jobs:
       targetType: inline
       script: |
         LOG_STDOUT="rccl-build-${BUILD_JOB_ID}.out"
-        LOG_STDERR="rccl-build-${BUILD_JOB_ID}.err"
         HAD_ERROR=0
 
         echo "================================================="
-        echo "Standard Output"
+        echo "Output"
         echo "================================================="
         if [[ -f "$LOG_STDOUT" ]]; then
           cat "$LOG_STDOUT"
           if grep -E -i 'CMake Error|FAILED|error:|make: \*\*\*' "$LOG_STDOUT"; then
-            echo "##vso[task.logissue type=error]Detected build error(s) in stdout log"
+            echo "##vso[task.logissue type=error]Detected build error(s) in log"
             HAD_ERROR=1
           fi
         else
-          echo "##vso[task.logissue type=error]No stdout log found"
-          HAD_ERROR=1
-        fi
-
-        echo "================================================="
-        echo "Standard Error"
-        echo "================================================="
-        if [[ -f "$LOG_STDERR" ]]; then
-          cat "$LOG_STDERR"
-          if grep -E -i 'CMake Error|FAILED|error:|make: \*\*\*' "$LOG_STDERR"; then
-            echo "##vso[task.logissue type=error]Detected build error(s) in stderr log"
-            HAD_ERROR=1
-          fi
-        else
-          echo "##vso[task.logissue type=error]No stderr log found"
+          echo "##vso[task.logissue type=error]No log found"
           HAD_ERROR=1
         fi
 
@@ -134,7 +120,7 @@ jobs:
       targetType: inline
       script: |
         echo "Submitting test job..."
-        TEST_JOB_ID=$(sbatch --export=ALL --parsable  $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
+        TEST_JOB_ID=$(sbatch --export=ALL,BINARIES_DIR=$(Build.BinariesDirectory),PIPELINE_WORKSPACE=$(Pipeline.Workspace) --parsable  $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
         echo "Submitted test job: $TEST_JOB_ID"
         echo "##vso[task.setvariable variable=TEST_JOB_ID]$TEST_JOB_ID"
 
@@ -164,21 +150,17 @@ jobs:
           fi
         done
   - task: Bash@3
-    displayName: Test Logs
+    displayName: Test Log
     inputs:
       targetType: inline
       script: |
         echo "================================================="
-        echo "Standard Output"
+        echo  Output"
         echo "================================================="
-        cat rccl-test-${TEST_JOB_ID}.out || echo "No stdout log found"
-        echo "================================================="
-        echo "Standard Error"
-        echo "================================================="
-        cat rccl-test-${TEST_JOB_ID}.err || echo "No stderr log found"
+        cat rccl-test-${TEST_JOB_ID}.out || echo "No log found"
   - task: PublishPipelineArtifact@1
     displayName: Upload test XML results
     inputs:
-      targetPath: '$(Build.SourcesDirectory)/build/test/test_output.xml'
+      targetPath: '$(Pipeline.Workspace)/test_output.xml'
       artifact: test-results
       condition: succeededOrFailed()
