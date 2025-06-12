@@ -9,9 +9,25 @@
 
 source /etc/profile.d/lmod.sh
 module load rocm/6.4.0
+
+# Setup local binary path
+export PATH="$HOME/.local/bin:$PATH"
+mkdir -p "$HOME/.local/bin"
+
+# Install Ninja if not already available
+if ! command -v ninja &>/dev/null; then
+  echo "Ninja not found. Installing locally..."
+  wget -q https://github.com/ninja-build/ninja/releases/download/v1.11.1/ninja-linux.zip -O /tmp/ninja.zip
+  unzip -q /tmp/ninja.zip -d "$HOME/.local/bin"
+  chmod +x "$HOME/.local/bin/ninja"
+fi
+
+echo "Using Ninja at: $(which ninja)"
+ninja --version
+
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
 cmake --build . -- -j $SLURM_CPUS_ON_NODE
 cmake --build . --target install
