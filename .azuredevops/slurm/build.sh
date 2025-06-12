@@ -28,6 +28,6 @@ ninja --version
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
+cmake -G Ninja -DCMAKE_INSTALL_PREFIX=/mnt/GT_NFS/azure/_work/2/b -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
 cmake --build . -- -j $SLURM_CPUS_ON_NODE
 cmake --build . --target install
