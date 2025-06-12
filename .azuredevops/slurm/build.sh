@@ -4,7 +4,7 @@
 #SBATCH --error=rccl-build-%j.err
 #SBATCH --time=60
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --exclusive
 #SBATCH --partition=gt
 
 source /etc/profile.d/lmod.sh
