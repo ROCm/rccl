@@ -159,7 +159,7 @@ jobs:
         echo "================================================="
         cat rccl-test-${TEST_JOB_ID}.out || echo "No log found"
   - task: PublishTestResults@2
-    displayName: '${{ parameters.componentName }} Publish Results'
+    displayName: 'Publish Results'
     condition: succeededOrFailed()
     inputs:
       searchFolder: $(Pipeline.Workspace)
