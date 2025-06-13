@@ -99,7 +99,7 @@ jobs:
         echo "================================================="
         if [[ -f "$LOG_STDOUT" ]]; then
           cat "$LOG_STDOUT"
-          if grep -E -i 'CMake Error|FAILED|error:' "$LOG_STDOUT"; then
+          if grep -E -i '(^|\s)(CMake Error|FAILED|error:)' "$LOG_STDOUT"; then
             echo "##vso[task.logissue type=error]Detected build error(s) in log"
             HAD_ERROR=1
           fi
@@ -158,9 +158,10 @@ jobs:
         echo "Output"
         echo "================================================="
         cat rccl-test-${TEST_JOB_ID}.out || echo "No log found"
-  - task: PublishPipelineArtifact@1
-    displayName: Upload test XML results
+  - task: PublishTestResults@2
+    displayName: '${{ parameters.componentName }} Publish Results'
+    condition: succeededOrFailed()
     inputs:
-      targetPath: '$(Pipeline.Workspace)/test_output.xml'
-      artifact: test-results
-      condition: succeededOrFailed()
+      searchFolder: $(Pipeline.Workspace)
+      testResultsFormat: JUnit
+      testResultsFiles: '**/test_output.xml'
