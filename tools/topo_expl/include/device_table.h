@@ -1,3 +1,5 @@
+/* Copyright © Advanced Micro Devices, Inc., or its affiliates. */
+
 #ifndef DEVICE_TABLE_COMPATIBILITY
 #define DEVICE_TABLE_COMPATIBILITY
 
