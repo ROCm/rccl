@@ -69,6 +69,10 @@ jobs:
         BINARIES_DIR: $(Build.BinariesDirectory)
       targetType: inline
       script: |
+        echo "##[section]Starting build job..."
+
+        rm -rf $(Build.BinariesDirectory)/*
+
         echo "Submitting build job..."
         mkdir -p $(Build.BinariesDirectory)
         BUILD_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/build.sh)
