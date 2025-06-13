@@ -5,9 +5,24 @@ resources:
     endpoint: ROCm
     name: ROCm/ROCm
 
+# small subset of files to check for install to determine pass/fail
+parameters:
+- name: expectedInstallFiles
+  type: object
+  default:
+    - bin/rccl-UnitTests
+    - include/rccl/rccl.h
+    - lib/cmake/rccl/rccl-config.cmake
+    - lib/librccl.so
+    - share/doc/rccl/LICENSE.txt
+    - share/rccl/msccl-algorithms
+    - share/rccl/msccl-unit-test-algorithms
+
 variables:
 - group: common
 - template: /.azuredevops/variables-global.yml@pipelines_repo
+- name: expectedInstallFilesFlat
+  value: ${{ join(' ', parameters.expectedInstallFiles) }}
 
 trigger: none
 pr: none
@@ -52,6 +67,8 @@ jobs:
     displayName: Build Job
     continueOnError: true
     inputs:
+      env:
+        expectedInstallFilesFlat: $(expectedInstallFilesFlat)
       targetType: inline
       script: |
         echo "Submitting build job..."
@@ -85,34 +102,29 @@ jobs:
             exit 1  # Exit with an error code if time limit is reached
           fi
         done
+
+        echo "Checking for expected installed files..."
+        MISSING_FILES=0
+
+        for relpath in $expectedInstallFilesFlat; do
+          fullpath="$(Build.BinariesDirectory)/$relpath"
+          if [ ! -e "$fullpath" ]; then
+            echo "##vso[task.logissue type=error]Missing expected file: $fullpath"
+            MISSING_FILES=1
+          fi
+        done
+
+        if [ "$MISSING_FILES" -eq 1 ]; then
+          echo "One or more expected files are missing from the install directory."
+          exit 1
+        fi
   - task: Bash@3
     displayName: Build Logs
-    continueOnError: true  # Allow pipeline to continue even if this step "fails"
+    continueOnError: true
     inputs:
       targetType: inline
       script: |
-        LOG_STDOUT="rccl-build-${BUILD_JOB_ID}.out"
-        HAD_ERROR=0
-
-        echo "================================================="
-        echo "Output"
-        echo "================================================="
-        if [[ -f "$LOG_STDOUT" ]]; then
-          cat "$LOG_STDOUT"
-          if grep -E '(^|\s)(CMake Error|FAILED|error:)' "$LOG_STDOUT"; then
-            echo "##vso[task.logissue type=error]Detected build error(s) in log"
-            HAD_ERROR=1
-          fi
-        else
-          echo "##vso[task.logissue type=error]No log found"
-          HAD_ERROR=1
-        fi
-
-        if [[ "$HAD_ERROR" -eq 1 ]]; then
-          echo "##vso[task.complete result=SucceededWithIssues;]Build logs contain error messages"
-        else
-          echo "Build logs parsed — no critical errors found."
-        fi
+        cat rccl-build-${TEST_JOB_ID}.out || echo "No log found"
   - task: Bash@3
     displayName: Test Job
     continueOnError: true
@@ -149,14 +161,24 @@ jobs:
             exit 1  # Exit with an error code if time limit is reached
           fi
         done
+
+        echo "Checking test result XML for failures..."
+        TEST_XML=$(find "$(Pipeline.Workspace)" -name 'test_output.xml' | head -n1)
+        if [ -z "$TEST_XML" ]; then
+          echo "##vso[task.logissue type=error]No test_output.xml file found"
+          exit 1
+        fi
+
+        FAILURES=$(xmllint --xpath 'string(/testsuites/@failures)' "$TEST_XML" 2>/dev/null || echo 0)
+        if [ "$FAILURES" != "0" ]; then
+          echo "##vso[task.logissue type=error]GTest reported $FAILURES failures"
+          exit 1
+        fi
   - task: Bash@3
     displayName: Test Log
     inputs:
       targetType: inline
       script: |
-        echo "================================================="
-        echo "Output"
-        echo "================================================="
         cat rccl-test-${TEST_JOB_ID}.out || echo "No log found"
   - task: PublishTestResults@2
     displayName: 'Publish Results'
