@@ -21,8 +21,6 @@ parameters:
 variables:
 - group: common
 - template: /.azuredevops/variables-global.yml@pipelines_repo
-- name: expectedInstallFilesFlat
-  value: ${{ join(' ', parameters.expectedInstallFiles) }}
 
 trigger: none
 pr: none
@@ -68,7 +66,7 @@ jobs:
     continueOnError: true
     inputs:
       env:
-        EXPECTED_INSTALL_FILES: $(expectedInstallFilesFlat)
+        EXPECTED_INSTALL_FILES: ${{ join(' ', parameters.expectedInstallFiles) }}
         BINARIES_DIR: $(Build.BinariesDirectory)
       targetType: inline
       script: |
