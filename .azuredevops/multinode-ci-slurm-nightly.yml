@@ -64,9 +64,9 @@ jobs:
   - task: Bash@3
     displayName: Build Job
     continueOnError: true
+    env:
+      BINARIES_DIR: $(Build.BinariesDirectory)
     inputs:
-      env:
-        BINARIES_DIR: $(Build.BinariesDirectory)
       targetType: inline
       script: |
         echo "##[section]Starting build job..."
