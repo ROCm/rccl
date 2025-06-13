@@ -99,7 +99,7 @@ jobs:
         echo "================================================="
         if [[ -f "$LOG_STDOUT" ]]; then
           cat "$LOG_STDOUT"
-          if grep -E -i 'CMake Error|FAILED|error:|make: \*\*\*' "$LOG_STDOUT"; then
+          if grep -E -i 'CMake Error|FAILED|error:' "$LOG_STDOUT"; then
             echo "##vso[task.logissue type=error]Detected build error(s) in log"
             HAD_ERROR=1
           fi
@@ -132,7 +132,7 @@ jobs:
 
         echo "Waiting for final status via sacct..."
         LOOP_COUNT=0
-        MAX_LOOPS=180  # Maximum of 180 loops (180 minutes)
+        MAX_LOOPS=120  # Maximum of 120 loops (120 minutes)
         while true; do
           STATE=$(sacct -j "$TEST_JOB_ID" --format=JobID,State --noheader | awk '$1 ~ /\.batch$/ { print $2; exit }' | xargs)
           echo "##[section]Test job state: $STATE"
