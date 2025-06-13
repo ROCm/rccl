@@ -1,3 +1,5 @@
+/* Copyright © Advanced Micro Devices, Inc., or its affiliates. */
+
 #pragma once
 #include <map>
 #include <unordered_map>

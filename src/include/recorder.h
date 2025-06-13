@@ -1,3 +1,5 @@
+/* Copyright © Advanced Micro Devices, Inc., or its affiliates. */
+
 #include <fstream>
 #include <sstream>
 #include <vector>

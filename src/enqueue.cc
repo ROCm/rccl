@@ -28,44 +28,75 @@
 
 using namespace rccl;
 
-struct ncclKernelMatch {
-  void* kernelFn;
-  bool specialized;
-};
+/* [RCCL] Determine which GPU kernel to execute */
+void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task = NULL)
+{
+  // At this time, unroll factor is controlled only by passed in unroll argument
+  // After more investigation, this may be further tuned by the actual task being processed
 
 #ifdef ENABLE_COLLTRACE
-#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
-static ncclKernelMatch const ncclKerns[6] = {
-  {(void *)ncclDevKernel_Generic_1, true},
-  {(void *)ncclDevKernel_Generic_2, true},
-  {(void *)ncclDevKernel_Generic_4, true},
-  {(void *)ncclDevKernelDebug_Generic_1, true},
-  {(void *)ncclDevKernelDebug_Generic_2, true},
-  {(void *)ncclDevKernelDebug_Generic_4, true}
-};
+  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]) / 2;
+  int firstKernel = useCollTrace ? numKernels : 0;
 #else
-#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
-static ncclKernelMatch const ncclKerns[3] = {
-  {(void*)ncclDevKernel_Generic_1, true},
-  {(void*)ncclDevKernel_Generic_2, true},
-  {(void*)ncclDevKernel_Generic_4, true}
-};
+  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]);
+  int firstKernel = 0;
 #endif
+
+  // Check if the requested unroll exists
+  for (int kernelIdx = 0; kernelIdx < numKernels; kernelIdx++) {
+    if (rcclKernelTable[firstKernel + kernelIdx].unroll == unroll) {
+      return rcclKernelTable[firstKernel + kernelIdx].funcPtr;
+    }
+  }
+  // Fall back to default unroll
+  WARN("Requested RCCL_UNROLL_FACTOR: %d does not exist in `rcclKernelTable`. Falling back to default unroll: %d", unroll, rcclKernelTable[firstKernel].unroll);
+  return rcclKernelTable[firstKernel].funcPtr;
+}
+
+static int rcclProtoGrainSize(int proto, ncclComm *comm){
+  switch (proto) {
+    case NCCL_PROTO_LL: return 16;
+    case NCCL_PROTO_LL128: return comm->WarpSize*(NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS)*NCCL_LL128_DATAELEMS*sizeof(uint64_t);
+    case NCCL_PROTO_SIMPLE: return 512;
+    default: return -1;
+  }
+}
+
+/* Copy of ncclShmemScratchWarpSize */
+constexpr int rcclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSize = 32) {
+  return (max_constexpr<int>(
+      /*LL    */0,
+      /*LL128 */(NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WarpSize)*sizeof(uint64_t),
+      /*SIMPLE*/(ncclCollUnroll(cudaArch)*WarpSize + 1)*16,
+      // NVLS needs an extra 16B to read unaligned data.
+      /*NVLS  */WarpSize*(cudaArch >= 900 ? ncclNvlsUnrollBytes(cudaArch) : 0) + 16
+    ) + 15) & -16; // pad to 16 bytes
+}
+
+/* Copy of ncclShmemDynamicSize */
+constexpr int rcclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSize = 32) {
+  return cudaArch < 700 ? 0 : rcclShmemScratchWarpSize(cudaArch, WarpSize)*(NCCL_MAX_NTHREADS/WarpSize);
+}
 
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
 ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* maxStackSize) {
-  constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
+  constexpr int KernelCount = sizeof(rcclKernelTable)/sizeof(rcclKernelTable[0]);
   ncclResult_t result = ncclSuccess;
   int print = 0;
 
   if (maxStackSize) *maxStackSize = 0;
   int carveout = ncclParamL1SharedMemoryCarveout();
-  int ncclMaxSharedMem = ncclShmemDynamicSize(cudaArch);
+
+  int WarpSize = -1;
+  int cudaDev = -1;
+  CUDACHECK(cudaGetDevice(&cudaDev));
+  CUDACHECK(hipDeviceGetAttribute(&WarpSize, hipDeviceAttributeWarpSize, cudaDev));
+  int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
   for (int k=0; k < KernelCount; k++) {
-    void* fn = ncclKerns[k].kernelFn;
+    void* fn = rcclKernelTable[k].funcPtr;
     cudaFuncAttributes attr = {0};
     if (fn == nullptr) continue;
 
@@ -197,7 +228,7 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   size_t workBytes = plan->workBytes;
   size_t batchBytes = plan->nWorkBatches*sizeof(struct ncclDevWorkBatch);
 
-  plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MIN_NTHREADS);
+  plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*NCCL_MIN_NTHREADS*/);
 
   // If we can fit everything into the kernel args we do so.
   if (sizeof(ncclDevKernelArgs) + batchBytes + workBytes <= comm->workArgsBytes) {
@@ -668,7 +699,8 @@ static ncclResult_t scheduleCollTasksToPlan(
       }
 
       uint32_t chunkSize, directFlags=0;
-      size_t grainSize = ncclProtoGrainSize(task->protocol);
+      size_t grainSize = rcclProtoGrainSize(task->protocol, comm);
+
       if (countLo != 0) {
         NCCLCHECK(calcCollChunking(comm, task, /*nChannels=*/1, globalBytesPerElement*countLo, &chunkSize, &directFlags, &proxyOpLo));
         devWork->cbd.chunkGrainsLo = chunkSize/grainSize;
@@ -750,10 +782,14 @@ static ncclResult_t scheduleCollTasksToPlan(
       plan->channelMask.masks[maskIdx] |= (1ull<<relativeIdx);
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
-    plan->threadPerBlock = std::max(plan->threadPerBlock, 3*plan->comm->WarpSize);
+    plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
     if (!plan->kernelSpecialized) {
-      plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
-      plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
+#ifdef ENABLE_COLLTRACE
+      plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
+#else
+      plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
+#endif
+      plan->kernelSpecialized = true;
     }
 
     if (comm->rank == 0) {
@@ -775,9 +811,9 @@ static ncclResult_t scheduleCollTasksToPlan(
           ncclProtoToString(task->protocol),
           (long)task->count, task->devFuncId, devWork->channelLo, devWork->channelHi,
           (long)devWork->cbd.countLo, (long)devWork->cbd.countMid, (long)devWork->cbd.countHi,
-          int(devWork->cbd.chunkGrainsLo*ncclProtoGrainSize(task->protocol)),
-          int(devWork->cbd.chunkGrainsMid*ncclProtoGrainSize(task->protocol)),
-          int(devWork->cbd.chunkGrainsHi*ncclProtoGrainSize(task->protocol)));
+          int(devWork->cbd.chunkGrainsLo*rcclProtoGrainSize(task->protocol, comm)),
+          int(devWork->cbd.chunkGrainsMid*rcclProtoGrainSize(task->protocol, comm)),
+          int(devWork->cbd.chunkGrainsHi*rcclProtoGrainSize(task->protocol, comm)));
       }
     }
 
@@ -1053,8 +1089,12 @@ static ncclResult_t scheduleP2pTasksToPlan(
 
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
   if (!plan->kernelSpecialized) {
-    plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
-    plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
+#ifdef ENABLE_COLLTRACE
+    plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
+#else
+    plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
+#endif
+    plan->kernelSpecialized = true;
   }
 
   // Compute how much to split operations
@@ -1516,7 +1556,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   void* sym = plan->kernelFn;
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
-  int smem = ncclShmemDynamicSize(comm->cudaArch);
+  int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
@@ -1790,11 +1830,11 @@ static ncclResult_t topoGetAlgoInfo(
     }
   }
   if (info->protocol == NCCL_PROTO_SIMPLE) {
-    if (info->algorithm == NCCL_ALGO_RING) nt += WARP_SIZE; // Extra warp for sync
+    if (info->algorithm == NCCL_ALGO_RING) nt += comm->WarpSize; // Extra warp for sync
     // More threads or sync warps needed due to split thread model
-    if (info->algorithm == NCCL_ALGO_TREE) nt += 4*WARP_SIZE;
+    if (info->algorithm == NCCL_ALGO_TREE) nt += 4*comm->WarpSize;
   }
-  nt = nt/WARP_SIZE < 3 ? 3*WARP_SIZE : nt;
+  nt = nt/comm->WarpSize < 3 ? 3*comm->WarpSize : nt;
 #endif
   if (info->func == ncclFuncAllReduce && comm->topo->pivotA2ANumBiRings == 3) {
     static int userTuneInput = -2;
@@ -1826,7 +1866,7 @@ static ncclResult_t topoGetAlgoInfo(
   }
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT) nt = NCCL_MAX_NTHREADS;
-  info->nWarps = nt/WARP_SIZE;
+  info->nWarps = nt/comm->WarpSize;
   return ncclSuccess;
 }
 
@@ -1871,7 +1911,7 @@ static ncclResult_t calcCollChunking(
     /*outputs*/uint32_t* outChunkSize, uint32_t* outDirectFlags, struct ncclProxyOp* proxyOp
   ) {
   ncclPattern_t pattern;
-  size_t grainSize = ncclProtoGrainSize(info->protocol);
+  size_t grainSize = rcclProtoGrainSize(info->protocol, comm);
 
   switch (info->func) {
   case ncclFuncBroadcast:

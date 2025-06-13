@@ -67,7 +67,21 @@ union ncclLLFifoLine {
   int4 i4;
 };
 
-#define WARP_SIZE warpSize
+#if __HIP_DEVICE_COMPILE__
+  #if defined(__GFX9__)
+  #define WARP_SIZE 64
+  #else
+  #define WARP_SIZE 32
+  #endif
+#else
+ /* IMPORTANT:
+  * WARP_SIZE should NEVER be referenced by host code in RCCL. It is defined here
+  * solely as a workaround to allow RCCL to compile, since the host still compiles __device__ functions,
+  * and WARP_SIZE needs to be defined. These __device__ functions will not be called from the host.
+  * The host warp size is handled in src/enqueue.cc by calling hipDeviceGetAttributes(). */
+  #define WARP_SIZE 32
+#endif
+
 #define MAXCHANNELS 128
 #define CHANNEL_LIMIT 16
 #define NCCL_MAX_LOCAL_RANKS 72
@@ -316,7 +330,7 @@ struct alignas(16) ncclDevWorkColl {
 };
 
 
-__host__ __device__ constexpr int ncclProtoGrainSize(int proto) {
+__device__ constexpr int ncclProtoGrainSize(int proto) {
   return proto == NCCL_PROTO_LL ? 16 :
         proto == NCCL_PROTO_LL128 ? WARP_SIZE*NCCL_LL128_SHMEM_ELEMS_PER_THREAD/NCCL_LL128_LINEELEMS*NCCL_LL128_DATAELEMS*sizeof(uint64_t) :
         proto == NCCL_PROTO_SIMPLE ? 512 :
@@ -324,7 +338,7 @@ __host__ __device__ constexpr int ncclProtoGrainSize(int proto) {
 }
 
 template<typename Int>
-__host__ __device__ inline void ncclCollCbdPart(
+__device__ inline void ncclCollCbdPart(
     struct ncclDevWorkColl* work, uint32_t channelId, int proto, int eltSize,
     Int* count, Int* partOffset, Int* partCount, Int* chunkCount
   ) {
@@ -618,7 +632,7 @@ __host__ __device__ constexpr int ncclNvlsUnroll(int bytePerPack, int cudaArch =
 }
 
 // The amount of dynamic shmem per warp
-__host__ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH) {
+__device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH) {
   return (max_constexpr<int>(
       /*LL    */0,
       /*LL128 */(NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE)*sizeof(uint64_t),
@@ -629,7 +643,7 @@ __host__ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_C
 }
 
 // The amount of dynamic shmem per block
-__host__ __device__ constexpr int ncclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH) {
+__device__ constexpr int ncclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH) {
   return cudaArch < 700 ? 0 : ncclShmemScratchWarpSize(cudaArch)*(NCCL_MAX_NTHREADS/WARP_SIZE);
 }
 
