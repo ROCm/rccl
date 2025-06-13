@@ -756,6 +756,7 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
 typedef int mscclAlgoHandle_t;
 
 /*! @brief      MSCCL Load Algorithm
+    @deprecated This function has been removed from the public API.
     @details    Load MSCCL algorithm file specified in mscclAlgoFilePath and return
                 its handle via mscclAlgoHandle. This API is expected to be called by MSCCL
                 scheduler instead of end users.
@@ -763,13 +764,14 @@ typedef int mscclAlgoHandle_t;
 
     @param[in]  mscclAlgoFilePath  Path to MSCCL algorithm file
     @param[out] mscclAlgoHandle    Returned handle to MSCCL algorithm
-    @param[in]  comm               Current rank's communicator */
-ncclResult_t  mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, const ncclComm_t comm);
+    @param[in]  rank               Current rank */
+ncclResult_t  mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
 /*! @cond       include_hidden */
-ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, const ncclComm_t comm);
+ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, int rank);
 /*! @endcond */
 
 /*! @brief      MSCCL Run Algorithm
+    @deprecated This function has been removed from the public API.
     @details    Run MSCCL algorithm specified by mscclAlgoHandle. The parameter
                 list merges all possible parameters required by different operations as this
                 is a general-purposed API. This API is expected to be called by MSCCL

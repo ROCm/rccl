@@ -1,3 +1,5 @@
+/* Copyright © Advanced Micro Devices, Inc., or its affiliates. */
+
 #include "bootstrap.h"
 #include "group.h"
 #include "utils.h"

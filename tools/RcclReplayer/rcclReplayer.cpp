@@ -1,3 +1,5 @@
+/* Copyright © Advanced Micro Devices, Inc., or its affiliates. */
+
 #include <cstdio>
 #include <cstring>
 #include <vector>

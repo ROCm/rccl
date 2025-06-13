@@ -8,7 +8,9 @@
 #include <rccl/rccl.h>
 
 #include "RcclMockFuncs.hpp"
-//#include "TestBed.hpp"
+#include "comm.h"
+
+#include <thread>
 
 namespace RcclUnitTesting
 {
@@ -32,7 +34,7 @@ namespace RcclUnitTesting
     hipStreamCreate(&stream);
 
     int array[] = {2, 3, 5};
-    ncclComm comm{.nRanks = 1, .localRank = 1, .localRankToRank = array, .opCount = 8, .planner = {.nTasksColl = 13, .nTasksP2p = 21}};  
+    ncclComm comm{.nRanks = 1, .localRank = 1, .localRankToRank = array, .opCount = 8, .planner = {.nTasksColl = 13, .nTasksP2p = 21}};
     rccl::rcclApiCall call(rccl::rrAllToAllv, {.sendbuff = (void*)0x7f22f9600000, .recvbuff = (void*)0x7f22f9601000, .count = 0, .datatype = ncclFloat32, .comm = &comm, .stream = stream});
     rccl::Recorder::instance().record(call);
 

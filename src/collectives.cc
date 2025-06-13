@@ -125,9 +125,11 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   }
 
   if (mscclAvailable(comm) && !mscclIsCaller()) {
-    return mscclEnqueueCheck(
-      sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
-      count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
+    if (datatype != ncclBfloat16 || (count * ncclTypeSize(datatype) <= 8388608)) {
+	return mscclEnqueueCheck(
+                sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
+                count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);	
+    }
   }
 
   return ncclEnqueueCheck(&info);
