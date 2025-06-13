@@ -7,6 +7,9 @@
 #SBATCH --exclusive
 #SBATCH --partition=gt
 
+short_id=$(hostname | cut -d'-' -f3-)
+echo "Node identifier: $short_id"
+
 source /etc/profile.d/lmod.sh
 module load rocm/6.4.0
 
