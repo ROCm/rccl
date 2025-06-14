@@ -99,7 +99,7 @@ jobs:
         MISSING_FILES=0
 
         expectedFiles="${{ join(' ', parameters.expectedInstallFiles) }}"
-        for relpath in "$expectedFiles"; do
+        for relpath in "${expectedFiles[@]}"; do
           fullpath="$BINARIES_DIR/$relpath"
           if [ ! -e "$fullpath" ]; then
             echo "##vso[task.logissue type=error]Missing expected file: $fullpath"
@@ -173,6 +173,7 @@ jobs:
           echo "No test failures detected."
         fi
   - task: Bash@3
+    displayName: Test Logs
     condition: always()
     inputs:
       targetType: inline
