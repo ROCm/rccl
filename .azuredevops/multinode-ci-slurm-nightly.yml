@@ -54,7 +54,6 @@ jobs:
       submoduleBehaviour: recursive
   - task: Bash@3
     displayName: Build Job
-    continueOnError: true
     env:
       BINARIES_DIR: $(Build.BinariesDirectory)
     inputs:
@@ -100,7 +99,7 @@ jobs:
         MISSING_FILES=0
 
         expectedFiles="${{ join(' ', parameters.expectedInstallFiles) }}"
-        for relpath in "expectedFiles"; do
+        for relpath in "$expectedFiles"; do
           fullpath="$BINARIES_DIR/$relpath"
           if [ ! -e "$fullpath" ]; then
             echo "##vso[task.logissue type=error]Missing expected file: $fullpath"
@@ -114,19 +113,21 @@ jobs:
         fi
   - task: Bash@3
     displayName: Build Logs
-    continueOnError: true
+    condition: always()
     inputs:
       targetType: inline
       script: |
         cat rccl-build-${BUILD_JOB_ID}.out || echo "No log found"
   - task: Bash@3
     displayName: Test Job
-    continueOnError: true
+    env:
+      BINARIES_DIR: $(Build.BinariesDirectory)
+      PIPELINE_WORKSPACE: $(Pipeline.Workspace)
     inputs:
       targetType: inline
       script: |
         echo "Submitting test job..."
-        TEST_JOB_ID=$(sbatch --export=ALL,BINARIES_DIR=$(Build.BinariesDirectory),PIPELINE_WORKSPACE=$(Pipeline.Workspace) --parsable  $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
+        TEST_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
         echo "Submitted test job: $TEST_JOB_ID"
         echo "##vso[task.setvariable variable=TEST_JOB_ID]$TEST_JOB_ID"
 
@@ -172,7 +173,7 @@ jobs:
           echo "No test failures detected."
         fi
   - task: Bash@3
-    displayName: Test Log
+    condition: always()
     inputs:
       targetType: inline
       script: |
