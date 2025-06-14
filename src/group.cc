@@ -98,7 +98,10 @@ ncclResult_t ncclAsyncJobComplete(struct ncclAsyncJob* job) {
 
 NCCL_API(ncclResult_t, ncclGroupStart);
 ncclResult_t ncclGroupStart_impl() {
-  NCCLCHECK(Recorder::instance().record(rrGroupStart, ncclGroupDepth));
+  if (!mscclIsCaller())
+  {
+    NCCLCHECK(Recorder::instance().record(rrGroupStart, ncclGroupDepth));
+  }
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
@@ -117,7 +120,10 @@ ncclResult_t ncclGroupStartInternal() {
 
 NCCL_API(ncclResult_t, ncclGroupEnd);
 ncclResult_t ncclGroupEnd_impl() {
-  NCCLCHECK(Recorder::instance().record(rrGroupEnd, ncclGroupDepth));
+  if (!mscclIsCaller())
+  {
+    NCCLCHECK(Recorder::instance().record(rrGroupEnd, ncclGroupDepth));
+  }
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   NCCLCHECKGOTO(ncclGroupEndInternal(), ret, exit);
@@ -128,7 +134,10 @@ exit:
 
 NCCL_API(ncclResult_t, ncclGroupSimulateEnd, ncclSimInfo_t* simInfo);
 ncclResult_t ncclGroupSimulateEnd(ncclSimInfo_t* simInfo) {
-  Recorder::instance().record(ncclGroupDepth, simInfo);
+  if (!mscclIsCaller())
+  {
+    Recorder::instance().record(ncclGroupDepth, simInfo);
+  }
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   NCCLCHECKGOTO(ncclGroupEndInternal(simInfo), ret, exit);

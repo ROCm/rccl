@@ -1,3 +1,5 @@
+/* Copyright © Advanced Micro Devices, Inc., or its affiliates. */
+
 #ifndef RCCL_MOCK_FUNCS_HPP
 #define RCCL_MOCK_FUNCS_HPP
 

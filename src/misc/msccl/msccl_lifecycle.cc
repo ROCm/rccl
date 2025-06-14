@@ -244,6 +244,29 @@ ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
   return ncclSuccess;
 }
 
+static ncclResult_t mscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *mscclAlgoHandle, const ncclComm_t comm) {
+  mscclStatus& status = mscclGetStatus(comm);
+
+  if (status.freeAlgoHandles.size() == 0) {
+    WARN("MSCCL: MSCCL_MAX_NUM_ALGOS (%d) limit reached", MSCCL_MAX_NUM_ALGOS);
+    return ncclInvalidUsage;
+  }
+  *mscclAlgoHandle = *status.freeAlgoHandles.rbegin();
+  status.freeAlgoHandles.pop_back();
+
+  struct mscclAlgo* hostAlgo;
+  NCCLCHECK(ncclCalloc(&hostAlgo, 1));
+  NCCLCHECK(mscclGetAlgoFromXmlFile(mscclAlgoFilePath, hostAlgo, comm->rank));
+  status.hostAlgos[*mscclAlgoHandle] = hostAlgo;
+
+  struct mscclAlgo* devAlgo;
+  NCCLCHECK(ncclCudaMalloc(&devAlgo, 1));
+  CUDACHECK(hipMemcpy(devAlgo, hostAlgo, sizeof(struct mscclAlgo), hipMemcpyHostToDevice));
+  status.devAlgos[*mscclAlgoHandle] = devAlgo;
+
+  return ncclSuccess;
+}
+
 ncclResult_t mscclInit(const ncclComm_t comm) {
   {
     mscclStatus& status = mscclGetStatus(comm);
@@ -413,6 +436,38 @@ static ncclResult_t mscclSaveCountsAndDispls(struct mscclSavedSchedulerParam* pa
   return ncclSuccess;
 }
 
+static ncclResult_t _mscclRunAlgo(
+    const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
+    void* recvBuff, const size_t recvCounts[], const size_t rDisPls[],
+    size_t count, ncclDataType_t dataType, int root, int peer, ncclRedOp_t op,
+    mscclAlgoHandle_t mscclAlgoHandle, ncclComm_t comm, hipStream_t stream) {
+  mscclStatus& status = mscclGetStatus(comm);
+  struct mscclAlgo* hostAlgo = status.hostAlgos[mscclAlgoHandle];
+  struct mscclAlgo* devAlgo = status.devAlgos[mscclAlgoHandle];
+
+  // NCCL adds a lot of guarantees that target device is getting used
+  // in its group management code, which we entirely skip when MSCCL is used
+  // Therefore, in single thread multiGPU mode
+  // setting the device is critical to be sure 
+  // communication is done on the intended device
+
+  CUDACHECK(hipSetDevice(comm->cudaDev)); 
+
+  NCCLCHECK(mscclGetCaptureStatus(comm, stream));
+
+  NCCLCHECK(mscclSetupCount(hostAlgo, comm, count, dataType));
+
+  NCCLCHECK(mscclSetupScratch(hostAlgo, stream));
+
+  NCCLCHECK(mscclSetupSyncFlags(comm, stream));
+
+  NCCLCHECK(mscclSetupProxy(hostAlgo, comm, stream));
+
+  NCCLCHECK(mscclSetupKernel(sendBuff, recvBuff, count, dataType, op, hostAlgo, devAlgo, comm, stream));
+
+  return ncclSuccess;
+}
+
 static ncclResult_t mscclRunSavedParams() {
   mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   for (auto& param : threadLocalStatus.savedSchedulerParams) {
@@ -420,7 +475,7 @@ static ncclResult_t mscclRunSavedParams() {
     mscclFuncNames[param.p.func], param.p.opCount, param.p.sendBuff, param.p.recvBuff, param.p.count,
     param.p.dataType, param.p.op, param.p.root, param.comm, param.p.nRanks, param.stream, param.comm->planner.nTasksP2p + param.comm->planner.nTasksColl, param.comm->localRankToRank[param.comm->localRank]);
 
-    NCCLCHECK(mscclRunAlgo(
+    NCCLCHECK(_mscclRunAlgo(
       param.p.sendBuff, param.p.sendCounts, param.p.sDisPls,
       param.p.recvBuff, param.p.recvCounts, param.p.rDisPls,
       param.p.count, param.p.dataType, param.p.root, param.p.peer, param.p.op, param.p.handle, param.comm, param.stream));

@@ -837,6 +837,7 @@ target_compile_options(rccl PRIVATE -Werror=uninitialized)
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
 
+
 ## TODO: Fix these NCCL-inherited warnings. They are put in the order of importance
 target_compile_options(rccl PRIVATE -Wno-unused-variable)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
@@ -845,6 +846,9 @@ target_compile_options(rccl PRIVATE -Wno-unused-but-set-variable)
 target_compile_options(rccl PRIVATE -Wno-unused-label)
 target_compile_options(rccl PRIVATE -Wno-null-conversion)
 target_compile_options(rccl PRIVATE -Wno-reorder-ctor)
+
+target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
+
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 
 target_compile_options(rccl PRIVATE -fgpu-rdc)
