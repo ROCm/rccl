@@ -108,6 +108,7 @@ jobs:
             echo "##vso[task.logissue type=error]Missing expected file: $fullpath"
             MISSING_FILES=1
           fi
+          i=$((i + 1))
         done
 
         if [ "$MISSING_FILES" -eq 1 ]; then
