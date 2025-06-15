@@ -98,14 +98,14 @@ jobs:
         echo "Checking for expected installed files..."
         MISSING_FILES=0
 
-        expectedFiles="${{ join(' ', parameters.expectedInstallFiles) }}"
-        for relpath in "${expectedFiles[@]}"; do
+        expectedFiles="${{ join('\n', parameters.expectedInstallFiles) }}"
+        while IFS= read -r relpath; do
           fullpath="$BINARIES_DIR/$relpath"
           if [ ! -e "$fullpath" ]; then
             echo "##vso[task.logissue type=error]Missing expected file: $fullpath"
             MISSING_FILES=1
           fi
-        done
+        done <<< "$expectedFiles"
 
         if [ "$MISSING_FILES" -eq 1 ]; then
           echo "One or more expected files are missing from the install directory."
