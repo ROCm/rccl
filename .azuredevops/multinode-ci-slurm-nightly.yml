@@ -114,6 +114,8 @@ jobs:
         if [ "$MISSING_FILES" -eq 1 ]; then
           echo "One or more expected files are missing from the install directory."
           exit 1
+        else
+          echo "All expected files are present in the install directory."
         fi
   - task: Bash@3
     displayName: Build Logs
