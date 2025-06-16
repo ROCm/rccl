@@ -39,5 +39,5 @@ jobs:
   - template: ${{ variables.CI_TEMPLATE_PATH }}/steps/checkout.yml@pipelines_repo
     parameters:
       submoduleBehaviour: recursive
-  - template: $(Build.SourcesDirectory)/.azuredevops/templates/build.yml
-  - template: $(Build.SourcesDirectory)/.azuredevops/templates/test.yml
+  - template: templates/build.yml
+  - template: templates/test.yml
