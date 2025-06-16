@@ -13,4 +13,4 @@ echo "Node identifier: $short_id"
 source /etc/profile.d/lmod.sh
 module load rocm/6.4.0
 cd "$BINARIES_DIR/bin"
-./rccl-UnitTests --gtest_output=xml:$PIPELINE_WORKSPACE/test_output.xml --gtest_color=yes
+LD_LIBRARY_PATH="$BINARIES_DIR/lib:$LD_LIBRARY_PATH" NCCL_DEBUG=INFO RCCL_ENABLE_SIGNALHANDLER=1 ./rccl-UnitTests --gtest_output=xml:$PIPELINE_WORKSPACE/test_output.xml --gtest_color=yes

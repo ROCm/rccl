@@ -31,6 +31,6 @@ ninja --version
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p build
 cd build
-cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DROCM_PATH=/opt/rocm-6.4.0 ..
+cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=gfx942 -DBUILD_TESTS=ON -DROCM_PATH="$ROCM_PATH" ..
 cmake --build .
 cmake --build . --target install
