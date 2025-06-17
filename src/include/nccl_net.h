@@ -601,4 +601,10 @@ typedef struct {
   ncclResult_t (*closeListen)(void* listenComm);
 } ncclCollNet_v5_t;
 
+// context passed from RCCL lib to n/w plugin
+typedef struct {
+  // channel id
+  uint32_t chId;
+} ncclNet_ctxt_t;
+
 #endif // end include guard

@@ -59,15 +59,39 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
         }
       }
 #endif
-    } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
-      // Warn that model detection for MI300 (or future others) did not work as expected
-      // Add supported archs to this condition as they come (e.g. gfx950)
+    } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
+               IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
+      // Warn that model detection for the above listed architectures did not work as expected
+      // Add supported archs to this condition as they come
       // Also make sure the tuning_model and model detection are updated for new archs
       static bool failedWarn = false;
       if (!failedWarn) {
         WARN("LL cutoff points not detected for a supported arch %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
         failedWarn = true;
       }
+    }
+  }
+}
+
+void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold) {
+  // Honor user input for thread thresholds
+  static int userChannelControlInput = -2;
+  if (userChannelControlInput == -2) {
+    const char *inputStr = getenv("NCCL_THREAD_THRESHOLDS");
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MAX_NCHANNELS");
+    }
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MIN_NCHANNELS");
+    }
+    userChannelControlInput = !inputStr ? 0 : 1;
+  }
+
+  if(!userChannelControlInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather)) {
+    auto tunableIndex = rcclGetTunableIndex(info->func);
+    auto tunedThreshold = comm->minMaxLLRange[tunableIndex][info->protocol][RCCL_PROTOCOL_THREAD_THRESHOLD_IDX];
+    if(tunedThreshold != RCCL_LL_LIMITS_UNDEFINED) {
+      threadThreshold = tunedThreshold * comm->nRanks;
     }
   }
 }

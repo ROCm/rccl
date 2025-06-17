@@ -53,53 +53,58 @@ if(ENABLE_MSCCLPP)
             )
         endif()
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/reg-fix.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/reg-fix.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no-cache.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no-cache.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
+        execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/device-flag.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
         execute_process(
             COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/remove-clip.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
+        execute_process(
+            COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/disable-executor.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
@@ -135,7 +140,7 @@ if(ENABLE_MSCCLPP)
                          #GIT_TAG             4ee15b7ad085daaf74349d4c49c9b8480d28f0dc
                          INSTALL_DIR         ${MSCCLPP_ROOT}
                          LIST_SEPARATOR      %
-                         CMAKE_ARGS          "-DGPU_TARGETS=${MSCCLPP_GPU_TARGETS}" -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DMSCCLPP_CLIP_ENABLED=${ENABLE_MSCCLPP_CLIP} -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INHERITED_ARGS}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}                         LOG_DOWNLOAD        FALSE
+                         CMAKE_ARGS          "-DGPU_TARGETS=${MSCCLPP_GPU_TARGETS}" -DMSCCLPP_BYPASS_GPU_CHECK=ON -DMSCCLPP_USE_ROCM=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMSCCLPP_BUILD_APPS_NCCL=ON -DMSCCLPP_BUILD_PYTHON_BINDINGS=OFF -DMSCCLPP_BUILD_TESTS=OFF -DMSCCLPP_CLIP_ENABLED=${ENABLE_MSCCLPP_CLIP} -DMSCCLPP_ENABLE_EXECUTOR=${ENABLE_MSCCLPP_EXECUTOR} -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DCMAKE_VERBOSE_MAKEFILE=1 "${CMAKE_INHERITED_ARGS}" -DFETCHCONTENT_SOURCE_DIR_JSON=${JSON_SOURCE}                         LOG_DOWNLOAD        FALSE
                          LOG_CONFIGURE       FALSE
                          LOG_BUILD           FALSE
                          LOG_INSTALL         FALSE
@@ -145,56 +150,60 @@ if(ENABLE_MSCCLPP)
 
         find_package(mscclpp_nccl REQUIRED)
 
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/disable-executor.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-    execute_process(
+        execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/remove-clip.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
         )
 
-	execute_process(
+        execute_process(
             COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/device-flag.patch
             WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-    )
+        )
 
-    execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no-cache.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
-    
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/reg-fix.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/no-cache.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/reg-fix.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/bf16-tuning.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/non-multiple-128-fix.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mem-reg.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/mscclpp_ibv_access_relaxed_ordering.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
-	execute_process(
-	    COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
-	    WORKING_DIRECTORY ${MSCCLPP_SOURCE}
-	)
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/read-allred.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
+
+        execute_process(
+            COMMAND git apply --reverse ${CMAKE_CURRENT_SOURCE_DIR}/ext-src/cpx.patch
+            WORKING_DIRECTORY ${MSCCLPP_SOURCE}
+        )
 
     #endif()
 

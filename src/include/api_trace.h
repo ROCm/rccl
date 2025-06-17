@@ -31,7 +31,7 @@
 #define RCCL_API_TRACE_VERSION_MAJOR 0
 
 // should be increased every time new members are added to existing dispatch tables
-#define RCCL_API_TRACE_VERSION_PATCH 0
+#define RCCL_API_TRACE_VERSION_PATCH 1
 
 #if !defined(RCCL_EXTERN_C_INIT)
 #    ifdef __cplusplus
@@ -143,7 +143,7 @@ typedef ncclResult_t (*ncclMemAlloc_fn_t)(void** ptr, size_t size);
 typedef ncclResult_t (*ncclMemFree_fn_t)(void* ptr);
 
 typedef ncclResult_t (*mscclLoadAlgo_fn_t)(const char*        mscclAlgoFilePath,
-                                           mscclAlgoHandle_t* mscclAlgoHandle, const ncclComm_t comm);
+                                           mscclAlgoHandle_t* mscclAlgoHandle, int rank);
 
 typedef ncclResult_t (*mscclRunAlgo_fn_t)(
     const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],
