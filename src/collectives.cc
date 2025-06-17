@@ -155,7 +155,7 @@ ncclResult_t ncclAllReduceWithBias_impl(const void* sendbuff, void* recvbuff, si
     NCCLCHECK(Recorder::instance().record(rrAllReduce, info));
   }
 
-  if (mscclAvailable(comm) && !mscclIsCaller() && acc == nullptr) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     return mscclEnqueueCheck(
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
