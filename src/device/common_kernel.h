@@ -77,8 +77,8 @@ __device__ __forceinline__ void reduceCopyPacks(
     // coverity[dead_error_line]
     minDsts[d] = cvta_to_global(dstPtrFn(d)) + threadBytesBehind;
   }
-  BytePack<BytePerPack> acc1[MinSrcs + !MinSrcs][Unroll];
-  BytePack<BytePerPack> acc2[MinSrcs + !MinSrcs][Unroll];
+  BytePack<BytePerPack> acc1[MaxSrcs + !MaxSrcs][Unroll];
+  BytePack<BytePerPack> acc2[MaxSrcs + !MaxSrcs][Unroll];
   // We dictate loop termination condition according to whether partial hunks
   // can be handled or not.
   while (Unroll==1 ? (BytePerPack <= threadBytesAhead) : (0 < nHunksAhead)) {
@@ -119,7 +119,6 @@ __device__ __forceinline__ void reduceCopyPacks(
         minSrcs[s] += WARP_SIZE*BytePerPack;
       }
     }
-
 
     #pragma unroll
     for (int s=0; s < MinSrcs; s++) {
@@ -186,22 +185,22 @@ __device__ __forceinline__ void reduceCopyPacks(
 
     for (int s=MinSrcs; (MinSrcs < MaxSrcs) && (s < MaxSrcs) && (s < nSrcs); s++) {
       uintptr_t src = cvta_to_global(srcPtrFn(s)) + threadBytesBehind;
-      BytePack<BytePerPack> tmp[Unroll];
+      // BytePack<BytePerPack> tmp[Unroll];
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_line]
       RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
       #pragma unroll Unroll
       for (int u=0; u < Unroll; u++) {
         // Use volatile loads in case credits are polled for with volatile (instead of acquire).
-        tmp[u] = ld_volatile_global<BytePerPack>(src);
+        acc1[s][u] = ld_volatile_global<BytePerPack>(src);
         src += WARP_SIZE*BytePerPack;
       }
       #pragma unroll Unroll
       for (int u=0; u < Unroll; u++) {
         // Yes, for some template arguments this code will be unreachable.  That's fine.
         // coverity[dead_error_line]
-        if (s < PreOpSrcs) tmp[u] = applyPreOp(preFn, tmp[u]);
-        acc1[0][u] = applyReduce(redFn, acc1[0][u], tmp[u]);
+        if (s < PreOpSrcs) acc1[s][u] = applyPreOp(preFn, acc1[s][u]);
+        acc1[0][u] = applyReduce(redFn, acc1[0][u], acc1[s][u]);
       }
     }
 
@@ -235,6 +234,8 @@ __device__ __forceinline__ void reduceCopyPacks(
         dst += WARP_SIZE*BytePerPack;
       }
     }
+
+
     threadBytesBehind += nWarps*BytePerHunk;
     nWarps = nThreads/WARP_SIZE;
 
