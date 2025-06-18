@@ -199,7 +199,6 @@ private:
       if (prev_count % (RCCL_WORKGROUPS_PER_SEMAPHORE + 1) == RCCL_WORKGROUPS_PER_SEMAPHORE - 1){
         __threadfence();
         __hip_atomic_fetch_add(semaphore, 1, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
-        //__atomic_fetch_add(semaphore, 1, __ATOMIC_RELAXED);
       }
       else{
         __threadfence_block();
@@ -208,12 +207,9 @@ private:
         // Calculate what value the counter was at immediately after the previous flush
         int64_t signal_condition = ((prev_count + RCCL_WORKGROUPS_PER_SEMAPHORE) / (RCCL_WORKGROUPS_PER_SEMAPHORE + 1)) * (RCCL_WORKGROUPS_PER_SEMAPHORE + 1);
         while (signaled < signal_condition) {
-          // TODO: Determine call for 64 bit atomic load
           signaled = __hip_atomic_load(semaphore, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
         }
       }
-    
-      //__threadfence();
 
 #else
     __threadfence_system();
