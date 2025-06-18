@@ -1895,6 +1895,14 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   timers[TIMER_INIT_TOTAL] = clockNano();
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);
+  
+  for(int i = 0; i < RCCL_SEMAPHORES_PER_GPU; i++){
+      // Prevent false sharing of semaphores
+      NCCLCHECK(ncclCudaMalloc(&comm -> rcclSemaphores[i], 128, hipDeviceMallocFinegrained));
+      // Don't bother zeroing anything except the first integer, which we actually use.
+      CUDACHECK(hipMemset(comm -> rcclSemaphores[i], 0, sizeof(uint64_t)));
+  }
+      
   CUDACHECKGOTO(cudaDeviceGetAttribute(&maxSharedMem, cudaDevAttrMaxSharedMemoryPerBlockOptin, cudaDev), res, fail);
   CUDACHECKGOTO(cudaDeviceGetAttribute(&archMajor, cudaDevAttrComputeCapabilityMajor, cudaDev), res, fail);
   CUDACHECKGOTO(cudaDeviceGetAttribute(&archMinor, cudaDevAttrComputeCapabilityMinor, cudaDev), res, fail);

@@ -481,6 +481,7 @@ struct ncclComm {
 
   int node;
   int nNodes;
+  uint64_t* rcclSemaphores[RCCL_SEMAPHORES_PER_GPU]; // semaphores for each local rank
   int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
   int localRank;
   int localRanks;

@@ -366,6 +366,10 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
+    for(int i = 0; i < RCCL_SEMAPHORES_PER_GPU; i++){
+      devWork.semaphore[i] = comm->rcclSemaphores[i];
+    }
+    
     if (task->regBufType & NCCL_NET_REG_BUFFER)
       devWork.netRegUsed = 1;
     if (task->regBufType & (NCCL_IPC_REG_BUFFER | NCCL_NVLS_REG_BUFFER))
@@ -420,7 +424,6 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
     // Next task
     task = next;
   }
-
   // Walk (fn,op,ty) bins, compute algo and proto etc. Then bin them by their
   // scheduling constraints (collnet x nvls).
   struct ncclIntruQueue<struct ncclTaskColl, &ncclTaskColl::next> collBins[2][2] = {};

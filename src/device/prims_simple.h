@@ -64,6 +64,7 @@ class Primitives<
   uint64_t* barriers;
   uint64_t barrier_next = 0;
   int repeat;
+  uint64_t* semaphore; // Counting semaphores for interblock synchronization
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -191,12 +192,33 @@ private:
 
   template<int Recv, int Send>
   inline __device__ void postPeer(bool dataStored) {
-    if (Send && (flags & RolePostSend) && dataStored)
+    if (Send && (flags & RolePostSend) && dataStored){
 #ifdef __GFX9__
-    __threadfence();
+      
+      int64_t prev_count = __hip_atomic_fetch_add(semaphore, 1, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
+      if (prev_count % (RCCL_WORKGROUPS_PER_SEMAPHORE + 1) == RCCL_WORKGROUPS_PER_SEMAPHORE - 1){
+        __threadfence();
+        __hip_atomic_fetch_add(semaphore, 1, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
+        //__atomic_fetch_add(semaphore, 1, __ATOMIC_RELAXED);
+      }
+      else{
+        __threadfence_block();
+        // Wait for flushing thread to signal that the L2 cache has completed flush and invalidation
+        int64_t signaled = 0;
+        // Calculate what value the counter was at immediately after the previous flush
+        int64_t signal_condition = ((prev_count + RCCL_WORKGROUPS_PER_SEMAPHORE) / (RCCL_WORKGROUPS_PER_SEMAPHORE + 1)) * (RCCL_WORKGROUPS_PER_SEMAPHORE + 1);
+        while (signaled < signal_condition) {
+          // TODO: Determine call for 64 bit atomic load
+          signaled = __hip_atomic_load(semaphore, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
+        }
+      }
+    
+      //__threadfence();
+
 #else
     __threadfence_system();
 #endif
+    }
 
     if ((flags & Send*RolePostSend) && next_hdp_reg)
       STORE((unsigned int *)next_hdp_reg, 0x1);
@@ -748,6 +770,7 @@ public:
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     barriers = &ncclShmem.groups[group].barrier;
+    semaphore = collWork -> semaphore[blockIdx.x % RCCL_SEMAPHORES_PER_GPU];
     this->nworkers = nthreads;
 
     int peer = -1;
