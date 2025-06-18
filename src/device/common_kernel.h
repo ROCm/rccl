@@ -84,23 +84,8 @@ __device__ __forceinline__ void reduceCopyPacks(
   // We dictate loop termination condition according to whether partial hunks
   // can be handled or not.
   while (Unroll==1 ? (BytePerPack <= threadBytesAhead) : (0 < nHunksAhead)) {
-    // minSrcs[0] cannot be nullptr so we always process it
-    { RedFn preFn(0 < PreOpSrcs ? preOpArgs[0] : 0);
-      #pragma unroll Unroll
-      for (int u=0; u < Unroll; u++) {
-        if (0 < MultimemSrcs) {
-          // applyLoadMultimem uses relaxed semantics for same reason we use volatile below.
-          acc1[0][u] = applyLoadMultimem<RedFn, BytePerPack>(redFn, minSrcs[0]);
-        } else {
-          // Use volatile loads in case credits are polled for with volatile (instead of acquire).
-          acc1[0][u] = ld_volatile_global<BytePerPack>(minSrcs[0]);
-        }
-        minSrcs[0] += WARP_SIZE*BytePerPack;
-      }
-    }
-
     #pragma unroll Unroll
-    for (int s=1; s < MinSrcs; s++) {
+    for (int s=0; s < MinSrcs; s++) {
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_begin]
       RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
@@ -178,9 +163,6 @@ __device__ __forceinline__ void reduceCopyPacks(
           dst += WARP_SIZE*BytePerPack;
         }
       }
-
-      nWarps = nThreads/WARP_SIZE;
-
       #pragma unroll
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_line]
@@ -198,23 +180,8 @@ __device__ __forceinline__ void reduceCopyPacks(
     bool canProcessDoubleBuffers = Unroll==1 ? (BytePerPack <= threadBytesAhead) : (0 < nHunksAhead);
     if(canProcessDoubleBuffers) {
       tailProcess = true;
-      // minSrcs[0] cannot be nullptr so we always process it
-      { RedFn preFn(0 < PreOpSrcs ? preOpArgs[0] : 0);
-        #pragma unroll Unroll
-        for (int u=0; u < Unroll; u++) {
-          if (0 < MultimemSrcs) {
-            // applyLoadMultimem uses relaxed semantics for same reason we use volatile below.
-            acc2[0][u] = applyLoadMultimem<RedFn, BytePerPack>(redFn, minSrcs[0]);
-          } else {
-            // Use volatile loads in case credits are polled for with volatile (instead of acquire).
-            acc2[0][u] = ld_volatile_global<BytePerPack>(minSrcs[0]);
-          }
-          minSrcs[0] += WARP_SIZE*BytePerPack;
-        }
-      }
-
       #pragma unroll Unroll
-      for (int s=1; s < MinSrcs; s++) {
+      for (int s=0; s < MinSrcs; s++) {
         // Yes, for some template arguments this code will be unreachable.  That's fine.
         // coverity[dead_error_begin]
         RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
