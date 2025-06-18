@@ -148,8 +148,6 @@ __device__ __forceinline__ void reduceCopyPacks(
       for (int s=1; s < MinSrcs; s++) {
         // Yes, for some template arguments this code will be unreachable.  That's fine.
         // coverity[dead_error_begin]
-        // BytePack<BytePerPack> tmp[Unroll];
-        // coverity[dead_error_line]
         RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
         #pragma unroll Unroll
         for (int u=0; u < Unroll; u++) {
@@ -163,12 +161,6 @@ __device__ __forceinline__ void reduceCopyPacks(
           }
           minSrcs[s] += WARP_SIZE*BytePerPack;
         }
-        #pragma unroll Unroll
-        for (int u=0; u < Unroll; u++) {
-          // coverity[dead_error_line]
-          if (s < PreOpSrcs) acc2[s][u] = applyPreOp(preFn, acc2[s][u]);
-          acc2[0][u] = applyReduce(redFn, acc2[0][u], acc2[s][u]);
-        }
       }
     }
     for (int s=0; s < MinSrcs; s++) {
@@ -180,7 +172,17 @@ __device__ __forceinline__ void reduceCopyPacks(
         if (s > 0) acc1[0][u] = applyReduce(redFn, acc1[0][u], acc1[s][u]);
       }
     }
-
+    if(canProcessSecond) {
+      for (int s=0; s < MinSrcs; s++) {
+        RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
+        #pragma unroll Unroll
+        for (int u=0; u < Unroll; u++) {
+          // coverity[dead_error_line]
+          if (s < PreOpSrcs) acc2[s][u] = applyPreOp(preFn, acc2[s][u]);
+          if (s > 0) acc2[0][u] = applyReduce(redFn, acc2[0][u], acc2[s][u]);
+        }
+      }
+    }
 
     for (int s=MinSrcs; (MinSrcs < MaxSrcs) && (s < MaxSrcs) && (s < nSrcs); s++) {
       uintptr_t src = cvta_to_global(srcPtrFn(s)) + threadBytesBehind;
