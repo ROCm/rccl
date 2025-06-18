@@ -1,3 +1,10 @@
+/*************************************************************************
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * See LICENSE.txt for license information
+ ************************************************************************/
+
 #include "register.h"
 #include "transport.h"
 

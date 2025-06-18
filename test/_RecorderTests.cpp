@@ -40,16 +40,18 @@ namespace RcclUnitTesting
 
     std::vector<rccl::rcclApiCall> calls;
     char entry[4096];
+    gethostname(entry, 256);
     //parse the outfile
-    std::string filename = "test" + std::to_string(pid) + ".json";
-    std::ifstream fp("/tmp/test" + std::to_string(pid) + ".json");
+    std::string filename = "/tmp/test." + std::to_string(pid) + "." + std::string(entry) + ".json";
+    std::ifstream fp(filename);
     fp.getline(entry, 4096);
     fp.getline(entry, 4096);
     fp.getline(entry, 4096);
     parseJsonEntry(entry, calls);
-    int result = memcmp((char*)&calls[0]+4, (char*)&call+4, sizeof(rccl::rcclApiCall)-4);
+    // compare only the fields after the pid field
+    int result = memcmp(&(calls[0].pid)+1, &(call.pid)+1, sizeof(rccl::rcclApiCall)-sizeof(call.pid));
     fp.close(); // care that recorder is not designed to anticipate fp closing before destructor
-    remove(filename.c_str());
+    //remove(filename.c_str()); TODO: after implement fp closing mechanism via envvar, remove file after test case
     unsetenv("RCCL_REPLAY_FILE");
     assert(!result);
   }

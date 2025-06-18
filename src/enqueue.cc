@@ -813,7 +813,7 @@ static ncclResult_t scheduleCollTasksToPlan(
           (long)devWork->cbd.countLo, (long)devWork->cbd.countMid, (long)devWork->cbd.countHi,
           int(devWork->cbd.chunkGrainsLo*rcclProtoGrainSize(task->protocol, comm)),
           int(devWork->cbd.chunkGrainsMid*rcclProtoGrainSize(task->protocol, comm)),
-          int(devWork->cbd.chunkGrainsHi*rcclProtoGrainSize(task->protocol), comm));
+          int(devWork->cbd.chunkGrainsHi*rcclProtoGrainSize(task->protocol, comm)));
       }
     }
 

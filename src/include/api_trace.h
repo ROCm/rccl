@@ -139,7 +139,7 @@ typedef ncclResult_t (*ncclMemAlloc_fn_t)(void** ptr, size_t size);
 typedef ncclResult_t (*ncclMemFree_fn_t)(void* ptr);
 
 typedef ncclResult_t (*mscclLoadAlgo_fn_t)(const char*        mscclAlgoFilePath,
-                                           mscclAlgoHandle_t* mscclAlgoHandle, const ncclComm_t comm);
+                                           mscclAlgoHandle_t* mscclAlgoHandle, int rank);
 
 typedef ncclResult_t (*mscclRunAlgo_fn_t)(
     const void* sendBuff, const size_t sendCounts[], const size_t sDisPls[],

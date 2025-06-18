@@ -6,7 +6,7 @@ INCLUDES = -I$(MPI_DIR)/include -I$(RCCL_DIR)/include -I$(RCCL_DIR)/hipify/src/i
 LDFLAGS  = -L$(MPI_DIR)/lib -L$(RCCL_DIR) -lmpi -lrccl
 
 main: rcclReplayer.cpp
-	$(ROCM_DIR)/bin/hipcc rcclReplayer.cpp -O1 -g -o rcclReplayer $(INCLUDES) $(LDFLAGS)
+	$(ROCM_DIR)/bin/hipcc -std=c++20 rcclReplayer.cpp -O0 -g -o rcclReplayer $(INCLUDES) $(LDFLAGS)
 
 clean:
 	rm -f ./rcclReplayer
