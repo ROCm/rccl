@@ -94,7 +94,6 @@ __device__ __forceinline__ void reduceCopyPacks(
         } else {
           // Use volatile loads in case credits are polled for with volatile (instead of acquire).
           acc1[0][u] = ld_volatile_global<BytePerPack>(minSrcs[0]);
-          if (0 < PreOpSrcs) acc1[0][u] = applyPreOp(preFn, acc1[0][u]);
         }
         minSrcs[0] += WARP_SIZE*BytePerPack;
       }
@@ -119,13 +118,9 @@ __device__ __forceinline__ void reduceCopyPacks(
         }
         minSrcs[s] += WARP_SIZE*BytePerPack;
       }
-      #pragma unroll Unroll
-      for (int u=0; u < Unroll; u++) {
-        // coverity[dead_error_line]
-        if (s < PreOpSrcs) acc1[s][u] = applyPreOp(preFn, acc1[s][u]);
-        acc1[0][u] = applyReduce(redFn, acc1[0][u], acc1[s][u]);
-      }
     }
+
+
     #pragma unroll
     for (int s=0; s < MinSrcs; s++) {
       minSrcs[s] += (nWarps-1)*BytePerHunk;
@@ -144,7 +139,6 @@ __device__ __forceinline__ void reduceCopyPacks(
           } else {
             // Use volatile loads in case credits are polled for with volatile (instead of acquire).
             acc2[0][u] = ld_volatile_global<BytePerPack>(minSrcs[0]);
-            if (0 < PreOpSrcs) acc2[0][u] = applyPreOp(preFn, acc2[0][u]);
           }
           minSrcs[0] += WARP_SIZE*BytePerPack;
         }
@@ -177,6 +171,17 @@ __device__ __forceinline__ void reduceCopyPacks(
         }
       }
     }
+    for (int s=0; s < MinSrcs; s++) {
+      RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
+      #pragma unroll Unroll
+      for (int u=0; u < Unroll; u++) {
+        // coverity[dead_error_line]
+        if (s < PreOpSrcs) acc1[s][u] = applyPreOp(preFn, acc1[s][u]);
+        if (s > 0) acc1[0][u] = applyReduce(redFn, acc1[0][u], acc1[s][u]);
+      }
+    }
+
+
     for (int s=MinSrcs; (MinSrcs < MaxSrcs) && (s < MaxSrcs) && (s < nSrcs); s++) {
       uintptr_t src = cvta_to_global(srcPtrFn(s)) + threadBytesBehind;
       BytePack<BytePerPack> tmp[Unroll];
