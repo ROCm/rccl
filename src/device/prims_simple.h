@@ -195,7 +195,11 @@ private:
   inline __device__ void postPeer(bool dataStored) {
     if (Send && (flags & RolePostSend) && dataStored){
 #ifdef __GFX9__
-    __threadfence_cooperative();
+    #if defined(__gfx942__) || defined(__gfx950__)
+      __threadfence_cooperative();
+    #else
+    __threadfence();
+    #endif
 #else
     __threadfence_system();
 #endif
