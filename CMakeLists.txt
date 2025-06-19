@@ -434,6 +434,7 @@ set(SRC_FILES
   src/device/common.h
   src/device/common_kernel.h
   src/device/op128.h
+  src/device/rccl_cooperative_threadfence.h
   src/device/primitives.h
   src/device/prims_ll128.h
   src/device/prims_ll.h

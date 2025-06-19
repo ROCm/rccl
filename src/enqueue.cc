@@ -366,8 +366,8 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
-    for(int i = 0; i < RCCL_SEMAPHORES_PER_GPU; i++){
-      devWork.semaphore[i] = comm->rcclSemaphores[i];
+    for(int i = 0; i < 2; i++){
+      devWork.rcclSemaphores[i] = comm->rcclSemaphores[i];
     }
     
     if (task->regBufType & NCCL_NET_REG_BUFFER)

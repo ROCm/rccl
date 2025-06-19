@@ -11,6 +11,7 @@
 
 #include "nccl.h"
 #include "rccl_float8.h"
+#include "rccl_cooperative_threadfence.h"
 #include <hip/hip_bfloat16.h>
 #include "nccl_common.h"
 #include "bitops.h"
@@ -327,7 +328,7 @@ struct alignas(16) ncclDevWorkColl {
   };
   uint64_t redOpArg;
   uint64_t opCount;
-  uint64_t* semaphore[64];
+  rccl::cooperative_threadfence::signal_type* rcclSemaphores[2];
 };
 
 

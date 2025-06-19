@@ -21,6 +21,7 @@
 #include "profiler.h"
 #include "rccl_common.h"
 #include "recorder.h"
+#include "rccl_cooperative_threadfence.h"
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
@@ -481,7 +482,7 @@ struct ncclComm {
 
   int node;
   int nNodes;
-  uint64_t* rcclSemaphores[RCCL_SEMAPHORES_PER_GPU]; // semaphores for each local rank
+  rccl::cooperative_threadfence::signal_type* rcclSemaphores[2]; // semaphores for each local rank
   int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
   int localRank;
   int localRanks;

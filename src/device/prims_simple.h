@@ -11,6 +11,7 @@
 #endif
 
 #include "msccl/msccl_struct.h"
+#include "rccl_cooperative_threadfence.h"
 #include "network/unpack/unpack.h"
 #include <cassert>
 
@@ -64,7 +65,7 @@ class Primitives<
   uint64_t* barriers;
   uint64_t barrier_next = 0;
   int repeat;
-  uint64_t* semaphore; // Counting semaphores for interblock synchronization
+  rccl::cooperative_threadfence::RCCLCooperativeThreadFence __threadfence_cooperative;
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -194,23 +195,7 @@ private:
   inline __device__ void postPeer(bool dataStored) {
     if (Send && (flags & RolePostSend) && dataStored){
 #ifdef __GFX9__
-      
-      int64_t prev_count = __hip_atomic_fetch_add(semaphore, 1, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
-      if (prev_count % (RCCL_WORKGROUPS_PER_SEMAPHORE + 1) == RCCL_WORKGROUPS_PER_SEMAPHORE - 1){
-        __threadfence();
-        __hip_atomic_fetch_add(semaphore, 1, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
-      }
-      else{
-        __threadfence_block();
-        // Wait for flushing thread to signal that the L2 cache has completed flush and invalidation
-        int64_t signaled = 0;
-        // Calculate what value the counter was at immediately after the previous flush
-        int64_t signal_condition = ((prev_count + RCCL_WORKGROUPS_PER_SEMAPHORE) / (RCCL_WORKGROUPS_PER_SEMAPHORE + 1)) * (RCCL_WORKGROUPS_PER_SEMAPHORE + 1);
-        while (signaled < signal_condition) {
-          signaled = __hip_atomic_load(semaphore, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
-        }
-      }
-
+    __threadfence_cooperative();
 #else
     __threadfence_system();
 #endif
@@ -762,11 +747,15 @@ public:
       struct ncclDevWorkP2p* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
     ):
     tid(tid), nthreads(nthreads), tidInBlock(threadIdx.x), group(group),
-    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_) {
+    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_)
+    {
+
+    if(collWork != nullptr){
+      __threadfence_cooperative = rccl::cooperative_threadfence::RCCLCooperativeThreadFence(collWork -> rcclSemaphores[0], collWork -> rcclSemaphores[1]);
+    }
 
     // For send operations, we need an extra warp to overlap the threadfence and the copy
     barriers = &ncclShmem.groups[group].barrier;
-    semaphore = collWork -> semaphore[blockIdx.x % RCCL_SEMAPHORES_PER_GPU];
     this->nworkers = nthreads;
 
     int peer = -1;

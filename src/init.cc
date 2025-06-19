@@ -45,6 +45,7 @@
 // [RCCL]
 #include "git_version.h"
 #include "rccl_vars.h"
+#include "rccl_cooperative_threadfence.h"
 #include "hip_rocm_version_info.h"
 //#include <hsa/hsa_ext_amd.h>
 #ifdef ENABLE_MSCCLPP
@@ -1896,11 +1897,11 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   timers[TIMER_INIT_TOTAL] = clockNano();
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);
   
-  for(int i = 0; i < RCCL_SEMAPHORES_PER_GPU; i++){
+  for(int i = 0; i < 2; i++){
       // Prevent false sharing of semaphores
       NCCLCHECK(ncclCudaMalloc(&comm -> rcclSemaphores[i], 128, hipDeviceMallocFinegrained));
       // Don't bother zeroing anything except the first integer, which we actually use.
-      CUDACHECK(hipMemset(comm -> rcclSemaphores[i], 0, sizeof(uint64_t)));
+      CUDACHECK(hipMemset(comm -> rcclSemaphores[i], 0, sizeof(rccl::cooperative_threadfence::signal_type)));
   }
       
   CUDACHECKGOTO(cudaDeviceGetAttribute(&maxSharedMem, cudaDevAttrMaxSharedMemoryPerBlockOptin, cudaDev), res, fail);
