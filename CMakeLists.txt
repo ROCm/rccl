@@ -20,7 +20,6 @@ project(rccl CXX)
 #==================================================================================================
 option(BUILD_ADDRESS_SANITIZER                 "Enable address sanitizer"                      OFF)
 option(BUILD_BFD                               "Enable custom backtrace (if bfd.h exists)"     OFF)
-option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "File/folder reorg with backward compatibility" OFF)
 option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on this machine"  OFF)
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
@@ -1038,24 +1037,6 @@ rocm_export_targets(
   NAMESPACE roc::
   TARGETS   rccl
   DEPENDS   hip)
-
-## Build with backwards compatibility if requested
-if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
-  ### Create wrapper files
-  rocm_wrap_header_dir(
-    "${PROJECT_BINARY_DIR}/include/rccl"
-    PATTERNS "rccl.h"
-    GUARDS SYMLINK WRAPPER
-    WRAPPER_LOCATIONS ${CMAKE_INSTALL_INCLUDEDIR} rccl/${CMAKE_INSTALL_INCLUDEDIR})
-
-  ### install the wrapper header file to package
-  rocm_install(
-    FILES ${PROJECT_BINARY_DIR}/rccl/include/rccl.h src/include/nccl_net.h
-    DESTINATION "./rccl/${CMAKE_INSTALL_INCLUDEDIR}/" )
-  rocm_install(
-    FILES ${PROJECT_BINARY_DIR}/include/rccl.h src/include/nccl_net.h
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" )
-endif()
 
 ## Set package dependencies
 if(BUILD_ADDRESS_SANITIZER)

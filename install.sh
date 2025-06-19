@@ -65,7 +65,6 @@ function display_help()
     echo "       --openmp-test-enable    Enable OpenMP in rccl unit tests"
     echo "    -p|--package_build         Build RCCL package"
     echo "       --prefix                Specify custom directory to install RCCL to (default: \`/opt/rocm\`)"
-    echo "       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility"
     echo "       --run_tests_all         Run all rccl unit tests (must be built already)"
     echo "    -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)"
     echo "       --static                Build RCCL as a static library instead of shared library"
@@ -118,7 +117,6 @@ while true; do
          --openmp-test-enable)       openmp_test_enabled=true;                                                                         shift ;;
     -p | --package_build)            build_package=true;                                                                               shift ;;
          --prefix)                   install_library=true; install_prefix=${2};                                                        shift 2 ;;
-         --rm-legacy-include-dir)    build_freorg_bkwdcomp=false;                                                                      shift ;;
     -r | --run_tests_quick)          run_tests=true;                                                                                   shift ;;
          --run_tests_all)            run_tests=true; run_tests_all=true;                                                               shift ;;
          --static)                   build_static=true;                                                                                shift ;;
@@ -219,11 +217,6 @@ fi
 # Backtrace support
 if [[ "${build_bfd}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DBUILD_BFD=ON"
-fi
-
-# Backward compatibility wrappers
-if [[ "${build_freorg_bkwdcomp}" == true ]]; then
-    cmake_common_options="${cmake_common_options} -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=ON"
 fi
 
 # Build local GPU arch only
