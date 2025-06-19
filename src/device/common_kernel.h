@@ -328,7 +328,7 @@ __device__ __forceinline__ void reduceCopyPacks(
     }
     for (int d=MinDsts; (MinDsts < MaxDsts) && (d < MaxDsts) && (d < nDsts); d++) {
       uintptr_t dstPtr = cvta_to_global(dstPtrFn(d));
-      uintptr_t dst = dstPtr + threadBytesBehind;
+      uintptr_t dst = dstPtr + tailThreadBytesBehind;
       #pragma unroll Unroll
       for (int u=0; u < Unroll; u++) {
         st_global<BytePerPack>(dst, acc2[0][u]);
