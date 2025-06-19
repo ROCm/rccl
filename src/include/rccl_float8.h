@@ -393,6 +393,8 @@ struct rccl_float8
     // default constructor
     HIP_HOST_DEVICE rccl_float8() = default;
 
+    constexpr inline HIP_HOST_DEVICE rccl_float8(const rccl_float8& a) : data(a.data) {}
+
 #if defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
 
@@ -541,7 +543,7 @@ struct rccl_float8
     }
 
     // assignment overloading only from the same F8 types
-    inline __host__ __device__ rccl_float8& operator=(const rccl_float8& a)
+    inline HIP_HOST_DEVICE rccl_float8& operator=(const rccl_float8& a)
     {
         data = a.data;
         return *this;
@@ -559,6 +561,8 @@ struct rccl_bfloat8
 
     // default constructor
     HIP_HOST_DEVICE rccl_bfloat8() = default;
+
+    constexpr inline HIP_HOST_DEVICE rccl_bfloat8(const rccl_bfloat8& a) : data(a.data) {}
 
 #if defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
@@ -708,7 +712,7 @@ struct rccl_bfloat8
     }
 
     // assignment overloading only from the same F8 types
-    inline __host__ __device__ rccl_bfloat8& operator=(const rccl_bfloat8& a)
+    inline HIP_HOST_DEVICE rccl_bfloat8& operator=(const rccl_bfloat8& a)
     {
         data = a.data;
         return *this;
@@ -733,11 +737,11 @@ namespace std
     {
         return rccl_bfloat8(cosf(float(a)));
     }
-    __device__ __host__ constexpr rccl_float8 real(const rccl_float8& a)
+    HIP_HOST_DEVICE constexpr rccl_float8 real(const rccl_float8& a)
     {
         return a;
     }
-    __device__ __host__ constexpr rccl_bfloat8 real(const rccl_bfloat8& a)
+    HIP_HOST_DEVICE constexpr rccl_bfloat8 real(const rccl_bfloat8& a)
     {
         return a;
     }
