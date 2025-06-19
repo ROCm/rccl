@@ -198,7 +198,7 @@ private:
     #if defined(__gfx942__) || defined(__gfx950__)
       __threadfence_cooperative();
     #else
-    __threadfence();
+      __threadfence();
     #endif
 #else
     __threadfence_system();
