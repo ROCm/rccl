@@ -23,7 +23,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Multi-node tuning for AllGather, AllReduce, and ReduceScatter that leverages LL/LL64/LL128 protocol to use nontemporal vector load/store for tunable message size ranges.
 * LL/LL128 usage ranges for AR, AG, and RS are part of the tuning models, which enable architecture-specific tuning in conjunction with the existing Rome Models scheme in RCCL.
 * Two new APIs are exposed as part of an initiative to separate RCCL code. These APIs are `rcclGetAlgoInfo` and `rcclFuncMaxSendRecvCount`. However, user-level invocation requires that RCCL be built with `RCCL_EXPOSE_STATIC` enabled.
-* Enabled double-buffering in reduceCopyPacks to trigger pipelining, especially to overlap bf16 arithmetic
+* Enabled double-buffering in `reduceCopyPacks` to trigger pipelining, especially to overlap bf16 arithmetic.
 * `--force-reduce-pipeline` is an option that can be passed to the `install.sh` script. By default, software-triggered pipelining is only on for `reduce` and `reduce_scatter`. Passing this option will enable it for `all_reduce`. This can be useful to experiment across hardware.
 
 
