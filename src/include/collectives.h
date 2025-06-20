@@ -402,7 +402,7 @@ public:
 #endif
 
 // Need a power of two to ensure it divides by parallelFactor (which is also a power of two)
-#define NCCL_PAT_NWORKERS 512
+#define NCCL_PAT_NWORKERS 128
 
 static constexpr int PatUsed = 0x1,
                      PatSkipped = 0x2;
@@ -424,7 +424,7 @@ struct ncclPatPeer {
     int connStepSize;
 };
 
-#define NCCL_SHMEM_PAT_STEPS 32
+#define NCCL_SHMEM_PAT_STEPS 64
 struct ncclPatShmem {
   struct ncclPatStep patSteps[NCCL_SHMEM_PAT_STEPS];
   int parallelFactor;

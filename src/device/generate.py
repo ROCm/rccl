@@ -8,7 +8,7 @@ all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","Redu
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
-all_algos =  ["TREE","RING"]
+all_algos =  ["TREE","RING", "PAT"]
 all_unroll = ["1", "2", "4"]
 
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
@@ -85,12 +85,12 @@ else:
 ################################################################################
 
 algos_of_coll = {
-  "AllGather":     ["RING"],
-  "AllReduce":     all_algos,
+  "AllGather":     ["RING", "PAT"],
+  "AllReduce":     ["RING", "TREE"],
   "AllToAllPivot": ["RING"],
   "Broadcast":     ["RING"],
   "Reduce":        ["RING"],
-  "ReduceScatter": ["RING"],
+  "ReduceScatter": ["RING", "PAT"],
   "SendRecv":      ["RING"]
 }
 
