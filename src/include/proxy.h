@@ -34,7 +34,8 @@ typedef enum : uint8_t {
   ncclPatternPatUp,
   ncclPatternPatDown,
   ncclPatternSend,
-  ncclPatternRecv
+  ncclPatternRecv,
+  ncclPatternProfiler,
 } ncclPattern_t;
 
 enum ncclProxyOpState { ncclProxyOpNone, ncclProxyOpReady, ncclProxyOpProgress };
@@ -93,12 +94,19 @@ struct ncclProxyOp {
     struct ncclTaskP2p* p2p;
   } task;
 
+  // Profiler work counter increment flag. Set to 'true' if the profiler work counter for this channel needs increment.
+  // Always 'true' for collective operations. Grouped p2p operations are fused into one <send, recv> pair in the GPU kernel,
+  // meaning the GPU profiler code increments the work counter for the pair rather than the individual p2p. For this
+  // reason, the incWorkCounter flag is used to avoid incrementing the work counter twice in the host code. This is done
+  // by setting incWorkCounter to 'true' only for one of the p2ps in the pair during enqueue.
+  bool incWorkCounter;
   int eActivationMask;
   void* taskEventHandle;
   int rank;
   int peer;
   pid_t pid;
   void* profilerContext;
+  uint64_t workCounter;
 
   struct ncclProxyOp *enqNext;
 };
@@ -135,12 +143,15 @@ struct ncclProxySubArgs {
   // Profiler plugin
   int eActivationMask;
   int rank;
+  uint64_t profilerSteps;
   pid_t pid;
   void* profilerContext;
   void* taskEventHandle;
   void* opEventHandle;
+  void* kernelEventHandle;
   void* stepEventHandles[NCCL_STEPS];
   size_t transSize;
+  uint64_t workCounter;
 
   void* recvRequestsCache[NCCL_STEPS];
   int recvRequestsSubCount;

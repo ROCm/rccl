@@ -2075,7 +2075,7 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
 
   for (i = 0; i < sizeof(romeTopoModels)/sizeof(romeTopoModels[0]); i++) {
     bool ignore_cpu = checkOption(romeTopoModels[i].options, "noCpuCheck");
-    if (!ignore_cpu && (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME))
+    if (!ignore_cpu && (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_MODEL_AMD_ROME))
       continue;
     bool ignore_numa = checkOption(romeTopoModels[i].options, "disableNumaMatching");
     if (!ignore_numa && romeTopo.nCpus != romeTopoModels[i].nCpus) continue;
@@ -2225,7 +2225,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   // only valid on Rome
   int arch, vendor, model;
   NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-  if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
+  if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_MODEL_AMD_ROME)
     return ncclSuccess;
 
   // number of GPUs and NICs on each numa node is used as first screening pattern
@@ -2396,7 +2396,7 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
   // only valid on Rome
   int arch, vendor, model;
   NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-  if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_TYPE_ROME)
+  if (arch != NCCL_TOPO_CPU_ARCH_X86 || vendor != NCCL_TOPO_CPU_VENDOR_AMD || model != NCCL_TOPO_CPU_MODEL_AMD_ROME)
     return ncclSuccess;
 
   // number of GPUs and NICs on each numa node is used as first screening pattern
@@ -2460,7 +2460,7 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
     }
   }
   INFO(NCCL_GRAPH, "%s", line);
-  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME)
+  if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_MODEL_AMD_ROME)
     system->type |= RCCL_TOPO_4P2H_ROME;
   parseOptions(system, rome_model_68.options);
   // create 4P4H based on reference and remapped ids
