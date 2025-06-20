@@ -177,9 +177,8 @@ __device__ __forceinline__ void reduceCopyPacks(
     }
     threadBytesAhead -= nWarps*BytePerHunk;
     nHunksAhead -= nWarps;
-    bool canProcessDoubleBuffers = Unroll==1 ? (BytePerPack <= threadBytesAhead) : (0 < nHunksAhead);
-    if(canProcessDoubleBuffers) {
-      tailProcess = true;
+    tailProcess = Unroll==1 ? (BytePerPack <= threadBytesAhead) : (0 < nHunksAhead);
+    if(tailProcess) {
       #pragma unroll Unroll
       for (int s=0; s < MinSrcs; s++) {
         // Yes, for some template arguments this code will be unreachable.  That's fine.
@@ -198,8 +197,6 @@ __device__ __forceinline__ void reduceCopyPacks(
           minSrcs[s] += WARP_SIZE*BytePerPack;
         }
       }
-    } else {
-      tailProcess = false;
     }
     for (int s=0; s < MinSrcs; s++) {
       RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
@@ -254,15 +251,8 @@ __device__ __forceinline__ void reduceCopyPacks(
     threadBytesBehind += nWarps*BytePerHunk;
     nWarps = nThreads/WARP_SIZE;
 
-    #pragma unroll
-    // Yes, for some template arguments this code will be unreachable.  That's fine.
-    // coverity[dead_error_line]
-    for (int d=0; d < MinDsts; d++) {
-      minDsts[d] += (nWarps-1)*BytePerHunk;
-    }
 
-
-    if(canProcessDoubleBuffers) {
+    if(tailProcess) {
       for (int s=MinSrcs; (MinSrcs < MaxSrcs) && (s < MaxSrcs) && (s < nSrcs); s++) {
         uintptr_t src = cvta_to_global(srcPtrFn(s)) + threadBytesBehind;
         // Yes, for some template arguments this code will be unreachable.  That's fine.
@@ -273,6 +263,13 @@ __device__ __forceinline__ void reduceCopyPacks(
           acc2[s][u] = ld_volatile_global<BytePerPack>(src);
           src += WARP_SIZE*BytePerPack;
         }
+      }
+      
+      #pragma unroll
+      // Yes, for some template arguments this code will be unreachable.  That's fine.
+      // coverity[dead_error_line]
+      for (int d=0; d < MinDsts; d++) {
+        minDsts[d] += (nWarps-1)*BytePerHunk;
       }
 
       #pragma unroll
