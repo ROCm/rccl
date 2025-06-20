@@ -2576,12 +2576,11 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
   if (npkitDumpDir == nullptr) {
     npkitDumpDir = "./npkit_dump";
     INFO(NCCL_INIT, "NPKIT_DUMP_DIR is not set, using default directory: %s", npkitDumpDir);
-
-    struct stat st;
-    if (stat(npkitDumpDir, &st) != 0) {
-      if (mkdir(npkitDumpDir, 0755) != 0) {
-        WARN("Failed to create NPKIT_DUMP_DIR directory: %s", npkitDumpDir);
-      }
+  }
+  struct stat st;
+  if (stat(npkitDumpDir, &st) != 0) {
+    if (mkdir(npkitDumpDir, 0755) != 0) {
+      WARN("Failed to create NPKIT_DUMP_DIR directory: %s", npkitDumpDir);
     }
   }
   NCCLCHECK(NpKit::Dump(npkitDumpDir));
