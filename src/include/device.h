@@ -163,6 +163,7 @@ struct ncclProxyConnector {
 
 struct ncclConnector {
   int connected;
+  int hasSeen;
   struct ncclProxyConnector proxyConn;
   struct ncclTransportComm* transportComm;
   void* transportResources;
@@ -256,6 +257,8 @@ struct alignas(16) ncclDevWorkP2p {
   uint8_t sendNetReg:1, recvNetReg:1;
   uint8_t sendIpcReg:1, recvIpcReg:1;
 
+  uint8_t profilerEnabled:1;
+
   uint8_t sendConnIndex:2, recvConnIndex:2;
 };
 
@@ -304,7 +307,7 @@ struct alignas(16) ncclDevWorkColl {
   uint32_t nWarps:8;
   uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1;
   uint32_t root:30, connIndex:2;
-  uint16_t pivotA2ANumBiRings;
+  uint16_t pivotA2ANumBiRings:15, profilerEnabled:1;
   void* recvbuff;
   void* sendbuff;
   uintptr_t sendbuffOffset;
@@ -498,6 +501,7 @@ struct alignas(16) ncclDevChannel {
   struct ncclTree binTree;
   struct ncclNvls nvls;
   uint32_t* workFifoDone; // Location of done counter, device writes index+1 of last work processed
+  uint64_t workCounter;
 };
 
 struct ncclDevComm {
@@ -522,6 +526,10 @@ struct ncclDevComm {
   struct ncclDevChannel* channels/*[MAXCHANNELS]*/;
 
   int* rankToLocalRank;
+
+  // Profiler counters
+  uint64_t* workStarted/*[MAXCHANNELS]*/;
+  uint64_t* workCompleted/*[MAXCHANNELS]*/;
 
 #if defined(ENABLE_NPKIT)
   NpKitEventCollectContext* npKitEventCollectContexts;
@@ -621,7 +629,7 @@ __host__ __device__ constexpr int ncclCalcUnroll(int bytePerPack, int insns, int
 
 __host__ __device__ constexpr int ncclCollUnroll(int cudaArch = NCCL_CUDA_ARCH) {
   // Our collective unroll should move to the same bytes&insns model as NVLS.
-  return cudaArch >= 800 ? 8 : 4;
+  return cudaArch >= 800 ? (cudaArch == 1200 ? 6 : 8) : 4;
 }
 
 __host__ __device__ constexpr int ncclNvlsUnrollBytes(int cudaArch = NCCL_CUDA_ARCH) { return 4*16; }
