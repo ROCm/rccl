@@ -621,7 +621,7 @@ namespace RcclUnitTesting
     ss << "(" << (inPlace ? "IP" : "OP") << ","
        << (managedMem ? "MM" : "GM") << ","
        << (useHipGraph ? "GL" : "NL") <<") ";
-    ss << std::setfill(' ') << std::setw(12) << ncclDataTypeNames[dataType] << " ";
+    ss << std::setfill(' ') << std::setw(15) << ncclDataTypeNames[dataType] << " ";
     if (CollectiveArgs::UsesReduce(funcType)) ss << std::setfill(' ') << std::setw(7) << ncclRedOpNames[redOp] << " ";
     if (CollectiveArgs::UsesRoot(funcType)) ss << "Root " << root << " ";
     return ss.str();

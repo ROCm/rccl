@@ -145,7 +145,7 @@ namespace RcclUnitTesting
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder), numCollPerGroup);
 
       if (testBed.ev.showNames)
-        INFO("%s %d-ranks GroupCall MixedDayaType\n", isMultiProcess ? "MP" : "SP", totalRanks);
+        INFO("%s %d-ranks GroupCall MixedDataType\n", isMultiProcess ? "MP" : "SP", totalRanks);
 
       // Set up the different collectives within the group
       for (int collIdx = 0; collIdx < numCollPerGroup; ++collIdx)

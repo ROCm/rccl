@@ -144,6 +144,8 @@ struct ncclShmemData {
   int nWorks;
   int workSize;
   uint32_t workConsumed;
+  uint64_t workCounter;
+  bool profilerEnabled;
   struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
   uint64_t redOpArgs[NCCL_MAX_NVLS_ARITY+1];
 
@@ -232,24 +234,6 @@ __device__ inline bool barrier_red_or(bool vote, int name, int nThreads) {
   asm volatile("{ .reg .pred p;"
       "  setp.ne.s32 p, %1, 0;"
       "  barrier.red.or.pred p, %2, %3, p; "
-      "  selp.s32 %0, 1, 0, p; }"
-      : "=r"(ans) : "r"((int)vote), "r"(name), "r"(nThreads) : "memory");
-  return bool(ans);
-}
-__device__ inline bool barrier_red_or_aligned(bool vote, int name) {
-  int ans;
-  asm volatile("{ .reg .pred p;"
-      "  setp.ne.s32 p, %1, 0;"
-      "  barrier.red.or.pred.aligned p, %2, p; "
-      "  selp.s32 %0, 1, 0, p; }"
-      : "=r"(ans) : "r"((int)vote), "r"(name) : "memory");
-  return bool(ans);
-}
-__device__ inline bool barrier_red_or_aligned(bool vote, int name, int nThreads) {
-  int ans;
-  asm("{ .reg .pred p;"
-      "  setp.ne.s32 p, %1, 0;"
-      "  barrier.red.or.pred.aligned p, %2, %3, p; "
       "  selp.s32 %0, 1, 0, p; }"
       : "=r"(ans) : "r"((int)vote), "r"(name), "r"(nThreads) : "memory");
   return bool(ans);
@@ -455,6 +439,48 @@ struct RunWorkBatch {
   }
 };
 
+#define START 0
+#define STOP  1
+#define FINI  2
+
+__device__ __forceinline__ bool profilerEnabled(void) {
+  // Check if any of the workItems in the batch is profiled. If so, there is an equivalent
+  // profiler ProxyOp waiting for the counter update in the host thread. If this check was
+  // done only for the first workItem the profiler counter for other workItems in the batch
+  // could never be updated, leaving the host thread spinning forever for the counter update
+  // and causing a hang.
+  bool enabled = false;
+  for (int i = 0; i < ncclShmem.nWorks && !enabled; i++) {
+    if (ncclShmem.workType == ncclDevWorkTypeP2p)
+      enabled = ((struct ncclDevWorkP2p*)ncclShmem.workStorage)[i].profilerEnabled;
+    else
+      enabled = ((struct ncclDevWorkColl*)ncclShmem.workStorage)[i].profilerEnabled;
+  }
+  return enabled;
+}
+
+__device__ __forceinline__ void profiler(int action) {
+  if (action == START) {
+    if (threadIdx.x == 0) {
+      // increment workCounter regardless of the profiler being active or not
+      ncclShmem.channel.workCounter += ncclShmem.nWorks;
+      if(!profilerEnabled()) return;
+      ncclShmem.comm.workStarted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
+    }
+  } else if (action == STOP) {
+    if (threadIdx.x == 0 && profilerEnabled()) {
+      ncclShmem.comm.workCompleted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
+    }
+  } else { // FINI
+    if (threadIdx.x == 0) {
+      // store the workCounter back to vidmem regardless of the profiler being active or not
+      ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter = ncclShmem.channel.workCounter;
+      if (!profilerEnabled()) return;
+      ncclShmem.comm.workCompleted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
+    }
+  }
+}
+
 template<int SpecializedFnId, typename SpecializedRunWorkBatch, bool COLLTRACE, int COLL_UNROLL>
 __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
   const int tid = threadIdx.x;
@@ -517,8 +543,13 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     break;
   }
   __syncthreads(); // publish ncclShmem.{args, channelId}
+  /* set abort flag to 0 */
+  if (tid == 0) {
+    ncclShmem.aborted = 0;
+    ncclShmem.channel.workCounter = ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter;
+  }
 
-  // Use first 2 warps to load comm and channel, and reamaining load work batch.
+  // Use first 2 warps to load comm and channel, and remaining load work batch.
   switch (tid/WARP_SIZE) {
   case 0:
     { void* dst = &ncclShmem.comm;
@@ -566,9 +597,9 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
   }
 
-  while (true) {
+  while (ncclShmem.aborted == 0) {
     if (tid == 0) __insert_timestamp(__LINE__);
-
+    profiler(START);
     if (0 <= SpecializedFnId && ncclShmem.funcId == (unsigned)SpecializedFnId) {
       SpecializedRunWorkBatch().run();
     } else {
@@ -586,20 +617,13 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       default:
         break;
     }
+    profiler(STOP);
     loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
     __syncthreads();
 
-    // Check whether the last operation was aborted and make sure all threads exit
-    bool aborted = false;
-    if (tid == 0) aborted = *ncclShmem.comm.abortFlag;
-    aborted = __any(aborted); // publish ncclShmem.work
     if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {
-      // ncclShmem.workConsumed written by loadWorkBatchToShmem before barrier_red_or()
+      // ncclShmem.workConsumed written by loadWorkBatchToShmem before __syncthreads()
       ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
-    }
-    if (aborted) {
-      if(COLLTRACE && tid%WARP_SIZE == 0) traceAbort();
-      break;
     }
     if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceCollLaunchType, batchIx);
   }
