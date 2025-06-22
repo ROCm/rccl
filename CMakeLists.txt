@@ -25,9 +25,11 @@ option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on 
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
+option(ENABLE_CODE_COVERAGE                    "Enable code coverage"                          OFF)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
-option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++"                                OFF)
+option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++ CLIP"                           OFF)
+option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"                       OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  ON)
@@ -689,9 +691,13 @@ endif()
 
 set(GEN_DIR "${HIPIFY_DIR}/gensrc")
 
+if(ONLY_FUNCS)
+  message(WARNING "Using ONLY_FUNCS = ${ONLY_FUNCS}. Not meant for release builds.")
+endif()
+
 # Execute the python script to generate required files
 execute_process(
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${ONLY_FUNCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     RESULT_VARIABLE gen_py_result
     ERROR_VARIABLE gen_py_error
@@ -841,9 +847,46 @@ endif()
 target_compile_options(rccl PRIVATE -Werror=uninitialized)
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
+target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
-target_compile_options(rccl PRIVATE -fgpu-rdc)               # Generate relocatable device code (required for extern __shared__)
-target_compile_options(rccl PRIVATE -fvisibility=hidden)     # Set symbol visibility to hidden by default
+target_compile_options(rccl PRIVATE -fgpu-rdc)
+
+## Set RCCL compile and linker options for unit tests and code coverage
+if(ENABLE_CODE_COVERAGE)
+  if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
+    message(FATAL_ERROR "Code coverage is enabled, but the build type is '${CMAKE_BUILD_TYPE}'. "
+                        "Code coverage requires 'Debug' build types to expose internal symbols. "
+                        "Please set CMAKE_BUILD_TYPE to 'Debug' and reconfigure.")
+  endif()
+
+  message(STATUS "Code coverage is enabled with build type '${CMAKE_BUILD_TYPE}'.")
+
+  target_compile_options(rccl PRIVATE
+    -fvisibility=default -Xarch_host -fprofile-instr-generate
+    -Xarch_host -fcoverage-mapping)
+
+  set(COVERAGE_SHARED_LINKER_FLAGS
+    -fprofile-generate
+    -Wl,--enable-new-dtags,--build-id=sha1,--rpath,$ORIGIN
+  )
+
+  set(COVERAGE_EXE_LINKER_FLAGS
+    -fprofile-generate
+    -Wl,--enable-new-dtags,--build-id=sha1,--rpath,$ORIGIN/../lib
+  )
+
+  target_link_options(rccl PRIVATE ${COVERAGE_SHARED_LINKER_FLAGS})
+  target_link_options(rccl PRIVATE ${COVERAGE_EXE_LINKER_FLAGS})
+elseif(BUILD_TESTS) # Enable default/hidden visibility based on build type and ROCM_VERSION
+  if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+    target_compile_options(rccl PRIVATE -fvisibility=default)
+  else()
+    target_compile_options(rccl PRIVATE -fvisibility=hidden)
+  endif()
+else()  # Enable hidden visibility for library without tests/code coverage enabled
+  target_compile_options(rccl PRIVATE -fvisibility=hidden)
+endif()
+
 if (HAVE_KERNARG_PRELOAD)
   target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
 endif()

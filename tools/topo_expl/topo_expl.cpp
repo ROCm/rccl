@@ -255,11 +255,13 @@ int main(int argc,char* argv[])
     node_model = network.GetNode(i);
     assert(node_model!=0);
     initTransportsRank_3(&comm[i], allGather3Data, treeGraph[i], ringGraph[i], collNetGraph[i], nvlsGraph[i]);
+    CUDACHECK(hipDeviceGetAttribute(&comm[i].WarpSize, hipDeviceAttributeWarpSize, comm[i].cudaDev));
   }
   for (uint64_t len = 8; len <= 4294967296L; len *= 2) {
     struct ncclInfo info;
     float minTime = 3600000000.0;
     info.comm = &comm[0];
+
     info.coll = ncclFuncAllReduce;
     // Find algorithm / protocol.
     int algorithm = -1;

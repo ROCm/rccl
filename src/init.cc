@@ -98,15 +98,34 @@ static uint64_t hashUniqueId(ncclUniqueId const &id) {
   return h;
 }
 
+//RCCL runtime param to set Unroll Factor
+RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", 0);
+
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx950"))
-    comm->unroll = NCCL_UNROLL_1;
-  else if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80)))
-    comm->unroll = NCCL_UNROLL_2;
-  else
-    comm->unroll = NCCL_UNROLL_4;
+
+  //If RCCL runtime param is set, it will override defaults
+  if (rcclParamUnrollFactor() != 0) {
+    comm->unroll = rcclParamUnrollFactor();
+    INFO(NCCL_INIT, "RCCL Unroll Factor (user-defined): %d", comm->unroll);
+  }
+  else {
+    if (IsArchMatch(devProp.gcnArchName, "gfx950")) {
+      //on gfx950, use unroll=1 for single-node and unroll=2 for multi-node
+      if (comm->nNodes == 1)
+        comm->unroll = 1;
+      else
+        comm->unroll = 2;
+    }
+    else if((IsArchMatch(devProp.gcnArchName, "gfx908")) ||
+            (IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80))
+      //on MI300X and gfx908, use unroll=2
+      comm->unroll = 2;
+    else
+      comm->unroll = 4;
+    INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll);
+  }
   return ncclSuccess;
 }
 
@@ -628,8 +647,6 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
 
   // RCCL: create persistent stream for calloc
   CUDACHECK(hipStreamCreateWithFlags(&comm->sideStream, hipStreamNonBlocking));
-  // RCCL: determine and set unroll factor for comm
-  NCCLCHECK(commSetUnrollFactor(comm));
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
 
@@ -1956,6 +1973,9 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent, timers), res, fail);
 
+  // RCCL: determine and set unroll factor for comm
+  NCCLCHECK(commSetUnrollFactor(comm));
+
 #ifdef ENABLE_MSCCLPP
   if (job->parent) {
     if (job->parent->mscclppCompatible) {
@@ -2549,10 +2569,17 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
   // Dump NPKit events and shutdown
   const char* npkitDumpDir = getenv("NPKIT_DUMP_DIR");
   if (npkitDumpDir == nullptr) {
-    WARN("NPKIT_DUMP_DIR is empty");
-  } else {
-    NCCLCHECK(NpKit::Dump(npkitDumpDir));
+    npkitDumpDir = "./npkit_dump";
+    INFO(NCCL_INIT, "NPKIT_DUMP_DIR is not set, using default directory: %s", npkitDumpDir);
+
+    struct stat st;
+    if (stat(npkitDumpDir, &st) != 0) {
+      if (mkdir(npkitDumpDir, 0755) != 0) {
+        WARN("Failed to create NPKIT_DUMP_DIR directory: %s", npkitDumpDir);
+      }
+    }
   }
+  NCCLCHECK(NpKit::Dump(npkitDumpDir));
   NCCLCHECK(NpKit::Shutdown());
 #endif
 
