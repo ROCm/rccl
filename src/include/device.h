@@ -706,8 +706,8 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
     // RING/TREE | <all_protos> | <all_redops> | <all_types>
     nAlgos = 2;
     if (coll == ncclFuncAllReduce) {
-      int algo1 = algo == NCCL_ALGO_RING ? 0 :
-                /*algo == NCCL_ALGO_TREE*/ 1;
+      int algo1 = algo == NCCL_ALGO_TREE ? 0 :
+                /*algo == NCCL_ALGO_RING*/ 1;
       row += (((algo1 * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo1 * NCCL_NUM_PROTOCOLS + proto);
       break;
     }
