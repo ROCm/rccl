@@ -17,7 +17,15 @@ void mscclSetIsCallerFlag();
 void mscclClearIsCallerFlag();
 bool mscclIsCaller();
 
-bool mscclAvailable(int rank = -1);
+/**
+ * @brief mscclAvailable() is used to determine if msccl functionality is avaliable
+ * @param comm is an optional rccl communicator, if provided uses the mscclStatus
+ * from a global map<comm -> mscclStatus> to determine if msccl is available. If not available
+ * in the map, this invocations inserts a new key value pair in the global map.
+ * If comm == nullptr, on the first invocation it initializes a static thread local variable 
+ * mscclStatus and uses the same object in subsequent calls from same thread if comm is null ptr
+ */
+bool mscclAvailable(const ncclComm_t comm = nullptr);
 
 ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired);
 
@@ -33,7 +41,7 @@ ncclResult_t mscclEnqueueCheck(
 
 ncclResult_t mscclGroupEnd();
 
-ncclResult_t mscclTeardown(int rank);
+ncclResult_t mscclTeardown(const ncclComm_t comm);
 
 size_t mscclKernMaxLocalSize();
 

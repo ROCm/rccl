@@ -329,11 +329,11 @@ static struct tuningModel tuning_model_5 {
   // Follow order in RcclTunableColls
   .llProtoRanges = {
     /*ReduceScatter*/
-    {/*LL (min/max/factor)*/ {0, 655360, 1}, /*LL64/128 (min/max/factor)*/ {131072, 3211264, 1}},
+    {/*LL (min/max/factor/thread_threshold)*/ {0, 655360, 1, 16}, /*LL64/128 (min/max/factor/thread_threshold)*/ {131072, 4793500, 1, 64}},
     /*AllGather*/
-    {/*LL (min/max/factor)*/ {0, 98304, 1},  /*LL64/128 (min/max/factor)*/ {98304, 5046272, 1}},
+    {/*LL (min/max/factor/thread_threshold)*/ {0, 98304,  1, 16}, /*LL64/128 (min/max/factor/thread_threshold)*/ {98304, 5592500, 1, 64}},
     /*AllReduce*/
-    {/*LL (min/max/factor)*/ {0, 1048576, 1},/*LL64/128 (min/max/factor)*/ {1048576, 9437184, 3145728}},
+    {/*LL (min/max/factor/thread_threshold)*/ {0, 1048576, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {1048576, 144217728, 3145728, 0}},
   },
 };
 
@@ -382,6 +382,7 @@ static const double perChMaxTreeBws[][3] = {
 NCCL_PARAM(PatEnable, "PAT_ENABLE", 2);
 static int ncclPatEnable(struct ncclComm* comm) {
   int patEnable = ncclParamPatEnable();
+  if (comm->minCompCap < 60) return 0; // Need SM60 or higher for CUDA atomics
   if (patEnable != 2) return patEnable;
   if (comm->nNodes != comm->nRanks) return 0; // PAT only supports 1 GPU per node
   if (comm->netDeviceType != NCCL_NET_DEVICE_HOST) return 0;   // PAT doesn't support net device offload
@@ -486,7 +487,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         if (a == NCCL_ALGO_TREE && coll == ncclFuncAllReduce) busBw = std::min(busBw*.92, graphs[a]->nChannels*perChMaxTreeBw);
         if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_LL) busBw = std::min(busBw*1.0/3.8, llMaxBw);
         if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_LL128) busBw = std::min(busBw * (nNodes == 1 ? 7.0/9.0 : 120.0/128.0), graphs[a]->nChannels*perChMaxTreeLL128Bw);
-        if (a == NCCL_ALGO_TREE && graphs[a]->pattern == NCCL_TOPO_PATTERN_TREE) busBw *= .85;
+        if (a == NCCL_ALGO_TREE && comm->maxTreePattern == NCCL_TOPO_PATTERN_TREE) busBw *= .85;
         if (a == NCCL_ALGO_PAT) busBw *= .75;
         if (a == NCCL_ALGO_COLLNET_DIRECT && p != NCCL_PROTO_SIMPLE) busBw = 0;  // Not used
         if (a == NCCL_ALGO_COLLNET_CHAIN && p != NCCL_PROTO_SIMPLE) busBw = 0;  // Not used
@@ -657,7 +658,8 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       // Enable LL128 by default only on gfx90a with available tuning table
       pEnable = (graphs[a]->typeInter <= PATH_PXB) && graphs[a]->typeIntra <= PATH_NVL &&
         ((IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx90a") ||
-          IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) && comm->topo->ll128Enabled) ? 1 : 0;
+          IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
+          IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) && comm->topo->ll128Enabled) ? 1 : 0;
 #else
       pEnable = 0;
 #endif
@@ -722,7 +724,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       }
     }
   }
- 
+
   // Set per-thread amount of work before we increase nThreads and nChannels
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
     comm->threadThresholds[a][NCCL_PROTO_LL] = NCCL_LL_THREAD_THRESHOLD;

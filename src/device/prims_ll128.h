@@ -76,22 +76,28 @@ private:
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   if (nthreads != WARP_SIZE)
-    barrier_by_group();
+    #if defined(__gfx942__) || defined(__gfx950__)
+      barrier_by_group_block();
+    #else
+      barrier_by_group();
+    #endif
 #else
    barrier_sync(15-group, nthreads);
 #endif
   }
 
-  uint32_t abort = 0;
-  uint32_t* sync;
+  int abort = 0;
 
-  inline __device__ int checkAbort(int &spins, int i, int send) {
-    spins++;
-    if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = __atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST);
+  __device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
+    if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
+      int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
       spins = 0;
+      if (abort) {
+        __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+        abortCache |= abortValue;
+      }
     }
-    return abort;
+    return abortCache;
   }
 
   inline __device__ void waitSend(int nbytes) {
@@ -100,7 +106,7 @@ private:
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
         sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
-        if (checkAbort(spins, wid, 1)) break;
+        if (checkAbort(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
         sendConnFifo[sendStep[wid]%NCCL_STEPS].size = nbytes;
@@ -126,6 +132,11 @@ private:
   template<int WordPerThread>
   __device__ __forceinline__ void loadRegsBegin(uint64_t(&regs)[WordPerThread], T const *src, int eltN) {
     constexpr int EltPer16B = 16/sizeof(T);
+    int ix[WordPerThread/2];
+    #pragma unroll
+    for(int g=0; g < WordPerThread/2; g++) {
+      ix[g] = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
+    }
     if(reinterpret_cast<uintptr_t>(src)%16 == 0) {
       /* We are aligned to 16 bytes, so load directly to registers no shmem.
        * Flag threads load half as much data which gets shuffled to the even
@@ -135,10 +146,9 @@ private:
        */
       #pragma unroll
       for(int g=0; g < WordPerThread/2; g++) {
-        int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
         if(!flagThread || g%2==0) {
-          if(ix*EltPer16B < eltN)
-            load128((uint64_t*)(src + ix*EltPer16B), regs[2*g+0], regs[2*g+1]);
+          if(ix[g]*EltPer16B < eltN)
+            load128((uint64_t*)(src + ix[g]*EltPer16B), regs[2*g+0], regs[2*g+1]);
         }
       }
     }
@@ -163,10 +173,10 @@ private:
       T *shm = (T*)shm8 + misalignment/sizeof(T);
       #pragma unroll
       for(int g=0; g < WordPerThread/2; g++) {
-        int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
+        // int ix = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
         if(!flagThread || g%2==0) {
-          if(ix*EltPer16B < eltN)
-            loadShmemMisaligned128(shm + ix*EltPer16B, regs[2*g+0], regs[2*g+1]);
+          if(ix[g]*EltPer16B < eltN)
+            loadShmemMisaligned128(shm + ix[g]*EltPer16B, regs[2*g+0], regs[2*g+1]);
         }
       }
     }
@@ -189,6 +199,7 @@ private:
     for (int g=1; g < WordPerThread/2; g+=2) {
       if (flagThread) regs[2*g-1] = regs[2*g];
     }
+
     // Write to dst if 4-byte aligned, shmem otherwise.
     int misalignment = reinterpret_cast<uintptr_t>(dst)%16;
     uint64_t *shm8 = shmemCvtPtr((uint64_t*)ncclScratchForWarp(warpInBlock));
@@ -232,7 +243,7 @@ private:
           load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
           needReload |= flagThread && (vr[u+1] != flag);
         }
-        needReload &= (0 == checkAbort(spins, 0, 0));
+        needReload &= (0 == checkAbort(abort, 1, spins));
       } while (__any(needReload));
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2)
@@ -278,7 +289,7 @@ private:
             load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
             needReload |= flagThread && (vr[u+1] != flag);
           }
-          needReload &= (0 == checkAbort(spins, i, 0));
+          needReload &= (0 == checkAbort(abort, 1, spins));
         } while (__any(needReload));
 
         #pragma unroll

@@ -5,7 +5,6 @@
  *
  * See LICENSE.txt for license information
  ************************************************************************/
-
 #ifndef NCCL_H_
 #define NCCL_H_
 
@@ -83,6 +82,7 @@ typedef struct ncclConfig_v21700 {
   int maxCTAs;                 /*!< Maximum number of cooperative thread arrays (blocks) */
   const char *netName;         /*!< Force NCCL to use a specfic network */
   int splitShare;              /*!< Allow communicators to share resources */
+  int trafficClass;            /*!< Traffic class*/
 } ncclConfig_t;
 
 /* Config initializer must be assigned to initialize config structure when it is created.
@@ -96,7 +96,8 @@ typedef struct ncclConfig_v21700 {
   NCCL_CONFIG_UNDEF_INT,                            /* minCTAs */        \
   NCCL_CONFIG_UNDEF_INT,                            /* maxCTAs */        \
   NCCL_CONFIG_UNDEF_PTR,                            /* netName */        \
-  NCCL_CONFIG_UNDEF_INT                             /* splitShare */     \
+  NCCL_CONFIG_UNDEF_INT,                            /* splitShare */     \
+  NCCL_CONFIG_UNDEF_INT,                            /* trafficClass */   \
 }
 /*! @} */
 
@@ -757,6 +758,7 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
 typedef int mscclAlgoHandle_t;
 
 /*! @brief      MSCCL Load Algorithm
+    @deprecated This function has been removed from the public API.
     @details    Load MSCCL algorithm file specified in mscclAlgoFilePath and return
                 its handle via mscclAlgoHandle. This API is expected to be called by MSCCL
                 scheduler instead of end users.
@@ -771,6 +773,7 @@ ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *ms
 /*! @endcond */
 
 /*! @brief      MSCCL Run Algorithm
+    @deprecated This function has been removed from the public API.
     @details    Run MSCCL algorithm specified by mscclAlgoHandle. The parameter
                 list merges all possible parameters required by different operations as this
                 is a general-purposed API. This API is expected to be called by MSCCL

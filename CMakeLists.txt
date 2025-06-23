@@ -20,14 +20,15 @@ project(rccl CXX)
 #==================================================================================================
 option(BUILD_ADDRESS_SANITIZER                 "Enable address sanitizer"                      OFF)
 option(BUILD_BFD                               "Enable custom backtrace (if bfd.h exists)"     OFF)
-option(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY "File/folder reorg with backward compatibility" OFF)
 option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on this machine"  OFF)
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
+option(ENABLE_CODE_COVERAGE                    "Enable code coverage"                          OFF)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
-option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++"                                OFF)
+option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++ CLIP"                           OFF)
+option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"                       OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  ON)
@@ -421,7 +422,6 @@ set(SRC_FILES
   src/init.cc
   src/init_nvtx.cc
   src/mnnvl.cc
-  src/net.cc
   src/msccl.cc
   src/proxy.cc
   src/rccl_wrap.cc
@@ -489,9 +489,6 @@ set(SRC_FILES
   src/include/ipcsocket.h
   src/include/mnnvl.h
   src/include/nccl_common.h
-  src/include/nccl_net.h
-  src/include/nccl_profiler.h
-  src/include/nccl_tuner.h
   src/include/net_device.h
   src/include/net.h
   src/include/nvmlwrap.h
@@ -564,6 +561,25 @@ set(SRC_FILES
   src/include/nvtx3/nvtxDetail/nvtxInitDefs.h
   src/include/nvtx3/nvtxDetail/nvtxLinkOnce.h
   src/include/nvtx3/nvtxDetail/nvtxTypes.h
+  src/include/plugin/nccl_net.h
+  src/include/plugin/nccl_profiler.h
+  src/include/plugin/nccl_tuner.h
+  src/include/plugin/plugin.h
+  src/include/plugin/net/net_v6.h
+  src/include/plugin/net/net_v7.h
+  src/include/plugin/net/net_v8.h
+  src/include/plugin/net/net_v9.h
+  src/include/plugin/net/net_v10.h
+  src/include/plugin/profiler/net_ib_v1.h
+  src/include/plugin/profiler/net_ib.h
+  src/include/plugin/profiler/net_socket_v1.h
+  src/include/plugin/profiler/net_socket.h
+  src/include/plugin/profiler/profiler_v1.h
+  src/include/plugin/profiler/profiler_v2.h
+  src/include/plugin/profiler/profiler_v3.h
+  src/include/plugin/tuner/tuner_v2.h
+  src/include/plugin/tuner/tuner_v3.h
+  src/include/plugin/tuner/tuner_v4.h
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
@@ -578,7 +594,6 @@ set(SRC_FILES
 # src/misc/nvmlwrap.cc
   src/misc/nvmlwrap_stub.cc
   src/misc/param.cc
-  src/misc/profiler.cc
   src/misc/rocm_smi_wrap.cc
   src/misc/rocmwrap.cc
   src/misc/roctx.cc
@@ -587,12 +602,26 @@ set(SRC_FILES
   src/misc/signals.cc
   src/misc/socket.cc
   src/misc/strongstream.cc
-  src/misc/tuner.cc
   src/misc/utils.cc
   src/misc/msccl/msccl_lifecycle.cc
   src/misc/msccl/msccl_parser.cc
   src/misc/msccl/msccl_setup.cc
   src/misc/msccl/msccl_status.cc
+  src/plugin/net.cc
+  src/plugin/plugin_open.cc
+  src/plugin/profiler.cc
+  src/plugin/tuner.cc
+  src/plugin/net/net_v6.cc
+  src/plugin/net/net_v7.cc
+  src/plugin/net/net_v8.cc
+  src/plugin/net/net_v9.cc
+  src/plugin/net/net_v10.cc
+  src/plugin/profiler/profiler_v1.cc
+  src/plugin/profiler/profiler_v2.cc
+  src/plugin/profiler/profiler_v3.cc
+  src/plugin/tuner/tuner_v2.cc
+  src/plugin/tuner/tuner_v3.cc
+  src/plugin/tuner/tuner_v4.cc
   src/ras/client.cc
   src/ras/client_support.cc
   src/ras/collectives.cc
@@ -610,6 +639,7 @@ set(SRC_FILES
   src/transport/net_socket.cc
   src/transport/nvls.cc
   src/transport/p2p.cc
+  src/transport/profiler.cc
   src/transport/shm.cc
 )
 
@@ -687,9 +717,13 @@ endif()
 
 set(GEN_DIR "${HIPIFY_DIR}/gensrc")
 
+if(ONLY_FUNCS)
+  message(WARNING "Using ONLY_FUNCS = ${ONLY_FUNCS}. Not meant for release builds.")
+endif()
+
 # Execute the python script to generate required files
 execute_process(
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${ONLY_FUNCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     RESULT_VARIABLE gen_py_result
     ERROR_VARIABLE gen_py_error
@@ -731,6 +765,7 @@ add_dependencies(rccl git_version_check)                                      # 
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # for hipfied headers
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/plugin)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
@@ -831,9 +866,46 @@ endif()
 target_compile_options(rccl PRIVATE -Werror=uninitialized)
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
+target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
-target_compile_options(rccl PRIVATE -fgpu-rdc)               # Generate relocatable device code (required for extern __shared__)
-target_compile_options(rccl PRIVATE -fvisibility=hidden)     # Set symbol visibility to hidden by default
+target_compile_options(rccl PRIVATE -fgpu-rdc)
+
+## Set RCCL compile and linker options for unit tests and code coverage
+if(ENABLE_CODE_COVERAGE)
+  if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
+    message(FATAL_ERROR "Code coverage is enabled, but the build type is '${CMAKE_BUILD_TYPE}'. "
+                        "Code coverage requires 'Debug' build types to expose internal symbols. "
+                        "Please set CMAKE_BUILD_TYPE to 'Debug' and reconfigure.")
+  endif()
+
+  message(STATUS "Code coverage is enabled with build type '${CMAKE_BUILD_TYPE}'.")
+
+  target_compile_options(rccl PRIVATE
+    -fvisibility=default -Xarch_host -fprofile-instr-generate
+    -Xarch_host -fcoverage-mapping)
+
+  set(COVERAGE_SHARED_LINKER_FLAGS
+    -fprofile-generate
+    -Wl,--enable-new-dtags,--build-id=sha1,--rpath,$ORIGIN
+  )
+
+  set(COVERAGE_EXE_LINKER_FLAGS
+    -fprofile-generate
+    -Wl,--enable-new-dtags,--build-id=sha1,--rpath,$ORIGIN/../lib
+  )
+
+  target_link_options(rccl PRIVATE ${COVERAGE_SHARED_LINKER_FLAGS})
+  target_link_options(rccl PRIVATE ${COVERAGE_EXE_LINKER_FLAGS})
+elseif(BUILD_TESTS) # Enable default/hidden visibility based on build type and ROCM_VERSION
+  if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+    target_compile_options(rccl PRIVATE -fvisibility=default)
+  else()
+    target_compile_options(rccl PRIVATE -fvisibility=hidden)
+  endif()
+else()  # Enable hidden visibility for library without tests/code coverage enabled
+  target_compile_options(rccl PRIVATE -fvisibility=hidden)
+endif()
+
 if (HAVE_KERNARG_PRELOAD)
   target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
 endif()
@@ -981,7 +1053,7 @@ endif()
 #==================================================================================================
 ## Specify install targets
 rocm_install_targets(TARGETS rccl)
-rocm_install(FILES       ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/nccl_net.h
+rocm_install(FILES       ${PROJECT_BINARY_DIR}/include/rccl/rccl.h src/include/plugin/nccl_net.h
              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl)
 rocm_install(FILES       src/include/api_trace.h
              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rccl/amd_detail)
@@ -995,24 +1067,6 @@ rocm_export_targets(
   NAMESPACE roc::
   TARGETS   rccl
   DEPENDS   hip)
-
-## Build with backwards compatibility if requested
-if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
-  ### Create wrapper files
-  rocm_wrap_header_dir(
-    "${PROJECT_BINARY_DIR}/include/rccl"
-    PATTERNS "rccl.h"
-    GUARDS SYMLINK WRAPPER
-    WRAPPER_LOCATIONS ${CMAKE_INSTALL_INCLUDEDIR} rccl/${CMAKE_INSTALL_INCLUDEDIR})
-
-  ### install the wrapper header file to package
-  rocm_install(
-    FILES ${PROJECT_BINARY_DIR}/rccl/include/rccl.h src/include/nccl_net.h
-    DESTINATION "./rccl/${CMAKE_INSTALL_INCLUDEDIR}/" )
-  rocm_install(
-    FILES ${PROJECT_BINARY_DIR}/include/rccl.h src/include/nccl_net.h
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" )
-endif()
 
 ## Set package dependencies
 if(BUILD_ADDRESS_SANITIZER)
