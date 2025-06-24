@@ -52,7 +52,11 @@
 #ifdef ENABLE_MSCCLPP
 #include "mscclpp/mscclpp_nccl.h"
 #endif
+#ifdef USE_AMDSMI
+#include "amdsmi_wrap.h"
+#else
 #include "rocm_smi_wrap.h"
+#endif
 #include "rccl_common.h"
 // [/RCCL]
 
@@ -138,9 +142,7 @@ ncclResult_t checkHsaEnvSetting() {
   // hipVer is an integer e.g., 6.2.41133 -> 60241133
   CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
 
-  // using rocm-smi API to query FW version, instead of parsing CLI output
-  // will switch to amd-smi API soon
-  const int firmwareVersion = parseFirmwareVersion();
+  const int firmwareVersion = getFirmwareVersion();
 
   hipDeviceProp_t devProp;
   // use GPU0 should be good enough
@@ -660,9 +662,14 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   char busId[]="0000:00:00.0";
   NCCLCHECK(int64ToBusId(comm->busId, busId));
+
+#ifdef USE_AMDSMI
+  NCCLCHECK(amd_smi_init());
+  NCCLCHECK(amd_smi_getDeviceIndexByPciBusId(busId, (unsigned int*)&comm->nvmlDev));
+#else
   NCCLCHECK(rocm_smi_init());
   NCCLCHECK(rocm_smi_getDeviceIndexByPciBusId(busId, (unsigned int*)&comm->nvmlDev));
-
+#endif
   comm->compCap = ncclCudaCompCap();
   TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx compCap %d", comm, rank, ndev, comm->cudaDev, comm->busId, comm->compCap);
 
