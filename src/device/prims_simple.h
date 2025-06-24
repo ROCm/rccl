@@ -195,7 +195,14 @@ private:
   inline __device__ void postPeer(bool dataStored) {
     if (Send && (flags & RolePostSend) && dataStored)
 #ifdef __GFX9__
+    #if defined(__gfx942__) && defined(HIP_UNCACHED_MEMORY)
+    // __threadfence compiles to buffer_wbl2 sc1 plus buffer_inv sc1.  It turns out in this
+    // case we only need the buffer_inv sc1 due to the memory model we use.
+    asm volatile("buffer_inv sc1");
+    __threadfence_block();
+    #else
     __threadfence();
+    #endif
 #else
     __threadfence_system();
 #endif
