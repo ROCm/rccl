@@ -146,8 +146,6 @@ public:
   bool checkActiveOpExist(uint64_t commHash, uint64_t opCount,
                           uint32_t proxyOpId) const;
 
-  //[TODO] Aoid risk of exposing internal data structures (useful for
-  // META_PROXY_TRACE_SET_COUNTER for now)
   ProxyTraceOp *getProxyTraceOpPtr(const ProxyTraceRecordKey &traceKey);
   float getMapSizeMB() const;
   void resetAll();
