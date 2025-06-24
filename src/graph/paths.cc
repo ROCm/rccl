@@ -981,10 +981,6 @@ ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
     }
   }
 
-  while (comm->p2pnChannelsPerPeer * comm->nRanks > 4*CHANNEL_LIMIT && comm->p2pnChannelsPerPeer > 1) {
-    comm->p2pnChannelsPerPeer /= 2;
-  }
-
   comm->p2pnChannels = std::min(pow2Up(comm->p2pnChannels), 4*CHANNEL_LIMIT);
   comm->p2pnChannelsPerPeer = std::min(comm->p2pnChannelsPerPeer, MAXCHANNELS);
 
