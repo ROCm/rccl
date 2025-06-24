@@ -31,15 +31,6 @@ if(BUILD_TESTS)
 
   include_directories(${GTEST_INCLUDE_DIRS} ./common)
 
-  include(FetchContent)
-
-  FetchContent_Declare(
-    fmt
-    GIT_REPOSITORY https://github.com/fmtlib/fmt
-    GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281) # 10.2.1
-  FetchContent_MakeAvailable(fmt)
-
-
   # Collect testing framework source files
   set(TEST_SOURCE_FILES
     AllGatherTests.cpp
