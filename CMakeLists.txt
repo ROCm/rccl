@@ -756,8 +756,6 @@ add_custom_target(git_version_check
   VERBATIM
 )
 
-include(FetchContent)
-
 
 # Set up RCCL library
 #==================================================================================================
