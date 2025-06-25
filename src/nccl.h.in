@@ -82,6 +82,7 @@ typedef struct ncclConfig_v21700 {
   int maxCTAs;                 /*!< Maximum number of cooperative thread arrays (blocks) */
   const char *netName;         /*!< Force NCCL to use a specfic network */
   int splitShare;              /*!< Allow communicators to share resources */
+  int trafficClass;            /*!< Traffic class*/
 } ncclConfig_t;
 
 /* Config initializer must be assigned to initialize config structure when it is created.
@@ -95,7 +96,8 @@ typedef struct ncclConfig_v21700 {
   NCCL_CONFIG_UNDEF_INT,                            /* minCTAs */        \
   NCCL_CONFIG_UNDEF_INT,                            /* maxCTAs */        \
   NCCL_CONFIG_UNDEF_PTR,                            /* netName */        \
-  NCCL_CONFIG_UNDEF_INT                             /* splitShare */     \
+  NCCL_CONFIG_UNDEF_INT,                            /* splitShare */     \
+  NCCL_CONFIG_UNDEF_INT,                            /* trafficClass */   \
 }
 /*! @} */
 

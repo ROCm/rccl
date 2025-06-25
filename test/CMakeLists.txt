@@ -71,8 +71,9 @@ if(BUILD_TESTS)
 
   ## Set rccl-UnitTests include directories
   target_include_directories(rccl-UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
-  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/include)            # for generated rccl.h header
-  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include) # for rccl_bfloat16.h
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/include)                   # for generated rccl.h header
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include)        # for rccl_bfloat16.h
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include/plugin) # for recorder tests
 
   ## Set rccl-UnitTests compile definitions
   if(LL128_ENABLED)

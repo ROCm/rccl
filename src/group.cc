@@ -98,7 +98,10 @@ ncclResult_t ncclAsyncJobComplete(struct ncclAsyncJob* job) {
 
 NCCL_API(ncclResult_t, ncclGroupStart);
 ncclResult_t ncclGroupStart_impl() {
-  NCCLCHECK(Recorder::instance().record(rrGroupStart, ncclGroupDepth));
+  if (!mscclIsCaller())
+  {
+    NCCLCHECK(Recorder::instance().record(rrGroupStart, ncclGroupDepth));
+  }
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
 
@@ -117,7 +120,10 @@ ncclResult_t ncclGroupStartInternal() {
 
 NCCL_API(ncclResult_t, ncclGroupEnd);
 ncclResult_t ncclGroupEnd_impl() {
-  NCCLCHECK(Recorder::instance().record(rrGroupEnd, ncclGroupDepth));
+  if (!mscclIsCaller())
+  {
+    NCCLCHECK(Recorder::instance().record(rrGroupEnd, ncclGroupDepth));
+  }
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   NCCLCHECKGOTO(ncclGroupEndInternal(), ret, exit);
@@ -128,7 +134,10 @@ exit:
 
 NCCL_API(ncclResult_t, ncclGroupSimulateEnd, ncclSimInfo_t* simInfo);
 ncclResult_t ncclGroupSimulateEnd(ncclSimInfo_t* simInfo) {
-  Recorder::instance().record(ncclGroupDepth, simInfo);
+  if (!mscclIsCaller())
+  {
+    Recorder::instance().record(ncclGroupDepth, simInfo);
+  }
   ncclResult_t ret = ncclSuccess;
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   NCCLCHECKGOTO(ncclGroupEndInternal(simInfo), ret, exit);
@@ -212,7 +221,6 @@ fail:
 
 static ncclResult_t doLaunches(struct ncclComm* head) {
   ncclResult_t result = ncclSuccess;
-  struct ncclComm* cliqueComm0 = head->intraComm0;
   struct ncclComm* cliqueHead = head;
   struct ncclComm* cliqueNextHead;
   bool useBarrier = ncclParamLaunchMode == ncclLaunchModeGroup;
@@ -228,7 +236,7 @@ static ncclResult_t doLaunches(struct ncclComm* head) {
       NCCLCHECKGOTO(ncclLaunchPrepare(comm), result, failure);
       if (useBarrier) ncclCommIntraBarrierIn(comm, 1);
       comm = comm->groupNext;
-    } while (comm != nullptr && comm->intraComm0 == cliqueComm0);
+    } while (comm != nullptr && comm->intraComm0 == cliqueHead->intraComm0);
     cliqueNextHead = comm;
 
     if (capturingYes && capturingNo) {
@@ -445,38 +453,47 @@ static ncclResult_t groupLaunch(struct ncclAsyncJob *job_, ncclSimInfo_t* simInf
 
   /* Connect channels at runtime if cumem is supported */
   if (groupCommHeadMain != nullptr) {
-    struct ncclComm* comm = groupCommHeadMain;
+    struct ncclComm* cliqueHead = groupCommHeadMain;
+    struct ncclComm* comm = NULL;
     struct ncclIntruQueue<struct ncclAsyncJob, &ncclAsyncJob::next> asyncCollJobs;
     ncclIntruQueueConstruct(&asyncCollJobs);
     do {
-      bool needConnect = false;
-      bool algoNeedConnect[NCCL_NUM_ALGORITHMS];
-      memset(algoNeedConnect, 0, sizeof(bool) * NCCL_NUM_ALGORITHMS);
+      // We need to preconnect connections for collectives clique by clique to avoid
+      // race condition for split shared comms which can connect the same connections
+      // at the same time.
+      comm = cliqueHead;
+      do {
+        bool needConnect = false;
+        bool algoNeedConnect[NCCL_NUM_ALGORITHMS];
+        memset(algoNeedConnect, 0, sizeof(bool) * NCCL_NUM_ALGORITHMS);
 
-      // CUDACHECKGOTO(cudaSetDevice(comm->cudaDev), ret, fail);
-      NCCLCHECKGOTO(ncclPrepareTasks(comm, algoNeedConnect, &needConnect, simInfo), ret, fail);
+        CUDACHECKGOTO(cudaSetDevice(comm->cudaDev), ret, fail);
+        NCCLCHECKGOTO(ncclPrepareTasks(comm, algoNeedConnect, &needConnect, simInfo), ret, fail);
 
-      if (comm->cuMemSupport && needConnect) {
-        struct ncclPreconnectJob* job;
-        NCCLCHECKGOTO(ncclCalloc(&job, 1), ret, fail);
-        job->base.func = ncclCollPreconnectFunc;
-        job->base.undo = nullptr;
-        job->base.destructor = free;
-        job->base.state = ncclGroupJobRunning;
-        job->base.abortFlag = comm->abortFlag;
-        job->base.abortFlagDev = comm->abortFlagDev;
-        job->comm = comm;
-        NCCLCHECKGOTO(ncclCalloc(&job->algoNeedConnect, NCCL_NUM_ALGORITHMS), ret, fail);
-        memcpy(job->algoNeedConnect, algoNeedConnect, sizeof(bool) * NCCL_NUM_ALGORITHMS);
-        ncclIntruQueueEnqueue(&asyncCollJobs, &job->base);
+        if (comm->cuMemSupport && needConnect) {
+          struct ncclPreconnectJob* job;
+          NCCLCHECKGOTO(ncclCalloc(&job, 1), ret, fail);
+          job->base.func = ncclCollPreconnectFunc;
+          job->base.undo = nullptr;
+          job->base.destructor = free;
+          job->base.state = ncclGroupJobRunning;
+          job->base.abortFlag = comm->abortFlag;
+          job->base.abortFlagDev = comm->abortFlagDev;
+          job->comm = comm;
+          NCCLCHECKGOTO(ncclCalloc(&job->algoNeedConnect, NCCL_NUM_ALGORITHMS), ret, fail);
+          memcpy(job->algoNeedConnect, algoNeedConnect, sizeof(bool) * NCCL_NUM_ALGORITHMS);
+          ncclIntruQueueEnqueue(&asyncCollJobs, &job->base);
+        }
+        comm = comm->groupNext;
+      } while (comm != nullptr && comm->intraComm0 == cliqueHead->intraComm0);
+      // connect
+      NCCLCHECKGOTO(asyncJobLaunch(&asyncCollJobs, groupAbortFlag), ret, fail);
+      while (!ncclIntruQueueEmpty(&asyncCollJobs)) {
+        struct ncclAsyncJob* job = ncclIntruQueueDequeue(&asyncCollJobs);
+        if (job->destructor) job->destructor((void*)job);
       }
-      comm = comm->groupNext;
-    } while (comm);
-    NCCLCHECKGOTO(asyncJobLaunch(&asyncCollJobs, groupAbortFlag), ret, fail);
-    while (!ncclIntruQueueEmpty(&asyncCollJobs)) {
-      struct ncclAsyncJob* job = ncclIntruQueueDequeue(&asyncCollJobs);
-      if (job->destructor) job->destructor((void*)job);
-    }
+      cliqueHead = comm;
+    } while (cliqueHead != nullptr);
 
     // done with all buffer allocation, start registration and enqueue
     comm = groupCommHeadMain;

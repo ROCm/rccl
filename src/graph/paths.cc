@@ -380,8 +380,8 @@ ncclResult_t ncclTopoCheckMNNVL(struct ncclTopoSystem* system, struct ncclPeerIn
   if ((((long *)&fabricInfo2->clusterUuid)[0]|((long *)fabricInfo2->clusterUuid)[1]) == 0) return ncclSuccess;
   if ((memcmp(fabricInfo1->clusterUuid, fabricInfo2->clusterUuid, NVML_GPU_FABRIC_UUID_LEN) == 0) &&
       (fabricInfo1->cliqueId == fabricInfo2->cliqueId)) {
-    INFO(NCCL_NET, "MNNVL matching peer 0x%lx UUID %lx.%lx cliqueId 0x%x",
-        info2->busId, ((long *)fabricInfo2->clusterUuid)[0], ((long *)fabricInfo2->clusterUuid)[1], fabricInfo2->cliqueId);
+    TRACE(NCCL_NET, "MNNVL matching peer 0x%lx UUID %lx.%lx cliqueId 0x%x",
+         info2->busId, ((long *)fabricInfo2->clusterUuid)[0], ((long *)fabricInfo2->clusterUuid)[1], fabricInfo2->cliqueId);
     *ret = 1;
   }
   return ncclSuccess;
@@ -389,9 +389,12 @@ ncclResult_t ncclTopoCheckMNNVL(struct ncclTopoSystem* system, struct ncclPeerIn
 
 NCCL_PARAM(NetGdrRead, "NET_GDR_READ", -2);
 int ncclTopoUserGdrLevel = -1;
+const char* ncclTopoGdrModeStr[ncclTopoGdrModeNum] = { "Disabled", "Default", "PCI" };
 
-ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int rank, int64_t netId, int read, int* useGdr) {
-  *useGdr = 0;
+NCCL_PARAM(NetGdrC2c, "NET_GDR_C2C", 0);
+
+ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int rank, int64_t netId, int read, enum ncclTopoGdrMode* gdrMode) {
+  *gdrMode = ncclTopoGdrModeDisable;
 
   // Get GPU and NET
   int n, g;
@@ -434,7 +437,7 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int rank, int64_t n
   else {
     int arch, vendor, model;
     NCCLCHECK(ncclTopoCpuType(system, &arch, &vendor, &model));
-    if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_TYPE_ROME) {
+    if (arch == NCCL_TOPO_CPU_ARCH_X86 && vendor == NCCL_TOPO_CPU_VENDOR_AMD && model == NCCL_TOPO_CPU_MODEL_AMD_ROME) {
       int i, d1 = -1, d2 = -1;
       for (i = 0; i < system->nodes[CPU].count; i++)
         if (system->nodes[GPU].nodes[g].paths[CPU][i].count == 2) break;
@@ -452,25 +455,37 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int rank, int64_t n
   int distance = gpu->paths[NET][n].type;
   if (distance == PATH_PXN) {
     // In case of PXN, use the intermediate GPU distance instead
-    int proxyRank, g;
+    int proxyRank;
     NCCLCHECK(ncclTopoGetIntermediateRank(system, gpu->gpu.rank, netId, &proxyRank));
     NCCLCHECK(ncclTopoRankToIndex(system, proxyRank, &g));
-    struct ncclTopoNode* proxyGpu = system->nodes[GPU].nodes+g;
-    distance = proxyGpu->paths[NET][n].type;
+    gpu = system->nodes[GPU].nodes+g;
+    distance = gpu->paths[NET][n].type;
   }
+
+  int c;
+  NCCLCHECK(ncclGetLocalCpu(system, g, &c));
+  if (ncclParamNetGdrC2c() && distance == PATH_PHB && gpu->paths[CPU][c].type == PATH_C2C) {
+    // On C2C platforms we can still use GDRDMA on NICs connected to the CPUs
+    INFO(NCCL_NET, "GPU %d / HCA %lx connected to CPU %d via C2C link", rank, netId, c);
+    distance = PATH_C2C;
+  }
+
   if (distance > netGdrLevel) {
     INFO(NCCL_NET,"GPU Direct RDMA Disabled for GPU %d / HCA %lx (distance %d > %d)", rank, netId, distance, netGdrLevel);
     return ncclSuccess;
   }
 
-  *useGdr = 1;
-  INFO(NCCL_NET,"GPU Direct RDMA Enabled for GPU %d / HCA %lx (distance %d <= %d), read %d", rank, netId, distance, netGdrLevel, read);
+  // Force PCIe mapping if path goes through PCI on a C2C system
+  if (gpu->paths[CPU][c].type == PATH_C2C && distance != PATH_C2C) *gdrMode = ncclTopoGdrModePci;
+  else *gdrMode = ncclTopoGdrModeDefault;
+
+  INFO(NCCL_NET,"GPU Direct RDMA Enabled for GPU %d / HCA %lx (distance %d <= %d), read %d mode %s", rank, netId, distance, netGdrLevel, read, ncclTopoGdrModeStr[*gdrMode]);
   return ncclSuccess;
 }
 
 ncclResult_t ncclTopoIsGdrAvail(struct ncclTopoSystem* system, int rank, bool *avail) {
   int netNum = system->nodes[NET].count;
-  int useGdr = 0;
+  enum ncclTopoGdrMode useGdr = ncclTopoGdrModeDisable;
   *avail = false;
   for (int n = 0; n < netNum; n++) {
     int64_t netId = system->nodes[NET].nodes[n].id;
@@ -492,7 +507,7 @@ ncclResult_t ncclTopoIsGdrAvail(struct ncclTopoSystem* system, int rank, bool *a
 NCCL_PARAM(NetForceFlush, "NET_FORCE_FLUSH", 0);
 
 // Determine whether we need to flush the GDR recv buffers
-ncclResult_t ncclTopoNeedFlush(struct ncclComm* comm, int netDev, int rank, int* flush) {
+ncclResult_t ncclTopoNeedFlush(struct ncclComm* comm, int64_t netId, int netDev, int rank, int* flush) {
   *flush = 1;
   ncclNetProperties_t props;
   NCCLCHECK(comm->ncclNet->getProperties(netDev, &props));
@@ -506,6 +521,14 @@ ncclResult_t ncclTopoNeedFlush(struct ncclComm* comm, int netDev, int rank, int*
 #else
   // Flush is required on Ampere and earlier
   if (gpu->gpu.cudaCompCap >= 90) *flush = 0;
+  // On C2C platforms, data could go through a PCI switch while completions and
+  // flags would go through C2C. In that case, force a flush.
+  int c, n;
+  NCCLCHECK(ncclGetLocalCpu(system, g, &c));
+  NCCLCHECK(ncclTopoIdToIndex(system, NET, netId, &n));
+  if (gpu->paths[NET][n].type <= PATH_PXB && gpu->paths[CPU][c].type == PATH_C2C) {
+    *flush = 1;
+  }
 #endif
   return ncclSuccess;
 }
@@ -576,7 +599,7 @@ NCCL_PARAM(PxnDisable, "PXN_DISABLE", 1);
 int ncclPxnDisable(struct ncclComm* comm) {
   static int pxnDisable = -1;
   if (pxnDisable == -1) {
-    if (comm && ncclNetVersion(comm) == 4) {
+    if (comm && comm->ncclNetVer == 4) {
       INFO(NCCL_INIT, "PXN Disabled as plugin is v4");
       pxnDisable = 1;
     } else {
@@ -599,9 +622,9 @@ ncclResult_t ncclTopoGetPxnRanks(struct ncclComm* comm, int** intermediateRanks,
     int proxyRank;
     NCCLCHECK(ncclTopoGetNetDev(comm, comm->rank, NULL, 0, rank, &netId, NULL, &proxyRank));
     if (proxyRank == comm->rank) continue;
-    int useGdr;
+    enum ncclTopoGdrMode useGdr;
     NCCLCHECK(ncclTopoCheckGdr(comm->topo, comm->rank, netId, 1, &useGdr));
-    if (useGdr == 0) continue;
+    if (useGdr == ncclTopoGdrModeDisable) continue;
     int found = 0;
     for (int r=0; r<nr; r++) {
       if (ranks[r] == proxyRank) found = 1;
@@ -746,7 +769,7 @@ ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm
       }
       if (gpu->paths[NET][n].type < PATH_PHB) {
         // Update path when we dont want to / can't use GPU Direct RDMA.
-        int gdr;
+        enum ncclTopoGdrMode gdr;
         NCCLCHECK(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[g].gpu.rank, netNode->id, 0, &gdr));
         if (gdr == 0) {
           // We cannot use GPU Direct RDMA, divert all traffic through the CPU local to the GPU
@@ -770,7 +793,7 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
   int myDomain = 0;
   int ngpus = system->nodes[GPU].count;
   int remove = 1;
-  int gdr = 1;
+  enum ncclTopoGdrMode useGdr = ncclTopoGdrModeDefault;
   bool allXgmi = true;
   NCCLCHECK(ncclCalloc(&domains, system->nodes[GPU].count));
   NCCLCHECKGOTO(ncclCalloc(&ids, system->nodes[GPU].count), ret, fail);
@@ -839,10 +862,10 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
   for (int g = 0; g < system->nodes[GPU].count; g++) {
     int64_t netId;
     NCCLCHECKGOTO(ncclTopoGetLocalNet(system, system->nodes[GPU].nodes[g].gpu.rank, 0, &netId, nullptr), ret, fail);
-    NCCLCHECKGOTO(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[g].gpu.rank, netId, 1, &gdr), ret, fail);
-    if (!gdr) break;
+    NCCLCHECKGOTO(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[g].gpu.rank, netId, 1, &useGdr), ret, fail);
+    if (!useGdr) break;
   }
-  if (gdr && !allXgmi) {
+  if (useGdr && !allXgmi) {
     remove = 0;
     system->type |= RCCL_TOPO_GDR_ALL;
     INFO(NCCL_GRAPH, "GDR is available on all GPUs");
@@ -1013,4 +1036,39 @@ ncclResult_t ncclTopoPathAllNVLink(struct ncclTopoSystem* system, int* allNvLink
   NCCLCHECK(ncclTopoGetGpuMaxPath(system, GPU, &maxPath));
   *allNvLink = maxPath >= PATH_PIX ? 0 : 1;
   return ncclSuccess;
+}
+
+// Check whether we are in a split NVLink situation, with two NVLink domains, not
+// connected through NVLink (e.g. QPI).
+ncclResult_t ncclTopoSplitNvLink(struct ncclTopoSystem* system, int* splitNvLink) {
+  ncclResult_t res = ncclSuccess;
+  int nvlDomains = 0;
+  int *nvlDomain = NULL, *nvlDomainCount = NULL;
+  // Compute NVLink domains
+  NCCLCHECKGOTO(ncclCalloc(&nvlDomain, system->nodes[GPU].count), res, exit);
+  for (int g=0; g<system->nodes[GPU].count; g++) nvlDomain[g] = g;
+  for (int g=0; g<system->nodes[GPU].count; g++) {
+    struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
+    int domain = nvlDomain[g];
+    for (int p=g+1; p<system->nodes[GPU].count; p++) {
+      if (gpu->paths[GPU][p].type == PATH_NVL) {
+        nvlDomain[p] = domain;
+      }
+    }
+  }
+  // Compute number of GPUs per NVLink domain.
+  NCCLCHECKGOTO(ncclCalloc(&nvlDomainCount, system->nodes[GPU].count), res, exit);
+  for (int g=0; g<system->nodes[GPU].count; g++) {
+    nvlDomainCount[nvlDomain[g]]++;
+  }
+  // Count the number of NVLink domains
+  for (int g=0; g<system->nodes[GPU].count; g++) {
+    if (nvlDomainCount[g] > 1) nvlDomains++;
+  }
+  *splitNvLink = nvlDomains == 2 ? 1 : 0;
+
+exit:
+  if(nvlDomain) free(nvlDomain);
+  if(nvlDomainCount) free(nvlDomainCount);
+  return res;
 }
