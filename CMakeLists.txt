@@ -209,6 +209,9 @@ set(CMAKE_REQUIRED_LIBRARIES hip::device)
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
 
+### Check for hipHostMallocUncached support
+check_symbol_exists("hipHostMallocUncached" "hip/hip_runtime_api.h" HIP_HOST_UNCACHED_MEMORY)
+
 ### Check for hipDeviceMallocContiguous support
 check_symbol_exists("hipDeviceMallocContiguous" "hip/hip_runtime_api.h" HIP_CONTIGUOUS_MEMORY)
 
@@ -942,6 +945,12 @@ else()
   else()
     message(STATUS "--hipcc-func-supp disabled")
   endif()
+endif()
+if(${HIP_HOST_UNCACHED_MEMORY})
+  target_compile_definitions(rccl PRIVATE HIP_HOST_UNCACHED_MEMORY)
+  message(STATUS "HIP_HOST_UNCACHED_MEMORY enabled")
+else()
+  message(STATUS "HIP_HOST_UNCACHED_MEMORY disabled")
 endif()
 if (BUILD_BFD)
   if (HAVE_BFD)
