@@ -150,6 +150,8 @@ ncclResult_t ncclAllReduceWithBias_impl(const void* sendbuff, void* recvbuff, si
     sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
     ALLREDUCE_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLREDUCE_SLICESTEPS_SINGLE_NODE : ALLREDUCE_SLICESTEPS, acc };
 
+  NCCLCHECK(Recorder::instance().record(rrAllReduceWithBias, info));
+
   return ncclEnqueueCheck(&info);
 }
 
