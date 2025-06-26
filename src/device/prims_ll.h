@@ -260,6 +260,15 @@ private:
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#if defined(__gfx950__)
+    using Vec = uint32_t __attribute__((ext_vector_type(4)));
+    Vec i4;
+    i4[0] = val & 0xffffffff;
+    i4[1] = flag;
+    i4[2] = (val >> 32);
+    i4[3] = flag;
+    asm volatile ("flat_store_dwordx4 %0, %1 sc0 sc1 nt" :: "v"(dst), "v"(i4));
+#else
     union ncclLLFifoLine i4;
     i4.data1 = val & 0xffffffff;
     i4.flag1 = flag;
@@ -267,6 +276,7 @@ private:
     i4.flag2 = flag;
     __builtin_nontemporal_store(i4.v[0], dst->v);
     __builtin_nontemporal_store(i4.v[1], dst->v+1);
+#endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
 #endif
