@@ -61,7 +61,6 @@ typedef _Float16 half2_t __attribute__((ext_vector_type(2)));
 
 //typedef uint16_t __amd_fp8x2_storage_t;
 typedef short shortx2_t __attribute__((ext_vector_type(2)));
-typedef float floatx2_t __attribute__((ext_vector_type(2)));
 typedef short __attribute__((ext_vector_type(2))) __amd_shortx2_storage_t;
 
 
@@ -79,10 +78,6 @@ inline __device__  rccl_float8 half2add(const rccl_float8& x, const rccl_float8&
     u.i16_vec =
         __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(v, v, /* scale */ 1.f, 0);
     return u.fp8[0];
-//#elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
-    //floatx2_t v;
-    //asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_fp8(x.__x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_fp8(y.__x, 0)));
-   // return __builtin_amdgcn_cvt_pk_f32_fp8(v, 0)[0];
 #else
     return rccl_float8(float(x) + float(y));
 #endif
