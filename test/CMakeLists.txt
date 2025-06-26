@@ -56,6 +56,9 @@ if(BUILD_TESTS)
     common/TestBed.cpp
     common/TestBedChild.cpp
     common/StandaloneUtils.cpp
+    ../src/misc/recorder.cc
+    proxy_trace/ProxyTraceUnitTests.cpp
+    ../src/misc/proxy_trace/proxy_trace.cc
     )
 
   # Append a file if BUILD_TESTS is ON and build type is not Debug
@@ -94,6 +97,7 @@ if(BUILD_TESTS)
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
   target_link_libraries(rccl-UnitTests PRIVATE Threads::Threads)
   target_link_libraries(rccl-UnitTests PRIVATE dl)
+  target_link_libraries(rccl-UnitTests PRIVATE fmt::fmt)
   if(OPENMP_TESTS_ENABLED)
     target_link_libraries(rccl-UnitTests PRIVATE "${OpenMP_CXX_FLAGS}")
   endif()
