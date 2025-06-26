@@ -562,6 +562,7 @@ set(SRC_FILES
   src/include/nvtx3/nvtxDetail/nvtxInitDefs.h
   src/include/nvtx3/nvtxDetail/nvtxLinkOnce.h
   src/include/nvtx3/nvtxDetail/nvtxTypes.h
+  src/include/proxy_trace/proxy_trace.h
   src/include/plugin/nccl_net.h
   src/include/plugin/nccl_profiler.h
   src/include/plugin/nccl_tuner.h
@@ -608,6 +609,7 @@ set(SRC_FILES
   src/misc/msccl/msccl_parser.cc
   src/misc/msccl/msccl_setup.cc
   src/misc/msccl/msccl_status.cc
+  src/misc/proxy_trace/proxy_trace.cc
   src/plugin/net.cc
   src/plugin/plugin_open.cc
   src/plugin/profiler.cc
@@ -753,6 +755,7 @@ add_custom_target(git_version_check
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/git_version.cmake
   VERBATIM
 )
+
 
 # Set up RCCL library
 #==================================================================================================
@@ -1078,6 +1081,7 @@ target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
+target_link_libraries(rccl PRIVATE fmt::fmt)
 if(ENABLE_MSCCLPP)
   target_link_libraries(rccl PRIVATE mscclpp_nccl)
 endif()
