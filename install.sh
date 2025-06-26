@@ -73,7 +73,7 @@ function display_help()
     echo "    -t|--tests_build           Build rccl unit tests, but do not run"
     echo "       --time-trace            Plot the build time of RCCL (requires \`ninja-build\` package installed on the system)"
     echo "       --verbose               Show compile commands"
-    echo "       --force-reduce-pipeline Force reduce_copy sw pipeline to be used for every reduce-based collectives"
+    echo "       --force-reduce-pipeline Force reduce_copy sw pipeline to be used for every reduce-based collectives and datatypes"
 }
 
 # #################################################
