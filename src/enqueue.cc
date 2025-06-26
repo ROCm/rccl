@@ -1232,10 +1232,10 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduce
     count++;
     if (warned == 0 && count == 100000 && comm->rank == 0) {
       warned = 1;
-      WARN("Waiting for work FIFO to become available."
-           "Work fifo exhaustion can happen in large scale/high iteration count of alltoall."
-           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number"
-           " (current: %ld). \n\nRCCL continues to retry...", comm->workFifoBytes);
+      WARN("Waiting for work FIFO to become available. "
+           "Work fifo exhaustion can happen in large scale/high iteration count of alltoall. "
+           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %ld).\n\n"
+           "RCCL continues to retry...", comm->workFifoBytes);
     }
 
   }
