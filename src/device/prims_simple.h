@@ -92,7 +92,7 @@ private:
   }
 
   inline __device__ void patBarrier() {
-    barrier();
+    __syncthreads();
   }
 
   inline __device__ void barrierAny() {

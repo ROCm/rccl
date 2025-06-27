@@ -424,7 +424,7 @@ struct ncclPatPeer {
     int connStepSize;
 };
 
-#define NCCL_SHMEM_PAT_STEPS 64
+#define NCCL_SHMEM_PAT_STEPS 32
 struct ncclPatShmem {
   struct ncclPatStep patSteps[NCCL_SHMEM_PAT_STEPS];
   int parallelFactor;
