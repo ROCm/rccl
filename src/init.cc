@@ -94,27 +94,33 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
 
-  //If RCCL runtime param is set, it will override defaults
+  //If RCCL runtime param is set, it will override defaults, if supported
   if (rcclParamUnrollFactor() != 0) {
-    comm->unroll = rcclParamUnrollFactor();
-    INFO(NCCL_INIT, "RCCL Unroll Factor (user-defined): %d", comm->unroll);
-  }
-  else {
-    if (IsArchMatch(devProp.gcnArchName, "gfx950")) {
-      //on gfx950, use unroll=1 for single-node and unroll=2 for multi-node
-      if (comm->nNodes == 1)
-        comm->unroll = 1;
-      else
-        comm->unroll = 2;
+    if(rcclGetKernelIndex(rcclParamUnrollFactor(), comm->collTraceEnabled)) {
+      comm->unroll = rcclParamUnrollFactor();
+      INFO(NCCL_INIT, "RCCL Unroll Factor (user-defined): %d", comm->unroll);
+      return ncclSuccess;
     }
-    else if((IsArchMatch(devProp.gcnArchName, "gfx908")) ||
-            (IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80))
-      //on MI300X and gfx908, use unroll=2
-      comm->unroll = 2;
-    else
-      comm->unroll = 4;
-    INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll);
+    else {
+      // Fall back to default unroll
+      WARN("Requested RCCL_UNROLL_FACTOR: %ld does not exist in `rcclKernelTable`. Falling back to pre-set unroll.", rcclParamUnrollFactor());
+    }
   }
+
+  if (IsArchMatch(devProp.gcnArchName, "gfx950")) {
+    //on gfx950, use unroll=1 for single-node and unroll=2 for multi-node
+    if (comm->nNodes == 1)
+      comm->unroll = 1;
+    else
+      comm->unroll = 2;
+  }
+  else if((IsArchMatch(devProp.gcnArchName, "gfx908")) ||
+          (IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80))
+    //on MI300X and gfx908, use unroll=2
+    comm->unroll = 2;
+  else
+    comm->unroll = 4;
+  INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll);
   return ncclSuccess;
 }
 
