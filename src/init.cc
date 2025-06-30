@@ -96,7 +96,11 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
 
   //If RCCL runtime param is set, it will override defaults, if supported
   if (rcclParamUnrollFactor() != 0) {
+#if ENABLE_COLLTRACE
     if(rcclGetKernelIndex(rcclParamUnrollFactor(), comm->collTraceEnabled)) {
+#else
+    if(rcclGetKernelIndex(rcclParamUnrollFactor(), false)) {
+#endif
       comm->unroll = rcclParamUnrollFactor();
       INFO(NCCL_INIT, "RCCL Unroll Factor (user-defined): %d", comm->unroll);
       return ncclSuccess;
