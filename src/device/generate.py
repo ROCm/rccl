@@ -52,19 +52,21 @@ else:
 # make ONLY_FUNCS="AllGather * *|Broadcast * *|SendRecv"
 #
 # # Only AllReduce Sum int32_t (but all algos, protos)
-# make ONLY_FUNCS="AllReduce * * Sum int32_t"
+# make ONLY_FUNCS="AllReduce * * Sum i32"
 #
 # # Only AllReduce RING Max float (but all protos and unrolls)
-# make ONLY_FUNCS="AllReduce RING * Max float"
+# make ONLY_FUNCS="AllReduce RING * Max f32"
 #
 # # AllReduce TREE LL128 Prod rccl_bfloat16 unroll=1
-# make ONLY_FUNCS="AllReduce TREE LL128 Prod rccl_bfloat16 1"
+# make ONLY_FUNCS="AllReduce TREE LL128 Prod bf16 1"
 #
 # # AllReduce RING SIMPLE and ReduceScatter RING LL float (but all redops, types, unrolls for AllReduce and all redops, unrolls for ReduceScatter)
-# make ONLY_FUNCS="AllReduce RING SIMPLE * *|ReduceScatter RING LL * float *"
+# make ONLY_FUNCS="AllReduce RING SIMPLE * *|ReduceScatter RING LL * f32 *"
 #                         --- or ---
-# make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * float *"
-# make ONLY_FUNCS="AllReduce RING/TREE LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8 1/2/4|AllGather RING LL/SIMPLE Sum int8_t 1/2/4|AllToAllPivot RING SIMPLE Sum int8_t 1/2/4|Broadcast RING LL/SIMPLE Sum int8_t 1/2/4|Reduce RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8 1/2/4|ReduceScatter RING LL/SIMPLE Sum/MinMax int8_t/uint8_t/half/float/double/hip_bfloat16/rccl_float8/rccl_bfloat8 1/2/4|SendRecv RING SIMPLE Sum int8_t 1/2/4"
+# make ONLY_FUNCS="AllReduce RING SIMPLE|ReduceScatter RING LL * f32 *"
+#
+#
+# make ONLY_FUNCS="AllReduce RING/TREE LL/LL128/SIMPLE Sum/MinMax i8/u8/f16/f32/f64/bf16/f8e4m3/f8e5m2 1/2/4|AllGather RING LL/LL128/SIMPLE Sum i8 1/2/4|AllToAllPivot RING SIMPLE Sum i8 1/2/4|Broadcast RING LL/LL128/SIMPLE Sum i8 1/2/4|Reduce RING LL/LL128/SIMPLE Sum/MinMax i8/u8/f16/f32/f64/bf16/f8e4m3/f8e5m2 1/2/4|ReduceScatter RING LL/LL128/SIMPLE Sum/MinMax i8/u8/f16/f32/f64/bf16/f8e4m3/f8e5m2 1/2/4|SendRecv RING SIMPLE Sum i8 1/2/4"
 #
 # # ONLY_FUNCS can be used together for debugging
 
@@ -159,9 +161,6 @@ def func_filter(function_params, current_idx, item_list=None):
 
     # If the paramter is equal to '*', include all possible cases for it
     if current_element == "*":
-      if current_idx == 0:
-        raise ValueError("Error: Paramter 'COLL' can not be type all '*'.")
-
       # all_params list must be in the same order as function_params --> <coll> <algo> <proto> <redop> <type> <unroll>
       # Get the current list from all_params
       current_list = all_params[current_idx]
