@@ -17,36 +17,39 @@ using meta::colltrace::CollTraceInfo;
 using meta::colltrace::EventQueue;
 
 namespace RcclUnitTesting {
-  // TEST(CollTraceUtilsTest, aggregateResultsTest) {
-  //   std::deque<std::unique_ptr<CollTraceInfo>> results;
-  //   // Host has 2 ranks, Ring buffer has 3 records
-  //   results.emplace_back(
-  //       std::make_unique<CollTraceInfo>(123, "allReduce", "float32", 10));
-  //   results.emplace_back(
-  //       std::make_unique<CollTraceInfo>(127, "allReduce", "int64", 20));
-  //   results.emplace_back(
-  //       std::make_unique<CollTraceInfo>(200, "allGather", "float32", 50));
+  TEST(CollTraceUtilsTest, aggregateResultsTest) {
+    std::deque<std::unique_ptr<CollTraceInfo>> results;
+    // Host has 2 ranks, Ring buffer has 3 records
+    auto info1 = CollTraceInfo{.collId = 123, .opName = "allReduce", .dataType = "float32", .count = 10};
+    auto info2 = CollTraceInfo{.collId = 127, .opName = "allReduce", .dataType = "int64", .count = 20};
+    auto info3 = CollTraceInfo{.collId = 200, .opName = "allGather", .dataType = "float32", .count = 50};
+    results.emplace_back(
+        std::make_unique<CollTraceInfo>(info1));
+    results.emplace_back(
+        std::make_unique<CollTraceInfo>(info2));
+    results.emplace_back(
+        std::make_unique<CollTraceInfo>(info3));
   
-  //   std::vector<float> latencyAllGather = {10, 20, 50, 15, 21, 45};
-  //   auto stats = aggregateResults(
-  //       results,
-  //       latencyAllGather,
-  //       2 /* ranks per host */,
-  //       3 /* element per rank */);
-  //   EXPECT_EQ(3, stats.size());
-  //   std::vector<CollStats> expected = {
-  //       CollStats(123, 50, 10000, 15000, "allReduce", "int64", 0),
-  //       CollStats(127, 5, 20000, 21000, "allReduce", "int64", 0),
-  //       CollStats(200, 11, 45000, 50000, "allReduce", "int64", 0)
-  //   };
+    std::vector<float> latencyAllGather = {10, 20, 50, 15, 21, 45};
+    auto stats = aggregateResults(
+        results,
+        latencyAllGather,
+        2 /* ranks per host */,
+        3 /* element per rank */);
+    EXPECT_EQ(3, stats.size());
+    std::vector<CollStats> expected = {
+        CollStats(123, 50, 10000, 15000, "allReduce", "int64", 0),
+        CollStats(127, 5, 20000, 21000, "allReduce", "int64", 0),
+        CollStats(200, 11, 45000, 50000, "allReduce", "int64", 0)
+    };
   
-  //   for (int i = 0; i < 3; i++) {
-  //     EXPECT_EQ(stats[i].collId, expected[i].collId);
-  //     EXPECT_EQ(stats[i].percent, expected[i].percent);
-  //     EXPECT_EQ(stats[i].minLatencyUs, expected[i].minLatencyUs);
-  //     EXPECT_EQ(stats[i].maxLatencyUs, expected[i].maxLatencyUs);
-  //   }
-  // }
+    for (int i = 0; i < 3; i++) {
+      EXPECT_EQ(stats[i].collId, expected[i].collId);
+      EXPECT_EQ(stats[i].percent, expected[i].percent);
+      EXPECT_EQ(stats[i].minLatencyUs, expected[i].minLatencyUs);
+      EXPECT_EQ(stats[i].maxLatencyUs, expected[i].maxLatencyUs);
+    }
+  }
   
   TEST(CollTraceUtilsTest, EventQueueOperationTest) {
     EventQueue<int> q;
