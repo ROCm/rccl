@@ -644,6 +644,15 @@ set(SRC_FILES
   src/transport/p2p.cc
   src/transport/profiler.cc
   src/transport/shm.cc
+  src/include/latency_profiler/CollTrace.h
+  src/include/latency_profiler/CollTraceEvent.h
+  src/include/latency_profiler/CollTraceFunc.h
+  src/include/latency_profiler/CollTraceUtils.h
+  src/include/latency_profiler/EventQueue.h
+  src/misc/latency_profiler/CollTrace.cc
+  src/misc/latency_profiler/CollTraceEvent.cc
+  src/misc/latency_profiler/CollTraceFunc.cc
+  src/misc/latency_profiler/CollTraceUtils.cc
 )
 
 if (ENABLE_MSCCL_KERNEL)
@@ -976,7 +985,7 @@ if (HAVE_PARALLEL_JOBS)
   target_compile_options(rccl PRIVATE -parallel-jobs=12)
 endif()
 
-if (ROCM_VERSION VERSION_GREATER_EQUAL "60200") 
+if (ROCM_VERSION VERSION_GREATER_EQUAL "60200")
   target_compile_options(rccl PRIVATE --offload-compress)    # Compress GPU code at compile time.
   target_link_libraries(rccl PRIVATE --offload-compress)     # Compress GPU code at link time.
   message(STATUS "--offload-compress enabled - ROCm version >= 6.2.0")

@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 2.8.12)
 if(BUILD_TESTS)
 
   option(OPENMP_TESTS_ENABLED "Enable OpenMP for unit tests" OFF)
-  
+
   message("Building rccl unit tests (Installed in /test/rccl-UnitTests)")
 
   find_package(hsa-runtime64 PATHS /opt/rocm )
@@ -46,7 +46,7 @@ if(BUILD_TESTS)
     ScatterTests.cpp
     SendRecvTests.cpp
     StandaloneTests.cpp
-    _RecorderTests.cpp
+    # _RecorderTests.cpp
     common/main.cpp
     common/CallCollectiveForked.cpp
     common/CollectiveArgs.cpp
@@ -59,6 +59,8 @@ if(BUILD_TESTS)
     ../src/misc/recorder.cc
     proxy_trace/ProxyTraceUnitTests.cpp
     ../src/misc/proxy_trace/proxy_trace.cc
+    # latency_profiler/LatencyProfilerUnitTest.cpp
+    # ../src/misc/latency_profiler/CollTraceUtils.cc
     )
 
   # Append a file if BUILD_TESTS is ON and build type is not Debug

@@ -55,6 +55,8 @@
 
 #include "msccl/msccl_lifecycle.h"
 #include "msccl/msccl_status.h"
+#include "latency_profiler/CollTrace.h"
+#include "latency_profiler/CollTraceFunc.h"
 
 #ifndef STR2
   #define STR2(v) #v
@@ -424,7 +426,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
       WARN("%s", comm->proxyState->proxyTrace->dump().c_str());
     }
   }
-  
+
 
 #ifdef ENABLE_PROFILING
   struct ncclProf *prof, *prof_seq;
@@ -2051,6 +2053,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     NCCLCHECK(comm->tuner->init(comm->nRanks, comm->nNodes, ncclDebugLog, &comm->tunerContext));
   }
 
+  NCCLCHECKGOTO(meta::colltrace::collTraceInit(comm), res, fail);
   // update communicator state
   comm->initState = ncclSuccess;
   timers[TIMER_INIT_TOTAL] = clockNano() - timers[TIMER_INIT_TOTAL];
@@ -2534,6 +2537,7 @@ static ncclResult_t commDestroySync(struct ncclAsyncJob* job_) {
 
   CUDACHECKGOTO(cudaSetDevice(comm->cudaDev), ret, fail);
 
+  NCCLCHECKGOTO(meta::colltrace::collTraceDestroy(comm), ret, fail);
   TRACE(NCCL_INIT, "Destroying comm %p rank %d abortFlag %d asyncResult %d", comm, comm->rank, *comm->abortFlag, comm->asyncResult);
 
   if (comm->initState == ncclSuccess) {

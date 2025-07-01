@@ -4,7 +4,7 @@
 # #################################################
 # global variables
 # #################################################
-ROCM_PATH=${ROCM_PATH:="/opt/rocm"}
+ROCM_PATH=${ROCM_PATH:="/usr/local/fbcode/platform010/lib/rocm-6.4.1"}
 
 # Default values
 build_address_sanitizer=false
