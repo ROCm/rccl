@@ -29,7 +29,7 @@ struct CollStats;
 class CollTrace {
  public:
   CollTrace(ncclComm* comm);
-  ~CollTrace();
+  __attribute__((visibility("default"))) ~CollTrace();
 
   void enqueueEvent(std::unique_ptr<CollTraceEvent> event);
 
