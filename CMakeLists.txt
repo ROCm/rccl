@@ -1024,6 +1024,10 @@ if(ENABLE_CODE_COVERAGE)
     -Wl,--enable-new-dtags,--build-id=sha1,--rpath,$ORIGIN/../lib
   )
 
+  set(CMAKE_EXE_LINKER_FLAGS   "${CMAKE_EXE_LINKER_FLAGS}   -Wl,--build-id=sha1")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--build-id=sha1")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--build-id=sha1")
+
   target_link_options(rccl PRIVATE ${COVERAGE_SHARED_LINKER_FLAGS})
   target_link_options(rccl PRIVATE ${COVERAGE_EXE_LINKER_FLAGS})
 elseif(BUILD_TESTS) # Enable default/hidden visibility based on build type and ROCM_VERSION
