@@ -153,7 +153,15 @@ void CollTrace::reportIfNeeded(bool checkInterval = true) {
       secs_passed,
       stats_.size(),
       checkInterval);
+
+// reportToScuba is a placeholder for oss environment.
+// meta production reports to scuba instead of file, which enables 
+// filering, aggregation and visualization.
+#ifdef ENABLE_SCUBA_LOGGING
+  reportToScuba(stats_, commHash_);
+#else
   reportToFile(stats_, commHash_);
+#endif
   lastReportTime_ = std::chrono::steady_clock::now();
   stats_.clear();
 }

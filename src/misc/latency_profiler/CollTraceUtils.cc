@@ -28,8 +28,6 @@ float getSizeMb(const std::string& dataType, int count) {
   throw std::runtime_error("CollTrace: unsupported data type " + dataType);
 }
 
-// meta has a reporting infra, but that is not available in other places
-// so report to file for now
 void reportToFile(
     const std::deque<std::vector<CollStats>>& stats,
     const std::string& commHash) {
