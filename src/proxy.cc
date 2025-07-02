@@ -368,6 +368,8 @@ ncclResult_t dumpProxyState(struct ncclProxyProgressState* state) {
   return ncclSuccess;
 }
 
+RCCL_PARAM_DECLARE(EnableProxyTrace);
+
 static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyArgs* args, int subIndex) {
   struct ncclProxySubArgs* sub = args->subs+subIndex;
   if (subIndex >= NCCL_PROXY_MAX_SUBS) {
@@ -398,6 +400,14 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   sub->ringAlgo = op->ringAlgo;
   sub->workCounter = op->workCounter;
   args->nsubs = subIndex+1;
+  if (rcclParamEnableProxyTrace()) {
+    sub->traceKey = op->traceKey;
+    sub->traceInfo.funcIdx = op->coll;
+    sub->traceInfo.protocol = op->protocol;
+    sub->traceInfo.pattern = op->pattern;
+    sub->traceInfo.totalBytes = op->totalBytes;
+    sub->traceInfo.chunkSize = op->chunkSize;
+  }
   if (subIndex) {
     if ((args->sliceSteps != op->sliceSteps) ||
         (args->chunkSteps != op->chunkSteps) ||
@@ -1836,6 +1846,9 @@ ncclResult_t ncclProxyInit(struct ncclComm* comm, struct ncclSocket* sock, union
   comm->proxyState->listenSock = sock;
   comm->proxyState->peerAddresses = peerAddresses;
   comm->proxyState->peerAddressesUDS = peerAddressesUDS;
+  if (rcclParamEnableProxyTrace()) {
+    facebook_rccl::proxyTraceInit(comm->proxyState->proxyTrace, comm->rank, comm->commHash);
+  }
 
   // UDS support
   NCCLCHECK(ncclIpcSocketInit(&comm->proxyState->ipcSock, comm->rank, peerAddressesUDS[comm->rank], comm->abortFlag));

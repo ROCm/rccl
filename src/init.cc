@@ -243,6 +243,9 @@ void NCCL_NO_OPTIMIZE commPoison(ncclComm_t comm) {
   comm->startMagic = comm->endMagic = 0;
 }
 
+RCCL_PARAM_DECLARE(EnableProxyTrace);
+RCCL_PARAM(EnableProxyTrace, "ENABLE_PROXY_TRACE", 0);
+
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
 
@@ -414,6 +417,14 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
   free(comm->connectSend);
   free(comm->connectRecv);
+
+  if (rcclParamEnableProxyTrace()) {
+    WARN("ProxyTrace:");
+    if (comm->proxyState && comm->proxyState->proxyTrace){
+      WARN("%s", comm->proxyState->proxyTrace->dump().c_str());
+    }
+  }
+  
 
 #ifdef ENABLE_PROFILING
   struct ncclProf *prof, *prof_seq;
@@ -2576,12 +2587,11 @@ static ncclResult_t commCleanup(ncclComm_t comm) {
   if (npkitDumpDir == nullptr) {
     npkitDumpDir = "./npkit_dump";
     INFO(NCCL_INIT, "NPKIT_DUMP_DIR is not set, using default directory: %s", npkitDumpDir);
-
-    struct stat st;
-    if (stat(npkitDumpDir, &st) != 0) {
-      if (mkdir(npkitDumpDir, 0755) != 0) {
-        WARN("Failed to create NPKIT_DUMP_DIR directory: %s", npkitDumpDir);
-      }
+  }
+  struct stat st;
+  if (stat(npkitDumpDir, &st) != 0) {
+    if (mkdir(npkitDumpDir, 0755) != 0) {
+      WARN("Failed to create NPKIT_DUMP_DIR directory: %s", npkitDumpDir);
     }
   }
   NCCLCHECK(NpKit::Dump(npkitDumpDir));
