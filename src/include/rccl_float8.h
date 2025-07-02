@@ -40,7 +40,7 @@ typedef struct
 } rccl_bfloat8;
 
 // __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
-#elif HIP_VERSION >= 60200000
+#elif HIP_VERSION >= 60300000
 
 #include <hip/hip_fp8.h>
 

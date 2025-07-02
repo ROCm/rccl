@@ -190,7 +190,7 @@ namespace {
       offset = gridOffset + elemOffset + chunkOffset;
       nelem = (int)min(chunkCount, remCount - chunkOffset);
 
-      prims.directRecv(offset, offset, nelem);
+      prims.directRecv(offset, nelem);
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_EXIT)
       if (tid == 0) {
@@ -329,7 +329,7 @@ namespace {
         for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
           offset = gridOffset + elemOffset;
           nelem = min(chunkCount, channelCount - elemOffset);
-          prims.directRecv(offset, offset, nelem);
+          prims.directRecv(offset, nelem);
         }
       }
       else {
@@ -528,7 +528,7 @@ namespace {
         for (size_t elemOffset = 0; elemOffset < channelCount; elemOffset += chunkCount) {
           offset = gridOffset + elemOffset;
           nelem = min(chunkCount, channelCount - elemOffset);
-          prims.directRecv(offset, offset, nelem);
+          prims.directRecv(offset, nelem);
         }
       }
       else {
@@ -1055,7 +1055,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET_CHAIN, NCCL_PR
             for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
               ssize_t offset = gridOffset + bid * int(chunkSize);
               int nelem = min(chunkSize, size - offset);
-              prims.directRecv(offset, offset, nelem, /*postOp*/true);
+              prims.directRecv(offset, nelem, /*postOp*/true);
             }
           }
         } else {
@@ -1082,7 +1082,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET_CHAIN, NCCL_PR
           for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
             ssize_t offset = gridOffset + bid*int(chunkSize);
             int nelem = min(chunkSize, size-offset);
-            prims.directRecv(offset, offset, nelem);
+            prims.directRecv(offset, nelem);
           }
         } else {
           for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {

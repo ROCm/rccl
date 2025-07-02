@@ -13,7 +13,7 @@
 #include "common_kernel.h"
 #include "common.h"
 
-#define NCCL_SPINS_BEFORE_CHECK_ABORT 1000000
+#define NCCL_SPINS_BEFORE_CHECK_ABORT 10000
 
 #define barrier_by_group_common(__THREAD_FENCE) do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
@@ -154,7 +154,7 @@ struct PrimitivesWithoutDirect {
   __device__ void directSendFromOutput(intptr_t outIx, int eltN) {
     static_cast<RealPrimitives*>(this)->sendFromOutput(outIx, eltN);
   }
-  __device__ void directRecv(intptr_t inpIx, intptr_t outIx, int eltN) {
+  __device__ void directRecv(intptr_t outIx, int eltN) {
     static_cast<RealPrimitives*>(this)->recv(outIx, eltN, /*postOp=*/false);
   }
   __device__ void directCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
@@ -177,6 +177,18 @@ struct PrimitivesWithoutDirect {
     static_cast<RealPrimitives*>(this)->recvReduceCopySend(inpIx, outIx, eltN, postOp);
   }
 };
+
+__device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
+  if (abortCache & abortValue) return 1;
+  if (++spins < NCCL_SPINS_BEFORE_CHECK_ABORT) return 0;
+  spins = 0;
+  int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
+  if (abort) {
+    __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+    abortCache |= abortValue;
+  }
+  return abort;
+}
 
 #include "prims_simple.h"
 #include "prims_ll.h"

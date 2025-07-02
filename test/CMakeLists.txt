@@ -56,6 +56,9 @@ if(BUILD_TESTS)
     common/TestBed.cpp
     common/TestBedChild.cpp
     common/StandaloneUtils.cpp
+    ../src/misc/recorder.cc
+    proxy_trace/ProxyTraceUnitTests.cpp
+    ../src/misc/proxy_trace/proxy_trace.cc
     )
 
   # Append a file if BUILD_TESTS is ON and build type is not Debug
@@ -71,8 +74,9 @@ if(BUILD_TESTS)
 
   ## Set rccl-UnitTests include directories
   target_include_directories(rccl-UnitTests PRIVATE ${ROCM_PATH} ${GTEST_INCLUDE_DIRS})
-  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/include)            # for generated rccl.h header
-  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include) # for rccl_bfloat16.h
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/include)                   # for generated rccl.h header
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include)        # for rccl_bfloat16.h
+  target_include_directories(rccl-UnitTests PRIVATE ${PROJECT_BINARY_DIR}/hipify/src/include/plugin) # for recorder tests
 
   ## Set rccl-UnitTests compile definitions
   if(LL128_ENABLED)
@@ -93,6 +97,7 @@ if(BUILD_TESTS)
   target_link_libraries(rccl-UnitTests PRIVATE hip::host hip::device hsa-runtime64::hsa-runtime64)
   target_link_libraries(rccl-UnitTests PRIVATE Threads::Threads)
   target_link_libraries(rccl-UnitTests PRIVATE dl)
+  target_link_libraries(rccl-UnitTests PRIVATE fmt::fmt)
   if(OPENMP_TESTS_ENABLED)
     target_link_libraries(rccl-UnitTests PRIVATE "${OpenMP_CXX_FLAGS}")
   endif()
