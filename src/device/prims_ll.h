@@ -828,4 +828,51 @@ public:
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
   }
+
+  __device__ void mscclStoreLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
+    union ncclLLFifoLine i4;
+    i4.data1 = val & 0xffffffff;
+    i4.flag1 = flag;
+    i4.data2 = (val >> 32);
+    i4.flag2 = flag;
+    __builtin_nontemporal_store(i4.v[0], dst->v);
+    __builtin_nontemporal_store(i4.v[1], dst->v+1);
+  }
+
+  __device__ void mscclSend(intptr_t srcIx, int nelem) {
+#if defined(__gfx950__)
+    T *srcElts = userBufs[0] + srcIx;
+
+    // Always waitSend in case of cleanup
+    nelem = nelem < 0 ? 0 : nelem;
+    waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
+
+    nelem -= tid*EltPerLine;
+    srcElts += tid*EltPerLine;
+    int offset = tid;
+    int eltPerTrip = nthreads*EltPerLine;
+    while (nelem > 0) {
+      int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
+
+      DataLoader dl;
+      ncclLLFifoLine line[MaxRecv];
+      uint64_t data, peerData;
+      dl.loadBegin(srcElts, eltInLine);
+      srcElts += eltPerTrip;
+      data = dl.loadFinish();
+
+      for (int i=1; i < MaxSend && i < fan.nsend(); i++)
+        mscclStoreLL(sendPtr(i)+offset, data, sendFlag(i));
+      mscclStoreLL(sendPtr(0)+offset, data, sendFlag(0));
+      nelem -= eltPerTrip;
+      offset += nthreads;
+    }
+
+    for (int i=1; i < MaxSend && i < fan.nsend(); i++)
+      incSend(i, offset);
+    incSend(0, offset);
+#else
+    LLGenericOp<0, 1, Input, -1>(srcIx, -1, nelem, false);
+#endif
+  }
 };

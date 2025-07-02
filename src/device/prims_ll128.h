@@ -587,4 +587,7 @@ public:
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
   }
+  __device__ void mscclSend(intptr_t inpIx, int eltN) {
+    return GenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
+  }
 };
