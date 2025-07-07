@@ -10,6 +10,9 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#ifndef FMT_HEADER_ONLY
+#define FMT_HEADER_ONLY 1
+#endif
 #include <fmt/format.h>
 #include <memory>
 #include <unordered_map>
