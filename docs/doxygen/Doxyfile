@@ -856,6 +856,8 @@ INPUT_ENCODING         = UTF-8
 # *.ucf, *.qsf and *.ice.
 
 FILE_PATTERNS          = *.f \
+                         *.f90 \
+                         *.F90 \
                          *.md
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should

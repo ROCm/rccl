@@ -1,2 +1,4 @@
 # Pre-processed fortran sources
 *.f
+*.f90
+*.F90
