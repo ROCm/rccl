@@ -24,6 +24,7 @@
 #define ROCBLAS_FLOAT8_H
 
 #include <stdint.h>
+//#include <hip/hip_version.h>
 
 #if __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
 /*! \brief Struct to represent a 8 bit floating-point number. */
@@ -39,7 +40,7 @@ typedef struct
 } rccl_bfloat8;
 
 // __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
-#elif HIP_VERSION >= 60300000
+#elif HIP_VERSION >= 60300000 && !(defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1030__))
 
 #include <hip/hip_fp8.h>
 
@@ -49,26 +50,6 @@ typedef __hip_fp8_e5m2_fnuz rccl_bfloat8;
 #else
 typedef __hip_fp8_e4m3 rccl_float8;
 typedef __hip_fp8_e5m2 rccl_bfloat8;
-
-inline  __device__ float operator*(rccl_float8 a, rccl_float8 b)
-{
-    return float(a) * float(b);
-}
-
-inline  __device__ float operator*(rccl_bfloat8 a, rccl_bfloat8 b)
-{
-    return float(a) * float(b);
-}
-
-inline  __device__ float operator*(rccl_float8 a, float b)
-{
-    return float(a) * float(b);
-}
-
-inline __device__ float operator*(rccl_bfloat8 a, float b)
-{
-    return float(a) * float(b);
-}
 #endif
 
 // For older versions of ROCm that do not include hip_fp8.h,
