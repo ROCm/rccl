@@ -24,7 +24,7 @@
 #define ROCBLAS_FLOAT8_H
 
 #include <stdint.h>
-//#include <hip/hip_version.h>
+#include <hip/hip_version.h>
 
 #if __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
 /*! \brief Struct to represent a 8 bit floating-point number. */
