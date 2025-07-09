@@ -53,9 +53,9 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
       if (comm->topo->ll128Enabled) {
         if (info->func == ncclFuncAllReduce) {
           if(comm->nNodes > 2) {
-            ll128Max *= 15.2; // Scale max message size for n > 2 since Tree has special behavior at 2 nodes
+            ll128Max *= 3.8; // Scale max message size for n > 2 since Tree has special behavior at 2 nodes
           }
-          ll128Max += (log2i(comm->nNodes) - 1) * comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_FACTOR_IDX];
+          // ll128Max += (log2i(comm->nNodes) - 1) * comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_FACTOR_IDX];
         }
         if (sizePerRank <= ll128Max && sizePerRank > ll128Min) {
           info->protocol = NCCL_PROTO_LL128;
