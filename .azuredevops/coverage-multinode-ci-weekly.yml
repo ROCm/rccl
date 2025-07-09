@@ -1,0 +1,63 @@
+resources:
+  repositories:
+    - repository: pipelines_repo
+      type: github
+      endpoint: ROCm
+      name: ROCm/ROCm
+    - repository: rccl-test-infra
+      type: github
+      endpoint: ROCm
+      name: ROCm/rccl-test-infra
+
+variables:
+  - group: common
+  - template: /.azuredevops/variables-global.yml@pipelines_repo
+
+trigger: none
+pr: none
+schedules:
+  - cron: "0 7 * 11-3 5"  # Midnight MST Friday (November - March)
+    displayName: "Weekly Build Friday (MST)"
+    branches:
+      include:
+        - develop
+    always: false
+
+  - cron: "0 6 * 4-10 5"  # Midnight MDT Friday (April - October)
+    displayName: "Weekly Build Friday (MDT)"
+    branches:
+      include:
+        - develop
+    always: false
+
+jobs:
+  - job: rccl_coverage_multinode_ci_weekly
+    timeoutInMinutes: 4320
+    pool: rocm-ci_rccl_slurm_pool
+    workspace:
+      clean: all
+    variables:
+      ENABLE_COVERAGE: "true"
+      INFRA_TEST_CONFIG: "meta_2_node_split_alola_cov"
+    steps:
+      - task: DeleteFiles@1
+        inputs:
+          Contents: '**/*'
+      - template: ${{ variables.CI_TEMPLATE_PATH }}/steps/checkout.yml@pipelines_repo
+        parameters:
+          submoduleBehaviour: recursive
+      - template: templates/build.yml
+      - template: templates/test_rccl-tests.yml
+        parameters:
+            TESTS_TIMEOUT: "72:00:00"
+            NUM_NODES: 3
+      - task: CopyFiles@2
+        displayName: 'Copy all HTML coverage files'
+        inputs:
+          SourceFolder: '$(Pipeline.Workspace)/s/rccl-test-infra'
+          Contents: 'slurm_runs_$(INFRA_TEST_CONFIG)_*/**'
+          TargetFolder: '$(Build.ArtifactStagingDirectory)'
+          flattenFolders: false
+      - template: ${{ variables.CI_TEMPLATE_PATH }}/steps/artifact-upload.yml@pipelines_repo
+        parameters:
+          componentName: "Coverage_Report"

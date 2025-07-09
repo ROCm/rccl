@@ -32,6 +32,14 @@ ninja --version
 export GPU_TARGETS="gfx942"
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
+
+if [ "$ENABLE_COVERAGE" = "true" ]; then
+    echo "Coverage build enabled"
+    cd $(Pipeline.Workspace)/s/rccl-test-infra || exit
+    LOCAL_RCCL_PATH="$(pwd)/.." TEST_INFRA_WORK_DIR=$BINARIES_DIR CODE_COV=1 ./install.sh build setup-venv
+    exit 0
+fi
+
 ## Building RCCL
 mkdir -p build
 cd build

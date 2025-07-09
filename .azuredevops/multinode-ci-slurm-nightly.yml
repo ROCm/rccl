@@ -42,3 +42,6 @@ jobs:
   - template: templates/build.yml
   - template: templates/test_rccl-UnitTests.yml
   - template: templates/test_rccl-tests.yml
+    parameters:
+      env:
+        TESTS_TIMEOUT: "3:00:00" # 180 minutes

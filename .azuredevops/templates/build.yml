@@ -63,11 +63,16 @@ steps:
         total=$(echo "$expectedFiles" | wc -w)
         while [ $i -le $total ]; do
           relpath=$(echo "$expectedFiles" | cut -d ' ' -f"$i")
-          fullpath="$BINARIES_DIR/$relpath"
-          if [ ! -e "$fullpath" ]; then
-            echo "##vso[task.logissue type=error]Missing expected file: $fullpath"
+
+          # Check if file exists anywhere in the binaries directory
+          if ! find "$BINARIES_DIR" -name "$(basename "$relpath")" -type f | grep -q .; then
+            echo "##vso[task.logissue type=error]Missing expected file: $relpath"
             MISSING_FILES=1
+          else
+            actual_location=$(find "$BINARIES_DIR" -name "$(basename "$relpath")" -type f | head -1)
+            echo "Found $relpath at: $actual_location"
           fi
+
           i=$((i + 1))
         done
 
