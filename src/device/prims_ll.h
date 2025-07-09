@@ -260,7 +260,7 @@ private:
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-#if defined(__gfx950__)
+#if (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
     using Vec = uint32_t __attribute__((ext_vector_type(4)));
     Vec i4;
     i4[0] = val & 0xffffffff;
