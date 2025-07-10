@@ -279,6 +279,28 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
 };
 
 template<typename T, typename RedOp>
+struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_LL> {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+    /*
+      ProtoLL is not supported with PAT algo.
+      This path should never be reached as PAT proto selection is handled at runtime.
+    */
+    ncclShmem.aborted = 1;
+  }
+};
+
+template<typename T, typename RedOp>
+struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_LL128> {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+    /*
+      ProtoLL128 is not supported with PAT algo.
+      This path should never be reached as PAT proto selection is handled at runtime.
+    */
+    ncclShmem.aborted = 1;
+  }
+};
+
+template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int/*nthreads*/, struct ncclDevWorkColl* work) {
     struct ncclNvls* nvls = &ncclShmem.channel.nvls;
