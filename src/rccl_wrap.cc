@@ -21,7 +21,6 @@ THE SOFTWARE.
 */
 
 #include "rccl_common.h"
-#include "nccl_common.h"
 #include "comm.h"
 #include "graph/topo.h"
 #include "enqueue.h"
