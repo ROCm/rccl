@@ -2,15 +2,6 @@
 
 The RCCL Topology Explorer is a tool for analyzing and exploring network topologies for RCCL (ROCm Communication Collectives Library) collective operations. It simulates various hardware configurations and predicts the performance of different collective communication algorithms and protocols.
 
-## Overview
-
-The topo_expl tool allows you to:
-- Simulate different GPU cluster topologies using predefined XML models
-- Analyze collective communication patterns (AllReduce, AllGather, Broadcast, etc.)
-- Compare performance of different algorithms (Tree, Ring, CollNetDirect, CollNetChain)
-- Evaluate protocol efficiency (LL, LL128, Simple)
-- Determine optimal channel configurations for various data sizes
-
 ## Building
 
 ### Prerequisites
@@ -24,12 +15,6 @@ The topo_expl tool allows you to:
 cd tools/topo_expl
 make
 ```
-
-The Makefile will:
-1. Create a `hipify_rccl` directory with transformed source files
-2. Copy necessary headers and source files from the main RCCL codebase
-3. Apply HIP transformations using hipify-perl
-4. Compile the topo_expl executable
 
 ## Usage
 
@@ -46,44 +31,25 @@ The Makefile will:
 
 Run `./topo_expl` without arguments to see the list of available models. Each model represents a different hardware configuration:
 
-- **Rome-based configurations**: Various AMD EPYC Rome processor topologies
-- **PCIe configurations**: Different PCIe interconnect patterns
-- **CollNet configurations**: Collective network topologies
-- **Multi-node setups**: Configurations for distributed systems
-
 ## Example Usage
+
+The tool is typically run with the `NCCL_DEBUG=version` environment variable:
 
 ```bash
 # List available models
 ./topo_expl
 
-# Test a single-node 8-GPU Rome configuration
-./topo_expl -m 0
+# Test MI300 configuration (model 55)
+NCCL_DEBUG=version ./topo_expl -m 55
 
-# Test a multi-node configuration with 4 nodes
-./topo_expl -m 5 -n 4
+# Test a multi-node MI300 configuration with 4 nodes
+NCCL_DEBUG=version ./topo_expl -m 55 -n 4
+
+
+# Test MI250 configuration (model 42)
+NCCL_DEBUG=version ./topo_expl -m 42
+
+# Test a multi-node MI250 configuration with 4 nodes
+NCCL_DEBUG=version ./topo_expl -m 42 -n 4
 ```
-
-## Output Format
-
-
-Example output table:
-```
-| Max Size(B)     | Count           | Collective      | Algorithm  | Protocol   | Max Channels |
-|-----------------|-----------------|-----------------|------------|------------|--------------|
-| 1024            | 1000            | AllReduce       | Ring       | LL         | 8            |
-| 65536           | 1000            | AllGather       | Tree       | Simple     | 16           |
-```
-
-## Model Files
-
-Topology models are stored as XML files in the `models/` directory. Each model defines:
-- GPU configurations and bus IDs
-- Interconnect topology (PCIe, Infinity Fabric, etc.)
-- Network interface configurations
-- Bandwidth and latency characteristics
-
-## License
-
-This tool is part of the RCCL project and is subject to the same licensing terms as the main RCCL library.
 
