@@ -21,6 +21,7 @@ THE SOFTWARE.
 */
 
 #include "rccl_common.h"
+#include "nccl_common.h"
 #include "comm.h"
 #include "graph/topo.h"
 #include "enqueue.h"
@@ -72,6 +73,22 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
         WARN("LL cutoff points not detected for a supported arch %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
         failedWarn = true;
       }
+    }
+  }
+}
+
+void rcclOverrideAlgoProto(const char *envStr, const char* algoProtoString[], int nEntries, int& result) {
+  if(envStr) {
+    for (int i = 0; i < nEntries; ++i) {
+      if (strcasecmp(envStr, algoProtoString[i]) == 0) {
+        result = i;
+        return;
+      }
+    }
+    static bool failedProtoWarn = false;
+    if (!failedProtoWarn) {
+      WARN("Invalid algo or protocol string passed %s", envStr);
+      failedProtoWarn = true;
     }
   }
 }
