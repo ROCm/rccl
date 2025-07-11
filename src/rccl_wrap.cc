@@ -76,20 +76,69 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
   }
 }
 
-void rcclOverrideAlgoProto(const char *envStr, const char* algoProtoString[], int nEntries, int& result) {
+ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoString[], int nEntries, int& result) {
   if(envStr) {
     for (int i = 0; i < nEntries; ++i) {
       if (strcasecmp(envStr, algoProtoString[i]) == 0) {
         result = i;
-        return;
+        return ncclSuccess;
       }
     }
     static bool failedProtoWarn = false;
     if (!failedProtoWarn) {
       WARN("Invalid algo or protocol string passed %s", envStr);
       failedProtoWarn = true;
+      return ncclInvalidUsage;
     }
   }
+  return ncclInvalidUsage;
+}
+
+ncclResult_t rcclOverrideAlgoOrProto(const char* ncclAlgoStr[], const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS],  struct ncclTaskColl* info) {
+  static const char* protoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_PROTO");
+  static const char* algoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_ALGO");
+  static bool validInput = true;
+  if(!validInput) return ncclInvalidUsage;
+  // Determine if override logic is applicable
+  const bool overrideProtoOnly = protoOverrideEnv && !algoOverrideEnv;
+  const bool overrideAlgoOnly = algoOverrideEnv && !protoOverrideEnv;
+  // If both are set, then original logic should work as expected to enforce a pair of algo/proto
+  // Following if-statement should skip
+  if (overrideAlgoOnly || overrideProtoOnly)
+  {
+    static int protoVal = NCCL_PROTO_UNDEF;
+    if(protoVal == NCCL_PROTO_UNDEF && protoOverrideEnv) {
+      if(rcclGetAlgoProtoIndex(protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoVal) != ncclSuccess) {
+        validInput = false;
+        return ncclInvalidUsage;
+      }
+    }
+    if(protoVal > NCCL_PROTO_UNDEF) {
+      if(table[info->algorithm][protoVal] == NCCL_ALGO_PROTO_IGNORE) {
+        WARN("Failed to force algorithm for function %s with datatype %s.%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), protoOverrideEnv);
+        return ncclInternalError;
+      } else {
+        info->protocol = protoVal;
+      }
+    }
+
+    static int algoVal = NCCL_ALGO_UNDEF;
+    if(algoVal == NCCL_ALGO_UNDEF && algoOverrideEnv) {
+      if(rcclGetAlgoProtoIndex(algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoVal) != ncclSuccess) {
+        validInput = false;
+        return ncclInvalidUsage;
+      }
+    }
+    if(algoVal > NCCL_ALGO_UNDEF) {
+      if(table[algoVal][info->protocol] == NCCL_ALGO_PROTO_IGNORE) {
+        WARN("Failed to force algorithm for function %s with datatype %s.%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), algoOverrideEnv);
+        return ncclInternalError;
+      } else {
+        info->algorithm = algoVal;
+      }
+    }
+  }
+  return ncclSuccess;
 }
 
 void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold) {

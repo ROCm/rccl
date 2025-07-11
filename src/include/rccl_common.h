@@ -71,9 +71,11 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
   // For AR, this is the send/recv size per rank
   return (func == ncclFuncReduceScatter || func == ncclFuncAllGather) ? nBytes / nRanks : nBytes;
 }
+ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoString[], int nEntries, int& result);
+ncclResult_t rcclOverrideAlgoOrProto(const char* ncclAlgoStr[], const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS],  struct ncclTaskColl* info);
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
+void rcclGetAlgoProto(const char *envStr, const char* algoProtoString[], int nEntries, int& result);
 void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold);
-void rcclOverrideAlgoProto(const char *envStr, const char* algoProtoString[], int nEntries, int& result);
 ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
                              int collNetSupport, int nvlsSupport, int numPipeOps,
                              int* algo, int* protocol, int* maxChannels);

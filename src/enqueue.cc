@@ -2005,41 +2005,7 @@ static ncclResult_t topoGetAlgoInfo(
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT) nt = NCCL_MAX_NTHREADS;
   info->nWarps = nt/comm->WarpSize;
-  
-  const char* protoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_PROTO");
-  const char* algoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_ALGO");
-  // If both are set, then original logic should work as expected, so if-statement will skip
-  if ((protoOverrideEnv != nullptr) ^ (algoOverrideEnv != nullptr)) 
-  {
-    static int protoVal = NCCL_PROTO_UNDEF;
-    if(protoOverrideEnv && protoVal == NCCL_PROTO_UNDEF) {
-      rcclOverrideAlgoProto(protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoVal);
-    }
-    char overrideStr[1024] = "";
-    if(protoVal != NCCL_PROTO_UNDEF) {
-      if(table[info->algorithm][protoVal] == NCCL_ALGO_PROTO_IGNORE) {
-        snprintf(overrideStr, 1023, " RCCL_OVERRIDE_PROTO was set to %s.", protoOverrideEnv);
-        WARN("Error : no algorithm/protocol available for function %s with datatype %s.%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), protoOverrideEnv);
-        return ncclInvalidUsage;
-      } else {
-        info->protocol = protoVal;
-      }
-    }
-
-    static int algoVal = NCCL_ALGO_UNDEF;
-    if(algoOverrideEnv && algoVal == NCCL_ALGO_UNDEF) {
-      rcclOverrideAlgoProto(algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoVal);
-    }
-    if(algoVal != NCCL_ALGO_UNDEF) {
-      if(table[algoVal][info->protocol] == NCCL_ALGO_PROTO_IGNORE) {
-        snprintf(overrideStr, 1023, " RCCL_OVERRIDE_ALGO was set to %s.", algoOverrideEnv);
-        WARN("Error : no algorithm/protocol available for function %s with datatype %s.%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), algoOverrideEnv);
-        return ncclInvalidUsage;
-      } else {
-        info->algorithm = algoVal;
-      }
-    }
-  }
+  rcclOverrideAlgoOrProto(ncclAlgoStr, ncclProtoStr, table, info);
   return ncclSuccess;
 }
 
