@@ -242,7 +242,9 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
       while (1) {
         struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
         int* poll = &ps->flags;
-        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) != 0) //pollCount++ ;//unused variable compiler waring // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
+        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) != 0) { 
+          //pollCount++ ;//unused variable compiler warning // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
+        }
         patAlgo.getNextOp(ps);
         int last = ps->last;
         step++;

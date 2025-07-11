@@ -25,7 +25,7 @@ namespace {
     const int nranks = ncclShmem.comm.nRanks;
 #if defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
-    int npKitCtxIdx = bid; // unused variable - compiler warings
+    int npKitCtxIdx = bid; // unused variable - compiler warning
 #endif
     ssize_t size;
     ssize_t gridOffset;
@@ -218,7 +218,7 @@ namespace {
 #endif
 #if defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
-    int npKitCtxIdx = bid; // unused variable - compiler warings
+    int npKitCtxIdx = bid; // unused variable - compiler warning
 #endif
     ncclTree *tree = &ncclShmem.channel.tree;
     size_t size;

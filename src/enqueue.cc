@@ -1776,7 +1776,7 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     ncclIntruQueueConstruct(&planner->planQueue);
 
     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler waring
+    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler warning
     cudaStream_t deviceStream, launchOrder;
 
     if (capturing || planner->numStreams != 1) {
