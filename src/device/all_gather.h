@@ -220,7 +220,6 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-#if __CUDA_ARCH__ >= 600
     using Proto = ProtoSimple<1, 1>;
     const int nranks = ncclShmem.comm.nRanks;
     const int rank = ncclShmem.comm.rank;
@@ -242,8 +241,8 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
       int step = 0;
       while (1) {
         struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
-        cuda::atomic_ref<int, cuda::thread_scope_block> poll(ps->flags);
-        while (poll.load(cuda::memory_order_acquire) != 0) pollCount++; // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
+        int* poll = &ps->flags;
+        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) != 0) pollCount++; // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
         patAlgo.getNextOp(ps);
         int last = ps->last;
         step++;
@@ -267,16 +266,15 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
       int step = group;
       while(1) {
         struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
-        cuda::atomic_ref<int, cuda::thread_scope_block> poll(ps->flags);
-        while (poll.load(cuda::memory_order_acquire) == 0) pollCount++; // Wait for compute thread
+        int* poll = &ps->flags;
+        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) == 0) pollCount++; // Wait for compute thread
         int last = ps->last;
         prims.patCopy(ps, shmem);
-        if (tidInGroup == 0) poll.store(0, cuda::memory_order_release); // Return element to compute thread
+        if (tidInGroup == 0) __hip_atomic_store(poll, 0, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); // Return element to compute thread
         if (last) break;
         step += nGroups;
       }
     }
-#endif
   }
 };
 

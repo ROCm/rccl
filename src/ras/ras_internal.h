@@ -22,6 +22,7 @@
 #include "ras.h"
 #include "socket.h"
 #include "utils.h"
+#include "hip_rocm_version_info.h"
 
 // Type of a RAS network or client message.
 typedef enum {

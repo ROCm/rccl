@@ -27,8 +27,9 @@ THE SOFTWARE.
 #include <cstdio>
 #include <string>
 #include <chrono>
+#include <vector>
 #include <hip/hip_runtime.h>
-#include <rccl.h>
+#include <rccl/rccl.h>
 #include "HelloRccl.hpp"
 
 
@@ -62,11 +63,11 @@ int main(int argc, char **argv)
     int nranks   = atoi(argv[1]);
 
     // Initialize communicators for each rank
-    ncclComm_t comm[nranks];
-    NCCL_CALL(ncclCommInitAll(comm, nranks, NULL));
+    std::vector<ncclComm_t> comm(nranks);
+    NCCL_CALL(ncclCommInitAll(comm.data(), nranks, NULL));
 
     // Run the test
-    ExecuteTest(nranks, 0, nranks, comm);
+    ExecuteTest(nranks, 0, nranks, comm.data());
   }
   else
   {
@@ -85,9 +86,9 @@ void ExecuteTest(int numIntraRank, int intraRankStartId, int numTotalRanks, nccl
   int numIterations = 10;      // Number of timed iterations
 
   // Allocate GPU resources for this process
-  hipStream_t stream[numIntraRank];
-  hipEvent_t  startEvent[numIntraRank];
-  hipEvent_t  stopEvent[numIntraRank];
+  std::vector<hipStream_t> stream(numIntraRank);
+  std::vector<hipEvent_t>  startEvent(numIntraRank);
+  std::vector<hipEvent_t>  stopEvent(numIntraRank);
   for (int i = 0; i < numIntraRank; i++)
   {
     HIP_CALL(hipSetDevice(intraRankStartId + i));
@@ -108,7 +109,8 @@ void ExecuteTest(int numIntraRank, int intraRankStartId, int numTotalRanks, nccl
     int N = 1 << power;
 
     // Allocate GPU memory
-    float *iputGpu[numIntraRank], *oputGpu[numIntraRank];
+    std::vector<float *>iputGpu(numIntraRank);
+    std::vector<float *>oputGpu(numIntraRank);
     for (int r = 0; r < numIntraRank; r++)
     {
       HIP_CALL(hipSetDevice(intraRankStartId + r));

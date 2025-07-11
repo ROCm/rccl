@@ -22,7 +22,7 @@ enum ncclPluginType {
 #define NUM_LIBS 3
 static void *libHandles[NUM_LIBS];
 static const char *pluginNames[NUM_LIBS] = { "NET", "TUNER", "PROFILER" };
-static const char *pluginPrefix[NUM_LIBS] = { "libnccl-net", "libnccl-tuner", "libnccl-profiler" };
+static const char *pluginPrefix[NUM_LIBS] = { "librccl-net", "librccl-tuner", "librccl-profiler" };
 static const char *pluginFallback[NUM_LIBS] = { "Using internal net plugin.", "Using internal tuner plugin.", "" };
 static unsigned long subsys[NUM_LIBS] = { NCCL_INIT|NCCL_NET, NCCL_INIT|NCCL_TUNING, NCCL_INIT };
 
