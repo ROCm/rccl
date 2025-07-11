@@ -64,18 +64,20 @@ typedef short shortx2_t __attribute__((ext_vector_type(2)));
 typedef short __attribute__((ext_vector_type(2))) __amd_shortx2_storage_t;
 typedef float float2_t __attribute__((ext_vector_type(2)));
 
-inline __device__  rccl_float8 half2add(const rccl_float8& x, const rccl_float8& y, unsigned int rng = 0)
+inline __device__  rccl_float8 half2add(rccl_float8 x, rccl_float8 y, unsigned int rng = 0)
 {
 #if   __HIP_DEVICE_COMPILE__ && defined(__gfx950__)
     union {
       half2_t half_vec;
       shortx2_t i16_vec;
+      unsigned int ui32;
       rccl_float8 fp8[4];
     } u{0};
-    half2_t v;
-    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(x.__x, 1.f, 0)), "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(y.__x, 1.f, 0)));
-    u.i16_vec =
-        __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(v, v, /* scale */ 1.f, 0);
+    half2_t v1;
+    u.fp8[0] = x; u.fp8[1] = y;
+    half2_t v = __builtin_amdgcn_cvt_scalef32_pk_f16_fp8(u.ui32,1.f, 0);
+    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v1) : "v"(v[0]), "v"(v[1]));
+    u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(v1, v1, /* scale */ 1.f, 0);
     return u.fp8[0];
 #elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
     union
@@ -85,7 +87,7 @@ inline __device__  rccl_float8 half2add(const rccl_float8& x, const rccl_float8&
     } val;
 
     float2_t v;
-    uint32_t ival       = 0;
+    uint32_t ival = 0;
     asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_fp8(x.__x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_fp8(y.__x, 0)));
     ival       = __builtin_amdgcn_cvt_pk_fp8_f32(v[0], v[0], ival, false);
     val.i32val = ival;
@@ -95,18 +97,20 @@ inline __device__  rccl_float8 half2add(const rccl_float8& x, const rccl_float8&
 #endif
 }
 
-inline __device__  rccl_bfloat8 half2add_b(const rccl_bfloat8& x, const rccl_bfloat8& y, unsigned int rng = 0)
+inline __device__  rccl_bfloat8 half2add_b(rccl_bfloat8 x, rccl_bfloat8 y, unsigned int rng = 0)
 {
 #if   __HIP_DEVICE_COMPILE__ && defined(__gfx950__)
-    union {
+     union {
       half2_t half_vec;
       shortx2_t i16_vec;
+      unsigned int ui32;
       rccl_bfloat8 fp8[4];
     } u{0};
-    half2_t v;
-    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(x.__x, 1.f, 0)), "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(y.__x, 1.f, 0)));
-    u.i16_vec =
-        __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(v, v, /* scale */ 1.f, 0);
+    half2_t v1;
+    u.fp8[0] = x; u.fp8[1] = y;
+    half2_t v = __builtin_amdgcn_cvt_scalef32_pk_f16_bf8(u.ui32,1.f, 0);
+    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v1) : "v"(v[0]), "v"(v[1]));
+    u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_bf8_f16(v1, v1, /* scale */ 1.f, 0);
     return u.fp8[0];
 #elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
     union
@@ -117,8 +121,8 @@ inline __device__  rccl_bfloat8 half2add_b(const rccl_bfloat8& x, const rccl_bfl
 
     float2_t v;
     uint32_t ival       = 0;
-    asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_fp8(x.__x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_fp8(y.__x, 0)));
-    ival       = __builtin_amdgcn_cvt_pk_fp8_f32(v[0], v[0], ival, false);
+    asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_bf8(x.__x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_bf8(y.__x, 0)));
+    ival       = __builtin_amdgcn_cvt_pk_bf8_f32(v[0], v[0], ival, false);
     val.i32val = ival;
     return val.i8val[0];
 #else
