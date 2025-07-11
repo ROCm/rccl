@@ -63,6 +63,8 @@ class Primitives<
   uint32_t* next_hdp_reg;
   uint64_t* barriers;
   uint64_t barrier_next = 0;
+  uint64_t* barriers_pat;
+  uint64_t barrier_next_pat = 0;
   int repeat;
 
 #if defined(ENABLE_NPKIT)
@@ -80,9 +82,9 @@ private:
       __syncwarp();
     else 
       #if defined(__gfx942__) || defined(__gfx950__)
-        barrier_by_group_block();
+        barrier_generic(__threadfence_block(), nworkers, barrier_next, barriers);
       #else
-        barrier_by_group();
+        barrier_generic(__threadfence(), nworkers, barrier_next, barriers);
       #endif
   }
   inline __device__ void subBarrier() {
@@ -92,7 +94,11 @@ private:
   }
 
   inline __device__ void patBarrier() {
-    barrier();
+    #if defined(__gfx942__) || defined(__gfx950__)
+      barrier_generic(__threadfence_block(), NCCL_PAT_NWORKERS, barrier_next_pat, barriers_pat);
+    #else
+      barrier_generic(__threadfence(), NCCL_PAT_NWORKERS, barrier_next_pat, barriers_pat);
+    #endif
   }
 
   inline __device__ void barrierAny() {
@@ -750,8 +756,9 @@ public:
     tid(tid), nthreads(nthreads), tidInBlock(threadIdx.x), group(group),
     stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_) {
 
-    // For send operations, we need an extra warp to overlap the threadfence and the copy
     barriers = &ncclShmem.groups[group].barrier;
+    // PAT uses the same barrier for each group
+    barriers_pat = &ncclShmem.barrier_pat;
     this->nworkers = nthreads;
 
     int peer = -1;
@@ -1316,5 +1323,8 @@ public:
   }
   __device__ __forceinline__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+  }
+  __device__ __forceinline__ void mscclSend(intptr_t inpIx, int eltN) {
+    genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
 };

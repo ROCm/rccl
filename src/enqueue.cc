@@ -29,7 +29,7 @@
 using namespace rccl;
 
 /* [RCCL] Determine which GPU kernel to execute */
-void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task = NULL)
+void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task)
 {
   // At this time, unroll factor is controlled only by passed in unroll argument
   // After more investigation, this may be further tuned by the actual task being processed
@@ -48,9 +48,9 @@ void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* tas
       return rcclKernelTable[firstKernel + kernelIdx].funcPtr;
     }
   }
-  // Fall back to default unroll
-  WARN("Requested RCCL_UNROLL_FACTOR: %d does not exist in `rcclKernelTable`. Falling back to default unroll: %d", unroll, rcclKernelTable[firstKernel].unroll);
-  return rcclKernelTable[firstKernel].funcPtr;
+
+  // If does not match, return null
+  return nullptr;
 }
 
 static int rcclProtoGrainSize(int proto, ncclComm *comm){
@@ -139,11 +139,16 @@ static inline int ncclFuncTrafficPerByte(ncclFunc_t func, int nRanks) {
   }
 }
 
+RCCL_PARAM_DECLARE(EnableProxyTrace);
 /*****************************************************************************/
 /*       Launch system : synchronization and CUDA kernel launch              */
 /*****************************************************************************/
 static ncclResult_t addProxyOpIfNeeded(struct ncclComm* comm, struct ncclKernelPlan* plan, struct ncclProxyOp* op) {
   bool needed = true;
+  if (rcclParamEnableProxyTrace()) {
+    op->traceKey.commHash = comm->commHash;
+    op->traceKey.opCount = comm->opCount;
+  }
   NCCLCHECK(ncclProxySaveOp(comm, op, &needed));
   if (needed) {
     struct ncclProxyOp* q = ncclMemoryPoolAlloc<struct ncclProxyOp>(&comm->memPool_ncclProxyOp, &comm->memPermanent);
@@ -1030,6 +1035,9 @@ static ncclResult_t addP2pToPlan(
     op->rank = comm->rank;
     op->eActivationMask = p2pTasks[dir] ? p2pTasks[dir]->eActivationMask : 0;
     op->connIndex = connIndex[dir];
+    if (rcclParamEnableProxyTrace()) {
+      op->coll =  dir ? ncclFuncSend : ncclFuncRecv;
+    }
     // The following are modified per channel part in addWorkToChannels():
     // op->buffer, op->nbytes, op->nsteps = ...;
   }
@@ -1052,7 +1060,9 @@ static ncclResult_t addP2pToPlan(
       int nParts = dir ? work->nSendChannels : work->nRecvChannels;
       void* addr = dir ? work->sendAddr : work->recvAddr;
       size_t bytes = dir ? work->sendBytes : work->recvBytes;
-
+      if (rcclParamEnableProxyTrace()) {
+        proxyOps[dir].totalBytes = bytes;
+      }
       proxyOps[dir].recvbuff = nullptr;
       if (nParts <= part) {
         proxyOps[dir].nsteps = 0;
@@ -1187,6 +1197,8 @@ static ncclResult_t scheduleP2pTasksToPlan(
 // Spin until its safe to increase comm->workFifoProduced to desiredProduced.
 static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduced) {
   bool hasRoom = (desiredProduced - comm->workFifoConsumedLeast) <= comm->workFifoBytes;
+  uint64_t count = 0;
+  int warned = 0;
   if (hasRoom) return;
   while (true) {
     // We have to poll for notifications from device.
@@ -1225,6 +1237,17 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduce
     hasRoom = (desiredProduced - comm->workFifoConsumedLeast) <= comm->workFifoBytes;
     if (hasRoom) break;
     sched_yield();
+
+    /* Warn if we get stuck waiting for workFifo. */
+    count++;
+    if (warned == 0 && count == 100000 && comm->rank == 0) {
+      warned = 1;
+      WARN("Waiting for work FIFO to become available. "
+           "Work fifo exhaustion can happen in large scale/high iteration count of alltoall. "
+           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %ld).\n\n"
+           "RCCL continues to retry...", comm->workFifoBytes);
+    }
+
   }
 }
 

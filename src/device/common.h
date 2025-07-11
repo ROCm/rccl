@@ -164,6 +164,7 @@ struct ncclShmemData {
 #ifdef ENABLE_FAULT_INJECTION
   uint64_t faults;
 #endif
+  uint64_t barrier_pat;
 };
 
 extern __shared__ ncclShmemData ncclShmem;
@@ -526,8 +527,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     }
     break;
   case 1:
-    if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
+    if (tid < WARP_SIZE + NCCL_MAX_GROUPS) {
+      if (tid == WARP_SIZE) ncclShmem.barrier_pat = 0;
       ncclShmem.groups[tid-WARP_SIZE].barrier = 0;
+    }
     break;
   case 2:
 #ifdef ENABLE_FAULT_INJECTION
@@ -611,8 +614,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     __syncthreads();
     switch (tid/WARP_SIZE) {
       case 1:
-        if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
+        if (tid < WARP_SIZE + NCCL_MAX_GROUPS) {
+          if (tid == WARP_SIZE) ncclShmem.barrier_pat = 0;
           ncclShmem.groups[tid-WARP_SIZE].barrier = 0;
+        }
         break;
       default:
         break;
