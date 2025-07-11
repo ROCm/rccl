@@ -29,7 +29,7 @@ make
 
 ### Available Models
 
-Run `./topo_expl` without arguments to see the list of available models. Each model represents a different hardware configuration. [Each model file inside](./models) that pertains to a particular GPU model can be output by RCCL through setting the environment variable `NCCL_TOPO_DUMP_FILE`. They have been generated for simplicity.
+Run `./topo_expl` without arguments to see the list of available models. Each model represents a different hardware configuration. [Each model file](./models) pertains to a particular GPU model and node configuration. It can be output by RCCL through setting the environment variable `NCCL_TOPO_DUMP_FILE`. Model XMLs have been generated for simplicity.
 
 ## Example Usage: Print RCCL's algorithm/protocol selections
 
