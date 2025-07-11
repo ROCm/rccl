@@ -99,13 +99,7 @@ ncclResult_t rcclOverrideAlgoOrProto(const char* ncclAlgoStr[], const char* nccl
   static const char* algoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_ALGO");
   static bool validInput = true;
   if(!validInput) return ncclInvalidUsage;
-  // Determine if override logic is applicable
-  const bool overrideProtoOnly = protoOverrideEnv && !algoOverrideEnv;
-  const bool overrideAlgoOnly = algoOverrideEnv && !protoOverrideEnv;
-  // If both are set, then original logic should work as expected to enforce a pair of algo/proto
-  // Following if-statement should skip
-  if (overrideAlgoOnly || overrideProtoOnly)
-  {
+  if (protoOverrideEnv || algoOverrideEnv) {
     static int protoVal = NCCL_PROTO_UNDEF;
     if(protoVal == NCCL_PROTO_UNDEF && protoOverrideEnv) {
       if(rcclGetAlgoProtoIndex(protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoVal) != ncclSuccess) {
