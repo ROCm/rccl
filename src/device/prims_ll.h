@@ -866,8 +866,8 @@ public:
       int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
 
       DataLoader dl;
-      ncclLLFifoLine line[MaxRecv];
-      uint64_t data, peerData;
+      // ncclLLFifoLine line[MaxRecv];//unused variable - compiler warning
+      uint64_t data;                  //unused variable - compiler warning
       dl.loadBegin(srcElts, eltInLine);
       srcElts += eltPerTrip;
       data = dl.loadFinish();
