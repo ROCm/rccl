@@ -40,8 +40,8 @@ rcclApiCall::rcclApiCall(rcclCall_t type, const ncclInfo& info)://name(rcclCallS
                                                                 datatype(info.datatype),
                                                                 op(info.op),
                                                                 root(info.root),
-                                                                comm(info.comm),
                                                                 nRanks(info.comm->nRanks),
+                                                                comm(info.comm),
                                                                 stream(info.stream),
                                                                 nTasks(info.comm->planner.nTasksP2p + info.comm->planner.nTasksColl),
                                                                 globalRank(info.comm->localRankToRank[info.comm->localRank])
