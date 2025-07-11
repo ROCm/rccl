@@ -1091,7 +1091,7 @@ static ncclResult_t p2pProxyRegister(struct ncclProxyConnection* connection, str
     regAddr = (void*)((uintptr_t)regAddr + ipcExpInfo->offset);
   } else {
 #if CUDART_VERSION >= 11030
-    bool mapped = false; /*compiler waring, defining vars only if needed*/
+    bool mapped = false; /*compiler warning, defining vars only if needed*/
     bool imported = false;
     CUmemGenericAllocationHandle handle;
     // cuMem import

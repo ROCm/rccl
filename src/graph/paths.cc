@@ -520,7 +520,7 @@ ncclResult_t ncclTopoNeedFlush(struct ncclComm* comm, int64_t netId, int netDev,
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   *flush = 1;
 #else
-  struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g; // unused variable - compiler waring
+  struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g; // unused variable - compiler warning
   // Flush is required on Ampere and earlier
   if (gpu->gpu.cudaCompCap >= 90) *flush = 0;
   // On C2C platforms, data could go through a PCI switch while completions and
