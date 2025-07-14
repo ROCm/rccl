@@ -119,6 +119,7 @@ set(CMAKE_INSTALL_LIBDIR lib CACHE STRING "Define install directory for librarie
 # Find or download/install fmt
 find_package(fmt QUIET)
 if(NOT fmt_FOUND)
+    set(FMT_INSTALL OFF)
     message(STATUS "fmt not found, fetching from source...")
     FetchContent_Declare(
         fmt
@@ -128,7 +129,7 @@ if(NOT fmt_FOUND)
     FetchContent_MakeAvailable(fmt)
 else()
     message(STATUS "Using system fmt")
-    get_target_property(FMT_INCLUDE_DIRS fmt::fmt INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(FMT_INCLUDE_DIRS fmt::fmt-header-only INTERFACE_INCLUDE_DIRECTORIES)
     message(STATUS "fmt include directories: ${FMT_INCLUDE_DIRS}")
 endif()
 

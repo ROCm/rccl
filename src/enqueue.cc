@@ -29,7 +29,7 @@
 using namespace rccl;
 
 /* [RCCL] Determine which GPU kernel to execute */
-void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task = NULL)
+void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task)
 {
   // At this time, unroll factor is controlled only by passed in unroll argument
   // After more investigation, this may be further tuned by the actual task being processed
@@ -48,9 +48,9 @@ void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* tas
       return rcclKernelTable[firstKernel + kernelIdx].funcPtr;
     }
   }
-  // Fall back to default unroll
-  WARN("Requested RCCL_UNROLL_FACTOR: %d does not exist in `rcclKernelTable`. Falling back to default unroll: %d", unroll, rcclKernelTable[firstKernel].unroll);
-  return rcclKernelTable[firstKernel].funcPtr;
+
+  // If does not match, return null
+  return nullptr;
 }
 
 static int rcclProtoGrainSize(int proto, ncclComm *comm){
