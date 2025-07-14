@@ -28,30 +28,29 @@
 
 using namespace rccl;
 
-/* [RCCL] Determine which GPU kernel to execute */
-void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task)
-{
-  // At this time, unroll factor is controlled only by passed in unroll argument
-  // After more investigation, this may be further tuned by the actual task being processed
+struct ncclKernelMatch {
+  void* kernelFn;
+  bool specialized;
+};
 
 #ifdef ENABLE_COLLTRACE
-  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]) / 2;
-  int firstKernel = useCollTrace ? numKernels : 0;
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
+static ncclKernelMatch const ncclKerns[6] = {
+  {(void *)ncclDevKernel_Generic_1, true},
+  {(void *)ncclDevKernel_Generic_2, true},
+  {(void *)ncclDevKernel_Generic_4, true},
+  {(void *)ncclDevKernelDebug_Generic_1, true},
+  {(void *)ncclDevKernelDebug_Generic_2, true},
+  {(void *)ncclDevKernelDebug_Generic_4, true}
+};
 #else
-  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]);
-  int firstKernel = 0;
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
+static ncclKernelMatch const ncclKerns[3] = {
+  {(void*)ncclDevKernel_Generic_1, true},
+  {(void*)ncclDevKernel_Generic_2, true},
+  {(void*)ncclDevKernel_Generic_4, true}
+};
 #endif
-
-  // Check if the requested unroll exists
-  for (int kernelIdx = 0; kernelIdx < numKernels; kernelIdx++) {
-    if (rcclKernelTable[firstKernel + kernelIdx].unroll == unroll) {
-      return rcclKernelTable[firstKernel + kernelIdx].funcPtr;
-    }
-  }
-
-  // If does not match, return null
-  return nullptr;
-}
 
 static int rcclProtoGrainSize(int proto, ncclComm *comm){
   switch (proto) {
@@ -82,7 +81,7 @@ NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
 ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* maxStackSize) {
-  constexpr int KernelCount = sizeof(rcclKernelTable)/sizeof(rcclKernelTable[0]);
+  constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
   ncclResult_t result = ncclSuccess;
 
   if (maxStackSize) *maxStackSize = 0;
@@ -95,7 +94,7 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
   int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
   for (int k=0; k < KernelCount; k++) {
-    void* fn = rcclKernelTable[k].funcPtr;
+    void* fn = ncclKerns[k].kernelFn;
     cudaFuncAttributes attr = {0};
     if (fn == nullptr) continue;
 
@@ -806,12 +805,8 @@ static ncclResult_t scheduleCollTasksToPlan(
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
     if (!plan->kernelSpecialized) {
-#ifdef ENABLE_COLLTRACE
-      plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
-#else
-      plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
-#endif
-      plan->kernelSpecialized = true;
+      plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
+      plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
     }
 
     if (comm->rank == 0) {
@@ -1127,12 +1122,8 @@ static ncclResult_t scheduleP2pTasksToPlan(
 
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
   if (!plan->kernelSpecialized) {
-#ifdef ENABLE_COLLTRACE
-    plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
-#else
-    plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
-#endif
-    plan->kernelSpecialized = true;
+    plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
+    plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
   }
 
   // Compute how much to split operations
