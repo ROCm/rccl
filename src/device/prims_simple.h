@@ -197,21 +197,37 @@ private:
     }
   }
 
-  template<int Recv, int Send>
-  inline __device__ void postPeer(bool dataStored) {
-    if (Send && (flags & RolePostSend) && dataStored)
-#ifdef __GFX9__
-    #if defined(__gfx942__) && defined(HIP_UNCACHED_MEMORY)
+  #if defined(__gfx942__) && defined(HIP_UNCACHED_MEMORY)
+  #define RCCL_USE_CHEAPER_THREADFENCE_POSSIBLE 1
+  #else
+  #define RCCL_USE_CHEAPER_THREADFENCE_POSSIBLE 0
+  #endif 
+
+  template<bool UseCheaperThreadFence>
+  inline __device__ void gfx9ThreadFence();
+
+  template<>
+  inline __device__ void gfx9ThreadFence<true>() {
     // __threadfence compiles to buffer_wbl2 sc1 plus buffer_inv sc1.  It turns out in this
     // case we only need the buffer_inv sc1 due to the memory model we use.
     asm volatile("buffer_inv sc1");
     __threadfence_block();
-    #else
+  }
+
+  template<>
+  inline __device__ void gfx9ThreadFence<false>() {
     __threadfence();
-    #endif
+  }
+
+  template<int Recv, int Send>
+  inline __device__ void postPeer(bool dataStored) {
+    if (Send && (flags & RolePostSend) && dataStored){
+#ifdef __GFX9__
+    gfx9ThreadFence<SlicePerChunk == 1 && RCCL_USE_CHEAPER_THREADFENCE_POSSIBLE>();
 #else
     __threadfence_system();
 #endif
+    }
 
     if ((flags & Send*RolePostSend) && next_hdp_reg)
       STORE((unsigned int *)next_hdp_reg, 0x1);
