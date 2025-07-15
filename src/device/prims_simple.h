@@ -12,6 +12,7 @@
 
 #include "msccl/msccl_struct.h"
 #include "network/unpack/unpack.h"
+#include "device/rccl_metadata.h"
 #include <cassert>
 
 enum primsMode {
@@ -21,9 +22,9 @@ enum primsMode {
 };
 
 template<typename T, typename RedOp, typename Fan, int Direct,
-         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload>
+         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload, int Metadata>
 class Primitives<
-    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload
+    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload, Metadata
   > {
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
   static constexpr int Input=0, Output=1;
@@ -223,7 +224,7 @@ private:
   inline __device__ void postPeer(bool dataStored) {
     if (Send && (flags & RolePostSend) && dataStored){
 #ifdef __GFX9__
-    gfx9ThreadFence<SlicePerChunk == 1 && RCCL_USE_CHEAPER_THREADFENCE_POSSIBLE>();
+    gfx9ThreadFence<isOneNodeRingSimple(Metadata) && RCCL_USE_CHEAPER_THREADFENCE_POSSIBLE>();
 #else
     __threadfence_system();
 #endif
