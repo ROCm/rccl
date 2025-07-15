@@ -110,7 +110,7 @@ ncclResult_t rcclOverrideAlgoOrProto(const char* ncclAlgoStr[], const char* nccl
     }
     if(protoVal > NCCL_PROTO_UNDEF) {
       if(table[info->algorithm][protoVal] == NCCL_ALGO_PROTO_IGNORE) {
-        WARN("Failed to force algorithm for function %s with datatype %s.%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), protoOverrideEnv);
+        WARN("Failed to force unsupported protocol %s for function %s with datatype %s", protoOverrideEnv, ncclFuncToString(info->func), ncclDatatypeToString(info->datatype));
         return ncclInternalError;
       } else {
         info->protocol = protoVal;
@@ -126,7 +126,7 @@ ncclResult_t rcclOverrideAlgoOrProto(const char* ncclAlgoStr[], const char* nccl
     }
     if(algoVal > NCCL_ALGO_UNDEF) {
       if(table[algoVal][info->protocol] == NCCL_ALGO_PROTO_IGNORE) {
-        WARN("Failed to force algorithm for function %s with datatype %s.%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), algoOverrideEnv);
+        WARN("Failed to force unsupported algorithm %s for function %s with datatype %s", algoOverrideEnv, ncclFuncToString(info->func), ncclDatatypeToString(info->datatype));
         return ncclInternalError;
       } else {
         info->algorithm = algoVal;
