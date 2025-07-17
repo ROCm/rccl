@@ -487,7 +487,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   int intraHw[NCCL_NUM_ALGORITHMS], hw[NCCL_NUM_ALGORITHMS];
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) intraHw[a] = graphs[a]->typeIntra == LINK_NVL ? NCCL_HW_NVLINK : NCCL_HW_PCI;
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) hw[a] = nNodes == 1 ? intraHw[a] : NCCL_HW_NET;
-
+  if(ppn == 1) comm->topo->tuning = 5;
   memcpy(comm->minMaxLLRange,
         rcclTuningModel[comm->topo->tuning].llProtoRanges,
         sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges));
