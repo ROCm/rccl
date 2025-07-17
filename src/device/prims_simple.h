@@ -10,9 +10,10 @@
 #include "npkit/npkit.h"
 #endif
 
+#include "device/gfx9_threadfence.h"
+#include "device/rccl_metadata.h"
 #include "msccl/msccl_struct.h"
 #include "network/unpack/unpack.h"
-#include "device/rccl_metadata.h"
 #include <cassert>
 
 enum primsMode {
@@ -196,27 +197,6 @@ private:
       }
       step += StepPerSlice;
     }
-  }
-
-  // This is only okay when the protocol buffer is allocated in uncached memory.
-  #if defined(__gfx942__) && defined(HIP_UNCACHED_MEMORY) && !defined(RCCL_CHEAP_THREADFENCE_DISABLED)
-  #define RCCL_CHEAP_THREADFENCE_OK_SOMETIMES 1
-  #else
-  #define RCCL_CHEAP_THREADFENCE_OK_SOMETIMES 0
-  #endif 
-
-  template<bool UseCheaperThreadFence>
-  inline __device__ void gfx9ThreadFence();
-
-  template<>
-  inline __device__ void gfx9ThreadFence<true>() {
-    asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)");
-    asm volatile("buffer_inv sc0 sc1");
-  }
-
-  template<>
-  inline __device__ void gfx9ThreadFence<false>() {
-    __threadfence();
   }
 
   template<int Recv, int Send>
