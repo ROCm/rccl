@@ -260,7 +260,7 @@ private:
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-#if defined(__gfx950__)
+#if (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
     using Vec = uint32_t __attribute__((ext_vector_type(4)));
     Vec i4;
     i4[0] = val & 0xffffffff;
@@ -431,7 +431,7 @@ private:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-  __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+  __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;

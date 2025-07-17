@@ -13,6 +13,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Added
 
+* Added support for extended fine-grained system memory pool.
 * Added new GPU target `gfx950`.
 * Added support for `unroll=1` in device-code generation to improve performance.
 * Set a default of 112 channels for a single node with `8 * gfx950`.
