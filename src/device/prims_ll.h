@@ -71,10 +71,10 @@ private:
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     if (nthreads != WARP_SIZE)
-      #if defined(__gfx942__)
-        barrier_by_group_block();
+      #if defined(__gfx942__) || (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
+        barrier_generic(__threadfence_block(), nthreads, barrier_next, barriers);
       #else
-        barrier_by_group();
+        barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
       #endif
 #else
     if (nthreads == WARP_SIZE) {
@@ -85,15 +85,18 @@ private:
 #endif
   }
 
-  uint32_t abort = 0;
+  int abort = 0;
 
-  inline __device__ int checkAbort(int &spins, int send) {
-    spins++;
-    if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
+  __device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
+    if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
+      int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
       spins = 0;
+      if (abort) {
+        __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+        abortCache |= abortValue;
+      }
     }
-    return abort;
+    return abortCache;
   }
 
   inline __device__ void waitSend(int nbytes) {
@@ -108,7 +111,7 @@ private:
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
         sendConnHeadCache = atomicAdd((unsigned long long *)sendConnHeadPtr, 0);
-        if (checkAbort(spins, 1)) break;
+        if (checkAbort(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
@@ -168,7 +171,7 @@ private:
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
-      if (checkAbort(spins, 0)) break;
+      if (checkAbort(abort, 1, spins)) break;
     } while ((i4.flag1 != flag) || (i4.flag2 != flag));
     uint64_t val64 = (uint64_t)(i4.data1) + (((uint64_t)i4.data2) << 32);
 #else
@@ -177,7 +180,7 @@ private:
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
-      if (checkAbort(spins, 0)) break;
+      if (checkAbort(abort, 1, spins)) break;
     } while ((flag1 != flag) || (flag2 != flag));
     uint64_t val64 = data1 + (((uint64_t)data2) << 32);
 #endif
@@ -241,7 +244,7 @@ private:
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
-      if (checkAbort(spins, 0)) break;
+      if (checkAbort(abort, 1, spins)) break;
     } while(line[i].flag1 != flag || line[i].flag2 != flag);
     uint64_t val64 = line[i].data1 + (((uint64_t)line[i].data2) << 32);
 
@@ -257,6 +260,15 @@ private:
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#if (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
+    using Vec = uint32_t __attribute__((ext_vector_type(4)));
+    Vec i4;
+    i4[0] = val & 0xffffffff;
+    i4[1] = flag;
+    i4[2] = (val >> 32);
+    i4[3] = flag;
+    asm volatile ("flat_store_dwordx4 %0, %1 sc0 sc1 nt" :: "v"(dst), "v"(i4));
+#else
     union ncclLLFifoLine i4;
     i4.data1 = val & 0xffffffff;
     i4.flag1 = flag;
@@ -264,6 +276,7 @@ private:
     i4.flag2 = flag;
     __builtin_nontemporal_store(i4.v[0], dst->v);
     __builtin_nontemporal_store(i4.v[1], dst->v+1);
+#endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
 #endif
@@ -418,7 +431,7 @@ private:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-  __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+  __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
@@ -814,5 +827,52 @@ public:
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+  }
+
+  __device__ void mscclStoreLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
+    union ncclLLFifoLine i4;
+    i4.data1 = val & 0xffffffff;
+    i4.flag1 = flag;
+    i4.data2 = (val >> 32);
+    i4.flag2 = flag;
+    __builtin_nontemporal_store(i4.v[0], dst->v);
+    __builtin_nontemporal_store(i4.v[1], dst->v+1);
+  }
+
+  __device__ void mscclSend(intptr_t srcIx, int nelem) {
+#if defined(__gfx950__)
+    T *srcElts = userBufs[0] + srcIx;
+
+    // Always waitSend in case of cleanup
+    nelem = nelem < 0 ? 0 : nelem;
+    waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
+
+    nelem -= tid*EltPerLine;
+    srcElts += tid*EltPerLine;
+    int offset = tid;
+    int eltPerTrip = nthreads*EltPerLine;
+    while (nelem > 0) {
+      int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
+
+      DataLoader dl;
+      ncclLLFifoLine line[MaxRecv];
+      uint64_t data, peerData;
+      dl.loadBegin(srcElts, eltInLine);
+      srcElts += eltPerTrip;
+      data = dl.loadFinish();
+
+      for (int i=1; i < MaxSend && i < fan.nsend(); i++)
+        mscclStoreLL(sendPtr(i)+offset, data, sendFlag(i));
+      mscclStoreLL(sendPtr(0)+offset, data, sendFlag(0));
+      nelem -= eltPerTrip;
+      offset += nthreads;
+    }
+
+    for (int i=1; i < MaxSend && i < fan.nsend(); i++)
+      incSend(i, offset);
+    incSend(0, offset);
+#else
+    LLGenericOp<0, 1, Input, -1>(srcIx, -1, nelem, false);
+#endif
   }
 };

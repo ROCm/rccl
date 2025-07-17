@@ -32,6 +32,8 @@
 # For downloading, building, and installing required dependencies
 include(cmake/DownloadProject.cmake)
 
+include(FetchContent)
+
 if(NOT INSTALL_DEPENDENCIES)
     find_package(GTest 1.11)
 endif()
@@ -60,14 +62,21 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
                      UPDATE_DISCONNECTED TRUE
     )
     set(GTEST_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/gtest/include CACHE PATH "")
+    set(GMOCK_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/gmock/include CACHE PATH "")
     if(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib)
         set(GTEST_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgtest_main.a CACHE PATH "")
+        set(GMOCK_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgmock.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib/libgmock_main.a CACHE PATH "")
     elseif(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib64)
         set(GTEST_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib64/libgtest.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib64/libgtest_main.a CACHE PATH "")
+        set(GMOCK_BOTH_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/gtest/lib64/libgmock.a;${CMAKE_CURRENT_BINARY_DIR}/gtest/lib64/libgmock_main.a CACHE PATH "")
     else()
         message(FATAL_ERROR "Cannot find gtest library installation path.")
     find_package(GTest REQUIRED CONFIG PATHS ${GTEST_ROOT})
+    find_package(GMock REQUIRED CONFIG PATHS ${GTEST_ROOT})
     endif()
+elseif(GTest_FOUND AND BUILD_TESTS)
+    set(GTEST_BOTH_LIBRARIES "GTest::gtest;GTest::gtest_main")
+    set(GMOCK_BOTH_LIBRARIES "GTest::gmock;GTest::gmock_main")
 endif()
 
 # Find or download/install rocm-cmake project
@@ -103,6 +112,25 @@ if(NOT ROCM_FOUND)
         message(FATAL_ERROR "Error: unpacking ${CMAKE_CURRENT_BINARY_DIR}/rocm-cmake-${rocm_cmake_tag}.zip failed")
     endif()
     find_package( ROCM 0.7.3 REQUIRED CONFIG PATHS ${PROJECT_EXTERN_DIR}/rocm-cmake )
+endif()
+
+set(CMAKE_INSTALL_LIBDIR lib CACHE STRING "Define install directory for libraries" FORCE)
+
+# Find or download/install fmt
+find_package(fmt QUIET)
+if(NOT fmt_FOUND)
+    set(FMT_INSTALL OFF)
+    message(STATUS "fmt not found, fetching from source...")
+    FetchContent_Declare(
+        fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt
+        GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281 # 10.2.1
+    )
+    FetchContent_MakeAvailable(fmt)
+else()
+    message(STATUS "Using system fmt")
+    get_target_property(FMT_INCLUDE_DIRS fmt::fmt-header-only INTERFACE_INCLUDE_DIRECTORIES)
+    message(STATUS "fmt include directories: ${FMT_INCLUDE_DIRS}")
 endif()
 
 # Find available local ROCM targets

@@ -201,10 +201,7 @@ int ARSMI_init(void)
                     ARSMI_orderedNodes.push_back(sort_vecs[j][k]);
                 }
                 break;
-                found = true;
             }
-            if (found)
-                continue;
         }
     }
 

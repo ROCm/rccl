@@ -77,25 +77,27 @@ private:
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   if (nthreads != WARP_SIZE)
     #if defined(__gfx942__) || defined(__gfx950__)
-      barrier_by_group_block();
+      barrier_generic(__threadfence_block(), nthreads, barrier_next, barriers);
     #else
-      barrier_by_group();
+      barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
     #endif
 #else
    barrier_sync(15-group, nthreads);
 #endif
   }
 
-  uint32_t abort = 0;
-  uint32_t* sync;
+  int abort = 0;
 
-  inline __device__ int checkAbort(int &spins, int i, int send) {
-    spins++;
-    if (abort == 0 && spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      abort = __atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST);
+  __device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
+    if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
+      int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
       spins = 0;
+      if (abort) {
+        __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+        abortCache |= abortValue;
+      }
     }
-    return abort;
+    return abortCache;
   }
 
   inline __device__ void waitSend(int nbytes) {
@@ -104,7 +106,7 @@ private:
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
         sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
-        if (checkAbort(spins, wid, 1)) break;
+        if (checkAbort(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
         sendConnFifo[sendStep[wid]%NCCL_STEPS].size = nbytes;
@@ -241,7 +243,7 @@ private:
           load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
           needReload |= flagThread && (vr[u+1] != flag);
         }
-        needReload &= (0 == checkAbort(spins, 0, 0));
+        needReload &= (0 == checkAbort(abort, 1, spins));
       } while (__any(needReload));
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2)
@@ -287,7 +289,7 @@ private:
             load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
             needReload |= flagThread && (vr[u+1] != flag);
           }
-          needReload &= (0 == checkAbort(spins, i, 0));
+          needReload &= (0 == checkAbort(abort, 1, spins));
         } while (__any(needReload));
 
         #pragma unroll
@@ -584,5 +586,8 @@ public:
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+  }
+  __device__ void mscclSend(intptr_t inpIx, int eltN) {
+    return GenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
 };

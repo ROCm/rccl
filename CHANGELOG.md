@@ -2,7 +2,7 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.25.1 for ROCm 7.0.0
+## Unreleased - RCCL 2.26.6 for ROCm 7.0.0
 
 ### Resolved issues
 
@@ -32,6 +32,13 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Compatibility with NCCL 2.23.4
 * Compatibility with NCCL 2.24.3
 * Compatibility with NCCL 2.25.1
+* Compatibility with NCCL 2.26.6
+
+## RCCL 2.22.3 for ROCm 6.4.2
+
+### Added
+
+* Added support for the LL128 protocol on gfx942.
 
 ## RCCL 2.22.3 for ROCm 6.4.1
 
