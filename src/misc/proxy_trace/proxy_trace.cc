@@ -9,7 +9,6 @@
 #include "debug.h"
 #include "device.h"
 #include "proxy.h"
-#include <fmt/format.h>
 #include <map>
 
 constexpr int32_t kFinishedProxyOpItems = 32;

@@ -11,6 +11,7 @@
 #include "nccl_common.h"
 #include "net_device.h"
 #include <stdint.h>
+#include <dlfcn.h>
 
 #define NCCL_NET_HANDLE_MAXSIZE 128
 //Maximum value NCCL can accept for maxP2pBytes and maxCollBytes net properties
