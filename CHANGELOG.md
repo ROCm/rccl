@@ -1,6 +1,6 @@
 # Change Log for hipfort
 
-## hipfort 0.7.0 for ROCm 6.5.0
+## hipfort 0.7.0 for ROCm 7.0.0
 
 ### Added
 
