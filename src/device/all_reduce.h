@@ -562,7 +562,7 @@ namespace {
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
-    if(work->regUsed || work->netRegUsed){ \
+    if(work->regUsed || work->netRegUsed || work->gfx942CheapFenceOff){ \
       runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
     } \ 
     else { \

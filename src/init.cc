@@ -103,6 +103,8 @@ RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(16*1024*1024));
 static constexpr int64_t defaultEnableMscclpp = 0;
 RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
 RCCL_PARAM(MscclppForceEnabled, "MSCCLPP_FORCE_ENABLE", 0);
+// Turn off cheap fence for gfx942
+RCCL_PARAM(Gfx942CheapFenceOff, "GFX942_CHEAP_FENCE_OFF", 0);
 
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
@@ -1365,6 +1367,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
     // RCCL: Only use one slice per primitive on some single node gfx9xx systems
     comm->rcclUseOneSlice = !managed && nNodes == 1;
+    comm->gfx942CheapFenceOff = rcclParamGfx942CheapFenceOff();
     if (managed && nNodes > 1) {
       // This forces the minimum channels to 24
       allGather3Data[rank].nc = 6;
