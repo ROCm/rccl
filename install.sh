@@ -332,15 +332,25 @@ fi
 
 # Optionally, run RCCL-UnitTests, if they're enabled.
 if [[ "${run_tests}" == true ]]; then
-    if [[ -x "./test/rccl-UnitTests" ]]; then
-        if [[ "${run_tests_all}" == true ]]; then
+    if [[ ! -x "./test/rccl-UnitTests" ]]; then
+        echo "RCCL-UnitTests have not been built yet; Please re-run script with \"-t\" to build the binary."
+        exit 1
+    fi
+    if [[ "${build_release}" == false && ! -x "./test/rccl-UnitTestsFixtures" ]]; then
+        echo "RCCL-UnitTestsFixtures have not been built yet; Please re-run script with \"-t\" to build the binary."
+        exit 1
+    fi
+    if [[ "${run_tests_all}" == true ]]; then
+        if [[ -x "./test/rccl-UnitTests" ]]; then
             ./test/rccl-UnitTests
-        else
-            ./test/rccl-UnitTests --gtest_filter="AllReduce.*"
+        fi
+        if [[ "${build_release}" == false && -x "./test/rccl-UnitTestsFixtures" ]]; then
+            ./test/rccl-UnitTestsFixtures
         fi
     else
-        echo "RCCL-UnitTests have not been built yet; Please re-run script with \"-t\" to build RCCL-UnitTests."
-        exit 1
+        if [[ -x "./test/rccl-UnitTests" ]]; then
+            ./test/rccl-UnitTests --gtest_filter="AllReduce.*"
+        fi
     fi
 fi
 
