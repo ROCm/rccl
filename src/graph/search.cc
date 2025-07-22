@@ -696,7 +696,7 @@ ncclResult_t ncclTopoSearchRecNet(struct ncclTopoSystem* system, struct ncclTopo
             if (paths[i].count <= paths[f].count) {
               // prefer GPU direct RDMA
               enum ncclTopoGdrMode useGdr;
-              NCCLCHECK(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[i].id, net->id, 0, &useGdr));
+              NCCLCHECK(ncclTopoCheckGdr(system, system->nodes[GPU].nodes[i].gpu.rank, net->id, 0, &useGdr));
               if (paths[i].count < paths[f].count || (paths[i].count == paths[f].count && !f_gdr && useGdr)) {
                 f = i;
                 f_gdr = useGdr;

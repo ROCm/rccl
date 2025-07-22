@@ -77,9 +77,9 @@ private:
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   if (nthreads != WARP_SIZE)
     #if defined(__gfx942__) || defined(__gfx950__)
-      barrier_by_group_block();
+      barrier_generic(__threadfence_block(), nthreads, barrier_next, barriers);
     #else
-      barrier_by_group();
+      barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
     #endif
 #else
    barrier_sync(15-group, nthreads);
@@ -586,5 +586,8 @@ public:
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+  }
+  __device__ void mscclSend(intptr_t inpIx, int eltN) {
+    return GenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
 };

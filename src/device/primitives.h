@@ -15,19 +15,19 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 10000
 
-#define barrier_by_group_common(__THREAD_FENCE) do { \
+#define barrier_generic(__THREAD_FENCE, NWORKERS, BARRIER_NEXT, BARRIERS_PTR) do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
     const int w = threadIdx.x/WARP_SIZE; \
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
-      barrier_next += nthreads/WARP_SIZE; \
+      (BARRIER_NEXT) += (NWORKERS) / WARP_SIZE; \
       __THREAD_FENCE; \
-      __hip_atomic_fetch_add(barriers, 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
+      __hip_atomic_fetch_add((BARRIERS_PTR), 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
       int spins = 0; \
       int rate_limit = 50; \
-      while (__hip_atomic_load(barriers, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < barrier_next) { \
+      while (__hip_atomic_load((BARRIERS_PTR), __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < (BARRIER_NEXT)) { \
         spins++; \
         if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
           if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
@@ -37,8 +37,8 @@
           spins = 0; \
         } \
         if (spins == 0 && rate_limit > 0) { \
-          rate_limit --; \
-          traceData(__LINE__, threadIdx.x, __hip_atomic_load(barriers, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP), barrier_next); \
+          rate_limit--; \
+          traceData(__LINE__, threadIdx.x, __hip_atomic_load((BARRIERS_PTR), __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP), (BARRIER_NEXT)); \
         } \
         __builtin_amdgcn_s_sleep(1); \
       } \
@@ -46,12 +46,6 @@
     } \
   } \
 } while (0)
-
-#define barrier_by_group() barrier_by_group_common(__threadfence())
-
-#if defined(__gfx942__) || defined(__gfx950__)
-#define barrier_by_group_block() barrier_by_group_common(__threadfence_block())
-#endif
 
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral

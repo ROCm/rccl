@@ -40,14 +40,11 @@ typedef struct
 } rccl_bfloat8;
 
 // __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
-#elif HIP_VERSION >= 60300000
+#elif HIP_VERSION >= 60300000 && !(defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1030__))
 
 #include <hip/hip_fp8.h>
 
-#if   __HIP_DEVICE_COMPILE__ && (defined(__gfx950__) || defined(__gfx1200__) || defined(__gfx1201__) ||  (defined(__gfx1100__) || defined(__gfx1101__)))//HIP_FP8_TYPE_OCP is enabled.
-typedef __hip_fp8_e4m3 rccl_float8;
-typedef __hip_fp8_e5m2 rccl_bfloat8;
-#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__))
+#if __HIP_DEVICE_COMPILE__ && (defined(__gfx942__))
 typedef __hip_fp8_e4m3_fnuz rccl_float8;
 typedef __hip_fp8_e5m2_fnuz rccl_bfloat8;
 #else

@@ -191,7 +191,7 @@ struct setupReq {
   int remoteRank;
   int shared;
   int netDev;
-  int useGdr;
+  enum ncclTopoGdrMode useGdr;
   int channelId;
   int connIndex;
 };
@@ -263,7 +263,8 @@ ncclResult_t collNetCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopo
 }
 
 ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
-  int netDev, useGdr = 0, proxy;
+  int netDev, proxy;
+  enum ncclTopoGdrMode useGdr = ncclTopoGdrModeDisable;
 
   NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, NULL, &netDev, &proxy));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->rank, netDev, 1, &useGdr));
@@ -273,7 +274,8 @@ ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
 }
 
 ncclResult_t collNetRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
-  int netDev, useGdr = 0, proxy;
+  int netDev, proxy;
+  enum ncclTopoGdrMode useGdr = ncclTopoGdrModeDisable;
 
   NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, NULL, &netDev,  &proxy));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->rank, netDev, 0, &useGdr));
