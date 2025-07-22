@@ -305,7 +305,7 @@ struct alignas(16) ncclDevWorkColl {
   //   nChannels == (channelHi - channelLo) + 1
   uint32_t channelLo:8, channelHi:8;
   uint32_t nWarps:8;
-  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1;
+  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx942CheapFenceOff:1;
   uint32_t root:30, connIndex:2;
   uint16_t pivotA2ANumBiRings:15, profilerEnabled:1;
   void* recvbuff;
