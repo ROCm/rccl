@@ -73,7 +73,6 @@ TEST(getHash, getHashSuccess) {
 template <typename T>
 class BitOpsTemplateAllIntTestsFixture : public testing::Test {
 public:
-    BitOpsTemplateAllIntTestsFixture() = default;
     ~BitOpsTemplateAllIntTestsFixture() override = default;
 protected:
     T valX_{};
@@ -195,7 +194,7 @@ TYPED_TEST(BitOpsTemplateAllIntTestsFixture, pow2UpSuccess){
     EXPECT_EQ(pow2Up(this->valX_), 4);
 }
 
-TYPED_TEST(BitOpsTemplateAllIntTestsFixture, pow2Down){
+TYPED_TEST(BitOpsTemplateAllIntTestsFixture, pow2DownSuccess){
     this->valX_ = 1;
     EXPECT_EQ(pow2Down(this->valX_), 1);
     this->valX_ = 2;
@@ -207,18 +206,17 @@ TYPED_TEST(BitOpsTemplateAllIntTestsFixture, pow2Down){
 template <typename T>
 class BitOpsTemplateUnsignedTestsFixture : public testing::Test {
 public:
-    BitOpsTemplateUnsignedTestsFixture() = default;
     ~BitOpsTemplateUnsignedTestsFixture() override = default;
 protected:
     T reverseSubBits_{2};
-    T reverseBits_{2}; // 0b10
+    T reverseBits_{2};
 };
 
 using BitOpsUnsignedTypes = ::testing::Types<unsigned int, unsigned long, unsigned long long>;
 
 TYPED_TEST_SUITE(BitOpsTemplateUnsignedTestsFixture, BitOpsUnsignedTypes);
 
-TYPED_TEST(BitOpsTemplateUnsignedTestsFixture, reverseSubBits) {
+TYPED_TEST(BitOpsTemplateUnsignedTestsFixture, reverseSubBitsSuccess) {
     auto ret = reverseSubBits<TypeParam, 1>(this->reverseSubBits_);
     EXPECT_EQ(ret, this->reverseSubBits_);
     ret = reverseSubBits<TypeParam, 2>(this->reverseSubBits_);
@@ -233,11 +231,11 @@ TYPED_TEST(BitOpsTemplateUnsignedTestsFixture, reverseSubBits) {
     EXPECT_EQ(ret, 1073741824);
 }
 
-TYPED_TEST(BitOpsTemplateUnsignedTestsFixture, reverseBits) {
+TYPED_TEST(BitOpsTemplateUnsignedTestsFixture, reverseBitsSuccess) {
     auto ret = reverseBits(this->reverseBits_, 2);
-    EXPECT_EQ(ret, 1); // 0b01
+    EXPECT_EQ(ret, 1);
     ret = reverseBits(this->reverseBits_, 16);
-    EXPECT_EQ(ret, 16384); // 0b0100000000000000
+    EXPECT_EQ(ret, 16384);
 }
 
 }
