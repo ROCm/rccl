@@ -265,6 +265,8 @@ private:
           T* userOutput = (T*)ncclShmem.groups[group].userOutput;
           if (Src) ncclShmem.groups[group].srcs[0] = (SrcBuf==Input ? userInput : userOutput) + srcIx + offset;
           if (Dst) ncclShmem.groups[group].dsts[0] = (DstBuf==Input ? userInput : userOutput) + dstIx + offset;
+          T* userAcc = (T*)ncclShmem.groups[group].userAcc;
+          ncclShmem.groups[group].acc = (Dst && userAcc != nullptr) ? userAcc + dstIx + offset : nullptr;
         }
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(srcIx, dstIx, offset, sliceSize);
         subBarrier();
@@ -385,7 +387,7 @@ private:
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
                 Recv * fan.nrecv() + Src, ncclShmem.groups[group].srcs,
                 Send * fan.nsend() + Dst, ncclShmem.groups[group].dsts,
-                workSize);
+                workSize, ncclShmem.groups[group].acc);
           }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
@@ -827,7 +829,7 @@ public:
 
       // coverity[negative_returns:FALSE] => coverity thinks that index could be -1 but that's not actually the case
       // coverity[var_deref_model] => coverity thinks work can dereferenced if NULL but this is not the case
-      setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclDevWorkCollReg*)collWork, sendIpcReg || recvIpcReg, peer);
+      setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclDevWorkCollReg*)collWork, sendIpcReg || recvIpcReg, peer, collWork != nullptr ? collWork->acc : nullptr);
       // coverity[uninit_member] => coverity thinks fan.n is not initialized
     } else if (mode == primsModePatRs || mode == primsModePatAg) { // Connect to all ranks +/- 2^n
       flags |= PatMode;
@@ -902,10 +904,11 @@ public:
     }
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, uint64_t redOpArg, struct ncclDevWorkCollReg* work, uint8_t ipcReg, int peer) {
+  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, uint64_t redOpArg, struct ncclDevWorkCollReg* work, uint8_t ipcReg, int peer, void const *acc) {
     if (tid==0) {
       ncclShmem.groups[group].userInput = (void*)inputBuf;
       ncclShmem.groups[group].userOutput = (void*)outputBuf;
+      ncclShmem.groups[group].userAcc = (void*)acc;
       ncclShmem.redOpArgs[0] = redOpArg;  // scaler for local input
     }
 
@@ -1023,7 +1026,7 @@ public:
   }
 
   // Set MSCCL data pointers
-  __device__ __forceinline__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
+  __device__ __forceinline__ void setDataPtrs(void const *inputBuf, void *outputBuf = nullptr) {
     if (tid==0) {
       ncclShmem.groups[group].userInput = (T*)inputBuf;
       ncclShmem.groups[group].userOutput = (T*)outputBuf;

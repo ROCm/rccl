@@ -14,10 +14,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Added
 
 * Added new GPU target `gfx950`.
-* Added support for `unroll=1` in device-code generation to improve performance.
-* Set a default of 112 channels for a single node with `8 * gfx950`.
+* Added support for `unroll=1` in device-code generation to improve performance,
+* Set a default of 112 channels for a single node with `8 * gfx950`,
 * Enabled LL128 protocol on `gfx950`.
-* Adding ability to choose unroll factor at runtime via `RCCL_UNROLL_FACTOR`.  This can be set at runtime to 1, 2, or 4.  This change currently increases compilation and linking time because it triples the number of kernels generated.
 * Added MSCCL support for AllGather multinode gfx942/gfx950 (i.e., 16 and 32 GPUs). To enable, set the environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
 * Thread thresholds for LL/LL128 are selected in Tuning Models for the MI300X. This impacts the number of channels used for AG and RS. Channel tuning model is bypassed if `NCCL_THREAD_THRESHOLDS`, `NCCL_MIN_NCHANNELS', or 'NCCL_MAX_NCHANNELS` are set.
 * Multi-node tuning for AllGather, AllReduce, and ReduceScatter that leverages LL/LL64/LL128 protocol to use nontemporal vector load/store for tunable message size ranges.

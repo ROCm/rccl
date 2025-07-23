@@ -589,7 +589,12 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
+    using Proto = ProtoSimple<1, 1>;
+    if (work->acc != nullptr) {
+      runTreeSplit<T, RedOp, Proto>(tid, nthreads, work);
+    } else {
+      runTreeUpDown<T, RedOp, Proto>(tid, nthreads, work);
+    }
     // Check-here
     // #if CUDART_VERSION >= 11020 && CUDART_VERSION < 11040 && __CUDA_ARCH__ >= 800
     //   runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
