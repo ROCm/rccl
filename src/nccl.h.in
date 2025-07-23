@@ -23,6 +23,7 @@
 #define RCCL_FLOAT8 1
 #define RCCL_GATHER_SCATTER 1
 #define RCCL_ALLTOALLV 1
+#define RCCL_ALLREDUCE_WITH_BIAS 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -561,6 +562,27 @@ ncclResult_t  ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
 /*! @cond       include_hidden */
 ncclResult_t pncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream);
+/*! @endcond */
+
+/*! @brief      All-Reduce-with-Bias
+    @details    Reduces data arrays of length *count* in *sendbuff* using *op* operation, and
+                leaves identical copies of result on each *recvbuff*.
+                In-place operation will happen if sendbuff == recvbuff.
+    @return     Result code. See @ref rccl_result_code for more details.
+
+    @param[in]  sendbuff      Input data array to reduce
+    @param[out] recvbuff      Data array to store reduced result array
+    @param[in]  count         Number of elements in data buffer
+    @param[in]  datatype      Data buffer element datatype
+    @param[in]  op            Reduction operator
+    @param[in]  comm          Communicator group object to execute on
+    @param[in]  stream        HIP stream to execute collective on
+    @param[in]  acc           Bias data array to reduce */
+ncclResult_t  ncclAllReduceWithBias(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream, const void* acc);
+/*! @cond       include_hidden */
+ncclResult_t pncclAllReduceWithBias(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream, const void* acc);
 /*! @endcond */
 
 /*! @brief      Reduce-Scatter

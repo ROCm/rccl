@@ -10,6 +10,7 @@
 
 #include <type_traits>
 #include "reduce_kernel.h" // for reduction funcs
+#include "rccl_metadata.h"
 #include "common_kernel.h"
 #include "common.h"
 
@@ -136,7 +137,7 @@ struct FanSymmetric {
 };
 
 // The primitives class. Specialized per protocol in the other headers.
-template<typename T, typename RedOp, typename Fan, int Direct, typename Proto, int P2p, bool isNetOffload = false>
+template<typename T, typename RedOp, typename Fan, int Direct, typename Proto, int P2p, bool isNetOffload = false, int Metadata = RCCL_METADATA_EMPTY>
 class Primitives;
 
 // Used by LL & LL128 to implement direct members in the naive way.

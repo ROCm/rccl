@@ -18,7 +18,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   // This is because of a recv buffer which is allocated to MaxRecv length in send-only cases
   static constexpr int MaxRecv = Fan::MaxRecv > 1 ? Fan::MaxRecv : 1;
   static constexpr int MaxSend = Fan::MaxSend;
-  static constexpr int Input=0, Output=1;
+  static constexpr int Input=0, Output=1, Acc=2;
   RedOp redOp;
   const int tid;
   const int nthreads;
@@ -26,7 +26,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   const int group;
   const int stepLines;
   Fan fan;
-  T *userBufs[2];
+  T *userBufs[3];
   struct ncclConnInfo* recvConn = NULL;
   volatile uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
@@ -436,6 +436,7 @@ private:
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
     T *dstElts = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
+    T *accElts = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : userBufs[Acc] + dstIx;
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
@@ -460,14 +461,15 @@ private:
     nelem -= tid*EltPerLine;
     srcElts += tid*EltPerLine;
     dstElts += tid*EltPerLine;
+    if (accElts != nullptr) accElts += tid*EltPerLine;
     int offset = tid;
     int eltPerTrip = nthreads*EltPerLine;
     while (nelem > 0) {
       int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
 
-      DataLoader dl;
+      DataLoader dl, accdl;
       ncclLLFifoLine line[MaxRecv];
-      uint64_t data, peerData;
+      uint64_t data, peerData, accData;
       if (SRC) {
         dl.loadBegin(srcElts, eltInLine);
         srcElts += eltPerTrip;
@@ -502,7 +504,14 @@ private:
         storeLL(sendPtr(0)+offset, data, sendFlag(0));
       }
       if (DST) {
-        storeData(dstElts, data, eltInLine);
+        if (accElts != nullptr) {
+          accdl.loadBegin(accElts, eltInLine);
+          accElts += eltPerTrip;
+          accData = accdl.loadFinish();
+          storeData(dstElts, applyReduce(redOp, accData, data), eltInLine);
+        } else {
+          storeData(dstElts, data, eltInLine);
+        }
         dstElts += eltPerTrip;
       }
       nelem -= eltPerTrip;
@@ -672,7 +681,7 @@ public:
     loadRecvSync();
     // coverity[var_deref_model:FALSE]
     loadSendSync();
-    setDataPtrs(inputBuf, outputBuf);
+    setDataPtrs(inputBuf, outputBuf, e != nullptr ? e->acc : nullptr);
   }
 
   __device__ ~Primitives() {
@@ -685,9 +694,10 @@ public:
     barrier();
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
+  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, void const *acc = nullptr) {
     userBufs[Input] = (T*)inputBuf;
     userBufs[Output] = (T*)outputBuf;
+    userBufs[Acc] = (T*)acc;
   }
 
   __device__ void moveDataPtrs(intptr_t delta) {

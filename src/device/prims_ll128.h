@@ -25,7 +25,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload>:
   public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload>> {
 
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
-  static constexpr int Input=0, Output=1;
+  static constexpr int Input=0, Output=1, Acc=2;;
   RedOp redOp;
   const int tid;
   const int nthreads;
@@ -36,7 +36,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload>:
   const bool flagThread;
   const int group;
   Fan fan;
-  T *userBufs[2];
+  T *userBufs[3];
   struct ncclConnInfo* recvConn = NULL;
   volatile uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
@@ -347,6 +347,7 @@ private:
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T const *srcPtr = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
     T       *dstPtr = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
+    T       *accPtr = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : userBufs[Acc] + dstIx;
     int wireOffset = WireWordPerSlice*warp + 2*wid;
     const int nwarps = nthreads/WARP_SIZE;
     nelem = nelem < 0 ? 0 : nelem;
@@ -356,12 +357,25 @@ private:
     nelem -= DataEltPerSlice*warp;
     srcPtr += DataEltPerSlice*warp;
     dstPtr += DataEltPerSlice*warp;
+    if (accPtr != nullptr) accPtr += DataEltPerSlice*warp;
     while (nelem > 0) {
       const int eltInSlice = min(nelem, DataEltPerSlice);
       uint64_t regs[NCCL_LL128_SHMEM_ELEMS_PER_THREAD];
       if (SRC) loadRegsBegin(regs, srcPtr, eltInSlice);
       recvReduceSendCopy<NCCL_LL128_SHMEM_ELEMS_PER_THREAD, RECV, SEND, SrcBuf, DstBuf>(regs, wireOffset, postOp);
-      if (DST) storeRegs(dstPtr, regs, eltInSlice);
+      if (DST) {
+        if (accPtr != nullptr) {
+          uint64_t accRegs[NCCL_LL128_SHMEM_ELEMS_PER_THREAD];
+          loadRegsBegin(accRegs, accPtr, eltInSlice);
+          loadRegsFinish(accRegs);
+          accPtr += DataEltPerSlice*nwarps;
+          #pragma unroll
+          for (int u=0; u<NCCL_LL128_SHMEM_ELEMS_PER_THREAD; u++) {
+            regs[u] = applyReduce(redOp, accRegs[u], regs[u]);
+          }
+        }
+        storeRegs(dstPtr, regs, eltInSlice);
+      }
 
       wireOffset += WireWordPerSlice*nwarps;
       srcPtr += DataEltPerSlice*nwarps;
@@ -529,7 +543,7 @@ public:
     loadRecvSync();
     // coverity[var_deref_model:FALSE]
     loadSendSync();
-    setDataPtrs(inputBuf, outputBuf);
+    setDataPtrs(inputBuf, outputBuf, e != nullptr ? e->acc : nullptr);
   }
 
   __device__ ~Primitives() {
@@ -542,9 +556,10 @@ public:
     barrier();
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
+  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, void const *acc = nullptr) {
     userBufs[Input] = (T*)inputBuf;
     userBufs[Output] = (T*)outputBuf;
+    userBufs[Acc] = (T*)acc;
   }
 
   __device__ void moveDataPtrs(intptr_t delta) {

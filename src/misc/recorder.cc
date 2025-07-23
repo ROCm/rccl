@@ -35,6 +35,7 @@ rcclApiCall::rcclApiCall(rcclCall_t type, const ncclInfo& info)://name(rcclCallS
                                                                 opCount(info.comm->opCount),
                                                                 sendbuff(info.sendbuff),
                                                                 recvbuff(info.recvbuff),
+                                                                acc(info.acc),
                                                                 count(info.count),
                                                                 datatype(info.datatype),
                                                                 op(info.op),
@@ -69,7 +70,7 @@ std::string alloc_fmt = "%s : [returned ptr : %p, size : %zu, context : [";
 std::string free_fmt = "%s : [ptr : %p, context : [";
 std::string redop_fmt = "%s : [scalar : %p, datatype : %d, op : %d, residence : %d, comm : %p, context : [";
 std::string redopdestroy_fmt = "%s : [op : %d, comm : %p, context : [";
-std::string coll_fmt = "%s : [opCount : %lx, sendbuff : [addr : %p, base : %p, size : %zu], recvbuff : [addr : %p, base : %p, size : %zu], count : %zu, datatype : %d, op : %d, root : %d, comm : %p, nranks : %d, stream : %p, task : %d, globalrank : %d, context : [";
+std::string coll_fmt = "%s : [opCount : %lx, sendbuff : [addr : %p, base : %p, size : %zu], recvbuff : [addr : %p, base : %p, size : %zu], acc : %p, count : %zu, datatype : %d, op : %d, root : %d, comm : %p, nranks : %d, stream : %p, task : %d, globalrank : %d, context : [";
 
 Recorder::Recorder()
 {
@@ -256,7 +257,7 @@ void Recorder::write(const rcclApiCall &call)
     default: // collectives
       len = snprintf(buffer, 4096, coll_fmt.c_str(),
                      rcclCallStr[call.type], call.opCount, call.sendbuff, call.sendPtrBase, call.sendPtrExtent,
-                     call.recvbuff, call.recvPtrBase, call.recvPtrExtent, call.count, call.datatype,
+                     call.recvbuff, call.recvPtrBase, call.recvPtrExtent, call.acc, call.count, call.datatype,
                      call.op, call.root, call.comm, call.nRanks, call.stream, call.nTasks, call.globalRank);
 
     }
@@ -686,9 +687,9 @@ void parseJsonEntry(const char* entry, std::vector<rcclApiCall>& calls)
   default:
     assert(sscanf(str.c_str() + end + 3, (coll_fmt.substr(5) + ctxt_fmt).c_str(),
                   &call.opCount, &call.sendbuff, &call.sendPtrBase, &call.sendPtrExtent, &call.recvbuff, &call.recvPtrBase, &call.recvPtrExtent,
-                  &call.count, &call.datatype, &call.op, &call.root,
+                  &call.acc, &call.count, &call.datatype, &call.op, &call.root,
                   &call.comm, &call.nRanks, &call.stream, &call.nTasks, &call.globalRank, &call.timestamp, &call.tid,
-                  &call.hipDev, &call.graphCaptured, &call.graphID) == 21);
+                  &call.hipDev, &call.graphCaptured, &call.graphID) == 22);
   }
   calls.push_back(call);
 }
