@@ -178,23 +178,38 @@ static void initOnceFunc() {
       //check for kernel name exists
       if (uname(&utsname) == -1) INFO(NCCL_INIT,"Could not get kernel name");
       //format and store the kernel conf file location
-      snprintf(kernel_conf_file, sizeof(kernel_conf_file), "/boot/config-%s", utsname.release);
-      fp = fopen(kernel_conf_file, "r");
+      const char* possiblePaths[] = {
+      "/proc/config.gz",
+      "/boot/config-%s",
+      "/usr/src/linux-%s/.config",
+      "/usr/src/linux/.config",
+      "/usr/lib/modules/%s/config",
+      "/usr/lib/ostree-boot/config-%s",
+      "/usr/lib/kernel/config-%s",
+      "/usr/src/linux-headers-%s/.config",
+      "/lib/modules/%s/build/.config",
+    };
+      for (const auto& path : possiblePaths) {
+            snprintf(kernel_conf_file, sizeof(kernel_conf_file), path, utsname.release);
+            fp = fopen(kernel_conf_file, "r");
+            if(fp != NULL)
+              break;
+      }
       if (fp == NULL) INFO(NCCL_INIT,"Could not open kernel conf file");
       //look for kernel_opt1 and kernel_opt2 in the conf file and check
       while (fgets(buf, sizeof(buf), fp) != NULL) {
         if (strstr(buf, kernel_opt1) != NULL) {
           found_opt1 = 1;
-          INFO(NCCL_INIT,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
+          INFO(NCCL_INIT,"CONFIG_DMABUF_MOVE_NOTIFY=y in %s", kernel_conf_file);
         }
         if (strstr(buf, kernel_opt2) != NULL) {
           found_opt2 = 1;
-          INFO(NCCL_INIT,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
+          INFO(NCCL_INIT,"CONFIG_PCI_P2PDMA=y in %s", kernel_conf_file);
         }
       }
       if (!found_opt1 || !found_opt2) {
         dmaBufSupport = 0;
-        INFO(NCCL_INIT, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
+        INFO(NCCL_INIT, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in %s", kernel_conf_file);
         INFO(NCCL_INIT, "DMA_BUF_SUPPORT Failed due to OS kernel support");
       }
 
