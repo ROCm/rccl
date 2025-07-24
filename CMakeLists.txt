@@ -29,6 +29,7 @@ option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"   
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
 option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++ CLIP"                           OFF)
 option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"                       OFF)
+option(ENABLE_MSCCLPP_FORMAT_CHECKS            "Enable formatting checks in MSCCL++"           OFF)
 option(ENABLE_NPKIT                            "Enable NPKit"                                  OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
@@ -37,6 +38,7 @@ option(PROFILE                                 "Enable profiling"               
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(DISABLE_CHEAP_THREADFENCE               "Compile-time killswitch for simpler fence"     OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -208,6 +210,9 @@ set(CMAKE_REQUIRED_LIBRARIES hip::device)
 
 ### Check for hipDeviceMallocUncached support
 check_symbol_exists("hipDeviceMallocUncached" "hip/hip_runtime_api.h" HIP_UNCACHED_MEMORY)
+
+### Check for hipHostMallocUncached support
+check_symbol_exists("hipHostMallocUncached" "hip/hip_runtime_api.h" HIP_HOST_UNCACHED_MEMORY)
 
 ### Check for hipDeviceMallocContiguous support
 check_symbol_exists("hipDeviceMallocContiguous" "hip/hip_runtime_api.h" HIP_CONTIGUOUS_MEMORY)
@@ -433,6 +438,7 @@ set(SRC_FILES
   src/device/broadcast.h
   src/device/common.h
   src/device/common_kernel.h
+  src/device/gfx9_threadfence.h
   src/device/op128.h
   src/device/primitives.h
   src/device/prims_ll128.h
@@ -441,6 +447,7 @@ set(SRC_FILES
   src/device/reduce.h
   src/device/reduce_kernel.h
   src/device/reduce_scatter.h
+  src/device/rccl_metadata.h
   src/device/sendrecv.h
   src/device/common.cu
   src/device/onerank.cu
@@ -720,6 +727,57 @@ foreach(SRC_FILE ${SRC_FILES})
   endif()
 endforeach()
 
+# Adding custom target to hipify all the source files
+# This is required to make sure that all the hipified source files are
+# available before compiling the unit tests executable(s)
+add_custom_target(hipify_all DEPENDS ${HIP_SOURCES})
+
+if (BUILD_TESTS)
+  if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(HIPIFY_SRC_DIR "${PROJECT_BINARY_DIR}/hipify/src")
+    set(REPLACE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/scripts/replace_static.sh")
+    message ("Replacing static functions in ${HIPIFY_SRC_DIR} with ${REPLACE_SCRIPT} for unit tests")
+    # Create a list of files which needs to be modified to remove static
+    set(TEST_NONSTATIC_SOURCE_FILES
+      ${HIPIFY_SRC_DIR}/misc/alt_rsmi.cc
+    )
+    # Create a custom command to backup the original files and remove static
+    # Always run replace script on hipified files, but preserve original backups
+    foreach(srcfile ${TEST_NONSTATIC_SOURCE_FILES})
+      add_custom_command(
+        OUTPUT "${srcfile}.staticbak"
+        COMMAND bash -c "\
+            ${CMAKE_COMMAND} -E echo 'Processing ${srcfile} for static replacement' && \
+            if [ ! -f '${srcfile}.staticbak' ]; then \
+              ${CMAKE_COMMAND} -E copy '${srcfile}' '${srcfile}.staticbak' && \
+              ${CMAKE_COMMAND} -E echo 'Created backup: ${srcfile}.staticbak'; \
+            fi && \
+            ${CMAKE_COMMAND} -E echo 'Exposing internal functions/variables in ${srcfile}' && \
+            ${REPLACE_SCRIPT} ${srcfile} --replace-vars --exclude-list=${exclude_list} 2>&1 \
+          "
+        DEPENDS "${srcfile}" "${REPLACE_SCRIPT}" hipify_all
+        COMMENT "Removing static from ${srcfile} (backup preserved at ${srcfile}.staticbak)"
+        VERBATIM
+      )
+      list(APPEND STATIC_BAK_FILES "${srcfile}.staticbak")
+    endforeach()
+    add_custom_target(replace_static_in_hipify ALL DEPENDS ${STATIC_BAK_FILES})
+    add_dependencies(replace_static_in_hipify hipify_all)
+  else()
+    # Restore originals in the build directory if backup exists
+    foreach(srcfile ${HIPIFY_SRC_FILES})
+      if(EXISTS "${srcfile}.staticbak")
+        execute_process(
+          COMMAND ${CMAKE_COMMAND} -E copy "${srcfile}.staticbak" "${srcfile}"
+        )
+        execute_process(
+          COMMAND ${CMAKE_COMMAND} -E remove "${srcfile}.staticbak"
+        )
+      endif()
+    endforeach()
+  endif()
+endif()
+
 # Generate device/host tables and all the collective functions that are going to be in librccl.so
 #==================================================================================================
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -729,13 +787,9 @@ endif()
 
 set(GEN_DIR "${HIPIFY_DIR}/gensrc")
 
-if(ONLY_FUNCS)
-  message(WARNING "Using ONLY_FUNCS = ${ONLY_FUNCS}. Not meant for release builds.")
-endif()
-
 # Execute the python script to generate required files
 execute_process(
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${ONLY_FUNCS}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     RESULT_VARIABLE gen_py_result
     ERROR_VARIABLE gen_py_error
@@ -773,6 +827,11 @@ add_library(rccl ${HIP_SOURCES})
 
 ## Set RCCL dependencies
 add_dependencies(rccl git_version_check)                                      # Execute git_version_check during build
+
+if (BUILD_TESTS AND ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+  ## Set static replacement dependency for fixture unit tests
+  add_dependencies(rccl replace_static_in_hipify)
+endif()
 
 ## Set RCCL include directories
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
@@ -860,7 +919,7 @@ if(ENABLE_NPKIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_SEND_ENTRY)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_TEST_ENTRY)
-  target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_TEST_ENTRY)
+  target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_TEST_EXIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_RECV_ENTRY)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_RECV_EXIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_SEND_ENTRY)
@@ -955,6 +1014,12 @@ else()
     message(STATUS "--hipcc-func-supp disabled")
   endif()
 endif()
+if (HIP_HOST_UNCACHED_MEMORY)
+  target_compile_definitions(rccl PRIVATE HIP_HOST_UNCACHED_MEMORY)
+  message(STATUS "HIP_HOST_UNCACHED_MEMORY enabled")
+else()
+  message(STATUS "HIP_HOST_UNCACHED_MEMORY disabled")
+endif()
 if (BUILD_BFD)
   if (HAVE_BFD)
     target_compile_definitions(rccl PRIVATE HAVE_BFD)
@@ -998,7 +1063,7 @@ target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
-target_compile_options(rccl PRIVATE -fgpu-rdc)
+target_compile_options(rccl PRIVATE -fgpu-rdc)      # Generate relocatable device code (required for extern __shared__)
 
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)
@@ -1055,6 +1120,12 @@ if (FAULT_INJECTION)
   target_compile_definitions(rccl PRIVATE ENABLE_FAULT_INJECTION)
   message(STATUS "Fault injection enabled")
 endif()
+if (DISABLE_CHEAP_THREADFENCE)
+  target_compile_definitions(rccl PRIVATE DISABLE_CHEAP_THREADFENCE)
+  message(STATUS "Cheap thread fence disabled")
+else()
+  message(STATUS "Cheap thread fence enabled for some collectives/parameters")
+endif()
 
 ## Set RCCL linked library directories
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
@@ -1090,7 +1161,7 @@ target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
-target_link_libraries(rccl PRIVATE fmt::fmt)
+target_link_libraries(rccl PRIVATE fmt::fmt-header-only)
 if(ENABLE_MSCCLPP)
   target_link_libraries(rccl PRIVATE mscclpp_nccl)
 endif()
@@ -1206,7 +1277,9 @@ else()
   set(DEPENDS_HIP_RUNTIME "hip-runtime-amd" )
 endif()
 rocm_package_add_dependencies(DEPENDS "${DEPENDS_HIP_RUNTIME} >= 4.5.0" "rocm-smi-lib >= 4.0.0")
+set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_RPM_COMPONENT_INSTALL ON)
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "${ROCM_PATH}")
 
 find_file (DEBIAN debian_version debconf.conf PATHS /etc)

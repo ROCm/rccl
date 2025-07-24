@@ -11,8 +11,8 @@
 #include "collectives.h"
 #include "device.h"
 #include "op128.h"
-#include "device_table.h"
 #include "reduce_kernel.h"
+#include "device_table.h"
 #include "network/unpack/unpack_defs.h"
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
@@ -121,8 +121,10 @@ struct ncclShmemGroup {
   ncclConnInfo *sendConns[NCCL_MAX_ARITY];
   void* userInput;
   void* userOutput;
+  void* userAcc;
   void* srcs[NCCL_MAX_ARITY+1];
   void* dsts[NCCL_MAX_ARITY+1];
+  void* acc;
   uint64_t barrier;
   union {
     unpackGroupShmem unpack;
@@ -164,6 +166,7 @@ struct ncclShmemData {
 #ifdef ENABLE_FAULT_INJECTION
   uint64_t faults;
 #endif
+  uint64_t barrier_pat;
 };
 
 extern __shared__ ncclShmemData ncclShmem;
@@ -526,8 +529,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     }
     break;
   case 1:
-    if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
+    if (tid < WARP_SIZE + NCCL_MAX_GROUPS) {
+      if (tid == WARP_SIZE) ncclShmem.barrier_pat = 0;
       ncclShmem.groups[tid-WARP_SIZE].barrier = 0;
+    }
     break;
   case 2:
 #ifdef ENABLE_FAULT_INJECTION
@@ -603,7 +608,21 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     if (0 <= SpecializedFnId && ncclShmem.funcId == (unsigned)SpecializedFnId) {
       SpecializedRunWorkBatch().run();
     } else {
-      NCCL_CALL_FUNCTIONS<COLL_UNROLL>(ncclShmem.funcId);
+#ifdef USE_INDIRECT_FUNCTION_CALL
+      if (COLL_UNROLL == 1)
+        ncclDevFuncTable_1[ncclShmem.funcId]();
+      else if (COLL_UNROLL == 2)
+        ncclDevFuncTable_2[ncclShmem.funcId]();
+      else
+        ncclDevFuncTable_4[ncclShmem.funcId]();
+#else
+      if (COLL_UNROLL == 1)
+        NCCL_CALL_FUNCTIONS_1(ncclShmem.funcId);
+      else if (COLL_UNROLL == 2)
+        NCCL_CALL_FUNCTIONS_2(ncclShmem.funcId);
+      else
+        NCCL_CALL_FUNCTIONS_4(ncclShmem.funcId);
+#endif
     }
 
     if (ncclShmem.nextBatchIx == -1) break;
@@ -611,8 +630,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     __syncthreads();
     switch (tid/WARP_SIZE) {
       case 1:
-        if (tid < WARP_SIZE + NCCL_MAX_GROUPS)
+        if (tid < WARP_SIZE + NCCL_MAX_GROUPS) {
+          if (tid == WARP_SIZE) ncclShmem.barrier_pat = 0;
           ncclShmem.groups[tid-WARP_SIZE].barrier = 0;
+        }
         break;
       default:
         break;
@@ -637,6 +658,15 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   }
 #endif
 }
+
+__global__ void ncclDevKernel_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernel_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+#ifdef ENABLE_COLLTRACE
+__global__ void ncclDevKernelDebug_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernelDebug_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+#endif
 
 #define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, specializedFnId) \
   __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}

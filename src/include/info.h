@@ -29,6 +29,7 @@ struct ncclInfo {
   // Algorithm details
   int chunkSteps;
   int sliceSteps;
+  const void* acc;
 };
 
 #endif

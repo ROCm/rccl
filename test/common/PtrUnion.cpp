@@ -234,11 +234,11 @@ namespace RcclUnitTesting
       case ncclUint32:   U4[idx] *= scalarsPerRank.U4[rank]; break;
       case ncclInt64:    I8[idx] *= scalarsPerRank.I8[rank]; break;
       case ncclUint64:   U8[idx] *= scalarsPerRank.U8[rank]; break;
-      case ncclFloat8e4m3:  F1[idx]  = rccl_float8(F1[idx] * scalarsPerRank.F1[rank]); break;
+      case ncclFloat8e4m3:  F1[idx]  = rccl_float8((float)F1[idx] * (float)scalarsPerRank.F1[rank]); break;
       case ncclFloat16:  F2[idx]  = __float2half(__half2float(F2[idx]) * __half2float(scalarsPerRank.F2[rank])); break;
       case ncclFloat32:  F4[idx] *= scalarsPerRank.F4[rank]; break;
       case ncclFloat64:  F8[idx] *= scalarsPerRank.F8[rank]; break;
-      case ncclFloat8e5m2:  B1[idx]  = rccl_bfloat8(B1[idx] * scalarsPerRank.B1[rank]); break;
+      case ncclFloat8e5m2:  B1[idx]  = rccl_bfloat8((float)B1[idx] * (float)scalarsPerRank.B1[rank]); break;
       case ncclBfloat16: B2[idx] *= scalarsPerRank.B2[rank]; break;
       default:
         ERROR("Unsupported datatype\n");

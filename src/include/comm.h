@@ -196,6 +196,7 @@ struct ncclTaskColl {
   ncclFunc_t func;
   void const* sendbuff;
   void* recvbuff;
+  void const* acc;
   size_t count;
   int root;
   ncclDataType_t datatype;
@@ -489,6 +490,7 @@ struct ncclComm {
   int node;
   int nNodes;
   int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
+  int gfx942CheapFenceOff; // RCCL: true if gfx942 cheap fence is disabled
   int localRank;
   int localRanks;
   int maxLocalRanks;
