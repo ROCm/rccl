@@ -1,12 +1,16 @@
-// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #pragma once
 
 #include "CollTraceEvent.h"
 #include "comm.h"
 #include "CollTraceUtils.h"
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 class CollTraceError : public std::runtime_error {
  public:
   explicit CollTraceError(const std::string& what) : std::runtime_error(what) {}
@@ -32,4 +36,4 @@ ncclResult_t collTraceRecordEndEvent(
     std::unique_ptr<CollTraceEvent> event);
 
 CollTraceInfo parseCollInfoFromCollTask(const ncclTaskColl& collTask);
-}} // namespace meta::colltrace
+} // namespace latency_profiler

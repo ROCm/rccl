@@ -1,5 +1,9 @@
-// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
-
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #include "latency_profiler/CollTrace.h"
 #include "bootstrap.h"
 #include "checks.h"
@@ -12,8 +16,7 @@ NCCL_PARAM(ColltraceDumpIntervalSec, "COLLTRACE_DUMP_INTERVAL_SEC", 300);
 
 constexpr int RANKS_PER_HOST = 8;
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 namespace {
 CudaEventPtr getCudaEventPtr() {
@@ -155,7 +158,7 @@ void CollTrace::reportIfNeeded(bool checkInterval = true) {
       checkInterval);
 
 // reportToScuba is a placeholder for oss environment.
-// meta production reports to scuba instead of file, which enables 
+// meta production reports to scuba instead of file, which enables
 // filering, aggregation and visualization.
 #ifdef ENABLE_SCUBA_LOGGING
   reportToScuba(stats_, commHash_);
@@ -222,4 +225,4 @@ void CollTrace::recordCurCollResult(int rank, float latency) {
   }
 }
 
-}} // namespace meta::colltrace
+} // namespace latency_profiler

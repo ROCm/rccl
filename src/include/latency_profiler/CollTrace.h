@@ -1,4 +1,9 @@
-// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #pragma once
 
 #include <thread>
@@ -9,8 +14,7 @@
 
 struct ncclComm;
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 struct CollStats;
 
@@ -54,4 +58,4 @@ class CollTrace {
   std::deque<std::vector<CollStats>> stats_;
   std::chrono::time_point<std::chrono::steady_clock> lastReportTime_;
 };
-}} // namespace meta::colltrace
+} // namespace latency_profiler

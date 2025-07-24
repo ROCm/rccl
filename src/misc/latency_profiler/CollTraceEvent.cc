@@ -1,12 +1,15 @@
-// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
-
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #include "latency_profiler/CollTraceEvent.h"
 #include "param.h"
 
 NCCL_PARAM(ColltraceCheckIntervalMs, "COLLTRACE_CHECK_INTERVAL_MS", 10);
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 ncclResult_t CudaWaitEvent::waitEventFinish() {
   // async polling case, query cuda whether event is ready every
@@ -35,4 +38,4 @@ std::shared_ptr<float> CudaWaitEvent::getElapsedTimeSinceEvent(
   return std::make_shared<float>(elapsedTime);
 }
 
-}} // namespace meta::colltrace
+} // namespace latency_profiler

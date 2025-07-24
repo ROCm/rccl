@@ -1,9 +1,14 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #include "latency_profiler/CollTraceUtils.h"
 #include "nccl_common.h"
 #include "debug.h"
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 float getSizeMb(const std::string& dataType, int count) {
   if (dataType == "ncclInt8" || dataType == "ncclFp8E4M3" ||
@@ -79,4 +84,4 @@ std::vector<CollStats> aggregateResults(
   return results;
 }
 
-}} // namespace meta::colltrace
+} // namespace latency_profiler

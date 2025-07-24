@@ -1,4 +1,9 @@
-// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #pragma once
 
 #include <cuda_runtime.h>
@@ -8,8 +13,7 @@
 #include "checks.h"
 #include "CollTraceUtils.h"
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 // CUDA event pointer w/ deleter
 struct CudaEventDeleter {
@@ -61,4 +65,4 @@ struct CollTraceEvent {
   CollTraceEvent(CollTraceEvent&&) = default;
   CollTraceEvent& operator=(CollTraceEvent&&) = default;
 };
-}} // namespace meta::colltrace
+} // namespace latency_profiler

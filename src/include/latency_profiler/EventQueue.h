@@ -1,10 +1,15 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #pragma once
 
 #include <condition_variable>
 #include <deque>
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 // A multi-producer, single consumer queue.
 // This queue is designed to be used in scenarios where multiple producers
@@ -38,4 +43,4 @@ class EventQueue {
     return item;
   }
 };
-}} // namespace meta::colltrace
+} // namespace latency_profiler

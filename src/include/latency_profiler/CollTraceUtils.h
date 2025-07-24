@@ -1,5 +1,9 @@
-// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
-
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #pragma once
 
 #include <deque>
@@ -7,8 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 struct CollStats {
   const int collId;
@@ -19,7 +22,7 @@ struct CollStats {
   const std::string dataType;
   int64_t count;
   CollStats(const int collId, const int percent, const float minLatencyUs, const float maxLatencyUs, const std::string& opName, const std::string& dataType, const int64_t count) : collId(collId), percent(percent), minLatencyUs(minLatencyUs), maxLatencyUs(maxLatencyUs), opName(opName), dataType(dataType), count(count) {
-    
+
   }
 };
 
@@ -43,4 +46,4 @@ std::vector<CollStats> aggregateResults(
 
 float getSizeMb(const std::string& dataType, int count);
 
-}} // namespace meta::colltrace
+} // namespace latency_profiler

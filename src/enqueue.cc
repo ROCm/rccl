@@ -1664,12 +1664,12 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
-  auto event = meta::colltrace::collTraceAquireEventBaseline(plan, launchStream);
+  auto event = latency_profiler::collTraceAquireEventBaseline(plan, launchStream);
   if (planner->numStreams == 1 && !plan->persistent) {
-    meta::colltrace::collTraceRecordStartEvent(comm, launchStream, event.get());
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     comm->lastStream = planner->streams->stream;
     CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
-    meta::colltrace::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
     return ncclSuccess;
   }
 
@@ -1738,22 +1738,22 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     launchConfig.numAttrs = attrs;
     launchConfig.hStream = launchStream;
 
-    meta::colltrace::collTraceRecordStartEvent(comm, launchStream, event.get());
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     CUCHECKGOTO(cuLaunchKernelEx(&launchConfig, fn, nullptr, extra), ret, do_return);
-    meta::colltrace::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
   #endif
   } else {
     // Standard kernel launch
-    meta::colltrace::collTraceRecordStartEvent(comm, launchStream, event.get());
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     CUCHECKGOTO(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra), ret, do_return);
-    meta::colltrace::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
   }
 #endif
   // Standard kernel launch
   //cuLaunchKernel(sym, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra);
-  meta::colltrace::collTraceRecordStartEvent(comm, launchStream, event.get());
+  latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
   CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
-  meta::colltrace::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
+  latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
 
 do_return:
   return ret;

@@ -1,7 +1,12 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #include "latency_profiler/CollTraceFunc.h"
 
-namespace meta {
-namespace colltrace {
+namespace latency_profiler {
 
 namespace {
 bool enableCollTrace() {
@@ -132,4 +137,4 @@ std::unique_ptr<CollTraceEvent> collTraceAquireEventBaseline(
   return event;
 }
 
-}} // namespace meta::colltrace
+} // namespace latency_profiler
