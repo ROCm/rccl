@@ -473,6 +473,7 @@ set(SRC_FILES
   src/include/argcheck.h
   src/include/BfdBacktrace.hpp
   src/include/bitops.h
+  src/include/bnxt_re_dv.h
   src/include/bootstrap.h
   src/include/channel.h
   src/include/checks.h
@@ -1059,6 +1060,8 @@ target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -fgpu-rdc)      # Generate relocatable device code (required for extern __shared__)
+target_compile_definitions(rccl PRIVATE HAVE_BNXT_DV)
+target_compile_definitions(rccl PRIVATE NCCL_BUILD_RDMA_CORE=1)
 
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)
@@ -1157,6 +1160,9 @@ target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
 target_link_libraries(rccl PRIVATE fmt::fmt-header-only)
+target_link_directories(rccl PRIVATE /usr/local/lib)
+target_link_libraries(rccl PRIVATE   bnxt_re)
+target_link_libraries(rccl PRIVATE   ibverbs)
 if(ENABLE_MSCCLPP)
   target_link_libraries(rccl PRIVATE mscclpp_nccl)
 endif()

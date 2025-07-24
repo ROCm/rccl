@@ -29,6 +29,10 @@
 #include "ibvwrap.h"
 #include "graph/xml.h"
 
+#ifdef HAVE_BNXT_DV
+#include "bnxt_re_dv.h"
+#endif
+
 #define MAXNAMESIZE 64
 static char ncclIbIfName[MAX_IF_NAME_SIZE+1];
 static union ncclSocketAddress ncclIbIfAddr;
@@ -999,12 +1003,30 @@ struct ncclIbRequest {
   };
 };
 
+struct bnxt_dv_memory_context {
+  void *addr;
+  void *umem;
+  uint32_t size;
+  uint32_t offset;
+  uint32_t type;  /* 0 is CPU, 1 is GPU */
+};
+
 struct ncclIbNetCommDevBase {
   int ibDevN;
   struct ibv_pd* pd;
-  struct ibv_cq* cq;
+  struct ibv_cq* scq;
+  struct ibv_cq* rcq;
   uint64_t pad[2];
   struct ncclIbGidInfo gidInfo;
+  int qp_index;
+  struct bnxt_dv_memory_context pmc_sqp[NCCL_IB_MAX_QPS];
+  struct bnxt_dv_memory_context pmc_rqp[NCCL_IB_MAX_QPS];
+  void *scq_addr;
+  void *scq_umem_handle;
+  void *rcq_addr;
+  void *rcq_umem_handle;
+  void *sq_umem_handle;
+  void *rq_umem_handle;
 };
 
 struct ncclIbListenComm {
@@ -1131,9 +1153,24 @@ static void ncclIbAddEvent(struct ncclIbRequest* req, int devIndex, struct ncclI
   req->events[devIndex]++;
   req->devBases[devIndex] = base;
 }
+
+RCCL_PARAM(MoveCQToHBM, "MOVE_CQ_TO_HBM", 0);
+
 ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base, void* cq_context) {
   base->ibDevN = ibDevN;
   ncclIbDev* ibDev = ncclIbDevs + ibDevN;
+#ifdef HAVE_BNXT_DV
+  struct bnxt_re_dv_cq_init_attr scq_dv_attr = {}, rcq_dv_attr = {};
+  struct bnxt_re_dv_umem_reg_attr s_uattr, r_uattr;
+  bool can_init_mem = true;
+  int dmabuf_fd = 0;
+  uint64_t dmabuf_offset;
+  int cq_size;
+  void *s_addr, *r_addr;
+  void *s_umem, *r_umem;
+  hipError_t error;
+  base->qp_index = 0;
+#endif
   pthread_mutex_lock(&ibDev->lock);
   if (0 == ibDev->pdRefs++) {
     ncclResult_t res;
@@ -1149,14 +1186,87 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
 
   // CQ is sized to accommodate the max SQ + RQ WQE completions. If each SQ WQE could be signaled, then,
   // for each QP, there can be 2*MAX_REQUESTS completions for SQ and MAX_REQUESTS completions for RQ. 
+#ifdef HAVE_BNXT_DV
+  // create RCQ
+  int cq_depth = 3*MAX_REQUESTS*ncclParamIbQpsPerConn();
+  cq_size = (cq_depth + 1) * 32;
+  if (rcclParamMoveCQToHBM())
+    error = hipExtMallocWithFlags(&r_addr, cq_size, hipDeviceMallocUncached);
+  else
+    error = hipHostMalloc(&r_addr, cq_size, cudaHostAllocMapped);
+  if (error != hipSuccess) {
+    WARN("Memory allocation for RCQ failed with error=%d\n", error);
+    return ncclInternalError;
+  }
+
+  memset(&r_uattr, 0, sizeof(struct bnxt_re_dv_umem_reg_attr));
+  r_uattr.size = cq_size;
+  r_uattr.dmabuf_fd = dmabuf_fd;
+  r_uattr.comp_mask = 0;
+  r_uattr.access_flags = IBV_ACCESS_LOCAL_WRITE;
+  r_uattr.addr = r_addr;
+  r_umem = bnxt_re_dv_umem_reg(ibDev->context, &r_uattr);
+  base->rcq_umem_handle = r_umem;
+  base->rcq_addr = r_addr;
+
+  memset(&rcq_dv_attr, 0, sizeof(struct bnxt_re_dv_cq_init_attr));
+  rcq_dv_attr.ncqe = cq_depth + 1;
+  rcq_dv_attr.umem_handle =r_umem;
+  base->rcq = bnxt_re_dv_create_cq(ibDev->context, &rcq_dv_attr);
+  INFO(NCCL_NET, "NET/IB : bnxt_re_dv_create_cq dev=%d devName=%s ndevs=%d nmdevs=%d pd=%p rcq=%p",
+    base->ibDevN, ncclIbDevs[base->ibDevN].devName, ncclNIbDevs, ncclNMergedIbDevs, base->pd, base->rcq);
+
+  // create SCQ
+  cq_depth = 2*MAX_REQUESTS*ncclParamIbQpsPerConn();
+  cq_size = (cq_depth + 1) * 32;
+  error = hipHostMalloc(&s_addr, cq_size, cudaHostAllocMapped);
+  if (error != hipSuccess) {
+    WARN("Memory allocation for SCQ failed with error=%d\n", error);
+    return ncclInternalError;
+  }
+
+  memset(&s_uattr, 0, sizeof(struct bnxt_re_dv_umem_reg_attr));
+  s_uattr.size = cq_size;
+  s_uattr.dmabuf_fd = dmabuf_fd;
+  s_uattr.comp_mask = 0;
+  s_uattr.access_flags = IBV_ACCESS_LOCAL_WRITE;
+  s_uattr.addr = s_addr;
+  s_umem = bnxt_re_dv_umem_reg(ibDev->context, &s_uattr);
+  base->scq_umem_handle = s_umem;
+  base->scq_addr = s_addr;
+
+  memset(&scq_dv_attr, 0, sizeof(struct bnxt_re_dv_cq_init_attr));
+  scq_dv_attr.ncqe = cq_depth + 1;
+  scq_dv_attr.umem_handle =s_umem;
+  base->scq = bnxt_re_dv_create_cq(ibDev->context, &scq_dv_attr);
+  INFO(NCCL_NET, "NET/IB : bnxt_re_dv_create_cq dev=%d devName=%s ndevs=%d nmdevs=%d pd=%p scq=%p",
+    base->ibDevN, ncclIbDevs[base->ibDevN].devName, ncclNIbDevs, ncclNMergedIbDevs, base->pd, base->scq);
+#else
   NCCLCHECK(wrap_ibv_create_cq(&base->cq, ibDev->context, 3*MAX_REQUESTS*ncclParamIbQpsPerConn(), cq_context, NULL, 0));
+#endif
 
   return ncclSuccess;
 }
 
 ncclResult_t ncclIbDestroyBase(struct ncclIbNetCommDevBase* base) {
   ncclResult_t res;
+#ifdef HAVE_BNXT_DV
+  bnxt_re_dv_destroy_cq(base->rcq);
+  bnxt_re_dv_destroy_cq(base->scq);
+  bnxt_re_dv_umem_dereg(base->scq_umem_handle);
+  bnxt_re_dv_umem_dereg(base->rcq_umem_handle);
+  bnxt_re_dv_umem_dereg(base->sq_umem_handle);
+  bnxt_re_dv_umem_dereg(base->rq_umem_handle);
+  if (rcclParamMoveCQToHBM())
+    CUDACHECK(hipFree(base->rcq_addr));
+  else
+    CUDACHECK(hipFreeHost(base->rcq_addr));
+  CUDACHECK(hipFreeHost(base->scq_addr));
+  CUDACHECK(hipFreeHost(base->pmc_sqp[0].addr));
+  CUDACHECK(hipFreeHost(base->pmc_rqp[0].addr));
+#else
   NCCLCHECK(wrap_ibv_destroy_cq(base->cq));
+#endif
 
   pthread_mutex_lock(&ncclIbDevs[base->ibDevN].lock);
   if (0 == --ncclIbDevs[base->ibDevN].pdRefs) {
@@ -1168,12 +1278,99 @@ returning:
   return res;
 }
 
+#ifdef HAVE_BNXT_DV
+static void bnxt_re_dv_qp_copy_mem_info(struct bnxt_re_dv_qp_init_attr *dst,
+          struct bnxt_re_dv_qp_mem_info *src)
+{
+  dst->qp_handle = src->qp_handle;
+  dst->sq_len = src->sq_len;
+  dst->sq_slots = src->sq_slots;
+  dst->sq_wqe_sz = src->sq_wqe_sz;
+  dst->sq_psn_sz = src->sq_psn_sz;
+  dst->sq_npsn = src->sq_npsn;
+  dst->rq_len = src->rq_len;
+  dst->rq_slots = src->rq_slots;
+  dst->rq_wqe_sz = src->rq_wqe_sz;
+  dst->comp_mask = src->comp_mask;
+}
+
+static int skip_rq_umem_reg;
+static int bnxt_re_dv_qp_reg_umem(struct ibv_context *ibvctx,
+          struct bnxt_re_dv_qp_init_attr *attr,
+          struct bnxt_re_dv_qp_mem_info *qp_mem)
+{
+  struct bnxt_re_dv_umem_reg_attr umem_input;
+  struct bnxt_re_dv_umem *umem;
+
+  umem_input.addr = (void *)qp_mem->sq_va;
+  umem_input.size = qp_mem->sq_len;
+  umem_input.access_flags = IBV_ACCESS_LOCAL_WRITE;
+  umem_input.comp_mask = 0;
+  umem = (struct bnxt_re_dv_umem *)bnxt_re_dv_umem_reg(ibvctx, &umem_input);
+  if (!umem) {
+    fprintf(stderr, "%s: SQ umem_reg() failed: %d\n", __func__, errno);
+    goto fail;
+  }
+  attr->sq_umem_handle = umem;
+
+  if (attr->srq || skip_rq_umem_reg)
+    goto done;
+
+  umem_input.addr = (void *)qp_mem->rq_va;
+  umem_input.size = qp_mem->rq_len;
+  umem_input.access_flags = IBV_ACCESS_LOCAL_WRITE;
+  umem_input.comp_mask = 0;
+  umem = (struct bnxt_re_dv_umem *)bnxt_re_dv_umem_reg(ibvctx, &umem_input);
+  if (!umem) {
+    fprintf(stderr, "%s: RQ umem_reg() failed\n", __func__);
+    goto fail;
+  }
+  attr->rq_umem_handle = umem;
+
+done:
+  return 0;
+
+fail:
+  if (attr->sq_umem_handle) {
+    bnxt_re_dv_umem_dereg(attr->sq_umem_handle);
+    attr->sq_umem_handle = NULL;
+  }
+  return -EIO;
+}
+
+static int bnxt_re_ctx_alloc_qp_mem(struct ncclIbNetCommDevBase *base,
+            int qp_index,
+            struct bnxt_re_dv_qp_mem_info *dv_qp_mem)
+{
+  base->pmc_sqp[qp_index].size = dv_qp_mem->sq_len * NCCL_IB_MAX_QPS;
+  hipError_t error = hipHostMalloc(&base->pmc_sqp[qp_index].addr, base->pmc_sqp[qp_index].size, cudaHostAllocMapped);
+
+  if (error != hipSuccess) {
+    WARN("Cannot allocate %ld memory for SQP umem.\n", base->pmc_sqp[qp_index].size);
+    return -ENOMEM;
+  }
+
+  if (!dv_qp_mem->rq_len)
+    goto done;
+
+  base->pmc_rqp[qp_index].size = dv_qp_mem->rq_len * NCCL_IB_MAX_QPS;
+  error = hipHostMalloc(&base->pmc_rqp[qp_index].addr, base->pmc_rqp[qp_index].size, cudaHostAllocMapped);
+  if (error != hipSuccess) {
+    WARN("Cannot allocate %ld memory for RQP umem.\n", base->pmc_rqp[qp_index].size);
+    return -ENOMEM;
+  }
+
+done:
+  return 0;
+}
+#endif
+
 ncclResult_t ncclIbCreateQp(uint8_t ib_port, struct ncclIbNetCommDevBase* base, int access_flags, void* qp_context, struct ncclIbQp* qp) {
   struct ibv_qp_init_attr qpInitAttr;
   memset(&qpInitAttr, 0, sizeof(struct ibv_qp_init_attr));
   qpInitAttr.qp_context = qp_context;
-  qpInitAttr.send_cq = base->cq;
-  qpInitAttr.recv_cq = base->cq;
+  qpInitAttr.send_cq = base->scq;
+  qpInitAttr.recv_cq = base->rcq;
   qpInitAttr.qp_type = IBV_QPT_RC;
   // We might send 2 messages per send (RDMA and RDMA_WITH_IMM)
   qpInitAttr.cap.max_send_wr = 2*MAX_REQUESTS;
@@ -1181,14 +1378,90 @@ ncclResult_t ncclIbCreateQp(uint8_t ib_port, struct ncclIbNetCommDevBase* base, 
   qpInitAttr.cap.max_send_sge = 1;
   qpInitAttr.cap.max_recv_sge = 1;
   qpInitAttr.cap.max_inline_data = ncclParamIbUseInline() ? sizeof(struct ncclIbSendFifo) : 0;
+#ifdef HAVE_BNXT_DV
+  struct bnxt_re_dv_qp_init_attr dv_qp_attr = {};
+  struct bnxt_re_dv_qp_mem_info dv_qp_mem = {};
+  if (bnxt_re_dv_qp_mem_alloc(base->pd, &qpInitAttr, &dv_qp_mem)) {
+    pthread_mutex_unlock(&ncclIbDevs[base->ibDevN].lock);
+    fprintf(stderr, "failed to alloc QP mem\n");
+    return ncclInternalError;
+  }
+
+  pthread_mutex_lock(&ncclIbDevs[base->ibDevN].lock);
+  if (base->qp_index == 0) {
+    if (bnxt_re_ctx_alloc_qp_mem(base, base->qp_index, &dv_qp_mem)) {
+      pthread_mutex_unlock(&ncclIbDevs[base->ibDevN].lock);
+      fprintf(stderr, "bnxt_re_ctx_alloc_qp_mem() failed\n");
+      return ncclInternalError;
+    }
+  }
+
+  dv_qp_attr.qp_type = qpInitAttr.qp_type;
+  dv_qp_attr.max_send_wr = qpInitAttr.cap.max_send_wr;
+  dv_qp_attr.max_recv_wr = qpInitAttr.cap.max_recv_wr;
+  dv_qp_attr.max_send_sge = qpInitAttr.cap.max_send_sge;
+  dv_qp_attr.max_recv_sge = qpInitAttr.cap.max_recv_sge;
+  dv_qp_attr.max_inline_data = qpInitAttr.cap.max_inline_data;
+  dv_qp_attr.send_cq = qpInitAttr.send_cq;
+  dv_qp_attr.recv_cq = qpInitAttr.recv_cq;
+  dv_qp_attr.srq = qpInitAttr.srq;
+  bnxt_re_dv_qp_copy_mem_info(&dv_qp_attr, &dv_qp_mem);
+
+  if (base->qp_index == 0) {
+    /* Update VA for SQ and RQ memory that we allocated,
+     * before registering this with umem.
+     */
+    ncclIbDev* ibDev = ncclIbDevs + base->ibDevN;
+    dv_qp_mem.sq_va = (uint64_t)base->pmc_sqp[base->qp_index].addr;
+    dv_qp_mem.rq_va = (uint64_t)base->pmc_rqp[base->qp_index].addr;
+    dv_qp_mem.sq_len = base->pmc_sqp[base->qp_index].size;
+    dv_qp_mem.rq_len = base->pmc_rqp[base->qp_index].size;
+    if (bnxt_re_dv_qp_reg_umem(ibDev->context, &dv_qp_attr, &dv_qp_mem)) {
+      pthread_mutex_unlock(&ncclIbDevs[base->ibDevN].lock);
+      fprintf(stderr, "failed to register QP mem\n");
+      return ncclInternalError;
+    }
+
+    base->pmc_sqp[base->qp_index].umem = dv_qp_attr.sq_umem_handle;
+    base->pmc_rqp[base->qp_index].umem = dv_qp_attr.rq_umem_handle;
+
+    /* SQ/RQ memory is umem registered once in the context of
+     * the first QP and the same handle is used by other QPs.
+     * Save these handles for subsequent QPs.
+     */
+    base->sq_umem_handle = dv_qp_attr.sq_umem_handle;
+    base->rq_umem_handle = dv_qp_attr.rq_umem_handle;
+  } else {
+    dv_qp_attr.sq_umem_handle = base->sq_umem_handle;
+    dv_qp_attr.rq_umem_handle = base->rq_umem_handle;
+  }
+
+  dv_qp_attr.sq_umem_offset = base->qp_index * dv_qp_attr.sq_len;
+  dv_qp_attr.rq_umem_offset = base->qp_index * dv_qp_attr.rq_len;
+  qp->qp = bnxt_re_dv_create_qp(base->pd, &dv_qp_attr);
+  INFO(NCCL_NET, "NET/IB : bnxt_re_dv_create_qp port=%d dev=%d devName=%s ndevs=%d nmdevs=%d qp=%p index=%d pd=%p",
+    ib_port, base->ibDevN, ncclIbDevs[base->ibDevN].devName, ncclNIbDevs, ncclNMergedIbDevs, qp->qp, base->qp_index, base->pd);
+
+  base->qp_index ++;
+  pthread_mutex_unlock(&ncclIbDevs[base->ibDevN].lock);
+#else
   NCCLCHECK(wrap_ibv_create_qp(&qp->qp, base->pd, &qpInitAttr));
+#endif
   struct ibv_qp_attr qpAttr;
   memset(&qpAttr, 0, sizeof(struct ibv_qp_attr));
   qpAttr.qp_state = IBV_QPS_INIT;
   qpAttr.pkey_index = ncclParamIbPkey();
   qpAttr.port_num = ib_port;
   qpAttr.qp_access_flags = access_flags;
+#ifdef HAVE_BNXT_DV
+  int ret = bnxt_re_dv_modify_qp(qp->qp, &qpAttr, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS, 0 ,0);
+  if (ret) {
+    WARN("Failed to modify QP to INIT, ret=%d\n",ret);
+    return ncclInternalError;
+  }
+#else
   NCCLCHECK(wrap_ibv_modify_qp(qp->qp, &qpAttr, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS));
+#endif
   TRACE(NCCL_NET, "NET/IB : ncclIbCreateQp port=%d dev=%d devName=%s ndevs=%d nmdevs=%d qpn=%u pkey=%u pd=%p",
     ib_port, base->ibDevN, ncclIbDevs[base->ibDevN].devName, ncclNIbDevs, ncclNMergedIbDevs, qp->qp->qp_num, qpAttr.pkey_index, base->pd);
   return ncclSuccess;
@@ -1236,7 +1509,15 @@ ncclResult_t ncclIbRtrQp(struct ibv_qp* qp, struct ncclIbGidInfo* sGidInfo, uint
   qpAttr.ah_attr.src_path_bits = 0;
   qpAttr.ah_attr.port_num = info->ib_port;
   TRACE(NCCL_NET, "NET/IB : ncclIbRtrQp qpn=%u mtu=%d dst=%u ll=%u port=%u sl: %d tc: %d", qp->qp_num, info->mtu, dest_qp_num, info->link_layer, info->ib_port, qpAttr.ah_attr.sl, qpAttr.ah_attr.grh.traffic_class);
+#ifdef HAVE_BNXT_DV
+  int ret = bnxt_re_dv_modify_qp(qp, &qpAttr, IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER, 0 ,0);
+  if (ret) {
+    WARN("Failed to modify QP to RTR, ret=%d\n",ret);
+    return ncclInternalError;
+  }
+#else
   NCCLCHECK(wrap_ibv_modify_qp(qp, &qpAttr, IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER));
+#endif
   return ncclSuccess;
 }
 
@@ -1249,7 +1530,15 @@ ncclResult_t ncclIbRtsQp(struct ibv_qp* qp) {
   qpAttr.rnr_retry = 7;
   qpAttr.sq_psn = 0;
   qpAttr.max_rd_atomic = 1;
+#ifdef HAVE_BNXT_DV
+  int ret = bnxt_re_dv_modify_qp(qp, &qpAttr, IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC, 0 ,0);
+  if (ret) {
+    WARN("Failed to modify QP to RTS, ret=%d\n",ret);
+    return ncclInternalError;
+  }
+#else
   NCCLCHECK(wrap_ibv_modify_qp(qp, &qpAttr, IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC));
+#endif
   return ncclSuccess;
 }
 
@@ -2480,8 +2769,10 @@ ncclResult_t ncclIbTest(void* request, int* done, int* sizes) {
       TIME_START(3);
       // If we expect any completions from this device's CQ
       if (r->events[i]) {
-        NCCLCHECK(wrap_ibv_poll_cq(r->devBases[i]->cq, 4, wcs, &wrDone));
+        NCCLCHECK(wrap_ibv_poll_cq(r->devBases[i]->scq, 4, wcs, &wrDone));
         totalWrDone += wrDone;
+        if (wrDone == 0) { TIME_CANCEL(3); } else { TIME_STOP(3); }
+        if (wrDone == 0) NCCLCHECK(wrap_ibv_poll_cq(r->devBases[i]->rcq, 4, wcs, &wrDone));
         if (wrDone == 0) { TIME_CANCEL(3); } else { TIME_STOP(3); }
         if (wrDone == 0) continue;
         for (int w=0; w<wrDone; w++) {
@@ -2563,7 +2854,11 @@ ncclResult_t ncclIbCloseSend(void* sendComm) {
     NCCLCHECK(ncclSocketClose(&comm->base.sock));
 
     for (int q = 0; q < comm->base.nqps; q++)
+#ifdef HAVE_BNXT_DV
+      if (comm->base.qps[q].qp != NULL) bnxt_re_dv_destroy_qp(comm->base.qps[q].qp);
+#else
       if (comm->base.qps[q].qp != NULL) NCCLCHECK(wrap_ibv_destroy_qp(comm->base.qps[q].qp));
+#endif
 
     for (int i = 0; i < comm->base.vProps.ndevs; i++) {
       struct ncclIbSendCommDev* commDev = comm->devs + i;
@@ -2583,7 +2878,11 @@ ncclResult_t ncclIbCloseRecv(void* recvComm) {
     NCCLCHECK(ncclSocketClose(&comm->base.sock));
 
     for (int q = 0; q < comm->base.nqps; q++)
+#ifdef HAVE_BNXT_DV
+      if (comm->base.qps[q].qp != NULL) bnxt_re_dv_destroy_qp(comm->base.qps[q].qp);
+#else
       if (comm->base.qps[q].qp != NULL) NCCLCHECK(wrap_ibv_destroy_qp(comm->base.qps[q].qp));
+#endif
 
     for (int i = 0; i < comm->base.vProps.ndevs; i++) {
       struct ncclIbRecvCommDev* commDev = comm->devs + i;
@@ -2595,7 +2894,11 @@ ncclResult_t ncclIbCloseRecv(void* recvComm) {
           commDev->gpuFlush.gpuMr = nullptr;
           if(commDev->gpuFlush.dmabuf_fd > 0) { close(commDev->gpuFlush.dmabuf_fd);}
         }
+#ifdef HAVE_BNXT_DV
+        if (commDev->gpuFlush.qp.qp != NULL) bnxt_re_dv_destroy_qp(commDev->gpuFlush.qp.qp);
+#else
         if (commDev->gpuFlush.qp.qp != NULL) NCCLCHECK(wrap_ibv_destroy_qp(commDev->gpuFlush.qp.qp));
+#endif
         if (commDev->gpuFlush.hostMr != NULL) NCCLCHECK(wrap_ibv_dereg_mr(commDev->gpuFlush.hostMr));
       }
       if (commDev->fifoMr != NULL) NCCLCHECK(wrap_ibv_dereg_mr(commDev->fifoMr));
