@@ -34,8 +34,7 @@ inline __device__ void gfx9ThreadFence();
 
 template<>
 inline __device__ void gfx9ThreadFence<true>() {
-    asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)");
-    asm volatile("buffer_inv sc0 sc1");
+    __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "agent");
 }
 
 template<>
