@@ -25,6 +25,9 @@
 #endif
 #include "msccl/msccl_lifecycle.h"
 
+#define NCCL_NET_OPTIONAL_RECV_COMPLETION    0x1
+#define NCCL_NET_USE_WRITE_OP                0x1
+
 static_assert(sizeof(ncclNetHandle_t) <= CONNECT_SIZE, "NET Connect info is too large");
 
 #define RCCL_ANP_PLUGIN_STR  "RCCL-ANP"
@@ -1317,8 +1320,11 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
             // Coverity complains about the size here as pointing to an out-of-scope temporary.  Which is nonsense,
             // since size is a plain integer.
             // coverity[use_invalid:FALSE]
-            NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, sub->sendMhandle, sub->requests+buffSlot));
-            if (sub->requests[buffSlot] != NULL) {
+            void **requestPtr = sub->requests+buffSlot;
+            bool ignoreCompletion = ncclParamNetOptionalRecvCompletion() && ((args->protocol == NCCL_PROTO_LL128) || (args->protocol == NCCL_PROTO_LL));
+            if (ignoreCompletion) *requestPtr = (void *)NCCL_NET_USE_WRITE_OP;
+            NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, sub->sendMhandle, requestPtr));
+            if (*requestPtr != NULL) {
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
               NpKit::CollectCpuEvent(
