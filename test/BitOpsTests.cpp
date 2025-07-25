@@ -58,6 +58,22 @@ TEST(u32fp8Encode, u32fp8EncodeSuccess) {
     EXPECT_EQ(u32fp8Encode(u8Val), static_cast<uint32_t>(2));
 }
 
+TEST(u32fpEncode, u32fpEncodeSuccess) {
+    // log2x is 1, use bitsPerPow2 = 1
+    uint32_t u32Val{0xFFFFFFFF}; // 32 bits set to 1
+    uint32_t u32ExpectVal = 63;
+    int bitsPerPow2 = 1;
+    EXPECT_EQ(u32fpEncode(u32Val, bitsPerPow2), u32ExpectVal);
+}
+
+TEST(u32fpDecode, u32fpDecodeSuccess) {
+    // log2x is 1, use bitsPerPow2 = 1
+    uint32_t u32Val{0xFFFFFFFF}; // 32 bits set to 1
+    uint32_t u32ExpectVal = 63;
+    int bitsPerPow2 = 1;
+    EXPECT_EQ(u32fpDecode(u32Val, bitsPerPow2), u32ExpectVal);
+}
+
 TEST(getHash, getHashSuccess) {
     std::vector<uint32_t> u32Vec{2, 4, 8, 16, 32, 64, 128, 256};
     uint64_t expectedHash = 0xa4495d05731e3337;
@@ -70,6 +86,15 @@ TEST(getHash, getHashSuccess) {
     EXPECT_EQ(ret, expectedHash);
 }
 
+TEST(eatHash, eatHashSuccess){
+    uint64_t acc[2] = {0, 0};
+    uint64_t expectedAcc[2] = {8617830242246783886ull, 2410367826245614052ull};
+    std::vector<uint32_t> u32Vec{2, 4, 8, 16, 32, 64, 128, 256};
+    eatHash(acc, u32Vec.data());
+    EXPECT_EQ(acc[0], expectedAcc[0]);
+    EXPECT_EQ(acc[1], expectedAcc[1]);
+}
+
 template <typename T>
 class BitOpsTemplateAllIntTestsFixture : public testing::Test {
 public:
@@ -80,7 +105,7 @@ protected:
     T valZ_{};
 };
 
-using BitOpsAllIntTypes = ::testing::Types<int, unsigned int, long, unsigned long, long long, unsigned long long>;
+using BitOpsAllIntTypes = ::testing::Types<short, unsigned short, int, unsigned int, long, unsigned long, long long, unsigned long long>;
 
 TYPED_TEST_SUITE(BitOpsTemplateAllIntTestsFixture, BitOpsAllIntTypes);
 
@@ -142,6 +167,21 @@ TYPED_TEST(BitOpsTemplateAllIntTestsFixture, alignUpSuccess) {
     this->valY_= 8;
     this->valZ_= 8;
     EXPECT_EQ(alignUp(this->valX_, this->valY_), this->valZ_);
+}
+
+TYPED_TEST(BitOpsTemplateAllIntTestsFixture, alignDownSuccess) {
+    this->valX_ = 0;
+    this->valY_= 8;
+    this->valZ_= 0;
+    EXPECT_EQ(alignDown(this->valX_, this->valY_), this->valZ_);
+    this->valX_ = 1;
+    this->valY_= 8;
+    this->valZ_= 0;
+    EXPECT_EQ(alignDown(this->valX_, this->valY_), this->valZ_);
+    this->valX_ = 9;
+    this->valY_= 8;
+    this->valZ_= 8;
+    EXPECT_EQ(alignDown(this->valX_, this->valY_), this->valZ_);
 }
 
 TYPED_TEST(BitOpsTemplateAllIntTestsFixture, BitOpsCountOneBitsSuccess) {
@@ -212,7 +252,7 @@ protected:
     T reverseBits_{2};
 };
 
-using BitOpsUnsignedTypes = ::testing::Types<unsigned int, unsigned long, unsigned long long>;
+using BitOpsUnsignedTypes = ::testing::Types<unsigned short, unsigned int, unsigned long, unsigned long long>;
 
 TYPED_TEST_SUITE(BitOpsTemplateUnsignedTestsFixture, BitOpsUnsignedTypes);
 
@@ -227,8 +267,10 @@ TYPED_TEST(BitOpsTemplateUnsignedTestsFixture, reverseSubBitsSuccess) {
     EXPECT_EQ(ret, 64); 
     ret = reverseSubBits<TypeParam, 16>(this->reverseSubBits_);
     EXPECT_EQ(ret, 16384);
-    ret = reverseSubBits<TypeParam, 32>(this->reverseSubBits_);
-    EXPECT_EQ(ret, 1073741824);
+    if(!std::is_same<TypeParam, unsigned short>::value) {
+        ret = reverseSubBits<TypeParam, 32>(this->reverseSubBits_);
+        EXPECT_EQ(ret, 1073741824);
+    }
 }
 
 TYPED_TEST(BitOpsTemplateUnsignedTestsFixture, reverseBitsSuccess) {
