@@ -126,6 +126,7 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
     const char *inputStr = getenv("NCCL_PXN_DISABLE");
     if(!IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || inputStr) {
       rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
+      return;
     }
     pxnDisable = (comm->nRanks >= 64)? 0 : 1;
     INFO(NCCL_INIT, "RCCL PXN set as %s", !pxnDisable? "enabled" : "disabled");
@@ -139,6 +140,7 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
     const char *inputStr = getenv("NCCL_P2P_NET_CHUNKSIZE");
     if(!IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || inputStr) {
       rcclP2pNetChunkSize = p2pNetChunkSize = RCCL_VALUE_INVALID;
+      return;
     }
     p2pNetChunkSize = (comm->nRanks >= 64)? (1 << 19) : (1 << 17);
     INFO(NCCL_INIT, "RCCL P2P net chunk size default set to: %d", p2pNetChunkSize);
