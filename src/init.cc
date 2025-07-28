@@ -394,7 +394,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
       WARN("%s", comm->proxyState->proxyTrace->dump().c_str());
     }
   }
-  
+
 
 #ifdef ENABLE_PROFILING
   struct ncclProf *prof, *prof_seq;
@@ -977,7 +977,7 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
 NCCL_PARAM(BuffSize, "BUFFSIZE", -2);
 NCCL_PARAM(LlBuffSize, "LL_BUFFSIZE", -2);
 NCCL_PARAM(Ll128BuffSize, "LL128_BUFFSIZE", -2);
-
+// Default value of P2P_NET_CHUNKSIZE may be overwritten by changes in src/rccl_wrap.cc
 NCCL_PARAM(P2pNetChunkSize, "P2P_NET_CHUNKSIZE", (1 << 17)); /* 128 kB */
 NCCL_PARAM(P2pPciChunkSize, "P2P_PCI_CHUNKSIZE", (1 << 17)); /* 128 kB */
 NCCL_PARAM(P2pNvlChunkSize, "P2P_NVL_CHUNKSIZE", (1 << 19)); /* 512 kB */
@@ -990,7 +990,10 @@ static ncclResult_t computeBuffSizes(struct ncclComm* comm) {
     comm->buffSizes[p] = envs[p] != -2 ? envs[p] : defaults[p];
   }
 
-  if (comm->nNodes > 1) comm->p2pChunkSize = ncclParamP2pNetChunkSize();
+  if (comm->nNodes > 1) {
+    rcclSetP2pNetChunkSize(comm, comm->p2pChunkSize);
+    comm->p2pChunkSize = (comm->p2pChunkSize > RCCL_VALUE_INVALID)? comm->p2pChunkSize :  ncclParamP2pNetChunkSize();
+  }
   else if (comm->isAllNvlink) comm->p2pChunkSize = ncclParamP2pNvlChunkSize();
   else comm->p2pChunkSize = ncclParamP2pPciChunkSize();
 

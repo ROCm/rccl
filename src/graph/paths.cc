@@ -591,7 +591,7 @@ ncclResult_t ncclTopoGetIntermediateRank(struct ncclTopoSystem* system, int rank
   }
   return ncclSuccess;
 }
-
+// Default value of PXN_DISABLE may be overwritten by changes in src/rccl_wrap.cc
 NCCL_PARAM(PxnDisable, "PXN_DISABLE", 1);
 
 // Net v4 plugins don't have non-blocking connect/accept. We can't therefore use
@@ -603,7 +603,8 @@ int ncclPxnDisable(struct ncclComm* comm) {
       INFO(NCCL_INIT, "PXN Disabled as plugin is v4");
       pxnDisable = 1;
     } else {
-      pxnDisable = ncclParamPxnDisable();
+      rcclSetPxn(comm, pxnDisable);
+      pxnDisable = (pxnDisable > RCCL_VALUE_INVALID)? pxnDisable : ncclParamPxnDisable();
     }
   }
   return pxnDisable;
