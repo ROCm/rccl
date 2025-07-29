@@ -313,6 +313,9 @@ if [[ "${build_tests}" == true ]] || ([[ "${run_tests}" == true ]] && [[ ! -x ./
     cmake_common_options="${cmake_common_options} -DBUILD_TESTS=ON"
 fi
 
+# Add build directory to RPATH for packaging dependency resolution
+cmake_common_options="${cmake_common_options} -DCMAKE_EXE_LINKER_FLAGS=\"-Wl,-rpath,${PWD}\""
+
 # Initiate RCCL CMake
 # Passing ONLY_FUNCS separately (not as part of ${cmake_common_options}) as
 # ${ONLY_FUNCS} is a debug-only feature

@@ -156,13 +156,11 @@ if(BUILD_TESTS)
     target_link_libraries(${test_executable} PRIVATE ${RCCL_COMMON_LINK_LIBS})
     if(BUILD_SHARED_LIBS)
       target_link_libraries(${test_executable} PRIVATE rccl)
-      set_property(TARGET ${test_executable} PROPERTY INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${ROCM_PATH}/lib;${CMAKE_BINARY_DIR}")
     else()
       add_dependencies(${test_executable} rccl)
       target_link_libraries(${test_executable} PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR} -lrocm_smi64 -L${ROCM_PATH}/lib -L${ROCM_PATH}/rocm_smi/lib)
     endif()
 
-    set_property(TARGET ${test_executable} PROPERTY BUILD_RPATH "${CMAKE_BINARY_DIR};${ROCM_PATH}/lib")
     rocm_install(TARGETS ${test_executable} COMPONENT tests)
   endforeach()
 
