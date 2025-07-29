@@ -41,8 +41,10 @@ typedef enum RcclTunableColls {
 #define RCCL_PROTOCOL_FACTOR_IDX 2
 #define RCCL_PROTOCOL_THREAD_THRESHOLD_IDX 3
 
-#define RCCL_VALUE_UNSET -2
-#define RCCL_VALUE_INVALID -1
+typedef enum {
+  RCCL_VALUE_UNSET = -2,
+  RCCL_VALUE_INVALID = -1
+} rcclValueState_t;
 
 #ifdef RCCL_EXPOSE_STATIC
 #define RCCL_STATIC_EXPOSE_CHECK()
