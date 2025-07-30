@@ -14,7 +14,7 @@
 #endif
 
 namespace {
-  template<typename T, typename RedOp, typename Proto, int RCCLMetadata, int COLL_UNROLL>
+  template<typename T, typename RedOp, typename Proto, int RCCLMetadata, int USE_ACC, int COLL_UNROLL>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__)
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #else
@@ -564,7 +564,7 @@ namespace {
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
     if(work->regUsed || work->netRegUsed || work->gfx942CheapFenceOff){ \
       runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
-    } \ 
+    } \
     else { \
       runRing<T, RedOp, Proto, RCCL_ONE_NODE_RING_SIMPLE>(tid, nthreads, work); \
     } \
@@ -770,7 +770,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
 
       if (tid < tidEndScatter) {
         // Scatter
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsScatter, NULL, nvls->up, work->sendbuff, NULL,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -782,7 +782,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
         }
       } else if (tid < tidEndGather) {
         // Gather
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
           prims(tid - tidEndScatter, nThreadsGather, nvls->up, NULL, NULL, work->recvbuff,
             work->redOpArg, 1 * Proto::MaxGroupWidth, 1, 1);
@@ -817,7 +817,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
 
       if (tid < tidEndScatter) {
         // Scatter
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsScatter, NULL, nvls->up, work->sendbuff, NULL,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -829,7 +829,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
         // coverity[overrun-call] => Coverity think prims.index can be greater than 1
       } else if (tid < tidEndGather) {
         // Gather
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
           prims(tid - tidEndScatter, nThreadsGather, nvls->up, NULL, NULL, work->recvbuff,
             work->redOpArg, 1 * Proto::MaxGroupWidth, 1, 1);
@@ -840,7 +840,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
         }
       } else if (tid < tidEndReduce && nvls->headRank != -1) {
         // Reduce, send to network
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 1, 0>;
         // Coverity complains about a possible overrun inside the class below, but that's actually
         // a false positive.
         // coverity[identity_transfer:FALSE]
@@ -855,7 +855,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
         }
       } else if (tid < tidEndBcast && nvls->headRank != -1) {
         // Recv from network, broadcast
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 0, 1>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 0, 1>;
         // Coverity complains about a possible overrun inside the class below, but that's actually
         // a false positive.
         // coverity[identity_transfer:FALSE]
@@ -905,7 +905,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PROTO_
 
     if (tid < tidEndScatter) {
       // Scatter
-      using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+      using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
       Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
         prims(tid, nThreadsScatter, NULL, nvls->up, work->sendbuff, NULL,
           work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -917,7 +917,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PROTO_
       }
     } else if (tid < tidEndGather) {
       // Gather
-      using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+      using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
       Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
         prims(tid - tidEndScatter, nThreadsGather, nvls->up, NULL, NULL, work->recvbuff,
           work->redOpArg, 1 * Proto::MaxGroupWidth, 1, 1);
@@ -930,7 +930,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PROTO_
     } else if (tid < tidEndReduce && nvls->headRank != -1) {
       if (!hasUp) {
         // Reduce and Broadcast
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 1>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 1, 1>;
         Primitives<T, RedOp, FanSymmetric<3>, /*Direct=*/1, Proto, 0>
           prims(tid - tidEndGather, nThreadsReduce, treeDown, treeDown, NULL, NULL,
             work->redOpArg, 2 * Proto::MaxGroupWidth, 0, 0, work);
@@ -944,7 +944,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PROTO_
         }
       } else {
         // Reduce, send to network
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 1, 0>;
         // Coverity reports that the callee treats &treeUp as an array.  However, due to the use of
         // FanAsymmetric<3, 1>, only the first element is ever accessed, so it's fine.
         // coverity[callee_ptr_arith:FALSE]
@@ -962,7 +962,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_NVLS_TREE, NCCL_PROTO_
       }
     } else if (tid < tidEndBcast && nvls->headRank != -1) {
       // Recv from network, broadcast
-      using Proto = ProtoSimple<1, 1, COLL_UNROLL, 0, 1>;
+      using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 0, 1>;
       // Coverity reports that the callee treats &treeUp as an array.  However, due to the use of
       // FanAsymmetric<1, 3>, only the first element is ever accessed, so it's fine.
       // coverity[callee_ptr_arith:FALSE]
