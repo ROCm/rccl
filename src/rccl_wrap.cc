@@ -120,6 +120,33 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   return ncclSuccess;
 }
 
+void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
+  static int pxnDisable = RCCL_VALUE_UNSET;
+  if(pxnDisable == RCCL_VALUE_UNSET) {
+    const char *inputStr = getenv("NCCL_PXN_DISABLE");
+    if(!IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || inputStr) {
+      rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
+      return;
+    }
+    pxnDisable = (comm->nRanks >= 64)? 0 : 1;
+    INFO(NCCL_INIT, "RCCL PXN set as %s", !pxnDisable? "enabled" : "disabled");
+  }
+  rcclPxnDisable = pxnDisable;
+}
+
+void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
+  static int p2pNetChunkSize = RCCL_VALUE_UNSET;
+  if(p2pNetChunkSize == RCCL_VALUE_UNSET) {
+    const char *inputStr = getenv("NCCL_P2P_NET_CHUNKSIZE");
+    if(!IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || inputStr) {
+      rcclP2pNetChunkSize = p2pNetChunkSize = RCCL_VALUE_INVALID;
+      return;
+    }
+    p2pNetChunkSize = (comm->nRanks >= 64)? (1 << 19) : (1 << 17);
+    INFO(NCCL_INIT, "RCCL P2P net chunk size default set to: %d", p2pNetChunkSize);
+  }
+  rcclP2pNetChunkSize = p2pNetChunkSize;
+}
 
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount) {
   RCCL_STATIC_EXPOSE_CHECK();
