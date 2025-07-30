@@ -28,30 +28,29 @@
 
 using namespace rccl;
 
-/* [RCCL] Determine which GPU kernel to execute */
-void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task = NULL)
-{
-  // At this time, unroll factor is controlled only by passed in unroll argument
-  // After more investigation, this may be further tuned by the actual task being processed
+struct ncclKernelMatch {
+  void* kernelFn;
+  bool specialized;
+};
 
 #ifdef ENABLE_COLLTRACE
-  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]) / 2;
-  int firstKernel = useCollTrace ? numKernels : 0;
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
+static ncclKernelMatch const ncclKerns[6] = {
+  {(void *)ncclDevKernel_Generic_1, true},
+  {(void *)ncclDevKernel_Generic_2, true},
+  {(void *)ncclDevKernel_Generic_4, true},
+  {(void *)ncclDevKernelDebug_Generic_1, true},
+  {(void *)ncclDevKernelDebug_Generic_2, true},
+  {(void *)ncclDevKernelDebug_Generic_4, true}
+};
 #else
-  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]);
-  int firstKernel = 0;
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
+static ncclKernelMatch const ncclKerns[3] = {
+  {(void*)ncclDevKernel_Generic_1, true},
+  {(void*)ncclDevKernel_Generic_2, true},
+  {(void*)ncclDevKernel_Generic_4, true}
+};
 #endif
-
-  // Check if the requested unroll exists
-  for (int kernelIdx = 0; kernelIdx < numKernels; kernelIdx++) {
-    if (rcclKernelTable[firstKernel + kernelIdx].unroll == unroll) {
-      return rcclKernelTable[firstKernel + kernelIdx].funcPtr;
-    }
-  }
-  // Fall back to default unroll
-  WARN("Requested RCCL_UNROLL_FACTOR: %d does not exist in `rcclKernelTable`. Falling back to default unroll: %d", unroll, rcclKernelTable[firstKernel].unroll);
-  return rcclKernelTable[firstKernel].funcPtr;
-}
 
 static int rcclProtoGrainSize(int proto, ncclComm *comm){
   switch (proto) {
@@ -82,7 +81,7 @@ NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
 ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* maxStackSize) {
-  constexpr int KernelCount = sizeof(rcclKernelTable)/sizeof(rcclKernelTable[0]);
+  constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
   ncclResult_t result = ncclSuccess;
 
   if (maxStackSize) *maxStackSize = 0;
@@ -95,7 +94,7 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
   int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
   for (int k=0; k < KernelCount; k++) {
-    void* fn = rcclKernelTable[k].funcPtr;
+    void* fn = ncclKerns[k].kernelFn;
     cudaFuncAttributes attr = {0};
     if (fn == nullptr) continue;
 
@@ -139,11 +138,16 @@ static inline int ncclFuncTrafficPerByte(ncclFunc_t func, int nRanks) {
   }
 }
 
+RCCL_PARAM_DECLARE(EnableProxyTrace);
 /*****************************************************************************/
 /*       Launch system : synchronization and CUDA kernel launch              */
 /*****************************************************************************/
 static ncclResult_t addProxyOpIfNeeded(struct ncclComm* comm, struct ncclKernelPlan* plan, struct ncclProxyOp* op) {
   bool needed = true;
+  if (rcclParamEnableProxyTrace()) {
+    op->traceKey.commHash = comm->commHash;
+    op->traceKey.opCount = comm->opCount;
+  }
   NCCLCHECK(ncclProxySaveOp(comm, op, &needed));
   if (needed) {
     struct ncclProxyOp* q = ncclMemoryPoolAlloc<struct ncclProxyOp>(&comm->memPool_ncclProxyOp, &comm->memPermanent);
@@ -351,6 +355,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
 
     devWork.sendbuff = (void*)task->sendbuff;
     devWork.recvbuff = (void*)task->recvbuff;
+    devWork.acc = (void*)task->acc;
     devWork.sendbuffOffset = task->sendbuffOffset;
     devWork.recvbuffOffset = task->recvbuffOffset;
     devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
@@ -361,6 +366,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
+    devWork.gfx942CheapFenceOff = comm->gfx942CheapFenceOff;
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     devWork.profilerEnabled = ncclProfilerPluginLoaded() && (task->eActivationMask & ncclProfileKernelCh);
@@ -800,12 +806,8 @@ static ncclResult_t scheduleCollTasksToPlan(
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
     if (!plan->kernelSpecialized) {
-#ifdef ENABLE_COLLTRACE
-      plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
-#else
-      plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
-#endif
-      plan->kernelSpecialized = true;
+      plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
+      plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
     }
 
     if (comm->rank == 0) {
@@ -1030,6 +1032,9 @@ static ncclResult_t addP2pToPlan(
     op->rank = comm->rank;
     op->eActivationMask = p2pTasks[dir] ? p2pTasks[dir]->eActivationMask : 0;
     op->connIndex = connIndex[dir];
+    if (rcclParamEnableProxyTrace()) {
+      op->coll =  dir ? ncclFuncSend : ncclFuncRecv;
+    }
     // The following are modified per channel part in addWorkToChannels():
     // op->buffer, op->nbytes, op->nsteps = ...;
   }
@@ -1052,7 +1057,9 @@ static ncclResult_t addP2pToPlan(
       int nParts = dir ? work->nSendChannels : work->nRecvChannels;
       void* addr = dir ? work->sendAddr : work->recvAddr;
       size_t bytes = dir ? work->sendBytes : work->recvBytes;
-
+      if (rcclParamEnableProxyTrace()) {
+        proxyOps[dir].totalBytes = bytes;
+      }
       proxyOps[dir].recvbuff = nullptr;
       if (nParts <= part) {
         proxyOps[dir].nsteps = 0;
@@ -1116,12 +1123,8 @@ static ncclResult_t scheduleP2pTasksToPlan(
 
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
   if (!plan->kernelSpecialized) {
-#ifdef ENABLE_COLLTRACE
-    plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
-#else
-    plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
-#endif
-    plan->kernelSpecialized = true;
+    plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
+    plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
   }
 
   // Compute how much to split operations
@@ -1187,6 +1190,8 @@ static ncclResult_t scheduleP2pTasksToPlan(
 // Spin until its safe to increase comm->workFifoProduced to desiredProduced.
 static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduced) {
   bool hasRoom = (desiredProduced - comm->workFifoConsumedLeast) <= comm->workFifoBytes;
+  uint64_t count = 0;
+  int warned = 0;
   if (hasRoom) return;
   while (true) {
     // We have to poll for notifications from device.
@@ -1225,6 +1230,17 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduce
     hasRoom = (desiredProduced - comm->workFifoConsumedLeast) <= comm->workFifoBytes;
     if (hasRoom) break;
     sched_yield();
+
+    /* Warn if we get stuck waiting for workFifo. */
+    count++;
+    if (warned == 0 && count == 100000 && comm->rank == 0) {
+      warned = 1;
+      WARN("Waiting for work FIFO to become available. "
+           "Work fifo exhaustion can happen in large scale/high iteration count of alltoall. "
+           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %ld).\n\n"
+           "RCCL continues to retry...", comm->workFifoBytes);
+    }
+
   }
 }
 
@@ -2481,6 +2497,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->sliceSteps = info->sliceSteps;
       t->eActivationMask = __atomic_load_n(&ncclProfilerEventMask, __ATOMIC_RELAXED);
       t->opCount = comm->opCount;
+      t->acc = info->acc;
 
       planner->nTasksColl += 1;
       ncclTaskCollSorterInsert(&planner->collSorter, t, t->trafficBytes);
@@ -2530,8 +2547,8 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   }
   NCCLCHECKGOTO(ArgsCheck(info), ret, fail);
 
-  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zu datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
-        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
+  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p acc %p count %zu datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
+        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->acc, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream,
         info->comm->planner.nTasksP2p + info->comm->planner.nTasksColl,
         info->comm->localRankToRank[info->comm->localRank]);

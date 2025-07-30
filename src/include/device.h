@@ -280,7 +280,7 @@ inline __host__ uint8_t ncclP2pChannelBaseForRound(struct ncclComm* comm, int p2
 // ncclP2pChannelToPart and ncclP2pChannelForPart are inverses. The device code
 // uses ncclP2pChannelToPart to determine which part "this" channel is responsible for.
 inline __host__ int ncclP2pChannelForPart(int nP2pChannels, int base, int part, int nParts, int nNodes) {
-  if (nNodes > 1) {
+  if (nNodes > 2) {
     // Only works because nP2pChannels is pow2
     int nChannelsLog2 = countOneBits(nP2pChannels-1);
     int delta = reverseBits(part, nChannelsLog2);
@@ -290,7 +290,7 @@ inline __host__ int ncclP2pChannelForPart(int nP2pChannels, int base, int part, 
   }
 }
 inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int channel, int nParts, int nNodes) {
-  if (nNodes > 1) {
+  if (nNodes > 2) {
     // Only works because nP2pChannels is pow2
     int nChannelsLog2 = countOneBits(nP2pChannels-1);
     int delta = (channel-base) & (nP2pChannels-1);
@@ -305,11 +305,12 @@ struct alignas(16) ncclDevWorkColl {
   //   nChannels == (channelHi - channelLo) + 1
   uint32_t channelLo:8, channelHi:8;
   uint32_t nWarps:8;
-  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1;
+  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx942CheapFenceOff:1;
   uint32_t root:30, connIndex:2;
   uint16_t pivotA2ANumBiRings:15, profilerEnabled:1;
   void* recvbuff;
   void* sendbuff;
+  void *acc;
   uintptr_t sendbuffOffset;
   uintptr_t recvbuffOffset;
   uintptr_t* sendbuffRmtAddrs;
@@ -693,48 +694,61 @@ extern int const ncclDevFuncRowToId[];
 inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
   int row = 0;
   do {
-    // RING / <all_protos> / Sum / int8_t
+    // RING/PAT | <all_protos> | Sum | int8_t
+    int nAlgos = 2;
     if (coll == ncclFuncAllGather) {
-      row += proto;
+      int algo1 = algo == NCCL_ALGO_RING ? 0 :
+                /*algo == NCCL_ALGO_PAT*/ 1;
+      row += algo1 * NCCL_NUM_PROTOCOLS + proto;
       break;
     }
-    row += NCCL_NUM_PROTOCOLS;
+    row += nAlgos * NCCL_NUM_PROTOCOLS;
 
-    // <all_algos> / <all_protos> / <all_redops> / <all_types>
+    // RING/TREE | <all_protos> | <all_redops> | <all_types>
+    nAlgos = 2;
     if (coll == ncclFuncAllReduce) {
-      row += (((algo * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo * NCCL_NUM_PROTOCOLS + proto);
+      int algo1 = algo == NCCL_ALGO_TREE ? 0 :
+                /*algo == NCCL_ALGO_RING*/ 1;
+      row += (((algo1 * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo1 * NCCL_NUM_PROTOCOLS + proto);
       break;
     }
-    row += (NCCL_NUM_ALGORITHMS - 5) * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += nAlgos * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
-    // RING / SIMPLE / Sum / int8_t
+    // RING | SIMPLE | Sum | int8_t
+    nAlgos = 1;
     if (coll == ncclFuncAllToAllPivot) break;
-    row += 1;
+    row += nAlgos * 1;
 
-    // RING / <all_protos> / Sum / int8_t
+    // RING | <all_protos> | Sum | int8_t
+    nAlgos = 1;
     if (coll == ncclFuncBroadcast) {
       row += proto;
       break;
     }
-    row += NCCL_NUM_PROTOCOLS;
+    row += nAlgos * NCCL_NUM_PROTOCOLS;
 
-    // RING / <all_protos> / <all_redops> / <all_types>
+    // RING | <all_protos> | <all_redops> | <all_types>
+    nAlgos = 1;
     if (coll == ncclFuncReduce) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto;
+      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto; 
       break;
     }
-    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
+    row += nAlgos * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
-    // RING / <all_protos> / <all_redops> / <all_types>
+    // RING/PAT | <all_protos> | <all_redops> | <all_types>
+    nAlgos = 2;
     if (coll == ncclFuncReduceScatter) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto;
+      int algo1 = algo == NCCL_ALGO_RING ? 0 :
+                /*algo == NCCL_ALGO_PAT*/ 1;
+      row += (((algo1 * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo1 * NCCL_NUM_PROTOCOLS + proto);
       break;
     }
     row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
 
-    // RING / SIMPLE / Sum / int8_t
+    // RING | SIMPLE | Sum | int8_t
+    nAlgos = 1;
     if (coll == ncclFuncSendRecv) break;
-    row += 1;
+    row += nAlgos * 1;
 
   } while (false);
 

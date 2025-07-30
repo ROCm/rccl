@@ -16,6 +16,7 @@ typedef enum {
   rrAllGather,
   rrReduceScatter,
   rrAllReduce,
+  rrAllReduceWithBias,
   rrSend,
   rrRecv,
   rrAllToAll,
@@ -51,6 +52,7 @@ constexpr const char* rcclCallStr[]
   "AllGather",
   "ReduceScatter",
   "AllReduce",
+  "AllReduceWithBias",
   "Send",
   "Recv",
   "AllToAll",
@@ -94,6 +96,7 @@ struct rcclApiCall {
   uint64_t              opCount = 0;
   const void*           sendbuff = NULL;
   void*                 recvbuff = NULL;
+  const void*           acc = NULL;
   void*                 sendPtrBase = NULL;
   void*                 recvPtrBase = NULL;
   size_t                sendPtrExtent = 0;

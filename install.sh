@@ -35,6 +35,7 @@ roctx_enabled=true
 run_tests=false
 run_tests_all=false
 time_trace=false
+force_reduce_pipeline=false
 
 # #################################################
 # helper functions
@@ -71,6 +72,7 @@ function display_help()
     echo "    -t|--tests_build           Build rccl unit tests, but do not run"
     echo "       --time-trace            Plot the build time of RCCL (requires \`ninja-build\` package installed on the system)"
     echo "       --verbose               Show compile commands"
+    echo "       --force-reduce-pipeline Force reduce_copy sw pipeline to be used for every reduce-based collectives and datatypes"
 }
 
 # #################################################
@@ -80,7 +82,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ "$?" -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options cdfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable-code-coverage,enable_backtrace,disable-colltrace,disable-msccl-kernel,disable-mscclpp,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,log-trace,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options cdfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable-code-coverage,enable_backtrace,disable-colltrace,disable-msccl-kernel,disable-mscclpp,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,log-trace,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,force-reduce-pipeline,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -123,6 +125,7 @@ while true; do
     -t | --tests_build)              build_tests=true;                                                                                 shift ;;
          --time-trace)               time_trace=true;                                                                                  shift ;;
          --verbose)                  build_verbose=true;                                                                               shift ;;
+         --force-reduce-pipeline)    force_reduce_pipeline=true;                                                                        shift ;;
     --) shift ; break ;;
     *)  echo "Unexpected command line parameter received; aborting";
         exit 1
@@ -277,6 +280,11 @@ if [[ "${openmp_test_enabled}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DOPENMP_TESTS_ENABLED=ON"
 fi
 
+# Force Reduce pipeline
+if [[ "${force_reduce_pipeline}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DFORCE_REDUCE_PIPELINING=ON"
+fi
+
 # Enable NPKit
 if [[ "${npkit_enabled}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DENABLE_NPKIT=ON"
@@ -332,15 +340,25 @@ fi
 
 # Optionally, run RCCL-UnitTests, if they're enabled.
 if [[ "${run_tests}" == true ]]; then
-    if [[ -x "./test/rccl-UnitTests" ]]; then
-        if [[ "${run_tests_all}" == true ]]; then
+    if [[ ! -x "./test/rccl-UnitTests" ]]; then
+        echo "RCCL-UnitTests have not been built yet; Please re-run script with \"-t\" to build the binary."
+        exit 1
+    fi
+    if [[ "${build_release}" == false && ! -x "./test/rccl-UnitTestsFixtures" ]]; then
+        echo "RCCL-UnitTestsFixtures have not been built yet; Please re-run script with \"-t\" to build the binary."
+        exit 1
+    fi
+    if [[ "${run_tests_all}" == true ]]; then
+        if [[ -x "./test/rccl-UnitTests" ]]; then
             ./test/rccl-UnitTests
-        else
-            ./test/rccl-UnitTests --gtest_filter="AllReduce.*"
+        fi
+        if [[ "${build_release}" == false && -x "./test/rccl-UnitTestsFixtures" ]]; then
+            ./test/rccl-UnitTestsFixtures
         fi
     else
-        echo "RCCL-UnitTests have not been built yet; Please re-run script with \"-t\" to build RCCL-UnitTests."
-        exit 1
+        if [[ -x "./test/rccl-UnitTests" ]]; then
+            ./test/rccl-UnitTests --gtest_filter="AllReduce.*"
+        fi
     fi
 fi
 
