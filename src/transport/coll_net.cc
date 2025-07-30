@@ -522,9 +522,10 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   struct connectMapMem* mapMem = map->mems+bank;
   NCCLCHECK(sharedBuffersInit(connection->collNet, resources->useGdr, &mapMem->gpuPtr, &mapMem->cpuPtr, &mapMem->size));
   NCCL_NET_MAP_ADD_POINTER(map, 1, resources->useGdr ? 1 : 0, mapMem->size, buffs[NCCL_PROTO_SIMPLE]);
-
+ 
+  int dmabuf_fd = -1;
+  (void)dmabuf_fd; /*compiler warnings fix - unused variable*/
 #if CUDA_VERSION >= 11070
-  int dmabuf_fd = -1; /*compiler warning , defining var only when needed*/
   /* DMA-BUF support */
   if (resources->useGdr && resources->useDmaBuf) {
     CUCHECK(cuMemGetHandleForAddressRange((void *)&dmabuf_fd, (CUdeviceptr)mapMem->cpuPtr, mapMem->size, CU_MEM_RANGE_HANDLE_TYPE_DMA_BUF_FD, getHandleForAddressRangeFlags(resources->useGdr)));
@@ -545,12 +546,10 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
 
 exit:
   return ret;
-#if CUDA_VERSION >= 11070
-fail:  /*compiler warning , defining label only when needed*/
+fail:
   if (dmabuf_fd != -1) {
     (void)close(dmabuf_fd);
   }
-#endif
   goto exit;
 }
 

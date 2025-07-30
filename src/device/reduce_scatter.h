@@ -187,7 +187,8 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
 
     if (tid == nworkers) { // Algo computation thread
       PatRSAlgorithm<T> patAlgo(chunkCount*sizeof(T), NCCL_STEPS, NCCL_PAT_NWORKERS/WARP_SIZE, channelOffset, channelOffset + channelCount, count, chunkCount, rank, nranks);
-      //int parallelFactor = shmem->parallelFactor = patAlgo.getParallelFactor(); //unused variable - compiler warning
+      int parallelFactor = shmem->parallelFactor = patAlgo.getParallelFactor();
+      (void)parallelFactor;// unused variable - compiler warning
       int step = 0;
       while (1) {
         struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
