@@ -333,7 +333,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       "__forceinline__ __device__ void NCCL_CALL_FUNCTIONS(unsigned short funcIndex) noexcept {\n")
   if is_ifc:
     for curr_unroll in seen_unroll:
-      out("  if (unroll == %s) { ncclDevFuncTable_%s[funcIndex]();\n" % (curr_unroll, curr_unroll))
+      out("  if (unroll == %s) { ncclDevFuncTable_%s[funcIndex](); }\n" % (curr_unroll, curr_unroll))
   else:
     out(f"  Caller<unroll, 0, {tableIdx}>::call(funcIndex);\n")
   out("}\n\n")
