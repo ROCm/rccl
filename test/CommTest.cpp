@@ -13,7 +13,7 @@ namespace RcclUnitTesting
 	ncclTaskCollSorter* me_ptr = new ncclTaskCollSorter;
 	me_ptr->head = nullptr;
 
-	assert(true == ncclTaskCollSorterEmpty(me_ptr));
+	ASSERT_EQ(ncclTaskCollSorterEmpty(me_ptr), true);
 	delete me_ptr;
 
 	INFO("[CommTest] Completed the test\n");
