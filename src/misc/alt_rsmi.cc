@@ -192,7 +192,6 @@ int ARSMI_init(void)
     // the order of each block.
     for (auto i=0; i < first_elem.size(); i++) {
         // Find the first_elem[i] in sort_vecs in
-        bool found = false;
         for (auto j = 0; j < sort_vecs.size(); j++ ) {
             if (first_elem[i] == sort_vecs[j][0].s_bdf) {
                 for (auto k=0; k<sort_vecs[j].size(); k++) {
