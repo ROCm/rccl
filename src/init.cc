@@ -51,6 +51,7 @@
 #include "mscclpp/mscclpp_nccl.h"
 #endif
 #include "rocm_smi_wrap.h"
+#include "rccl_common.h"
 // [/RCCL]
 
 #include "msccl/msccl_lifecycle.h"
@@ -86,37 +87,6 @@ NCCL_PARAM(RuntimeConnect, "RUNTIME_CONNECT", 1);
 
 struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
 static ncclResult_t commReclaim(ncclComm_t comm);
-
-//RCCL runtime param to set Unroll Factor
-RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", 0);
-
-ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
-  hipDeviceProp_t devProp;
-  CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-
-  //If RCCL runtime param is set, it will override defaults
-  if (rcclParamUnrollFactor() != 0) {
-    comm->unroll = rcclParamUnrollFactor();
-    INFO(NCCL_INIT, "RCCL Unroll Factor (user-defined): %d", comm->unroll);
-  }
-  else {
-    if (IsArchMatch(devProp.gcnArchName, "gfx950")) {
-      //on gfx950, use unroll=1 for single-node and unroll=2 for multi-node
-      if (comm->nNodes == 1)
-        comm->unroll = 1;
-      else
-        comm->unroll = 2;
-    }
-    else if((IsArchMatch(devProp.gcnArchName, "gfx908")) ||
-            (IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80))
-      //on MI300X and gfx908, use unroll=2
-      comm->unroll = 2;
-    else
-      comm->unroll = 4;
-    INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll);
-  }
-  return ncclSuccess;
-}
 
 #ifdef ENABLE_MSCCLPP
 size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
