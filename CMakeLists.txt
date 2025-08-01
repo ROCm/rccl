@@ -473,7 +473,6 @@ set(SRC_FILES
   src/include/argcheck.h
   src/include/BfdBacktrace.hpp
   src/include/bitops.h
-  src/include/bnxt_re_dv.h
   src/include/bootstrap.h
   src/include/channel.h
   src/include/checks.h

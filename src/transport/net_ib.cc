@@ -30,7 +30,7 @@
 #include "graph/xml.h"
 
 #ifdef HAVE_BNXT_DV
-#include "bnxt_re_dv.h"
+#include <infiniband/bnxt_re_dv.h>
 #endif
 
 #define MAXNAMESIZE 64
@@ -1188,8 +1188,16 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
   // for each QP, there can be 2*MAX_REQUESTS completions for SQ and MAX_REQUESTS completions for RQ. 
 #ifdef HAVE_BNXT_DV
   // create RCQ
-  int cq_depth = 3*MAX_REQUESTS*ncclParamIbQpsPerConn();
-  cq_size = (cq_depth + 1) * 32;
+  struct bnxt_re_dv_cq_attr cq_attr = {};
+  void *cq_handle;
+  int cq_depth = MAX_REQUESTS*ncclParamIbQpsPerConn();
+
+  cq_handle = bnxt_re_dv_cq_mem_alloc(ibDev->context, cq_depth, &cq_attr);
+  if (!cq_handle) {
+    WARN("Cannot allocate CQ memory");
+    return ncclInternalError;
+  }
+  cq_size = cq_attr.ncqe * cq_attr.cqe_size;
   if (rcclParamMoveCQToHBM())
     error = hipExtMallocWithFlags(&r_addr, cq_size, hipDeviceMallocUncached);
   else
@@ -1210,15 +1218,21 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
   base->rcq_addr = r_addr;
 
   memset(&rcq_dv_attr, 0, sizeof(struct bnxt_re_dv_cq_init_attr));
-  rcq_dv_attr.ncqe = cq_depth + 1;
+  rcq_dv_attr.ncqe = cq_attr.ncqe;
   rcq_dv_attr.umem_handle =r_umem;
+  rcq_dv_attr.cq_handle = (uint64_t)cq_handle;
   base->rcq = bnxt_re_dv_create_cq(ibDev->context, &rcq_dv_attr);
   INFO(NCCL_NET, "NET/IB : bnxt_re_dv_create_cq dev=%d devName=%s ndevs=%d nmdevs=%d pd=%p rcq=%p",
     base->ibDevN, ncclIbDevs[base->ibDevN].devName, ncclNIbDevs, ncclNMergedIbDevs, base->pd, base->rcq);
 
   // create SCQ
   cq_depth = 2*MAX_REQUESTS*ncclParamIbQpsPerConn();
-  cq_size = (cq_depth + 1) * 32;
+  cq_handle = bnxt_re_dv_cq_mem_alloc(ibDev->context, cq_depth, &cq_attr);
+  if (!cq_handle) {
+    WARN("Cannot allocate CQ memory");
+    return ncclInternalError;
+  }
+  cq_size = cq_attr.ncqe * cq_attr.cqe_size;
   error = hipHostMalloc(&s_addr, cq_size, cudaHostAllocMapped);
   if (error != hipSuccess) {
     WARN("Memory allocation for SCQ failed with error=%d\n", error);
@@ -1236,7 +1250,8 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
   base->scq_addr = s_addr;
 
   memset(&scq_dv_attr, 0, sizeof(struct bnxt_re_dv_cq_init_attr));
-  scq_dv_attr.ncqe = cq_depth + 1;
+  scq_dv_attr.cq_handle = (uint64_t)cq_handle;
+  scq_dv_attr.ncqe = cq_attr.ncqe;
   scq_dv_attr.umem_handle =s_umem;
   base->scq = bnxt_re_dv_create_cq(ibDev->context, &scq_dv_attr);
   INFO(NCCL_NET, "NET/IB : bnxt_re_dv_create_cq dev=%d devName=%s ndevs=%d nmdevs=%d pd=%p scq=%p",
