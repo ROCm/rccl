@@ -95,6 +95,8 @@ NCCL_PARAM(NvlsChannels, "NVLS_NCHANNELS", NCCL_CONFIG_UNDEF_INT);
 
 struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
 static ncclResult_t commReclaim(ncclComm_t comm);
+std::unordered_map<void*, size_t> hugepageAllocs;
+std::mutex hugepageAllocsMutex;
 
 #ifdef ENABLE_MSCCLPP
 size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
