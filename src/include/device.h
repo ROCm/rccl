@@ -14,6 +14,7 @@
 #include <hip/hip_bfloat16.h>
 #include "nccl_common.h"
 #include "bitops.h"
+#include "symmetric.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit_struct.h"
 #endif
@@ -36,6 +37,30 @@ extern const char* funcNames[FUNC_INDEX_TOTAL];
   #define NCCL_CUDA_ARCH __CUDA_ARCH__
 #else
   #define NCCL_CUDA_ARCH 0
+#endif
+
+#ifdef __CUDA_ARCH_SPECIFIC__
+  #define NCCL_CUDA_ARCH_SPECIFIC __CUDA_ARCH_SPECIFIC__
+#elif defined(__CUDA_ARCH_HAS_FEATURE__)
+  #if __CUDA_ARCH_HAS_FEATURE__(SM90_ALL)
+    #define NCCL_CUDA_ARCH_SPECIFIC 900
+  #elif __CUDA_ARCH_HAS_FEATURE__(SM100_ALL)
+    #define NCCL_CUDA_ARCH_SPECIFIC 1000
+  #elif __CUDA_ARCH_HAS_FEATURE__(SM101_ALL)
+    #define NCCL_CUDA_ARCH_SPECIFIC 1010
+  #elif __CUDA_ARCH_HAS_FEATURE__(SM120_ALL)
+    #define NCCL_CUDA_ARCH_SPECIFIC 1200
+  #else
+    #define NCCL_CUDA_ARCH_SPECIFIC 0
+  #endif
+#else
+  #define NCCL_CUDA_ARCH_SPECIFIC 0
+#endif
+
+#ifdef __CUDA_ARCH_FAMILY_SPECIFIC__
+  #define NCCL_CUDA_ARCH_FAMILY_SPECIFIC __CUDA_ARCH_FAMILY_SPECIFIC__
+#else
+  #define NCCL_CUDA_ARCH_FAMILY_SPECIFIC 0
 #endif
 
 #include "net_device.h"
@@ -505,6 +530,14 @@ struct alignas(16) ncclDevChannel {
   uint64_t workCounter;
 };
 
+#define MAX_PROFILER_EVENTS_PER_CHANNEL 64
+struct ncclDevProfiler {
+  struct {
+    uint64_t counter;
+    uint64_t timestamp;
+  } data[MAX_PROFILER_EVENTS_PER_CHANNEL];
+};
+
 struct ncclDevComm {
   int rank;
   int nRanks;
@@ -514,9 +547,6 @@ struct ncclDevComm {
   int p2pChunkSize;
   int isAllNvlink;
   int p2pnChannelsPerPeer;
-
-  // Work fifo return credits
-  uint32_t* workConsumed/*[MAXCHANNELS]*/;
 
   int* collNetDenseToUserRank;
 
@@ -529,8 +559,8 @@ struct ncclDevComm {
   int* rankToLocalRank;
 
   // Profiler counters
-  uint64_t* workStarted/*[MAXCHANNELS]*/;
-  uint64_t* workCompleted/*[MAXCHANNELS]*/;
+  struct ncclDevProfiler* workStarted/*[MAXCHANNELS]*/;
+  struct ncclDevProfiler* workCompleted/*[MAXCHANNELS]*/;
 
 #if defined(ENABLE_NPKIT)
   NpKitEventCollectContext* npKitEventCollectContexts;
@@ -630,7 +660,7 @@ __host__ __device__ constexpr int ncclCalcUnroll(int bytePerPack, int insns, int
 
 __host__ __device__ constexpr int ncclCollUnroll(int cudaArch = NCCL_CUDA_ARCH) {
   // Our collective unroll should move to the same bytes&insns model as NVLS.
-  return cudaArch >= 800 ? (cudaArch == 1200 ? 6 : 8) : 4;
+  return cudaArch >= 800 ? (cudaArch / 100 == 12 ? 6 : 8) : 4;
 }
 
 __host__ __device__ constexpr int ncclNvlsUnrollBytes(int cudaArch = NCCL_CUDA_ARCH) { return 4*16; }
@@ -661,7 +691,6 @@ extern int const ncclDevKernelCount;
 extern void* const ncclDevKernelList[/*ncclDevKernelCount*/];
 
 // Table of most specialized kernel function to run given func index.
-extern int const ncclDevFuncIdCount;
 extern int const ncclDevFuncRowToId[];
 extern void* const ncclDevKernelForFunc[/*funcIndex*/];
 extern bool const ncclDevKernelForFuncIsSpecialized[/*funcIndex*/];
