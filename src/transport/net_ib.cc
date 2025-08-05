@@ -1156,7 +1156,7 @@ static void ncclIbAddEvent(struct ncclIbRequest* req, int devIndex, struct ncclI
 
 RCCL_PARAM(MoveCQToHBM, "MOVE_CQ_TO_HBM", 0);
 
-ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base, void* cq_context) {
+ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base, void* cq_context, bool isSend) {
   base->ibDevN = ibDevN;
   ncclIbDev* ibDev = ncclIbDevs + ibDevN;
 #ifdef HAVE_BNXT_DV
@@ -1198,7 +1198,7 @@ ncclResult_t ncclIbInitCommDevBase(int ibDevN, struct ncclIbNetCommDevBase* base
     return ncclInternalError;
   }
   cq_size = cq_attr.ncqe * cq_attr.cqe_size;
-  if (rcclParamMoveCQToHBM())
+  if (rcclParamMoveCQToHBM() && !isSend)
     error = hipExtMallocWithFlags(&r_addr, cq_size, hipDeviceMallocUncached);
   else
     error = hipHostMalloc(&r_addr, cq_size, cudaHostAllocMapped);
@@ -1652,7 +1652,7 @@ ib_recv_dev_list:
   comm->ar = 1; // Set to 1 for logic
   for (int i = 0; i < comm->base.vProps.ndevs; i++) {
     int ibDevN = comm->base.vProps.devs[i];
-    NCCLCHECKGOTO(ncclIbInitCommDevBase(ibDevN, &comm->devs[i].base, &comm->base.stats), ret, fail);
+    NCCLCHECKGOTO(ncclIbInitCommDevBase(ibDevN, &comm->devs[i].base, &comm->base.stats, true), ret, fail);
     comm->ar = comm->ar && ncclIbDevs[ibDevN].ar; // ADAPTIVE_ROUTING - if all merged devs have it enabled
   }
 
@@ -1980,7 +1980,7 @@ ib_recv:
   for (int i = 0; i < rComm->base.vProps.ndevs; i++) {
     rCommDev = rComm->devs + i;
     ibDevN = rComm->base.vProps.devs[i];
-    NCCLCHECKGOTO(ncclIbInitCommDevBase(ibDevN, &rCommDev->base, &rComm->base.stats), ret, fail);
+    NCCLCHECKGOTO(ncclIbInitCommDevBase(ibDevN, &rCommDev->base, &rComm->base.stats, false), ret, fail);
     ibDev = ncclIbDevs + ibDevN;
     NCCLCHECKGOTO(ncclIbGetGidIndex(ibDev->context, ibDev->portNum, &ibDev->portAttr, &rCommDev->base.gidInfo.localGidIndex), ret, fail);
     NCCLCHECKGOTO(wrap_ibv_query_gid(ibDev->context, ibDev->portNum, rCommDev->base.gidInfo.localGidIndex, &rCommDev->base.gidInfo.localGid), ret, fail);
@@ -2787,8 +2787,11 @@ ncclResult_t ncclIbTest(void* request, int* done, int* sizes) {
         NCCLCHECK(wrap_ibv_poll_cq(r->devBases[i]->scq, 4, wcs, &wrDone));
         totalWrDone += wrDone;
         if (wrDone == 0) { TIME_CANCEL(3); } else { TIME_STOP(3); }
-        if (wrDone == 0) NCCLCHECK(wrap_ibv_poll_cq(r->devBases[i]->rcq, 4, wcs, &wrDone));
-        if (wrDone == 0) { TIME_CANCEL(3); } else { TIME_STOP(3); }
+        if (wrDone == 0) {
+          NCCLCHECK(wrap_ibv_poll_cq(r->devBases[i]->rcq, 4, wcs, &wrDone));
+          totalWrDone += wrDone;
+          if (wrDone == 0) { TIME_CANCEL(3); } else { TIME_STOP(3); }
+        }
         if (wrDone == 0) continue;
         for (int w=0; w<wrDone; w++) {
           struct ibv_wc *wc = wcs+w;
