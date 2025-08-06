@@ -347,7 +347,12 @@ private:
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T const *srcPtr = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
     T       *dstPtr = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
+#if !defined(__gfx950__)
     T       *accPtr = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : userBufs[Acc] + dstIx;
+#else
+    //temporary solution to avoid increased register pressure on gfx950
+    T       *accPtr = nullptr;
+#endif
     int wireOffset = WireWordPerSlice*warp + 2*wid;
     const int nwarps = nthreads/WARP_SIZE;
     nelem = nelem < 0 ? 0 : nelem;
