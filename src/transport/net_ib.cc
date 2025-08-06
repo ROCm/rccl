@@ -2788,9 +2788,10 @@ ncclResult_t ncclIbTest(void* request, int* done, int* sizes) {
         totalWrDone += wrDone;
         if (wrDone == 0) { TIME_CANCEL(3); } else { TIME_STOP(3); }
         if (wrDone == 0) {
+          TIME_START(5);
           NCCLCHECK(wrap_ibv_poll_cq(r->devBases[i]->rcq, 4, wcs, &wrDone));
           totalWrDone += wrDone;
-          if (wrDone == 0) { TIME_CANCEL(3); } else { TIME_STOP(3); }
+          if (wrDone == 0) { TIME_CANCEL(5); } else { TIME_STOP(5); }
         }
         if (wrDone == 0) continue;
         for (int w=0; w<wrDone; w++) {
