@@ -355,6 +355,13 @@ execute_process(
   OUTPUT_VARIABLE HOST_OS_ID
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+execute_process(
+  COMMAND bash -c "grep '^ID_LIKE=' /etc/os-release | cut -d'=' -f2 | cut -d'\"' -f2"
+  OUTPUT_VARIABLE HOST_OS_FAMILY
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 if (ENABLE_MSCCLPP AND NOT(${HOST_OS_ID} STREQUAL "ubuntu" OR ${HOST_OS_ID} STREQUAL "centos"))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration not supported on this OS (${HOST_OS_ID}); disabling MSCCL++ build")
