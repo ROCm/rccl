@@ -10,8 +10,9 @@ all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING", "PAT"]
 all_unroll = ["1", "2", "4"]
-
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
+all_pipeline = ["0", "1"]
+pipelined_types = ["bf16"]
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_pipeline, all_unroll]
 
 ################################################################################
 # The first command line argument is the path to the directory to generate and
@@ -120,6 +121,16 @@ tys_of_coll = {
   "SendRecv":      ["i8"]
 }
 
+pipelines_of_coll = {
+  "AllGather":     ["0"],
+  "AllReduce":     all_pipeline,
+  "AllToAllPivot": ["0"],
+  "Broadcast":     ["0"],
+  "Reduce":        all_pipeline,
+  "ReduceScatter": all_pipeline,
+  "SendRecv":      ["0"]
+}
+
 coll_camel_to_lower = {
   "AllGather":     "all_gather",
   "AllReduce":     "all_reduce",
@@ -174,10 +185,10 @@ def calc_unroll_for_local_arch():
     return all_unroll
 
 # Helper function to check if the conditions for the collective is being met
-def func_validate(coll, algo, proto, redop, ty, unroll):
+def func_validate(coll, algo, proto, redop, ty, pipeline, unroll):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
-  if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll:
+  if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll or pipeline not in pipelines_of_coll[coll] or (pipeline in ["1"] and ty not in pipelined_types):
     return False
   return True
 
@@ -209,12 +220,12 @@ def func_filter(function_params, current_idx, item_list=None):
       # Check if the current element is recognized
       elements = current_element.split("/")
       current_param = all_params[current_idx]
-      
+
       # Iterate over the elements in the elements list
       for item in elements:
         if item not in current_param:
           raise ValueError(f"Error: {item} is unrecognized or does not belong to this category {current_param}.")
-        
+
       for item in elements:
         item_list.append(item)
         yield from func_filter(function_params, current_idx+1, item_list)
@@ -222,10 +233,10 @@ def func_filter(function_params, current_idx, item_list=None):
         # For each loop layer remove the last element in item_list
         item_list.pop()
   else:
-    coll, algo, proto, redop, ty, unroll = item_list
+    coll, algo, proto, redop, ty, pipeline, unroll = item_list
 
-    if func_validate(coll, algo, proto, redop, ty, unroll):
-      yield(coll, algo, proto, redop, ty, unroll)
+    if func_validate(coll, algo, proto, redop, ty, pipeline, unroll):
+      yield(coll, algo, proto, redop, ty, pipeline, unroll)
 
 # Parse ONLY_FUNCS input and feed it to func_filter
 def parse_input(func_pattern):
@@ -245,7 +256,7 @@ def parse_input(func_pattern):
 
 # Maps functions to the chosen representative for the equivalence class it
 # belongs to. For instance (sum, signed int) maps to (sum, unsigned int).
-def equivalent_primary(coll, algo, proto, redop, ty, unroll):
+def equivalent_primary(coll, algo, proto, redop, ty, pipeline, unroll):
   if coll in ("AllReduce", "Reduce", "ReduceScatter"):
     # map signed integer sum/prod to unsigned
     if redop in ("Sum","Prod","PreMulSum","SumPostDiv") and ty[0]=="i":
@@ -253,7 +264,7 @@ def equivalent_primary(coll, algo, proto, redop, ty, unroll):
     # map signed integer min/max to unsigned for non-NVLS
     elif redop=="MinMax" and ty[0]=="i" and ("NVLS" not in algo):
       ty = "u"+ty[1:]
-  return (coll, algo, proto, redop, ty, unroll)
+  return (coll, algo, proto, redop, ty, pipeline, unroll)
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
 def enumerate_func_rows():
@@ -263,20 +274,22 @@ def enumerate_func_rows():
         for proto in all_protos:
           for redop in all_redops:
             for ty in all_tys:
-              if func_validate(coll, algo, proto, redop, ty, unroll):
-                yield (coll, algo, proto, redop, ty, unroll)
+              for pipeline in all_pipeline:
+                if func_validate(coll, algo, proto, redop, ty, pipeline, unroll):
+                  yield (coll, algo, proto, redop, ty, pipeline, unroll)
 
 # Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
 def custom_sort_key(fn):
-    coll, algo, proto, redop, ty, unroll = fn
-    
+    coll, algo, proto, redop, ty, pipeline, unroll = fn
+
     return (
         all_unroll.index(unroll),
         all_colls.index(coll),
         all_algos.index(algo),
         all_protos.index(proto),
         all_redops.index(redop),
-        all_tys.index(ty)
+        all_tys.index(ty),
+        all_pipeline.index(pipeline)
     )
 
 ################################################################################
@@ -320,7 +333,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_1[] = {\n")
   index1 = 0
   for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
+    coll, algo, proto, redop, ty, pipeline, unroll = fn
     if unroll != "1": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
@@ -337,7 +350,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_2[] = {\n")
   index2 = 0
   for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
+    coll, algo, proto, redop, ty, pipeline, unroll = fn
     if unroll != "2": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
@@ -354,7 +367,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
   index4 = 0
   for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
+    coll, algo, proto, redop, ty, pipeline, unroll = fn
     if unroll != "4": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
@@ -368,7 +381,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     index4 += 1
   out("nullptr};\n")
   out("\n")
-  
+
   if not is_ifc:
     out("template<unsigned short f, unsigned short l>\n"
       "struct Caller1 {\n"
@@ -433,7 +446,7 @@ if is_colltrace:
     out = f.write
     out('#include "nccl_common.h"\n#include "device.h"\n')
     out("\n")
-    
+
     seen_fns = set()
     out("const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
     for fn in primary_funcs:
@@ -469,7 +482,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
 # Maps to .cu filename which implements this func. The only constraint is that
 # "coll" is reflected in the name: formally that no two funcs having different
 # coll's map to the same filename.
-def impl_filename(coll, algo, proto, redop, ty, unroll):
+def impl_filename(coll, algo, proto, redop, ty, pipeline, unroll):
   return "%s.cpp" % paste("_", coll_camel_to_lower[coll], redop and redop.lower(), ty)
 
 # Partition the functions and kernels to the .cu filenames. The partition is
@@ -525,14 +538,14 @@ for name in name_to_funcs.keys():
     )
 
     for fn in fns:
-      (coll, algo, proto, redop, ty, unroll) = fn
-      sym = paste("_", coll, algo, proto, redop, ty, unroll)
+      (coll, algo, proto, redop, ty, pipeline, unroll) = fn
+      sym = paste("_", coll, algo, proto, redop, ty, pipeline, unroll)
       if proto == "LL128":
         out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
       out(
-        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
+        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {pipeline}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
-                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll)
+                algo=(algo or "RING"), proto=(proto or "SIMPLE"), pipeline=pipeline, unroll=unroll)
       )
       if proto == "LL128":
         out("#endif\n")
