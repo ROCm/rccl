@@ -377,7 +377,7 @@ static struct tuningModel tuning_model_6 {
     /*Reduce*/
     {/*LL (min/max/factor/thread_threshold)*/ {0, 16383, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {16383, 16777216, 1, 0}},
     /*Broadcast*/
-    {/*LL (min/max/factor/thread_threshold)*/ {0, 4095, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {4095, 16777216, 1, 0}},
+    {/*LL (min/max/factor/thread_threshold)*/ {0, 7, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {7, 16777216, 1, 0}},
   },                                                                                                                    
 };
 
