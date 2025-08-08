@@ -377,7 +377,7 @@ static struct tuningModel tuning_model_6 {
     /*Reduce*/
     {/*LL (min/max/factor/thread_threshold)*/ {0, 16383, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {16383, 16777216, 1, 0}},
     /*Broadcast*/
-    {/*LL (min/max/factor/thread_threshold)*/ {0, 7, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {7, 16777216, 1, 0}},
+    {/*LL (min/max/factor/thread_threshold)*/ {0, 2048, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {2048, 16777216, 1, 0}},
   },                                                                                                                    
 };
 
@@ -823,7 +823,6 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclComm* comm, int coll, int algorithm,
     *time = -1.0; return ncclSuccess;
   }
   int logSize = log2i(nBytes>>6);
-    logSize, protocol, rcclTuningModel[comm->topo->tuning].treeCorrectionFactor[protocol][logSize], rcclTuningModel[comm->topo->tuning].ringCorrectionFactor[protocol][logSize]);
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   if (algorithm == NCCL_ALGO_TREE) {
     if (logSize < 27) bw *= rcclTuningModel[comm->topo->tuning].treeCorrectionFactor[protocol][logSize];
