@@ -3,8 +3,8 @@ import os
 import sys
 import subprocess
 
-# Order of redops, tys, protos, algos must match src/include/device.h
-all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
+# Order of colls, redops, tys, protos, algos must match src/include/device.h
+all_colls = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
@@ -187,6 +187,8 @@ def calc_unroll_for_local_arch():
 # Helper function to check if the conditions for the collective is being met
 def func_validate(coll, algo, proto, redop, ty, pipeline, unroll):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
+    return False
+  if coll == "":
     return False
   if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll or pipeline not in pipelines_of_coll[coll] or (pipeline in ["1"] and ty not in pipelined_types):
     return False
@@ -459,6 +461,27 @@ if is_colltrace:
     out("};\n")
 
 # Generate <gensrc>/host_table.cpp
+# with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
+#   print("-- Generating %s" % os.path.join(gensrc, "host_table.cpp"))
+
+#   out = f.write
+#   out('#include "device.h"\n')
+#   out("\n")
+
+#   # The mapping from function rows to valid primary function ids.
+#   out("extern int const ncclDevFuncRowToId[] = {\n")
+#   index = 0
+#   for fn in func_rows[:len(func_rows)//len(all_unroll)]:
+#     fn_id, comment = -1, ""
+#     if fn is not None:
+#       fn_id = primary_to_index[equivalent_primary(*fn)]
+#       comment = " // " + paste(" ", *fn[:-1])
+#     out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
+#     index += 1
+#   out(f"{index}")
+#   out("};\n")
+
+# Generate <gensrc>/host_table.cpp
 with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   print("-- Generating %s" % os.path.join(gensrc, "host_table.cpp"))
 
@@ -466,17 +489,26 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out('#include "device.h"\n')
   out("\n")
 
-  # The mapping from function rows to valid primary function ids.
-  out("extern int const ncclDevFuncRowToId[] = {\n")
-  index = 0
-  for fn in func_rows[:len(func_rows)//len(all_unroll)]:
-    fn_id, comment = -1, ""
+  out("#include <unordered_map>\n#include <string>\n")
+  out("extern std::unordered_map<std::string, int> ncclDevFuncNameToId = {\n")
+  for fn in func_rows:
+    fn_id = -1
     if fn is not None:
       fn_id = primary_to_index[equivalent_primary(*fn)]
       comment = " // " + paste(" ", *fn[:-1])
-    out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
-    index += 1
-  out(f"{index}")
+      # Build the function signature string: "<coll> <algo> <proto> <redop> <ty> <pipeline>"
+      coll_idx = all_colls.index(fn[0])
+      algo_idx = all_algos.index(fn[1])
+      proto_idx = all_protos.index(fn[2])
+      redop_idx = all_redops.index(fn[3])
+      ty_idx = all_tys.index(fn[4])
+      pipeline_idx = all_pipeline.index(fn[5])
+      fn_str = f"{coll_idx} {algo_idx} {proto_idx} {redop_idx} {ty_idx} {pipeline_idx}"
+      if fn[0] == "Broadcast":
+        fn_str = f"{coll_idx} {proto_idx}"
+      if fn[0] in ["SendRecv", "AllToAllPivot"]:
+        fn_str =  f"{coll_idx}"
+      out(f'  {{"{fn_str}", {fn_id}}}, {comment}\n')
   out("};\n")
 
 # Maps to .cu filename which implements this func. The only constraint is that
