@@ -27,6 +27,24 @@ struct allGatherInfo {
   bool mscclEnabled;
 };
 
+struct QPTracker;
+struct NodeQPStats;
+struct RankQPStats;
+struct ChannelQPStats;
+
+QPTracker* getDeviceTracker(int deviceId);
+NodeQPStats* getNodeStats(int nodeId);
+RankQPStats* getRankStats(int rankId, int nodeId);
+ChannelQPStats* getChannelStats(int channelId);
+void printQPStatistics();
+void printChannelMappings();
+void resetQPStatistics();
+int getDeviceQPCount(int deviceId);
+int getNodeQPCount(int nodeId);
+int getRankQPCount(int rankId);
+bool isDeviceQPLimitReached(int deviceId);
+void trackQPWithChannelInfo(int rank, int nodeId, int deviceId, int channelId, int peerRank, bool isSend);
+
 void initCollNet();
 
 ncclResult_t ncclTopoGetSystem(const char* xmlTopoFile, struct ncclTopoSystem** system);

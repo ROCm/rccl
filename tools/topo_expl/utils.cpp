@@ -31,6 +31,11 @@
 #include "model.h"
 #include "utils.h"
 #include "rocm_smi/rocm_smi.h"
+#include <map>
+#include <set>
+#include <string>
+#include <iostream>
+#include <algorithm>
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "AllToAllPivot" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNetDirect", "CollNetChain" };
@@ -356,6 +361,7 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     NCCLCHECK(transport->canConnect(&ret, comm, graph, myInfo, peerInfo));
     if (ret) {
       connector->transportComm = transportComm;
+      INFO(NCCL_INIT, "Selected transport %s for channel %d peer %d", transport->name, channelId, peer);
       NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, connIndex));
       if (transportType) *transportType = t;
       if (needsProxy) *needsProxy = (transportComm->proxyProgress != NULL);
@@ -495,7 +501,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
               struct ncclConnector* conn = comm->channels[c].peers[sendPeer]->send + connIndex;
               // This connector hasn't completed connection yet
               if (conn->connected == 0) {
-                //NCCLCHECKGOTO(conn->transportComm->connect(comm, sendData[p] + sendDataOffset++, 1, comm->rank, conn), ret, fail);
+                NCCLCHECKGOTO(conn->transportComm->connect(comm, sendData[p] + sendDataOffset++, 1, comm->rank, conn), ret, fail);
                 if (ret == ncclSuccess) {
                   conn->connected = 1;
                   /* comm->channels[c].devPeers[sendPeer]->send[connIndex] is a device memory access. */
@@ -513,7 +519,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
               struct ncclConnector* conn = comm->channels[c].peers[recvPeer]->recv + connIndex;
               // This connector hasn't completed connection yet
               if (conn->connected == 0) {
-                //NCCLCHECKGOTO(conn->transportComm->connect(comm, recvData[p] + recvDataOffset++, 1, comm->rank, conn), ret, fail);
+                NCCLCHECKGOTO(conn->transportComm->connect(comm, recvData[p] + recvDataOffset++, 1, comm->rank, conn), ret, fail);
                 if (ret == ncclSuccess) {
                   conn->connected = 1;
                   /* comm->channels[c].devPeers[recvPeer]->recv[connIndex] is a device memory access. */
@@ -1367,3 +1373,227 @@ uint64_t getHostHash(void) {
 ncclResult_t bootstrapIntraNodeAllGather(void* commState, int *ranks, int rank, int nranks, void* allData, int size) {
   return ncclSuccess;
 }
+
+struct QPTracker {
+  int deviceId;
+  int qpCount;
+  int maxQPs;
+};
+
+struct NodeQPStats {
+  int nodeId;
+  int totalQPs;
+  int sendQPs;
+  int recvQPs;
+  int maxQPs;
+  std::map<int, RankQPStats> ranks;
+};
+
+struct RankQPStats {
+  int rankId;
+  int nodeId;
+  int totalQPs;
+  int sendQPs;
+  int recvQPs;
+  int connections;
+  std::map<int, ChannelQPStats> channels;
+};
+
+struct ChannelQPStats {
+  int channelId;
+  int sendQPs;
+  int recvQPs;
+};
+
+static std::map<int, QPTracker> deviceQPTrackers;
+static std::map<int, NodeQPStats> nodeQPStats;
+static std::map<int, RankQPStats> rankQPStats;
+static std::map<int, std::map<int, std::map<int, ChannelQPStats>>> channelQPStats;
+
+QPTracker* getDeviceTracker(int deviceId) {
+  auto it = deviceQPTrackers.find(deviceId);
+  if (it != deviceQPTrackers.end()) {
+    return &it->second;
+  }
+
+  QPTracker newTracker = {0};
+  newTracker.deviceId = deviceId;
+  newTracker.maxQPs = 1000;
+  deviceQPTrackers[deviceId] = newTracker;
+  return &deviceQPTrackers[deviceId];
+}
+
+NodeQPStats* getNodeStats(int nodeId) {
+  auto it = nodeQPStats.find(nodeId);
+  if (it != nodeQPStats.end()) {
+    return &it->second;
+  }
+
+  NodeQPStats newStats = {0};
+  newStats.nodeId = nodeId;
+  newStats.maxQPs = 10000;
+  nodeQPStats[nodeId] = newStats;
+  return &nodeQPStats[nodeId];
+}
+
+RankQPStats* getRankStats(int rankId, int nodeId) {
+  auto it = rankQPStats.find(rankId);
+  if (it != rankQPStats.end()) {
+    return &it->second;
+  }
+
+  RankQPStats newStats = {0};
+  newStats.rankId = rankId;
+  newStats.nodeId = nodeId;
+  rankQPStats[rankId] = newStats;
+  return &rankQPStats[rankId];
+}
+
+void printQPStatistics() {
+  std::cout << "\n=== QP Statistics by Node and Rank ===" << std::endl;
+
+  std::vector<int> nodeIds;
+  for (const auto& pair : nodeQPStats) {
+    nodeIds.push_back(pair.first);
+  }
+  std::sort(nodeIds.begin(), nodeIds.end());
+
+  for (int nodeId : nodeIds) {
+    const NodeQPStats& nodeStats = nodeQPStats[nodeId];
+    std::cout << "Node " << nodeId << ":" << std::endl;
+
+    std::vector<int> rankIds;
+    for (const auto& pair : rankQPStats) {
+      if (pair.second.nodeId == nodeId) {
+        rankIds.push_back(pair.first);
+      }
+    }
+    std::sort(rankIds.begin(), rankIds.end());
+
+    for (int rankId : rankIds) {
+      const RankQPStats& rankStats = rankQPStats[rankId];
+      std::cout << "  rank " << rankId << " - Send QP: " << rankStats.sendQPs
+                << " Recv QP: " << rankStats.recvQPs
+                << " Total QP: " << rankStats.totalQPs << std::endl;
+    }
+    std::cout << std::endl;
+  }
+}
+
+ChannelQPStats* getChannelStats(int nodeId, int rankId, int channelId) {
+  auto& nodeMap = channelQPStats[nodeId];
+  auto& rankMap = nodeMap[rankId];
+  auto it = rankMap.find(channelId);
+  if (it != rankMap.end()) {
+    return &it->second;
+  }
+
+  ChannelQPStats newStats = {0};
+  newStats.channelId = channelId;
+  rankMap[channelId] = newStats;
+  return &rankMap[channelId];
+}
+
+void trackQPWithChannelInfo(int rank, int nodeId, int deviceId, int channelId, int peerRank, bool isSend) {
+  QPTracker* deviceTracker = getDeviceTracker(deviceId);
+  NodeQPStats* nodeTracker = getNodeStats(nodeId);
+  RankQPStats* rankTracker = getRankStats(rank, nodeId);
+  ChannelQPStats* channelTracker = getChannelStats(nodeId, rank, channelId);
+
+  deviceTracker->qpCount++;
+  nodeTracker->totalQPs++;
+  rankTracker->totalQPs++;
+
+  if (isSend) {
+    nodeTracker->sendQPs++;
+    rankTracker->sendQPs++;
+    channelTracker->sendQPs++;
+  } else {
+    nodeTracker->recvQPs++;
+    rankTracker->recvQPs++;
+    channelTracker->recvQPs++;
+  }
+
+  INFO(NCCL_INIT|NCCL_NET, "QP_TRACK: Rank %d -> Peer %d, Channel %d, %s QP, Device %d: %d/%d",
+       rank, peerRank, channelId, isSend ? "SEND" : "RECV",
+       deviceId, deviceTracker->qpCount, deviceTracker->maxQPs);
+}
+
+void printChannelMappings() {
+  std::cout << "\n=== Channel Mappings ===" << std::endl;
+
+  std::vector<int> nodeIds;
+  for (const auto& pair : nodeQPStats) {
+    nodeIds.push_back(pair.first);
+  }
+  std::sort(nodeIds.begin(), nodeIds.end());
+
+  for (int nodeId : nodeIds) {
+    std::cout << "Node " << nodeId << ":" << std::endl;
+
+    std::vector<int> rankIds;
+    for (const auto& pair : rankQPStats) {
+      if (pair.second.nodeId == nodeId) {
+        rankIds.push_back(pair.first);
+      }
+    }
+    std::sort(rankIds.begin(), rankIds.end());
+
+    for (int rankId : rankIds) {
+      const RankQPStats& rankStats = rankQPStats[rankId];
+      std::cout << "  rank " << rankId << std::endl;
+
+      if (channelQPStats.find(nodeId) != channelQPStats.end() &&
+          channelQPStats[nodeId].find(rankId) != channelQPStats[nodeId].end()) {
+
+        std::vector<int> channelIds;
+        for (const auto& pair : channelQPStats[nodeId][rankId]) {
+          channelIds.push_back(pair.first);
+        }
+        std::sort(channelIds.begin(), channelIds.end());
+
+        for (int channelId : channelIds) {
+          const ChannelQPStats& channelStats = channelQPStats[nodeId][rankId][channelId];
+
+          std::cout << "    Channel " << channelId
+                    << ": Send QP: " << channelStats.sendQPs
+                    << " Recv QP: " << channelStats.recvQPs
+                    << " Total QP: " << (channelStats.sendQPs + channelStats.recvQPs)
+                    << std::endl;
+        }
+      }
+    }
+  }
+}
+
+void resetQPStatistics() {
+  deviceQPTrackers.clear();
+  nodeQPStats.clear();
+  rankQPStats.clear();
+  channelQPStats.clear();
+}
+
+int getDeviceQPCount(int deviceId) {
+  auto it = deviceQPTrackers.find(deviceId);
+  if (it != deviceQPTrackers.end()) return it->second.qpCount;
+  return 0;
+}
+
+int getNodeQPCount(int nodeId) {
+  auto it = nodeQPStats.find(nodeId);
+  if (it != nodeQPStats.end()) return it->second.totalQPs;
+  return 0;
+}
+
+int getRankQPCount(int rankId) {
+  auto it = rankQPStats.find(rankId);
+  if (it != rankQPStats.end()) return it->second.totalQPs;
+  return 0;
+}
+
+bool isDeviceQPLimitReached(int deviceId) {
+  auto it = deviceQPTrackers.find(deviceId);
+  if (it != deviceQPTrackers.end()) return it->second.qpCount >= it->second.maxQPs;
+  return false;
+}
+

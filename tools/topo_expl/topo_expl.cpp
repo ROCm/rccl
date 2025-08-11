@@ -178,6 +178,10 @@ int main(int argc,char* argv[])
     if (numNodesStr)
       numNodes = atol(numNodesStr);
   }
+  bool QPdump = false;
+  if (cmdOptionExists(argv, argv + argc, "-q")) {
+    QPdump = true;
+  }
   for (int i=0; i < numNodes; i++) {
       node = new NodeModel(desc->filename);
       network.AddNode(node);
@@ -312,7 +316,11 @@ int main(int argc,char* argv[])
     }
   }
 
-
+  if (QPdump) {
+    printQPStatistics();
+    printChannelMappings();
+    resetQPStatistics();
+  }
 
   for (int i = 0; i < nranks; i++) {
     free(comm[i].connectSend);

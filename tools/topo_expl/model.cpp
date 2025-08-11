@@ -64,6 +64,40 @@ ncclNet_t ncclNetDummy = {
   0
 };
 
+struct netSendResources {
+  int rank;
+  int nodeId;
+  int deviceId;
+  int channelId;
+  int peerRank;
+  int qpCount;
+};
+
+struct netRecvResources {
+  int rank;
+  int nodeId;
+  int deviceId;
+  int channelId;
+  int peerRank;
+  int qpCount;
+};
+
+struct netSendConnectArgs {
+  int rank;
+  int nodeId;
+  int deviceId;
+  int channelId;
+  int peerRank;
+};
+
+struct netRecvConnectArgs {
+  int rank;
+  int nodeId;
+  int deviceId;
+  int channelId;
+  int peerRank;
+};
+
 ncclNet_t* ncclNet = &ncclNetDummy;
 
 int ncclNetVersion() {
@@ -130,6 +164,22 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   return ncclSuccess;
 }
 
+static ncclResult_t p2pSendProxyConnect(struct ncclProxyConnection* connection, struct ncclProxyState* proxyState, void* reqBuff, int reqSize, void* respBuff, int respSize, int* done) {
+  return ncclSuccess;
+}
+
+static ncclResult_t p2pRecvProxyConnect(struct ncclProxyConnection* connection, struct ncclProxyState* proxyState, void* reqBuff, int reqSize, void* respBuff, int respSize, int* done) {
+  return ncclSuccess;
+}
+
+static ncclResult_t p2pSendConnect(struct ncclComm* comm, struct ncclConnect* connectInfo, int nranks, int rank, struct ncclConnector* send) {
+  return ncclSuccess;
+}
+
+static ncclResult_t p2pRecvConnect(struct ncclComm* comm, struct ncclConnect* connectInfo, int nranks, int rank, struct ncclConnector* send) {
+  return ncclSuccess;
+}
+
 /* Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
     struct ncclConnect* connectInfo, struct ncclConnector * recv, int channelId, int connIndex) {
@@ -139,8 +189,8 @@ ncclResult_t p2pRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
 struct ncclTransport p2pTransport = {
   "P2P",
   p2pCanConnect,
-  { p2pSendSetup, NULL, NULL, NULL },
-  { p2pRecvSetup, NULL, NULL, NULL }
+  { p2pSendSetup, p2pSendConnect, NULL, NULL, NULL, p2pSendProxyConnect, NULL, NULL, NULL, NULL },
+  { p2pRecvSetup, p2pRecvConnect, NULL, NULL, NULL, p2pRecvProxyConnect, NULL, NULL, NULL, NULL }
 };
 
 NCCL_PARAM(ShmDisable, "SHM_DISABLE", 0);
@@ -198,7 +248,77 @@ struct setupReq {
 
 /* Determine if two peers can communicate with NET */
 ncclResult_t netCanConnect(int* ret,  struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* info1, struct ncclPeerInfo* info2) {
-  *ret = 1;
+  // Force NET transport for cross-node connections
+  if (info1->hostHash != info2->hostHash) {
+    *ret = 1;  // Use NET transport for cross-node
+    return ncclSuccess;
+  }
+
+  // For same-node, you can choose based on your needs
+  // *ret = 1;  // Always use NET
+  *ret = 0;    // Don't use NET for same-node (will fall back to P2P)
+  return ncclSuccess;
+}
+
+static ncclResult_t netSendProxyConnect(struct ncclProxyConnection* connection, struct ncclProxyState* proxyState, void* reqBuff, int reqSize, void* respBuff, int respSize, int* done) {
+  struct netSendConnectArgs* args = (struct netSendConnectArgs*)reqBuff;
+
+  int rank = args->rank;
+  int nodeId = args->nodeId;
+  int deviceId = args->deviceId;
+  int channelId = args->channelId;
+  int peerRank = args->peerRank;
+
+  trackQPWithChannelInfo(rank, nodeId, deviceId, channelId, peerRank, true);
+
+  *done = 1;
+  return ncclSuccess;
+}
+
+static ncclResult_t netRecvProxyConnect(struct ncclProxyConnection* connection, struct ncclProxyState* proxyState, void* reqBuff, int reqSize, void* respBuff, int respSize, int* done) {
+  struct netRecvConnectArgs* args = (struct netRecvConnectArgs*)reqBuff;
+
+  int rank = args->rank;
+  int nodeId = args->nodeId;
+  int deviceId = args->deviceId;
+  int channelId = args->channelId;
+  int peerRank = args->peerRank;
+
+  trackQPWithChannelInfo(rank, nodeId, deviceId, channelId, peerRank, false);
+
+  *done = 1;
+  return ncclSuccess;
+}
+
+static ncclResult_t netSendConnect(struct ncclComm* comm, struct ncclConnect* connectInfo, int nranks, int rank, struct ncclConnector* send) {
+  struct netSendResources* resources = (struct netSendResources*)send->transportResources;
+  struct netSendConnectArgs args = {0};
+  args.rank = rank;
+  args.nodeId = comm->node;
+  args.deviceId = comm->cudaDev;
+  args.channelId = resources->channelId;
+  args.peerRank = resources->peerRank;
+
+  args.peerRank = rank;
+  int done = 0;
+  netSendProxyConnect(NULL, NULL, &args, sizeof(args), NULL, 0, &done);
+
+  return ncclSuccess;
+}
+
+static ncclResult_t netRecvConnect(struct ncclComm* comm, struct ncclConnect* connectInfo, int nranks, int rank, struct ncclConnector* recv) {
+  struct netRecvResources* resources = (struct netRecvResources*)recv->transportResources;
+  struct netRecvConnectArgs args = {0};
+  args.rank = rank;
+  args.nodeId = comm->node;
+  args.deviceId = comm->cudaDev;
+  args.channelId = resources->channelId;
+  args.peerRank = resources->peerRank;
+
+  args.peerRank = rank;
+  int done = 0;
+  netRecvProxyConnect(NULL, NULL, &args, sizeof(args), NULL, 0, &done);
+
   return ncclSuccess;
 }
 
@@ -210,8 +330,15 @@ ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   req.connIndex = connIndex;
   req.netDev = -1;
 
+  struct netSendResources* resources;
   int proxyRank = myInfo->rank;
   int64_t netId;
+
+  NCCLCHECK(ncclCalloc(&resources, 1));
+  resources->channelId = channelId;
+  resources->peerRank = myInfo->rank;
+  send->transportResources = resources;
+
   if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 1, &netId, &req.netDev));
   if (req.netDev < 0) NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, peerInfo->rank, &netId, &req.netDev, &proxyRank));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->rank, netId, 1, &req.useGdr));
@@ -238,8 +365,15 @@ ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   req.netDev = -1;
 
   // Use myInfo->rank as the receiver uses its own NIC
+  struct netRecvResources* resources;
   int proxyRank = myInfo->rank;
   int64_t netId;
+
+  NCCLCHECK(ncclCalloc(&resources, 1));
+  resources->channelId = channelId;
+  resources->peerRank = myInfo->rank;
+  recv->transportResources = resources;
+
   if (connIndex == NCCL_CONN_IDX_P2P_NET) NCCLCHECK(ncclTopoGetIntraNetDev(comm->topo, myInfo->rank, graph, channelId, 0, &netId, &req.netDev));
   if (req.netDev < 0) NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, myInfo->rank, &netId, &req.netDev, &proxyRank));
   NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->rank, netId, 0, &req.useGdr));
@@ -252,8 +386,8 @@ ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
 struct ncclTransport netTransport = {
   "NET",
   netCanConnect,
-  { netSendSetup, NULL, NULL, NULL },
-  { netRecvSetup, NULL, NULL, NULL }
+  { netSendSetup, netSendConnect, NULL, NULL, NULL, netSendProxyConnect, NULL, NULL, NULL, NULL },
+  { netRecvSetup, netRecvConnect, NULL, NULL, NULL, netRecvProxyConnect, NULL, NULL, NULL, NULL }
 };
 
 /* Determine if two peers can communicate with NET */
