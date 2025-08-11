@@ -488,9 +488,17 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out = f.write
   out('#include "device.h"\n')
   out("\n")
-
+  out("// The key for the ncclDevFuncNameToId map is a 64-bit unsigned integer.\n")
+  out("// Each field (coll, algo, proto, redop, ty, pipeline) is packed into 4 bits,\n")
+  out("// allowing up to 16 unique values per field. The layout is:\n")
+  out("//   bits  0-3:   coll index\n")
+  out("//   bits  4-7:   algo index\n")
+  out("//   bits  8-11:  proto index\n")
+  out("//   bits 12-15:  redop index\n")
+  out("//   bits 16-19:  ty index\n")
+  out("//   bits 20-23:  pipeline index\n")
   out("#include <unordered_map>\n#include <string>\n")
-  out("extern std::unordered_map<std::string, int> ncclDevFuncNameToId = {\n")
+  out("extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId = {\n")
   for fn in func_rows:
     fn_id = -1
     if fn is not None:
@@ -503,12 +511,28 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
       redop_idx = all_redops.index(fn[3])
       ty_idx = all_tys.index(fn[4])
       pipeline_idx = all_pipeline.index(fn[5])
+      # Assert that 4 bits (16 values) is enough to map all_colls, all_algos, etc.
+      assert len(all_colls) <= 16, "Error: all_colls has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_algos) <= 16, "Error: all_algos has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_protos) <= 16, "Error: all_protos has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_redops) <= 16, "Error: all_redops has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_tys) <= 16, "Error: all_tys has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_pipeline) <= 16, "Error: all_pipeline has more than 16 values, which exceeds 4-bit capacity."
+      # Create a 64-bit unsigned integer key and pack the indices into 4 bits each
+      key = (
+        (coll_idx & 0xF)
+        | ((algo_idx & 0xF) << 4)
+        | ((proto_idx & 0xF) << 8)
+        | ((redop_idx & 0xF) << 12)
+        | ((ty_idx & 0xF) << 16)
+        | ((pipeline_idx & 0xF) << 20)
+      )
       fn_str = f"{coll_idx} {algo_idx} {proto_idx} {redop_idx} {ty_idx} {pipeline_idx}"
       if fn[0] == "Broadcast":
-        fn_str = f"{coll_idx} {proto_idx}"
+        key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 12))
       if fn[0] in ["SendRecv", "AllToAllPivot"]:
-        fn_str =  f"{coll_idx}"
-      out(f'  {{"{fn_str}", {fn_id}}}, {comment}\n')
+        key = ((coll_idx & 0x3F))
+      out(f'  {{{key}, {fn_id}}}, {comment}\n')
   out("};\n")
 
 # Maps to .cu filename which implements this func. The only constraint is that

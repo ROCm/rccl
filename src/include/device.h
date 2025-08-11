@@ -128,6 +128,9 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_NVLS_REG_BUFFER 0x02
 #define NCCL_NET_REG_BUFFER 0x04
 
+#define RCCL_FUNC_ID_MASK 0xF
+#define RCCL_FUNC_ID_SHIFT 4
+
 struct ncclConnInfo {
   // Regular comm mechanism
   char *buffs[NCCL_NUM_PROTOCOLS]; // Local for recv, remote for send
@@ -691,30 +694,42 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 }
 
 // Map the function literal to funcIdx
-extern std::unordered_map<std::string, int> ncclDevFuncNameToId;
+extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId;
 
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
 inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int pipeline = 0) {
   int row = -1;
-  std::string key;
+  uint64_t key;
+  // Pack 6-bit fields from right (LSB) to left in order:
+  // coll, algo, proto, devRedOp, type, pipeline
+  // This logic must be in sync with the key generation logic in generate.py
   if (coll == ncclFuncBroadcast) {
-    key = std::to_string(coll) + " " + std::to_string(proto);
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK)) |
+          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*2));
   } else if (coll == ncclFuncSendRecv || coll == ncclFuncAllToAllPivot) {
-    key = std::to_string(coll);
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK));
   } else {
-    key = std::to_string(coll) + " " + std::to_string(algo) + " " + std::to_string(proto) + " " + std::to_string(devRedOp) + " " + std::to_string(type) + " " + std::to_string(pipeline);
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK)) |
+          ((uint64_t)(algo     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT))   |
+          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*2)) |
+          ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*3)) |
+          ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*4)) |
+          ((uint64_t)(pipeline & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*5));
   }
   auto it = ncclDevFuncNameToId.find(key);
   if (it != ncclDevFuncNameToId.end()) {
     row = it->second;
   }
   if(row < 0) {
-    WARN("Fatal error: ncclDevFuncId: %s not found", key.c_str());
+    WARN("Fatal error: ncclDevFuncId: %llu not found", key);
     return -1;
   }
   return row;
 }
 
-inline int ncclDevFuncId_P2p() { return ncclDevFuncNameToId[std::to_string(ncclFuncSendRecv)]; }
+inline int ncclDevFuncId_P2p() {
+  static int ncclDevFuncIdP2p = ncclDevFuncId(ncclFuncSendRecv, -1 , -1 , NCCL_ALGO_UNDEF, NCCL_PROTO_UNDEF);
+  return ncclDevFuncIdP2p;
+}
 
 #endif
