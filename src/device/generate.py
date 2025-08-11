@@ -461,27 +461,6 @@ if is_colltrace:
     out("};\n")
 
 # Generate <gensrc>/host_table.cpp
-# with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
-#   print("-- Generating %s" % os.path.join(gensrc, "host_table.cpp"))
-
-#   out = f.write
-#   out('#include "device.h"\n')
-#   out("\n")
-
-#   # The mapping from function rows to valid primary function ids.
-#   out("extern int const ncclDevFuncRowToId[] = {\n")
-#   index = 0
-#   for fn in func_rows[:len(func_rows)//len(all_unroll)]:
-#     fn_id, comment = -1, ""
-#     if fn is not None:
-#       fn_id = primary_to_index[equivalent_primary(*fn)]
-#       comment = " // " + paste(" ", *fn[:-1])
-#     out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
-#     index += 1
-#   out(f"{index}")
-#   out("};\n")
-
-# Generate <gensrc>/host_table.cpp
 with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   print("-- Generating %s" % os.path.join(gensrc, "host_table.cpp"))
 
@@ -490,14 +469,14 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out("\n")
   out("// The key for the ncclDevFuncNameToId map is a 64-bit unsigned integer.\n")
   out("// Each field (coll, algo, proto, redop, ty, pipeline) is packed into 4 bits,\n")
-  out("// allowing up to 16 unique values per field. The layout is:\n")
+  out("// This allows up to 16 unique values per field. The layout is:\n")
   out("//   bits  0-3:   coll index\n")
   out("//   bits  4-7:   algo index\n")
   out("//   bits  8-11:  proto index\n")
   out("//   bits 12-15:  redop index\n")
   out("//   bits 16-19:  ty index\n")
   out("//   bits 20-23:  pipeline index\n")
-  out("#include <unordered_map>\n#include <string>\n")
+  out("#include <unordered_map>\n")
   out("extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId = {\n")
   for fn in func_rows:
     fn_id = -1
