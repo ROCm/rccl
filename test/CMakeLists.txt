@@ -106,7 +106,7 @@ if(BUILD_TESTS)
   # through -l and -L instead of command line input.
   if(BUILD_SHARED_LIBS)
     target_link_libraries(rccl-UnitTests PRIVATE rccl)
-    if(${HOST_OS_FAMILY} STREQUAL "debian")
+    if((${HOST_OS_ID} STREQUAL "debian") OR (EXISTS ${HOST_OS_FAMILY} AND ${HOST_OS_FAMILY} STREQUAL "debian"))
       set_property(TARGET rccl-UnitTests PROPERTY INSTALL_RPATH "${CMAKE_BINARY_DIR}")
     endif()
   else()
