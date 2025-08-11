@@ -124,6 +124,10 @@ will run only AllReduce correctness tests with float16 datatype. A list of avail
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCm/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
 
+## RCCL CI Status
+
+RCCL Build/Unittests [![RCCL](https://dev.azure.com/ROCm-CI/ROCm-CI/_apis/build/status%2Frccl?repoName=ROCm%2Frccl&branchName=develop)](https://dev.azure.com/ROCm-CI/ROCm-CI/_build/latest?definitionId=107&repoName=ROCm%2Frccl&branchName=develop)
+
 ## Library and API Documentation
 
 Please refer to the [RCCL Documentation Site](https://rocm.docs.amd.com/projects/rccl/en/latest/) for current documentation.
