@@ -1,13 +1,30 @@
 name: rccl multi node tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      package_version:
+        type: string
+        default: ADHOCBUILD
+      amdgpu_families:
+        type: string
+      expect_failure:
+        type: boolean
+        default: false
+      extra_cmake_options:
+        type: string
+
   workflow_call:
     inputs:
-      cmake_options:
+      package_version:
         type: string
-      project_to_test:
+        default: ADHOCBUILD
+      amdgpu_families:
         type: string
-      subtree_checkout:
+      expect_failure:
+        type: boolean
+        default: false
+      extra_cmake_options:
         type: string
 
 
