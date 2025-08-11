@@ -42,4 +42,3 @@ jobs:
   - template: templates/build.yml
   - template: templates/test_rccl-UnitTests.yml
   - template: templates/test_rccl-tests.yml
-  - template: templates/test_pytorch-tests.yml

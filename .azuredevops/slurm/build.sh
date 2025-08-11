@@ -32,13 +32,16 @@ ninja --version
 export GPU_TARGETS="gfx942"
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
+## Building RCCL
 mkdir -p build
 cd build
 cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${GPU_TARGETS} -DBUILD_TESTS=ON -DROCM_PATH="$ROCM_PATH" ..
 cmake --build .
 cmake --build . --target install
 
+
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
+## Building RCCL-Tests
 git clone https://github.com/ROCm/rccl-tests
 cd rccl-tests
 mkdir -p build
@@ -46,12 +49,3 @@ cd build
 cmake -DCMAKE_PREFIX_PATH="$BINARIES_DIR;$MPI_HOME" -DUSE_MPI=ON -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${GPU_TARGETS} -DROCM_PATH="$ROCM_PATH" ..
 cmake --build .
 cmake --build . --target install
-
-cd "${BINARIES_DIR}"
-mkdir -p pytorch-vllm
-cp /mnt/GT_NFS/new_gt/nilenegi/pytorch-vllm/run_pytorch_vllm.sh "${BINARIES_DIR}"/pytorch-vllm/run_pytorch_vllm.sh
-
-cd "${BINARIES_DIR}"
-mkdir -p pytorch-tests
-cp /mnt/GT_NFS/new_gt/nilenegi/pytorch-tests/run_pytorch_tests.sh "${BINARIES_DIR}"/pytorch-tests/run_pytorch_tests.sh
-
