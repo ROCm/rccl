@@ -432,7 +432,11 @@ private:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
+#if defined(__gfx950__)
   __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+#else
+  __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+#endif
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
