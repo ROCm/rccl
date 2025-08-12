@@ -3,16 +3,25 @@ import os
 import sys
 import subprocess
 
+<<<<<<< HEAD
 # Order of redops, tys, protos, algos must match src/include/device.h
 all_colls =  ["AllGather","AllReduce","AllReduceWithBias","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
+=======
+# Order of colls, redops, tys, protos, algos must match src/include/device.h
+all_colls = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
+>>>>>>> c380955f (Refactor: Replace row-based lookup with hash-based logic in ncclDevFuncId)
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING", "PAT"]
 all_unroll = ["1", "2", "4"]
+<<<<<<< HEAD
 use_acc    = ["0", "1"]
 
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, use_acc, all_unroll]
+=======
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
+>>>>>>> c380955f (Refactor: Replace row-based lookup with hash-based logic in ncclDevFuncId)
 
 ################################################################################
 # The first command line argument is the path to the directory to generate and
@@ -187,6 +196,8 @@ def func_validate(coll, algo, proto, redop, ty, acc, unroll):
     return False
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
+  if coll == "":
+    return False
   if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll:
     return False
   return True
@@ -219,12 +230,12 @@ def func_filter(function_params, current_idx, item_list=None):
       # Check if the current element is recognized
       elements = current_element.split("/")
       current_param = all_params[current_idx]
-      
+
       # Iterate over the elements in the elements list
       for item in elements:
         if item not in current_param:
           raise ValueError(f"Error: {item} is unrecognized or does not belong to this category {current_param}.")
-        
+
       for item in elements:
         item_list.append(item)
         yield from func_filter(function_params, current_idx+1, item_list)
@@ -279,8 +290,8 @@ def enumerate_func_rows():
 
 # Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
 def custom_sort_key(fn):
-    coll, algo, proto, redop, ty, acc, unroll = fn
-    
+    coll, algo, proto, redop, ty, unroll = fn
+
     return (
         all_unroll.index(unroll),
         use_acc.index(acc),
@@ -380,7 +391,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     index4 += 1
   out("nullptr};\n")
   out("\n")
-  
+
   if not is_ifc:
     out("template<unsigned short f, unsigned short l>\n"
       "struct Caller1 {\n"
@@ -445,7 +456,7 @@ if is_colltrace:
     out = f.write
     out('#include "nccl_common.h"\n#include "device.h"\n')
     out("\n")
-    
+
     seen_fns = set()
     out("const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
     for fn in primary_funcs:
@@ -464,18 +475,47 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out = f.write
   out('#include "device.h"\n')
   out("\n")
-
-  # The mapping from function rows to valid primary function ids.
-  out("extern int const ncclDevFuncRowToId[] = {\n")
-  index = 0
-  for fn in func_rows[:len(func_rows)//len(all_unroll)]:
-    fn_id, comment = -1, ""
+  out("// The key for the ncclDevFuncNameToId map is a 64-bit unsigned integer.\n")
+  out("// Each field (coll, algo, proto, redop, ty) is packed into 4 bits,\n")
+  out("// This allows up to 16 unique values per field. The layout is:\n")
+  out("//   bits  0-3:   coll index\n")
+  out("//   bits  4-7:   algo index\n")
+  out("//   bits  8-11:  proto index\n")
+  out("//   bits 12-15:  redop index\n")
+  out("//   bits 16-19:  ty index\n")
+  out("#include <unordered_map>\n")
+  out("extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId = {\n")
+  for fn in func_rows:
+    fn_id = -1
     if fn is not None:
       fn_id = primary_to_index[equivalent_primary(*fn)]
       comment = " // " + paste(" ", *fn[:-1])
-    out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
-    index += 1
-  out(f"{index}")
+      # Build the function signature string: "<coll> <algo> <proto> <redop> <ty>"
+      coll_idx = all_colls.index(fn[0])
+      algo_idx = all_algos.index(fn[1])
+      proto_idx = all_protos.index(fn[2])
+      redop_idx = all_redops.index(fn[3])
+      ty_idx = all_tys.index(fn[4])
+      # Assert that 4 bits (16 values) is enough to map all_colls, all_algos, etc.
+      assert len(all_colls) <= 16, "Error: all_colls has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_algos) <= 16, "Error: all_algos has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_protos) <= 16, "Error: all_protos has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_redops) <= 16, "Error: all_redops has more than 16 values, which exceeds 4-bit capacity."
+      assert len(all_tys) <= 16, "Error: all_tys has more than 16 values, which exceeds 4-bit capacity."
+      # Create a 64-bit unsigned integer key and pack the indices into 4 bits each
+      key = (
+        (coll_idx & 0xF)
+        | ((algo_idx & 0xF) << 4)
+        | ((proto_idx & 0xF) << 8)
+        | ((redop_idx & 0xF) << 12)
+        | ((ty_idx & 0xF) << 16)
+      )
+      fn_str = f"{coll_idx} {algo_idx} {proto_idx} {redop_idx} {ty_idx}"
+      if fn[0] == "Broadcast":
+        key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 8))
+      if fn[0] in ["SendRecv", "AllToAllPivot"]:
+        key = ((coll_idx & 0x3F))
+      out(f'  {{{key}, {fn_id}}}, {comment}\n')
   out("};\n")
 
 # Maps to .cu filename which implements this func. The only constraint is that
