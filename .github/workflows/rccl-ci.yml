@@ -4,17 +4,6 @@ on:
   push:
     branches:
       - 'users/arravikum/multi-node-rccl-tests'
-    inputs:
-      package_version:
-        type: string
-        default: ADHOCBUILD
-      amdgpu_families:
-        type: string
-      expect_failure:
-        type: boolean
-        default: false
-      extra_cmake_options:
-        type: string
 
   workflow_dispatch:
     inputs:
@@ -50,7 +39,7 @@ jobs:
   build_test_packages:
     name: Build test packages
     runs-on: azure-linux-scale-rocm
-    continue-on-error: ${{ inputs.expect_failure }}
+    continue-on-error: false
     permissions:
       id-token: write
     container:
@@ -61,7 +50,7 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      AMDGPU_FAMILIES: 'gfx94X-dcgpu'
       TEATIME_FORCE_INTERACTIVE: 0
     steps:
       - name: Generate a token for rccl
