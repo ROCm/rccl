@@ -10,7 +10,7 @@
 
 namespace RcclUnitTesting
 {
-  TEST(CommTest, Sorter)
+  TEST(CommTests, Sorter)
   {
 	// Configuration
 	ncclTaskCollSorter* me_ptr = new ncclTaskCollSorter;
