@@ -39,6 +39,8 @@ jobs:
     variables:
       ENABLE_COVERAGE: "true"
       INFRA_TEST_CONFIG: "meta_2_node_split_alola_cov"
+      RCCL_TEST_INFRA_DIR: "$(Pipeline.Workspace)/s/rccl-test-infra"
+      LOCAL_RCCL_PATH: "$(Pipeline.Workspace)/s/rccl"
     steps:
       - task: DeleteFiles@1
         inputs:
@@ -54,7 +56,7 @@ jobs:
       - task: CopyFiles@2
         displayName: 'Copy all HTML coverage files'
         inputs:
-          SourceFolder: '$(Pipeline.Workspace)/s/rccl-test-infra'
+          SourceFolder: '$(RCCL_TEST_INFRA_DIR)'
           Contents: 'slurm_runs_$(INFRA_TEST_CONFIG)_*/**'
           TargetFolder: '$(Build.ArtifactStagingDirectory)'
           flattenFolders: false
