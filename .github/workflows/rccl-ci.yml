@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - 'users/arravikum/multi-node-rccl-tests'
+    inputs:
+      package_version:
+        type: string
+        default: ADHOCBUILD
+      amdgpu_families:
+        type: string
+      expect_failure:
+        type: boolean
+        default: false
+      extra_cmake_options:
+        type: string
 
   workflow_dispatch:
     inputs:
