@@ -91,7 +91,6 @@ if(BUILD_TESTS)
     AllToAllTests.cpp
     AllToAllVTests.cpp
     BroadcastTests.cpp
-    CommTest.cpp
     GatherTests.cpp
     GroupCallTests.cpp
     NonBlockingTests.cpp
@@ -142,12 +141,13 @@ if(BUILD_TESTS)
       AltRsmiTests.cpp
       AllocTests.cpp
       ArgCheckTests.cpp
+      BitOpsTests.cpp
       IpcsocketTests.cpp
       CollRegTests.cpp
+      CommTests.cpp
+      P2pTests.cpp
       RcclWrapTests.cpp
       ShmTests.cpp
-      P2pTests.cpp
-      BitOpsTests.cpp
       TransportTests.cpp
       common/main_fixtures.cpp
       common/EnvVars.cpp
