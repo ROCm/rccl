@@ -186,15 +186,15 @@ jobs:
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
             --build-dir TheRock/build
   ## WIP - Adding tests once build with TheRock and other submodules work
-  therock-test-linux:
-    name: "Test"
-    needs: [build_test_packages]
-    runs-on: vultr-linux-node
+  multi-node-rccl-test:
+    name: "Test multi-node-rccl-tests"
+    #needs: [build_test_packages]
+    runs-on: vultr-mi300-linux-rocm
 
     steps:
-      - name: Checkout cvs repository for tests
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: "ROCm/cvs"
-          path: "cvs"
+      - name: Run tests on vultr-linux-node
+        if: always()
+        run:
+          source /TheRock/.venv/bin/activate
+          pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
           
