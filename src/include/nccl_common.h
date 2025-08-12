@@ -53,8 +53,8 @@ typedef enum {
   ncclFuncSendRecv = 6,
   ncclFuncSend = 7,
   ncclFuncRecv = 8,
-  ncclFuncAllToAllPivot = 10,
-  ncclNumFuncs = 11
+  ncclFuncAllToAllPivot = 9,
+  ncclNumFuncs = 10
 } ncclFunc_t;
 
 #define NCCL_NUM_ALGORITHMS 7 // Tree/Ring/CollNet*

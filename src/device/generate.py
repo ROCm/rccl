@@ -178,7 +178,7 @@ def calc_unroll_for_local_arch():
       return 4
 
 # Helper function to check if the conditions for the collective is being met
-def func_validate(coll, algo, proto, redop, ty):
+def func_validate(coll, algo, proto, redop, ty, acc, unroll):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
   if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll]:
@@ -231,7 +231,7 @@ def func_filter(function_params, current_idx, item_list=None):
   else:
     coll, algo, proto, redop, ty, acc, unroll = item_list
 
-    if func_validate(coll, algo, proto, redop, ty):
+    if func_validate(coll, algo, proto, redop, ty, acc, unroll):
       yield(coll, algo, proto, redop, ty, acc, unroll)
 
 # Parse ONLY_FUNCS input and feed it to func_filter
@@ -274,9 +274,8 @@ def enumerate_func_rows():
         for proto in all_protos:
           for redop in all_redops:
             for ty in all_tys:
-              if func_validate(coll, algo, proto, redop, ty):
+              if func_validate(coll, algo, proto, redop, ty, "0", unroll):
                 if coll == "AllReduceWithBias":
-                  yield (coll, algo, proto, redop, ty, "0", unroll)
                   yield (coll, algo, proto, redop, ty, "1", unroll)
                 else:
                   yield (coll, algo, proto, redop, ty, "0", unroll)
