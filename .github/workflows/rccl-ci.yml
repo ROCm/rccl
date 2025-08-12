@@ -190,7 +190,7 @@ jobs:
   multi-node-rccl-test:
     name: "Test multi-node-rccl-tests"
     #needs: [build_test_packages]
-    runs-on: vultr-mi300-linux-rocm
+    runs-on: vultr-linux-rocm
 
     steps:
       - name: Run tests on vultr-linux-node
