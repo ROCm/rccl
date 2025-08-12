@@ -3,8 +3,8 @@ name: rccl multi node tests
 on:
   push:
     branches:
-      - 'users/arravikum/pytorch_test_gating'
-      
+      - 'users/arravikum/multi-node-rccl-tests'
+
   workflow_dispatch:
     inputs:
       package_version:
