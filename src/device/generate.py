@@ -8,7 +8,7 @@ all_colls = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
-all_algos =  ["TREE","RING", "PAT"]
+all_algos =  ["TREE","RING", "", "", "", "", "PAT"]
 all_unroll = ["1", "2", "4"]
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
 
@@ -176,7 +176,7 @@ def calc_unroll_for_local_arch():
 def func_validate(coll, algo, proto, redop, ty, unroll):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
-  if coll == "":
+  if coll == "" or algo == "":
     return False
   if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll:
     return False
