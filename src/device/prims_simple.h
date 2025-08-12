@@ -10,6 +10,8 @@
 #include "npkit/npkit.h"
 #endif
 
+#include "device/gfx9_threadfence.h"
+#include "device/rccl_metadata.h"
 #include "msccl/msccl_struct.h"
 #include "network/unpack/unpack.h"
 #include <cassert>
@@ -21,9 +23,9 @@ enum primsMode {
 };
 
 template<typename T, typename RedOp, typename Fan, int Direct,
-         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload>
+         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload, int Metadata>
 class Primitives<
-    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload
+    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload, Metadata
   > {
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
   static constexpr int Input=0, Output=1;
@@ -63,6 +65,8 @@ class Primitives<
   uint32_t* next_hdp_reg;
   uint64_t* barriers;
   uint64_t barrier_next = 0;
+  uint64_t* barriers_pat;
+  uint64_t barrier_next_pat = 0;
   int repeat;
 
 #if defined(ENABLE_NPKIT)
@@ -80,9 +84,9 @@ private:
       __syncwarp();
     else 
       #if defined(__gfx942__) || defined(__gfx950__)
-        barrier_by_group_block();
+        barrier_generic(__threadfence_block(), nworkers, barrier_next, barriers);
       #else
-        barrier_by_group();
+        barrier_generic(__threadfence(), nworkers, barrier_next, barriers);
       #endif
   }
   inline __device__ void subBarrier() {
@@ -92,7 +96,11 @@ private:
   }
 
   inline __device__ void patBarrier() {
-    barrier();
+    #if defined(__gfx942__) || defined(__gfx950__)
+      barrier_generic(__threadfence_block(), NCCL_PAT_NWORKERS, barrier_next_pat, barriers_pat);
+    #else
+      barrier_generic(__threadfence(), NCCL_PAT_NWORKERS, barrier_next_pat, barriers_pat);
+    #endif
   }
 
   inline __device__ void barrierAny() {
@@ -193,12 +201,13 @@ private:
 
   template<int Recv, int Send>
   inline __device__ void postPeer(bool dataStored) {
-    if (Send && (flags & RolePostSend) && dataStored)
+    if (Send && (flags & RolePostSend) && dataStored){
 #ifdef __GFX9__
-    __threadfence();
+    gfx9ThreadFence<isOneNodeRingSimple(Metadata) && RCCL_CHEAP_THREADFENCE_OK_SOMETIMES>();
 #else
     __threadfence_system();
 #endif
+    }
 
     if ((flags & Send*RolePostSend) && next_hdp_reg)
       STORE((unsigned int *)next_hdp_reg, 0x1);
@@ -256,6 +265,8 @@ private:
           T* userOutput = (T*)ncclShmem.groups[group].userOutput;
           if (Src) ncclShmem.groups[group].srcs[0] = (SrcBuf==Input ? userInput : userOutput) + srcIx + offset;
           if (Dst) ncclShmem.groups[group].dsts[0] = (DstBuf==Input ? userInput : userOutput) + dstIx + offset;
+          T* userAcc = (T*)ncclShmem.groups[group].userAcc;
+          ncclShmem.groups[group].acc = (Dst && userAcc != nullptr) ? userAcc + dstIx + offset : nullptr;
         }
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(srcIx, dstIx, offset, sliceSize);
         subBarrier();
@@ -376,7 +387,7 @@ private:
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
                 Recv * fan.nrecv() + Src, ncclShmem.groups[group].srcs,
                 Send * fan.nsend() + Dst, ncclShmem.groups[group].dsts,
-                workSize);
+                workSize, ncclShmem.groups[group].acc);
           }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
@@ -740,11 +751,12 @@ public:
       uint8_t connIndexRecv = 0, uint8_t connIndexSend = 0, struct ncclDevWorkColl* collWork = nullptr,
       struct ncclDevWorkP2p* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
     ):
-    tid(tid), nthreads(nthreads), tidInBlock(threadIdx.x), group(group),
-    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_) {
+    tid(tid), tidInBlock(threadIdx.x), nthreads(nthreads), /*compiler warnings*/
+    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_), group(group) {
 
-    // For send operations, we need an extra warp to overlap the threadfence and the copy
     barriers = &ncclShmem.groups[group].barrier;
+    // PAT uses the same barrier for each group
+    barriers_pat = &ncclShmem.barrier_pat;
     this->nworkers = nthreads;
 
     int peer = -1;
@@ -817,7 +829,7 @@ public:
 
       // coverity[negative_returns:FALSE] => coverity thinks that index could be -1 but that's not actually the case
       // coverity[var_deref_model] => coverity thinks work can dereferenced if NULL but this is not the case
-      setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclDevWorkCollReg*)collWork, sendIpcReg || recvIpcReg, peer);
+      setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclDevWorkCollReg*)collWork, sendIpcReg || recvIpcReg, peer, collWork != nullptr ? collWork->acc : nullptr);
       // coverity[uninit_member] => coverity thinks fan.n is not initialized
     } else if (mode == primsModePatRs || mode == primsModePatAg) { // Connect to all ranks +/- 2^n
       flags |= PatMode;
@@ -892,10 +904,11 @@ public:
     }
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, uint64_t redOpArg, struct ncclDevWorkCollReg* work, uint8_t ipcReg, int peer) {
+  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, uint64_t redOpArg, struct ncclDevWorkCollReg* work, uint8_t ipcReg, int peer, void const *acc) {
     if (tid==0) {
       ncclShmem.groups[group].userInput = (void*)inputBuf;
       ncclShmem.groups[group].userOutput = (void*)outputBuf;
+      ncclShmem.groups[group].userAcc = (void*)acc;
       ncclShmem.redOpArgs[0] = redOpArg;  // scaler for local input
     }
 
@@ -1013,7 +1026,7 @@ public:
   }
 
   // Set MSCCL data pointers
-  __device__ __forceinline__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
+  __device__ __forceinline__ void setDataPtrs(void const *inputBuf, void *outputBuf = nullptr) {
     if (tid==0) {
       ncclShmem.groups[group].userInput = (T*)inputBuf;
       ncclShmem.groups[group].userOutput = (T*)outputBuf;
@@ -1309,5 +1322,8 @@ public:
   }
   __device__ __forceinline__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+  }
+  __device__ __forceinline__ void mscclSend(intptr_t inpIx, int eltN) {
+    genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
 };

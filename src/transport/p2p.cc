@@ -1077,9 +1077,6 @@ static ncclResult_t p2pProxyRegister(struct ncclProxyConnection* connection, str
   struct p2pIpcExpInfo* ipcExpInfo = (struct p2pIpcExpInfo*)reqBuff;
   void* regAddr = NULL;
   ncclResult_t ret = ncclSuccess;
-  bool mapped = false;
-  bool imported = false;
-  CUmemGenericAllocationHandle handle;
 
   assert(sizeof(struct p2pIpcExpInfo) == reqSize);
   assert(sizeof(void*) == respSize);
@@ -1094,6 +1091,9 @@ static ncclResult_t p2pProxyRegister(struct ncclProxyConnection* connection, str
     regAddr = (void*)((uintptr_t)regAddr + ipcExpInfo->offset);
   } else {
 #if CUDART_VERSION >= 11030
+    bool mapped = false; /*compiler warning, defining vars only if needed*/
+    bool imported = false;
+    CUmemGenericAllocationHandle handle;
     // cuMem import
     if (connection->sameProcess) {
       // if proxy is same process as request peer, we just need to map the handle.

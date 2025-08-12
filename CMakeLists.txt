@@ -38,6 +38,8 @@ option(PROFILE                                 "Enable profiling"               
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(FORCE_REDUCE_PIPELINING                 "Force reduce pipelining"                       OFF)
+option(DISABLE_CHEAP_THREADFENCE               "Compile-time killswitch for simpler fence"     OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -353,6 +355,13 @@ execute_process(
   OUTPUT_VARIABLE HOST_OS_ID
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+execute_process(
+  COMMAND bash -c "grep '^ID_LIKE=' /etc/os-release | cut -d'=' -f2 | cut -d'\"' -f2"
+  OUTPUT_VARIABLE HOST_OS_FAMILY
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 if (ENABLE_MSCCLPP AND NOT(${HOST_OS_ID} STREQUAL "ubuntu" OR ${HOST_OS_ID} STREQUAL "centos"))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration not supported on this OS (${HOST_OS_ID}); disabling MSCCL++ build")
@@ -437,6 +446,7 @@ set(SRC_FILES
   src/device/broadcast.h
   src/device/common.h
   src/device/common_kernel.h
+  src/device/gfx9_threadfence.h
   src/device/op128.h
   src/device/primitives.h
   src/device/prims_ll128.h
@@ -445,6 +455,7 @@ set(SRC_FILES
   src/device/reduce.h
   src/device/reduce_kernel.h
   src/device/reduce_scatter.h
+  src/device/rccl_metadata.h
   src/device/sendrecv.h
   src/device/common.cu
   src/device/onerank.cu
@@ -648,6 +659,15 @@ set(SRC_FILES
   src/transport/p2p.cc
   src/transport/profiler.cc
   src/transport/shm.cc
+  src/include/latency_profiler/CollTrace.h
+  src/include/latency_profiler/CollTraceEvent.h
+  src/include/latency_profiler/CollTraceFunc.h
+  src/include/latency_profiler/CollTraceUtils.h
+  src/include/latency_profiler/EventQueue.h
+  src/misc/latency_profiler/CollTrace.cc
+  src/misc/latency_profiler/CollTraceEvent.cc
+  src/misc/latency_profiler/CollTraceFunc.cc
+  src/misc/latency_profiler/CollTraceUtils.cc
 )
 
 if (ENABLE_MSCCL_KERNEL)
@@ -715,6 +735,92 @@ foreach(SRC_FILE ${SRC_FILES})
   endif()
 endforeach()
 
+# Adding custom target to hipify all the source files
+# This is required to make sure that all the hipified source files are
+# available before compiling the unit tests executable(s)
+add_custom_target(hipify_all DEPENDS ${HIP_SOURCES})
+
+if (BUILD_TESTS)
+  if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+    ## Set definition for exposing rccl static function
+    add_definitions(-DRCCL_EXPOSE_STATIC)
+
+    set(HIPIFY_SRC_DIR "${PROJECT_BINARY_DIR}/hipify/src")
+    set(REPLACE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/scripts/replace_static.sh")
+    message ("Replacing static functions in ${HIPIFY_SRC_DIR} with ${REPLACE_SCRIPT} for unit tests")
+    # Create a list of files which needs to be modified to remove static
+    set(TEST_NONSTATIC_SOURCE_FILES
+      ${HIPIFY_SRC_DIR}/misc/alt_rsmi.cc
+      ${HIPIFY_SRC_DIR}/register/coll_reg.cc
+      ${HIPIFY_SRC_DIR}/transport/shm.cc
+      ${HIPIFY_SRC_DIR}/transport/p2p.cc
+    )
+
+    set(EXCLUDE_STATIC_FILE "${CMAKE_SOURCE_DIR}/tools/scripts/exclude_static_list.txt")
+    # Read the exclude list file into a CMake variable
+    file(READ "${EXCLUDE_STATIC_FILE}" EXCLUDE_STATIC_CONTENTS)
+    string(REPLACE "\n" ";" EXCLUDE_STATIC_LINES "${EXCLUDE_STATIC_CONTENTS}")
+    # Create a mapping from full/relative filename to exclude list
+    unset(EXCLUDE_MAP)
+    foreach(line ${EXCLUDE_STATIC_LINES})
+      if(line MATCHES "^([a-zA-Z0-9_./-]+):([a-zA-Z0-9_,]*)")
+        set(fname "${CMAKE_MATCH_1}")
+        set(exlist "${CMAKE_MATCH_2}")
+        # Map both the basename and the full/relative path for flexibility
+        get_filename_component(basename "${fname}" NAME)
+        set(EXCLUDE_MAP_${fname} "${exlist}")
+        set(EXCLUDE_MAP_${basename} "${exlist}")
+      endif()
+    endforeach()
+
+    # Now, for each file, get the exclude list and pass to the script
+    # Create a custom command to backup the original files and remove static
+    # Always run replace script on hipified files, but preserve original backups
+    foreach(srcfile ${TEST_NONSTATIC_SOURCE_FILES})
+      # Try to match using the full/relative path first, then fallback to basename
+      set(exclude_list "")
+      if(DEFINED EXCLUDE_MAP_${srcfile})
+        set(exclude_list "${EXCLUDE_MAP_${srcfile}}")
+      else()
+        get_filename_component(basename "${srcfile}" NAME)
+        if(DEFINED EXCLUDE_MAP_${basename})
+          set(exclude_list "${EXCLUDE_MAP_${basename}}")
+        endif()
+      endif()
+      add_custom_command(
+        OUTPUT "${srcfile}.staticbak"
+        COMMAND bash -c "\
+            ${CMAKE_COMMAND} -E echo 'Processing ${srcfile} for static replacement' && \
+            if [ ! -f '${srcfile}.staticbak' ]; then \
+              ${CMAKE_COMMAND} -E copy '${srcfile}' '${srcfile}.staticbak' && \
+              ${CMAKE_COMMAND} -E echo 'Created backup: ${srcfile}.staticbak'; \
+            fi && \
+            ${CMAKE_COMMAND} -E echo 'Exposing internal functions/variables in ${srcfile}' && \
+            ${REPLACE_SCRIPT} ${srcfile} --replace-vars --exclude-list=${exclude_list} 2>&1 \
+          "
+        DEPENDS "${srcfile}" "${REPLACE_SCRIPT}" hipify_all
+        COMMENT "Removing static from ${srcfile} (backup preserved at ${srcfile}.staticbak)"
+        VERBATIM
+      )
+      list(APPEND STATIC_BAK_FILES "${srcfile}.staticbak")
+    endforeach()
+    add_custom_target(replace_static_in_hipify ALL DEPENDS ${STATIC_BAK_FILES})
+    add_dependencies(replace_static_in_hipify hipify_all)
+  else()
+    # Restore originals in the build directory if backup exists
+    foreach(srcfile ${HIPIFY_SRC_FILES})
+      if(EXISTS "${srcfile}.staticbak")
+        execute_process(
+          COMMAND ${CMAKE_COMMAND} -E copy "${srcfile}.staticbak" "${srcfile}"
+        )
+        execute_process(
+          COMMAND ${CMAKE_COMMAND} -E remove "${srcfile}.staticbak"
+        )
+      endif()
+    endforeach()
+  endif()
+endif()
+
 # Generate device/host tables and all the collective functions that are going to be in librccl.so
 #==================================================================================================
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -724,13 +830,9 @@ endif()
 
 set(GEN_DIR "${HIPIFY_DIR}/gensrc")
 
-if(ONLY_FUNCS)
-  message(WARNING "Using ONLY_FUNCS = ${ONLY_FUNCS}. Not meant for release builds.")
-endif()
-
 # Execute the python script to generate required files
 execute_process(
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${ONLY_FUNCS}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     RESULT_VARIABLE gen_py_result
     ERROR_VARIABLE gen_py_error
@@ -746,6 +848,18 @@ file(GLOB GENERATED_FILES "${GEN_DIR}/*")
 # Append all found generated files to the list
 foreach(file ${GENERATED_FILES})
   list(APPEND HIP_SOURCES ${file})
+endforeach()
+
+# Enable SW pipelining where needed
+foreach(SOURCE_FILE ${HIP_SOURCES})
+    # TODO: enable bf16 pipelining by default upon having the pipelined/scalar switching feature
+    # if (FORCE_REDUCE_PIPELINING AND (SOURCE_FILE MATCHES "gensrc/reduce_.*" OR SOURCE_FILE MATCHES "gensrc/reduce_scatter_.*" OR SOURCE_FILE MATCHES "gensrc/all_reduce_.*"))
+    #   message(STATUS "RCCL_ENABLE_SW_PIPELINE enabled for ${SOURCE_FILE}")
+    #   set_source_files_properties(${SOURCE_FILE} PROPERTIES COMPILE_FLAGS "-DRCCL_ENABLE_SW_PIPELINE")
+    if(FORCE_REDUCE_PIPELINING AND SOURCE_FILE MATCHES "gensrc/(reduce|reduce_scatter|all_reduce).*_bf16\\.cpp$")
+      message(STATUS "BF16 pipelining support enabled for ${SOURCE_FILE}")
+      set_source_files_properties(${SOURCE_FILE} PROPERTIES COMPILE_FLAGS "-DRCCL_ENABLE_SW_PIPELINE")
+    endif()
 endforeach()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
@@ -768,6 +882,11 @@ add_library(rccl ${HIP_SOURCES})
 
 ## Set RCCL dependencies
 add_dependencies(rccl git_version_check)                                      # Execute git_version_check during build
+
+if (BUILD_TESTS AND ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+  ## Set static replacement dependency for fixture unit tests
+  add_dependencies(rccl replace_static_in_hipify)
+endif()
 
 ## Set RCCL include directories
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
@@ -855,7 +974,7 @@ if(ENABLE_NPKIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_SEND_ENTRY)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_TEST_ENTRY)
-  target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_TEST_ENTRY)
+  target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_TEST_EXIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_RECV_ENTRY)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_NET_RECV_EXIT)
   target_compile_definitions(rccl PRIVATE ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_SEND_ENTRY)
@@ -986,7 +1105,7 @@ if (HAVE_PARALLEL_JOBS)
   target_compile_options(rccl PRIVATE -parallel-jobs=12)
 endif()
 
-if (ROCM_VERSION VERSION_GREATER_EQUAL "60200") 
+if (ROCM_VERSION VERSION_GREATER_EQUAL "60200")
   target_compile_options(rccl PRIVATE --offload-compress)    # Compress GPU code at compile time.
   target_link_libraries(rccl PRIVATE --offload-compress)     # Compress GPU code at link time.
   message(STATUS "--offload-compress enabled - ROCm version >= 6.2.0")
@@ -999,6 +1118,7 @@ target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
+target_compile_options(rccl PRIVATE -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
 
 ## Set RCCL compile and linker options for unit tests and code coverage
@@ -1056,6 +1176,12 @@ if (FAULT_INJECTION)
   target_compile_definitions(rccl PRIVATE ENABLE_FAULT_INJECTION)
   message(STATUS "Fault injection enabled")
 endif()
+if (DISABLE_CHEAP_THREADFENCE)
+  target_compile_definitions(rccl PRIVATE DISABLE_CHEAP_THREADFENCE)
+  message(STATUS "Cheap thread fence disabled")
+else()
+  message(STATUS "Cheap thread fence enabled for some collectives/parameters")
+endif()
 
 ## Set RCCL linked library directories
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
@@ -1091,7 +1217,7 @@ target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
-target_link_libraries(rccl PRIVATE fmt::fmt)
+target_link_libraries(rccl PRIVATE fmt::fmt-header-only)
 if(ENABLE_MSCCLPP)
   target_link_libraries(rccl PRIVATE mscclpp_nccl)
 endif()

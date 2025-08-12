@@ -23,6 +23,8 @@ THE SOFTWARE.
 #define RCCL_COMMON_H_
 #include "nccl_common.h"
 #include "nccl.h"
+#include "param.h"
+
 typedef enum RcclTunableColls {
   RCCL_UNSUPPORTED_TUNABLE = -1,
   RCCL_RS_TUNABLE = 0,    // reduce_scatter index
@@ -38,6 +40,11 @@ typedef enum RcclTunableColls {
 #define RCCL_PROTOCOL_MAX_IDX 1
 #define RCCL_PROTOCOL_FACTOR_IDX 2
 #define RCCL_PROTOCOL_THREAD_THRESHOLD_IDX 3
+
+typedef enum {
+  RCCL_VALUE_UNSET = -2,
+  RCCL_VALUE_INVALID = -1
+} rcclValueState_t;
 
 #ifdef RCCL_EXPOSE_STATIC
 #define RCCL_STATIC_EXPOSE_CHECK()
@@ -76,6 +83,8 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
 ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
                              int collNetSupport, int nvlsSupport, int numPipeOps,
                              int* algo, int* protocol, int* maxChannels);
-
+void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable);
+void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize);
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount);
+ncclResult_t commSetUnrollFactor(struct ncclComm* comm);
 #endif

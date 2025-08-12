@@ -119,14 +119,14 @@ bool isRankHere(const char* s, int start, int end, int rank) {
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
-  int x=0, y=0;
+  int x=0;
   for (int i=0;  treeGraph->treeBase[i][0]!=0; i++)
   {
     x=i+1;
   }
   if( treeGraph->treeBase[0][0] == 0) return ncclSuccess;
   int nChannels = comm->nChannels;
-  int localRanks = comm->topo->nodes[GPU].count;
+  //int localRanks = comm->topo->nodes[GPU].count; // unused variable - compiler warning
   //new tree
   for (int c=0; c<nChannels; c++) { // in here
     int buff = c%x;
@@ -804,10 +804,10 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     }
   }
 
-  // Only use full MAXCHANNELS for gfx94x and gfx950
-  maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) ?
-    ((comm->topo->nodes[GPU].nodes[0].gpu.cu == 80 || comm->topo->nodes[GPU].nodes[0].gpu.cu == 20 || comm->topo->nodes[GPU].nodes[0].gpu.cu == 38)
-      ? comm->topo->nodes[GPU].nodes[0].gpu.cu : MAXCHANNELS) : 2*CHANNEL_LIMIT;
+  // Only use full MAXCHANNELS for gfx942 (MI300X) and gfx950
+  maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
+                 IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950"))
+                 ? std::min(comm->topo->nodes[GPU].nodes[0].gpu.cu, MAXCHANNELS) : 2*CHANNEL_LIMIT;
 
   if (graphs[NCCL_ALGO_RING]->nIntraChannels > 0 || comm->nNodes > 1) {
     maxChannels = std::min(64, maxChannels);

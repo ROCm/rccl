@@ -14,7 +14,7 @@
 #endif
 
 namespace {
-  template<typename T, typename RedOp, typename Proto>
+  template<typename T, typename RedOp, typename Proto, int RCCLMetadata, int COLL_UNROLL>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__)
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #else
@@ -23,7 +23,10 @@ namespace {
     ncclRing *ring = &ncclShmem.channel.ring;
     int ringIx = ring->index;
     const int nranks = ncclShmem.comm.nRanks;
+#if defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
+    int npKitCtxIdx = bid; // unused variable - compiler warning
+#endif
     ssize_t size;
     ssize_t gridOffset;
     ssize_t channelCount;
@@ -34,9 +37,6 @@ namespace {
     int nelem;
     int chunk;
 
-#if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
-#endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
     if (tid == 0) {
@@ -61,7 +61,7 @@ namespace {
     // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
-    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
+    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata> prims
       (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
 
 #if defined(ENABLE_NPKIT)
@@ -216,7 +216,10 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
+#if defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
+    int npKitCtxIdx = bid; // unused variable - compiler warning
+#endif
     ncclTree *tree = &ncclShmem.channel.tree;
     size_t size;
     size_t gridOffset;
@@ -226,9 +229,6 @@ namespace {
     size_t offset;
     int nelem;
 
-#if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
-#endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
     if (tid == 0) {
@@ -364,7 +364,9 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runTreeSplit(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    const int bid = ncclShmem.channelId - work->channelLo;
+#if defined(ENABLE_NPKIT)
+    const int bid = ncclShmem.channelId - work->channelLo; // unused variable - compiler warning
+#endif
     ncclTree *tree = &ncclShmem.channel.tree;
     size_t size;
     size_t gridOffset;
@@ -562,15 +564,21 @@ namespace {
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
-    runRing<T, RedOp, Proto>(tid, nthreads, work); \
-  } else{ \
+    if(work->regUsed || work->netRegUsed || work->gfx942CheapFenceOff){ \
+      runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
+    } \ 
+    else { \
+      runRing<T, RedOp, Proto, RCCL_ONE_NODE_RING_SIMPLE>(tid, nthreads, work); \
+    } \
+  } \
+  else{ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>; \
-    runRing<T, RedOp, Proto>(tid, nthreads, work); \
+    runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
   }
 #else
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>; \
-  runRing<T, RedOp, Proto>(tid, nthreads, work);
+  runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work);
 #endif
 
 template<typename T, typename RedOp>
@@ -583,7 +591,12 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
+    using Proto = ProtoSimple<1, 1>;
+    if (work->acc != nullptr) {
+      runTreeSplit<T, RedOp, Proto>(tid, nthreads, work);
+    } else {
+      runTreeUpDown<T, RedOp, Proto>(tid, nthreads, work);
+    }
     // Check-here
     // #if CUDART_VERSION >= 11020 && CUDART_VERSION < 11040 && __CUDA_ARCH__ >= 800
     //   runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
@@ -1099,7 +1112,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET_CHAIN, NCCL_PR
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL, RCCL_METADATA_EMPTY>(tid, nthreads, work);
   }
 };
 
@@ -1113,7 +1126,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL> {
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL128, RCCL_METADATA_EMPTY>(tid, nthreads, work);
   }
 };
 

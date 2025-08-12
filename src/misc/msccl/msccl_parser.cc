@@ -708,7 +708,6 @@ ncclResult_t mscclXmlLoadSingleNode(FILE* file, struct mscclXmlNode* node) {
 }
 
 ncclResult_t mscclAlgoMetaXmlLoad(const char* xmlFilePath, struct mscclXmlNode* node) {
-  ncclResult_t ret = ncclSuccess;
   FILE* file = fopen(xmlFilePath, "r");
   if (file == NULL) {
     fprintf(stderr, "Could not open MSCCL XML algorithm file %s : %s", xmlFilePath, strerror(errno));
@@ -720,7 +719,6 @@ ncclResult_t mscclAlgoMetaXmlLoad(const char* xmlFilePath, struct mscclXmlNode* 
 }
 
 ncclResult_t mscclGetAlgoMetaFromXmlFile(const char* str, struct mscclAlgoMeta* algoMeta) {
-  ncclResult_t ret = ncclSuccess;
   struct mscclXmlNode* node;
   node = (struct mscclXmlNode *)malloc(sizeof(struct mscclXmlNode));
   NCCLCHECK(mscclAlgoMetaXmlLoad(str, node));
