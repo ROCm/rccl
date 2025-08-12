@@ -196,6 +196,6 @@ jobs:
       - name: Run tests on vultr-linux-node
         if: always()
         run:
-          source /TheRock/.venv/bin/activate
-          pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
+          source /home/arravikum/TheRock/.venv/bin/activate
+          pytest -vvv --log-file=/tmp/rccl_log.log -s /home/arravikum/cvs/tests/rccl/rccl_multinode_cvs.py --cluster_file /home/arravikum/cvs/input/cluster.json --config_file /home/arravikum/cvs/input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
           
