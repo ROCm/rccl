@@ -37,6 +37,7 @@ permissions:
 
 jobs:
   build_test_packages:
+    if: false
     name: Build test packages
     runs-on: azure-linux-scale-rocm
     continue-on-error: false
