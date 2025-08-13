@@ -129,7 +129,17 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_NET_REG_BUFFER 0x04
 
 #define RCCL_FUNC_ID_MASK 0xF
-#define RCCL_FUNC_ID_SHIFT 4
+#define RCCL_COLL_SHIFT 0
+#define RCCL_ALGO_SHIFT 4
+#define RCCL_PROTO_SHIFT 8
+#define RCCL_REDOP_SHIFT 12
+#define RCCL_DTYPE_SHIFT 16
+
+    // key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK)) |
+    //       ((uint64_t)(algo     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT))   |
+    //       ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*2)) |
+    //       ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*3)) |
+    //       ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*4));
 
 struct ncclConnInfo {
   // Regular comm mechanism
@@ -704,16 +714,16 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
   // coll, algo, proto, devRedOp, type
   // This logic must be in sync with the key generation logic in generate.py
   if (coll == ncclFuncBroadcast) {
-    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK)) |
-          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*2));
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
+          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT);
   } else if (coll == ncclFuncSendRecv || coll == ncclFuncAllToAllPivot) {
-    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK));
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT );
   } else {
-    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK)) |
-          ((uint64_t)(algo     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT))   |
-          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*2)) |
-          ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*3)) |
-          ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*4));
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
+          ((uint64_t)(algo     & RCCL_FUNC_ID_MASK) << RCCL_ALGO_SHIFT ) |
+          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT) |
+          ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << RCCL_REDOP_SHIFT) |
+          ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << RCCL_DTYPE_SHIFT);
   }
   auto it = ncclDevFuncNameToId.find(key);
   if (it != ncclDevFuncNameToId.end()) {
