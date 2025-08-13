@@ -730,7 +730,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
     row = it->second;
   }
   if(row < 0) {
-    WARN("Fatal error: ncclDevFuncId: %llu not found", key);
+    WARN("Fatal error: ncclDevFuncId: %llu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d", key, coll, algo, proto, devRedOp, type);
     return -1;
   }
   return row;
