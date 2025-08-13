@@ -135,12 +135,6 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define RCCL_REDOP_SHIFT 12
 #define RCCL_DTYPE_SHIFT 16
 
-    // key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK)) |
-    //       ((uint64_t)(algo     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT))   |
-    //       ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*2)) |
-    //       ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*3)) |
-    //       ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << (RCCL_FUNC_ID_SHIFT*4));
-
 struct ncclConnInfo {
   // Regular comm mechanism
   char *buffs[NCCL_NUM_PROTOCOLS]; // Local for recv, remote for send
