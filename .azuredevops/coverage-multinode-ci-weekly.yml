@@ -39,7 +39,7 @@ jobs:
     variables:
       ENABLE_COVERAGE: "true"
       INFRA_TEST_CONFIG: "meta_2_node_split_alola_cov"
-      RCCL_TEST_INFRA_DIR: "$(Pipeline.Workspace)/s/rccl-test-infra"
+      RCCL_TEST_INFRA_DIR: "$(Pipeline.Workspace)/rccl-test-infra/rccl-test-infra"
       LOCAL_RCCL_PATH: "$(Pipeline.Workspace)/s/rccl"
     steps:
       - task: DeleteFiles@1
@@ -48,9 +48,8 @@ jobs:
       - template: ${{ variables.CI_TEMPLATE_PATH }}/steps/checkout.yml@pipelines_repo
         parameters:
           submoduleBehaviour: recursive
-      - template: ${{ variables.CI_TEMPLATE_PATH }}/steps/checkout.yml@pipelines_repo
-        parameters:
-          checkoutRepo: rccl-test-infra
+      - checkout: rccl-test-infra
+        path: rccl-test-infra
       - template: templates/build.yml
       - template: templates/test_rccl-tests.yml
         parameters:
