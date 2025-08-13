@@ -14,8 +14,8 @@ source /etc/profile.d/lmod.sh
 module load rocm/6.4.1
 
 if [ "$ENABLE_COVERAGE" = "true" ]; then
-    cd $(Pipeline.Workspace)/s/rccl-test-infra || exit
-    CODE_COV=1 ./run.sh -c config/"$INFRA_TEST_CONFIG".json -B -C -O --use-slurm --slurm-time="$TESTS_TIMEOUT" --slurm-partition=gt --slurm-nodes="$NUM_NODES" --work_dir="$BINARIES_DIR"
+    cd $RCCL_TEST_INFRA_DIR || exit
+    TEST_INFRA_WORK_DIR=$BINARIES_DIR CODE_COV=1 ./run.sh -c config/"$INFRA_TEST_CONFIG".json -B -C -O --use-slurm --slurm-time="$TESTS_TIMEOUT" --slurm-partition=gt --slurm-nodes="$NUM_NODES" --work_dir="$BINARIES_DIR"
     cd slurm_runs_"$INFRA_TEST_CONFIG_"* || exit
 
     FILE="rawprofiles.list"
