@@ -148,7 +148,8 @@ private:
   __device__ uint64_t readLL(int offset, int i) {
     union ncclLLFifoLine* src = recvPtr(i) + offset;
     uint32_t flag = recvFlag(i);
-    uint32_t data1, flag1, data2, flag2;
+    uint32_t data1, flag1, data2, flag2; 
+    (void)data1; (void)flag1; (void)data2; (void)flag2; // unused variable - compiler warning
     int spins = 0;
 
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
@@ -865,8 +866,8 @@ public:
       int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
 
       DataLoader dl;
-      ncclLLFifoLine line[MaxRecv];
-      uint64_t data, peerData;
+      // ncclLLFifoLine line[MaxRecv];//unused variable - compiler warning
+      uint64_t data /*peerData*/;     //unused variable - compiler warning
       dl.loadBegin(srcElts, eltInLine);
       srcElts += eltPerTrip;
       data = dl.loadFinish();

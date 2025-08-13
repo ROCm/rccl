@@ -14,13 +14,11 @@ target_link_libraries(rcclras PRIVATE hip::host)
 target_link_libraries(rcclras PRIVATE dl)
 
 if(BUILD_SHARED_LIBS)
-  target_link_libraries(rcclras PRIVATE rccl)
-  set_property(TARGET rcclras PROPERTY INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${CMAKE_BINARY_DIR};${ROCM_PATH}/lib")
+  target_link_libraries(rcclras PRIVATE rccl hip::device)
 else()
   add_dependencies(rcclras rccl)
   target_link_libraries(rcclras PRIVATE dl rt -lrccl -L${CMAKE_BINARY_DIR} -lamdhip64 -L${ROCM_PATH}/lib)
 endif()
 
-set_target_properties(rcclras PROPERTIES BUILD_RPATH "${CMAKE_BINARY_DIR};${ROCM_PATH}/lib")
 
 rocm_install(TARGETS rcclras)

@@ -110,6 +110,9 @@ if(BUILD_TESTS)
     common/TestBedChild.cpp
     common/StandaloneUtils.cpp
     proxy_trace/ProxyTraceUnitTests.cpp
+    ../src/misc/proxy_trace/proxy_trace.cc
+    latency_profiler/LatencyProfilerUnitTest.cpp
+    ../src/misc/latency_profiler/CollTraceUtils.cc
     )
 
   # Due to default hidden symbol visibility, append source file if build type is not Debug.
@@ -139,11 +142,15 @@ if(BUILD_TESTS)
       AllocTests.cpp
       ArgCheckTests.cpp
       IpcsocketTests.cpp
+      CollRegTests.cpp
+      RcclWrapTests.cpp
       ShmTests.cpp
       P2pTests.cpp
       BitOpsTests.cpp
+      TransportTests.cpp
       common/main_fixtures.cpp
       common/EnvVars.cpp
+      graph/XmlTests.cpp
     )
 
     add_executable(rccl-UnitTestsFixtures ${TEST_FIXTURE_SOURCE_FILES})
@@ -156,13 +163,16 @@ if(BUILD_TESTS)
     target_link_libraries(${test_executable} PRIVATE ${RCCL_COMMON_LINK_LIBS})
     if(BUILD_SHARED_LIBS)
       target_link_libraries(${test_executable} PRIVATE rccl)
-      set_property(TARGET ${test_executable} PROPERTY INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${ROCM_PATH}/lib;${CMAKE_BINARY_DIR}")
+      if(${HOST_OS_ID} STREQUAL "debian")
+        set_property(TARGET ${test_executable} PROPERTY INSTALL_RPATH "${CMAKE_BINARY_DIR}")
+      elseif(DEFINED HOST_OS_FAMILY AND "${HOST_OS_FAMILY}" STREQUAL "debian")
+        set_property(TARGET ${test_executable} PROPERTY INSTALL_RPATH "${CMAKE_BINARY_DIR}")
+      endif()
     else()
       add_dependencies(${test_executable} rccl)
       target_link_libraries(${test_executable} PRIVATE dl rt numa -lrccl -L${CMAKE_BINARY_DIR} -lrocm_smi64 -L${ROCM_PATH}/lib -L${ROCM_PATH}/rocm_smi/lib)
     endif()
 
-    set_property(TARGET ${test_executable} PROPERTY BUILD_RPATH "${CMAKE_BINARY_DIR};${ROCM_PATH}/lib")
     rocm_install(TARGETS ${test_executable} COMPONENT tests)
   endforeach()
 

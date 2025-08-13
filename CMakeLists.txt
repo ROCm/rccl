@@ -355,6 +355,13 @@ execute_process(
   OUTPUT_VARIABLE HOST_OS_ID
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+execute_process(
+  COMMAND bash -c "grep '^ID_LIKE=' /etc/os-release | cut -d'=' -f2 | cut -d'\"' -f2"
+  OUTPUT_VARIABLE HOST_OS_FAMILY
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 if (ENABLE_MSCCLPP AND NOT(${HOST_OS_ID} STREQUAL "ubuntu" OR ${HOST_OS_ID} STREQUAL "centos"))
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration not supported on this OS (${HOST_OS_ID}); disabling MSCCL++ build")
@@ -652,6 +659,15 @@ set(SRC_FILES
   src/transport/p2p.cc
   src/transport/profiler.cc
   src/transport/shm.cc
+  src/include/latency_profiler/CollTrace.h
+  src/include/latency_profiler/CollTraceEvent.h
+  src/include/latency_profiler/CollTraceFunc.h
+  src/include/latency_profiler/CollTraceUtils.h
+  src/include/latency_profiler/EventQueue.h
+  src/misc/latency_profiler/CollTrace.cc
+  src/misc/latency_profiler/CollTraceEvent.cc
+  src/misc/latency_profiler/CollTraceFunc.cc
+  src/misc/latency_profiler/CollTraceUtils.cc
 )
 
 if (ENABLE_MSCCL_KERNEL)
@@ -726,12 +742,16 @@ add_custom_target(hipify_all DEPENDS ${HIP_SOURCES})
 
 if (BUILD_TESTS)
   if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+    ## Set definition for exposing rccl static function
+    add_definitions(-DRCCL_EXPOSE_STATIC)
+
     set(HIPIFY_SRC_DIR "${PROJECT_BINARY_DIR}/hipify/src")
     set(REPLACE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/scripts/replace_static.sh")
     message ("Replacing static functions in ${HIPIFY_SRC_DIR} with ${REPLACE_SCRIPT} for unit tests")
     # Create a list of files which needs to be modified to remove static
     set(TEST_NONSTATIC_SOURCE_FILES
       ${HIPIFY_SRC_DIR}/misc/alt_rsmi.cc
+      ${HIPIFY_SRC_DIR}/register/coll_reg.cc
       ${HIPIFY_SRC_DIR}/transport/shm.cc
       ${HIPIFY_SRC_DIR}/transport/p2p.cc
     )
@@ -1098,7 +1118,8 @@ target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
-target_compile_options(rccl PRIVATE -fgpu-rdc)      # Generate relocatable device code (required for extern __shared__)
+target_compile_options(rccl PRIVATE -Wno-unused-function)
+target_compile_options(rccl PRIVATE -fgpu-rdc)
 
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)

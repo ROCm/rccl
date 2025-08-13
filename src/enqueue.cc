@@ -25,6 +25,7 @@
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
 #include <cassert>
+#include "latency_profiler/CollTraceFunc.h"
 
 using namespace rccl;
 
@@ -1237,7 +1238,7 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduce
       warned = 1;
       WARN("Waiting for work FIFO to become available. "
            "Work fifo exhaustion can happen in large scale/high iteration count of alltoall. "
-           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %ld).\n\n"
+           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %d).\n\n"
            "RCCL continues to retry...", comm->workFifoBytes);
     }
 
@@ -1656,9 +1657,12 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
+  auto event = latency_profiler::collTraceAquireEventBaseline(plan, launchStream);
   if (planner->numStreams == 1 && !plan->persistent) {
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     comm->lastStream = planner->streams->stream;
     CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
     return ncclSuccess;
   }
 
@@ -1727,16 +1731,22 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     launchConfig.numAttrs = attrs;
     launchConfig.hStream = launchStream;
 
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     CUCHECKGOTO(cuLaunchKernelEx(&launchConfig, fn, nullptr, extra), ret, do_return);
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
   #endif
   } else {
     // Standard kernel launch
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     CUCHECKGOTO(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra), ret, do_return);
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
   }
 #endif
   // Standard kernel launch
   //cuLaunchKernel(sym, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra);
+  latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
   CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
+  latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
 
 do_return:
   return ret;
@@ -1766,7 +1776,7 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     ncclIntruQueueConstruct(&planner->planQueue);
 
     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch
+    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler warning
     cudaStream_t deviceStream, launchOrder;
 
     if (capturing || planner->numStreams != 1) {

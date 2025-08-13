@@ -45,7 +45,7 @@ function display_help()
     echo "RCCL build & installation helper script"
     echo " Options:"
     echo "       --address-sanitizer     Build with address sanitizer enabled"
-    echo "    -c|--enable-code-coverage  Enable Code Coverage"
+    echo "    -c|--enable-code-coverage  Enable code coverage"
     echo "    -d|--dependencies          Install RCCL dependencies"
     echo "       --debug                 Build debug library"
     echo "       --enable_backtrace      Build with custom backtrace support"
@@ -312,6 +312,9 @@ cmake_common_options="${cmake_common_options} -DROCM_PATH=${ROCM_PATH} ${enable_
 if [[ "${build_tests}" == true ]] || ([[ "${run_tests}" == true ]] && [[ ! -x ./test/rccl-UnitTests ]]); then
     cmake_common_options="${cmake_common_options} -DBUILD_TESTS=ON"
 fi
+
+# Add build directory to RPATH for packaging dependency resolution
+cmake_common_options="${cmake_common_options} -DCMAKE_EXE_LINKER_FLAGS=\"-Wl,-rpath,${PWD}\""
 
 # Initiate RCCL CMake
 # Passing ONLY_FUNCS separately (not as part of ${cmake_common_options}) as
