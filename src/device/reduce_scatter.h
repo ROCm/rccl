@@ -12,9 +12,9 @@
 namespace {
   template<typename T, typename RedOp, typename Proto>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__)
-  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #else
-  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     ncclRing *ring = &ncclShmem.channel.ring;
     int const *ringRanks = ring->userRanks;
@@ -148,28 +148,28 @@ namespace {
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     rcclReduceScatterRunRingSimpleProtoImpl(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     using Proto = ProtoSimple<1, 1>;
     const int nranks = ncclShmem.comm.nRanks;
     const int rank = ncclShmem.comm.rank;
@@ -230,7 +230,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(int tid, int/*nthreads*/, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int/*nthreads*/, struct ncclDevWorkColl TLOCAL* work) {
     struct ncclNvls* nvls = &ncclShmem.channel.nvls;
     size_t count;
     size_t gridOffset;
@@ -315,7 +315,7 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NCCL_PROTO_SIMPLE> {
   template<bool ReduceSendNotRecv>
   struct Scatterer {
-    struct ncclDevWorkColl* work;
+    struct ncclDevWorkColl TLOCAL* work;
     int chunkSize;
     ssize_t railGridOffset;
 
@@ -384,7 +384,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NC
     }
   };
 
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     const int part = ncclShmem.channelId - work->channelLo;
     const int nChannels = work->channelHi - work->channelLo + 1;
     struct ncclDirect* direct = &ncclShmem.channel.collnetDirect;

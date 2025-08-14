@@ -21,12 +21,6 @@
 // Define min for ssize_t
 inline __device__ int min(int a, ssize_t b) { return (a < b) ? a : b; }
 
-inline __device__ int loadInt(int* ptr) {
-  int v;
-  v = __atomic_load_n(ptr, __ATOMIC_RELAXED);
-  return v;
-}
-
 template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,

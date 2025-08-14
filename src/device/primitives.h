@@ -12,10 +12,13 @@
 #include "reduce_kernel.h" // for reduction funcs
 #include "rccl_metadata.h"
 #include "common_kernel.h"
+#include "load_store_macros.h"
 #include "common.h"
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 10000
 
+
+// NOTE is BARRIERS_PTR local ???
 #define barrier_generic(__THREAD_FENCE, NWORKERS, BARRIER_NEXT, BARRIERS_PTR) do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
@@ -31,7 +34,7 @@
       while (__hip_atomic_load((BARRIERS_PTR), __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < (BARRIER_NEXT)) { \
         spins++; \
         if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
-          if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
+          if (__atomic_load_n(Tglobal((uint32_t *)ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST)) { \
             ncclShmem.aborted = 1; \
             break; \
           } \
@@ -173,13 +176,13 @@ struct PrimitivesWithoutDirect {
   }
 };
 
-__device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
+__device__ __forceinline__ int checkAbort(int& abortCache, const int abortValue, int& spins) {
   if (abortCache & abortValue) return 1;
   if (++spins < NCCL_SPINS_BEFORE_CHECK_ABORT) return 0;
   spins = 0;
-  int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
+  int abort = ld_seq_sys_global(ncclShmem.comm.abortFlag);
   if (abort) {
-    __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+    __atomic_store_n(Tlocal(&ncclShmem.aborted), abort, __ATOMIC_SEQ_CST);
     abortCache |= abortValue;
   }
   return abort;

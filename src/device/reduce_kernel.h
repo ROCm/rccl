@@ -77,7 +77,7 @@ struct RedOpArg<FuncMinMax<T>> {
   __device__ static uint64_t loadArg(void *ptr) {
     union { uint64_t u64; T val; };
     u64 = 0;
-    val = *(T*)ptr;
+    val = *Tglobal((T *)ptr);
     return u64;
   }
 };
@@ -408,7 +408,7 @@ struct RedOpArg<FuncPreMulSum<T>> {
   __device__ static uint64_t loadArg(void *ptr) {
     union { uint64_t u64; T val; };
     u64 = 0;
-    val = *(T*)ptr;
+    val = *Tglobal((T *)ptr);
     return u64;
   }
 };

@@ -414,8 +414,8 @@ struct ncclPatStep {
 
 struct ncclPatPeer {
     uint64_t step;
-    struct ncclConnInfo* conn;
-    struct ncclConnFifo* connFifo;
+    struct ncclConnInfo SGLOBAL* conn;
+    struct ncclConnFifo SGLOBAL* connFifo;
     void* buff;
     uint64_t *headPtr;
     uint64_t *tailPtr;

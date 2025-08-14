@@ -28,6 +28,10 @@
 
 using namespace rccl;
 
+
+#define XPUT(fmt, ...) //fprintf(stderr, fmt"\n", __VA_ARGS__)
+
+
 struct ncclKernelMatch {
   void* kernelFn;
   bool specialized;
@@ -214,6 +218,7 @@ static void addWorkBatchToPlan(
       chan->nWorkBatchesP2p += (workType == ncclDevWorkTypeP2p ? 1 : 0);
     }
     plan->nWorkBatches += 1;
+    XPUT("batch #%d funcID (devFuncId): %d", plan->nWorkBatches, batch->funcId);
   }
   batch->offsetBitset |= 1ull<<(offset/workSize);
   chan->wipBatch.workBytes += workSize;
@@ -353,13 +358,13 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     }
     ncclRegisterCollBuffers(comm, task, regBufSend, regBufRecv, &planner->collCleanupQueue, &regNeedConnect);
 
-    devWork.sendbuff = (void*)task->sendbuff;
-    devWork.recvbuff = (void*)task->recvbuff;
-    devWork.acc = (void*)task->acc;
+    devWork.sendbuff = (void SGLOBAL*)task->sendbuff;
+    devWork.recvbuff = (void SGLOBAL*)task->recvbuff;
+    devWork.acc = (void SGLOBAL*)task->acc;
     devWork.sendbuffOffset = task->sendbuffOffset;
     devWork.recvbuffOffset = task->recvbuffOffset;
-    devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
-    devWork.recvbuffRmtAddrs = task->recvbuffRmtAddrs;
+    devWork.sendbuffRmtAddrs = (uintptr_t SGLOBAL *)task->sendbuffRmtAddrs;
+    devWork.recvbuffRmtAddrs = (uintptr_t SGLOBAL *)task->recvbuffRmtAddrs;
     devWork.root = task->root;
     devWork.nWarps = task->nWarps;
     devWork.redOpArg = task->opDev.scalarArg;
@@ -449,6 +454,8 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
 
       NCCLCHECK(getAlgoInfo(comm, &agg, collNetSupport, nvlsSupport, nTasksPerChannel, simInfo));
       agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol);
+      XPUT("agg.func: %d devFuncID: %d", agg.func, agg.devFuncId);
+
       if (agg.devFuncId < 0) {
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
@@ -519,12 +526,12 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
 
     if (task->algorithm == NCCL_ALGO_NVLS_TREE || task->algorithm == NCCL_ALGO_NVLS) {
       struct ncclDevWorkColl devWork = {};
-      devWork.sendbuff = (void*)task->sendbuff;
-      devWork.recvbuff = (void*)task->recvbuff;
+      devWork.sendbuff = (void SGLOBAL*)task->sendbuff;
+      devWork.recvbuff = (void SGLOBAL*)task->recvbuff;
       devWork.sendbuffOffset = task->sendbuffOffset;
       devWork.recvbuffOffset = task->recvbuffOffset;
-      devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
-      devWork.recvbuffRmtAddrs = task->recvbuffRmtAddrs;
+      devWork.sendbuffRmtAddrs = (uintptr_t SGLOBAL *)task->sendbuffRmtAddrs;
+      devWork.recvbuffRmtAddrs = (uintptr_t SGLOBAL *)task->recvbuffRmtAddrs;
       devWork.root = task->root;
       devWork.nWarps = task->nWarps;
       devWork.redOpArg = task->opDev.scalarArg;
@@ -1655,6 +1662,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
+
+  XPUT("launching: nWorkBatches: %d arg size: %zu",
+      plan->nWorkBatches, plan->kernelArgsSize);
 
   if (planner->numStreams == 1 && !plan->persistent) {
     comm->lastStream = planner->streams->stream;

@@ -23,17 +23,17 @@ option(BUILD_BFD                               "Enable custom backtrace (if bfd.
 option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on this machine"  OFF)
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
-option(COLLTRACE                               "Collective Trace Option"                       ON)
+option(COLLTRACE                               "Collective Trace Option"                       OFF)
 option(ENABLE_CODE_COVERAGE                    "Enable code coverage"                          OFF)
-option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
+option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  OFF)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
 option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++ CLIP"                           OFF)
 option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"                       OFF)
 option(ENABLE_MSCCLPP_FORMAT_CHECKS            "Enable formatting checks in MSCCL++"           OFF)
 option(ENABLE_NPKIT                            "Enable NPKit"                                  OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
-option(ROCTX                                   "Enable ROCTX"                                  ON)
+option(ROCTX                                   "Enable ROCTX"                                  OFF)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
@@ -43,17 +43,16 @@ option(DISABLE_CHEAP_THREADFENCE               "Compile-time killswitch for simp
 # Default GPU architectures to build
 #==================================================================================================
 set(DEFAULT_GPUS
-      gfx906
-      gfx908
-      gfx90a
-      gfx942
-      gfx950
-      gfx1030
-      gfx1100
-      gfx1101
-      gfx1102
-      gfx1200
-      gfx1201)
+      # gfx906
+      # gfx908
+      # gfx90a
+      gfx942)
+      # gfx1030
+      # gfx1100
+      # gfx1101
+      # gfx1102
+      # gfx1200
+      # gfx1201)
 
 # Load CMake modules
 #==================================================================================================
@@ -495,6 +494,7 @@ set(SRC_FILES
   src/include/ibvwrap.h
   src/include/info.h
   src/include/ipcsocket.h
+  src/include/load_store_macros.h
   src/include/mnnvl.h
   src/include/nccl_common.h
   src/include/net_device.h
@@ -526,6 +526,7 @@ set(SRC_FILES
   src/include/trees.h
   src/include/tuner.h
   src/include/utils.h
+  src/include/load_store_macros.h
   src/include/msccl/msccl_lifecycle.h
   src/include/msccl/msccl_parser.h
   src/include/msccl/msccl_scheduler.h
@@ -1053,7 +1054,7 @@ target_compile_options(rccl PRIVATE -Werror=uninitialized)
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
-target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
+target_compile_options(rccl PRIVATE -Wno-format-nonliteral -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)      # Generate relocatable device code (required for extern __shared__)
 
 ## Set RCCL compile and linker options for unit tests and code coverage
@@ -1093,7 +1094,9 @@ else()  # Enable hidden visibility for library without tests/code coverage enabl
 endif()
 
 if (HAVE_KERNARG_PRELOAD)
-  target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+  #target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+  message(STATUS "================== NOTE NOTE using debug RCCL version!")
+  target_compile_options(rccl PRIVATE -g3 -ggdb -Og -mllvm --amdgpu-kernarg-preload-count=16)
 endif()
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
@@ -1198,7 +1201,8 @@ else()
   message(STATUS "Building shared RCCL library")
 endif()
 if (HAVE_KERNARG_PRELOAD)
-  target_link_options(rccl PRIVATE "SHELL:-Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
+  #target_link_options(rccl PRIVATE "SHELL:-Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
+  target_link_options(rccl PRIVATE "SHELL:-g3 -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
 endif()
 
 if(ENABLE_MSCCLPP)

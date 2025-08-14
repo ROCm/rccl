@@ -10,6 +10,8 @@
 #include "npkit/npkit.h"
 #endif
 
+#include "load_store_macros.h"
+
 #define NCCL_LL128_FLAGTHREAD (NCCL_LL128_LINEELEMS-1)
 
 #ifndef RCCL_USE_WBINVL1_VOL
@@ -36,16 +38,16 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload>:
   const bool flagThread;
   const int group;
   Fan fan;
-  T *userBufs[3];
-  struct ncclConnInfo* recvConn = NULL;
-  volatile uint64_t* recvConnHeadPtr = NULL;
+  T SGLOBAL *userBufs[3];
+  struct ncclConnInfo SGLOBAL* recvConn = NULL;
+  uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
 
-  struct ncclConnInfo* sendConn = NULL;
+  struct ncclConnInfo SGLOBAL* sendConn = NULL;
   volatile struct ncclConnFifo* sendConnFifo = NULL;
   volatile uint64_t* sendConnTailPtr = NULL;
   uint64_t sendConnTail;
-  volatile uint64_t* sendConnHeadPtr = NULL;
+  uint64_t* sendConnHeadPtr = NULL;
   uint64_t sendConnHead;
   uint64_t sendConnHeadCache; // Cache last seen value
 
@@ -87,13 +89,12 @@ private:
   }
 
   int abort = 0;
-
   __device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
     if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
+      int abort = ld_seq_sys_global(ncclShmem.comm.abortFlag);
       spins = 0;
       if (abort) {
-        __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+        __atomic_store_n(Tlocal(&ncclShmem.aborted), abort, __ATOMIC_SEQ_CST);
         abortCache |= abortValue;
       }
     }
@@ -105,18 +106,24 @@ private:
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
-        sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
+        sendConnHeadCache = ld_relaxed_sys_global(sendConnHeadPtr);
+        //sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
         if (checkAbort(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
-        sendConnFifo[sendStep[wid]%NCCL_STEPS].size = nbytes;
+        st_relaxed_sys_global(&sendConnFifo[sendStep[wid]%NCCL_STEPS].size, (ssize_t)nbytes);
+        //sendConnFifo[sendStep[wid]%NCCL_STEPS].size = nbytes;
       }
       sendConnHead += 1;
     }
   }
 
   inline __device__ void postRecv() {
-    if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) {
+      recvConnHead += 1;
+      STORE(Tglobal(recvConnHeadPtr), recvConnHead);
+      //st_relaxed_sys_global(recvConnHeadPtr, recvConnHead);
+    }
   }
   inline __device__ void postSend() {
     if (sendConnTailPtr) {
@@ -125,7 +132,9 @@ private:
 #else
       __threadfence();
 #endif
-      STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1);
+      // STORE((unsigned long long  SGLOBAL *)sendConnTailPtr, sendConnTail += 1);
+      sendConnTail += 1;
+      st_relaxed_sys_global(sendConnTailPtr, sendConnTail);
     }
   }
 
@@ -345,9 +354,9 @@ private:
   __device__ __forceinline__ void GenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
-    T const *srcPtr = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
-    T       *dstPtr = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
-    T       *accPtr = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : userBufs[Acc] + dstIx;
+    T const *srcPtr = SrcBuf == -1 ? nullptr : (T const *)userBufs[SrcBuf] + srcIx;
+    T       *dstPtr = DstBuf == -1 ? nullptr : (T *)userBufs[DstBuf] + dstIx;
+    T       *accPtr = (DstBuf == -1 || (T *)userBufs[Acc] == nullptr) ? nullptr : (T *)userBufs[Acc] + dstIx;
     int wireOffset = WireWordPerSlice*warp + 2*wid;
     const int nwarps = nthreads/WARP_SIZE;
     nelem = nelem < 0 ? 0 : nelem;
@@ -481,7 +490,7 @@ private:
     barrier();
   }
 
-  __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
+  __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo SGLOBAL* conn, int i) {
     recvBuff[i] = (uint64_t*)conn->buffs[NCCL_PROTO_LL128];
     recvStep[i] = conn->step;
     if (wid == i) recvConn = conn;
@@ -493,7 +502,7 @@ private:
     }
   }
 
-  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
+  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo SGLOBAL* conn, int i) {
     sendBuff[i] = (uint64_t*)conn->buffs[NCCL_PROTO_LL128];
     sendStep[i] = conn->step;
     if (wid == i) sendConn = conn;
@@ -501,9 +510,10 @@ private:
   __device__ __forceinline__ void loadSendSync() {
     if (tid < fan.nsend()) {
       sendConnHeadPtr = sendConn->head;
-      sendConnHeadCache = *sendConnHeadPtr;
+      sendConnHeadCache = ld_relaxed_sys_global(sendConnHeadPtr);
+      //sendConnHeadCache = *sendConnHeadPtr;
       sendConnHead = sendConn->step;
-      sendConnFifo = sendConn->connFifo;
+      sendConnFifo = (volatile ncclConnFifo *)sendConn->connFifo;
     }
     if (tid >= nthreads-WARP_SIZE && wid<fan.nsend()) {
       if (sendConn->connFifo) {
@@ -515,9 +525,9 @@ private:
 
 public:
   __device__ Primitives(
-      const int tid, const int nthreads, int const *recvPeers, int const *sendPeers,
-      void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint8_t group=0,
-      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclDevWorkColl* e = nullptr,
+      const int tid, const int nthreads, int const SLOCAL *recvPeers, int const SLOCAL *sendPeers,
+      void const SGLOBAL *inputBuf, void SGLOBAL *outputBuf, uint64_t redOpArg, uint8_t group=0,
+      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclDevWorkColl SLOCAL *e = nullptr,
       bool ipcReg = false, bool netReg = false, int stepSize_ = 0
     ):
     redOp(redOpArg),
@@ -556,10 +566,10 @@ public:
     barrier();
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, void const *acc = nullptr) {
-    userBufs[Input] = (T*)inputBuf;
-    userBufs[Output] = (T*)outputBuf;
-    userBufs[Acc] = (T*)acc;
+  __device__ void setDataPtrs(void const SGLOBAL *inputBuf, void SGLOBAL *outputBuf, void const SGLOBAL*acc = nullptr) {
+    userBufs[Input] = (T SGLOBAL*)inputBuf;
+    userBufs[Output] = (T SGLOBAL*)outputBuf;
+    userBufs[Acc] = (T SGLOBAL*)acc;
   }
 
   __device__ void moveDataPtrs(intptr_t delta) {

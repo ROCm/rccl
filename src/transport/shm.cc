@@ -178,14 +178,14 @@ static ncclResult_t shmSendConnect(struct ncclComm* comm, struct ncclConnect* co
   send->conn.stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS;
 
   if (useMemcpyRecv) {
-    send->conn.connFifo = resources->devRemHostMem->connFifo;
+    send->conn.connFifo = (ncclConnFifo SGLOBAL *)resources->devRemHostMem->connFifo;
   }
   if (useMemcpySend) {
     struct shmProxyInfo proxyInfo = { NULL, NULL, send->conn.buffs[NCCL_PROTO_SIMPLE], resources->hostMem, resources->remHostMem };
     NCCLCHECK(ncclProxyCallBlocking(comm, &send->proxyConn, ncclProxyMsgConnect, &proxyInfo, sizeof(struct shmProxyInfo), &proxyInfo, sizeof(struct shmProxyInfo)));
     send->conn.buffs[NCCL_PROTO_SIMPLE] = proxyInfo.devFifo;
     send->conn.tail = &proxyInfo.ceRecvMem->tail;
-    send->conn.connFifo = proxyInfo.ceRecvMem->connFifo;
+    send->conn.connFifo = (ncclConnFifo SGLOBAL *)proxyInfo.ceRecvMem->connFifo;
   }
 
   // We must assign the proxyConn's proxyProgress property for proper checking at enqueue-time

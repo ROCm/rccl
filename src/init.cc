@@ -801,7 +801,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   }
 
   for (int c=0; c < MAXCHANNELS; c++) {
-    tmpCommAndChans.channels[c].peers = comm->channels[c].devPeers;
+    tmpCommAndChans.channels[c].peers = (ncclDevChannelPeer SGLOBAL* SGLOBAL*)comm->channels[c].devPeers;
     tmpCommAndChans.channels[c].ring = comm->channels[c].ring;
     tmpCommAndChans.channels[c].ring.userRanks = comm->channels[c].devRingUserRanks;
     tmpCommAndChans.channels[c].tree = comm->channels[c].tree;

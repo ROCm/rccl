@@ -10,6 +10,8 @@
 #include "npkit/npkit.h"
 #endif
 
+#include "load_store_macros.h"
+
 template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload>
 class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>> {
@@ -26,14 +28,14 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   const int group;
   const int stepLines;
   Fan fan;
-  T *userBufs[3];
-  struct ncclConnInfo* recvConn = NULL;
-  volatile uint64_t* recvConnHeadPtr = NULL;
+  T SGLOBAL *userBufs[3];
+  struct ncclConnInfo SGLOBAL * recvConn = NULL;
+  uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
 
-  struct ncclConnInfo* sendConn = NULL;
-  volatile struct ncclConnFifo* sendConnFifo = NULL;
-  volatile uint64_t* sendConnHeadPtr = NULL;
+  struct ncclConnInfo SGLOBAL* sendConn = NULL;
+  volatile struct ncclConnFifo SGLOBAL* sendConnFifo = NULL;
+  uint64_t* sendConnHeadPtr = NULL;
   uint64_t sendConnHead;
   uint64_t sendConnHeadCache; // Cache last seen value
 
@@ -89,10 +91,10 @@ private:
 
   __device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
     if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
+      int abort = ld_seq_sys_global(ncclShmem.comm.abortFlag);
       spins = 0;
       if (abort) {
-        __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+        __atomic_store_n(Tlocal(&ncclShmem.aborted), abort, __ATOMIC_SEQ_CST);
         abortCache |= abortValue;
       }
     }
@@ -110,12 +112,14 @@ private:
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
-        sendConnHeadCache = atomicAdd((unsigned long long *)sendConnHeadPtr, 0);
+        sendConnHeadCache = ld_relaxed_sys_global(sendConnHeadPtr);
+        //sendConnHeadCache = atomicAdd(Tglobal(sendConnHeadPtr), 0);
         if (checkAbort(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        sendConnFifo[sendConnHead%NCCL_STEPS].size = size;
+        st_relaxed_sys_global(&sendConnFifo[sendConnHead%NCCL_STEPS].size, (ssize_t)size);
+        //sendConnFifo[sendConnHead%NCCL_STEPS].size = size;
       }
       sendConnHead += 1;
     }
@@ -133,7 +137,10 @@ private:
   }
   inline __device__ void postRecv() {
     barrier();
-    if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
+    if (recvConnHeadPtr) {
+      recvConnHead += 1;
+      st_relaxed_sys_global(recvConnHeadPtr, recvConnHead);
+    }
   }
 
   inline __device__ void incSend(int i, int offset) {
@@ -165,8 +172,8 @@ private:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(i4.i4) : "v"(&src->i4));
 #else
-      i4.v[0] = __builtin_nontemporal_load(src->v);
-      i4.v[1] = __builtin_nontemporal_load(src->v+1);
+      i4.v[0] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v);
+      i4.v[1] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v+1);
 #endif
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
@@ -208,8 +215,8 @@ private:
         asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
           "s_waitcnt vmcnt(0)\n" : "=v"(line[i].i4) : "v"(&src->i4));
 #else
-        line[i].v[0] = __builtin_nontemporal_load(src->v);
-        line[i].v[1] = __builtin_nontemporal_load(src->v+1);
+        line[i].v[0] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v);
+        line[i].v[1] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v+1);
 #endif
 #else
         asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
@@ -235,8 +242,8 @@ private:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(line[i].i4) : "v"(&src->i4));
 #else
-      line[i].v[0] = __builtin_nontemporal_load(src->v);
-      line[i].v[1] = __builtin_nontemporal_load(src->v+1);
+      line[i].v[0] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v);
+      line[i].v[1] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v+1);
 #endif
 #else
       asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
@@ -274,8 +281,8 @@ private:
     i4.flag1 = flag;
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
-    __builtin_nontemporal_store(i4.v[0], dst->v);
-    __builtin_nontemporal_store(i4.v[1], dst->v+1);
+    __builtin_nontemporal_store(i4.v[0], Tglobal(dst->v));
+    __builtin_nontemporal_store(i4.v[1], Tglobal(dst->v+1));
 #endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
@@ -298,25 +305,25 @@ private:
 #ifdef __GFX11__
       u1 = __atomic_load_n((uint8_t*)src, __ATOMIC_RELAXED);
 #else
-      u1 = __builtin_nontemporal_load((uint8_t*)src);
+      u1 = __builtin_nontemporal_load((uint8_t SGLOBAL *)src);
 #endif
     else if(sizeof(U) == 2)
 #ifdef __GFX11__
       u2 = __atomic_load_n((uint16_t*)src, __ATOMIC_RELAXED);
 #else
-      u2 = __builtin_nontemporal_load((uint16_t*)src);
+      u2 = __builtin_nontemporal_load((uint16_t SGLOBAL *)src);
 #endif
     else if(sizeof(U) == 4)
 #ifdef __GFX11__
       u4 = __atomic_load_n((uint32_t*)src, __ATOMIC_RELAXED);
 #else
-      u4 = __builtin_nontemporal_load((uint32_t*)src);
+      u4 = __builtin_nontemporal_load((uint32_t SGLOBAL *)src);
 #endif
     else
 #ifdef __GFX11__
       u8 = __atomic_load_n((uint64_t*)src, __ATOMIC_RELAXED);
 #else
-      u8 = __builtin_nontemporal_load((uint64_t*)src);
+      u8 = __builtin_nontemporal_load((uint64_t SGLOBAL *)src);
 #endif
 #else
     if(sizeof(U) == 1)
@@ -343,13 +350,13 @@ private:
     elt = val;
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
-      __builtin_nontemporal_store(u1, (uint8_t*)dst);
+      __builtin_nontemporal_store(u1, (uint8_t SGLOBAL *)dst);
     else if(sizeof(U) == 2)
-      __builtin_nontemporal_store(u2, (uint16_t*)dst);
+      __builtin_nontemporal_store(u2, (uint16_t SGLOBAL *)dst);
     else if(sizeof(U) == 4)
-      __builtin_nontemporal_store(u4, (uint32_t*)dst);
+      __builtin_nontemporal_store(u4, (uint32_t SGLOBAL *)dst);
     else
-      __builtin_nontemporal_store(u8, (uint64_t*)dst);
+      __builtin_nontemporal_store(u8, (uint64_t SGLOBAL *)dst);
 #else
     if(sizeof(U) == 1)
       asm volatile("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4) : "memory");
@@ -410,9 +417,9 @@ private:
     for(int i=0; i < EltPerLine; i++) {
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_line]
-      if (i==0 || i < eltN)
-        //store(dst+i, elt[i]);
-        dst[i] = elt[i];
+      if (i==0 || i < eltN) {
+        Tglobal(dst)[i] = elt[i];
+      }
     }
   }
 
@@ -425,7 +432,7 @@ private:
     #pragma unroll
     for(int i=0; i < EltPerLine; i++) {
       if (i==0 || i < eltN)
-        store(dst+i, elt[i]);
+        store((T SGLOBAL *)dst+i, elt[i]);
         // dst[i] = elt[i];
     }
   }
@@ -434,9 +441,9 @@ private:
   __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
-    T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
-    T *dstElts = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
-    T *accElts = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : userBufs[Acc] + dstIx;
+    T *srcElts = SrcBuf == -1 ? nullptr : (T *)userBufs[SrcBuf] + srcIx;
+    T *dstElts = DstBuf == -1 ? nullptr : (T *)userBufs[DstBuf] + dstIx;
+    T *accElts = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : (T *)userBufs[Acc] + dstIx;
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
@@ -622,37 +629,38 @@ private:
     barrier();
   }
 
-  __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
-    recvBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
-    recvStep[i] = conn->step;
+  __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo SGLOBAL* conn, int i) {
+    recvBuff[i] = (union ncclLLFifoLine*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
+    recvStep[i] = Tglobal(conn)->step;
     if (wid == i) recvConn = conn;
   }
   __device__ __forceinline__ void loadRecvSync() {
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv()) {
-      recvConnHeadPtr = recvConn->head;
-      recvConnHead = recvConn->step;
+      recvConnHeadPtr = Tglobal(recvConn)->head;
+      recvConnHead = Tglobal(recvConn)->step;
     }
   }
 
-  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
-    sendBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
-    sendStep[i] = conn->step;
+  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo SGLOBAL* conn, int i) {
+    sendBuff[i] = (union ncclLLFifoLine*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
+    sendStep[i] = Tglobal(conn)->step;
     if (wid == i) sendConn = conn;
   }
   __device__ __forceinline__ void loadSendSync() {
     if (tid < fan.nsend()) {
       sendConnHeadPtr = sendConn->head;
-      sendConnHeadCache = *sendConnHeadPtr;
+      sendConnHeadCache = ld_relaxed_sys_global(sendConnHeadPtr);
       sendConnHead = sendConn->step;
       sendConnFifo = sendConn->connFifo;
     }
   }
 
 public:
+
   __device__  Primitives(
-      const int tid, const int nthreads, int const *recvPeers, int const *sendPeers,
-      void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint8_t group=0,
-      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclDevWorkColl* e = nullptr,
+      const int tid, const int nthreads, int const SLOCAL *recvPeers, int const SLOCAL *sendPeers,
+      void const SGLOBAL *inputBuf, void SGLOBAL *outputBuf, uint64_t redOpArg, uint8_t group=0,
+      uint8_t connIndexRecv=0, uint8_t connIndexSend=0, struct ncclDevWorkColl SLOCAL* e = nullptr,
       bool ipcReg = false, bool netReg = false, int stepSize_ = 0
     ):
     redOp(redOpArg),
@@ -666,7 +674,8 @@ public:
     // Yes, for some template arguments this code will be unreachable.  That's fine.
     // coverity[dead_error_line]
     while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) {
-      loadRecvConn(&channel->peers[recvPeers[nrecv]]->recv[connIndexRecv], nrecv);
+      auto SGLOBAL *z = &channel->peers[recvPeers[nrecv]]->recv[connIndexRecv];
+      loadRecvConn(z, nrecv);
       nrecv++;
     }
     // coverity[dead_error_line]
@@ -694,15 +703,15 @@ public:
     barrier();
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, void const *acc = nullptr) {
-    userBufs[Input] = (T*)inputBuf;
-    userBufs[Output] = (T*)outputBuf;
-    userBufs[Acc] = (T*)acc;
+  __device__ void setDataPtrs(void const SGLOBAL *inputBuf, void SGLOBAL* outputBuf, void const SGLOBAL *acc = nullptr) {
+    userBufs[Input] = (T SGLOBAL *)inputBuf;
+    userBufs[Output] = (T SGLOBAL *)outputBuf;
+    userBufs[Acc] = (T SGLOBAL*)acc;
   }
 
   __device__ void moveDataPtrs(intptr_t delta) {
-    userBufs[Input] += delta;
-    userBufs[Output] += delta;
+    *Tglobal(&userBufs[Input]) += delta;
+    *Tglobal(&userBufs[Output]) += delta;
   }
 
   __device__ void send(intptr_t inpIx, int eltN) {
