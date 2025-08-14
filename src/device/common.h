@@ -672,14 +672,14 @@ __global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONST
   __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
-#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, unroll) \
+#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, pipeline, unroll) \
   __device__ void ncclDevFunc_##suffix() { \
-    RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll>().run(); \
+    RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll, pipeline>().run(); \
   }
 #else
-#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, unroll) \
+#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, pipeline, unroll) \
   __device__ __attribute__((noinline)) void ncclDevFunc_##suffix() { \
-    RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll>().run(); \
+    RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll, pipeline>().run(); \
   }
 #endif
 

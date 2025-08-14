@@ -701,7 +701,7 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId;
 
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
-inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
+inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int pipeline = 0) {
   int row = -1;
   uint64_t key;
   // Pack 4-bit fields from right (LSB) to left in order:
