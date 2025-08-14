@@ -181,6 +181,10 @@ def calc_unroll_for_local_arch():
 
 # Helper function to check if the conditions for the collective is being met
 def func_validate(coll, algo, proto, redop, ty, acc, unroll):
+  if acc == "1" and coll != "AllReduceWithBias":
+    return False
+  if acc == "0" and coll == "AllReduceWithBias":
+    return False
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
   if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll:
@@ -252,7 +256,7 @@ def parse_input(func_pattern):
 # Maps functions to the chosen representative for the equivalence class it
 # belongs to. For instance (sum, signed int) maps to (sum, unsigned int).
 def equivalent_primary(coll, algo, proto, redop, ty, acc, unroll):
-  if coll in ("AllReduce", "Reduce", "ReduceScatter"):
+  if coll in ("AllReduce", "AllReduceWithBias", "Reduce", "ReduceScatter"):
     # map signed integer sum/prod to unsigned
     if redop in ("Sum","Prod","PreMulSum","SumPostDiv") and ty[0]=="i":
       ty = "u"+ty[1:]
@@ -263,25 +267,23 @@ def equivalent_primary(coll, algo, proto, redop, ty, acc, unroll):
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
 def enumerate_func_rows():
-  for unroll in all_unroll:
-    for coll in all_colls:
-      for algo in all_algos:
-        for proto in all_protos:
-          for redop in all_redops:
-            for ty in all_tys:
-              if func_validate(coll, algo, proto, redop, ty, "0", unroll):
-                if coll == "AllReduceWithBias":
-                  yield (coll, algo, proto, redop, ty, "1", unroll)
-                else:
-                  yield (coll, algo, proto, redop, ty, "0", unroll)
+  for acc in use_acc:
+    for unroll in all_unroll:
+      for coll in all_colls:
+        for algo in all_algos:
+          for proto in all_protos:
+            for redop in all_redops:
+              for ty in all_tys:
+                  if func_validate(coll, algo, proto, redop, ty, acc, unroll):
+                    yield (coll, algo, proto, redop, ty, acc, unroll)
 
 # Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
 def custom_sort_key(fn):
     coll, algo, proto, redop, ty, acc, unroll = fn
     
     return (
-        use_acc.index(acc),
         all_unroll.index(unroll),
+        use_acc.index(acc),
         all_colls.index(coll),
         all_algos.index(algo),
         all_protos.index(proto),
