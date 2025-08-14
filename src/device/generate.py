@@ -8,7 +8,7 @@ all_colls = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
-all_algos =  ["TREE","RING", "PAT"]
+all_algos =  ["TREE","RING", "", "", "", "", "PAT"]
 all_unroll = ["1", "2", "4"]
 all_pipeline = ["0", "1"]
 pipelined_types = ["bf16"]
@@ -508,7 +508,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
       )
       fn_str = f"{coll_idx} {algo_idx} {proto_idx} {redop_idx} {ty_idx} {pipeline_idx}"
       if fn[0] == "Broadcast":
-        key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 12))
+        key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 8))
       if fn[0] in ["SendRecv", "AllToAllPivot"]:
         key = ((coll_idx & 0x3F))
       out(f'  {{{key}, {fn_id}}}, {comment}\n')
