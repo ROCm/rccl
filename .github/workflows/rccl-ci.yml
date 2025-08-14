@@ -79,9 +79,11 @@ jobs:
           repository: "ROCm/rccl-tests"
           path: "rccl-tests"
 
+      # TODO: We shouldn't be using a cache on actual release branches, but it
+      # really helps for iteration time.
       - name: Runner Health Settings
         run: |
-          ./TheRock/build_tools/setup_ccache.py \
+          ./build_tools/setup_ccache.py \
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
@@ -93,7 +95,7 @@ jobs:
           echo "---"
           ccache -z
           ccache -s -v
-          cmake --version
+          echo cmake --version
           echo "Installed Python versions:"
           ls -d /opt/python
           echo "python: $(which python), python3: $(which python3)"
@@ -103,87 +105,92 @@ jobs:
 
       - name: Fetch sources
         run: |
-          ./TheRock/build_tools/fetch_sources.py --jobs 12 --no-include-math-libs
+          ./build_tools/fetch_sources.py --jobs 12
 
       - name: Install python deps
         run: |
-          pip install -r TheRock/requirements.txt
-          pip freeze
+          pip install -r requirements.txt
 
       - name: Configure Projects
         env:
-          amdgpu_families: ${{ env.AMDGPU_FAMILIES }}
-          package_version: ADHOCBUILD
+          amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ${{ inputs.package_version }}
           extra_cmake_options: "-DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu -DTHEROCK_USE_EXTERNAL_RCCL=ON -DTHEROCK_RCCL_SOURCE_DIR=rccl -DTHEROCK_RCCL_TESTS_SOURCE_DIR=rccl-tests -DUSE_MPI=ON"
           BUILD_DIR: build
         run: |
-          python3 TheRock/build_tools/github_actions/build_configure.py
+          python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist
-        run: cmake --build TheRock/build --target therock-dist
+        run: cmake --build build --target therock-dist
 
       - name: Build therock-archives
-        run: cmake --build TheRock/build --target therock-archives
+        run: cmake --build build --target therock-archives
+
+      - name: Test Packaging
+        if: ${{ github.event.repository.name == 'TheRock' }}
+        run: |
+          ctest --test-dir build --output-on-failure
 
       - name: Report
         if: ${{ !cancelled() }}
         run: |
           echo "Full SDK du:"
           echo "------------"
-          du -h -d 1 TheRock/build/dist/rocm
+          du -h -d 1 build/dist/rocm
           echo "Artifact Archives:"
           echo "------------------"
-          ls -lh TheRock/build/artifacts/*.tar.xz
+          ls -lh build/artifacts/*.tar.xz
           echo "Artifacts:"
           echo "----------"
-          du -h -d 1 TheRock/build/artifacts
+          du -h -d 1 build/artifacts
           echo "CCache Stats:"
           echo "-------------"
           ccache -s -v
-          tail -v -n +1 .ccache/compiler_check_cache/* > TheRock/build/logs/ccache_compiler_check_cache.log
+          tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
       - name: Create Log archive
         if: always()
         run: |
-          python3 TheRock/build_tools/create_log_archive.py \
-            --build-dir=TheRock/build
+          python3 build_tools/create_log_archive.py \
+            --build-dir=build
 
       - name: Create Logs index Files
         if: always()
         run: |
-          python3 TheRock/build_tools/github_actions/create_log_index.py \
-            --build-dir=TheRock/build \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+          python3 build_tools/github_actions/create_log_index.py \
+            --build-dir=build \
+            --amdgpu-family=${{ inputs.amdgpu_families }}
 
       - name: Upload artifacts
+        if: always()
         run: |
-          python TheRock/build_tools/github_actions/upload_build_artifacts.py \
+          python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir TheRock/build
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
       - name: Upload Logs
         if: always()
         run: |
-          python3 TheRock/build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=TheRock/build \
+          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
+            --build-dir=build \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
+            --amdgpu-family ${{ inputs.amdgpu_families }}
 
       - name: Add Links to Job Summary
         if: always()
         run: |
-          python TheRock/build_tools/github_actions/upload_build_summary.py \
+          python build_tools/github_actions/upload_build_summary.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir TheRock/build
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
   ## WIP - Adding tests once build with TheRock and other submodules work
   multi-node-rccl-test:
