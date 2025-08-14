@@ -72,13 +72,13 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rccl"
-          path: "TheRock/rccl"
+          path: "rccl"
 
       - name: Checkout rccl-tests repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rccl-tests"
-          path: "TheRock/rccl-tests"
+          path: "rccl-tests"
 
       - name: Runner Health Settings
         run: |
