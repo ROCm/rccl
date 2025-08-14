@@ -25,33 +25,33 @@
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
 #include <cassert>
+#include "latency_profiler/CollTraceFunc.h"
 
 using namespace rccl;
 
-/* [RCCL] Determine which GPU kernel to execute */
-void* rcclGetKernelIndex(int unroll, bool useCollTrace, struct ncclTaskColl* task)
-{
-  // At this time, unroll factor is controlled only by passed in unroll argument
-  // After more investigation, this may be further tuned by the actual task being processed
+struct ncclKernelMatch {
+  void* kernelFn;
+  bool specialized;
+};
 
 #ifdef ENABLE_COLLTRACE
-  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]) / 2;
-  int firstKernel = useCollTrace ? numKernels : 0;
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
+static ncclKernelMatch const ncclKerns[6] = {
+  {(void *)ncclDevKernel_Generic_1, true},
+  {(void *)ncclDevKernel_Generic_2, true},
+  {(void *)ncclDevKernel_Generic_4, true},
+  {(void *)ncclDevKernelDebug_Generic_1, true},
+  {(void *)ncclDevKernelDebug_Generic_2, true},
+  {(void *)ncclDevKernelDebug_Generic_4, true}
+};
 #else
-  int numKernels = sizeof(rcclKernelTable) / sizeof(rcclKernelTable[0]);
-  int firstKernel = 0;
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
+static ncclKernelMatch const ncclKerns[3] = {
+  {(void*)ncclDevKernel_Generic_1, true},
+  {(void*)ncclDevKernel_Generic_2, true},
+  {(void*)ncclDevKernel_Generic_4, true}
+};
 #endif
-
-  // Check if the requested unroll exists
-  for (int kernelIdx = 0; kernelIdx < numKernels; kernelIdx++) {
-    if (rcclKernelTable[firstKernel + kernelIdx].unroll == unroll) {
-      return rcclKernelTable[firstKernel + kernelIdx].funcPtr;
-    }
-  }
-
-  // If does not match, return null
-  return nullptr;
-}
 
 static int rcclProtoGrainSize(int proto, ncclComm *comm){
   switch (proto) {
@@ -82,7 +82,7 @@ NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
 ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* maxStackSize) {
-  constexpr int KernelCount = sizeof(rcclKernelTable)/sizeof(rcclKernelTable[0]);
+  constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
   ncclResult_t result = ncclSuccess;
 
   if (maxStackSize) *maxStackSize = 0;
@@ -95,7 +95,7 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
   int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
   for (int k=0; k < KernelCount; k++) {
-    void* fn = rcclKernelTable[k].funcPtr;
+    void* fn = ncclKerns[k].kernelFn;
     cudaFuncAttributes attr = {0};
     if (fn == nullptr) continue;
 
@@ -356,6 +356,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
 
     devWork.sendbuff = (void*)task->sendbuff;
     devWork.recvbuff = (void*)task->recvbuff;
+    devWork.acc = (void*)task->acc;
     devWork.sendbuffOffset = task->sendbuffOffset;
     devWork.recvbuffOffset = task->recvbuffOffset;
     devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
@@ -806,12 +807,8 @@ static ncclResult_t scheduleCollTasksToPlan(
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
     if (!plan->kernelSpecialized) {
-#ifdef ENABLE_COLLTRACE
-      plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
-#else
-      plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
-#endif
-      plan->kernelSpecialized = true;
+      plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
+      plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
     }
 
     if (comm->rank == 0) {
@@ -1127,12 +1124,8 @@ static ncclResult_t scheduleP2pTasksToPlan(
 
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
   if (!plan->kernelSpecialized) {
-#ifdef ENABLE_COLLTRACE
-    plan->kernelFn = rcclGetKernelIndex(comm->unroll, comm->collTraceEnabled);
-#else
-    plan->kernelFn = rcclGetKernelIndex(comm->unroll, false);
-#endif
-    plan->kernelSpecialized = true;
+    plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
+    plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
   }
 
   // Compute how much to split operations
@@ -1245,7 +1238,7 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduce
       warned = 1;
       WARN("Waiting for work FIFO to become available. "
            "Work fifo exhaustion can happen in large scale/high iteration count of alltoall. "
-           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %ld).\n\n"
+           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %d).\n\n"
            "RCCL continues to retry...", comm->workFifoBytes);
     }
 
@@ -1664,9 +1657,12 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
+  auto event = latency_profiler::collTraceAquireEventBaseline(plan, launchStream);
   if (planner->numStreams == 1 && !plan->persistent) {
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     comm->lastStream = planner->streams->stream;
     CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
     return ncclSuccess;
   }
 
@@ -1735,16 +1731,22 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     launchConfig.numAttrs = attrs;
     launchConfig.hStream = launchStream;
 
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     CUCHECKGOTO(cuLaunchKernelEx(&launchConfig, fn, nullptr, extra), ret, do_return);
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
   #endif
   } else {
     // Standard kernel launch
+    latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     CUCHECKGOTO(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra), ret, do_return);
+    latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
   }
 #endif
   // Standard kernel launch
   //cuLaunchKernel(sym, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra);
+  latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
   CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
+  latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
 
 do_return:
   return ret;
@@ -1774,7 +1776,7 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     ncclIntruQueueConstruct(&planner->planQueue);
 
     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch
+    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler warning
     cudaStream_t deviceStream, launchOrder;
 
     if (capturing || planner->numStreams != 1) {
@@ -2505,6 +2507,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->sliceSteps = info->sliceSteps;
       t->eActivationMask = __atomic_load_n(&ncclProfilerEventMask, __ATOMIC_RELAXED);
       t->opCount = comm->opCount;
+      t->acc = info->acc;
 
       planner->nTasksColl += 1;
       ncclTaskCollSorterInsert(&planner->collSorter, t, t->trafficBytes);
@@ -2554,8 +2557,8 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   }
   NCCLCHECKGOTO(ArgsCheck(info), ret, fail);
 
-  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zu datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
-        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
+  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p acc %p count %zu datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
+        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->acc, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream,
         info->comm->planner.nTasksP2p + info->comm->planner.nTasksColl,
         info->comm->localRankToRank[info->comm->localRank]);

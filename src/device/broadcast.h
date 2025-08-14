@@ -15,7 +15,10 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
+#if defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
+    int npKitCtxIdx = bid; // unused variable - compiler warning
+#endif
     ncclRing *ring = &ncclShmem.channel.ring;
     const int rank = ring->userRanks[0];
     const int nextRank = ring->userRanks[1];
@@ -30,9 +33,6 @@ namespace {
     int workNthreads;
     bool isNetOffload = work->isOneRPN && work->netRegUsed;
 
-#if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
-#endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
     if (tid == 0) {

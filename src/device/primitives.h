@@ -20,7 +20,7 @@
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
-    const int w = threadIdx.x/WARP_SIZE; \
+    /**const int w = threadIdx.x/WARP_SIZE //unused variable - compiler warning**/;\
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
       (BARRIER_NEXT) += (NWORKERS) / WARP_SIZE; \

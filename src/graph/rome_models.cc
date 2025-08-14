@@ -1338,7 +1338,6 @@ end:
  */
 ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* gpu_map) {
   int gpus[NCCL_TOPO_MAX_NODES]; //transcribe/change according to gpu_map
-  int nChannels = 0;
   int gpu = 0;
   int offset = 0;
   int start_offset = offset;
@@ -1348,7 +1347,7 @@ ncclResult_t parseGraphLight(const char* str, struct ncclTopoSystem* system, str
   }
   int status = 0; // 0 : between numbers, 1 : inside number
   int ngpus = system->nodes[GPU].count;
-  int x=0, y=0;
+  int x=0;
   do {
     int digit = str[offset] - '0';
     if (digit >= 0 && digit <= 9) {
@@ -1855,7 +1854,6 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   bool isAlltoall = checkAlltoallWidth(&romeTopo);
   if (!isAlltoall) return ncclSuccess;
 
-  int gcnt = 0;
   int *g8, n[NCCL_TOPO_MAX_NODES];
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
   struct timeval tvs, tve;
@@ -1878,7 +1876,6 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
       }
       if (ngpusPerNuma == 0) continue;
       if (ngpusPerNuma != NUMA_GPUS) break;
-      gcnt++;
       // init GPU mapping
       for (int k = 0; k < ngpus; k++) {
         if (romeTopo.gpuNuma[k] != j) continue;
@@ -1927,7 +1924,6 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     if (p < TOTAL_PERMUTE_COUNT) break;
   }
   gettimeofday(&tve, NULL);
-  float t = (tve.tv_sec - tvs.tv_sec)*1E3 + (tve.tv_usec - tvs.tv_usec)/1E3;
   if (i >= sizeof(romeTopoModels)/sizeof(romeTopoModels[0])) {
     //printf("No solution in %.2fms\n", t);
     return ncclSuccess;
@@ -2035,7 +2031,6 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   int i;
 
   int ngpus = system->nodes[GPU].count;
-  int ncpus = system->nodes[CPU].count;
   int nnets = system->nodes[NET].count;
 
   // Only support ring and tree graphs
@@ -2129,7 +2124,6 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
   }
   gettimeofday(&tve, NULL);
-  float t = (tve.tv_sec - tvs.tv_sec)*1E3 + (tve.tv_usec - tvs.tv_usec)/1E3;
   if (i >= sizeof(romeTopoModels)/sizeof(romeTopoModels[0])) {
     //printf("No solution in %.2fms (%d iter)\n", t, time);
     return ncclSuccess;
@@ -2241,7 +2235,6 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   // only match for system with 16 GPUs
   if (ngpus != 16 || ncpus != NUMA_CPUS) return ncclSuccess;
 
-  int gcnt = 0;
   int *g16, n[NCCL_TOPO_MAX_NODES], rdm[NUMA_GPUS*NUMA_CPUS];
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
   struct timeval tvs, tve;
@@ -2262,7 +2255,6 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
       }
       if (ngpusPerNuma == 0) continue;
       if (ngpusPerNuma != NUMA_GPUS) break;
-      gcnt++;
       // init GPU mapping
       for (int k = 0; k < ngpus; k++) {
         if (romeTopo.gpuNuma[k] != j) continue;
@@ -2317,7 +2309,6 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     if (p < TOTAL_PERMUTE_COUNT) break;
   }
   gettimeofday(&tve, NULL);
-  float t = (tve.tv_sec - tvs.tv_sec)*1E3 + (tve.tv_usec - tvs.tv_usec)/1E3;
   if (i >= sizeof(romeTopoModels)/sizeof(romeTopoModels[0])) {
     //printf("No solution in %.2fms\n", t);
     return ncclSuccess;
