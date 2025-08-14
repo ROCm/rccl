@@ -66,7 +66,6 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          path: "TheRock"
 
       - name: Checkout rccl repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -100,7 +99,7 @@ jobs:
           echo "python: $(which python), python3: $(which python3)"
           echo "Git version: $(git --version)"
           git config --global --add safe.directory $PWD
-          git config --global fetch.parallel 10
+          git config fetch.parallel 10
 
       - name: Fetch sources
         run: |
@@ -115,7 +114,7 @@ jobs:
         env:
           amdgpu_families: ${{ env.AMDGPU_FAMILIES }}
           package_version: ADHOCBUILD
-          extra_cmake_options: "-DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu -DTHEROCK_USE_EXTERNAL_RCCL=ON -DTHEROCK_RCCL_SOURCE_DIR=./rccl -DTHEROCK_RCCL_TESTS_SOURCE_DIR=./rccl-tests -DUSE_MPI=ON"
+          extra_cmake_options: "-DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu -DTHEROCK_USE_EXTERNAL_RCCL=ON -DTHEROCK_RCCL_SOURCE_DIR=rccl -DTHEROCK_RCCL_TESTS_SOURCE_DIR=rccl-tests -DUSE_MPI=ON"
           BUILD_DIR: build
         run: |
           python3 TheRock/build_tools/github_actions/build_configure.py
