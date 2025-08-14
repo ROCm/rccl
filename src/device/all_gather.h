@@ -162,7 +162,7 @@ namespace {
     } else if (inputBuf != outputBuf + ringRanks[0] * count) {
       inputBuf = inputBuf + partOffset;
       outputBuf = outputBuf + partOffset + ringRanks[0] * count;
-      reduceCopy<COLL_UNROLL, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs=*/0>
+      reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs=*/0>
         (tid - workNthreads, nthreads - workNthreads, work->redOpArg, &work->redOpArg, false, 1, (void**)&inputBuf, 1, (void**)&outputBuf, partCount);
     }
 #if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
@@ -303,7 +303,7 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
     if (!work->regUsed) {
       if (tid < tidEndGather) {
         // Gather
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_NVLS_ARITY, 0>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsGather, nvls->up, NULL, NULL, work->recvbuff,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -329,7 +329,7 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPL
     } else {
       /* direct allgather */
       if (tid < tidEndGather) {
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanSymmetric<NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsGather, nvls->up, nvls->up, NULL, NULL,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -409,7 +409,7 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NCCL_P
           ssize_t userOneBeg = rank*countPerRank + railOneOffset;
           int outIsDst = (inPlace && rank == ncclShmem.comm.rank) ? 0 : 1;
           if (nSrcs != 0 && outIsDst+nDsts != 0) {
-            reduceCopy<ncclCollUnroll(), RedOp, T,
+            reduceCopy<ncclCollUnroll(), USE_ACC, RedOp, T,
                     /*MultimemSrcs,MinSrcs,MaxSrcs=*/0,1,1,
                     /*MultimemDsts=*/0, 0+MinDsts, 1+MaxDsts,
                     /*PreOpSrcs=*/0>

@@ -258,7 +258,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
     if (!work->regUsed) {
       if (tid < tidEndScatter) {
         // Scatter
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsScatter, NULL, nvls->up, work->sendbuff, NULL,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -270,7 +270,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
         // coverity[overrun-call] => Coverity think prims.index can be greater than 1
       } else if (tid < tidEndReduce) {
         // Reduce through NVLS
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 1, 0>;
         Primitives<T, RedOp, FanAsymmetric<1, 0>, /*Direct=*/0, Proto, 0>
           prims(tid - tidEndScatter, nThreadsReduce, &nvls->down, NULL, NULL, work->recvbuff,
             work->redOpArg, 3 * Proto::MaxGroupWidth, 0, 0);
@@ -283,7 +283,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
     } else {
       if (tid < tidEndScatter) {
         // Scatter
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanSymmetric<NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsScatter, nvls->up, nvls->up, NULL, NULL,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -295,7 +295,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
         prims.gather(0, 0, 0, 0, -1, 0);
       } else if (tid < tidEndReduce) {
         // Reduce through NVLS
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 1, 0>;
         Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
           prims(tid - tidEndScatter, nThreadsReduce, &nvls->down, &nvls->down, NULL, work->recvbuff,
             work->redOpArg, 3 * Proto::MaxGroupWidth, 0, 0, work);
