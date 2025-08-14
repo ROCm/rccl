@@ -100,7 +100,7 @@ jobs:
           echo "python: $(which python), python3: $(which python3)"
           echo "Git version: $(git --version)"
           git config --global --add safe.directory $PWD
-          git config fetch.parallel 10
+          git config --global fetch.parallel 10
 
       - name: Fetch sources
         run: |
