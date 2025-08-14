@@ -28,6 +28,10 @@
 
 using namespace rccl;
 
+
+#define XPUT(fmt, ...) //fprintf(stderr, fmt"\n", __VA_ARGS__)
+
+
 struct ncclKernelMatch {
   void* kernelFn;
   bool specialized;
@@ -35,20 +39,20 @@ struct ncclKernelMatch {
 
 #ifdef ENABLE_COLLTRACE
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
-static ncclKernelMatch const ncclKerns[6] = {
-  {(void *)ncclDevKernel_Generic_1, true},
-  {(void *)ncclDevKernel_Generic_2, true},
-  {(void *)ncclDevKernel_Generic_4, true},
-  {(void *)ncclDevKernelDebug_Generic_1, true},
-  {(void *)ncclDevKernelDebug_Generic_2, true},
-  {(void *)ncclDevKernelDebug_Generic_4, true}
+static ncclKernelMatch const ncclKerns[] = {
+  // {(void *)ncclDevKernel_Generic_1, true},
+  // {(void *)ncclDevKernel_Generic_2, true},
+  // {(void *)ncclDevKernel_Generic_4, true},
+  // {(void *)ncclDevKernelDebug_Generic_1, true},
+  // {(void *)ncclDevKernelDebug_Generic_2, true},
+  // {(void *)ncclDevKernelDebug_Generic_4, true}
 };
 #else
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
-static ncclKernelMatch const ncclKerns[3] = {
-  {(void*)ncclDevKernel_Generic_1, true},
-  {(void*)ncclDevKernel_Generic_2, true},
-  {(void*)ncclDevKernel_Generic_4, true}
+static ncclKernelMatch const ncclKerns[] = {
+  // {(void*)ncclDevKernel_Generic_1, true},
+  // {(void*)ncclDevKernel_Generic_2, true},
+  // {(void*)ncclDevKernel_Generic_4, true}
 };
 #endif
 
@@ -171,6 +175,7 @@ static void addWorkBatchToPlan(
     batch = &chan->workBatchQueue.tail->batch;
     // All of the conditions that prevent us from appending to current batch.
     newBatch |= batch->workType != (uint8_t)workType;
+    // We alrady create a new batch when func ID differs!
     newBatch |= batch->funcId != devFuncId;
     // The following ensure the device can handle a batch this large. They have to
     // account for all extension batches being fused together which is why
@@ -214,6 +219,7 @@ static void addWorkBatchToPlan(
       chan->nWorkBatchesP2p += (workType == ncclDevWorkTypeP2p ? 1 : 0);
     }
     plan->nWorkBatches += 1;
+    XPUT("batch #%d funcID (devFuncId): %d", plan->nWorkBatches, batch->funcId);
   }
   batch->offsetBitset |= 1ull<<(offset/workSize);
   chan->wipBatch.workBytes += workSize;
@@ -353,13 +359,13 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     }
     ncclRegisterCollBuffers(comm, task, regBufSend, regBufRecv, &planner->collCleanupQueue, &regNeedConnect);
 
-    devWork.sendbuff = (void*)task->sendbuff;
-    devWork.recvbuff = (void*)task->recvbuff;
-    devWork.acc = (void*)task->acc;
+    devWork.sendbuff = (void SGLOBAL*)task->sendbuff;
+    devWork.recvbuff = (void SGLOBAL*)task->recvbuff;
+    devWork.acc = (void SGLOBAL*)task->acc;
     devWork.sendbuffOffset = task->sendbuffOffset;
     devWork.recvbuffOffset = task->recvbuffOffset;
-    devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
-    devWork.recvbuffRmtAddrs = task->recvbuffRmtAddrs;
+    devWork.sendbuffRmtAddrs = (uintptr_t SGLOBAL *)task->sendbuffRmtAddrs;
+    devWork.recvbuffRmtAddrs = (uintptr_t SGLOBAL *)task->recvbuffRmtAddrs;
     devWork.root = task->root;
     devWork.nWarps = task->nWarps;
     devWork.redOpArg = task->opDev.scalarArg;
@@ -449,6 +455,8 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
 
       NCCLCHECK(getAlgoInfo(comm, &agg, collNetSupport, nvlsSupport, nTasksPerChannel, simInfo));
       agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol);
+      XPUT("agg.func: %d devFuncID: %d", agg.func, agg.devFuncId);
+
       if (agg.devFuncId < 0) {
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
@@ -519,12 +527,12 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
 
     if (task->algorithm == NCCL_ALGO_NVLS_TREE || task->algorithm == NCCL_ALGO_NVLS) {
       struct ncclDevWorkColl devWork = {};
-      devWork.sendbuff = (void*)task->sendbuff;
-      devWork.recvbuff = (void*)task->recvbuff;
+      devWork.sendbuff = (void SGLOBAL*)task->sendbuff;
+      devWork.recvbuff = (void SGLOBAL*)task->recvbuff;
       devWork.sendbuffOffset = task->sendbuffOffset;
       devWork.recvbuffOffset = task->recvbuffOffset;
-      devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
-      devWork.recvbuffRmtAddrs = task->recvbuffRmtAddrs;
+      devWork.sendbuffRmtAddrs = (uintptr_t SGLOBAL *)task->sendbuffRmtAddrs;
+      devWork.recvbuffRmtAddrs = (uintptr_t SGLOBAL *)task->recvbuffRmtAddrs;
       devWork.root = task->root;
       devWork.nWarps = task->nWarps;
       devWork.redOpArg = task->opDev.scalarArg;
@@ -586,13 +594,19 @@ static ncclResult_t scheduleCollTasksToPlan(
   int const nMaxChannels[2*2] = {comm->nChannels, comm->nvlsChannels, // [collnet][nvls]
                                  comm->nChannels, comm->nvlsChannels};
   constexpr size_t MinTrafficPerChannel = 16 << 10; // 16K traffic as minimal
-  do {
-    size_t workBytes = 0;
+    do {
+    size_t workBytes = 0, prevFuncId = 0;
     struct ncclTaskColl* task = ncclIntruQueueHead(&planner->collTaskQueue);
     struct ncclWorkList* workNode = ncclIntruQueueHead(&planner->collWorkQueue);
     while (task != nullptr) {
       int nBatches = divUp(nPlanColls, 4); // Rough guess: 4 colls per batch.
       if (!testBudget(budget, nBatches, workBytes + workNode->size)) goto plan_full;
+      if (nPlanColls > 0 && prevFuncId != task->devFuncId) {
+        INFO(NCCL_COLL,"Starting new kernel since prevFuncId %d != %d, nPlanColls=%d", prevFuncId, task->devFuncId, nPlanColls);
+        goto plan_full;
+      }
+      // make sure one plan contains only work with same funcID
+      prevFuncId = task->devFuncId;
 
       nPlanColls += 1;
       workBytes += workNode->size;
@@ -773,11 +787,11 @@ static ncclResult_t scheduleCollTasksToPlan(
         proxyOp->ringAlgo = NULL;
         if (proxyOp->reg && task->algorithm == NCCL_ALGO_RING && (task->recvNetHandles[c] || task->sendNetHandles[c])) {
           if (task->func == ncclFuncAllGather) {
-            proxyOp->ringAlgo = new RingAGAlgorithm(task->sendbuff, task->recvbuff, comm->nRanks, comm->channels[c].ring.userRanks, proxyOp->chunkSteps, proxyOp->sliceSteps, proxyOp->chunkSize, proxyOp->sliceSize, proxyOp->loopOffset, proxyOp->channelSize, elementSize, task->count * elementSize, task->sendNetHandles[c], task->recvNetHandles[c], task->srecvNetHandles[c]);
+            proxyOp->ringAlgo = new RingAGAlgorithm(task->sendbuff, task->recvbuff, comm->nRanks, (int *)comm->channels[c].ring.userRanks, proxyOp->chunkSteps, proxyOp->sliceSteps, proxyOp->chunkSize, proxyOp->sliceSize, proxyOp->loopOffset, proxyOp->channelSize, elementSize, task->count * elementSize, task->sendNetHandles[c], task->recvNetHandles[c], task->srecvNetHandles[c]);
           } else if (task->func == ncclFuncAllReduce) {
             proxyOp->ringAlgo = new RingARAlgorithm(task->sendbuff, task->recvbuff, comm->nRanks, comm->channels[c].ring.index, proxyOp->chunkSteps, proxyOp->sliceSteps, proxyOp->chunkSize, proxyOp->sliceSize, proxyOp->loopOffset, proxyOp->channelSize, elementSize, task->sendNetHandles[c], task->recvNetHandles[c], task->srecvNetHandles[c]);
           } else if (task->func == ncclFuncBroadcast) {
-            proxyOp->ringAlgo = new RingBCAlgorithm(task->sendbuff, task->recvbuff, comm->rank, task->root, comm->nRanks, comm->channels[c].ring.userRanks, proxyOp->chunkSteps, proxyOp->sliceSteps, proxyOp->chunkSize, proxyOp->sliceSize, proxyOp->loopOffset, proxyOp->channelSize, task->sendNetHandles[c], task->recvNetHandles[c], task->srecvNetHandles[c]);
+            proxyOp->ringAlgo = new RingBCAlgorithm(task->sendbuff, task->recvbuff, comm->rank, task->root, comm->nRanks, (int *)comm->channels[c].ring.userRanks, proxyOp->chunkSteps, proxyOp->sliceSteps, proxyOp->chunkSize, proxyOp->sliceSize, proxyOp->loopOffset, proxyOp->channelSize, task->sendNetHandles[c], task->recvNetHandles[c], task->srecvNetHandles[c]);
           }
           proxyOp->ringAlgo->incRefCount();
         }
@@ -805,11 +819,16 @@ static ncclResult_t scheduleCollTasksToPlan(
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
-    if (!plan->kernelSpecialized) {
-      plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
-      plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
+    
+    int unroll = ncclGetKernelIndex(comm);
+    int finalId = task->devFuncId + unroll * ncclDevKernelCount/3; 
+    if (finalId >= ncclDevKernelCount) {
+      XPUT("oops wrong func ID: %d -- %d -- %d", 
+          finalId, task->devFuncId, ncclDevKernelCount);
+      plan->kernelFn = nullptr;
+    } else {
+      plan->kernelFn = ncclDevKernelList[finalId];
     }
-
     if (comm->rank == 0) {
       INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %s proto %s channel{Lo..Hi}={%d..%d}",
         ncclFuncToString(task->func), task->count * ncclTypeSize(task->datatype), ncclAlgoToString(task->algorithm),
@@ -998,7 +1017,7 @@ static ncclResult_t addP2pToPlan(
   work->sendIpcReg = ipcRegistered[1];
   work->sendChunkSize_u32fp8 = chunkDataSize_u32fp8[1];
   work->sendRank = sendRank;
-  work->sendAddr = sendAddr;
+  work->sendAddr = (void SGLOBAL *)sendAddr;
   work->sendBytes = sendBytes==-1 ? 0 : sendBytes;
   work->sendConnIndex = connIndex[1];
   work->sendOpCount = sendOpCount;
@@ -1008,7 +1027,7 @@ static ncclResult_t addP2pToPlan(
   work->recvIpcReg = ipcRegistered[0];
   work->recvChunkSize_u32fp8 = chunkDataSize_u32fp8[0];
   work->recvRank = recvRank;
-  work->recvAddr = recvAddr;
+  work->recvAddr = (void SGLOBAL *)recvAddr;
   work->recvBytes = recvBytes==-1 ? 0 : recvBytes;
   work->profilerEnabled = ncclProfilerPluginLoaded() && ((p2pTasks[0] ? p2pTasks[0] : p2pTasks[1])->eActivationMask & ncclProfileKernelCh);
   work->recvConnIndex = connIndex[0];
@@ -1045,7 +1064,10 @@ static ncclResult_t addP2pToPlan(
     int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, comm->p2pnChannelsPerPeer, comm->nNodes);
     plan->channelMask.masks[channelId/64] |= uint64_t(1)<<(channelId%64);
     // Add batch first.
+    // we just need to take the last entry of the first group (unroll=1)
+    // real unroll factor will be added later
     int funcIdx = ncclDevFuncId_P2p();
+    XPUT("funcIdx: %d -- %d", funcIdx, ncclDevKernelCount/3 - 1);
     addWorkBatchToPlan(comm, plan, channelId, ncclDevWorkTypeP2p, funcIdx, workOffset, p2pRound);
     if (funcIdx < 0) {
       WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
@@ -1055,7 +1077,7 @@ static ncclResult_t addP2pToPlan(
     for (int dir=0; dir < nProxyOps; dir++) {
       // Partition steps across channels.
       int nParts = dir ? work->nSendChannels : work->nRecvChannels;
-      void* addr = dir ? work->sendAddr : work->recvAddr;
+      auto* addr = dir ? work->sendAddr : work->recvAddr;
       size_t bytes = dir ? work->sendBytes : work->recvBytes;
       if (rcclParamEnableProxyTrace()) {
         proxyOps[dir].totalBytes = bytes;
@@ -1122,9 +1144,16 @@ static ncclResult_t scheduleP2pTasksToPlan(
   struct ncclKernelPlanner::Peer* peers = comm->planner.peers;
 
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
-  if (!plan->kernelSpecialized) {
-    plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
-    plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
+
+  int unroll = ncclGetKernelIndex(comm);
+  int funcIdx = ncclDevFuncId_P2p(); // this is actually constant!!
+  int finalId = funcIdx + unroll * ncclDevKernelCount/3; 
+  if (finalId >= ncclDevKernelCount) {
+    fprintf(stderr, "oops wrong p2pfunc ID: %d -- %d -- %d\n", 
+          finalId, funcIdx, ncclDevKernelCount);
+    plan->kernelFn = nullptr;
+  } else {
+    plan->kernelFn = ncclDevKernelList[finalId];
   }
 
   // Compute how much to split operations
@@ -1655,6 +1684,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
+
+  XPUT("launching: nWorkBatches: %d arg size: %zu",
+      plan->nWorkBatches, plan->kernelArgsSize);
 
   if (planner->numStreams == 1 && !plan->persistent) {
     comm->lastStream = planner->streams->stream;

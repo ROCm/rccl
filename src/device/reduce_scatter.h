@@ -12,12 +12,12 @@
 namespace {
   template<typename T, typename RedOp, typename Proto>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__)
-  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #else
-  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
-    ncclRing *ring = &ncclShmem.channel.ring;
-    int const *ringRanks = ring->userRanks;
+    auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
+    auto *ringRanks = (const int SGLOBAL *)ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
     size_t count;
     size_t gridOffset;
@@ -57,7 +57,10 @@ namespace {
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0>
-      prims(tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex);
+      prims(tid, nthreads, &ring->prev, &ring->next, 
+        work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex);
+
+    
 
 #if defined(ENABLE_NPKIT)
     if (tid == 0) {
@@ -148,28 +151,28 @@ namespace {
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     rcclReduceScatterRunRingSimpleProtoImpl(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     using Proto = ProtoSimple<1, 1>;
     const int nranks = ncclShmem.comm.nRanks;
     const int rank = ncclShmem.comm.rank;
@@ -177,8 +180,9 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
     ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &count, &channelOffset, &channelCount, &chunkCount);
 
     static constexpr int nworkers = NCCL_PAT_NWORKERS;
-    struct ncclPatShmem* shmem = (struct ncclPatShmem*)ncclScratchForWarp(0);
-    uint64_t pollCount = 0;
+    auto* shmem = (ncclPatShmem SLOCAL*)ncclScratchForWarp(0);
+    uint64_t pollCount = 0; 
+    static_cast<void>(pollCount); // mute unused warning
     __syncthreads(); // Don't start using shared mem until everyone arrives
     for (int i=tid; i<NCCL_SHMEM_PAT_STEPS; i+=nthreads) shmem->patSteps[i].flags = 0;
     if (tid == 0) shmem->localAccSize = 0;
@@ -190,8 +194,8 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
       int parallelFactor = shmem->parallelFactor = patAlgo.getParallelFactor();
       int step = 0;
       while (1) {
-        struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
-        int* poll = &ps->flags;
+        auto* ps = (ncclPatStep SLOCAL *)shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
+        auto* poll = &ps->flags;
         while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) != 0) pollCount++; // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
         patAlgo.getNextOp(ps);
         int last = ps->last;
@@ -199,10 +203,10 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
         if (last == 2) break;
       }
     } else if (tid < nworkers) { // Worker threads
-      T *inputBuf = (T*)work->sendbuff;
-      T *outputBuf = (T*)work->recvbuff;
+      auto *inputBuf = (T SGLOBAL*)work->sendbuff;
+      auto *outputBuf = (T SGLOBAL*)work->recvbuff;
       int parallelFactor = 0;
-      volatile int* pfPtr = &shmem->parallelFactor;
+      auto pfPtr = (volatile int SLOCAL *)&shmem->parallelFactor;
       while (parallelFactor == 0) parallelFactor = *pfPtr;
 
       int groupSize = nworkers/(WARP_SIZE*parallelFactor) * WARP_SIZE;
@@ -211,12 +215,12 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
       int tidInGroup = tid - group*groupSize;
       // We don't use recvPeers/sendPeers so let's pass shmem structs instead
       Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
-        (tidInGroup, groupSize, (int*)shmem->recvDims, (int*)shmem->sendDims, inputBuf, outputBuf, work->redOpArg, group, 0, 0, nullptr, nullptr, 0, primsModePatRs);
+        (tidInGroup, groupSize, (int SLOCAL*)shmem->recvDims, (int SLOCAL*)shmem->sendDims, inputBuf, outputBuf, work->redOpArg, group, 0, 0, nullptr, nullptr, 0, primsModePatRs);
 
       int step = group;
       while(1) {
-        struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
-        int* poll = &ps->flags;
+        auto* ps = (ncclPatStep SLOCAL *)shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
+        auto* poll = &ps->flags;
         while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) == 0) pollCount++; // Wait for compute thread
         int last = ps->last;
         prims.patReduce(ps, shmem);
@@ -230,8 +234,8 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(int tid, int/*nthreads*/, struct ncclDevWorkColl* work) {
-    struct ncclNvls* nvls = &ncclShmem.channel.nvls;
+  __device__ __forceinline__ void run(int tid, int/*nthreads*/, struct ncclDevWorkColl TLOCAL* work) {
+    auto* nvls = (ncclNvls SLOCAL *)&ncclShmem.channel.nvls;
     size_t count;
     size_t gridOffset;
     size_t channelCount;
@@ -315,7 +319,7 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NCCL_PROTO_SIMPLE> {
   template<bool ReduceSendNotRecv>
   struct Scatterer {
-    struct ncclDevWorkColl* work;
+    struct ncclDevWorkColl TLOCAL* work;
     int chunkSize;
     ssize_t railGridOffset;
 
@@ -327,7 +331,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NC
       static_assert(SlicePerChunk==1, "require: SlicePerChunk==1");
       static_assert(MaxDsts<=1 || MaxSrcs<=1, "require: MaxDsts<=1 || MaxSrcs<=1");
 
-      struct ncclDirect* direct = &ncclShmem.channel.collnetDirect;
+      auto* direct = (ncclDirect SLOCAL *)&ncclShmem.channel.collnetDirect;
       int nNodes = ncclShmem.comm.nNodes;
       int nRails = direct->nHeads;
       int part = ncclShmem.channelId - work->channelLo;
@@ -384,10 +388,10 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_COLLNET_DIRECT, NC
     }
   };
 
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     const int part = ncclShmem.channelId - work->channelLo;
     const int nChannels = work->channelHi - work->channelLo + 1;
-    struct ncclDirect* direct = &ncclShmem.channel.collnetDirect;
+    auto* direct = (ncclDirect SLOCAL *)&ncclShmem.channel.collnetDirect;
     int const &nNodes = ncclShmem.comm.nNodes;
     ssize_t chunkSize = int(work->collnet.chunkCount);
     ssize_t countPerRank = work->collnet.count;

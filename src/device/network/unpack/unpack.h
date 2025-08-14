@@ -32,7 +32,7 @@ inline __device__ void load64gpu(const uint64_t* ptr, uint64_t &v) {
 
 // Map internal association of handle with group and peer index (called once at init time)
 inline __device__ void ncclNetDeviceUnpackSetup(void* ohandle, const int group, const int index) {
-  struct unpackNetDeviceHandle* handle = (struct unpackNetDeviceHandle*) ohandle;
+  auto* handle = (unpackNetDeviceHandle SGLOBAL*)ohandle;
   // coverity[index_parm:FALSE]
   ncclShmem.groups[group].devicePlugin.unpack.g_meta[index] = handle->meta;
   ncclShmem.devicePlugin.unpack.bounce_buf = handle->bounce_buf;
@@ -46,7 +46,7 @@ inline __device__ void ncclNetDeviceIncrementHead(const int group, const int ind
 }
 
 inline __device__ void ncclNetDeviceSaveHead(void* ohandle, const int group, const int index) {
-  struct unpackNetDeviceHandle* handle = (struct unpackNetDeviceHandle*) ohandle;
+  auto* handle = (unpackNetDeviceHandle SGLOBAL*)ohandle;
   // coverity[index_parm:FALSE]
   handle->head = ncclShmem.groups[group].devicePlugin.unpack.head[index];
 }
@@ -203,7 +203,7 @@ inline __device__ void ncclNetDeviceUnpackInner(
   loadMeta meta;
 
   uint64_t head;
-  struct netUnpackMeta* g_meta_struct;
+  netUnpackMeta * g_meta_struct;
   void* bounce_buf;
 
   loadMeta* g_meta;
@@ -212,7 +212,7 @@ inline __device__ void ncclNetDeviceUnpackInner(
 
   // hack head use per-warp
   head          = step;
-  g_meta_struct = ncclShmem.groups[group].devicePlugin.unpack.g_meta[index];
+  g_meta_struct = (netUnpackMeta *)ncclShmem.groups[group].devicePlugin.unpack.g_meta[index];
   bounce_buf    = ncclShmem.devicePlugin.unpack.bounce_buf;
 
   __syncwarp();
@@ -275,7 +275,7 @@ inline __device__ void ncclNetDeviceUnpackInner(
       if (t < meta.len % DATA_LOAD_SIZE) {
         volatile char* cpy_src = (char*) bounce_buf + meta.src_off + (meta.len / DATA_LOAD_SIZE) * DATA_LOAD_SIZE + t;
         volatile char* cpy_dst = (char*) src        + meta.dst_off + (meta.len / DATA_LOAD_SIZE) * DATA_LOAD_SIZE + t;
-        *cpy_dst = *cpy_src;
+        *(volatile char SGLOBAL *)cpy_dst = *(volatile char SGLOBAL *)cpy_src;
       }
     }
 

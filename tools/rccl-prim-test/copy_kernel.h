@@ -25,15 +25,15 @@ struct MULTI {
   }
 };
 
-
+// PAE why do we use volatile here??
 template<typename T> inline __device__
 T vFetch(const volatile T* ptr) {
-  return __builtin_nontemporal_load(ptr);
+  return NTLOAD(ptr);
 }
 
 template<typename T> inline __device__
 void vStore(volatile T* ptr, const T val) {
-  __builtin_nontemporal_store(val, ptr);
+  NTSTORE(val, ptr);
 }
 
 template<typename T>
@@ -86,16 +86,16 @@ struct MULTI128 {
 
 inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
-  v.x = __builtin_nontemporal_load(&p->x);
-  v.y = __builtin_nontemporal_load(&p->y);
+  v.x = NTLOAD(&p->x);
+  v.y = NTLOAD(&p->y);
 #else
   asm volatile("ld.volatile.global.v2.u64 {%0,%1}, [%2];" : "=l"(v.x), "=l"(v.y) : "l"(p) : "memory");
 #endif
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
-  __builtin_nontemporal_store(v.x, &p->x);
-  __builtin_nontemporal_store(v.y, &p->y);
+  NTSTORE(v.x, &p->x);
+  NTSTORE(v.y, &p->y);
 #else
   asm volatile("st.volatile.global.v2.u64 [%0], {%1,%2};" :: "l"(p), "l"(v.x), "l"(v.y) : "memory");
 #endif

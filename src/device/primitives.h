@@ -12,10 +12,20 @@
 #include "reduce_kernel.h" // for reduction funcs
 #include "rccl_metadata.h"
 #include "common_kernel.h"
+#include "load_store_macros.h"
 #include "common.h"
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 10000
 
+// PAE: split barrier seems to be required by TREE reduce algorithms
+// For RING algorithms __builtin_amdgcn_s_barrier seems to be fine
+#if 0
+#define barrier_generic(__THREAD_FENCE, NWORKERS, BARRIER_NEXT, BARRIERS_PTR) do { \
+    __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
+  } while(0)
+
+#else
+// NOTE is BARRIERS_PTR local ???
 #define barrier_generic(__THREAD_FENCE, NWORKERS, BARRIER_NEXT, BARRIERS_PTR) do { \
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
@@ -25,13 +35,13 @@
     if (wid == 0) { \
       (BARRIER_NEXT) += (NWORKERS) / WARP_SIZE; \
       __THREAD_FENCE; \
-      __hip_atomic_fetch_add((BARRIERS_PTR), 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
+      __hip_atomic_fetch_add(Tlocal(BARRIERS_PTR), 1, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
       int spins = 0; \
       int rate_limit = 50; \
-      while (__hip_atomic_load((BARRIERS_PTR), __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < (BARRIER_NEXT)) { \
+      while (__hip_atomic_load(Tlocal(BARRIERS_PTR), __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) < (BARRIER_NEXT)) { \
         spins++; \
         if (spins == NCCL_SPINS_BEFORE_CHECK_ABORT) { \
-          if (__atomic_load_n(ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
+          if (__atomic_load_n((uint32_t SGLOBAL*)ncclShmem.comm.abortFlag, __ATOMIC_SEQ_CST)) { \
             ncclShmem.aborted = 1; \
             break; \
           } \
@@ -39,7 +49,7 @@
         } \
         if (spins == 0 && rate_limit > 0) { \
           rate_limit--; \
-          traceData(__LINE__, threadIdx.x, __hip_atomic_load((BARRIERS_PTR), __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP), (BARRIER_NEXT)); \
+          traceData(__LINE__, threadIdx.x, __hip_atomic_load(Tlocal(BARRIERS_PTR), __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP), (BARRIER_NEXT)); \
         } \
         __builtin_amdgcn_s_sleep(1); \
       } \
@@ -47,6 +57,7 @@
     } \
   } \
 } while (0)
+#endif // if switch
 
 /* Protocol classes: ProtoSimple, ProtoLL, ProtoLL128
  * We use these as template args to the Primtiives class instead of integral
@@ -159,7 +170,6 @@ struct PrimitivesWithoutDirect {
     static_cast<RealPrimitives*>(this)->recvCopySend(outIx, eltN, /*postOp=*/false);
   }
   __device__ void directRecvDirectSend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    return;
   }
   __device__ void recvReduceCopyDirectSend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     // Direct is only for the send part
@@ -171,18 +181,36 @@ struct PrimitivesWithoutDirect {
   __device__ __forceinline__ void directRecvReduceCopyDirectSend(intptr_t inpIx, intptr_t outIx, ssize_t eltN, bool postOp=false) {
     static_cast<RealPrimitives*>(this)->recvReduceCopySend(inpIx, outIx, eltN, postOp);
   }
-};
+}; // PrimitivesWithoutDirect
 
-__device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
+// All version of checkAbort in one place!
+// used by prims_simple.h:
+static __device__ __forceinline__ int checkAbort(int& abortCache, const int abortValue, int& spins) {
   if (abortCache & abortValue) return 1;
   if (++spins < NCCL_SPINS_BEFORE_CHECK_ABORT) return 0;
   spins = 0;
-  int abort = __atomic_load_n((ncclShmem.comm.abortFlag), __ATOMIC_SEQ_CST);
+  int abort = ld_seq_sys_global(ncclShmem.comm.abortFlag);
   if (abort) {
-    __atomic_store_n(&ncclShmem.aborted, abort, __ATOMIC_SEQ_CST);
+    __atomic_store_n(Tlocal(&ncclShmem.aborted), abort, __ATOMIC_SEQ_CST);
     abortCache |= abortValue;
   }
   return abort;
+}
+
+__device__ __forceinline__ int checkAbortLL(int &abortCache, const int abortValue, int &spins) {
+#if 1
+  if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
+    int abort = ld_seq_sys_global(ncclShmem.comm.abortFlag);
+    spins = 0;
+    if (abort) {
+      __atomic_store_n(Tlocal(&ncclShmem.aborted), abort, __ATOMIC_SEQ_CST);
+      abortCache |= abortValue;
+    }
+  }
+  return abortCache;
+#else
+  return 0;
+#endif
 }
 
 #include "prims_simple.h"

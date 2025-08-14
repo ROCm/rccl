@@ -14,6 +14,7 @@
 #include <hip/hip_bfloat16.h>
 #include "nccl_common.h"
 #include "bitops.h"
+#include "load_store_macros.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit_struct.h"
 #endif
@@ -138,7 +139,7 @@ struct ncclConnInfo {
   void **ptrExchange; // Pointer exchange for direct communication
   uint64_t* redOpArgExchange; // PreOp scaler exchange for direct pull case
 
-  struct ncclConnFifo* connFifo; // Used for GPU - Proxy communication
+  struct ncclConnFifo SGLOBAL* connFifo; // Used for GPU - Proxy communication
 
   uint64_t step;      // Keep where we are
   uint64_t llLastCleaning;
@@ -178,7 +179,7 @@ struct ncclRing {
   // Maps an internal nccl index to user-specified rank order. This is necessary
   // since we need to know how the user expects data to be ordered across
   // devices. Ordered from current device.
-  int* userRanks;
+  int SGLOBAL* userRanks;
 
   int index; // This rank's index in the ring
 };
@@ -240,7 +241,8 @@ struct ncclDevComm;
 #pragma pack(8)     /* set alignment to 8 bytes boundary */
 
 struct alignas(16) ncclDevWorkP2p {
-  void *sendAddr, *recvAddr;
+  void SGLOBAL *sendAddr; 
+  void SGLOBAL *recvAddr;
   size_t sendBytes, recvBytes;
   int sendRank, recvRank;
   uint64_t sendOpCount, recvOpCount;
@@ -308,13 +310,13 @@ struct alignas(16) ncclDevWorkColl {
   uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx942CheapFenceOff:1;
   uint32_t root:30, connIndex:2;
   uint16_t pivotA2ANumBiRings:15, profilerEnabled:1;
-  void* recvbuff;
-  void* sendbuff;
-  void *acc;
+  void SGLOBAL* recvbuff;
+  void SGLOBAL* sendbuff;
+  void SGLOBAL* acc;
   uintptr_t sendbuffOffset;
   uintptr_t recvbuffOffset;
-  uintptr_t* sendbuffRmtAddrs;
-  uintptr_t* recvbuffRmtAddrs;
+  uintptr_t SGLOBAL* sendbuffRmtAddrs;
+  uintptr_t SGLOBAL* recvbuffRmtAddrs;
   union {
     // Continuous-byte-distribution scheduling. The lo and hi channels are of
     // different size than the channels in the middle.
@@ -343,7 +345,7 @@ __device__ constexpr int ncclProtoGrainSize(int proto) {
 
 template<typename Int>
 __device__ inline void ncclCollCbdPart(
-    struct ncclDevWorkColl* work, uint32_t channelId, int proto, int eltSize,
+    struct ncclDevWorkColl TLOCAL* work, uint32_t channelId, int proto, int eltSize,
     Int* count, Int* partOffset, Int* partCount, Int* chunkCount
   ) {
   int eltPerGrain = ncclProtoGrainSize(proto)/eltSize;
@@ -494,7 +496,7 @@ union ncclCollTraceTail{
 #endif
 
 struct alignas(16) ncclDevChannel {
-  struct ncclDevChannelPeer** peers;
+  struct ncclDevChannelPeer SGLOBAL* SGLOBAL* peers;
   struct ncclRing ring;
   struct ncclTree tree;
   struct ncclTree collnetChain;
@@ -594,7 +596,12 @@ struct alignas(16) ncclDevKernelArgsStorage {
   };
 };
 
-typedef ncclDevKernelArgsStorage<(4<<10)> ncclDevKernelArgs4K;
+template<>
+struct alignas(16) ncclDevKernelArgsStorage<0> {
+  struct ncclDevKernelArgs args;
+};
+
+typedef ncclDevKernelArgsStorage<4096> ncclDevKernelArgs4K;
 //typedef ncclDevKernelArgsStorage<(32<<10)-4> ncclDevKernelArgs31K;
 
 template<typename T>

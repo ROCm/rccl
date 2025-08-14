@@ -263,7 +263,7 @@ static ncclResult_t sendConnect(struct ncclComm* comm, struct ncclConnect* conne
 
   struct ncclRecvMem *recvMem = (struct ncclRecvMem*) NCCL_NET_MAP_GET_POINTER(map, gpu, recvMem);
   send->conn.tail = &recvMem->tail;
-  send->conn.connFifo = recvMem->connFifo;
+  send->conn.connFifo = (ncclConnFifo SGLOBAL *)recvMem->connFifo;
   for (int i=0; i<NCCL_STEPS; i++) {
     send->conn.connFifo[i].size = -1;
     send->conn.connFifo[i].mode = NCCL_MODE_OFFSET;
@@ -296,7 +296,7 @@ static ncclResult_t recvConnect(struct ncclComm* comm, struct ncclConnect* conne
   struct ncclRecvMem *recvMem = (struct ncclRecvMem*) NCCL_NET_MAP_GET_POINTER(map, gpu, recvMem);
   void* gdcMem = map->mems[NCCL_NET_MAP_GDCMEM].gpuPtr;
   recv->conn.tail = gdcMem ? (uint64_t*)gdcMem : &recvMem->tail;
-  recv->conn.connFifo = recvMem->connFifo;
+  recv->conn.connFifo = (ncclConnFifo SGLOBAL *)recvMem->connFifo;
   for (int i=0; i<NCCL_STEPS; i++) {
     recv->conn.connFifo[i].mode = NCCL_MODE_OFFSET;
   }

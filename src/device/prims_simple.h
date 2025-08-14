@@ -53,9 +53,9 @@ class Primitives<
   int flags;
   const int group;
   uint64_t step;
-  struct ncclConnInfo* conn = NULL;
-  struct ncclConnFifo* connFifo = NULL;
-  T* connEltsFifo;
+  struct ncclConnInfo SGLOBAL* conn = NULL;
+  struct ncclConnFifo SGLOBAL* connFifo = NULL;
+  T SGLOBAL* connEltsFifo;
   T* directBuff = NULL;
   uint64_t *connStepPtr;
   uint64_t connStepCache; // Cache last seen value of (*connStepPtr)
@@ -112,19 +112,12 @@ private:
   }
 
   inline __device__ uint64_t loadStepValue(uint64_t* ptr) {
-    #if __CUDA_ARCH__ >= 900 && CUDART_VERSION >= 12010
-    if (flags & NvlsMinPolling) {
-      uint64_t ans;
-      asm volatile("multimem.ld_reduce.acquire.sys.global.min.u64 %0, [%1];" : "=l"(ans) : "l"(cvta_to_global(ptr)) : "memory");
-      return ans;
-    }
-    #endif
     // volatile is faster than acquire but not as correct. Make sure reduceCopy
     // loads data using volatile so it doesn't see stale data in L1.
 #if defined(__gfx1200__) || defined(__gfx1201__)
-    return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+    return ld_acquire_sys_global(ptr);
 #else
-    return __atomic_load_n(ptr, __ATOMIC_RELAXED);
+    return ld_relaxed_sys_global(ptr);
 #endif
   }
 
@@ -163,20 +156,20 @@ private:
             if (!Recv)
               ptrs[index] = NULL;
             else
-              ptrs[index] = (T*)ncclShmem.groups[group].userOutput + dstIx + offset;
+              ptrs[index] = (T *)ncclShmem.groups[group].userOutput + dstIx + offset;
           } else {
-            ptrs[index] = (T*)ncclShmem.groups[group].userOutput + srcIx + offset;
+            ptrs[index] = (T *)ncclShmem.groups[group].userOutput + srcIx + offset;
           }
         }
       } else if ((flags & ConnFifoEnabled) && connFifo[step%NCCL_STEPS].mode == NCCL_MODE_OFFSET) {
-        ptrs[index] = connEltsFifo + loadInt(&connFifo[step%NCCL_STEPS].offset)/sizeof(T);
+        ptrs[index] = (T*)connEltsFifo + ld_relaxed_sys_global(&connFifo[step%NCCL_STEPS].offset)/sizeof(T);
       } else if (isSendNotRecv && DirectSend) {
         if (flags & DirectWrite) {
           ptrs[index] = directBuff + dstIx + offset;
         } else if (flags & DirectRead) {  // empty send
           ptrs[index] = nullptr;
         } else {
-          ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*connStepSize;
+          ptrs[index] = (T*)connEltsFifo + (step%NCCL_STEPS)*connStepSize;
         }
       } else if (!isSendNotRecv && DirectRecv) {
         if (flags & DirectRead) {
@@ -184,13 +177,13 @@ private:
         } else if (flags & DirectWrite) {
           ptrs[index] = directBuff + dstIx + offset;  // send to next from my output buffer
         } else {
-          ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*connStepSize;
+          ptrs[index] = (T*)connEltsFifo + (step%NCCL_STEPS)*connStepSize;
         }
       }
       else {
         // Yes, for some template arguments this code will be unreachable.  That's fine.
         // coverity[dead_error_line]
-        ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*connStepSize;
+        ptrs[index] = (T*)connEltsFifo + (step%NCCL_STEPS)*connStepSize;
       }
       if (flags & NetDeviceUnpack) {
         ncclNetDeviceIncrementHead(group, index);
@@ -210,11 +203,11 @@ private:
     }
 
     if ((flags & Send*RolePostSend) && next_hdp_reg)
-      STORE((unsigned int *)next_hdp_reg, 0x1);
+      STORE(Tglobal(next_hdp_reg), 0x1);
 
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
-      STORE(connStepPtr, step);
+      STORE(Tglobal(connStepPtr), step);
     }
   }
 
@@ -484,17 +477,17 @@ private:
 
 public:
   static inline __device__ void sendPeerNotify(int peer, int connIndex, int steps) {
-    ncclDevChannelPeer* peerPtr = ncclShmem.channel.peers[peer];
+    auto peerPtr = ncclShmem.channel.peers[peer];
     peerPtr->send[connIndex].step += steps;
     st_relaxed_sys_global(peerPtr->send[connIndex].tail, peerPtr->send[connIndex].step);
   }
 
   static inline __device__ void recvPeerNotify(int peer, int connIndex, int steps) {
     int spins = 0;
-    ncclDevChannelPeer* peerPtr = ncclShmem.channel.peers[peer];
+    auto peerPtr = ncclShmem.channel.peers[peer];
     peerPtr->recv[connIndex].step += steps;
     st_relaxed_sys_global(peerPtr->recv[connIndex].head, peerPtr->recv[connIndex].step);
-    while (ld_volatile_global(peerPtr->recv[connIndex].tail) < peerPtr->recv[connIndex].step) {
+    while (ld_relaxed_sys_global(peerPtr->recv[connIndex].tail) < peerPtr->recv[connIndex].step) {
       int abort = 0;
       if (checkAbort(abort, 1, spins)) break;
     }
@@ -516,8 +509,8 @@ public:
           void **ptrs = isSendNotRecv ? ncclShmem.groups[group].dsts
                                       : ncclShmem.groups[group].srcs;
           if ((flags & ConnFifoEnabled) && connFifo[step%NCCL_STEPS].mode == NCCL_MODE_OFFSET) {
-            int offset = loadInt(&connFifo[step%NCCL_STEPS].offset);
-            ptrs[index] = connEltsFifo + offset/sizeof(T);
+            int offset = ld_relaxed_sys_global(&connFifo[step%NCCL_STEPS].offset);
+            ptrs[index] = (T*)connEltsFifo + offset/sizeof(T);
           } else if (Direct && fn.work->regUsed) {
             if (isSendNotRecv) {
               if (flags & DirectWrite) {
@@ -525,7 +518,7 @@ public:
               } else if (flags & DirectRead) {  // empty send
                 ptrs[index] = nullptr;
               } else {
-                ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*stepSize;
+                ptrs[index] = (T*)connEltsFifo + (step%NCCL_STEPS)*stepSize;
               }
             } else {
               if (flags & DirectRead) {
@@ -536,11 +529,11 @@ public:
                 else
                   ptrs[index] = nullptr;
               } else {
-                ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*stepSize;
+                ptrs[index] = (T*)connEltsFifo + (step%NCCL_STEPS)*stepSize;
               }
             }
           } else {
-            ptrs[index] = connEltsFifo + (step%NCCL_STEPS)*stepSize;
+            ptrs[index] = (T*)connEltsFifo + (step%NCCL_STEPS)*stepSize;
           }
         }
         subBarrier();
@@ -634,10 +627,14 @@ private:
             int i = (j+shift)%fan.nrecv();
             pOffset = i*peerOffset;
             if (skip >= 0 && i >= skip) pOffset += peerOffset;
-            void* dst0 = (T*)ncclShmem.groups[group].dsts[0] + pOffset;
+            void * dst0 = (T*)ncclShmem.groups[group].dsts[0] + pOffset;
             ssize_t realPeerSize = min(realSize, totalElem-pOffset);
             if (DirectRecv && ncclShmem.groups[group].srcs[i] == dst0) realPeerSize = 0;
-            if (realPeerSize > 0) reduceCopy<Unroll, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>(tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp, 1, ncclShmem.groups[group].srcs+i, 1, &dst0, realPeerSize);
+            if (realPeerSize > 0) {
+              reduceCopy<Unroll, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>(
+                tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp, 1, 
+                ncclShmem.groups[group].srcs+i, 1, &dst0, realPeerSize);
+            }
           }
         }
       }
@@ -647,7 +644,7 @@ private:
     }
   }
 
-  __device__ __forceinline__ void loadRecvConn(ncclDevChannelPeer *peer, int connIndex, uint32_t direct, int ipcRegFlag, int netRegFlag) {
+  __device__ __forceinline__ void loadRecvConn(ncclDevChannelPeer SGLOBAL *peer, int connIndex, uint32_t direct, int ipcRegFlag, int netRegFlag) {
     conn = &peer->recv[connIndex];
     if (conn->netDeviceHandle.netDeviceType == NCCL_NET_DEVICE_UNPACK) {
       // handle must be a device ptr
@@ -660,15 +657,16 @@ private:
     step = roundUp(step, SlicePerChunk*StepPerSlice);
     if (flags & RolePostRecv) {
       connStepPtr = conn->head;
-      STORE(connStepPtr, step); // Return credits in case we rounded up.
+      STORE(Tglobal(connStepPtr), step); // Return credits in case we rounded up.
     }
     if (flags & RoleWaitRecv) {
-      if ((flags & PatMode) == 0) ncclShmem.groups[group].recvConns[index] = conn; // WaitRecv role saves since that's who needs it in setDataPtrs()
+      // WaitRecv role saves since that's who needs it in setDataPtrs()
+      if ((flags & PatMode) == 0) ncclShmem.groups[group].recvConns[index] = conn; 
       flags |= (conn->flags & NCCL_NVLS_MIN_POLL) ? NvlsMinPolling : 0;
       connStepPtr = conn->tail;
       connStepCache = loadStepValue(connStepPtr);
       connStepSize = conn->stepSize/sizeof(T);
-      connEltsFifo = (T*)conn->buffs[NCCL_PROTO_SIMPLE];
+      connEltsFifo = (T SGLOBAL*)conn->buffs[NCCL_PROTO_SIMPLE];
       if (conn->connFifo != nullptr) {
         flags |= ConnFifoEnabled;
         connFifo = conn->connFifo;
@@ -699,7 +697,7 @@ private:
     }
   }
 
-  __device__ __forceinline__ void loadSendConn(ncclDevChannelPeer *peer, int connIndex, uint32_t direct, int ipcRegFlag, int netRegFlag) {
+  __device__ __forceinline__ void loadSendConn(ncclDevChannelPeer SGLOBAL *peer, int connIndex, uint32_t direct, int ipcRegFlag, int netRegFlag) {
     conn = &peer->send[connIndex];
     step = conn->step;
     step = roundUp(step, SlicePerChunk*StepPerSlice);
@@ -710,15 +708,16 @@ private:
     if (flags & RolePostSend) {
       connStepPtr = conn->tail;
       next_hdp_reg = conn->next_hdp_reg;
-      connEltsFifo = (T*)conn->buffs[NCCL_PROTO_SIMPLE];
+      connEltsFifo = (T SGLOBAL*)conn->buffs[NCCL_PROTO_SIMPLE];
     }
     if (flags & RoleWaitSend) {
-      if ((flags & PatMode) == 0) ncclShmem.groups[group].sendConns[index] = conn; // WaitSend role saves since that's who needs it in setDataPtrs()
+      // WaitSend role saves since that's who needs it in setDataPtrs()
+      if ((flags & PatMode) == 0) ncclShmem.groups[group].sendConns[index] = conn; 
       flags |= (conn->flags & NCCL_NVLS_MIN_POLL) ? NvlsMinPolling : 0;
       connStepPtr = conn->head;
       connStepCache = loadStepValue(connStepPtr);
       connStepSize = conn->stepSize/sizeof(T);
-      connEltsFifo = (T*)conn->buffs[NCCL_PROTO_SIMPLE];
+      connEltsFifo = (T SGLOBAL*)conn->buffs[NCCL_PROTO_SIMPLE];
       if (Direct) {
         if (ipcRegFlag) {
           // User buffers have been registered
@@ -746,10 +745,10 @@ private:
 
 public:
   __forceinline__ __device__ Primitives(
-      int tid, int nthreads, int const *recvPeers, int const *sendPeers,
-      void const *inputBuf, void *outputBuf, uint64_t redOpArg, uint8_t group=0,
-      uint8_t connIndexRecv = 0, uint8_t connIndexSend = 0, struct ncclDevWorkColl* collWork = nullptr,
-      struct ncclDevWorkP2p* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
+      int tid, int nthreads, int const SLOCAL *recvPeers, int const SLOCAL *sendPeers,
+      void const SGLOBAL *inputBuf, void SGLOBAL *outputBuf, uint64_t redOpArg, uint8_t group=0,
+      uint8_t connIndexRecv = 0, uint8_t connIndexSend = 0, ncclDevWorkColl SLOCAL* collWork = nullptr,
+      ncclDevWorkP2p SLOCAL* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
     ):
     tid(tid), nthreads(nthreads), tidInBlock(threadIdx.x), group(group),
     stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_) {
@@ -772,7 +771,7 @@ public:
       while (nrecv < MaxRecv && recvPeers[nrecv] != -1) nrecv++;
       // coverity[dead_error_line]
       while (nsend < MaxSend && sendPeers[nsend] != -1) nsend++;
-      this->fan = Fan(nrecv, nsend);
+      this->fan = Fan(nrecv, nsend);  
 
       constexpr int ThreadPerSync =
         MaxSend >= 16 || MaxRecv >= 16 ? 32 : // NVLS may have an arity > 8. In that case increase the size of the groups
@@ -780,7 +779,8 @@ public:
         8; // Allows for all roles (WaitRecv/WaitSend/PostRecv/PostSend) within a single warp
       static_assert(MaxSend <= ThreadPerSync && MaxRecv <= ThreadPerSync, "Not enough threads to cover all peers");
 
-      assert(2*(nrecv+nsend) <= nthreads); // Ensure no thread is assigned more than one role.
+      // WOW removing assert removes private_segment >>
+      // assert(2*(nrecv+nsend) <= nthreads); // Ensure no thread is assigned more than one role.
       // Coverity assumes that index will equal tid based on the line below, but it doesn't consider the setting
       // of flags.  This results in multiple false positive overruns being reported here and in all_reduce.h.
       // Unfortunately, we've been unsuccessful in trying to silence them with a single directive here so
@@ -829,7 +829,8 @@ public:
 
       // coverity[negative_returns:FALSE] => coverity thinks that index could be -1 but that's not actually the case
       // coverity[var_deref_model] => coverity thinks work can dereferenced if NULL but this is not the case
-      setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclDevWorkCollReg*)collWork, sendIpcReg || recvIpcReg, peer, collWork != nullptr ? collWork->acc : nullptr);
+      setDataPtrs(inputBuf, outputBuf, redOpArg, (ncclDevWorkCollReg SLOCAL*)collWork, 
+                  sendIpcReg || recvIpcReg, peer, collWork != nullptr ? collWork->acc : nullptr);
       // coverity[uninit_member] => coverity thinks fan.n is not initialized
     } else if (mode == primsModePatRs || mode == primsModePatAg) { // Connect to all ranks +/- 2^n
       flags |= PatMode;
@@ -843,7 +844,7 @@ public:
         // Load recv peer
         int recvPeer = mode == primsModePatRs ? (rank - delta + nranks) % nranks : (rank + delta) % nranks;
         struct ncclPatPeer* peer = ((struct ncclPatPeer*)recvPeers)+tid;
-        struct ncclConnInfo* conn = peer->conn = ncclShmem.channel.peers[recvPeer]->recv+connIndexRecv;
+        auto* conn = peer->conn = ncclShmem.channel.peers[recvPeer]->recv+connIndexRecv;
         peer->step = conn->step;
         peer->buff = conn->buffs[NCCL_PROTO_SIMPLE];
         peer->stepCache = loadStepValue(peer->tailPtr = conn->tail);
@@ -863,8 +864,8 @@ public:
         peer->connStepSize = conn->stepSize/sizeof(T);
       }
       if (tid==0) {
-        ncclShmem.groups[group].userInput = (void*)inputBuf;
-        ncclShmem.groups[group].userOutput = (void*)outputBuf;
+        ncclShmem.groups[group].userInput = (void SGLOBAL*)inputBuf;
+        ncclShmem.groups[group].userOutput = (void SGLOBAL*)outputBuf;
         ncclShmem.redOpArgs[0] = redOpArg;  // scaler for local input
       }
       patBarrier();
@@ -880,9 +881,11 @@ public:
       // We don't want the next CUDA kernel to overwrite the send buffer which
       // was accessed directly.
       uint64_t prevStep = step - StepPerSlice;
-      volatile ssize_t* ptr = &(connFifo[prevStep%NCCL_STEPS].size);
+      auto ptr = (uint64_t *)&connFifo[prevStep%NCCL_STEPS].size;
       int spins = 0;
-      while (*ptr != -1) if (checkAbort(flags, Aborted, spins)) break;
+      while ((ssize_t)atomicAdd(Tglobal(ptr), 0) != -1) {
+        if (checkAbort(flags, Aborted, spins)) break;
+      }
     }
 
     if (flags & NetDeviceUnpack) {
@@ -898,17 +901,23 @@ public:
       // This has to be done after barrier() since post thread might have contention with
       // this check.
       int spins = 0;
-      volatile uint64_t* tail = conn->tail;
-      volatile uint64_t* head = conn->head;
-      while (*tail > *head) if (checkAbort(flags, Aborted, spins)) break;
+      uint64_t* tail = conn->tail;
+      uint64_t* head = conn->head;
+      while (1) {
+        auto tailv = ld_relaxed_sys_global(tail),
+             headv = ld_relaxed_sys_global(head);
+        if (tailv <= headv) break;
+        if (checkAbort(flags, Aborted, spins)) break;
+      }
     }
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, uint64_t redOpArg, struct ncclDevWorkCollReg* work, uint8_t ipcReg, int peer, void const *acc) {
+  __device__ void setDataPtrs(void const SGLOBAL *inputBuf, void SGLOBAL* outputBuf, uint64_t redOpArg, 
+            ncclDevWorkCollReg SLOCAL *work, uint8_t ipcReg, int peer, void const SGLOBAL *acc) {
     if (tid==0) {
-      ncclShmem.groups[group].userInput = (void*)inputBuf;
-      ncclShmem.groups[group].userOutput = (void*)outputBuf;
-      ncclShmem.groups[group].userAcc = (void*)acc;
+      ncclShmem.groups[group].userInput = (void SGLOBAL *)inputBuf;
+      ncclShmem.groups[group].userOutput = outputBuf;
+      ncclShmem.groups[group].userAcc = (void SGLOBAL*)acc;
       ncclShmem.redOpArgs[0] = redOpArg;  // scaler for local input
     }
 
@@ -919,12 +928,13 @@ public:
       bool recvAcceptor = (flags & RoleWaitRecv) && (flags & DirectRead); // receiver accepts direct buffer
       if (recvProvider) {
         int spins = 0;
-        void* volatile* slot = ncclShmem.groups[group].recvConns[index]->ptrExchange;
+        auto *slot = reinterpret_cast<uint64_t*>(ncclShmem.groups[group].recvConns[index]->ptrExchange);
         // Wait for consumer to consume previous value before trampling it.
         if (slot) {
           T* exchgPtr;
           directBuff = (T*)outputBuf;
-          while ((void *)atomicAdd((unsigned long long *) slot,0) != nullptr && !checkAbort(flags, Aborted, spins));
+          while ((void *)atomicAdd(Tglobal(slot), 0) != nullptr 
+                        && !checkAbort(flags, Aborted, spins));
           if (P2p) {
             exchgPtr = (T*)outputBuf;
           } else {
@@ -932,21 +942,22 @@ public:
             // coverity[deref_parm:FALSE] => work cannot be NULL if ipcReg != NULL
             exchgPtr = (T*)(work->coll.recvbuffOffset + work->coll.recvbuffRmtAddrs[localPeer]);
           }
-          *slot = reinterpret_cast<void*>(exchgPtr);
+          st_uncached_global(slot, reinterpret_cast<uint64_t>(exchgPtr));
+          //*slot = reinterpret_cast<void*>(exchgPtr);
         }
       }
       if (sendAcceptor) {
         int spins = 0;
-        void* volatile* slot = ncclShmem.groups[group].sendConns[index]->ptrExchange;
+        auto *slot = reinterpret_cast<uint64_t*>(ncclShmem.groups[group].sendConns[index]->ptrExchange);
         void* ptr;
         while (slot) {
-          ptr = (void *)atomicAdd((unsigned long long *) slot,0);
+          ptr = (void *)atomicAdd(Tglobal(slot), 0);
           if (ptr != nullptr || checkAbort(flags, Aborted, spins)) break;
         }
 
         if (slot) {
           directBuff = reinterpret_cast<T*>(ptr);
-          *slot = nullptr;
+          st_uncached_global(slot, 0u); //*slot = nullptr;
         } else {
           // coverity[var_deref_op]
           directBuff = (T*)work->dnOutputs[index];
@@ -954,13 +965,18 @@ public:
       }
       if (sendProvider) {
         int spins = 0;
-        void* volatile* slot = ncclShmem.groups[group].sendConns[index]->ptrExchange;
-        volatile uint64_t* argSlot0 = ncclShmem.groups[group].sendConns[index]->redOpArgExchange;
-        volatile uint64_t* argSlot1 = ncclShmem.groups[group].sendConns[index]->redOpArgExchange + 1;
+        auto* slot = reinterpret_cast<uint64_t*>(ncclShmem.groups[group].sendConns[index]->ptrExchange);
+        uint64_t* argSlot0 = ncclShmem.groups[group].sendConns[index]->redOpArgExchange;
+        uint64_t* argSlot1 = ncclShmem.groups[group].sendConns[index]->redOpArgExchange + 1;
         // Wait for consumer to consume previous value before trampling it.
         if (slot && argSlot0 && argSlot1) {
           T* exchgPtr;
-          while (((void *)atomicAdd((unsigned long long *) slot,0) != nullptr || *argSlot0 != 0 || *argSlot1 != 0) && !checkAbort(flags, Aborted, spins));
+          while(1) {
+            if (((atomicAdd(Tglobal(slot), 0)) == 0 &&
+                  atomicAdd(Tglobal(argSlot0), 0) == 0 &&
+                  atomicAdd(Tglobal(argSlot1), 0) == 0) ||
+                  checkAbort(flags, Aborted, spins)) break;
+          }
           // If there is no recv, then we are directly pulling from input buffer (e.g. directScatter)
           // Otherwise, we are pulling from output buffer (e.g. recvCopyDirectSend)
           directBuff = MaxRecv == 0 ? (T*)inputBuf : (T*)outputBuf;
@@ -977,19 +993,19 @@ public:
           }
 
           // Exchange pre-scalers for use in direct pull
-          *argSlot0 = (uint64_t(1) << 32) | (uint32_t)redOpArg;
-          *argSlot1 = (uint64_t(1) << 32) | (uint32_t)(redOpArg >> 32);
-          *slot = reinterpret_cast<T*>(exchgPtr);
+          st_uncached_global(argSlot0, (uint64_t(1) << 32) | (uint32_t)redOpArg);
+          st_uncached_global(argSlot1, (uint64_t(1) << 32) | (uint32_t)(redOpArg >> 32));
+          st_uncached_global(slot, reinterpret_cast<uint64_t>(exchgPtr));
         }
       }
       if (recvAcceptor) {
         int spins = 0;
-        void* volatile* slot = ncclShmem.groups[group].recvConns[index]->ptrExchange;
-        volatile uint64_t* argSlot0 = ncclShmem.groups[group].recvConns[index]->redOpArgExchange;
-        volatile uint64_t* argSlot1 = ncclShmem.groups[group].recvConns[index]->redOpArgExchange + 1;
+        auto* slot = reinterpret_cast<uint64_t*>(ncclShmem.groups[group].recvConns[index]->ptrExchange);
+        uint64_t* argSlot0 = ncclShmem.groups[group].recvConns[index]->redOpArgExchange;
+        uint64_t* argSlot1 = ncclShmem.groups[group].recvConns[index]->redOpArgExchange + 1;
         void* ptr;
         while (slot) {
-          ptr = (void *)atomicAdd((unsigned long long *) slot,0);
+          ptr = (void *)atomicAdd(Tglobal(slot),0);
           if (ptr != nullptr || checkAbort(flags, Aborted, spins)) break;
         }
 
@@ -999,14 +1015,15 @@ public:
             // Store scalers for remote inputs
             uint64_t arg0, arg1;
             while (true) {
-              arg0 = *argSlot0;
-              arg1 = *argSlot1;
+              arg0 = atomicAdd(argSlot0, 0);
+              arg1 = atomicAdd(argSlot1, 0);
               if ((arg0 != 0 && arg1 != 0) || checkAbort(flags, Aborted, spins)) break;
             }
             ncclShmem.redOpArgs[1 + index] = ((arg1 & 0xffffffff) << 32) | (arg0 & 0xffffffff);
           }
-          *argSlot0 = 0; *argSlot1 = 0;
-          *slot = nullptr;
+          st_uncached_global(argSlot0, 0);
+          st_uncached_global(argSlot1, 0);
+          st_uncached_global(slot, 0);
         } else {
           // Coverity complains about work being possibly NULL below.  However, slot
           // being NULL means that the NVLS buffer is registered (regUsed == 1)
@@ -1018,18 +1035,11 @@ public:
     }
   }
 
-  __device__ void moveDataPtrs(intptr_t delta) {
-    if (tid==0) {
-      ncclShmem.groups[group].userInput = (T*)ncclShmem.groups[group].userInput + delta;
-      ncclShmem.groups[group].userOutput = (T*)ncclShmem.groups[group].userOutput + delta;
-    }
-  }
-
   // Set MSCCL data pointers
   __device__ __forceinline__ void setDataPtrs(void const *inputBuf, void *outputBuf = nullptr) {
     if (tid==0) {
-      ncclShmem.groups[group].userInput = (T*)inputBuf;
-      ncclShmem.groups[group].userOutput = (T*)outputBuf;
+      ncclShmem.groups[group].userInput = (T SGLOBAL*)inputBuf;
+      ncclShmem.groups[group].userOutput = (T SGLOBAL*)outputBuf;
     }
   }
 
@@ -1128,23 +1138,23 @@ public:
     ScatterGatherOp<1, 0, 1, 0>(-1, outIx, totalElem, peerElem, peerOffset, skip, shift, /*postOp=*/false);
   }
 
-  __device__ __forceinline__ void patReduce(struct ncclPatStep* ps, struct ncclPatShmem* shmem) {
+  __device__ __forceinline__ void patReduce(ncclPatStep SLOCAL* ps, ncclPatShmem SLOCAL* shmem) {
     if (ps->flags & PatSkipped) { patBarrier(); patBarrier(); return; } // Skipped
     int nelem = ps->nelem < 0 ? 0 : ps->nelem;
-    T* userInput = (T*)ncclShmem.groups[group].userInput;
-    T* userOutput = (T*)ncclShmem.groups[group].userOutput;
+    auto* userInput = (T *)ncclShmem.groups[group].userInput;
+    auto* userOutput = (T *)ncclShmem.groups[group].userOutput;
 
     bool recv = ps->recvDim >= 0 && (flags & (RolePostRecv|RoleWaitRecv));
     bool send = ps->sendDim >= 0 && (flags & (RolePostSend|RoleWaitSend));
     bool postRecv = ps->postRecv && recv;
     bool postSend = ps->postSend && send;
-    struct ncclPatPeer* peer = NULL;
+    struct ncclPatPeer SLOCAL* peer = NULL;
     if (recv) {
-      peer = shmem->recvDims+ps->recvDim;
+      peer = (ncclPatPeer SLOCAL*)(shmem->recvDims+ps->recvDim);
       step = peer->step;
     }
     if (send) {
-      peer = shmem->sendDims+ps->sendDim;
+      peer = (ncclPatPeer SLOCAL*)(shmem->sendDims+ps->sendDim);
       step = peer->step;
     }
 
@@ -1185,7 +1195,7 @@ public:
     }
     patBarrier();
     int nSrcs = 2;
-    void** srcs = ncclShmem.groups[group].srcs;
+    void ** srcs = ncclShmem.groups[group].srcs;
     if (ps->recvDim < 0) { srcs++; nSrcs--; } // No peer to receive from, remove one source
 
     int workSize = ncclShmem.aborted ? 0 : nelem;
@@ -1200,29 +1210,32 @@ public:
         peer->connFifo[step%NCCL_STEPS].size = (ps->sendOffset + nelem)*sizeof(T);
       }
       peer->step = step += StepPerSlice;
-      st_relaxed_sys_global(&peer->conn->step, step);
+      st_relaxed_sys_global((uint64_t *)&peer->conn->step, step);
     }
     if (postRecv && (flags & RolePostRecv)) {
       peer->step = step += StepPerSlice;
-      st_relaxed_sys_global(&peer->conn->step, step); // Also save in global mem for next op
+      st_relaxed_sys_global((uint64_t *)&peer->conn->step, step); // Also save in global mem for next op
     }
 
     // Update accSize
-    if (ps->sendDim < 0 && (flags & RoleOutput)) atomicMax(&shmem->localAccSize, localAccSize);
-    if (ps->sendDim >= 0 && (flags & RoleWaitSend)) atomicMax(&peer->accSize, ps->sendOffset + nelem + (step+ps->stepOffset)*peer->connStepSize);
+    if (ps->sendDim < 0 && (flags & RoleOutput)) atomicMax(Tlocal((long long int *)&shmem->localAccSize), localAccSize);
+    if (ps->sendDim >= 0 && (flags & RoleWaitSend)) {
+      // PAE need to check!
+      atomicMax(Tglobal((long long int *)&peer->accSize), ps->sendOffset + nelem + (step+ps->stepOffset)*peer->connStepSize);
+    }
 
     patBarrier();
 
     if (postSend && (flags & RolePostSend)) {
       if (nelem > 0 || peer->connFifo) fence_acq_rel_sys();
-      st_relaxed_sys_global(peer->tailPtr, step);
+      st_relaxed_sys_global((uint64_t *)peer->tailPtr, step);
     }
     if (postRecv && (flags & RolePostRecv)) {
-      st_relaxed_sys_global(peer->headPtr, step);
+      st_relaxed_sys_global((uint64_t *)peer->headPtr, step);
     }
   }
 
-  __device__ __forceinline__ void patCopy(struct ncclPatStep* ps, struct ncclPatShmem* shmem) {
+  __device__ __forceinline__ void patCopy(ncclPatStep SLOCAL* ps, struct ncclPatShmem SLOCAL* shmem) {
     if (ps->flags & PatSkipped) { patBarrier(); patBarrier(); return; } // Skipped
     int nelem = ps->nelem < 0 ? 0 : ps->nelem;
     T* userInput = (T*)ncclShmem.groups[group].userInput;
@@ -1232,13 +1245,13 @@ public:
     bool send = ps->sendDim >= 0 && (flags & (RolePostSend|RoleWaitSend));
     bool postRecv = ps->postRecv && recv;
     bool postSend = ps->postSend && send;
-    struct ncclPatPeer* peer = NULL;
+    struct ncclPatPeer SLOCAL* peer = NULL;
     if (recv) {
-      peer = shmem->recvDims+ps->recvDim;
+      peer = (ncclPatPeer SLOCAL*)shmem->recvDims+ps->recvDim;
       step = peer->step;
     }
     if (send) {
-      peer = shmem->sendDims+ps->sendDim;
+      peer = (ncclPatPeer SLOCAL*)shmem->sendDims+ps->sendDim;
       step = peer->step;
     }
 
@@ -1278,7 +1291,7 @@ public:
     }
     patBarrier();
     int nDsts = 2;
-    void** dsts = ncclShmem.groups[group].dsts;
+    void ** dsts = ncclShmem.groups[group].dsts;
     if (ps->sendDim < 0) { dsts++; nDsts--; } // No peer to send to, remove one dest
     if (ncclShmem.groups[group].srcs[0] == ncclShmem.groups[group].dsts[1]) nDsts--; // In-place or already done.
 
@@ -1294,16 +1307,19 @@ public:
         peer->connFifo[step%NCCL_STEPS].size = (ps->sendOffset + nelem)*sizeof(T);
       }
       peer->step = step += StepPerSlice;
-      st_relaxed_sys_global(&peer->conn->step, step);
+      st_relaxed_sys_global((uint64_t *)&peer->conn->step, step);
     }
     if (postRecv && (flags & RolePostRecv)) {
       peer->step = step += StepPerSlice;
-      st_relaxed_sys_global(&peer->conn->step, step); // Also save in global mem for next op
+      st_relaxed_sys_global((uint64_t *)&peer->conn->step, step); // Also save in global mem for next op
     }
 
     // Update accSize
-    if (ps->recvDim < 0 && (flags & RoleInput)) atomicMax(&shmem->localAccSize, localAccSize);
-    if (ps->recvDim >= 0 && (flags & RoleWaitRecv)) atomicMax(&peer->accSize, ps->recvOffset + nelem + (step+ps->stepOffset)*peer->connStepSize);
+    if (ps->recvDim < 0 && (flags & RoleInput)) atomicMax(Tlocal((long long int *)&shmem->localAccSize), localAccSize);
+    if (ps->recvDim >= 0 && (flags & RoleWaitRecv)) {
+      // PAE need to check! if 'peer->accSize' is really global mem ??
+      atomicMax(Tglobal((long long int *)&peer->accSize), ps->recvOffset + nelem + (step+ps->stepOffset)*peer->connStepSize);
+    }
 
     patBarrier();
 

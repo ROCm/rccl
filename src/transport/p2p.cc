@@ -536,7 +536,7 @@ static ncclResult_t p2pSendConnect(struct ncclComm* comm, struct ncclConnect* co
 
   if (useMemcpy) {
     send->conn.tail = &resources->proxyInfo.ceRecvMem->tail;
-    send->conn.connFifo = resources->proxyInfo.ceRecvMem->connFifo;
+    send->conn.connFifo = (ncclConnFifo SGLOBAL *)resources->proxyInfo.ceRecvMem->connFifo;
     send->conn.head = &resources->proxyInfo.devShm->sendMem.head;
     // Send SIMPLE buff to proxy, and replace it by local buffer
     NCCLCHECK(ncclProxyCallBlocking(comm, &send->proxyConn, ncclProxyMsgConnect, &send->conn.buffs[NCCL_PROTO_SIMPLE], sizeof(void*), NULL, 0));

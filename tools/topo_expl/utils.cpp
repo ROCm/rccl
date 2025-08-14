@@ -279,7 +279,7 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelId) {
     }
   }
 #endif
-  channel->ring.userRanks = ncclMemoryStackAlloc<int>(&comm->memPermanent, nRanks);
+  channel->ring.userRanks = (int SGLOBAL *)ncclMemoryStackAlloc<int>(&comm->memPermanent, nRanks);
   //NCCLCHECK(ncclCudaCallocAsync(&channel->devRingUserRanks, nRanks, sharedRes->deviceStream.cudaStream));
   //ncclCommPushCudaFree(comm, channel->devRingUserRanks);
 

@@ -424,7 +424,7 @@ static ncclResult_t sendConnect(struct ncclComm* comm, struct ncclConnect* conne
   struct ncclRecvMem *recvMem = (struct ncclRecvMem*) NCCL_NET_MAP_GET_POINTER(map, gpu, recvMem);
   send->conn.tail = &recvMem->tail;
   send->conn.stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS;
-  send->conn.connFifo = recvMem->connFifo;
+  send->conn.connFifo = (ncclConnFifo SGLOBAL *)recvMem->connFifo;
   struct ncclRecvMem *recvMemCpu = (struct ncclRecvMem*) NCCL_NET_MAP_GET_POINTER(map, cpu, recvMem);
   for (int i=0; i<NCCL_STEPS; i++) {
     recvMemCpu->connFifo[i].offset = -1;
@@ -499,7 +499,7 @@ static ncclResult_t recvConnect(struct ncclComm* comm, struct ncclConnect* conne
   void* gdcMem = map->mems[NCCL_NET_MAP_GDCMEM].gpuPtr;
   recv->conn.tail = gdcMem ? (uint64_t*)gdcMem : &recvMem->tail;
   recv->conn.stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS;
-  recv->conn.connFifo = recvMem->connFifo;
+  recv->conn.connFifo = (ncclConnFifo SGLOBAL *)recvMem->connFifo;
   // Only fuse P2P buffers, continue to allocate dedicated buffers for ring/tree
   for (int i=0; i<NCCL_STEPS; i++) {
     recvMem->connFifo[i].mode = map->shared ? NCCL_MODE_OFFSET : NCCL_MODE_NORMAL;

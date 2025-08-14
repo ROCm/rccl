@@ -11,12 +11,12 @@
 namespace {
   template<typename T, typename RedOp, typename Proto>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__)
-  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #else
-  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     const int bid = ncclShmem.channelId - work->channelLo;
-    ncclRing *ring = &ncclShmem.channel.ring;
+    auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
     const int rank = ring->userRanks[0];
     const int nextRank = ring->userRanks[1];
     const int root = work->root;
@@ -55,8 +55,8 @@ namespace {
     }
 #endif
 
-    T *inputBuf = (T*)work->sendbuff;
-    T *outputBuf = (T*)work->recvbuff;
+    auto *inputBuf = (T SGLOBAL*)work->sendbuff;
+    auto *outputBuf = (T SGLOBAL*)work->recvbuff;
     workNthreads = isNetOffload ? WARP_SIZE : nthreads;
 
     if (tid < workNthreads) {
@@ -92,7 +92,7 @@ namespace {
       inputBuf = inputBuf + gridOffset;
       outputBuf = outputBuf + gridOffset;
       reduceCopy<COLL_UNROLL, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs=*/0>
-        (tid - workNthreads, nthreads - workNthreads, work->redOpArg, &work->redOpArg, false, 1, (void**)&inputBuf, 1, (void**)&outputBuf, channelCount);
+        (tid - workNthreads, nthreads - workNthreads, work->redOpArg, (uint64_t *)&work->redOpArg, false, 1, (void**)&inputBuf, 1, (void**)&outputBuf, channelCount);
     }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_BROADCAST_RING_EXIT)
     if (tid == 0) {
@@ -108,7 +108,7 @@ namespace {
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     using Proto = ProtoSimple<BROADCAST_CHUNKSTEPS/BROADCAST_SLICESTEPS, BROADCAST_SLICESTEPS>;
     runRing<T, RedOp, Proto>(tid, nthreads, work);
   }
@@ -116,14 +116,14 @@ struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
-  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
+  __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };

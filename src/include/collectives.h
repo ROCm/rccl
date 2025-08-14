@@ -414,8 +414,8 @@ struct ncclPatStep {
 
 struct ncclPatPeer {
     uint64_t step;
-    struct ncclConnInfo* conn;
-    struct ncclConnFifo* connFifo;
+    struct ncclConnInfo SGLOBAL* conn;
+    struct ncclConnFifo SGLOBAL* connFifo;
     void* buff;
     uint64_t *headPtr;
     uint64_t *tailPtr;
@@ -542,7 +542,7 @@ public:
     return parallelFactor;
   }
 
-  __device__ __host__ void getNextOp(struct ncclPatStep* ps) {
+  __device__ __host__ void getNextOp(ncclPatStep SLOCAL* ps) {
     ps->last = 0;
     ps->nelem = nelem;
     ps->outIx = offset;
@@ -807,7 +807,7 @@ public:
     return parallelFactor;
   }
 
-  __device__ __host__ void getNextOp(struct ncclPatStep* ps) {
+  __device__ __host__ void getNextOp(ncclPatStep SLOCAL* ps) {
     ps->last = 0;
     ps->nelem = nelem;
     ps->inpIx = offset;

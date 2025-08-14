@@ -17,7 +17,8 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
   static_assert(sizeof(T)==1, "SendRecv only works on single byte types T.");
 
   template<typename Proto>
-  __device__ void runSend(int tid, int tn, int group, struct ncclDevWorkP2p* work) {
+  __device__ void runSend(int tid, int tn, int group, ncclDevWorkP2p SLOCAL* work) {
+
     size_t bytes = work->sendBytes;
     bool useLargeChunk = (work->sendIpcReg && ncclShmem.comm.isAllNvlink) || work->sendNetReg;
     int chunkSize = useLargeChunk ? NCCL_MAX_NET_SIZE : u32fp8Decode(work->sendChunkSize_u32fp8);
@@ -76,7 +77,8 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
   }
 
   template<typename Proto>
-  __device__ void runRecv(int tid, int tn, int group, struct ncclDevWorkP2p* work) {
+  __device__ void runRecv(int tid, int tn, int group, ncclDevWorkP2p SLOCAL* work) {
+
     size_t bytes = work->recvBytes;
     bool useLargeChunk = (work->recvIpcReg && ncclShmem.comm.isAllNvlink) || work->recvNetReg;
     int chunkSize = useLargeChunk ? NCCL_MAX_NET_SIZE : u32fp8Decode(work->recvChunkSize_u32fp8);
@@ -137,7 +139,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__)
   __device__  void run() {
 #else
-  __device__  __attribute__((noinline)) void run() {
+  __device__  __forceinline__ void run() {
 #endif
     const int tid = threadIdx.x;
     const int tn = blockDim.x;
@@ -149,9 +151,9 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
       uint32_t workSendMask; // bitmasks of which work indices have send/recv
       uint32_t workRecvMask;
     };
-    Shared* shared = (Shared*)ncclScratchForWarp(0);
+    auto* shared = (Shared SLOCAL*)ncclScratchForWarp(0);
 
-    struct ncclDevWorkP2p* works = (ncclDevWorkP2p*)ncclShmem.workStorage;
+    auto* works = (ncclDevWorkP2p SLOCAL*)ncclShmem.workStorage;
     int nWorks = ncclShmem.nWorks;
 
     if (wid == 0) {
@@ -162,7 +164,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
       int isSend = lane < 16 ? 0 : 1;
       bool hasWork = false;
       if (workIx < nWorks) {
-        struct ncclDevWorkP2p* work = &works[workIx];
+        auto* work = &works[workIx];
         size_t bytes = isSend ? work->sendBytes : work->recvBytes;
         int nParts = isSend ? work->nSendChannels : work->nRecvChannels;
         int part = ncclP2pChannelToPart(work->nP2pChannels, work->channelBase, ncclShmem.channelId, ncclShmem.comm.p2pnChannelsPerPeer, ncclShmem.comm.nNodes);
@@ -170,7 +172,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
         if (nParts != 0) {
           size_t partBeg, partEnd;
           ncclP2pPartBounds(nParts, part, bytes, &partBeg, &partEnd);
-          (isSend ? work->sendAddr : work->recvAddr) = (char*)(isSend ? work->sendAddr : work->recvAddr) + partBeg;
+          (isSend ? work->sendAddr : work->recvAddr) = (char SGLOBAL*)(isSend ? work->sendAddr : work->recvAddr) + partBeg;
           (isSend ? work->sendBytes : work->recvBytes) = partEnd - partBeg;
         }
       }
@@ -228,7 +230,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
     extra = (nWarpPerWork >= nSendWarpsForExtraGroup) ? 1 : 0;
     group += __popcll((workSendMask & ~workRecvMask) & ((1<<workIx)-1))*(1+extra);
 
-    struct ncclDevWorkP2p* work = &works[workIx];
+    auto* work = &works[workIx];
     bool hasSend = 1 & (workSendMask>>workIx);
     bool hasRecv = 1 & (workRecvMask>>workIx);
     bool isCopy = work->sendRank == ncclShmem.comm.rank;
@@ -248,10 +250,10 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
     if (isCopy) {
 #if defined(__gfx942__) || defined(__gfx950__)
       reduceCopy<COLL_UNROLL*2, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
-        (subtid, subtn, 0, nullptr, false, 1, &work->sendAddr, 1, &work->recvAddr, (ssize_t)work->sendBytes);
+        (subtid, subtn, 0, nullptr, false, 1, (void **)&work->sendAddr, 1, (void **)&work->recvAddr, (ssize_t)work->sendBytes);
 #else
       reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
-        (subtid, subtn, 0, nullptr, false, 1, &work->sendAddr, 1, &work->recvAddr, (ssize_t)work->sendBytes);
+        (subtid, subtn, 0, nullptr, false, 1, (void **)&work->sendAddr, 1, (void **)&work->recvAddr, (ssize_t)work->sendBytes);
 #endif
     } else if (isSend) {
       if (work->sendProtoLL) {
