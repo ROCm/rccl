@@ -38,8 +38,8 @@ jobs:
       clean: all
     variables:
       ENABLE_COVERAGE: "true"
-      INFRA_TEST_CONFIG: "meta_2_node_split_alola_cov"
-      RCCL_TEST_INFRA_DIR: "$(Pipeline.Workspace)/rccl-test-infra/rccl-test-infra"
+      INFRA_TEST_CONFIG: "2_node_split_gt_cov_no_mscclpp"
+      RCCL_TEST_INFRA_DIR: "$(Pipeline.Workspace)/rccl-test-infra"
       LOCAL_RCCL_PATH: "$(Pipeline.Workspace)/s/rccl"
     steps:
       - task: DeleteFiles@1

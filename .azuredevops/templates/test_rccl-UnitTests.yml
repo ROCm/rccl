@@ -8,7 +8,7 @@ steps:
       targetType: inline
       script: |
         echo "Submitting test job..."
-        TEST_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/test_rccl-UnitTests.sh)
+        TEST_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/rccl/.azuredevops/slurm/test_rccl-UnitTests.sh)
         echo "Submitted test job: $TEST_JOB_ID"
         echo "##vso[task.setvariable variable=TEST_JOB_ID]$TEST_JOB_ID"
 

@@ -36,6 +36,7 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 if [ "$ENABLE_COVERAGE" = "true" ]; then
     echo "Coverage build enabled"
     cd $RCCL_TEST_INFRA_DIR || exit
+    git checkout dev/gpinkert/add_test_config
     TEST_INFRA_WORK_DIR=$BINARIES_DIR CODE_COV=1 ./install.sh build setup-venv
     exit 0
 fi
