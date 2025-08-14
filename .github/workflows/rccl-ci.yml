@@ -82,7 +82,7 @@ jobs:
 
       - name: Runner Health Settings
         run: |
-          ./build_tools/setup_ccache.py \
+          ./TheRock/build_tools/setup_ccache.py \
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
@@ -104,11 +104,11 @@ jobs:
 
       - name: Fetch sources
         run: |
-          ./build_tools/fetch_sources.py --jobs 12 --no-include-math-libs
+          ./TheRock/build_tools/fetch_sources.py --jobs 12 --no-include-math-libs
 
       - name: Install python deps
         run: |
-          pip install -r requirements.txt
+          pip install -r TheRock/requirements.txt
           pip freeze
 
       - name: Configure Projects
@@ -121,27 +121,27 @@ jobs:
           python3 TheRock/build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist
-        run: cmake --build build --target therock-dist
+        run: cmake --build TheRock/build --target therock-dist
 
       - name: Build therock-archives
-        run: cmake --build build --target therock-archives
+        run: cmake --build TheRock/build --target therock-archives
 
       - name: Report
         if: ${{ !cancelled() }}
         run: |
           echo "Full SDK du:"
           echo "------------"
-          du -h -d 1 build/dist/rocm
+          du -h -d 1 TheRock/build/dist/rocm
           echo "Artifact Archives:"
           echo "------------------"
-          ls -lh build/artifacts/*.tar.xz
+          ls -lh TheRock/build/artifacts/*.tar.xz
           echo "Artifacts:"
           echo "----------"
-          du -h -d 1 build/artifacts
+          du -h -d 1 TheRock/build/artifacts
           echo "CCache Stats:"
           echo "-------------"
           ccache -s -v
-          tail -v -n +1 .ccache/compiler_check_cache/* > ./build/logs/ccache_compiler_check_cache.log
+          tail -v -n +1 .ccache/compiler_check_cache/* > TheRock/build/logs/ccache_compiler_check_cache.log
 
       - name: Configure AWS Credentials
         if: always()
@@ -153,38 +153,39 @@ jobs:
       - name: Create Log archive
         if: always()
         run: |
-          python3 build_tools/create_log_archive.py \
-            --build-dir=build
+          python3 TheRock/build_tools/create_log_archive.py \
+            --build-dir=TheRock/build
 
       - name: Create Logs index Files
         if: always()
         run: |
-          python3 build_tools/github_actions/create_log_index.py \
-            --build-dir=build \
+          python3 TheRock/build_tools/github_actions/create_log_index.py \
+            --build-dir=TheRock/build \
             --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
 
       - name: Upload artifacts
         run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
+          python TheRock/build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build
+            --build-dir TheRock/build
 
       - name: Upload Logs
         if: always()
         run: |
-          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=build \
+          python3 TheRock/build_tools/github_actions/upload_build_logs_to_s3.py \
+            --build-dir=TheRock/build \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
 
       - name: Add Links to Job Summary
         if: always()
         run: |
-          python build_tools/github_actions/upload_build_summary.py \
+          python TheRock/build_tools/github_actions/upload_build_summary.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build
+            --build-dir TheRock/build
+
   ## WIP - Adding tests once build with TheRock and other submodules work
   multi-node-rccl-test:
     name: "Test multi-node-rccl-tests"
