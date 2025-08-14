@@ -39,7 +39,6 @@ option(TIMETRACE                               "Enable time-trace during compila
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
 option(FORCE_REDUCE_PIPELINING                 "Force reduce pipelining"                       OFF)
-option(DISABLE_CHEAP_THREADFENCE               "Compile-time killswitch for simpler fence"     OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -446,7 +445,6 @@ set(SRC_FILES
   src/device/broadcast.h
   src/device/common.h
   src/device/common_kernel.h
-  src/device/gfx9_threadfence.h
   src/device/op128.h
   src/device/primitives.h
   src/device/prims_ll128.h
@@ -1175,12 +1173,6 @@ endif()
 if (FAULT_INJECTION)
   target_compile_definitions(rccl PRIVATE ENABLE_FAULT_INJECTION)
   message(STATUS "Fault injection enabled")
-endif()
-if (DISABLE_CHEAP_THREADFENCE)
-  target_compile_definitions(rccl PRIVATE DISABLE_CHEAP_THREADFENCE)
-  message(STATUS "Cheap thread fence disabled")
-else()
-  message(STATUS "Cheap thread fence enabled for some collectives/parameters")
 endif()
 
 ## Set RCCL linked library directories

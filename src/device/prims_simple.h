@@ -10,7 +10,6 @@
 #include "npkit/npkit.h"
 #endif
 
-#include "device/gfx9_threadfence.h"
 #include "device/rccl_metadata.h"
 #include "msccl/msccl_struct.h"
 #include "network/unpack/unpack.h"
@@ -68,6 +67,7 @@ class Primitives<
   uint64_t* barriers_pat;
   uint64_t barrier_next_pat = 0;
   int repeat;
+  bool skip_fence = 0;
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -201,9 +201,14 @@ private:
 
   template<int Recv, int Send>
   inline __device__ void postPeer(bool dataStored) {
-    if (Send && (flags & RolePostSend) && dataStored){
+    if (skip_fence){
+      __atomic_signal_fence(__ATOMIC_SEQ_CST);
+      barrier_generic(asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)"), nworkers, barrier_next, barriers);
+      __atomic_signal_fence(__ATOMIC_SEQ_CST);
+    }
+    else if((flags & RolePostSend) && dataStored){
 #ifdef __GFX9__
-    gfx9ThreadFence<isOneNodeRingSimple(Metadata) && RCCL_CHEAP_THREADFENCE_OK_SOMETIMES>();
+    __threadfence();
 #else
     __threadfence_system();
 #endif
@@ -868,6 +873,9 @@ public:
         ncclShmem.redOpArgs[0] = redOpArg;  // scaler for local input
       }
       patBarrier();
+    }
+    if(collWork){
+      skip_fence = !collWork -> gfx942CheapFenceOff;
     }
   }
 

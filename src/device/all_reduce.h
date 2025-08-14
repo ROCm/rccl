@@ -560,16 +560,11 @@ namespace {
   }
 }
 
-#if defined(__gfx942__) || defined(__gfx950__) // Use a single slice per simple primitive for a single node on some GFX9 devices.
+#if defined(__gfx942__) || defined(__gfx950__) // Use a single slice per simple primitive for a single node on some GFX9 devices. 
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
-    if(work->regUsed || work->netRegUsed || work->gfx942CheapFenceOff){ \
-      runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
-    } \
-    else { \
-      runRing<T, RedOp, Proto, RCCL_ONE_NODE_RING_SIMPLE>(tid, nthreads, work); \
-    } \
+    runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
   } \
   else{ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>; \

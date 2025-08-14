@@ -335,6 +335,13 @@ static bool testBudget(
   return ok;
 }
 
+// Returns whether this should be disabled at the device level.  Should be called after devWork fields have been set for what
+// it depends on.
+bool gfx942CheapFenceOff(const ncclDevWorkColl& devWork, bool disabledByPrecheck){
+    bool fenceOk = devWork.regUsed == 0 && devWork.netRegUsed == 0 && !disabledByPrecheck;
+    return !fenceOk;
+}
+
 ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
   struct ncclKernelPlanner* planner = &comm->planner;
   struct ncclTaskColl *task;
@@ -367,9 +374,10 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
-    devWork.gfx942CheapFenceOff = comm->gfx942CheapFenceOff;
+    
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
+    devWork.gfx942CheapFenceOff = gfx942CheapFenceOff(devWork, comm->gfx942CheapFenceOff);
     devWork.profilerEnabled = ncclProfilerPluginLoaded() && (task->eActivationMask & ncclProfileKernelCh);
     if (task->regBufType & NCCL_NET_REG_BUFFER)
       devWork.netRegUsed = 1;

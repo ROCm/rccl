@@ -1369,13 +1369,23 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph->nChannels);
   if (ringGraph->nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
+  comm -> gfx942CheapFenceOff = 1;
+  #ifdef HIP_UNCACHED_MEMORY
+  if(!rcclParamGfx942CheapFenceOff()){
+    if(IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")){
+      comm -> gfx942CheapFenceOff = 0;
+    }
+    else if(IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")){
+      comm -> gfx942CheapFenceOff = nNodes > 1;
+    }
+  }
+  #endif
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
     // RCCL: Only use one slice per primitive on some single node gfx9xx systems
     comm->rcclUseOneSlice = !managed && nNodes == 1;
-    comm->gfx942CheapFenceOff = rcclParamGfx942CheapFenceOff();
     if (managed && nNodes > 1) {
       // This forces the minimum channels to 24
       allGather3Data[rank].nc = 6;
