@@ -12,6 +12,7 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+        default: gfx94X-dcgpu
       expect_failure:
         type: boolean
         default: false
@@ -25,6 +26,7 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+        default: gfx94X-dcgpu
       expect_failure:
         type: boolean
         default: false
@@ -51,7 +53,7 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      AMDGPU_FAMILIES: 'gfx94X-dcgpu'
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
       TEATIME_FORCE_INTERACTIVE: 0
     steps:
       - name: Checkout TheRock repository
@@ -105,7 +107,7 @@ jobs:
 
       - name: Configure Projects
         env:
-          amdgpu_families: ${{ inputs.amdgpu_families }}
+          amdgpu_families: "${{ env.amdgpu_families }}"
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: "-DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu -DTHEROCK_USE_EXTERNAL_RCCL=ON -DTHEROCK_RCCL_SOURCE_DIR=rccl -DTHEROCK_RCCL_TESTS_SOURCE_DIR=rccl-tests -DUSE_MPI=ON"
           BUILD_DIR: build
@@ -158,14 +160,14 @@ jobs:
         run: |
           python3 build_tools/github_actions/create_log_index.py \
             --build-dir=build \
-            --amdgpu-family=${{ inputs.amdgpu_families }}
+            --amdgpu-family="${{ env.amdgpu_families }}""
 
       - name: Upload artifacts
         if: always()
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --amdgpu-family "${{ env.amdgpu_families }}" \
             --build-dir build
 
       - name: Upload Logs
@@ -174,14 +176,14 @@ jobs:
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }}
+            --amdgpu-family "${{ env.amdgpu_families }}"
 
       - name: Add Links to Job Summary
         if: always()
         run: |
           python build_tools/github_actions/upload_build_summary.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --amdgpu-family "${{ env.amdgpu_families }}" \
             --build-dir build
 
   ## WIP - Adding tests once build with TheRock and other submodules work
