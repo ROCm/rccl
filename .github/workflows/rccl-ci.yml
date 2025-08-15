@@ -54,29 +54,18 @@ jobs:
       AMDGPU_FAMILIES: 'gfx94X-dcgpu'
       TEATIME_FORCE_INTERACTIVE: 0
     steps:
-      # - name: Generate a token for rccl
-      #   id: generate-token
-      #   uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
-      #   with:
-      #     app-id: ${{ secrets.APP_ID }}
-      #     private-key: ${{ secrets.APP_PRIVATE_KEY }}
-      #     owner: ${{ github.repository_owner }}
-
       - name: Checkout TheRock repository
-        if: false
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
 
       - name: Checkout rccl repository
-        if: false
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rccl"
           path: "rccl"
 
       - name: Checkout rccl-tests repository
-        if: false
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rccl-tests"
@@ -85,7 +74,6 @@ jobs:
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Runner Health Settings
-        if: false
         run: |
           ./build_tools/setup_ccache.py \
             --config-preset "github-oss-presubmit" \
@@ -108,17 +96,14 @@ jobs:
           git config fetch.parallel 10
 
       - name: Fetch sources
-        if: false
         run: |
           ./build_tools/fetch_sources.py --jobs 12
 
       - name: Install python deps
-        if: false
         run: |
           pip install -r requirements.txt
 
       - name: Configure Projects
-        if: false
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
@@ -128,21 +113,17 @@ jobs:
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist
-        if: false
         run: cmake --build build --target therock-dist
 
       - name: Build therock-archives
-        if: false
         run: cmake --build build --target therock-archives
 
       - name: Test Packaging
-        if: false
-        #if: ${{ github.event.repository.name == 'TheRock' }}
+        if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
           ctest --test-dir build --output-on-failure
 
       - name: Report
-        if: false
         #if: ${{ !cancelled() }}
         run: |
           echo "Full SDK du:"
@@ -206,7 +187,6 @@ jobs:
   ## WIP - Adding tests once build with TheRock and other submodules work
   multi-node-rccl-test:
     name: "Test multi-node-rccl-tests"
-    if: false
     #needs: [build_test_packages]
     runs-on: vultr-linux-rocm
 
