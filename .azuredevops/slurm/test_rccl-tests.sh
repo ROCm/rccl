@@ -15,7 +15,7 @@ module load rocm/6.4.1
 
 if [ "$ENABLE_COVERAGE" = "true" ]; then
     cd $RCCL_TEST_INFRA_DIR || exit
-    TEST_INFRA_WORK_DIR=$BINARIES_DIR CODE_COV=1  ENABLE_MSCCLPP=0 ./run.sh -c config/"$INFRA_TEST_CONFIG".json -B -C -O --use-slurm --slurm-time="$TESTS_TIMEOUT" --slurm-partition=gt --slurm-nodes="$NUM_NODES" --work_dir="$BINARIES_DIR"
+    TEST_INFRA_WORK_DIR=$BINARIES_DIR CODE_COV=1 ENABLE_MSCCLPP=0 ./run.sh -c config/"$INFRA_TEST_CONFIG".json -B -C -O --skip-build --use-slurm --slurm-time="$TESTS_TIMEOUT" --slurm-partition=gt --slurm-nodes="$NUM_NODES"
     cd slurm_runs_"$INFRA_TEST_CONFIG_"* || exit
 
     FILE="rawprofiles.list"
