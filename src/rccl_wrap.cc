@@ -33,7 +33,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     userProtocolInput = !protoStr ? 0 : 1;
   }
 
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce)) {
+  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
     auto llMax = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MAX_IDX];
@@ -124,11 +124,14 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   static int pxnDisable = RCCL_VALUE_UNSET;
   if(pxnDisable == RCCL_VALUE_UNSET) {
     const char *inputStr = getenv("NCCL_PXN_DISABLE");
-    if(!IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || inputStr) {
+    const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
+    const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
+    if((!archGfx942 && !archGfx950) || inputStr) {
       rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
       return;
     }
-    pxnDisable = (comm->nRanks >= 64)? 0 : 1;
+    const int ranksThreshold = (archGfx942)? 64 : 32;
+    pxnDisable = (comm->nRanks >= ranksThreshold)? 0 : 1;
     INFO(NCCL_INIT, "RCCL PXN set as %s", !pxnDisable? "enabled" : "disabled");
   }
   rcclPxnDisable = pxnDisable;
@@ -138,11 +141,19 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
   static int p2pNetChunkSize = RCCL_VALUE_UNSET;
   if(p2pNetChunkSize == RCCL_VALUE_UNSET) {
     const char *inputStr = getenv("NCCL_P2P_NET_CHUNKSIZE");
-    if(!IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") || inputStr) {
+    const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
+    const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
+    if((!archGfx942 && !archGfx950) || inputStr) {
       rcclP2pNetChunkSize = p2pNetChunkSize = RCCL_VALUE_INVALID;
       return;
     }
-    p2pNetChunkSize = (comm->nRanks >= 64)? (1 << 19) : (1 << 17);
+
+    if(archGfx942)
+      p2pNetChunkSize = (comm->nRanks >= 64)? (1 << 19) : (1 << 17);
+    else  if(archGfx950)
+      p2pNetChunkSize = (comm->nRanks >= 32) ? (1 << 19) : (comm->nRanks >= 16 ? (1 << 18) : (1 << 17));
+    else
+      WARN("RCCL P2P attempt to set P2P net chunk size for unsupported arch: %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
     INFO(NCCL_INIT, "RCCL P2P net chunk size default set to: %d", p2pNetChunkSize);
   }
   rcclP2pNetChunkSize = p2pNetChunkSize;
