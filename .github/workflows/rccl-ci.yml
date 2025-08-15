@@ -137,7 +137,7 @@ jobs:
 
       - name: Test Packaging
         if: false
-        if: ${{ github.event.repository.name == 'TheRock' }}
+        #if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
           ctest --test-dir build --output-on-failure
 
