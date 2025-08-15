@@ -1238,7 +1238,7 @@ static void waitWorkFifoAvailable(struct ncclComm* comm, uint32_t desiredProduce
       warned = 1;
       WARN("Waiting for work FIFO to become available. "
            "Work fifo exhaustion can happen in large scale/high iteration count of alltoall. "
-           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %ld).\n\n"
+           "In order to increase work FIFO size, set NCCL_WORK_FIFO_BYTES to higher number (current: %d).\n\n"
            "RCCL continues to retry...", comm->workFifoBytes);
     }
 
@@ -1776,7 +1776,7 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     ncclIntruQueueConstruct(&planner->planQueue);
 
     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch
+    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler warning
     cudaStream_t deviceStream, launchOrder;
 
     if (capturing || planner->numStreams != 1) {

@@ -618,7 +618,7 @@ __device__ __attribute__((noinline)) void reduceCopyPacksWithBias(
   thread = warp*WARP_SIZE + lane;
 }
 
-template<int Unroll, typename RedFn, typename T,
+template<int Unroll, int  useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn, typename AccPtrFn>
@@ -641,7 +641,7 @@ __device__ __forceinline__ void reduceCopy(
 
   IntBytes nBytesBehind = 0;
   IntBytes nBytesAhead = nElts*sizeof(T);
-  bool useAcc = accPtrFn() != nullptr;
+  //bool useAcc = accPtrFn() != nullptr;
 
   #if __cpp_if_constexpr
   if constexpr (BigPackSize > sizeof(T)) {
@@ -763,7 +763,7 @@ __device__ __forceinline__ void reduceCopy(
      nSrcs, srcPtrFn, nDsts, dstPtrFn, /*&*/nBytesBehind, /*&*/nBytesAhead);
 }
 
-template<int Unroll, typename RedFn, typename T,
+template<int Unroll, int useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes>
@@ -773,7 +773,7 @@ __device__ __forceinline__ void reduceCopy(
     int nSrcs, void** srcPtrs, int nDsts, void** dstPtrs,
     IntBytes nElts, void *accPtr = nullptr
   ) {
-  reduceCopy<Unroll, RedFn, T,
+  reduceCopy<Unroll, useAcc, RedFn, T,
              MultimemSrcs, MinSrcs, MaxSrcs,
              MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes>
     (thread, nThreads, redArg, preOpArgs, postOp,

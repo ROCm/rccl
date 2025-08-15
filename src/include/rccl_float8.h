@@ -73,11 +73,6 @@ inline __device__  rccl_float8 hadd(rccl_float8 x, rccl_float8 y)
     u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(v1, v1, /* scale */ 1.f, 0);
     return u.fp8[0];
 #elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
-     union
-    {
-        uint32_t i32val;
-        rccl_float8 i8val[4];
-    } val;
 
     float2_t v;
     uint32_t ival = 0;
@@ -235,7 +230,7 @@ namespace rocblas_hip_f8_impl
         else
             x = reinterpret_cast<uint16_t&>(_x);
 
-        uint32_t y, head, mantissa;
+        uint32_t head, mantissa;
         int      exponent, bias;
         uint32_t sign;
 

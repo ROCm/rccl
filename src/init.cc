@@ -501,7 +501,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclNetFinalize(comm));
   NCCLCHECK(ncclNetPluginUnload(comm));
 
-  ncclCudaContextDrop(comm->context);
+  // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
+  //ncclCudaContextDrop(comm->context);
 
   free(comm);
 
@@ -599,7 +600,8 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   comm->lastStream = nullptr;
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
 
-  NCCLCHECK(ncclCudaContextTrack(&comm->context));
+  // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
+  //NCCLCHECK(ncclCudaContextTrack(&comm->context));
 
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   char busId[]="0000:00:00.0";
@@ -707,7 +709,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   int nRanks = comm->nRanks;
   struct ncclDevCommAndChannels tmpCommAndChans;
   struct ncclDevCommAndChannels *devCommAndChans = NULL;
-  struct ncclNvmlCCStatus ccStatus;
+  //struct ncclNvmlCCStatus ccStatus; //unused variable - compiler warning
   bool ccEnable = false;
   cudaStream_t deviceStream;
 
@@ -1880,9 +1882,6 @@ fail:
 static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   struct ncclCommInitRankAsyncJob* job = (struct ncclCommInitRankAsyncJob*)job_;
   ncclComm_t comm = job->comm;
-#ifdef ENABLE_MSCCLPP
-  ncclUniqueId origUniqueId = *job->commId;
-#endif
   ncclResult_t res = ncclSuccess;
   int archMajor, archMinor;
   size_t maxLocalSizeBytes = 0;
@@ -1893,8 +1892,10 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   double sum_timers = 0;
   uint64_t timers[TIMERS_INIT_COUNT] = {0};
   unsigned long long commIdHash;
+  #ifdef USE_INDIRECT_FUNCTION_CALL
   int64_t stackSize;
   hipDeviceProp_t devProp;
+  #endif
 
   timers[TIMER_INIT_TOTAL] = clockNano();
   CUDACHECKGOTO(cudaSetDevice(cudaDev), res, fail);

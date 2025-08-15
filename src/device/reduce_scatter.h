@@ -178,7 +178,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
 
     static constexpr int nworkers = NCCL_PAT_NWORKERS;
     struct ncclPatShmem* shmem = (struct ncclPatShmem*)ncclScratchForWarp(0);
-    uint64_t pollCount = 0;
+    //uint64_t pollCount = 0; unused variable - compiler warning
     __syncthreads(); // Don't start using shared mem until everyone arrives
     for (int i=tid; i<NCCL_SHMEM_PAT_STEPS; i+=nthreads) shmem->patSteps[i].flags = 0;
     if (tid == 0) shmem->localAccSize = 0;
@@ -188,11 +188,14 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
     if (tid == nworkers) { // Algo computation thread
       PatRSAlgorithm<T> patAlgo(chunkCount*sizeof(T), NCCL_STEPS, NCCL_PAT_NWORKERS/WARP_SIZE, channelOffset, channelOffset + channelCount, count, chunkCount, rank, nranks);
       int parallelFactor = shmem->parallelFactor = patAlgo.getParallelFactor();
+      (void)parallelFactor;// unused variable - compiler warning
       int step = 0;
       while (1) {
         struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
         int* poll = &ps->flags;
-        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) != 0) pollCount++; // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
+        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) != 0){
+          //pollCount++;// unused variable - compiler warning // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
+        }
         patAlgo.getNextOp(ps);
         int last = ps->last;
         step++;
@@ -217,7 +220,9 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
       while(1) {
         struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
         int* poll = &ps->flags;
-        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) == 0) pollCount++; // Wait for compute thread
+        while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) == 0) {
+          //pollCount++; // unused variable - compiler warning // Wait for compute thread
+        }
         int last = ps->last;
         prims.patReduce(ps, shmem);
         if (tidInGroup == 0) __hip_atomic_store(poll, 0, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); // Return element to compute thread
@@ -253,7 +258,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
     if (!work->regUsed) {
       if (tid < tidEndScatter) {
         // Scatter
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanAsymmetric<0, NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsScatter, NULL, nvls->up, work->sendbuff, NULL,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -265,7 +270,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
         // coverity[overrun-call] => Coverity think prims.index can be greater than 1
       } else if (tid < tidEndReduce) {
         // Reduce through NVLS
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 1, 0>;
         Primitives<T, RedOp, FanAsymmetric<1, 0>, /*Direct=*/0, Proto, 0>
           prims(tid - tidEndScatter, nThreadsReduce, &nvls->down, NULL, NULL, work->recvbuff,
             work->redOpArg, 3 * Proto::MaxGroupWidth, 0, 0);
@@ -278,7 +283,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
     } else {
       if (tid < tidEndScatter) {
         // Scatter
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL>;
         Primitives<T, RedOp, FanSymmetric<NCCL_MAX_NVLS_ARITY>, /*Direct=*/0, Proto, 0>
           prims(tid, nThreadsScatter, nvls->up, nvls->up, NULL, NULL,
             work->redOpArg, 0 * Proto::MaxGroupWidth, 1, 1);
@@ -290,7 +295,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_NVLS, NCCL_PROTO_S
         prims.gather(0, 0, 0, 0, -1, 0);
       } else if (tid < tidEndReduce) {
         // Reduce through NVLS
-        using Proto = ProtoSimple<1, 1, COLL_UNROLL, 1, 0>;
+        using Proto = ProtoSimple<1, 1, USE_ACC, COLL_UNROLL, 1, 0>;
         Primitives<T, RedOp, FanSymmetric<1>, /*Direct=*/1, Proto, 0>
           prims(tid - tidEndScatter, nThreadsReduce, &nvls->down, &nvls->down, NULL, work->recvbuff,
             work->redOpArg, 3 * Proto::MaxGroupWidth, 0, 0, work);

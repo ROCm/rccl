@@ -286,14 +286,17 @@ ncclResult_t ncclTopoCheckP2p(struct ncclComm* comm, struct ncclTopoSystem* syst
     // GPU not found, we can't use p2p.
     return ncclSuccess;
   }
-
+  #if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
   int intermediateIndex = -1;
+  #endif
   // Set intermediate GPU rank, if routing through an intermediate GPU.
   struct ncclTopoLinkList* path = gpu1->paths[GPU]+g2;
   if (path->count == 2) {
     struct ncclTopoNode* intermediateNode = path->list[0]->remNode;
     if (intermediateNode->type == GPU) {
+      #if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
       intermediateIndex = intermediateNode - system->nodes[GPU].nodes;
+      #endif
       if (intermediateRank) *intermediateRank = intermediateNode->gpu.rank;
     }
   }
@@ -324,8 +327,7 @@ compare:
   // Compute the PCI distance and compare with the p2pLevel.
   if (path->type <= p2pLevel) *p2p = 1;
 
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-#else
+#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
   if (*p2p == 1) {
     // NCCL_IGNORE_DISABLED_P2P=2 is used by unit tests that don't want to
     // validate against NVML at all since they are pretending to be on other hw.
@@ -515,10 +517,10 @@ ncclResult_t ncclTopoNeedFlush(struct ncclComm* comm, int64_t netId, int netDev,
   int g;
   struct ncclTopoSystem* system = comm->topo;
   NCCLCHECK(ncclTopoRankToIndex(system, rank, &g));
-  struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   *flush = 1;
 #else
+  struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g; // unused variable - compiler warning
   // Flush is required on Ampere and earlier
   if (gpu->gpu.cudaCompCap >= 90) *flush = 0;
   // On C2C platforms, data could go through a PCI switch while completions and

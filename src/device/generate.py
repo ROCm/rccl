@@ -4,14 +4,15 @@ import sys
 import subprocess
 
 # Order of redops, tys, protos, algos must match src/include/device.h
-all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
+all_colls =  ["AllGather","AllReduce","AllReduceWithBias","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING", "PAT"]
 all_unroll = ["1", "2", "4"]
+use_acc    = ["0", "1"]
 
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, use_acc, all_unroll]
 
 ################################################################################
 # The first command line argument is the path to the directory to generate and
@@ -76,43 +77,47 @@ func_pattern = sys.argv[6:7]
 if func_pattern and func_pattern[0]:
   func_pattern = func_pattern[0]
 else:
-  func_pattern = "AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
+  func_pattern = "AllGather|AllReduce|AllReduceWithBias|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
 
 ################################################################################
 
 algos_of_coll = {
-  "AllGather":     ["RING", "PAT"],
-  "AllReduce":     ["RING", "TREE"],
-  "AllToAllPivot": ["RING"],
-  "Broadcast":     ["RING"],
-  "Reduce":        ["RING"],
-  "ReduceScatter": ["RING", "PAT"],
-  "SendRecv":      ["RING"]
+  "AllGather":             ["RING", "PAT"],
+  "AllReduce":             ["RING", "TREE"],
+  "AllReduceWithBias":     ["RING", "TREE"],
+  "AllToAllPivot":         ["RING"],
+  "Broadcast":             ["RING"],
+  "Reduce":                ["RING"],
+  "ReduceScatter":         ["RING", "PAT"],
+  "SendRecv":              ["RING"]
 }
 
 protos_of_coll = {
-  "AllGather":     all_protos,
-  "AllReduce":     all_protos,
-  "AllToAllPivot": ["SIMPLE"],
-  "Broadcast":     all_protos,
-  "Reduce":        all_protos,
-  "ReduceScatter": all_protos,
-  "SendRecv":      ["SIMPLE"]
+  "AllGather":              all_protos,
+  "AllReduce":              all_protos,
+  "AllReduceWithBias":      all_protos,
+  "AllToAllPivot":          ["SIMPLE"],
+  "Broadcast":              all_protos,
+  "Reduce":                 all_protos,
+  "ReduceScatter":          all_protos,
+  "SendRecv":               ["SIMPLE"]
 }
 
 redops_of_coll = {
-  "AllGather":     ["Sum"],
-  "AllReduce":     all_redops,
-  "AllToAllPivot": ["Sum"],
-  "Broadcast":     ["Sum"],
-  "Reduce":        all_redops,
-  "ReduceScatter": all_redops,
-  "SendRecv":      ["Sum"]
+  "AllGather":            ["Sum"],
+  "AllReduce":            all_redops,
+  "AllReduceWithBias":    all_redops,
+  "AllToAllPivot":        ["Sum"],
+  "Broadcast":            ["Sum"],
+  "Reduce":               all_redops,
+  "ReduceScatter":        all_redops,
+  "SendRecv":             ["Sum"]
 }
 
 tys_of_coll = {
   "AllGather":     ["i8"],
   "AllReduce":     all_tys,
+  "AllReduceWithBias":     all_tys,
   "AllToAllPivot": ["i8"],
   "Broadcast":     ["i8"],
   "Reduce":        all_tys,
@@ -121,11 +126,12 @@ tys_of_coll = {
 }
 
 coll_camel_to_lower = {
-  "AllGather":     "all_gather",
-  "AllReduce":     "all_reduce",
-  "AllToAllPivot": "alltoall_pivot",
-  "Broadcast":     "broadcast",
-  "Reduce":        "reduce",
+  "AllGather":             "all_gather",
+  "AllReduce":             "all_reduce",
+  "AllReduceWithBias":     "allreduce_with_bias",
+  "AllToAllPivot":         "alltoall_pivot",
+  "Broadcast":             "broadcast",
+  "Reduce":                "reduce",
   "ReduceScatter": "reduce_scatter",
   "SendRecv":      "sendrecv"
 }
@@ -174,7 +180,11 @@ def calc_unroll_for_local_arch():
     return all_unroll
 
 # Helper function to check if the conditions for the collective is being met
-def func_validate(coll, algo, proto, redop, ty, unroll):
+def func_validate(coll, algo, proto, redop, ty, acc, unroll):
+  if acc == "1" and coll != "AllReduceWithBias":
+    return False
+  if acc == "0" and coll == "AllReduceWithBias":
+    return False
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
   if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll:
@@ -222,10 +232,10 @@ def func_filter(function_params, current_idx, item_list=None):
         # For each loop layer remove the last element in item_list
         item_list.pop()
   else:
-    coll, algo, proto, redop, ty, unroll = item_list
+    coll, algo, proto, redop, ty, acc, unroll = item_list
 
-    if func_validate(coll, algo, proto, redop, ty, unroll):
-      yield(coll, algo, proto, redop, ty, unroll)
+    if func_validate(coll, algo, proto, redop, ty, acc, unroll):
+      yield(coll, algo, proto, redop, ty, acc, unroll)
 
 # Parse ONLY_FUNCS input and feed it to func_filter
 def parse_input(func_pattern):
@@ -245,33 +255,35 @@ def parse_input(func_pattern):
 
 # Maps functions to the chosen representative for the equivalence class it
 # belongs to. For instance (sum, signed int) maps to (sum, unsigned int).
-def equivalent_primary(coll, algo, proto, redop, ty, unroll):
-  if coll in ("AllReduce", "Reduce", "ReduceScatter"):
+def equivalent_primary(coll, algo, proto, redop, ty, acc, unroll):
+  if coll in ("AllReduce", "AllReduceWithBias", "Reduce", "ReduceScatter"):
     # map signed integer sum/prod to unsigned
     if redop in ("Sum","Prod","PreMulSum","SumPostDiv") and ty[0]=="i":
       ty = "u"+ty[1:]
     # map signed integer min/max to unsigned for non-NVLS
     elif redop=="MinMax" and ty[0]=="i" and ("NVLS" not in algo):
       ty = "u"+ty[1:]
-  return (coll, algo, proto, redop, ty, unroll)
+  return (coll, algo, proto, redop, ty, acc, unroll)
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
 def enumerate_func_rows():
-  for unroll in all_unroll:
-    for coll in all_colls:
-      for algo in all_algos:
-        for proto in all_protos:
-          for redop in all_redops:
-            for ty in all_tys:
-              if func_validate(coll, algo, proto, redop, ty, unroll):
-                yield (coll, algo, proto, redop, ty, unroll)
+  for acc in use_acc:
+    for unroll in all_unroll:
+      for coll in all_colls:
+        for algo in all_algos:
+          for proto in all_protos:
+            for redop in all_redops:
+              for ty in all_tys:
+                  if func_validate(coll, algo, proto, redop, ty, acc, unroll):
+                    yield (coll, algo, proto, redop, ty, acc, unroll)
 
 # Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
 def custom_sort_key(fn):
-    coll, algo, proto, redop, ty, unroll = fn
+    coll, algo, proto, redop, ty, acc, unroll = fn
     
     return (
         all_unroll.index(unroll),
+        use_acc.index(acc),
         all_colls.index(coll),
         all_algos.index(algo),
         all_protos.index(proto),
@@ -320,7 +332,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_1[] = {\n")
   index1 = 0
   for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
+    coll, algo, proto, redop, ty, acc, unroll = fn
     if unroll != "1": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
@@ -337,7 +349,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_2[] = {\n")
   index2 = 0
   for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
+    coll, algo, proto, redop, ty, acc, unroll = fn
     if unroll != "2": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
@@ -354,7 +366,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
   index4 = 0
   for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
+    coll, algo, proto, redop, ty, acc, unroll = fn
     if unroll != "4": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
@@ -469,7 +481,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
 # Maps to .cu filename which implements this func. The only constraint is that
 # "coll" is reflected in the name: formally that no two funcs having different
 # coll's map to the same filename.
-def impl_filename(coll, algo, proto, redop, ty, unroll):
+def impl_filename(coll, algo, proto, redop, ty, acc, unroll):
   return "%s.cpp" % paste("_", coll_camel_to_lower[coll], redop and redop.lower(), ty)
 
 # Partition the functions and kernels to the .cu filenames. The partition is
@@ -518,6 +530,8 @@ for name in name_to_funcs.keys():
     print("-- Generating %s" % os.path.join(gensrc, name))
 
     out = f.write
+    if coll == "AllReduceWithBias":
+      coll = "AllReduce"
     out(
       '#include "common.h"\n'
       '#include "{lower_coll}.h"\n'
@@ -525,14 +539,14 @@ for name in name_to_funcs.keys():
     )
 
     for fn in fns:
-      (coll, algo, proto, redop, ty, unroll) = fn
-      sym = paste("_", coll, algo, proto, redop, ty, unroll)
+      (coll, algo, proto, redop, ty, acc, unroll) = fn
+      sym = paste("_", coll, algo, proto, redop, ty, acc, unroll)
       if proto == "LL128":
         out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
       out(
-        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
+        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {acc}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
-                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll)
+                algo=(algo or "RING"), proto=(proto or "SIMPLE"), acc=acc, unroll=unroll)
       )
       if proto == "LL128":
         out("#endif\n")
