@@ -21,13 +21,13 @@
 HIP_FILE=$1
 
 if [[ "$HIP_FILE" =~ .*/src/device/.*\.h ]]; then
-  perl -pi -e 's/(template<typename T, typename RedOp(?:, typename Proto)?)(, bool isNetOffload.*?)?>/\1, int COLL_UNROLL\2>/g' "$HIP_FILE"
-  perl -pi -e 's/(ProtoSimple<[^,]*?,[^,]+?)>/\1, COLL_UNROLL>/g' "$HIP_FILE"
-  perl -pi -e 's/(runRing<T.*?)((, (true|false))?>\()/\1, COLL_UNROLL\2/g' "$HIP_FILE"
-  perl -pi -e 's/(runTreeUpDown<T.*?)>\(/\1, COLL_UNROLL>(/' "$HIP_FILE"
-  perl -pi -e 's/(runTreeSplit<T.*?)>\(/\1, COLL_UNROLL>(/' "$HIP_FILE"
-  sed -i "s/\\(struct RunWorkColl<ncclFunc[^>]*\\)>*/\\1, COLL_UNROLL>/" "$HIP_FILE"
-  sed -i "s/\\(struct RunWorkBatch<ncclFunc[^>]*\\)>*/\\1, COLL_UNROLL>/" "$HIP_FILE"
+  perl -pi -e 's/(template<typename T, typename RedOp(?:, typename Proto)?)(, bool isNetOffload.*?)?>/\1, int USE_ACC, int COLL_UNROLL\2>/g' "$HIP_FILE"
+  perl -pi -e 's/(ProtoSimple<[^,]*?,[^,]+?)>/\1, USE_ACC, COLL_UNROLL>/g' "$HIP_FILE"
+  perl -pi -e 's/(runRing<T.*?)((, (true|false))?>\()/\1, USE_ACC, COLL_UNROLL\2/g' "$HIP_FILE"
+  perl -pi -e 's/(runTreeUpDown<T.*?)>\(/\1, USE_ACC, COLL_UNROLL>(/' "$HIP_FILE"
+  perl -pi -e 's/(runTreeSplit<T.*?)>\(/\1, USE_ACC, COLL_UNROLL>(/' "$HIP_FILE"
+  sed -i "s/\\(struct RunWorkColl<ncclFunc[^>]*\\)>*/\\1, USE_ACC, COLL_UNROLL>/" "$HIP_FILE"
+  sed -i "s/\\(struct RunWorkBatch<ncclFunc[^>]*\\)>*/\\1, USE_ACC, COLL_UNROLL>/" "$HIP_FILE"
+  echo "Added COLL_UNROLL and USE_ACC template arguments to $HIP_FILE"
 
-  echo "Added COLL_UNROLL template argument to $HIP_FILE"
 fi

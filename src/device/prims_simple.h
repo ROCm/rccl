@@ -10,7 +10,6 @@
 #include "npkit/npkit.h"
 #endif
 
-#include "device/gfx9_threadfence.h"
 #include "device/rccl_metadata.h"
 #include "msccl/msccl_struct.h"
 #include "network/unpack/unpack.h"
@@ -23,9 +22,9 @@ enum primsMode {
 };
 
 template<typename T, typename RedOp, typename Fan, int Direct,
-         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload, int Metadata>
+         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload, int Metadata, int useAcc>
 class Primitives<
-    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload, Metadata
+    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, useAcc, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload, Metadata
   > {
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
   static constexpr int Input=0, Output=1;
@@ -68,6 +67,7 @@ class Primitives<
   uint64_t* barriers_pat;
   uint64_t barrier_next_pat = 0;
   int repeat;
+  bool skip_fence = 0;
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -201,9 +201,14 @@ private:
 
   template<int Recv, int Send>
   inline __device__ void postPeer(bool dataStored) {
-    if (Send && (flags & RolePostSend) && dataStored){
+    if (skip_fence){
+      __atomic_signal_fence(__ATOMIC_SEQ_CST);
+      barrier_generic(asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)"), nworkers, barrier_next, barriers);
+      __atomic_signal_fence(__ATOMIC_SEQ_CST);
+    }
+    else if((flags & RolePostSend) && dataStored){
 #ifdef __GFX9__
-    gfx9ThreadFence<isOneNodeRingSimple(Metadata) && RCCL_CHEAP_THREADFENCE_OK_SOMETIMES>();
+    __threadfence();
 #else
     __threadfence_system();
 #endif
@@ -299,7 +304,7 @@ private:
             }
 #endif
 
-            reduceCopy<Unroll, RedOp, T, 0, 1, 1, 0, 1, MaxSend, /*PreOpSrcs*/0>
+            reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, MaxSend, /*PreOpSrcs*/0>
               (tid, nworkers, /*redArg*/0, /*preOpArgs*/nullptr, /*postOp*/false,
               1, ncclShmem.groups[group].srcs,
               fan.nsend(), ncclShmem.groups[group].dsts+1,
@@ -335,7 +340,7 @@ private:
           }
 #endif
 
-          reduceCopy<Unroll, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs*/0>
+          reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs*/0>
             (tid, nworkers, ncclShmem.redOpArgs[0],  nullptr, postOp,
             Recv, ncclShmem.groups[group].srcs,
             Dst, ncclShmem.groups[group].dsts,
@@ -373,7 +378,7 @@ private:
                                     DirectRecv*MaxRecv == NCCL_MAX_DIRECT_ARITY ? (1+NCCL_MAX_DIRECT_ARITY) : 1;
           if (Send && Dst && ncclShmem.groups[group].dsts[1] == nullptr) {
             // this case should only be directCopySend() with registered buffers and send to net peer
-            reduceCopy<Unroll, RedOp, T,
+            reduceCopy<Unroll, useAcc, RedOp, T,
               0, Recv + Src, Recv * MaxRecv + Src,
               0, 1, 1, PreOpSrcs>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
@@ -381,7 +386,7 @@ private:
                 1, ncclShmem.groups[group].dsts,
                 workSize);
           } else {
-            reduceCopy<Unroll, RedOp, T,
+            reduceCopy<Unroll, useAcc, RedOp, T,
               MultimemSrcs, Recv + Src, Recv * MaxRecv + Src,
               MultimemDsts, Send + Dst, Send * MaxSend + Dst, PreOpSrcs>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
@@ -453,19 +458,19 @@ private:
         srcs[nsrcs] = dsts[0];
         nsrcs++;
         if (MULTISRCS){
-          reduceCopy<Unroll, RedOp, T, 0, 3, MSCCL_MAX_REDUCE_FUSION, 0, 1, 1, 0>
+          reduceCopy<Unroll, useAcc, RedOp, T, 0, 3, MSCCL_MAX_REDUCE_FUSION, 0, 1, 1, 0>
             (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nsrcs, (void **)srcs, 1, (void **)dsts, nelem);
         } else {
-          reduceCopy<Unroll, RedOp, T, 0, 2, 2, 0, 1, 1, 0>
+          reduceCopy<Unroll, useAcc, RedOp, T, 0, 2, 2, 0, 1, 1, 0>
             (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, 2, (void **)srcs, 1, (void **)dsts, nelem);
         }
       }
       if (COPY){
-        reduceCopy<Unroll, RedOp, T, 0, 1, 1, 0, 1, 1, 0>
+        reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, 1, 0>
           (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, 1, (void **)srcs, 1, (void **)dsts, nelem);
         if (MULTISRCS) {
           for (int i = 1; i < nsrcs; i++){
-            reduceCopy<Unroll, RedOp, T, 0, 1, 1, 0, 1, 1, 0>
+            reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, 1, 0>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, 1, (void **)&srcs[i], 1, (void **)&dsts[i], nelem);
           }
         }
@@ -617,7 +622,7 @@ private:
             void* src0 = (T*)ncclShmem.groups[group].srcs[0] + pOffset;
             ssize_t realPeerSize = min(realSize, totalElem-pOffset);
             if (realPeerSize > 0 && ncclShmem.groups[group].dsts[i] != nullptr) {
-              reduceCopy<Unroll, RedOp, T, 0, 1, 1, 0, 1, 1, PreOpSrcs>(tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, 1, &src0, 1, ncclShmem.groups[group].dsts+i, realPeerSize);
+              reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, 1, PreOpSrcs>(tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, 1, &src0, 1, ncclShmem.groups[group].dsts+i, realPeerSize);
               // Mark for threadfence at the end
               fenceNeeded |= true;
             }
@@ -637,7 +642,7 @@ private:
             void* dst0 = (T*)ncclShmem.groups[group].dsts[0] + pOffset;
             ssize_t realPeerSize = min(realSize, totalElem-pOffset);
             if (DirectRecv && ncclShmem.groups[group].srcs[i] == dst0) realPeerSize = 0;
-            if (realPeerSize > 0) reduceCopy<Unroll, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>(tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp, 1, ncclShmem.groups[group].srcs+i, 1, &dst0, realPeerSize);
+            if (realPeerSize > 0) reduceCopy<Unroll, useAcc, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>(tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp, 1, ncclShmem.groups[group].srcs+i, 1, &dst0, realPeerSize);
           }
         }
       }
@@ -868,6 +873,9 @@ public:
         ncclShmem.redOpArgs[0] = redOpArg;  // scaler for local input
       }
       patBarrier();
+    }
+    if(collWork){
+      skip_fence = !collWork -> gfx942CheapFenceOff;
     }
   }
 
@@ -1190,7 +1198,7 @@ public:
 
     int workSize = ncclShmem.aborted ? 0 : nelem;
 
-    reduceCopy<Unroll, RedOp, T, 0, 1, 2, 0, 1, 1, /*PreOpSrcs*/0>
+    reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 2, 0, 1, 1, /*PreOpSrcs*/0>
       (tid, nthreads, ncclShmem.redOpArgs[0],  nullptr, /*postOp=*/false,
       nSrcs, srcs, 1, ncclShmem.groups[group].dsts, workSize);
 
@@ -1284,7 +1292,7 @@ public:
 
     int workSize = ncclShmem.aborted ? 0 : nelem;
 
-    reduceCopy<Unroll, RedOp, T, 0, 1, 1, 0, 1, 2, /*PreOpSrcs*/0>
+    reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, 2, /*PreOpSrcs*/0>
       (tid, nthreads, ncclShmem.redOpArgs[0],  nullptr, /*postOp=*/false,
       1, ncclShmem.groups[group].srcs, nDsts, dsts, workSize);
 

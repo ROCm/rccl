@@ -247,10 +247,10 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 
     if (isCopy) {
 #if defined(__gfx942__) || defined(__gfx950__)
-      reduceCopy<COLL_UNROLL*2, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
+      reduceCopy<COLL_UNROLL*2, 0, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
         (subtid, subtn, 0, nullptr, false, 1, &work->sendAddr, 1, &work->recvAddr, (ssize_t)work->sendBytes);
 #else
-      reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
+      reduceCopy<COLL_UNROLL, 0, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/0>
         (subtid, subtn, 0, nullptr, false, 1, &work->sendAddr, 1, &work->recvAddr, (ssize_t)work->sendBytes);
 #endif
     } else if (isSend) {
@@ -258,9 +258,9 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
         runSend<ProtoLL>(subtid, subtn, group, work);
       } else {
 #if defined(__gfx90a__)
-        runSend<ProtoSimple<1,1,8>>(subtid, subtn, group, work);
+        runSend<ProtoSimple<1,1,0,8>>(subtid, subtn, group, work);
 #elif defined(__gfx908__) || defined(__gfx942__) || defined(__gfx950__)
-        runSend<ProtoSimple<1,1,4>>(subtid, subtn, group, work);
+        runSend<ProtoSimple<1,1,0,4>>(subtid, subtn, group, work);
 #else
         runSend<ProtoSimple<1,1>>(subtid, subtn, group, work);
 #endif
@@ -270,9 +270,9 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
         runRecv<ProtoLL>(subtid, subtn, group, work);
       } else {
 #if defined(__gfx90a__)
-        runRecv<ProtoSimple<1,1,8>>(subtid, subtn, group, work);
+        runRecv<ProtoSimple<1,1,0,8>>(subtid, subtn, group, work);
 #elif defined(__gfx908__) || defined(__gfx942__) || defined(__gfx950__)
-        runRecv<ProtoSimple<1,1,4>>(subtid, subtn, group, work);
+        runRecv<ProtoSimple<1,1,0,4>>(subtid, subtn, group, work);
 #else
         runRecv<ProtoSimple<1,1>>(subtid, subtn, group, work);
 #endif

@@ -91,7 +91,7 @@ namespace {
     } else if (inputBuf != outputBuf && rank == root) {
       inputBuf = inputBuf + gridOffset;
       outputBuf = outputBuf + gridOffset;
-      reduceCopy<COLL_UNROLL, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs=*/0>
+      reduceCopy<COLL_UNROLL, 0, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs=*/0>
         (tid - workNthreads, nthreads - workNthreads, work->redOpArg, &work->redOpArg, false, 1, (void**)&inputBuf, 1, (void**)&outputBuf, channelCount);
     }
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_BROADCAST_RING_EXIT)

@@ -10,9 +10,9 @@
 #include "npkit/npkit.h"
 #endif
 
-template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload>
-class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
-  public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>> {
+template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload, int useAcc>
+class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, useAcc>:
+    public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, useAcc>> {
 
   // In the case of Fan::MaxRecv == 0, we need to force MaxRecv to 1 for this to compile
   // This is because of a recv buffer which is allocated to MaxRecv length in send-only cases
@@ -437,7 +437,7 @@ private:
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
     T *dstElts = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
-    T *accElts = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : userBufs[Acc] + dstIx;
+    T *accElts = (DstBuf == -1 || !useAcc) ? nullptr : userBufs[Acc] + dstIx;
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;

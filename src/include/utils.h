@@ -12,6 +12,7 @@
 #include "bitops.h"
 #include "checks.h"
 #include <stdint.h>
+#include <string.h>
 #include <time.h>
 #include <sched.h>
 #include <algorithm>
