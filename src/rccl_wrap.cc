@@ -100,6 +100,17 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
   }
 }
 
+void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
+  info->pipeline = 0; // Default to no pipelining
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
+    if(info->datatype == ncclBfloat16) {
+     if (comm->nNodes == 1 || (comm->nNodes > 1 &&  nBytes <= (512 * 1024 * 1024) * (1 << (log2i(comm->nNodes) - 1)))) {
+        info->pipeline = 1;
+      }
+    }
+  }
+}
+
 extern ncclResult_t getAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* task,
     int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL
