@@ -56,7 +56,7 @@ namespace {
     // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
-    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0>
+    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, 0, Pipeline>
       prims(tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex);
 
 #if defined(ENABLE_NPKIT)
@@ -213,7 +213,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
       int nGroups = nworkers / groupSize;
       int tidInGroup = tid - group*groupSize;
       // We don't use recvPeers/sendPeers so let's pass shmem structs instead
-      Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
+      Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, 0, Pipeline> prims
         (tidInGroup, groupSize, (int*)shmem->recvDims, (int*)shmem->sendDims, inputBuf, outputBuf, work->redOpArg, group, 0, 0, nullptr, nullptr, 0, primsModePatRs);
 
       int step = group;

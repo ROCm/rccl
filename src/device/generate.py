@@ -3,31 +3,17 @@ import os
 import sys
 import subprocess
 
-<<<<<<< HEAD
-# Order of redops, tys, protos, algos must match src/include/device.h
-all_colls =  ["AllGather","AllReduce","AllReduceWithBias","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
-=======
 # Order of colls, redops, tys, protos, algos must match src/include/device.h
-all_colls = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
->>>>>>> c380955f (Refactor: Replace row-based lookup with hash-based logic in ncclDevFuncId)
+all_colls = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllReduceWithBias", "SendRecv", "", "", "AllToAllPivot"]
 all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING", "", "", "", "", "PAT"]
 all_unroll = ["1", "2", "4"]
-<<<<<<< HEAD
-<<<<<<< HEAD
 use_acc    = ["0", "1"]
-
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, use_acc, all_unroll]
-=======
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_unroll]
->>>>>>> c380955f (Refactor: Replace row-based lookup with hash-based logic in ncclDevFuncId)
-=======
 all_pipeline = ["0", "1"]
 pipelined_types = ["bf16"]
-all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_pipeline, all_unroll]
->>>>>>> 836fe995 (Support pipelining codegen and template specialization)
+all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, use_acc, all_pipeline, all_unroll]
 
 ################################################################################
 # The first command line argument is the path to the directory to generate and

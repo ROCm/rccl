@@ -14,7 +14,7 @@
 #endif
 
 namespace {
-  template<typename T, typename RedOp, typename Proto, int RCCLMetadata, int USE_ACC, int COLL_UNROLL>
+  template<typename T, typename RedOp, typename Proto, int RCCLMetadata>
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__)
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #else
@@ -61,7 +61,7 @@ namespace {
     // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
-    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata> prims
+    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata, Pipeline> prims
       (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
 
 #if defined(ENABLE_NPKIT)
@@ -252,7 +252,7 @@ namespace {
 #endif
 
     { // Reduce : max number of recv is 3, max number of send is 1 (binary tree + local)
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0> prims
+      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0, false, 0, Pipeline> prims
         (tid, nthreads, tree->down, &tree->up, work->sendbuff, work->recvbuff, work->redOpArg, 0, 0, 0, work);
 
 #if defined(ENABLE_NPKIT)
@@ -301,7 +301,7 @@ namespace {
     }
 
     { // Broadcast : max number of recv is 1, max number of send is 3 (binary tree + local)
-      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0> prims
+      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0, false, 0, Pipeline> prims
         (tid, nthreads, &tree->up, tree->down, work->sendbuff, work->recvbuff, work->redOpArg, 0, 0, 0, work);
 
 #if defined(ENABLE_NPKIT)
@@ -420,7 +420,7 @@ namespace {
 
     if (tree->up == -1) {
       // Reduce and broadcast. Max number of recv is 2, max number of send is 2
-      Primitives<T, RedOp, FanSymmetric<NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto,USE_ACC >
+      Primitives<T, RedOp, FanSymmetric<NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0, false, 0, Pipeline, USE_ACC>
         prims(tid, nthreads, tree->down, tree->down, work->sendbuff, work->recvbuff, work->redOpArg, 0, 0, 0, work);
 
 #if defined(ENABLE_NPKIT)
@@ -463,7 +463,7 @@ namespace {
       // Coverity reports that the callee treats &tree->up as an array.  However, due to the use of
       // FanAsymmetric<n, 1>, only the first element is ever accessed, so it's fine.
       // coverity[callee_ptr_arith:FALSE]
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0>
+      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0, false, 0, Pipeline>
         prims(tid, nthreadsSplit, tree->down, &tree->up, work->sendbuff, work->recvbuff, work->redOpArg, 0*Proto::MaxGroupWidth, 0, 0, work);
 
 #if defined(ENABLE_NPKIT)
@@ -508,7 +508,7 @@ namespace {
       // Coverity reports that the callee treats &tree->up as an array.  However, due to the use of
       // FanAsymmetric<1, n>, only the first element is ever accessed, so it's fine.
       // coverity[callee_ptr_arith:FALSE]
-      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0>
+      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0, false, 0, Pipeline>
         prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &tree->up, tree->down, work->sendbuff, work->recvbuff,
             work->redOpArg, 1*Proto::MaxGroupWidth, 0, 0, work);
 
@@ -560,7 +560,7 @@ namespace {
   }
 }
 
-#if defined(__gfx942__) || defined(__gfx950__) // Use a single slice per simple primitive for a single node on some GFX9 devices. 
+#if defined(__gfx942__) || defined(__gfx950__) // Use a single slice per simple primitive for a single node on some GFX9 devices.
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
@@ -579,7 +579,7 @@ namespace {
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-   rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work);    
+   rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work);
   }
 };
 

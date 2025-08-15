@@ -223,7 +223,6 @@ REDUCE_INLINE_ATTR static void run(
 
 };
 
-#ifdef RCCL_ENABLE_SW_PIPELINE
 template <typename RedFn, typename SrcPtrFn, typename IntBytes, int MultimemSrcs, int MinSrcs, int MaxSrcs, int PreOpSrcs, int Unroll, int BytePerPack>
 __device__ __forceinline__ void loadSources(
   const RedFn& redFn,
@@ -436,7 +435,6 @@ REDUCE_INLINE_ATTR static void run(
   thread = warp*WARP_SIZE + lane;
 }
 };
-#endif
 
 template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
