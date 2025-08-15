@@ -39,10 +39,13 @@ typedef enum {
 
 typedef void (*ncclDebugLogger_t)(ncclDebugLogLevel level, unsigned long flags, const char *file, int line, const char *fmt, ...);
 
+<<<<<<< HEAD
 #define NCCL_NUM_ONERANK 12
 #define AR_WITH_BIAS_FUNC_COUNTS 324
 #define FUNC_INDEX_TOTAL 821 + AR_WITH_BIAS_FUNC_COUNTS + NCCL_NUM_ONERANK
 
+=======
+>>>>>>> cb40ec4f (Remove need for FUNC_INDEX_TOTAL)
 #define NCCL_NUM_FUNCTIONS 5 // Send/Recv not included for now
 typedef enum {
   ncclFuncBroadcast = 0,

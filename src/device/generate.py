@@ -461,7 +461,7 @@ if is_colltrace:
     out("\n")
 
     seen_fns = set()
-    out("const char* funcNames[FUNC_INDEX_TOTAL] = {\n")
+    out("const char* funcNames[] = {\n")
     for fn in primary_funcs:
       fn_no_unroll = fn[:-1]
       if fn_no_unroll not in seen_fns:

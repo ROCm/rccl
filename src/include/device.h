@@ -30,7 +30,7 @@ extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
 
-extern const char* funcNames[FUNC_INDEX_TOTAL];
+extern const char* funcNames[];
 
 #define NCCL_MAX_OPS 2048
 #define NCCL_STEPS 8
