@@ -453,6 +453,7 @@ set(SRC_FILES
   src/device/reduce.h
   src/device/reduce_kernel.h
   src/device/reduce_scatter.h
+  src/device/rccl_asm.h
   src/device/rccl_metadata.h
   src/device/sendrecv.h
   src/device/common.cu
