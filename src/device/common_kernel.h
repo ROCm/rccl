@@ -653,12 +653,8 @@ __device__ __forceinline__ void reduceCopy(
 
   IntBytes nBytesBehind = 0;
   IntBytes nBytesAhead = nElts*sizeof(T);
-<<<<<<< HEAD
   //bool useAcc = accPtrFn() != nullptr;
 
-=======
-  bool useAcc = accPtrFn() != nullptr;
->>>>>>> 836fe995 (Support pipelining codegen and template specialization)
   #if __cpp_if_constexpr
   if constexpr (BigPackSize > sizeof(T)) {
   #else
@@ -772,9 +768,7 @@ __device__ __forceinline__ void reduceCopy(
      nSrcs, srcPtrFn, nDsts, dstPtrFn, /*&*/nBytesBehind, /*&*/nBytesAhead);
 }
 
-<<<<<<< HEAD
-template<int Unroll, int useAcc, typename RedFn, typename T,
-=======
+
 struct PtrFn {
   void** ptrs;
   __device__ void* operator()(int i) const { return ptrs[i]; }
@@ -785,8 +779,7 @@ struct AccPtrFn {
   __device__ void* operator()() const { return ptr; }
 };
 
-template<int Unroll, typename RedFn, typename T,
->>>>>>> 836fe995 (Support pipelining codegen and template specialization)
+template<int Unroll, int useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, int Pipeline = 0>

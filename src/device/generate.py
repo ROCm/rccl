@@ -116,24 +116,25 @@ redops_of_coll = {
 }
 
 tys_of_coll = {
-  "AllGather":     ["i8"],
-  "AllReduce":     all_tys,
+  "AllGather":             ["i8"],
+  "AllReduce":             all_tys,
   "AllReduceWithBias":     all_tys,
-  "AllToAllPivot": ["i8"],
-  "Broadcast":     ["i8"],
-  "Reduce":        all_tys,
-  "ReduceScatter": all_tys,
-  "SendRecv":      ["i8"]
+  "AllToAllPivot":         ["i8"],
+  "Broadcast":             ["i8"],
+  "Reduce":                all_tys,
+  "ReduceScatter":         all_tys,
+  "SendRecv":              ["i8"]
 }
 
 pipelines_of_coll = {
-  "AllGather":     ["0"],
-  "AllReduce":     all_pipeline,
-  "AllToAllPivot": ["0"],
-  "Broadcast":     ["0"],
-  "Reduce":        all_pipeline,
-  "ReduceScatter": all_pipeline,
-  "SendRecv":      ["0"]
+  "AllGather":             ["0"],
+  "AllReduce":             all_pipeline,
+  "AllReduceWithBias":     ["0"],
+  "AllToAllPivot":         ["0"],
+  "Broadcast":             ["0"],
+  "Reduce":                all_pipeline,
+  "ReduceScatter":         all_pipeline,
+  "SendRecv":              ["0"]
 }
 
 coll_camel_to_lower = {
