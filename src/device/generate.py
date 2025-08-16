@@ -496,12 +496,13 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
       fn_id = primary_to_index[equivalent_primary(*fn)]
       comment = " // " + paste(" ", *fn[:-1])
       # Build the function signature string: "<coll> <algo> <proto> <redop> <ty>"
+      # get parts indexes in order (coll, algo, proto, redop, ty, acc, pipeline, unroll)
       coll_idx = all_colls.index(fn[0])
       algo_idx = all_algos.index(fn[1])
       proto_idx = all_protos.index(fn[2])
       redop_idx = all_redops.index(fn[3])
       ty_idx = all_tys.index(fn[4])
-      pipeline_idx = all_pipeline.index(fn[5])
+      pipeline_idx = all_pipeline.index(fn[6])
       # Assert that 4 bits (16 values) is enough to map all_colls, all_algos, etc.
       assert len(all_colls) <= 16, "Error: all_colls has more than 16 values, which exceeds 4-bit capacity."
       assert len(all_algos) <= 16, "Error: all_algos has more than 16 values, which exceeds 4-bit capacity."
