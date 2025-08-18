@@ -5,7 +5,7 @@ on:
     branches:
       - develop
       # for testing
-      - usres/arravikum/multi-node-rccl-tests
+      - users/arravikum/multi-node-rccl-tests
   workflow_dispatch:
 
 permissions:
