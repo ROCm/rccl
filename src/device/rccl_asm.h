@@ -23,12 +23,25 @@ THE SOFTWARE.
 #pragma once
 
 
-#if defined(__gfx942__) || defined(__gfx950)
-// Bypass caches
+namespace rccl{
+
+using RCCLVecU64_2 = uint64_t __attribute__((ext_vector_type(2)));
+
+#if (defined(__gfx942__) || defined(__gfx950))
 #define store_bytepack16_global(addr, value) \
-  asm ("global_store_dwordx4 %0, %1 off sc0 sc1" :: "v"((addr)), "v"((value.u64_vec2)))
+  asm ("global_store_dwordx4 %0, %1 off sc0 sc1 nt " :: "v"((rccl::RCCLVecU64_2*)(addr)), "v"((value.u64_vec2)))
+
+#define load_bytepack16_global(addr, ans) \
+  ans.u64_vec2 = __builtin_nontemporal_load((rccl::RCCLVecU64_2*)(addr)) 
+  
 #else
 #define store_bytepack16_global(addr, value) \
   __builtin_nontemporal_store((value).u64[0], (uint64_t*)(addr));  \
   __builtin_nontemporal_store((value).u64[1], (uint64_t*)(addr)+1);
+
+#define load_bytepack16_global(addr, ans) \
+  ans.u64[0] = __builtin_nontemporal_load((uint64_t*)addr); \
+  ans.u64[1] = __builtin_nontemporal_load((uint64_t*)addr+1); 
 #endif
+
+}

@@ -119,14 +119,13 @@ union BytePack<8> {
 };
 template<>
 union alignas(16) BytePack<16> {
-  using VecU64_2 = uint64_t __attribute__((ext_vector_type(2)));
   BytePack<8> half[2];
   uint8_t u8[16];
   uint16_t u16[8];
   uint32_t u32[4];
   uint64_t u64[2];
   ulong2 ul2, native;
-  VecU64_2 u64_vec2;
+  rccl::RCCLVecU64_2 u64_vec2;
 #if !defined(USE_INDIRECT_FUNCTION_CALL) || defined(__gfx942__) || defined(__gfx950__)
   inline __device__ BytePack<16>() = default;
   inline __device__ BytePack<16>(const BytePack<16>& other) {
@@ -259,8 +258,7 @@ DEFINE_ld_st__size(8, uint64_t, b64, l)
   template<> \
   __device__ __forceinline__ BytePack<16> ld_volatile_##space<16>(addr_cxx_ty addr) { \
     BytePack<16> ans; \
-    ans.u64[0] = __builtin_nontemporal_load((uint64_t*)addr); \
-    ans.u64[1] = __builtin_nontemporal_load((uint64_t*)addr+1); \
+    load_bytepack16_##space(addr, ans); \
     return ans; \
   } \
   template<> \
