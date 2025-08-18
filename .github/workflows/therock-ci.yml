@@ -50,7 +50,7 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: "gfx94X-dcgpu"
-      extra_cmake_options: "-DTHEROCK_USE_EXTERNAL_RCCL=ON -DTHEROCK_RCCL_SOURCE_DIR=./rccl -DTHEROCK_RCCL_TESTS_SOURCE_DIR=./rccl-tests -DUSE_MPI=ON"
+      extra_cmake_options: "-DTHEROCK_USE_EXTERNAL_RCCL=ON -DTHEROCK_USE_EXTERNAL_RCCL_TESTS=ON -DTHEROCK_RCCL_SOURCE_DIR=./rccl -DTHEROCK_RCCL_TESTS_SOURCE_DIR=./rccl-tests -DUSE_MPI=ON"
 
   therock_ci_summary:
     name: TheRock CI Summary
