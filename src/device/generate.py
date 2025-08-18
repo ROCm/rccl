@@ -11,6 +11,8 @@ all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING", "", "", "", "", "PAT"]
 all_unroll = ["1", "2", "4"]
 use_acc    = ["0", "1"]
+# Pipelining is not supported for LL/LL64 prims, so "1" is not a valid value for low latency protocols.
+# However, if it needs to be supported, equivalent_primary() can be modified to avoid the "non-zero"->"0" mapping.
 all_pipeline = ["0", "1"]
 pipelined_types = ["bf16"]
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, use_acc, all_pipeline, all_unroll]
@@ -277,6 +279,10 @@ def equivalent_primary(coll, algo, proto, redop, ty, acc, pipeline, unroll):
     # map signed integer min/max to unsigned for non-NVLS
     elif redop=="MinMax" and ty[0]=="i" and ("NVLS" not in algo):
       ty = "u"+ty[1:]
+    # map pipelined to non-pipelined for LL/LL128 to avoid extra device codegen
+    if (pipeline != "0" and proto != "SIMPLE"):
+      pipeline = "0"
+
   return (coll, algo, proto, redop, ty, acc, pipeline, unroll)
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
