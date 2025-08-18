@@ -36,7 +36,7 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 if [ "$ENABLE_COVERAGE" = "true" ]; then
     echo "Coverage build enabled"
     cd $RCCL_TEST_INFRA_DIR || exit
-    LOCAL_RCCL_PATH=$LOCAL_RCCL_PATH ENABLE_MSCCLPP=0 CODE_COV=1 ./run.sh -d $BINARIES_DIR -c config/"$INFRA_TEST_CONFIG".json -B --build-only -O
+    LOCAL_RCCL_PATH=$LOCAL_RCCL_PATH ENABLE_MSCCLPP=0 CODE_COV=1 ./run.sh -c config/2_node_split_gt_cov_no_mscclpp.json -B --build-only -O -d $BINARIES_DIR
     exit 0
 fi
 
