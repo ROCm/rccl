@@ -89,3 +89,4 @@ steps:
       targetType: inline
       script: |
         cat rccl-build-${BUILD_JOB_ID}.out || echo "No log found"
+        cat $(Build.BinariesDirectory)/build.log  || echo "No rccl-test-infra build.log found. If this is not a coverage build, this is expected."
