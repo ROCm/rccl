@@ -114,9 +114,10 @@ void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclT
       // 512MB × 2^(log2[nNodes] - 1), nNodes > 1
       // The above equation is derived from the tuning results of the bf16 all_reduce on MI300.
       case ncclFuncAllReduce:
-        if (comm->nNodes == 1 ||
-            (comm->nNodes > 1 && nBytes <= (512 * 1024 * 1024) * (1 << (log2i(comm->nNodes) - 1)))) {
-          info->pipeline = 1;
+        if ( comm->nNodes == 1 ||
+           ((comm->nNodes  > 1) &&
+             nBytes <= (1ULL << 29 /*512MB*/)  * (1ULL << (log2i(comm->nNodes) - 1)))) {
+            info->pipeline = 1;
         }
         break;
 
