@@ -537,6 +537,7 @@ namespace RcclUnitTesting
       {
         ERROR("Child process %d exited with code %d\n", childId, returnVal);
       }
+      delete(childList[childId]);
     }
 
     childList.clear();
