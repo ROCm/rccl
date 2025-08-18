@@ -203,7 +203,7 @@ def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
     return False
   if coll == "" or algo == "":
     return False
-  if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or unroll not in all_unroll or pipeline not in pipelines_of_coll[coll] or (pipeline in ["1"] and ty not in pipelined_types):
+  if algo not in algos_of_coll[coll] or proto not in protos_of_coll[coll] or redop not in redops_of_coll[coll] or ty not in tys_of_coll[coll] or acc not in use_acc or unroll not in all_unroll or pipeline not in pipelines_of_coll[coll] or (pipeline in ["1"] and ty not in pipelined_types):
     return False
   return True
 
@@ -287,8 +287,8 @@ def equivalent_primary(coll, algo, proto, redop, ty, acc, pipeline, unroll):
 
 # Order rows are enumerated must match formula of `ncclDevFuncId()`:
 def enumerate_func_rows():
-  for acc in use_acc:
-    for unroll in all_unroll:
+  for unroll in all_unroll:
+    for acc in use_acc:
       for coll in all_colls:
         for algo in all_algos:
           for proto in all_protos:
