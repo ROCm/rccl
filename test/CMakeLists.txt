@@ -141,12 +141,15 @@ if(BUILD_TESTS)
       AltRsmiTests.cpp
       AllocTests.cpp
       ArgCheckTests.cpp
+      BitOpsTests.cpp
       IpcsocketTests.cpp
       CollRegTests.cpp
+      CommTests.cpp
+      EnqueueTests.cpp
+      P2pTests.cpp
+      ProxyTests.cpp
       RcclWrapTests.cpp
       ShmTests.cpp
-      P2pTests.cpp
-      BitOpsTests.cpp
       TransportTests.cpp
       common/main_fixtures.cpp
       common/EnvVars.cpp

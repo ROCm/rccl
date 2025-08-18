@@ -31,7 +31,8 @@ typedef enum RcclTunableColls {
   RCCL_AG_TUNABLE = 1,    // all_gather index
   RCCL_AR_TUNABLE = 2,    // all_reduce index
   RCCL_RE_TUNABLE = 3,    // reduce index
-  RCCL_TUNABLE_COLLS = 4  // LL/LL64/LL128 tunable collectives count
+  RCCL_BR_TUNABLE = 4,    // broadcast index
+  RCCL_TUNABLE_COLLS = 5  // LL/LL64/LL128 tunable collectives count
 } rcclTunableIndex_t;
 
 #define RCCL_LL_LIMITS_UNDEFINED 0
@@ -66,6 +67,8 @@ inline rcclTunableIndex_t rcclGetTunableIndex(ncclFunc_t const& func) {
       return RCCL_AR_TUNABLE;
     case ncclFuncReduce:
       return RCCL_RE_TUNABLE;
+    case ncclFuncBroadcast:
+      return RCCL_BR_TUNABLE;
     default:
       return RCCL_UNSUPPORTED_TUNABLE; // Invalid or unsupported function
   }
@@ -76,7 +79,7 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
   // For AG, this is the send size per rank
   // For RS, this is the recv size per rank
   // For AR, this is the send/recv size per rank
-  return (func == ncclFuncReduceScatter || func == ncclFuncAllGather) ? nBytes / nRanks : nBytes;
+  return (func == ncclFuncReduceScatter || func == ncclFuncAllGather || func == ncclFuncBroadcast) ? nBytes / nRanks : nBytes;
 }
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
 void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold);

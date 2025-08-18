@@ -138,11 +138,13 @@ private:
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
+    __atomic_signal_fence(__ATOMIC_SEQ_CST);	  
+    asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)"); 	  
+    __atomic_signal_fence(__ATOMIC_SEQ_CST);
+
     if (sendConnTailPtr) {
 #if __CUDA_ARCH__ >= 900
       __threadfence_system();
-#else
-      __threadfence();
 #endif
       STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1);
     }
