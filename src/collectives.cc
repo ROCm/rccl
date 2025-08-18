@@ -79,6 +79,8 @@ const char* ncclProtoToString(int proto) {
   }
 }
 
+RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 65536);
+
 NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 
@@ -88,10 +90,15 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
     NVTX3_PAYLOAD(comm ? comm->commHash : 0, sendcount * ncclTypeSize(datatype), datatype));
 
   struct ncclInfo info = { ncclFuncAllGather, "AllGather",
-    sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+    sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream,
     ALLGATHER_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLGATHER_SLICESTEPS_SINGLE_NODE : ALLGATHER_SLICESTEPS, nullptr };
 
-  if (!mscclIsCaller()) // when msccl falls back to
+  int nRanks;
+  const void* srcbuff;
+  int in_place = 0;
+  NCCLCHECK(ncclCommCount(comm, &nRanks));
+
+  if (!mscclIsCaller())
   {
     NCCLCHECK(Recorder::instance().record(rrAllGather, info));
   }
@@ -102,7 +109,30 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
   }
 
-  return ncclEnqueueCheck(&info);
+  if ((comm->nNodes > 1 && comm->nNodes <= 8) && sendcount <= rcclParamDirectAllGatherThreshold()) {
+     // use direct allgather	  
+     if (sendcount == 0) return ncclSuccess;
+     size_t rankOffset = sendcount * ncclTypeSize(datatype);
+     if (((char*)recvbuff) != (((char*)sendbuff) + comm->rank * rankOffset)) {
+        srcbuff = sendbuff;
+     } else {
+        srcbuff = ((char*)recvbuff) + comm->rank * rankOffset;
+        in_place = 1;;
+     }
+     NCCLCHECK(ncclGroupStart());
+     for (int r = 0; r < nRanks; r++) {
+         if (in_place && (r == comm->rank)) {
+            continue;
+         }
+         NCCLCHECK(ncclSend(((char*)srcbuff), sendcount, datatype, r, comm, stream));
+         NCCLCHECK(ncclRecv(((char*)recvbuff)+r*rankOffset, sendcount, datatype, r, comm, stream));
+     }
+     NCCLCHECK(ncclGroupEnd());
+     return ncclSuccess;
+  } else {	
+     // use ring allgather
+     return ncclEnqueueCheck(&info);
+  }
 }
 
 NCCL_API(ncclResult_t, ncclAllReduce, const void* sendbuff, void* recvbuff, size_t count,
