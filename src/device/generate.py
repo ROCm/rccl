@@ -11,11 +11,13 @@ all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING", "", "", "", "", "PAT"]
 all_unroll = ["1", "2", "4"]
 use_acc    = ["0", "1"]
+
 # Pipelining is not supported for LL/LL64 prims, so "1" is not a valid value for low latency protocols.
 # However, if it needs to be supported, equivalent_primary() can be modified to avoid the "non-zero"->"0" mapping.
 all_pipeline = ["0", "1"]
 pipelined_types = ["bf16"]
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, use_acc, all_pipeline, all_unroll]
+
 
 ################################################################################
 # The first command line argument is the path to the directory to generate and
@@ -300,7 +302,6 @@ def enumerate_func_rows():
 # Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
 def custom_sort_key(fn):
     coll, algo, proto, redop, ty, acc, pipeline, unroll = fn
-
     return (
         all_unroll.index(unroll),
         use_acc.index(acc),
@@ -487,6 +488,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out("\n")
   out("// The key for the ncclDevFuncNameToId map is a 64-bit unsigned integer.\n")
   out("// Each field (coll, algo, proto, redop, ty, pipeline) is packed into 4 bits,\n")
+  out("// Each field (coll, algo, proto, redop, ty) is packed into 4 bits,\n")
   out("// This allows up to 16 unique values per field. The layout is:\n")
   out("//   bits  0-3:   coll index\n")
   out("//   bits  4-7:   algo index\n")
