@@ -173,8 +173,8 @@ static ncclResult_t ncclInit() {
   int hipRuntimeVersion = 0;
   // hipVer is an integer e.g., 6.2.41133 -> 60241133
   CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
-  if ((!hsaScratchEnv || strcmp(hsaScratchEnv,"1") != 0) && hipRuntimeVersion < 60400000){
-    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit for rocm older than 6.4,, rocm ver:%d", hipRuntimeVersion);
+  if ((!hsaScratchEnv || strcmp(hsaScratchEnv,"1") != 0)){
+    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
   }
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;
