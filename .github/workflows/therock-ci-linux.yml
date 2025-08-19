@@ -134,3 +134,4 @@ jobs:
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: vultr-linux-rocm
+      artifact_run_id: ${{ github.run_id }}
