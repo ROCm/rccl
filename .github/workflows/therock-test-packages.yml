@@ -39,8 +39,7 @@ jobs:
         with:
           repository: "ROCm/rccl"
           ref: users/arravikum/multi-node-rccl-tests
-          sparse-checkout: |
-            therock-scripts
+          path: rccl
 
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -63,7 +62,8 @@ jobs:
         run: |
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
+          ls -l ${{ github.workspace }}/rccl
+          python ${{ github.workspace }}/rccl/therock-scripts/therock_test.py
           sudo cat ./input/mi300_config.json
-          python ${{ github.workspace }}/therock-scripts/therock_test.py
           pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
           
