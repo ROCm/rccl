@@ -42,7 +42,7 @@ jobs:
 
       - name: Run tests on vultr-linux-node
         run: |
-          source /home/arravikum/TheRock/.venv/bin/activate
+          source ${VENV_DIR}/bin/activate
           cd /home/arravikum/cvs
           pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
           
