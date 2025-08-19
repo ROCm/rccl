@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rccl"
-          ref: users/arravikun/multi-node-rccl-tests
+          ref: users/arravikum/multi-node-rccl-tests
           sparse-checkout: |
             therock-scripts
 
