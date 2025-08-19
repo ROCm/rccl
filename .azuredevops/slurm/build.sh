@@ -36,9 +36,11 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 if [ "$ENABLE_COVERAGE" = "true" ]; then
     echo "Coverage build enabled"
     cd $RCCL_TEST_INFRA_DIR || exit
-    export CC=$ROCM_PATH/amdclang
-    export CXX=$ROCM_PATH/amdclang++
-    CC=$ROCM_PATH/amdclang CXX=$ROCM_PATH/amdclang++ CXX_COMPILER=$ROCM_PATH/bin/amdclang++ LOCAL_RCCL_PATH=$LOCAL_RCCL_PATH ENABLE_MSCCLPP=0 CODE_COV=1 ./run.sh -c config/2_node_split_gt_cov_no_mscclpp.json -B --build-only -O -d $BINARIES_DIR
+    echo "ROCM_PATH: $ROCM_PATH"
+    echo "ROCM_HOME: $ROCM_HOME"
+    export CC=$ROCM_PATH/bin/amdclang
+    export CXX=$ROCM_PATH/bin/amdclang++
+    CC=$ROCM_PATH/bin/amdclang CXX=$ROCM_PATH/bin/amdclang++ CXX_COMPILER=$ROCM_PATH/bin/amdclang++ LOCAL_RCCL_PATH=$LOCAL_RCCL_PATH ENABLE_MSCCLPP=0 CODE_COV=1 ./run.sh -c config/2_node_split_gt_cov_no_mscclpp.json -B --build-only -O -d $BINARIES_DIR
     exit 0
 fi
 
