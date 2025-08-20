@@ -474,7 +474,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out("//   bits 16-19:  ty index\n")
   out("#include <unordered_map>\n")
   out("extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId = {\n")
-  for fn in func_rows:
+  for fn in func_rows[:len(func_rows)//len(all_unroll)]:
     fn_id = -1
     if fn is not None:
       fn_id = primary_to_index[equivalent_primary(*fn)]
