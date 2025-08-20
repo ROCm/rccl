@@ -57,8 +57,6 @@ jobs:
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       - name: Run tests on vultr-linux-node
-        env:
-          GITHUB_WORKSPACE: ${{ github.workspace }}
         run: |
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
