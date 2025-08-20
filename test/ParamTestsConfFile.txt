@@ -1,0 +1,3 @@
+# Comment: This file has been created for param.cc code coverage
+TEST_VAR_WITH_NO_VALUE
+TEST_VAR=12345
