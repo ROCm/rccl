@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - develop
-      # for testing
-      - users/arravikum/multi-node-rccl-tests
   workflow_dispatch:
 
 permissions:
