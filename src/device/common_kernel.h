@@ -27,12 +27,6 @@ inline __device__ int loadInt(int* ptr) {
   return v;
 }
 
-#if defined(__gfx942__) || defined(__gfx950__)
-#define REDUCE_INLINE_ATTR __device__ __forceinline__
-#else
-#define REDUCE_INLINE_ATTR __device__ __attribute__((noinline))
-#endif
-
 template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
@@ -45,7 +39,7 @@ template<typename RedFn, typename T, int Unroll, int BytePerPack,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn>
 struct reduceCopyPacks<RedFn, T, Unroll, BytePerPack, MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes, SrcPtrFn, DstPtrFn, 0> {
 
-REDUCE_INLINE_ATTR static void run(
+__device__ __forceinline__ static void run(
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
@@ -311,7 +305,7 @@ template<typename RedFn, typename T, int Unroll, int BytePerPack,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn>
 struct reduceCopyPacks<RedFn, T, Unroll, BytePerPack, MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes, SrcPtrFn, DstPtrFn, 1> {
 
-REDUCE_INLINE_ATTR static void run(
+__device__ __forceinline__ static void run(
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
@@ -440,11 +434,7 @@ template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn, typename AccPtrFn>
-#if defined(__gfx942__) || defined(__gfx950__)
 __device__ __forceinline__ void reduceCopyPacksWithBias(
-#else
-__device__ __attribute__((noinline)) void reduceCopyPacksWithBias(
-#endif
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
