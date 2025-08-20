@@ -38,11 +38,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rccl"
-          ref: users/arravikum/multi-node-rccl-tests
           path: rccl
-
-      - name: LS TEST
-        run: ls -l /home/arravikum/dist_new/dist/rocm
 
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -58,9 +54,6 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--rccl"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-
-      - name: LS TEST
-        run: ls -l /home/arravikum/dist_new/dist/rocm
 
       - name: Run tests on vultr-linux-node
         run: |
