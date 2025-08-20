@@ -21,7 +21,7 @@ jobs:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:283673fe3e1bf498d079e3f386b794af1b4f71845a9a0107c6cf7aa304dce050
       options: -v /runner/config:/home/awsconfig/
     env:
-      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
@@ -93,12 +93,12 @@ jobs:
           echo "----------"
           du -h -d 1 build/artifacts
 
-    #   - name: Configure AWS Credentials for non-forked repos
-    #     if: ${{ always() && !github.event.pull_request.head.repo.fork }}
-    #     uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
-    #     with:
-    #       aws-region: us-east-2
-    #       role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
 
       - name: Create Logs index Files and upload logs
         if: always()
