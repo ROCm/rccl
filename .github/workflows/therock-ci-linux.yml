@@ -43,8 +43,6 @@ jobs:
           repository: "ROCm/rccl-tests"
           path: rccl-tests
 
-      # TODO: We shouldn't be using a cache on actual release branches, but it
-      # really helps for iteration time.
       - name: Runner Health Settings
         run: |
           df -h

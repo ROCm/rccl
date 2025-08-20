@@ -37,13 +37,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          repository: "ROCm/rccl"
-          path: rccl
-
-      - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
           repository: "ROCm/TheRock"
+          ref: 890c856134d955441790c8ed2d60ad4fb027f4e5
 
       - name: Run setup test environment workflow
         uses: './.github/actions/setup_test_environment'
