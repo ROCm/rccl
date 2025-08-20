@@ -41,6 +41,7 @@
 #include "archinfo.h"
 #include "param.h"
 #include "nvtx_payload_schemas.h"
+#include "rccl_common.h"
 
 // [RCCL]
 #include "git_version.h"
@@ -136,83 +137,6 @@ static void initOnceFunc() {
 exit:;
 }
 
-std::string trimString(const std::string& s) {
-  int sz = s.size();
-  int b = 0;
-  int e = sz - 1;
-  while (b < sz && isspace(s[b])) {
-    b++;
-  }
-  if (b >= sz) {
-    return "";
-  }
-
-  while (e >= b && e < sz && isspace(s[e])) {
-    e--;
-  }
-  if (b > e) {
-    return "";
-  }
-  return s.substr(b, e - b + 1);
-}
-
-std::vector<std::string> splitString(const std::string& s, char delimiter) {
-  std::vector<std::string> tokens;
-  std::stringstream ss(s);
-  std::string token;
-
-  while (std::getline(ss, token, delimiter)) {
-    tokens.push_back(trimString(token));
-  }
-  return tokens;
-}
-
-int parseFirmwareVersionImpl(FILE* file) {
-  constexpr std::size_t MAX_LINE_SZ = 1024;
-  char line[MAX_LINE_SZ];
-  bool found_pattern = false;
-  while (fgets(line, MAX_LINE_SZ, file)) {
-    auto parts = splitString(line, ':');
-    if (parts == std::vector<std::string>{"FW_ID", "CP_MEC1"}) {
-      if (!found_pattern) {
-        found_pattern = true;
-      }
-      continue;
-    }
-
-    if (found_pattern && (parts[0] == "FW_VERSION")) {
-      return stoi(parts[1]);
-    }
-  }
-  return -1;
-}
-
-int parseFirmwareVersion(const char* command) {
-  auto file = popen(command, "r");
-  if (file == nullptr) {
-    return -1;
-  }
-  int version = -1;
-  try {
-    version = parseFirmwareVersionImpl(file);
-  } catch (const std::exception& ex) {
-  }
-  pclose(file);
-  return version;
-}
-
-bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion) {
-  bool hsaScratchEnvSet = (hsaScratchEnv && strcmp(hsaScratchEnv,"1") == 0);
-  if (hsaScratchEnvSet) {
-    return true;
-  }
-  #if defined(__gfx942__)
-  return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 177);
-  #else
-  return hipRuntimeVersion >= 60400000;
-  #endif
-}
-
 static ncclResult_t ncclInit() {
     char strValue[2048];
     NCCLCHECK(ncclTopoGetStrFromSys("/proc/sys/kernel", "numa_balancing", strValue));
@@ -251,7 +175,11 @@ static ncclResult_t ncclInit() {
   // hipVer is an integer e.g., 6.2.41133 -> 60241133
   CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
   const int firmwareVersion = parseFirmwareVersion("amd-smi firmware");
-  if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion)) {
+  hipDeviceProp_t devProp;
+  // use GPU0 should be good enough
+  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
+  INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
+  if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
     WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
     return ncclInternalError;
   }
