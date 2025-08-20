@@ -79,7 +79,7 @@ const char* ncclProtoToString(int proto) {
   }
 }
 
-RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 65536);
+RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 4194304);
 
 NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
@@ -97,6 +97,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
   const void* srcbuff;
   int in_place = 0;
   NCCLCHECK(ncclCommCount(comm, &nRanks));
+  size_t msgSize = sendcount * ncclTypeSize(datatype) * nRanks;
 
   if (!mscclIsCaller())
   {
@@ -109,7 +110,8 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
   }
 
-  if ((comm->nNodes > 1 && comm->nNodes <= 16) && sendcount <= rcclParamDirectAllGatherThreshold()) {
+  if ((comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() && 
+	rcclParamDirectAllGatherThreshold() > -1)) {
      // use direct allgather	  
      if (sendcount == 0) return ncclSuccess;
      size_t rankOffset = sendcount * ncclTypeSize(datatype);
