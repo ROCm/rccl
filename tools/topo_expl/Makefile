@@ -18,7 +18,6 @@ FMT_DIR     := third_party/fmt
 FMT_INCLUDE := $(FMT_DIR)/include
 FMT_HEADER  := $(FMT_INCLUDE)/fmt/format.h
 FMT_GIT     := https://github.com/fmtlib/fmt.git
-FMT_REF     := 11.0.2
 
 # Probe for <fmt/format.h> using a portable pipe (no <<< here-string)
 HAVE_FMT := $(shell echo '#include <fmt/format.h>' | \
