@@ -123,11 +123,12 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
      }
      NCCLCHECK(ncclGroupStart());
      for (int r = 0; r < nRanks; r++) {
-         if (in_place && (r == comm->rank)) {
+	 int peer = (comm->rank + r) % nRanks;    
+         if (in_place && (peer == comm->rank)) {
             continue;
          }
-         NCCLCHECK(ncclSend(((char*)srcbuff), sendcount, datatype, r, comm, stream));
-         NCCLCHECK(ncclRecv(((char*)recvbuff)+r*rankOffset, sendcount, datatype, r, comm, stream));
+         NCCLCHECK(ncclSend(((char*)srcbuff), sendcount, datatype, peer, comm, stream));
+         NCCLCHECK(ncclRecv(((char*)recvbuff) + peer * rankOffset, sendcount, datatype, peer, comm, stream));
      }
      NCCLCHECK(ncclGroupEnd());
      return ncclSuccess;
