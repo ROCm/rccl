@@ -20,6 +20,9 @@
 #include <algorithm>
 #include <stdint.h>
 #include <sys/types.h>
+#include <unordered_map>
+#include <string>
+#include "debug.h"
 
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2];
 
@@ -124,6 +127,13 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_IPC_REG_BUFFER 0x01
 #define NCCL_NVLS_REG_BUFFER 0x02
 #define NCCL_NET_REG_BUFFER 0x04
+
+#define RCCL_FUNC_ID_MASK 0xF
+#define RCCL_COLL_SHIFT 0
+#define RCCL_ALGO_SHIFT 4
+#define RCCL_PROTO_SHIFT 8
+#define RCCL_REDOP_SHIFT 12
+#define RCCL_DTYPE_SHIFT 16
 
 struct ncclConnInfo {
   // Regular comm mechanism
@@ -687,74 +697,42 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
   }
 }
 
-// Map the rowIdx to funcIdx
-extern int const ncclDevFuncRowToId[];
+// Map the uint64_t key to funcIdx
+extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId;
 
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
 inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
-  int row = 0;
-  do {
-    // RING/PAT | <all_protos> | Sum | int8_t
-    int nAlgos = 2;
-    if (coll == ncclFuncAllGather) {
-      int algo1 = algo == NCCL_ALGO_RING ? 0 :
-                /*algo == NCCL_ALGO_PAT*/ 1;
-      row += algo1 * NCCL_NUM_PROTOCOLS + proto;
-      break;
-    }
-    row += nAlgos * NCCL_NUM_PROTOCOLS;
-
-    // RING/TREE | <all_protos> | <all_redops> | <all_types>
-    nAlgos = 2;
-    if (coll == ncclFuncAllReduce) {
-      int algo1 = algo == NCCL_ALGO_TREE ? 0 :
-                /*algo == NCCL_ALGO_RING*/ 1;
-      row += (((algo1 * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo1 * NCCL_NUM_PROTOCOLS + proto);
-      break;
-    }
-    row += nAlgos * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
-
-    // RING | SIMPLE | Sum | int8_t
-    nAlgos = 1;
-    if (coll == ncclFuncAllToAllPivot) break;
-    row += nAlgos * 1;
-
-    // RING | <all_protos> | Sum | int8_t
-    nAlgos = 1;
-    if (coll == ncclFuncBroadcast) {
-      row += proto;
-      break;
-    }
-    row += nAlgos * NCCL_NUM_PROTOCOLS;
-
-    // RING | <all_protos> | <all_redops> | <all_types>
-    nAlgos = 1;
-    if (coll == ncclFuncReduce) {
-      row += ((proto * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * proto; 
-      break;
-    }
-    row += nAlgos * NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
-
-    // RING/PAT | <all_protos> | <all_redops> | <all_types>
-    nAlgos = 2;
-    if (coll == ncclFuncReduceScatter) {
-      int algo1 = algo == NCCL_ALGO_RING ? 0 :
-                /*algo == NCCL_ALGO_PAT*/ 1;
-      row += (((algo1 * NCCL_NUM_PROTOCOLS + proto) * ncclNumDevRedOps + devRedOp) * ncclNumTypes + type) - NCCL_NUM_FLOATS * (algo1 * NCCL_NUM_PROTOCOLS + proto);
-      break;
-    }
-    row += NCCL_NUM_PROTOCOLS * (ncclNumDevRedOps * ncclNumTypes - NCCL_NUM_FLOATS);
-
-    // RING | SIMPLE | Sum | int8_t
-    nAlgos = 1;
-    if (coll == ncclFuncSendRecv) break;
-    row += nAlgos * 1;
-
-  } while (false);
-
-  return ncclDevFuncRowToId[row];
+  int row = -1;
+  uint64_t key;
+  // Pack 4-bit fields from right (LSB) to left in order:
+  // coll, algo, proto, devRedOp, type
+  // This logic must be in sync with the key generation logic in generate.py
+  if (coll == ncclFuncBroadcast) {
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
+          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT);
+  } else if (coll == ncclFuncSendRecv || coll == ncclFuncAllToAllPivot) {
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT );
+  } else {
+    key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
+          ((uint64_t)(algo     & RCCL_FUNC_ID_MASK) << RCCL_ALGO_SHIFT ) |
+          ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT) |
+          ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << RCCL_REDOP_SHIFT) |
+          ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << RCCL_DTYPE_SHIFT);
+  }
+  auto it = ncclDevFuncNameToId.find(key);
+  if (it != ncclDevFuncNameToId.end()) {
+    row = it->second;
+  }
+  if(row < 0) {
+    WARN("Fatal error: ncclDevFuncId: %llu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d", key, coll, algo, proto, devRedOp, type);
+    return -1;
+  }
+  return row;
 }
 
-inline int ncclDevFuncId_P2p() { return ncclDevFuncRowToId[FUNC_INDEX_TOTAL - AR_WITH_BIAS_FUNC_COUNTS - NCCL_NUM_ONERANK - 1]; }
+inline int ncclDevFuncId_P2p() {
+  static int ncclDevFuncIdP2p = ncclDevFuncId(ncclFuncSendRecv, -1 , -1 , NCCL_ALGO_UNDEF, NCCL_PROTO_UNDEF);
+  return ncclDevFuncIdP2p;
+}
 
 #endif
