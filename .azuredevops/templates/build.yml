@@ -3,13 +3,23 @@ parameters:
 - name: expectedInstallFiles
   type: object
   default:
-    - bin/rccl-UnitTests
-    - include/rccl/rccl.h
-    - lib/cmake/rccl/rccl-config.cmake
-    - lib/librccl.so
-    - share/doc/rccl/LICENSE.txt
-    - share/rccl/msccl-algorithms
-    - share/rccl/msccl-unit-test-algorithms
+      - bin/rccl-UnitTests
+      - include/rccl/rccl.h
+      - lib/cmake/rccl/rccl-config.cmake
+      - lib/librccl.so
+      - librccl.so.1
+      - lib/librccl.so.1.0
+      - share/doc/rccl/LICENSE.txt
+      - build/all_gather_perf
+      - build/all_reduce_perf
+      - build/alltoall_perf
+      - build/alltoallv_perf
+      - build/broadcast_perf
+      - build/reduce_perf
+      - build/reduce_scatter_perf
+      - build/scatter_perf
+      - build/gather_perf
+      - build/sendrecv_perf
 
 steps:
   - task: Bash@3
