@@ -1,21 +1,41 @@
 #include <gtest/gtest.h>
 #include <rccl/rccl.h>
-
 #include "param.h"
+#include "debug.h"
 
 namespace RcclUnitTesting
 {
     TEST(ParamTests, initEnv_ParseValidConfFile){
-        // This function call reads and opens the conf file from the path
-        // which is set using env. variable NCCL_CONF_FILE
-        initEnv();
+        // Skip the test if NCCL_CONF_FILE is not set
+        const char *value = getenv("NCCL_CONF_FILE");
 
-        EXPECT_EQ(getenv("TEST_VAR_WITH_NO_VALUE"), nullptr);
-        EXPECT_STREQ(getenv("TEST_VAR"), "12345"); 
-        
-        // Clean up
-        unsetenv("TEST_VAR_WITH_NO_VALUE");
-        unsetenv("TEST_VAR");
+        if (!value) {
+            INFO(NCCL_LOG_INFO, "SKIPPING TEST. Set environment variable NCCL_CONF_FILE.\n"
+                                "To run this test, create a file with the following contents and set its "
+                                "absolute path to NCCL_CONF_FILE:\n\n"
+                                "# Comment: This file is required to run unit tests for param.cc\n"
+                                "TEST_VAR_WITH_NO_VALUE\n"
+                                "TEST_VAR=12345\n");
+
+            GTEST_SKIP()    << "SKIPPING TEST. Set environment variable NCCL_CONF_FILE.\n"
+                            << "To run this test, create a file with the following contents and set its "
+                                "absolute path to NCCL_CONF_FILE:\n\n"
+                            << "# Comment: This file is required to run unit tests for param.cc\n"
+                            << "TEST_VAR_WITH_NO_VALUE\n"
+                            << "TEST_VAR=12345\n";
+        }
+        else{
+            // This function call reads and opens the conf file from the path
+            // which is set using env. variable NCCL_CONF_FILE
+            initEnv();
+
+            EXPECT_EQ(getenv("TEST_VAR_WITH_NO_VALUE"), nullptr);
+            EXPECT_STREQ(getenv("TEST_VAR"), "12345"); 
+            
+            // Clean up
+            unsetenv("TEST_VAR_WITH_NO_VALUE");
+            unsetenv("TEST_VAR");
+        }
     }
 
     TEST(ParamTests, ncclLoadParam_InvalidParam){
