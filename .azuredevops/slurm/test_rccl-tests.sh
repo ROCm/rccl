@@ -2,7 +2,7 @@
 #SBATCH --job-name=rccl-tests
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.out
-#SBATCH --time=$TESTS_TIMEOUT
+#SBATCH --time=72:00:00
 #SBATCH --nodes=2
 #SBATCH --exclusive
 #SBATCH --partition=gt
@@ -16,13 +16,20 @@ module load rocm/6.4.1
 if [ "$ENABLE_COVERAGE" = "true" ]; then
     cd $RCCL_TEST_INFRA_DIR || exit
     TEST_INFRA_WORK_DIR=$BINARIES_DIR CODE_COV=1 ENABLE_MSCCLPP=0 ./run.sh -c config/"$INFRA_TEST_CONFIG".json -B -C -O --skip-build --use-slurm --slurm-time="$TESTS_TIMEOUT" --slurm-partition=gt --slurm-nodes="$NUM_NODES"
-    cd slurm_runs_"$INFRA_TEST_CONFIG_"* || exit
+    cd slurm_runs_"${INFRA_TEST_CONFIG}_"* || exit
 
     FILE="rawprofiles.list"
+    MAX_WAIT_SECS=259200 # 72 hours, these tests can take a long time
+    WAIT_SECS=0
+    echo "Waiting for ${FILE} (timeout: ${MAX_WAIT_SECS}s)"
 
-    echo "Waiting for ${FILE}"
     while [ ! -e "${FILE}" ]; do
-      sleep 1
+      sleep 5
+      WAIT_SECS=$((WAIT_SECS + 5))
+      if [ "$WAIT_SECS" -ge "$MAX_WAIT_SECS" ]; then
+          echo "Timed out waiting for ${FILE}"
+          exit 1
+      fi
     done
     echo "File ${FILE} found, now building coverage report"
     /opt/rocm/lib/llvm/bin/llvm-profdata merge --sparse --input-files=$FILE --output=merged.profdata

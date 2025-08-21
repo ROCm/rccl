@@ -53,14 +53,11 @@ jobs:
         path: rccl-test-infra
       - template: templates/build.yml
       - template: templates/test_rccl-tests.yml
-        parameters:
-            TESTS_TIMEOUT: "72:00:00"
-            NUM_NODES: 3
       - task: CopyFiles@2
         displayName: 'Copy all HTML coverage files'
         inputs:
           SourceFolder: '$(RCCL_TEST_INFRA_DIR)'
-          Contents: 'slurm_runs_$(INFRA_TEST_CONFIG)_*/**'
+          Contents: 'slurm_runs_$(INFRA_TEST_CONFIG)_*/report/**'
           TargetFolder: '$(Build.ArtifactStagingDirectory)'
           flattenFolders: false
       - template: ${{ variables.CI_TEMPLATE_PATH }}/steps/artifact-upload.yml@pipelines_repo
