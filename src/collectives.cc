@@ -123,7 +123,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
      }
      NCCLCHECK(ncclGroupStart());
      for (int r = 0; r < nRanks; r++) {
-	 int peer = (comm->rank + r) % nRanks;    
+         int peer = (comm->rank + r) % nRanks;    
          if (in_place && (peer == comm->rank)) {
             continue;
          }
