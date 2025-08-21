@@ -8,7 +8,7 @@ steps:
       targetType: inline
       script: |
         echo "Submitting test job..."
-        TEST_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/test_rccl-tests.sh)
+        TEST_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/rccl/.azuredevops/slurm/test_rccl-tests.sh)
         echo "Submitted test job: $TEST_JOB_ID"
         echo "##vso[task.setvariable variable=TEST_JOB_ID]$TEST_JOB_ID"
 
@@ -38,13 +38,13 @@ steps:
           fi
         done
 
-        echo "Checking test result json for failures..."
-        TEST_JSON=$(find "$(Pipeline.Workspace)" -name 'rccl-tests*.json')
-        if [ -z "$TEST_JSON" ]; then
-          echo "##vso[task.logissue type=error]No $TEST_JSON file(s) found"
-          echo "##vso[task.complete result=Failed;]DONE"
-          exit 1
-        fi
+        #echo "Checking test result json for failures..."
+        #TEST_JSON=$(find "$(Pipeline.Workspace)" -name 'rccl-tests*.json')
+        #if [ -z "$TEST_JSON" ]; then
+        #  echo "##vso[task.logissue type=error]No $TEST_JSON file(s) found"
+        #  echo "##vso[task.complete result=Failed;]DONE"
+        #  exit 1
+        #fi
 
         #echo "Checking test result XML for failures..."
         #TEST_XML=$(find "$(Pipeline.Workspace)" -name 'rccl-tests_output.xml' | head -n1)

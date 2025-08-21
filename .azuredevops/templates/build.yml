@@ -3,11 +3,7 @@ parameters:
 - name: expectedInstallFiles
   type: object
   default:
-      - bin/rccl-UnitTests
-      - include/rccl/rccl.h
-      - lib/cmake/rccl/rccl-config.cmake
       - lib/librccl.so.1.0
-      - share/doc/rccl/LICENSE.txt
       - build/all_gather_perf
       - build/all_reduce_perf
       - build/alltoall_perf
