@@ -24,11 +24,3 @@ THE SOFTWARE.
 /* This file implements methods to extract metadata from an integer Metadata field passed in as a template parameter. Feel free to add additional fields below.*/
 
 #define RCCL_METADATA_EMPTY 0
-#define RCCL_ONE_NODE_RING_SIMPLE (1 << 0)
-
-constexpr bool isOneNodeRingSimple(int metadata) {
-  return (metadata & RCCL_ONE_NODE_RING_SIMPLE) != 0;
-}
-
-static_assert(isOneNodeRingSimple(RCCL_ONE_NODE_RING_SIMPLE), "RCCL_ONE_NODE_RING_SIMPLE should be set to (1 << 0)");
-static_assert(isOneNodeRingSimple(0) == 0, "RCCL_ONE_NODE_RING_SIMPLE should not be set when metadata is 0");

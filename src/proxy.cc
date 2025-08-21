@@ -292,10 +292,8 @@ ncclResult_t dumpProxyState(struct ncclProxyProgressState* state) {
   struct ncclProxyArgs* op = state->active;
   int poolIndex, opIndex;
   int list_len = 0;
-  int sublist_len = 0;
   fprintf(stderr, "ACTIVE OPS\n");
   while (op) {
-    sublist_len = 0;
     NCCLCHECK(getOpIndex(op, state, &poolIndex, &opIndex));
     if (op->state & OP_SEEN) {
       WARN("List loop at element %d-%d", poolIndex, opIndex);
@@ -304,7 +302,6 @@ ncclResult_t dumpProxyState(struct ncclProxyProgressState* state) {
     op->state |= OP_SEEN;
     struct ncclProxyArgs* nextOp = op->nextPeer;
     while (nextOp) {
-      sublist_len++;
       NCCLCHECK(getOpIndex(nextOp, state, &poolIndex, &opIndex));
       if (nextOp->state & OP_SEEN) {
         WARN("List loop at element %d-%d", poolIndex, opIndex);

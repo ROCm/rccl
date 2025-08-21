@@ -27,15 +27,12 @@ inline __device__ int loadInt(int* ptr) {
   return v;
 }
 
+#ifndef RCCL_ENABLE_SW_PIPELINE
 template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn>
-#if defined(__gfx942__) || defined(__gfx950__)
 __device__ __forceinline__ void reduceCopyPacks(
-#else
-__device__ __attribute__((noinline)) void reduceCopyPacks(
-#endif
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
@@ -210,16 +207,224 @@ __device__ __attribute__((noinline)) void reduceCopyPacks(
   warp = -nHunksAhead;
   thread = warp*WARP_SIZE + lane;
 }
+#else
+
+template <typename RedFn, typename SrcPtrFn, typename IntBytes, int MultimemSrcs, int MinSrcs, int MaxSrcs, int PreOpSrcs, int Unroll, int BytePerPack>
+__device__ __forceinline__ void loadSources(
+  const RedFn& redFn, 
+  const SrcPtrFn& srcPtrFn, 
+  IntBytes& globalOffset, 
+  uintptr_t* minSrcs, 
+  uint64_t *preOpArgs,
+  BytePack<BytePerPack> buff[MaxSrcs + !MaxSrcs][Unroll], 
+  int nSrcs
+) {
+  #pragma unroll Unroll
+  for (int s = 0; s < MinSrcs; s++) {
+    RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
+    #pragma unroll Unroll
+    for (int u = 0; u < Unroll; u++) {
+      if (s < MultimemSrcs) {
+        buff[s][u] = applyLoadMultimem<RedFn, BytePerPack>(redFn, minSrcs[s]);
+      } else {
+        buff[s][u] = ld_volatile_global<BytePerPack>(minSrcs[s]);
+      }
+      minSrcs[s] += WARP_SIZE * BytePerPack;
+    }
+  }
+  for (int s = MinSrcs; (MinSrcs < MaxSrcs) && (s < MaxSrcs) && (s < nSrcs); s++) {
+    uintptr_t src = cvta_to_global(srcPtrFn(s)) + globalOffset;
+    #pragma unroll Unroll
+    for (int u = 0; u < Unroll; u++) {
+      buff[s][u] = ld_volatile_global<BytePerPack>(src);
+      src += WARP_SIZE * BytePerPack;
+    }
+  }
+}
+
+template <typename RedFn, typename DstPtrFn, typename IntBytes, int MultimemDsts, int MinSrcs, int MaxSrcs, int MinDsts, int MaxDsts, int PreOpSrcs, int Unroll, int BytePerPack>
+  __device__ __forceinline__ void reduceAndStore(
+  RedFn redFn, uint64_t *preOpArgs, BytePack<BytePerPack> buff[MaxSrcs + !MaxSrcs][Unroll],
+  uintptr_t *minDsts, bool postOp, int nDsts, DstPtrFn const &dstPtrFn, IntBytes tailThreadBytesBehind, int nSrcs) {
+  for (int s = 0; s < MinSrcs; s++) {
+    RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
+    #pragma unroll Unroll
+    for (int u = 0; u < Unroll; u++) {
+      if (s < PreOpSrcs) buff[s][u] = applyPreOp(preFn, buff[s][u]);
+      if (s > 0) buff[0][u] = applyReduce(redFn, buff[0][u], buff[s][u]);
+    }
+  }
+  for (int s = MinSrcs; (MinSrcs < MaxSrcs) && (s < MaxSrcs) && (s < nSrcs); s++) {
+    RedFn preFn(s < PreOpSrcs ? preOpArgs[s] : 0);
+    #pragma unroll Unroll
+    for (int u = 0; u < Unroll; u++) {
+      if (s < PreOpSrcs) buff[s][u] = applyPreOp(preFn, buff[s][u]);
+      buff[0][u] = applyReduce(redFn, buff[0][u], buff[s][u]);
+    }
+  }
+  if (postOp) {
+    #pragma unroll Unroll
+    for (int u = 0; u < Unroll; u++)
+      buff[0][u] = applyPostOp(redFn, buff[0][u]);
+  }
+
+  #pragma unroll Unroll
+  for (int d = 0; d < MinDsts; d++) {
+    #pragma unroll Unroll
+    for (int u = 0; u < Unroll; u++) {
+      if (d < MultimemDsts) {
+        multimem_st_global(minDsts[d], buff[0][u]);
+      } else {
+        st_global<BytePerPack>(minDsts[d], buff[0][u]);
+      }
+      minDsts[d] += WARP_SIZE * BytePerPack;
+    }
+  }
+  for (int d = MinDsts; (MinDsts < MaxDsts) && (d < MaxDsts) && (d < nDsts); d++) {
+    uintptr_t dstPtr = cvta_to_global(dstPtrFn(d));
+    uintptr_t dst = dstPtr + tailThreadBytesBehind;
+    #pragma unroll Unroll
+    for (int u = 0; u < Unroll; u++) {
+      st_global<BytePerPack>(dst, buff[0][u]);
+      dst += WARP_SIZE * BytePerPack;
+    }
+  }
+}
+
+template<typename RedFn, typename T, int Unroll, int BytePerPack,
+         int MultimemSrcs, int MinSrcs, int MaxSrcs,
+         int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
+         typename IntBytes, typename SrcPtrFn, typename DstPtrFn>
+__device__ __forceinline__ void reduceCopyPacks(
+    int nThreads, int &thread,
+    uint64_t redArg, uint64_t *preOpArgs, bool postOp,
+    int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
+    IntBytes &nBytesBehind, IntBytes &nBytesAhead
+  ) {
+  static_assert(std::is_signed<IntBytes>::value, "IntBytes must be a signed integral type.");
+  static_assert(MinSrcs <= MaxSrcs, "MinSrcs must be less than or equal to MaxSrcs.");
+  //if (BytePerPack == 0) __trap();
+
+  // A hunk is the amount of contiguous data a warp consumes per loop iteration
+  // assuming all threads partake.
+  constexpr int BytePerHunk = Unroll*WARP_SIZE*BytePerPack;
+  int nWarps = nThreads/WARP_SIZE;
+  int warp = thread/WARP_SIZE;
+  int lane = thread%WARP_SIZE;
+
+  // This thread's initial position.
+  IntBytes threadBytesBehind = nBytesBehind + (warp*BytePerHunk + lane*BytePerPack);
+  IntBytes threadBytesAhead = nBytesAhead - (warp*BytePerHunk + lane*BytePerPack);
+  // Number of hunks to be consumed over all warps.
+  IntBytes nHunksAhead = nBytesAhead/(BytePerHunk + !BytePerHunk);
+  // Advance collective position.
+  nBytesBehind += nHunksAhead*BytePerHunk;
+  nBytesAhead -= nHunksAhead*BytePerHunk;
+  if (Unroll==1 && BytePerPack <= nBytesAhead) {
+    // Only Unroll=1 can do partial hunks (where not all threads partake).
+    nHunksAhead += 1;
+    nBytesBehind += nBytesAhead - (nBytesAhead%(BytePerPack + !BytePerPack));
+    nBytesAhead = nBytesAhead%(BytePerPack + !BytePerPack);
+  }
+  nHunksAhead -= warp;
+
+  RedFn redFn(redArg);
+  uintptr_t minSrcs[MinSrcs + !MinSrcs];
+  uintptr_t minDsts[MinDsts + !MinDsts];
+  #pragma unroll
+  for (int s=0; s < MinSrcs; s++) {
+    minSrcs[s] = cvta_to_global(srcPtrFn(s)) + threadBytesBehind;
+  }
+
+  #pragma unroll
+  for (int d=0; d < MinDsts; d++) {
+    // Yes, for some template arguments this code will be unreachable.  That's fine.
+    // coverity[dead_error_line]
+    minDsts[d] = cvta_to_global(dstPtrFn(d)) + threadBytesBehind;
+  }
+  BytePack<BytePerPack> acc1[MaxSrcs + !MaxSrcs][Unroll];
+  BytePack<BytePerPack> acc2[MaxSrcs + !MaxSrcs][Unroll];
+  bool tailProcess = false;
+  IntBytes tailThreadBytesBehind;
+  // We dictate loop termination condition according to whether partial hunks
+  // can be handled or not.
+  while (Unroll==1 ? (BytePerPack <= threadBytesAhead) : (0 < nHunksAhead)) {
+
+    // load sources into acc1
+    loadSources<RedFn, SrcPtrFn, IntBytes, MultimemSrcs, MinSrcs, MaxSrcs, PreOpSrcs, Unroll, BytePerPack>(
+      redFn, srcPtrFn, threadBytesBehind, minSrcs, preOpArgs, acc1, nSrcs
+    );
+    
+    if(tailProcess) {
+      reduceAndStore<RedFn, DstPtrFn, IntBytes, MultimemDsts, MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs, Unroll, BytePerPack>(
+        redFn, preOpArgs, acc2, minDsts, postOp, nDsts, dstPtrFn, tailThreadBytesBehind, nSrcs
+      );
+      
+      #pragma unroll
+      for (int d=0; d < MinDsts; d++) {
+        minDsts[d] += (nWarps-1)*BytePerHunk;
+      }
+    }
+
+    #pragma unroll
+    for (int s=0; s < MinSrcs; s++) {
+      minSrcs[s] += (nWarps-1)*BytePerHunk;
+    }
+    threadBytesAhead -= nWarps*BytePerHunk;
+    nHunksAhead -= nWarps;
+    tailProcess = Unroll==1 ? (BytePerPack <= threadBytesAhead) : (0 < nHunksAhead);
+    
+    tailThreadBytesBehind = threadBytesBehind;
+    threadBytesBehind += nWarps*BytePerHunk;
+    if(tailProcess) {
+      loadSources<RedFn, SrcPtrFn, IntBytes, MultimemSrcs, MinSrcs, MaxSrcs, PreOpSrcs, Unroll, BytePerPack>(
+        redFn, srcPtrFn, threadBytesBehind, minSrcs, preOpArgs, acc2, nSrcs
+      );
+    }
+    reduceAndStore<RedFn, DstPtrFn, IntBytes, MultimemDsts, MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs, Unroll, BytePerPack>(
+      redFn, preOpArgs, acc1, minDsts, postOp, nDsts, dstPtrFn, tailThreadBytesBehind, nSrcs
+    );
+
+    if(tailProcess) {
+      #pragma unroll
+      for (int d=0; d < MinDsts; d++) {
+        minDsts[d] += (nWarps-1)*BytePerHunk;
+      }
+      #pragma unroll
+      for (int s=0; s < MinSrcs; s++) {
+        minSrcs[s] += (nWarps-1)*BytePerHunk;
+      }
+      tailThreadBytesBehind = threadBytesBehind;
+      threadBytesBehind += nWarps*BytePerHunk;
+      threadBytesAhead -= nWarps*BytePerHunk;
+      nHunksAhead -= nWarps;
+    }
+  }
+  
+  if(tailProcess) {
+    reduceAndStore<RedFn, DstPtrFn, IntBytes, MultimemDsts, MinSrcs, MaxSrcs, MinDsts, MaxDsts, PreOpSrcs, Unroll, BytePerPack>(
+      redFn, preOpArgs, acc2, minDsts, postOp, nDsts, dstPtrFn, tailThreadBytesBehind, nSrcs
+    );
+  }
+  nWarps = nThreads/WARP_SIZE;
+  warp = thread/WARP_SIZE;
+  lane = thread%WARP_SIZE;
+  // The last loop iteration could have been partial, i.e. not taken by all
+  // threads. The threads that weren't included need an extra subtraction to
+  // make the value warp uniform.
+  if (Unroll==1 && nHunksAhead > 0) nHunksAhead -= nWarps;
+  // Rotate warps so the warp which got the least work here will be warp 0.
+  // This effectively assigns: warp = (warp-nHunks+nWarps)%nWarps;
+  warp = -nHunksAhead;
+  thread = warp*WARP_SIZE + lane;
+}
+#endif
 
 template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn, typename AccPtrFn>
-#if defined(__gfx942__) || defined(__gfx950__)
 __device__ __forceinline__ void reduceCopyPacksWithBias(
-#else
-__device__ __attribute__((noinline)) void reduceCopyPacksWithBias(
-#endif
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
@@ -405,7 +610,7 @@ __device__ __attribute__((noinline)) void reduceCopyPacksWithBias(
   thread = warp*WARP_SIZE + lane;
 }
 
-template<int Unroll, typename RedFn, typename T,
+template<int Unroll, int  useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn, typename AccPtrFn>
@@ -428,7 +633,7 @@ __device__ __forceinline__ void reduceCopy(
 
   IntBytes nBytesBehind = 0;
   IntBytes nBytesAhead = nElts*sizeof(T);
-  bool useAcc = accPtrFn() != nullptr;
+  //bool useAcc = accPtrFn() != nullptr;
 
   #if __cpp_if_constexpr
   if constexpr (BigPackSize > sizeof(T)) {
@@ -550,7 +755,7 @@ __device__ __forceinline__ void reduceCopy(
      nSrcs, srcPtrFn, nDsts, dstPtrFn, /*&*/nBytesBehind, /*&*/nBytesAhead);
 }
 
-template<int Unroll, typename RedFn, typename T,
+template<int Unroll, int useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes>
@@ -560,7 +765,7 @@ __device__ __forceinline__ void reduceCopy(
     int nSrcs, void** srcPtrs, int nDsts, void** dstPtrs,
     IntBytes nElts, void *accPtr = nullptr
   ) {
-  reduceCopy<Unroll, RedFn, T,
+  reduceCopy<Unroll, useAcc, RedFn, T,
              MultimemSrcs, MinSrcs, MaxSrcs,
              MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes>
     (thread, nThreads, redArg, preOpArgs, postOp,

@@ -123,7 +123,6 @@ ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
 
 static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
   mscclStatus& status = mscclGetStatus(comm);
-  mscclThreadLocalStatus& threadLocalStatus = mscclGetThreadLocalStatus();
   struct ncclProxyOp proxyOp = {};
   proxyOp.connIndex = 0;
   proxyOp.sliceSteps = status.sliceSteps;
