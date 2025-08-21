@@ -29,7 +29,7 @@ using RCCLVecU64_2 = uint64_t __attribute__((ext_vector_type(2)));
 
 #if (defined(__gfx942__) || defined(__gfx950))
 #define store_bytepack16_global(addr, value) \
-  asm ("global_store_dwordx4 %0, %1 off sc0 sc1 nt " :: "v"((rccl::RCCLVecU64_2*)(addr)), "v"((value.u64_vec2)))
+  asm volatile("global_store_dwordx4 %0, %1 off sc0 sc1" :: "v"((rccl::RCCLVecU64_2*)(addr)), "v"((value.u64_vec2)))
 
 #define load_bytepack16_global(addr, ans) \
   ans.u64_vec2 = __builtin_nontemporal_load((rccl::RCCLVecU64_2*)(addr)) 
