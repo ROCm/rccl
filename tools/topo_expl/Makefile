@@ -65,5 +65,5 @@ hipify:
 	hipify-perl -inplace -quiet-warnings hipify_rccl/*.cc
 
 clean:
-	rm -rf hipify_rccl
+	rm -rf hipify_rccl third_party
 	rm -f *.o $(EXE)
