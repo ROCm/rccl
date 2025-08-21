@@ -34,6 +34,8 @@ $(FMT_HEADER):
 	@echo ">>> fmt not found; cloning $(FMT_GIT) ..."
 	@mkdir -p $(dir $(FMT_DIR))
 	@git clone --depth=1  $(FMT_GIT) $(FMT_DIR)
+else
+$(FMT_HEADER):
 endif
 # ---------------------------------------------------------------------------
 
