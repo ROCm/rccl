@@ -119,14 +119,14 @@ bool isRankHere(const char* s, int start, int end, int rank) {
 
 ncclResult_t ncclTreeBasePostset(struct ncclComm* comm,
     struct ncclTopoGraph* treeGraph) {
-  int x=0, y=0;
+  int x=0;
   for (int i=0;  treeGraph->treeBase[i][0]!=0; i++)
   {
     x=i+1;
   }
   if( treeGraph->treeBase[0][0] == 0) return ncclSuccess;
   int nChannels = comm->nChannels;
-  int localRanks = comm->topo->nodes[GPU].count;
+  //int localRanks = comm->topo->nodes[GPU].count; // unused variable - compiler warning
   //new tree
   for (int c=0; c<nChannels; c++) { // in here
     int buff = c%x;

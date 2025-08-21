@@ -20,26 +20,29 @@
 # THE SOFTWARE.
 
 # Usage:
-#   ./replace_static_functions.sh <source_file> [--replace-vars] [--verbose]
+#   ./replace_static.sh <source_file> [--replace-vars] [--verbose] [--exclude-list=func1,func2,var1]
 #
 # - Replaces all 'static' function definitions with non-static.
 # - Replaces all 'static inline' with 'inline'.
 # - If --replace-vars is given, also replaces 'static' at variable definitions.
+# - If --exclude-list is given, skips listed functions/variables.
 # - If --verbose is given, shows a diff of the changes.
 
 set -e
 
 SOURCE_FILE="$1"
+shift
+
 REPLACE_VARS=0
 VERBOSE=0
+EXCLUDE_LIST=""
 
 for arg in "$@"; do
-  if [[ "$arg" == "--replace-vars" ]]; then
-    REPLACE_VARS=1
-  fi
-  if [[ "$arg" == "--verbose" ]]; then
-    VERBOSE=1
-  fi
+  case "$arg" in
+    --replace-vars) REPLACE_VARS=1 ;;
+    --verbose) VERBOSE=1 ;;
+    --exclude-list=*) EXCLUDE_LIST="${arg#*=}" ;;
+  esac
 done
 
 if [[ ! -f "$SOURCE_FILE" ]]; then
@@ -48,40 +51,69 @@ if [[ ! -f "$SOURCE_FILE" ]]; then
 fi
 
 TMP_FILE="${SOURCE_FILE}.tmp.$$"
+cp "$SOURCE_FILE" "$TMP_FILE"
 
-# Regex explanation:
-# \b : Word boundary, ensures 'static' and 'inline' are matched as whole words.
-# static : Matches the literal word 'static'.
-# [[:space:]]+ : Matches one or more whitespace characters (spaces, tabs, etc.) between 'static' and 'inline'.
-# inline : Matches the literal word 'inline'.
-# \b : Word boundary after 'inline'.
-echo "[INFO] Replacing 'static inline' with 'inline' in $SOURCE_FILE"
-sed -E 's/\bstatic[[:space:]]+inline\b/inline/g' "$SOURCE_FILE" > "$TMP_FILE"
-
-# Regex explanation:
-# ^ : Start of the line.
-# ([[:space:]]*) : Captures any leading whitespace at the start of the line (indentation).
-# (inline[[:space:]]+|__device__[[:space:]]+|__forceinline__[[:space:]]+|__host__[[:space:]]+|__global__[[:space:]]+|)* :
-#   Matches zero or more occurrences of common C/C++/CUDA qualifiers (each followed by whitespace).
-# ([[:space:]]*(...|)*) : The outer group allows for any combination/order of these qualifiers.
-# static[[:space:]]+ : Matches the literal word 'static' followed by one or more spaces/tabs.
-# \1 : In the replacement, refers to the leading whitespace and any qualifiers (without 'static').
-#
-# Removes 'static' after any qualifiers before the function name
-echo "[INFO] Replacing 'static' in function qualifiers in $SOURCE_FILE"
-sed -E -i 's/^([[:space:]]*(inline[[:space:]]+|__device__[[:space:]]+|__forceinline__[[:space:]]+|__host__[[:space:]]+|__global__[[:space:]]+|)*)static[[:space:]]+/\1/g' "$TMP_FILE"
-
-
-# Regex explanation:
-# ^ : Start of the line.
-# ([[:space:]]*) : Captures any leading whitespace at the start of the line.
-# static : Matches the literal word 'static'.
-# ([[:space:]]+) : Captures one or more spaces after 'static'.
-if [[ "$REPLACE_VARS" == "1" ]]; then
-  echo "[INFO] Replacing 'static' at variable definitions in $SOURCE_FILE"
-  # This matches 'static' at the start of a line (possibly with spaces), followed by a type and a variable name
-  sed -E -i 's/^([[:space:]]*)static([[:space:]]+)/\1/g' "$TMP_FILE"
+# Prepare exclude regex if needed
+if [[ -n "$EXCLUDE_LIST" ]]; then
+  # Convert comma-separated list to alternation regex
+  EXCLUDE_REGEX="($(echo "$EXCLUDE_LIST" | sed 's/,/|/g'))"
 fi
+
+# Mark lines with excluded function or variable names
+if [[ -n "$EXCLUDE_LIST" ]]; then
+  IFS=',' read -ra EXCLUDES <<< "$EXCLUDE_LIST"
+  for name in "${EXCLUDES[@]}"; do
+    # Mark function definitions/declarations to skip (robust to qualifiers/types)
+    sed -E -i "/static[[:space:]]+([a-zA-Z_][a-zA-Z0-9_:[:space:]\*\&]*)[[:space:]]+${name}[[:space:]]*(\(|;)/s/^/__STATIC_SKIP__/" "$TMP_FILE"
+    # Mark variable definitions/declarations to skip (no '(' on the line)
+    sed -E -i '/\(/!s/static[[:space:]]+.*\b'"${name}"'\b[[:space:]]*(=|;)/__STATIC_SKIP__&/' "$TMP_FILE"
+  done
+fi
+
+# s/\bstatic[[:space:]]+inline\b/inline/g
+  #   - Matches 'static' followed by one or more spaces and then 'inline' as a whole word.
+  #   - Replaces it with just 'inline'.
+  #   - Example: 'static inline int foo()' -> 'inline int foo()'
+# s/^([[:space:]]*(inline[[:space:]]+|__device__[[:space:]]+|__forceinline__[[:space:]]+|__host__[[:space:]]+|__global__[[:space:]]+|)*)static[[:space:]]+/\1/g
+  #   - Matches lines that start with optional whitespace, then any qualifiers (inline, __device__, etc.), then 'static' and spaces.
+  #   - Removes 'static' but preserves the qualifiers and indentation.
+  #   - Example: '  inline static int foo()' -> '  inline int foo()'
+sed -E -i '/^__STATIC_SKIP__/!{
+  s/\bstatic[[:space:]]+inline\b/inline/g
+  s/^([[:space:]]*(inline[[:space:]]+|__device__[[:space:]]+|__forceinline__[[:space:]]+|__host__[[:space:]]+|__global__[[:space:]]+|)*)static[[:space:]]+/\1/g
+}' "$TMP_FILE"
+
+# # Always remove 'static' from function definitions/declarations, except excluded
+# sed -E -i '/^__STATIC_SKIP__/!s/^([[:space:]]*(inline[[:space:]]+|__device__[[:space:]]+|__forceinline__[[:space:]]+|__host__[[:space:]]+|__global__[[:space:]]+|)*)static[[:space:]]+/\1/g' "$TMP_FILE"
+
+# # Replace 'static inline' with 'inline' everywhere except marked lines
+# sed -E -i '/^__STATIC_SKIP__/!s/\bstatic[[:space:]]+inline\b/inline/g' "$TMP_FILE"
+
+# Remove 'static' at variable definitions, excluding variables in EXCLUDE_LIST
+if [[ "$REPLACE_VARS" == "1" ]]; then
+  if [[ -n "$EXCLUDE_LIST" ]]; then
+    # Regex explanation:
+    # '/^__STATIC_SKIP__/{b}; /\(/b; s/^([[:space:]]*)static([[:space:]]+)/\1/g'
+    # - /^__STATIC_SKIP__/{b};   If the line starts with __STATIC_SKIP__, branch (skip substitution).
+    # - /\(/b;                  If the line contains '(', branch (skip substitution; likely a function).
+    # - s/^([[:space:]]*)static([[:space:]]+)/\1/g
+    #     - Matches 'static' at the start of a line (possibly after indentation).
+    #     - Removes 'static', preserving indentation.
+    #     - Only applies to lines not skipped above (i.e., not excluded and not functions).
+    sed -E -i '/^__STATIC_SKIP__/{b}; /\(/b; s/^([[:space:]]*)static([[:space:]]+)/\1/g' "$TMP_FILE"
+  else
+    # Regex explanation:
+    # '/\(/!s/^([[:space:]]*)static([[:space:]]+)/\1/g'
+    # - /\(/!    Only apply to lines that do NOT contain '(' (i.e., not functions).
+    # - s/^([[:space:]]*)static([[:space:]]+)/\1/g
+    #     - Matches 'static' at the start of a line (possibly after indentation).
+    #     - Removes 'static', preserving indentation.
+    sed -E -i '/\(/!s/^([[:space:]]*)static([[:space:]]+)/\1/g' "$TMP_FILE"
+  fi
+fi
+
+# Remove the marker after all substitutions, preserving original line formatting
+sed -E -i 's/([[:space:]]*)__STATIC_SKIP__/\1/' "$TMP_FILE"
 
 if [[ "$VERBOSE" == "1" ]]; then
   echo "[INFO] Showing diff for changes:"

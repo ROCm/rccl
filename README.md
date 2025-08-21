@@ -34,31 +34,34 @@ For more info on build options/flags when using the install script, use `./insta
 RCCL build & installation helper script
  Options:
        --address-sanitizer     Build with address sanitizer enabled
-    -d|--dependencies          Install RCCL depdencencies
+    -c|--enable-code-coverage  Enable code coverage
+    -d|--dependencies          Install RCCL dependencies
        --debug                 Build debug library
        --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
        --disable-msccl-kernel  Build without MSCCL kernels
        --disable-mscclpp       Build without MSCCL++ support
+       --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines
+       --disable-roctx         Build without ROCTX logging
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)
     -j|--jobs                  Specify how many parallel compilation jobs to run ($nproc by default)
     -l|--local_gpu_only        Only compile for local GPU architecture
-       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)
+       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, separate by ';' (builds for all supported GPU architectures by default)
        --no_clean              Don't delete files if they already exist
        --npkit-enable          Compile with npkit enabled
+       --log-trace             Build with log trace enabled (i.e. NCCL_DEBUG=TRACE)
        --openmp-test-enable    Enable OpenMP in rccl unit tests
-       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)
     -p|--package_build         Build RCCL package
        --prefix                Specify custom directory to install RCCL to (default: `/opt/rocm`)
-       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility
        --run_tests_all         Run all rccl unit tests (must be built already)
     -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)
        --static                Build RCCL as a static library instead of shared library
     -t|--tests_build           Build rccl unit tests, but do not run
        --time-trace            Plot the build time of RCCL (requires `ninja-build` package installed on the system)
        --verbose               Show compile commands
+       --force-reduce-pipeline Force reduce_copy sw pipeline to be used for every reduce-based collectives and datatypes
 ```
 
 By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeLists.txt`. To target specific GPU(s), and potentially reduce build time, use `--amdgpu_targets` as a `;` separated string listing GPU(s) to target.
@@ -121,6 +124,10 @@ will run only AllReduce correctness tests with float16 datatype. A list of avail
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCm/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
 
+## RCCL CI Status
+
+RCCL Build/Unittests [![RCCL](https://dev.azure.com/ROCm-CI/ROCm-CI/_apis/build/status%2Frccl?repoName=ROCm%2Frccl&branchName=develop)](https://dev.azure.com/ROCm-CI/ROCm-CI/_build/latest?definitionId=107&repoName=ROCm%2Frccl&branchName=develop)
+
 ## Library and API Documentation
 
 Please refer to the [RCCL Documentation Site](https://rocm.docs.amd.com/projects/rccl/en/latest/) for current documentation.
@@ -137,6 +144,6 @@ python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 
 ## Copyright
 
-All source code and accompanying documentation is copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+All source code and accompanying documentation is copyright (c) 2015-2025, NVIDIA CORPORATION. All rights reserved.
 
-All modifications are copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+All modifications are copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.

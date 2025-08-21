@@ -19,6 +19,7 @@
 #include "graph.h"
 #include "nvmlwrap.h"
 #include "profiler.h"
+#include "latency_profiler/CollTrace.h"
 #include "rccl_common.h"
 #include "recorder.h"
 
@@ -634,6 +635,7 @@ struct ncclComm {
 
   hipEvent_t doneEvent;
   hipStream_t lastStream;
+  std::unique_ptr<latency_profiler::CollTrace> ctrace;
 
 #ifdef ENABLE_COLLTRACE
   struct ncclCollTrace* collTrace;

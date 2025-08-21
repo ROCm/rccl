@@ -147,8 +147,8 @@ std::string facebook_rccl::ProxyTrace::dump(uint64_t commHash) {
       sortedDumpStrMap[traceKey.str()] = proxyOpMap.second.str();
     }
   }
-  for (const auto &[keyStr, proxyOpStr] : sortedDumpStrMap) {
-    result += proxyOpStr;
+  for (const auto &pair : sortedDumpStrMap) {
+    result += pair.second; //proxyOpStr
   }
   return result;
 }
@@ -159,22 +159,22 @@ std::string facebook_rccl::ProxyTrace::dump() {
 
   // maps serialized key to serliazed proxyOp; sorted by key
   std::map<std::string, std::string> sortedDumpStrMap;
-  for (auto &[commHash, opCountMap] : activeOps) {
-    for (auto &[opCount, proxyOpMap] : opCountMap) {
-      for (auto &[opId, opEntry] : proxyOpMap) {
-        ProxyTraceRecordKey traceKey = {commHash, opCount, opId};
-        opEntry.computeStatus();
-        sortedDumpStrMap[traceKey.str()] = opEntry.str();
+  for (auto &commHash_opCountMap : activeOps) {
+    for (auto &opCount_proxyOpMap : commHash_opCountMap.second /*opCountMap*/) {
+      for (auto &opId_opEntry : opCount_proxyOpMap.second/*proxyOpMap*/) {
+        ProxyTraceRecordKey traceKey = {commHash_opCountMap.first, opCount_proxyOpMap.first, opId_opEntry.first};
+        opId_opEntry.second.computeStatus();
+        sortedDumpStrMap[traceKey.str()] = opId_opEntry.second.str();
       }
     }
   }
 
   // add the recent finished ops as well
-  for (const auto &[keyStr, proxyOpStr] : finishedOps) {
-    sortedDumpStrMap[keyStr] = proxyOpStr;
+  for (const auto &keyStr_proxyOpStr : finishedOps) {
+    sortedDumpStrMap[keyStr_proxyOpStr.first] = keyStr_proxyOpStr.second;
   }
-  for (const auto &[keyStr, proxyOpStr] : sortedDumpStrMap) {
-    result += proxyOpStr;
+  for (const auto &keyStr_proxyOpStr : sortedDumpStrMap) {
+    result += keyStr_proxyOpStr.second;
   }
   return result;
 }
@@ -207,15 +207,15 @@ std::string facebook_rccl::ProxyTraceOp::str() {
 
 float facebook_rccl::ProxyTrace::getMapSizeMB() const {
   float size = 0;
-  for (const auto &[commHash, opCountMap] : activeOps) {
-    for (const auto &[opCount, proxyOpMap] : opCountMap) {
-      size += proxyOpMap.size() *
+  for (const auto &commHash_opCountMap : activeOps) {
+    for (const auto &opCount_proxyOpMap : commHash_opCountMap.second) {
+      size += opCount_proxyOpMap.second.size() *
               (sizeof(ProxyTraceOp) +
                sizeof(std::unique_ptr<facebook_rccl::ProxyTraceOp>));
     }
   }
-  for (const auto &[keyStr, proxyOpStr] : finishedOps) {
-    size += keyStr.size() + proxyOpStr.size();
+  for (const auto &keyStr_proxyOpStr : finishedOps) {
+    size += keyStr_proxyOpStr.first.size() + keyStr_proxyOpStr.second.size();
   }
   return size / 1024.0 / 1024.0;
 }

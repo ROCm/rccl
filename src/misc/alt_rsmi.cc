@@ -48,7 +48,6 @@ struct ARSMI_systemNode {
     std::string s_card;
 };
 
-static const char *kPathDRMRoot = "/sys/class/drm";
 static const char *kKFDNodesPathRoot = "/sys/class/kfd/kfd/topology/nodes";
 static const uint32_t kAmdGpuId = 0x1002;
 
@@ -66,7 +65,6 @@ static thread_local int ARSMI_num_devices=-1;
 int ARSMI_init(void)
 {
     std::string err_msg;
-    uint32_t count = 0;
     std::multimap<uint64_t, ARSMI_systemNode> ARSMI_allSystemNodes;
 
     if (ARSMI_num_devices > 0) {
@@ -101,7 +99,7 @@ int ARSMI_init(void)
         int ret_loc_id = read_node_properties(node_id, "location_id", &location_id, properties);
         int ret_domain = read_node_properties(node_id, "domain", &domain, properties);
         int ret_vendor = read_node_properties(node_id, "vendor_id", &vendor_id, properties);
-        if (ret_gpu_id == 0 &&  ~(ret_unique_id != 0 || ret_loc_id != 0 || ret_unique_id != 0 || ret_vendor != 0) &&
+        if (ret_gpu_id == 0 &&  !(ret_unique_id != 0 || ret_loc_id != 0 || ret_domain != 0 || ret_vendor != 0) &&
             (gpu_id != 0) && (vendor_id == kAmdGpuId)) {
             // Do not try to build a node if one of these fields
             // do not exist in KFD (0 as values okay)
@@ -194,7 +192,6 @@ int ARSMI_init(void)
     // the order of each block.
     for (auto i=0; i < first_elem.size(); i++) {
         // Find the first_elem[i] in sort_vecs in
-        bool found = false;
         for (auto j = 0; j < sort_vecs.size(); j++ ) {
             if (first_elem[i] == sort_vecs[j][0].s_bdf) {
                 for (auto k=0; k<sort_vecs[j].size(); k++) {
@@ -226,7 +223,6 @@ int ARSMI_init(void)
                 continue;
             }
 
-            uint64_t hops;
             uint64_t type;
             uint64_t weight;
             uint64_t min_bandwidth;

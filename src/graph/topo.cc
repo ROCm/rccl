@@ -1546,7 +1546,9 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int ch
   int localNetCount;
   NCCLCHECK(ncclTopoGetLocal(system, GPU, gpu, NET, localNets, &localNetCount, NULL));
   if (localNetCount==0) {
+#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
     WARN("Could not find any local path from gpu %d to net.", gpu);
+#endif
     return ncclInternalError;
   }
 

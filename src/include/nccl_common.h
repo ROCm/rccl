@@ -40,7 +40,8 @@ typedef enum {
 typedef void (*ncclDebugLogger_t)(ncclDebugLogLevel level, unsigned long flags, const char *file, int line, const char *fmt, ...);
 
 #define NCCL_NUM_ONERANK 12
-#define FUNC_INDEX_TOTAL 821 + NCCL_NUM_ONERANK
+#define AR_WITH_BIAS_FUNC_COUNTS 324
+#define FUNC_INDEX_TOTAL 821 + AR_WITH_BIAS_FUNC_COUNTS + NCCL_NUM_ONERANK
 
 #define NCCL_NUM_FUNCTIONS 5 // Send/Recv not included for now
 typedef enum {
@@ -49,11 +50,12 @@ typedef enum {
   ncclFuncAllGather = 2,
   ncclFuncReduceScatter = 3,
   ncclFuncAllReduce = 4,
-  ncclFuncSendRecv = 5,
-  ncclFuncSend = 6,
-  ncclFuncRecv = 7,
-  ncclFuncAllToAllPivot = 8,
-  ncclNumFuncs = 9
+  ncclFuncAllReduceWithBias = 5,
+  ncclFuncSendRecv = 6,
+  ncclFuncSend = 7,
+  ncclFuncRecv = 8,
+  ncclFuncAllToAllPivot = 9,
+  ncclNumFuncs = 10
 } ncclFunc_t;
 
 #define NCCL_NUM_ALGORITHMS 7 // Tree/Ring/CollNet*
