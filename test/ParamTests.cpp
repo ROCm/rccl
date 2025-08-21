@@ -24,18 +24,17 @@ namespace RcclUnitTesting
                             << "TEST_VAR_WITH_NO_VALUE\n"
                             << "TEST_VAR=12345\n";
         }
-        else{
-            // This function call reads and opens the conf file from the path
-            // which is set using env. variable NCCL_CONF_FILE
-            initEnv();
+        
+        // This function call reads and opens the conf file from the path
+        // which is set using env. variable NCCL_CONF_FILE
+        initEnv();
 
-            EXPECT_EQ(getenv("TEST_VAR_WITH_NO_VALUE"), nullptr);
-            EXPECT_STREQ(getenv("TEST_VAR"), "12345"); 
-            
-            // Clean up
-            unsetenv("TEST_VAR_WITH_NO_VALUE");
-            unsetenv("TEST_VAR");
-        }
+        EXPECT_EQ(getenv("TEST_VAR_WITH_NO_VALUE"), nullptr);
+        EXPECT_STREQ(getenv("TEST_VAR"), "12345"); 
+        
+        // Clean up
+        unsetenv("TEST_VAR_WITH_NO_VALUE");
+        unsetenv("TEST_VAR");
     }
 
     TEST(ParamTests, ncclLoadParam_InvalidParam){
