@@ -27,6 +27,7 @@
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
 #include <cassert>
+#include "barrier.h"
 #include "latency_profiler/CollTraceFunc.h"
 
 using namespace rccl;
@@ -1726,6 +1727,7 @@ NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 #endif
 
 NCCL_PARAM(NvlinkUtilCentricSchedEnable, "NVLINK_UTIL_CENTRIC_SCHED_ENABLE", 0);
+RCCL_PARAM_DECLARE(InsertBarrier);
 
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclResult_t ret = ncclSuccess;
@@ -1740,8 +1742,14 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
+  if(rcclParamInsertBarrier() == 1)
+  {
+    void* temp_args[] = { &comm->devComm, &plan->channelMask, &comm->barrierWork, plan->kernelArgs, &plan->kernelArgsSize};
+    CUDACHECK(hipExtLaunchKernel((const void*)rcclWaitForAllRanksBarrier, grid, block, temp_args, 0, launchStream, NULL, comm->doneEvent, 0));
+  }
   auto event = latency_profiler::collTraceAquireEventBaseline(plan, launchStream);
   if (planner->numStreams == 1 && !plan->persistent) {
+
     latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     comm->lastStream = planner->streams->stream;
     CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);

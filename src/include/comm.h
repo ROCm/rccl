@@ -677,6 +677,12 @@ struct ncclComm {
   bool mscclppForceEnable;
 #endif
 
+  //#ifdef ENABLE_BARRIER
+  void* barrierSendBuffer;
+  void* barrierRecvBuffer;
+  ncclDevWorkColl* barrierWork;
+//#endif
+
   // Whether this comm is compatible with MSCCL
   bool mscclCompatible;
   // group job to support multi-thread FT

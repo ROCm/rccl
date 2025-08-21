@@ -444,6 +444,7 @@ set(SRC_FILES
   src/transport.cc
   src/device/all_gather.h
   src/device/all_reduce.h
+  src/device/barrier.h
   src/device/alltoall_pivot.h
   src/device/broadcast.h
   src/device/common.h

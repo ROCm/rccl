@@ -596,6 +596,8 @@ exit:
 }
 
 RCCL_PARAM(InjectFaults, "INJECT_FAULTS", 0);
+RCCL_PARAM_DECLARE(InsertBarrier);
+RCCL_PARAM(InsertBarrier, "INSERT_BARRIER", 0);
 
 static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, int ndev, int rank) {
   if (ndev < 1) {
@@ -666,6 +668,19 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
       comm->collTraceThread = 0;
   }
 #endif
+  if (rcclParamInsertBarrier() == 1) {
+    NCCLCHECK(ncclCudaHostCalloc(&comm->barrierSendBuffer, 4 * comm->nRanks ));
+    NCCLCHECK(ncclCudaHostCalloc(&comm->barrierRecvBuffer, 4 * comm->nRanks));
+    NCCLCHECK(ncclCudaHostCalloc(&comm->barrierWork, sizeof(ncclDevWorkColl)));
+    comm->barrierWork->sendbuff = (void*)comm->barrierSendBuffer;
+    comm->barrierWork->recvbuff = (void*)comm->barrierRecvBuffer;
+    comm->barrierWork->channelLo = 1;
+    comm->barrierWork->channelHi = 1;
+    comm->barrierWork->cbd.countLo = 1;
+    comm->barrierWork->cbd.countHi = 1;
+    comm->barrierWork->root = 0;
+  }
+
 
   if (rcclParamInjectFaults() != 0) {
 #ifdef ENABLE_FAULT_INJECTION
