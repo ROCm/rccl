@@ -125,7 +125,24 @@ ncclResult_t initGdrCopy() {
 static ncclResult_t initResult = ncclSuccess;
 static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
 
+ncclResult_t checkHsaEnvSetting() {
+  const char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
+  int hipRuntimeVersion = 0;
+  // hipVer is an integer e.g., 6.2.41133 -> 60241133
+  CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
+  const int firmwareVersion = parseFirmwareVersion("amd-smi firmware");
+  hipDeviceProp_t devProp;
+  // use GPU0 should be good enough
+  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
+  INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
+  if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
+    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
+    return ncclSystemError;
+  }
+  return ncclSuccess;
+}
 static void initOnceFunc() {
+  NCCLCHECKGOTO(checkHsaEnvSetting(), initResult, exit);
   initEnv();
   initGdrCopy();
   // Always initialize bootstrap network
@@ -170,19 +187,6 @@ static ncclResult_t ncclInit() {
         WARN("Missing \"HSA_FORCE_FINE_GRAIN_PCIE=1\" from environment which can lead to low RCCL performance, system instablity or hang!");
 #endif
     }
-  const char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
-  int hipRuntimeVersion = 0;
-  // hipVer is an integer e.g., 6.2.41133 -> 60241133
-  CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
-  const int firmwareVersion = parseFirmwareVersion("amd-smi firmware");
-  hipDeviceProp_t devProp;
-  // use GPU0 should be good enough
-  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
-  if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
-    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
-    return ncclInternalError;
-  }
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;
 }
