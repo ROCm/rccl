@@ -125,11 +125,22 @@ jobs:
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
             --build-dir build
 
-  therock-test-linux:
-    name: "Test"
+  therock-test-linux-multi-node:
+    name: "Test multi-node"
     needs: [therock-build-linux]
     uses: ./.github/workflows/therock-test-packages.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: vultr-linux-rocm
       artifact_run_id: ${{ github.run_id }}
+      test_type: multi-node
+
+  therock-test-linux-single-node:
+    name: "Test single-node"
+    needs: [therock-build-linux]
+    uses: ./.github/workflows/therock-test-packages.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: linux-mi325-1gpu-ossci-rocm
+      artifact_run_id: ${{ github.run_id }}
+      test_type: single-node
