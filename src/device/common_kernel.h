@@ -37,8 +37,8 @@ template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn>
-struct reduceCopyPacks<RedFn, T, Unroll, BytePerPack, MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes, SrcPtrFn, DstPtrFn, 0> {
 
+struct reduceCopyPacks<RedFn, T, Unroll, BytePerPack, MultimemSrcs, MinSrcs, MaxSrcs, MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes, SrcPtrFn, DstPtrFn, 0> {
 __device__ __forceinline__ static void run(
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
