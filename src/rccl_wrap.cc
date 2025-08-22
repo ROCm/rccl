@@ -122,10 +122,13 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
 
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   static int pxnDisable = RCCL_VALUE_UNSET;
+  comm->enableCustColl = false;
   if(pxnDisable == RCCL_VALUE_UNSET) {
     const char *inputStr = getenv("NCCL_PXN_DISABLE");
     const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
     const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
+    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));   
+
     if((!archGfx942 && !archGfx950) || inputStr) {
       rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
       return;
@@ -135,6 +138,7 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
     INFO(NCCL_INIT, "RCCL PXN set as %s", !pxnDisable? "enabled" : "disabled");
   }
   rcclPxnDisable = pxnDisable;
+  comm->enableCustColl = !pxnDisable;
 }
 
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {

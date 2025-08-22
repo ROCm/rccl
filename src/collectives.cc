@@ -110,7 +110,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
   }
 
-  if ((comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() && 
+  if (comm->enableCustColl && (comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() && 
 	rcclParamDirectAllGatherThreshold() > -1)) {
      // use direct allgather	  
      if (sendcount == 0) return ncclSuccess;
