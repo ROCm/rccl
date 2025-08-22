@@ -26,8 +26,6 @@ steps:
         echo "##[section]Starting build job..."
 
         rm -rf $(Build.BinariesDirectory)/*
-        sinfo -o "%P %G"
-        scontrol show config | grep -i GresTypes
         echo "Submitting build job..."
         mkdir -p $(Build.BinariesDirectory)
         BUILD_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/rccl/.azuredevops/slurm/build.sh)
