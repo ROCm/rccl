@@ -133,7 +133,7 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: vultr-linux-rocm
       artifact_run_id: ${{ github.run_id }}
-      test_type: multi-node
+      test_type: 'multi-node'
 
   therock-test-linux-single-node:
     name: "Test single-node"
@@ -143,4 +143,4 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: linux-mi325-1gpu-ossci-rocm
       artifact_run_id: ${{ github.run_id }}
-      test_type: single-node
+      test_type: 'single-node'
