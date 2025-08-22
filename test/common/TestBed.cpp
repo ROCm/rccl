@@ -142,11 +142,11 @@ namespace RcclUnitTesting
     // Tell first rank to get ncclUniqueId
     int getIdCmd = TestBedChild::CHILD_GET_UNIQUE_ID;
     PIPE_WRITE(0, getIdCmd);
+    PIPE_CHECK(0);
 
     // Receive back unique ID from first rank
     ncclUniqueId id;
     PIPE_READ(0, id);
-    PIPE_CHECK(0);
 
     // Send InitComms command to each active child process
     int const cmd = TestBedChild::CHILD_INIT_COMMS;
