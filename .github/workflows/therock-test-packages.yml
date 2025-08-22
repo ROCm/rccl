@@ -30,8 +30,8 @@ permissions:
 
 jobs:
   test_rccl_multi_node:
-    if: ${{ inputs.test_type == "multi-node" }}
-    name: 'Test'
+    if: ${{ inputs.test_type == 'multi-node' }}
+    name: 'Test multi-node'
     runs-on: ${{ inputs.test_runs_on }}
     defaults:
       run:
@@ -58,16 +58,24 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--rccl"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      - name: Run tests on vultr-linux-node
+      - name: Test
         run: |
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
           pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
 
   test_rccl_single_node:
-    if: ${{ inputs.test_type == "single-node" }}
-    name: 'Test'
+    if: ${{ inputs.test_type == 'single-node' }}
+    name: 'Test single-node'
     runs-on: ${{ inputs.test_runs_on }}
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
     defaults:
       run:
         shell: bash
@@ -93,6 +101,7 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--rccl"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      - name: Run single-node tests
+      - name: Test
+        timeout-minutes: 15
         run: |
-          # TODO: Fix me
+          pytest ./build_tools/github_actions/test_executable_script/test_rccl.py -v -s --log-cli-level=info
