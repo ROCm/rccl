@@ -101,6 +101,7 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--rccl --tests"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
+      # MPI install is required until https://github.com/ROCm/TheRock/issues/1284 is resolved
       - name: Install dependencies
         run: sudo apt install openmpi-bin openmpi-common libopenmpi-dev -y
 
