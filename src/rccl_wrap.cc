@@ -107,7 +107,25 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
 void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   info->pipeline = 0; // Default to no pipelining
 
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && (info->datatype == ncclBfloat16 || rcclParamPipelineAllDTypes())) {
+  const bool dtypeOK = (info->datatype == ncclBfloat16) || rcclParamPipelineAllDTypes();
+
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && dtypeOK) {
+    if (comm->nNodes > 1) {
+      switch (info->func) {
+        case ncclFuncAllReduce:
+        case ncclFuncReduceScatter:
+        case ncclFuncReduce:
+          // Enable for multi-node
+          info->pipeline = 1;
+          break;
+        default:
+          break;
+      }
+    }
+    return;
+  }
+
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && dtypeOK) {
     switch (info->func) {
       // For multi-node case, we check if the number of bytes (`nBytes`) satisfies
       // the Bf16 Limit Equation for bf16 all_reduce on MI300:
@@ -115,9 +133,9 @@ void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclT
       // The above equation is derived from the tuning results of the bf16 all_reduce on MI300.
       case ncclFuncAllReduce:
         if ( comm->nNodes == 1 ||
-           ((comm->nNodes  > 1) &&
-             nBytes <= (1ULL << 29 /*512MB*/)  * (1ULL << (log2i(comm->nNodes) - 1)))) {
-            info->pipeline = 1;
+             ((comm->nNodes > 1) &&
+               nBytes <= (1ULL << 29 /*512MB*/) * (1ULL << (log2i(comm->nNodes) - 1))) ) {
+          info->pipeline = 1;
         }
         break;
 
