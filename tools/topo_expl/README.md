@@ -33,7 +33,7 @@ Run `./topo_expl` without arguments to see the list of available models. Each mo
 
 ## Example Usage: Print RCCL's algorithm/protocol selections
 
-The tool is typically run with the `NCCL_DEBUG=INFO` environment variable, but for the convenience of just printing the algo/proto table, we use version `NCCL_DEBUG=version` in this example to avoid printing topo details.
+The tool is typically run with the `NCCL_DEBUG=INFO` environment variable to show the topology information and print out the constructed rings/trees. However, for the convenience of just printing the algo/proto table, we use version `NCCL_DEBUG=version` in this example to avoid printing topo details.
 
 ```bash
 # List available models
