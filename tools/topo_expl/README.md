@@ -45,6 +45,9 @@ NCCL_DEBUG=version ./topo_expl -m 55
 # Test a multi-node MI300 configuration with 8 nodes
 NCCL_DEBUG=version ./topo_expl -m 55 -n 8
 
+# Test a multi-node MI350 configuration with 2 nodes
+NCCL_DEBUG=version ./topo_expl -m 59 -n 2
+
 # Test MI250 configuration (model 42)
 NCCL_DEBUG=version ./topo_expl -m 42
 
