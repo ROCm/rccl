@@ -104,4 +104,4 @@ jobs:
       - name: Test
         timeout-minutes: 15
         run: |
-          pytest ./build_tools/github_actions/test_executable_script/test_rccl.py -v -s --log-cli-level=info
+          pytest ./build_tools/github_actions/test_executable_scripts/test_rccl.py -v -s --log-cli-level=info
