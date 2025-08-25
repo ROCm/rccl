@@ -62,7 +62,8 @@ jobs:
             HIP \
             rocm_smi_lib \
             rocprofiler-sdk \
-            roctracer
+            roctracer \
+            rocm-core
 
       - name: Install python deps
         run: |
