@@ -119,7 +119,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
         srcbuff = sendbuff;
      } else {
         srcbuff = ((char*)recvbuff) + comm->rank * rankOffset;
-        in_place = 1;;
+        in_place = 1;
      }
      NCCLCHECK(ncclGroupStart());
      for (int r = 0; r < nRanks; r++) {
