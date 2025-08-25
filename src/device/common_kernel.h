@@ -772,7 +772,7 @@ struct AccPtrFn {
 template<int Unroll, int useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
-         typename IntBytes, int Pipeline = 0>
+         int Pipeline = 0, typename IntBytes>
 __device__ __forceinline__ void reduceCopy(
     int thread, int nThreads,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
