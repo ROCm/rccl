@@ -91,7 +91,7 @@ namespace RcclUnitTesting
 
   protected:
     // Calls ncclGetUniqueId and returns it to parent
-    ErrCode GetUniqueId();
+    ErrCode GetUniqueId(std::vector<char>& retValBuf);
 
     // Initialize RCCL communicators
     ErrCode InitComms();

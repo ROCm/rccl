@@ -2706,6 +2706,7 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
     NVTX3_FUNC_RANGE_IN(nccl_domain);
     return ncclSuccess;
   }
+  INFO(NCCL_INIT, "Memory used = %ld", allocTracker[comm->cudaDev].totalAllocSize);
 
 #ifdef ENABLE_MSCCLPP
   if (comm->mscclppCompatible) {
