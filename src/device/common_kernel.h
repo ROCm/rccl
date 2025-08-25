@@ -610,7 +610,7 @@ __device__ __forceinline__ void reduceCopyPacksWithBias(
 template<int Unroll, int  useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
-         typename IntBytes, typename SrcPtrFn, typename DstPtrFn, typename AccPtrFn, int Pipeline>
+         typename IntBytes, int Pipeline, typename SrcPtrFn, typename DstPtrFn, typename AccPtrFn>
 __device__ __forceinline__ void reduceCopy(
     int thread, int nThreads,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
@@ -791,16 +791,6 @@ __device__ __forceinline__ void reduceCopy(
 }
 
 
-struct PtrFn {
-  void** ptrs;
-  __device__ void* operator()(int i) const { return ptrs[i]; }
-};
-
-struct AccPtrFn {
-  void* ptr;
-  __device__ void* operator()() const { return ptr; }
-};
-
 template<int Unroll, int useAcc, typename RedFn, typename T,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
@@ -813,11 +803,10 @@ __device__ __forceinline__ void reduceCopy(
   ) {
   reduceCopy<Unroll, useAcc, RedFn, T,
              MultimemSrcs, MinSrcs, MaxSrcs,
-             MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes,
-             PtrFn, PtrFn, AccPtrFn, Pipeline>
+             MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes, Pipeline>
     (thread, nThreads, redArg, preOpArgs, postOp,
-     nSrcs, PtrFn{srcPtrs},
-     nDsts, PtrFn{dstPtrs}, nElts, AccPtrFn{accPtr});
+     nSrcs, [=]__device__(int i) { return srcPtrs[i]; },
+     nDsts, [=]__device__(int i) { return dstPtrs[i]; }, nElts, [=]__device__() { return accPtr; });
 }
 
 #endif // COMMON_KERNEL_H_
