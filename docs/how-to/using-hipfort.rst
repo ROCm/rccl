@@ -34,7 +34,7 @@ hipFORT provides interfaces to the following HIP and ROCm-only libraries:
 
    hipSOLVER interfaces only work with AMD GPUs.
 
-While the HIP-based interfaces and libraries let you write portable code for both AMD and CUDA devices,
+While the HIP-based interfaces and libraries let you write portable code,
 the ROCm-only libraries can only be used with AMD devices.
 
 The available interfaces depend on which Fortran compiler was used to compile the hipFORT modules and libraries.

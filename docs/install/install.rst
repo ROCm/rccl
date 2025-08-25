@@ -33,7 +33,7 @@ Building and testing hipFORT from source
 
    .. note::
 
-      The hipFORT installation compiles backends for both ROCm (``hipfort-amdgcn``) and NVIDIA CUDA (``hipfort-nvptx``).
+      The hipFORT installation compiles a backend for ROCm (``hipfort-amdgcn``).
       When installing hipFORT from source, you do not need to specify the ``HIP_PLATFORM`` environment variable.
 
 Customizing the build
@@ -83,14 +83,11 @@ The following table lists the most important environment variables:
      - Description
      - Default
    * - ``HIP_PLATFORM``
-     - The platform to compile for (``amd`` or ``nvidia``)
+     - The platform to compile for
      - ``amd``
    * - ``ROCM_PATH``
      - Path to the ROCm installation
      - ``/opt/rocm``
-   * - ``CUDA_PATH``
-     - Path to the CUDA installation
-     - ``/usr/local/cuda``
    * - ``FC``
      -  Fortran compiler to use
      - ``gfortran``
@@ -114,19 +111,6 @@ To compile for AMD devices, call the ``make`` command from within the test direc
 
    The ``make`` targets append the linker flags for AMD devices to the ``CFLAGS`` variable by default.
 
-To compile for CUDA devices, use the ``make`` command to build as follows:
-
-.. code-block:: shell
-
-   make CFLAGS="--offload-arch=sm_70 <libs>"
-
-
-Substitute ``<libs>`` for the actual library, such as ``-lcublas`` or ``-lcusparse``.
-
-.. note:: 
-
-        Only the hip* tests can be compiled for CUDA devices. The roc* tests cannot be compiled for CUDA devices. 
-
 To compile using hipfc, run the following command:
 
 .. code-block:: shell
@@ -146,10 +130,7 @@ Building and running all tests
 
 You can build and run the whole test collection from the ``build/`` folder
 (see :ref:`build-test-hipfort-from-source`) or
-from the ``test/`` folder. Follow the instructions below corresponding to the platform you are building for.
-
-AMD devices
-^^^^^^^^^^^^
+from the ``test/`` folder.
 
 The command to run all tests, as shown below, expects the ROCm math libraries to be found at ``/opt/rocm``.
 To specify a different ROCm location, use the ``ROCM_PATH`` environment variable.
@@ -172,31 +153,3 @@ Alternatively, run the following commands from the ``test`` directory:
 
    cd test/
    make run_all
-
-CUDA devices
-^^^^^^^^^^^^
-
-To run the tests as shown below, CUDA must be found at ``/usr/local/cuda``.
-To specify a different CUDA location, use the ``CUDA_PATH`` environment variable or provide it as part of the ``CFLAGS`` variable
-by appending ``-cuda-path <path_to_cuda>``. 
-
-.. note::
-
-   Choose the offload architecture value according to the device being used.
-
-To run the tests from the ``build`` subdirectory, use these commands:
-
-.. code-block:: shell
-
-   cd build/
-   make all-tests-run CFLAGS="--offload-arch=sm_70 -lcublas -lcusolver -lcufft"
-
-
-Alternatively, run the following commands from the ``test`` directory:
-
-.. code-block:: shell
-
-   cd test/
-   make run_all CFLAGS="--offload-arch=sm_70 -lcublas -lcusolver -lcufft"
-
-

@@ -33,7 +33,7 @@ make -C build check
 * **HIP:**   HIP runtime, hipBLAS, hipSPARSE, hipFFT, hipRAND, hipSOLVER
 * **ROCm:** rocBLAS, rocSPARSE, rocFFT, rocRAND, rocSOLVER
 
-While the HIP interfaces and libraries allow to write portable code for both AMD and CUDA devices, the ROCm ones 
+While the HIP interfaces and libraries allow to write portable code, the ROCm ones 
 can only be used with AMD devices.
 
 The available interfaces depend on the Fortran compiler that is used to compile the `hipfort` modules and libraries.
@@ -131,9 +131,8 @@ Among the environment variables, the most important are:
 
 | Variable | Description | Default |
 |---|---|---|
-| `HIP_PLATFORM` | The platform to compile for (either 'amd' or 'nvidia') | `amd` |
+| `HIP_PLATFORM` | The platform to compile for | `amd` |
 | `ROCM_PATH` | Path to ROCm installation | `/opt/rocm` |
-| `CUDA_PATH` | Path to CUDA installation | `/usr/local/cuda` | 
 | `CMAKE_Fortran_COMPILER` | Fortran compiler to be used | `gfortran` | 
 
 ## Examples and tests
@@ -146,18 +145,10 @@ There are further subcategories per `hip*` or `roc*` library that is tested.
 
 ### Building a single test
 
-> **NOTE**: Only the `hip*` tests can be compiled for CUDA devices. The `roc*` tests cannot.
 > **NOTE**: The make targets append the linker flags for AMD devices to the `CFLAGS` variable per default.
 
 To compile for AMD devices you can simply call `make` in the test directories.
 
-If you want to compile for CUDA devices, you need to build as follows:
-
-```shell
-make CFLAGS="--offload-arch=sm_70 <libs>"
-```
-
-where you must substitute `<libs>` by `-lcublas`, `-lcusparse`, ... as needed.
 Compilation typically boils down to calling `hipfc` as follows:
 
 ```shell
@@ -192,24 +183,6 @@ Alternatively:
 ```shell
 cd test/
 make run_all
-```
-
-#### CUDA devices
-
-> **NOTE**: Running all tests as below requires that CUDA can be found at `/usr/local/cuda`. Specify a different CUDA location via the `CUDA_PATH` environment variable
-> or supply it to the `CFLAGS` variable by appending `-cuda-path <path_to_cuda>`.
-> **NOTE**: Choose offload architecture value according to used device.
-
-```shell
-cd build/
-make all-tests-run CFLAGS="--offload-arch=sm_70 -lcublas -lcusolver -lcufft"
-```
-
-Alternatively:
-
-```shell
-cd test/
-make run_all CFLAGS="--offload-arch=sm_70 -lcublas -lcusolver -lcufft"
 ```
 
 ## Copyright, License, and Disclaimer
