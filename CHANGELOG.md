@@ -4,12 +4,12 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased - RCCL 2.26.6 for ROCm 7.1.0
 
-### Resolved issues
-
 ### Added
 
 ### Changed
 * The default build option of `--disable-mscclpp` is changed to `--enable-mscclpp` in the `rccl/install.sh` script.
+
+### Resolved issues
 
 ## RCCL 2.26.6 for ROCm 7.0.0
 
