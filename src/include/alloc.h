@@ -455,21 +455,24 @@ ncclResult_t ncclCudaFree(T* ptr) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   TRACE(NCCL_ALLOC, "Cuda Free pointer %p", ptr);
-  CUdeviceptr baseAddress;
-  size_t retrievedSize;
 
   // get the size of the allocation
-  CUDACHECK(cuMemGetAddressRange(&baseAddress, &retrievedSize, ptr));
-  retrievedSize *= -1;
+  if (ptr != NULL) {
+     CUdeviceptr baseAddress;
+     size_t retrievedSize;
 
-  if (ptr == baseAddress) {
-     int dev;
-     CUDACHECK(hipGetDevice(&dev));
-     if (dev < MAX_ALLOC_TRACK_NGPU) {
-        __atomic_fetch_add(&allocTracker[dev].totalAlloc, -1, __ATOMIC_RELAXED);
-        __atomic_fetch_add(&allocTracker[dev].totalAllocSize, retrievedSize, __ATOMIC_RELAXED);
+     CUDACHECK(cuMemGetAddressRange(&baseAddress, &retrievedSize, ptr));
+     retrievedSize *= -1;
+
+     if (ptr == baseAddress) {
+        int dev;
+        CUDACHECK(hipGetDevice(&dev));
+        if (dev < MAX_ALLOC_TRACK_NGPU) {
+           __atomic_fetch_add(&allocTracker[dev].totalAlloc, -1, __ATOMIC_RELAXED);
+           __atomic_fetch_add(&allocTracker[dev].totalAllocSize, retrievedSize, __ATOMIC_RELAXED);
+        }
+        INFO(NCCL_ALLOC, "ncclCudaFree: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
      }
-     INFO(NCCL_ALLOC, "ncclCudaFree: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
   }
 
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
