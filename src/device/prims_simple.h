@@ -380,7 +380,7 @@ private:
             // this case should only be directCopySend() with registered buffers and send to net peer
             reduceCopy<Unroll, useAcc, RedOp, T,
               0, Recv + Src, Recv * MaxRecv + Src,
-              0, 1, 1, PreOpSrcs, decltype(workSize), Pipeline>
+              0, 1, 1, PreOpSrcs, Pipeline>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
                 Recv * fan.nrecv() + Src, ncclShmem.groups[group].srcs,
                 1, ncclShmem.groups[group].dsts,
@@ -388,7 +388,7 @@ private:
           } else {
             reduceCopy<Unroll, useAcc, RedOp, T,
               MultimemSrcs, Recv + Src, Recv * MaxRecv + Src,
-              MultimemDsts, Send + Dst, Send * MaxSend + Dst, PreOpSrcs, decltype(workSize), Pipeline>
+              MultimemDsts, Send + Dst, Send * MaxSend + Dst, PreOpSrcs, Pipeline>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
                 Recv * fan.nrecv() + Src, ncclShmem.groups[group].srcs,
                 Send * fan.nsend() + Dst, ncclShmem.groups[group].dsts,
@@ -458,10 +458,10 @@ private:
         srcs[nsrcs] = dsts[0];
         nsrcs++;
         if (MULTISRCS){
-          reduceCopy<Unroll, useAcc, RedOp, T, 0, 3, MSCCL_MAX_REDUCE_FUSION, 0, 1, 1, 0, decltype(nelem), Pipeline>
+          reduceCopy<Unroll, useAcc, RedOp, T, 0, 3, MSCCL_MAX_REDUCE_FUSION, 0, 1, 1, 0, Pipeline>
             (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nsrcs, (void **)srcs, 1, (void **)dsts, nelem);
         } else {
-          reduceCopy<Unroll, useAcc, RedOp, T, 0, 2, 2, 0, 1, 1, 0, decltype(nelem), Pipeline>
+          reduceCopy<Unroll, useAcc, RedOp, T, 0, 2, 2, 0, 1, 1, 0, Pipeline>
             (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, 2, (void **)srcs, 1, (void **)dsts, nelem);
         }
       }
