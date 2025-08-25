@@ -64,7 +64,9 @@ jobs:
             rocprofiler-sdk \
             roctracer \
             rocm-core \
-            half
+            half \
+            ROCR-Runtime \
+            rocm-cmake
 
       - name: Install python deps
         run: |
