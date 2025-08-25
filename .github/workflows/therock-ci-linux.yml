@@ -56,7 +56,13 @@ jobs:
 
       - name: Fetch sources
         run: |
-          ./build_tools/fetch_sources.py --jobs 12
+          ./build_tools/fetch_sources.py --jobs 12 --system-projects \
+            rocprofiler-register \
+            rocm-cmake \
+            HIP \
+            rocm_smi_lib \
+            rocprofiler-sdk \
+            roctracer
 
       - name: Install python deps
         run: |
