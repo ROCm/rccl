@@ -66,7 +66,11 @@ jobs:
             rocm-core \
             half \
             ROCR-Runtime \
-            rocm-cmake
+            rocm-cmake \
+            rocminfo \
+            aqlprofile \
+            clr \
+            rocprof-trace-decoder
 
       - name: Install python deps
         run: |
