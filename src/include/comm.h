@@ -690,6 +690,9 @@ struct ncclComm {
   // Unroll factor for comm [RCCL]
   int unroll;
 
+  // custom collective
+  bool enableCustColl;
+
   uint64_t endMagic;
 };
 
