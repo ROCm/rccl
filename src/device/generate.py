@@ -497,7 +497,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out("//   bits 16-19:  ty index\n")
   out("//   bits 20-23:  pipeline index\n")
   out("#include <unordered_map>\n")
-  out("extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId = {\n")
+  out("std::unordered_map<uint64_t, int> ncclDevFuncNameToId = {\n")
   for fn in func_rows:
     fn_id = -1
     if fn is not None:
