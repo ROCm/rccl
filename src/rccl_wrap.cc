@@ -127,7 +127,7 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
     const char *inputStr = getenv("NCCL_PXN_DISABLE");
     const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
     const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
-    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));   
+    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));
 
     if((!archGfx942 && !archGfx950) || inputStr) {
       rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
@@ -232,7 +232,7 @@ int parseFirmwareVersionImpl(FILE* file) {
     }
 
     if (found_pattern && (parts[0] == "FW_VERSION")) {
-      return stoi(parts[1]);
+      return stoi(parts[1]) & 0x7ff;
     }
   }
   return -1;
@@ -263,6 +263,5 @@ bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, 
   if (IsArchMatch(archName, "gfx942")) {
     return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 177);
   }
-  // remaining archs making sure use 6.4.0 or higher
-  return hipRuntimeVersion >= 60400000;
+  return true;
 }

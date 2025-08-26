@@ -137,7 +137,6 @@ if(BUILD_TESTS)
     # Add rccl-UnitTestsFixtures binary
     list(APPEND RCCL_TEST_EXECUTABLES rccl-UnitTestsFixtures)
 
-
     set(TEST_FIXTURE_SOURCE_FILES
       AltRsmiTests.cpp
       AllocTests.cpp
@@ -181,3 +180,4 @@ if(BUILD_TESTS)
   endforeach()
 
 endif()
+
