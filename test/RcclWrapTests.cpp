@@ -351,6 +351,10 @@ TEST(Rcclwrap, validHsaScratchEnvSettingTest) {
   EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443484, 176, "gfx942"));
 
   EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443483, 177, "gfx942"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60443483, 0, "gfx000"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60300000, 0, "gfx000"));
 }
 
 TEST(Rcclwrap, RcclUpdateThreadThreshold_UserEnvSet) {
