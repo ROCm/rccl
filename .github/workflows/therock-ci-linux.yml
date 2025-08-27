@@ -56,21 +56,7 @@ jobs:
 
       - name: Fetch sources
         run: |
-          ./build_tools/fetch_sources.py --jobs 12 --system-projects \
-            rocprofiler-register \
-            rocm-cmake \
-            HIP \
-            rocm_smi_lib \
-            rocprofiler-sdk \
-            roctracer \
-            rocm-core \
-            half \
-            ROCR-Runtime \
-            rocm-cmake \
-            rocminfo \
-            aqlprofile \
-            clr \
-            rocprof-trace-decoder
+          ./build_tools/fetch_sources.py --jobs 12
 
       - name: Install python deps
         run: |
@@ -112,32 +98,14 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
 
-      - name: Create Logs index Files and upload logs
+      - name: Post Build Upload
         if: always()
         run: |
-          python3 build_tools/github_actions/create_log_index.py \
-            --build-dir=build \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
-
-          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=build \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
-
-      - name: Upload artifacts
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
+          python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build
-
-      - name: Add Links to Job Summary
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_summary.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build
+            --build-dir build \
+            --upload
 
   therock-test-linux-multi-node:
     name: "Test multi-node"
