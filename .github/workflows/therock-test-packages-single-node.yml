@@ -60,6 +60,8 @@ jobs:
 
       - name: Test
         timeout-minutes: 15
+        # Currently, TheRock CI always builds with MPI enabled which causes RCCL correctness test failures
+        # TODO (geomin12): rebuild rccl-tests without MPI to enable RCCL correctness tests
         run: |
           pytest ./build_tools/github_actions/test_executable_scripts/test_rccl.py -v -s \
             --log-cli-level=info \
