@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          ref: 5f35280878ca80755c5456dfdb527c29d3f5058c
+          ref: 16ee54fb580a4dde62dc4133f978e73370a545af
 
       - name: Checkout rccl repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
