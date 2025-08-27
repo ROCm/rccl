@@ -124,7 +124,7 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
     NCCLCHECK(Recorder::instance().record(rrAllReduce, info));
   }
 
-  if (mscclAvailable(comm) && !mscclIsCaller()) {
+  if ((datatype != ncclFloat8e4m3 && datatype != ncclFloat8e5m2) && mscclAvailable(comm) && !mscclIsCaller()) {
     if (datatype != ncclBfloat16 || (count * ncclTypeSize(datatype) <= 8388608)) {
 	return mscclEnqueueCheck(
                 sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
