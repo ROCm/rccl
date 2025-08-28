@@ -7,7 +7,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Added
 
 ### Changed
-* The MSCCL++ is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
+* The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
 
 ### Resolved issues
 
