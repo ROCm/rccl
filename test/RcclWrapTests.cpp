@@ -277,7 +277,7 @@ TEST(Rcclwrap,
   comm->nNodes = 2; // triggers inter-node logic
   comm->rank = 0;
   comm->topo = new ncclTopoSystem(); //(struct ncclTopoSystem*)calloc(1,
-                                     //sizeof(struct ncclTopoSystem));
+                                     // sizeof(struct ncclTopoSystem));
   *comm->topo = {};
   comm->topo->ll128Enabled = true;
   comm->topo->nodes[GPU].nodes[0] = {};
@@ -308,7 +308,7 @@ TEST(Rcclwrap, RcclUpdateCollectiveProtocol_SimpleFallbackWhenNoRanges) {
   comm->nNodes = 2; // triggers inter-node logic
   comm->rank = 0;
   comm->topo = new ncclTopoSystem(); //(struct ncclTopoSystem*)calloc(1,
-                                     //sizeof(struct ncclTopoSystem));
+                                     // sizeof(struct ncclTopoSystem));
   *comm->topo = {};
   comm->topo->ll128Enabled = true;
   comm->topo->nodes[GPU].nodes[0] = {};
@@ -1685,6 +1685,165 @@ TEST(Rcclwrap, PXN_ZeroRanks_GFX950) {
        pxnDisable);
 
   CleanupMockComm(mockComm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_Invalid_DType) {
+  // Pipeline should not be set for non-bf16 datatypes, unless
+  // rcclParamPipelineAllDTypes() returns True
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx950", 8);
+  comm->nNodes = 2; // Multi node
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclFloat32;
+
+  size_t nBytes = 1 << 20;
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 0) << "Non-bf16 should not set pipeline by default";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX950_MultiNode_Enable) {
+  // For multi-node, pipeline is set to 1 for AllReduce with bf16
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx950", 8);
+  comm->nNodes = 2; // Multi node
+
+  ncclTaskColl info = {};
+  // In rcclSetPipelining(), ncclFuncAllReduce, ncclFuncReduceScatter, and
+  // ncclFuncReduce share the same case body. Testing any one of them is
+  // sufficient to validate that code path.
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 1 << 20;
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx950 multi-node AllReduce bf16 should enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX950_SingleNode_Disable) {
+  // For single-node, pipeline remains 0
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx950", 8);
+  comm->nNodes = 1; // Single node
+
+  ncclTaskColl info = {};
+  // In rcclSetPipelining(), ncclFuncAllReduce, ncclFuncReduceScatter, and
+  // ncclFuncReduce share the same case body. Testing any one of them is
+  // sufficient to validate that code path.
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 1 << 20;
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 0)
+      << "gfx950 single-node should not enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_SingleNode_AllReduce_Enable) {
+  // For single-node, pipeline is set to 1 for AllReduce with bf16
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 1; // Single node
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 1 << 20;
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx942 single-node AllReduce bf16 should enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Enable) {
+  // For multi-node AllReduce with bf16, pipelining is enabled if
+  // nBytes <= 512MB * 2^(log2(nNodes)-1)
+  // Testing with nNodes = 4  => threshold = 512MB * 2^(2-1) = 1GB
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 4;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = (1ULL << 30); // 1GB, exactly at threshold
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx942 4-node AllReduce at threshold should enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Disable) {
+  // When nBytes is just above the threshold, pipelining should be disabled
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 4;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = (1ULL << 30) + 1024; // 1GB + 1KB, just above threshold
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 0)
+      << "gfx942 4-node AllReduce above threshold should disable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_Enable) {
+  // ReduceScatter & Reduce should enable pipelining regardless of no. of nodes
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 8;
+
+  ncclTaskColl info = {};
+  // In rcclSetPipelining(), ncclFuncReduceScatter, and
+  // ncclFuncReduce share the same case body. Testing any one of them is
+  // sufficient to validate that code path.
+  info.func = ncclFuncReduceScatter;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 1 << 20;
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx942 ReduceScatter and Reduce should enable "
+         "pipelining with single or multi-node";
+
+  CleanupMockComm(comm);
 }
 
 } // namespace RcclUnitTesting
