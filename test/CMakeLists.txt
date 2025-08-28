@@ -140,12 +140,14 @@ if(BUILD_TESTS)
     set(TEST_FIXTURE_SOURCE_FILES
       AltRsmiTests.cpp
       AllocTests.cpp
+      ParamTests.cpp
       ArgCheckTests.cpp
       BitOpsTests.cpp
-      IpcsocketTests.cpp
       CollRegTests.cpp
       CommTests.cpp
       EnqueueTests.cpp
+      IpcsocketTests.cpp
+      NetSocketTests.cpp
       P2pTests.cpp
       ProxyTests.cpp
       RcclWrapTests.cpp

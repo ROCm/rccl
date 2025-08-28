@@ -64,7 +64,6 @@ RCCL build & installation helper script
     -t|--tests_build           Build rccl unit tests, but do not run
        --time-trace            Plot the build time of RCCL (requires `ninja-build` package installed on the system)
        --verbose               Show compile commands
-       --force-reduce-pipeline Force reduce_copy sw pipeline to be used for every reduce-based collectives and datatypes
 ```
 
 By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeLists.txt`. To target specific GPU(s), and potentially reduce build time, use `--amdgpu_targets` as a `;` separated string listing GPU(s) to target.

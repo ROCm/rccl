@@ -30,7 +30,7 @@ extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
 
-extern const char* funcNames[FUNC_INDEX_TOTAL];
+extern const char* funcNames[];
 
 #define NCCL_MAX_OPS 2048
 #define NCCL_STEPS 8
@@ -134,6 +134,7 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define RCCL_PROTO_SHIFT 8
 #define RCCL_REDOP_SHIFT 12
 #define RCCL_DTYPE_SHIFT 16
+#define RCCL_PIPELINE_SHIFT 20
 
 struct ncclConnInfo {
   // Regular comm mechanism
@@ -701,7 +702,7 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId;
 
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
-inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
+inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int pipeline = 0) {
   int row = -1;
   uint64_t key;
   // Pack 4-bit fields from right (LSB) to left in order:
@@ -717,14 +718,15 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) 
           ((uint64_t)(algo     & RCCL_FUNC_ID_MASK) << RCCL_ALGO_SHIFT ) |
           ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT) |
           ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << RCCL_REDOP_SHIFT) |
-          ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << RCCL_DTYPE_SHIFT);
+          ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << RCCL_DTYPE_SHIFT) |
+          ((uint64_t)(pipeline & RCCL_FUNC_ID_MASK) << RCCL_PIPELINE_SHIFT);
   }
   auto it = ncclDevFuncNameToId.find(key);
   if (it != ncclDevFuncNameToId.end()) {
     row = it->second;
   }
   if(row < 0) {
-    WARN("Fatal error: ncclDevFuncId: %llu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d", key, coll, algo, proto, devRedOp, type);
+    WARN("Fatal error: ncclDevFuncId: %lu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d", key, coll, algo, proto, devRedOp, type);
     return -1;
   }
   return row;

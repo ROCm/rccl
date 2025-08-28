@@ -45,4 +45,5 @@ stages:
       parameters:
         submoduleBehaviour: recursive
     - template: templates/build.yml
-    - template: templates/test.yml
+    - template: templates/test_rccl-UnitTests.yml
+    - template: templates/test_rccl-tests.yml

@@ -38,7 +38,6 @@ option(PROFILE                                 "Enable profiling"               
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
-option(FORCE_REDUCE_PIPELINING                 "Force reduce pipelining"                       OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -848,18 +847,6 @@ foreach(file ${GENERATED_FILES})
   list(APPEND HIP_SOURCES ${file})
 endforeach()
 
-# Enable SW pipelining where needed
-foreach(SOURCE_FILE ${HIP_SOURCES})
-    # TODO: enable bf16 pipelining by default upon having the pipelined/scalar switching feature
-    # if (FORCE_REDUCE_PIPELINING AND (SOURCE_FILE MATCHES "gensrc/reduce_.*" OR SOURCE_FILE MATCHES "gensrc/reduce_scatter_.*" OR SOURCE_FILE MATCHES "gensrc/all_reduce_.*"))
-    #   message(STATUS "RCCL_ENABLE_SW_PIPELINE enabled for ${SOURCE_FILE}")
-    #   set_source_files_properties(${SOURCE_FILE} PROPERTIES COMPILE_FLAGS "-DRCCL_ENABLE_SW_PIPELINE")
-    if(FORCE_REDUCE_PIPELINING AND SOURCE_FILE MATCHES "gensrc/(reduce|reduce_scatter|all_reduce).*_bf16\\.cpp$")
-      message(STATUS "BF16 pipelining support enabled for ${SOURCE_FILE}")
-      set_source_files_properties(${SOURCE_FILE} PROPERTIES COMPILE_FLAGS "-DRCCL_ENABLE_SW_PIPELINE")
-    endif()
-endforeach()
-
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "")
@@ -1354,7 +1341,7 @@ License: See LICENSE.txt for license information\n")
 
  -- RCCL Maintainer <rccl-maintainer@amd.com>  ${TIMESTAMP}\n")
   find_program( gzip_executable gzip )
-  execute_process(COMMAND bash "-c" "${gzip_executable} -9 -c ${CMAKE_BINARY_DIR}/changelog"
+  execute_process(COMMAND bash "-c" "${gzip_executable} -9 -c -n ${CMAKE_BINARY_DIR}/changelog"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR} OUTPUT_FILE "${CMAKE_BINARY_DIR}/changelog.Debian.gz")
   rocm_install(FILES "${CMAKE_BINARY_DIR}/changelog.Debian.gz" DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl)
   set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "ROCm Communication Collectives Library

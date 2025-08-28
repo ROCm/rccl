@@ -22,9 +22,9 @@ enum primsMode {
 };
 
 template<typename T, typename RedOp, typename Fan, int Direct,
-         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload, int Metadata, int useAcc>
+         int SlicePerChunk, int StepPerSlice, int Unroll, int P2p, int MultimemSrcs, int MultimemDsts, bool isNetOffload, int Metadata, int Pipeline, int useAcc>
 class Primitives<
-    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, useAcc, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload, Metadata
+    T, RedOp, Fan, Direct, ProtoSimple<SlicePerChunk, StepPerSlice, useAcc, Unroll, MultimemSrcs, MultimemDsts>, P2p, isNetOffload, Metadata, Pipeline, useAcc
   > {
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
   static constexpr int Input=0, Output=1;
@@ -80,9 +80,9 @@ private:
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
-    if (nthreads == WARP_SIZE) 
+    if (nthreads == WARP_SIZE)
       __syncwarp();
-    else 
+    else
       #if defined(__gfx942__) || defined(__gfx950__)
         barrier_generic(__threadfence_block(), nworkers, barrier_next, barriers);
       #else
@@ -380,7 +380,7 @@ private:
             // this case should only be directCopySend() with registered buffers and send to net peer
             reduceCopy<Unroll, useAcc, RedOp, T,
               0, Recv + Src, Recv * MaxRecv + Src,
-              0, 1, 1, PreOpSrcs>
+              0, 1, 1, PreOpSrcs, Pipeline>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
                 Recv * fan.nrecv() + Src, ncclShmem.groups[group].srcs,
                 1, ncclShmem.groups[group].dsts,
@@ -388,7 +388,7 @@ private:
           } else {
             reduceCopy<Unroll, useAcc, RedOp, T,
               MultimemSrcs, Recv + Src, Recv * MaxRecv + Src,
-              MultimemDsts, Send + Dst, Send * MaxSend + Dst, PreOpSrcs>
+              MultimemDsts, Send + Dst, Send * MaxSend + Dst, PreOpSrcs, Pipeline>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
                 Recv * fan.nrecv() + Src, ncclShmem.groups[group].srcs,
                 Send * fan.nsend() + Dst, ncclShmem.groups[group].dsts,
@@ -458,10 +458,10 @@ private:
         srcs[nsrcs] = dsts[0];
         nsrcs++;
         if (MULTISRCS){
-          reduceCopy<Unroll, useAcc, RedOp, T, 0, 3, MSCCL_MAX_REDUCE_FUSION, 0, 1, 1, 0>
+          reduceCopy<Unroll, useAcc, RedOp, T, 0, 3, MSCCL_MAX_REDUCE_FUSION, 0, 1, 1, 0, Pipeline>
             (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nsrcs, (void **)srcs, 1, (void **)dsts, nelem);
         } else {
-          reduceCopy<Unroll, useAcc, RedOp, T, 0, 2, 2, 0, 1, 1, 0>
+          reduceCopy<Unroll, useAcc, RedOp, T, 0, 2, 2, 0, 1, 1, 0, Pipeline>
             (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, 2, (void **)srcs, 1, (void **)dsts, nelem);
         }
       }

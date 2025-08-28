@@ -25,6 +25,14 @@ THE SOFTWARE.
 #include "graph/topo.h"
 #include "enqueue.h"
 
+// Use this param to experiment pipelining new data types besides bfloat16
+// Make sure you generate the device code with the new data type (i.e. in generate.py)
+RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
+
+// Use this to assess impact of pipelining on performance.
+// Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
+RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
+
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
@@ -96,6 +104,54 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
     auto tunedThreshold = comm->minMaxLLRange[tunableIndex][info->protocol][RCCL_PROTOCOL_THREAD_THRESHOLD_IDX];
     if(tunedThreshold != RCCL_LL_LIMITS_UNDEFINED) {
       threadThreshold = tunedThreshold * comm->nRanks;
+    }
+  }
+}
+
+void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
+  info->pipeline = 0; // Default to no pipelining
+  if (rcclParamdisableReduceCopyPipelining()) {
+    return;
+  }
+  const bool dtypeOK = (info->datatype == ncclBfloat16) || rcclParamPipelineAllDTypes();
+
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && dtypeOK) {
+    if (comm->nNodes > 1) {
+      switch (info->func) {
+        case ncclFuncAllReduce:
+        case ncclFuncReduceScatter:
+        case ncclFuncReduce:
+          // Enable for multi-node
+          info->pipeline = 1;
+          break;
+        default:
+          break;
+      }
+    }
+    return;
+  }
+
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && dtypeOK) {
+    switch (info->func) {
+      // For multi-node case, we check if the number of bytes (`nBytes`) satisfies
+      // the Bf16 Limit Equation for bf16 all_reduce on MI300:
+      // 512MB × 2^(log2[nNodes] - 1), nNodes > 1
+      // The above equation is derived from the tuning results of the bf16 all_reduce on MI300.
+      case ncclFuncAllReduce:
+        if ( comm->nNodes == 1 ||
+             ((comm->nNodes > 1) &&
+               nBytes <= (1ULL << 29 /*512MB*/) * (1ULL << (log2i(comm->nNodes) - 1))) ) {
+          info->pipeline = 1;
+        }
+        break;
+
+      case ncclFuncReduceScatter:
+      case ncclFuncReduce:
+        info->pipeline = 1;
+        break;
+
+      default:
+        break;
     }
   }
 }
