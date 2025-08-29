@@ -95,37 +95,46 @@ ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoStri
   return ncclInvalidUsage;
 }
 
-ncclResult_t rcclOverrideAlgoOrProto(const char* ncclAlgoStr[], const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS],  struct ncclTaskColl* info) {
+ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info) {
   static const char* protoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_PROTO");
-  static const char* algoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_ALGO");
   static bool validInput = true;
-  if(!validInput) return ncclInvalidUsage;
-  if (protoOverrideEnv || algoOverrideEnv) {
+  if (!validInput) return ncclInvalidUsage;
+
+  if (protoOverrideEnv) {
     static int protoVal = NCCL_PROTO_UNDEF;
-    if(protoVal == NCCL_PROTO_UNDEF && protoOverrideEnv) {
-      if(rcclGetAlgoProtoIndex(protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoVal) != ncclSuccess) {
+    if (protoVal == NCCL_PROTO_UNDEF) {
+      if (rcclGetAlgoProtoIndex(protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoVal) != ncclSuccess) {
         validInput = false;
         return ncclInvalidUsage;
       }
     }
-    if(protoVal > NCCL_PROTO_UNDEF) {
-      if(table[info->algorithm][protoVal] == NCCL_ALGO_PROTO_IGNORE) {
+    if (protoVal > NCCL_PROTO_UNDEF) {
+      if (table[info->algorithm][protoVal] == NCCL_ALGO_PROTO_IGNORE) {
         WARN("Failed to force unsupported protocol %s for function %s with datatype %s", protoOverrideEnv, ncclFuncToString(info->func), ncclDatatypeToString(info->datatype));
         return ncclInternalError;
       } else {
         info->protocol = protoVal;
       }
     }
+  }
+  return ncclSuccess;
+}
 
+ncclResult_t rcclOverrideAlgorithm(const char* ncclAlgoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info) {
+  static const char* algoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_ALGO");
+  static bool validInput = true;
+  if (!validInput) return ncclInvalidUsage;
+
+  if (algoOverrideEnv) {
     static int algoVal = NCCL_ALGO_UNDEF;
-    if(algoVal == NCCL_ALGO_UNDEF && algoOverrideEnv) {
-      if(rcclGetAlgoProtoIndex(algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoVal) != ncclSuccess) {
+    if (algoVal == NCCL_ALGO_UNDEF) {
+      if (rcclGetAlgoProtoIndex(algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoVal) != ncclSuccess) {
         validInput = false;
         return ncclInvalidUsage;
       }
     }
-    if(algoVal > NCCL_ALGO_UNDEF) {
-      if(table[algoVal][info->protocol] == NCCL_ALGO_PROTO_IGNORE) {
+    if (algoVal > NCCL_ALGO_UNDEF) {
+      if (table[algoVal][info->protocol] == NCCL_ALGO_PROTO_IGNORE) {
         WARN("Failed to force unsupported algorithm %s for function %s with datatype %s", algoOverrideEnv, ncclFuncToString(info->func), ncclDatatypeToString(info->datatype));
         return ncclInternalError;
       } else {
