@@ -34,6 +34,7 @@ extern "C" {
 /*! @brief      Opaque handle to communicator
     @details    A communicator contains information required to facilitate collective communications calls */
 typedef struct ncclComm* ncclComm_t;
+typedef struct ncclWindow* ncclWindow_t;
 #define NCCL_COMM_NULL NULL
 
 #define NCCL_UNIQUE_ID_BYTES 128
@@ -65,13 +66,25 @@ typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; /*!< Opaque array>*/} nccl
 #define NCCL_SPLIT_NOCOLOR -1
 #define NCCL_UNDEF_FLOAT -1.0f
 
+/* Window Registration flags */
+#define NCCL_WIN_DEFAULT 0x00
+#define NCCL_WIN_COLL_SYMMETRIC 0x01
+
+/* NCCL performance policy */
+#define NCCL_CTA_POLICY_DEFAULT 0x00
+#define NCCL_CTA_POLICY_EFFICIENCY 0x01
+
+/* ncclCommShrink flags*/
+#define NCCL_SHRINK_DEFAULT 0x00 /* shrink the parent communicator */
+#define NCCL_SHRINK_ABORT 0x01   /* First, terminate ongoing parent operations, and then shrink the parent communicator */
+
 /*! @defgroup   rccl_config_type Communicator Configuration
     @details    Structure that allows for customizing Communicator behavior via ncclCommInitRankConfig
     @{ */
 
 /*! @brief      Communicator configuration
     @details    Users can assign value to attributes to specify the behavior of a communicator */
-typedef struct ncclConfig_v21700 {
+typedef struct ncclConfig_v22700 {
   /* attributes that users should never touch. */
   size_t size;                 /*!< Should not be touched */
   unsigned int magic;          /*!< Should not be touched */
@@ -84,6 +97,11 @@ typedef struct ncclConfig_v21700 {
   const char *netName;         /*!< Force NCCL to use a specfic network */
   int splitShare;              /*!< Allow communicators to share resources */
   int trafficClass;            /*!< Traffic class*/
+  const char *commName;        /*!< Name of the communicator*/
+  int collnetEnable;           /*!< Check for collnet enablement*/
+  int CTAPolicy;               /*!< CTA Policy*/
+  int shrinkShare;             /*!< Shrink size*/
+  int nvlsCTAs;                /*!< Number of NVLS cooperative thread arrays (blocks)*/
 } ncclConfig_t;
 
 /* Config initializer must be assigned to initialize config structure when it is created.
@@ -99,6 +117,11 @@ typedef struct ncclConfig_v21700 {
   NCCL_CONFIG_UNDEF_PTR,                            /* netName */        \
   NCCL_CONFIG_UNDEF_INT,                            /* splitShare */     \
   NCCL_CONFIG_UNDEF_INT,                            /* trafficClass */   \
+  NCCL_CONFIG_UNDEF_PTR,                            /* commName */       \
+  NCCL_CONFIG_UNDEF_INT,                            /* collnetEnable */  \
+  NCCL_CONFIG_UNDEF_INT,                            /* CTAPolicy */      \
+  NCCL_CONFIG_UNDEF_INT,                            /* shrinkShare */    \
+  NCCL_CONFIG_UNDEF_INT,                            /* nvlsCTAs */       \
 }
 /*! @} */
 
@@ -270,7 +293,23 @@ ncclResult_t pncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *new
 /*! @endcond */
 /*! @} */
 
- /*! @brief      Creates a new communicator (multi thread/process version), similar to ncclCommInitRankConfig.
+/*! @brief      Shrink existing communicator.
+    @details    Ranks in excludeRanksList will be removed form the existing communicator.
+                Within the new communicator, ranks will be re-ordered to fill the gap of removed ones.
+                If config is NULL, the new communicator will inherit the original communicator's configuration.
+                The flag enables NCCL to adapt to various states of the parent communicator, see NCCL_SHRINK flags.
+    @return     Result code. See @ref rccl_result_code for more details.
+
+    @param[in]  comm                  Original communicator object for this rank
+    @param[in]  excludeRanksList      List of ranks to be exluded
+    @param[in]  excludeRanksCount     Number of ranks to be excluded
+    @param[out] newcomm               Pointer to new communicator
+    @param[in]  config                Config file for new communicator. May be NULL to inherit from comm 
+    @param[in]  shrinkFlags           Flag to adapt to various states of the parent communicator (see NCCL_SHRINK flags)*/
+ncclResult_t  ncclCommShrink(ncclComm_t comm, int* excludeRanksList, int excludeRanksCount, ncclComm_t* newcomm, ncclConfig_t* config, int shrinkFlags);
+ncclResult_t pncclCommShrink(ncclComm_t comm, int* excludeRanksList, int excludeRanksCount, ncclComm_t* newcomm, ncclConfig_t* config, int shrinkFlags);
+
+/*! @brief      Creates a new communicator (multi thread/process version), similar to ncclCommInitRankConfig.
      @details    Allows to use more than one ncclUniqueId (up to one per rank), 
                  indicated by nId, to accelerate the init operation.
                  The number of ncclUniqueIds and their order must be the same for every rank.
@@ -374,6 +413,18 @@ ncclResult_t pncclCommRegister(const ncclComm_t comm, void* buff, size_t size, v
 ncclResult_t  ncclCommDeregister(const ncclComm_t comm, void* handle);
 /*! @cond       include_hidden */
 ncclResult_t pncclCommDeregister(const ncclComm_t comm, void* handle);
+/*! @endcond */
+
+/* Register memory window  */
+ncclResult_t  ncclCommWindowRegister(ncclComm_t comm, void* buff, size_t size, ncclWindow_t* win, int winFlags);
+/*! @cond       include_hidden */
+ncclResult_t pncclCommWindowRegister(ncclComm_t comm, void* buff, size_t size, ncclWindow_t* win, int winFlags);
+/*! @endcond */
+
+/* Deregister symmetric memory */
+ncclResult_t  ncclCommWindowDeregister(ncclComm_t comm, ncclWindow_t win);
+/*! @cond       include_hidden */
+ncclResult_t pncclCommWindowDeregister(ncclComm_t comm, ncclWindow_t win);
 /*! @endcond */
 
 /*! @defgroup   rccl_api_enumerations API Enumerations

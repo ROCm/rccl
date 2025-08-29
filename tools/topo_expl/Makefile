@@ -58,6 +58,7 @@ hipify:
 	cp -a ../../src/collectives.cc hipify_rccl/
 	cp -a ../../src/misc/archinfo.cc hipify_rccl/graph/
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/*.h
+	hipify-perl -inplace -quiet-warnings hipify_rccl/include/latency_profiler/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/plugin/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/latency_profiler/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/device/include/*.h

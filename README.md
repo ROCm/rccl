@@ -43,7 +43,7 @@ RCCL build & installation helper script
        --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
        --disable-msccl-kernel  Build without MSCCL kernels
-       --disable-mscclpp       Build without MSCCL++ support
+       --enable-mscclpp        Build with MSCCL++ support
        --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines
        --disable-roctx         Build without ROCTX logging
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
