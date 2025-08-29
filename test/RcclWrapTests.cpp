@@ -167,6 +167,16 @@ static void CleanupMockComm(ncclComm_t &mockComm) {
   }
 }
 
+// Helper function to determine if rcclSetPipelining test should be skipped
+static bool ShouldSkipRcclSetPipeliningTests() {
+  const char *disable = getenv("RCCL_DISABLE_REDUCE_COPY_PIPELINING");
+  // Skip the test if RCCL_DISABLE_REDUCE_COPY_PIPELINING is set
+  if (disable && strcmp(disable, "0") != 0) {
+    return true;
+  }
+  return false;
+}
+
 TEST(Rcclwrap, RcclFuncMaxSendRecvCount) {
   ncclResult_t staticCheckResult = testStaticExposeCheck();
 #ifdef RCCL_EXPOSE_STATIC
@@ -1688,8 +1698,25 @@ TEST(Rcclwrap, PXN_ZeroRanks_GFX950) {
 }
 
 TEST(Rcclwrap, RcclSetPipelining_Invalid_DType) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // Skip the test if pipelining has been enabled for all data types
+  // (RCCL_PIPELINE_ALL_DATA_TYPES=1)
+  const char *allowAllDTypes = getenv("RCCL_PIPELINE_ALL_DATA_TYPES");
+  if (allowAllDTypes && strcmp(allowAllDTypes, "0") != 0) {
+    GTEST_SKIP() << "Skipping test: RCCL_PIPELINE_ALL_DATA_TYPES environment "
+                    "variable is set. Unset this variable to enable pipelining "
+                    "only for bf16 data type.";
+  }
+
   // Pipeline should not be set for non-bf16 datatypes, unless
-  // rcclParamPipelineAllDTypes() returns True
+  // rcclParamPipelineAllDTypes() returns true
   ncclComm_t comm = nullptr;
   struct ncclTopoSystem topo;
   struct ncclTopoNode gpu;
@@ -1709,6 +1736,14 @@ TEST(Rcclwrap, RcclSetPipelining_Invalid_DType) {
 }
 
 TEST(Rcclwrap, RcclSetPipelining_GFX950_MultiNode_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
   // For multi-node, pipeline is set to 1 for AllReduce with bf16
   ncclComm_t comm = nullptr;
   struct ncclTopoSystem topo;
@@ -1733,6 +1768,14 @@ TEST(Rcclwrap, RcclSetPipelining_GFX950_MultiNode_Enable) {
 }
 
 TEST(Rcclwrap, RcclSetPipelining_GFX950_SingleNode_Disable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
   // For single-node, pipeline remains 0
   ncclComm_t comm = nullptr;
   struct ncclTopoSystem topo;
@@ -1757,6 +1800,14 @@ TEST(Rcclwrap, RcclSetPipelining_GFX950_SingleNode_Disable) {
 }
 
 TEST(Rcclwrap, RcclSetPipelining_GFX942_SingleNode_AllReduce_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
   // For single-node, pipeline is set to 1 for AllReduce with bf16
   ncclComm_t comm = nullptr;
   struct ncclTopoSystem topo;
@@ -1778,6 +1829,14 @@ TEST(Rcclwrap, RcclSetPipelining_GFX942_SingleNode_AllReduce_Enable) {
 }
 
 TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
   // For multi-node AllReduce with bf16, pipelining is enabled if
   // nBytes <= 512MB * 2^(log2(nNodes)-1)
   // Testing with nNodes = 4  => threshold = 512MB * 2^(2-1) = 1GB
@@ -1801,6 +1860,14 @@ TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Enable) {
 }
 
 TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Disable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
   // When nBytes is just above the threshold, pipelining should be disabled
   ncclComm_t comm = nullptr;
   struct ncclTopoSystem topo;
@@ -1822,6 +1889,14 @@ TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Disable) {
 }
 
 TEST(Rcclwrap, RcclSetPipelining_GFX942_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
   // ReduceScatter & Reduce should enable pipelining regardless of no. of nodes
   ncclComm_t comm = nullptr;
   struct ncclTopoSystem topo;
