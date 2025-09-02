@@ -343,6 +343,31 @@ TEST(Rcclwrap, RcclUpdateCollectiveProtocol_SimpleFallbackWhenNoRanges) {
   delete comm;
 }
 
+TEST(Rcclwrap, validHsaScratchEnvSettingTest) {
+  // When HSA_NO_SCRATCH_RECLAIM is set, it is always valid
+  EXPECT_TRUE(validHsaScratchEnvSetting("1", 0, 0, "gfx950"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting("1", 0, 0, "gfx942"));
+
+  // When HSA_NO_SCRATCH_RECLAIM is not set, looking at hip version and firmware
+  // version
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60443484, 24, "gfx950"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443483, 24, "gfx950"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443484, 23, "gfx950"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60443484, 177, "gfx942"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443484, 176, "gfx942"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443483, 177, "gfx942"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60443483, 0, "gfx000"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60300000, 0, "gfx000"));
+}
+
 TEST(Rcclwrap, RcclUpdateThreadThreshold_UserEnvSet) {
   const char *value = getenv("NCCL_THREAD_THRESHOLDS");
 

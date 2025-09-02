@@ -26,7 +26,7 @@ option(BUILD_TESTS                             "Build unit test programs"       
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(ENABLE_CODE_COVERAGE                    "Enable code coverage"                          OFF)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
-option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                ON)
+option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
 option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++ CLIP"                           OFF)
 option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"                       OFF)
 option(ENABLE_MSCCLPP_FORMAT_CHECKS            "Enable formatting checks in MSCCL++"           OFF)
@@ -140,8 +140,8 @@ endif()
 # Set CMAKE flags
 #==================================================================================================
 set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
-set(CMAKE_CXX_STANDARD   14)   # We use C++14 features, this will add compile option: -std=c++14
-set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++14 instead, which has some issues.
+set(CMAKE_CXX_STANDARD   17)   # We use C++17 features, this will add compile option: -std=c++17
+set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++17 instead, which has some issues.
 if(ROCM_PATH)
   list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA
               ${ROCM_PATH}
@@ -425,6 +425,7 @@ configure_file(src/nccl.h.in ${PROJECT_BINARY_DIR}/include/nccl.h)      # Used b
 #==================================================================================================
 # E.g: find src -type f \( -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) | sort
 set(SRC_FILES
+  src/allocator.cc
   src/bootstrap.cc
   src/channel.cc
   src/collectives.cc
@@ -437,6 +438,7 @@ set(SRC_FILES
   src/msccl.cc
   src/proxy.cc
   src/rccl_wrap.cc
+  src/symmetric.cc
   src/transport.cc
   src/device/all_gather.h
   src/device/all_reduce.h
@@ -458,6 +460,11 @@ set(SRC_FILES
   src/device/onerank.cu
   src/device/network/unpack/unpack_defs.h
   src/device/network/unpack/unpack.h
+  src/device/symmetric/all_gather.cuh
+  src/device/symmetric/all_reduce.cuh
+  src/device/symmetric/kernel.cuh
+  src/device/symmetric/primitives.cuh
+  src/device/symmetric/reduce_scatter.cuh
   src/graph/connect.cc
   src/graph/paths.cc
   src/graph/rings.cc
@@ -472,6 +479,7 @@ set(SRC_FILES
   src/graph/xml.cc
   src/graph/xml.h
   src/include/alloc.h
+  src/include/allocator.h
   src/include/alt_rsmi.h
   src/include/archinfo.h
   src/include/api_trace.h
@@ -516,6 +524,7 @@ set(SRC_FILES
   src/include/rccl_common.h
   src/include/rccl_vars.h
   src/include/register.h
+  src/include/register_inline.h
   src/include/rccl_float8.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
@@ -526,11 +535,15 @@ set(SRC_FILES
   src/include/signals.h
   src/include/socket.h
   src/include/strongstream.h
+  src/include/symmetric.h
   src/include/timer.h
   src/include/transport.h
   src/include/trees.h
   src/include/tuner.h
   src/include/utils.h
+  src/include/mlx5/mlx5dvcore.h
+  src/include/mlx5/mlx5dvsymbols.h
+  src/include/mlx5/mlx5dvwrap.h
   src/include/msccl/msccl_lifecycle.h
   src/include/msccl/msccl_parser.h
   src/include/msccl/msccl_scheduler.h
@@ -591,6 +604,7 @@ set(SRC_FILES
   src/include/plugin/profiler/profiler_v1.h
   src/include/plugin/profiler/profiler_v2.h
   src/include/plugin/profiler/profiler_v3.h
+  src/include/plugin/profiler/profiler_v4.h
   src/include/plugin/tuner/tuner_v2.h
   src/include/plugin/tuner/tuner_v3.h
   src/include/plugin/tuner/tuner_v4.h
@@ -604,6 +618,8 @@ set(SRC_FILES
   src/misc/ibvsymbols.cc
   src/misc/ibvwrap.cc
   src/misc/ipcsocket.cc
+  src/misc/mlx5dvsymbols.cc
+  src/misc/mlx5dvwrap.cc
   src/misc/npkit.cc
 # src/misc/nvmlwrap.cc
   src/misc/nvmlwrap_stub.cc
@@ -634,6 +650,7 @@ set(SRC_FILES
   src/plugin/profiler/profiler_v1.cc
   src/plugin/profiler/profiler_v2.cc
   src/plugin/profiler/profiler_v3.cc
+  src/plugin/profiler/profiler_v4.cc
   src/plugin/tuner/tuner_v2.cc
   src/plugin/tuner/tuner_v3.cc
   src/plugin/tuner/tuner_v4.cc
@@ -706,6 +723,7 @@ foreach(SRC_FILE ${SRC_FILES})
   add_file_unique(HIP_SOURCES ${HIP_FILE})
 
   # Convert .cu files to .cpp so that they get processed properly
+  string(REPLACE "\.cuh" "\.h" HIP_FILE ${HIP_FILE})
   string(REPLACE "\.cu" "\.cu.cpp" HIP_FILE ${HIP_FILE})
   list(APPEND HIP_SOURCES ${HIP_FILE})
 
@@ -826,8 +844,13 @@ if (NOT Python3_FOUND)
 endif()
 
 set(GEN_DIR "${HIPIFY_DIR}/gensrc")
+set(GEN_SYM_DIR "${GEN_DIR}/symmetric")
 
-# Execute the python script to generate required files
+if(ONLY_FUNCS)
+  message(WARNING "Using ONLY_FUNCS = ${ONLY_FUNCS}. Not meant for release builds.")
+endif()
+
+# Execute the python script to generate required collective functions
 execute_process(
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -839,8 +862,20 @@ if (gen_py_result)
   message(FATAL_ERROR "${CMAKE_SOURCE_DIR}/src/device/generate.py failed")
 endif()
 
+# Execute the python script to generate required symmetric memory kernels
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/symmetric/generate.py ${GEN_SYM_DIR}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  RESULT_VARIABLE gen_sym_py_result
+  ERROR_VARIABLE gen_sym_py_error
+)
+if (gen_sym_py_result)
+  message(SEND_ERROR "Error: ${gen_sym_py_error}")
+  message(FATAL_ERROR "${CMAKE_SOURCE_DIR}/src/device/symmetric/generate.py failed")
+endif()
+
 # Find the generated files in the output directory
-file(GLOB GENERATED_FILES "${GEN_DIR}/*")
+file(GLOB_RECURSE GENERATED_FILES "${GEN_DIR}/*")
 
 # Append all found generated files to the list
 foreach(file ${GENERATED_FILES})
@@ -876,10 +911,11 @@ endif()
 ## Set RCCL include directories
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # for hipfied headers
-target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
-target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/plugin)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/mlx5)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/plugin)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
 target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})

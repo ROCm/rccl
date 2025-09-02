@@ -183,7 +183,7 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
     const char *inputStr = getenv("NCCL_PXN_DISABLE");
     const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
     const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
-    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));   
+    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));
 
     if((!archGfx942 && !archGfx950) || inputStr) {
       rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
@@ -241,4 +241,83 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
 
   INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll+1);
   return ncclSuccess;
+}
+
+std::string trimString(const std::string& s) {
+  int sz = s.size();
+  int b = 0;
+  int e = sz - 1;
+  while (b < sz && isspace(s[b])) {
+    b++;
+  }
+  if (b >= sz) {
+    return "";
+  }
+
+  while (e >= b && e < sz && isspace(s[e])) {
+    e--;
+  }
+  if (b > e) {
+    return "";
+  }
+  return s.substr(b, e - b + 1);
+}
+
+std::vector<std::string> splitString(const std::string& s, char delimiter) {
+  std::vector<std::string> tokens;
+  std::stringstream ss(s);
+  std::string token;
+
+  while (std::getline(ss, token, delimiter)) {
+    tokens.push_back(trimString(token));
+  }
+  return tokens;
+}
+
+int parseFirmwareVersionImpl(FILE* file) {
+  constexpr std::size_t MAX_LINE_SZ = 1024;
+  char line[MAX_LINE_SZ];
+  bool found_pattern = false;
+  while (fgets(line, MAX_LINE_SZ, file)) {
+    auto parts = splitString(line, ':');
+    if (parts == std::vector<std::string>{"FW_ID", "CP_MEC1"}) {
+      if (!found_pattern) {
+        found_pattern = true;
+      }
+      continue;
+    }
+
+    if (found_pattern && (parts[0] == "FW_VERSION")) {
+      return stoi(parts[1]) & 0x7ff;
+    }
+  }
+  return -1;
+}
+
+int parseFirmwareVersion(const char* command) {
+  auto file = popen(command, "r");
+  if (file == nullptr) {
+    return -1;
+  }
+  int version = -1;
+  try {
+    version = parseFirmwareVersionImpl(file);
+  } catch (const std::exception& ex) {
+  }
+  pclose(file);
+  return version;
+}
+
+bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, char const* archName) {
+  bool hsaScratchEnvSet = (hsaScratchEnv && strcmp(hsaScratchEnv,"1") == 0);
+  if (hsaScratchEnvSet) {
+    return true;
+  }
+  if (IsArchMatch(archName, "gfx950")) {
+    return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 24);
+  }
+  if (IsArchMatch(archName, "gfx942")) {
+    return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 177);
+  }
+  return true;
 }

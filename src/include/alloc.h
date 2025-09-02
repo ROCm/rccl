@@ -193,10 +193,9 @@ static_assert(sizeof(struct allocationTracker) == 64, "allocationTracker must be
 #define MAX_ALLOC_TRACK_NGPU 128
 extern struct allocationTracker allocTracker[];
 
-#if CUDART_VERSION >= 11030
+#if ROCM_VERSION >= 70000
 
-#include <cuda.h>
-#include "cudawrap.h"
+#include "rocmwrap.h"
 
 // ncclCuMemAllocAddr takes memory handle and size and returns the mapped address pointer
 static inline ncclResult_t ncclCuMemAllocAddr(void **ptr, CUmemGenericAllocationHandle *handleIn, size_t size) {
@@ -262,7 +261,7 @@ static inline ncclResult_t ncclCuMemAlloc(void **ptr, CUmemGenericAllocationHand
   prop.requestedHandleTypes = type;
   prop.location.id = currentDev;
   // Query device to see if RDMA support is available
-  CUCHECK(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, currentDev));
+  // CUCHECK(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, currentDev));
   if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
   CUCHECK(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
   ALIGN_SIZE(size, granularity);
@@ -318,21 +317,21 @@ static inline ncclResult_t ncclCuMemFree(void *ptr) {
 extern int ncclCuMemEnable();
 
 static inline ncclResult_t ncclCuMemAlloc(void **ptr, void *handlep, int type, size_t size) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 static inline ncclResult_t ncclCuMemFree(void *ptr) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 
 static inline ncclResult_t ncclCuMemAllocAddr(void **ptr, CUmemGenericAllocationHandle *handleIn, size_t size) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 
 static inline ncclResult_t ncclCuMemFreeAddr(void *ptr) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 #endif

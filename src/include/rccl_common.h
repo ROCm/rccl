@@ -91,4 +91,6 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable);
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize);
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount);
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm);
+bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, const char* archName);
+int parseFirmwareVersion(const char* command);
 #endif

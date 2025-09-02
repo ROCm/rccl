@@ -437,6 +437,7 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   args->state = ncclProxyOpReady;
   args->progress = op->connection->tcomm->proxyProgress;
   args->proxyAppendPtr = op->connection->proxyAppendPtr;
+  if (args->pattern != ncclPatternProfiler) ncclProfilerStartProxyOpEvent(subIndex, args);
   args->send = op->connection->send;
   args->prevRank = op->prevRank;
   args->nextRank = op->nextRank;
@@ -668,10 +669,10 @@ ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* op, bool
       const int rank = comm->rank, nranks = comm->nRanks;
       int *nstepsSend = NULL, *nstepsRecv = NULL;
       PatRSAlgorithm<char> algo(op->chunkSize, NCCL_STEPS, 16, 0, size, size, op->chunkSize, rank, nranks);
+      struct ncclPatStep ps = {0};
       NCCLCHECKGOTO(ncclCalloc(&nstepsSend, log2Up(nranks)), result, exit_pat_up);
       NCCLCHECKGOTO(ncclCalloc(&nstepsRecv, log2Up(nranks)), result, exit_pat_up);
 
-      struct ncclPatStep ps;
       do {
         algo.getNextOp(&ps);
         if (ps.flags & PatSkipped) continue;
@@ -702,10 +703,10 @@ ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* op, bool
       const int rank = comm->rank, nranks = comm->nRanks;
       int *nstepsSend = NULL, *nstepsRecv = NULL;
       PatAGAlgorithm<char> algo(op->chunkSize, NCCL_STEPS, 16, 0, size, size, op->chunkSize, rank, nranks);
+      struct ncclPatStep ps = {0};
       NCCLCHECKGOTO(ncclCalloc(&nstepsSend, log2Up(nranks)), result, exit_pat_down);
       NCCLCHECKGOTO(ncclCalloc(&nstepsRecv, log2Up(nranks)), result, exit_pat_down);
 
-      struct ncclPatStep ps;
       do {
         algo.getNextOp(&ps);
         if (ps.flags & PatSkipped) continue;
@@ -970,11 +971,13 @@ void* ncclProxyProgress(void *proxyState_) {
       INFO(NCCL_ALL,"%s:%d -> %d [Progress Thread]", __FILE__, __LINE__, ret);
       break;
     }
-    void* eHandle;
-    ncclProfilerStartProxyCtrlEvent(proxyState->profilerContext, &eHandle);
-    if (lastIdle == 0 && idle == 1) ncclProfilerRecordProxyCtrlEventState(eHandle, 0, ncclProfilerProxyCtrlIdle);
-    if (lastIdle == 1 && idle == 0) ncclProfilerRecordProxyCtrlEventState(eHandle, 0, ncclProfilerProxyCtrlActive);
-    ncclProfilerStopProxyCtrlEvent(eHandle);
+    if ((lastIdle == 0 && idle == 1) || (lastIdle == 1 && idle == 0)) {
+      void* eHandle;
+      ncclProfilerStartProxyCtrlEvent(proxyState->profilerContext, &eHandle);
+      if (lastIdle == 0 && idle == 1) ncclProfilerRecordProxyCtrlEventState(eHandle, 0, ncclProfilerProxyCtrlIdle);
+      if (lastIdle == 1 && idle == 0) ncclProfilerRecordProxyCtrlEventState(eHandle, 0, ncclProfilerProxyCtrlActive);
+      ncclProfilerStopProxyCtrlEvent(eHandle);
+    }
     if (idle || !state->active || (++proxyOpAppendCounter == ncclParamProgressAppendOpFreq())) {
       int added = 0;
       proxyOpAppendCounter = 0;
@@ -1226,12 +1229,17 @@ error:
 // The request/response is sent out-of-band using ncclIpcSocket for this specific command
 ncclResult_t ncclProxyClientGetFdBlocking(struct ncclComm* comm, int proxyRank, void *handle, int* convertedFd) {
   ncclResult_t ret = ncclSuccess;
+  uint64_t hipHandleVal = (uint64_t)(uintptr_t)(*(hipMemGenericAllocationHandle_t*)handle);
 
   // Request the allocation of a UDS fd for the handle
   if (comm->gproxyConn[proxyRank].initialized == false) {
     NCCLCHECKGOTO(ncclProxyConnect(comm, TRANSPORT_P2P, 1, proxyRank, &comm->gproxyConn[proxyRank]), ret, error);
   }
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  NCCLCHECKGOTO(ncclProxyCallBlockingUDS(comm, &comm->gproxyConn[proxyRank], ncclProxyMsgGetFd, (void*)&hipHandleVal, sizeof(hipHandleVal), NULL, 0, NULL, convertedFd), ret, error);
+#else
   NCCLCHECKGOTO(ncclProxyCallBlockingUDS(comm, &comm->gproxyConn[proxyRank], ncclProxyMsgGetFd, handle, sizeof(CUmemGenericAllocationHandle), NULL, 0, NULL, convertedFd), ret, error);
+#endif
 
   // We have now received the converted fd over UDS
   INFO(NCCL_PROXY, "UDS: ClientGetFd handle 0x%lx tpRank %d returned fd %d sameProcess %d", *(uint64_t*)handle, comm->topParentRanks[proxyRank], *convertedFd, comm->gproxyConn[proxyRank].sameProcess);
@@ -1443,7 +1451,7 @@ static ncclResult_t proxyConnInit(struct ncclProxyLocalPeer* peer, struct ncclPr
 }
 
 static ncclResult_t proxyQueryFd(struct ncclProxyState* proxyState, int rank, void *opId, int rmtFd) {
-#if CUDART_VERSION >= 11030
+#if ROCM_VERSION >= 70000
   struct ncclIpcSocket ipcSock = { 0 };
   uint64_t hash = (uint64_t) opId;
   ncclResult_t ret = ncclSuccess;
@@ -1459,8 +1467,14 @@ exit:
 }
 
 // cuMem API support
-static ncclResult_t proxyGetFd(struct ncclProxyState* proxyState, int rank, void *opId, uint64_t handle) {
-#if CUDART_VERSION >= 11030
+static ncclResult_t proxyGetFd(struct ncclProxyState* proxyState, int rank, void *opId,
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  hipMemGenericAllocationHandle_t handle
+#else
+   uint64_t handle
+#endif
+) {
+#if ROCM_VERSION >= 70000
   // cuMem API support
   ncclResult_t ret = ncclSuccess;
   struct ncclIpcSocket ipcSock = { 0 };
@@ -1747,6 +1761,14 @@ void* ncclProxyService(void* _args) {
         pollfds[s].fd = -1;
         npeers--;
       }
+
+      // Close any lingering connections after the stop condition is set
+      if (stop != PROXY_RUNNING && pollfds[s].fd != -1) {
+        INFO(NCCL_PROXY, "[Proxy Service %d] Force closing peer=%d fd: %d", proxyState->tpRank, s, pollfds[s].fd);
+        (void)ncclSocketClose(sock);
+        pollfds[s].fd = -1;
+        npeers--;
+      }
     }
   }
 
@@ -1776,7 +1798,11 @@ static ncclResult_t proxyUDSRecvReq(struct ncclProxyState* proxyState, int reqFd
     // cuMem API support for non-UB case, and rmtFd is not used since UDS proxy thread need to export
     // fd from handle and send it back to the main thread to import the buffer. We just need to close
     // this dummy rmtFd.
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    hipMemGenericAllocationHandle_t handle = (hipMemGenericAllocationHandle_t)(uintptr_t)(*(uint64_t*)hdr.data);
+#else
     uint64_t handle = *(uint64_t*)hdr.data;
+#endif
     INFO(NCCL_PROXY, "proxyUDSRecvReq::ncclProxyMsgGetFd rank %d opId %p handle=0x%lx", hdr.rank, hdr.opId, handle);
     close(rmtFd);
     return proxyGetFd(proxyState, hdr.rank, hdr.opId, handle);
