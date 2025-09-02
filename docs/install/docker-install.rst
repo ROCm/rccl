@@ -36,14 +36,15 @@ To build the Docker image and run the container, follow these steps.
 
       docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --network=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it rccl-tests /bin/bash
 
-To run, for example, the ``all_reduce_perf`` test from rccl-tests on 8 AMD GPUs from inside the Docker container, use this command:
+To run, for example, the ``all_reduce_perf`` test from rccl-tests on 8 AMD GPUs from inside the Docker container, use this command
+for ROCm 6.4.1 or earlier:
 
-If using ROCm 6.3.x or earlier
 .. code-block:: shell
 
    mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG=VERSION -x HSA_NO_SCRATCH_RECLAIM=1 /workspace/rccl-tests/build/all_reduce_perf -b 1 -e 16G -f 2 -g 1
 
-If using ROCm 6.4.0 or later
+For ROCm 6.4.2 or later, use this command:
+
 .. code-block:: shell
 
    mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG=VERSION /workspace/rccl-tests/build/all_reduce_perf -b 1 -e 16G -f 2 -g 1

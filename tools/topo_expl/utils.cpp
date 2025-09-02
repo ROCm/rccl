@@ -824,7 +824,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
     if (collNetEnable != NULL) {
       INFO(NCCL_ALL, "NCCL_COLLNET_ENABLE set by environment to %s.", collNetEnable);
       if (strcmp(collNetEnable, "1") == 0) {
-        comm->collNetSupport = 1;
+        comm->config.collnetEnable = 1;
       }
     }
   }
@@ -875,7 +875,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
   collNetGraph.pattern = NCCL_TOPO_PATTERN_TREE;
   collNetGraph.collNet = 1;
   collNetGraph.minChannels = collNetGraph.maxChannels = ringGraph.nChannels;
-  if (comm->collNetSupport) {
+  if (comm->config.collnetEnable) {
     NCCLCHECKGOTO(ncclTopoCompute(comm->topo, &collNetGraph), ret, fail);
     NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, &collNetGraph), ret, fail);
   }
@@ -1061,7 +1061,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
       graphs[a]->typeIntra = std::max(allGather3Data[i].graphInfo[a].typeIntra, graphs[a]->typeIntra);
       graphs[a]->typeInter = std::max(allGather3Data[i].graphInfo[a].typeInter, graphs[a]->typeInter);
     }
-    if (graphs[NCCL_ALGO_COLLNET_CHAIN]->nChannels == 0) comm->collNetSupport = 0;
+    if (graphs[NCCL_ALGO_COLLNET_CHAIN]->nChannels == 0) comm->config.collnetEnable = 0;
     if (graphs[NCCL_ALGO_NVLS]->nChannels == 0) comm->nvlsSupport = 0;
   }
 
@@ -1075,16 +1075,16 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
   }
 
   // Determine CollNet support after all-gather now that we know nNodes and each node localRanks
-  if (comm->collNetSupport == 1) {
+  if (comm->config.collnetEnable == 1) {
     int collNetNodeThreshold = ncclParamCollNetNodeThreshold();
     if (comm->nNodes < collNetNodeThreshold) {
       INFO(NCCL_INIT, "Communicator has %d nodes which is less than CollNet node threshold %d, disabling CollNet", comm->nNodes, collNetNodeThreshold);
-      comm->collNetSupport = 0;
+      comm->config.collnetEnable = 0;
     }
     for (int n=0; n<comm->nNodes; n++) {
       if (comm->nodeRanks[n].localRanks > NCCL_MAX_DIRECT_ARITY+1) {
         WARN("CollNet currently only supports up to %d GPUs per node, disabling CollNet", NCCL_MAX_DIRECT_ARITY+1);
-        comm->collNetSupport = 0;
+        comm->config.collnetEnable = 0;
         break;
       }
     }
@@ -1183,7 +1183,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
 #endif
 #if CUDART_VERSION >= 12010
   // Check if we can setup CollNet
-  if (comm->collNetSupport > 0) collNetTrySetup(comm, parent, &collNetGraph);
+  if (comm->config.collnetEnable > 0) collNetTrySetup(comm, parent, &collNetGraph);
 #endif
 
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);

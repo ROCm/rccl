@@ -8,7 +8,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef NCCL_BUILD_RDMA_CORE
+#include <infiniband/verbs.h>
+#else
 #include "ibvcore.h"
+#endif
 #include "ibvsymbols.h"
 
 static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
@@ -107,6 +111,7 @@ ncclResult_t wrap_ibv_get_device_list(struct ibv_device ***ret, int *num_devices
 }
 
 ncclResult_t wrap_ibv_free_device_list(struct ibv_device **list) {
+  if (list == nullptr) return ncclSuccess;
   IBV_PASSTHRU(ibvSymbols, ibv_internal_free_device_list, ibv_internal_free_device_list(list));
 }
 

@@ -2,6 +2,9 @@
 
 ROCm Communication Collectives Library
 
+[![RCCL](https://dev.azure.com/ROCm-CI/ROCm-CI/_apis/build/status%2Frccl?repoName=ROCm%2Frccl&branchName=develop)](https://dev.azure.com/ROCm-CI/ROCm-CI/_build/latest?definitionId=107&repoName=ROCm%2Frccl&branchName=develop)
+[![TheRock CI](https://github.com/ROCm/rccl/actions/workflows/therock-ci.yml/badge.svg?branch=develop&event=push)](https://github.com/ROCm/rccl/actions/workflows/therock-ci.yml)
+
 > **Note:** The published documentation is available at [RCCL](https://rocm.docs.amd.com/projects/rccl/en/latest/index.html) in an organized easy-to-read format that includes a table of contents and search functionality. The documentation source files reside in the [rccl/docs](https://github.com/ROCm/rccl/tree/develop/docs) folder in this repository. As with all ROCm projects, the documentation is open source. For more information, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
 
 ## Introduction
@@ -34,25 +37,27 @@ For more info on build options/flags when using the install script, use `./insta
 RCCL build & installation helper script
  Options:
        --address-sanitizer     Build with address sanitizer enabled
-    -d|--dependencies          Install RCCL depdencencies
+    -c|--enable-code-coverage  Enable code coverage
+    -d|--dependencies          Install RCCL dependencies
        --debug                 Build debug library
        --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
        --disable-msccl-kernel  Build without MSCCL kernels
-       --disable-mscclpp       Build without MSCCL++ support
+       --enable-mscclpp        Build with MSCCL++ support
+       --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines
+       --disable-roctx         Build without ROCTX logging
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)
     -j|--jobs                  Specify how many parallel compilation jobs to run ($nproc by default)
     -l|--local_gpu_only        Only compile for local GPU architecture
-       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)
+       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, separate by ';' (builds for all supported GPU architectures by default)
        --no_clean              Don't delete files if they already exist
        --npkit-enable          Compile with npkit enabled
+       --log-trace             Build with log trace enabled (i.e. NCCL_DEBUG=TRACE)
        --openmp-test-enable    Enable OpenMP in rccl unit tests
-       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)
     -p|--package_build         Build RCCL package
        --prefix                Specify custom directory to install RCCL to (default: `/opt/rocm`)
-       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility
        --run_tests_all         Run all rccl unit tests (must be built already)
     -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)
        --static                Build RCCL as a static library instead of shared library
@@ -137,6 +142,6 @@ python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 
 ## Copyright
 
-All source code and accompanying documentation is copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+All source code and accompanying documentation is copyright (c) 2015-2025, NVIDIA CORPORATION. All rights reserved.
 
-All modifications are copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+All modifications are copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.

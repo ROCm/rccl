@@ -25,6 +25,14 @@ THE SOFTWARE.
 #include "graph/topo.h"
 #include "enqueue.h"
 
+// Use this param to experiment pipelining new data types besides bfloat16
+// Make sure you generate the device code with the new data type (i.e. in generate.py)
+RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
+
+// Use this to assess impact of pipelining on performance.
+// Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
+RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
+
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
@@ -33,7 +41,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     userProtocolInput = !protoStr ? 0 : 1;
   }
 
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce)) {
+  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
     auto llMax = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MAX_IDX];
@@ -168,6 +176,54 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
   }
 }
 
+void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
+  info->pipeline = 0; // Default to no pipelining
+  if (rcclParamdisableReduceCopyPipelining()) {
+    return;
+  }
+  const bool dtypeOK = (info->datatype == ncclBfloat16) || rcclParamPipelineAllDTypes();
+
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && dtypeOK) {
+    if (comm->nNodes > 1) {
+      switch (info->func) {
+        case ncclFuncAllReduce:
+        case ncclFuncReduceScatter:
+        case ncclFuncReduce:
+          // Enable for multi-node
+          info->pipeline = 1;
+          break;
+        default:
+          break;
+      }
+    }
+    return;
+  }
+
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && dtypeOK) {
+    switch (info->func) {
+      // For multi-node case, we check if the number of bytes (`nBytes`) satisfies
+      // the Bf16 Limit Equation for bf16 all_reduce on MI300:
+      // 512MB × 2^(log2[nNodes] - 1), nNodes > 1
+      // The above equation is derived from the tuning results of the bf16 all_reduce on MI300.
+      case ncclFuncAllReduce:
+        if ( comm->nNodes == 1 ||
+             ((comm->nNodes > 1) &&
+               nBytes <= (1ULL << 29 /*512MB*/) * (1ULL << (log2i(comm->nNodes) - 1))) ) {
+          info->pipeline = 1;
+        }
+        break;
+
+      case ncclFuncReduceScatter:
+      case ncclFuncReduce:
+        info->pipeline = 1;
+        break;
+
+      default:
+        break;
+    }
+  }
+}
+
 extern ncclResult_t getAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* task,
     int collNetSupport, int nvlsSupport, int numPipeOps, ncclSimInfo_t* simInfo = NULL
@@ -188,6 +244,48 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   return ncclSuccess;
 }
 
+void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
+  static int pxnDisable = RCCL_VALUE_UNSET;
+  comm->enableCustColl = false;
+  if(pxnDisable == RCCL_VALUE_UNSET) {
+    const char *inputStr = getenv("NCCL_PXN_DISABLE");
+    const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
+    const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
+    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));
+
+    if((!archGfx942 && !archGfx950) || inputStr) {
+      rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
+      return;
+    }
+    const int ranksThreshold = (archGfx942)? 64 : 32;
+    pxnDisable = (comm->nRanks >= ranksThreshold)? 0 : 1;
+    INFO(NCCL_INIT, "RCCL PXN set as %s", !pxnDisable? "enabled" : "disabled");
+  }
+  rcclPxnDisable = pxnDisable;
+  comm->enableCustColl = !pxnDisable;
+}
+
+void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
+  static int p2pNetChunkSize = RCCL_VALUE_UNSET;
+  if(p2pNetChunkSize == RCCL_VALUE_UNSET) {
+    const char *inputStr = getenv("NCCL_P2P_NET_CHUNKSIZE");
+    const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
+    const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
+    if((!archGfx942 && !archGfx950) || inputStr) {
+      rcclP2pNetChunkSize = p2pNetChunkSize = RCCL_VALUE_INVALID;
+      return;
+    }
+
+    if(archGfx942)
+      p2pNetChunkSize = (comm->nRanks >= 64)? (1 << 19) : (1 << 17);
+    else  if(archGfx950)
+      p2pNetChunkSize = (comm->nRanks >= 32) ? (1 << 19) : (comm->nRanks >= 16 ? (1 << 18) : (1 << 17));
+    else
+      WARN("RCCL P2P attempt to set P2P net chunk size for unsupported arch: %s", comm->topo->nodes[GPU].nodes[0].gpu.gcn);
+    INFO(NCCL_INIT, "RCCL P2P net chunk size default set to: %d", p2pNetChunkSize);
+  }
+  rcclP2pNetChunkSize = p2pNetChunkSize;
+}
 
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount) {
   RCCL_STATIC_EXPOSE_CHECK();
@@ -195,43 +293,99 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
   return ncclSuccess;
 }
 
-//RCCL runtime param to set Unroll Factor
-RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", 0);
-
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-
-  //If RCCL runtime param is set, it will override defaults, if supported
-  if (rcclParamUnrollFactor() != 0) {
-#if ENABLE_COLLTRACE
-    if(rcclGetKernelIndex(rcclParamUnrollFactor(), comm->collTraceEnabled)) {
-#else
-    if(rcclGetKernelIndex(rcclParamUnrollFactor(), false)) {
-#endif
-      comm->unroll = rcclParamUnrollFactor();
-      INFO(NCCL_INIT, "RCCL Unroll Factor (user-defined): %d", comm->unroll);
-      return ncclSuccess;
-    }
-    else {
-      // Fall back to default unroll
-      WARN("Requested RCCL_UNROLL_FACTOR: %ld is invalid and does not exist in `rcclKernelTable`. Falling back to pre-set unroll.", rcclParamUnrollFactor());
-    }
-  }
-
-  if (IsArchMatch(devProp.gcnArchName, "gfx950")) {
-    //on gfx950, use unroll=1 for single-node and unroll=2 for multi-node
-    if (comm->nNodes == 1)
-      comm->unroll = 1;
+  if(IsArchMatch(devProp.gcnArchName, "gfx950")) {
+    if(comm->nNodes == 1)
+      comm->unroll = NCCL_UNROLL_1;
     else
-      comm->unroll = 2;
+      comm->unroll = NCCL_UNROLL_2;
   }
-  else if((IsArchMatch(devProp.gcnArchName, "gfx908")) ||
-          (IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80))
-    //on MI300X and gfx908, use unroll=2
-    comm->unroll = 2;
+  else if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80)))
+    comm->unroll = NCCL_UNROLL_2;
   else
-    comm->unroll = 4;
-  INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll);
+    comm->unroll = NCCL_UNROLL_4;
+
+  INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll+1);
   return ncclSuccess;
+}
+
+std::string trimString(const std::string& s) {
+  int sz = s.size();
+  int b = 0;
+  int e = sz - 1;
+  while (b < sz && isspace(s[b])) {
+    b++;
+  }
+  if (b >= sz) {
+    return "";
+  }
+
+  while (e >= b && e < sz && isspace(s[e])) {
+    e--;
+  }
+  if (b > e) {
+    return "";
+  }
+  return s.substr(b, e - b + 1);
+}
+
+std::vector<std::string> splitString(const std::string& s, char delimiter) {
+  std::vector<std::string> tokens;
+  std::stringstream ss(s);
+  std::string token;
+
+  while (std::getline(ss, token, delimiter)) {
+    tokens.push_back(trimString(token));
+  }
+  return tokens;
+}
+
+int parseFirmwareVersionImpl(FILE* file) {
+  constexpr std::size_t MAX_LINE_SZ = 1024;
+  char line[MAX_LINE_SZ];
+  bool found_pattern = false;
+  while (fgets(line, MAX_LINE_SZ, file)) {
+    auto parts = splitString(line, ':');
+    if (parts == std::vector<std::string>{"FW_ID", "CP_MEC1"}) {
+      if (!found_pattern) {
+        found_pattern = true;
+      }
+      continue;
+    }
+
+    if (found_pattern && (parts[0] == "FW_VERSION")) {
+      return stoi(parts[1]) & 0x7ff;
+    }
+  }
+  return -1;
+}
+
+int parseFirmwareVersion(const char* command) {
+  auto file = popen(command, "r");
+  if (file == nullptr) {
+    return -1;
+  }
+  int version = -1;
+  try {
+    version = parseFirmwareVersionImpl(file);
+  } catch (const std::exception& ex) {
+  }
+  pclose(file);
+  return version;
+}
+
+bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, char const* archName) {
+  bool hsaScratchEnvSet = (hsaScratchEnv && strcmp(hsaScratchEnv,"1") == 0);
+  if (hsaScratchEnvSet) {
+    return true;
+  }
+  if (IsArchMatch(archName, "gfx950")) {
+    return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 24);
+  }
+  if (IsArchMatch(archName, "gfx942")) {
+    return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 177);
+  }
+  return true;
 }

@@ -7,6 +7,9 @@
 #ifndef NCCL_DEBUG_H_
 #define NCCL_DEBUG_H_
 
+#include <cstdint>
+#include "nccl.h"
+
 typedef enum {
   NCCL_LOG_NONE = 0,
   NCCL_LOG_VERSION = 1,
@@ -39,8 +42,15 @@ typedef enum {
 
 typedef void (*ncclDebugLogger_t)(ncclDebugLogLevel level, unsigned long flags, const char *file, int line, const char *fmt, ...);
 
-#define NCCL_NUM_ONERANK 12
-#define FUNC_INDEX_TOTAL 821 + NCCL_NUM_ONERANK
+// NCCL core profiler callback for network defined events instrumentation
+enum {
+  ncclProfilerNetEventStart = 0,
+  ncclProfilerNetEventStop,
+  ncclProfilerNetEventUpdate,
+  ncclProfilerNetEventUpdateAndStop,
+};
+
+typedef ncclResult_t (*ncclProfilerCallback_t)(void** eHandle, int type, void* pHandle, int64_t pluginId, void* extData);
 
 #define NCCL_NUM_FUNCTIONS 5 // Send/Recv not included for now
 typedef enum {
@@ -49,14 +59,15 @@ typedef enum {
   ncclFuncAllGather = 2,
   ncclFuncReduceScatter = 3,
   ncclFuncAllReduce = 4,
-  ncclFuncSendRecv = 5,
-  ncclFuncSend = 6,
-  ncclFuncRecv = 7,
-  ncclFuncAllToAllPivot = 8,
-  ncclNumFuncs = 9
+  ncclFuncAllReduceWithBias = 5,
+  ncclFuncSendRecv = 6,
+  ncclFuncSend = 7,
+  ncclFuncRecv = 8,
+  ncclFuncAllToAllPivot = 9,
+  ncclNumFuncs = 10
 } ncclFunc_t;
 
-#define NCCL_NUM_ALGORITHMS 7 // Tree/Ring/CollNet*
+#define NCCL_NUM_ALGORITHMS 7 // Tree/Ring/CollNet*/PAT
 #define NCCL_ALGO_UNDEF -1
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
@@ -73,6 +84,11 @@ typedef enum {
 #define NCCL_PROTO_SIMPLE 2
 
 #define NCCL_ALGO_PROTO_IGNORE -1.0
+
+#define NCCL_NUM_UNROLLS 3 // 1/2/4
+#define NCCL_UNROLL_1 0
+#define NCCL_UNROLL_2 1
+#define NCCL_UNROLL_4 2
 
 #define NCCL_NUM_FLOATS 6 // half/float/double/rccl_bfloat16/rccl_float8/rccl_bfloat8
 #endif
