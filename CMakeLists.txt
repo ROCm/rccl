@@ -1161,8 +1161,7 @@ if (FAULT_INJECTION)
   target_compile_definitions(rccl PRIVATE ENABLE_FAULT_INJECTION)
   message(STATUS "Fault injection enabled")
 endif()
-target_compile_options(rccl PRIVATE -g -pg)
-target_link_libraries(rccl PRIVATE -g -pg)
+
 ## Set RCCL linked library directories
 target_link_directories(rccl PRIVATE ${ROCM_SMI_LIB_DIR})
 
@@ -1197,12 +1196,7 @@ target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
 target_link_libraries(rccl PRIVATE   dl)
 target_link_libraries(rccl PRIVATE   ${ROCM_SMI_LIBRARIES})
-# AFTER
 target_link_libraries(rccl PRIVATE fmt::fmt-header-only)
-# And hide link-interface from the install export to avoid CMake complaining
-install(TARGETS fmt-header-only EXPORT rccl-targets)
-
-
 if(ENABLE_MSCCLPP)
   target_link_libraries(rccl PRIVATE mscclpp_nccl)
 endif()
