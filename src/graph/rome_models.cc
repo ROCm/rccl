@@ -1791,6 +1791,10 @@ static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel*
       for (j = 0; j < ref->nGpus; j++) {
         // enabling PXN override paths over PHB and SYS
         if (topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXN) continue;
+        // treat PIX and PXB as same
+        if ((ref->gdrLevel[i*ref->nGpus+j] == PATH_PXB && topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PIX) ||
+          (ref->gdrLevel[i*ref->nGpus+j] == PATH_PIX && topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXB))
+          continue;
         if (ref->gdrLevel[i*ref->nGpus+j] != topo->gdrLevel[n[i]*ref->nGpus+g[j]]) break;
       }
       if (j < ref->nGpus) break;
