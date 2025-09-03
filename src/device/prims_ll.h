@@ -29,20 +29,20 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   const int stepLines;
   Fan fan;
   T SGLOBAL *userBufs[3];
-  struct ncclConnInfo SGLOBAL * recvConn = NULL;
-  uint64_t* recvConnHeadPtr = NULL;
+  ncclConnInfo SGLOBAL *recvConn = NULL;
+  uint64_t *recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
 
-  struct ncclConnInfo SGLOBAL* sendConn = NULL;
-  volatile struct ncclConnFifo SGLOBAL* sendConnFifo = NULL;
-  uint64_t* sendConnHeadPtr = NULL;
+  ncclConnInfo SGLOBAL *sendConn = NULL;
+  ncclConnFifo SGLOBAL *sendConnFifo = NULL;
+  uint64_t *sendConnHeadPtr = NULL;
   uint64_t sendConnHead;
   uint64_t sendConnHeadCache; // Cache last seen value
 
   uint64_t recvStep[MaxRecv];
   uint64_t sendStep[MaxSend];
-  union ncclLLFifoLine* recvBuff[MaxRecv];
-  union ncclLLFifoLine* sendBuff[MaxSend];
+  ncclLLFifoLine SGLOBAL *recvBuff[MaxRecv];
+  ncclLLFifoLine SGLOBAL *sendBuff[MaxSend];
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -60,12 +60,23 @@ private:
   uint64_t npKitWaitRecvTotalTime = 0;
 #endif
 
-  inline __device__ int recvOffset(int i) { return (recvStep[i]%NCCL_STEPS)*stepLines; }
-  inline __device__ int sendOffset(int i) { return (sendStep[i]%NCCL_STEPS)*stepLines; }
-  inline __device__ union ncclLLFifoLine* recvPtr(int i) { return recvBuff[i]+recvOffset(i); }
-  inline __device__ union ncclLLFifoLine* sendPtr(int i) { return sendBuff[i]+sendOffset(i); }
-  inline __device__ uint32_t recvFlag(int i) { return NCCL_LL_FLAG(recvStep[i]+1); }
-  inline __device__ uint32_t sendFlag(int i) { return NCCL_LL_FLAG(sendStep[i]+1); }
+  inline __device__ int recvOffset(int i) { 
+    // NOTE: changing to Xprivate(recvStep) reduces the perf 2x!
+    return ((recvStep)[i] % NCCL_STEPS)*stepLines; 
+  }
+  inline __device__ int sendOffset(int i) { 
+    return ((sendStep)[i] % NCCL_STEPS)*stepLines; 
+  }
+  inline __device__ ncclLLFifoLine SGLOBAL* recvPtr(int i) { 
+    return (recvBuff)[i] + recvOffset(i); }
+  inline __device__ ncclLLFifoLine SGLOBAL* sendPtr(int i) { 
+    return (sendBuff)[i] + sendOffset(i); }
+  inline __device__ uint32_t recvFlag(int i) { 
+    return NCCL_LL_FLAG((recvStep)[i] + 1); 
+  }
+  inline __device__ uint32_t sendFlag(int i) { 
+    return NCCL_LL_FLAG((sendStep)[i] + 1); 
+  }
 
   uint64_t* barriers;
   uint64_t barrier_next = 0;
@@ -89,18 +100,7 @@ private:
 
   int abort = 0;
 
-  __device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
-    if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      int abort = ld_seq_sys_global(ncclShmem.comm.abortFlag);
-      spins = 0;
-      if (abort) {
-        __atomic_store_n(Tlocal(&ncclShmem.aborted), abort, __ATOMIC_SEQ_CST);
-        abortCache |= abortValue;
-      }
-    }
-    return abortCache;
-  }
-
+public:
   inline __device__ void waitSend(int nbytes) {
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_WAIT_SEND_ENTRY)
     if (tid == 0) {
@@ -114,12 +114,12 @@ private:
         __builtin_amdgcn_s_sleep(1);
         sendConnHeadCache = ld_relaxed_sys_global(sendConnHeadPtr);
         //sendConnHeadCache = atomicAdd(Tglobal(sendConnHeadPtr), 0);
-        if (checkAbort(abort, 1, spins)) break;
+        if (checkAbortLL(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
-        int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        st_relaxed_sys_global(&sendConnFifo[sendConnHead%NCCL_STEPS].size, (ssize_t)size);
-        //sendConnFifo[sendConnHead%NCCL_STEPS].size = size;
+        int size = (sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK ? stepLines*sizeof(ncclLLFifoLine) : nbytes;
+        auto *ptr = sendConnFifo + sendConnHead % NCCL_STEPS;
+        st_relaxed_sys_global(&ptr->size, (ssize_t)size);
       }
       sendConnHead += 1;
     }
@@ -133,7 +133,7 @@ private:
   }
 
   inline __device__ void incRecv(int i) {
-    recvStep[i] += 1;
+    (recvStep)[i] += 1;
   }
   inline __device__ void postRecv() {
     barrier();
@@ -146,14 +146,16 @@ private:
   inline __device__ void incSend(int i, int offset) {
     // LL Cleanup : write all flags in the slice to make sure we don't have
     // data corruption when flag loops over.
-    if ((sendStep[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
-      for (int o = offset; o<stepLines; o+=nthreads) storeLL(sendPtr(i)+o, 0, sendFlag(i));
+    if (((sendStep)[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
+      for (int o = offset; o < stepLines; o += nthreads) {
+        storeLL(sendPtr(i) + o, 0, sendFlag(i));
+      }
     }
-    sendStep[i]++;
+    (sendStep)[i]++;
   }
 
   __device__ uint64_t readLL(int offset, int i) {
-    union ncclLLFifoLine* src = recvPtr(i) + offset;
+    auto* src = recvPtr(i) + offset;
     uint32_t flag = recvFlag(i);
     uint32_t data1, flag1, data2, flag2;
     int spins = 0;
@@ -166,7 +168,7 @@ private:
 #endif
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-    union ncclLLFifoLine i4;
+    ncclLLFifoLine i4;
     do {
 #ifdef __GFX11__
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
@@ -178,7 +180,8 @@ private:
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
-      if (checkAbort(abort, 1, spins)) break;
+      // NOTE NOTE: removing this makes LL fail !!!
+      if (checkAbortLL(abort, 1, spins)) break;
     } while ((i4.flag1 != flag) || (i4.flag2 != flag));
     uint64_t val64 = (uint64_t)(i4.data1) + (((uint64_t)i4.data2) << 32);
 #else
@@ -187,7 +190,7 @@ private:
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
-      if (checkAbort(abort, 1, spins)) break;
+      if (checkAbortLL(abort, 1, spins)) break;
     } while ((flag1 != flag) || (flag2 != flag));
     uint64_t val64 = data1 + (((uint64_t)data2) << 32);
 #endif
@@ -209,7 +212,7 @@ private:
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_line]
       if (i < fan.nrecv()) {
-        union ncclLLFifoLine* src = recvPtr(i) + offset;
+        auto* src = recvPtr(i) + offset;
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #ifdef __GFX11__
         asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
@@ -225,7 +228,7 @@ private:
     }
   }
   __device__ uint64_t readLLFinish(int offset, ncclLLFifoLine(&line)[MaxRecv], int i) {
-    union ncclLLFifoLine* src = recvPtr(i) + offset;
+    auto* src = recvPtr(i) + offset;
     uint32_t flag = recvFlag(i);
     int spins = 0;
 
@@ -251,7 +254,7 @@ private:
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
 #endif
-      if (checkAbort(abort, 1, spins)) break;
+      if (checkAbortLL(abort, 1, spins)) break;
     } while(line[i].flag1 != flag || line[i].flag2 != flag);
     uint64_t val64 = line[i].data1 + (((uint64_t)line[i].data2) << 32);
 
@@ -265,7 +268,7 @@ private:
     return val64;
   }
 
-  __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
+  __device__ void storeLL(ncclLLFifoLine SGLOBAL* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #if (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
     using Vec = uint32_t __attribute__((ext_vector_type(4)));
@@ -438,7 +441,7 @@ private:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-  __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+  __device__ __forceinline__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : (T *)userBufs[SrcBuf] + srcIx;
@@ -547,7 +550,7 @@ private:
     if (SEND) {
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_line]
-      for (int i=1; i < MaxSend && i < fan.nsend(); i++)
+      for (int i = 1; i < MaxSend && i < fan.nsend(); i++)
         incSend(i, offset);
       incSend(0, offset);
     }
@@ -629,21 +632,21 @@ private:
     barrier();
   }
 
-  __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo SGLOBAL* conn, int i) {
-    recvBuff[i] = (union ncclLLFifoLine*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
-    recvStep[i] = Tglobal(conn)->step;
+  __device__ __forceinline__ void loadRecvConn(ncclConnInfo SGLOBAL* conn, int i) {
+    (recvBuff)[i] = (ncclLLFifoLine SGLOBAL*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
+    (recvStep)[i] = Tglobal(conn)->step;
     if (wid == i) recvConn = conn;
   }
   __device__ __forceinline__ void loadRecvSync() {
-    if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv()) {
+    if (tid >= nthreads - WARP_SIZE && wid < fan.nrecv()) {
       recvConnHeadPtr = Tglobal(recvConn)->head;
       recvConnHead = Tglobal(recvConn)->step;
     }
   }
 
-  __device__ __forceinline__ void loadSendConn(struct ncclConnInfo SGLOBAL* conn, int i) {
-    sendBuff[i] = (union ncclLLFifoLine*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
-    sendStep[i] = Tglobal(conn)->step;
+  __device__ __forceinline__ void loadSendConn(ncclConnInfo SGLOBAL* conn, int i) {
+    (sendBuff)[i] = (ncclLLFifoLine SGLOBAL*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
+    (sendStep)[i] = Tglobal(conn)->step;
     if (wid == i) sendConn = conn;
   }
   __device__ __forceinline__ void loadSendSync() {
@@ -707,11 +710,6 @@ public:
     userBufs[Input] = (T SGLOBAL *)inputBuf;
     userBufs[Output] = (T SGLOBAL *)outputBuf;
     userBufs[Acc] = (T SGLOBAL*)acc;
-  }
-
-  __device__ void moveDataPtrs(intptr_t delta) {
-    *Tglobal(&userBufs[Input]) += delta;
-    *Tglobal(&userBufs[Output]) += delta;
   }
 
   __device__ void send(intptr_t inpIx, int eltN) {
@@ -848,14 +846,14 @@ public:
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
   }
 
-  __device__ void mscclStoreLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
+  __device__ void mscclStoreLL(ncclLLFifoLine SGLOBAL* dst, uint64_t val, uint32_t flag) {
     union ncclLLFifoLine i4;
     i4.data1 = val & 0xffffffff;
     i4.flag1 = flag;
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
-    __builtin_nontemporal_store(i4.v[0], dst->v);
-    __builtin_nontemporal_store(i4.v[1], dst->v+1);
+    __builtin_nontemporal_store(i4.v[0], Tglobal(dst)->v);
+    __builtin_nontemporal_store(i4.v[1], Tglobal(dst)->v+1);
   }
 
   __device__ void mscclSend(intptr_t srcIx, int nelem) {

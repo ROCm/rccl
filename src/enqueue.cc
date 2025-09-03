@@ -175,6 +175,7 @@ static void addWorkBatchToPlan(
     batch = &chan->workBatchQueue.tail->batch;
     // All of the conditions that prevent us from appending to current batch.
     newBatch |= batch->workType != (uint8_t)workType;
+    // We alrady create a new batch when func ID differs!
     newBatch |= batch->funcId != devFuncId;
     // The following ensure the device can handle a batch this large. They have to
     // account for all extension batches being fused together which is why

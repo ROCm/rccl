@@ -472,18 +472,22 @@ __device__ __forceinline__ void profiler(int action) {
       // increment workCounter regardless of the profiler being active or not
       ncclShmem.channel.workCounter += ncclShmem.nWorks;
       if(!profilerEnabled()) return;
-      ncclShmem.comm.workStarted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
+      auto *ptr = (uint64_t SGLOBAL *)ncclShmem.comm.workStarted;
+      ptr[ncclShmem.channelId] = ncclShmem.channel.workCounter;
     }
   } else if (action == STOP) {
     if (threadIdx.x == 0 && profilerEnabled()) {
-      ncclShmem.comm.workCompleted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
+      auto *ptr = (uint64_t SGLOBAL *)ncclShmem.comm.workCompleted;
+      ptr[ncclShmem.channelId] = ncclShmem.channel.workCounter;
     }
   } else { // FINI
     if (threadIdx.x == 0) {
       // store the workCounter back to vidmem regardless of the profiler being active or not
-      ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter = ncclShmem.channel.workCounter;
+      auto *pcomm = (ncclDevCommAndChannels SGLOBAL*)ncclShmem.args.comm;
+      pcomm->channels[ncclShmem.channelId].workCounter = ncclShmem.channel.workCounter;
       if (!profilerEnabled()) return;
-      ncclShmem.comm.workCompleted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
+      auto *ptr = (uint64_t SGLOBAL *)ncclShmem.comm.workCompleted;
+      ptr[ncclShmem.channelId] = ncclShmem.channel.workCounter;
     }
   }
 }
@@ -603,7 +607,8 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 
   if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {
     // ncclShmem.workConsumed written by loadWorkBatchToShmem before __syncthreads()
-    ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
+    auto *ptr = Tglobal(ncclShmem.comm.workConsumed);
+    ptr[ncclShmem.channelId] = ncclShmem.workConsumed;
   }
 
   while (ncclShmem.aborted == 0) {
@@ -648,7 +653,8 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 
     if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {
       // ncclShmem.workConsumed written by loadWorkBatchToShmem before __syncthreads()
-      ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
+      auto *ptr = Tglobal(ncclShmem.comm.workConsumed);
+      ptr[ncclShmem.channelId] = ncclShmem.workConsumed;
     }
     if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceCollLaunchType, batchIx);
   }

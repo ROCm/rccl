@@ -64,6 +64,14 @@ namespace {
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata> prims
       (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
 
+    // if constexpr(std::is_same<Proto, ProtoLL>::value) {
+    //   prims.waitSend(0x11111);
+    // __builtin_amdgcn_s_sleep(0xCC);
+    // __builtin_amdgcn_s_sleep(0xDD);
+    // __builtin_amdgcn_s_sleep(0x11);
+    // return;
+    // }
+    
 #if defined(ENABLE_NPKIT)
     if (tid == 0) {
       prims.npKitCtxIdx = npKitCtxIdx;
@@ -564,7 +572,7 @@ namespace {
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
     if(work->regUsed || work->netRegUsed || work->gfx942CheapFenceOff){ \
       runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
-    } \ 
+    } \
     else { \
       runRing<T, RedOp, Proto, RCCL_ONE_NODE_RING_SIMPLE>(tid, nthreads, work); \
     } \

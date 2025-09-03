@@ -35,6 +35,8 @@ __device__ __attribute__((noinline)) void reduceCopyPacks(
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
     IntBytes &nBytesBehind, IntBytes &nBytesAhead
   ) {
+
+  // constexpr int Unroll=1;
   static_assert(std::is_signed<IntBytes>::value, "IntBytes must be a signed integral type.");
   //if (BytePerPack == 0) __trap();
 
@@ -559,7 +561,8 @@ __device__ __forceinline__ void reduceCopy(
              MultimemDsts, MinDsts, MaxDsts, PreOpSrcs, IntBytes>
     (thread, nThreads, redArg, preOpArgs, postOp,
      nSrcs, [=]__device__(int i) { return srcPtrs[i]; },
-     nDsts, [=]__device__(int i) { return dstPtrs[i]; }, nElts, [=]__device__() { return accPtr; });
+     nDsts, [=]__device__(int i) { return dstPtrs[i]; }, 
+     nElts, [=]__device__() { return accPtr; });
 }
 
 #endif // COMMON_KERNEL_H_

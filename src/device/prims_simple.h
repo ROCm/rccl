@@ -203,11 +203,11 @@ private:
     }
 
     if ((flags & Send*RolePostSend) && next_hdp_reg)
-      STORE((unsigned int SGLOBAL*)next_hdp_reg, 0x1);
+      STORE(Tglobal(next_hdp_reg), 0x1);
 
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
       step += StepPerSlice;
-      STORE((uint64_t SGLOBAL*)connStepPtr, step);
+      STORE(Tglobal(connStepPtr), step);
     }
   }
 
@@ -657,7 +657,7 @@ private:
     step = roundUp(step, SlicePerChunk*StepPerSlice);
     if (flags & RolePostRecv) {
       connStepPtr = conn->head;
-      STORE(connStepPtr, step); // Return credits in case we rounded up.
+      STORE(Tglobal(connStepPtr), step); // Return credits in case we rounded up.
     }
     if (flags & RoleWaitRecv) {
       // WaitRecv role saves since that's who needs it in setDataPtrs()
@@ -1031,13 +1031,6 @@ public:
           directBuff = (T*)work->dnInputs[index];
         }
       }
-    }
-  }
-
-  __device__ void moveDataPtrs(intptr_t delta) {
-    if (tid==0) {
-      ncclShmem.groups[group].userInput = (T SGLOBAL*)ncclShmem.groups[group].userInput + delta;
-      ncclShmem.groups[group].userOutput = (T SGLOBAL*)ncclShmem.groups[group].userOutput + delta;
     }
   }
 

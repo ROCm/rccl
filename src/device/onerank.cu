@@ -40,13 +40,13 @@ namespace {
 
     if (redOpArgIsPtr) {
       if (redOpArg%2 != 0) {
-        redOpArg = *reinterpret_cast<uint8_t*>(redOpArg);
+        redOpArg = *reinterpret_cast<uint8_t SGLOBAL*>(redOpArg);
       } else if (redOpArg%4 != 0) {
-        redOpArg = *reinterpret_cast<uint16_t*>(redOpArg);
+        redOpArg = *reinterpret_cast<uint16_t SGLOBAL*>(redOpArg);
       } else if (redOpArg%8 != 0) {
-        redOpArg = *reinterpret_cast<uint32_t*>(redOpArg);
+        redOpArg = *reinterpret_cast<uint32_t SGLOBAL*>(redOpArg);
       } else {
-        redOpArg = *reinterpret_cast<uint64_t*>(redOpArg);
+        redOpArg = *reinterpret_cast<uint64_t SGLOBAL*>(redOpArg);
       }
     }
     reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/1>

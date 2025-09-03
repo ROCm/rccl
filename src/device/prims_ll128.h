@@ -39,13 +39,13 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload>:
   const int group;
   Fan fan;
   T SGLOBAL *userBufs[3];
-  struct ncclConnInfo SGLOBAL* recvConn = NULL;
+  ncclConnInfo SGLOBAL* recvConn = NULL;
   uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
 
-  struct ncclConnInfo SGLOBAL* sendConn = NULL;
-  volatile struct ncclConnFifo* sendConnFifo = NULL;
-  volatile uint64_t* sendConnTailPtr = NULL;
+  ncclConnInfo SGLOBAL *sendConn = NULL;
+  ncclConnFifo SGLOBAL *sendConnFifo = NULL;
+  uint64_t* sendConnTailPtr = NULL;
   uint64_t sendConnTail;
   uint64_t* sendConnHeadPtr = NULL;
   uint64_t sendConnHead;
@@ -89,17 +89,6 @@ private:
   }
 
   int abort = 0;
-  __device__ inline int checkAbort(int &abortCache, const int abortValue, int &spins) {
-    if (abortCache == 0 && ++spins == NCCL_SPINS_BEFORE_CHECK_ABORT) {
-      int abort = ld_seq_sys_global(ncclShmem.comm.abortFlag);
-      spins = 0;
-      if (abort) {
-        __atomic_store_n(Tlocal(&ncclShmem.aborted), abort, __ATOMIC_SEQ_CST);
-        abortCache |= abortValue;
-      }
-    }
-    return abortCache;
-  }
 
   inline __device__ void waitSend(int nbytes) {
     if (sendConnHeadPtr) {
@@ -107,12 +96,11 @@ private:
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
         sendConnHeadCache = ld_relaxed_sys_global(sendConnHeadPtr);
-        //sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
-        if (checkAbort(abort, 1, spins)) break;
+        if (checkAbortLL(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
-        st_relaxed_sys_global(&sendConnFifo[sendStep[wid]%NCCL_STEPS].size, (ssize_t)nbytes);
-        //sendConnFifo[sendStep[wid]%NCCL_STEPS].size = nbytes;
+        auto *ptr = sendConnFifo + sendStep[wid] % NCCL_STEPS;
+        st_relaxed_sys_global(&ptr->size, (ssize_t)nbytes);
       }
       sendConnHead += 1;
     }
@@ -122,7 +110,6 @@ private:
     if (recvConnHeadPtr) {
       recvConnHead += 1;
       STORE(Tglobal(recvConnHeadPtr), recvConnHead);
-      //st_relaxed_sys_global(recvConnHeadPtr, recvConnHead);
     }
   }
   inline __device__ void postSend() {
@@ -132,9 +119,8 @@ private:
 #else
       __threadfence();
 #endif
-      // STORE((unsigned long long  SGLOBAL *)sendConnTailPtr, sendConnTail += 1);
       sendConnTail += 1;
-      st_relaxed_sys_global(sendConnTailPtr, sendConnTail);
+      STORE(Tglobal(sendConnTailPtr), sendConnTail);
     }
   }
 
@@ -252,7 +238,7 @@ private:
           load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
           needReload |= flagThread && (vr[u+1] != flag);
         }
-        needReload &= (0 == checkAbort(abort, 1, spins));
+        needReload &= (0 == checkAbortLL(abort, 1, spins));
       } while (__any(needReload));
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2)
@@ -298,7 +284,7 @@ private:
             load128(ptr+u*WARP_SIZE, vr[u], vr[u+1]);
             needReload |= flagThread && (vr[u+1] != flag);
           }
-          needReload &= (0 == checkAbort(abort, 1, spins));
+          needReload &= (0 == checkAbortLL(abort, 1, spins));
         } while (__any(needReload));
 
         #pragma unroll
@@ -511,11 +497,10 @@ private:
     if (tid < fan.nsend()) {
       sendConnHeadPtr = sendConn->head;
       sendConnHeadCache = ld_relaxed_sys_global(sendConnHeadPtr);
-      //sendConnHeadCache = *sendConnHeadPtr;
       sendConnHead = sendConn->step;
-      sendConnFifo = (volatile ncclConnFifo *)sendConn->connFifo;
+      sendConnFifo = sendConn->connFifo;
     }
-    if (tid >= nthreads-WARP_SIZE && wid<fan.nsend()) {
+    if (tid >= nthreads - WARP_SIZE && wid < fan.nsend()) {
       if (sendConn->connFifo) {
         sendConnTailPtr = sendConn->tail;
         sendConnTail = sendConn->step;
@@ -570,11 +555,6 @@ public:
     userBufs[Input] = (T SGLOBAL*)inputBuf;
     userBufs[Output] = (T SGLOBAL*)outputBuf;
     userBufs[Acc] = (T SGLOBAL*)acc;
-  }
-
-  __device__ void moveDataPtrs(intptr_t delta) {
-    userBufs[Input] += delta;
-    userBufs[Output] += delta;
   }
 
   __device__ void send(intptr_t inpIx, int eltN) {

@@ -44,6 +44,10 @@ template<typename T>
 __device__ __host__ inline static auto Xlocal(T* ptr) 
 { return ptr; }
 
+template<typename T> 
+__device__ __host__ inline static auto Xprivate(T* ptr) 
+{ return ptr; }
+
 // ---------------------------------------------------------------------------
 #else
 // ---------------------------------------------------------------------------
@@ -99,6 +103,11 @@ template<typename T,
 __device__ __host__ inline static auto Xlocal(T* ptr) 
 { return (T2 SLOCAL *)reinterpret_cast<uintptr_t>(ptr); }
 
-#endif
+template<typename T, 
+    typename T2 = typename std::remove_volatile<T>::type >
+__device__ __host__ inline static auto Xprivate(T* ptr) 
+{ return (T2 SPRIVATE *)reinterpret_cast<uintptr_t>(ptr); }
 
 #endif
+
+#endif // NCCL_LOAD_STORE_MACROS_H_

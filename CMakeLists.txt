@@ -37,7 +37,7 @@ option(ROCTX                                   "Enable ROCTX"                   
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
-option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(FAULT_INJECTION                         "Enable fault injection"                        OFF)
 option(DISABLE_CHEAP_THREADFENCE               "Compile-time killswitch for simpler fence"     OFF)
 
 # Default GPU architectures to build
@@ -526,7 +526,6 @@ set(SRC_FILES
   src/include/trees.h
   src/include/tuner.h
   src/include/utils.h
-  src/include/load_store_macros.h
   src/include/msccl/msccl_lifecycle.h
   src/include/msccl/msccl_parser.h
   src/include/msccl/msccl_scheduler.h
@@ -1042,19 +1041,19 @@ if (HAVE_PARALLEL_JOBS)
   target_compile_options(rccl PRIVATE -parallel-jobs=12)
 endif()
 
-if (ROCM_VERSION VERSION_GREATER_EQUAL "60200")
-  target_compile_options(rccl PRIVATE --offload-compress)    # Compress GPU code at compile time.
-  target_link_libraries(rccl PRIVATE --offload-compress)     # Compress GPU code at link time.
-  message(STATUS "--offload-compress enabled - ROCm version >= 6.2.0")
-else()
-  message(STATUS "--offload-compress disabled - ROCm version < 6.2.0")
-endif()
+# if (ROCM_VERSION VERSION_GREATER_EQUAL "60200")
+#   target_compile_options(rccl PRIVATE --offload-compress)    # Compress GPU code at compile time.
+#   target_link_libraries(rccl PRIVATE --offload-compress)     # Compress GPU code at link time.
+#   message(STATUS "--offload-compress enabled - ROCm version >= 6.2.0")
+# else()
+#   message(STATUS "--offload-compress disabled - ROCm version < 6.2.0")
+# endif()
 
 target_compile_options(rccl PRIVATE -Werror=uninitialized)
 target_compile_options(rccl PRIVATE -Werror=sometimes-uninitialized)
 target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
-target_compile_options(rccl PRIVATE -Wno-format-nonliteral -Wno-unused-function)
+target_compile_options(rccl PRIVATE -Wno-format-nonliteral -Wno-unused-function -Wno-unused-variable -Wno-reorder-ctor)
 target_compile_options(rccl PRIVATE -fgpu-rdc)      # Generate relocatable device code (required for extern __shared__)
 
 ## Set RCCL compile and linker options for unit tests and code coverage

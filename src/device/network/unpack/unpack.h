@@ -46,7 +46,7 @@ inline __device__ void ncclNetDeviceIncrementHead(const int group, const int ind
 }
 
 inline __device__ void ncclNetDeviceSaveHead(void* ohandle, const int group, const int index) {
-  struct unpackNetDeviceHandle* handle = (struct unpackNetDeviceHandle*) ohandle;
+  auto* handle = (unpackNetDeviceHandle SGLOBAL*)ohandle;
   // coverity[index_parm:FALSE]
   handle->head = ncclShmem.groups[group].devicePlugin.unpack.head[index];
 }
