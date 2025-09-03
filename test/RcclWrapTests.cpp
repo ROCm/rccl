@@ -1752,7 +1752,7 @@ TEST(Rcclwrap, RcclSetPipelining_Invalid_DType) {
   info.func = ncclFuncAllReduce;
   info.datatype = ncclFloat32;
 
-  size_t nBytes = 1 << 20;
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
   rcclSetPipelining(comm, nBytes, &info);
 
   EXPECT_EQ(info.pipeline, 0) << "Non-bf16 should not set pipeline by default";
@@ -1783,7 +1783,7 @@ TEST(Rcclwrap, RcclSetPipelining_GFX950_MultiNode_Enable) {
   info.func = ncclFuncAllReduce;
   info.datatype = ncclBfloat16;
 
-  size_t nBytes = 1 << 20;
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
   rcclSetPipelining(comm, nBytes, &info);
 
   EXPECT_EQ(info.pipeline, 1)
@@ -1815,7 +1815,7 @@ TEST(Rcclwrap, RcclSetPipelining_GFX950_SingleNode_Disable) {
   info.func = ncclFuncAllReduce;
   info.datatype = ncclBfloat16;
 
-  size_t nBytes = 1 << 20;
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
   rcclSetPipelining(comm, nBytes, &info);
 
   EXPECT_EQ(info.pipeline, 0)
@@ -1844,7 +1844,7 @@ TEST(Rcclwrap, RcclSetPipelining_GFX942_SingleNode_AllReduce_Enable) {
   info.func = ncclFuncAllReduce;
   info.datatype = ncclBfloat16;
 
-  size_t nBytes = 1 << 20;
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
   rcclSetPipelining(comm, nBytes, &info);
 
   EXPECT_EQ(info.pipeline, 1)
@@ -1936,7 +1936,7 @@ TEST(Rcclwrap, RcclSetPipelining_GFX942_Enable) {
   info.func = ncclFuncReduceScatter;
   info.datatype = ncclBfloat16;
 
-  size_t nBytes = 1 << 20;
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
   rcclSetPipelining(comm, nBytes, &info);
 
   EXPECT_EQ(info.pipeline, 1)
