@@ -5,25 +5,25 @@
  *
  * See LICENSE.txt for license information
  ************************************************************************/
-
 #ifndef NCCL_H_
 #define NCCL_H_
 
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
 
-#define NCCL_MAJOR 2
-#define NCCL_MINOR 22
-#define NCCL_PATCH 3
-#define NCCL_SUFFIX ""
+#define NCCL_MAJOR ${NCCL_MAJOR}
+#define NCCL_MINOR ${NCCL_MINOR}
+#define NCCL_PATCH ${NCCL_PATCH}
+#define NCCL_SUFFIX "${NCCL_SUFFIX}"
 
-#define NCCL_VERSION_CODE 22203
+#define NCCL_VERSION_CODE ${NCCL_VERSION}
 #define NCCL_VERSION(X,Y,Z) (((X) <= 2 && (Y) <= 8) ? (X) * 1000 + (Y) * 100 + (Z) : (X) * 10000 + (Y) * 100 + (Z))
 
 #define RCCL_BFLOAT16 1
 #define RCCL_FLOAT8 1
 #define RCCL_GATHER_SCATTER 1
 #define RCCL_ALLTOALLV 1
+#define RCCL_ALLREDUCE_WITH_BIAS 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +34,7 @@ extern "C" {
 /*! @brief      Opaque handle to communicator
     @details    A communicator contains information required to facilitate collective communications calls */
 typedef struct ncclComm* ncclComm_t;
+typedef struct ncclWindow* ncclWindow_t;
 #define NCCL_COMM_NULL NULL
 
 #define NCCL_UNIQUE_ID_BYTES 128
@@ -65,13 +66,25 @@ typedef struct { char internal[NCCL_UNIQUE_ID_BYTES]; /*!< Opaque array>*/} nccl
 #define NCCL_SPLIT_NOCOLOR -1
 #define NCCL_UNDEF_FLOAT -1.0f
 
+/* Window Registration flags */
+#define NCCL_WIN_DEFAULT 0x00
+#define NCCL_WIN_COLL_SYMMETRIC 0x01
+
+/* NCCL performance policy */
+#define NCCL_CTA_POLICY_DEFAULT 0x00
+#define NCCL_CTA_POLICY_EFFICIENCY 0x01
+
+/* ncclCommShrink flags*/
+#define NCCL_SHRINK_DEFAULT 0x00 /* shrink the parent communicator */
+#define NCCL_SHRINK_ABORT 0x01   /* First, terminate ongoing parent operations, and then shrink the parent communicator */
+
 /*! @defgroup   rccl_config_type Communicator Configuration
     @details    Structure that allows for customizing Communicator behavior via ncclCommInitRankConfig
     @{ */
 
 /*! @brief      Communicator configuration
     @details    Users can assign value to attributes to specify the behavior of a communicator */
-typedef struct ncclConfig_v21700 {
+typedef struct ncclConfig_v22700 {
   /* attributes that users should never touch. */
   size_t size;                 /*!< Should not be touched */
   unsigned int magic;          /*!< Should not be touched */
@@ -83,6 +96,12 @@ typedef struct ncclConfig_v21700 {
   int maxCTAs;                 /*!< Maximum number of cooperative thread arrays (blocks) */
   const char *netName;         /*!< Force NCCL to use a specfic network */
   int splitShare;              /*!< Allow communicators to share resources */
+  int trafficClass;            /*!< Traffic class*/
+  const char *commName;        /*!< Name of the communicator*/
+  int collnetEnable;           /*!< Check for collnet enablement*/
+  int CTAPolicy;               /*!< CTA Policy*/
+  int shrinkShare;             /*!< Shrink size*/
+  int nvlsCTAs;                /*!< Number of NVLS cooperative thread arrays (blocks)*/
 } ncclConfig_t;
 
 /* Config initializer must be assigned to initialize config structure when it is created.
@@ -96,7 +115,13 @@ typedef struct ncclConfig_v21700 {
   NCCL_CONFIG_UNDEF_INT,                            /* minCTAs */        \
   NCCL_CONFIG_UNDEF_INT,                            /* maxCTAs */        \
   NCCL_CONFIG_UNDEF_PTR,                            /* netName */        \
-  NCCL_CONFIG_UNDEF_INT                             /* splitShare */     \
+  NCCL_CONFIG_UNDEF_INT,                            /* splitShare */     \
+  NCCL_CONFIG_UNDEF_INT,                            /* trafficClass */   \
+  NCCL_CONFIG_UNDEF_PTR,                            /* commName */       \
+  NCCL_CONFIG_UNDEF_INT,                            /* collnetEnable */  \
+  NCCL_CONFIG_UNDEF_INT,                            /* CTAPolicy */      \
+  NCCL_CONFIG_UNDEF_INT,                            /* shrinkShare */    \
+  NCCL_CONFIG_UNDEF_INT,                            /* nvlsCTAs */       \
 }
 /*! @} */
 
@@ -268,6 +293,39 @@ ncclResult_t pncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *new
 /*! @endcond */
 /*! @} */
 
+/*! @brief      Shrink existing communicator.
+    @details    Ranks in excludeRanksList will be removed form the existing communicator.
+                Within the new communicator, ranks will be re-ordered to fill the gap of removed ones.
+                If config is NULL, the new communicator will inherit the original communicator's configuration.
+                The flag enables NCCL to adapt to various states of the parent communicator, see NCCL_SHRINK flags.
+    @return     Result code. See @ref rccl_result_code for more details.
+
+    @param[in]  comm                  Original communicator object for this rank
+    @param[in]  excludeRanksList      List of ranks to be exluded
+    @param[in]  excludeRanksCount     Number of ranks to be excluded
+    @param[out] newcomm               Pointer to new communicator
+    @param[in]  config                Config file for new communicator. May be NULL to inherit from comm 
+    @param[in]  shrinkFlags           Flag to adapt to various states of the parent communicator (see NCCL_SHRINK flags)*/
+ncclResult_t  ncclCommShrink(ncclComm_t comm, int* excludeRanksList, int excludeRanksCount, ncclComm_t* newcomm, ncclConfig_t* config, int shrinkFlags);
+ncclResult_t pncclCommShrink(ncclComm_t comm, int* excludeRanksList, int excludeRanksCount, ncclComm_t* newcomm, ncclConfig_t* config, int shrinkFlags);
+
+/*! @brief      Creates a new communicator (multi thread/process version), similar to ncclCommInitRankConfig.
+     @details    Allows to use more than one ncclUniqueId (up to one per rank), 
+                 indicated by nId, to accelerate the init operation.
+                 The number of ncclUniqueIds and their order must be the same for every rank.
+     @return     Result code. See @ref rccl_result_code for more details.
+ 
+     @param[out] newcomm       Pointer to new communicator
+     @param[in]  nranks        Total number of ranks participating in this communicator
+     @param[in]  myrank        Current rank
+     @param[in]  nId           Number of unique IDs
+     @param[in]  commIds       List of unique IDs
+     @param[in]  config        Config file for new communicator. May be NULL to inherit from comm */
+ncclResult_t ncclCommInitRankScalable(ncclComm_t* newcomm, int nranks, int myrank, int nId, ncclUniqueId* commIds, ncclConfig_t* config);
+ /*! @cond       include_hidden */
+ncclResult_t pncclCommInitRankScalable(ncclComm_t* newcomm, int nranks, int myrank, int nId, ncclUniqueId* commIds, ncclConfig_t* config);
+ /*! @endcond */
+
 /*! @defgroup   rccl_api_errcheck Error Checking Calls
     @details    API calls that check for errors
     @{ */
@@ -277,6 +335,7 @@ ncclResult_t pncclCommSplit(ncclComm_t comm, int color, int key, ncclComm_t *new
     @return     String containing description of result code.
 
     @param[in]  result        Result code to get description for */
+/* Returns a string for each error code. */
 const char*  ncclGetErrorString(ncclResult_t result);
 /*! @cond       include_hidden */
 const char* pncclGetErrorString(ncclResult_t result);
@@ -286,6 +345,12 @@ const char* pncclGetErrorString(ncclResult_t result);
 const char*  ncclGetLastError(ncclComm_t comm);
 /*! @cond       include_hidden */
 const char* pncclGetLastError(ncclComm_t comm);
+/*! @endcond */
+
+/* Reload environment variables that determine logging. */
+void  ncclResetDebugInit();
+/*! @cond       include_hidden */
+void pncclResetDebugInit();
 /*! @endcond */
 
 /*! @brief      Checks whether the comm has encountered any asynchronous errors
@@ -348,6 +413,18 @@ ncclResult_t pncclCommRegister(const ncclComm_t comm, void* buff, size_t size, v
 ncclResult_t  ncclCommDeregister(const ncclComm_t comm, void* handle);
 /*! @cond       include_hidden */
 ncclResult_t pncclCommDeregister(const ncclComm_t comm, void* handle);
+/*! @endcond */
+
+/* Register memory window  */
+ncclResult_t  ncclCommWindowRegister(ncclComm_t comm, void* buff, size_t size, ncclWindow_t* win, int winFlags);
+/*! @cond       include_hidden */
+ncclResult_t pncclCommWindowRegister(ncclComm_t comm, void* buff, size_t size, ncclWindow_t* win, int winFlags);
+/*! @endcond */
+
+/* Deregister symmetric memory */
+ncclResult_t  ncclCommWindowDeregister(ncclComm_t comm, ncclWindow_t win);
+/*! @cond       include_hidden */
+ncclResult_t pncclCommWindowDeregister(ncclComm_t comm, ncclWindow_t win);
 /*! @endcond */
 
 /*! @defgroup   rccl_api_enumerations API Enumerations
@@ -536,6 +613,27 @@ ncclResult_t  ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
 /*! @cond       include_hidden */
 ncclResult_t pncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream);
+/*! @endcond */
+
+/*! @brief      All-Reduce-with-Bias
+    @details    Reduces data arrays of length *count* in *sendbuff* using *op* operation, and
+                leaves identical copies of result on each *recvbuff*.
+                In-place operation will happen if sendbuff == recvbuff.
+    @return     Result code. See @ref rccl_result_code for more details.
+
+    @param[in]  sendbuff      Input data array to reduce
+    @param[out] recvbuff      Data array to store reduced result array
+    @param[in]  count         Number of elements in data buffer
+    @param[in]  datatype      Data buffer element datatype
+    @param[in]  op            Reduction operator
+    @param[in]  comm          Communicator group object to execute on
+    @param[in]  stream        HIP stream to execute collective on
+    @param[in]  acc           Bias data array to reduce */
+ncclResult_t  ncclAllReduceWithBias(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream, const void* acc);
+/*! @cond       include_hidden */
+ncclResult_t pncclAllReduceWithBias(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm_t comm, hipStream_t stream, const void* acc);
 /*! @endcond */
 
 /*! @brief      Reduce-Scatter
@@ -733,6 +831,7 @@ ncclResult_t pncclAllToAllv(const void *sendbuff, const size_t sendcounts[],
 typedef int mscclAlgoHandle_t;
 
 /*! @brief      MSCCL Load Algorithm
+    @deprecated This function has been removed from the public API.
     @details    Load MSCCL algorithm file specified in mscclAlgoFilePath and return
                 its handle via mscclAlgoHandle. This API is expected to be called by MSCCL
                 scheduler instead of end users.
@@ -747,6 +846,7 @@ ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *ms
 /*! @endcond */
 
 /*! @brief      MSCCL Run Algorithm
+    @deprecated This function has been removed from the public API.
     @details    Run MSCCL algorithm specified by mscclAlgoHandle. The parameter
                 list merges all possible parameters required by different operations as this
                 is a general-purposed API. This API is expected to be called by MSCCL

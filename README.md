@@ -2,6 +2,9 @@
 
 ROCm Communication Collectives Library
 
+[![RCCL](https://dev.azure.com/ROCm-CI/ROCm-CI/_apis/build/status%2Frccl?repoName=ROCm%2Frccl&branchName=develop)](https://dev.azure.com/ROCm-CI/ROCm-CI/_build/latest?definitionId=107&repoName=ROCm%2Frccl&branchName=develop)
+[![TheRock CI](https://github.com/ROCm/rccl/actions/workflows/therock-ci.yml/badge.svg?branch=develop&event=push)](https://github.com/ROCm/rccl/actions/workflows/therock-ci.yml)
+
 > **Note:** The published documentation is available at [RCCL](https://rocm.docs.amd.com/projects/rccl/en/latest/index.html) in an organized easy-to-read format that includes a table of contents and search functionality. The documentation source files reside in the [rccl/docs](https://github.com/ROCm/rccl/tree/develop/docs) folder in this repository. As with all ROCm projects, the documentation is open source. For more information, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
 
 ## Introduction
@@ -40,7 +43,7 @@ RCCL build & installation helper script
        --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
        --disable-msccl-kernel  Build without MSCCL kernels
-       --disable-mscclpp       Build without MSCCL++ support
+       --enable-mscclpp        Build with MSCCL++ support
        --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines
        --disable-roctx         Build without ROCTX logging
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
@@ -61,7 +64,6 @@ RCCL build & installation helper script
     -t|--tests_build           Build rccl unit tests, but do not run
        --time-trace            Plot the build time of RCCL (requires `ninja-build` package installed on the system)
        --verbose               Show compile commands
-       --force-reduce-pipeline Force reduce_copy sw pipeline to be used for every reduce-based collectives and datatypes
 ```
 
 By default, RCCL builds for all GPU targets defined in `DEFAULT_GPUS` in `CMakeLists.txt`. To target specific GPU(s), and potentially reduce build time, use `--amdgpu_targets` as a `;` separated string listing GPU(s) to target.
@@ -123,10 +125,6 @@ will run only AllReduce correctness tests with float16 datatype. A list of avail
 
 There are also other performance and error-checking tests for RCCL.  These are maintained separately at https://github.com/ROCm/rccl-tests.
 See the rccl-tests README for more information on how to build and run those tests.
-
-## RCCL CI Status
-
-RCCL Build/Unittests [![RCCL](https://dev.azure.com/ROCm-CI/ROCm-CI/_apis/build/status%2Frccl?repoName=ROCm%2Frccl&branchName=develop)](https://dev.azure.com/ROCm-CI/ROCm-CI/_build/latest?definitionId=107&repoName=ROCm%2Frccl&branchName=develop)
 
 ## Library and API Documentation
 

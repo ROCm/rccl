@@ -10,6 +10,7 @@
 #include "rocmwrap.h"
 #include "hsa/hsa.h"
 #include "param.h"
+#include "bootstrap.h"
 
 #include <dlfcn.h>
 #include <sys/utsname.h>
@@ -24,15 +25,58 @@ DECLARE_ROCM_PFN(hsa_init);
 DECLARE_ROCM_PFN(hsa_system_get_info);
 DECLARE_ROCM_PFN(hsa_status_string);
 
-// Handle type used for cuMemCreate()
-CUmemAllocationHandleType ncclCuMemHandleType = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
-
 static void *hsaLib;
 static uint16_t version_major, version_minor;
 bool ncclCudaLaunchBlocking = false;
 
 static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
 static ncclResult_t initResult;
+
+// This env var (NCCL_CUMEM_ENABLE) toggles cuMem API usage
+NCCL_PARAM(CuMemEnable, "CUMEM_ENABLE", 0);
+NCCL_PARAM(CuMemHostEnable, "CUMEM_HOST_ENABLE", -1);
+// Handle type used for cuMemCreate()
+CUmemAllocationHandleType ncclCuMemHandleType = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+
+static int ncclCuMemSupported = 0;
+
+// Determine whether CUMEM & VMM RDMA is supported on this platform
+int ncclIsCuMemSupported() {
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  return 0;
+#else
+  CUdevice currentDev;
+  int cudaDev;
+  int cudaDriverVersion;
+  int flag = 0;
+  ncclResult_t ret = ncclSuccess;
+  CUDACHECKGOTO(cudaDriverGetVersion(&cudaDriverVersion), ret, error);
+  if (cudaDriverVersion < 12000) return 0;  // Need CUDA_VISIBLE_DEVICES support
+  CUDACHECKGOTO(cudaGetDevice(&cudaDev), ret, error);
+  if (CUPFN(cuMemCreate) == NULL) return 0;
+  CUCHECKGOTO(cuDeviceGet(&currentDev, cudaDev), ret, error);
+  // Query device to see if CUMEM VMM support is available
+  CUCHECKGOTO(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, currentDev), ret, error);
+  if (!flag) return 0;
+
+error:
+  return (ret == ncclSuccess);
+#endif
+}
+
+int ncclCuMemEnable() {
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  return 0;
+#else
+  // NCCL_CUMEM_ENABLE=-2 means auto-detect CUMEM support
+  int param = ncclParamCuMemEnable();
+  return  param >= 0 ? param : (param == -2 && ncclCuMemSupported);
+#endif
+}
+
+int ncclCuMemHostEnable() {
+  return 0;
+}
 
 static void initOnceFunc() {
   do {
@@ -99,6 +143,9 @@ static void initOnceFunc() {
     // Silently ignore version check mismatch for backwards compatibility
     //goto error;
   //}
+
+  // Determine whether we support the cuMem APIs or not
+  ncclCuMemSupported = ncclIsCuMemSupported();
 
   /* DMA-BUF support */
   //ROCm support
@@ -168,14 +215,6 @@ static void initOnceFunc() {
 
 error:
   initResult = ncclSystemError;
-}
-
-int ncclCuMemEnable() {
-  return 0;
-}
-
-int ncclCuMemHostEnable() {
-  return 0;
 }
 
 ncclResult_t rocmLibraryInit() {
