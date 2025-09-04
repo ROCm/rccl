@@ -16,7 +16,7 @@ namespace {
   __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     const int bid = ncclShmem.channelId - work->channelLo;
-    ncclRing *ring = &ncclShmem.channel.ring;
+    auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
     const int rank = ring->userRanks[0];
     const int nextRank = ring->userRanks[1];
     const int root = work->root;

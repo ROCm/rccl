@@ -65,8 +65,8 @@ __device__ uint64_t readLL(union LLFifoLine* src, uint32_t flag, uint32_t* abort
 
   union LLFifoLine i4;
   do {
-    i4.v[0] = __builtin_nontemporal_load(src->v);
-    i4.v[1] = __builtin_nontemporal_load(src->v+1);
+    i4.v[0] = NTLOAD(src->v);
+    i4.v[1] = NTLOAD(src->v+1);
     if (checkAbort(spins, abortFlag)) break;
   } while ((i4.flag1 != flag) || (i4.flag2 != flag));
   uint64_t val64 = (uint64_t)(i4.data1) + (((uint64_t)i4.data2) << 32);

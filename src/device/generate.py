@@ -532,11 +532,12 @@ for name in name_to_funcs.keys():
       sym = paste("_", coll, algo, proto, redop, ty, unroll)
       all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16", "f8", "bf8"]
       #if ty in ["f8","bf8","i8","u8","f64","i64","u64","f16","bf16"]: # do not generate those..
+      # all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
       if ty not in ["f32"] or coll not in ["AllReduce"] or algo not in ["RING"]: # or unroll not in [4]: # or redop not in ["Sum","SumPostDiv", "PreMulSum"]:
         out(
         "DEFINE_dummyFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
-                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll)
+                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll) # hack unroll=1
         )
         continue
       if proto == "LL128":
@@ -544,7 +545,7 @@ for name in name_to_funcs.keys():
       out(
         "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
-                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll)
+                algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll) # hack unroll=1
       )
       if proto == "LL128":
         out("#endif\n")

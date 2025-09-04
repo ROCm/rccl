@@ -174,8 +174,8 @@ public:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(i4.i4) : "v"(&src->i4));
 #else
-      i4.v[0] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v);
-      i4.v[1] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v+1);
+      i4.v[0] = NTLOAD((uint64_t SGLOBAL *)src->v);
+      i4.v[1] = NTLOAD((uint64_t SGLOBAL *)src->v+1);
 #endif
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
@@ -218,8 +218,8 @@ public:
         asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
           "s_waitcnt vmcnt(0)\n" : "=v"(line[i].i4) : "v"(&src->i4));
 #else
-        line[i].v[0] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v);
-        line[i].v[1] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v+1);
+        line[i].v[0] = NTLOAD((uint64_t SGLOBAL *)src->v);
+        line[i].v[1] = NTLOAD((uint64_t SGLOBAL *)src->v+1);
 #endif
 #else
         asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
@@ -245,8 +245,8 @@ public:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(line[i].i4) : "v"(&src->i4));
 #else
-      line[i].v[0] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v);
-      line[i].v[1] = __builtin_nontemporal_load((uint64_t SGLOBAL *)src->v+1);
+      line[i].v[0] = NTLOAD((uint64_t SGLOBAL *)src->v);
+      line[i].v[1] = NTLOAD((uint64_t SGLOBAL *)src->v+1);
 #endif
 #else
       asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
@@ -306,27 +306,27 @@ public:
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
 #ifdef __GFX11__
-      u1 = __atomic_load_n((uint8_t*)src, __ATOMIC_RELAXED);
+      u1 = ld_uncached_global((uint8_t*)src);
 #else
-      u1 = __builtin_nontemporal_load((uint8_t SGLOBAL *)src);
+      u1 = NTLOAD((uint8_t SGLOBAL *)src);
 #endif
     else if(sizeof(U) == 2)
 #ifdef __GFX11__
-      u2 = __atomic_load_n((uint16_t*)src, __ATOMIC_RELAXED);
+      u2 = ld_uncached_global((uint16_t*)src);
 #else
-      u2 = __builtin_nontemporal_load((uint16_t SGLOBAL *)src);
+      u2 = NTLOAD((uint16_t SGLOBAL *)src);
 #endif
     else if(sizeof(U) == 4)
 #ifdef __GFX11__
-      u4 = __atomic_load_n((uint32_t*)src, __ATOMIC_RELAXED);
+      u4 = ld_uncached_global((uint32_t*)src);
 #else
-      u4 = __builtin_nontemporal_load((uint32_t SGLOBAL *)src);
+      u4 = NTLOAD((uint32_t SGLOBAL *)src);
 #endif
     else
 #ifdef __GFX11__
-      u8 = __atomic_load_n((uint64_t*)src, __ATOMIC_RELAXED);
+      u8 = ld_uncached_global((uint64_t*)src);
 #else
-      u8 = __builtin_nontemporal_load((uint64_t SGLOBAL *)src);
+      u8 = NTLOAD((uint64_t SGLOBAL *)src);
 #endif
 #else
     if(sizeof(U) == 1)

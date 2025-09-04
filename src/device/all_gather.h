@@ -17,7 +17,7 @@ namespace {
   __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     const int bid = ncclShmem.channelId - work->channelLo;
-    ncclRing *ring = &ncclShmem.channel.ring;
+    auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
     const int *ringRanks = ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
     ssize_t count, partOffset, partCount, chunkCount;

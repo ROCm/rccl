@@ -11,8 +11,8 @@
 #include "load_store_macros.h"
 
 inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {
-  v0 = __builtin_nontemporal_load(Tglobal(ptr));
-  v1 = __builtin_nontemporal_load(Tglobal(ptr)+1);
+  v0 = NTLOAD(Tglobal(ptr));
+  v1 = NTLOAD(Tglobal(ptr)+1);
 }
 
 inline __device__ void store128(uint64_t* ptr, uint64_t v0, uint64_t v1) {
@@ -48,21 +48,22 @@ inline __device__ void loadShmemMisaligned128(T *ptr, uint64_t &v0, uint64_t &v1
       // aligned values and shifting.
       uint32_t lo, hi;
       
-      // non-temporal load ???
-      lo = __builtin_nontemporal_load(Tlocal((uint32_t *)ptr4+e+0));
-      hi = __builtin_nontemporal_load(Tlocal((uint32_t *)ptr4+e+1));
+      // PAE used to be non-temporal load?
+      lo = *((uint32_t SLOCAL*)ptr4+e+0);
+      hi = *((uint32_t SLOCAL*)ptr4+e+1);
       tmp4[e] = __funnelshift_r(lo, hi, 8*(int(reinterpret_cast<uintptr_t>(ptr))%4));
     }
   }
   else if(sizeof(T) == 4) {
+    // PAE used to be non-temporal load?
     #pragma unroll
     for(int e=0; e < 4; e++)
-      tmp4[e] = __builtin_nontemporal_load(Tlocal(reinterpret_cast<uint32_t  *>(ptr)+e));
+      tmp4[e] = *((uint32_t SLOCAL *)ptr + e);
   }
   else /*sizeof(T)==8*/ {
     #pragma unroll
     for(int e=0; e < 2; e++)
-      tmp8[e] = __builtin_nontemporal_load(Tlocal(reinterpret_cast<uint64_t  *>(ptr)+e));
+      tmp8[e] = *((uint64_t SLOCAL *)ptr + e);
   }
   v0 = tmp8[0];
   v1 = tmp8[1];
@@ -182,7 +183,7 @@ template<> __device__ __forceinline__ void st_global<0>(uintptr_t addr, BytePack
   template<> \
   __device__ __forceinline__ BytePack<bytes> ld_volatile_##space<bytes>(addr_cxx_ty addr) { \
     data_cxx_ty tmp; \
-    tmp =  __builtin_nontemporal_load(Tglobal((data_cxx_ty *)addr)); \
+    tmp =  NTLOAD(Tglobal((data_cxx_ty *)addr)); \
     BytePack<bytes> ans; \
     ans.native = tmp; \
     return ans; \
@@ -209,8 +210,8 @@ DEFINE_ld_st__size(8, uint64_t, b64, l)
   template<> \
   __device__ __forceinline__ BytePack<16> ld_volatile_##space<16>(addr_cxx_ty addr) { \
     BytePack<16> ans; \
-    ans.u64[0] = __builtin_nontemporal_load(Tglobal((uint64_t *)addr)); \
-    ans.u64[1] = __builtin_nontemporal_load(Tglobal((uint64_t *)addr+1)); \
+    ans.u64[0] = NTLOAD(Tglobal((uint64_t *)addr)); \
+    ans.u64[1] = NTLOAD(Tglobal((uint64_t *)addr+1)); \
     return ans; \
   } \
   template<> \

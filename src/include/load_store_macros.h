@@ -23,9 +23,6 @@
 #define TLOCAL
 #define TCONSTANT
 
-#define GLOBAL_LOAD(addr) __builtin_nontemporal_load(addr)
-#define GLOBAL_STORE(x, addr) __builtin_nontemporal_store((x), (addr))
-
 #define MAYBE_XINLINE __attribute__((noinline))
 
 template<typename T>
@@ -68,19 +65,6 @@ __device__ __host__ inline static auto Xprivate(T* ptr)
 #define TLOCAL    __local
 #define TCONSTANT __constant
 
-// NOTE: if data size is small, maybe makes sense to use just normal load/store?
-#if 0
-#define GLOBAL_LOAD(addr) __builtin_nontemporal_load(Xglobal(addr))
-#else
-#define GLOBAL_LOAD(addr) Xglobal(addr)[0]
-#endif
-// it seems that loading with cache and storing without it gives the best results
-#if 1
-#define GLOBAL_STORE(x, addr) __builtin_nontemporal_store((x), Xglobal(addr))
-#else
-#define GLOBAL_STORE(x, addr) Xglobal(addr)[0] = (x)
-#endif
-
 template<typename T, 
     typename T2 = typename std::remove_volatile<T>::type >
 __device__ __host__ inline static  T2* Tglobal(T* ptr) 
@@ -108,6 +92,19 @@ template<typename T,
 __device__ __host__ inline static auto Xprivate(T* ptr) 
 { return (T2 SPRIVATE *)reinterpret_cast<uintptr_t>(ptr); }
 
+#endif // global on/off switch
+
+// NOTE: if data size is small, maybe makes sense to use just normal load/store?
+#if 1
+#define NTLOAD(addr) __builtin_nontemporal_load(Xglobal(addr))
+#else
+#define NTLOAD(addr) Xglobal(addr)[0]
+#endif
+// it seems that loading with cache and storing without it gives the best results
+#if 1
+#define NTSTORE(x, addr) __builtin_nontemporal_store((x), Xglobal(addr))
+#else
+#define NTSTORE(x, addr) Xglobal(addr)[0] = (x)
 #endif
 
 #endif // NCCL_LOAD_STORE_MACROS_H_

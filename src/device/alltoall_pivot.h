@@ -20,7 +20,7 @@ namespace {
     size_t count, partOffset, partCount, chunkCount;
     ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &count, &partOffset, &partCount, &chunkCount);
 
-    const ncclRing *ring = &ncclShmem.channel.ring;
+    const auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
     const int num_bi_rings = work->pivotA2ANumBiRings;
     const int num_uni_rings = num_bi_rings * 2;
     const int num_chunks = (work->channelHi - work->channelLo + 1) / 2;
