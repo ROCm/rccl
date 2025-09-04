@@ -113,7 +113,7 @@ jobs:
     uses: ./.github/workflows/therock-test-packages-multi-node.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: vultr-linux-rocm
+      test_runs_on: nova-linux-slurm-scale-runner
       artifact_run_id: ${{ github.run_id }}
 
   therock-test-linux-single-node:

@@ -47,7 +47,7 @@ jobs:
     uses: ./.github/workflows/therock-ci-linux.yml
     secrets: inherit
     with:
-      amdgpu_families: "gfx94X-dcgpu"
+      amdgpu_families: "gfx950-dcgpu"
       extra_cmake_options: >
         -DTHEROCK_ENABLE_ALL=OFF 
         -DTHEROCK_BUILD_TESTING=ON 
