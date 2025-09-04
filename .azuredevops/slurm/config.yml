@@ -1,0 +1,33 @@
+results_root: /mnt/GT_NFS/new_gt/gpinkert/rccl
+
+# RCCL paths
+rccl_install_dir: /mnt/GT_NFS/new_gt/gpinkert/rccl/rccl/install/lib
+rccl_tests_dir:   /mnt/GT_NFS/new_gt/gpinkert/rccl/rccl-tests/build
+
+collectives: [all_reduce, all_gather, alltoall, alltoallv, broadcast, gather, reduce, reduce_scatter, scatter, sendrecv]
+dtypes: [float, half, bfloat16, fp8_e4m3, fp8_e5m2]
+rccl_test_args: ["-b","1","-e","16G","-f","2","-g","1","-o","all"]
+
+mpi:
+  root: /opt/ompi/4.1.5-ucx1.18.0-rocm6.4.1/     # <— NEW: sets MPI_ROOT
+  # np: 16  # optional; else from SLURM
+  extra_args: ["-mca", "pml", "^ucx", "-mca", "osc", "^ucx", "-mca", "btl", "^openib", "-mca", "oob_tcp_if_exclude", "docker,lo", "-mca", "btl_tcp_if_exclude", "docker,lo"]
+  export_base:
+    - PATH
+    - LD_LIBRARY_PATH
+    - MPI_ROOT
+    - RCCL_INSTALL_DIR
+    - NCCL_DEBUG=WARN
+    - RCCL_GDR_FLUSH_GPU_MEM_NO_RELAXED_ORDERING=0
+    - HSA_NO_SCRATCH_RECLAIM=1
+
+env_matrix:
+  NCCL_MEM_SYNC_DOMAIN: [0, 1]
+  NCCL_DMABUF_ENABLE: [0, 1]
+
+llvm:
+  tools_dir: /opt/rocm-6.4.1/lib/llvm/bin
+  ignore_filename_regex: "ext-src/*"
+  project_title: "RCCL_Lib_Coverage_Report"
+  output_dir: "coverage_html"
+
