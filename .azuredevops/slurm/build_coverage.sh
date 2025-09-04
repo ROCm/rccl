@@ -15,7 +15,7 @@ module load rocm/6.4.1
 set -e
 set -x
 
-
+export SLURM_SUBMIT_DIR=/mnt/GT_NFS/new_gt/gpinkert/rccl/rccl
 export WORKDIR=`pwd`
 
 ROCM_VERSION="6.4.1"
@@ -25,7 +25,7 @@ export ROCM_PATH=/opt/rocm-6.4.1
 echo $ROCM_PATH
 
 # RCCL local install dir
-RCCL_INSTALL_DIR=$WORKDIR/rccl/install
+RCCL_INSTALL_DIR=$BINARIES_DIR
 
 # Delete the existing folder
 # Set the env variables
@@ -34,9 +34,7 @@ export HIPCC_LINK_FLAGS_APPEND="-fprofile-instr-generate -fcoverage-mapping -par
 export LLVM_PROFILE_FILE=rccl_tests_%9999m.profraw
 export HSA_NO_SCRATCH_RECLAIM=1
 
-# Clone and build RCCL
-
-cd $WORKDIR/rccl
+cd "${SLURM_SUBMIT_DIR:-$PWD}"
 
 mkdir -p build && cd build
 CXX=${ROCM_PATH}/bin/hipcc cmake --trace-expand \
@@ -76,21 +74,13 @@ CXX=${ROCM_PATH}/bin/hipcc cmake --trace-expand \
 make -j${PROC} package 2>&1 | tee -a ../rccl_build_log.txt
 make install 2>&1 | tee -a ../rccl_build_log.txt
 
-cd $WORKDIR
-
-
-OMPMPI_UCX_LIB_DIR=/opt/ompi/4.1.5-ucx1.18.0-rocm6.4.1/lib/
-MPI_RUN=/opt/ompi/4.1.5-ucx1.18.0-rocm6.4.1/bin/
-MPI_INSTALL_PREFIX=/opt/ompi/4.1.5-ucx1.18.0-rocm6.4.1
-
-export LD_LIBRARY_PATH=$OMPMPI_UCX_LIB_DIR/lib:$LD_LIBRARY_PATH
-export PATH=$MPI_RUN:$PATH
-
+cd "${SLURM_SUBMIT_DIR:-$PWD}"
+## Building RCCL-Tests
 git clone https://github.com/ROCm/rccl-tests
 cd rccl-tests
-make MPI=1 MPI_HOME=${MPI_INSTALL_PREFIX} NCCL_HOME=${RCCL_INSTALL_DIR} -j
-
-
-
-
+mkdir -p build
+cd build
+cmake -DCMAKE_PREFIX_PATH="$BINARIES_DIR;$MPI_HOME" -DUSE_MPI=ON -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${GPU_TARGETS} -DROCM_PATH="$ROCM_PATH" ..
+cmake --build .
+cmake --build . --target install
 

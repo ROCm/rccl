@@ -1,8 +1,8 @@
-results_root: /mnt/GT_NFS/new_gt/gpinkert/rccl
+results_root: /mnt/GT_NFS/new_gt/gpinkert/rccl/rccl/.azuredevops/slurm
 
 # RCCL paths
-rccl_install_dir: /mnt/GT_NFS/new_gt/gpinkert/rccl/rccl/install/lib
-rccl_tests_dir:   /mnt/GT_NFS/new_gt/gpinkert/rccl/rccl-tests/build
+rccl_install_dir: /mnt/GT_NFS/new_gt/gpinkert/rccl/rccl/install/
+rccl_tests_dir:   /mnt/GT_NFS/new_gt/gpinkert/rccl/rccl/.azuredevops/slurm/bin
 
 collectives: [all_reduce, all_gather, alltoall, alltoallv, broadcast, gather, reduce, reduce_scatter, scatter, sendrecv]
 dtypes: [float, half, bfloat16, fp8_e4m3, fp8_e5m2]
