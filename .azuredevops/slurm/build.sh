@@ -35,19 +35,45 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 
 if [ "$ENABLE_COVERAGE" = "true" ]; then
     echo "Coverage build enabled"
-    cd $RCCL_TEST_INFRA_DIR || exit
-    echo "ROCM_PATH: $ROCM_PATH"
-    echo "ROCM_HOME: $ROCM_HOME"
-    export CC=$ROCM_PATH/bin/amdclang
-    export CXX=$ROCM_PATH/bin/amdclang++
-    CC=$ROCM_PATH/bin/amdclang CXX=$ROCM_PATH/bin/amdclang++ CXX_COMPILER=$ROCM_PATH/bin/amdclang++ LOCAL_RCCL_PATH=$LOCAL_RCCL_PATH ENABLE_MSCCLPP=0 CODE_COV=1 ./run.sh -c config/2_node_split_gt_cov_no_mscclpp.json -B --build-only -O -d $BINARIES_DIR
+    CXX=${ROCM_PATH}/bin/hipcc cmake --trace-expand \
+                               -DCMAKE_PREFIX_PATH="${ROCM_PATH}/llvm;${ROCM_PATH};${ROCM_PATH}/share/rocm/cmake/" \
+                               -DHIP_COMPILER=clang \
+                               -DCMAKE_CXX_FLAGS="-Xarch_host -fprofile-instr-generate -Xarch_host -fcoverage-mapping" \
+                               -DCMAKE_SHARED_LINKER_FLAGS="-fprofile-generate" \
+                               -DCMAKE_EXE_LINKER_FLAGS="-fprofile-generate" \
+                               -DCMAKE_SHARED_LINKER_FLAGS_INIT="-Wl,--enable-new-dtags,--build-id=sha1,--rpath,$ORIGIN" \
+                               -DCMAKE_EXE_LINKER_FLAGS_INIT="-Wl,--enable-new-dtags,--build-id=sha1,--rpath,$ORIGIN/../lib" \
+                               -DCMAKE_VERBOSE_MAKEFILE=ON \
+                               -DCMAKE_FIND_DEBUG_MODE=ON \
+                               -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                               -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE \
+                               -DCMAKE_INSTALL_PREFIX="${BINARIES_DIR}" \
+                               -DBUILD_FILE_REORG_BACKWARD_COMPATIBILITY=OFF \
+                               -DROCM_SYMLINK_LIBS=OFF \
+                               -DROCM_DISABLE_LDCONFIG=ON \
+                               -DCPACK_SET_DESTDIR=OFF \
+                               -DCPACK_RPM_PACKAGE_RELOCATABLE=ON \
+                               -DROCM_PATH="${ROCM_PATH}" \
+                               -DAMDGPU_TARGETS=${GPU_TARGETS} \
+                               -DGPU_TARGETS=${GPU_TARGETS} \
+                               -DCMAKE_HIP_ARCHITECTURES=${GPU_TARGETS} \
+                               -DCPACK_DEBIAN_DEBUGINFO_PACKAGE=TRUE \
+                               -DCPACK_RPM_DEBUGINFO_PACKAGE=TRUE \
+                               -DCPACK_RPM_INSTALL_WITH_EXEC=TRUE \
+                               -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-Xarch_host -fprofile-instr-generate -Xarch_host -fcoverage-mapping -O3 -g -DNDEBUG" \
+                               -DCPACK_GENERATOR=DEB \
+                               -DROCM_PATCH_VERSION="${ROCM_PATCH_VERSION}" \
+                               -DBUILD_ADDRESS_SANITIZER=OFF \
+                               -DBUILD_TESTS=OFF \
+                               ..
+    make -j${PROC} package 2>&1 | tee -a ../rccl_build_log.txt
+    make install
     exit 0
+else
+  cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${GPU_TARGETS} -DBUILD_TESTS=ON -DROCM_PATH="$ROCM_PATH" ..
 fi
 
 ## Building RCCL
-mkdir -p build
-cd build
-cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${GPU_TARGETS} -DBUILD_TESTS=ON -DROCM_PATH="$ROCM_PATH" ..
 cmake --build .
 cmake --build . --target install
 
