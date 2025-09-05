@@ -113,11 +113,12 @@ jobs:
     uses: ./.github/workflows/therock-test-packages-multi-node.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: nova-linux-slurm-scale-runner
+      test_runs_on: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' && 'vultr-linux-rocm' || (inputs.amdgpu_families == 'gfx950-dcgpu' && 'nova-linux-slurm-scale-runner') }}
       artifact_run_id: ${{ github.run_id }}
 
   therock-test-linux-single-node:
     name: "Test single-node"
+    if: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' }}
     needs: [therock-build-linux]
     uses: ./.github/workflows/therock-test-packages-single-node.yml
     with:
