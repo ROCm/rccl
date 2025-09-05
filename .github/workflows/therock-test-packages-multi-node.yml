@@ -52,6 +52,12 @@ jobs:
 
       - name: Test
         run: |
+          salloc -N 4 --reservation=ci_cd_test --exclusive bash <<'EOF'
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
-          pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
+          
+          pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
+              --cluster_file ./input/cluster.json \
+              --config_file ./input/mi350_config.json \
+              --log-file=/tmp/rccl_log.log
+          EOF
