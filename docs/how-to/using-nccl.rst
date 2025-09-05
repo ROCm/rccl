@@ -16,20 +16,20 @@ particular version of the GPU stack (such as NVIDIA CUDA), from the network code
 particular version of the networking stack. Using this method, you can easily integrate any CUDA version
 with any network stack version.
 
-NCCL network plugins are packaged as a shared library called ``libnccl-net.so``. The shared library
+NCCL network plugins are packaged as a shared library called ``librccl-net.so``. The shared library
 contains one or more implementations of the NCCL Net API in the form of versioned structs,
 which are filled with pointers to all required functions.
 
 Plugin architecture
 ===================
 
-When NCCL is initialized, it searches for a ``libnccl-net.so`` library and dynamically loads it,
+When NCCL is initialized, it searches for a ``librccl-net.so`` library and dynamically loads it,
 then searches for symbols inside the library.
 
 The ``NCCL_NET_PLUGIN`` environment variable allows multiple plugins to coexist. If it's set, NCCL
-looks for a library named ``libnccl-net-${NCCL_NET_PLUGIN}.so``. It is therefore
-recommended that you name the library according to that pattern, with a symlink pointing from ``libnccl-net.so``
-to ``libnccl-net-${NCCL_NET_PLUGIN}.so``. This lets users select the correct plugin
+looks for a library named ``librccl-net-${NCCL_NET_PLUGIN}.so``. It is therefore
+recommended that you name the library according to that pattern, with a symlink pointing from ``librccl-net.so``
+to ``librccl-net-${NCCL_NET_PLUGIN}.so``. This lets users select the correct plugin
 if there are multiple plugins in the path.
 
 Struct versioning
@@ -169,7 +169,7 @@ Initialization
 
       Setting ``NCCL_NET=<plugin name>`` ensures a specific network implementation is used, with
       a matching ``name``. This is not to be confused with ``NCCL_NET_PLUGIN`` which defines a suffix for the
-      ``libnccl-net.so`` library name to load.
+      ``librccl-net.so`` library name to load.
 
 *  ``init`` - As soon as NCCL finds the plugin and the correct ``ncclNet`` symbol, it calls the ``init`` function. This allows the plugin to discover network devices and ensure they are usable.
    If the ``init`` function does not return ``ncclSuccess``, then NCCL does not use the plugin and falls back to internal ones.
@@ -203,6 +203,17 @@ Initialization
       set to ``NCCL_PTR_HOST|NCCL_PTR_CUDA``. Otherwise, it should be set to ``NCCL_PTR_HOST``. If the plugin
       supports ``dmabuf``, it should set ``ptrSupport`` to ``NCCL_PTR_HOST|NCCL_PTR_CUDA|NCCL_PTR_DMABUF`` and
       provide a ``regMrDmaBuf`` function.
+
+   *  The ``regIsGlobal`` field allows NCCL to register buffers in advance, for example, using a loopback connection.
+      Later, it also lets NCCL expect that a subsequent registration on a buffer from a previous registration
+      will happen nearly immediately, because the buffer is already known by the network adapter. A typical
+      implementation maintains a registration cache, with the call to ``ncclCommRegister`` creating the
+      initial entry in the cache using ``regMr()`` on a loopback connection. Any later call to the NCCL
+      system can call ``regMr()`` again on the real connection, with the real buffer (which could be at a
+      different offset within the original buffer, with a smaller size, for example). It
+      could then call ``deregMr()`` immediately afterwards.
+      The ``ncclCommDeregister`` call should issue the final call to ``deregMr()`` and effectively remove the mapping
+      on the network adapter.
 
    *  The ``speed`` field indicates the speed of the network port in Mbps (10^6 bits per second).
       This ensures proper optimization of flows within the node.

@@ -3,3 +3,6 @@
 /coverage/
 build/
 ext/
+
+# Visual Studio Code
+.vscode

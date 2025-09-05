@@ -10,6 +10,8 @@
 
 #include "graph.h"
 #include "core.h"
+#include "xml.h"
+#include "net.h"
 #include "archinfo.h"
 #include <string.h>
 
@@ -19,10 +21,13 @@
 #define SM80_NVLINK_BW 20.0
 #define SM90_NVLINK_BW 20.6
 #define SM86_NVLINK_BW 12.0
+#define SM100_NVLINK_BW 40.0
 #define PCI_BW 12.0           // PCI Gen3 x16
-#define QPI_BW 6.0
 #define AMD_BW 16.0
+#define BDW_QPI_BW 6.0
 #define SKL_QPI_BW 10.0
+#define SRP_QPI_BW 22.0
+#define ERP_QPI_BW 40.0
 #define ZPI_BW 6.0
 #define YONGFENG_ZPI_BW 9.0
 #define P9_BW 32.0
@@ -31,12 +36,13 @@
 #define VEGA_XGMI_WIDTH 24.0
 #define MI200_XGMI_WIDTH 36.0
 #define GFX94X_XGMI_WIDTH 48.0
+#define GFX95X_XGMI_WIDTH 48.0
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, so GPU
 // to GPU traffic consumes more PCI bandwidth.
 #define INTEL_P2P_OVERHEAD(bw) (bw*6/5)
 
-#define NCCL_TOPO_NODE_TYPES 7
+#define NCCL_TOPO_NODE_TYPES 6
 #define GPU 0
 #define PCI 1
 #define NVS 2
@@ -49,12 +55,14 @@ extern const char* topoNodeTypeStr[];
 #define LINK_LOC 0
 #define LINK_NVL 1
 // Skipping 2 for PATH_NVB
-#define LINK_PCI 3
-// Skipping 4 for PATH_PXB
-// Skipping 5 for PATH_PXN
-// Skipping 6 for PATH_PHB
-#define LINK_SYS 7
-#define LINK_NET 8
+#define LINK_C2C 3
+#define LINK_PCI 4
+// Skipping 5 for PATH_PXB
+// Skipping 6 for PATH_PXN
+// Skipping 7 for PATH_P2C
+// Skipping 8 for PATH_PHB
+#define LINK_SYS 9
+#define LINK_NET 10
 extern const char* topoLinkTypeStr[];
 
 // Local (myself)
@@ -66,26 +74,35 @@ extern const char* topoLinkTypeStr[];
 // Connection through NVLink using an intermediate GPU
 #define PATH_NVB 2
 
+// Connection through C2C
+#define PATH_C2C 3
+
 // Connection traversing at most a single PCIe bridge
-#define PATH_PIX 3
+#define PATH_PIX 4
 
 // Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
-#define PATH_PXB 4
+#define PATH_PXB 5
 
 // Connection between a GPU and a NIC using an intermediate GPU. Used to enable rail-local, aggregated network send/recv operations.
-#define PATH_PXN 5
+#define PATH_PXN 6
+
+// Connection between a GPU and a NIC using the C2C connection to the CPU and the PCIe connection to the NIC
+#define PATH_P2C 7
 
 // Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
-#define PATH_PHB 6
+#define PATH_PHB 8
 
 // Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
-#define PATH_SYS 7
+#define PATH_SYS 9
 
 // Connection through the network
-#define PATH_NET 8
+#define PATH_NET 10
+
+// New type of path which should precede PATH_PIX
+#define PATH_PORT PATH_NVL
 
 // Disconnected
-#define PATH_DIS 9
+#define PATH_DIS 11
 extern const char* topoPathTypeStr[];
 
 struct ncclTopoNode;
@@ -94,8 +111,8 @@ struct ncclTopoLink {
   float bw;
   struct ncclTopoNode* remNode;
 };
-#define NCCL_TOPO_MAX_LINKS 128
-
+// Allows for up to 32 NICs per node on GB200-NVL72
+#define NCCL_TOPO_MAX_LINKS 576
 #define NCCL_TOPO_MAX_HOPS (NCCL_TOPO_MAX_NODES*NCCL_TOPO_NODE_TYPES)
 
 struct ncclTopoLinkList {
@@ -105,14 +122,13 @@ struct ncclTopoLinkList {
   int type;
 };
 
-#define NCCL_TOPO_CPU_INTEL_BDW 1
-#define NCCL_TOPO_CPU_INTEL_SKL 2
-
 #define NCCL_TOPO_UNDEF (-1)
 
+#define NCCL_TOPO_ID_LOCAL_ID_MASK 0x00ffffffffffffff
 #define NCCL_TOPO_ID_SYSTEM_ID(id) (id >> 56)
-#define NCCL_TOPO_ID_LOCAL_ID(id) (id & 0x00ffffffffffffff)
-#define NCCL_TOPO_ID(systemid, localid) (((int64_t)systemid << 56) + localid)
+#define NCCL_TOPO_ID_LOCAL_ID(id) (id & NCCL_TOPO_ID_LOCAL_ID_MASK)
+#define NCCL_TOPO_LOCAL_NIC_ID(numaid, busid) (((int64_t)numaid << 56) + busid)
+#define NCCL_TOPO_ID(systemid, localid) (((int64_t)systemid << 56) + (localid & NCCL_TOPO_ID_LOCAL_ID_MASK))
 
 #define RCCL_TOPO_CR8G      1
 #define RCCL_TOPO_4P2H_ROME 2
@@ -120,6 +136,7 @@ struct ncclTopoLinkList {
 #define RCCL_TOPO_16P1H     8
 #define RCCL_TOPO_FORCE_INTRA 16
 #define RCCL_TOPO_XGMI_ALL  32
+
 
 #define GCN_ARCH_NAME_LEN 16
 
@@ -192,6 +209,7 @@ struct ncclTopoSystem {
 
   // [RCCL] Track hostIdx to support rail-optimized rings/trees
   int hostIdx;
+  bool useRailOptimizedTrees;
 };
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id);
@@ -201,6 +219,16 @@ ncclResult_t ncclTopoConnectNodes(struct ncclTopoNode* node, struct ncclTopoNode
 ncclResult_t ncclTopoPrintPaths(struct ncclTopoSystem* system);
 ncclResult_t ncclTopoLoadSystem(const char* xmlTopoFile, struct ncclTopoSystem* system);
 ncclResult_t ncclTopoGetIntermediateRank(struct ncclTopoSystem* system, int rank, int64_t netId, int* intermediateRank);
+ncclResult_t ncclTopoGetGpuMinPath(struct ncclTopoSystem* system, int type, int* min);
+ncclResult_t ncclTopoGetGpuMaxPath(struct ncclTopoSystem* system, int type, int* max);
+ncclResult_t ncclTopoSplitNvLink(struct ncclTopoSystem* system, int* splitNvLink);
+
+struct ncclTopoNetState {
+  int nVirtualNics;
+  int nPhysicalNics;
+  const char* name;
+};
+ncclResult_t ncclTopoProcessNet(ncclXml* xml, int coll, const char* dumpXmlFile, ncclTopoNetState* state, ncclResult_t (*getProperties)(int, ncclNetProperties_t*), ncclResult_t (*makeVDevice)(int*, ncclNetVDeviceProps_t*), ncclResult_t (*devices)(int*), const char* netName, bool dmaBufSupport);
 
 #define NCCL_TOPO_XML_MAX_NODES 8192
 #define NCCL_GRAPH_XML_MAX_NODES 8192
@@ -221,7 +249,7 @@ static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, i
   return ncclInternalError;
 }
 
-static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank, int* index) {
+static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank, int* index, bool showWarn) {
   *index = -1;
   for (int i=0; i<system->nodes[GPU].count; i++) {
     if (system->nodes[GPU].nodes[i].gpu.rank == rank) {
@@ -229,6 +257,7 @@ static ncclResult_t ncclTopoRankToIndex(struct ncclTopoSystem* system, int rank,
       return ncclSuccess;
     }
   }
+  if (showWarn) WARN("ncclTopoRankToIndex could not find rank %d", rank);
   return ncclInternalError;
 }
 
@@ -252,7 +281,7 @@ static ncclResult_t ncclTopoIdToNetDev(struct ncclTopoSystem* system, int64_t id
       return ncclSuccess;
     }
   }
-  WARN("Could not find NET with id %lx\n", id);
+  WARN("Could not find NET with id %lx", id);
   return ncclInternalError;
 }
 
@@ -260,8 +289,10 @@ static ncclResult_t ncclTopoIdToNetDev(struct ncclTopoSystem* system, int64_t id
 static float ncclTopoXGMISpeed(const char* gcn) {
   if (IsArchMatch(gcn, "gfx90a"))
     return MI200_XGMI_WIDTH;
-  else if (IsArchMatch(gcn, "gfx94"))
+  else if (IsArchMatch(gcn, "gfx942"))
     return GFX94X_XGMI_WIDTH;
+  else if (IsArchMatch(gcn, "gfx95"))
+    return GFX95X_XGMI_WIDTH;
   else
     return VEGA_XGMI_WIDTH;
 }
@@ -269,6 +300,7 @@ static float ncclTopoXGMISpeed(const char* gcn) {
 // Returns NVLink bw in GB/s
 static float ncclTopoNVLinkBw(int cudaCompCap) {
   return
+    cudaCompCap >= 100 ? SM100_NVLINK_BW :
     cudaCompCap >= 90 ? SM90_NVLINK_BW :
     cudaCompCap == 86 ? SM86_NVLINK_BW :
     cudaCompCap >= 80 ? SM80_NVLINK_BW :

@@ -11,13 +11,13 @@
 #include "comm.h"
 #include "msccl/msccl_struct.h"
 
-ncclResult_t mscclGetCaptureStatus(int rank, hipStream_t stream);
+ncclResult_t mscclGetCaptureStatus(const ncclComm_t comm, hipStream_t stream);
 
 ncclResult_t mscclSetupScratch(struct mscclAlgo* hostAlgo, hipStream_t stream);
 
-ncclResult_t mscclSetupSyncFlags(int rank, hipStream_t stream);
+ncclResult_t mscclSetupSyncFlags(const ncclComm_t comm, hipStream_t stream);
 
-ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo, ncclComm_t comm);
+ncclResult_t mscclSetupConnections(struct mscclAlgo* hostAlgo,const ncclComm_t comm);
 
 ncclResult_t mscclSetupCount(struct mscclAlgo* hostAlgo, ncclComm_t comm, size_t count, ncclDataType_t dataType);
 

@@ -1,10 +1,10 @@
 Notices and Licenses file
 _______________________________________________________________
 
-Dependencies on nvidia-nccl v2.21.5-1 (BSD3)
+Dependencies on nvidia-nccl v2.22.3-1 (BSD3)
 
 Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
-Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+Modifications Copyright (c) 2019-2024 Advanced Micro Devices, Inc. All rights reserved.
 Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
  Redistribution and use in source and binary forms, with or without

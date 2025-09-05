@@ -24,7 +24,7 @@ Quick start RCCL build
 ======================
 
 RCCL directly depends on the HIP runtime plus the HIP-Clang compiler, which are part of the ROCm software stack.
-For ROCm installation instructions, see :doc:`rocm-install-on-linux:install/native-install/index`.
+For ROCm installation instructions, see the :doc:`package manager installation guide <rocm-install-on-linux:install/install-methods/package-manager-index>`.
 
 Use the `install.sh helper script <https://github.com/ROCm/rccl/blob/develop/install.sh>`_,
 located in the root directory of the RCCL repository,
@@ -57,7 +57,7 @@ The RCCL build and installation helper script options are as follows:
        --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
        --disable-msccl-kernel  Build without MSCCL kernels
-       --disable-mscclpp       Build without MSCCL++ support
+       --enable-mscclpp        Build with MSCCL++ support
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)

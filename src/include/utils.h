@@ -9,12 +9,15 @@
 
 #include "nccl.h"
 #include "alloc.h"
+#include "bitops.h"
 #include "checks.h"
 #include <stdint.h>
+#include <string.h>
 #include <time.h>
 #include <sched.h>
 #include <algorithm>
 #include <new>
+#include <type_traits>
 
 int ncclCudaCompCap();
 
@@ -25,15 +28,9 @@ ncclResult_t busIdToInt64(const char* busId, int64_t* id);
 ncclResult_t getBusId(int cudaDev, int64_t *busId);
 
 ncclResult_t getHostName(char* hostname, int maxlen, const char delim);
-uint64_t getHash(const char* string, int n);
 uint64_t getHostHash();
 uint64_t getPidHash();
 ncclResult_t getRandomData(void* buffer, size_t bytes);
-
-const char* ncclOpToString(ncclRedOp_t op);
-const char* ncclDatatypeToString(ncclDataType_t type);
-const char* ncclAlgoToString(int algo);
-const char* ncclProtoToString(int proto);
 
 struct netIf {
   char prefix[64];
@@ -44,9 +41,13 @@ int parseStringList(const char* string, struct netIf* ifList, int maxList);
 bool matchIfList(const char* string, int port, struct netIf* ifList, int listSize, bool matchExact);
 
 static long log2i(long n) {
- long l = 0;
- while (n>>=1) l++;
- return l;
+  return log2Down(n);
+}
+
+// Comparator function for qsort/bsearch to compare integers
+static int compareInts(const void *a, const void *b) {
+    int ia = *(const int*)a, ib = *(const int*)b;
+    return (ia > ib) - (ia < ib);
 }
 
 inline uint64_t clockNano() {
@@ -55,8 +56,7 @@ inline uint64_t clockNano() {
   return uint64_t(ts.tv_sec)*1000*1000*1000 + ts.tv_nsec;
 }
 
-/* get any bytes of random data from /dev/urandom, return 0 if it succeeds; else
- * return -1 */
+/* get any bytes of random data from /dev/urandom, return ncclSuccess (0) if it succeeds. */
 inline ncclResult_t getRandomData(void* buffer, size_t bytes) {
   ncclResult_t ret = ncclSuccess;
   if (bytes > 0) {
@@ -96,8 +96,11 @@ void ncclMemoryStackConstruct(struct ncclMemoryStack* me);
 void ncclMemoryStackDestruct(struct ncclMemoryStack* me);
 void ncclMemoryStackPush(struct ncclMemoryStack* me);
 void ncclMemoryStackPop(struct ncclMemoryStack* me);
+void* ncclMemoryStackAlloc(struct ncclMemoryStack* me, size_t size, size_t align);
 template<typename T>
 T* ncclMemoryStackAlloc(struct ncclMemoryStack* me, size_t n=1);
+template<typename Header, typename Element>
+inline Header* ncclMemoryStackAllocInlineArray(struct ncclMemoryStack* me, size_t nElt);
 
 ////////////////////////////////////////////////////////////////////////////////
 /* ncclMemoryPool: A free-list of same-sized allocations. It is an invalid for
@@ -140,11 +143,14 @@ T* ncclIntruQueueHead(ncclIntruQueue<T,next> *me);
 template<typename T, T *T::*next>
 void ncclIntruQueueEnqueue(ncclIntruQueue<T,next> *me, T *x);
 template<typename T, T *T::*next>
+void ncclIntruQueueEnqueueFront(ncclIntruQueue<T,next> *me, T *x);
+template<typename T, T *T::*next>
 T* ncclIntruQueueDequeue(ncclIntruQueue<T,next> *me);
 template<typename T, T *T::*next>
 T* ncclIntruQueueTryDequeue(ncclIntruQueue<T,next> *me);
 template<typename T, T *T::*next>
-void ncclIntruQueueFreeAll(ncclIntruQueue<T,next> *me, ncclMemoryPool *memPool);
+void ncclIntruQueueTransfer(ncclIntruQueue<T,next> *dst, ncclIntruQueue<T,next> *src);
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /* ncclThreadSignal: Couples a pthread mutex and cond together. The "mutex"
@@ -233,11 +239,28 @@ inline void* ncclMemoryStack::allocate(struct ncclMemoryStack* me, size_t size, 
   return obj;
 }
 
+inline void* ncclMemoryStackAlloc(struct ncclMemoryStack* me, size_t size, size_t align) {
+  void *obj = ncclMemoryStack::allocate(me, size, align);
+  memset(obj, 0, size);
+  return obj;
+}
+
 template<typename T>
 inline T* ncclMemoryStackAlloc(struct ncclMemoryStack* me, size_t n) {
   void *obj = ncclMemoryStack::allocate(me, n*sizeof(T), alignof(T));
   memset(obj, 0, n*sizeof(T));
   return (T*)obj;
+}
+
+template<typename Header, typename Element>
+inline Header* ncclMemoryStackAllocInlineArray(struct ncclMemoryStack* me, size_t nElt) {
+  size_t size = sizeof(Header);
+  size = (size + alignof(Element)-1) & -alignof(Element);
+  size += nElt*sizeof(Element);
+  size_t align = alignof(Header) < alignof(Element) ? alignof(Element) : alignof(Header);
+  void *obj = ncclMemoryStack::allocate(me, size, align);
+  memset(obj, 0, size);
+  return (Header*)obj;
 }
 
 inline void ncclMemoryStackPush(struct ncclMemoryStack* me) {
@@ -344,6 +367,13 @@ inline void ncclIntruQueueEnqueue(ncclIntruQueue<T,next> *me, T *x) {
 }
 
 template<typename T, T *T::*next>
+inline void ncclIntruQueueEnqueueFront(ncclIntruQueue<T,next> *me, T *x) {
+  if (me->head == nullptr) me->tail = x;
+  x->*next = me->head;
+  me->head = x;
+}
+
+template<typename T, T *T::*next>
 inline T* ncclIntruQueueDequeue(ncclIntruQueue<T,next> *me) {
   T *ans = me->head;
   me->head = ans->*next;
@@ -388,45 +418,11 @@ inline T* ncclIntruQueueTryDequeue(ncclIntruQueue<T,next> *me) {
 }
 
 template<typename T, T *T::*next>
-void ncclIntruQueueFreeAll(ncclIntruQueue<T,next> *me, ncclMemoryPool *pool) {
-  T *head = me->head;
-  me->head = nullptr;
-  me->tail = nullptr;
-  while (head != nullptr) {
-    T *tmp = head->*next;
-    ncclMemoryPoolFree(pool, tmp);
-    head = tmp;
-  }
-}
-
-/* cmp function determines the sequence of objects in the queue. If cmp returns value >= 0, it means a > b,
- * and we should put a before b; otherwise, b should be put ahead of a. */
-template<typename T, T *T::*next>
-inline void ncclIntruQueueSortEnqueue(ncclIntruQueue<T,next> *me, T *x, int (*cmp)(T *a, T *b)) {
-  T *cur = me->head;
-  T *prev = NULL;
-
-  if (cur == NULL) {
-    x->*next = nullptr;
-    me->tail = me->head = x;
-  } else {
-    while (cur) {
-      if (cmp(cur, x) > 0) {
-        prev = cur;
-        cur = cur->next;
-      } else {
-        break;
-      }
-    }
-
-    x->*next = cur;
-    if (prev) {
-      prev->*next = x;
-      if (cur == NULL) me->tail = x;
-    } else {
-      me->head = x;
-    }
-  }
+void ncclIntruQueueTransfer(ncclIntruQueue<T,next> *dst, ncclIntruQueue<T,next> *src) {
+  (dst->tail ? dst->tail->next : dst->head) = src->head;
+  if (src->tail) dst->tail = src->tail;
+  src->head = nullptr;
+  src->tail = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -556,4 +552,25 @@ T* ncclIntruQueueMpscAbandon(ncclIntruQueueMpsc<T,next>* me) {
     return head;
   }
 }
+/**
+ * @brief function to get page size of the system
+ */
+size_t get_sc_page_size(void);
+
+/**
+ * @brief function to get system's page size aligned memory address and buffersize 
+ *
+ * Given a pointer `ptr` to a buffer of size `bufsize`, this function computes:
+ *   1. A new pointer `aligned_ptr` which points to the start of the page-aligned memory region that includes `ptr`.
+ *   2. A new size `aligned_size` that is the minimum number of bytes (aligned to page size) needed to cover the original buffer from `aligned_ptr`.
+ *
+ * This is useful, for example, when performing operations such as memory mapping or advising memory usage (e.g., with `mmap`, `madvise`, `mlock`, etc.), which often require page-aligned memory ranges.
+ * This function doesn't dereferece the input pointer
+ *
+ * @param[in]  ptr           Pointer to the start of the original memory buffer.
+ * @param[in]  bufsize       Size (in bytes) of the original buffer starting at `ptr`.
+ * @param[out] aligned_ptr   Pointer to a variable that will be set to the aligned base address.
+ * @param[out] aligned_size  Pointer to a variable that will be set to the aligned size.
+ */
+void get_aligned_ptr_and_size(const void *ptr, const size_t bufsize, void **aligned_ptr, size_t *aligned_size);
 #endif

@@ -90,7 +90,7 @@ details about the platform and system. Some issues to consider include:
 
    *  Build or run the develop branch version of RCCL and see if the problem persists.
    *  Try an earlier RCCL version (minor or major).
-   *  If you recently changed the ROCm runtime configuration, KFD/driver, or compiler,
+   *  If you recently changed the ROCm runtime configuration, AMD Kernel-mode GPU Driver (KMD), or compiler,
       rerun the test with the previous configuration.
 
 .. _collecting-rccl-info:
@@ -133,7 +133,7 @@ Using the RCCL Replayer
 The RCCL Replayer is a debugging tool designed to analyze and replay the collective logs obtained from RCCL runs. 
 It can be helpful when trying to reproduce problems, because it uses dummy data and doesn't have any dependencies 
 on non-RCCL calls. For more information, 
-see `RCCL Replayer GitHub documentation <https://github.com/ROCm/rccl/tree/develop/tools/rccl_replayer>`_.
+see `RCCL Replayer GitHub documentation <https://github.com/ROCm/rccl/tree/develop/tools/RcclReplayer>`_.
 
 You must build the RCCL Replayer before you can use it. To build it, run these commands. Ensure ``MPI_DIR`` is set to 
 the path where MPI is installed.

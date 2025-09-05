@@ -8,7 +8,7 @@
 #include "core.h"
 
 #include "nvmlwrap.h"
-
+#include <unistd.h>
 #include <stdlib.h>
 
 // Get current Compute Capability
@@ -65,15 +65,7 @@ ncclResult_t getHostName(char* hostname, int maxlen, const char delim) {
   return ncclSuccess;
 }
 
-uint64_t getHash(const char* string, int n) {
-  // Based on DJB2a, result = result * 33 ^ char
-  uint64_t result = 5381;
-  for (int c = 0; c < n; c++) {
-    result = ((result << 5) + result) ^ string[c];
-  }
-  return result;
-}
-
+static uint64_t hostHashValue = 0;
 /* Generate a hash of the unique identifying string for this host
  * that will be unique for both bare-metal and container instances
  * Equivalent of a hash of;
@@ -83,7 +75,7 @@ uint64_t getHash(const char* string, int n) {
  * This string can be overridden by using the NCCL_HOSTID env var.
  */
 #define HOSTID_FILE "/proc/sys/kernel/random/boot_id"
-uint64_t getHostHash(void) {
+static void getHostHashOnce() {
   char hostHash[1024];
   const char *hostId;
 
@@ -93,7 +85,8 @@ uint64_t getHostHash(void) {
 
   if ((hostId = ncclGetEnv("NCCL_HOSTID")) != NULL) {
     INFO(NCCL_ENV, "NCCL_HOSTID set by environment to %s", hostId);
-    strncpy(hostHash, hostId, sizeof(hostHash));
+    strncpy(hostHash, hostId, sizeof(hostHash)-1);
+    hostHash[sizeof(hostHash)-1] = '\0';
   } else {
     FILE *file = fopen(HOSTID_FILE, "r");
     if (file != NULL) {
@@ -102,8 +95,8 @@ uint64_t getHostHash(void) {
         strncpy(hostHash+offset, p, sizeof(hostHash)-offset-1);
         free(p);
       }
+      fclose(file);
     }
-    fclose(file);
   }
 
   // Make sure the string is terminated
@@ -111,7 +104,12 @@ uint64_t getHostHash(void) {
 
   TRACE(NCCL_INIT,"unique hostname '%s'", hostHash);
 
-  return getHash(hostHash, strlen(hostHash));
+  hostHashValue = getHash(hostHash, strlen(hostHash));
+}
+uint64_t getHostHash(void) {
+  static pthread_once_t once = PTHREAD_ONCE_INIT;
+  pthread_once(&once, getHostHashOnce);
+  return hostHashValue;
 }
 
 /* Generate a hash of the unique identifying string for this process
@@ -292,78 +290,21 @@ void ncclMemoryStackDestruct(struct ncclMemoryStack* me) {
   }
 }
 
-const char* ncclOpToString(ncclRedOp_t op) {
-  switch (op) {
-    case ncclSum:
-      return "ncclSum";
-    case ncclProd:
-      return "ncclProd";
-    case ncclMax:
-      return "ncclMax";
-    case ncclMin:
-      return "ncclMin";
-    case ncclAvg:
-      return "ncclAvg";
-    default:
-      return "Unknown";
+size_t get_sc_page_size() {
+  static size_t cached_page_size = 0;
+  size_t ps = __atomic_load_n(&cached_page_size,__ATOMIC_RELAXED);
+  if (ps == 0) {
+      ps = (size_t)sysconf(_SC_PAGESIZE);
+      __atomic_store_n(&cached_page_size, ps,__ATOMIC_RELAXED);
   }
+  return ps;
 }
 
-const char* ncclDatatypeToString(ncclDataType_t type) {
-  switch (type) {
-    case ncclInt8: // ncclChar
-      return "ncclInt8";
-    case ncclInt32: // ncclInt
-      return "ncclInt32";
-    case ncclUint32:
-      return "ncclUint32";
-    case ncclInt64:
-      return "ncclInt64";
-    case ncclUint64:
-      return "ncclUint64";
-    case ncclFloat16: // ncclHalf
-      return "ncclFloat16";
-    case ncclFloat32: // ncclFloat
-      return "ncclFloat32";
-    case ncclFloat64: // ncclDouble
-      return "ncclFloat64";
-#if defined(__CUDA_BF16_TYPES_EXIST__)
-    case ncclBfloat16:
-      return "ncclBfloat16";
-#endif
-    default:
-      return "Unknown";
-  }
-}
-
-const char* ncclAlgoToString(int algo) {
-  switch (algo) {
-    case NCCL_ALGO_TREE:
-      return "TREE";
-    case NCCL_ALGO_RING:
-      return "RING";
-    case NCCL_ALGO_COLLNET_DIRECT:
-      return "COLLNET_DIRECT";
-    case NCCL_ALGO_COLLNET_CHAIN:
-      return "COLLNET_CHAIN";
-    case NCCL_ALGO_NVLS:
-      return "NVLS";
-    case NCCL_ALGO_NVLS_TREE:
-      return "NVLS_TREE";
-    default:
-      return "Unknown";
-  }
-}
-
-const char* ncclProtoToString(int proto) {
-  switch (proto) {
-    case NCCL_PROTO_LL:
-      return "LL";
-    case NCCL_PROTO_LL128:
-      return "LL128";
-    case NCCL_PROTO_SIMPLE:
-      return "SIMPLE";
-    default:
-      return "Unknown";
-  }
+void get_aligned_ptr_and_size(const void *ptr, const size_t bufsize, void **aligned_ptr, size_t *aligned_size) {
+  if (!aligned_ptr || !aligned_size) return;
+  const size_t page_size = get_sc_page_size();
+  uintptr_t aligned_ptr_local = (uintptr_t)ptr & ~(page_size - 1);
+  size_t local_offset = (size_t)((uintptr_t)ptr - aligned_ptr_local);
+  *aligned_size = (bufsize + local_offset + page_size - 1) & ~(page_size - 1);
+  *aligned_ptr = (void *)aligned_ptr_local;
 }
