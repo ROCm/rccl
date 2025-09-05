@@ -1,6 +1,6 @@
 # Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
 HIP_PATH ?= $(wildcard /opt/rocm)
-ROCM_VERSION ?=$(shell sed 's/\./0/g' /opt/rocm/.info/version)
+ROCM_VERSION ?=$(shell sed 's/\./0/g' $(HIP_PATH)/.info/version)
 ifeq (,$(HIP_PATH))
 HIP_PATH = ../../..
 endif
