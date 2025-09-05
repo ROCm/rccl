@@ -45,9 +45,9 @@ jobs:
       contents: read
       id-token: write
     strategy:
+      fail-fast: false
       matrix:
         amdgpu_family: [gfx94X-dcgpu, gfx950-dcgpu]
-    continue-on-error: true
     uses: ./.github/workflows/therock-ci-linux.yml
     secrets: inherit
     with:
