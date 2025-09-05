@@ -39,6 +39,9 @@ cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 cmake --build . --target install
 
+## Building RCCL topo_explorer
+cd ../tools/topo_expl
+make
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 ## Building RCCL-Tests
