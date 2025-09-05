@@ -7,14 +7,6 @@ on:
         type: string
       extra_cmake_options:
         type: string
-  workflow_dispatch:
-    inputs:
-      amdgpu_families:
-        type: choice
-        options:
-          - gfx94X-dcgpu
-          - gfx950-dcgpu
-        default: gfx94X-dcgpu
 
 permissions:
   contents: read
@@ -121,7 +113,7 @@ jobs:
     uses: ./.github/workflows/therock-test-packages-multi-node.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' && 'vultr-linux-rocm' || (inputs.amdgpu_families == 'gfx950-dcgpu' && 'nova-linux-slurm-scale-runner') }}
+      test_runs_on: nova-linux-slurm-scale-runner
       artifact_run_id: ${{ github.run_id }}
 
   therock-test-linux-single-node:
