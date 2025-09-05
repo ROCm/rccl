@@ -64,12 +64,10 @@ jobs:
              --self-contained-html
 
       # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
-      # First, scancel anything running on the slurm reservation for CI.
-      # Then, salloc will hold 4 nodes while the commands inside the EOF block run. After the block completes, salloc automatically releases the nodes.
+      # salloc will hold 4 nodes while the commands inside the EOF block run. After the block completes, salloc automatically releases the nodes.
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          scancel -p 32nodexgmi36 --reservation=ci_cd_test
           salloc -N 4 --reservation=ci_cd_test --exclusive bash <<'EOF'
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
