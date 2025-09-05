@@ -59,5 +59,6 @@ jobs:
           pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
               --cluster_file ./input/cluster.json \
               --config_file ./input/mi350_config.json \
-              --log-file=/tmp/rccl_log.log
+              --log-file=/tmp/rccl_log.log \
+              --html=/home/arravikum/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
           EOF
