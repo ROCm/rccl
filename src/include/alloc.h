@@ -294,8 +294,9 @@ static inline ncclResult_t ncclCuMemFree(void *ptr) {
   CUmemGenericAllocationHandle handle;
   size_t size = 0;
   CUCHECK(cuMemRetainAllocationHandle(&handle, ptr));
-  CUCHECK(cuMemRelease(handle));
-  CUCHECK(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)ptr));
+  // CUCHECK(cuMemRelease(handle));
+  void* base = nullptr;
+  CUCHECK(cuMemGetAddressRange(&base, &size, (CUdeviceptr)ptr));
   TRACE(NCCL_ALLOC, "CuMem Free Size %zu pointer %p handle 0x%llx", size, ptr, handle);
   CUCHECK(cuMemUnmap((CUdeviceptr)ptr, size));
   CUCHECK(cuMemRelease(handle));
@@ -369,15 +370,21 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   int dev;
 
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  // Need a side stream so as not to interfere with graph capture.
-  cudaStream_t stream = sideStream;
-  if (stream == nullptr)
-    CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
-  CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
-  CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish);
-  CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
-  if (sideStream == nullptr)
-    CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
+  if (nelem > 0) {
+    // Need a side stream so as not to interfere with graph capture.
+    cudaStream_t stream = sideStream;
+    if (stream == nullptr)
+      CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    if (ncclCuMemEnable()) {
+      NCCLCHECKGOTO(ncclCuMemAlloc((void **)ptr, NULL, ncclCuMemHandleType, nelem*ncclSizeOfT<T>()), result, finish);
+    } else {
+      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+    }
+    CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish);
+    CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
+    if (sideStream == nullptr)
+      CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
+  }
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr && nelem > 0) WARN("Failed to CUDA calloc %ld bytes", nelem*ncclSizeOfT<T>());
@@ -392,7 +399,7 @@ finish:
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p flags %d", filefunc, line, nelem*ncclSizeOfT<T>(), *ptr, flags);
   return result;
 }
-#define ncclCudaCalloc(...) ncclCudaCallocDebug(__FILE__, __LINE__, __VA_ARGS__)
+#define ncclCudaCalloc(...) ncclCudaCallocDebug(__FILE__, __LINE__, __VA_ARGS__) 
 
 template <typename T>
 ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, size_t nelem, hipStream_t stream, unsigned int flags = hipDeviceMallocDefault) {
@@ -403,7 +410,11 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
 
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (nelem > 0) {
-    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+    if (ncclCuMemEnable()) {
+      NCCLCHECKGOTO(ncclCuMemAlloc((void **)ptr, NULL, ncclCuMemHandleType, nelem*ncclSizeOfT<T>()), result, finish);
+    } else {
+      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+    }
     CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish); 
   }
 finish:
