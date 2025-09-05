@@ -52,10 +52,11 @@ jobs:
 
       - name: Test
         run: |
+          scancel -p 32nodexgmi36 --reservation=ci_cd_test <<'EOF'
           salloc -N 4 --reservation=ci_cd_test --exclusive bash <<'EOF'
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
-          
+
           pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
               --cluster_file ./input/cluster.json \
               --config_file ./input/mi350_config.json \

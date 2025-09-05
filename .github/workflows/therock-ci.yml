@@ -4,7 +4,18 @@ on:
   push:
     branches:
       - develop
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        description: The type of build version to produce ("nightly", or "dev")
+        type: string
+        default: "gfx950-dcgpu"
   workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: "gfx950-dcgpu"
 
 permissions:
   contents: read
@@ -47,16 +58,16 @@ jobs:
     uses: ./.github/workflows/therock-ci-linux.yml
     secrets: inherit
     with:
-      amdgpu_families: "gfx950-dcgpu"
+      amdgpu_families: ${{ inputs.amdgpu_families }}
       extra_cmake_options: >
-        -DTHEROCK_ENABLE_ALL=OFF 
-        -DTHEROCK_BUILD_TESTING=ON 
-        -DTHEROCK_BUNDLE_SYSDEPS=ON 
-        -DTHEROCK_ENABLE_COMM_LIBS=ON 
-        -DTHEROCK_ENABLE_ROCPROFV3=ON 
-        -DTHEROCK_USE_EXTERNAL_RCCL=ON 
-        -DTHEROCK_USE_EXTERNAL_RCCL_TESTS=ON 
-        -DTHEROCK_RCCL_SOURCE_DIR=./rccl 
+        -DTHEROCK_ENABLE_ALL=OFF
+        -DTHEROCK_BUILD_TESTING=ON
+        -DTHEROCK_BUNDLE_SYSDEPS=ON
+        -DTHEROCK_ENABLE_COMM_LIBS=ON
+        -DTHEROCK_ENABLE_ROCPROFV3=ON
+        -DTHEROCK_USE_EXTERNAL_RCCL=ON
+        -DTHEROCK_USE_EXTERNAL_RCCL_TESTS=ON
+        -DTHEROCK_RCCL_SOURCE_DIR=./rccl
         -DTHEROCK_RCCL_TESTS_SOURCE_DIR=./rccl-tests
         -DTHEROCK_ENABLE_MPI=ON
 
