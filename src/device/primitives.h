@@ -10,6 +10,7 @@
 
 #include <type_traits>
 #include "reduce_kernel.h" // for reduction funcs
+#include "rccl_metadata.h"
 #include "common_kernel.h"
 #include "common.h"
 
@@ -19,7 +20,7 @@
   if (nthreads == NCCL_MAX_NTHREADS) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
-    const int w = threadIdx.x/WARP_SIZE; \
+    /**const int w = threadIdx.x/WARP_SIZE //unused variable - compiler warning**/;\
     const int wid = threadIdx.x%WARP_SIZE; \
     if (wid == 0) { \
       (BARRIER_NEXT) += (NWORKERS) / WARP_SIZE; \
@@ -54,7 +55,7 @@
  * to how that protocol operates with a consistent interface so that our
  * algorithm code can operate protocol parametrically.
  */
-template<int SlicePerChunk_1, int StepPerSlice_1, int Unroll_1, int MultimemSrcs_1 = 0, int MultimemDsts_1 = 0>
+template<int SlicePerChunk_1, int StepPerSlice_1, int useAcc, int Unroll_1, int MultimemSrcs_1 = 0, int MultimemDsts_1 = 0>
 struct ProtoSimple {
   static constexpr int Id = NCCL_PROTO_SIMPLE;
   static constexpr int SlicePerChunk = SlicePerChunk_1;
@@ -136,7 +137,7 @@ struct FanSymmetric {
 };
 
 // The primitives class. Specialized per protocol in the other headers.
-template<typename T, typename RedOp, typename Fan, int Direct, typename Proto, int P2p, bool isNetOffload = false>
+template<typename T, typename RedOp, typename Fan, int Direct, typename Proto, int P2p, bool isNetOffload = false, int Metadata = RCCL_METADATA_EMPTY, int Pipeline = 0, int useAcc = 0>
 class Primitives;
 
 // Used by LL & LL128 to implement direct members in the naive way.

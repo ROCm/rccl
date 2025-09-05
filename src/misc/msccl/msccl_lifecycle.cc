@@ -30,7 +30,6 @@
 RCCL_PARAM(MscclEnabled, "MSCCL_ENABLE", 1);
 RCCL_PARAM(MscclForceEnabled, "MSCCL_FORCE_ENABLE", 0);
 RCCL_PARAM(MscclEnableSingleProcess, "MSCCL_ENABLE_SINGLE_PROCESS", 1);
-static const char* mscclAlgoFilePathEnv = "MSCCL_ALGO_FILE_PATH";
 
 bool mscclEnabled() {
 #ifdef COMPILE_MSCCL_KERNEL
@@ -562,6 +561,18 @@ static inline bool isMscclppAllReduceSupported(ncclDataType_t dataType, ncclRedO
 
   return (op == ncclSum);
 }
+
+static inline bool isMscclppAllGatherSupported(ncclDataType_t dataType) {
+  switch (dataType) {
+#ifdef RCCL_FLOAT8
+  case ncclFloat8e4m3:
+  case ncclFloat8e5m2:
+    return false;
+#endif
+  default:
+    return true;
+  }
+}
 #endif
 
 ncclResult_t mscclEnqueueCheck(
@@ -606,7 +617,7 @@ ncclResult_t mscclEnqueueCheck(
             threadLocalStatus.savedSchedulerParams.clear();
             break;
           }
-          else if (func == mscclFuncAllGather && nBytes * comm->nRanks <= comm->mscclpp_threshold) {
+          else if (func == mscclFuncAllGather && nBytes * comm->nRanks <= comm->mscclpp_threshold && isMscclppAllGatherSupported(dataType)) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p graphMode %d ubr %d",
               "mscclpp_ncclAllGather", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream, 
 	      	graphMode, buffsRegistered);
@@ -652,7 +663,7 @@ ncclResult_t mscclEnqueueCheck(
             threadLocalStatus.savedSchedulerParams.clear();
             break;
           }
-          else if (func == mscclFuncAllGather && nBytes * comm->nRanks <= comm->mscclpp_threshold) {
+          else if (func == mscclFuncAllGather && nBytes * comm->nRanks <= comm->mscclpp_threshold && isMscclppAllGatherSupported(dataType)) {
             INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p graphMode %d ubr %d" ,
               "mscclpp_ncclAllGather", comm->opCount, sendBuff, recvBuff, count, dataType, op, root, comm, comm->nRanks, stream, 
 	      	graphMode, buffsRegistered);

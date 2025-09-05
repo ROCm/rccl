@@ -14,6 +14,7 @@
 #include "assert.h"
 #include "bootstrap.h"
 #include "channel.h"
+#include "register_inline.h"
 
 int64_t ncclParamGdrCopySyncEnable();
 int64_t ncclParamGdrCopyFlushEnable();
@@ -524,6 +525,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   NCCL_NET_MAP_ADD_POINTER(map, 1, resources->useGdr ? 1 : 0, mapMem->size, buffs[NCCL_PROTO_SIMPLE]);
 
   int dmabuf_fd = -1;
+  (void)dmabuf_fd; /*compiler warnings fix - unused variable*/
 #if CUDA_VERSION >= 11070
   /* DMA-BUF support */
   if (resources->useGdr && resources->useDmaBuf) {
@@ -600,8 +602,9 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
   struct connectMapMem* mapMem = map->mems+bank;
   NCCLCHECK(sharedBuffersInit(connection->collNet, resources->useGdr, &mapMem->gpuPtr, &mapMem->cpuPtr, &mapMem->size));
   NCCL_NET_MAP_ADD_POINTER(map, 1, resources->useGdr ? 1 : 0, mapMem->size, buffs[NCCL_PROTO_SIMPLE]);
-
+  
   int dmabuf_fd = -1;
+  (void)dmabuf_fd; /*compiler warnings fix - unused variable*/
 #if CUDA_VERSION >= 11070
   /* DMA-BUF support */
   if (resources->useGdr && resources->useDmaBuf) {
@@ -1194,7 +1197,7 @@ static ncclResult_t collnetRegisterBuffer(struct ncclComm* comm, const void* use
       goto exit;
     } else {
       /* start register collnet buffer */
-      struct collnetRegInfo info = { regRecord->addr, regRecord->pages * comm->regCache.pageSize };
+      struct collnetRegInfo info = { regRecord->begAddr, regRecord->endAddr - regRecord->begAddr };
       void* handle = NULL;
       struct ncclConnInfo* conn = (type == collNetRecv) ? &comm->channels[0].peers[comm->nRanks]->recv[type].conn : &comm->channels[0].peers[comm->nRanks]->send[type].conn;
 
@@ -1314,8 +1317,8 @@ static ncclResult_t sendProxyRegBuffer(struct ncclProxyConnection* connection, s
     NCCLCHECKGOTO(proxyState->ncclCollNet->regMrDmaBuf(resources->collNetComm, (void*)info->buffer, info->size, NCCL_PTR_CUDA, 0ULL, dmabuf_fd, &handle), ret, peermem);
     needReg = false;
   }
-#endif
 peermem:
+#endif
   if (dmabuf_fd != -1) {
     (void)close(dmabuf_fd);
     dmabuf_fd = -1;
@@ -1342,20 +1345,20 @@ static ncclResult_t recvProxyRegBuffer(struct ncclProxyConnection* connection, s
 
   assert(reqSize == sizeof(struct collnetRegInfo));
   assert(respSize == sizeof(void*));
-  int dmabuf_fd = -1;
   #if CUDART_VERSION >= 11070
+  int dmabuf_fd = -1;
   /* DMA-BUF support */
   if (resources->useGdr && resources->useDmaBuf) {
     CUCHECKGOTO(cuMemGetHandleForAddressRange((void *)&dmabuf_fd, (CUdeviceptr)info->buffer, info->size, CU_MEM_RANGE_HANDLE_TYPE_DMA_BUF_FD, getHandleForAddressRangeFlags(resources->useGdr)), ret, peermem);
     NCCLCHECKGOTO(proxyState->ncclCollNet->regMrDmaBuf(resources->collNetComm, (void*)info->buffer, info->size, NCCL_PTR_CUDA, 0ULL, dmabuf_fd, &handle), ret, peermem);
     needReg = false;
   }
-#endif
 peermem:
   if (dmabuf_fd != -1) {
     (void)close(dmabuf_fd);
     dmabuf_fd = -1;
   }
+#endif
   if (needReg) {
     NCCLCHECKGOTO(proxyState->ncclCollNet->regMr(resources->collNetComm, (void*)info->buffer, info->size, NCCL_PTR_CUDA, &handle), ret, fail);
   }
@@ -1395,7 +1398,7 @@ ncclResult_t ncclCollNetChainBufferSetup(ncclComm_t comm) {
   ncclResult_t ret = ncclSuccess;
   char line[1024];
 
-  if (comm->collNetSupport == 0) goto exit;
+  if (comm->config.collnetEnable == 0) goto exit;
   // Connect Collnet + chain
   for (int c = 0; c < comm->nChannels; c++) {
     struct ncclChannel* channel = comm->channels + c;
@@ -1427,7 +1430,7 @@ fail:
 ncclResult_t ncclCollNetDirectBufferSetup(ncclComm_t comm) {
   ncclResult_t ret = ncclSuccess;
 
-  if (comm->collNetSupport == 0) goto exit;
+  if (comm->config.collnetEnable == 0) goto exit;
 
   // Connect intra-node CollNet + Direct
   for (int c = 0; c < comm->nChannels; c++) {
@@ -1504,8 +1507,8 @@ ncclResult_t ncclCollNetSetup(ncclComm_t comm, ncclComm_t parent, struct ncclTop
 
   comm->collNetHeads = headsUnique;
   comm->collNetHeadsNum = nHeadsUnique;
-  if (parent && parent->collNetSupport && parent->nNodes == comm->nNodes) {
-    if (!parent->config.splitShare) {
+  if (parent && parent->config.collnetEnable && parent->nNodes == comm->nNodes) {
+    if (!parent->shareResources) {
       collNetSetupFail = 1;
       goto fail;
     }
@@ -1553,9 +1556,6 @@ ncclResult_t ncclCollNetSetup(ncclComm_t comm, ncclComm_t parent, struct ncclTop
 
         NCCLCHECKGOTO(collNetInitRailRankMap(comm), ret, fail);
       } else {
-        /* TODO: CX-6 and CX-7 both do not support multiple sharp resources per process, if child comm cannot
-         * share the sharp resource from parent, we cannot use sharp in this case. This restriction might be
-         * lifted by sharp plugin/IB hardware in the future. */
         collNetSetupFail = 1;
         if (comm->rank == 0) {
           WARN("Child comms (nRanks %d) fails to share parent comms (nRanks %d) sharp resources", comm->nRanks, parent->nRanks);
@@ -1635,7 +1635,7 @@ exit:
   return ret;
 fail:
   ncclTransportCollNetFree(comm);
-  comm->collNetSupport = 0;
+  comm->config.collnetEnable = 0;
   goto exit;
 }
 

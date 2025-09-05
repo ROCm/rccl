@@ -114,19 +114,20 @@ namespace RcclUnitTesting
     {
       if (verbose) INFO("Child %d received command [%s]:\n", this->childId, ChildCommandNames[command]);;
       ErrCode status = TEST_SUCCESS;
+      std::vector<char> retValBuf;
       switch(command)
       {
-      case CHILD_GET_UNIQUE_ID   : status = GetUniqueId();        break;
-      case CHILD_INIT_COMMS      : status = InitComms();          break;
-      case CHILD_SET_COLL_ARGS   : status = SetCollectiveArgs();  break;
-      case CHILD_ALLOCATE_MEM    : status = AllocateMem();        break;
-      case CHILD_PREPARE_DATA    : status = PrepareData();        break;
-      case CHILD_EXECUTE_COLL    : status = ExecuteCollectives(); break;
-      case CHILD_VALIDATE_RESULTS: status = ValidateResults();    break;
-      case CHILD_LAUNCH_GRAPHS   : status = LaunchGraphs();       break;
-      case CHILD_DEALLOCATE_MEM  : status = DeallocateMem();      break;
-      case CHILD_DESTROY_COMMS   : status = DestroyComms();       break;
-      case CHILD_DESTROY_GRAPHS  : status = DestroyGraphs();      break;
+      case CHILD_GET_UNIQUE_ID   : status = GetUniqueId(retValBuf); break;
+      case CHILD_INIT_COMMS      : status = InitComms();            break;
+      case CHILD_SET_COLL_ARGS   : status = SetCollectiveArgs();    break;
+      case CHILD_ALLOCATE_MEM    : status = AllocateMem();          break;
+      case CHILD_PREPARE_DATA    : status = PrepareData();          break;
+      case CHILD_EXECUTE_COLL    : status = ExecuteCollectives();   break;
+      case CHILD_VALIDATE_RESULTS: status = ValidateResults();      break;
+      case CHILD_LAUNCH_GRAPHS   : status = LaunchGraphs();         break;
+      case CHILD_DEALLOCATE_MEM  : status = DeallocateMem();        break;
+      case CHILD_DESTROY_COMMS   : status = DestroyComms();         break;
+      case CHILD_DESTROY_GRAPHS  : status = DestroyGraphs();        break;
       case CHILD_STOP            : goto stop;
       default: exit(0);
       }
@@ -137,6 +138,10 @@ namespace RcclUnitTesting
       if (write(childWriteFd, &status, sizeof(status)) < 0)
       {
         ERROR("Child %d write to parent failed: %s\n", this->childId, strerror(errno));
+        break;
+      }
+      if (retValBuf.size() > 0 && write(childWriteFd, retValBuf.data(), retValBuf.size()) < 0) {
+        ERROR("Child %d write return value to parent failed: %s\n", this->childId, strerror(errno));
         break;
       }
     }
@@ -150,14 +155,15 @@ namespace RcclUnitTesting
     exit(0);
   }
 
-  ErrCode TestBedChild::GetUniqueId()
+  ErrCode TestBedChild::GetUniqueId(std::vector<char>& retValBuf)
   {
     if (this->verbose) INFO("Child %d begins GetUniqueId()\n", this->childId);
 
     // Get a unique ID and pass it back to parent process
     ncclUniqueId id;
     CHILD_NCCL_CALL(ncclGetUniqueId(&id), "ncclGetUniqueId");
-    write(childWriteFd, &id, sizeof(id));
+    retValBuf.resize(sizeof(id));
+    memcpy(retValBuf.data(), &id, sizeof(id));
 
     if (this->verbose) INFO("Child %d finishes GetUniqueId()\n", this->childId);
     return TEST_SUCCESS;

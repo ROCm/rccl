@@ -36,12 +36,13 @@ The RCCL public repository is located at `<https://github.com/ROCm/rccl>`_.
 
     * `RCCL Tuner plugin examples <https://github.com/ROCm/rccl/tree/develop/ext-tuner/example>`_
     * `NCCL Net plugin examples <https://github.com/ROCm/rccl/tree/develop/ext-net/example>`_
-       
+
   .. grid-item-card:: API reference
 
     * :ref:`Library specification<library-specification>`
     * :ref:`api-library`
-       
+    * :ref:`Environment variables<env-variables>`
+
 To contribute to the documentation, see
 `Contributing to ROCm  <https://rocm.docs.amd.com/en/latest/contribute/contributing.html>`_.
 

@@ -11,8 +11,8 @@
 #include "collectives.h"
 #include "device.h"
 #include "op128.h"
-#include "device_table.h"
 #include "reduce_kernel.h"
+#include "device_table.h"
 #include "network/unpack/unpack_defs.h"
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
@@ -121,8 +121,10 @@ struct ncclShmemGroup {
   ncclConnInfo *sendConns[NCCL_MAX_ARITY];
   void* userInput;
   void* userOutput;
+  void* userAcc;
   void* srcs[NCCL_MAX_ARITY+1];
   void* dsts[NCCL_MAX_ARITY+1];
+  void* acc;
   uint64_t barrier;
   union {
     unpackGroupShmem unpack;
@@ -143,7 +145,6 @@ struct ncclShmemData {
   uint16_t funcId;
   int nWorks;
   int workSize;
-  uint32_t workConsumed;
   uint64_t workCounter;
   bool profilerEnabled;
   struct ncclShmemGroup groups[NCCL_MAX_GROUPS];
@@ -329,7 +330,6 @@ __device__ __forceinline__ void loadWorkBatchToShmem(
     }
     if (tid == 0) {
       ncclShmem.workSize = workSize;
-      ncclShmem.workConsumed = batch.offsetBase + (64-__clzll(batch.offsetBitset))*workSize;
     }
     // We deliberately replicate these div and mod calculations into the case
     // blocks above so that they get constant divisor optimizations by the compiler.
@@ -390,14 +390,24 @@ __device__ __forceinline__ void loadWorkBatchToShmem(
   }
 }
 
-template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int COLL_UNROLL>
+__device__ __forceinline__ unsigned long long int globaltimer() {
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  return wall_clock64();
+#else
+  unsigned long long int timer;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(timer));
+  return timer;
+#endif
+}
+
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int USE_ACC, int COLL_UNROLL, int Pipeline>
 struct RunWorkColl {
   __device__ void run(int tid, int tn, struct ncclDevWorkColl* work) {
     // Put NOT IMPLEMENTED behavior here.
   }
 };
 
-template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int COLL_UNROLL>
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int USE_ACC, int COLL_UNROLL, int Pipeline>
 struct RunWorkBatch;
 
 // Specialized for P2p in sendrecv.h
@@ -405,7 +415,7 @@ template<typename T, typename RedOp>
 struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE>;
 
 // Specialized here for non-P2p (Coll and CollReg)
-template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int COLL_UNROLL>
+template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto,  int USE_ACC, int COLL_UNROLL, int Pipeline>
 struct RunWorkBatch {
   // This __forceinline__ is necessary. The compiler was inserting a function call
   // here from the LL ncclKernel.
@@ -435,7 +445,7 @@ struct RunWorkBatch {
       // Coverity reports a possible thread divergence due to not all threads participating in the collective.
       // However, the code ensures that the participation is on a per-warp basis.
       // coverity[device_thread_diverged:FALSE]
-      if (tid < subtn) RunWorkColl<Fn, T, RedOp, Algo, Proto, COLL_UNROLL>().run(tid, subtn, work);
+      if (tid < subtn) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
     }
   }
 };
@@ -444,40 +454,30 @@ struct RunWorkBatch {
 #define STOP  1
 #define FINI  2
 
-__device__ __forceinline__ bool profilerEnabled(void) {
-  // Check if any of the workItems in the batch is profiled. If so, there is an equivalent
-  // profiler ProxyOp waiting for the counter update in the host thread. If this check was
-  // done only for the first workItem the profiler counter for other workItems in the batch
-  // could never be updated, leaving the host thread spinning forever for the counter update
-  // and causing a hang.
-  bool enabled = false;
-  for (int i = 0; i < ncclShmem.nWorks && !enabled; i++) {
-    if (ncclShmem.workType == ncclDevWorkTypeP2p)
-      enabled = ((struct ncclDevWorkP2p*)ncclShmem.workStorage)[i].profilerEnabled;
-    else
-      enabled = ((struct ncclDevWorkColl*)ncclShmem.workStorage)[i].profilerEnabled;
-  }
-  return enabled;
+__device__ __forceinline__ bool profilerEnabled(int workItemIdx) {
+  return (ncclShmem.workType == ncclDevWorkTypeP2p) ?
+    ((struct ncclDevWorkP2p*)ncclShmem.workStorage)[workItemIdx].profilerEnabled :
+    ((struct ncclDevWorkColl*)ncclShmem.workStorage)[workItemIdx].profilerEnabled;
 }
 
 __device__ __forceinline__ void profiler(int action) {
-  if (action == START) {
-    if (threadIdx.x == 0) {
-      // increment workCounter regardless of the profiler being active or not
+  if (threadIdx.x == 0) {
+    int idx = 0;
+    uint64_t wc = ncclShmem.channel.workCounter + 1;
+    if (action == START) {
+      for (; wc <= ncclShmem.channel.workCounter + ncclShmem.nWorks; wc++) {
+        if (!profilerEnabled(idx++)) continue;
+        ncclShmem.comm.workStarted[ncclShmem.channelId].data[wc%MAX_PROFILER_EVENTS_PER_CHANNEL].timestamp = globaltimer();
+        ncclShmem.comm.workStarted[ncclShmem.channelId].data[wc%MAX_PROFILER_EVENTS_PER_CHANNEL].counter = wc;
+      }
+    } else {
+      for (; wc <= ncclShmem.channel.workCounter + ncclShmem.nWorks; wc++) {
+        if (!profilerEnabled(idx++)) continue;
+        ncclShmem.comm.workCompleted[ncclShmem.channelId].data[wc%MAX_PROFILER_EVENTS_PER_CHANNEL].timestamp = globaltimer();
+        ncclShmem.comm.workCompleted[ncclShmem.channelId].data[wc%MAX_PROFILER_EVENTS_PER_CHANNEL].counter = wc;
+      }
       ncclShmem.channel.workCounter += ncclShmem.nWorks;
-      if(!profilerEnabled()) return;
-      ncclShmem.comm.workStarted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
-    }
-  } else if (action == STOP) {
-    if (threadIdx.x == 0 && profilerEnabled()) {
-      ncclShmem.comm.workCompleted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
-    }
-  } else { // FINI
-    if (threadIdx.x == 0) {
-      // store the workCounter back to vidmem regardless of the profiler being active or not
-      ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter = ncclShmem.channel.workCounter;
-      if (!profilerEnabled()) return;
-      ncclShmem.comm.workCompleted[ncclShmem.channelId] = ncclShmem.channel.workCounter;
+      if (action == FINI) ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter = ncclShmem.channel.workCounter;
     }
   }
 }
@@ -595,18 +595,27 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   if (tid == 0) __insert_timestamp(__LINE__);
   if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceKernelLaunchType, 0);
 
-  if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {
-    // ncclShmem.workConsumed written by loadWorkBatchToShmem before __syncthreads()
-    ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
-  }
-
   while (ncclShmem.aborted == 0) {
     if (tid == 0) __insert_timestamp(__LINE__);
     profiler(START);
     if (0 <= SpecializedFnId && ncclShmem.funcId == (unsigned)SpecializedFnId) {
       SpecializedRunWorkBatch().run();
     } else {
-      NCCL_CALL_FUNCTIONS<COLL_UNROLL>(ncclShmem.funcId);
+#ifdef USE_INDIRECT_FUNCTION_CALL
+      if (COLL_UNROLL == 1)
+        ncclDevFuncTable_1[ncclShmem.funcId]();
+      else if (COLL_UNROLL == 2)
+        ncclDevFuncTable_2[ncclShmem.funcId]();
+      else
+        ncclDevFuncTable_4[ncclShmem.funcId]();
+#else
+      if (COLL_UNROLL == 1)
+        NCCL_CALL_FUNCTIONS_1(ncclShmem.funcId);
+      else if (COLL_UNROLL == 2)
+        NCCL_CALL_FUNCTIONS_2(ncclShmem.funcId);
+      else
+        NCCL_CALL_FUNCTIONS_4(ncclShmem.funcId);
+#endif
     }
 
     if (ncclShmem.nextBatchIx == -1) break;
@@ -625,11 +634,6 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     profiler(STOP);
     loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
     __syncthreads();
-
-    if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {
-      // ncclShmem.workConsumed written by loadWorkBatchToShmem before __syncthreads()
-      ncclShmem.comm.workConsumed[ncclShmem.channelId] = ncclShmem.workConsumed;
-    }
     if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceCollLaunchType, batchIx);
   }
   if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelEnd(ncclCollTraceKernelEndType);
@@ -643,18 +647,27 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #endif
 }
 
+__global__ void ncclDevKernel_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernel_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+#ifdef ENABLE_COLLTRACE
+__global__ void ncclDevKernelDebug_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernelDebug_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+#endif
+
 #define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, specializedFnId) \
   __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
-#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, unroll) \
+#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, pipeline, unroll) \
   __device__ void ncclDevFunc_##suffix() { \
-    RunWorkBatch<coll, ty, redop<ty>, algo, proto, unroll>().run(); \
+    RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll, pipeline>().run(); \
   }
 #else
-#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, unroll) \
+#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, pipeline, unroll) \
   __device__ __attribute__((noinline)) void ncclDevFunc_##suffix() { \
-    RunWorkBatch<coll, ty, redop<ty>, algo, proto, unroll>().run(); \
+    RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll, pipeline>().run(); \
   }
 #endif
 
