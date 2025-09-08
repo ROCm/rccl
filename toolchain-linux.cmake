@@ -13,7 +13,7 @@ else()
 endif()
 
 if (NOT DEFINED ENV{CXXFLAGS})
-  set(CMAKE_CXX_FLAGS_DEBUG "-g -O1")
+  set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
   set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 endif()
 
