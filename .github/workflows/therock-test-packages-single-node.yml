@@ -62,8 +62,10 @@ jobs:
         timeout-minutes: 15
         # Currently, TheRock CI in RCCL always builds with MPI-supported enabled which causes the
         # RCCL correctness tests to fail on the mi325 runners which don't have MPI pre-installed.
+        # Also, TheRock ROCm build is currently missing amd-smi which is required for the unit tests.
         # TODO (geomin12): Rebuild rccl-tests without MPI to enable RCCL correctness tests.
+        # TODO (saienduri): Re-enable rccl unit tests once https://github.com/ROCm/TheRock/issues/1422 is resolved.
         run: |
           pytest ./build_tools/github_actions/test_executable_scripts/test_rccl.py -v -s \
             --log-cli-level=info \
-            -k "not test_rccl_correctness_tests"
+            -k "not test_rccl_correctness_tests not test_rccl_unittests"
