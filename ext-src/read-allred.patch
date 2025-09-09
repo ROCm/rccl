@@ -1,16 +1,16 @@
 diff --git a/apps/nccl/src/allreduce.hpp b/apps/nccl/src/allreduce.hpp
-index 4134241..76674ba 100644
+index 4134241..3fed055 100644
 --- a/apps/nccl/src/allreduce.hpp
 +++ b/apps/nccl/src/allreduce.hpp
-@@ -495,24 +495,336 @@ __global__ void __launch_bounds__(512, 1)
+@@ -495,24 +495,337 @@ __global__ void __launch_bounds__(512, 1)
    }
  }
  
 +template <typename T>
 +__global__ void __launch_bounds__(512, 1)
 +    allreduce8Read(T* buff, T* resultBuff, mscclpp::DeviceHandle<mscclpp::SmChannel>* smChannels,
-+                   mscclpp::DeviceHandle<mscclpp::SmChannel>* smOutChannels, size_t channelOutDataOffset, int rank,
-+                   int nRanksPerNode, int worldSize, size_t nelems) {
++               mscclpp::DeviceHandle<mscclpp::SmChannel>* smOutChannels, size_t channelOutDataOffset,
++               int rank, int nRanksPerNode, int worldSize, size_t nelems) {
 +  const int nPeer = nRanksPerNode - 1;
 +  const size_t chanOffset = nPeer * blockIdx.x;
 +  // assume (nelems * sizeof(T)) is divisible by (16 * worldSize)
@@ -22,7 +22,7 @@ index 4134241..76674ba 100644
 +  int4* buff4 = reinterpret_cast<int4*>(buff);
 +  int4* resultBuff4 = reinterpret_cast<int4*>(resultBuff);
 +
-+  // Distribute `nInt4PerRank` across all blocks with the unit size `unitNInt4`
++   // Distribute `nInt4PerRank` across all blocks with the unit size `unitNInt4`
 +  constexpr size_t unitNInt4 = 512;
 +  const size_t maxNInt4PerBlock =
 +      (((nInt4PerRank + gridDim.x - 1) / gridDim.x) + unitNInt4 - 1) / unitNInt4 * unitNInt4;
@@ -55,11 +55,12 @@ index 4134241..76674ba 100644
 +  }
 +  __syncthreads();
 +
++  // we can use double buffering to hide synchronization overhead
 +  for (size_t itr = 0; itr < nItrs; itr++) {
 +    for (size_t idx = threadIdx.x; idx < nInt4PerChunk; idx += blockDim.x) {
 +      int4 data = buff4[nInt4PerRank * rank + idx + offsetOfThisBlock];
 +      for (int peerIdx = 0; peerIdx < nPeer; peerIdx++) {
-+        int4 val = channels[peerIdx].read<int4>(nInt4PerRank * rank + offsetOfThisBlock + idx);
++        int4 val = channels[peerIdx].read<int4>(nInt4PerRank  * rank + offsetOfThisBlock + idx);;
 +        data = add_vectors<T>(val, data);
 +      }
 +      resultBuff4[nInt4PerRank * rank + idx + offsetOfThisBlock] = data;
@@ -76,7 +77,7 @@ index 4134241..76674ba 100644
 +    for (size_t idx = threadIdx.x; idx < restNInt4; idx += blockDim.x) {
 +      int4 data = buff4[nInt4PerRank * rank + idx + offsetOfThisBlock];
 +      for (int peerIdx = 0; peerIdx < nPeer; peerIdx++) {
-+        int4 val = channels[peerIdx].read<int4>(nInt4PerRank * rank + offsetOfThisBlock + idx);
++        int4 val = channels[peerIdx].read<int4>(nInt4PerRank  * rank + offsetOfThisBlock + idx);;
 +        data = add_vectors<T>(val, data);
 +      }
 +      resultBuff4[nInt4PerRank * rank + idx + offsetOfThisBlock] = data;
@@ -311,9 +312,9 @@ index 4134241..76674ba 100644
 +  int readAllred = 0, hieAllred = 0;
 +  char* envValue = nullptr;
 +  char* envValue1 = nullptr;
- 
-+  nRanksPerNode = (worldSize < nRanksPerNode) ? worldSize : nRanksPerNode;
 +
++  nRanksPerNode = (worldSize < nRanksPerNode) ? worldSize : nRanksPerNode;
+ 
 +  envValue = std::getenv("MSCCLPP_READ_ALLRED");
 +  envValue1 = std::getenv("MSCCLPP_HIERARCHICAL_ALLRED");
 +
@@ -346,7 +347,7 @@ index 4134241..76674ba 100644
        nThreadsPerBlock = (nelems <= 76800) ? 512 : 1024;
      }
  #if defined(ENABLE_NPKIT)
-@@ -526,11 +847,23 @@ cudaError_t allreduce(T* buff, T* scratch, T* resultBuff, mscclpp::DeviceHandle<
+@@ -526,11 +839,23 @@ cudaError_t allreduce(T* buff, T* scratch, T* resultBuff, mscclpp::DeviceHandle<
                                                           flag++);
  #endif
    } else {
