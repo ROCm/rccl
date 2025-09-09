@@ -124,7 +124,7 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
     NCCLCHECK(Recorder::instance().record(rrAllReduce, info));
   }
 
-if (mscclAvailable(comm) && !mscclIsCaller()) {
+  if (mscclAvailable(comm) && !mscclIsCaller()) {
     //MSCCL not supported for FP8 datatype
     if (datatype != ncclFloat8e4m3 && datatype != ncclFloat8e5m2) {
       // MSCCL threshold for Bfloat16 = 8MB
@@ -132,8 +132,8 @@ if (mscclAvailable(comm) && !mscclIsCaller()) {
         return mscclEnqueueCheck(
                       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
                       count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
+      }
     }
-  }
   }
 
   return ncclEnqueueCheck(&info);
