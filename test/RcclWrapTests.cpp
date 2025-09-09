@@ -2054,6 +2054,51 @@ TEST(Rcclwrap, RcclOverrideProtocol_ValidOverride) {
                                           "override value from environment.";
 }
 
+TEST(Rcclwrap, RcclOverrideProtocol_ValidOverridePersists) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  // Skip the test if RCCL_OVERRIDE_PROTO is not set or if its set to an invalid
+  // value
+  if (!isProtoStrValid(protoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_OVERRIDE_PROTO is not set or set to an invalid "
+           "value. Set it to a valid protocol name (e.g., 'Simple') to run "
+           "this test.";
+  }
+
+  // Get the index of the protocol from the string for later comparison
+  int protoIndex = NCCL_PROTO_UNDEF;
+  ncclResult_t idxResult = rcclGetAlgoProtoIndex(
+      protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoIndex);
+  ASSERT_EQ(idxResult, ncclSuccess)
+      << "Failed to get protocol index from string";
+
+  // Mark all combinations as valid for the purpose of this test.
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = 0.0;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclFloat16;
+  info.algorithm = NCCL_ALGO_RING; // Set any algorithm
+  info.protocol = NCCL_PROTO_UNDEF;
+
+  // First call
+  ncclResult_t result1 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result1, ncclSuccess)
+      << "Expected rcclOverrideProtocol to succeed with valid override";
+  EXPECT_EQ(info.protocol, protoIndex)
+      << "Expected protocol to match override after first call";
+
+  // Second call
+  ncclResult_t result2 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result2, ncclSuccess)
+      << "Expected rcclOverrideProtocol to succeed again on second call";
+  EXPECT_EQ(info.protocol, protoIndex)
+      << "Expected protocol to match override after second call";
+}
+
 TEST(Rcclwrap, RcclOverrideProtocol_InvalidProtocol) {
   const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
   // Skip the test if RCCL_OVERRIDE_PROTO is not set or if its set to a valid
@@ -2071,6 +2116,31 @@ TEST(Rcclwrap, RcclOverrideProtocol_InvalidProtocol) {
 
   EXPECT_EQ(result, ncclInvalidUsage) << "Expected ncclInvalidUsage when the "
                                          "override protocol is invalid.";
+}
+
+TEST(Rcclwrap, RcclOverrideProtocol_InvalidOverridePersists) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  if (!protoOverrideEnv || isProtoStrValid(protoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: Variable RCCL_OVERRIDE_PROTO is not set or set to a "
+           "valid value. Set it to an invalid protocol value to run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  // First call should fail due to invalid proto string
+  ncclResult_t result1 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result1, ncclInvalidUsage)
+      << "Expected rcclOverrideProtocol to fail with invalid "
+         "RCCL_OVERRIDE_PROTO.";
+
+  // Second call should still fail because the static variable disables further
+  // overrides
+  ncclResult_t result2 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result2, ncclInvalidUsage)
+      << "Expected rcclOverrideProtocol to continue returning failure after "
+         "invalid proto was set.";
 }
 
 TEST(Rcclwrap, RcclOverrideAlgorithm_NoOverride) {
@@ -2156,6 +2226,51 @@ TEST(Rcclwrap, RcclOverrideAlgorithm_ValidOverride) {
       << "Algorithm index should match the override value from environment.";
 }
 
+TEST(Rcclwrap, RcclOverrideAlgorithm_ValidOverridePersists) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to an invalid
+  // value
+  if (!isAlgoStrValid(algoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_OVERRIDE_ALGO is not set or set to an invalid "
+           "value. Set it to a valid algorithm name (e.g., 'Ring') to run this "
+           "test.";
+  }
+
+  // Get the index of the algorithm from the string for later comparison
+  int algoIndex = NCCL_ALGO_UNDEF;
+  ncclResult_t idxResult = rcclGetAlgoProtoIndex(
+      algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoIndex);
+  ASSERT_EQ(idxResult, ncclSuccess)
+      << "Failed to get algorithm index from string";
+
+  // Mark all combinations as valid for the purpose of this test.
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = 0.0;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclFloat16;
+  info.protocol = NCCL_PROTO_SIMPLE; // Set any protocol
+  info.algorithm = NCCL_ALGO_UNDEF;
+
+  // First call
+  ncclResult_t result1 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result1, ncclSuccess)
+      << "Expected rcclOverrideAlgorithm to succeed with valid override.";
+  EXPECT_EQ(info.algorithm, algoIndex)
+      << "Expected algorithm to match override after first call.";
+
+  // Second call
+  ncclResult_t result2 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result2, ncclSuccess)
+      << "Expected rcclOverrideAlgorithm to succeed again on second call.";
+  EXPECT_EQ(info.algorithm, algoIndex)
+      << "Expected algorithm to match override after second call.";
+}
+
 TEST(Rcclwrap, RcclOverrideAlgorithm_InvalidAlgorithm) {
   const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
   // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to a valid
@@ -2173,6 +2288,32 @@ TEST(Rcclwrap, RcclOverrideAlgorithm_InvalidAlgorithm) {
 
   EXPECT_EQ(result, ncclInvalidUsage)
       << "Expected ncclInvalidUsage when the override algorithm is invalid.";
+}
+
+TEST(Rcclwrap, RcclOverrideAlgorithm_InvalidOverridePersists) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to a valid
+  // value
+  if (!algoOverrideEnv || isAlgoStrValid(algoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_OVERRIDE_ALGO is not set or set to a valid "
+           "value. Set it to an invalid algorithm name to run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  // First call should fail due to invalid algo string (and set the static flag)
+  ncclResult_t result1 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result1, ncclInvalidUsage)
+      << "Expected rcclOverrideAlgorithm to fail with invalid "
+         "RCCL_OVERRIDE_ALGO.";
+
+  // Second call should also fail due to static validInput=false
+  ncclResult_t result2 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result2, ncclInvalidUsage)
+      << "Expected rcclOverrideAlgorithm to continue returning failure after "
+         "invalid algo was set.";
 }
 
 } // namespace RcclUnitTesting
