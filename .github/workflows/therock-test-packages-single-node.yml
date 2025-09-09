@@ -68,4 +68,4 @@ jobs:
         run: |
           pytest ./build_tools/github_actions/test_executable_scripts/test_rccl.py -v -s \
             --log-cli-level=info \
-            -k "not test_rccl_correctness_tests not test_rccl_unittests"
+            -k "not test_rccl_correctness_tests and not test_rccl_unittests"
