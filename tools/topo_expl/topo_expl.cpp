@@ -291,7 +291,9 @@ int main(int argc,char* argv[])
   std::vector<ncclFunc_t> ncclFuncTypes = {
     ncclFuncAllReduce,
     ncclFuncReduceScatter,
-    ncclFuncAllGather
+    ncclFuncAllGather,
+    ncclFuncReduce,
+    ncclFuncBroadcast
   };
 
   std::cout << "Running fp32 production choices for algorithm/protocol/maxChannels" << std::endl;

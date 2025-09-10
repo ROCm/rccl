@@ -79,7 +79,7 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
   // For AG, this is the send size per rank
   // For RS, this is the recv size per rank
   // For AR, this is the send/recv size per rank
-  return (func == ncclFuncReduceScatter || func == ncclFuncAllGather || func == ncclFuncBroadcast) ? nBytes / nRanks : nBytes;
+  return (func == ncclFuncReduceScatter || func == ncclFuncAllGather || func == ncclFuncBroadcast || func == ncclFuncReduce) ? nBytes / nRanks : nBytes;
 }
 ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoString[], int nEntries, int& result);
 ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info);
