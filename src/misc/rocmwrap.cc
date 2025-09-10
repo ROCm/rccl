@@ -20,6 +20,7 @@
 
 DECLARE_ROCM_PFN(hsa_amd_portable_export_dmabuf); // DMA-BUF support
 NCCL_PARAM(DmaBufEnable, "DMABUF_ENABLE", 0);
+RCCL_PARAM(ForceEnableDMABUF, "FORCE_ENABLE_DMABUF", 0);
 /* ROCr Driver functions loaded with dlsym() */
 DECLARE_ROCM_PFN(hsa_init);
 DECLARE_ROCM_PFN(hsa_system_get_info);
@@ -153,6 +154,10 @@ static void initOnceFunc() {
     INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
     goto error;
   }
+  if (rcclParamForceEnableDMABUF() == 0 ) {
+    INFO(NCCL_INIT, "Dmabuf feature disabled without RCCL_FORCE_DMABUF_ENABLE=1");
+    goto error;
+  }
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
   if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) {
     INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
@@ -195,7 +200,17 @@ static void initOnceFunc() {
             if(fp != NULL)
               break;
       }
-      if (fp == NULL) INFO(NCCL_INIT,"Could not open kernel conf file");
+      if (fp == NULL){
+        if(rcclParamForceEnableDMABUF()){
+          dmaBufSupport = 1;
+          INFO(NCCL_INIT, "DMA_BUF Support Enabled");
+        }
+        else{
+          dmaBufSupport = 0;
+          INFO(NCCL_INIT,"Could not open kernel conf file");
+        }
+      }
+      else{
       //look for kernel_opt1 and kernel_opt2 in the conf file and check
       while (fgets(buf, sizeof(buf), fp) != NULL) {
         if (strstr(buf, kernel_opt1) != NULL) {
@@ -215,6 +230,7 @@ static void initOnceFunc() {
 
       if(dmaBufSupport) INFO(NCCL_INIT, "DMA_BUF Support Enabled");
       else goto error;
+    }
     }
   }
 
