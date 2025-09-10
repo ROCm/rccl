@@ -10,7 +10,7 @@
 #include "npkit/npkit.h"
 #endif
 
-#include "device/rccl_metadata.h"
+#include "rccl_metadata.h"
 #include "msccl/msccl_struct.h"
 #include "network/unpack/unpack.h"
 #include <cassert>
