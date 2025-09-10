@@ -1140,7 +1140,7 @@ static struct rcclRomeModel rome_model_87 = {
                "N1 7 3 2 6 0 4 1 5 N2|"
                "N2 4 0 3 7 2 5 1 6 N1|",
 
-  .options = "noCpuCheck=1,netOverride=1",
+  .options = "noCpuCheck=1,netOverride=1,tuning=5,ll128Enabled=1",
 };
 
 static struct rcclRomeModel romeTopoModels[] = {
