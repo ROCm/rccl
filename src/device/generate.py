@@ -603,6 +603,8 @@ for name in name_to_funcs.keys():
     for fn in fns:
       (coll, algo, proto, redop, ty, acc, pipeline, unroll) = fn
       sym = paste("_", coll, algo, proto, redop, ty, acc, pipeline, unroll)
+      if coll == "AllReduceWithBias":
+        coll = "AllReduce"
       if proto == "LL128":
         out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
       out(
