@@ -158,10 +158,14 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   }
 
   if (mscclAvailable(comm) && !mscclIsCaller()) {
-    if (datatype != ncclBfloat16 || (count * ncclTypeSize(datatype) <= 8388608)) {
-	return mscclEnqueueCheck(
-                sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
-                count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);	
+    //MSCCL not supported for FP8 datatype
+    if (datatype != ncclFloat8e4m3 && datatype != ncclFloat8e5m2) {
+      // MSCCL threshold for Bfloat16 = 8MB
+      if (datatype != ncclBfloat16 || (count * ncclTypeSize(datatype) <= 8388608)) {
+        return mscclEnqueueCheck(
+                      sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
+                      count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
+      }
     }
   }
 
