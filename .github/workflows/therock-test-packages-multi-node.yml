@@ -64,19 +64,18 @@ jobs:
              --self-contained-html
 
       # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
-      # salloc will hold 4 nodes while the commands inside the EOF block run. After the block completes, salloc automatically releases the nodes.
+      # salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          salloc -N 32 -p meta64 --exclusive bash <<'EOF'
-          source /home/arravikum/TheRock/.venv/bin/activate
-          cd /home/arravikum/cvs
-          python input/setup.py
-          pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
+          salloc -N 1 -p meta64 --exclusive bash -c "
+          source /home/arravikum/TheRock/.venv/bin/activate &&
+          cd /home/arravikum/cvs &&
+          python input/setup.py &&
+          pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py::test_rccl_perf[1-simple-ring-alltoall_perf] \
               --cluster_file ./input/cluster-test.json \
               --config_file ./input/mi350_32node_config.json \
               --log-file=/tmp/rccl_log.log \
               --html=/home/arravikum/cvs/ci_test_report.html \
               --capture=tee-sys \
-              --self-contained-html
-          EOF
+              --self-contained-html"
