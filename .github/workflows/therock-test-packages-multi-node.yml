@@ -68,12 +68,13 @@ jobs:
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          salloc -N 4 --reservation=ci_cd_test --exclusive bash <<'EOF'
+          salloc -N 32 -p meta64 --exclusive bash <<'EOF'
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
+          python input/setup.py
           pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
-              --cluster_file ./input/cluster.json \
-              --config_file ./input/mi350_config.json \
+              --cluster_file ./input/cluster-test.json \
+              --config_file ./input/mi350_32node_config.json \
               --log-file=/tmp/rccl_log.log \
               --html=/home/arravikum/cvs/ci_test_report.html \
               --capture=tee-sys \
