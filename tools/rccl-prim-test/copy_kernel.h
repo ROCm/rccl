@@ -33,7 +33,7 @@ T vFetch(const volatile T* ptr) {
 
 template<typename T> inline __device__
 void vStore(volatile T* ptr, const T val) {
-  __builtin_nontemporal_store(val, ptr);
+  NTSTORE(val, ptr);
 }
 
 template<typename T>
@@ -94,8 +94,8 @@ inline __device__ void Fetch128(Pack128& v, const Pack128* p) {
 }
 inline __device__ void Store128(Pack128* p, Pack128& v) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HCC__) || defined(__HIPCC__)
-  __builtin_nontemporal_store(v.x, &p->x);
-  __builtin_nontemporal_store(v.y, &p->y);
+  NTSTORE(v.x, &p->x);
+  NTSTORE(v.y, &p->y);
 #else
   asm volatile("st.volatile.global.v2.u64 [%0], {%1,%2};" :: "l"(p), "l"(v.x), "l"(v.y) : "memory");
 #endif

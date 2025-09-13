@@ -43,8 +43,8 @@ __device__ void storeLL(union LLFifoLine* dst, uint64_t val, uint32_t flag) {
   i4.flag1 = flag;
   i4.data2 = (val >> 32);
   i4.flag2 = flag;
-  __builtin_nontemporal_store(i4.v[0], dst->v);
-  __builtin_nontemporal_store(i4.v[1], dst->v+1);
+  NTSTORE(i4.v[0], Tglobal(dst)->v);
+  NTSTORE(i4.v[1], Tglobal(dst)->v+1);
 }
 
 #define LL_SPINS_BEFORE_CHECK_ABORT 1000000

@@ -174,8 +174,8 @@ public:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(i4.i4) : "v"(&src->i4));
 #else
-      i4.v[0] = NTLOAD((uint64_t SGLOBAL *)src->v);
-      i4.v[1] = NTLOAD((uint64_t SGLOBAL *)src->v+1);
+      i4.v[0] = NTLOAD(src->v);
+      i4.v[1] = NTLOAD(src->v+1);
 #endif
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
@@ -218,8 +218,8 @@ public:
         asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
           "s_waitcnt vmcnt(0)\n" : "=v"(line[i].i4) : "v"(&src->i4));
 #else
-        line[i].v[0] = NTLOAD((uint64_t SGLOBAL *)src->v);
-        line[i].v[1] = NTLOAD((uint64_t SGLOBAL *)src->v+1);
+        line[i].v[0] = NTLOAD(src->v);
+        line[i].v[1] = NTLOAD(src->v+1);
 #endif
 #else
         asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
@@ -245,8 +245,8 @@ public:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(line[i].i4) : "v"(&src->i4));
 #else
-      line[i].v[0] = NTLOAD((uint64_t SGLOBAL *)src->v);
-      line[i].v[1] = NTLOAD((uint64_t SGLOBAL *)src->v+1);
+      line[i].v[0] = NTLOAD(src->v);
+      line[i].v[1] = NTLOAD(src->v+1);
 #endif
 #else
       asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
@@ -284,8 +284,8 @@ public:
     i4.flag1 = flag;
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
-    __builtin_nontemporal_store(i4.v[0], Tglobal(dst->v));
-    __builtin_nontemporal_store(i4.v[1], Tglobal(dst->v+1));
+    NTSTORE(i4.v[0], dst->v);
+    NTSTORE(i4.v[1], dst->v+1);
 #endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
@@ -353,13 +353,13 @@ public:
     elt = val;
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     if(sizeof(U) == 1)
-      __builtin_nontemporal_store(u1, (uint8_t SGLOBAL *)dst);
+      NTSTORE(u1, (uint8_t *)dst);
     else if(sizeof(U) == 2)
-      __builtin_nontemporal_store(u2, (uint16_t SGLOBAL *)dst);
+      NTSTORE(u2, (uint16_t *)dst);
     else if(sizeof(U) == 4)
-      __builtin_nontemporal_store(u4, (uint32_t SGLOBAL *)dst);
+      NTSTORE(u4, (uint32_t *)dst);
     else
-      __builtin_nontemporal_store(u8, (uint64_t SGLOBAL *)dst);
+      NTSTORE(u8, (uint64_t *)dst);
 #else
     if(sizeof(U) == 1)
       asm volatile("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4) : "memory");
@@ -852,8 +852,8 @@ public:
     i4.flag1 = flag;
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
-    __builtin_nontemporal_store(i4.v[0], Tglobal(dst)->v);
-    __builtin_nontemporal_store(i4.v[1], Tglobal(dst)->v+1);
+    NTSTORE(i4.v[0], Tglobal(dst)->v);
+    NTSTORE(i4.v[1], Tglobal(dst)->v+1);
   }
 
   __device__ void mscclSend(intptr_t srcIx, int nelem) {

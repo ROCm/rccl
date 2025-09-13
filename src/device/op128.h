@@ -11,13 +11,13 @@
 #include "load_store_macros.h"
 
 inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {
-  v0 = NTLOAD(Tglobal(ptr));
-  v1 = NTLOAD(Tglobal(ptr)+1);
+  v0 = NTLOAD(ptr);
+  v1 = NTLOAD(ptr+1);
 }
 
 inline __device__ void store128(uint64_t* ptr, uint64_t v0, uint64_t v1) {
-  __builtin_nontemporal_store(v0, Tglobal(ptr));
-  __builtin_nontemporal_store(v1, Tglobal(ptr)+1);
+  NTSTORE(v0, ptr);
+  NTSTORE(v1, ptr+1);
 }
 
 inline __device__ uint64_t* shmemCvtPtr(volatile uint64_t* shmemGenericPtr) {
@@ -183,14 +183,14 @@ template<> __device__ __forceinline__ void st_global<0>(uintptr_t addr, BytePack
   template<> \
   __device__ __forceinline__ BytePack<bytes> ld_volatile_##space<bytes>(addr_cxx_ty addr) { \
     data_cxx_ty tmp; \
-    tmp =  NTLOAD(Tglobal((data_cxx_ty *)addr)); \
+    tmp =  NTLOAD((data_cxx_ty *)addr); \
     BytePack<bytes> ans; \
     ans.native = tmp; \
     return ans; \
   } \
   template<> \
   __device__ __forceinline__ void st_##space<bytes>(addr_cxx_ty addr, BytePack<bytes> value) { \
-    __builtin_nontemporal_store(value.native, Tglobal((data_cxx_ty *)addr)); \
+    NTSTORE(value.native, (data_cxx_ty *)addr); \
   }
 
 #define DEFINE_ld_st__size(bytes, data_cxx_ty, data_ptx_ty, data_reg_ty) \
@@ -210,14 +210,14 @@ DEFINE_ld_st__size(8, uint64_t, b64, l)
   template<> \
   __device__ __forceinline__ BytePack<16> ld_volatile_##space<16>(addr_cxx_ty addr) { \
     BytePack<16> ans; \
-    ans.u64[0] = NTLOAD(Tglobal((uint64_t *)addr)); \
-    ans.u64[1] = NTLOAD(Tglobal((uint64_t *)addr+1)); \
+    ans.u64[0] = NTLOAD((uint64_t *)addr); \
+    ans.u64[1] = NTLOAD((uint64_t *)addr+1); \
     return ans; \
   } \
   template<> \
   __device__ __forceinline__ void st_##space<16>(addr_cxx_ty addr, BytePack<16> value) { \
-    __builtin_nontemporal_store(value.u64[0], Tglobal((uint64_t *)addr)); \
-    __builtin_nontemporal_store(value.u64[1], Tglobal((uint64_t *)addr+1)); \
+    NTSTORE(value.u64[0], (uint64_t *)addr); \
+    NTSTORE(value.u64[1], (uint64_t *)addr+1); \
   }
 
 DEFINE_ld_st_16__space(global, uintptr_t, l)
