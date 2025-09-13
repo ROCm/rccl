@@ -95,12 +95,13 @@ __device__ __host__ inline static auto Xprivate(T* ptr)
 #endif // global on/off switch
 
 // NOTE: if data size is small, maybe makes sense to use just normal load/store?
+// benchmarks show that NT load + cached store works best ??
 #if 1
 #define NTLOAD(addr) __builtin_nontemporal_load(Xglobal(addr))
 #else
 #define NTLOAD(addr) Xglobal(addr)[0]
 #endif
-// it seems that loading with cache and storing without it gives the best results
+
 #if 1
 #define NTSTORE(x, addr) __builtin_nontemporal_store((x), Xglobal(addr))
 #else

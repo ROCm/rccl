@@ -492,7 +492,7 @@ __device__ __forceinline__ void profiler(int action) {
   }
 }
 
-template<int SpecializedFnId, typename SpecializedRunWorkBatch, bool COLLTRACE, int COLL_UNROLL>
+template< typename SpecializedRunWorkBatch, bool COLLTRACE, int COLL_UNROLL>
 __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
   const int tid = threadIdx.x;
   int tn = blockDim.x;
@@ -613,26 +613,28 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 
   while (ncclShmem.aborted == 0) {
     if (tid == 0) __insert_timestamp(__LINE__);
-    profiler(START);
-    if (0 <= SpecializedFnId && ncclShmem.funcId == (unsigned)SpecializedFnId) {
-      SpecializedRunWorkBatch().run();
-    } else {
-#ifdef USE_INDIRECT_FUNCTION_CALL
-      if (COLL_UNROLL == 1)
-        ncclDevFuncTable_1[ncclShmem.funcId]();
-      else if (COLL_UNROLL == 2)
-        ncclDevFuncTable_2[ncclShmem.funcId]();
-      else
-        ncclDevFuncTable_4[ncclShmem.funcId]();
-#else
-      if (COLL_UNROLL == 1)
-        NCCL_CALL_FUNCTIONS_1(ncclShmem.funcId);
-      else if (COLL_UNROLL == 2)
-        NCCL_CALL_FUNCTIONS_2(ncclShmem.funcId);
-      else
-        NCCL_CALL_FUNCTIONS_4(ncclShmem.funcId);
-#endif
-    }
+
+    // NOTE we should check that ncclShmem.funcId is always the same!!
+    // profiler(START);
+    // if (0 <= SpecializedFnId && ncclShmem.funcId == (unsigned)SpecializedFnId) {
+    SpecializedRunWorkBatch().run();
+//     } else {
+// #ifdef USE_INDIRECT_FUNCTION_CALL
+//       if (COLL_UNROLL == 1)
+//         ncclDevFuncTable_1[ncclShmem.funcId]();
+//       else if (COLL_UNROLL == 2)
+//         ncclDevFuncTable_2[ncclShmem.funcId]();
+//       else
+//         ncclDevFuncTable_4[ncclShmem.funcId]();
+// #else
+//       if (COLL_UNROLL == 1)
+//         NCCL_CALL_FUNCTIONS_1(ncclShmem.funcId);
+//       else if (COLL_UNROLL == 2)
+//         NCCL_CALL_FUNCTIONS_2(ncclShmem.funcId);
+//       else
+//         NCCL_CALL_FUNCTIONS_4(ncclShmem.funcId);
+// #endif
+    // }
 
     if (ncclShmem.nextBatchIx == -1) break;
     int batchIx = ncclShmem.nextBatchIx;
@@ -647,7 +649,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       default:
         break;
     }
-    profiler(STOP);
+    // profiler(STOP);
     loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
     __syncthreads();
 
@@ -657,7 +659,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       ptr[ncclShmem.channelId] = ncclShmem.workConsumed;
     }
     if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelLaunch(ncclCollTraceCollLaunchType, batchIx);
-  }
+  } // while
   if (COLLTRACE && tid%WARP_SIZE == 0) traceKernelEnd(ncclCollTraceKernelEndType);
 
 #ifdef ENABLE_PROFILING
@@ -669,16 +671,35 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #endif
 }
 
-__global__ void ncclDevKernel_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernel_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-#ifdef ENABLE_COLLTRACE
-__global__ void ncclDevKernelDebug_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernelDebug_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-#endif
+// __global__ void ncclDevKernel_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+// __global__ void ncclDevKernel_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+// __global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+// #ifdef ENABLE_COLLTRACE
+// __global__ void ncclDevKernelDebug_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+// __global__ void ncclDevKernelDebug_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+// __global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+// #endif
 
-#define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, specializedFnId) \
+#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)
+
+#define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
+  __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
+  __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) { \
+    ncclKernelMain< RunWorkBatch<coll, ty, redop<ty>, algo, proto, unroll>, \
+          /*COLLTRACE*/false, unroll >(&args4K.args); \
+  }
+#else
+
+#define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
+  __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
+  __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) { \
+    constexpr auto fixed_proto = (proto == NCCL_PROTO_LL128 ? NCCL_PROTO_LL : proto); \
+    ncclKernelMain< RunWorkBatch<coll, ty, redop<ty>, algo, fixed_proto, unroll>, \
+          /*COLLTRACE*/false, unroll >(&args4K.args); \
+  }
+#endif // ENABLE_LL128
+
+#define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
   __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
@@ -691,11 +712,10 @@ __global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONST
   __device__ __attribute__((noinline)) void ncclDevFunc_##suffix() { \
     RunWorkBatch<coll, ty, redop<ty>, algo, proto, unroll>().run(); \
   }
+#endif // USE_INDIRECT_FUNCTION_CALL
 
 #define DEFINE_dummyFunc(suffix, coll, redop, ty, algo, proto, unroll) \
-  __device__ __attribute__((noinline)) void ncclDevFunc_##suffix() { \
-  }
+  __device__ __attribute__((noinline)) void ncclDevFunc_##suffix() { }
 
-#endif
 
-#endif
+#endif // NCCL_DEVICE_COMMON_H_

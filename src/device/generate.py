@@ -303,130 +303,105 @@ primary_to_index = {fn: primary_funcs.index(fn) if fn in primary_funcs else -1 f
 with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   print("-- Generating %s" % os.path.join(gensrc, "device_table.h"))
   out = f.write
+  out("/* nope */\n")
 
-  if is_ifc: func_declaration = "__device__ void"
-  else: func_declaration = "__device__ __attribute__((noinline)) void"
+#   if is_ifc: func_declaration = "__device__ void"
+#   else: func_declaration = "__device__ __attribute__((noinline)) void"
 
-  for fn in primary_funcs:
-    sym = paste("_", "ncclDevFunc", *fn)
-    if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
-      out("%s %s();\n#else\n" % (func_declaration, sym))
-      fn_ll = fn[:2] + ("LL",) + fn[3:]
-      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("%s %s();\n#endif\n" % (func_declaration, sym_ll))
-    else:
-      out("%s %s();\n" % (func_declaration, sym))
-  out("\n")
+#   index = 0
+#   for fn in primary_funcs:
+#     sym = paste("_", "ncclDevFunc", *fn)
+#     out("/* %4d */ %s %s();\n" % (index, func_declaration, sym))
+#     index += 1
+#   out("\n")
 
-  out("typedef void(*ncclDevFuncPtr_t)();\n\n")
-  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_1[] = {\n")
-  index1 = 0
-  for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
-    if unroll != "1": continue
-    sym = paste("_", "ncclDevFunc", *fn)
-    if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
-      out("/*%4d*/ %s,\n#else\n" % (index1, sym))
-      fn_ll = fn[:2] + ("LL",) + fn[3:]
-      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("/*%4d*/ %s,\n#endif\n" % (index1, sym_ll))
-    else:
-      out("/*%4d*/ %s,\n" % (index1, sym))
-    index1 += 1
-  out("nullptr};\n")
-  out("\n")
-  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_2[] = {\n")
-  index2 = 0
-  for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
-    if unroll != "2": continue
-    sym = paste("_", "ncclDevFunc", *fn)
-    if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
-      out("/*%4d*/ %s,\n#else\n" % (index2, sym))
-      fn_ll = fn[:2] + ("LL",) + fn[3:]
-      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("/*%4d*/ %s,\n#endif\n" % (index2, sym_ll))
-    else:
-      out("/*%4d*/ %s,\n" % (index2, sym))
-    index2 += 1
-  out("nullptr};\n")
-  out("\n")
-  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
-  index4 = 0
-  for fn in primary_funcs:
-    coll, algo, proto, redop, ty, unroll = fn
-    if unroll != "4": continue
-    sym = paste("_", "ncclDevFunc", *fn)
-    if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
-      out("/*%4d*/ %s,\n#else\n" % (index4, sym))
-      fn_ll = fn[:2] + ("LL",) + fn[3:]
-      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
-      out("/*%4d*/ %s,\n#endif\n" % (index4, sym_ll))
-    else:
-      out("/*%4d*/ %s,\n" % (index4, sym))
-    index4 += 1
-  out("nullptr};\n")
-  out("\n")
+#   out("typedef void(*ncclDevFuncPtr_t)();\n\n")
+#   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_1[] = {\n")
+#   index1 = 0
+#   for fn in primary_funcs:
+#     coll, algo, proto, redop, ty, unroll = fn
+#     if unroll != "1": continue
+#     sym = paste("_", "ncclDevFunc", *fn)
+#     out("/*%4d*/ %s,\n" % (index1, sym))
+#     index1 += 1
+#   out("nullptr};\n")
+#   out("\n")
+#   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_2[] = {\n")
+#   index2 = 0
+#   for fn in primary_funcs:
+#     coll, algo, proto, redop, ty, unroll = fn
+#     if unroll != "2": continue
+#     sym = paste("_", "ncclDevFunc", *fn)
+#     out("/*%4d*/ %s,\n" % (index2, sym))
+#     index2 += 1
+#   out("nullptr};\n")
+#   out("\n")
+#   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
+#   index4 = 0
+#   for fn in primary_funcs:
+#     coll, algo, proto, redop, ty, unroll = fn
+#     if unroll != "4": continue
+#     sym = paste("_", "ncclDevFunc", *fn)
+#     out("/*%4d*/ %s,\n" % (index4, sym))
+#     index4 += 1
+#   out("nullptr};\n")
+#   out("\n")
   
-  if not is_ifc:
-    out("template<unsigned short f, unsigned short l>\n"
-      "struct Caller1 {\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call1(unsigned short funcIndex) noexcept\n"
-      "  {\n"
-      "    constexpr unsigned short m = f + (l - f) / 2;\n"
-      "    return (funcIndex < m) ? Caller1<f, m>::call1(funcIndex) : Caller1<m, l>::call1(funcIndex);\n"
-      "  }\n"
-      "};\n"
-      "\n"
-      "template<unsigned short f>\n"
-      "struct Caller1<f, f + 1>{\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call1(unsigned short funcIndex) noexcept { ncclDevFuncTable_1[f](); }\n"
-      "};\n")
-    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_1(unsigned short funcIndex) noexcept {\n")
-    out(f"  Caller1<0, {index1}>::call1(funcIndex);\n")
-    out("}\n\n")
-    out("template<unsigned short f, unsigned short l>\n"
-      "struct Caller2 {\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call2(unsigned short funcIndex) noexcept\n"
-      "  {\n"
-      "    constexpr unsigned short m = f + (l - f) / 2;\n"
-      "    return (funcIndex < m) ? Caller2<f, m>::call2(funcIndex) : Caller2<m, l>::call2(funcIndex);\n"
-      "  }\n"
-      "};\n"
-      "\n"
-      "template<unsigned short f>\n"
-      "struct Caller2<f, f + 1>{\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call2(unsigned short funcIndex) noexcept { ncclDevFuncTable_2[f](); }\n"
-      "};\n")
-    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_2(unsigned short funcIndex) noexcept {\n")
-    out(f"  Caller2<0, {index2}>::call2(funcIndex);\n")
-    out("}\n\n")
-    out("template<unsigned short f, unsigned short l>\n"
-      "struct Caller4 {\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call4(unsigned short funcIndex) noexcept\n"
-      "  {\n"
-      "    constexpr unsigned short m = f + (l - f) / 2;\n"
-      "    return (funcIndex < m) ? Caller4<f, m>::call4(funcIndex) : Caller4<m, l>::call4(funcIndex);\n"
-      "  }\n"
-      "};\n"
-      "\n"
-      "template<unsigned short f>\n"
-      "struct Caller4<f, f + 1>{\n"
-      "  static __forceinline__ __device__ __host__\n"
-      "  void call4(unsigned short funcIndex) noexcept { ncclDevFuncTable_4[f](); }\n"
-      "};\n")
-    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_4(unsigned short funcIndex) noexcept {\n")
-    out(f"  Caller4<0, {index4}>::call4(funcIndex);\n")
-    out("}\n\n")
+#   if not is_ifc:
+#     out("template<unsigned short f, unsigned short l>\n"
+#       "struct Caller1 {\n"
+#       "  static __forceinline__ __device__ __host__\n"
+#       "  void call1(unsigned short funcIndex) noexcept\n"
+#       "  {\n"
+#       "    constexpr unsigned short m = f + (l - f) / 2;\n"
+#       "    return (funcIndex < m) ? Caller1<f, m>::call1(funcIndex) : Caller1<m, l>::call1(funcIndex);\n"
+#       "  }\n"
+#       "};\n"
+#       "\n"
+#       "template<unsigned short f>\n"
+#       "struct Caller1<f, f + 1>{\n"
+#       "  static __forceinline__ __device__ __host__\n"
+#       "  void call1(unsigned short funcIndex) noexcept { ncclDevFuncTable_1[f](); }\n"
+#       "};\n")
+#     out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_1(unsigned short funcIndex) noexcept {\n")
+#     out(f"  Caller1<0, {index1}>::call1(funcIndex);\n")
+#     out("}\n\n")
+#     out("template<unsigned short f, unsigned short l>\n"
+#       "struct Caller2 {\n"
+#       "  static __forceinline__ __device__ __host__\n"
+#       "  void call2(unsigned short funcIndex) noexcept\n"
+#       "  {\n"
+#       "    constexpr unsigned short m = f + (l - f) / 2;\n"
+#       "    return (funcIndex < m) ? Caller2<f, m>::call2(funcIndex) : Caller2<m, l>::call2(funcIndex);\n"
+#       "  }\n"
+#       "};\n"
+#       "\n"
+#       "template<unsigned short f>\n"
+#       "struct Caller2<f, f + 1>{\n"
+#       "  static __forceinline__ __device__ __host__\n"
+#       "  void call2(unsigned short funcIndex) noexcept { ncclDevFuncTable_2[f](); }\n"
+#       "};\n")
+#     out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_2(unsigned short funcIndex) noexcept {\n")
+#     out(f"  Caller2<0, {index2}>::call2(funcIndex);\n")
+#     out("}\n\n")
+#     out("template<unsigned short f, unsigned short l>\n"
+#       "struct Caller4 {\n"
+#       "  static __forceinline__ __device__ __host__\n"
+#       "  void call4(unsigned short funcIndex) noexcept\n"
+#       "  {\n"
+#       "    constexpr unsigned short m = f + (l - f) / 2;\n"
+#       "    return (funcIndex < m) ? Caller4<f, m>::call4(funcIndex) : Caller4<m, l>::call4(funcIndex);\n"
+#       "  }\n"
+#       "};\n"
+#       "\n"
+#       "template<unsigned short f>\n"
+#       "struct Caller4<f, f + 1>{\n"
+#       "  static __forceinline__ __device__ __host__\n"
+#       "  void call4(unsigned short funcIndex) noexcept { ncclDevFuncTable_4[f](); }\n"
+#       "};\n")
+#     out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_4(unsigned short funcIndex) noexcept {\n")
+#     out(f"  Caller4<0, {index4}>::call4(funcIndex);\n")
+#     out("}\n\n")
 
 # Generate <gensrc>/device_table.cpp
 if is_colltrace:
@@ -448,14 +423,30 @@ if is_colltrace:
       out(f'   "ncclDevFunc_OneRankReduce_PreMulSum_{ty}",\n')
     out("};\n")
 
+
 # Generate <gensrc>/host_table.cpp
 with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   print("-- Generating %s" % os.path.join(gensrc, "host_table.cpp"))
+
+# # Corresponds to ncclDevFuncRowToId[]
+# func_rows = [fn for fn in enumerate_func_rows()]
+# # Corresponds to ncclDevFuncTable[]
+# primary_funcs = sorted(set(equivalent_primary(*fn) for fn in parse_input(func_pattern)), key=custom_sort_key)
+# # primary_to_index[primary_funcs[i]] == i
+# primary_to_index = {fn: primary_funcs.index(fn) if fn in primary_funcs else -1 for fn in func_rows}
 
   out = f.write
   out('#include "device.h"\n')
   out("\n")
 
+
+  # ncclDevFuncRowToId {0..820} -> {0..595}
+  # this maps ncclDevFuncId(...) to a function ID from one of unroll tables
+  # Each unroll table ncclDevFuncTable_1/2/4 has 596 entries
+  # total number of kernels in host_table.cpp is 1788 which is 596 * 3 !!!!
+
+  # len(func_rows) = 2463 => len(func_rows)/3 = 821
+  # basically this does not count 'unroll' param (1, 2, 4)
   # The mapping from function rows to valid primary function ids.
   out("extern int const ncclDevFuncRowToId[] = {\n")
   index = 0
@@ -467,7 +458,23 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
     out("/*%4d*/ %d,%s\n" % (index, fn_id, comment))
     index += 1
   out(f"{index}")
+  out("};\n\n")
+  
+  for fn in primary_funcs:
+    sym = paste("_", "ncclDevKernel", *fn)
+    out("__global__ void %s(ncclDevKernelArgs4K const);\n" % sym)
+  out("\n\n")
+  
+  # __global__ void ncclDevKernel_
+  out("extern int const ncclDevKernelCount = %d;\n" % len(primary_funcs))
+  out("extern void* const ncclDevKernelList[] = {\n")
+  index = 0
+  for fn in primary_funcs:
+    sym = paste("_", "ncclDevKernel", *fn)
+    out("/* %4d */ (void *)%s,\n" % (index, sym))
+    index += 1
   out("};\n")
+  out("\n")
 
 # Maps to .cu filename which implements this func. The only constraint is that
 # "coll" is reflected in the name: formally that no two funcs having different
@@ -531,24 +538,34 @@ for name in name_to_funcs.keys():
       (coll, algo, proto, redop, ty, unroll) = fn
       sym = paste("_", coll, algo, proto, redop, ty, unroll)
       all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16", "f8", "bf8"]
+      
+      #fn_id = primary_to_index[kfn]
+      
       #if ty in ["f8","bf8","i8","u8","f64","i64","u64","f16","bf16"]: # do not generate those..
       # all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
+      
       if ty not in ["f32"] or coll not in ["AllReduce"] or algo not in ["RING"]: # or unroll not in [4]: # or redop not in ["Sum","SumPostDiv", "PreMulSum"]:
+        # out(
+        # "DEFINE_dummyFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
+        # .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
+        #         algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll) # hack unroll=1
+        # )
         out(
-        "DEFINE_dummyFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
+        "DEFINE_ncclDevKernel_nop({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll}, -1)\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
                 algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll) # hack unroll=1
         )
         continue
-      if proto == "LL128":
-        out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      # out(
+      #   "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
+      #   .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
+      #           algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll) # hack unroll=1
+      # )
       out(
-        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
+        "DEFINE_ncclDevKernel({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll}, -1)\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
                 algo=(algo or "RING"), proto=(proto or "SIMPLE"), unroll=unroll) # hack unroll=1
       )
-      if proto == "LL128":
-        out("#endif\n")
 
 # Generate each <gensrc>/<msccl_impl>.cpp
 if is_msccl_kernels:

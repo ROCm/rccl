@@ -25,11 +25,11 @@ template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn>
-#if defined(__gfx942__) || defined(__gfx950__)
+//#if defined(__gfx942__) || defined(__gfx950__)
 __device__ __forceinline__ void reduceCopyPacks(
-#else
-__device__ __attribute__((noinline)) void reduceCopyPacks(
-#endif
+// #else
+// __device__ __attribute__((noinline)) void reduceCopyPacks(
+// #endif
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
@@ -211,11 +211,11 @@ template<typename RedFn, typename T, int Unroll, int BytePerPack,
          int MultimemSrcs, int MinSrcs, int MaxSrcs,
          int MultimemDsts, int MinDsts, int MaxDsts, int PreOpSrcs,
          typename IntBytes, typename SrcPtrFn, typename DstPtrFn, typename AccPtrFn>
-#if defined(__gfx942__) || defined(__gfx950__)
+// #if defined(__gfx942__) || defined(__gfx950__)
 __device__ __forceinline__ void reduceCopyPacksWithBias(
-#else
-__device__ __attribute__((noinline)) void reduceCopyPacksWithBias(
-#endif
+// #else
+// __device__ __attribute__((noinline)) void reduceCopyPacksWithBias(
+// #endif
     int nThreads, int &thread,
     uint64_t redArg, uint64_t *preOpArgs, bool postOp,
     int nSrcs, SrcPtrFn const &srcPtrFn, int nDsts, DstPtrFn const &dstPtrFn,
