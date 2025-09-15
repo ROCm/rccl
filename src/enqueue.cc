@@ -96,10 +96,15 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
   CUDACHECK(hipDeviceGetAttribute(&WarpSize, hipDeviceAttributeWarpSize, cudaDev));
   int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
+#ifdef GENERATE_SYM_KERNELS
   for (int sym=0; sym <= 1; sym++) {
     int kcount = sym==0 ? KernelCount : ncclSymKernelCount;
     for (int k=0; k < kcount; k++) {
       void* fn = sym==0 ? ncclKerns[k].kernelFn : ncclSymKernelList[k];
+#else
+  for (int k = 0; k < KernelCount; k++) {
+    void* fn = ncclKerns[k].kernelFn;
+#endif
       cudaFuncAttributes attr = {0};
       if (fn == nullptr) continue;
 
@@ -130,7 +135,9 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
       }
     next_kernel:;
     }
+#ifdef GENERATE_SYM_KERNELS
   }
+#endif
   return result;
 }
 
