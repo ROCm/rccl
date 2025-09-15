@@ -255,7 +255,6 @@ struct ncclKernelPlan {
   bool persistent; // aka captured in a graph
   bool isHostCbEnq;
   enum ncclDevWorkStorageType workStorageType;
-  bool kernelSpecialized;
   void *kernelFn;
   struct ncclDevKernelArgs* kernelArgs;
   size_t kernelArgsSize;

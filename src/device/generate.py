@@ -474,6 +474,9 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
     out("/* %4d */ (void *)%s,\n" % (index, sym))
     index += 1
   out("};\n")
+  out('static_assert(sizeof(ncclDevKernelList)/\n\
+      sizeof(ncclDevKernelList[0]) % 3 == 0, \n\
+      "ncclDevKernelList size must be divisible by 3");\n')
   out("\n")
 
 # Maps to .cu filename which implements this func. The only constraint is that

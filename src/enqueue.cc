@@ -594,13 +594,16 @@ static ncclResult_t scheduleCollTasksToPlan(
   int const nMaxChannels[2*2] = {comm->nChannels, comm->nvlsChannels, // [collnet][nvls]
                                  comm->nChannels, comm->nvlsChannels};
   constexpr size_t MinTrafficPerChannel = 16 << 10; // 16K traffic as minimal
-  do {
-    size_t workBytes = 0;
+    do {
+    size_t workBytes = 0, prevFuncId = 0;
     struct ncclTaskColl* task = ncclIntruQueueHead(&planner->collTaskQueue);
     struct ncclWorkList* workNode = ncclIntruQueueHead(&planner->collWorkQueue);
     while (task != nullptr) {
       int nBatches = divUp(nPlanColls, 4); // Rough guess: 4 colls per batch.
       if (!testBudget(budget, nBatches, workBytes + workNode->size)) goto plan_full;
+      if (nPlanColls > 0 && prevFuncId != task->devFuncId) goto plan_full;
+      // make sure one plan contains only work with same funcID
+      prevFuncId = task->devFuncId;
 
       nPlanColls += 1;
       workBytes += workNode->size;
@@ -813,11 +816,16 @@ static ncclResult_t scheduleCollTasksToPlan(
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
-    if (!plan->kernelSpecialized) {
-      plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
-      plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
+    
+    int unroll = ncclGetKernelIndex(comm);
+    int finalId = task->devFuncId + unroll * ncclDevKernelCount/3; 
+    if (finalId >= ncclDevKernelCount) {
+      XPUT("oops wrong func ID: %d -- %d -- %d", 
+          finalId, task->devFuncId, ncclDevKernelCount);
+      plan->kernelFn = nullptr;
+    } else {
+      plan->kernelFn = ncclDevKernelList[finalId];
     }
-
     if (comm->rank == 0) {
       INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %s proto %s channel{Lo..Hi}={%d..%d}",
         ncclFuncToString(task->func), task->count * ncclTypeSize(task->datatype), ncclAlgoToString(task->algorithm),
@@ -1053,7 +1061,10 @@ static ncclResult_t addP2pToPlan(
     int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, comm->p2pnChannelsPerPeer, comm->nNodes);
     plan->channelMask.masks[channelId/64] |= uint64_t(1)<<(channelId%64);
     // Add batch first.
+    // we just need to take the last entry of the first group (unroll=1)
+    // real unroll factor will be added later
     int funcIdx = ncclDevFuncId_P2p();
+    XPUT("funcIdx: %d -- %d", funcIdx, ncclDevKernelCount/3 - 1);
     addWorkBatchToPlan(comm, plan, channelId, ncclDevWorkTypeP2p, funcIdx, workOffset, p2pRound);
     if (funcIdx < 0) {
       WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
@@ -1130,9 +1141,16 @@ static ncclResult_t scheduleP2pTasksToPlan(
   struct ncclKernelPlanner::Peer* peers = comm->planner.peers;
 
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
-  if (!plan->kernelSpecialized) {
-    plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
-    plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
+
+  int unroll = ncclGetKernelIndex(comm);
+  int funcIdx = ncclDevFuncId_P2p(); // this is actually constant!!
+  int finalId = funcIdx + unroll * ncclDevKernelCount/3; 
+  if (finalId >= ncclDevKernelCount) {
+    fprintf(stderr, "oops wrong p2pfunc ID: %d -- %d -- %d\n", 
+          finalId, funcIdx, ncclDevKernelCount);
+    plan->kernelFn = nullptr;
+  } else {
+    plan->kernelFn = ncclDevKernelList[finalId];
   }
 
   // Compute how much to split operations
