@@ -161,7 +161,7 @@ static ncclResult_t addProxyOpIfNeeded(struct ncclComm* comm, struct ncclKernelP
 static void addWorkBatchToPlan(
     struct ncclComm* comm, struct ncclKernelPlan* plan, int channelId,
     enum ncclDevWorkType workType, int devFuncId, uint32_t workOffset,
-    int p2pRound = -1
+    int p2pRound = -1, bool batchP2P = false
   ) {
   ncclKernelPlanner::WipPlan::Channel* chan = &comm->planner.wipPlan.channels[channelId];
   size_t workSize = ncclDevWorkSize(workType);
@@ -179,7 +179,7 @@ static void addWorkBatchToPlan(
     // batch further down.
     newBatch |= NCCL_MAX_DEV_WORK_BATCH_BYTES < chan->wipBatch.workBytes + workSize;
     if (workType == ncclDevWorkTypeP2p) {
-      newBatch |= (comm->nNodes > 2)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
+      newBatch |= (comm->nNodes > 2 && batchP2P)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
       for (int i=0; i < chan->wipBatch.nP2ps; i++) {
         newBatch |= p2pRound == chan->wipBatch.p2pRounds[i];
       }
