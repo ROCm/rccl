@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          ref: 5f35280878ca80755c5456dfdb527c29d3f5058c
+          ref: 16ee54fb580a4dde62dc4133f978e73370a545af
 
       - name: Checkout rccl repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -98,38 +98,29 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
 
-      - name: Create Logs index Files and upload logs
+      - name: Post Build Upload
         if: always()
         run: |
-          python3 build_tools/github_actions/create_log_index.py \
-            --build-dir=build \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
-
-          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=build \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
-
-      - name: Upload artifacts
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
+          python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build
+            --build-dir build \
+            --upload
 
-      - name: Add Links to Job Summary
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_summary.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build
-
-  therock-test-linux:
-    name: "Test"
+  therock-test-linux-multi-node:
+    name: "Test multi-node"
     needs: [therock-build-linux]
-    uses: ./.github/workflows/therock-test-packages.yml
+    uses: ./.github/workflows/therock-test-packages-multi-node.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: vultr-linux-rocm
+      artifact_run_id: ${{ github.run_id }}
+
+  therock-test-linux-single-node:
+    name: "Test single-node"
+    needs: [therock-build-linux]
+    uses: ./.github/workflows/therock-test-packages-single-node.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: linux-mi325-1gpu-ossci-rocm
       artifact_run_id: ${{ github.run_id }}

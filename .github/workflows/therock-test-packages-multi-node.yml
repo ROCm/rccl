@@ -1,4 +1,4 @@
-name: TheRock Test Packages
+name: TheRock Test Packages multi-node
 
 on:
   workflow_call:
@@ -22,8 +22,8 @@ permissions:
   contents: read
 
 jobs:
-  test_rccl:
-    name: 'Test'
+  test_rccl_multi_node:
+    name: 'Test multi-node'
     runs-on: ${{ inputs.test_runs_on }}
     defaults:
       run:
@@ -50,9 +50,8 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--rccl"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      - name: Run tests on vultr-linux-node
+      - name: Test
         run: |
           source /home/arravikum/TheRock/.venv/bin/activate
           cd /home/arravikum/cvs
           pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
-          

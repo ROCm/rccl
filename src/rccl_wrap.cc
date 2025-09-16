@@ -41,7 +41,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     userProtocolInput = !protoStr ? 0 : 1;
   }
 
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast)) {
+  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
     auto llMax = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MAX_IDX];
@@ -83,6 +83,74 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
       }
     }
   }
+}
+
+ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoString[], int nEntries, int& result) {
+  if(envStr) {
+    for (int i = 0; i < nEntries; ++i) {
+      if (strcasecmp(envStr, algoProtoString[i]) == 0) {
+        result = i;
+        return ncclSuccess;
+      }
+    }
+    static bool failedProtoWarn = false;
+    if (!failedProtoWarn) {
+      WARN("Invalid algo or protocol string passed %s", envStr);
+      failedProtoWarn = true;
+      return ncclInvalidUsage;
+    }
+  }
+  return ncclInvalidUsage;
+}
+
+ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info) {
+  static const char* protoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_PROTO");
+  static bool validInput = true;
+  if (!validInput) return ncclInvalidUsage;
+
+  if (protoOverrideEnv) {
+    static int protoVal = NCCL_PROTO_UNDEF;
+    if (protoVal == NCCL_PROTO_UNDEF) {
+      if (rcclGetAlgoProtoIndex(protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoVal) != ncclSuccess) {
+        validInput = false;
+        return ncclInvalidUsage;
+      }
+    }
+    if (protoVal > NCCL_PROTO_UNDEF) {
+      if (table[info->algorithm][protoVal] == NCCL_ALGO_PROTO_IGNORE) {
+        WARN("Failed to force unsupported protocol %s for function %s with datatype %s", protoOverrideEnv, ncclFuncToString(info->func), ncclDatatypeToString(info->datatype));
+        return ncclInternalError;
+      } else {
+        info->protocol = protoVal;
+      }
+    }
+  }
+  return ncclSuccess;
+}
+
+ncclResult_t rcclOverrideAlgorithm(const char* ncclAlgoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info) {
+  static const char* algoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_ALGO");
+  static bool validInput = true;
+  if (!validInput) return ncclInvalidUsage;
+
+  if (algoOverrideEnv) {
+    static int algoVal = NCCL_ALGO_UNDEF;
+    if (algoVal == NCCL_ALGO_UNDEF) {
+      if (rcclGetAlgoProtoIndex(algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoVal) != ncclSuccess) {
+        validInput = false;
+        return ncclInvalidUsage;
+      }
+    }
+    if (algoVal > NCCL_ALGO_UNDEF) {
+      if (table[algoVal][info->protocol] == NCCL_ALGO_PROTO_IGNORE) {
+        WARN("Failed to force unsupported algorithm %s for function %s with datatype %s", algoOverrideEnv, ncclFuncToString(info->func), ncclDatatypeToString(info->datatype));
+        return ncclInternalError;
+      } else {
+        info->algorithm = algoVal;
+      }
+    }
+  }
+  return ncclSuccess;
 }
 
 void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold) {
@@ -183,7 +251,7 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
     const char *inputStr = getenv("NCCL_PXN_DISABLE");
     const bool archGfx942 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
     const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
-    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));   
+    comm->enableCustColl = (archGfx942 || archGfx950) && (inputStr && !atoi(inputStr));
 
     if((!archGfx942 && !archGfx950) || inputStr) {
       rcclPxnDisable = pxnDisable = RCCL_VALUE_INVALID;
@@ -241,4 +309,83 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
 
   INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll+1);
   return ncclSuccess;
+}
+
+std::string trimString(const std::string& s) {
+  int sz = s.size();
+  int b = 0;
+  int e = sz - 1;
+  while (b < sz && isspace(s[b])) {
+    b++;
+  }
+  if (b >= sz) {
+    return "";
+  }
+
+  while (e >= b && e < sz && isspace(s[e])) {
+    e--;
+  }
+  if (b > e) {
+    return "";
+  }
+  return s.substr(b, e - b + 1);
+}
+
+std::vector<std::string> splitString(const std::string& s, char delimiter) {
+  std::vector<std::string> tokens;
+  std::stringstream ss(s);
+  std::string token;
+
+  while (std::getline(ss, token, delimiter)) {
+    tokens.push_back(trimString(token));
+  }
+  return tokens;
+}
+
+int parseFirmwareVersionImpl(FILE* file) {
+  constexpr std::size_t MAX_LINE_SZ = 1024;
+  char line[MAX_LINE_SZ];
+  bool found_pattern = false;
+  while (fgets(line, MAX_LINE_SZ, file)) {
+    auto parts = splitString(line, ':');
+    if (parts == std::vector<std::string>{"FW_ID", "CP_MEC1"}) {
+      if (!found_pattern) {
+        found_pattern = true;
+      }
+      continue;
+    }
+
+    if (found_pattern && (parts[0] == "FW_VERSION")) {
+      return stoi(parts[1]) & 0x7ff;
+    }
+  }
+  return -1;
+}
+
+int parseFirmwareVersion(const char* command) {
+  auto file = popen(command, "r");
+  if (file == nullptr) {
+    return -1;
+  }
+  int version = -1;
+  try {
+    version = parseFirmwareVersionImpl(file);
+  } catch (const std::exception& ex) {
+  }
+  pclose(file);
+  return version;
+}
+
+bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, char const* archName) {
+  bool hsaScratchEnvSet = (hsaScratchEnv && strcmp(hsaScratchEnv,"1") == 0);
+  if (hsaScratchEnvSet) {
+    return true;
+  }
+  if (IsArchMatch(archName, "gfx950")) {
+    return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 24);
+  }
+  if (IsArchMatch(archName, "gfx942")) {
+    return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 177);
+  }
+  return true;
 }
