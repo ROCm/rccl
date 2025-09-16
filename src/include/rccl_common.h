@@ -21,6 +21,7 @@ THE SOFTWARE.
 */
 #ifndef RCCL_COMMON_H_
 #define RCCL_COMMON_H_
+#include "rocm_smi/rocm_smi.h"
 #include "nccl_common.h"
 #include "nccl.h"
 #include "param.h"
@@ -95,5 +96,5 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize);
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount);
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm);
 bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, const char* archName);
-int parseFirmwareVersion(const char* command);
+int parseFirmwareVersion();
 #endif
