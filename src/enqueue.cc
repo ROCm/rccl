@@ -913,7 +913,7 @@ NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 16384);
 RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 
-// This is the maximum P2P message size that can be batch with another
+// This is the maximum P2P message size that can be batched with others 
 // Below this message size, NCCL_MAX_DEV_WORK_P2P_PER_BATCH will be applicable
 // For alltoall, this can be mutiplied by number of ranks to match Size (B) in rccl-tests
 // Without a threshold, RCCL will suffer large message regression due to limitation at a larger scale
