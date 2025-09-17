@@ -24,6 +24,7 @@ THE SOFTWARE.
 #include "comm.h"
 #include "graph/topo.h"
 #include "enqueue.h"
+#include "rocm_smi/rocm_smi.h"
 
 // Use this param to experiment pipelining new data types besides bfloat16
 // Make sure you generate the device code with the new data type (i.e. in generate.py)

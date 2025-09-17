@@ -21,7 +21,6 @@ THE SOFTWARE.
 */
 #ifndef RCCL_COMMON_H_
 #define RCCL_COMMON_H_
-#include "rocm_smi/rocm_smi.h"
 #include "nccl_common.h"
 #include "nccl.h"
 #include "param.h"
