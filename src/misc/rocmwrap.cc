@@ -154,10 +154,6 @@ static void initOnceFunc() {
     INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
     goto error;
   }
-  if (rcclParamForceEnableDMABUF() == 0 ) {
-    INFO(NCCL_INIT, "Dmabuf feature disabled without RCCL_FORCE_DMABUF_ENABLE=1");
-    goto error;
-  }
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
   if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) {
     INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
@@ -203,7 +199,7 @@ static void initOnceFunc() {
       if (fp == NULL){
         if(rcclParamForceEnableDMABUF()){
           dmaBufSupport = 1;
-          INFO(NCCL_INIT, "DMA_BUF Support Enabled");
+          INFO(NCCL_INIT, "DMA_BUF Support is force enabled, as RCCL_FORCE_ENABLE_DMABUF=1");
         }
         else{
           dmaBufSupport = 0;
