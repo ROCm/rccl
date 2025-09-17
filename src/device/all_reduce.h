@@ -384,8 +384,6 @@ namespace {
       nthreadsSplit = (nthreads*7/(10*WARP_SIZE))*WARP_SIZE;
     }
 
-    if(tid == 0) printf("running nthreadsSplit = %d tree->up: %d\n", nthreadsSplit, tree->up);
-
 #if defined(ENABLE_NPKIT)
     bool isNpKitThread = false;
     int npKitCtxIdx = 0;
@@ -991,7 +989,7 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET_CHAIN, NCCL_PR
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     const int bid = ncclShmem.channelId - work->channelLo;
     const int nChannels = work->channelHi - work->channelLo + 1;
-    ncclTree *tree = &ncclShmem.channel.collnetChain;
+    auto *tree = (ncclTree SLOCAL *)&ncclShmem.channel.collnetChain;
     ssize_t chunkSize = work->collnet.chunkCount;
     const ssize_t loopSize = int(nChannels*chunkSize);
     const int nranks = ncclShmem.comm.nRanks;

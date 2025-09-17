@@ -17,8 +17,9 @@
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 10000
 
-// HACK HACK the barrier is disabled!!
-#if 1
+// PAE: split barrier seems to be required by TREE reduce algorithms
+// For RING algorithms __builtin_amdgcn_s_barrier seems to be fine
+#if 0
 #define barrier_generic(__THREAD_FENCE, NWORKERS, BARRIER_NEXT, BARRIERS_PTR) do { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } while(0)

@@ -547,7 +547,7 @@ for name in name_to_funcs.keys():
       #if ty in ["f8","bf8","i8","u8","f64","i64","u64","f16","bf16"]: # do not generate those..
       # all_colls =  ["AllGather","AllReduce","AllToAllPivot","Broadcast","Reduce","ReduceScatter","SendRecv"]
       
-      if ty not in ["f32"] or coll not in ["AllReduce"] or algo not in ["RING"]: # or unroll not in [4]: # or redop not in ["Sum","SumPostDiv", "PreMulSum"]:
+      if ty not in ["f32", "f16", "bf16"] or coll not in ["AllReduce"] or algo not in ["TREE", "RING"]: # or unroll not in [4]: # or redop not in ["Sum","SumPostDiv", "PreMulSum"]:
         # out(
         # "DEFINE_dummyFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {unroll})\n"
         # .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
