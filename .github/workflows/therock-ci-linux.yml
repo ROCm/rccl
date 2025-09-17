@@ -109,18 +109,17 @@ jobs:
 
   therock-test-linux-multi-node:
     name: "Test multi-node"
+    if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
     needs: [therock-build-linux]
     uses: ./.github/workflows/therock-test-packages-multi-node.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' && 'vultr-linux-rocm' || (inputs.amdgpu_families == 'gfx950-dcgpu' && 'nova-linux-slurm-scale-runner') }}
+      test_runs_on: nova-linux-slurm-scale-runner
       artifact_run_id: ${{ github.run_id }}
 
-  # TheRock ROCm build is currently missing amd-smi which is required for this testing.
-  # TODO (saienduri): Re-enable after issue resolved (https://github.com/ROCm/TheRock/issues/1422)
   therock-test-linux-single-node:
     name: "Test single-node"
-    if: ${{ false }}
+    if: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' }}
     needs: [therock-build-linux]
     uses: ./.github/workflows/therock-test-packages-single-node.yml
     with:
