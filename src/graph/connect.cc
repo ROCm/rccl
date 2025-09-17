@@ -456,7 +456,7 @@ static ncclResult_t connectNvls(struct ncclComm* comm, int* nvlsHeads, int nHead
     channel->nvls.out = -1;       // NVLS+SHARP not yet implemented.
     channel->nvls.headRank = headRank;
     channel->nvls.treeUp = channel->nvls.treeDown[0] = channel->nvls.treeDown[1] = channel->nvls.treeDown[2] = -1;
-    if (comm->collNetSupport && channel->nvls.headRank != -1) channel->nvls.out = comm->nRanks;
+    if (comm->config.collnetEnable && channel->nvls.headRank != -1) channel->nvls.out = comm->nRanks;
   }
   if (comm->nNodes == 1) return ncclSuccess;
 
@@ -528,7 +528,7 @@ int ncclMinNchannels() {
   if (ncclParamMinNrings() != -2) minNchannels = ncclParamMinNrings();
   if (ncclParamMinNchannels() != -2) minNchannels = ncclParamMinNchannels();
   if (minNchannels > MAXCHANNELS) {
-    WARN("User asked for a minimum of %d channels, limiting to %d", minNchannels, MAXCHANNELS);
+    INFO(NCCL_GRAPH|NCCL_ENV, "User asked for a minimum of %d channels, limiting to %d", minNchannels, MAXCHANNELS);
     minNchannels = MAXCHANNELS;
   }
   if (minNchannels < 0) minNchannels = 0;
@@ -544,7 +544,7 @@ int ncclMaxNchannels() {
   maxNchannels = std::min(maxNchannels, ncclDevMaxChannelsForArgsBytes(ncclParamWorkArgsBytes()));
   if (maxNchannels > MAXCHANNELS) maxNchannels = MAXCHANNELS;
   if (maxNchannels < 1) {
-    WARN("User asked for a maximum of %d channels, setting it to 1", maxNchannels);
+    INFO(NCCL_GRAPH|NCCL_ENV, "User asked for a maximum of %d channels, setting it to 1", maxNchannels);
     maxNchannels = 1;
   }
   return maxNchannels;
@@ -718,7 +718,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   int nNodes = comm->nNodes;
   int nChannels = comm->nChannels;
   int minHeadNum = INT_MAX;
-  int shared = parent && parent->nvlsSupport  && parent->config.splitShare;
+  int shared = parent && parent->nvlsSupport  && parent->shareResources;
   int maxChannels;
   int minNchannels, maxNchannels;
   NCCLCHECK(ncclCalloc(&ringRecv, nNodes*MAXCHANNELS));
@@ -839,7 +839,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   nChannels = comm->nChannels = std::min(maxChannels, (nChannels <= maxChannels/2) ? nChannels*2 : nChannels);
 
   // Setup CollNet
-  if (comm->collNetSupport == 1) {
+  if (comm->config.collnetEnable) {
     struct ncclTopoGraph* collNetChainGraph = graphs[NCCL_ALGO_COLLNET_CHAIN];
     // Add more channels to saturate intra-node bandwidth, except the 1 PPN case
     if (collNetChainGraph->bwIntra > collNetChainGraph->bwInter && comm->nRanks > comm->nNodes) {
