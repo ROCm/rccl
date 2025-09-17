@@ -55,11 +55,11 @@ jobs:
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          salloc -N 32 -p meta64 --exclusive bash -c "
+          salloc -N 4 -p meta64 --exclusive bash -c "
           source /home/arravikum/TheRock/.venv/bin/activate &&
           cd /home/arravikum/cvs &&
           python input/setup.py &&
-          pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py::test_rccl_perf[1-simple-ring-alltoall_perf] \
+          pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
               --cluster_file ./input/cluster.json \
               --config_file ./input/mi350_config.json \
               --log-file=/tmp/rccl_log.log \
