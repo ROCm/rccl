@@ -24,7 +24,7 @@ THE SOFTWARE.
 #include "nccl_common.h"
 #include "nccl.h"
 #include "param.h"
-
+#include "core.h"
 typedef enum RcclTunableColls {
   RCCL_UNSUPPORTED_TUNABLE = -1,
   RCCL_RS_TUNABLE = 0,    // reduce_scatter index
@@ -87,9 +87,9 @@ ncclResult_t rcclOverrideAlgorithm(const char* ncclAlgoStr[], float table[][NCCL
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
 void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold);
 void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
-ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
-                             int collNetSupport, int nvlsSupport, int numPipeOps,
-                             int* algo, int* protocol, int* maxChannels);
+NCCL_API(ncclResult_t, rcclGetAlgoInfo, struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType, int collNetSupport, int nvlsSupport, int numPipeOps, int* algo, int* protocol, int* maxChannels);
+NCCL_API(ncclResult_t, rcclGetAlgoName, int algo, const char** algoName);
+NCCL_API(ncclResult_t, rcclGetProtocolName, int protocol, const char** algoName);
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable);
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize);
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount);

@@ -244,6 +244,24 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   return ncclSuccess;
 }
 
+ncclResult_t rcclGetAlgoName(int algo, const char** algoName) {
+  if (algo < 0 || algo >= NCCL_NUM_ALGORITHMS) {
+    WARN("Invalid algorithm value: %d", algo);
+    return ncclInvalidArgument;
+  }
+  *algoName = ncclAlgoToString(algo);
+  return ncclSuccess;
+}
+
+ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
+  if (protocol < 0 || protocol >= NCCL_NUM_PROTOCOLS) {
+    WARN("Invalid protocol value: %d", protocol);
+    return ncclInvalidArgument;
+  }
+  *protocolName = ncclProtoToString(protocol);
+  return ncclSuccess;
+}
+
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   static int pxnDisable = RCCL_VALUE_UNSET;
   comm->enableCustColl = false;
