@@ -771,7 +771,7 @@ public:
       while (nrecv < MaxRecv && recvPeers[nrecv] != -1) nrecv++;
       // coverity[dead_error_line]
       while (nsend < MaxSend && sendPeers[nsend] != -1) nsend++;
-      this->fan = Fan(nrecv, nsend);
+      this->fan = Fan(nrecv, nsend);  
 
       constexpr int ThreadPerSync =
         MaxSend >= 16 || MaxRecv >= 16 ? 32 : // NVLS may have an arity > 8. In that case increase the size of the groups
@@ -779,7 +779,8 @@ public:
         8; // Allows for all roles (WaitRecv/WaitSend/PostRecv/PostSend) within a single warp
       static_assert(MaxSend <= ThreadPerSync && MaxRecv <= ThreadPerSync, "Not enough threads to cover all peers");
 
-      assert(2*(nrecv+nsend) <= nthreads); // Ensure no thread is assigned more than one role.
+      // WOW removing assert removes private_segment >>
+      // assert(2*(nrecv+nsend) <= nthreads); // Ensure no thread is assigned more than one role.
       // Coverity assumes that index will equal tid based on the line below, but it doesn't consider the setting
       // of flags.  This results in multiple false positive overruns being reported here and in all_reduce.h.
       // Unfortunately, we've been unsuccessful in trying to silence them with a single directive here so

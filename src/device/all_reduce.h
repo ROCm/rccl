@@ -218,7 +218,7 @@ namespace {
   __device__ __forceinline__ void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     const int bid = ncclShmem.channelId - work->channelLo;
-    ncclTree *tree = &ncclShmem.channel.tree;
+    auto *tree = (ncclTree SLOCAL *)&ncclShmem.channel.tree;
     size_t size;
     size_t gridOffset;
     size_t channelCount;
@@ -366,7 +366,7 @@ namespace {
   __device__ __forceinline__ void runTreeSplit(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     const int bid = ncclShmem.channelId - work->channelLo;
-    ncclTree *tree = &ncclShmem.channel.tree;
+    auto *tree = (ncclTree SLOCAL *)&ncclShmem.channel.tree;
     size_t size;
     size_t gridOffset;
     size_t channelCount;
@@ -383,6 +383,8 @@ namespace {
       // to 3 dests. Use 70% for reduce and 30% for bcast.
       nthreadsSplit = (nthreads*7/(10*WARP_SIZE))*WARP_SIZE;
     }
+
+    if(tid == 0) printf("running nthreadsSplit = %d tree->up: %d\n", nthreadsSplit, tree->up);
 
 #if defined(ENABLE_NPKIT)
     bool isNpKitThread = false;
@@ -591,9 +593,11 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
     using Proto = ProtoSimple<1, 1>;
-    if (work->acc != nullptr) {
-      runTreeSplit<T, RedOp, Proto>(tid, nthreads, work);
-    } else {
+
+    // if (work->acc != nullptr) { PAE we do not need fused all-reduce stuff
+    //   runTreeSplit<T, RedOp, Proto>(tid, nthreads, work);
+    // } else 
+    {
       runTreeUpDown<T, RedOp, Proto>(tid, nthreads, work);
     }
     // Check-here

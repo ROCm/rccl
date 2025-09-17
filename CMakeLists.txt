@@ -855,6 +855,8 @@ if(HAVE_ROCM_SMI_THREAD_ONLY_MUTEX)
   target_compile_definitions(rccl PRIVATE USE_ROCM_SMI_THREAD_ONLY_MUTEX)
 endif()
 
+target_compile_definitions(rccl PRIVATE NDEBUG)
+
 # NPKit flags
 ## May be better to move these to a separate file
 if(ENABLE_NPKIT)
@@ -1093,9 +1095,9 @@ else()  # Enable hidden visibility for library without tests/code coverage enabl
 endif()
 
 if (HAVE_KERNARG_PRELOAD)
-  #target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
-  message(STATUS "================== NOTE NOTE using debug RCCL version!")
-  target_compile_options(rccl PRIVATE -g3 -ggdb -Og -mllvm --amdgpu-kernarg-preload-count=16)
+  #message(STATUS "================== NOTE NOTE using debug RCCL version!")
+  #target_compile_options(rccl PRIVATE -g3 -ggdb -Og -mllvm --amdgpu-kernarg-preload-count=16)
+  target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
 endif()
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
@@ -1200,8 +1202,8 @@ else()
   message(STATUS "Building shared RCCL library")
 endif()
 if (HAVE_KERNARG_PRELOAD)
-  #target_link_options(rccl PRIVATE "SHELL:-Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
-  target_link_options(rccl PRIVATE "SHELL:-g3 -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
+  target_link_options(rccl PRIVATE "SHELL:-Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
+  #target_link_options(rccl PRIVATE "SHELL:-g3 -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
 endif()
 
 if(ENABLE_MSCCLPP)
