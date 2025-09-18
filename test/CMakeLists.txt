@@ -1,7 +1,7 @@
 # Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
 # Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.16)
 
 if(BUILD_TESTS)
 
@@ -24,7 +24,7 @@ if(BUILD_TESTS)
 
     # Search for ROCr header file in user defined locations
     find_path(ROCR_HDR hsa/hsa.h PATHS ${ROCR_INC_DIR} "/opt/rocm" PATH_SUFFIXES include REQUIRED)
-    INCLUDE_DIRECTORIES(${ROCR_HDR})
+    include_directories(${ROCR_HDR})
 
     # Search for ROCr library file in user defined locations
     find_library(ROCR_LIB ${CORE_RUNTIME_TARGET} PATHS ${ROCR_LIB_DIR} "/opt/rocm" PATH_SUFFIXES lib lib64 REQUIRED)
@@ -129,11 +129,12 @@ if(BUILD_TESTS)
 
   # Create rccl-UnitTests binary
   add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})
-  add_dependencies(rccl-UnitTests replace_static_in_hipify)
-
+  
   # Create rccl-UnitTestsFixtures binary if ROCm version is 4.6.0 or greater
   # and build type is Debug
   if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+    add_dependencies(rccl-UnitTests replace_static_in_hipify)
+    
     # Add rccl-UnitTestsFixtures binary
     list(APPEND RCCL_TEST_EXECUTABLES rccl-UnitTestsFixtures)
 

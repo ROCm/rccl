@@ -59,8 +59,8 @@ protected:
         comm->workFifoBytes = 1024;  // Power of 2
         comm->workFifoBuf = nullptr;
         comm->workFifoBufDev = nullptr;
-        comm->workFifoConsumed = nullptr;
-        comm->workFifoConsumedLeast = 0;
+        comm->workFifoConsumed = 0;
+        comm->workFifoProducedLastRecorded = 0;
         comm->workFifoProduced = 0;
 
         // Initialize planner
