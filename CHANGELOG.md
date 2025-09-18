@@ -2,7 +2,14 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.26.6 for ROCm 7.0.0
+## Unreleased - RCCL 2.26.6 for ROCm 7.0.2
+
+### Added
+
+* Enabled double-buffering in `reduceCopyPacks` to trigger pipelining, especially to overlap bf16 arithmetic.
+* Added `--force-reduce-pipeline` as an option that can be passed to the `install.sh` script. Passing this option will enable software-triggered pipelining `bfloat16` reductions (i.e. `all_reduce`, `reduce_scatter` and `reduce`).
+
+## RCCL 2.26.6 for ROCm 7.0.0
 
 ### Resolved issues
 
