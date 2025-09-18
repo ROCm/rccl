@@ -47,6 +47,13 @@ typedef enum {
   RCCL_VALUE_INVALID = -1
 } rcclValueState_t;
 
+typedef enum {
+  RCCL_DIRECT_ALLGATHER = NCCL_NUM_ALGORITHMS, // Direct AllGather
+  RCCL_MSCCL,
+  RCCL_MSCCLPP,
+  RCCL_ALGO_COUNT
+} rcclAddonAlgos_t;
+
 #ifdef RCCL_EXPOSE_STATIC
 #define RCCL_STATIC_EXPOSE_CHECK()
 #else
@@ -90,6 +97,7 @@ void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclT
 NCCL_API(ncclResult_t, rcclGetAlgoInfo, struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType, int collNetSupport, int nvlsSupport, int numPipeOps, int* algo, int* protocol, int* maxChannels);
 NCCL_API(ncclResult_t, rcclGetAlgoName, int algo, const char** algoName);
 NCCL_API(ncclResult_t, rcclGetProtocolName, int protocol, const char** algoName);
+bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize);
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable);
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize);
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount);
