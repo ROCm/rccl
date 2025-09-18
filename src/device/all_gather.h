@@ -52,8 +52,8 @@ namespace {
     }
 #endif
     int workNthreads;
-    T *inputBuf = (T*)work->sendbuff;
-    T *outputBuf = (T*)work->recvbuff;
+    auto *inputBuf = (T SGLOBAL*)work->sendbuff;
+    auto *outputBuf = (T SGLOBAL*)work->recvbuff;
 
     // If isNetOffload == true, we only use 1 warp to drive Ring algo/network communication
     // and the rest of warps proceed to copy src data into dst buffer in parallel when AG
@@ -70,7 +70,8 @@ namespace {
       // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
       // coverity[callee_ptr_arith:FALSE]
       Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, isNetOffload> prims
-        (tid, workNthreads, &ring->prev, &ring->next, inputBuf, outputBuf, work->redOpArg, 0, work->connIndex, work->connIndex, work, NULL, isNetOffload ? NCCL_MAX_NET_SIZE : 0);
+        (tid, workNthreads, &ring->prev, &ring->next, inputBuf, outputBuf, work->redOpArg, 0, 
+          work->connIndex, work->connIndex, work, NULL, isNetOffload ? NCCL_MAX_NET_SIZE : 0);
 
 #if defined(ENABLE_NPKIT)
       if (tid == 0) {
@@ -163,7 +164,7 @@ namespace {
       inputBuf = inputBuf + partOffset;
       outputBuf = outputBuf + partOffset + ringRanks[0] * count;
       reduceCopy<COLL_UNROLL, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs=*/0>
-        (tid - workNthreads, nthreads - workNthreads, work->redOpArg, &work->redOpArg, false, 1, (void**)&inputBuf, 1, (void**)&outputBuf, partCount);
+        (tid - workNthreads, nthreads - workNthreads, work->redOpArg, (uint64_t *)&work->redOpArg, false, 1, (void**)&inputBuf, 1, (void**)&outputBuf, partCount);
     }
 #if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
     // we have to wait for all warps before we can proceed to the next work;
@@ -227,8 +228,9 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
     ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &count, &channelOffset, &channelCount, &chunkCount);
 
     static constexpr int nworkers = NCCL_PAT_NWORKERS;
-    struct ncclPatShmem* shmem = (struct ncclPatShmem*)ncclScratchForWarp(0);
+    auto* shmem = (ncclPatShmem SLOCAL*)ncclScratchForWarp(0);
     uint64_t pollCount = 0;
+    static_cast<void>(pollCount);
     __syncthreads(); // Don't start using shared mem until everyone arrives
     for (int i=tid; i<NCCL_SHMEM_PAT_STEPS; i+=nthreads) shmem->patSteps[i].flags = 0;
     if (tid == 0) shmem->localAccSize = 0;
@@ -240,8 +242,8 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
       int parallelFactor = shmem->parallelFactor = patAlgo.getParallelFactor();
       int step = 0;
       while (1) {
-        struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
-        int* poll = &ps->flags;
+        auto* ps = (ncclPatStep SLOCAL *)shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
+        auto* poll = &ps->flags;
         while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) != 0) pollCount++; // Wait for workers to be done with step 'step-NCCL_SHMEM_PAT_STEPS'
         patAlgo.getNextOp(ps);
         int last = ps->last;
@@ -249,10 +251,10 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
         if (last == 2) break;
       }
     } else if (tid < nworkers) { // Worker threads
-      T *inputBuf = (T*)work->sendbuff;
-      T *outputBuf = (T*)work->recvbuff;
+      auto *inputBuf = (T SGLOBAL*)work->sendbuff;
+      auto *outputBuf = (T SGLOBAL*)work->recvbuff;
       int parallelFactor = 0;
-      volatile int* pfPtr = &shmem->parallelFactor;
+      auto* pfPtr = (volatile int *)&shmem->parallelFactor;
       while (parallelFactor == 0) parallelFactor = *pfPtr;
 
       int groupSize = nworkers/(WARP_SIZE*parallelFactor) * WARP_SIZE;
@@ -261,12 +263,12 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
       int tidInGroup = tid - group*groupSize;
       // We don't use recvPeers/sendPeers so let's pass shmem structs instead
       Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
-        (tidInGroup, groupSize, (int*)shmem->recvDims, (int*)shmem->sendDims, inputBuf, outputBuf, work->redOpArg, group, 0, 0, nullptr, nullptr, 0, primsModePatAg);
+        (tidInGroup, groupSize, (int SLOCAL*)shmem->recvDims, (int SLOCAL*)shmem->sendDims, inputBuf, outputBuf, work->redOpArg, group, 0, 0, nullptr, nullptr, 0, primsModePatAg);
 
       int step = group;
       while(1) {
-        struct ncclPatStep* ps = shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
-        int* poll = &ps->flags;
+        auto* ps = (ncclPatStep SLOCAL *)shmem->patSteps+(step%NCCL_SHMEM_PAT_STEPS);
+        auto* poll = &ps->flags;
         while (__hip_atomic_load(poll, __ATOMIC_ACQUIRE, __HIP_MEMORY_SCOPE_WORKGROUP) == 0) pollCount++; // Wait for compute thread
         int last = ps->last;
         prims.patCopy(ps, shmem);

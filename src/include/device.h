@@ -241,7 +241,8 @@ struct ncclDevComm;
 #pragma pack(8)     /* set alignment to 8 bytes boundary */
 
 struct alignas(16) ncclDevWorkP2p {
-  void *sendAddr, *recvAddr;
+  void SGLOBAL *sendAddr; 
+  void SGLOBAL *recvAddr;
   size_t sendBytes, recvBytes;
   int sendRank, recvRank;
   uint64_t sendOpCount, recvOpCount;

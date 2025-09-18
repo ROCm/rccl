@@ -542,7 +542,7 @@ public:
     return parallelFactor;
   }
 
-  __device__ __host__ void getNextOp(struct ncclPatStep* ps) {
+  __device__ __host__ void getNextOp(ncclPatStep SLOCAL* ps) {
     ps->last = 0;
     ps->nelem = nelem;
     ps->outIx = offset;
@@ -807,7 +807,7 @@ public:
     return parallelFactor;
   }
 
-  __device__ __host__ void getNextOp(struct ncclPatStep* ps) {
+  __device__ __host__ void getNextOp(ncclPatStep SLOCAL* ps) {
     ps->last = 0;
     ps->nelem = nelem;
     ps->inpIx = offset;

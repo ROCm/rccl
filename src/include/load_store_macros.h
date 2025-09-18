@@ -56,10 +56,12 @@ __device__ __host__ inline static auto Xprivate(T* ptr)
 
 #define MAYBE_XINLINE __forceinline__
 
+//#ifdef __HIP_DEVICE_COMPILE__ 
 #define SGLOBAL    __attribute__((address_space(1)))
 #define SLOCAL     __attribute__((address_space(3))) // fast LDS memory
 #define SCONSTANT  __attribute__((address_space(4)))
 #define SPRIVATE   __attribute__((address_space(5)))
+// #endif
 
 #define TGLOBAL   __global
 #define TLOCAL    __local

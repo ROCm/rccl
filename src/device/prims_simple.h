@@ -747,8 +747,8 @@ public:
   __forceinline__ __device__ Primitives(
       int tid, int nthreads, int const SLOCAL *recvPeers, int const SLOCAL *sendPeers,
       void const SGLOBAL *inputBuf, void SGLOBAL *outputBuf, uint64_t redOpArg, uint8_t group=0,
-      uint8_t connIndexRecv = 0, uint8_t connIndexSend = 0, struct ncclDevWorkColl SLOCAL* collWork = nullptr,
-      struct ncclDevWorkP2p* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
+      uint8_t connIndexRecv = 0, uint8_t connIndexSend = 0, ncclDevWorkColl SLOCAL* collWork = nullptr,
+      ncclDevWorkP2p SLOCAL* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
     ):
     tid(tid), nthreads(nthreads), tidInBlock(threadIdx.x), group(group),
     stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_) {
@@ -1138,11 +1138,11 @@ public:
     ScatterGatherOp<1, 0, 1, 0>(-1, outIx, totalElem, peerElem, peerOffset, skip, shift, /*postOp=*/false);
   }
 
-  __device__ __forceinline__ void patReduce(struct ncclPatStep* ps, struct ncclPatShmem* shmem) {
+  __device__ __forceinline__ void patReduce(ncclPatStep SLOCAL* ps, ncclPatShmem SLOCAL* shmem) {
     if (ps->flags & PatSkipped) { patBarrier(); patBarrier(); return; } // Skipped
     int nelem = ps->nelem < 0 ? 0 : ps->nelem;
-    T* userInput = (T*)ncclShmem.groups[group].userInput;
-    T* userOutput = (T*)ncclShmem.groups[group].userOutput;
+    auto* userInput = (T *)ncclShmem.groups[group].userInput;
+    auto* userOutput = (T *)ncclShmem.groups[group].userOutput;
 
     bool recv = ps->recvDim >= 0 && (flags & (RolePostRecv|RoleWaitRecv));
     bool send = ps->sendDim >= 0 && (flags & (RolePostSend|RoleWaitSend));
@@ -1218,7 +1218,7 @@ public:
     }
 
     // Update accSize
-    if (ps->sendDim < 0 && (flags & RoleOutput)) atomicMax(&shmem->localAccSize, localAccSize);
+    if (ps->sendDim < 0 && (flags & RoleOutput)) atomicMax(Tlocal((long long int *)&shmem->localAccSize), localAccSize);
     if (ps->sendDim >= 0 && (flags & RoleWaitSend)) {
       // PAE need to check!
       atomicMax(Tglobal((long long int *)&peer->accSize), ps->sendOffset + nelem + (step+ps->stepOffset)*peer->connStepSize);
@@ -1235,7 +1235,7 @@ public:
     }
   }
 
-  __device__ __forceinline__ void patCopy(struct ncclPatStep* ps, struct ncclPatShmem* shmem) {
+  __device__ __forceinline__ void patCopy(ncclPatStep SLOCAL* ps, struct ncclPatShmem SLOCAL* shmem) {
     if (ps->flags & PatSkipped) { patBarrier(); patBarrier(); return; } // Skipped
     int nelem = ps->nelem < 0 ? 0 : ps->nelem;
     T* userInput = (T*)ncclShmem.groups[group].userInput;
@@ -1315,9 +1315,9 @@ public:
     }
 
     // Update accSize
-    if (ps->recvDim < 0 && (flags & RoleInput)) atomicMax(Tlocal(&shmem->localAccSize), localAccSize);
+    if (ps->recvDim < 0 && (flags & RoleInput)) atomicMax(Tlocal((long long int *)&shmem->localAccSize), localAccSize);
     if (ps->recvDim >= 0 && (flags & RoleWaitRecv)) {
-      // PAE need to check! if 'peer->accSize' is really local mem ??
+      // PAE need to check! if 'peer->accSize' is really global mem ??
       atomicMax(Tglobal((long long int *)&peer->accSize), ps->recvOffset + nelem + (step+ps->stepOffset)*peer->connStepSize);
     }
 

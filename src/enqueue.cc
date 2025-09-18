@@ -1014,7 +1014,7 @@ static ncclResult_t addP2pToPlan(
   work->sendIpcReg = ipcRegistered[1];
   work->sendChunkSize_u32fp8 = chunkDataSize_u32fp8[1];
   work->sendRank = sendRank;
-  work->sendAddr = sendAddr;
+  work->sendAddr = (void SGLOBAL *)sendAddr;
   work->sendBytes = sendBytes==-1 ? 0 : sendBytes;
   work->sendConnIndex = connIndex[1];
   work->sendOpCount = sendOpCount;
@@ -1024,7 +1024,7 @@ static ncclResult_t addP2pToPlan(
   work->recvIpcReg = ipcRegistered[0];
   work->recvChunkSize_u32fp8 = chunkDataSize_u32fp8[0];
   work->recvRank = recvRank;
-  work->recvAddr = recvAddr;
+  work->recvAddr = (void SGLOBAL *)recvAddr;
   work->recvBytes = recvBytes==-1 ? 0 : recvBytes;
   work->profilerEnabled = ncclProfilerPluginLoaded() && ((p2pTasks[0] ? p2pTasks[0] : p2pTasks[1])->eActivationMask & ncclProfileKernelCh);
   work->recvConnIndex = connIndex[0];
@@ -1074,7 +1074,7 @@ static ncclResult_t addP2pToPlan(
     for (int dir=0; dir < nProxyOps; dir++) {
       // Partition steps across channels.
       int nParts = dir ? work->nSendChannels : work->nRecvChannels;
-      void* addr = dir ? work->sendAddr : work->recvAddr;
+      auto* addr = dir ? work->sendAddr : work->recvAddr;
       size_t bytes = dir ? work->sendBytes : work->recvBytes;
       if (rcclParamEnableProxyTrace()) {
         proxyOps[dir].totalBytes = bytes;

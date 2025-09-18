@@ -676,7 +676,7 @@ ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* op, bool
 
       struct ncclPatStep ps;
       do {
-        algo.getNextOp(&ps);
+        algo.getNextOp((ncclPatStep SLOCAL *)&ps);
         if (ps.flags & PatSkipped) continue;
         if (ps.recvDim != -1 && ps.postRecv) nstepsRecv[ps.recvDim]++;
         if (ps.sendDim != -1 && ps.postSend) nstepsSend[ps.sendDim]++;
@@ -710,7 +710,7 @@ ncclResult_t ncclProxySaveOp(struct ncclComm* comm, struct ncclProxyOp* op, bool
 
       struct ncclPatStep ps;
       do {
-        algo.getNextOp(&ps);
+        algo.getNextOp((ncclPatStep SLOCAL *)&ps);
         if (ps.flags & PatSkipped) continue;
         if (ps.recvDim != -1 && ps.postRecv) nstepsRecv[ps.recvDim]++;
         if (ps.sendDim != -1 && ps.postSend) nstepsSend[ps.sendDim]++;
