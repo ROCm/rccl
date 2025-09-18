@@ -24,6 +24,7 @@ THE SOFTWARE.
 #include "comm.h"
 #include "graph/topo.h"
 #include "enqueue.h"
+#include "rocm_smi/rocm_smi.h"
 
 // Use this param to experiment pipelining new data types besides bfloat16
 // Make sure you generate the device code with the new data type (i.e. in generate.py)
@@ -342,37 +343,26 @@ std::vector<std::string> splitString(const std::string& s, char delimiter) {
   return tokens;
 }
 
-int parseFirmwareVersionImpl(FILE* file) {
-  constexpr std::size_t MAX_LINE_SZ = 1024;
-  char line[MAX_LINE_SZ];
-  bool found_pattern = false;
-  while (fgets(line, MAX_LINE_SZ, file)) {
-    auto parts = splitString(line, ':');
-    if (parts == std::vector<std::string>{"FW_ID", "CP_MEC1"}) {
-      if (!found_pattern) {
-        found_pattern = true;
-      }
-      continue;
-    }
+int parseFirmwareVersionImpl() {
+  uint64_t fw_version = -1;
 
-    if (found_pattern && (parts[0] == "FW_VERSION")) {
-      return stoi(parts[1]) & 0x7ff;
-    }
-  }
-  return -1;
+  // using rocm-smi APIs for now to query MEC FW version
+  // will switch to amd-smi APIs soon
+  rsmi_status_t ret;
+  ret = rsmi_init(0);
+  if (ret != RSMI_STATUS_SUCCESS) return -1;
+  ret = rsmi_dev_firmware_version_get(0, RSMI_FW_BLOCK_MEC, &fw_version);
+  if (ret != RSMI_STATUS_SUCCESS) return -1;
+
+  return fw_version;
 }
 
-int parseFirmwareVersion(const char* command) {
-  auto file = popen(command, "r");
-  if (file == nullptr) {
-    return -1;
-  }
+int parseFirmwareVersion() {
   int version = -1;
   try {
-    version = parseFirmwareVersionImpl(file);
+    version = parseFirmwareVersionImpl();
   } catch (const std::exception& ex) {
   }
-  pclose(file);
   return version;
 }
 
