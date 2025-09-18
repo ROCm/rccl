@@ -5,7 +5,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## Unreleased - RCCL 2.27.3 for ROCm 7.1.0
 
 ### Added
-
+* `RCCL_FORCE_ENABLE_DMABUF` added as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
 ### Changed
 
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.

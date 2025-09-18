@@ -150,83 +150,84 @@ static void initOnceFunc() {
 
   /* DMA-BUF support */
   //ROCm support
-  if (ncclParamDmaBufEnable() == 0 ) {
-    INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
-    goto error;
+   if(rcclParamForceEnableDMABUF()){
+      dmaBufSupport = 1;
+      WARN("DMA_BUF Support is force enabled, so explicitly setting RCCL_FORCE_ENABLE_DMABUF=1");
   }
-  res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
-  if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) {
-    INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
-    goto error;
-  }
-  else {
-    pfn_hsa_amd_portable_export_dmabuf = (PFN_hsa_amd_portable_export_dmabuf) dlsym(hsaLib, "hsa_amd_portable_export_dmabuf");
-    if (pfn_hsa_amd_portable_export_dmabuf == NULL) {
-      WARN("Failed to load ROCr missing symbol hsa_amd_portable_export_dmabuf");
+  else{
+    if (ncclParamDmaBufEnable() == 0 ) {
+      INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
+      goto error;
+    }
+    res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
+    if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) {
+      INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
       goto error;
     }
     else {
-      //check OS kernel support
-      struct utsname utsname;
-      FILE *fp = NULL;
-      char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
-      char kernel_opt2[20] = "CONFIG_PCI_P2PDMA=y";
-      char kernel_conf_file[128];
-      char buf[256];
-      int found_opt1 = 0;
-      int found_opt2 = 0;
-
-      //check for kernel name exists
-      if (uname(&utsname) == -1) INFO(NCCL_INIT,"Could not get kernel name");
-      //format and store the kernel conf file location
-      const char* possiblePaths[] = {
-      "/proc/config.gz",
-      "/boot/config-%s",
-      "/usr/src/linux-%s/.config",
-      "/usr/src/linux/.config",
-      "/usr/lib/modules/%s/config",
-      "/usr/lib/ostree-boot/config-%s",
-      "/usr/lib/kernel/config-%s",
-      "/usr/src/linux-headers-%s/.config",
-      "/lib/modules/%s/build/.config",
-    };
-      for (const auto& path : possiblePaths) {
-            snprintf(kernel_conf_file, sizeof(kernel_conf_file), path, utsname.release);
-            fp = fopen(kernel_conf_file, "r");
-            if(fp != NULL)
-              break;
+      pfn_hsa_amd_portable_export_dmabuf = (PFN_hsa_amd_portable_export_dmabuf) dlsym(hsaLib, "hsa_amd_portable_export_dmabuf");
+      if (pfn_hsa_amd_portable_export_dmabuf == NULL) {
+        WARN("Failed to load ROCr missing symbol hsa_amd_portable_export_dmabuf");
+        goto error;
       }
-      if (fp == NULL){
-        if(rcclParamForceEnableDMABUF()){
-          dmaBufSupport = 1;
-          INFO(NCCL_INIT, "DMA_BUF Support is force enabled, as RCCL_FORCE_ENABLE_DMABUF=1");
+      else {
+        //check OS kernel support
+        struct utsname utsname;
+        FILE *fp = NULL;
+        char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
+        char kernel_opt2[20] = "CONFIG_PCI_P2PDMA=y";
+        char kernel_conf_file[128];
+        char buf[256];
+        int found_opt1 = 0;
+        int found_opt2 = 0;
+
+        //check for kernel name exists
+        if (uname(&utsname) == -1) INFO(NCCL_INIT,"Could not get kernel name");
+        //format and store the kernel conf file location
+        const char* possiblePaths[] = {
+        "/proc/config.gz",
+        "/boot/config-%s",
+        "/usr/src/linux-%s/.config",
+        "/usr/src/linux/.config",
+        "/usr/lib/modules/%s/config",
+        "/usr/lib/ostree-boot/config-%s",
+        "/usr/lib/kernel/config-%s",
+        "/usr/src/linux-headers-%s/.config",
+        "/lib/modules/%s/build/.config",
+      };
+        for (const auto& path : possiblePaths) {
+              snprintf(kernel_conf_file, sizeof(kernel_conf_file), path, utsname.release);
+              fp = fopen(kernel_conf_file, "r");
+              if(fp != NULL)
+                break;
         }
-        else{
+        if (fp == NULL){
           dmaBufSupport = 0;
           INFO(NCCL_INIT,"Could not open kernel conf file");
+          return;
         }
-      }
-      else{
-      //look for kernel_opt1 and kernel_opt2 in the conf file and check
-      while (fgets(buf, sizeof(buf), fp) != NULL) {
-        if (strstr(buf, kernel_opt1) != NULL) {
-          found_opt1 = 1;
-          INFO(NCCL_INIT,"CONFIG_DMABUF_MOVE_NOTIFY=y in %s", kernel_conf_file);
+        else{
+        //look for kernel_opt1 and kernel_opt2 in the conf file and check
+        while (fgets(buf, sizeof(buf), fp) != NULL) {
+          if (strstr(buf, kernel_opt1) != NULL) {
+            found_opt1 = 1;
+            INFO(NCCL_INIT,"CONFIG_DMABUF_MOVE_NOTIFY=y in %s", kernel_conf_file);
+          }
+          if (strstr(buf, kernel_opt2) != NULL) {
+            found_opt2 = 1;
+            INFO(NCCL_INIT,"CONFIG_PCI_P2PDMA=y in %s", kernel_conf_file);
+          }
         }
-        if (strstr(buf, kernel_opt2) != NULL) {
-          found_opt2 = 1;
-          INFO(NCCL_INIT,"CONFIG_PCI_P2PDMA=y in %s", kernel_conf_file);
+        if (!found_opt1 || !found_opt2) {
+          dmaBufSupport = 0;
+          INFO(NCCL_INIT, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in %s", kernel_conf_file);
+          INFO(NCCL_INIT, "DMA_BUF_SUPPORT Failed due to OS kernel support");
         }
-      }
-      if (!found_opt1 || !found_opt2) {
-        dmaBufSupport = 0;
-        INFO(NCCL_INIT, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in %s", kernel_conf_file);
-        INFO(NCCL_INIT, "DMA_BUF_SUPPORT Failed due to OS kernel support");
-      }
 
-      if(dmaBufSupport) INFO(NCCL_INIT, "DMA_BUF Support Enabled");
-      else goto error;
-    }
+        if(dmaBufSupport) INFO(NCCL_INIT, "DMA_BUF Support Enabled");
+        else goto error;
+      }
+      }
     }
   }
 
