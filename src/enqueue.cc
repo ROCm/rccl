@@ -872,6 +872,12 @@ NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 // This value has been tested on MI300.
 RCCL_PARAM(P2pBatchThreshold, "P2P_BATCH_THRESHOLD", 1 << 16); // 65k
 
+
+// Need this temporary parameter to disable p2p batching to avoid some dips at 4MB - 32 MB message size at large scale
+// This parameter must be removed after further investigation,
+// Note that NCCL enables batching by default and it is needed to achieve perf for with smaller messages <= 4MB
+RCCL_PARAM(P2pBatchEnable, "P2P_BATCH_ENABLE", 0); // 65k
+
 // Put p2p op in plan assuming there is sizeof(ncclDevWorkBatch) in batch budget
 // and sizeof(ncclDevWorkP2p) in work budget. "sendRank" and "recvRank" must
 // match the corresponding values for this round of the p2p schedule (no -1's).
@@ -893,8 +899,9 @@ static ncclResult_t addP2pToPlan(
   bool network[2] = {false, false};
   bool proxySameProcess[2] = {true, true};
   void** handles[2] = {NULL, NULL};
-  uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound);
-  bool batchP2P = (sendBytes == -1)? recvBytes <= rcclParamP2pBatchThreshold() : sendBytes <= rcclParamP2pBatchThreshold();
+  auto batchP2PEnableEnv = rcclParamP2pBatchEnable();
+  bool batchP2P =  batchP2PEnableEnv && ((sendBytes == -1)? recvBytes <= rcclParamP2pBatchThreshold() : sendBytes <= rcclParamP2pBatchThreshold());
+  uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound, batchP2PEnableEnv);
   if (comm->p2pNet) {
     for (int dir = 0; dir <= 1; dir++) {
       if (bytes[dir] > rcclParamP2pNetThreshold())
@@ -2448,7 +2455,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
                                       : comm->p2pSchedule[round].recvRank)) {
           round += 1;
         }
-        uint8_t base = ncclP2pChannelBaseForRound(comm, round);
+        uint8_t base = ncclP2pChannelBaseForRound(comm, round, rcclParamP2pBatchEnable());
         for (int c=0; c < comm->p2pnChannelsPerPeer; c++) {
           int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c, comm->p2pnChannelsPerPeer, comm->nNodes);
           if (isSendNotRecv) {
