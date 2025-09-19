@@ -5,6 +5,8 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## Unreleased - RCCL 2.27.3 for ROCm 7.1.0
 
 ### Added
+* Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
+* Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
 
 ### Changed
 
@@ -12,6 +14,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Compatibility with NCCL 2.27.3
 
 ### Resolved issues
+* Improve small message performance for alltoall by enabling and optimizing batched P2P operations. 
 
 ## RCCL 2.26.6 for ROCm 7.0.0
 
@@ -21,7 +24,6 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
 * Suboptimal algorithmic switching point for AllReduce on MI300x.
 * Fixed the known issue "When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault." with a design change to use `comm` instead of `rank` for `mscclStatus`. The Global map for `comm` to `mscclStatus` is still not thread safe but should be explicitly handled by mutexes for read writes. This is tested for correctness, but there is a plan to use a thread-safe map data structure in upcoming changes.
-* Improve small message performance for alltoall by enabling and optimizing batched P2P operations. 
 
 ### Added
 
@@ -37,8 +39,6 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Enabled double-buffering in `reduceCopyPacks` to trigger pipelining, especially to overlap `bf16` arithmetic and bridge the gap between `fp32` performance and `bf16` for both `gfx942` and `gfx950`. Pipelining has been made tunable via `rcclSetPipelining`, similar to algorithms/protocols so that regression is avoided in certain message sizes.
 * Added a direct allgather algorithm. This is enabled by default for multi-node if there are 16 nodes or fewer. The message size threshold is 4MB.
 * Added `RCCL_OVERRIDE_PROTO` and `RCCL_OVERRIDE_ALGO` to allow direct replacement of protocol and algorithm choices. Unlike `NCCL_PROTO` and `NCCL_ALGO`, which re-run the model across enabled combinations and may not guarantee the intended override, these new options enforce the specified selections explicitly.
-* Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
-* Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
 
 ### Changed
 
