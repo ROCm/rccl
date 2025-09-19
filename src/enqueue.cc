@@ -913,20 +913,20 @@ NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 16384);
 RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 
-// This is the maximum P2P message size that can be batched with others 
+// This is the maximum P2P message size that can be batched with others
 // Below this message size, NCCL_MAX_DEV_WORK_P2P_PER_BATCH will be applicable
 // For alltoall, this can be mutiplied by number of ranks to match Size (B) in rccl-tests
 // Without a threshold, RCCL will suffer large message regression due to limitation at a larger scale
 // when more batches are needed to saturate the NIC BW in RCCL.
 // The threshold can be set to a higher value to experiment on other platforms.
 // This value has been tested on MI300.
-RCCL_PARAM(P2pBatchThreshold, "P2P_BATCH_THRESHOLD", 1 << 16); // 65k
+RCCL_PARAM(P2pBatchThreshold, "P2P_BATCH_THRESHOLD", 1 << 16); // 64k
 
 
 // Need this temporary parameter to disable p2p batching to avoid some dips at 4MB - 32 MB message size at large scale
 // This parameter must be removed after further investigation,
 // Note that NCCL enables batching by default and it is needed to achieve perf for with smaller messages <= 4MB
-RCCL_PARAM(P2pBatchEnable, "P2P_BATCH_ENABLE", 0); // 65k
+RCCL_PARAM(P2pBatchEnable, "P2P_BATCH_ENABLE", 0); // 64k
 
 // Put p2p op in plan assuming there is sizeof(ncclDevWorkBatch) in batch budget
 // and sizeof(ncclDevWorkP2p) in work budget. "sendRank" and "recvRank" must
