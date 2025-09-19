@@ -4,10 +4,11 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#include "utils.h"
+#include "archinfo.h"
 #include "core.h"
-
 #include "nvmlwrap.h"
+#include "utils.h"
+
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -189,6 +190,15 @@ bool matchIfList(const char* string, int port, struct netIf* ifList, int listSiz
     }
   }
   return false;
+}
+
+bool ncclNeedEnableContextTrack(int cuDeviceId) {
+  hipDeviceProp_t devProp;
+  if (hipGetDeviceProperties(&devProp, cuDeviceId) != 0)
+    return false;
+  return IsArchMatch(devProp.gcnArchName,"gfx11")
+         || IsArchMatch(devProp.gcnArchName,"gfx12")
+         || IsArchMatch(devProp.gcnArchName,"gfx10");
 }
 
 __thread struct ncclThreadSignal ncclThreadSignalLocalInstance = ncclThreadSignalStaticInitializer();
