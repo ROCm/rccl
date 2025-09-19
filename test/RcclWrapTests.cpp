@@ -167,6 +167,40 @@ static void CleanupMockComm(ncclComm_t &mockComm) {
   }
 }
 
+// Helper function to determine if rcclSetPipelining test should be skipped
+static bool ShouldSkipRcclSetPipeliningTests() {
+  const char *disable = getenv("RCCL_DISABLE_REDUCE_COPY_PIPELINING");
+  // Skip the test if RCCL_DISABLE_REDUCE_COPY_PIPELINING is set
+  if (disable && strcmp(disable, "0") != 0) {
+    return true;
+  }
+  return false;
+}
+
+// Helper function to validate protocol string against known valid protocols
+static bool isProtoStrValid(const char *envStr) {
+  if (!envStr)
+    return false;
+  for (int i = 0; i < NCCL_NUM_PROTOCOLS; ++i) {
+    if (strcasecmp(envStr, ncclProtoStr[i]) == 0) {
+      return true; // Match found
+    }
+  }
+  return false; // No match found
+}
+
+// Helper function to validate algorithm string against known valid algorithms
+static bool isAlgoStrValid(const char *envStr) {
+  if (!envStr)
+    return false;
+  for (int i = 0; i < NCCL_NUM_ALGORITHMS; ++i) {
+    if (strcasecmp(envStr, ncclAlgoStr[i]) == 0) {
+      return true; // Match found
+    }
+  }
+  return false; // No match found
+}
+
 TEST(Rcclwrap, RcclFuncMaxSendRecvCount) {
   ncclResult_t staticCheckResult = testStaticExposeCheck();
 #ifdef RCCL_EXPOSE_STATIC
@@ -277,7 +311,7 @@ TEST(Rcclwrap,
   comm->nNodes = 2; // triggers inter-node logic
   comm->rank = 0;
   comm->topo = new ncclTopoSystem(); //(struct ncclTopoSystem*)calloc(1,
-                                     //sizeof(struct ncclTopoSystem));
+                                     // sizeof(struct ncclTopoSystem));
   *comm->topo = {};
   comm->topo->ll128Enabled = true;
   comm->topo->nodes[GPU].nodes[0] = {};
@@ -308,7 +342,7 @@ TEST(Rcclwrap, RcclUpdateCollectiveProtocol_SimpleFallbackWhenNoRanges) {
   comm->nNodes = 2; // triggers inter-node logic
   comm->rank = 0;
   comm->topo = new ncclTopoSystem(); //(struct ncclTopoSystem*)calloc(1,
-                                     //sizeof(struct ncclTopoSystem));
+                                     // sizeof(struct ncclTopoSystem));
   *comm->topo = {};
   comm->topo->ll128Enabled = true;
   comm->topo->nodes[GPU].nodes[0] = {};
@@ -331,6 +365,31 @@ TEST(Rcclwrap, RcclUpdateCollectiveProtocol_SimpleFallbackWhenNoRanges) {
 
   delete comm->topo;
   delete comm;
+}
+
+TEST(Rcclwrap, validHsaScratchEnvSettingTest) {
+  // When HSA_NO_SCRATCH_RECLAIM is set, it is always valid
+  EXPECT_TRUE(validHsaScratchEnvSetting("1", 0, 0, "gfx950"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting("1", 0, 0, "gfx942"));
+
+  // When HSA_NO_SCRATCH_RECLAIM is not set, looking at hip version and firmware
+  // version
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60443484, 24, "gfx950"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443483, 24, "gfx950"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443484, 23, "gfx950"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60443484, 177, "gfx942"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443484, 176, "gfx942"));
+
+  EXPECT_FALSE(validHsaScratchEnvSetting(nullptr, 60443483, 177, "gfx942"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60443483, 0, "gfx000"));
+
+  EXPECT_TRUE(validHsaScratchEnvSetting(nullptr, 60300000, 0, "gfx000"));
 }
 
 TEST(Rcclwrap, RcclUpdateThreadThreshold_UserEnvSet) {
@@ -1685,6 +1744,576 @@ TEST(Rcclwrap, PXN_ZeroRanks_GFX950) {
        pxnDisable);
 
   CleanupMockComm(mockComm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_Invalid_DType) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // Skip the test if pipelining has been enabled for all data types
+  // (RCCL_PIPELINE_ALL_DATA_TYPES=1)
+  const char *allowAllDTypes = getenv("RCCL_PIPELINE_ALL_DATA_TYPES");
+  if (allowAllDTypes && strcmp(allowAllDTypes, "0") != 0) {
+    GTEST_SKIP() << "Skipping test: RCCL_PIPELINE_ALL_DATA_TYPES environment "
+                    "variable is set. Unset this variable to enable pipelining "
+                    "only for bf16 data type.";
+  }
+
+  // Pipeline should not be set for non-bf16 datatypes, unless
+  // rcclParamPipelineAllDTypes() returns true
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx950", 8);
+  comm->nNodes = 2; // Multi node
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclFloat32;
+
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 0) << "Non-bf16 should not set pipeline by default";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX950_MultiNode_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // For multi-node, pipeline is set to 1 for AllReduce with bf16
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx950", 8);
+  comm->nNodes = 2; // Multi node
+
+  ncclTaskColl info = {};
+  // In rcclSetPipelining(), ncclFuncAllReduce, ncclFuncReduceScatter, and
+  // ncclFuncReduce share the same case body. Testing any one of them is
+  // sufficient to validate that code path.
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx950 multi-node AllReduce bf16 should enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX950_SingleNode_Disable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // For single-node, pipeline remains 0
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx950", 8);
+  comm->nNodes = 1; // Single node
+
+  ncclTaskColl info = {};
+  // In rcclSetPipelining(), ncclFuncAllReduce, ncclFuncReduceScatter, and
+  // ncclFuncReduce share the same case body. Testing any one of them is
+  // sufficient to validate that code path.
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 0)
+      << "gfx950 single-node should not enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_SingleNode_AllReduce_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // For single-node, pipeline is set to 1 for AllReduce with bf16
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 1; // Single node
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx942 single-node AllReduce bf16 should enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // For multi-node AllReduce with bf16, pipelining is enabled if
+  // nBytes <= 512MB * 2^(log2(nNodes)-1)
+  // Testing with nNodes = 4  => threshold = 512MB * 2^(2-1) = 1GB
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 4;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = (1ULL << 30); // 1GB, exactly at threshold
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx942 4-node AllReduce at threshold should enable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_MultiNode_AllReduce_Disable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // When nBytes is just above the threshold, pipelining should be disabled
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 4;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = (1ULL << 30) + 1024; // 1GB + 1KB, just above threshold
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 0)
+      << "gfx942 4-node AllReduce above threshold should disable pipelining";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclSetPipelining_GFX942_Enable) {
+  // Skip the test if pipelining has been disabled
+  // (RCCL_DISABLE_REDUCE_COPY_PIPELINING=1)
+  if (ShouldSkipRcclSetPipeliningTests()) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_DISABLE_REDUCE_COPY_PIPELINING environment "
+           "variable is set. Unset this variable to enable pipelining.";
+  }
+
+  // ReduceScatter & Reduce should enable pipelining regardless of no. of nodes
+  ncclComm_t comm = nullptr;
+  struct ncclTopoSystem topo;
+  struct ncclTopoNode gpu;
+  CreateMockComm(comm, topo, gpu, "gfx942", 8);
+  comm->nNodes = 8;
+
+  ncclTaskColl info = {};
+  // In rcclSetPipelining(), ncclFuncReduceScatter, and
+  // ncclFuncReduce share the same case body. Testing any one of them is
+  // sufficient to validate that code path.
+  info.func = ncclFuncReduceScatter;
+  info.datatype = ncclBfloat16;
+
+  size_t nBytes = 16 * 1024 * 1024; // 16MB
+  rcclSetPipelining(comm, nBytes, &info);
+
+  EXPECT_EQ(info.pipeline, 1)
+      << "gfx942 ReduceScatter and Reduce should enable "
+         "pipelining with single or multi-node";
+
+  CleanupMockComm(comm);
+}
+
+TEST(Rcclwrap, RcclOverrideProtocol_NoOverride) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  // Skip the test if RCCL_OVERRIDE_PROTO is set
+  if (protoOverrideEnv) {
+    GTEST_SKIP() << "Skipping test: Variable RCCL_OVERRIDE_PROTO is set. Unset "
+                    "it to run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  ncclResult_t result = rcclOverrideProtocol(ncclProtoStr, table, &info);
+
+  EXPECT_EQ(result, ncclSuccess)
+      << "Expected ncclSuccess when RCCL_OVERRIDE_PROTO is unset, indicating "
+         "no override should be applied.";
+}
+
+TEST(Rcclwrap, RcclOverrideProtocol_UnsupportedOverride) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  // Skip the test if RCCL_OVERRIDE_PROTO is not set or if its set to an invalid
+  // value
+  if (!isProtoStrValid(protoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: Variable RCCL_OVERRIDE_PROTO is not set or "
+           "set to an invalid value. Set it to a valid protocol value to "
+           "run this test.";
+  }
+
+  // Mark all combinations as unsupported for the purpose of this test.
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = NCCL_ALGO_PROTO_IGNORE;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncReduceScatter;
+  info.datatype = ncclBfloat16;
+  info.algorithm = NCCL_ALGO_RING; // Set any algorithm
+
+  ncclResult_t result = rcclOverrideProtocol(ncclProtoStr, table, &info);
+
+  EXPECT_EQ(result, ncclInternalError)
+      << "Expected ncclInternalError when the override protocol is valid, but "
+         "not enabled for the selected algorithm.";
+}
+
+TEST(Rcclwrap, RcclOverrideProtocol_ValidOverride) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  // Skip the test if RCCL_OVERRIDE_PROTO is not set or if its set to an invalid
+  // value
+  if (!isProtoStrValid(protoOverrideEnv)) {
+    GTEST_SKIP() << "Skipping test: RCCL_OVERRIDE_PROTO is not set or set to "
+                    "an invalid value. Set it to a valid protocol name (e.g., "
+                    "'Simple') to run this test.";
+  }
+
+  // Get the index of the protocol from the string for later comparison
+  int protoIndex = NCCL_PROTO_UNDEF;
+  ncclResult_t idxResult = rcclGetAlgoProtoIndex(
+      protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoIndex);
+  ASSERT_EQ(idxResult, ncclSuccess)
+      << "Failed to get protocol index from string";
+
+  // Mark all combinations as valid for the purpose of this test.
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = 0.0;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+  info.algorithm = NCCL_ALGO_RING; // Set any algorithm
+  info.protocol = NCCL_PROTO_UNDEF;
+
+  ncclResult_t result = rcclOverrideProtocol(ncclProtoStr, table, &info);
+
+  EXPECT_EQ(result, ncclSuccess)
+      << "Expected ncclSuccess when override is applied successfully.";
+  EXPECT_EQ(info.protocol, protoIndex) << "Protocol index should match the "
+                                          "override value from environment.";
+}
+
+TEST(Rcclwrap, RcclOverrideProtocol_ValidOverridePersists) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  // Skip the test if RCCL_OVERRIDE_PROTO is not set or if its set to an invalid
+  // value
+  if (!isProtoStrValid(protoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_OVERRIDE_PROTO is not set or set to an invalid "
+           "value. Set it to a valid protocol name (e.g., 'Simple') to run "
+           "this test.";
+  }
+
+  // Get the index of the protocol from the string for later comparison
+  int protoIndex = NCCL_PROTO_UNDEF;
+  ncclResult_t idxResult = rcclGetAlgoProtoIndex(
+      protoOverrideEnv, ncclProtoStr, NCCL_NUM_PROTOCOLS, protoIndex);
+  ASSERT_EQ(idxResult, ncclSuccess)
+      << "Failed to get protocol index from string";
+
+  // Mark all combinations as valid for the purpose of this test.
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = 0.0;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclFloat16;
+  info.algorithm = NCCL_ALGO_RING; // Set any algorithm
+  info.protocol = NCCL_PROTO_UNDEF;
+
+  // First call
+  ncclResult_t result1 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result1, ncclSuccess)
+      << "Expected rcclOverrideProtocol to succeed with valid override";
+  EXPECT_EQ(info.protocol, protoIndex)
+      << "Expected protocol to match override after first call";
+
+  // Second call
+  ncclResult_t result2 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result2, ncclSuccess)
+      << "Expected rcclOverrideProtocol to succeed again on second call";
+  EXPECT_EQ(info.protocol, protoIndex)
+      << "Expected protocol to match override after second call";
+}
+
+TEST(Rcclwrap, RcclOverrideProtocol_InvalidProtocol) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  // Skip the test if RCCL_OVERRIDE_PROTO is not set or if its set to a valid
+  // value
+  if (!protoOverrideEnv || isProtoStrValid(protoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: Variable RCCL_OVERRIDE_PROTO is not set or set to a "
+           "valid value. Set it to an invalid protocol value to run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  ncclResult_t result = rcclOverrideProtocol(ncclProtoStr, table, &info);
+
+  EXPECT_EQ(result, ncclInvalidUsage) << "Expected ncclInvalidUsage when the "
+                                         "override protocol is invalid.";
+}
+
+TEST(Rcclwrap, RcclOverrideProtocol_InvalidOverridePersists) {
+  const char *protoOverrideEnv = getenv("RCCL_OVERRIDE_PROTO");
+  if (!protoOverrideEnv || isProtoStrValid(protoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: Variable RCCL_OVERRIDE_PROTO is not set or set to a "
+           "valid value. Set it to an invalid protocol value to run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  // First call should fail due to invalid proto string
+  ncclResult_t result1 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result1, ncclInvalidUsage)
+      << "Expected rcclOverrideProtocol to fail with invalid "
+         "RCCL_OVERRIDE_PROTO.";
+
+  // Second call should still fail because the static variable disables further
+  // overrides
+  ncclResult_t result2 = rcclOverrideProtocol(ncclProtoStr, table, &info);
+  EXPECT_EQ(result2, ncclInvalidUsage)
+      << "Expected rcclOverrideProtocol to continue returning failure after "
+         "invalid proto was set.";
+}
+
+TEST(Rcclwrap, RcclOverrideAlgorithm_NoOverride) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is set
+  if (algoOverrideEnv) {
+    GTEST_SKIP() << "Skipping test: Variable RCCL_OVERRIDE_ALGO is set. Unset "
+                    "it to run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  ncclResult_t result = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+
+  // Since no override is set, it should return success and do nothing
+  EXPECT_EQ(result, ncclSuccess)
+      << "Expected ncclSuccess when RCCL_OVERRIDE_ALGO is unset, indicating no "
+         "override should be applied.";
+}
+
+TEST(Rcclwrap, RcclOverrideAlgorithm_UnsupportedOverride) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to an invalid
+  // value
+  if (!isAlgoStrValid(algoOverrideEnv)) {
+    GTEST_SKIP() << "Skipping test: RCCL_OVERRIDE_ALGO is not set or "
+                    "set to an invalid value. Set it to a valid algorithm to "
+                    "run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = NCCL_ALGO_PROTO_IGNORE;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncReduceScatter;
+  info.datatype = ncclBfloat16;
+  info.protocol = NCCL_PROTO_SIMPLE; // Set any protocol
+
+  ncclResult_t result = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+
+  EXPECT_EQ(result, ncclInternalError)
+      << "Expected ncclInternalError when the override algorithm is valid, but "
+         "not enabled for the selected protocol.";
+}
+
+TEST(Rcclwrap, RcclOverrideAlgorithm_ValidOverride) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to an invalid
+  // value
+  if (!isAlgoStrValid(algoOverrideEnv)) {
+    GTEST_SKIP() << "Skipping test: RCCL_OVERRIDE_ALGO is not set or set to "
+                    "an invalid value. Set it to a valid algorithm name (e.g., "
+                    "'Ring') to run this test.";
+  }
+
+  // Get the index of the algorithm from the string for later comparison
+  int algoIndex = NCCL_ALGO_UNDEF;
+  ncclResult_t idxResult = rcclGetAlgoProtoIndex(
+      algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoIndex);
+  ASSERT_EQ(idxResult, ncclSuccess)
+      << "Failed to get algorithm index from string";
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  // Mark all combinations as valid for the purpose of this test.
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = 0.0;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclBfloat16;
+  info.protocol = NCCL_PROTO_SIMPLE; // Set any protocol
+  info.algorithm = NCCL_ALGO_UNDEF;
+
+  ncclResult_t result = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+
+  EXPECT_EQ(result, ncclSuccess)
+      << "Expected ncclSuccess when override is applied successfully.";
+  EXPECT_EQ(info.algorithm, algoIndex)
+      << "Algorithm index should match the override value from environment.";
+}
+
+TEST(Rcclwrap, RcclOverrideAlgorithm_ValidOverridePersists) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to an invalid
+  // value
+  if (!isAlgoStrValid(algoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_OVERRIDE_ALGO is not set or set to an invalid "
+           "value. Set it to a valid algorithm name (e.g., 'Ring') to run this "
+           "test.";
+  }
+
+  // Get the index of the algorithm from the string for later comparison
+  int algoIndex = NCCL_ALGO_UNDEF;
+  ncclResult_t idxResult = rcclGetAlgoProtoIndex(
+      algoOverrideEnv, ncclAlgoStr, NCCL_NUM_ALGORITHMS, algoIndex);
+  ASSERT_EQ(idxResult, ncclSuccess)
+      << "Failed to get algorithm index from string";
+
+  // Mark all combinations as valid for the purpose of this test.
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  for (int a = 0; a < NCCL_NUM_ALGORITHMS; ++a)
+    for (int p = 0; p < NCCL_NUM_PROTOCOLS; ++p)
+      table[a][p] = 0.0;
+
+  ncclTaskColl info = {};
+  info.func = ncclFuncAllReduce;
+  info.datatype = ncclFloat16;
+  info.protocol = NCCL_PROTO_SIMPLE; // Set any protocol
+  info.algorithm = NCCL_ALGO_UNDEF;
+
+  // First call
+  ncclResult_t result1 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result1, ncclSuccess)
+      << "Expected rcclOverrideAlgorithm to succeed with valid override.";
+  EXPECT_EQ(info.algorithm, algoIndex)
+      << "Expected algorithm to match override after first call.";
+
+  // Second call
+  ncclResult_t result2 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result2, ncclSuccess)
+      << "Expected rcclOverrideAlgorithm to succeed again on second call.";
+  EXPECT_EQ(info.algorithm, algoIndex)
+      << "Expected algorithm to match override after second call.";
+}
+
+TEST(Rcclwrap, RcclOverrideAlgorithm_InvalidAlgorithm) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to a valid
+  // value
+  if (!algoOverrideEnv || isAlgoStrValid(algoOverrideEnv)) {
+    GTEST_SKIP() << "Skipping test: RCCL_OVERRIDE_ALGO is not set or set to a "
+                    "valid value. Set it to an invalid algorithm value to run "
+                    "this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  ncclResult_t result = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+
+  EXPECT_EQ(result, ncclInvalidUsage)
+      << "Expected ncclInvalidUsage when the override algorithm is invalid.";
+}
+
+TEST(Rcclwrap, RcclOverrideAlgorithm_InvalidOverridePersists) {
+  const char *algoOverrideEnv = getenv("RCCL_OVERRIDE_ALGO");
+  // Skip the test if RCCL_OVERRIDE_ALGO is not set or if its set to a valid
+  // value
+  if (!algoOverrideEnv || isAlgoStrValid(algoOverrideEnv)) {
+    GTEST_SKIP()
+        << "Skipping test: RCCL_OVERRIDE_ALGO is not set or set to a valid "
+           "value. Set it to an invalid algorithm name to run this test.";
+  }
+
+  float table[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+  ncclTaskColl info = {};
+
+  // First call should fail due to invalid algo string (and set the static flag)
+  ncclResult_t result1 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result1, ncclInvalidUsage)
+      << "Expected rcclOverrideAlgorithm to fail with invalid "
+         "RCCL_OVERRIDE_ALGO.";
+
+  // Second call should also fail due to static validInput=false
+  ncclResult_t result2 = rcclOverrideAlgorithm(ncclAlgoStr, table, &info);
+  EXPECT_EQ(result2, ncclInvalidUsage)
+      << "Expected rcclOverrideAlgorithm to continue returning failure after "
+         "invalid algo was set.";
 }
 
 } // namespace RcclUnitTesting

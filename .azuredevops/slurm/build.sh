@@ -11,7 +11,7 @@ short_id=$(hostname | cut -d'.' -f1 | cut -d'-' -f3-)
 echo "Node identifier: $short_id"
 
 source /etc/profile.d/lmod.sh
-module load rocm/6.4.0
+module load rocm/6.4.1
 
 # Setup local binary path
 export PATH="$HOME/.local/bin:$PATH"
@@ -28,9 +28,24 @@ fi
 echo "Using Ninja at: $(which ninja)"
 ninja --version
 
+# Define GPU target
+export GPU_TARGETS="gfx942"
+
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
+## Building RCCL
 mkdir -p build
 cd build
-cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=gfx942 -DBUILD_TESTS=ON -DROCM_PATH="$ROCM_PATH" ..
+cmake -G Ninja -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${GPU_TARGETS} -DBUILD_TESTS=ON -DROCM_PATH="$ROCM_PATH" ..
+cmake --build .
+cmake --build . --target install
+
+
+cd "${SLURM_SUBMIT_DIR:-$PWD}"
+## Building RCCL-Tests
+git clone https://github.com/ROCm/rccl-tests
+cd rccl-tests
+mkdir -p build
+cd build
+cmake -DCMAKE_PREFIX_PATH="$BINARIES_DIR;$MPI_HOME" -DUSE_MPI=ON -DCMAKE_INSTALL_PREFIX="$BINARIES_DIR" -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${GPU_TARGETS} -DROCM_PATH="$ROCM_PATH" ..
 cmake --build .
 cmake --build . --target install

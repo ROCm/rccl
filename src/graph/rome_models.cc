@@ -1140,7 +1140,7 @@ static struct rcclRomeModel rome_model_87 = {
                "N1 7 3 2 6 0 4 1 5 N2|"
                "N2 4 0 3 7 2 5 1 6 N1|",
 
-  .options = "noCpuCheck=1,netOverride=1",
+  .options = "noCpuCheck=1,netOverride=1,tuning=5,ll128Enabled=1",
 };
 
 static struct rcclRomeModel romeTopoModels[] = {
@@ -1791,6 +1791,10 @@ static bool permuteNetIds(int *n, int *g, int s, int last, struct rcclRomeModel*
       for (j = 0; j < ref->nGpus; j++) {
         // enabling PXN override paths over PHB and SYS
         if (topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXN) continue;
+        // treat PIX and PXB as same
+        if ((ref->gdrLevel[i*ref->nGpus+j] == PATH_PXB && topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PIX) ||
+          (ref->gdrLevel[i*ref->nGpus+j] == PATH_PIX && topo->gdrLevel[n[i]*ref->nGpus+g[j]] == PATH_PXB))
+          continue;
         if (ref->gdrLevel[i*ref->nGpus+j] != topo->gdrLevel[n[i]*ref->nGpus+g[j]]) break;
       }
       if (j < ref->nGpus) break;
