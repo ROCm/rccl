@@ -1,8 +1,8 @@
 # Structured Logging
-As part of the efforts to enhance RCCL Replayer functionality, and per Meta's request, RCCL now provides detailed logging of API calls.
+As part of the efforts to enhance RCCL Replayer functionality, RCCL now provides detailed logging of API calls.
 
 ## Usage
-* Structured logging is a built-in module of RCCL source. For RCCL library in ROCm release, it's estimated to be present starting from ROCm 7.0. To enable structured logging, point LD_LIBRARY_PATH to supporting RCCL library, then run with environment variable `RCCL_REPLAY_FILE="${filename}"`.
+* Structured logging is a built-in module of RCCL source. For RCCL library in ROCm release, it is present starting from ROCm 7.0. To enable structured logging, point LD_LIBRARY_PATH to supporting RCCL library, then run with environment variable `RCCL_REPLAY_FILE="${filename}"`.
 * If the value of `RCCL_REPLAY_FILE` contains “.json” extension, the log will be exported as text in **JSON** format. Otherwise, the log will be a **binary** file by default, with ".bin" extension.
 * Each process will export its own log local to the directory and node of the executable. Names of each process' output will be in the format of `filename.PID.hostname.extension`. For example, run workload with `RCCL_REPLAY_FILE="replayer_log"` will produce logs named such as `replayer_log.1275.quanta-cyxtera-cx77-11.bin`.
 * Log level is controlled by `RCCL_LOG_LEVEL` environment. Currently, by default, log level is 1 and will record most essential RCCL APIs which perform actual operations or incur changes to the communicator. Otherwise, other informational RCCL calls such as `ncclGetAsyncError` or third party function calls like `mscclRunAlgo` will be recorded, too.
@@ -24,9 +24,9 @@ will contain all the parameters and their values of the function call as defined
 
 Wherever applicable, the structured logging preserves underlying RCCL data constructs and how they are filled.
 
-<!---We try to register and flush logging information at the beginning of a function, lest it never completes before termination/hanging of the program. **However**, many RCCL routines, such as communicator creation, user buffer registration, etc. will have pointers for returned handles. We record those value as well, but at the end of the routine, therefore these calls may not be logged in face of deadlock or error.---> 
+<!---We try to register and flush logging information at the beginning of a function, in case it never completes before termination/hanging of the program. **However**, many RCCL routines, such as communicator creation, user buffer registration, etc. will have pointers for returned handles. We record those value as well, but at the end of the routine, therefore these calls may not be logged in face of deadlock or error.---> 
 
-<!---Please interpret the parameters with a grain of salt. They are logged exactly as they are used, by user or by NCCL internal implementations. For instance, `ncclSend` entries will always have a null sendbuff but a valid "recfbuff" in the log, as `ncclSend` under the hood always fills the send buffer into the recv buffer field of `ncclInfo` that is enqueued.--->
+<!---Please interpret the parameters with a grain of salt. They are logged exactly as they are used, by user or by NCCL internal implementations. For instance, `ncclSend` entries will always have a null sendbuff but a valid "recvbuff" in the log, as `ncclSend` under the hood always fills the send buffer into the recv buffer field of `ncclInfo` that is enqueued.--->
  
 
 ### Device context
