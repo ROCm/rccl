@@ -261,7 +261,7 @@ private:
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-#if (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
+#if 0 //(defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
     using Vec = uint32_t __attribute__((ext_vector_type(4)));
     Vec i4;
     i4[0] = val & 0xffffffff;
@@ -269,6 +269,7 @@ private:
     i4[2] = (val >> 32);
     i4[3] = flag;
     asm volatile ("flat_store_dwordx4 %0, %1 sc0 sc1 nt" :: "v"(dst), "v"(i4));
+    __builtin_amdgcn_s_waitcnt(0);
 #else
     union ncclLLFifoLine i4;
     i4.data1 = val & 0xffffffff;
@@ -432,11 +433,7 @@ private:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-#if defined(__gfx950__)
-  __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
-#else
   __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
-#endif
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
