@@ -700,6 +700,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #endif // ENABLE_LL128
 
 #define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
+  __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
   __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}
 
 #ifdef USE_INDIRECT_FUNCTION_CALL

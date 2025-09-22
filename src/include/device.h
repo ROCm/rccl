@@ -179,7 +179,7 @@ struct ncclRing {
   // Maps an internal nccl index to user-specified rank order. This is necessary
   // since we need to know how the user expects data to be ordered across
   // devices. Ordered from current device.
-  int* userRanks;
+  int SGLOBAL* userRanks;
 
   int index; // This rank's index in the ring
 };

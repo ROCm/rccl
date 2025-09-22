@@ -17,7 +17,7 @@ namespace {
   __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
-    int const *ringRanks = ring->userRanks;
+    auto *ringRanks = (const int SGLOBAL *)ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
     size_t count;
     size_t gridOffset;
@@ -206,7 +206,7 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SI
       auto *inputBuf = (T SGLOBAL*)work->sendbuff;
       auto *outputBuf = (T SGLOBAL*)work->recvbuff;
       int parallelFactor = 0;
-      auto pfPtr = (volatile int* )&shmem->parallelFactor;
+      auto pfPtr = (volatile int SLOCAL *)&shmem->parallelFactor;
       while (parallelFactor == 0) parallelFactor = *pfPtr;
 
       int groupSize = nworkers/(WARP_SIZE*parallelFactor) * WARP_SIZE;

@@ -665,7 +665,7 @@ template<typename T>
 struct RedOpArg<FuncSumPostDiv<T>> {
   static constexpr bool ArgUsed = true;
   __device__ static uint64_t loadArg(void *ptr) {
-    return *(uint64_t*)ptr;
+    return *(uint64_t SGLOBAL*)ptr;
   }
 };
 

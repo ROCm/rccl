@@ -62,20 +62,20 @@ private:
 
   inline __device__ int recvOffset(int i) { 
     // NOTE: changing to Xprivate(recvStep) reduces the perf 2x!
-    return ((recvStep)[i] % NCCL_STEPS)*stepLines; 
+    return (recvStep[i] % NCCL_STEPS)*stepLines; 
   }
   inline __device__ int sendOffset(int i) { 
-    return ((sendStep)[i] % NCCL_STEPS)*stepLines; 
+    return (sendStep[i] % NCCL_STEPS)*stepLines; 
   }
   inline __device__ ncclLLFifoLine SGLOBAL* recvPtr(int i) { 
-    return (recvBuff)[i] + recvOffset(i); }
+    return recvBuff[i] + recvOffset(i); }
   inline __device__ ncclLLFifoLine SGLOBAL* sendPtr(int i) { 
-    return (sendBuff)[i] + sendOffset(i); }
+    return sendBuff[i] + sendOffset(i); }
   inline __device__ uint32_t recvFlag(int i) { 
-    return NCCL_LL_FLAG((recvStep)[i] + 1); 
+    return NCCL_LL_FLAG(recvStep[i] + 1); 
   }
   inline __device__ uint32_t sendFlag(int i) { 
-    return NCCL_LL_FLAG((sendStep)[i] + 1); 
+    return NCCL_LL_FLAG(sendStep[i] + 1); 
   }
 
   uint64_t* barriers;
@@ -133,7 +133,7 @@ public:
   }
 
   inline __device__ void incRecv(int i) {
-    (recvStep)[i] += 1;
+    recvStep[i] += 1;
   }
   inline __device__ void postRecv() {
     barrier();
@@ -146,12 +146,12 @@ public:
   inline __device__ void incSend(int i, int offset) {
     // LL Cleanup : write all flags in the slice to make sure we don't have
     // data corruption when flag loops over.
-    if (((sendStep)[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
+    if ((sendStep[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
       for (int o = offset; o < stepLines; o += nthreads) {
         storeLL(sendPtr(i) + o, 0, sendFlag(i));
       }
     }
-    (sendStep)[i]++;
+    sendStep[i]++;
   }
 
   __device__ uint64_t readLL(int offset, int i) {
@@ -633,20 +633,20 @@ public:
   }
 
   __device__ __forceinline__ void loadRecvConn(ncclConnInfo SGLOBAL* conn, int i) {
-    (recvBuff)[i] = (ncclLLFifoLine SGLOBAL*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
-    (recvStep)[i] = Tglobal(conn)->step;
+    recvBuff[i] = (ncclLLFifoLine SGLOBAL*)conn->buffs[NCCL_PROTO_LL];
+    recvStep[i] = conn->step;
     if (wid == i) recvConn = conn;
   }
   __device__ __forceinline__ void loadRecvSync() {
     if (tid >= nthreads - WARP_SIZE && wid < fan.nrecv()) {
-      recvConnHeadPtr = Tglobal(recvConn)->head;
-      recvConnHead = Tglobal(recvConn)->step;
+      recvConnHeadPtr = recvConn->head;
+      recvConnHead = recvConn->step;
     }
   }
 
   __device__ __forceinline__ void loadSendConn(ncclConnInfo SGLOBAL* conn, int i) {
-    (sendBuff)[i] = (ncclLLFifoLine SGLOBAL*)Tglobal(conn)->buffs[NCCL_PROTO_LL];
-    (sendStep)[i] = Tglobal(conn)->step;
+    sendBuff[i] = (ncclLLFifoLine SGLOBAL*)conn->buffs[NCCL_PROTO_LL];
+    sendStep[i] = conn->step;
     if (wid == i) sendConn = conn;
   }
   __device__ __forceinline__ void loadSendSync() {
@@ -676,9 +676,10 @@ public:
     // We compare with Fan::MaxRecv here because this->MaxRecv is always at least 1
     // Yes, for some template arguments this code will be unreachable.  That's fine.
     // coverity[dead_error_line]
+    
+    // PAE: recvBuff[i]/sendStep[i] result in scratch mem usage !!
     while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) {
-      auto SGLOBAL *z = &channel->peers[recvPeers[nrecv]]->recv[connIndexRecv];
-      loadRecvConn(z, nrecv);
+      loadRecvConn(&channel->peers[recvPeers[nrecv]]->recv[connIndexRecv], nrecv);
       nrecv++;
     }
     // coverity[dead_error_line]

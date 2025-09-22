@@ -18,7 +18,7 @@ namespace {
 #endif
     const int bid = ncclShmem.channelId - work->channelLo;
     auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
-    const int *ringRanks = ring->userRanks;
+    auto *ringRanks = (const int SGLOBAL *)ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
     ssize_t count, partOffset, partCount, chunkCount;
     ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &count, &partOffset, &partCount, &chunkCount);
@@ -254,7 +254,7 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_PAT, NCCL_PROTO_SIMPLE
       auto *inputBuf = (T SGLOBAL*)work->sendbuff;
       auto *outputBuf = (T SGLOBAL*)work->recvbuff;
       int parallelFactor = 0;
-      auto* pfPtr = (volatile int *)&shmem->parallelFactor;
+      auto* pfPtr = (volatile int SLOCAL *)&shmem->parallelFactor;
       while (parallelFactor == 0) parallelFactor = *pfPtr;
 
       int groupSize = nworkers/(WARP_SIZE*parallelFactor) * WARP_SIZE;

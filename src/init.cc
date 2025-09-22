@@ -803,7 +803,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   for (int c=0; c < MAXCHANNELS; c++) {
     tmpCommAndChans.channels[c].peers = (ncclDevChannelPeer SGLOBAL* SGLOBAL*)comm->channels[c].devPeers;
     tmpCommAndChans.channels[c].ring = comm->channels[c].ring;
-    tmpCommAndChans.channels[c].ring.userRanks = comm->channels[c].devRingUserRanks;
+    tmpCommAndChans.channels[c].ring.userRanks = (int SGLOBAL *)comm->channels[c].devRingUserRanks;
     tmpCommAndChans.channels[c].tree = comm->channels[c].tree;
     tmpCommAndChans.channels[c].collnetChain = comm->channels[c].collnetChain;
     tmpCommAndChans.channels[c].collnetDirect = comm->channels[c].collnetDirect;
@@ -811,7 +811,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     tmpCommAndChans.channels[c].nvls = comm->channels[c].nvls;
 
     if (comm->channels[c].ring.userRanks != nullptr) {
-      NCCLCHECKGOTO(ncclCudaMemcpyAsync(tmpCommAndChans.channels[c].ring.userRanks, comm->channels[c].ring.userRanks, nRanks, deviceStream), ret, fail);
+      NCCLCHECKGOTO(ncclCudaMemcpyAsync((int *)tmpCommAndChans.channels[c].ring.userRanks, (int *)comm->channels[c].ring.userRanks, nRanks, deviceStream), ret, fail);
     }
   }
 
