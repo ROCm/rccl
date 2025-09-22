@@ -1145,8 +1145,6 @@ target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
 
-target_compile_options(rccl PRIVATE -gline-tables-only)
-
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)
   if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
