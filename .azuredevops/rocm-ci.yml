@@ -9,6 +9,9 @@ parameters:
 - name: systemsRepoRef
   type: string
   default: refs/heads/develop
+- name: systemsSparseCheckoutDir
+  type: string
+  default: 'projects/rocprofiler-sdk'
 - name: triggerDownstreamJobs
   type: boolean
   default: true
@@ -66,4 +69,5 @@ stages:
     parameters:
       sparseCheckoutDir: ''
       systemsRepo: systems_repo
+      systemsSparseCheckoutDir: ${{ parameters.systemsSparseCheckoutDir }}
       triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
