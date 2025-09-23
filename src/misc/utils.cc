@@ -194,6 +194,9 @@ bool matchIfList(const char* string, int port, struct netIf* ifList, int listSiz
 
 bool ncclNeedEnableContextTrack(int cuDeviceId) {
   hipDeviceProp_t devProp;
+  const char* disableContextTracking = ncclGetEnv("NCCL_DISABLE_CONTEXT_TRACKING");
+  if (disableContextTracking && atoi(disableContextTracking) == 1)
+    return false;
   if (hipGetDeviceProperties(&devProp, cuDeviceId) != 0)
     return false;
   return IsArchMatch(devProp.gcnArchName,"gfx11")
