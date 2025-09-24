@@ -192,10 +192,10 @@ bool matchIfList(const char* string, int port, struct netIf* ifList, int listSiz
   return false;
 }
 
+RCCL_PARAM(DisableContextTracking, "DISABLE_CONTEXT_TRACKING", 0);
 bool ncclNeedEnableContextTrack(int cuDeviceId) {
   hipDeviceProp_t devProp;
-  const char* disableContextTracking = ncclGetEnv("NCCL_DISABLE_CONTEXT_TRACKING");
-  if (disableContextTracking && atoi(disableContextTracking) == 1)
+  if (rcclParamDisableContextTracking() == 1)
     return false;
   if (hipGetDeviceProperties(&devProp, cuDeviceId) != 0)
     return false;

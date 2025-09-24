@@ -262,4 +262,4 @@ To disable context tracking for Radeon GPUs, set the following environment varia
 
 .. code-block:: shell
 
-   export NCCL_DISABLE_CONTEXT_TRACKING=1
+   export RCCL_DISABLE_CONTEXT_TRACKING=1
