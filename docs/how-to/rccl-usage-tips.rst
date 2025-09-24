@@ -257,7 +257,7 @@ single OAM peaks at ~315 GB/s.
 
 Context tracking on Radeon GPUs
 ----------------------------------------
-Context tracking disabled for MI series for better performance, but keeps enabled for Radeon GPUs.
+Context tracking is disabled on the AMD Instinct™ series of GPUs for better performance but is enabled for Radeon GPUs.
 To disable context tracking for Radeon GPUs, set the following environment variable:
 
 .. code-block:: shell
