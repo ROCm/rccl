@@ -150,6 +150,7 @@ struct tuningModel {
   float bwRatio [2][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
+  uint64_t channelThresholds[RCCL_TUNABLE_COLLS][5][3]; //for each collective, set for 5 channel-counts: 32,40,48,56,64, {min,max,nchannels}
   uint64_t llProtoRanges[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
 };
 
@@ -183,6 +184,7 @@ static struct tuningModel tuning_model_0 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_1 {
@@ -215,6 +217,7 @@ static struct tuningModel tuning_model_1 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_2 {
@@ -247,6 +250,7 @@ static struct tuningModel tuning_model_2 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_3 {
@@ -279,6 +283,7 @@ static struct tuningModel tuning_model_3 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_4 {
@@ -311,6 +316,7 @@ static struct tuningModel tuning_model_4 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_5 {
@@ -354,6 +360,9 @@ static struct tuningModel tuning_model_5 {
     /*Broadcast*/
     {/*LL (min/max/factor/thread_threshold)*/ {0, 8192, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {8192, 33554432, 1, 0}},
   },
+
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
+   
 };
 
 static struct tuningModel tuning_model_6 {
@@ -396,7 +405,14 @@ static struct tuningModel tuning_model_6 {
     {/*LL (min/max/factor/thread_threshold)*/ {0, 16383, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {16383, 16777216, 1, 0}},
     /*Broadcast*/
     {/*LL (min/max/factor/thread_threshold)*/ {0, 2048, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {2048, 16777216, 1, 0}},
-  },                                                                                                                    
+  },   
+  
+    .channelThresholds  = {
+    // For each collective, define minMax per-rank size threshold for 32,40,48,56,64 channels
+    /*ReduceScatter*/ {{8192, 524287, 32}, {524288, 524289, 40}, {0,0, 48}, {524290,1048577, 56}, {1048578, 268435457, 64}},
+    /*AllGather*/     {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}},
+    /*AllReduce*/     {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}},
+  },                                                                                                                 
 };
 
 static struct tuningModel rcclTuningModel[] = {
@@ -407,7 +423,6 @@ static struct tuningModel rcclTuningModel[] = {
   tuning_model_4,
   tuning_model_5,
   tuning_model_6,
-
 };
 
 /* Array indexes used below */
@@ -518,6 +533,10 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   memcpy(comm->minMaxLLRange,
         rcclTuningModel[comm->topo->tuning].llProtoRanges,
         sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges));
+
+  memcpy(comm->minMaxChannelThresholds,
+        rcclTuningModel[comm->topo->tuning].channelThresholds,
+        sizeof(rcclTuningModel[comm->topo->tuning].channelThresholds));
 
   for (int coll=0; coll<NCCL_NUM_FUNCTIONS; coll++) {
     int nsteps = coll == ncclFuncAllReduce ? 2*(nRanks-1) :

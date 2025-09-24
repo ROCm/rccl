@@ -108,6 +108,32 @@ ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoStri
   return ncclInvalidUsage;
 }
 
+ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc){
+  if(comm->nNodes < 2)
+    return ncclSuccess;
+
+  auto tunableIndex = rcclGetTunableIndex(coll);
+  if(tunableIndex == RCCL_UNSUPPORTED_TUNABLE){
+    return ncclSuccess;
+  }
+
+  for(int channelCountIndex = 0; channelCountIndex < RCCL_CHANNELS_TUNABLE_ENTRIES; ++channelCountIndex){    
+    size_t minByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][0];
+    size_t maxByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][1];
+    if(minByteThreshold == CHAN_THRESHOLDS_UNDEFINED || maxByteThreshold == CHAN_THRESHOLDS_UNDEFINED) {
+      break; // Skip undefined thresholds
+    }
+    size_t bytesPerRank = divUp(nBytes, comm->nRanks);
+
+    if(bytesPerRank >= minByteThreshold && bytesPerRank < maxByteThreshold){
+      nc = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][2];
+      INFO(NCCL_INIT, "RCCL tuning model overrides nchannels to %i, channels may be decreased further due to MinTrafficPerchannel thresholds", nc);
+      break;
+    }
+  }
+  return ncclSuccess;
+}
+
 ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info) {
   static const char* protoOverrideEnv = ncclGetEnv("RCCL_OVERRIDE_PROTO");
   static bool validInput = true;
