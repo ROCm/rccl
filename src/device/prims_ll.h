@@ -142,6 +142,9 @@ private:
     if ((sendStep[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
       for (int o = offset; o<stepLines; o+=nthreads) storeLL(sendPtr(i)+o, 0, sendFlag(i));
     }
+    __atomic_signal_fence(__ATOMIC_SEQ_CST);
+    __builtin_amdgcn_s_waitcnt(7 << 4);
+    __atomic_signal_fence(__ATOMIC_SEQ_CST);
     sendStep[i]++;
   }
 
@@ -432,11 +435,7 @@ private:
   }
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-#if defined(__gfx950__)
-  __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
-#else
   __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
-#endif
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
@@ -507,6 +506,9 @@ private:
         for (int i=1; i < MaxSend && i < fan.nsend(); i++)
           storeLL(sendPtr(i)+offset, data, sendFlag(i));
         storeLL(sendPtr(0)+offset, data, sendFlag(0));
+        __atomic_signal_fence(__ATOMIC_SEQ_CST);
+        __builtin_amdgcn_s_waitcnt(7 << 4);
+        __atomic_signal_fence(__ATOMIC_SEQ_CST);
       }
       if (DST) {
         if (accElts != nullptr) {
