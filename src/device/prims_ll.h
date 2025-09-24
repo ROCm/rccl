@@ -142,9 +142,6 @@ private:
     if ((sendStep[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
       for (int o = offset; o<stepLines; o+=nthreads) storeLL(sendPtr(i)+o, 0, sendFlag(i));
     }
-    __atomic_signal_fence(__ATOMIC_SEQ_CST);
-    __builtin_amdgcn_s_waitcnt(7 << 4);
-    __atomic_signal_fence(__ATOMIC_SEQ_CST);
     sendStep[i]++;
   }
 
@@ -271,7 +268,7 @@ private:
     i4[1] = flag;
     i4[2] = (val >> 32);
     i4[3] = flag;
-    asm volatile ("flat_store_dwordx4 %0, %1 sc0 sc1 nt" :: "v"(dst), "v"(i4));
+    asm volatile ("flat_store_dwordx4 %0, %1 sc0 sc1 nt\n s_waitcnt lgkmcnt(0) vmcnt(0)" :: "v"(dst), "v"(i4));
 #else
     union ncclLLFifoLine i4;
     i4.data1 = val & 0xffffffff;
@@ -506,9 +503,6 @@ private:
         for (int i=1; i < MaxSend && i < fan.nsend(); i++)
           storeLL(sendPtr(i)+offset, data, sendFlag(i));
         storeLL(sendPtr(0)+offset, data, sendFlag(0));
-        __atomic_signal_fence(__ATOMIC_SEQ_CST);
-        __builtin_amdgcn_s_waitcnt(7 << 4);
-        __atomic_signal_fence(__ATOMIC_SEQ_CST);
       }
       if (DST) {
         if (accElts != nullptr) {
