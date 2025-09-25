@@ -760,7 +760,6 @@ static ncclResult_t scheduleCollTasksToPlan(
       devWork->cbd.countLo = countLo;
       devWork->cbd.countMid = countMid;
       devWork->cbd.countHi = countHi;
-      INFO(NCCL_INIT, "devWork->channelLo:%i devWork->channelHi:%i", devWork->channelLo, devWork->channelHi);
 
       // calcCollChunking() uses global bytes instead of traffic which differs
       // in that allreduce isn't multiplied by 2.
@@ -2080,8 +2079,6 @@ static ncclResult_t topoGetAlgoInfo(
     }
     INFO(NCCL_INIT, "post-adjustment based on threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
     rcclOverrideChannels(comm, info->func, nBytes, nc);
-    INFO(NCCL_INIT, "tuned channels with rcclOverrideChannels nBytes:%lu nc:%i", nBytes, nc);      
-
   }
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #else
