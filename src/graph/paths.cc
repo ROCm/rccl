@@ -123,7 +123,13 @@ static void printNodePaths(struct ncclTopoSystem* system, struct ncclTopoNode* n
 #ifdef ENABLE_TRACE
   INFO(NCCL_GRAPH, "Paths from %s/%lx-%lx :", topoNodeTypeStr[node->type], NCCL_TOPO_ID_SYSTEM_ID(node->id), NCCL_TOPO_ID_LOCAL_ID(node->id));
 #else
-  snprintf(line, linesize, "%s/%lx-%lx :", topoNodeTypeStr[node->type], NCCL_TOPO_ID_SYSTEM_ID(node->id), NCCL_TOPO_ID_LOCAL_ID(node->id));
+  if(node->type != NET)
+    snprintf(line, linesize, "%s/%lx-%lx :", topoNodeTypeStr[node->type], NCCL_TOPO_ID_SYSTEM_ID(node->id), NCCL_TOPO_ID_LOCAL_ID(node->id));
+  else {
+    char busId[32];
+    int64ToBusIdShort(node->net.busId, busId);
+    snprintf(line, linesize, "%s/%lx-%s :", topoNodeTypeStr[node->type], NCCL_TOPO_ID_SYSTEM_ID(node->id), busId);
+  }
   int offset = strlen(line);
 #endif
   for (int t=0; t<NCCL_TOPO_NODE_TYPES; t++) {
@@ -486,8 +492,15 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int rank, int64_t n
   NCCLCHECK(ncclGetLocalCpu(system, g, &c));
   if (gpu->paths[CPU][c].type == PATH_C2C && distance != PATH_C2C) *gdrMode = ncclTopoGdrModePci;
   else *gdrMode = ncclTopoGdrModeDefault;
+  int netIndex;
+  ncclTopoIdToIndex(system, NET, netId, &netIndex);
+  char busId[32];
+  int64ToBusIdShort(system->nodes[NET].nodes[netIndex].net.busId, busId);
+  int nGpus = system->nodes[GPU].count;
+  char gpuBusId[32];
+  int64ToBusIdShort(system->nodes[GPU].nodes[rank%nGpus].id, gpuBusId);
 
-  INFO(NCCL_GRAPH|NCCL_NET,"GPU Direct RDMA Enabled for GPU %d / HCA %lx (distance %d <= %d), read %d mode %s", rank, netId, distance, netGdrLevel, read, ncclTopoGdrModeStr[*gdrMode]);
+  INFO(NCCL_GRAPH|NCCL_NET,"GPU Direct RDMA Enabled for GPU %d/%s / HCA %lx/%s (distance %d <= %d), read %d mode %s", rank, gpuBusId, netId, busId, distance, netGdrLevel, read, ncclTopoGdrModeStr[*gdrMode]);
   return ncclSuccess;
 }
 

@@ -273,6 +273,17 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
   return ncclInternalError;
 }
 
+static ncclResult_t ncclNetDevToIndex(struct ncclTopoSystem* system, int netDev, int* index) {
+  *index = -1;
+  for (int i=0; i<system->nodes[NET].count; i++) {
+    if (system->nodes[NET].nodes[i].net.dev == netDev) {
+      *index = i;
+      return ncclSuccess;
+    }
+  }
+  return ncclInternalError;
+}
+
 static ncclResult_t ncclTopoIdToNetDev(struct ncclTopoSystem* system, int64_t id, int* netDev) {
   *netDev = -1;
   for (int i=0; i<system->nodes[NET].count; i++) {

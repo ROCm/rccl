@@ -1278,6 +1278,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   ringGraph->maxChannels = MAXCHANNELS/2;
   NCCLCHECKGOTO(ncclTopoCompute(comm->topo, ringGraph), ret, fail);
   NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, ringGraph), ret, fail);
+  NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, ringGraph, true), ret, fail);
 
   memset(treeGraph, 0, sizeof(struct ncclTopoGraph));
   treeGraph->id = 1;
@@ -1572,8 +1573,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     struct ncclTree* tree = &comm->channels[c].tree;
     snprintf(line+strlen(line), 2047-strlen(line), " [%d] %d/%d/%d->%d->%d",
         c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
-    INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
-         comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
+    char busIdPrev[32];
+    int64ToBusIdShort(comm->topo->nodes[GPU].nodes[comm->rankToLocalRank[comm->channels[c].ring.prev]].id, busIdPrev);
+
+    char busIdCurrent[32];
+    int64ToBusIdShort(comm->topo->nodes[GPU].nodes[comm->rankToLocalRank[comm->rank]].id, busIdCurrent);
+
+    char busIdNext[32];
+    int64ToBusIdShort(comm->topo->nodes[GPU].nodes[comm->rankToLocalRank[comm->channels[c].ring.next]].id, busIdNext);
+    INFO(NCCL_GRAPH, "Ring %d : %d/%s -> %d/%s -> %d/%s comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev, busIdPrev,
+        comm->rank,  busIdCurrent, comm->channels[c].ring.prev, busIdNext, comm, comm->nRanks, comm->busId);
   }
   line[4095] = '\0';
   INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);

@@ -242,12 +242,33 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   req.tpRemoteRank = comm->topParentRanks[peerInfo->rank];
   NCCLCHECK(ncclProxyCallBlocking(comm, &send->proxyConn, ncclProxyMsgSetup, &req, sizeof(req), NULL, 0));
 
+  int rankLocalTopoIndex;
+  int proxyRankLocalTopoIndex;
+  int nGpus = comm->topo->nodes[GPU].count;
+  int localRank = myInfo->rank;
+
+  ncclTopoRankToIndex(comm->topo, localRank, &rankLocalTopoIndex, true);
+  ncclTopoRankToIndex(comm->topo, proxyRank, &proxyRankLocalTopoIndex, true);
+  int netDevId;
+  ncclNetDevToIndex(comm->topo, req.netDev, &netDevId);
+
+  char netBusId[8];
+  char myRankBusId[8];
+  char proxyBusId[8];
+
+  int64ToBusIdShort(comm->topo->nodes[NET].nodes[netDevId].net.busId, netBusId);
+  int64ToBusIdShort(comm->topo->nodes[GPU].nodes[rankLocalTopoIndex].id, myRankBusId);
+  //int64ToBusIdShort(comm->topo->nodes[GPU].nodes[graph->intra[nGpus*channelId + myInfo->rank] % nGpus].id, myRankBusId);
+
+  int64ToBusIdShort(comm->topo->nodes[GPU].nodes[proxyRankLocalTopoIndex].id, proxyBusId);
+  // int64ToBusIdShort(comm->topo->nodes[GPU].nodes[peerRankLocalTopoIndex].id, peerBusId);
+
   if (proxyRank == myInfo->rank) {
-    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%d] -> %d[%d] [send] via NET/%s/%d%s%s%s comm %p nRanks %02d", channelId, connIndex, myInfo->rank, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, req.netDev,
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[0x%s][%d] -> %d[%d] [send] via NET/%s/%d[0x%s]%s%s%s comm %p nRanks %02d", channelId, connIndex, myInfo->rank, myRankBusId, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, req.netDev, netBusId,
         req.useGdr ? "/GDRDMA" : "", req.useGdr==ncclTopoGdrModePci ? "(PCI)" : "",
         req.shared ? "/Shared" : "", comm, comm->nRanks);
   } else {
-    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%d] -> %d[%d] [send] via NET/%s/%d(%d)%s%s%s comm %p nRanks %02d", channelId, connIndex, myInfo->rank, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, req.netDev,
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[0x%s][%d] -> %d[%d] [send] via NET/%s/%d[0x%s](%d)%s%s%s comm %p nRanks %02d", channelId, connIndex, myInfo->rank, myRankBusId, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, req.netDev, netBusId,
         proxyRank,
         req.useGdr ? "/GDRDMA" : "", req.useGdr==ncclTopoGdrModePci ? "(PCI)" : "",
         req.shared ? "/Shared" : "", comm, comm->nRanks);
@@ -295,7 +316,17 @@ static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   req.tpRemoteRank = comm->topParentRanks[peerInfo->rank];
   NCCLCHECK(ncclProxyCallBlocking(comm, &recv->proxyConn, ncclProxyMsgSetup, &req, sizeof(req), connectInfo, sizeof(ncclNetHandle_t)));
   memcpy((uint8_t*)connectInfo + sizeof(ncclNetHandle_t), &req.useGdr, sizeof(int));
-  INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%d] -> %d[%d] [receive] via NET/%s/%d%s%s%s comm %p nRanks %02d", channelId, connIndex, peerInfo->rank, peerInfo->nvmlDev, myInfo->rank, myInfo->nvmlDev, comm->ncclNet->name, req.netDev,
+
+  int rankLocalTopoIndex;
+  ncclTopoRankToIndex(comm->topo, myInfo->rank, &rankLocalTopoIndex, true);
+  int netDevId;
+  ncclNetDevToIndex(comm->topo, req.netDev, &netDevId);
+  char netBusId[8];
+  char myRankBusId[8];
+  int64ToBusIdShort(comm->topo->nodes[NET].nodes[netDevId].net.busId, netBusId);
+  int64ToBusIdShort(comm->topo->nodes[GPU].nodes[rankLocalTopoIndex].id, myRankBusId);
+
+  INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%d] -> %d[0x%s][%d] [receive] via NET/%s/%d[0x%s]%s%s%s comm %p nRanks %02d", channelId, connIndex, peerInfo->rank, peerInfo->nvmlDev, myInfo->rank, myRankBusId, myInfo->nvmlDev, comm->ncclNet->name, req.netDev, netBusId,
       req.useGdr ? "/GDRDMA" : "", req.useGdr==ncclTopoGdrModePci ? "(PCI)" : "",
       req.shared ? "/Shared" : "", comm, comm->nRanks);
   return ncclSuccess;
@@ -1256,7 +1287,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
       resources->step = sub->base + sub->nsteps;
       sub->posted = sub->transmitted = sub->done = 0;
       ncclProfilerRecordProxyOpEventState(s, args, ncclProfilerProxyOpInProgress_v4);
-      facebook_rccl::addNewProxyOp(proxyState->proxyTrace, sub->traceKey, 
+      facebook_rccl::addNewProxyOp(proxyState->proxyTrace, sub->traceKey,
         sub->traceInfo,  facebook_rccl::ProxyOpType::SEND,
         sub->channelId, sub->nsteps, sub->nbytes, sub->peer);
       if (!sub->reg)
@@ -1317,7 +1348,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
         facebook_rccl::updateProxyOpCounter(
           proxyState->proxyTrace, sub->traceKey,
           facebook_rccl::ProxyCounterTypes::FIFO_SZ_OR_HEAD_CACHE, connFifo[buffSlot].size);
-          
+
         if (connFifo[buffSlot].size != -1 && (*recvTail > tail || p == NCCL_PROTO_LL)) {
           // We have something to receive, let's check if it's completely ready.
           int size = connFifo[buffSlot].size;
@@ -1365,7 +1396,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
               *resources->curr_hdp_reg = 1;
             }
             ncclProfilerRecordProxyStepEventState(s, args, transmittedStepId, ncclProfilerProxyStepSendPeerWait_v4);
-            facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey, 
+            facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey,
               facebook_rccl::ProxyCounterTypes::KERNEL_COPY_READY, sub->reg ? 1: sub->transmitted + args->sliceSteps);
             // Data is ready, try to send.
             // Coverity complains about the size here as pointing to an out-of-scope temporary.  Which is nonsense,
@@ -1399,7 +1430,7 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
               sub->transSize = size;
               sub->transmitted += args->sliceSteps;
               ncclProfilerRecordProxyStepEventState(s, args, transmittedStepId, ncclProfilerProxyStepSendWait);
-              facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey, 
+              facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey,
                 facebook_rccl::ProxyCounterTypes::TRANSMITTED, sub->transmitted);
               args->idle = 0;
               continue;
@@ -1532,7 +1563,7 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
       sub->regBufferReady = 0;
       for (int i=0; i<groupSize; i++) sub[-i].groupSize = groupSize;
       ncclProfilerRecordProxyOpEventState(s, args, ncclProfilerProxyOpInProgress_v4);
-      facebook_rccl::addNewProxyOp(proxyState->proxyTrace, sub->traceKey, sub->traceInfo,  
+      facebook_rccl::addNewProxyOp(proxyState->proxyTrace, sub->traceKey, sub->traceInfo,
         facebook_rccl::ProxyOpType::RECV, sub->channelId, sub->nsteps, sub->nbytes, sub->peer);
       if (!sub->reg)
         sub->recvMhandle = resources->mhandles[args->protocol];
@@ -1630,7 +1661,7 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
 
             sub->posted += args->sliceSteps;
             ncclProfilerRecordProxyStepEventState(s+i, args, postedStepId, ncclProfilerProxyStepRecvWait);
-            facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, 
+            facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace,
               sub->traceKey, facebook_rccl::ProxyCounterTypes::POSTED, sub->posted);
           }
           args->idle = 0;
