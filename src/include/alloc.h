@@ -230,7 +230,8 @@ static inline ncclResult_t ncclCuMemFreeAddr(void *ptr) {
   if (ptr == NULL) return ncclSuccess;
   ncclResult_t result = ncclSuccess;
   size_t size = 0;
-  CUCHECK(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)ptr));
+  void* base = nullptr;
+  CUCHECK(cuMemGetAddressRange(&base, &size, (CUdeviceptr)ptr));
   CUCHECK(cuMemUnmap((CUdeviceptr)ptr, size));
   CUCHECK(cuMemAddressFree((CUdeviceptr)ptr, size));
 
@@ -299,7 +300,7 @@ static inline ncclResult_t ncclCuMemFree(void *ptr) {
   CUCHECK(cuMemGetAddressRange(&base, &size, (CUdeviceptr)ptr));
   TRACE(NCCL_ALLOC, "CuMem Free Size %zu pointer %p handle 0x%llx", size, ptr, handle);
   CUCHECK(cuMemUnmap((CUdeviceptr)ptr, size));
-  CUCHECK(cuMemRelease(handle));
+  // CUCHECK(cuMemRelease(handle));
   CUCHECK(cuMemAddressFree((CUdeviceptr)ptr, size));
 
   int dev;

@@ -292,7 +292,7 @@ ncclResult_t ncclP2pImportShareableBuffer(struct ncclComm *comm, int peer, size_
       // Send cuMem handle to remote for conversion to an fd
       NCCLCHECK(ncclProxyClientGetFdBlocking(comm, peer, &cuDesc->data, &fd));
       INFO(NCCL_P2P, "UDS converted handle 0x%lx to fd %d on remote peer %d", *(uint64_t*)&cuDesc->data, fd, peer);
-      CUCHECK(cuMemImportFromShareableHandle(&handle, &fd, type));
+      CUCHECK(cuMemImportFromShareableHandle(&handle, (void*)fd, type));
       SYSCHECK(close(fd), "close");
     } else {
       CUCHECK(cuMemImportFromShareableHandle(&handle, cuDesc, type));
