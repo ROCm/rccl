@@ -19,6 +19,7 @@
 # SOFTWARE.
 
 # Attempt to collect the latest git hash
+set(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 execute_process(COMMAND git log --pretty=format:'%h' -n 1
                 OUTPUT_VARIABLE GIT_REV
                 ERROR_QUIET)

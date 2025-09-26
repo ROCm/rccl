@@ -956,7 +956,7 @@ static ncclResult_t ncclTopoGetNchannels(struct ncclComm* comm, int g /*local gp
       int netCountByBw = 1, nChannelsMax = nNetChannels;
       NCCLCHECK(getLocalNetCountByBw(system, g, &netCountByBw));
       // Avoid overloading channels with 8+ operations as we loose the sync warp, hence a bit of bandwidth.
-      while (nChannelsMax*comm->nRanks > comm->p2pnChannels*4 && nChannelsMax > 1) nChannelsMax /= 2;
+      while (nChannelsMax*comm->nRanks > comm->p2pnChannels && nChannelsMax > 1) nChannelsMax /= 2;
 
       //allow upto channels requires to drive the NICs
       nNetChannels = std::max(netCountByBw, nChannelsMax);

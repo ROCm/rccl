@@ -131,14 +131,21 @@ static ncclResult_t initResult = ncclSuccess;
 static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
 
 ncclResult_t checkHsaEnvSetting() {
+  // get user-specified value for `HSA_NO_SCRATCH_RECLAIM`
   const char* hsaScratchEnv = getenv("HSA_NO_SCRATCH_RECLAIM");
+
   int hipRuntimeVersion = 0;
   // hipVer is an integer e.g., 6.2.41133 -> 60241133
   CUDACHECK(hipRuntimeGetVersion(&hipRuntimeVersion));
-  const int firmwareVersion = parseFirmwareVersion("amd-smi firmware");
+
+  // using rocm-smi API to query FW version, instead of parsing CLI output
+  // will switch to amd-smi API soon
+  const int firmwareVersion = parseFirmwareVersion();
+
   hipDeviceProp_t devProp;
   // use GPU0 should be good enough
   CUDACHECK(hipGetDeviceProperties(&devProp, 0));
+
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
     WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);

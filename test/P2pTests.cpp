@@ -1050,7 +1050,7 @@ TEST_F(P2pTests, P2pCanConnectWithIntermediateRankForkTest) {
 }
 
 TEST_F(P2pTests, IpcRegisterBufferFailures) {
-
+  const size_t TEST_BUFFER_ELEMENTS = 32;
   struct ncclComm comm;
   struct ncclTopoSystem system;
   setupCommAndPeers(&comm, &system, gethostid(), 0, 0, 0, true);
@@ -1061,13 +1061,13 @@ TEST_F(P2pTests, IpcRegisterBufferFailures) {
 
   void *dptr = nullptr;
   ASSERT_EQ(hipSetDevice(0), hipSuccess);
-  hipError_t err = hipMalloc(&dptr, 32 * sizeof(float));
+  hipError_t err = hipMalloc(&dptr, TEST_BUFFER_ELEMENTS * sizeof(float));
   ASSERT_EQ(err, hipSuccess);
 
   struct ncclReg regRecord;
   memset(&regRecord, 0, sizeof(regRecord));
-  regRecord.addr = (uintptr_t)dptr;
-  regRecord.pages = 1;
+  regRecord.begAddr = (uintptr_t)dptr;
+  regRecord.endAddr = regRecord.begAddr + (TEST_BUFFER_ELEMENTS * sizeof(float)); // Calculate end address based on size
   for (int i = 0; i < 2; ++i)
     regRecord.ipcInfos[i] = nullptr;
 
@@ -1080,7 +1080,7 @@ TEST_F(P2pTests, IpcRegisterBufferFailures) {
 
   // Test 1: HIP_POINTER_ATTRIBUTE_IS_LEGACY_HIP_IPC_CAPABLE is not supported
   ncclResult_t result = ipcRegisterBuffer(
-      &comm, dptr, 32 * sizeof(float), peerRanks, 1, type, &regRecord,
+      &comm, dptr, TEST_BUFFER_ELEMENTS * sizeof(float), peerRanks, 1, type, &regRecord,
       &regBufFlag, &offsetOut, &peerRmtAddrsOut, &isLegacyIpc);
   EXPECT_EQ(result, ncclUnhandledCudaError);
 
