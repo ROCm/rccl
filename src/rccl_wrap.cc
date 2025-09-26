@@ -33,7 +33,7 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 // Use this to assess impact of pipelining on performance.
 // Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
-RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 4194304);
+RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -42,8 +42,11 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     const char *protoStr = getenv("NCCL_PROTO");
     userProtocolInput = !protoStr ? 0 : 1;
   }
+  if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllGather) && nBytes <= 4194304) {
+    // Change LL protocol threshold
+    info->protocol = NCCL_PROTO_LL;
 
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
+  } else if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
     auto llMax = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MAX_IDX];
@@ -291,8 +294,14 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 }
 
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
-  return (comm->enableCustColl && (comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() &&
-	        rcclParamDirectAllGatherThreshold() > -1));
+  size_t threshold = rcclParamDirectAllGatherThreshold();
+
+  if (comm->nNodes < 64 && threshold != -1) {
+	threshold = comm->nNodes * 2097152;
+  }
+
+  return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
+	  ;
 }
 
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
@@ -314,6 +323,10 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   }
   rcclPxnDisable = pxnDisable;
   comm->enableCustColl = !pxnDisable;
+  if (comm->enableCustColl) {
+    setenv("NCCL_ALLOC_P2P_NET_LL_BUFFERS", "1", 0);
+    setenv("NCCL_P2P_LL_THRESHOLD", "1024", 0);
+  }
 }
 
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
