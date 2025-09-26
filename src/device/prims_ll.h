@@ -267,7 +267,7 @@ private:
     i4.flag2 = flag;
     __builtin_nontemporal_store(i4.v[0], dst->v);
     __builtin_nontemporal_store(i4.v[1], dst->v+1);
-#if defined(__gfx950__)
+#if defined(__gfx950__) && ROCM_VERSION < 70200
     __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
 #endif
 #else
@@ -343,7 +343,7 @@ private:
       __builtin_nontemporal_store(u4, (uint32_t*)dst);
     else
       __builtin_nontemporal_store(u8, (uint64_t*)dst);
-#if defined(__gfx950__)
+#if defined(__gfx950__) && ROCM_VERSION < 70200
     __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
 #endif
 #else
