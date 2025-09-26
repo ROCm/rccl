@@ -114,13 +114,16 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
 
   auto tunableIndex = rcclGetTunableIndex(coll);
   if(tunableIndex == RCCL_UNSUPPORTED_TUNABLE){
+    INFO(NCCL_INIT, "tunableIndex:%i not supported", tunableIndex);
     return ncclSuccess;
   }
 
   for(int channelCountIndex = 0; channelCountIndex < RCCL_CHANNELS_TUNABLE_ENTRIES; ++channelCountIndex){    
     size_t minByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][0];
     size_t maxByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][1];
+    INFO(NCCL_INIT, "nBytes:%lu minByteThreshold:%lu maxByteThreshold:%lu", nBytes, minByteThreshold, maxByteThreshold);
     if(minByteThreshold == CHAN_THRESHOLDS_UNDEFINED || maxByteThreshold == CHAN_THRESHOLDS_UNDEFINED) {
+      INFO(NCCL_INIT, "RCCL tuning model does not define threshold for coll:%i and nbytes:%lu", coll, nBytes);
       break; // Skip undefined thresholds
     }
     size_t bytesPerRank = divUp(nBytes, comm->nRanks);
@@ -130,6 +133,7 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
       INFO(NCCL_INIT, "RCCL tuning model overrides nchannels to %i, channels may be decreased further due to MinTrafficPerchannel thresholds", nc);
       break;
     }
+
   }
   return ncclSuccess;
 }
