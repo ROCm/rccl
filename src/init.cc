@@ -499,7 +499,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
   // but enable for Radeon due to big impact on performance
-  if (ncclNeedEnableContextTrack(comm->cudaDev)) {
+  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
     ncclCudaContextDrop(comm->context);
     INFO(NCCL_INIT, "cudaDev %d context tracking destroyed", comm->cudaDev);
   }
@@ -602,7 +602,7 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
 
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
   // but enable for Radeon due to big impact on performance
-  if (ncclNeedEnableContextTrack(comm->cudaDev)) {
+  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
     NCCLCHECK(ncclCudaContextTrack(&comm->context));
     INFO(NCCL_INIT, "cudaDev %d context tracking created", comm->cudaDev);
   }

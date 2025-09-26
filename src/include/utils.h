@@ -62,7 +62,7 @@ inline ncclResult_t getRandomData(void* buffer, size_t bytes) {
   return ret;
 }
 
-bool ncclNeedEnableContextTrack(int cuDeviceId);
+bool rcclNeedEnableContextTrack(int cuDeviceId);
 
 ////////////////////////////////////////////////////////////////////////////////
 

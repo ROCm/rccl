@@ -4,10 +4,11 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#include "archinfo.h"
-#include "core.h"
-#include "nvmlwrap.h"
 #include "utils.h"
+#include "core.h"
+
+#include "nvmlwrap.h"
+#include "archinfo.h"
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -193,7 +194,7 @@ bool matchIfList(const char* string, int port, struct netIf* ifList, int listSiz
 }
 
 RCCL_PARAM(DisableContextTracking, "DISABLE_CONTEXT_TRACKING", 0);
-bool ncclNeedEnableContextTrack(int cuDeviceId) {
+bool rcclNeedEnableContextTrack(int cuDeviceId) {
   hipDeviceProp_t devProp;
   if (rcclParamDisableContextTracking() == 1)
     return false;
