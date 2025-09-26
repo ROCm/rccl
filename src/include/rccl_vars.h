@@ -34,6 +34,6 @@ RCCL_PARAM_DECLARE(EnableHipGraph);  // Opt-in environment variable for enabling
 #else
 #define rccl_static static
 #define rccl_static_inline static inline
-#endif`
+#endif
 
 #endif
