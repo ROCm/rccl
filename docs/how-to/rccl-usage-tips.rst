@@ -93,7 +93,7 @@ ignore the job's supplied CPU affinity and use the GPU affinity only.
 
    NCCL_IGNORE_CPU_AFFINITY=1
 
-For the general case, this environment variable is not set so as to not interfere with the user or launcher
+For general usage, this environment variable is not set so it doesn't interfere with the user or launcher
 supplied preferences.
 
 Improving performance on the MI300X 
