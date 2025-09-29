@@ -323,10 +323,6 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   }
   rcclPxnDisable = pxnDisable;
   comm->enableCustColl = !pxnDisable;
-  if (comm->enableCustColl && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
-    setenv("NCCL_ALLOC_P2P_NET_LL_BUFFERS", "1", 0);
-    setenv("NCCL_P2P_LL_THRESHOLD", "1024", 0);
-  }
 }
 
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
