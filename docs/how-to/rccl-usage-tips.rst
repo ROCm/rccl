@@ -85,8 +85,8 @@ proper large BAR addressing support.
 Ignoring CPU affinity with multi-node
 =====================================
 
-Depending on the job launcher and the requirements of your workload, performance as communication scales
-can be improved by setting ``NCCL_IGNORE_CPU_AFFINITY`` which allows the RCCL communication library to 
+Depending on the job launcher and the requirements of your workload, performance as the communication workload scales
+can be improved by setting ``NCCL_IGNORE_CPU_AFFINITY``.  This allows the RCCL communication library to 
 ignore the job's supplied CPU affinity and use the GPU affinity only.
 
 .. code-block:: shell
