@@ -498,7 +498,11 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclNetPluginUnload(comm));
 
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  //ncclCudaContextDrop(comm->context);
+  // but enable for Radeon due to big impact on performance
+  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
+    ncclCudaContextDrop(comm->context);
+    INFO(NCCL_INIT, "cudaDev %d context tracking destroyed", comm->cudaDev);
+  }
 
   free(comm);
 
@@ -597,7 +601,11 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
 
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  //NCCLCHECK(ncclCudaContextTrack(&comm->context));
+  // but enable for Radeon due to big impact on performance
+  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
+    NCCLCHECK(ncclCudaContextTrack(&comm->context));
+    INFO(NCCL_INIT, "cudaDev %d context tracking created", comm->cudaDev);
+  }
 
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   char busId[]="0000:00:00.0";
