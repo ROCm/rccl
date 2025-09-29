@@ -42,7 +42,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     const char *protoStr = getenv("NCCL_PROTO");
     userProtocolInput = !protoStr ? 0 : 1;
   }
-  if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllGather) && nBytes <= 4194304) {
+  if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllGather) && nBytes <= 524288) {
     // Change LL protocol threshold
     info->protocol = NCCL_PROTO_LL;
 
@@ -297,11 +297,11 @@ bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
   size_t threshold = rcclParamDirectAllGatherThreshold();
 
   if (comm->nNodes < 64 && threshold != -1) {
-	threshold = comm->nNodes * 2097152;
+     threshold = comm->nNodes * 2097152;
   }
 
   return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
-	  ;
+    ;
 }
 
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
@@ -323,7 +323,7 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   }
   rcclPxnDisable = pxnDisable;
   comm->enableCustColl = !pxnDisable;
-  if (comm->enableCustColl) {
+  if (comm->enableCustColl && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
     setenv("NCCL_ALLOC_P2P_NET_LL_BUFFERS", "1", 0);
     setenv("NCCL_P2P_LL_THRESHOLD", "1024", 0);
   }
