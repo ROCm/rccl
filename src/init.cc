@@ -142,7 +142,7 @@ ncclResult_t checkHsaEnvSetting() {
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
     // Always print out this warning message
-    printf("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
+    printf("Fatal Error: HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with HIP Runtime version:%d, GPU Firmware version:%d\n", hipRuntimeVersion, firmwareVersion);
     return ncclSystemError;
   }
   return ncclSuccess;
