@@ -300,7 +300,8 @@ bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
      threshold = comm->nNodes * 2097152;
   }
 
-  return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
+  //return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
+  return ((msgSize <= threshold) && (threshold != -1))
     ;
 }
 
