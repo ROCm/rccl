@@ -242,34 +242,21 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   req.tpRemoteRank = comm->topParentRanks[peerInfo->rank];
   NCCLCHECK(ncclProxyCallBlocking(comm, &send->proxyConn, ncclProxyMsgSetup, &req, sizeof(req), NULL, 0));
 
-  int rankLocalTopoIndex;
-  int proxyRankLocalTopoIndex;
-  int nGpus = comm->topo->nodes[GPU].count;
-  int localRank = myInfo->rank;
-
-  ncclTopoRankToIndex(comm->topo, localRank, &rankLocalTopoIndex, true);
-  ncclTopoRankToIndex(comm->topo, proxyRank, &proxyRankLocalTopoIndex, true);
-  int netDevId;
-  ncclNetDevToIndex(comm->topo, req.netDev, &netDevId);
-
-  char netBusId[8];
-  char myRankBusId[8];
-  char proxyBusId[8];
-
-  int64ToBusIdShort(comm->topo->nodes[NET].nodes[netDevId].net.busId, netBusId);
-  int64ToBusIdShort(comm->topo->nodes[GPU].nodes[rankLocalTopoIndex].id, myRankBusId);
-  //int64ToBusIdShort(comm->topo->nodes[GPU].nodes[graph->intra[nGpus*channelId + myInfo->rank] % nGpus].id, myRankBusId);
-
-  int64ToBusIdShort(comm->topo->nodes[GPU].nodes[proxyRankLocalTopoIndex].id, proxyBusId);
-  // int64ToBusIdShort(comm->topo->nodes[GPU].nodes[peerRankLocalTopoIndex].id, peerBusId);
-
+  std::string netBusId    = std::to_string(req.netDev);
+  std::string myRankBusId = std::to_string(myInfo->rank);
+  std::string proxyRankBusId = std::to_string(proxyRank);
+  if(comm->printPCIeAddresses) {
+    rcclGetGpuBusId(comm->topo, myInfo->rank, myRankBusId);
+    rcclGetNicBusId(comm->topo, req.netDev, netBusId);
+    rcclGetNicBusId(comm->topo, proxyRank, proxyRankBusId);
+  }
   if (proxyRank == myInfo->rank) {
-    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[0x%s][%d] -> %d[%d] [send] via NET/%s/%d[0x%s]%s%s%s comm %p nRanks %02d", channelId, connIndex, myInfo->rank, myRankBusId, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, req.netDev, netBusId,
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %s[%d] -> %d[%d] [send] via NET/%s/%s%s%s%s comm %p nRanks %02d", channelId, connIndex, myRankBusId.c_str(), myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, netBusId.c_str(),
         req.useGdr ? "/GDRDMA" : "", req.useGdr==ncclTopoGdrModePci ? "(PCI)" : "",
         req.shared ? "/Shared" : "", comm, comm->nRanks);
   } else {
-    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[0x%s][%d] -> %d[%d] [send] via NET/%s/%d[0x%s](%d)%s%s%s comm %p nRanks %02d", channelId, connIndex, myInfo->rank, myRankBusId, myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, req.netDev, netBusId,
-        proxyRank,
+    INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %s[%d] -> %d[%d] [send] via NET/%s/%s(%s)%s%s%s comm %p nRanks %02d", channelId, connIndex, myRankBusId.c_str(), myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, netBusId.c_str(),
+        proxyRankBusId.c_str(),
         req.useGdr ? "/GDRDMA" : "", req.useGdr==ncclTopoGdrModePci ? "(PCI)" : "",
         req.shared ? "/Shared" : "", comm, comm->nRanks);
   }
@@ -317,16 +304,14 @@ static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   NCCLCHECK(ncclProxyCallBlocking(comm, &recv->proxyConn, ncclProxyMsgSetup, &req, sizeof(req), connectInfo, sizeof(ncclNetHandle_t)));
   memcpy((uint8_t*)connectInfo + sizeof(ncclNetHandle_t), &req.useGdr, sizeof(int));
 
-  int rankLocalTopoIndex;
-  ncclTopoRankToIndex(comm->topo, myInfo->rank, &rankLocalTopoIndex, true);
-  int netDevId;
-  ncclNetDevToIndex(comm->topo, req.netDev, &netDevId);
-  char netBusId[8];
-  char myRankBusId[8];
-  int64ToBusIdShort(comm->topo->nodes[NET].nodes[netDevId].net.busId, netBusId);
-  int64ToBusIdShort(comm->topo->nodes[GPU].nodes[rankLocalTopoIndex].id, myRankBusId);
+  std::string netBusId    = std::to_string(req.netDev);
+  std::string myRankBusId = std::to_string(myInfo->rank);
+  if(comm->printPCIeAddresses) {
+    rcclGetGpuBusId(comm->topo, myInfo->rank, myRankBusId);
+    rcclGetNicBusId(comm->topo, req.netDev, netBusId);
+  }
 
-  INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%d] -> %d[0x%s][%d] [receive] via NET/%s/%d[0x%s]%s%s%s comm %p nRanks %02d", channelId, connIndex, peerInfo->rank, peerInfo->nvmlDev, myInfo->rank, myRankBusId, myInfo->nvmlDev, comm->ncclNet->name, req.netDev, netBusId,
+  INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %d[%d] -> %s[%d] [receive] via NET/%s/%s%s%s%s comm %p nRanks %02d", channelId, connIndex, peerInfo->rank, peerInfo->nvmlDev, myRankBusId.c_str(), myInfo->nvmlDev, comm->ncclNet->name, netBusId.c_str(),
       req.useGdr ? "/GDRDMA" : "", req.useGdr==ncclTopoGdrModePci ? "(PCI)" : "",
       req.shared ? "/Shared" : "", comm, comm->nRanks);
   return ncclSuccess;

@@ -318,8 +318,13 @@ static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* 
        if (comm->rank == ttp[node] ||
            comm->rank == ttc0[node] ||
            comm->rank == ttc1[node]) {
-         INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", c,           channel0->tree.up, comm->rank, channel0->tree.down[0], channel0->tree.down[1], channel0->tree.down[2]);
-         INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", c+nChannels, channel1->tree.up, comm->rank, channel1->tree.down[0], channel1->tree.down[1], channel1->tree.down[2]);
+         if(comm->printPCIeAddresses) {
+           rcclPrintTreeBusIds(comm, &channel0->tree, comm->rank, c);
+           rcclPrintTreeBusIds(comm, &channel1->tree, comm->rank, c+nChannels);
+         } else {
+           INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", c,           channel0->tree.up, comm->rank, channel0->tree.down[0], channel0->tree.down[1], channel0->tree.down[2]);
+           INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", c+nChannels, channel1->tree.up, comm->rank, channel1->tree.down[0], channel1->tree.down[1], channel1->tree.down[2]);
+         }
        }
        channel0->tree.depth = channel1->tree.depth = depth;
     }
@@ -341,7 +346,11 @@ static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* 
        if (comm->rank == ttp[node] ||
            comm->rank == ttc0[node] ||
            comm->rank == ttc1[node]) {
+        if(comm->printPCIeAddresses) {
+          rcclPrintTreeBusIds(comm, &channel0->tree, comm->rank, c);
+        } else {
          INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", c,           channel0->tree.up, comm->rank, channel0->tree.down[0], channel0->tree.down[1], channel0->tree.down[2]);
+        }
        }
        channel0->tree.depth = depth;
     }
@@ -362,7 +371,11 @@ static ncclResult_t connectTrees(struct ncclComm* comm, int* treeToParent, int* 
        if (comm->rank == ttp[node] ||
            comm->rank == ttc0[node] ||
            comm->rank == ttc1[node]) {
-         INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", c+nChannels, channel1->tree.up, comm->rank, channel1->tree.down[0], channel1->tree.down[1], channel1->tree.down[2]);
+         if(comm->printPCIeAddresses) {
+           rcclPrintTreeBusIds(comm, &channel1->tree, comm->rank, c+nChannels);
+         } else {
+           INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", c+nChannels, channel1->tree.up, comm->rank, channel1->tree.down[0], channel1->tree.down[1], channel1->tree.down[2]);
+         }
        }
        channel1->tree.depth = depth;
     }
@@ -695,11 +708,15 @@ ncclResult_t connectRailOptimizedTrees(struct ncclComm* comm, int* treeToParent,
         if (rank == rankToParent[i] ||
             rank == rankToChild0[i] ||
             rank == rankToChild1[i]) {
-          INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", (i == 0 ? ch0 : ch1),
+          if(comm->printPCIeAddresses) {
+            rcclPrintTreeBusIds(comm, &channel[i]->tree, rank, (i == 0 ? ch0 : ch1));
+          } else {
+            INFO(NCCL_GRAPH, "Tree %d : %d -> %d -> %d/%d/%d", (i == 0 ? ch0 : ch1),
                channel[i]->tree.up, rank,
                channel[i]->tree.down[0],
                channel[i]->tree.down[1],
                channel[i]->tree.down[2]);
+          }
         }
       }
     }

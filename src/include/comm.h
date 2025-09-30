@@ -716,7 +716,9 @@ struct ncclComm {
   int unroll;
   // custom collective [RCCL]
   bool enableCustColl;
-  
+  // switch to enable PCIe printing for Ring and RDMA devices
+  bool printPCIeAddresses;
+
   uint64_t endMagic;
 };
 

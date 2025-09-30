@@ -114,6 +114,9 @@ RCCL_PARAM(MscclppForceEnabled, "MSCCLPP_FORCE_ENABLE", 0);
 // Turn off cheap fence for gfx942
 RCCL_PARAM(Gfx942CheapFenceOff, "GFX942_CHEAP_FENCE_OFF", 0);
 
+// Turn on PCIe addresses printing for rings, trees GPU and NIC devices
+RCCL_PARAM(PrintPCIeAddresses, "PRINT_PCIE_ADDRESSES", 0);
+
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
 
@@ -1133,6 +1136,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   if ((nNodes > 1 && ncclParamMNNVLEnable() != 0 && p2pLevel != 0) || ncclParamMNNVLEnable() == 1) {
     NCCLCHECKGOTO(ncclMnnvlCheck(comm), ret, fail);
   }
+  comm->printPCIeAddresses = rcclParamPrintPCIeAddresses();
 
   do {
     // Compute intra-process ranks
@@ -1277,17 +1281,22 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   ringGraph->minChannels = 1;
   ringGraph->maxChannels = MAXCHANNELS/2;
   NCCLCHECKGOTO(ncclTopoCompute(comm->topo, ringGraph), ret, fail);
-  NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, ringGraph), ret, fail);
-  NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, ringGraph, true), ret, fail);
-
+  if(comm->printPCIeAddresses) {
+    NCCLCHECKGOTO(rcclTopoPrintGraphBusIds(comm->topo, ringGraph), ret, fail);
+  } else {
+    NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, ringGraph), ret, fail);
+  }
   memset(treeGraph, 0, sizeof(struct ncclTopoGraph));
   treeGraph->id = 1;
   treeGraph->pattern = NCCL_TOPO_PATTERN_BALANCED_TREE;
   treeGraph->minChannels = ringGraph->nChannels;
   treeGraph->maxChannels = ringGraph->nChannels;
   NCCLCHECKGOTO(ncclTopoCompute(comm->topo, treeGraph), ret, fail);
-  NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, treeGraph), ret, fail);
-
+  if(comm->printPCIeAddresses) {
+    NCCLCHECKGOTO(rcclTopoPrintGraphBusIds(comm->topo, treeGraph), ret, fail);
+  } else {
+    NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, treeGraph), ret, fail);
+  }
   memset(collNetChainGraph, 0, sizeof(struct ncclTopoGraph));
   collNetChainGraph->id = 2;
   collNetChainGraph->pattern = NCCL_TOPO_PATTERN_TREE;
@@ -1566,27 +1575,21 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   timers[TIMER_INIT_ALLGATHER] += clockNano() - timers[TIMER_INIT_CONNECT];
 
   TRACE(NCCL_INIT, "rank %d nranks %d - BUILT %d TREES/RINGS", rank, nranks, comm->nChannels);
-
-  char line[4096];
-  line[0]='\0';
-  for (int c=0; c<comm->nChannels; c++) {
-    struct ncclTree* tree = &comm->channels[c].tree;
-    snprintf(line+strlen(line), 2047-strlen(line), " [%d] %d/%d/%d->%d->%d",
-        c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
-    char busIdPrev[32];
-    int64ToBusIdShort(comm->topo->nodes[GPU].nodes[comm->rankToLocalRank[comm->channels[c].ring.prev]].id, busIdPrev);
-
-    char busIdCurrent[32];
-    int64ToBusIdShort(comm->topo->nodes[GPU].nodes[comm->rankToLocalRank[comm->rank]].id, busIdCurrent);
-
-    char busIdNext[32];
-    int64ToBusIdShort(comm->topo->nodes[GPU].nodes[comm->rankToLocalRank[comm->channels[c].ring.next]].id, busIdNext);
-    INFO(NCCL_GRAPH, "Ring %d : %d/%s -> %d/%s -> %d/%s comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev, busIdPrev,
-        comm->rank,  busIdCurrent, comm->channels[c].ring.prev, busIdNext, comm, comm->nRanks, comm->busId);
+  if (comm->printPCIeAddresses) {
+    rcclPrintRingsAndTrees(comm);
+  } else {
+    char line[4096];
+    line[0]='\0';
+    for (int c=0; c<comm->nChannels; c++) {
+      struct ncclTree* tree = &comm->channels[c].tree;
+      snprintf(line+strlen(line), 2047-strlen(line), " [%d] %d/%d/%d->%d->%d",
+          c, tree->down[0], tree->down[1], tree->down[2], rank, tree->up);
+      INFO(NCCL_GRAPH, "Ring %d : %d -> %d -> %d comm %p nRanks %02d busId %lx", c, comm->channels[c].ring.prev,
+          comm->rank, comm->channels[c].ring.next, comm, comm->nRanks, comm->busId);
+    }
+    line[4095] = '\0';
+    INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
   }
-  line[4095] = '\0';
-  INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
-
   NCCLCHECKGOTO(computeBuffSizes(comm), ret, fail);
 
   // Compute nChannels per peer for p2p

@@ -293,6 +293,133 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
   return ncclSuccess;
 }
 
+ncclResult_t rcclGetNicBusId(struct ncclTopoSystem* system, int netDevId, std::string& busId) {
+  char busIdStr[32];
+  if(netDevId < 0) {
+    return ncclInvalidArgument;
+  }
+  int netDevIdx = -1;
+  ncclNetDevToIndex(system, netDevId, &netDevIdx);
+  if(netDevIdx >= 0) {
+    int64ToBusIdShort(system->nodes[NET].nodes[netDevIdx].net.busId, busIdStr);
+  }
+  busId =  "0x" + std::string(busIdStr);
+  return ncclSuccess;
+}
+
+ncclResult_t rcclGetGpuBusId(struct ncclTopoSystem* system, int rank, std::string& busId) {
+  char busIdStr[32];
+  if(rank < 0) {
+    return ncclInvalidArgument;
+  }
+  int topoIndex = -1;
+  if (ncclTopoRankToIndex(system, rank, &topoIndex, false) != ncclSuccess) {
+     busId = std::to_string(rank);
+  } else if(topoIndex >= 0) {
+    int64ToBusIdShort(system->nodes[GPU].nodes[topoIndex].id, busIdStr);
+    busId = "0x" + std::string(busIdStr);
+  }
+  return ncclSuccess;
+}
+
+ncclResult_t rcclTopoPrintGraphBusIds(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
+  INFO(NCCL_GRAPH, "Pattern %d, crossNic %d, nChannels %d, bw %f/%f, type %s/%s, sameChannels %d", graph->pattern, graph->crossNic, graph->nChannels, graph->bwIntra, graph->bwInter, topoPathTypeStr[graph->typeIntra], topoPathTypeStr[graph->typeInter], graph->sameChannels);
+  int ngpus = system->nodes[GPU].count;
+
+  char line[1024];
+  for (int c=0; c<graph->nChannels; c++) {
+    sprintf(line, "%2d :", c);
+    int offset = strlen(line);
+    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks && !graph->nIntraChannels) {
+      sprintf(line+offset, " %s/%lx-%lx", topoNodeTypeStr[NET], NCCL_TOPO_ID_SYSTEM_ID(graph->inter[2*c]), NCCL_TOPO_ID_LOCAL_ID(graph->inter[2*c]));
+      offset = strlen(line);
+    }
+    for (int i=0; i<ngpus; i++) {
+      int n = graph->intraNets[(ngpus*c+i)*2]-'N';
+      if(n >= 0 && n < system->nodes[NET].count) {
+        sprintf(line+offset, " NET/%d", n);
+        offset = strlen(line);
+      }
+      std::string busId;
+      rcclGetGpuBusId(system, graph->intra[ngpus*c+i], busId);
+      // char busId[32];
+      // int topoIndex;
+      // ncclTopoRankToIndex(system, graph->intra[ngpus*c+i], &topoIndex, true);
+      // int64ToBusIdShort(system->nodes[GPU].nodes[topoIndex].id, busId);
+      sprintf(line+offset, " %s/%s", topoNodeTypeStr[GPU], busId.c_str());
+
+      offset = strlen(line);
+      n = graph->intraNets[(ngpus*c+i)*2+1]-'N';
+      if(n >= 0 && n < system->nodes[NET].count) {
+        sprintf(line+offset, " NET/%d", n);
+        offset = strlen(line);
+      }
+    }
+    if (system->nodes[NET].count > 0 && system->nodes[GPU].count != system->nRanks && !graph->nIntraChannels) {
+      sprintf(line+offset, " %s/%lx-%lx", topoNodeTypeStr[NET], NCCL_TOPO_ID_SYSTEM_ID(graph->inter[2*c+1]), NCCL_TOPO_ID_LOCAL_ID(graph->inter[2*c+1]));
+      offset = strlen(line);
+    }
+    INFO(NCCL_GRAPH, "%s", line);
+  }
+  return ncclSuccess;
+}
+
+void rcclPrintTreeBusIds(struct ncclComm* comm, struct ncclTree* tree, int rank, int ch) {
+  std::string busIdTreeUp = "-1";
+  std::string busIdTreeDown[3] = {"-1", "-1", "-1"};
+  std::string busIdCurrent;
+  rcclGetGpuBusId(comm->topo, comm->rank, busIdCurrent);
+
+  if(tree->up >= 0) {
+    rcclGetGpuBusId(comm->topo, tree->up, busIdTreeUp);
+  }
+  for(int i=0; i<NCCL_MAX_TREE_ARITY; i++) {
+    if(tree->down[i] >= 0) {
+      rcclGetGpuBusId(comm->topo, tree->down[i], busIdTreeDown[i]);
+    }
+  }
+
+  INFO(NCCL_GRAPH, "Tree %d : %s -> %s -> %s/%s/%s", ch,
+       busIdTreeUp.c_str(), busIdCurrent.c_str(),
+       busIdTreeDown[0].c_str(),
+       busIdTreeDown[1].c_str(),
+       busIdTreeDown[2].c_str());
+}
+
+void rcclPrintRingsAndTrees(struct ncclComm* comm) {
+char line[4096];
+  line[0]='\0';
+  for (int c=0; c<comm->nChannels; c++) {
+    struct ncclTree* tree = &comm->channels[c].tree;
+    std::string busIdTreeUp = "-1";
+    std::string busIdTreeDown[3] = {"-1", "-1", "-1"};
+    std::string busIdCurrent;
+    rcclGetGpuBusId(comm->topo, comm->rank, busIdCurrent);
+
+    if(tree->up >= 0) {
+      rcclGetGpuBusId(comm->topo, tree->up, busIdTreeUp);
+    }
+    for(int i=0; i<NCCL_MAX_TREE_ARITY; i++) {
+      if(tree->down[i] >= 0) {
+        rcclGetGpuBusId(comm->topo, tree->down[i], busIdTreeDown[i]);
+      }
+    }
+    snprintf(line+strlen(line), 2047-strlen(line), " [%d] %s/%s/%s->%s->%s",
+             c, busIdTreeDown[0].c_str(), busIdTreeDown[1].c_str(),
+                busIdTreeDown[2].c_str(), busIdCurrent.c_str(),
+                busIdTreeUp.c_str());
+
+    std::string busIdPrev, busIdNext;
+    rcclGetGpuBusId(comm->topo, comm->channels[c].ring.prev, busIdPrev);
+    rcclGetGpuBusId(comm->topo, comm->channels[c].ring.next, busIdNext);
+
+    INFO(NCCL_GRAPH, "Ring %d : %s -> %s -> %s comm %p nRanks %02d busId %lx", c, busIdPrev.c_str(),
+        busIdCurrent.c_str(), busIdNext.c_str(), comm, comm->nRanks, comm->busId);
+  }
+  line[4095] = '\0';
+  INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
+}
+
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));

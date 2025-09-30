@@ -1231,7 +1231,7 @@ done:
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, bool printPCIe) {
+ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGraph* graph) {
   INFO(NCCL_GRAPH, "Pattern %d, crossNic %d, nChannels %d, bw %f/%f, type %s/%s, sameChannels %d", graph->pattern, graph->crossNic, graph->nChannels, graph->bwIntra, graph->bwInter, topoPathTypeStr[graph->typeIntra], topoPathTypeStr[graph->typeInter], graph->sameChannels);
   int ngpus = system->nodes[GPU].count;
 
@@ -1249,15 +1249,7 @@ ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGr
         sprintf(line+offset, " NET/%d", n);
         offset = strlen(line);
       }
-      if(printPCIe) {
-        char busId[32];
-        int topoIndex;
-        ncclTopoRankToIndex(system, graph->intra[ngpus*c+i], &topoIndex, true);
-        int64ToBusIdShort(system->nodes[GPU].nodes[topoIndex].id, busId);
-        sprintf(line+offset, " %s/%d[0x%s]", topoNodeTypeStr[GPU], graph->intra[ngpus*c+i], busId);
-      } else {
-        sprintf(line+offset, " %s/%d", topoNodeTypeStr[GPU], graph->intra[ngpus*c+i]);
-      }
+      sprintf(line+offset, " %s/%d", topoNodeTypeStr[GPU], graph->intra[ngpus*c+i]);
       offset = strlen(line);
       n = graph->intraNets[(ngpus*c+i)*2+1]-'N';
       if(n >= 0 && n < system->nodes[NET].count) {
