@@ -601,7 +601,10 @@ static ncclResult_t scheduleCollTasksToPlan(
     while (task != nullptr) {
       int nBatches = divUp(nPlanColls, 4); // Rough guess: 4 colls per batch.
       if (!testBudget(budget, nBatches, workBytes + workNode->size)) goto plan_full;
-      if (nPlanColls > 0 && prevFuncId != task->devFuncId) goto plan_full;
+      if (nPlanColls > 0 && prevFuncId != task->devFuncId) {
+        INFO(NCCL_COLL,"Starting new kernel since prevFuncId %d != %d, nPlanColls=%d", prevFuncId, task->devFuncId, nPlanColls);
+        goto plan_full;
+      }
       // make sure one plan contains only work with same funcID
       prevFuncId = task->devFuncId;
 
