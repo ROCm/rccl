@@ -293,6 +293,11 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
   return ncclSuccess;
 }
 
+static ncclResult_t int64ToBusIdShort(int64_t id, char* busId) {
+  sprintf(busId, "%02lx",(id & 0xff000) >> 12);
+  return ncclSuccess;
+}
+
 ncclResult_t rcclGetNicBusId(struct ncclTopoSystem* system, int netDevId, std::string& busId) {
   char busIdStr[32];
   if(netDevId < 0) {
@@ -307,18 +312,25 @@ ncclResult_t rcclGetNicBusId(struct ncclTopoSystem* system, int netDevId, std::s
   return ncclSuccess;
 }
 
-ncclResult_t rcclGetGpuBusId(struct ncclTopoSystem* system, int rank, std::string& busId) {
+ncclResult_t rcclGetGpuBusId(struct ncclTopoSystem* system, int rank, std::string& busId, int localRank) {
   char busIdStr[32];
   if(rank < 0) {
     return ncclInvalidArgument;
   }
   int topoIndex = -1;
   if (ncclTopoRankToIndex(system, rank, &topoIndex, false) != ncclSuccess) {
-     busId = std::to_string(rank);
+    // If rank is not found, try using localRank if provided
+    if (localRank >= 0 && localRank < system->nodes[GPU].count) {
+      // Try local rank index (for external ranks that do not appear in the topology)
+      NCCLCHECK(ncclTopoRankToIndex(system, localRank, &topoIndex, true));
+      int64ToBusIdShort(system->nodes[GPU].nodes[topoIndex].id, busIdStr);
+
+    }
   } else if(topoIndex >= 0) {
     int64ToBusIdShort(system->nodes[GPU].nodes[topoIndex].id, busIdStr);
-    busId = "0x" + std::string(busIdStr);
+    // busId = "0x" + std::string(busIdStr);
   }
+  busId = std::to_string(rank)+ ":[0x" + std::string(busIdStr)+"]";
   return ncclSuccess;
 }
 
@@ -368,14 +380,14 @@ void rcclPrintTreeBusIds(struct ncclComm* comm, struct ncclTree* tree, int rank,
   std::string busIdTreeUp = "-1";
   std::string busIdTreeDown[3] = {"-1", "-1", "-1"};
   std::string busIdCurrent;
-  rcclGetGpuBusId(comm->topo, comm->rank, busIdCurrent);
+  rcclGetGpuBusId(comm->topo, comm->rank, busIdCurrent, comm->rankToLocalRank[rank]);
 
   if(tree->up >= 0) {
     rcclGetGpuBusId(comm->topo, tree->up, busIdTreeUp);
   }
   for(int i=0; i<NCCL_MAX_TREE_ARITY; i++) {
     if(tree->down[i] >= 0) {
-      rcclGetGpuBusId(comm->topo, tree->down[i], busIdTreeDown[i]);
+      rcclGetGpuBusId(comm->topo, tree->down[i], busIdTreeDown[i], comm->rankToLocalRank[tree->down[i]]);
     }
   }
 
