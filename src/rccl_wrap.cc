@@ -33,6 +33,22 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 // Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
 
+static ncclResult_t int64ToBusIdShort(int64_t id, char* busId) {
+  sprintf(busId, "%02lx",(id & 0xff000) >> 12);
+  return ncclSuccess;
+}
+
+static ncclResult_t rcclNetDevToIndex(struct ncclTopoSystem* system, int netDev, int* index) {
+  *index = -1;
+  for (int i=0; i<system->nodes[NET].count; i++) {
+    if (system->nodes[NET].nodes[i].net.dev == netDev) {
+      *index = i;
+      return ncclSuccess;
+    }
+  }
+  return ncclInternalError;
+}
+
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
@@ -293,18 +309,13 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
   return ncclSuccess;
 }
 
-static ncclResult_t int64ToBusIdShort(int64_t id, char* busId) {
-  sprintf(busId, "%02lx",(id & 0xff000) >> 12);
-  return ncclSuccess;
-}
-
 ncclResult_t rcclGetNicBusId(struct ncclTopoSystem* system, int netDevId, std::string& busId) {
   char busIdStr[32];
   if(netDevId < 0) {
     return ncclInvalidArgument;
   }
   int netDevIdx = -1;
-  ncclNetDevToIndex(system, netDevId, &netDevIdx);
+  rcclNetDevToIndex(system, netDevId, &netDevIdx);
   if(netDevIdx >= 0) {
     int64ToBusIdShort(system->nodes[NET].nodes[netDevIdx].net.busId, busIdStr);
   }
