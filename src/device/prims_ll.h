@@ -508,7 +508,7 @@ private:
           storeLL(sendPtr(i)+offset, data, sendFlag(i));
         storeLL(sendPtr(0)+offset, data, sendFlag(0));
       }
-      if (DST && useAcc) {
+      if (DST) {
         if (accElts != nullptr) {
           accdl.loadBegin(accElts, eltInLine);
           accElts += eltPerTrip;
