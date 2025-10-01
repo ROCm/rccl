@@ -6,12 +6,16 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Added
 * `RCCL_FORCE_ENABLE_DMABUF` added as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
+* Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
+* Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
+
 ### Changed
 
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
 * Compatibility with NCCL 2.27.3
 
 ### Resolved issues
+* Improve small message performance for alltoall by enabling and optimizing batched P2P operations. 
 
 ## RCCL 2.26.6 for ROCm 7.0.0
 

@@ -33,6 +33,7 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 // Use this to assess impact of pipelining on performance.
 // Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
+RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 4194304);
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -234,6 +235,15 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
                              int collNetSupport, int nvlsSupport, int numPipeOps,
                              int* algo, int* protocol, int* maxChannels) {
   RCCL_STATIC_EXPOSE_CHECK();
+  int nRanks;
+  NCCLCHECK(ncclCommCount(comm, &nRanks));
+  size_t msgSize = count * ncclTypeSize(dataType) * nRanks;
+  if (coll == ncclFuncAllGather && rcclUseAllGatherDirect(comm, msgSize)) {
+    *algo = rcclAddonAlgos_t::RCCL_DIRECT_ALLGATHER;
+    *protocol = NCCL_PROTO_SIMPLE; // TODO: consider LL for small messages
+    *maxChannels = comm->nChannels;
+    return ncclSuccess;
+  }
   struct ncclTaskColl task;
   task.func = coll;
   task.count = count;
@@ -243,6 +253,46 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   *protocol = task.protocol;
   *maxChannels = task.nMaxChannels;
   return ncclSuccess;
+}
+
+ncclResult_t rcclGetAlgoName(int algo, const char** algoName) {
+  if (algo < 0 || algo >= RCCL_ALGO_COUNT) {
+    WARN("Invalid algorithm value: %d", algo);
+    return ncclInvalidArgument;
+  }
+  if(algo >= NCCL_NUM_ALGORITHMS) {
+    switch(algo) {
+      case rcclAddonAlgos_t::RCCL_DIRECT_ALLGATHER:
+        *algoName = "Direct";
+        break;
+      case rcclAddonAlgos_t::RCCL_MSCCL:
+        *algoName = "MSCCL";
+        break;
+      case rcclAddonAlgos_t::RCCL_MSCCLPP:
+        *algoName = "MSCCLPP";
+        break;
+      default:
+        WARN("Invalid algorithm value: %d", algo);
+        return ncclInvalidArgument;
+    }
+    return ncclSuccess;
+  }
+  *algoName = ncclAlgoToString(algo);
+  return ncclSuccess;
+}
+
+ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
+  if (protocol < 0 || protocol >= NCCL_NUM_PROTOCOLS) {
+    WARN("Invalid protocol value: %d", protocol);
+    return ncclInvalidArgument;
+  }
+  *protocolName = ncclProtoToString(protocol);
+  return ncclSuccess;
+}
+
+bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
+  return (comm->enableCustColl && (comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() &&
+	        rcclParamDirectAllGatherThreshold() > -1));
 }
 
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {

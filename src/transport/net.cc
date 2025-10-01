@@ -179,6 +179,7 @@ static ncclResult_t canConnect(int* ret, struct ncclComm* comm, struct ncclTopoG
 NCCL_PARAM(NetSharedBuffers, "NET_SHARED_BUFFERS", -2);
 NCCL_PARAM(NetSharedComms, "NET_SHARED_COMMS", 1);
 
+RCCL_PARAM(NetHostBufferHugePageAlloc, "NET_HOST_BUFFER_HUGE_PAGE_ALLOC", 0);
 #if defined(HIP_CONTIGUOUS_MEMORY)
 RCCL_PARAM(NetContiguousMem, "NET_CONTIGUOUS_MEM", 0);
 #endif
@@ -602,7 +603,7 @@ static ncclResult_t sharedNetBuffersInit(struct ncclProxyState* proxyState, int 
     }
   }
   if (!cuda && state->hostBuff == NULL) {
-    NCCLCHECK(ncclCudaHostCalloc(&state->hostBuff, state->size));
+    NCCLCHECK(ncclCudaHostCallocDebug(&state->hostBuff, state->size, __FILE__, __LINE__, rcclParamNetHostBufferHugePageAlloc()));
   }
   if (cpuPtr) *cpuPtr = cuda ? state->cudaBuff : state->hostBuff;
   if (gpuPtr) *gpuPtr = (cpuPtr && sameProcess) ? *cpuPtr : NULL;
@@ -631,7 +632,9 @@ static ncclResult_t sharedNetBuffersDestroy(struct ncclProxyState* proxyState, i
       }
       NCCLCHECK(ncclCudaFree(state->cudaBuff));
     }
-    if (state->hostBuff) NCCLCHECK(ncclCudaHostFree(state->hostBuff));
+    if (state->hostBuff) {
+      NCCLCHECK(ncclCudaHostFree(state->hostBuff, (state->size)*(sizeof(int64_t)), rcclParamNetHostBufferHugePageAlloc()));
+    }
   }
 
   if (peer->send.refcount || peer->recv.refcount) return ncclSuccess;
@@ -888,7 +891,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
     }
   }
   if (map->sameProcess) {
-    NCCLCHECK(ncclCudaHostCalloc(&map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, map->mems[NCCL_NET_MAP_HOSTMEM].size));
+    NCCLCHECK(ncclCudaHostCallocDebug(&map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, map->mems[NCCL_NET_MAP_HOSTMEM].size, __FILE__, __LINE__, rcclParamNetHostBufferHugePageAlloc()));
     map->mems[NCCL_NET_MAP_HOSTMEM].gpuPtr = map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr;
   } else {
     NCCLCHECK(netCreateShm(proxyState, map->mems+NCCL_NET_MAP_HOSTMEM));
@@ -1090,7 +1093,7 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
       map->mems[NCCL_NET_MAP_DEVMEM].cpuPtr = map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr;
     }
   }
-  NCCLCHECK(ncclCudaHostCalloc(&map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, map->mems[NCCL_NET_MAP_HOSTMEM].size));
+  NCCLCHECK(ncclCudaHostCallocDebug(&map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, map->mems[NCCL_NET_MAP_HOSTMEM].size, __FILE__, __LINE__, rcclParamNetHostBufferHugePageAlloc()));
   map->mems[NCCL_NET_MAP_HOSTMEM].gpuPtr = map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr;
   if (ncclGdrCopy && map->sameProcess) {
     uint64_t *cpuPtr, *gpuPtr;
@@ -1165,7 +1168,7 @@ static ncclResult_t sendProxyFree(struct ncclProxyConnection* connection, struct
     }
     struct connectMapMem* mems = resources->map.mems;
     if (resources->map.sameProcess) {
-      NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr));
+      NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, (mems[NCCL_NET_MAP_HOSTMEM].size)*(sizeof(int)), rcclParamNetHostBufferHugePageAlloc()));
     } else {
       NCCLCHECK(ncclShmIpcClose(&mems[NCCL_NET_MAP_HOSTMEM].createDesc));
     }
@@ -1209,7 +1212,7 @@ static ncclResult_t recvProxyFree(struct ncclProxyConnection* connection, struct
       }
     }
     struct connectMapMem* mems = resources->map.mems;
-    NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr));
+    NCCLCHECK(ncclCudaHostFree(mems[NCCL_NET_MAP_HOSTMEM].cpuPtr, (mems[NCCL_NET_MAP_HOSTMEM].size)*(sizeof(int)), rcclParamNetHostBufferHugePageAlloc()));
     NCCLCHECK(ncclCudaFree(mems[NCCL_NET_MAP_DEVMEM].cpuPtr));
     if (!resources->map.sameProcess || ncclCuMemEnable()) {
       // cuMem API support

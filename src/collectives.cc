@@ -79,8 +79,6 @@ const char* ncclProtoToString(int proto) {
   }
 }
 
-RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 4194304);
-
 NCCL_API(ncclResult_t, ncclAllGather, const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 
@@ -110,9 +108,8 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
   }
 
-  if (comm->enableCustColl && (comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() && 
-	rcclParamDirectAllGatherThreshold() > -1)) {
-     // use direct allgather	  
+  if (rcclUseAllGatherDirect(comm, msgSize)) {
+     // use direct allgather
      if (sendcount == 0) return ncclSuccess;
      size_t rankOffset = sendcount * ncclTypeSize(datatype);
      if (((char*)recvbuff) != (((char*)sendbuff) + comm->rank * rankOffset)) {
@@ -123,7 +120,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
      }
      NCCLCHECK(ncclGroupStart());
      for (int r = 0; r < nRanks; r++) {
-         int peer = (comm->rank + r) % nRanks;    
+         int peer = (comm->rank + r) % nRanks;
          if (in_place && (peer == comm->rank)) {
             continue;
          }
@@ -132,7 +129,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
      }
      NCCLCHECK(ncclGroupEnd());
      return ncclSuccess;
-  } else {	
+  } else {
      // use ring allgather
      return ncclEnqueueCheck(&info);
   }
@@ -248,7 +245,7 @@ ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[],
     void *recvbuff, const size_t recvcounts[], const size_t rdispls[],
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream) {
   NVTX3_FUNC_WITH_PARAMS(AllToAllv, NcclNvtxParamsAllToAllv,
-    NVTX3_PAYLOAD(comm ? comm->commHash : 0, sendcounts[comm->rank] * ncclTypeSize(datatype), 
+    NVTX3_PAYLOAD(comm ? comm->commHash : 0, sendcounts[comm->rank] * ncclTypeSize(datatype),
       recvcounts[comm->rank] * ncclTypeSize(datatype), datatype));
 
   if (!mscclIsCaller()) // when msccl falls back to
