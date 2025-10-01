@@ -36,7 +36,7 @@ typedef enum RcclTunableColls {
 } rcclTunableIndex_t;
 
 #define CHAN_THRESHOLDS_UNDEFINED 0
-#define RCCL_CHANNELS_TUNABLE_ENTRIES 5 // 32/40/48/56/64 channels
+#define RCCL_CHANNELS_TUNABLE_ENTRIES 9 // 2,4,8,16,32,40,48,56,64 channels
 
 #define RCCL_LL_LIMITS_UNDEFINED 0
 #define RCCL_PROTOCOL_ENTRY_SIZE 4

@@ -150,7 +150,7 @@ struct tuningModel {
   float bwRatio [2][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
-  uint64_t channelThresholds[RCCL_TUNABLE_COLLS][5][3]; //for each collective, set for 5 channel-counts: 32,40,48,56,64, {min,max,nchannels}
+  uint64_t channelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 2,4,8,16,32,40,48,56,64, {min,max,nchannels}
   uint64_t llProtoRanges[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
 };
 
@@ -409,9 +409,9 @@ static struct tuningModel tuning_model_6 {
   
     .channelThresholds  = {
     // For each collective, define minMax per-rank size threshold for 32,40,48,56,64 channels
-    /*ReduceScatter*/ {{8192, 524287, 32}, {524288, 524289, 40}, {1,1, 48}, {524290,1048577, 56}, {1048578, 268435457, 64}},
-    /*AllGather*/     {{524288, 1048575, 32}, {1048576, 2097151, 40}, {1,1, 48}, {2097152, 8388607, 56}, {8388608, 268435457, 64}},
-    /*AllReduce*/     {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}},
+    /*ReduceScatter*/ {{512, 1024, 2},{1024, 2048, 4},{2048, 4096, 8},{4096, 32768, 16}, {32768, 262144, 32}, {262144, 524288, 40}, {1,1, 48}, {524288, 1048576, 56}, {1048576, 268435457, 64}},
+    /*AllGather*/     {{2048, 4096, 2},{4096, 8192, 4},{8192, 16384, 8},{16384, 262144, 16},{262144, 524288, 32}, {524288, 1048576, 40}, {1,1, 48}, {1048576, 4194304, 56}, {4194304, 268435457, 64}},
+    /*AllReduce*/     {{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}},
   },                                                                                                                 
 };
 
