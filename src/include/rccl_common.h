@@ -84,7 +84,7 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
 ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoString[], int nEntries, int& result);
 ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info);
 ncclResult_t rcclOverrideAlgorithm(const char* ncclAlgoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info);
-ncclResult_t rcclGetGpuBusId(struct ncclTopoSystem* system, int rank, std::string& busId);
+ncclResult_t rcclGetGpuBusId(struct ncclTopoSystem* system, int rank, std::string& busId, int localRank = -1);
 ncclResult_t rcclTopoPrintGraphBusIds(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t rcclGetNicBusId(struct ncclTopoSystem* system, int netDevId, std::string& busId);
 void rcclPrintRingsAndTrees(struct ncclComm* comm);

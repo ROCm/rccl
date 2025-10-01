@@ -248,7 +248,7 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   if(comm->printPCIeAddresses) {
     rcclGetGpuBusId(comm->topo, myInfo->rank, myRankBusId);
     rcclGetNicBusId(comm->topo, req.netDev, netBusId);
-    rcclGetNicBusId(comm->topo, proxyRank, proxyRankBusId);
+    rcclGetGpuBusId(comm->topo, proxyRank, proxyRankBusId);
   }
   if (proxyRank == myInfo->rank) {
     INFO(NCCL_INIT|NCCL_NET,"Channel %02d/%d : %s[%d] -> %d[%d] [send] via NET/%s/%s%s%s%s comm %p nRanks %02d", channelId, connIndex, myRankBusId.c_str(), myInfo->nvmlDev, peerInfo->rank, peerInfo->nvmlDev, comm->ncclNet->name, netBusId.c_str(),
