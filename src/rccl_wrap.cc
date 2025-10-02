@@ -128,7 +128,7 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
     }
     size_t bytesPerRank = divUp(nBytes, comm->nRanks);
 
-    if(bytesPerRank >= minByteThreshold && bytesPerRank < maxByteThreshold){
+    if(bytesPerRank > minByteThreshold && bytesPerRank <= maxByteThreshold){
       nc = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][2];
       INFO(NCCL_INIT, "RCCL tuning model overrides nchannels to %i, channels may be decreased further due to MinTrafficPerchannel thresholds", nc);
       break;
