@@ -24,6 +24,7 @@ THE SOFTWARE.
 #include "comm.h"
 #include "graph/topo.h"
 #include "enqueue.h"
+#include "rocm_smi/rocm_smi.h"
 
 // Use this param to experiment pipelining new data types besides bfloat16
 // Make sure you generate the device code with the new data type (i.e. in generate.py)
@@ -32,6 +33,7 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 // Use this to assess impact of pipelining on performance.
 // Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
+RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 4194304);
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -233,6 +235,15 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
                              int collNetSupport, int nvlsSupport, int numPipeOps,
                              int* algo, int* protocol, int* maxChannels) {
   RCCL_STATIC_EXPOSE_CHECK();
+  int nRanks;
+  NCCLCHECK(ncclCommCount(comm, &nRanks));
+  size_t msgSize = count * ncclTypeSize(dataType) * nRanks;
+  if (coll == ncclFuncAllGather && rcclUseAllGatherDirect(comm, msgSize)) {
+    *algo = rcclAddonAlgos_t::RCCL_DIRECT_ALLGATHER;
+    *protocol = NCCL_PROTO_SIMPLE; // TODO: consider LL for small messages
+    *maxChannels = comm->nChannels;
+    return ncclSuccess;
+  }
   struct ncclTaskColl task;
   task.func = coll;
   task.count = count;
@@ -242,6 +253,46 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   *protocol = task.protocol;
   *maxChannels = task.nMaxChannels;
   return ncclSuccess;
+}
+
+ncclResult_t rcclGetAlgoName(int algo, const char** algoName) {
+  if (algo < 0 || algo >= RCCL_ALGO_COUNT) {
+    WARN("Invalid algorithm value: %d", algo);
+    return ncclInvalidArgument;
+  }
+  if(algo >= NCCL_NUM_ALGORITHMS) {
+    switch(algo) {
+      case rcclAddonAlgos_t::RCCL_DIRECT_ALLGATHER:
+        *algoName = "Direct";
+        break;
+      case rcclAddonAlgos_t::RCCL_MSCCL:
+        *algoName = "MSCCL";
+        break;
+      case rcclAddonAlgos_t::RCCL_MSCCLPP:
+        *algoName = "MSCCLPP";
+        break;
+      default:
+        WARN("Invalid algorithm value: %d", algo);
+        return ncclInvalidArgument;
+    }
+    return ncclSuccess;
+  }
+  *algoName = ncclAlgoToString(algo);
+  return ncclSuccess;
+}
+
+ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
+  if (protocol < 0 || protocol >= NCCL_NUM_PROTOCOLS) {
+    WARN("Invalid protocol value: %d", protocol);
+    return ncclInvalidArgument;
+  }
+  *protocolName = ncclProtoToString(protocol);
+  return ncclSuccess;
+}
+
+bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
+  return (comm->enableCustColl && (comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() &&
+	        rcclParamDirectAllGatherThreshold() > -1));
 }
 
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
@@ -342,37 +393,26 @@ std::vector<std::string> splitString(const std::string& s, char delimiter) {
   return tokens;
 }
 
-int parseFirmwareVersionImpl(FILE* file) {
-  constexpr std::size_t MAX_LINE_SZ = 1024;
-  char line[MAX_LINE_SZ];
-  bool found_pattern = false;
-  while (fgets(line, MAX_LINE_SZ, file)) {
-    auto parts = splitString(line, ':');
-    if (parts == std::vector<std::string>{"FW_ID", "CP_MEC1"}) {
-      if (!found_pattern) {
-        found_pattern = true;
-      }
-      continue;
-    }
+int parseFirmwareVersionImpl() {
+  uint64_t fw_version = -1;
 
-    if (found_pattern && (parts[0] == "FW_VERSION")) {
-      return stoi(parts[1]) & 0x7ff;
-    }
-  }
-  return -1;
+  // using rocm-smi APIs for now to query MEC FW version
+  // will switch to amd-smi APIs soon
+  rsmi_status_t ret;
+  ret = rsmi_init(0);
+  if (ret != RSMI_STATUS_SUCCESS) return -1;
+  ret = rsmi_dev_firmware_version_get(0, RSMI_FW_BLOCK_MEC, &fw_version);
+  if (ret != RSMI_STATUS_SUCCESS) return -1;
+
+  return fw_version;
 }
 
-int parseFirmwareVersion(const char* command) {
-  auto file = popen(command, "r");
-  if (file == nullptr) {
-    return -1;
-  }
+int parseFirmwareVersion() {
   int version = -1;
   try {
-    version = parseFirmwareVersionImpl(file);
+    version = parseFirmwareVersionImpl();
   } catch (const std::exception& ex) {
   }
-  pclose(file);
   return version;
 }
 

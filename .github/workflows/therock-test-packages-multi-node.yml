@@ -50,8 +50,19 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--rccl"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      - name: Test
+      # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
+      # salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
+      - name: Test gfx950
+        if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          source /home/arravikum/TheRock/.venv/bin/activate
-          cd /home/arravikum/cvs
-          pytest -vvv --log-file=/tmp/rccl_log.log -s ./tests/rccl/rccl_multinode_cvs.py --cluster_file ./input/cluster.json --config_file ./input/mi300_config.json --html=/var/www/html/cvs/ci_test_report.html --capture=tee-sys --self-contained-html
+          salloc -N 4 -p meta64 --exclusive bash -c "
+          source /home/arravikum/TheRock/.venv/bin/activate &&
+          cd /home/arravikum/cvs &&
+          python input/setup.py &&
+          pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
+              --cluster_file ./input/cluster.json \
+              --config_file ./input/mi350_config.json \
+              --log-file=/tmp/rccl_log.log \
+              --html=/home/arravikum/cvs/ci_test_report.html \
+              --capture=tee-sys \
+              --self-contained-html"

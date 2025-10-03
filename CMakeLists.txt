@@ -24,6 +24,7 @@ option(BUILD_LOCAL_GPU_TARGET_ONLY             "Build only for GPUs detected on 
 option(BUILD_SHARED_LIBS                       "Build as shared library"                       ON)
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
+option(DUMP_ASM                                "Disassemble and dump"                          OFF)
 option(ENABLE_CODE_COVERAGE                    "Enable code coverage"                          OFF)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
@@ -1183,6 +1184,26 @@ endif()
 
 if (HAVE_KERNARG_PRELOAD)
   target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+endif()
+
+if (DUMP_ASM) # Save temporary files from kernel compilation
+  message(STATUS "Disassembling librccl.so to asm")
+  # Maintain symbols but without changing code.  Keep additional data in dwarf section of binary.
+  target_compile_options(rccl PRIVATE -gline-tables-only)
+  set(OBJ_DUMP ${ROCM_PATH}/llvm/bin/llvm-objdump)
+
+  add_custom_command(TARGET rccl POST_BUILD
+    COMMENT "Disassembling RCCL library"
+    COMMAND /bin/bash -c "${OBJ_DUMP} --offload-fatbin librccl.so"
+    VERBATIM
+  )
+  foreach(GPUARCH ${GPU_TARGETS})
+    add_custom_command(TARGET rccl POST_BUILD
+        COMMENT "Disassembling RCCL library to dump assembly for ${GPUARCH}"
+        COMMAND /bin/bash -c "${OBJ_DUMP} -d -l --source --symbolize-operands librccl.so.0.hipv4-amdgcn-amd-amdhsa--${GPUARCH} > librccl.${GPUARCH}.s"
+        VERBATIM
+    )
+  endforeach()
 endif()
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
