@@ -92,7 +92,6 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
     ALLGATHER_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLGATHER_SLICESTEPS_SINGLE_NODE : ALLGATHER_SLICESTEPS, nullptr };
 
   int nRanks;
-  const void* srcbuff;
   int in_place = 0;
   NCCLCHECK(ncclCommCount(comm, &nRanks));
   size_t msgSize = sendcount * ncclTypeSize(datatype) * nRanks;
@@ -113,7 +112,7 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
      if (sendcount == 0) return ncclSuccess;
      size_t rankOffset = sendcount * ncclTypeSize(datatype);
      if (((char*)sendbuff) == (((char*)recvbuff) + comm->rank * rankOffset)) {
-	in_place = 1;
+        in_place = 1;
      } 
 
      NCCLCHECK(ncclGroupStart());
