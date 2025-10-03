@@ -148,7 +148,8 @@ ncclResult_t checkHsaEnvSetting() {
 
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
-    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
+    // Always print out this warning message
+    printf("Fatal Error: HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with HIP Runtime version:%d, GPU Firmware version:%d\n", hipRuntimeVersion, firmwareVersion);
     return ncclSystemError;
   }
   return ncclSuccess;
@@ -531,7 +532,12 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclProfilerPluginFinalize(comm));
   NCCLCHECK(ncclNetFinalize(comm));
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  //ncclCudaContextDrop(comm->context);
+  // but enable for Radeon due to big impact on performance
+  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
+    ncclCudaContextDrop(comm->context);
+    INFO(NCCL_INIT, "cudaDev %d context tracking destroyed", comm->cudaDev);
+  }
+
   free(comm);
 
   return ncclSuccess;
@@ -627,7 +633,11 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
 
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  //NCCLCHECK(ncclCudaContextTrack(&comm->context));
+  // but enable for Radeon due to big impact on performance
+  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
+    NCCLCHECK(ncclCudaContextTrack(&comm->context));
+    INFO(NCCL_INIT, "cudaDev %d context tracking created", comm->cudaDev);
+  }
 
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   char busId[]="0000:00:00.0";
