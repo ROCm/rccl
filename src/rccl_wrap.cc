@@ -296,12 +296,20 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
   size_t threshold = rcclParamDirectAllGatherThreshold();
 
-  if (comm->nNodes < 64 && threshold != -1) {
-     threshold = comm->nNodes * 2097152;
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
+     if (comm->nNodes == 1 && threshold != -1) {
+        threshold = 8388608;
+     } else if (comm->nNodes < 64 && threshold != -1) {
+        threshold = comm->nNodes * 2097152;
+     }
+  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
+	threshold = 4194304;	
   }
 
+  int rankMultiple = comm->nRanks % 8;
+  
   //return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
-  return ((msgSize <= threshold) && (threshold != -1))
+  return ((msgSize <= threshold) && (threshold != -1) && !rankMultiple)
     ;
 }
 
