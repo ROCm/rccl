@@ -306,10 +306,12 @@ bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
 	threshold = 4194304;	
   }
 
+  comm->enableCustColl = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
+
   int rankMultiple = comm->nRanks % 8;
   
   //return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
-  return ((msgSize <= threshold) && (threshold != -1) && !rankMultiple)
+  return (comm->enableCustColl && (msgSize <= threshold) && (threshold != -1) && !rankMultiple)
     ;
 }
 
