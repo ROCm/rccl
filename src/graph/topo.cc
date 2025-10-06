@@ -23,10 +23,10 @@
 const char* topoNodeTypeStr[] = { "GPU", "PCI", "NVS", "CPU", "NIC", "NET" };
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 const char* topoLinkTypeStr[] = { "LOC", "XGMI", "",    "C2C", "PCI",    "",    "",    "",    "", "SYS", "NET" };
-const char* topoPathTypeStr[] = { "LOC", "XGMI", "NVB", "C2C", "PIX", "PXB", "PXN", "P2C", "PHB", "SYS", "NET", "DIS" };
+const char* topoPathTypeStr[] = { "LOC", "XGMI", "NVB", "C2C", "PIX", "PXB", "P2C", "PXN", "PHB", "SYS", "NET", "DIS" };
 #else
 const char* topoLinkTypeStr[] = { "LOC", "NVL", "",    "C2C", "PCI",    "",    "",    "",    "", "SYS", "NET" };
-const char* topoPathTypeStr[] = { "LOC", "NVL", "NVB", "C2C", "PIX", "PXB", "PXN", "P2C", "PHB", "SYS", "NET", "DIS" };
+const char* topoPathTypeStr[] = { "LOC", "NVL", "NVB", "C2C", "PIX", "PXB", "P2C", "PXN", "PHB", "SYS", "NET", "DIS" };
 #endif
 
 /******************************************************************/
@@ -760,7 +760,14 @@ ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "cpu") == 0) NCCLCHECK(ncclTopoAddCpu(node, *topoSystem));
   }
-  for (int systemId=0; systemId<system->nHosts; systemId++) if (system->hostHashes[systemId] == localHostHash) system->systemId = systemId;
+
+  int systemId = 0;
+  while (systemId < system->nHosts && system->hostHashes[systemId] != localHostHash) systemId++;
+  system->systemId = systemId;
+  if(systemId == system->nHosts){
+    WARN("localHostHash = 0x%lx not found in the list of system hostHashes",localHostHash);
+    return ncclInvalidArgument;
+  }
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
   NCCLCHECK(ncclTopoAddXGMI(topNode, *topoSystem, NULL));
@@ -1230,8 +1237,8 @@ struct kvDict nicPathKvList[] = {
   { "PORT", PATH_PORT },
   { "PIX",  PATH_PIX },
   { "PXB",  PATH_PXB },
-  { "PXN",  PATH_PXN },
   { "P2C",  PATH_P2C },
+  { "PXN",  PATH_PXN },
   { "PHB",  PATH_PHB },
   { "SYS",  PATH_SYS },
   { NULL, 0 }
@@ -1509,7 +1516,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   }
 
   // Only update our topo tracking structure if we aren't dumping (separate steps)
-  if (dumpXmlFile == NULL) NCCLCHECKGOTO(ncclTopoGetSystemFromXml(xml, system, comm->peerInfo[comm->rank].hostHash), ret, fail);
+  if (dumpXmlFile == NULL) NCCLCHECKGOTO(ncclTopoGetSystemFromXml(xml, system, getHostHash()), ret, fail);
 
 exit:
   if (!comm->MNNVL && localRanks) free(localRanks);
