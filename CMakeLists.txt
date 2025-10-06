@@ -886,6 +886,15 @@ foreach(file ${GENERATED_FILES})
   list(APPEND HIP_SOURCES ${file})
 endforeach()
 
+# Apply -O1 optimization for generated files in debug builds
+# This is needed for device object to not go over the stacksize limit at link time while allowing
+# -O0 for host code in debug build.
+if(CMAKE_BUILD_TYPE MATCHES "Debug" AND NOT DEFINED ENV{CXXFLAGS})
+  message(STATUS "Setting -O1 optimization for device code in ${GEN_DIR} (Debug build)")
+  set_source_files_properties(${GENERATED_FILES} PROPERTIES COMPILE_OPTIONS "-O1")
+endif()
+
+
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "")
