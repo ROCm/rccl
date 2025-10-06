@@ -18,6 +18,10 @@
 
 #define __syncwarp()
 
+#if ARECH_STRICT_MEM
+#define STORE(DST, SRC) \
+  { __atomic_store_n((DST), (SRC), __ATOMIC_RELEASE); }
+#else //ARECH_STRICT_MEM
 #ifdef __GFX9__
 #define STORE(DST, SRC) \
   { __atomic_store_n((DST), (SRC), __ATOMIC_RELAXED); }
@@ -25,6 +29,7 @@
 #define STORE(DST, SRC) \
   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
 #endif
+#endif //ARECH_STRICT_MEM
 
 #if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__)
 #define __trace_hwreg()
@@ -167,6 +172,7 @@ struct ncclShmemData {
   uint64_t barrier_pat;
 };
 
+//extern __shared__ uint64_t myTmp[2*8];
 extern __shared__ ncclShmemData ncclShmem;
 #if __CUDA_ARCH__ >= 700
   extern __shared__ ulong2 ncclShmemPerWarp[/*ncclShmemDynamicSize()/sizeof(ulong2)*/];
@@ -429,7 +435,9 @@ struct RunWorkBatch {
       struct ncclDevWorkColl* work = (struct ncclDevWorkColl*)(ncclShmem.workStorage + w*ncclShmem.workSize);
       if (w != 0) {
         struct ncclDevWorkColl* workPrev = (struct ncclDevWorkColl*)(ncclShmem.workStorage + (w-1)*ncclShmem.workSize);
-        if (work->nWarps != workPrev->nWarps) __syncthreads();
+        if (work->nWarps != workPrev->nWarps) {
+          __syncthreads();
+        }
       }
       int subtn = work->nWarps*WARP_SIZE;
       // Coverity reports a possible thread divergence due to not all threads participating in the collective.
@@ -623,7 +631,9 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
         break;
     }
     profiler(STOP);
-    loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
+    //TODO:ARECH Why this %WARP_SIZE is here?
+    //loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
+    loadWorkBatchToShmem(tid, tn, args, batchIx);
     __syncthreads();
 
     if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {

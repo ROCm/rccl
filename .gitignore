@@ -3,3 +3,7 @@
 /coverage/
 build/
 ext/
+/.cache/
+/.cline_storage
+/.vscode
+/compile_commands.json

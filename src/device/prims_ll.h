@@ -10,32 +10,33 @@
 #include "npkit/npkit.h"
 #endif
 
+// in runRing: <T, RedOp, FanSymmetric<1>, Direct==0==IGNORED, Proto==IGNORED, isNetOffload==0==IGNORED>
 template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload>
 class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>> {
 
   // In the case of Fan::MaxRecv == 0, we need to force MaxRecv to 1 for this to compile
   // This is because of a recv buffer which is allocated to MaxRecv length in send-only cases
-  static constexpr int MaxRecv = Fan::MaxRecv > 1 ? Fan::MaxRecv : 1;
-  static constexpr int MaxSend = Fan::MaxSend;
+  static constexpr int MaxRecv = Fan::MaxRecv > 1 ? Fan::MaxRecv : 1;  // 1
+  static constexpr int MaxSend = Fan::MaxSend;  // 1
   static constexpr int Input=0, Output=1;
   RedOp redOp;
   const int tid;
   const int nthreads;
   const int wid;
   const int group;
-  const int stepLines;
+  const int stepLines; // number of NCCL_STEPS * sizeof(ncclLLFifoLine) chunks in the LL buffer
   Fan fan;
   T *userBufs[2];
-  struct ncclConnInfo* recvConn = NULL;
-  volatile uint64_t* recvConnHeadPtr = NULL;
-  uint64_t recvConnHead;
+  struct ncclConnInfo* recvConn = NULL;  // set only for the first thread of a warp!
+  volatile uint64_t* recvConnHeadPtr = NULL; // set only IF there are more than a warp of threads, for the first thread of the last warp.
+  uint64_t recvConnHead; // recvConnHeadPtr sync step#. Set only IF there are more than a warp of threads, for the first thread of the last warp.
 
-  struct ncclConnInfo* sendConn = NULL;
-  volatile struct ncclConnFifo* sendConnFifo = NULL;
-  volatile uint64_t* sendConnHeadPtr = NULL;
-  uint64_t sendConnHead;
-  uint64_t sendConnHeadCache; // Cache last seen value
+  struct ncclConnInfo* sendConn = NULL;  // set only for the first thread of a warp!
+  volatile struct ncclConnFifo* sendConnFifo = NULL; // set only for the first thread of the block! (/grid?)
+  volatile uint64_t* sendConnHeadPtr = NULL; // set only for the first thread of the block! (/grid?)
+  uint64_t sendConnHead; // sendConnHeadPtr sync step#, set only for the first thread of the block! (/grid?)
+  uint64_t sendConnHeadCache; // Cache last seen value of sendConnHeadPtr, set only for the first thread of the block! (/grid?)
 
   uint64_t recvStep[MaxRecv];
   uint64_t sendStep[MaxSend];
@@ -106,16 +107,32 @@ private:
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
-    if (sendConnHeadPtr) {
+    if (sendConnHeadPtr) { // set only for the first thread of the block! (/grid?)
       int spins = 0;
+      // the first thread of the block is blocked in the loop until *sendConnHeadPtr is incremented
+      // potentially many times by other threads. It's probably related to recvConnHeadPtr, which is gets incremented
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
         __builtin_amdgcn_s_sleep(1);
-        sendConnHeadCache = atomicAdd((unsigned long long *)sendConnHeadPtr, 0);
+        
+        //sendConnHeadCache = atomicAdd((unsigned long long *)sendConnHeadPtr, 0);
+        //sendConnHeadCache = atomicAdd_system((unsigned long long *)sendConnHeadPtr, 0);
+        #if ARECH_STRICT_MEM
+        sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_ACQUIRE);
+        #else //ARECH_STRICT_MEM
+        #ifdef __GFX9__
+        sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
+        #else
+        sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_SEQ_CST);
+        #endif
+        #endif //ARECH_STRICT_MEM
+
         if (checkAbort(abort, 1, spins)) break;
       }
-      if (sendConnFifo) {
+      if (sendConnFifo) { // might be true only when sendConnHeadPtr is set
+        // NCCL_LL_CLEAN_MASK==0x7ffffff8, so size is likely always =nbytes
         int size = ((sendConnHead & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) ? stepLines*sizeof(union ncclLLFifoLine) : nbytes;
-        sendConnFifo[sendConnHead%NCCL_STEPS].size = size;
+        //sendConnFifo[sendConnHead%NCCL_STEPS].size = size;
+        STORE(&sendConnFifo[sendConnHead%NCCL_STEPS].size, size);
       }
       sendConnHead += 1;
     }
@@ -136,16 +153,18 @@ private:
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
 
-  inline __device__ void incSend(int i, int offset) {
+  inline __device__ void incSend(int i, int offset) { // i==0 (rank/GPU idx), offset==tid+k*nthreads
     // LL Cleanup : write all flags in the slice to make sure we don't have
     // data corruption when flag loops over.
+
+    // #define NCCL_LL_CLEAN_MASK 0x7ffffff8
     if ((sendStep[i] & NCCL_LL_CLEAN_MASK) == NCCL_LL_CLEAN_MASK) {
       for (int o = offset; o<stepLines; o+=nthreads) storeLL(sendPtr(i)+o, 0, sendFlag(i));
     }
     sendStep[i]++;
   }
 
-  __device__ uint64_t readLL(int offset, int i) {
+  __device__ uint64_t readLL(int offset, int i) { //offset==tid+k*nthreads, i==0 always for LLGenericOp()
     union ncclLLFifoLine* src = recvPtr(i) + offset;
     uint32_t flag = recvFlag(i);
     uint32_t data1, flag1, data2, flag2;
@@ -157,7 +176,6 @@ private:
       npKitWaitRecvEntryTime = NPKIT_GET_GPU_TIMESTAMP();
     }
 #endif
-
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     union ncclLLFifoLine i4;
     do {
@@ -165,8 +183,13 @@ private:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(i4.i4) : "v"(&src->i4));
 #else
+      #if ARECH_STRICT_MEM
+      i4.v[0] = __atomic_load_n(src->v, __ATOMIC_ACQUIRE);
+      i4.v[1] = __atomic_load_n(src->v+1, __ATOMIC_ACQUIRE);
+      #else //ARECH_STRICT_MEM
       i4.v[0] = __builtin_nontemporal_load(src->v);
       i4.v[1] = __builtin_nontemporal_load(src->v+1);
+      #endif //ARECH_STRICT_MEM
 #endif
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
@@ -195,7 +218,7 @@ private:
     return val64;
   }
 
-  template<int BeginIx>
+  template<int BeginIx>// always 1 for LLGenericOp()
   __device__ void readLLBeginAll(int offset, ncclLLFifoLine(&line)[MaxRecv]) {
     #pragma unroll
     for (int i=BeginIx; i < MaxRecv; i++) {
@@ -274,14 +297,21 @@ private:
     i4.flag1 = flag;
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
+    #if ARECH_STRICT_MEM
+    STORE(dst->v, i4.v[0]);
+    STORE(dst->v+1, i4.v[1]);
+    #else //ARECH_STRICT_MEM
     __builtin_nontemporal_store(i4.v[0], dst->v);
     __builtin_nontemporal_store(i4.v[1], dst->v+1);
+    #endif //ARECH_STRICT_MEM
+
 #endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
 #endif
   }
 
+  // number of T's fitting into 64 bits.
   static constexpr int EltPerLine = sizeof(uint64_t)/sizeof(T);
 
   template<typename U>
@@ -410,9 +440,10 @@ private:
     for(int i=0; i < EltPerLine; i++) {
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_line]
-      if (i==0 || i < eltN)
+      if (i==0 || i < eltN) {
         //store(dst+i, elt[i]);
         dst[i] = elt[i];
+      }
     }
   }
 
@@ -430,6 +461,11 @@ private:
     }
   }
 
+  // for send():                LLGenericOp<0, 1, Input, -1>    (inpIx, -1, eltN, false);     // for the -1 ring chunk
+  // for recvReduceSend():      LLGenericOp<1, 1, Input, -1>    (inpIx, -1, eltN, false);     // for -2..-N+1 ring chunks
+  // for recvReduceCopySend():  LLGenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, true);   // for 0 ring chunk
+  // for recvCopySend():        LLGenericOp<1, 1, -1, Output>   (-1, outIx, eltN, false);     // -1..-N+2 ring chunks
+  // for recv():                LLGenericOp<1, 0, -1, Output>   (-1, outIx, eltN, false);     // +1 ring chunk
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
 #if defined(__gfx950__)
   __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
@@ -438,12 +474,17 @@ private:
 #endif
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
-    T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
-    T *dstElts = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
+    T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx; // userBufs[1] + srcIx
+    T *dstElts = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx; // nullptr for send() & recvReduceSend()
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
-    if (SEND) waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
+
+    //ARECH: if fails, ensure waitSend() is compatible with nbytes=0
+    //if (0==nelem) __builtin_debugtrap();
+
+    // divUp(nelem, EltPerLine) == number of 64 bit chunks into which T[nelem] fully fits 
+    if (SEND) waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine)); // true
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT)
     if (tid == 0) {
@@ -467,6 +508,7 @@ private:
     int offset = tid;
     int eltPerTrip = nthreads*EltPerLine;
     while (nelem > 0) {
+      // read next up to EltPerLine elements of T from srcElts
       int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
 
       DataLoader dl;
@@ -474,22 +516,23 @@ private:
       uint64_t data, peerData;
       if (SRC) {
         dl.loadBegin(srcElts, eltInLine);
-        srcElts += eltPerTrip;
+        srcElts += eltPerTrip; // jump over the while region all threads will process access to a corresponding next chunk
       }
-      if (RECV) {
-        readLLBeginAll<1>(offset, line);
+
+      if (RECV) {  // not for the first call (send()) into this code
+        readLLBeginAll<1>(offset, line); // does nothing
         peerData = readLL(offset, 0);
       }
       if (SRC) {
         data = dl.loadFinish();
         if (SrcBuf == Input) data = applyPreOp(redOp, data);
       }
-      if (RECV) {
+      if (RECV) { // not for the first call (send()) into this code
         data = !SRC ? peerData : applyReduce(redOp, peerData, data);
         #pragma unroll MaxRecv
         // Yes, for some template arguments this code will be unreachable.  That's fine.
         // coverity[dead_error_line]
-        for (int i=1; i < MaxRecv && i < fan.nrecv(); i++) {
+        for (int i=1; i < MaxRecv && i < fan.nrecv(); i++) {  // never run
           peerData = readLLFinish(offset, line, i);
           data = applyReduce(redOp, peerData, data);
         }
@@ -498,7 +541,7 @@ private:
       if (postOp) data = applyPostOp(redOp, data);
 
       // Send : inter-node, then intra-node, then local
-      if (SEND) {
+      if (SEND) { //true
         // Yes, for some template arguments this code will be unreachable.  That's fine.
         // coverity[dead_error_line]
         for (int i=1; i < MaxSend && i < fan.nsend(); i++)
@@ -528,11 +571,11 @@ private:
     }
 #endif
 
-    if (RECV) {
+    if (RECV) {// not for the first call (send()) into this code
       for (int i=0; i < MaxRecv; i++) incRecv(i);
       postRecv();
     }
-    if (SEND) {
+    if (SEND) {//true
       // Yes, for some template arguments this code will be unreachable.  That's fine.
       // coverity[dead_error_line]
       for (int i=1; i < MaxSend && i < fan.nsend(); i++)
@@ -617,27 +660,42 @@ private:
     barrier();
   }
 
+    // sets ncclLLFifoLine buffer and initial step# for a given recv peer# i
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
     recvBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
     recvStep[i] = conn->step;
-    if (wid == i) recvConn = conn;
+    if (wid == i) recvConn = conn; // set only for the first thread of a warp
   }
   __device__ __forceinline__ void loadRecvSync() {
-    if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv()) {
+    if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv()) { // set only IF there are more than a warp of threads, for
+      // the first thread of the last warp.
+    //if (tid < fan.nrecv()) {
       recvConnHeadPtr = recvConn->head;
       recvConnHead = recvConn->step;
     }
   }
 
+  // sets ncclLLFifoLine buffer and initial step# for a given send peer# i
   __device__ __forceinline__ void loadSendConn(struct ncclConnInfo* conn, int i) {
     sendBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
     sendStep[i] = conn->step;
-    if (wid == i) sendConn = conn;
+    if (wid == i) sendConn = conn; // set only for the first thread of a warp
   }
   __device__ __forceinline__ void loadSendSync() {
-    if (tid < fan.nsend()) {
+    if (tid < fan.nsend()) { // set only for the first thread of the block! (/grid?)
       sendConnHeadPtr = sendConn->head;
-      sendConnHeadCache = *sendConnHeadPtr;
+      //sendConnHeadCache = *sendConnHeadPtr;
+
+      #if ARECH_STRICT_MEM
+      sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_ACQUIRE);
+      #else //ARECH_STRICT_MEM
+      #ifdef __GFX9__
+      sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_RELAXED);
+      #else
+      sendConnHeadCache = __atomic_load_n(sendConnHeadPtr, __ATOMIC_SEQ_CST);
+      #endif
+      #endif //ARECH_STRICT_MEM
+
       sendConnHead = sendConn->step;
       sendConnFifo = sendConn->connFifo;
     }
@@ -660,12 +718,15 @@ public:
     // We compare with Fan::MaxRecv here because this->MaxRecv is always at least 1
     // Yes, for some template arguments this code will be unreachable.  That's fine.
     // coverity[dead_error_line]
-    while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) {
+    
+    //ARECH: is recvPeers[nrecv] always >=0 ? In runRing() recvPeers[0]==ring->prev
+    while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) { // 1 iter at most
       loadRecvConn(&channel->peers[recvPeers[nrecv]]->recv[connIndexRecv], nrecv);
       nrecv++;
     }
     // coverity[dead_error_line]
-    while (nsend < MaxSend && sendPeers[nsend] >= 0) {
+    // ARECH: is sendPeers[nsend] always >=0 ? In runRing() sendPeers[0]==ring->next
+    while (nsend < MaxSend && sendPeers[nsend] >= 0) { // 1 iter at most
       loadSendConn(&channel->peers[sendPeers[nsend]]->send[connIndexSend], nsend);
       nsend++;
     }

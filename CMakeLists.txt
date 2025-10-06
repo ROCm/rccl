@@ -754,6 +754,7 @@ file(GLOB GENERATED_FILES "${GEN_DIR}/*")
 # Append all found generated files to the list
 foreach(file ${GENERATED_FILES})
   list(APPEND HIP_SOURCES ${file})
+  # set_source_files_properties(${file} PROPERTIES COMPILE_FLAGS "-O0 -ggdb3")
 endforeach()
 
 # Enable SW pipelining where needed

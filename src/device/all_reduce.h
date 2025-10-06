@@ -26,13 +26,15 @@ namespace {
     const int bid = ncclShmem.channelId - work->channelLo;
     ssize_t size;
     ssize_t gridOffset;
-    ssize_t channelCount;
+    ssize_t channelCount; //freaking size of the channel, not count! It's count of freaking elements in the channel!
     ssize_t chunkCount;
     ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
     const ssize_t loopCount = nranks * chunkCount;
     ssize_t offset;
     int nelem;
     int chunk;
+
+    //if (1==channelCount) __builtin_debugtrap();
 
 #if defined(ENABLE_NPKIT)
     int npKitCtxIdx = bid;
@@ -58,6 +60,25 @@ namespace {
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
+    #if ARECH_SHOW_RING
+    if ((1==channelCount || 5== channelCount) && 0==tid){
+      auto *channel = &ncclShmem.channel;
+      auto& recvConn = channel->peers[ring->prev]->recv[work->connIndex];
+      auto& sendConn = channel->peers[ring->next]->send[work->connIndex];
+
+      printf("ncclShmem=%p, fid=%d, nthreads=%d, size=%zd, gridOffset=%zd, channelCount=%zd, chunkCount=%zd, nranks=%d\n"
+        "prev,cur,next = %d,%d,%d; "
+        "recv{buf,step, headPtr,headVal} = %p,%zx, %p,%zx; "
+        "send{buf,step, headPtr,headVal} = %p,%zx, %p,%zx\n"
+        , &ncclShmem, int(ncclShmem.funcId), nthreads, size, gridOffset, channelCount, chunkCount, nranks
+        ring->prev, ring->index, ring->next,
+        recvConn.buffs[NCCL_PROTO_LL], recvConn.step, recvConn.head, __atomic_load_n(recvConn.head, __ATOMIC_RELAXED),
+        sendConn.buffs[NCCL_PROTO_LL], sendConn.step, sendConn.head, __atomic_load_n(sendConn.head, __ATOMIC_RELAXED));
+    }
+    __syncthreads();
+    { // SCOPE START
+    #endif // ARECH_SHOW_RING
+
     // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
@@ -81,7 +102,7 @@ namespace {
       };
 
       // step 0: push data to next GPU
-      chunk = modRanks(ringIx + nranks - 1);
+      chunk = modRanks(ringIx + nranks - 1); // chunk is -1 element in the ring from ringIx
       chunkOffset = chunk * chunkCount;
       offset = gridOffset + elemOffset + chunkOffset;
       nelem = (int)min(chunkCount, remCount - chunkOffset);
@@ -114,11 +135,11 @@ namespace {
 #endif
 
       for (int j = 2; j < nranks; ++j) {
-        chunk = modRanks(ringIx + nranks - j);
+        chunk = modRanks(ringIx + nranks - j); // chunk is -j element in the ring from ringIx
         chunkOffset = chunk * chunkCount;
         offset = gridOffset + elemOffset + chunkOffset;
         nelem = (int)min(chunkCount, remCount - chunkOffset);
-        prims.directRecvReduceDirectSend(offset, offset, nelem);
+        prims.directRecvReduceDirectSend(offset, offset, nelem); // 1.2 / 1 / 4
       }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_RECV_REDUCE_SEND_EXIT)
@@ -130,7 +151,7 @@ namespace {
 
       // step k-1: reduce this buffer and data, which will produce the final
       // result that we store in this data and push to the next GPU
-      chunk = ringIx + 0;
+      chunk = ringIx + 0; // chunk is current ringIx
       chunkOffset = chunk * chunkCount;
       offset = gridOffset + elemOffset + chunkOffset;
       nelem = (int)min(chunkCount, remCount - chunkOffset);
@@ -143,7 +164,7 @@ namespace {
       }
 #endif
 
-      prims.directRecvReduceCopyDirectSend(offset, offset, nelem, /*postOp=*/true);
+      prims.directRecvReduceCopyDirectSend(offset, offset, nelem, /*postOp=*/true); //1.1 / 1
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_REDUCE_COPY_SEND_EXIT)
       if (tid == 0) {
@@ -162,11 +183,11 @@ namespace {
 
       // k-2 steps: copy to next GPU
       for (int j = 1; j < nranks - 1; ++j) {
-        chunk = modRanks(ringIx + nranks - j);
+        chunk = modRanks(ringIx + nranks - j); // chunk is -1..-nranks+2 
         chunkOffset = chunk * chunkCount;
         offset = gridOffset + elemOffset + chunkOffset;
         nelem = (int)min(chunkCount, remCount - chunkOffset);
-        prims.directRecvCopyDirectSend(offset, offset, nelem);
+        prims.directRecvCopyDirectSend(offset, offset, nelem); // 2 + 3
       }
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_COPY_SEND_EXIT)
@@ -185,12 +206,12 @@ namespace {
 #endif
 
       // Make final copy from buffer to dest.
-      chunk = modRanks(ringIx + 1);
+      chunk = modRanks(ringIx + 1); // chunk is +1
       chunkOffset = chunk * chunkCount;
       offset = gridOffset + elemOffset + chunkOffset;
       nelem = (int)min(chunkCount, remCount - chunkOffset);
 
-      prims.directRecv(offset, nelem);
+      prims.directRecv(offset, nelem); // 4
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_EXIT)
       if (tid == 0) {
@@ -207,6 +228,21 @@ namespace {
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
+
+    #if ARECH_SHOW_RING
+    } // SCOPE END
+    __syncthreads();
+    if ((1==channelCount || 5== channelCount) && 0==tid){
+      auto *channel = &ncclShmem.channel;
+      auto& recvConn = channel->peers[ring->prev]->recv[work->connIndex];
+      auto& sendConn = channel->peers[ring->next]->send[work->connIndex];
+      printf("recv{buf,step, headPtr,headVal} = %p,%zx, %p,%zx; "
+        "send{buf,step, headPtr,headVal} = %p,%zx, %p,%zx\n",
+        recvConn.buffs[NCCL_PROTO_LL], recvConn.step, recvConn.head, __atomic_load_n(recvConn.head, __ATOMIC_RELAXED),
+        sendConn.buffs[NCCL_PROTO_LL], sendConn.step, sendConn.head, __atomic_load_n(sendConn.head, __ATOMIC_RELAXED));
+    }
+    __syncthreads();
+    #endif // ARECH_SHOW_RING
 
   }
 

@@ -31,7 +31,8 @@ enable_mscclpp_clip=false
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
 openmp_test_enabled=false
-roctx_enabled=true
+#roctx_enabled=true
+roctx_enabled=false
 run_tests=false
 run_tests_all=false
 time_trace=false
@@ -202,9 +203,10 @@ fi
 
 # build type
 if [[ "${build_release}" == true ]]; then
-    cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Release"
+    #cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Release"
+    cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_EXPORT_COMPILE_COMMANDS=1"
 else
-    cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug"
+    cmake_common_options="${cmake_common_options} -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1"
 fi
 
 # Address sanitizer
@@ -319,7 +321,14 @@ cmake_common_options="${cmake_common_options} -DCMAKE_EXE_LINKER_FLAGS=\"-Wl,-rp
 # Initiate RCCL CMake
 # Passing ONLY_FUNCS separately (not as part of ${cmake_common_options}) as
 # ${ONLY_FUNCS} is a debug-only feature
-${cmake_executable} ${cmake_common_options} -DONLY_FUNCS="${ONLY_FUNCS}" ../../.
+#MYFLGS="-O1 -ggdb3" # doesn't reproduce
+
+#MYFLGS="-O1 -ggdb3 -DNDEBUG"  # removing -DNDEBUG breaks the hang
+MYFLGS="-O3 -ggdb3 -DNDEBUG"    # -fno-strict-aliasing
+#MYFLGS="-O0 -ggdb3"
+HIPFLGS="-O0 -ggdb3" #essentially ignored
+${cmake_executable} ${cmake_common_options} -DONLY_FUNCS="${ONLY_FUNCS}" ../../. -DFAULT_INJECTION=OFF -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="$MYFLGS" -DCMAKE_C_FLAGS_RELWITHDEBINFO="$MYFLGS" -DCMAKE_HIP_FLAGS_RELWITHDEBINFO="$HIPFLGS"
+# "${cust_args[@]}"
 check_exit_code "$?"
 
 # Enable verbose output from Makefile
