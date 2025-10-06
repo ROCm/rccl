@@ -68,9 +68,9 @@ namespace {
 
       printf("ncclShmem=%p, fid=%d, nthreads=%d, size=%zd, gridOffset=%zd, channelCount=%zd, chunkCount=%zd, nranks=%d\n"
         "prev,cur,next = %d,%d,%d; "
-        "recv{buf,step, headPtr,headVal} = %p,%zx, %p,%zx; "
-        "send{buf,step, headPtr,headVal} = %p,%zx, %p,%zx\n"
-        , &ncclShmem, int(ncclShmem.funcId), nthreads, size, gridOffset, channelCount, chunkCount, nranks
+        "recv{buf,step, headPtr,headVal} = %p,%zu, %p,%zu; "
+        "send{buf,step, headPtr,headVal} = %p,%zu, %p,%zu\n",
+        &ncclShmem, int(ncclShmem.funcId), nthreads, size, gridOffset, channelCount, chunkCount, nranks,
         ring->prev, ring->index, ring->next,
         recvConn.buffs[NCCL_PROTO_LL], recvConn.step, recvConn.head, __atomic_load_n(recvConn.head, __ATOMIC_RELAXED),
         sendConn.buffs[NCCL_PROTO_LL], sendConn.step, sendConn.head, __atomic_load_n(sendConn.head, __ATOMIC_RELAXED));
@@ -236,8 +236,10 @@ namespace {
       auto *channel = &ncclShmem.channel;
       auto& recvConn = channel->peers[ring->prev]->recv[work->connIndex];
       auto& sendConn = channel->peers[ring->next]->send[work->connIndex];
-      printf("recv{buf,step, headPtr,headVal} = %p,%zx, %p,%zx; "
-        "send{buf,step, headPtr,headVal} = %p,%zx, %p,%zx\n",
+      printf("ncclShmem=%p, fid=%d, nthreads=%d, size=%zd, gridOffset=%zd, channelCount=%zd, chunkCount=%zd, nranks=%d\n"
+        "recv{buf,step, headPtr,headVal} = %p,%zu, %p,%zu; "
+        "send{buf,step, headPtr,headVal} = %p,%zu, %p,%zu\n",
+        &ncclShmem, int(ncclShmem.funcId), nthreads, size, gridOffset, channelCount, chunkCount, nranks,
         recvConn.buffs[NCCL_PROTO_LL], recvConn.step, recvConn.head, __atomic_load_n(recvConn.head, __ATOMIC_RELAXED),
         sendConn.buffs[NCCL_PROTO_LL], sendConn.step, sendConn.head, __atomic_load_n(sendConn.head, __ATOMIC_RELAXED));
     }
