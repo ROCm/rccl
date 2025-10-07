@@ -31,14 +31,10 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload>:
   RedOp redOp;
   const int tid;
   const int nthreads;
-  const int wid;
   const int stepSize;
-  const int warp;
-  const int warpInBlock; // warp index in thread block
-  const bool flagThread;
   const int group;
   Fan fan;
-  T SGLOBAL *userBufs[3];
+  T SGLOBAL *userBufs[2];
   ncclConnInfo SGLOBAL* recvConn = NULL;
   uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
@@ -63,7 +59,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload>:
   inline __device__ uint64_t recvFlag(int i) { return recvStep[i]+1; }
   inline __device__ uint64_t sendFlag(int i) { return sendStep[i]+1; }
 
-  uint64_t* barriers;
   uint64_t barrier_next = 0;
 
 #if defined(ENABLE_NPKIT)
@@ -77,6 +72,7 @@ private:
 
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  uint64_t* barriers = &ncclShmem.groups[group].barrier;
   if (nthreads != WARP_SIZE)
     #if defined(__gfx942__) || defined(__gfx950__)
       barrier_generic(__threadfence_block(), nthreads, barrier_next, barriers);
@@ -99,6 +95,7 @@ private:
         if (checkAbortLL(abort, 1, spins)) break;
       }
       if (sendConnFifo) {
+        auto wid = tid%WARP_SIZE;
         auto *ptr = sendConnFifo + sendStep[wid] % NCCL_STEPS;
         st_relaxed_sys_global(&ptr->size, (ssize_t)nbytes);
       }
@@ -128,6 +125,8 @@ private:
   __device__ __forceinline__ void loadRegsBegin(uint64_t(&regs)[WordPerThread], T const *src, int eltN) {
     constexpr int EltPer16B = 16/sizeof(T);
     int ix[WordPerThread/2];
+    const auto wid = tid%WARP_SIZE;
+    const bool flagThread = (tid%4) == 3;
     #pragma unroll
     for(int g=0; g < WordPerThread/2; g++) {
       ix[g] = g*WARP_SIZE - 16*(g/2) + wid - (g%2)*(wid/4);
@@ -150,6 +149,7 @@ private:
     else {
       // Not aligned. Stage the smallest 16 byte aligned region subsuming the
       // buffer into shmem.
+      const int warpInBlock = threadIdx.x/WARP_SIZE; 
       int misalignment = reinterpret_cast<uintptr_t>(src) % 16;
       uint64_t *src8 = reinterpret_cast<uint64_t*>(reinterpret_cast<uintptr_t>(src) & -uintptr_t(16));
       uint64_t *shm8 = shmemCvtPtr((uint64_t*)ncclScratchForWarp(warpInBlock));
@@ -179,6 +179,7 @@ private:
 
   template<int WordPerThread>
   __device__ __forceinline__ void loadRegsFinish(uint64_t(&regs)[WordPerThread]) {
+    const bool flagThread = (tid%4) == 3;
     // Move data out of flag registers into the vacant registers.
     #pragma unroll
     for (int g=1; g < WordPerThread/2; g+=2) {
@@ -189,6 +190,9 @@ private:
   template<int WordPerThread>
   __device__ __forceinline__ void storeRegs(T *dst, uint64_t(&regs)[WordPerThread], int eltN) {
     constexpr int EltPer16B = 16/sizeof(T);
+    const auto wid = tid%WARP_SIZE;
+    const int warpInBlock = threadIdx.x/WARP_SIZE; 
+    const bool flagThread = (tid%4) == 3;
     // Reverse Finish() register permuatation.
     #pragma unroll
     for (int g=1; g < WordPerThread/2; g+=2) {
@@ -223,6 +227,7 @@ private:
   __device__ __forceinline__ void recvReduceSendCopy(uint64_t(&v)[ELEMS_PER_THREAD], int ll128Offset, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     uint64_t vr[ELEMS_PER_THREAD];
+    const bool flagThread = (tid%4) == 3;
 
     __syncwarp();
     /************************ Wait first recv ********************/
@@ -342,7 +347,9 @@ private:
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T const *srcPtr = SrcBuf == -1 ? nullptr : (T const *)userBufs[SrcBuf] + srcIx;
     T       *dstPtr = DstBuf == -1 ? nullptr : (T *)userBufs[DstBuf] + dstIx;
-    T       *accPtr = (DstBuf == -1 || (T *)userBufs[Acc] == nullptr) ? nullptr : (T *)userBufs[Acc] + dstIx;
+    T       *accPtr = nullptr;
+    const auto wid = tid%WARP_SIZE;
+    const auto warp = tid/WARP_SIZE;
     int wireOffset = WireWordPerSlice*warp + 2*wid;
     const int nwarps = nthreads/WARP_SIZE;
     nelem = nelem < 0 ? 0 : nelem;
@@ -397,6 +404,8 @@ private:
     T const *srcPtr = srcs[0];
     T       *dstPtr = dsts[0];
     const int nwarps = nthreads/WARP_SIZE;
+    const auto warp = tid/WARP_SIZE;
+    const bool flagThread = (tid%4) == 3;
     nelem = nelem < 0 ? 0 : nelem;
 
     nelem -= DataEltPerSlice*warp;
@@ -479,9 +488,11 @@ private:
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo SGLOBAL* conn, int i) {
     recvBuff[i] = (uint64_t*)conn->buffs[NCCL_PROTO_LL128];
     recvStep[i] = conn->step;
+    auto wid = tid%WARP_SIZE;
     if (wid == i) recvConn = conn;
   }
   __device__ __forceinline__ void loadRecvSync() {
+    auto wid = tid%WARP_SIZE;
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv()) {
       recvConnHeadPtr = recvConn->head;
       recvConnHead = recvConn->step;
@@ -491,6 +502,7 @@ private:
   __device__ __forceinline__ void loadSendConn(struct ncclConnInfo SGLOBAL* conn, int i) {
     sendBuff[i] = (uint64_t*)conn->buffs[NCCL_PROTO_LL128];
     sendStep[i] = conn->step;
+    auto wid = tid%WARP_SIZE;
     if (wid == i) sendConn = conn;
   }
   __device__ __forceinline__ void loadSendSync() {
@@ -500,6 +512,7 @@ private:
       sendConnHead = sendConn->step;
       sendConnFifo = sendConn->connFifo;
     }
+    auto wid = tid%WARP_SIZE;
     if (tid >= nthreads - WARP_SIZE && wid < fan.nsend()) {
       if (sendConn->connFifo) {
         sendConnTailPtr = sendConn->tail;
@@ -516,12 +529,10 @@ public:
       bool ipcReg = false, bool netReg = false, int stepSize_ = 0
     ):
     redOp(redOpArg),
-    tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE),
-    warpInBlock(threadIdx.x/WARP_SIZE),
-    flagThread((tid%4)==3), group(group),
+    tid(tid), nthreads(nthreads), 
+    group(group),
     stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)) {
     auto *channel = &ncclShmem.channel;
-    barriers = &ncclShmem.groups[group].barrier;
     int nrecv=0, nsend=0;
     while (nrecv < MaxRecv && recvPeers[nrecv] >= 0) {
       loadRecvConn(&channel->peers[recvPeers[nrecv]]->recv[connIndexRecv], nrecv);
@@ -542,6 +553,7 @@ public:
   }
 
   __device__ ~Primitives() {
+    auto wid = tid%WARP_SIZE;
     // Save steps for the next operation
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv())
       recvConn->step = recvConnHead;
@@ -554,7 +566,6 @@ public:
   __device__ void setDataPtrs(void const SGLOBAL *inputBuf, void SGLOBAL *outputBuf, void const SGLOBAL*acc = nullptr) {
     userBufs[Input] = (T SGLOBAL*)inputBuf;
     userBufs[Output] = (T SGLOBAL*)outputBuf;
-    userBufs[Acc] = (T SGLOBAL*)acc;
   }
 
   __device__ void send(intptr_t inpIx, int eltN) {

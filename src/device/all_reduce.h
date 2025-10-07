@@ -21,194 +21,68 @@ namespace {
   __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
-    int ringIx = ring->index;
-    const int nranks = ncclShmem.comm.nRanks;
-    const int bid = ncclShmem.channelId - work->channelLo;
-    ssize_t size;
     ssize_t gridOffset;
-    ssize_t channelCount;
-    ssize_t chunkCount;
-    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
-    const ssize_t loopCount = nranks * chunkCount;
-    ssize_t offset;
-    int nelem;
-    int chunk;
-
-#if defined(ENABLE_NPKIT)
-    int npKitCtxIdx = bid;
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, NPKIT_GET_CPU_TIMESTAMP_FROM_BLOCK,
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    uint32_t channelCount, chunkCount;
+    {
+    ssize_t size64, channelCount64, chunkCount64;
+    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size64, 
+          &gridOffset, &channelCount64, &chunkCount64);
+    channelCount = channelCount64, chunkCount = chunkCount64;
     }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, NPKIT_GET_GPU_TIMESTAMP(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_ENTRY, size*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
     // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata> prims
-      (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
+      (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, 
+        work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
 
-   
-#if defined(ENABLE_NPKIT)
-    if (tid == 0) {
-      prims.npKitCtxIdx = npKitCtxIdx;
-    }
-#endif
+    // elemOffset = ncclShmem.comm.nRanks * chunkCount * i;
+    for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += 
+        ncclShmem.comm.nRanks * chunkCount) {
 
-    for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += loopCount) {
-      ssize_t remCount = channelCount - elemOffset;
-      ssize_t chunkOffset;
-
-      if (remCount < loopCount) chunkCount = alignUp(divUp(remCount, nranks), 16/sizeof(T));
-
-      auto modRanks = [&]__device__(int r)->int {
-        return r - (r >= nranks ? nranks : 0);
+      auto getOfsNelem = [&]__device__(int r) {
+        const int nranks = ncclShmem.comm.nRanks;
+        int chunk = r - (r >= nranks ? nranks : 0);
+        ssize_t remCount = channelCount - elemOffset;
+        ssize_t tmpChunkCount = chunkCount;
+        if (remCount < ncclShmem.comm.nRanks * chunkCount) {
+          tmpChunkCount = alignUp(divUp(remCount, nranks), 16/sizeof(T));
+        }
+        ssize_t chunkOffset = chunk * tmpChunkCount;
+        ssize_t offset = gridOffset + elemOffset + chunkOffset;
+        int nelem = (int)min(tmpChunkCount, remCount - chunkOffset);
+        return std::make_tuple(offset, nelem);
       };
 
       // step 0: push data to next GPU
-      chunk = modRanks(ringIx + nranks - 1);
-      chunkOffset = chunk * chunkCount;
-      offset = gridOffset + elemOffset + chunkOffset;
-      nelem = (int)min(chunkCount, remCount - chunkOffset);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_SEND_ENTRY)
-      if (tid == 0) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_SEND_ENTRY, nelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        prims.npKitDataProcessTotalTime = 0;
-      }
-#endif
-
+      {
+      auto[offset,nelem] = getOfsNelem(ring->index + ncclShmem.comm.nRanks - 1);
       prims.directSend(offset, offset, nelem);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_SEND_EXIT)
-      if (tid == 0) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_SEND_EXIT, nelem*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
       }
-#endif
 
       // k-2 steps: reduce and copy to next GPU
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_RECV_REDUCE_SEND_ENTRY)
-      if (tid == 0 && nranks > 2) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_RECV_REDUCE_SEND_ENTRY, nelem*(nranks-2)*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        prims.npKitDataProcessTotalTime = 0;
-      }
-#endif
-
-      for (int j = 2; j < nranks; ++j) {
-        chunk = modRanks(ringIx + nranks - j);
-        chunkOffset = chunk * chunkCount;
-        offset = gridOffset + elemOffset + chunkOffset;
-        nelem = (int)min(chunkCount, remCount - chunkOffset);
+      for (int j = 2; j < ncclShmem.comm.nRanks; ++j) {
+        auto[offset,nelem] = getOfsNelem(ring->index + ncclShmem.comm.nRanks - j);
         prims.directRecvReduceDirectSend(offset, offset, nelem);
       }
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_RECV_REDUCE_SEND_EXIT)
-      if (tid == 0 && nranks > 2) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_RECV_REDUCE_SEND_EXIT, nelem*(nranks-2)*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-      }
-#endif
-
       // step k-1: reduce this buffer and data, which will produce the final
       // result that we store in this data and push to the next GPU
-      chunk = ringIx + 0;
-      chunkOffset = chunk * chunkCount;
-      offset = gridOffset + elemOffset + chunkOffset;
-      nelem = (int)min(chunkCount, remCount - chunkOffset);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY)
-      if (tid == 0) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY, nelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        prims.npKitDataProcessTotalTime = 0;
-      }
-#endif
-
+      {
+      auto[offset,nelem] = getOfsNelem(ring->index + 0);
       prims.directRecvReduceCopyDirectSend(offset, offset, nelem, /*postOp=*/true);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_REDUCE_COPY_SEND_EXIT)
-      if (tid == 0) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_REDUCE_COPY_SEND_EXIT, nelem*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
       }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_COPY_SEND_ENTRY)
-      if (tid == 0 && nranks > 2) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_COPY_SEND_ENTRY, nelem*(nranks-2)*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        prims.npKitDataProcessTotalTime = 0;
-      }
-#endif
-
       // k-2 steps: copy to next GPU
-      for (int j = 1; j < nranks - 1; ++j) {
-        chunk = modRanks(ringIx + nranks - j);
-        chunkOffset = chunk * chunkCount;
-        offset = gridOffset + elemOffset + chunkOffset;
-        nelem = (int)min(chunkCount, remCount - chunkOffset);
+      for (int j = 1; j < ncclShmem.comm.nRanks - 1; ++j) {
+        auto[offset,nelem] = getOfsNelem(ring->index + ncclShmem.comm.nRanks - j);
         prims.directRecvCopyDirectSend(offset, offset, nelem);
       }
 
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_COPY_SEND_EXIT)
-      if (tid == 0 && nranks > 2) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_COPY_SEND_EXIT, nelem*(nranks-2)*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-      }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_ENTRY)
-      if (tid == 0) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_ENTRY, nelem*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-        prims.npKitDataProcessTotalTime = 0;
-      }
-#endif
-
       // Make final copy from buffer to dest.
-      chunk = modRanks(ringIx + 1);
-      chunkOffset = chunk * chunkCount;
-      offset = gridOffset + elemOffset + chunkOffset;
-      nelem = (int)min(chunkCount, remCount - chunkOffset);
-
+      {
+      auto[offset,nelem] = getOfsNelem(ring->index + 1);
       prims.directRecv(offset, nelem);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_EXIT)
-      if (tid == 0) {
-        NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_DIRECT_RECV_EXIT, nelem*sizeof(T), prims.npKitDataProcessTotalTime, NPKIT_GET_GPU_TIMESTAMP(),
-            ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
       }
-#endif
-
     }
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_EXIT, size*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
-
   }
 
   template<typename T, typename RedOp, typename Proto>
