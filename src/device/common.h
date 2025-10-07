@@ -116,6 +116,12 @@
 #define NCCL_GRID_CONSTANT
 #endif
 
+__device__ void llvm_amdgcn_global_load_to_lds(const uint8_t SGLOBAL *global_src,
+                                  uint8_t SLOCAL *local_dst,
+                                  int32_t byte_size,
+                                  int32_t offset,
+                                  int32_t glc_slc) __asm("llvm.amdgcn.global.load.lds");
+
 struct ncclShmemGroup {
   ncclConnInfo SGLOBAL *recvConns[NCCL_MAX_ARITY];
   ncclConnInfo SGLOBAL *sendConns[NCCL_MAX_ARITY];
@@ -258,12 +264,22 @@ __device__ inline bool barrier_red_or(bool vote, int name, int nThreads) {
 inline __device__ void copyToShmem16(int tid, void* dst, void const* src, int bytes) {
   int offset = 16*tid;
   if (offset < bytes) {
+#if 0
+    auto *dsrc = (const uint8_t SGLOBAL*)src + offset;
+    auto *ddst = (uint8_t SLOCAL*)dst + offset;
+#pragma unroll
+    for (int i = 0; i < 4; i++) {
+      // 16*tid, 16*tid+4, +8, +12
+      llvm_amdgcn_global_load_to_lds(dsrc, ddst, 4, i*4, 0);
+    }
+#else
     ulong2 SGLOBAL *src2;
     ulong2 SLOCAL *dst2;
     src2 = (ulong2 SGLOBAL*)((char const*)src + offset);
     dst2 = (ulong2 SLOCAL*)((char*)dst + offset);
     dst2->x = src2->x;
     dst2->y = src2->y;
+#endif
   }
 }
 
@@ -362,10 +378,11 @@ __device__ __forceinline__ void loadWorkBatchToShmem(
       //   src = &global_variable;
       // }
       // memcpy(dst, src, n);
+      char* dst = ncclShmem.workStorage;
+      dst += (workCursor + dstWork)*workSize + packInWork*16;
+#if 1
       if (ncclShmem.args.workStorageType == ncclDevWorkStorageTypeArgs) {
         char* src = (char*)args + (batch.offsetBase + srcWork*workSize + packInWork*16);
-        // Tlocal apparently breaks here ?? why?
-        // I mean it works fine but the data is not read correctly
         tmp = *(ulong2*)(src); // becomes ld.param.v2.u64
       }
       if (ncclShmem.args.workStorageType != ncclDevWorkStorageTypeArgs) {
@@ -373,9 +390,17 @@ __device__ __forceinline__ void loadWorkBatchToShmem(
         // PAE need to check if this is really global ?? 
         tmp = *(ulong2*)Tglobal(src); // becomes ld.v2.u64
       }
-      char* dst = ncclShmem.workStorage;
-      dst += (workCursor + dstWork)*workSize + packInWork*16;
       *(ulong2*)dst = tmp;
+#else
+      // this version seems to generate lots of scratch load/stores elsewhere
+      char* src = ncclShmem.args.workStorageType == ncclDevWorkStorageTypeArgs ?  
+            (char*)args + (batch.offsetBase + srcWork*workSize + packInWork*16) :
+            (char*)ncclShmem.args.workBuf + ((batch.offsetBase + srcWork*workSize + packInWork*16) & ncclShmem.args.workMask);
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        llvm_amdgcn_global_load_to_lds((const uint8_t SGLOBAL *)src, (uint8_t SLOCAL *)src, 4, i*4, 0);
+      }
+#endif
     }
     workCursor += nWorks;
 
@@ -689,6 +714,8 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
           /*COLLTRACE*/false, unroll >(&args4K.args); \
   }
 #else
+
+//  __attribute__((amdgpu_waves_per_eu(1,1))) 
 
 #define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
   __launch_bounds__(NCCL_MAX_NTHREADS, 1) \

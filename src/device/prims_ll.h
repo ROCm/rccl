@@ -28,7 +28,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   const int group;
   const int stepLines;
   Fan fan;
-  T SGLOBAL *userBufs[3];
+  T SGLOBAL *userBufs[2];
   ncclConnInfo SGLOBAL *recvConn = NULL;
   uint64_t *recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
@@ -78,11 +78,11 @@ private:
     return NCCL_LL_FLAG(sendStep[i] + 1); 
   }
 
-  uint64_t* barriers;
   uint64_t barrier_next = 0;
 
   inline __device__ void barrier() {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    uint64_t* barriers = &ncclShmem.groups[group].barrier;
     if (nthreads != WARP_SIZE)
       #if defined(__gfx942__) || (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
         barrier_generic(__threadfence_block(), nthreads, barrier_next, barriers);
@@ -446,7 +446,7 @@ public:
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : (T *)userBufs[SrcBuf] + srcIx;
     T *dstElts = DstBuf == -1 ? nullptr : (T *)userBufs[DstBuf] + dstIx;
-    T *accElts = (DstBuf == -1 || userBufs[Acc] == nullptr) ? nullptr : (T *)userBufs[Acc] + dstIx;
+    T *accElts = nullptr;
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
@@ -670,7 +670,6 @@ public:
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group),
     stepLines(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
     auto *channel = &ncclShmem.channel;
-    barriers = &ncclShmem.groups[group].barrier;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
     int nrecv=0, nsend=0;
     // We compare with Fan::MaxRecv here because this->MaxRecv is always at least 1
@@ -710,7 +709,6 @@ public:
   __device__ void setDataPtrs(void const SGLOBAL *inputBuf, void SGLOBAL* outputBuf, void const SGLOBAL *acc = nullptr) {
     userBufs[Input] = (T SGLOBAL *)inputBuf;
     userBufs[Output] = (T SGLOBAL *)outputBuf;
-    userBufs[Acc] = (T SGLOBAL*)acc;
   }
 
   __device__ void send(intptr_t inpIx, int eltN) {

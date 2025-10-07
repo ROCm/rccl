@@ -140,7 +140,7 @@ endif()
 # Set CMAKE flags
 #==================================================================================================
 set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
-set(CMAKE_CXX_STANDARD   14)   # We use C++14 features, this will add compile option: -std=c++14
+set(CMAKE_CXX_STANDARD   17)   # We use C++14 features, this will add compile option: -std=c++14
 set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++14 instead, which has some issues.
 if(ROCM_PATH)
   list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA
@@ -310,10 +310,11 @@ if(BUILD_BFD)
   endif()
 endif()
 
-# Check for --amdgpu-kernarg-preload-count
-check_cxx_compiler_flag("-mllvm --amdgpu-kernarg-preload-count=16" HAVE_KERNARG_PRELOAD)
+check_cxx_compiler_flag("-mllvm -amdgpu-kernarg-preload-count" HAVE_KERNARG_PRELOAD)
 if (HAVE_KERNARG_PRELOAD)
   message(STATUS "Kernarg preloading to SGPR enabled")
+else()
+  message(STATUS "NOT enabling kernarg preloading!")
 endif()
 
 check_cxx_compiler_flag("-parallel-jobs=12" HAVE_PARALLEL_JOBS)
@@ -1095,10 +1096,21 @@ else()  # Enable hidden visibility for library without tests/code coverage enabl
 endif()
 
 if (HAVE_KERNARG_PRELOAD)
-  #message(STATUS "================== NOTE NOTE using debug RCCL version!")
   #target_compile_options(rccl PRIVATE -g3 -ggdb -Og -mllvm --amdgpu-kernarg-preload-count=16)
-  target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+  target_compile_options(rccl PRIVATE -mllvm -amdgpu-kernarg-preload-count=16)
 endif()
+
+# target_compile_options(rccl PRIVATE -g3 -ggdb -Og)
+
+#target_compile_options(rccl PRIVATE -mllvm -amdgpu-promote-alloca-to-vector=1)
+# target_compile_options(rccl PRIVATE -mllvm -amdgpu-enable-vgpr-live-range-splitting=1)
+# target_compile_options(rccl PRIVATE -mllvm -amdgpu-spill-vgpr-to-agpr=1)
+# target_compile_options(rccl PRIVATE -mllvm -amdgpu-promote-alloca-to-vector-limit=1)
+# target_compile_options(rccl PRIVATE -mllvm -amdgpu-waves-per-eu=1)
+
+# target_compile_options(rccl PRIVATE 
+#   -mllvm -amdgpu-enable-pre-ra-optimizations=false
+#   -mllvm -amdgpu-schedule-relaxed-occupancy)
 
 ## NOTE: This is currently being handled by rocm-cmake, however may need to be re-enabled in the future
 #foreach(target ${GPU_TARGETS})
@@ -1205,6 +1217,8 @@ if (HAVE_KERNARG_PRELOAD)
   target_link_options(rccl PRIVATE "SHELL:-Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
   #target_link_options(rccl PRIVATE "SHELL:-g3 -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
 endif()
+
+# target_link_options(rccl PRIVATE "SHELL:-g3")
 
 if(ENABLE_MSCCLPP)
   include(cmake/MSCCLPP.cmake)
