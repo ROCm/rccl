@@ -82,6 +82,20 @@ set the HSA environment variable as follows:
 This feature requires GPUs that support peer-to-peer access along with
 proper large BAR addressing support.
 
+Ignoring CPU affinity with multi-node
+=====================================
+
+Depending on the job launcher and the requirements of your workload, performance as the communication workload scales
+can be improved by setting ``NCCL_IGNORE_CPU_AFFINITY``.  This allows the RCCL communication library to 
+ignore the job's supplied CPU affinity and use the GPU affinity only.
+
+.. code-block:: shell
+
+   NCCL_IGNORE_CPU_AFFINITY=1
+
+For general usage, this environment variable is not set so it doesn't interfere with the user or launcher
+supplied preferences.
+
 Improving performance on the MI300X 
 ===================================
 

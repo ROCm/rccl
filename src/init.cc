@@ -95,8 +95,6 @@ NCCL_PARAM(NvlsChannels, "NVLS_NCHANNELS", NCCL_CONFIG_UNDEF_INT);
 
 struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
 static ncclResult_t commReclaim(ncclComm_t comm);
-std::unordered_map<void*, size_t> hugepageAllocs;
-std::mutex hugepageAllocsMutex;
 
 #ifdef ENABLE_MSCCLPP
 size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
@@ -150,7 +148,8 @@ ncclResult_t checkHsaEnvSetting() {
 
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
-    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
+    // Always print out this warning message
+    printf("Fatal Error: HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with HIP Runtime version:%d, GPU Firmware version:%d\n", hipRuntimeVersion, firmwareVersion);
     return ncclSystemError;
   }
   return ncclSuccess;
@@ -2156,7 +2155,7 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
   int minCTAsEnv;
   int maxCTAsEnv;
   int splitShareEnv;
-  int collnetEnableEnv;
+  const char* collnetEnableEnv;
   int ctaPolicyEnv;
   int shrinkShareEnv;
   int nvlsCTAsEnv;
@@ -2210,9 +2209,15 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
     comm->config.shrinkShare = shrinkShareEnv;
   }
 
-  collnetEnableEnv = ncclParamCollnetEnable();
-  if (collnetEnableEnv != NCCL_CONFIG_UNDEF_INT) {
-    comm->config.collnetEnable = collnetEnableEnv;
+  // NCCL_COLLNET_ENABLE needs to be reloaded each time for comm init
+  // since users might change the env on the fly to enable/disable collnet
+  collnetEnableEnv = ncclGetEnv("NCCL_COLLNET_ENABLE");
+  if (collnetEnableEnv != NULL) {
+    int collnetEnableInt = (int)strtol(collnetEnableEnv, NULL, 0);
+    if (collnetEnableInt != NCCL_CONFIG_UNDEF_INT) {
+      comm->config.collnetEnable = collnetEnableInt;
+      INFO(NCCL_ENV, "NCCL_COLLNET_ENABLE set by environment to %d.", collnetEnableInt);
+    }
   }
 
   ctaPolicyEnv = ncclParamCtaPolicy();
@@ -2869,6 +2874,7 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
     NVTX3_PAYLOAD(comm->commHash, nranks, rank, cudaDev));
 
   TRACE(NCCL_INIT, "comm %p rank %d nRanks %d cudaDev %d busId %lx", comm, rank, nranks, cudaDev, comm->busId);
+  NCCLCHECK(ncclGroupStartInternal());
   // Try and prevent a double free of the comm struct (user error)
   if (comm->rank == -1 || comm->nRanks == -1 || comm->cudaDev == -1 || comm->busId == -1) {
     WARN("comm %p has already been destroyed", comm);
@@ -2883,6 +2889,8 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, commReclaim, NULL, free, comm), res, fail);
 
 exit:
+  ncclGroupErrCheck(res);
+  NCCLCHECK(ncclGroupEndInternal());
   return res;
 fail:
   goto exit;
@@ -2907,6 +2915,7 @@ ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
   if (comm == NULL) {
     return ncclSuccess;
   }
+  NCCLCHECK(ncclGroupStartInternal());
   // Ask anything that might still be running on the device to quit
   NCCLCHECK(setCommAbortFlags(comm,1));
   comm->destroyFlag = 1;
@@ -2929,7 +2938,9 @@ ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, commReclaim, NULL, free, comm), res, fail);
 
 exit:
-  return ncclSuccess;
+  ncclGroupErrCheck(res);
+  NCCLCHECK(ncclGroupEndInternal());
+  return res;
 fail:
   goto exit;
 }

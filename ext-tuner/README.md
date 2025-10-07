@@ -1,95 +1,182 @@
-# RCCL Tuner Plugin API Overview
+# NCCL Tuner Plugin Development
 
-This document describes the API structure to be implemented by an external tuner plugin for RCCL. The purpose of this plugin is to enable stakeholders to hand-tailor the selection of an algorithm, a protocol, number of channels (thread blocks) based on an input configuration of interest: message size, number of nodes and GPUs, and link types (PCIe, XGMI, NET).
+This directory contains resources and examples for developing NCCL tuner plugins. Tuner plugins allow you to customize NCCL's algorithm and protocol selection behavior to optimize performance for specific workloads and hardware configurations.
 
-## Notes
-- The [example plugin](example/plugin.c) is only a demonstration that uses math models to approximate BW and latency of available choices of algorithms and protocols and provide the one that scores the lowest latency. It is customized for MI300 GPUs and RoCEv2 networks on a limited number of nodes. It is not meant to be inclusive of all AMD GPUs/Network setups out there. 
-- The API allows partial outputs: tuners can set only the algorithm and protocol, or let RCCL set the remaining fields (e.g., number of channels).
-- If`getCollInfo()`fails, RCCL will use its default internal mechanisms to determine the best collective configuration.
-- `getCollInfo()`is called for each collective invocation per communicator, so special care is to be taken not to cause excessive latency.
-- The advantage of this plugin is that each customer can create and maintain their hand-tailored tuner without relying on RCCL to develop and maintain it.
-- Supported RCCL algorithms are `NCCL_ALGO_TREE` and `NCCL_ALGO_RING`.
-- Supported RCCL protocols are `NCCL_PROTO_SIMPLE`, `NCCL_PROTO_LL` and `NCCL_PROTO_LL128`.
-  - Until support is present for network collectives, we show in our example how to ignore other algorithms in `pluginGetCollInfo` API implementation as follows:
-    ```C++
-    if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
-    if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1) continue;
-    if (a == NCCL_ALGO_NVLS && collNetSupport != 1) continue;
-    ```
----
-# API Description 
-The `ncclTuner_v1_t` structure must be implemented to build a custom tuner. 
+## Overview
 
-## Structure: `ncclTuner_v1_t`
+NCCL tuner plugins provide a way to influence NCCL's automatic algorithm and protocol selection by modifying the cost tables that NCCL uses to make decisions. This allows you to:
 
-### Fields
+- Override default algorithm/protocol combinations for specific collective operations
+- Customize tuning based on message size, topology, and other parameters
+- Implement sophisticated tuning strategies without recompiling NCCL
+- Optimize performance for specific hardware configurations or workloads
 
-#### 1. `name`
-  Type: `const char*`  
-  Description: The name of the tuner. Can be used for logging purposes when (`NCCL_DEBUG=info NCCL_DEBUG_SUBSYS=tune`) are set.
+## Tuner Plugin Interface
 
-### Functions
+NCCL tuner plugins must implement the `ncclTuner_t` interface defined in `nccl_tuner.h` within `nccl/src/include/plugin`. These definitions have been forked to `tuner.h` in each example plugin, and it is expected that any plugin implementor forks the internal NCCL definitions as well. The current interface includes:
 
-#### 1. `init` (called upon communicator initialization with `ncclCommInitRank`)
+```c
+// Initialize the tuner plugin
+ncclResult_t (*init)(size_t nRanks, size_t nNodes, ncclDebugLogger_t logFunction, void **context);
 
-Initializes the tuner states. Each communicator initializes its tuner. nNodes x nRanks = total number of GPUs participating in the collective communication
+// Get and modify collective operation cost information
+ncclResult_t (*getCollInfo)(void* context, ncclFunc_t collType, size_t nBytes,
+                           int numPipeOps, float** collCostTable, int numAlgo, int numProto,
+                           int regBuff, int* nChannels);
 
-- **Parameters**:
-  - `nRanks` (size_t): The number of devices (GPUs).
-  - `nNodes` (size_t): The number of OS nodes (physical nodes or VMs).
-  - `logFunction` (ncclDebugLogger_t): A log function that can be useful to turn on certain debugging info.
+// Clean up plugin resources
+ncclResult_t (*destroy)(void* context);
+```
 
-- **Return**:  
-  Type: `ncclResult_t`  
-  The result of the initialization.
+## Development Guidelines
 
-#### 2. `getCollInfo` (called for each collective call per communicator)
+### 1. Plugin Structure
 
-Retrieves information about the collective algorithm, protocol, and number of channels for the given input parameters.
+A typical tuner plugin should:
+- Include the necessary forked NCCL headers (`tuner.h`)
+- Implement all required interface functions
+- Export the plugin structure with appropriate version
+- Handle all input parameters gracefully
 
-- **Parameters**:
-  - `collType` (ncclFunc_t): The collective type, e.g., `allreduce`, `allgather`, etc.
-  - `nBytes` (size_t): The size of the collective in bytes.
-  - `collNetSupport` (int): Whether `collNet` supports this type.
-  - `nvlsSupport` (int): Whether NVLink SHARP supports this type.
-  - `numPipeOps` (int): The number of operations in the group.
-  
-- **Outputs**:
-  - `algorithm` (int*): The selected algorithm to be used for the given collective.
-  - `protocol` (int*): The selected protocol to be used for the given collective.
-  - `nChannels` (int*): The number of channels (and SMs) to be used.
-  
-- **Description**:
-  If `getCollInfo()` does not return `ncclSuccess`, RCCL will fall back to its default tuning for the given collective. The tuner is allowed to leave fields unset, in which case RCCL will automatically set those fields.
+### 2. Cost Table Modification
 
-- **Return**:  
-  Type: `ncclResult_t`  
-  The result of the operation.
+The `getCollInfo` function receives a cost table that maps algorithm/protocol combinations to performance costs. Lower costs indicate preferred combinations. You can:
 
-#### 3. `destroy` (called upon communicator finalization with `ncclCommFinalize`)
+- Set costs to `0.0` to make combinations highly preferred
+- Set costs to `NCCL_ALGO_PROTO_IGNORE` to disable combinations
+- Use relative costs to create preferences between options
 
-Terminates the plugin and cleans up any resources allocated by the tuner.
+### 3. Channel Management
 
-- **Return**:  
-  Type: `ncclResult_t`  
-  The result of the cleanup process.
+The `nChannels` parameter allows you to:
+- Set a specific number of channels to use
+- Return the original value to preserve NCCL's default behavior
+- Implement dynamic channel selection based on message size or topology
 
----
+### 4. Error Handling
 
+Always return appropriate `ncclResult_t` values:
+- `ncclSuccess` for successful or ignored operations
+- `ncclInternalError` for plugin-specific errors. Returning an error is only advisable on plugin initialization and destruction, as the penalty users can pay for the overhead of a failed plugin call can be immense.
+- Other NCCL error codes as appropriate
 
-# Build instructions and usage
+## Getting Started
 
-- The way to use the external plugin is to implement the desired algorithm/protocol selection technique using the API described above. `ext-tuner/example/plugin.c` is an example based on MI300 tuning table by default as a reference for customers in `plugin.c`.
-- Build the `libnccl-tuner.so` file following [the Makefile example](example/Makefile). 
+### Option 1: Start with the Example Plugin
 
-## Building and using example libnccl-tuner.so
+If you're new to tuner plugin development, start with the `example/` directory:
+
 ```bash
-cd $RCCL_HOME/ext-tuner/example/ 
+cd example/
 make
 ```
-Next is to let RCCL know that you want to use the custom-made libnccl-tuner.so by setting the following environment variable to the directory of the libnccl-tuner.so file:
+
+This provides a CSV-based configuration system that you can customize or use as a template.
+
+## Building and Testing
+
+### Build Requirements
+
+- GCC or compatible C compiler
+- NCCL headers (included in `nccl/` subdirectories)
+- Make
+
+## Option 2: Use the Basic Plugin
+
+For more customized tuning needs, you might want to start with a clean baseline. In that case, base off the basic plugin in the `basic/` directory:
 
 ```bash
-export NCCL_TUNER_PLUGIN=$RCCL_HOME/ext-tuner/example/libnccl-tuner.so
+cd basic/
+make
 ```
 
+### Build Process
+
+Each plugin directory contains a Makefile:
+
+```bash
+cd basic/    # or example/
+make
+```
+
+This generates a shared library (`.so` file) that can be loaded by NCCL.
+
+### Loading the Plugin
+
+Set the `LD_LIBRARY_PATH` to include your plugin directory:
+
+```bash
+export LD_LIBRARY_PATH=/path/to/your/plugin:$LD_LIBRARY_PATH
+```
+
+Set `NCCL_TUNER_PLUGIN` to either the plugin name, or the absolute path to the plugin file. Any of the below can work:
+
+```bash
+export NCCL_TUNER_PLUGIN=example
+export NCCL_TUNER_PLUGIN=libnccl-tuner-example.so
+export NCCL_TUNER_PLUGIN=/path/to/your/plugin/libnccl-tuner-example.so
+```
+
+NCCL will automatically discover and load the plugin based on the exported symbol names.
+
+## Advanced Topics
+
+### Plugin Versioning
+
+NCCL supports multiple plugin interface versions. Make sure your plugin exports the correct version:
+
+```c
+const ncclTuner_v4_t ncclTunerPlugin_v4 = {
+    .name = "YourPluginName",
+    .init = yourInitFunction,
+    .getCollInfo = yourGetCollInfoFunction,
+    .destroy = yourDestroyFunction
+};
+```
+
+### Multi-GPU and Multi-Node Considerations
+
+Your plugin receives topology information (`nRanks`, `nNodes`) during initialization. Use this to:
+- Implement topology-aware tuning strategies
+- Handle single-node vs. multi-node optimizations differently
+- Scale channel counts based on available hardware
+
+### Performance Optimization
+
+- Keep plugin logic lightweight to avoid impacting NCCL performance
+- Cache expensive computations when possible
+- Use the logging system for debugging but avoid excessive output in production
+
+## Debugging and Logging
+
+Use NCCL's debug logging system:
+
+```bash
+export NCCL_DEBUG=INFO    # General information
+export NCCL_DEBUG_SUBSYS=TUNING
+```
+
+Within your plugin, use the provided `ncclDebugLogger_t` function for consistent logging.
+
+## Best Practices
+
+1. **Test thoroughly**: Verify your plugin works with various message sizes and topologies
+2. **Handle edge cases**: Ensure your plugin behaves correctly with unusual input parameters
+3. **Document your approach**: Clearly document your tuning strategy and configuration options
+4. **Version your plugin**: Use meaningful version numbers and maintain backward compatibility
+5. **Performance validation**: Measure the impact of your tuning decisions on real workloads
+
+## Contributing
+
+When developing new tuner plugins:
+- Follow the existing code style and structure
+- Include comprehensive documentation
+- Add example configurations and test cases
+- Consider contributing useful plugins back to the community
+
+## Resources
+
+- [NCCL Documentation](https://docs.nvidia.com/deeplearning/nccl/)
+- Example plugin implementations in this directory
+
+For questions and support, refer to the NCCL community resources and documentation.
