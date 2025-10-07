@@ -632,8 +632,8 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     }
     profiler(STOP);
     //TODO:ARECH Why this %WARP_SIZE is here?
-    //loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
-    loadWorkBatchToShmem(tid, tn, args, batchIx);
+    loadWorkBatchToShmem(tid%WARP_SIZE, tn, args, batchIx);
+    //loadWorkBatchToShmem(tid, tn, args, batchIx);
     __syncthreads();
 
     if (tid == 0 && ncclShmem.args.workStorageType == ncclDevWorkStorageTypeFifo) {

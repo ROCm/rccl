@@ -12,7 +12,7 @@
 #include <hip/hip_fp16.h>
 
 #define ARECH_STRICT_MEM 1
-#define ARECH_SHOW_RING 1
+#define ARECH_SHOW_RING 0
 
 #define NCCL_MAJOR ${NCCL_MAJOR}
 #define NCCL_MINOR ${NCCL_MINOR}

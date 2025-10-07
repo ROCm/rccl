@@ -61,21 +61,6 @@ namespace {
     }
 #endif
     #if ARECH_SHOW_RING
-    if ((1==channelCount || 5== channelCount) && 0==tid){
-      auto *channel = &ncclShmem.channel;
-      auto& recvConn = channel->peers[ring->prev]->recv[work->connIndex];
-      auto& sendConn = channel->peers[ring->next]->send[work->connIndex];
-
-      printf("ncclShmem=%p, fid=%d, nthreads=%d, size=%zd, gridOffset=%zd, channelCount=%zd, chunkCount=%zd, nranks=%d\n"
-        "prev,cur,next = %d,%d,%d; "
-        "recv{buf,step, headPtr,headVal} = %p,%zu, %p,%zu; "
-        "send{buf,step, headPtr,headVal} = %p,%zu, %p,%zu\n",
-        &ncclShmem, int(ncclShmem.funcId), nthreads, size, gridOffset, channelCount, chunkCount, nranks,
-        ring->prev, ring->index, ring->next,
-        recvConn.buffs[NCCL_PROTO_LL], recvConn.step, recvConn.head, __atomic_load_n(recvConn.head, __ATOMIC_RELAXED),
-        sendConn.buffs[NCCL_PROTO_LL], sendConn.step, sendConn.head, __atomic_load_n(sendConn.head, __ATOMIC_RELAXED));
-    }
-    __syncthreads();
     { // SCOPE START
     #endif // ARECH_SHOW_RING
 
@@ -84,6 +69,25 @@ namespace {
     // coverity[callee_ptr_arith:FALSE]
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
+
+    #if ARECH_SHOW_RING
+    if ((1==channelCount || 5== channelCount) && 0==tid % WARP_SIZE){
+      auto *channel = &ncclShmem.channel;
+      auto& recvConn = channel->peers[ring->prev]->recv[work->connIndex];
+      auto& sendConn = channel->peers[ring->next]->send[work->connIndex];
+
+      printf("fid=%d, tid=%3d; prev,cur,next = %d,%d,%d; "
+        "recv{buf,step, headPtr,headVal} = %p,%2zu, %p,%2zu; "
+        "send{buf,step, headPtr,headVal} = %p,%2zu, %p,%2zu; "
+        "nSh=%p, prims=%p; sz,chnlCnt,chnkCnt = %zd,%zd,%zd; nranks=%d, nthrd=%d\n",
+        int(ncclShmem.funcId), tid, ring->prev, ring->index, ring->next,
+        recvConn.buffs[NCCL_PROTO_LL], recvConn.step, recvConn.head, __atomic_load_n(recvConn.head, __ATOMIC_RELAXED),
+        sendConn.buffs[NCCL_PROTO_LL], sendConn.step, sendConn.head, __atomic_load_n(sendConn.head, __ATOMIC_RELAXED),
+        &ncclShmem, &prims, size, channelCount, chunkCount, nranks, nthreads
+      );
+    }
+    __syncthreads();
+    #endif // ARECH_SHOW_RING
 
 #if defined(ENABLE_NPKIT)
     if (tid == 0) {
@@ -231,21 +235,21 @@ namespace {
 
     #if ARECH_SHOW_RING
     } // SCOPE END
-    __syncthreads();
-    if ((1==channelCount || 5== channelCount) && 0==tid){
+    //__syncthreads();
+    if ((1==channelCount || 5== channelCount) && 0==tid % WARP_SIZE){
       auto *channel = &ncclShmem.channel;
       auto& recvConn = channel->peers[ring->prev]->recv[work->connIndex];
       auto& sendConn = channel->peers[ring->next]->send[work->connIndex];
-      printf("ncclShmem=%p, fid=%d, nthreads=%d, size=%zd, gridOffset=%zd, channelCount=%zd, chunkCount=%zd, nranks=%d\n"
+      printf("fid=%d, tid=%3d; prev,cur,next = %d,%d,%d; "
         "recv{buf,step, headPtr,headVal} = %p,%zu, %p,%zu; "
         "send{buf,step, headPtr,headVal} = %p,%zu, %p,%zu\n",
-        &ncclShmem, int(ncclShmem.funcId), nthreads, size, gridOffset, channelCount, chunkCount, nranks,
+        int(ncclShmem.funcId), tid,
+        ring->prev, ring->index, ring->next,
         recvConn.buffs[NCCL_PROTO_LL], recvConn.step, recvConn.head, __atomic_load_n(recvConn.head, __ATOMIC_RELAXED),
         sendConn.buffs[NCCL_PROTO_LL], sendConn.step, sendConn.head, __atomic_load_n(sendConn.head, __ATOMIC_RELAXED));
     }
     __syncthreads();
     #endif // ARECH_SHOW_RING
-
   }
 
   template<typename T, typename RedOp, typename Proto>
