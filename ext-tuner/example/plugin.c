@@ -5,224 +5,446 @@
  ************************************************************************/
 
 #include "tuner.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 #define __hidden __attribute__ ((visibility("hidden")))
-#define HOPPER_COMPCAP_IDX 2
-// NVLink, PCI, Network
-#define NCCL_HW_NVLINK 0
-#define NCCL_HW_PCI 1
-#define NCCL_HW_NET 2
+#define MAX_LINE_LENGTH 256
 
-static long log2i(long n) {
- long l = 0;
- while (n>>=1) l++;
- return l;
-}
-// Latencies in us, Bandwidths in GB/s
-// Tree { LL, LL128, Simple } , Ring { LL, LL128, Simple }
-static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = { 
-       { 12.0, 12.0, 17.0 }, { 12.0, 12.0, 17.0 },   // Tree, Ring
-       { 12.0, 12.0, 17.0 }, { 12.0, 12.0, 17.0 },   // Collnet Direct, Chain
-       {    0,    0,    0 }, {    0,    0,    0 }};  // NVLS, NVLS Tree
+// CSV field indices for configuration parsing
+// Format: colltype,minbytes,maxbytes,algorithm,protocol,channels,nNodes,nRanks,numPipeOps,regBuff
+#define CONFIG_FIELD_COLLTYPE     0
+#define CONFIG_FIELD_MINBYTES     1
+#define CONFIG_FIELD_MAXBYTES     2
+#define CONFIG_FIELD_ALGORITHM    3
+#define CONFIG_FIELD_PROTOCOL     4
+#define CONFIG_FIELD_CHANNELS     5
+#define CONFIG_FIELD_NNODES       6
+#define CONFIG_FIELD_NRANKS       7
+#define CONFIG_FIELD_PIPEOPS      8  // Optional field
+#define CONFIG_FIELD_REGBUFF      9  // Optional field
 
-struct tuningModel {
-  float hwLat[3][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
-  float bwRatio[2][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
-  float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
-  float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
-};
+// Field count constants
+#define CONFIG_FIELDS_REQUIRED    8   // Minimum required fields (up to nRanks)
+#define CONFIG_FIELDS_WITH_PIPEOPS 9  // Fields including numPipeOps
+#define CONFIG_FIELDS_WITH_REGBUFF 10 // Fields including both numPipeOps and regBuff
+#define CONFIG_FIELDS_MAX         10  // Maximum number of fields supported
 
-static struct tuningModel tuning_model = {
-  {
-    /* NVLINK */
-    { /* Tree (LL/LL128/Simple)*/ { 0.8, 0.0, 2.5 }, /* Ring (LL/LL128/Simple)*/ { 0.8, 0.0, 3.6 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 0.8 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
-    /* PCI */
-    { /* Tree (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* Ring (LL/LL128/Simple)*/ { 2.2, 2.2, 5.7 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 5.7 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 5.7 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
-    /* NET */
-    { /* Tree (LL/LL128/Simple)*/ { 12.5, 0.0, 22.4 }, /* Ring (LL/LL128/Simple)*/ { 9.5, 0.0, 19.8 }, /* CollNetDirect (Simple)*/ { 0.0, 0.0, 12.5 }, /* CollNetChain (Simple)*/ { 0.0, 0.0, 0.0 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
-  },
+typedef struct {
+  ncclFunc_t collType;
+  size_t minBytes;
+  size_t maxBytes;
+  int algorithm;
+  int protocol;
+  int nChannels;
+  int nNodes;
+  int nRanks;
+  int numPipeOps;
+  int regBuff;
+} TuningConfig;
 
-  {
-    /* 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* Ring (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
-    /* more than 2 nodes */
-    { /* Tree (LL/LL128/Simple)*/ { 0.41, 0.00, 0.86 }, /* Ring (LL/LL128/Simple)*/ { 0.41, 0.00, 1.00 }, /* CollNetDirect (Simple)*/ { 0.00, 0.00, 1.00 }, /* CollNetChain (Simple)*/ { 0.00, 0.00, 1.00 }, /* NVLS */ { 0, 0, 0 }, /* NVLS Tree */ { 0, 0, 0 } },
-  },
+typedef struct {
+  TuningConfig* configs;  // Changed from static array to dynamic pointer
+  int numConfigs;
+  int maxConfigs;         // Added to track allocated size
+  size_t nRanks;
+  size_t nNodes;
+  ncclDebugLogger_t logFunction;
+} TunerContext;
 
-  {
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 0.8, 0.1, 0.4, 0.5, 1.0, 0.6, 0.4, 0.6, 0.1, 0.3, 0.4, 0.4, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
-    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 0.4, 1.0, 1.0, 1.0, 0.2, 0.7, 1.0, 1.0, 1.0, 0.8, 0.7, 0.7, 0.8, 0.8, 0.8, 0.9, },
-  },
-
-  {
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 0.1, 0.2, 0.2, 0.1, 0.5, 0.8, 1.0, 0.2, 0.4, 0.5, 0.4, 0.4, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, },
-    { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, },
-    { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.7, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, },
-  },
-};
-
-float latencies[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
-float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
-
-ncclResult_t ncclTopoGetAlgoTime_Tuner(ncclFunc_t collType, int algorithm, int protocol, int numPipeOps, float* time, size_t nBytes) {
-  float bw = bandwidths[collType][algorithm][protocol];
-  float lat = latencies[collType][algorithm][protocol];
-
-  if (bw == 0) {
-    *time = -1.0; return ncclSuccess;
-  }
-  int logSize = log2i(nBytes>>6);
-  if (algorithm == NCCL_ALGO_TREE) {
-    if (logSize < 27) bw *= tuning_model.treeCorrectionFactor[protocol][logSize];
-    else bw *= tuning_model.treeCorrectionFactor[protocol][26];
-  }
-  else if (algorithm == NCCL_ALGO_RING) {
-    if(logSize < 27) bw *= tuning_model.ringCorrectionFactor[protocol][logSize];
-    else bw *= tuning_model.ringCorrectionFactor[protocol][26];
-  }
-
-  int latCount = 1;
-  *time = lat * latCount + (nBytes) / (1000 * bw);
-  return ncclSuccess;
+// Parse collective type from string
+static ncclFunc_t parseCollType(const char* str) {
+  if (strcmp(str, "broadcast") == 0) return ncclFuncBroadcast;
+  if (strcmp(str, "reduce") == 0) return ncclFuncReduce;
+  if (strcmp(str, "allgather") == 0) return ncclFuncAllGather;
+  if (strcmp(str, "reducescatter") == 0) return ncclFuncReduceScatter;
+  if (strcmp(str, "allreduce") == 0) return ncclFuncAllReduce;
+  return ncclFuncAllReduce; // default
 }
 
-__hidden ncclResult_t pluginInit(size_t nRanks, size_t nNodes, ncclDebugLogger_t logFunction) { 
-  if (nRanks <= 1) return ncclSuccess;
-  int compCapIndex = HOPPER_COMPCAP_IDX;
-  int index2 = nNodes <= 2 ? nNodes-1 : 2;
-  int index1 = nNodes == 1 ? compCapIndex : 1;
-  float ppn = (float)nRanks / nNodes; // if ppn < 2, then we are sending/receiving at the same GPU through the NIC, apply some bw discount
+// Convert collective type to string
+static const char* collTypeToString(ncclFunc_t collType) {
+  switch (collType) {
+    case ncclFuncBroadcast: return "broadcast";
+    case ncclFuncReduce: return "reduce";
+    case ncclFuncAllGather: return "allgather";
+    case ncclFuncReduceScatter: return "reducescatter";
+    case ncclFuncAllReduce: return "allreduce";
+    default: return "unknown";
+  }
+}
 
-  int intraHw[NCCL_NUM_ALGORITHMS], hw[NCCL_NUM_ALGORITHMS];
-  for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) intraHw[a] = NCCL_HW_NVLINK;
-  for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) hw[a] = nNodes == 1 ? intraHw[a] : NCCL_HW_NET;
-  for (int coll=0; coll<NCCL_NUM_FUNCTIONS; coll++) {
-    int nsteps = coll == ncclFuncAllReduce ? 2*(nRanks-1) :
-      coll == ncclFuncReduceScatter || coll == ncclFuncAllGather ? nRanks-1 :
-      nRanks;
-    int nInterSteps = coll == ncclFuncAllReduce ? (nNodes > 1 ? 2*nNodes :0) :
-      coll == ncclFuncReduceScatter || coll == ncclFuncAllGather ? nNodes-1 :
-      nNodes;
+// Parse algorithm from string
+static int parseAlgorithm(const char* str) {
+  if (strcmp(str, "tree") == 0) return NCCL_ALGO_TREE;
+  if (strcmp(str, "ring") == 0) return NCCL_ALGO_RING;
+  if (strcmp(str, "collnet_direct") == 0) return NCCL_ALGO_COLLNET_DIRECT;
+  if (strcmp(str, "collnet_chain") == 0) return NCCL_ALGO_COLLNET_CHAIN;
+  if (strcmp(str, "nvls") == 0) return NCCL_ALGO_NVLS;
+  if (strcmp(str, "nvls_tree") == 0) return NCCL_ALGO_NVLS_TREE;
+  if (strcmp(str, "pat") == 0) return NCCL_ALGO_PAT;
+  return NCCL_ALGO_RING; // default
+}
 
-    for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
-      if (coll == ncclFuncBroadcast && a != NCCL_ALGO_RING) continue;
-      if (coll == ncclFuncReduce && a != NCCL_ALGO_RING) continue;
-      if (coll == ncclFuncReduceScatter && a != NCCL_ALGO_RING && a != NCCL_ALGO_NVLS && a != NCCL_ALGO_COLLNET_DIRECT) continue;
-      if (coll == ncclFuncAllGather && a != NCCL_ALGO_RING && a != NCCL_ALGO_NVLS && a != NCCL_ALGO_COLLNET_DIRECT) continue;
+// Convert algorithm to string
+static const char* algorithmToString(int algorithm) {
+  switch (algorithm) {
+    case NCCL_ALGO_TREE: return "tree";
+    case NCCL_ALGO_RING: return "ring";
+    case NCCL_ALGO_COLLNET_DIRECT: return "collnet_direct";
+    case NCCL_ALGO_COLLNET_CHAIN: return "collnet_chain";
+    case NCCL_ALGO_NVLS: return "nvls";
+    case NCCL_ALGO_NVLS_TREE: return "nvls_tree";
+    case NCCL_ALGO_PAT: return "pat";
+    default: return "unknown";
+  }
+}
 
-      for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-        if (a == NCCL_ALGO_TREE && p == NCCL_PROTO_SIMPLE && nNodes == 1) continue;
-        if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && p != NCCL_PROTO_SIMPLE) continue;
-        int collnet = (a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) ? 1 : 0;
-        float bw = nNodes <= 2 || collnet ? 12.0 : 12.0; //graphs[a]->bwIntra : graphs[a]->bwInter
-        if (a == NCCL_ALGO_NVLS) bw = 0.0;
-        if (a == NCCL_ALGO_NVLS_TREE) bw = 0.0;
-        if (collnet == 1) bw = 0.0;
-        int nChannels = 28; //nNodes==1 && MI300
-        float busBw = nChannels * bw; //comm->topo->baseBw != 0.0 ? comm->topo->baseBw : graphs[a]->nChannels * bw
-        
-        // Various model refinements
-        if (nNodes <= 2)
-          busBw *= tuning_model.bwRatio[0][a][p];
-        else
-          busBw *= tuning_model.bwRatio[1][a][p];
-        if (a == NCCL_ALGO_RING && p == NCCL_PROTO_LL && (coll == ncclFuncBroadcast || coll == ncclFuncReduce) && nNodes == 1) { busBw = busBw * 1.65; }
+// Parse protocol from string
+static int parseProtocol(const char* str) {
+  if (strcmp(str, "ll") == 0) return NCCL_PROTO_LL;
+  if (strcmp(str, "ll128") == 0) return NCCL_PROTO_LL128;
+  if (strcmp(str, "simple") == 0) return NCCL_PROTO_SIMPLE;
+  return NCCL_PROTO_SIMPLE; // default
+}
 
-        // Convert bus BW to algorithm BW
-        if (!(a == NCCL_ALGO_COLLNET_DIRECT && (coll == ncclFuncAllGather || coll == ncclFuncReduceScatter))) {
-          float ratio = 1.0f;
-          if (a == NCCL_ALGO_RING) ratio *= (1.0 * nRanks) / nsteps;
-          else if (a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) ratio *= 5.0/6.0;
-          else ratio *= .5;
-          busBw *= ratio;
-        }
-        bandwidths[coll][a][p] = busBw;
-        latencies[coll][a][p] = baseLat[a][p];
-        float intraLat = tuning_model.hwLat[intraHw[a]][a][p];
-        float interLat = tuning_model.hwLat[NCCL_HW_NET][a][p];
+// Convert protocol to string
+static const char* protocolToString(int protocol) {
+  switch (protocol) {
+    case NCCL_PROTO_LL: return "ll";
+    case NCCL_PROTO_LL128: return "ll128";
+    case NCCL_PROTO_SIMPLE: return "simple";
+    default: return "unknown";
+  }
+}
 
-        if (a == NCCL_ALGO_RING) {
-          float lat = tuning_model.hwLat[hw[a]][a][p];
-          if ((coll == ncclFuncReduce || coll == ncclFuncBroadcast)) {
-            latencies[coll][a][p] += lat;
-          } else {
-            // Inter-node rings still have to launch nsteps * net overhead.
-            float netOverhead = 0.0;
-            if (nNodes > 1) {
-              netOverhead = 1;
-              if (p == NCCL_PROTO_SIMPLE) netOverhead *= 3;
-            }
-            if (intraLat < netOverhead) intraLat = netOverhead;
-            latencies[coll][a][p] += (nsteps-nInterSteps)*intraLat + nInterSteps*interLat;
-          }
-        } else if (a == NCCL_ALGO_TREE) {
-          latencies[coll][a][p] +=
-            2 * ((nRanks/nNodes-1) * intraLat + log2i(nNodes) * interLat);
-        } else if (a == NCCL_ALGO_COLLNET_DIRECT) {
-          int minimum = 1;
-          if ((nRanks/nNodes-1) < 1) minimum = (nRanks/nNodes-1);
-          latencies[coll][a][p] +=
-            2 * (minimum * intraLat + (nRanks/nNodes-1) * 0.4) + interLat;  // Add 0.4 us arity serialization latency
-        } else if (a == NCCL_ALGO_COLLNET_CHAIN) {
-          latencies[coll][a][p] += 2 * (nRanks/nNodes-1) * intraLat + interLat;
-        } else if (a == NCCL_ALGO_NVLS) {
-          if (nNodes > 1) latencies[coll][a][p] += tuning_model.hwLat[NCCL_HW_NET][a][p];
-        } else if (a == NCCL_ALGO_NVLS_TREE) {
-          latencies[coll][a][p] += 2*(nNodes-1)*tuning_model.hwLat[NCCL_HW_NET][a][p];
+// Helper function to count valid configuration lines in file
+static int countConfigLines(const char* filename) {
+  FILE* file = fopen(filename, "r");
+  if (!file) {
+    return 0;
+  }
+
+  char line[MAX_LINE_LENGTH];
+  int count = 0;
+
+  while (fgets(line, sizeof(line), file)) {
+    // Skip comments and empty lines
+    if (line[0] == '#' || line[0] == '\n') continue;
+
+    // Remove trailing newline
+    line[strcspn(line, "\n")] = 0;
+
+    // Check if line has content
+    if (strlen(line) > 0) {
+      count++;
+    }
+  }
+
+  fclose(file);
+  return count;
+}
+
+// Load configuration from file
+static ncclResult_t loadConfig(TunerContext* ctx, const char* filename) {
+  FILE* file = fopen(filename, "r");
+  if (!file) {
+    if (ctx->logFunction) {
+      ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                       "TUNER/ExamplePlugin: Config file %s not found, using defaults", filename);
+    }
+    return ncclSuccess; // Not finding config file is not an error
+  }
+
+  // First pass: count valid configuration lines
+  int configCount = countConfigLines(filename);
+  if (configCount == 0) {
+    if (ctx->logFunction) {
+      ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                       "TUNER/ExamplePlugin: No valid configurations found in %s", filename);
+    }
+    fclose(file);
+    return ncclSuccess;
+  }
+
+  // Allocate memory for configurations based on actual count
+  ctx->configs = (TuningConfig*)malloc(configCount * sizeof(TuningConfig));
+  if (!ctx->configs) {
+    if (ctx->logFunction) {
+      ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                       "TUNER/ExamplePlugin: Failed to allocate memory for %d configurations", configCount);
+    }
+    fclose(file);
+    return ncclSystemError;
+  }
+
+  ctx->maxConfigs = configCount;
+  ctx->numConfigs = 0;
+
+  if (ctx->logFunction) {
+    ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                     "TUNER/ExamplePlugin: Allocated memory for %d configurations", configCount);
+  }
+
+  // Reset file pointer to beginning
+  fseek(file, 0, SEEK_SET);
+
+  char line[MAX_LINE_LENGTH];
+
+  while (fgets(line, sizeof(line), file) && ctx->numConfigs < ctx->maxConfigs) {
+    // Skip comments and empty lines
+    if (line[0] == '#' || line[0] == '\n') continue;
+
+    // Remove trailing newline
+    line[strcspn(line, "\n")] = 0;
+
+    // Parse CSV format: colltype,minbytes,maxbytes,algorithm,protocol,channels,nNodes,nRanks,numPipeOps,regBuff
+    char* token;
+    char* tokens[CONFIG_FIELDS_MAX];
+    int tokenCount = 0;
+
+    // Make a copy of the line for tokenizing
+    char lineCopy[MAX_LINE_LENGTH];
+    strncpy(lineCopy, line, sizeof(lineCopy));
+    lineCopy[sizeof(lineCopy) - 1] = '\0';
+
+    // Tokenize by comma
+    token = strtok(lineCopy, ",");
+    while (token != NULL && tokenCount < CONFIG_FIELDS_MAX) {
+      // Trim whitespace
+      while (*token == ' ' || *token == '\t') token++;
+      char* end = token + strlen(token) - 1;
+      while (end > token && (*end == ' ' || *end == '\t')) {
+        *end = '\0';
+        end--;
+      }
+      tokens[tokenCount++] = token;
+      token = strtok(NULL, ",");
+    }
+
+    // Validate field count: support required fields (8), with pipeOps (9), or with regBuff (10)
+    if (tokenCount >= CONFIG_FIELDS_REQUIRED && tokenCount <= CONFIG_FIELDS_MAX) {
+      TuningConfig* config = &ctx->configs[ctx->numConfigs];
+      config->collType = parseCollType(tokens[CONFIG_FIELD_COLLTYPE]);
+      config->minBytes = (size_t)strtoull(tokens[CONFIG_FIELD_MINBYTES], NULL, 10);
+      config->maxBytes = (size_t)strtoull(tokens[CONFIG_FIELD_MAXBYTES], NULL, 10);
+      config->algorithm = parseAlgorithm(tokens[CONFIG_FIELD_ALGORITHM]);
+      config->protocol = parseProtocol(tokens[CONFIG_FIELD_PROTOCOL]);
+      config->nChannels = atoi(tokens[CONFIG_FIELD_CHANNELS]);
+      config->nNodes = atoi(tokens[CONFIG_FIELD_NNODES]);
+      config->nRanks = atoi(tokens[CONFIG_FIELD_NRANKS]);
+
+      // numPipeOps is optional (9th field, index 8)
+      if (tokenCount >= CONFIG_FIELDS_WITH_PIPEOPS) {
+        config->numPipeOps = atoi(tokens[CONFIG_FIELD_PIPEOPS]);
+      } else {
+        config->numPipeOps = -1; // -1 means match any numPipeOps
+      }
+
+      // regBuff is optional (10th field, index 9)
+      if (tokenCount >= CONFIG_FIELDS_WITH_REGBUFF) {
+        config->regBuff = atoi(tokens[CONFIG_FIELD_REGBUFF]);
+      } else {
+        config->regBuff = -1; // -1 means match any regBuff value
+      }
+
+      ctx->numConfigs++;
+
+      if (ctx->logFunction) {
+        if (config->numPipeOps == -1 && config->regBuff == -1) {
+          ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                           "TUNER/ExamplePlugin: Loaded config: %s [%zu-%zu] %s/%s channels=%d nodes=%d ranks=%d pipeOps=any regBuff=any",
+                           tokens[CONFIG_FIELD_COLLTYPE], config->minBytes, config->maxBytes,
+                           tokens[CONFIG_FIELD_ALGORITHM], tokens[CONFIG_FIELD_PROTOCOL],
+                           config->nChannels, config->nNodes, config->nRanks);
+        } else if (config->regBuff == -1) {
+          ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                           "TUNER/ExamplePlugin: Loaded config: %s [%zu-%zu] %s/%s channels=%d nodes=%d ranks=%d pipeOps=%d regBuff=any",
+                           tokens[CONFIG_FIELD_COLLTYPE], config->minBytes, config->maxBytes,
+                           tokens[CONFIG_FIELD_ALGORITHM], tokens[CONFIG_FIELD_PROTOCOL],
+                           config->nChannels, config->nNodes, config->nRanks, config->numPipeOps);
+        } else if (config->numPipeOps == -1) {
+          ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                           "TUNER/ExamplePlugin: Loaded config: %s [%zu-%zu] %s/%s channels=%d nodes=%d ranks=%d pipeOps=any regBuff=%d",
+                           tokens[CONFIG_FIELD_COLLTYPE], config->minBytes, config->maxBytes,
+                           tokens[CONFIG_FIELD_ALGORITHM], tokens[CONFIG_FIELD_PROTOCOL],
+                           config->nChannels, config->nNodes, config->nRanks, config->regBuff);
+        } else {
+          ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                           "TUNER/ExamplePlugin: Loaded config: %s [%zu-%zu] %s/%s channels=%d nodes=%d ranks=%d pipeOps=%d regBuff=%d",
+                           tokens[CONFIG_FIELD_COLLTYPE], config->minBytes, config->maxBytes,
+                           tokens[CONFIG_FIELD_ALGORITHM], tokens[CONFIG_FIELD_PROTOCOL],
+                           config->nChannels, config->nNodes, config->nRanks, config->numPipeOps, config->regBuff);
         }
       }
     }
   }
-  // Protocols/Algorithms enable/disable, and user overrides.
-  // All are enabled except ll128 which is enabled by default only in certain cases.
-  int protoEnable[NCCL_NUM_PROTOCOLS] = { 1, 2, 1 };
-  int algoEnable[NCCL_NUM_ALGORITHMS] = { 1, 1, 1, 1, 1, 1 };
 
-  // MNNVL: NVLS not yet supported
-  algoEnable[NCCL_ALGO_NVLS_TREE] = 0;
-  algoEnable[NCCL_ALGO_COLLNET_DIRECT] = 0;
-  algoEnable[NCCL_ALGO_COLLNET_CHAIN] = 0;
-  algoEnable[NCCL_ALGO_NVLS] = 0;
-
-  for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-    int pEnable = protoEnable[p];
-    if (p == NCCL_PROTO_LL128) {
-      pEnable = 0;
-    }
-    if (pEnable == 0) bandwidths[c][a][p] = 0;
-    if (algoEnable[a] == 0) bandwidths[c][a][p] = 0;
+  fclose(file);
+  if (ctx->logFunction) {
+    ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                     "TUNER/ExamplePlugin: Loaded %d tuning configurations from %s", ctx->numConfigs, filename);
   }
+  return ncclSuccess;
+}
+
+__hidden ncclResult_t pluginInit(size_t nRanks, size_t nNodes, ncclDebugLogger_t logFunction, void **context) {
+  TunerContext* ctx = (TunerContext*)malloc(sizeof(TunerContext));
+  if (!ctx) return ncclSystemError;
+
+  ctx->configs = NULL;     // Initialize to NULL
+  ctx->numConfigs = 0;
+  ctx->maxConfigs = 0;     // Initialize to 0
+  ctx->nRanks = nRanks;
+  ctx->nNodes = nNodes;
+  ctx->logFunction = logFunction;
+
+  if (logFunction) {
+    logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                "TUNER/ExamplePlugin: Initializing tuner for %zu nodes, %zu ranks", nNodes, nRanks);
+  }
+
+  // Try to load config file from environment variable or default location
+  const char* configFile = getenv("NCCL_TUNER_CONFIG_FILE");
+  if (!configFile) {
+    configFile = "nccl_tuner.conf"; // default config file name
+  }
+
+  ncclResult_t result = loadConfig(ctx, configFile);
+  if (result != ncclSuccess) {
+    if (ctx->configs) {
+      free(ctx->configs);  // Clean up allocated memory on error
+    }
+    free(ctx);
+    return result;
+  }
+
+  *context = ctx;
   return ncclSuccess;
 }
 
 __hidden ncclResult_t pluginGetCollInfo(void* context, ncclFunc_t collType, size_t nBytes,
-                              int collNetSupport, int nvlsSupport, int numPipeOps,
-                              int *algorithm, int *protocol, int* nChannels) {
-                                
-  float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
-  // Find algorithm / protocol.
-  *algorithm = -1;
-  *protocol = -1;
-  int nAlgos = NCCL_NUM_ALGORITHMS;
-  for (int a=0; a<nAlgos; a++) {
-    if ((a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) && collNetSupport != 1) continue;
-    if ((a == NCCL_ALGO_NVLS || a == NCCL_ALGO_NVLS_TREE) && nvlsSupport != 1) continue;
-    if (a == NCCL_ALGO_NVLS && collNetSupport != 1) continue;
-    for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-      if (p == NCCL_PROTO_LL128) continue;
-      float time;
-      ncclTopoGetAlgoTime_Tuner(collType, a, p, numPipeOps, &time, nBytes);
-        if (time >= 0 && time < minTime) {
-          *algorithm = a;
-          *protocol = p;
-          minTime = time;
+                              int numPipeOps, float** collCostTable, int numAlgo, int numProto,
+                              int regBuff, int* nChannels) {
+  TunerContext* ctx = (TunerContext*)context;
+  if (!ctx) return ncclInternalError;
+
+  // Default channels
+  *nChannels = 1;
+
+  if (ctx->logFunction) {
+    ctx->logFunction(NCCL_LOG_TRACE, NCCL_TUNING, __FILE__, __LINE__,
+                     "TUNER/ExamplePlugin: pluginGetCollInfo called - collType=%s, nBytes=%zu, numPipeOps=%d, regBuff=%d, numConfigs=%d",
+                     collTypeToString(collType), nBytes, numPipeOps, regBuff, ctx->numConfigs);
+  }
+
+  // Cast the collCostTable pointer to a 2D array to fix the segmentation fault
+  float (*table)[NCCL_NUM_PROTOCOLS] = (float (*)[NCCL_NUM_PROTOCOLS])collCostTable;
+
+  // Look for matching configuration
+  for (int i = 0; i < ctx->numConfigs; i++) {
+    TuningConfig* config = &ctx->configs[i];
+
+    if (ctx->logFunction) {
+      ctx->logFunction(NCCL_LOG_TRACE, NCCL_TUNING, __FILE__, __LINE__,
+                       "TUNER/ExamplePlugin: Checking config %d - collType=%s, minBytes=%zu, maxBytes=%zu, algo=%s, proto=%s, nNodes=%d, nRanks=%d, numPipeOps=%d, regBuff=%d",
+                       i, collTypeToString(config->collType), config->minBytes, config->maxBytes, algorithmToString(config->algorithm), protocolToString(config->protocol),
+                       config->nNodes, config->nRanks, config->numPipeOps, config->regBuff);
+    }
+
+    // Check if this config matches the current collective, size range, topology, pipeline ops, and regBuff
+    if (config->collType == collType &&
+        nBytes >= config->minBytes &&
+        nBytes <= config->maxBytes &&
+        (config->nNodes == -1 || config->nNodes == (int)ctx->nNodes) &&
+        (config->nRanks == -1 || config->nRanks == (int)ctx->nRanks) &&
+        (config->numPipeOps == -1 || config->numPipeOps == numPipeOps) &&
+        (config->regBuff == -1 || config->regBuff == regBuff)) {
+
+      if (ctx->logFunction) {
+        ctx->logFunction(NCCL_LOG_TRACE, NCCL_TUNING, __FILE__, __LINE__,
+                         "TUNER/ExamplePlugin: Config matches. Applying algo=%s, proto=%s, channels=%d",
+                         algorithmToString(config->algorithm), protocolToString(config->protocol), config->nChannels);
+      }
+
+      // Check bounds
+      if (config->algorithm < numAlgo && config->protocol < numProto) {
+        if (table[config->algorithm][config->protocol] != NCCL_ALGO_PROTO_IGNORE) {
+          if (ctx->logFunction) {
+            ctx->logFunction(NCCL_LOG_TRACE, NCCL_TUNING, __FILE__, __LINE__,
+                             "TUNER/ExamplePlugin: Setting cost table[%s][%s] (%p) = 0.0 (was %.1f)",
+                             algorithmToString(config->algorithm), protocolToString(config->protocol),
+                             &table[config->algorithm][config->protocol], table[config->algorithm][config->protocol]);
+          }
+          table[config->algorithm][config->protocol] = 0.0; // Set low cost to prefer this configuration
+
+          // Only override channels if not set to -1 (keep default)
+          if (config->nChannels != -1) {
+            *nChannels = config->nChannels;
+          }
+
+          if (ctx->logFunction) {
+            if (config->nChannels == -1) {
+              ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                               "TUNER/ExamplePlugin: Applied config for collType=%s, bytes=%zu, pipeOps=%d, regBuff=%d: algo=%s, proto=%s, channels=default (nodes=%d, ranks=%d)",
+                               collTypeToString(config->collType), nBytes, numPipeOps, regBuff, algorithmToString(config->algorithm), protocolToString(config->protocol),
+                               config->nNodes, config->nRanks);
+            } else {
+              ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                               "TUNER/ExamplePlugin: Applied config for collType=%s, bytes=%zu, pipeOps=%d, regBuff=%d: algo=%s, proto=%s, channels=%d (nodes=%d, ranks=%d)",
+                               collTypeToString(config->collType), nBytes, numPipeOps, regBuff, algorithmToString(config->algorithm), protocolToString(config->protocol),
+                               config->nChannels, config->nNodes, config->nRanks);
+            }
+          }
+          return ncclSuccess;
+        } else {
+          if (ctx->logFunction) {
+            ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                             "TUNER/ExamplePlugin: Algorithm/protocol combination [%s][%s] is marked as IGNORE",
+                             algorithmToString(config->algorithm), protocolToString(config->protocol));
+          }
         }
+      } else {
+        if (ctx->logFunction) {
+          ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                           "TUNER/ExamplePlugin: Algorithm/protocol out of bounds - algo=%s (max %d), proto=%s (max %d)",
+                           algorithmToString(config->algorithm), numAlgo, protocolToString(config->protocol), numProto);
+        }
+      }
+    } else {
+      if (ctx->logFunction) {
+        ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                         "TUNER/ExamplePlugin: Config does not match - collType match=%d, size match=%d, nodes match=%d, ranks match=%d, pipeOps match=%d, regBuff match=%d",
+                         config->collType == collType,
+                         (nBytes >= config->minBytes && nBytes <= config->maxBytes),
+                         (config->nNodes == -1 || config->nNodes == (int)ctx->nNodes),
+                         (config->nRanks == -1 || config->nRanks == (int)ctx->nRanks),
+                         (config->numPipeOps == -1 || config->numPipeOps == numPipeOps),
+                         (config->regBuff == -1 || config->regBuff == regBuff));
+      }
     }
   }
+
+  // If no specific config found, apply default behavior
+  if (ctx->logFunction) {
+    ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                     "TUNER/ExamplePlugin: No matching config found");
+  }
+
   return ncclSuccess;
 }
 
-__hidden ncclResult_t pluginDestroy(void* context) { return ncclSuccess; }
+__hidden ncclResult_t pluginDestroy(void* context) {
+  if (context) {
+    TunerContext* ctx = (TunerContext*)context;
+    if (ctx->configs) {
+      free(ctx->configs);  // Free dynamically allocated configs array
+    }
+    free(context);
+  }
+  return ncclSuccess;
+}
 
 #define PLUGIN_NAME "Example"
 
