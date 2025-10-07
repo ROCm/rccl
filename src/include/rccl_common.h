@@ -104,4 +104,10 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm);
 bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, const char* archName);
 int parseFirmwareVersion();
+
+/*PCIe Graph Printing Functions*/
+void rcclLogGraph(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int rank);
+void rcclLogGraphSegmentForChannels(struct ncclComm* comm);
+void rcclLogSendRecvNic(struct ncclTopoSystem* system, int rank, int netDev, int channelId, bool isSend, int useGdr, int peerRank, int proxyRank = -1);
+void rcclLogP2p(struct ncclTopoSystem* system, int channelId, int connIndex, int rank, int peerRank, const char* descriptor);
 #endif

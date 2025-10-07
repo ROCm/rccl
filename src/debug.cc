@@ -107,6 +107,8 @@ static void ncclDebugInit() {
         mask = NCCL_RAS;
       } else if (strcasecmp(subsys, "VERBS") == 0) {
         mask = NCCL_VERBS;
+      } else if (strcasecmp(subsys, "GRAPHV2") == 0) {
+        mask = RCCL_GRAPHV2;
       } else if (strcasecmp(subsys, "ALL") == 0) {
         mask = NCCL_ALL;
       }

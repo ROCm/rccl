@@ -416,6 +416,7 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
     info->rank = myInfo->rank;
     if (P2P_SAME_PID(myInfo, peerInfo) && ncclParamP2pDirectDisable() == 0 && useMemcpy == 0) {
       resources->type = P2P_DIRECT;
+      rcclLogP2p(comm->topo, channelId, connIndex, myInfo->rank, peerInfo->rank, "Direct");
       INFO(NCCL_INIT|NCCL_P2P, "Channel %02d/%01d : %d[%lx] -> %d[%lx] via P2P/direct pointer%s comm %p nRanks %02d",
           channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, comm, comm->nRanks);
     } else {
@@ -423,11 +424,13 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
       if (ncclCuMemEnable()) {
         resources->type = P2P_CUMEM;
         const char *MNNVL = comm->MNNVL ? "MNNVL" : "CUMEM";
+        rcclLogP2p(comm->topo, channelId, connIndex, myInfo->rank, peerInfo->rank, MNNVL);
         INFO(NCCL_INIT|NCCL_P2P,"Channel %02d/%01d : %d[%x] -> %d[%x] via P2P/CUMEM%s%s%s comm %p nRanks %02d",
             channelId, connIndex, myInfo->rank, myInfo->cudaDev, peerInfo->rank, peerInfo->cudaDev, MNNVL, useReadStr, useMemcpy ? "/CE" : "", comm, comm->nRanks);;
       } else {
         // Legacy CUDA IPC
         resources->type = P2P_IPC;
+        rcclLogP2p(comm->topo, channelId, connIndex, myInfo->rank, peerInfo->rank, "IPC");
         INFO(NCCL_INIT|NCCL_P2P,"Channel %02d/%01d : %d[%lx] -> %d[%lx] via P2P/IPC%s%s comm %p nRanks %02d",
             channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, useReadStr, useMemcpy ? "/CE" : "", comm, comm->nRanks);
       }
@@ -436,6 +439,7 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   } else {
     resources->type = P2P_INTERMEDIATE;
     info->rank = intermediateRank;
+    rcclLogP2p(comm->topo, channelId, connIndex, myInfo->rank, peerInfo->rank, "Indirect");
     INFO(NCCL_INIT|NCCL_P2P, "Channel %02d/%01d : %d[%lx] -> %d[%lx] via P2P/indirect/%d[%lx]%s comm %p nRanks %02d",
         channelId, connIndex, myInfo->rank, myInfo->busId, peerInfo->rank, peerInfo->busId, intermediateRank,
     comm->peerInfo[intermediateRank].busId, useReadStr, comm, comm->nRanks);

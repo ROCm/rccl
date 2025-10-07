@@ -429,3 +429,165 @@ bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, 
   }
   return true;
 }
+
+
+/* PCIe Graph Printing Functions */
+static void int64ToBusIdShort(int64_t id, char* busId) {
+  sprintf(busId, "%02lx",(id & 0xff000) >> 12);
+}
+
+static ncclResult_t rcclNetDevToIndex(struct ncclTopoSystem* system, int netDev, int* index) {
+  *index = -1;
+  for (int i=0; i<system->nodes[NET].count; i++) {
+    if (system->nodes[NET].nodes[i].net.dev == netDev) {
+      *index = i;
+      return ncclSuccess;
+    }
+  }
+  return ncclInternalError;
+}
+
+static void rcclGetNicBusId(struct ncclTopoSystem* system, int netDevId, std::string& busId) {
+  if(netDevId < 0) return;
+  char busIdStr[32];
+  int netDevIdx = -1;
+  rcclNetDevToIndex(system, netDevId, &netDevIdx);
+  if(netDevIdx >= 0) {
+    int64ToBusIdShort(system->nodes[NET].nodes[netDevIdx].net.busId, busIdStr);
+  }
+  busId =  std::to_string(netDevId)+ ":[0x" + std::string(busIdStr)+"]";
+}
+
+static void rcclGetGpuBusId(struct ncclTopoSystem* system, int rank, std::string& busId, int localRank = -1) {
+  if(rank < 0) return;
+  char busIdStr[32] = "";
+  int topoIndex = -1;
+  if (ncclTopoRankToIndex(system, rank, &topoIndex, false) == ncclSuccess && topoIndex >= 0) {
+    int64ToBusIdShort(system->nodes[GPU].nodes[topoIndex].id, busIdStr);
+    busId = std::to_string(rank) + ":[0x" + std::string(busIdStr) + "]";
+  } else {
+    busId = std::to_string(rank)+ ":[remote]";
+  }
+}
+
+void rcclLogGraph(struct ncclTopoSystem* system,
+                  struct ncclTopoGraph* graph, int rank) {
+  int ngpus = system->nodes[GPU].count;
+  // Print graph only once per node
+  if(rank%ngpus != 0) return;
+  for (int c = 0; c < graph->nChannels; c++) {
+    char line[2048];
+    int offset = (graph->pattern == NCCL_TOPO_PATTERN_RING)? sprintf(line, "RING_GRAPH ch=%d: hostid=%d:", c, system->hostIdx) : sprintf(line, "TREE_GRAPH ch=%d: hostid=%d:", c, system->hostIdx);
+
+    if (system->nodes[NET].count > 0 &&
+        system->nodes[GPU].count != system->nRanks &&
+        !graph->nIntraChannels) {
+      int n = graph->inter[2*c] - 'N';
+      if (n >= 0 && n < system->nodes[NET].count) {
+        offset += sprintf(line+offset, " NET/%d", n);
+      }
+    }
+
+    for (int i = 0; i < ngpus; i++) {
+      int n;
+
+      n = graph->intraNets[(ngpus*c+i)*2] - 'N';
+      if (n >= 0 && n < system->nodes[NET].count) {
+        offset += sprintf(line+offset, " NET/%d", n);
+      }
+
+      std::string busId;
+      rcclGetGpuBusId(system, graph->intra[ngpus*c+i], busId);
+      offset += sprintf(line+offset, " GPU/%s", busId.c_str());
+
+      n = graph->intraNets[(ngpus*c+i)*2+1] - 'N';
+      if (n >= 0 && n < system->nodes[NET].count) {
+        offset += sprintf(line+offset, " NET/%d", n);
+      }
+    }
+
+    if (system->nodes[NET].count > 0 &&
+        system->nodes[GPU].count != system->nRanks &&
+        !graph->nIntraChannels) {
+      int n = graph->inter[2*c+1] - 'N';
+      if (n >= 0 && n < system->nodes[NET].count) {
+        offset += sprintf(line+offset, " NET/%d", n);
+      }
+    }
+
+    INFO(RCCL_GRAPHV2, "%s", line);
+  }
+}
+
+void rcclLogGraphSegmentForChannels(struct ncclComm* comm) {
+  for (int c = 0; c < comm->nChannels; ++c) {
+    std::string curBus;
+    rcclGetGpuBusId(comm->topo, comm->rank, curBus);
+
+    const ncclTree* tree = &comm->channels[c].tree;
+
+    auto busOrDash = [&](int rankIdx) -> const char* {
+      std::string tmp;
+      if (rankIdx < 0) return "-";
+      rcclGetGpuBusId(comm->topo, rankIdx, tmp);
+      return tmp.c_str();
+    };
+
+    const char* up  = busOrDash(tree->up);
+    const char* d0  = busOrDash(tree->down[0]);
+    const char* d1  = busOrDash(tree->down[1]);
+    const char* d2  = busOrDash(tree->down[2]);
+
+    INFO(RCCL_GRAPHV2, "TREE ch=%d: GPU/%s/GPU/%s/GPU/%s -> GPU/%s -> GPU/%s", c, d0, d1, d2, curBus.c_str(), up);
+
+    const char* prev =  busOrDash(comm->channels[c].ring.prev);
+    const char* next =  busOrDash(comm->channels[c].ring.next);
+
+    INFO(RCCL_GRAPHV2, "RING ch=%d: GPU/%s -> GPU/%s -> GPU/%s", c, prev, curBus.c_str(), next);
+  }
+}
+
+void rcclLogSendRecvNic(struct ncclTopoSystem* system, int rank, int netDev, int channelId, bool isSend, int useGdr, int peerRank, int proxyRank) {
+  std::string gpuBusId, nicBusId;
+  rcclGetGpuBusId(system, rank, gpuBusId);
+  rcclGetNicBusId(system, netDev, nicBusId);
+
+  const char* gdrSuffix = (useGdr ? "/GDRDMA" : "");
+  const char* gdrMode   = (useGdr == ncclTopoGdrModePci ? "(PCI)" : "");
+
+  if (rank != proxyRank && proxyRank >= 0) {
+    std::string proxyGpuBusId;
+    rcclGetGpuBusId(system, proxyRank, proxyGpuBusId);
+    INFO(RCCL_GRAPHV2, "NICMAP ch=%d %s GPU/%s NIC/%s%s%s PEER_GPU/%d PROXY_GPU/%s",
+           channelId,
+           isSend ? "SEND" : "RECV",
+           gpuBusId.c_str(),
+           nicBusId.c_str(),
+           gdrSuffix,
+           gdrMode,
+           peerRank,
+           proxyGpuBusId.c_str());
+  } else {
+   INFO(RCCL_GRAPHV2, "NICMAP ch=%d %s GPU/%s NIC/%s%s%s PEER_GPU/%d",
+           channelId,
+           isSend ? "SEND" : "RECV",
+           gpuBusId.c_str(),
+           nicBusId.c_str(),
+           gdrSuffix,
+           gdrMode,
+           peerRank);
+  }
+}
+
+void rcclLogP2p(struct ncclTopoSystem* system, int channelId, int connIndex, int rank, int peerRank, const char* descriptor) {
+  std::string gpuBusId, peerBusId;
+  rcclGetGpuBusId(system, rank, gpuBusId);
+  rcclGetGpuBusId(system, peerRank, peerBusId);
+
+  INFO(RCCL_GRAPHV2, "P2PMAP ch=%d connIndex=%d %s GPU/%s PEER_GPU/%s",
+           channelId,
+           connIndex,
+           descriptor,
+           gpuBusId.c_str(),
+           peerBusId.c_str());
+}

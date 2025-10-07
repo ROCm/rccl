@@ -1296,6 +1296,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   ringGraph->maxChannels = MAXCHANNELS/2;
   NCCLCHECKGOTO(ncclTopoCompute(comm->topo, ringGraph), ret, fail);
   NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, ringGraph), ret, fail);
+  rcclLogGraph(comm->topo, ringGraph, comm->rank);
 
   memset(treeGraph, 0, sizeof(struct ncclTopoGraph));
   treeGraph->id = 1;
@@ -1304,7 +1305,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   treeGraph->maxChannels = ringGraph->nChannels;
   NCCLCHECKGOTO(ncclTopoCompute(comm->topo, treeGraph), ret, fail);
   NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, treeGraph), ret, fail);
-
+  rcclLogGraph(comm->topo, treeGraph, comm->rank);
   memset(collNetChainGraph, 0, sizeof(struct ncclTopoGraph));
   collNetChainGraph->id = 2;
   collNetChainGraph->pattern = NCCL_TOPO_PATTERN_TREE;
@@ -1595,7 +1596,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   }
   line[4095] = '\0';
   INFO(NCCL_INIT, "Trees%s comm %p nRanks %02d busId %lx", line, comm, comm->nRanks, comm->busId);
-
+  rcclLogGraphSegmentForChannels(comm);
   NCCLCHECKGOTO(computeBuffSizes(comm), ret, fail);
 
   // Compute nChannels per peer for p2p
