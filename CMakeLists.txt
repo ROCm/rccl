@@ -35,6 +35,7 @@ option(ENABLE_NPKIT                            "Enable NPKit"                   
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(GENERATE_SYM_KERNELS                    "Generate symmetric memory kernels"             OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
+option(REPORT_KERNEL_RESOURCE_USE              "Append -Rpass-analysis=kernel to CXX flags"    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  ON)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
@@ -1184,6 +1185,10 @@ endif()
 
 if (HAVE_KERNARG_PRELOAD)
   target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+endif()
+
+if (REPORT_KERNEL_RESOURCE_USE)
+  target_link_options(rccl PRIVATE -Rpass-analysis=kernel-resource-usage)
 endif()
 
 if (DUMP_ASM) # Save temporary files from kernel compilation
