@@ -358,7 +358,7 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   else
     comm->unroll = NCCL_UNROLL_4;
 
-  INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll+1);
+  INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", (int) (pow(2.0, (double)comm->unroll)));
   return ncclSuccess;
 }
 
