@@ -21,13 +21,13 @@ PLUGIN_DIR = f"{RCCL_INSTALL_DIR}/ext-tuner/example"
 PLUGIN_SO = f"{PLUGIN_DIR}/libnccl-tuner-example.so"
 
 # CSV Configs 
-VALID_CONFIG_WITH_WILDCARDS = os.path.join(WORKDIR, "src/assets/csv_confs/valid_config_with_wildcards.conf")
-VALID_CONFIG_WITHOUT_WILDCARDS = os.path.join(WORKDIR, "src/assets/csv_confs/valid_config_without_wildcards.conf")
-NO_MATCHING_CONFIG = os.path.join(WORKDIR, "src/assets/csv_confs/no_matching_config.conf")
-INCORRECT_VALUES_CONFIG = os.path.join(WORKDIR, "src/assets/csv_confs/incorrect_values_config.conf")
-UNSUPPORTED_ALGO_PROTO_CONFIG = os.path.join(WORKDIR, "src/assets/csv_confs/unsupported_algo_proto_config.conf")
-SINGLENODE_CONFIG = os.path.join(WORKDIR, "src/assets/csv_confs/singlenode_config.conf")
-MULTINODE_CONFIG = os.path.join(WORKDIR, "src/assets/csv_confs/multinode_config.conf")
+VALID_CONFIG_WITH_WILDCARDS = os.path.join(WORKDIR, "assets/csv_confs/valid_config_with_wildcards.conf")
+VALID_CONFIG_WITHOUT_WILDCARDS = os.path.join(WORKDIR, "assets/csv_confs/valid_config_without_wildcards.conf")
+NO_MATCHING_CONFIG = os.path.join(WORKDIR, "assets/csv_confs/no_matching_config.conf")
+INCORRECT_VALUES_CONFIG = os.path.join(WORKDIR, "assets/csv_confs/incorrect_values_config.conf")
+UNSUPPORTED_ALGO_PROTO_CONFIG = os.path.join(WORKDIR, "assets/csv_confs/unsupported_algo_proto_config.conf")
+SINGLENODE_CONFIG = os.path.join(WORKDIR, "assets/csv_confs/singlenode_config.conf")
+MULTINODE_CONFIG = os.path.join(WORKDIR, "assets/csv_confs/multinode_config.conf")
 
 LOGDIR = os.path.join(WORKDIR, "logs")
 os.makedirs(LOGDIR, exist_ok=True)

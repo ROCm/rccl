@@ -1,27 +1,33 @@
-# RCCL Plugin Tests
+# RCCL CSV Tuner Plugin Tests
 
 ## Description
 
-This directory contains automated tests for RCCL (ROCm Communication Collectives Library) plugins. The test suite validates the functionality of various RCCL plugins, particularly focusing on the CSV Tuner Plugin and different collective operations like AllReduce, Broadcast, Reduce, AllGather, and ReduceScatter.
+This directory contains automated tests for the RCCL (ROCm Communication Collectives Library) CSV Tuner Plugin. The test suite validates the functionality of the CSV-based tuning plugin across different collective operations (AllReduce, Broadcast, Reduce, AllGather, and ReduceScatter) and various configuration scenarios.
 
 The tests are written in Python using the pytest framework, making it easy to run, maintain, and extend the test coverage.
 
 ## Directory Structure
 
 ```
-functional_tests/
-├── README.md             # This file - documentation for the test suite
-├── requirements.txt      # Python dependencies required for testing
-├── pytest.ini            # Pytest configuration and test markers
-├── .gitignore            # Git ignore rules for Python/pytest artifacts
-├── venv/                 # Python virtual environment (created after setup)
-├── logs/                 # Test execution logs and output files
-├── src/                  # Source files and test assets
-│   └── assets/           # Test configuration files and assets
-│       └── csv_confs/    # CSV configuration files for testing
-└── tests/                # Test suite directory
-    ├── conftest.py       # Pytest fixtures and shared test configuration
-    └── csv_plugin_tests/ # CSV Tuner Plugin specific tests
+ext-tuner/
+├── README.md                    # This file - documentation for the test suite
+├── requirements.txt             # Python dependencies required for testing
+├── pytest.ini                   # Pytest configuration and test markers
+├── .gitignore                   # Git ignore rules for Python/pytest artifacts
+├── venv/                        # Python virtual environment (created after setup)
+├── logs/                        # Test execution logs and output files
+├── assets/                      # Test configuration files and assets
+│   └── csv_confs/               # CSV configuration files for testing
+│       ├── incorrect_values_config.conf
+│       ├── multinode_config.conf
+│       ├── no_matching_config.conf
+│       ├── singlenode_config.conf
+│       ├── unsupported_algo_proto_config.conf
+│       ├── valid_config_with_wildcards.conf
+│       └── valid_config_without_wildcards.conf
+└── tests/                       # Test suite directory
+    ├── conftest.py              # Pytest fixtures and shared test configuration
+    └── csv_plugin_tests/        # CSV Tuner Plugin specific tests
         ├── test_allreduce.py
         ├── test_broadcast.py
         ├── test_reduce.py
