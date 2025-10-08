@@ -110,10 +110,13 @@ ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoStri
 
 extern int64_t ncclParamMinNchannels();
 extern int64_t ncclParamMaxNchannels();
+RCCL_PARAM(ChannelTuningEnable, "CHANNEL_TUNING_ENABLE", 1);
 
 ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc){
-  if(comm->nNodes < 2)
+  if(comm->nNodes < 2 || !rcclParamChannelTuningEnable()){
+    INFO(NCCL_INIT, "RCCL Channel Tuning not applied");
     return ncclSuccess;
+  }
 
   auto tunableIndex = rcclGetTunableIndex(coll);
   if(tunableIndex == RCCL_UNSUPPORTED_TUNABLE){
