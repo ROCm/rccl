@@ -2044,7 +2044,6 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
       comm->mscclpp_comm = job->parent->mscclpp_comm;
       const ncclUniqueId& parentUniqueId = ncclCommToUniqueIdMap[job->parent];
       auto& mscclppUniqueId = mscclpp_uniqueIdMap[parentUniqueId];
-      mscclpp_uniqueIdMap[parentUniqueId] = mscclppUniqueId;
       mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(parentUniqueId);
       ncclCommToUniqueIdMap[comm] = parentUniqueId;
     }
