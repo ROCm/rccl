@@ -2006,6 +2006,8 @@ static ncclResult_t updateCollCostTable(
   return ncclSuccess;
 }
 
+extern int64_t ncclParamMinNchannels();
+
 static ncclResult_t topoGetAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes,
     float** collCostTable, ncclSimInfo_t* simInfo
@@ -2072,8 +2074,10 @@ static ncclResult_t topoGetAlgoInfo(
     rcclUpdateThreadThreshold(comm, nBytes, info, threadThreshold);
     INFO(NCCL_INIT, "pre-adjustment threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
 
+    int minNChannels = ncclParamMinNchannels();
     // Ring/Tree channel tuning
-    while (nBytes < nc * nt * threadThreshold) {
+    INFO(NCCL_INIT, "minNChannels:%i", minNChannels);
+    while (nBytes < nc * nt * threadThreshold && nc > minNChannels) {
       if (nc >= 2) nc--;
       else break;
     }
