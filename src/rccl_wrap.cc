@@ -114,16 +114,18 @@ RCCL_PARAM(ChannelTuningEnable, "CHANNEL_TUNING_ENABLE", 1);
 
 ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc){
   if(comm->nNodes < 2 || !rcclParamChannelTuningEnable()){
-    INFO(NCCL_INIT, "RCCL Channel Tuning not applied");
+    INFO(NCCL_TUNING;, "RCCL Channel Tuning not applied");
     return ncclSuccess;
   }
 
   auto tunableIndex = rcclGetTunableIndex(coll);
   if(tunableIndex == RCCL_UNSUPPORTED_TUNABLE){
-    INFO(NCCL_INIT, "tunableIndex:%i not supported", tunableIndex);
+    INFO(NCCL_TUNING;, "tunableIndex:%i not supported", tunableIndex);
     return ncclSuccess;
   }
 
+  int minCTAs = comm->config.minCTAs;
+  int maxCTAs = comm->config.maxCTAs;
   int minNChannels = ncclParamMinNchannels();
   int maxNChannels = ncclParamMaxNchannels();
   size_t bytesPerRank = divUp(nBytes, comm->nRanks);
@@ -131,9 +133,9 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
   for(int channelCountIndex = 0; channelCountIndex < RCCL_CHANNELS_TUNABLE_ENTRIES; ++channelCountIndex){    
     size_t minByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][0];
     size_t maxByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][1];
-    INFO(NCCL_INIT, "nBytes:%lu minByteThreshold:%lu maxByteThreshold:%lu", nBytes, minByteThreshold, maxByteThreshold);
+    INFO(NCCL_TUNING;, "nBytes:%lu minByteThreshold:%lu maxByteThreshold:%lu  NCCL_MIN_NCHANNELS:%i or NCCL_MAX_NCHANNELS:%i minCTAs:%i maxCTAs:%i", nBytes, minByteThreshold, maxByteThreshold, minNChannels, maxNChannels, minCTAs, maxCTAs);
     if(minByteThreshold == CHAN_THRESHOLDS_UNDEFINED || maxByteThreshold == CHAN_THRESHOLDS_UNDEFINED) {
-      INFO(NCCL_INIT, "RCCL tuning model does not define threshold for coll:%i and nbytes:%lu", coll, nBytes);
+      INFO(NCCL_TUNING;, "RCCL tuning model does not define threshold for coll:%i and nbytes:%lu", coll, nBytes);
       break; // Skip undefined thresholds
     }
     
@@ -141,12 +143,12 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
       int channelCount = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][2];
 
       //honor user's min/max channels defined through NCCL_MIN_NCHANNELS and NCCL_MAX_NCHANNELS
-      if(channelCount >= minNChannels && channelCount <= maxNChannels){
+      if(channelCount >= minNChannels && channelCount <= maxNChannels && channelCount >= minCTAs && channelCount <= maxCTAs){
         nc = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][2];
-        INFO(NCCL_INIT, "RCCL tuning model overrides nchannels to %i, channels may be decreased further due to MinTrafficPerchannel thresholds", channelCount);
+        INFO(NCCL_TUNING;, "RCCL tuning model overrides nchannels to %i, channels may be decreased further due to MinTrafficPerchannel thresholds", channelCount);
       }
       else{
-        INFO(NCCL_INIT, "RCCL tuning model cannot override nchannels to %i due to conflicting NCCL_MIN_NCHANNELS:%i or NCCL_MAX_NCHANNELS:%i", channelCount, minNChannels, maxNChannels);
+        INFO(NCCL_TUNING;, "RCCL tuning model cannot override nchannels to %i due to conflicting NCCL_MIN_NCHANNELS:%i or NCCL_MAX_NCHANNELS:%i minCTAs:%i maxCTAs:%i", channelCount, minNChannels, maxNChannels, minCTAs, maxCTAs);
       }
 
       break;
