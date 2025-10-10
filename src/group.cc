@@ -753,9 +753,6 @@ ncclResult_t ncclGroupJobComplete(struct ncclGroupJob* groupJob) {
     if (!__atomic_exchange_n(&groupJob->joined, true, __ATOMIC_ACQ_REL)) {
       ret = ncclAsyncJobComplete(&groupJob->base);
     }
-    // if (ncclAtomicRefCountDecrement(&groupJob->groupRefCount) == 0) {
-    //   free(groupJob);
-    // }
   }
   return ret;
 }
