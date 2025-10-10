@@ -311,29 +311,15 @@ inline __host__ __device__ void ncclP2pPartBounds(int nParts, int part, size_t b
 }
 
 // implemented in channel.h
-inline __host__ uint8_t ncclP2pChannelBaseForRound(struct ncclComm* comm, int p2pRound);
+inline __host__ uint8_t ncclP2pChannelBaseForRound(struct ncclComm* comm, int p2pRound, int p2pBatchEnable);
 
 // ncclP2pChannelToPart and ncclP2pChannelForPart are inverses. The device code
 // uses ncclP2pChannelToPart to determine which part "this" channel is responsible for.
 inline __host__ int ncclP2pChannelForPart(int nP2pChannels, int base, int part, int nParts, int nNodes) {
-  if (nNodes > 2) {
-    // Only works because nP2pChannels is pow2
-    int nChannelsLog2 = countOneBits(nP2pChannels-1);
-    int delta = reverseBits(part, nChannelsLog2);
-    return (base + delta) & (nP2pChannels-1);
-  } else {
     return (base * nParts + part) & (nP2pChannels-1);
-  }
 }
 inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int channel, int nParts, int nNodes) {
-  if (nNodes > 2) {
-    // Only works because nP2pChannels is pow2
-    int nChannelsLog2 = countOneBits(nP2pChannels-1);
-    int delta = (channel-base) & (nP2pChannels-1);
-    return reverseBits(delta, nChannelsLog2);
-  } else {
-    return (channel - base * nParts) & (nParts-1);
-  }
+    return (channel - base * nParts) & (nP2pChannels-1);
 }
 
 struct alignas(16) ncclDevWorkColl {
@@ -425,7 +411,7 @@ constexpr size_t ncclDevWorkSize(enum ncclDevWorkType type) {
 
 #define NCCL_MAX_DEV_WORK_BATCH_BYTES 128
 #define NCCL_MAX_DEV_WORK_BATCH_COLLS (NCCL_MAX_DEV_WORK_BATCH_BYTES/sizeof(ncclDevWorkColl))
-#define NCCL_MAX_DEV_WORK_P2P_PER_BATCH 1
+#define NCCL_MAX_DEV_WORK_P2P_PER_BATCH 2
 #define NCCL_MAX_DEV_WORK_P2P_ELEMENTS 2
 struct alignas(16) ncclDevWorkBatch {
   union {

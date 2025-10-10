@@ -189,6 +189,7 @@ compute_table_size(size_t nmembers)
     static_assert(offsetof(TABLE, MEMBER) == compute_table_offset(IDX),                  \
                   "Do not re-arrange the table members")
 
+// DO NOT REORDER, ADD NEW ITEMS TO BOTTOM
 RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclAllGather_fn, 0);
 RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclAllReduce_fn, 1);
 RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclAllToAll_fn, 2);
@@ -212,24 +213,25 @@ RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommInitRankConfig_fn, 19);
 RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommFinalize_fn, 20);
 RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommDestroy_fn, 21);
 RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommAbort_fn, 22);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommShrink_fn, 23);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommSplit_fn, 24);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclGetErrorString_fn, 25);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclGetLastError_fn, 26);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommGetAsyncError_fn, 27);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommCount_fn, 28);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommCuDevice_fn, 29);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommUserRank_fn, 30);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclMemAlloc_fn, 31);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclMemFree_fn, 32);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, mscclLoadAlgo_fn, 33);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, mscclRunAlgo_fn, 34);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, mscclUnloadAlgo_fn, 35);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommRegister_fn, 36);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommDeregister_fn, 37);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommWindowRegister_fn, 38);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommWindowDeregister_fn, 39);
-RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclAllReduceWithBias_fn, 40);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommSplit_fn, 23);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclGetErrorString_fn, 24);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclGetLastError_fn, 25);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommGetAsyncError_fn, 26);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommCount_fn, 27);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommCuDevice_fn, 28);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommUserRank_fn, 29);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclMemAlloc_fn, 30);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclMemFree_fn, 31);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, mscclLoadAlgo_fn, 32);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, mscclRunAlgo_fn, 33);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, mscclUnloadAlgo_fn, 34);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommRegister_fn, 35);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommDeregister_fn, 36);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclAllReduceWithBias_fn, 37);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommShrink_fn, 38);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommWindowRegister_fn, 39);
+RCCL_ASSERT_OFFSET(rcclApiFuncTable, ncclCommWindowDeregister_fn, 40);
+// DO NOT REORDER, ADD NEW ITEMS HERE
 
 #undef RCCL_ASSERT_OFFSET
 
@@ -267,7 +269,6 @@ RcclGetFunctionTable_impl()
                                                &ncclCommFinalize_impl,
                                                &ncclCommDestroy_impl,
                                                &ncclCommAbort_impl,
-                                               &ncclCommShrink_impl,
                                                &ncclCommSplit_impl,
                                                &ncclGetErrorString_impl,
                                                &ncclGetLastError_impl,
@@ -282,9 +283,12 @@ RcclGetFunctionTable_impl()
                                                &mscclUnloadAlgo_impl,
                                                &ncclCommRegister_impl,
                                                &ncclCommDeregister_impl,
+                                               &ncclAllReduceWithBias_impl,
+                                               &ncclCommShrink_impl,
                                                &ncclCommWindowRegister_impl,
-                                               &ncclCommWindowDeregister_impl,
-                                               &ncclAllReduceWithBias_impl };
+                                               &ncclCommWindowDeregister_impl
+                                               // DO NOT REORDER, ADD NEW ITEMS HERE
+                                             };
 
 #if defined(RCCL_ROCPROFILER_REGISTER) && RCCL_ROCPROFILER_REGISTER > 0
     std::array<void*, 1>                       table_array{ tbl };

@@ -148,7 +148,8 @@ ncclResult_t checkHsaEnvSetting() {
 
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
-    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
+    // Always print out this warning message
+    printf("Fatal Error: HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with HIP Runtime version:%d, GPU Firmware version:%d\n", hipRuntimeVersion, firmwareVersion);
     return ncclSystemError;
   }
   return ncclSuccess;
@@ -245,6 +246,7 @@ RCCL_PARAM(EnableProxyTrace, "ENABLE_PROXY_TRACE", 0);
 
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
+RCCL_PARAM(EnableContextTracking, "ENABLE_CONTEXT_TRACKING", 0);
 
 #ifdef ENABLE_COLLTRACE
 // Should be in sync with 'ALL_COLLS' in Generator.cmake
@@ -531,7 +533,12 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclProfilerPluginFinalize(comm));
   NCCLCHECK(ncclNetFinalize(comm));
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  //ncclCudaContextDrop(comm->context);
+  // but can be enabled via environment variable
+  if (rcclParamEnableContextTracking() == 1) {
+    ncclCudaContextDrop(comm->context);
+    INFO(NCCL_INIT, "cudaDev %d context tracking destroyed", comm->cudaDev);
+  }
+
   free(comm);
 
   return ncclSuccess;
@@ -627,7 +634,11 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
 
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  //NCCLCHECK(ncclCudaContextTrack(&comm->context));
+  // but can be enabled via environment variable
+  if (rcclParamEnableContextTracking() == 1) {
+    NCCLCHECK(ncclCudaContextTrack(&comm->context));
+    INFO(NCCL_INIT, "cudaDev %d context tracking created", comm->cudaDev);
+  }
 
   NCCLCHECK(getBusId(comm->cudaDev, &comm->busId));
   char busId[]="0000:00:00.0";
@@ -2032,10 +2043,10 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
       comm->mscclppCompatible = true;
       comm->mscclpp_threshold = job->parent->mscclpp_threshold;
       comm->mscclpp_comm = job->parent->mscclpp_comm;
-      auto& mscclppUniqueId = mscclpp_uniqueIdMap[*job->commId];
-      mscclpp_uniqueIdMap[*job->commId] = mscclppUniqueId;
-      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(*job->commId);
-      ncclCommToUniqueIdMap[comm] = *job->commId;
+      const ncclUniqueId& parentUniqueId = ncclCommToUniqueIdMap[job->parent];
+      auto& mscclppUniqueId = mscclpp_uniqueIdMap[parentUniqueId];
+      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(parentUniqueId);
+      ncclCommToUniqueIdMap[comm] = parentUniqueId;
     }
   }
   else
@@ -2144,7 +2155,7 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
   int minCTAsEnv;
   int maxCTAsEnv;
   int splitShareEnv;
-  int collnetEnableEnv;
+  const char* collnetEnableEnv;
   int ctaPolicyEnv;
   int shrinkShareEnv;
   int nvlsCTAsEnv;
@@ -2198,9 +2209,15 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
     comm->config.shrinkShare = shrinkShareEnv;
   }
 
-  collnetEnableEnv = ncclParamCollnetEnable();
-  if (collnetEnableEnv != NCCL_CONFIG_UNDEF_INT) {
-    comm->config.collnetEnable = collnetEnableEnv;
+  // NCCL_COLLNET_ENABLE needs to be reloaded each time for comm init
+  // since users might change the env on the fly to enable/disable collnet
+  collnetEnableEnv = ncclGetEnv("NCCL_COLLNET_ENABLE");
+  if (collnetEnableEnv != NULL) {
+    int collnetEnableInt = (int)strtol(collnetEnableEnv, NULL, 0);
+    if (collnetEnableInt != NCCL_CONFIG_UNDEF_INT) {
+      comm->config.collnetEnable = collnetEnableInt;
+      INFO(NCCL_ENV, "NCCL_COLLNET_ENABLE set by environment to %d.", collnetEnableInt);
+    }
   }
 
   ctaPolicyEnv = ncclParamCtaPolicy();
@@ -2857,6 +2874,7 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
     NVTX3_PAYLOAD(comm->commHash, nranks, rank, cudaDev));
 
   TRACE(NCCL_INIT, "comm %p rank %d nRanks %d cudaDev %d busId %lx", comm, rank, nranks, cudaDev, comm->busId);
+  NCCLCHECK(ncclGroupStartInternal());
   // Try and prevent a double free of the comm struct (user error)
   if (comm->rank == -1 || comm->nRanks == -1 || comm->cudaDev == -1 || comm->busId == -1) {
     WARN("comm %p has already been destroyed", comm);
@@ -2871,6 +2889,8 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, commReclaim, NULL, free, comm), res, fail);
 
 exit:
+  ncclGroupErrCheck(res);
+  NCCLCHECK(ncclGroupEndInternal());
   return res;
 fail:
   goto exit;
@@ -2895,6 +2915,7 @@ ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
   if (comm == NULL) {
     return ncclSuccess;
   }
+  NCCLCHECK(ncclGroupStartInternal());
   // Ask anything that might still be running on the device to quit
   NCCLCHECK(setCommAbortFlags(comm,1));
   comm->destroyFlag = 1;
@@ -2917,7 +2938,9 @@ ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, commReclaim, NULL, free, comm), res, fail);
 
 exit:
-  return ncclSuccess;
+  ncclGroupErrCheck(res);
+  NCCLCHECK(ncclGroupEndInternal());
+  return res;
 fail:
   goto exit;
 }

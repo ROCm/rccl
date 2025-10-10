@@ -82,6 +82,20 @@ set the HSA environment variable as follows:
 This feature requires GPUs that support peer-to-peer access along with
 proper large BAR addressing support.
 
+Ignoring CPU affinity with multi-node
+=====================================
+
+Depending on the job launcher and the requirements of your workload, performance as the communication workload scales
+can be improved by setting ``NCCL_IGNORE_CPU_AFFINITY``.  This allows the RCCL communication library to 
+ignore the job's supplied CPU affinity and use the GPU affinity only.
+
+.. code-block:: shell
+
+   NCCL_IGNORE_CPU_AFFINITY=1
+
+For general usage, this environment variable is not set so it doesn't interfere with the user or launcher
+supplied preferences.
+
 Improving performance on the MI300X 
 ===================================
 
@@ -254,3 +268,14 @@ set during the benchmark in the following manner:
 The default allreduce PyTorch benchmark peak bus bandwidth performance is
 ~170 GB/s on a single OAM with ROCm 6.2.4, while the optimized run for CPX on a
 single OAM peaks at ~315 GB/s.
+
+Context tracking on GPUs
+----------------------------------------
+Context tracking is disabled by default for optimal performance. However, enabling of context tracking can significantly improve performance
+in certain scenarios. To enable context tracking, set the following environment variable:
+
+.. code-block:: shell
+
+
+   export RCCL_ENABLE_CONTEXT_TRACKING=1
+
