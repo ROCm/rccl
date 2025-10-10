@@ -1,5 +1,15 @@
 # Change Log for hipfort
 
+## hipfort 0.7.1 for ROCm 7.1.0
+
+### Added
+
+* Support for building with CMake 4.0.
+
+### Resolved issues
+
+* Fixed a potential integer overflow issue in `hipMalloc` interfaces.
+
 ## hipfort 0.7.0 for ROCm 7.0.0
 
 ### Added
