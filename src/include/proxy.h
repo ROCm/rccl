@@ -118,6 +118,13 @@ struct ncclProxyOp {
   facebook_rccl::ProxyTraceExtraInfo traceInfo;
 };
 
+struct ncclProxySubArgs;
+
+struct ncclProxyEventHandle {
+  void* stepEventHandle;
+  struct ncclProxySubArgs* subArgPtr;
+};
+
 struct ncclProxySubArgs {
   struct ncclProxyConnection* connection;
   int reg;
@@ -150,13 +157,12 @@ struct ncclProxySubArgs {
   // Profiler plugin
   int eActivationMask;
   int rank;
-  uint64_t profilerSteps;
   pid_t pid;
   void* profilerContext;
   void* taskEventHandle;
   void* opEventHandle;
   void* kernelEventHandle;
-  void* stepEventHandles[NCCL_STEPS];
+  struct ncclProxyEventHandle pHandles[NCCL_STEPS];
   size_t transSize;
   uint64_t workCounter;
 
@@ -254,6 +260,8 @@ struct ncclProxyPeer {
 };
 
 struct ncclSharedNetComms {
+  int activeConnect[MAXCHANNELS];
+  int activeAccept[MAXCHANNELS];
   void* sendComm[MAXCHANNELS];
   void* recvComm[MAXCHANNELS];
   int sendRefCount[MAXCHANNELS];

@@ -1,6 +1,6 @@
 steps:
   - task: Bash@3
-    displayName: Test Job
+    displayName: RCCL UnitTests
     env:
       BINARIES_DIR: $(Build.BinariesDirectory)
       PIPELINE_WORKSPACE: $(Pipeline.Workspace)
@@ -8,7 +8,7 @@ steps:
       targetType: inline
       script: |
         echo "Submitting test job..."
-        TEST_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/test.sh)
+        TEST_JOB_ID=$(sbatch --export=ALL --parsable $(Build.SourcesDirectory)/.azuredevops/slurm/test_rccl-UnitTests.sh)
         echo "Submitted test job: $TEST_JOB_ID"
         echo "##vso[task.setvariable variable=TEST_JOB_ID]$TEST_JOB_ID"
 
@@ -39,9 +39,9 @@ steps:
         done
 
         echo "Checking test result XML for failures..."
-        TEST_XML=$(find "$(Pipeline.Workspace)" -name 'test_output.xml' | head -n1)
+        TEST_XML=$(find "$(Pipeline.Workspace)" -name 'rccl-UnitTests_output.xml' | head -n1)
         if [ -z "$TEST_XML" ]; then
-          echo "##vso[task.logissue type=error]No test_output.xml file found"
+          echo "##vso[task.logissue type=error]No $TEST_XML file found"
           echo "##vso[task.complete result=Failed;]DONE"
           exit 1
         fi
@@ -59,11 +59,11 @@ steps:
     inputs:
       targetType: inline
       script: |
-        cat rccl-test-${TEST_JOB_ID}.out || echo "No log found"
+        cat rccl-UnitTests-${TEST_JOB_ID}.out || echo "No log found"
   - task: PublishTestResults@2
     displayName: 'Publish Results'
     condition: succeededOrFailed()
     inputs:
       searchFolder: $(Pipeline.Workspace)
       testResultsFormat: JUnit
-      testResultsFiles: '**/test_output.xml'
+      testResultsFiles: '**/rccl-UnitTests_output.xml'

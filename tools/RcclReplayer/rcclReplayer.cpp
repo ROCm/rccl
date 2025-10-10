@@ -487,6 +487,13 @@ void Replayer::replay()
       NCCL_CALL(ncclAllReduce(sbuffer, rbuffer, call.count, call.datatype, call.op, commMap[call.comm], streams[call.stream].first));
       break;
     }
+    case rrAllReduceWithBias:
+    {
+      std::vector<char> acc(call.count * ncclTypeSize(call.datatype));
+      NCCL_CALL(ncclAllReduceWithBias(sbuffer, rbuffer, call.count, call.datatype, call.op, commMap[call.comm], streams[call.stream].first, acc.data()));
+      HIP_CALL(hipStreamSynchronize(streams[call.stream].first)); // TODO: remove, and further verify behavior of fused AR
+      break;
+    }
     // a2av
     case rrAllToAllv:
     {

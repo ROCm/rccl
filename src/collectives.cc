@@ -89,9 +89,14 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
 
   struct ncclInfo info = { ncclFuncAllGather, "AllGather",
     sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
-    ALLGATHER_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLGATHER_SLICESTEPS_SINGLE_NODE : ALLGATHER_SLICESTEPS };
+    ALLGATHER_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLGATHER_SLICESTEPS_SINGLE_NODE : ALLGATHER_SLICESTEPS, nullptr };
 
-  if (!mscclIsCaller()) // when msccl falls back to
+  int nRanks;
+  int in_place = 0;
+  NCCLCHECK(ncclCommCount(comm, &nRanks));
+  size_t msgSize = sendcount * ncclTypeSize(datatype) * nRanks;
+
+  if (!mscclIsCaller())
   {
     NCCLCHECK(Recorder::instance().record(rrAllGather, info));
   }
@@ -102,7 +107,29 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
       sendcount, datatype, 0, 0, ncclSum, mscclFuncAllGather, comm, stream);
   }
 
-  return ncclEnqueueCheck(&info);
+  if (rcclUseAllGatherDirect(comm, msgSize)) {
+     // use direct allgather
+     if (sendcount == 0) return ncclSuccess;
+     size_t rankOffset = sendcount * ncclTypeSize(datatype);
+     if (((char*)sendbuff) == (((char*)recvbuff) + comm->rank * rankOffset)) {
+        in_place = 1;
+     } 
+
+     NCCLCHECK(ncclGroupStart());
+     for (int r = 0; r < nRanks; r++) {
+         int peer = (comm->rank + r) % nRanks;
+         if (in_place && (peer == comm->rank)) {
+            continue;
+         }
+         NCCLCHECK(ncclSend(sendbuff, sendcount, datatype, peer, comm, stream));
+         NCCLCHECK(ncclRecv(((char*)recvbuff) + peer * rankOffset, sendcount, datatype, peer, comm, stream));
+     }
+     NCCLCHECK(ncclGroupEnd());
+     return ncclSuccess;
+  } else {
+     // use ring allgather
+     return ncclEnqueueCheck(&info);
+  }
 }
 
 NCCL_API(ncclResult_t, ncclAllReduce, const void* sendbuff, void* recvbuff, size_t count,
@@ -117,7 +144,7 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   // RCCL update slice steps for AllReduce if single node
   struct ncclInfo info = { ncclFuncAllReduce, "AllReduce",
     sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
-    ALLREDUCE_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLREDUCE_SLICESTEPS_SINGLE_NODE : ALLREDUCE_SLICESTEPS };
+    ALLREDUCE_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLREDUCE_SLICESTEPS_SINGLE_NODE : ALLREDUCE_SLICESTEPS, nullptr };
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
@@ -125,12 +152,36 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
   }
 
   if (mscclAvailable(comm) && !mscclIsCaller()) {
-    if (datatype != ncclBfloat16 || (count * ncclTypeSize(datatype) <= 8388608)) {
-	return mscclEnqueueCheck(
-                sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
-                count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);	
+    //MSCCL not supported for FP8 datatype
+    if (datatype != ncclFloat8e4m3 && datatype != ncclFloat8e5m2) {
+      // MSCCL threshold for Bfloat16 = 8MB
+      if (datatype != ncclBfloat16 || (count * ncclTypeSize(datatype) <= 8388608)) {
+        return mscclEnqueueCheck(
+                      sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
+                      count, datatype, 0, 0, op, mscclFuncAllReduce, comm, stream);
+      }
     }
   }
+
+  return ncclEnqueueCheck(&info);
+}
+
+ncclResult_t ncclAllReduceWithBias_impl(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream, const void* acc) {
+  NVTX3_FUNC_WITH_PARAMS(AllReduce, NcclNvtxParamsAllReduce,
+    NVTX3_PAYLOAD(comm ? comm->commHash : 0, count * ncclTypeSize(datatype), op, datatype));
+
+  if (acc == nullptr) {
+    WARN("ncclAllReduceWithBias : acc cannot be nullptr");
+    return ncclInvalidArgument;
+  }
+
+  // RCCL update slice steps for AllReduce if single node
+  struct ncclInfo info = { ncclFuncAllReduce, "AllReduce",
+    sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
+    ALLREDUCE_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLREDUCE_SLICESTEPS_SINGLE_NODE : ALLREDUCE_SLICESTEPS, acc };
+
+  NCCLCHECK(Recorder::instance().record(rrAllReduceWithBias, info));
 
   return ncclEnqueueCheck(&info);
 }
@@ -164,7 +215,7 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
       rankOffset >= 744 * 1024 && rankAlign != 4 && rcclParamAllToAllPivotEnable()) {
     struct ncclInfo info = { ncclFuncAllToAllPivot, "AllToAllPivot",
       sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream, /* Args */
-      ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS };
+      ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
     return ncclEnqueueCheck(&info);
   } else {
     int nRanks;
@@ -191,7 +242,7 @@ ncclResult_t ncclAllToAllv_impl(const void *sendbuff, const size_t sendcounts[],
     void *recvbuff, const size_t recvcounts[], const size_t rdispls[],
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream) {
   NVTX3_FUNC_WITH_PARAMS(AllToAllv, NcclNvtxParamsAllToAllv,
-    NVTX3_PAYLOAD(comm ? comm->commHash : 0, sendcounts[comm->rank] * ncclTypeSize(datatype), 
+    NVTX3_PAYLOAD(comm ? comm->commHash : 0, sendcounts[comm->rank] * ncclTypeSize(datatype),
       recvcounts[comm->rank] * ncclTypeSize(datatype), datatype));
 
   if (!mscclIsCaller()) // when msccl falls back to
@@ -240,7 +291,7 @@ ncclResult_t ncclBroadcast_impl(const void* sendbuff, void* recvbuff, size_t cou
 
   struct ncclInfo info = { ncclFuncBroadcast, "Broadcast",
     sendbuff, recvbuff, count, datatype, ncclSum, root, comm, stream, /* Args */
-    BROADCAST_CHUNKSTEPS, BROADCAST_SLICESTEPS };
+    BROADCAST_CHUNKSTEPS, BROADCAST_SLICESTEPS, nullptr };
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
@@ -311,7 +362,7 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
 
   struct ncclInfo info = { ncclFuncReduce, "Reduce",
     sendbuff, recvbuff, count, datatype, op, root, comm, stream, /* Args */
-    REDUCE_CHUNKSTEPS, REDUCE_SLICESTEPS };
+    REDUCE_CHUNKSTEPS, REDUCE_SLICESTEPS, nullptr };
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
@@ -338,7 +389,7 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
 
   struct ncclInfo info = { ncclFuncReduceScatter, "ReduceScatter",
     sendbuff, recvbuff, recvcount, datatype, op, 0, comm, stream, /* Args */
-    REDUCESCATTER_CHUNKSTEPS, comm -> rcclUseOneSlice ? REDUCESCATTER_SLICESTEPS_SINGLE_NODE : REDUCESCATTER_SLICESTEPS };
+    REDUCESCATTER_CHUNKSTEPS, comm -> rcclUseOneSlice ? REDUCESCATTER_SLICESTEPS_SINGLE_NODE : REDUCESCATTER_SLICESTEPS, nullptr };
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
@@ -403,7 +454,7 @@ ncclResult_t ncclSend_impl(const void* sendbuff, size_t count, ncclDataType_t da
 
   struct ncclInfo info = { ncclFuncSend, "Send",
     NULL, (void*)sendbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
-    1, 1 };
+    1, 1, nullptr };
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
@@ -429,7 +480,7 @@ ncclResult_t ncclRecv_impl(void* recvbuff, size_t count, ncclDataType_t datatype
 
   struct ncclInfo info = { ncclFuncRecv, "Recv",
     NULL, recvbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
-    1, 1 };
+    1, 1, nullptr };
 
   if (!mscclIsCaller()) // when msccl falls back to
   {

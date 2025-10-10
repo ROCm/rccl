@@ -190,13 +190,12 @@ struct __attribute__ ((aligned(64))) allocationTracker {
   };
 };
 static_assert(sizeof(struct allocationTracker) == 64, "allocationTracker must be size of 64 bytes");
-#define MAX_ALLOC_TRACK_NGPU 32
+#define MAX_ALLOC_TRACK_NGPU 128
 extern struct allocationTracker allocTracker[];
 
-#if CUDART_VERSION >= 11030
+#if ROCM_VERSION >= 70000
 
-#include <cuda.h>
-#include "cudawrap.h"
+#include "rocmwrap.h"
 
 // ncclCuMemAllocAddr takes memory handle and size and returns the mapped address pointer
 static inline ncclResult_t ncclCuMemAllocAddr(void **ptr, CUmemGenericAllocationHandle *handleIn, size_t size) {
@@ -219,6 +218,11 @@ static inline ncclResult_t ncclCuMemAllocAddr(void **ptr, CUmemGenericAllocation
   accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
   CUCHECK(cuMemSetAccess((CUdeviceptr)*ptr, size, &accessDesc, 1));
   TRACE(NCCL_ALLOC, "CuMem Map Size %zu pointer %p handle %llx", size, *ptr, *handleIn);
+  if (cudaDev < MAX_ALLOC_TRACK_NGPU) {
+     __atomic_fetch_add(&allocTracker[cudaDev].totalAlloc, 1, __ATOMIC_RELAXED);
+     __atomic_fetch_add(&allocTracker[cudaDev].totalAllocSize, size, __ATOMIC_RELAXED);
+  }
+  INFO(NCCL_ALLOC, "ncclCuMemAllocAddr: Memory used = %ld on device = %d", allocTracker[cudaDev].totalAllocSize, cudaDev);
   return result;
 }
 
@@ -229,6 +233,15 @@ static inline ncclResult_t ncclCuMemFreeAddr(void *ptr) {
   CUCHECK(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)ptr));
   CUCHECK(cuMemUnmap((CUdeviceptr)ptr, size));
   CUCHECK(cuMemAddressFree((CUdeviceptr)ptr, size));
+
+  int dev;
+  size *= -1;
+  CUDACHECK(hipGetDevice(&dev));
+  if (dev < MAX_ALLOC_TRACK_NGPU) {
+     __atomic_fetch_add(&allocTracker[dev].totalAlloc, -1, __ATOMIC_RELAXED);
+     __atomic_fetch_add(&allocTracker[dev].totalAllocSize, size, __ATOMIC_RELAXED);
+  }
+  INFO(NCCL_ALLOC, "ncclCuMemFreeAddr: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
   return result;
 }
 
@@ -248,7 +261,7 @@ static inline ncclResult_t ncclCuMemAlloc(void **ptr, CUmemGenericAllocationHand
   prop.requestedHandleTypes = type;
   prop.location.id = currentDev;
   // Query device to see if RDMA support is available
-  CUCHECK(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, currentDev));
+  // CUCHECK(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, currentDev));
   if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
   CUCHECK(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
   ALIGN_SIZE(size, granularity);
@@ -265,6 +278,13 @@ static inline ncclResult_t ncclCuMemAlloc(void **ptr, CUmemGenericAllocationHand
   CUCHECK(cuMemSetAccess((CUdeviceptr)*ptr, size, &accessDesc, 1));
   if (handlep) *handlep = handle;
   TRACE(NCCL_ALLOC, "CuMem Alloc Size %zu pointer %p handle %llx", size, *ptr, handle);
+  
+  if (cudaDev < MAX_ALLOC_TRACK_NGPU) {
+     __atomic_fetch_add(&allocTracker[cudaDev].totalAlloc, 1, __ATOMIC_RELAXED);
+     __atomic_fetch_add(&allocTracker[cudaDev].totalAllocSize, size, __ATOMIC_RELAXED);
+  }
+  INFO(NCCL_ALLOC, "ncclCuMemAlloc: Memory used = %ld on device = %d", allocTracker[cudaDev].totalAllocSize, cudaDev);
+
   return result;
 }
 
@@ -280,6 +300,15 @@ static inline ncclResult_t ncclCuMemFree(void *ptr) {
   CUCHECK(cuMemUnmap((CUdeviceptr)ptr, size));
   CUCHECK(cuMemRelease(handle));
   CUCHECK(cuMemAddressFree((CUdeviceptr)ptr, size));
+
+  int dev;
+  size *= -1;
+  CUDACHECK(hipGetDevice(&dev));
+  if (dev < MAX_ALLOC_TRACK_NGPU) {
+     __atomic_fetch_add(&allocTracker[dev].totalAlloc, -1, __ATOMIC_RELAXED);
+     __atomic_fetch_add(&allocTracker[dev].totalAllocSize, size, __ATOMIC_RELAXED);
+  }
+  INFO(NCCL_ALLOC, "ncclCuMemFree: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
   return result;
 }
 
@@ -288,21 +317,21 @@ static inline ncclResult_t ncclCuMemFree(void *ptr) {
 extern int ncclCuMemEnable();
 
 static inline ncclResult_t ncclCuMemAlloc(void **ptr, void *handlep, int type, size_t size) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 static inline ncclResult_t ncclCuMemFree(void *ptr) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 
 static inline ncclResult_t ncclCuMemAllocAddr(void **ptr, CUmemGenericAllocationHandle *handleIn, size_t size) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 
 static inline ncclResult_t ncclCuMemFreeAddr(void *ptr) {
-  WARN("CUMEM not supported prior to CUDA 11.3");
+  WARN("CUMEM not supported prior to ROCm 7.0");
   return ncclInternalError;
 }
 #endif
@@ -318,6 +347,15 @@ ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr && nelem > 0) WARN("Failed to CUDA malloc %ld bytes", nelem*ncclSizeOfT<T>());
+  else {
+     int dev;
+     CUDACHECK(hipGetDevice(&dev));
+     if (dev < MAX_ALLOC_TRACK_NGPU) {
+        __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*ncclSizeOfT<T>(), __ATOMIC_RELAXED);
+     }
+     INFO(NCCL_ALLOC, "ncclCudaMallocDebug: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
+  }
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p flags %d", filefunc, line, nelem*ncclSizeOfT<T>(), *ptr, flags);
   return result;
 }
@@ -328,6 +366,8 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
+  int dev;
+
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   // Need a side stream so as not to interfere with graph capture.
   cudaStream_t stream = sideStream;
@@ -338,15 +378,17 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
   if (sideStream == nullptr)
     CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
-  int dev;
-  CUDACHECK(hipGetDevice(&dev));
-  if (dev < MAX_ALLOC_TRACK_NGPU) {
-    __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_RELAXED);
-    __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*ncclSizeOfT<T>(), __ATOMIC_RELAXED);
-  }
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr && nelem > 0) WARN("Failed to CUDA calloc %ld bytes", nelem*ncclSizeOfT<T>());
+  else {
+      CUDACHECK(hipGetDevice(&dev));
+      if (dev < MAX_ALLOC_TRACK_NGPU) {
+    	 __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_RELAXED);
+    	 __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*ncclSizeOfT<T>(), __ATOMIC_RELAXED);
+      }
+      INFO(NCCL_ALLOC, "ncclCudaCallocDebug: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
+  }
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p flags %d", filefunc, line, nelem*ncclSizeOfT<T>(), *ptr, flags);
   return result;
 }
@@ -357,20 +399,24 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
+  int dev;
+
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (nelem > 0) {
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
-    CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish);
-    int dev;
-    CUDACHECK(hipGetDevice(&dev));
-    if (dev < MAX_ALLOC_TRACK_NGPU) {
-      __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_RELAXED);
-      __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*ncclSizeOfT<T>(), __ATOMIC_RELAXED);
-    }
+    CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish); 
   }
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr && nelem > 0) WARN("Failed to CUDA calloc async %ld bytes", nelem*ncclSizeOfT<T>());
+  else {
+     CUDACHECK(hipGetDevice(&dev));
+     if (dev < MAX_ALLOC_TRACK_NGPU) {
+       __atomic_fetch_add(&allocTracker[dev].totalAlloc, 1, __ATOMIC_RELAXED);
+       __atomic_fetch_add(&allocTracker[dev].totalAllocSize, nelem*ncclSizeOfT<T>(), __ATOMIC_RELAXED);
+     }
+     INFO(NCCL_ALLOC, "ncclCudaCallocDebug: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
+  }
   INFO(NCCL_ALLOC, "%s:%d Cuda Alloc Size %ld pointer %p flags %d", filefunc, line, nelem*ncclSizeOfT<T>(), *ptr, flags);
   return result;
 }
@@ -408,6 +454,26 @@ ncclResult_t ncclCudaFree(T* ptr) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   TRACE(NCCL_ALLOC, "Cuda Free pointer %p", ptr);
+
+  // get the size of the allocation
+  if (ptr != NULL) {
+     CUdeviceptr baseAddress;
+     size_t retrievedSize;
+
+     CUDACHECK(cuMemGetAddressRange(&baseAddress, &retrievedSize, ptr));
+     retrievedSize *= -1;
+
+     if (ptr == baseAddress) {
+        int dev;
+        CUDACHECK(hipGetDevice(&dev));
+        if (dev < MAX_ALLOC_TRACK_NGPU) {
+           __atomic_fetch_add(&allocTracker[dev].totalAlloc, -1, __ATOMIC_RELAXED);
+           __atomic_fetch_add(&allocTracker[dev].totalAllocSize, retrievedSize, __ATOMIC_RELAXED);
+        }
+        INFO(NCCL_ALLOC, "ncclCudaFree: Memory used = %ld on device = %d", allocTracker[dev].totalAllocSize, dev);
+     }
+  }
+
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (ncclCuMemEnable()) {
     NCCLCHECKGOTO(ncclCuMemFree((void *)ptr), result, finish);
