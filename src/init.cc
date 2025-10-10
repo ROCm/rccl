@@ -1404,7 +1404,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       comm -> gfx942CheapFenceOff = 0;
     }
     else if(IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")){
-      comm -> gfx942CheapFenceOff = ROCM_VERSION >= 70200 || nNodes > 1;
+      comm -> gfx942CheapFenceOff = ROCM_VERSION < 70200 && nNodes > 1; // Enable for single node only prior to ROCm 7.0.2
     }
   }
   #endif
