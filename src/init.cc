@@ -520,6 +520,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(comm->topParentRanks);
   free(comm->topParentLocalRanks);
   free(comm->gproxyConn);
+  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
+    ncclCudaContextDrop(comm->context);
+    INFO(NCCL_INIT, "cudaDev %d context tracking dropped", comm->cudaDev);
+  }
 
   NCCLCHECK(ncclRegCleanup(comm));
 
