@@ -875,7 +875,7 @@ public:
       patBarrier();
     }
     if(collWork){
-      skip_fence = !collWork -> gfx942CheapFenceOff;
+      skip_fence = !collWork -> gfx9CheapFenceOff;
     }
   }
 
