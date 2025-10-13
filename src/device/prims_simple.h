@@ -304,7 +304,7 @@ private:
             }
 #endif
 
-            reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, MaxSend, /*PreOpSrcs*/0>
+            reduceCopy<Unroll, useAcc && Dst, RedOp, T, 0, 1, 1, 0, 1, MaxSend, /*PreOpSrcs*/0>
               (tid, nworkers, /*redArg*/0, /*preOpArgs*/nullptr, /*postOp*/false,
               1, ncclShmem.groups[group].srcs,
               fan.nsend(), ncclShmem.groups[group].dsts+1,
@@ -340,7 +340,7 @@ private:
           }
 #endif
 
-          reduceCopy<Unroll, useAcc, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs*/0>
+          reduceCopy<Unroll, useAcc && Dst, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs*/0>
             (tid, nworkers, ncclShmem.redOpArgs[0],  nullptr, postOp,
             Recv, ncclShmem.groups[group].srcs,
             Dst, ncclShmem.groups[group].dsts,
@@ -378,7 +378,7 @@ private:
                                     DirectRecv*MaxRecv == NCCL_MAX_DIRECT_ARITY ? (1+NCCL_MAX_DIRECT_ARITY) : 1;
           if (Send && Dst && ncclShmem.groups[group].dsts[1] == nullptr) {
             // this case should only be directCopySend() with registered buffers and send to net peer
-            reduceCopy<Unroll, useAcc, RedOp, T,
+            reduceCopy<Unroll, useAcc && Dst, RedOp, T,
               0, Recv + Src, Recv * MaxRecv + Src,
               0, 1, 1, PreOpSrcs, Pipeline>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
@@ -386,7 +386,7 @@ private:
                 1, ncclShmem.groups[group].dsts,
                 workSize);
           } else {
-            reduceCopy<Unroll, useAcc, RedOp, T,
+            reduceCopy<Unroll, useAcc && Dst, RedOp, T,
               MultimemSrcs, Recv + Src, Recv * MaxRecv + Src,
               MultimemDsts, Send + Dst, Send * MaxSend + Dst, PreOpSrcs, Pipeline>
               (tid, nworkers, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, postOp,
