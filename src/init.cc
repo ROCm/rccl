@@ -1407,6 +1407,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       comm -> gfx9CheapFenceOff = ROCM_VERSION < 70200 && nNodes > 1; // Enable for single node only prior to ROCm 7.0.2
     }
   }
+  INFO(NCCL_INIT, "GFX9 cheap fence is %s", comm -> gfx9CheapFenceOff ? "OFF" : "ON");
   #endif
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
     // Multi-node MI300A
