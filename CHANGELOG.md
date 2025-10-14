@@ -16,7 +16,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
 * Compatibility with NCCL 2.27.7
 
-### Optimizations
+### Optimized
 * Improve small message performance for alltoall by enabling and optimizing batched P2P operations.
 
 ### Known issues
@@ -55,7 +55,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Compatibility with NCCL 2.25.1
 * Compatibility with NCCL 2.26.6
 
-### Optimizations
+### Optimized
 * Improved the performance of the `FP8` Sum operation by upcasting to `FP16`.
 
 ### Known Issues
