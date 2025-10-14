@@ -13,7 +13,7 @@ from types import SimpleNamespace
 WORKDIR = os.getcwd()
 
 RCCL_INSTALL_DIR = "path/to/rccl"
-OMPI_INSTALL_DIR = "path/to/ompi"
+OMPI_INSTALL_DIR = "path/to/ompi/install"
 RCCL_TESTS_DIR = "path/to/rccl-tests"
 
 # Plugin Paths

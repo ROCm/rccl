@@ -8,8 +8,8 @@ import os
 import subprocess
 import pytest
 
-@pytest.mark.csvplugin
-@pytest.mark.reduce
+@pytest.mark.ext_tuner
+@pytest.mark.broadcast
 def test_valid_config_with_wildcards(paths):
     """Test CSV plugin with wildcard values for matching configurations"""
     
@@ -28,17 +28,17 @@ def test_valid_config_with_wildcards(paths):
         f"{paths.OMPI_INSTALL_DIR}/bin/mpirun", "-np", "4",
         "--mca", "pml", "ucx",
         "--mca", "btl", "^vader,openib",
-        f"{paths.RCCL_TESTS_DIR}/build/reduce_perf",
+        f"{paths.RCCL_TESTS_DIR}/build/broadcast_perf",
         "-b", "8",
         "-e", "128M",
         "-f", "2",
         "-g", "1",
     ]
 
-    reduce_log_dir = os.path.join(paths.LOGDIR, "reduce_csv_plugin_test_logs")
-    os.makedirs(reduce_log_dir, exist_ok=True)
+    broadcast_log_dir = os.path.join(paths.LOGDIR, "broadcast_csv_plugin_test_logs")
+    os.makedirs(broadcast_log_dir, exist_ok=True)
 
-    log_file = os.path.join(reduce_log_dir, "test_reduce_valid_config_with_wildcards.log")
+    log_file = os.path.join(broadcast_log_dir, "test_broadcast_valid_config_with_wildcards.log")
     with open(log_file, "w") as logfile:
         rccl_test = subprocess.run(
             args,
@@ -48,7 +48,7 @@ def test_valid_config_with_wildcards(paths):
             universal_newlines=True
         )
 
-    assert rccl_test.returncode == 0, f"CSV Plugin reduce test failed, see {log_file}"
+    assert rccl_test.returncode == 0, f"CSV Plugin broadcast test failed, see {log_file}"
     
     # Read and validate log content
     with open(log_file, "r") as logfile:
@@ -64,8 +64,8 @@ def test_valid_config_with_wildcards(paths):
     assert plugin_applied, \
         f"Plugin should have applied valid configurations, but none were applied. Check {log_file} for details"
     
-@pytest.mark.csvplugin
-@pytest.mark.reduce
+@pytest.mark.ext_tuner
+@pytest.mark.broadcast
 def test_valid_config_without_wildcards(paths):
     """Test CSV plugin with specific values (no wildcards -1) for precise matching"""
 
@@ -84,17 +84,17 @@ def test_valid_config_without_wildcards(paths):
         f"{paths.OMPI_INSTALL_DIR}/bin/mpirun", "-np", "4",
         "--mca", "pml", "ucx",
         "--mca", "btl", "^vader,openib",
-        f"{paths.RCCL_TESTS_DIR}/build/reduce_perf",
+        f"{paths.RCCL_TESTS_DIR}/build/broadcast_perf",
         "-b", "8",
         "-e", "128M",
         "-f", "2",
         "-g", "1",
     ]
 
-    reduce_log_dir = os.path.join(paths.LOGDIR, "reduce_csv_plugin_test_logs")
-    os.makedirs(reduce_log_dir, exist_ok=True)
+    broadcast_log_dir = os.path.join(paths.LOGDIR, "broadcast_csv_plugin_test_logs")
+    os.makedirs(broadcast_log_dir, exist_ok=True)
 
-    log_file = os.path.join(reduce_log_dir, "test_reduce_valid_config_without_wildcards.log")
+    log_file = os.path.join(broadcast_log_dir, "test_broadcast_valid_config_without_wildcards.log")
     with open(log_file, "w") as logfile:
         rccl_test = subprocess.run(
             args,
@@ -104,7 +104,7 @@ def test_valid_config_without_wildcards(paths):
             universal_newlines=True
         )
 
-    assert rccl_test.returncode == 0, f"CSV Plugin reduce test failed, see {log_file}"
+    assert rccl_test.returncode == 0, f"CSV Plugin broadcast test failed, see {log_file}"
     
     # Read and validate log content
     with open(log_file, "r") as logfile:
@@ -121,8 +121,8 @@ def test_valid_config_without_wildcards(paths):
     assert plugin_applied, \
         f"Plugin should have applied at least one configuration from {paths.VALID_CONFIG_WITHOUT_WILDCARDS}. Check {log_file} for details"
 
-@pytest.mark.csvplugin
-@pytest.mark.reduce
+@pytest.mark.ext_tuner
+@pytest.mark.broadcast
 def test_no_matching_config(paths):
     """Test CSV plugin behavior with no matching configurations"""
 
@@ -141,17 +141,17 @@ def test_no_matching_config(paths):
         f"{paths.OMPI_INSTALL_DIR}/bin/mpirun", "-np", "8",
         "--mca", "pml", "ucx",
         "--mca", "btl", "^vader,openib",
-        f"{paths.RCCL_TESTS_DIR}/build/reduce_perf",
+        f"{paths.RCCL_TESTS_DIR}/build/broadcast_perf",
         "-b", "8",
         "-e", "128M",
         "-f", "2",
         "-g", "1",
     ]
 
-    reduce_log_dir = os.path.join(paths.LOGDIR, "reduce_csv_plugin_test_logs")
-    os.makedirs(reduce_log_dir, exist_ok=True)
+    broadcast_log_dir = os.path.join(paths.LOGDIR, "broadcast_csv_plugin_test_logs")
+    os.makedirs(broadcast_log_dir, exist_ok=True)
 
-    log_file = os.path.join(reduce_log_dir, "test_reduce_no_matching_config.log")
+    log_file = os.path.join(broadcast_log_dir, "test_broadcast_no_matching_config.log")
     with open(log_file, "w") as logfile:
         rccl_test = subprocess.run(
             args,
@@ -161,7 +161,7 @@ def test_no_matching_config(paths):
             universal_newlines=True
         )
 
-    assert rccl_test.returncode == 0, f"CSV Plugin reduce test failed, see {log_file}"
+    assert rccl_test.returncode == 0, f"CSV Plugin broadcast test failed, see {log_file}"
     
     # Read and validate log content
     with open(log_file, "r") as logfile:
@@ -177,8 +177,8 @@ def test_no_matching_config(paths):
     assert not plugin_applied, \
         f"Plugin should NOT have applied any configurations from {paths.NO_MATCHING_CONFIG} as they don't match the test environment. Check {log_file} for details"
 
-@pytest.mark.csvplugin
-@pytest.mark.reduce
+@pytest.mark.ext_tuner
+@pytest.mark.broadcast
 def test_incorrect_values_config(paths):
     """Test CSV plugin behavior with invalid/incorrect values in configuration"""
 
@@ -197,17 +197,17 @@ def test_incorrect_values_config(paths):
         f"{paths.OMPI_INSTALL_DIR}/bin/mpirun", "-np", "4",
         "--mca", "pml", "ucx",
         "--mca", "btl", "^vader,openib",
-        f"{paths.RCCL_TESTS_DIR}/build/reduce_perf",
+        f"{paths.RCCL_TESTS_DIR}/build/broadcast_perf",
         "-b", "8",
         "-e", "128M",
         "-f", "2",
         "-g", "1",
     ]
 
-    reduce_log_dir = os.path.join(paths.LOGDIR, "reduce_csv_plugin_test_logs")
-    os.makedirs(reduce_log_dir, exist_ok=True)
+    broadcast_log_dir = os.path.join(paths.LOGDIR, "broadcast_csv_plugin_test_logs")
+    os.makedirs(broadcast_log_dir, exist_ok=True)
 
-    log_file = os.path.join(reduce_log_dir, "test_reduce_incorrect_values_config.log")
+    log_file = os.path.join(broadcast_log_dir, "test_broadcast_incorrect_values_config.log")
     with open(log_file, "w") as logfile:
         rccl_test = subprocess.run(
             args,
@@ -217,7 +217,7 @@ def test_incorrect_values_config(paths):
             universal_newlines=True
         )
 
-    assert rccl_test.returncode == 0, f"CSV Plugin reduce test failed, see {log_file}"
+    assert rccl_test.returncode == 0, f"CSV Plugin broadcast test failed, see {log_file}"
     
     # Read and validate log content
     with open(log_file, "r") as logfile:
@@ -234,8 +234,8 @@ def test_incorrect_values_config(paths):
     assert plugin_applied, \
         "Plugin should either apply configurations (with defaults) or report no matches"
 
-@pytest.mark.csvplugin
-@pytest.mark.reduce
+@pytest.mark.ext_tuner
+@pytest.mark.broadcast
 def test_unsupported_algo_proto_config(paths):
     """Test that plugin handles unsupported algorithm/protocol combinations"""
 
@@ -254,17 +254,17 @@ def test_unsupported_algo_proto_config(paths):
         f"{paths.OMPI_INSTALL_DIR}/bin/mpirun", "-np", "4",
         "--mca", "pml", "ucx",
         "--mca", "btl", "^vader,openib",
-        f"{paths.RCCL_TESTS_DIR}/build/reduce_perf",
+        f"{paths.RCCL_TESTS_DIR}/build/broadcast_perf",
         "-b", "8",
         "-e", "128M",
         "-f", "2",
         "-g", "1",
     ]
 
-    reduce_log_dir = os.path.join(paths.LOGDIR, "reduce_csv_plugin_test_logs")
-    os.makedirs(reduce_log_dir, exist_ok=True)
+    broadcast_log_dir = os.path.join(paths.LOGDIR, "broadcast_csv_plugin_test_logs")
+    os.makedirs(broadcast_log_dir, exist_ok=True)
 
-    log_file = os.path.join(reduce_log_dir, "test_reduce_unsupported_algo_proto.log")
+    log_file = os.path.join(broadcast_log_dir, "test_broadcast_unsupported_algo_proto.log")
     with open(log_file, "w") as logfile:
         rccl_test = subprocess.run(
             args,
@@ -274,7 +274,7 @@ def test_unsupported_algo_proto_config(paths):
             universal_newlines=True
         )
 
-    assert rccl_test.returncode == 0, f"CSV Plugin reduce test failed, see {log_file}"
+    assert rccl_test.returncode == 0, f"CSV Plugin broadcast test failed, see {log_file}"
     
     # Read and validate log content
     with open(log_file, "r") as logfile:
@@ -291,8 +291,8 @@ def test_unsupported_algo_proto_config(paths):
     assert ignored_combinations or out_of_bounds, \
         f"Plugin should report unsupported algorithm/protocol combinations as IGNORE or out of bounds. Check {log_file} for details"
 
-@pytest.mark.csvplugin
-@pytest.mark.reduce
+@pytest.mark.ext_tuner
+@pytest.mark.broadcast
 def test_singlenode_config(paths):
     """Test CSV plugin with single-node configuration"""
 
@@ -311,17 +311,17 @@ def test_singlenode_config(paths):
         f"{paths.OMPI_INSTALL_DIR}/bin/mpirun", "-np", "8",
         "--mca", "pml", "ucx",
         "--mca", "btl", "^vader,openib",
-        f"{paths.RCCL_TESTS_DIR}/build/reduce_perf",
+        f"{paths.RCCL_TESTS_DIR}/build/broadcast_perf",
         "-b", "8",
         "-e", "128M",
         "-f", "2",
         "-g", "1",
     ]
 
-    reduce_log_dir = os.path.join(paths.LOGDIR, "reduce_csv_plugin_test_logs")
-    os.makedirs(reduce_log_dir, exist_ok=True)
+    broadcast_log_dir = os.path.join(paths.LOGDIR, "broadcast_csv_plugin_test_logs")
+    os.makedirs(broadcast_log_dir, exist_ok=True)
 
-    log_file = os.path.join(reduce_log_dir, "test_reduce_singlenode.log")
+    log_file = os.path.join(broadcast_log_dir, "test_broadcast_singlenode.log")
     with open(log_file, "w") as logfile:
         rccl_test = subprocess.run(
             args,
@@ -331,7 +331,7 @@ def test_singlenode_config(paths):
             universal_newlines=True
         )
 
-    assert rccl_test.returncode == 0, f"Single-node CSV Plugin reduce test failed, see {log_file}"
+    assert rccl_test.returncode == 0, f"Single-node CSV Plugin broadcast test failed, see {log_file}"
 
     # Read and validate log content
     with open(log_file, "r") as logfile:
@@ -347,8 +347,8 @@ def test_singlenode_config(paths):
     assert plugin_applied, \
         f"Plugin should have applied single-node configurations from {paths.SINGLENODE_CONFIG}. Check {log_file} for details"
 
-@pytest.mark.csvplugin
-@pytest.mark.reduce
+@pytest.mark.ext_tuner
+@pytest.mark.broadcast
 def test_multinode_config(paths):
     """Test CSV plugin with multi-node configuration"""
 
@@ -364,7 +364,7 @@ def test_multinode_config(paths):
     # Check for common network interface across all nodes
     common_interface = paths.find_common_interface(nodelist)
     if common_interface is None:
-        pytest.skip(f"Multinode reduce test requires all nodes to have the same network interface (eth0 or eth1).")
+        pytest.skip(f"Multinode broadcast test requires all nodes to have the same network interface (eth0 or eth1).")
     
     # Build host specification string (4 processes per node)
     host_spec = ",".join([f"{node}:8" for node in nodelist])
@@ -390,17 +390,17 @@ def test_multinode_config(paths):
         "--host", host_spec,
         "--mca", "pml", "ucx",
         "--mca", "btl", "^vader,openib",
-        f"{paths.RCCL_TESTS_DIR}/build/reduce_perf",
-        "-b", "8",       # 64 bytes start (faster than 1 byte)
-        "-e", "128M",      # 64MB end (much smaller than 16GB)
-        "-f", "2",        # factor 4 (fewer size steps)
-        "-g", "1",        # gap 1
+        f"{paths.RCCL_TESTS_DIR}/build/broadcast_perf",
+        "-b", "8",       
+        "-e", "128M",      
+        "-f", "2",        
+        "-g", "1",      
     ]
 
-    reduce_log_dir = os.path.join(paths.LOGDIR, "reduce_csv_plugin_test_logs")
-    os.makedirs(reduce_log_dir, exist_ok=True)
+    broadcast_log_dir = os.path.join(paths.LOGDIR, "broadcast_csv_plugin_test_logs")
+    os.makedirs(broadcast_log_dir, exist_ok=True)
 
-    log_file = os.path.join(reduce_log_dir, "test_reduce_multinode.log")
+    log_file = os.path.join(broadcast_log_dir, "test_broadcast_multinode.log")
     with open(log_file, "w") as logfile:
         rccl_test = subprocess.run(
             args,
@@ -410,7 +410,7 @@ def test_multinode_config(paths):
             universal_newlines=True
         )
 
-    assert rccl_test.returncode == 0, f"Multi-node CSV Plugin reduce test failed, see {log_file}"
+    assert rccl_test.returncode == 0, f"Multi-node CSV Plugin broadcast test failed, see {log_file}"
     
     # Read and validate log content
     with open(log_file, "r") as logfile:
