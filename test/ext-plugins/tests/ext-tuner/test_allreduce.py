@@ -8,7 +8,7 @@ import os
 import subprocess
 import pytest
 
-@pytest.mark.csvplugin
+@pytest.mark.ext_tuner
 @pytest.mark.allreduce
 def test_valid_config_with_wildcards(paths):
     """Test CSV plugin with wildcard values for matching configurations"""
@@ -64,7 +64,7 @@ def test_valid_config_with_wildcards(paths):
     assert plugin_applied, \
         f"Plugin should have applied valid configurations, but none were applied. Check {log_file} for details"
     
-@pytest.mark.csvplugin
+@pytest.mark.ext_tuner
 @pytest.mark.allreduce
 def test_valid_config_without_wildcards(paths):
     """Test CSV plugin with specific values (no wildcards -1) for precise matching"""
@@ -121,7 +121,7 @@ def test_valid_config_without_wildcards(paths):
     assert plugin_applied, \
         f"Plugin should have applied at least one configuration from {paths.VALID_CONFIG_WITHOUT_WILDCARDS}. Check {log_file} for details"
 
-@pytest.mark.csvplugin
+@pytest.mark.ext_tuner
 @pytest.mark.allreduce
 def test_no_matching_config(paths):
     """Test CSV plugin behavior with no matching configurations"""
@@ -178,7 +178,7 @@ def test_no_matching_config(paths):
     assert not plugin_applied, \
         f"Plugin should NOT have applied any configurations from {paths.NO_MATCHING_CONFIG} as they don't match the test environment. Check {log_file} for details"
 
-@pytest.mark.csvplugin
+@pytest.mark.ext_tuner
 @pytest.mark.allreduce
 def test_incorrect_values_config(paths):
     """Test CSV plugin behavior with invalid/incorrect values in configuration"""
@@ -235,7 +235,7 @@ def test_incorrect_values_config(paths):
     assert plugin_applied, \
         "Plugin should either apply configurations (with defaults) or report no matches"
 
-@pytest.mark.csvplugin
+@pytest.mark.ext_tuner
 @pytest.mark.allreduce
 def test_unsupported_algo_proto_config(paths):
     """Test that plugin handles unsupported algorithm/protocol combinations"""
@@ -292,7 +292,7 @@ def test_unsupported_algo_proto_config(paths):
     assert ignored_combinations or out_of_bounds, \
         f"Plugin should report unsupported algorithm/protocol combinations as IGNORE or out of bounds. Check {log_file} for details"
 
-@pytest.mark.csvplugin
+@pytest.mark.ext_tuner
 @pytest.mark.allreduce
 def test_singlenode_config(paths):
     """Test CSV plugin with single-node configuration"""
@@ -349,7 +349,7 @@ def test_singlenode_config(paths):
     assert plugin_applied, \
         f"Plugin should have applied single-node configurations from {paths.SINGLENODE_CONFIG}. Check {log_file} for details"
 
-@pytest.mark.csvplugin
+@pytest.mark.ext_tuner
 @pytest.mark.allreduce
 def test_multinode_config(paths):
     """Test CSV plugin with multi-node configuration"""

@@ -9,7 +9,7 @@ The tests are written in Python using the pytest framework, making it easy to ru
 ## Directory Structure
 
 ```
-ext-tuner/
+ext-plugins/
 ├── README.md                    # This file - documentation for the test suite
 ├── requirements.txt             # Python dependencies required for testing
 ├── pytest.ini                   # Pytest configuration and test markers
@@ -27,7 +27,7 @@ ext-tuner/
 │       └── valid_config_without_wildcards.conf
 └── tests/                       # Test suite directory
     ├── conftest.py              # Pytest fixtures and shared test configuration
-    └── csv_plugin_tests/        # CSV Tuner Plugin specific tests
+    └── ext-tuner/               # CSV Tuner Plugin specific tests
         ├── test_allreduce.py
         ├── test_broadcast.py
         ├── test_reduce.py
@@ -131,7 +131,7 @@ Tests are organized using pytest markers. You can run specific groups of tests:
 
 **Run CSV Plugin tests:**
 ```bash
-pytest -m csvplugin --cache-clear
+pytest -m mark.ext_tuner --cache-clear
 ```
 
 **Run tests for specific collective operations:**
