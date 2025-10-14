@@ -23,6 +23,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Known issues
 * Symmetric memory kernels are currently disabled due to ongoing CUMEM enablement work.
+* When running this version of RCCL using ROCm versions earlier than 6.4.0, the user must set the environment flag `HSA_NO_SCRATCH_RECLAIM=1`.
 
 ## RCCL 2.26.6 for ROCm 7.0.0
 
