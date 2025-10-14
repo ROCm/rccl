@@ -15,11 +15,11 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
 * Compatibility with NCCL 2.27.7
-* Improved performance of FP8 Sum operation by upcasting to FP16.
+* Improved the performance of the `FP8` Sum operation by upcasting to `FP16`.
 
 ### Resolved issues
 * Improve small message performance for alltoall by enabling and optimizing batched P2P operations.
-* Fixed broken functionality within LL protocol on gfx950 by disabling inlining of LLGenericOp kernels.
+* Fixed broken functionality within the LL protocol on gfx950 by disabling inlining of LLGenericOp kernels.
 
 ### Known issues
 * Symmetric memory kernels are currently disabled due to ongoing CUMEM enablement work.
