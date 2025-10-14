@@ -2,7 +2,10 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.27.7 for ROCm 7.1.0
+## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
+
+
+## RCCL 2.27.7 for ROCm 7.1.0
 
 ### Added
 * Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
@@ -12,9 +15,11 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
 * Compatibility with NCCL 2.27.7
+* Improved performance of FP8 Sum operation by upcasting to FP16.
 
 ### Resolved issues
-* Improve small message performance for alltoall by enabling and optimizing batched P2P operations. 
+* Improve small message performance for alltoall by enabling and optimizing batched P2P operations.
+* Fixed broken functionality within LL protocol on gfx950 by disabling inlining of LLGenericOp kernels.
 
 ### Known issues
 * Symmetric memory kernels are currently disabled due to ongoing CUMEM enablement work.
