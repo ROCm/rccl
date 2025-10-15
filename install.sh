@@ -19,6 +19,7 @@ build_tests=false
 build_verbose=false
 clean_build=true
 collective_trace=true
+dump_asm=false
 enable_code_coverage=false
 enable_ninja=""
 install_dependencies=false
@@ -31,11 +32,13 @@ enable_mscclpp_clip=false
 num_parallel_jobs=$(nproc)
 npkit_enabled=false
 openmp_test_enabled=false
+kernel_resource_use=false
 roctx_enabled=true
 run_tests=false
 run_tests_all=false
 time_trace=false
 force_reduce_pipeline=false
+generate_sym_kernels=false
 
 # #################################################
 # helper functions
@@ -51,6 +54,7 @@ function display_help()
     echo "       --enable_backtrace      Build with custom backtrace support"
     echo "       --disable-colltrace     Build without collective trace"
     echo "       --disable-msccl-kernel  Build without MSCCL kernels"
+    echo "       --dump-asm              Disassemble code and dump assembly with inline code"
     echo "       --enable-mscclpp        Build with MSCCL++ support"
     echo "       --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines"
     echo "       --disable-roctx         Build without ROCTX logging"
@@ -58,6 +62,7 @@ function display_help()
     echo "    -h|--help                  Prints this help message"
     echo "    -i|--install               Install RCCL library (see --prefix argument below)"
     echo "    -j|--jobs                  Specify how many parallel compilation jobs to run ($num_parallel_jobs by default)"
+    echo "       --kernel-resource-use   Dump GPU kernel resource usage (e.g., VGPRs, scratch, spill) at link stage"
     echo "    -l|--local_gpu_only        Only compile for local GPU architecture"
     echo "       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, separate by ';' (builds for all supported GPU architectures by default)"
     echo "       --no_clean              Don't delete files if they already exist"
@@ -73,6 +78,7 @@ function display_help()
     echo "       --time-trace            Plot the build time of RCCL (requires \`ninja-build\` package installed on the system)"
     echo "       --verbose               Show compile commands"
     echo "       --force-reduce-pipeline Force reduce_copy sw pipeline to be used for every reduce-based collectives and datatypes"
+    echo "       --generate-sym-kernels  Generate symmetric memory kernels"
 }
 
 # #################################################
@@ -82,7 +88,7 @@ function display_help()
 # check if we have a modern version of getopt that can handle whitespace and long parameters
 getopt -T
 if [[ "$?" -eq 4 ]]; then
-    GETOPT_PARSE=$(getopt --name "${0}" --options cdfhij:lprt --longoptions address-sanitizer,dependencies,debug,enable-code-coverage,enable_backtrace,disable-colltrace,disable-msccl-kernel,enable-mscclpp,fast,help,install,jobs:,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,log-trace,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,force-reduce-pipeline,verbose -- "$@")
+    GETOPT_PARSE=$(getopt --name "${0}" --options cdfhij:lprt --longoptions address-sanitizer,dependencies,debug,dump-asm,enable-code-coverage,enable_backtrace,disable-colltrace,disable-msccl-kernel,enable-mscclpp,fast,help,install,jobs:,kernel-resource-use,local_gpu_only,amdgpu_targets:,no_clean,npkit-enable,log-trace,openmp-test-enable,roctx-enable,package_build,prefix:,rm-legacy-include-dir,run_tests_all,run_tests_quick,static,tests_build,time-trace,force-reduce-pipeline,generate-sym-kernels,verbose -- "$@")
 else
     echo "Need a new version of getopt"
     exit 1
@@ -104,6 +110,7 @@ while true; do
          --enable_backtrace)         build_bfd=true;                                                                                   shift ;;
          --disable-colltrace)        collective_trace=false;                                                                           shift ;;
          --disable-msccl-kernel)     msccl_kernel_enabled=false;                                                                       shift ;;
+         --dump-asm)                 dump_asm=true;                                                                                    shift ;;
          --enable-mscclpp)           mscclpp_enabled=true;                                                                             shift ;;
          --enable-mscclpp-clip)      enable_mscclpp_clip=true;                                                                         shift ;;
          --disable-roctx)            roctx_enabled=false;                                                                              shift ;;
@@ -111,6 +118,7 @@ while true; do
     -h | --help)                     display_help;                                                                                     exit 0 ;;
     -i | --install)                  install_library=true;                                                                             shift ;;
     -j | --jobs)                     num_parallel_jobs=${2};                                                                           shift 2 ;;
+         --kernel-resource-use)      kernel_resource_use=true;                                                                         shift ;;
     -l | --local_gpu_only)           build_local_gpu_only=true;                                                                        shift ;;
          --amdgpu_targets)           build_amdgpu_targets=${2};                                                                        shift 2 ;;
          --no_clean)                 clean_build=false;                                                                                shift ;;
@@ -125,7 +133,8 @@ while true; do
     -t | --tests_build)              build_tests=true;                                                                                 shift ;;
          --time-trace)               time_trace=true;                                                                                  shift ;;
          --verbose)                  build_verbose=true;                                                                               shift ;;
-         --force-reduce-pipeline)    force_reduce_pipeline=true;                                                                        shift ;;
+         --force-reduce-pipeline)    force_reduce_pipeline=true;                                                                       shift ;;
+         --generate-sym-kernels)     generate_sym_kernels=true;                                                                        shift ;;
     --) shift ; break ;;
     *)  echo "Unexpected command line parameter received; aborting";
         exit 1
@@ -265,6 +274,10 @@ if [[ "${install_library}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DCMAKE_INSTALL_PREFIX=${install_prefix}"
 fi
 
+if [[ "${kernel_resource_use}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DREPORT_KERNEL_RESOURCE_USE=ON"
+fi
+
 # Enable trace debug level
 if [[ "${log_trace}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DTRACE=ON"
@@ -275,6 +288,11 @@ if [[ "${roctx_enabled}" == false ]]; then
     cmake_common_options="${cmake_common_options} -DROCTX=OFF"
 fi
 
+# Dump ASM files from GPU compilation
+if [[ "${dump_asm}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DDUMP_ASM=ON"
+fi
+
 # Enable OpenMP in unit tests
 if [[ "${openmp_test_enabled}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DOPENMP_TESTS_ENABLED=ON"
@@ -283,6 +301,11 @@ fi
 # Force Reduce pipeline
 if [[ "${force_reduce_pipeline}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DFORCE_REDUCE_PIPELINING=ON"
+fi
+
+# Generate symmetric memory kernels
+if [[ "${generate_sym_kernels}" == true ]]; then
+    cmake_common_options="${cmake_common_options} -DGENERATE_SYM_KERNELS=ON"
 fi
 
 # Enable NPKit

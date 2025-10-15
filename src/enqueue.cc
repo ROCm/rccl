@@ -96,20 +96,22 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
   CUDACHECK(hipDeviceGetAttribute(&WarpSize, hipDeviceAttributeWarpSize, cudaDev));
   int ncclMaxSharedMem = rcclShmemDynamicSize(cudaArch, WarpSize);
 
+#ifdef GENERATE_SYM_KERNELS
   for (int sym=0; sym <= 1; sym++) {
     int kcount = sym==0 ? KernelCount : ncclSymKernelCount;
     for (int k=0; k < kcount; k++) {
       void* fn = sym==0 ? ncclKerns[k].kernelFn : ncclSymKernelList[k];
+#else
+  for (int k = 0; k < KernelCount; k++) {
+    void* fn = ncclKerns[k].kernelFn;
+#endif
       cudaFuncAttributes attr = {0};
       if (fn == nullptr) continue;
 
       cudaError_t errcode = cudaFuncGetAttributes(&attr, fn);
-      if (errcode == cudaErrorNoKernelImageForDevice) continue;
-      CUDACHECKGOTO(errcode, result, ignore0);
-
+      if (errcode != cudaSuccess) continue; // Silently ignore failures
       if (maxStackSize) {
         if (attr.localSizeBytes > *maxStackSize) *maxStackSize = attr.localSizeBytes;
-      ignore0:;
       }
       if (carveout) {
         CUDACHECKGOTO(cudaFuncSetAttribute(fn,
@@ -130,7 +132,9 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, int maxSharedMem, size_t* ma
       }
     next_kernel:;
     }
+#ifdef GENERATE_SYM_KERNELS
   }
+#endif
   return result;
 }
 
@@ -168,7 +172,7 @@ static ncclResult_t addProxyOpIfNeeded(struct ncclComm* comm, struct ncclKernelP
 static void addWorkBatchToPlan(
     struct ncclComm* comm, struct ncclKernelPlan* plan, int channelId,
     enum ncclDevWorkType workType, int devFuncId, uint32_t workOffset,
-    int p2pRound = -1
+    int p2pRound = -1, bool batchP2P = false
   ) {
   ncclKernelPlanner::WipPlan::Channel* chan = &comm->planner.wipPlan.channels[channelId];
   size_t workSize = ncclDevWorkSize(workType);
@@ -186,7 +190,7 @@ static void addWorkBatchToPlan(
     // batch further down.
     newBatch |= NCCL_MAX_DEV_WORK_BATCH_BYTES < chan->wipBatch.workBytes + workSize;
     if (workType == ncclDevWorkTypeP2p) {
-      newBatch |= chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH;
+      newBatch |= (comm->nNodes > 2 && batchP2P)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
       for (int i=0; i < chan->wipBatch.nP2ps; i++) {
         newBatch |= p2pRound == chan->wipBatch.p2pRounds[i];
       }
@@ -381,7 +385,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
-    
+
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     devWork.gfx942CheapFenceOff = gfx942CheapFenceOff(devWork, comm->gfx942CheapFenceOff);
@@ -496,7 +500,14 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
       }
 
       NCCLCHECK(getAlgoInfo(comm, &agg, collNetSupport, nvlsSupport, nTasksPerChannel, simInfo));
-      agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, agg.pipeline);
+      if(agg.func==ncclFuncAllReduce && agg.acc != nullptr)
+      {
+        agg.devFuncId = ncclDevFuncId(ncclFuncAllReduceWithBias, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, agg.pipeline);
+      }
+      else
+      {
+        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, agg.pipeline);
+      }
       if (agg.devFuncId < 0) {
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
@@ -519,6 +530,7 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         struct ncclTaskColl* next = aggBeg->next;
         aggBeg->algorithm = agg.algorithm;
         aggBeg->protocol = agg.protocol;
+        aggBeg->acc = agg.acc;
         aggBeg->pipeline = agg.pipeline;
         if (aggBeg->protocol == NCCL_PROTO_LL) aggBeg->trafficBytes *= 4;
         aggBeg->nMaxChannels = agg.nMaxChannels;
@@ -570,6 +582,7 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
       struct ncclDevWorkColl devWork = {};
       devWork.sendbuff = (void*)task->sendbuff;
       devWork.recvbuff = (void*)task->recvbuff;
+      devWork.acc = (void*)task->acc;
       devWork.sendbuffOffset = task->sendbuffOffset;
       devWork.recvbuffOffset = task->recvbuffOffset;
       devWork.sendbuffRmtAddrs = task->sendbuffRmtAddrs;
@@ -906,6 +919,21 @@ NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 16384);
 RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 
+// This is the maximum P2P message size that can be batched with others
+// Below this message size, NCCL_MAX_DEV_WORK_P2P_PER_BATCH will be applicable
+// For alltoall, this can be mutiplied by number of ranks to match Size (B) in rccl-tests
+// Without a threshold, RCCL will suffer large message regression due to limitation at a larger scale
+// when more batches are needed to saturate the NIC BW in RCCL.
+// The threshold can be set to a higher value to experiment on other platforms.
+// This value has been tested on MI300.
+RCCL_PARAM(P2pBatchThreshold, "P2P_BATCH_THRESHOLD", 1 << 16); // 64k
+
+
+// Need this temporary parameter to disable p2p batching to avoid some dips at 4MB - 32 MB message size at large scale
+// This parameter must be removed after further investigation,
+// Note that NCCL enables batching by default and it is needed to achieve perf for with smaller messages <= 4MB
+RCCL_PARAM(P2pBatchEnable, "P2P_BATCH_ENABLE", 0); // 64k
+
 // Put p2p op in plan assuming there is sizeof(ncclDevWorkBatch) in batch budget
 // and sizeof(ncclDevWorkP2p) in work budget. "sendRank" and "recvRank" must
 // match the corresponding values for this round of the p2p schedule (no -1's).
@@ -927,8 +955,9 @@ static ncclResult_t addP2pToPlan(
   bool network[2] = {false, false};
   bool proxySameProcess[2] = {true, true};
   void** handles[2] = {NULL, NULL};
-  uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound);
-
+  auto batchP2PEnableEnv = rcclParamP2pBatchEnable();
+  bool batchP2P =  batchP2PEnableEnv && ((sendBytes == -1)? recvBytes <= rcclParamP2pBatchThreshold() : sendBytes <= rcclParamP2pBatchThreshold());
+  uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound, batchP2PEnableEnv);
   if (comm->p2pNet) {
     for (int dir = 0; dir <= 1; dir++) {
       if (bytes[dir] > rcclParamP2pNetThreshold())
@@ -1101,7 +1130,7 @@ static ncclResult_t addP2pToPlan(
     plan->channelMask.masks[channelId/64] |= uint64_t(1)<<(channelId%64);
     // Add batch first.
     int funcIdx = ncclDevFuncId_P2p();
-    addWorkBatchToPlan(comm, plan, channelId, ncclDevWorkTypeP2p, funcIdx, workOffset, p2pRound);
+    addWorkBatchToPlan(comm, plan, channelId, ncclDevWorkTypeP2p, funcIdx, workOffset, p2pRound, batchP2P);
     if (funcIdx < 0) {
       WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
       return ncclInvalidUsage;
@@ -1986,6 +2015,8 @@ static ncclResult_t updateCollCostTable(
   return ncclSuccess;
 }
 
+extern int64_t ncclParamMinNchannels();
+
 static ncclResult_t topoGetAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes,
     float** collCostTable, ncclSimInfo_t* simInfo
@@ -2050,11 +2081,17 @@ static ncclResult_t topoGetAlgoInfo(
     nc = comm->nvlsChannels;
   } else {
     rcclUpdateThreadThreshold(comm, nBytes, info, threadThreshold);
+    INFO(NCCL_INIT, "pre-adjustment threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
+
+    int minNChannels = ncclParamMinNchannels();
     // Ring/Tree channel tuning
-    while (nBytes < nc * nt * threadThreshold) {
+    INFO(NCCL_INIT, "minNChannels:%i", minNChannels);
+    while (nBytes < nc * nt * threadThreshold && nc > minNChannels) {
       if (nc >= 2) nc--;
       else break;
     }
+    INFO(NCCL_INIT, "post-adjustment based on threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
+    rcclOverrideChannels(comm, info->func, nBytes, nc);
   }
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #else
@@ -2559,7 +2596,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
                                       : comm->p2pSchedule[round].recvRank)) {
           round += 1;
         }
-        uint8_t base = ncclP2pChannelBaseForRound(comm, round);
+        uint8_t base = ncclP2pChannelBaseForRound(comm, round, rcclParamP2pBatchEnable());
         for (int c=0; c < comm->p2pnChannelsPerPeer; c++) {
           int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c, comm->p2pnChannelsPerPeer, comm->nNodes);
           if (isSendNotRecv) {

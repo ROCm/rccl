@@ -109,4 +109,6 @@ This section provides all the enumerations used.
 
 .. doxygenenum:: ncclRedOp_t
 
+.. _rccl-supported-data-types:
+
 .. doxygenenum:: ncclDataType_t
