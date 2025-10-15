@@ -1202,7 +1202,7 @@ ncclResult_t ncclIpcSymmetricMap(struct ncclComm* comm, size_t offset, size_t si
       if (ncclCuMemHandleType == CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR) {
         impFd = -1;
         NCCLCHECKGOTO(ncclProxyClientGetFdBlocking(comm, comm->localRankToRank[r], &desc[r].data, &impFd), ret, fail);
-        CUCHECKGOTO(cuMemImportFromShareableHandle(&impHandle, &impFd, ncclCuMemHandleType), ret, fail);
+        CUCHECKGOTO(cuMemImportFromShareableHandle(&impHandle, (void*)impFd, ncclCuMemHandleType), ret, fail);
         SYSCHECKGOTO(close(impFd), "close", ret, fail);
       } else {
         CUCHECKGOTO(cuMemImportFromShareableHandle(&impHandle, (void*)&desc[r].handle, ncclCuMemHandleType), ret, fail);
