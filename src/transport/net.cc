@@ -122,6 +122,7 @@ struct sendNetResources {
   ncclNetDeviceHandle_t* netDeviceHandle;
   size_t maxP2pBytes;
   volatile uint32_t* curr_hdp_reg;  // Curr GPU in ring (for rdma transport use only)
+  int isP2p;
 };
 
 struct recvNetResources {
@@ -194,6 +195,7 @@ struct setupReq {
   int channelId;
   int connIndex;
   uint32_t* curr_hdp_reg;
+  int isP2p;
 };
 
 NCCL_PARAM(NetOptionalRecvCompletion, "NET_OPTIONAL_RECV_COMPLETION", 1);
@@ -222,6 +224,11 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   req.connIndex = connIndex;
   req.curr_hdp_reg = 0;
   req.netDev = -1;
+  if(graph == NULL) {
+    req.isP2p = 1;
+  } else {
+    req.isP2p = 0;
+  }
 
   int proxyRank = myInfo->rank;
   int64_t netId;
@@ -672,6 +679,7 @@ static ncclResult_t sendProxySetup(struct ncclProxyConnection* connection, struc
   resources->channelId = req->channelId;
   resources->connIndex = req->connIndex;
   resources->curr_hdp_reg = req->curr_hdp_reg;
+  resources->isP2p = req->isP2p;
   ncclNetProperties_t props;
   NCCLCHECK(proxyState->ncclNet->getProperties(req->netDev, &props));
   /* DMA-BUF support */
