@@ -969,6 +969,24 @@ ncclResult_t ncclIbGetProperties(int dev, ncclNetProperties_t* props) {
 static_assert(MAX_REQUESTS <= 256, "request id are encoded in wr_id and we need up to 8 requests ids per completion");
 
 #define NCCL_IB_MAX_QPS 128
+#define P2P_MAX_QPS 1
+
+// P2P Signature Helpers for IB transport
+// Upper 31 bits = signature, LSB = isP2p flag.
+#define NCCL_IB_ISP2P_SIGNATURE_BASE  0x49420000u  // "IB" 
+#define NCCL_IB_ISP2P_SIGNATURE_MASK  0xFFFFFFFEu
+#define NCCL_IB_ISP2P_FLAG_MASK       0x00000001u
+static inline uint32_t ncclIbPackP2pFlags(int isP2p) {
+ return (NCCL_IB_ISP2P_SIGNATURE_BASE & NCCL_IB_ISP2P_SIGNATURE_MASK) |
+        (isP2p & NCCL_IB_ISP2P_FLAG_MASK);
+}
+static inline int ncclIbExtractP2pFlag(uint32_t flags) {
+ return (int)(flags & NCCL_IB_ISP2P_FLAG_MASK);
+}
+static inline int ncclIbValidateP2pSignature(uint32_t flags) {
+ return ((flags & NCCL_IB_ISP2P_SIGNATURE_MASK) ==
+         (NCCL_IB_ISP2P_SIGNATURE_BASE & NCCL_IB_ISP2P_SIGNATURE_MASK));
+}
 
 // Per-QP connection metatdata
 struct ncclIbQpInfo {
@@ -1008,6 +1026,7 @@ struct ncclIbConnectionMetadata {
   int ndevs;
   int tc;
   int sl;
+  int isP2p;
 };
 
 enum ncclIbCommState {
@@ -1033,6 +1052,7 @@ struct ncclIbCommStage {
 struct ncclIbHandle {
   union ncclSocketAddress connectAddr; // Filled by the target
   uint64_t magic; // random number to help debugging
+  uint32_t isP2pFlags; // Upper 31 bits: signature (0x49420000u), bit 0: isP2p flag
   struct ncclIbCommStage stage; // Used by the other side when connecting
 };
 
@@ -2715,6 +2735,15 @@ ncclResult_t ncclIbCloseListen(void* listenComm) {
     free(comm);
   }
   return ncclSuccess;
+}
+
+extern "C" __attribute__((visibility("default")))
+void ncclIbNetEncodeP2pPolicy(void* handle, int isP2p) {
+ if (!handle) return;
+ ncclIbHandle* h = (ncclIbHandle*)handle;
+ h->isP2pFlags = ncclIbPackP2pFlags(isP2p);
+ INFO(NCCL_NET, "NET/IB: Encoded policy into handle: isP2p=%d flags=0x%x",
+      isP2p, h->isP2pFlags);
 }
 
 ncclNet_t ncclNetIb = {

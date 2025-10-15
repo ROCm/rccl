@@ -23,4 +23,14 @@ ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport);
 extern ncclNet_t ncclNetIb;
 extern ncclNet_t ncclNetSocket;
 
+// Optional weak symbol for transport-specific policy encoding.
+// If defined by the plugin (e.g., IB), core will call it with the handle and isP2p flag.
+#ifdef __cplusplus
+extern "C" {
+#endif
+void ncclIbNetEncodeP2pPolicy(void* handle, int isP2p) __attribute__((weak));
+#ifdef __cplusplus
+}
+#endif
+
 #endif
