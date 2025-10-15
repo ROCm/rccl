@@ -2132,7 +2132,7 @@ static ncclResult_t topoGetAlgoInfo(
   }
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT) nt = NCCL_MAX_NTHREADS;
-  if(comm->nNodes == 1) nt = NCCL_MAX_NTHREADS / 2; // For single node, we use have the number of threads for perf reasons.
+  if(comm->nNodes == 1) nt = NCCL_MAX_NTHREADS / 2; // For single node, we use half the number of threads for perf reasons.
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
