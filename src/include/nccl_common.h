@@ -91,4 +91,5 @@ typedef enum {
 #define NCCL_UNROLL_4 2
 
 #define NCCL_NUM_FLOATS 6 // half/float/double/rccl_bfloat16/rccl_float8/rccl_bfloat8
+
 #endif
