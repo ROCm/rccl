@@ -1383,6 +1383,7 @@ ncclResult_t ncclIbConnect(int dev, ncclNetCommConfig_t* config, void* opaqueHan
   struct ncclIbSendComm* comm = (struct ncclIbSendComm*)stage->comm;
   int ready;
   uint8_t link_layer = IBV_LINK_LAYER_UNSPECIFIED;
+  int isP2p = 0; 
   *sendComm = NULL;
 
   if (stage->state == ncclIbCommStateConnect)      goto ib_connect_check;
@@ -1442,9 +1443,23 @@ ib_recv_dev_list:
   mergedDev = ncclIbMergedDevs + dev;
   comm->base.vProps = mergedDev->vProps;
   int localNqps, remoteNqps;
-  localNqps  = ncclParamIbQpsPerConn() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
-  remoteNqps = ncclParamIbQpsPerConn() * remoteVProps.ndevs;
+
+  // Validate isP2p signature and extract flag from single uint32_t field
+  // Upper 31 bits contain signature, LSB contains P2P flag
+  if (ncclIbValidateP2pSignature(handle->isP2pFlags)) {
+    // Signature valid by extracting P2P flag from LSB
+    isP2p = ncclIbExtractP2pFlag(handle->isP2pFlags);
+  } 
+  
+  if(isP2p) {
+    localNqps  = P2P_MAX_QPS * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
+    remoteNqps = P2P_MAX_QPS * remoteVProps.ndevs;
+  } else {
+    localNqps  = ncclParamIbQpsPerConn() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
+    remoteNqps = ncclParamIbQpsPerConn() * remoteVProps.ndevs;
+  }
   comm->base.nqps = remoteNqps > localNqps ? remoteNqps : localNqps; // Select max nqps (local or remote)
+  INFO(NCCL_NET, "NET/IB: Max Nqps=%d, localNqps=%d, remoteNqps=%d", comm->base.nqps, localNqps, remoteNqps);
 
   // Init PD, Ctx for each IB device
   comm->ar = 1; // Set to 1 for logic
@@ -1456,7 +1471,7 @@ ib_recv_dev_list:
 
   memset(&meta, 0, sizeof(meta));
   meta.ndevs = comm->base.vProps.ndevs;
-
+  meta.isP2p = isP2p;
   // Alternate QPs between devices
   int devIndex;
   devIndex = 0;
@@ -1735,9 +1750,16 @@ ib_recv_dev_list:
   memcpy(stage->buffer, &rComm->base.vProps, sizeof(ncclNetVDeviceProps_t));
   rComm->base.isSend = false;
   int localNqps, remoteNqps;
-  localNqps  = ncclParamIbQpsPerConn() * rComm->base.vProps.ndevs; // We must have at least 1 qp per-device
-  remoteNqps = ncclParamIbQpsPerConn() * remoteVProps.ndevs;
-  rComm->base.nqps = remoteNqps > localNqps ? remoteNqps : localNqps; // Select max nqps (local or remote)
+  // Recalculate nqps based on isP2p from remote metadata
+  if(remMeta.isP2p) {
+    localNqps  = P2P_MAX_QPS * rComm->base.vProps.ndevs;
+    remoteNqps = P2P_MAX_QPS * remMeta.ndevs;
+  } else {
+    localNqps  = ncclParamIbQpsPerConn() * rComm->base.vProps.ndevs;
+    remoteNqps = ncclParamIbQpsPerConn() * remMeta.ndevs;
+  }
+  rComm->base.nqps = remoteNqps > localNqps ? remoteNqps : localNqps;
+  INFO(NCCL_NET, "NET/IB: ibAccept Max Nqps=%d, localNqps=%d, remoteNqps=%d", rComm->base.nqps, localNqps, remoteNqps);
 
   stage->offset = 0;
   stage->state = ncclIbCommStateSendDevList;
@@ -1926,6 +1948,7 @@ ib_recv:
     meta.qpInfo[q].devIndex = rComm->base.qps[q].devIndex;
   }
   meta.ndevs = rComm->base.vProps.ndevs;
+  meta.isP2p = remMeta.isP2p;
   strncpy(meta.devName, mergedDev->devName, MAX_MERGED_DEV_NAME);
   rComm->base.nDataQps = std::max(rComm->base.vProps.ndevs, rComm->base.nRemDevs);
 
