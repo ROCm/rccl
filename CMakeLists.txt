@@ -907,7 +907,17 @@ endif()
 
 if (ENABLE_ROCSHMEM)
   add_rocshmem_targets()
-  target_include_directories(rccl PRIVATE ${ROCSHMEM_INCLUDE_DIR})
+  # Ensure rocSHMEM is fully built/installed before compiling rccl
+  if (TARGET rocshmem_ext)
+    add_dependencies(rccl rocshmem_ext)
+  endif()
+
+  # TODO - fixup and only use DIR or DIRS
+  if (ROCSHMEM_INCLUDE_DIRS)
+    target_include_directories(rccl PRIVATE ${ROCSHMEM_INCLUDE_DIRS})
+  elseif(ROCSHMEM_INCLUDE_DIR)
+    target_include_directories(rccl PRIVATE ${ROCSHMEM_INCLUDE_DIR})
+  endif()
 
   # Moved to where MSCCL target_links
   ## target_link_libraries(rccl PRIVATE ${ROCSHMEM_LIBRARY})

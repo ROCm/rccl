@@ -1,0 +1,18 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3c3b785..f2136d6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -151,9 +151,9 @@ if (NOT BUILD_TESTS_ONLY)
+   #############################################################################
+   # PACKAGE DEPENDENCIES
+   #############################################################################
+-  find_package(MPI)
++  #find_package(MPI)
+   if (MPI_FOUND)
+-    set(HAVE_EXTERNAL_MPI ON)
++         set(HAVE_EXTERNAL_MPI OFF)
+   else()
+     set(HAVE_EXTERNAL_MPI OFF)
+     set(BUILD_FUNCTIONAL_TESTS OFF)
+diff --git a/scripts/build_configs/gda_bnxt b/scripts/build_configs/gda_bnxt
+index 77f3f29..09d121f 100755

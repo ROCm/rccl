@@ -23,34 +23,75 @@
 include(ExternalProject)
 
 function(add_rocshmem_targets)
+
+    # Check for an existing installation via the user-provided prefix ROCSHMEM_INSTALL DIR
     if(ROCSHMEM_INSTALL_DIR)
         list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
         find_package(rocshmem_static)
     endif()
 
+    # If no pre-existing installation, build from submodule into ext/rocshmem
     if(NOT rocshmem_static_FOUND)
-        set(ROCSHMEM_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ext/rocshmem)
-        set(ROCSHMEM_INCLUDE_DIRS "${ROCSHMEM_INSTALL_DIR}/include")
-        set(ROCSHMEM_STATIC_LIB "${ROCSHMEM_INSTALL_DIR}/lib/librocshmem.a")
-        execute_process(
-            COMMAND mkdir -p $(ROCSHMEM_INSTALL_DIR)
+        set(_rccl_root            "${CMAKE_SOURCE_DIR}")
+        set(ROCSHMEM_SOURCE       "${_rccl_root}/ext-src/rocSHMEM")
+        set(ROCSHMEM_INSTALL_DIR  "${_rccl_root}/ext/rocshmem")
+
+        # Make sure submodule exists (same style as MSCCL++: custom rule + target)
+        add_custom_command(
+            OUTPUT "${ROCSHMEM_SOURCE}/CMakeLists.txt"
+            COMMAND git submodule update --init --recursive ext-src/rocSHMEM
+            WORKING_DIRECTORY "${_rccl_root}"
+            COMMENT "Checking out submodule: ext-src/rocSHMEM"
+            VERBATIM
         )
 
-        set(EXT_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/ext-src)
+        add_custom_target(rocshmem_checkout_submodule
+            DEPENDS "${ROCSHMEM_SOURCE}/CMakeLists.txt")
 
-        if (NOT ROCSHMEM_SOURCE)
-            add_custom_command(
-                OUTPUT
-                    ${EXT_SOURCE}/rocSHMEM/CMakeLists.txt
-                COMMAND git submodule update --init --recursive
-                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                COMMENT "Checking out submodules for rocSHMEM"
-            )
-            add_custom_target(
-                checkout_submodules
-                DEPENDS
-                    ${EXT_SOURCE}/rocSHMEM/CMakeLists.txt
-            )
-        endif()
-    endif()
+        # Where our patch files live (like MSCCL++)
+        set(EXT_SOURCE "${_rccl_root}/ext-src")
+
+            # Build and install rocSHMEM. We run `../build_scripts/gdx_bxnt`
+        # from a 'build' dir just like the README shows.
+        ExternalProject_Add(rocshmem_ext
+            SOURCE_DIR          "${ROCSHMEM_SOURCE}"
+            INSTALL_DIR         "${ROCSHMEM_INSTALL_DIR}"
+            UPDATE_DISCONNECTED TRUE
+            LOG_DOWNLOAD        FALSE
+            LOG_CONFIGURE       FALSE
+            LOG_BUILD           FALSE
+            LOG_INSTALL         FALSE
+            BUILD_IN_SOURCE     TRUE
+            PATCH_COMMAND       git apply "${EXT_SOURCE}/rocshmem-no-mpi.patch"
+            DOWNLOAD_COMMAND    ""   # using the submodule checkout above
+            TEST_COMMAND        ""
+            DEPENDS             rocshmem_checkout_submodule   
+
+            # The project has its own scripts; we replicate the README sequence:
+            CONFIGURE_COMMAND   ""
+            BUILD_COMMAND
+                ${CMAKE_COMMAND} -E make_directory build
+                && ${CMAKE_COMMAND} -E chdir build bash -lc "../scripts/build_configs/gda_bnxt"
+                && ${CMAKE_COMMAND} -E chdir build ${CMAKE_COMMAND}
+                    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+                    -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> ..
+                && ${CMAKE_COMMAND} -E chdir build ${CMAKE_MAKE_PROGRAM} -j
+            INSTALL_COMMAND
+                ${CMAKE_COMMAND} -E chdir build ${CMAKE_MAKE_PROGRAM} install
+        )
+
+         # After build, define the variables RCCL expects
+        set(ROCSHMEM_INCLUDE_DIRS "${ROCSHMEM_INSTALL_DIR}/include" PARENT_SCOPE)
+        set(ROCSHMEM_INCLUDE_DIR  "${ROCSHMEM_INSTALL_DIR}/include" PARENT_SCOPE)
+        set(ROCSHMEM_LIBRARY      "${ROCSHMEM_INSTALL_DIR}/lib/librocshmem.a" PARENT_SCOPE)
+
+        # Provide a dummy target other code can depend on
+        add_custom_target(rocshmem_static ALL DEPENDS rocshmem_ext)
+    else()
+    # We found a prebuilt rocSHMEM; export variables upward as-is
+    set(ROCSHMEM_INCLUDE_DIRS "${ROCSHMEM_INCLUDE_DIRS}" PARENT_SCOPE)
+    set(ROCSHMEM_INCLUDE_DIR  "${ROCSHMEM_INCLUDE_DIRS}" PARENT_SCOPE)
+    set(ROCSHMEM_LIBRARY      "${ROCSHMEM_LIBRARY}"      PARENT_SCOPE)
+     endif()
+
 endfunction()
