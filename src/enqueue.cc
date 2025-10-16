@@ -2570,6 +2570,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
     // Must be in thread local group before tasks can be alloc'd in `comm->memScoped`.
     ncclGroupCommJoin(info->comm, ncclGroupTaskTypeCollective);
     struct ncclTaskP2p* p2p = ncclMemoryPoolAlloc<struct ncclTaskP2p>(&comm->memPool_ncclTaskP2p, &comm->memPermanent);
+    p2p->func = info->coll;
     p2p->buff = (void*)info->recvbuff;
     p2p->count = info->count;
     p2p->datatype = info->datatype;
