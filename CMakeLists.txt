@@ -310,8 +310,7 @@ if(BUILD_BFD)
   endif()
 endif()
 
-# Check for --amdgpu-kernarg-preload-count : disable kernarg preload
-check_cxx_compiler_flag("-mllvm --blablabla" HAVE_KERNARG_PRELOAD)
+check_cxx_compiler_flag("-mllvm -amdgpu-kernarg-preload-count" HAVE_KERNARG_PRELOAD)
 if (HAVE_KERNARG_PRELOAD)
   message(STATUS "Kernarg preloading to SGPR enabled")
 else()
