@@ -40,7 +40,7 @@ do
     total=$((n*8))
     #h_8ppn=`echo ${hosts_8ppn[@]:0:${n}} | tr ' ' ','`
 
-    for coll in all_reduce all_gather reduce_scatter alltoall alltoallv broadcast gather reduce scatter sendrecv
+    for coll in all_reduce all_reduce_bias all_gather reduce_scatter alltoall alltoallv broadcast gather reduce scatter sendrecv
     do
         for dtype in float bfloat16 half fp8_e5m2
         do
