@@ -912,10 +912,7 @@ if (ENABLE_ROCSHMEM)
     add_dependencies(rccl rocshmem_ext)
   endif()
 
-  # TODO - fixup and only use DIR or DIRS
-  if (ROCSHMEM_INCLUDE_DIRS)
-    target_include_directories(rccl PRIVATE ${ROCSHMEM_INCLUDE_DIRS})
-  elseif(ROCSHMEM_INCLUDE_DIR)
+  if (ROCSHMEM_INCLUDE_DIR)
     target_include_directories(rccl PRIVATE ${ROCSHMEM_INCLUDE_DIR})
   endif()
 

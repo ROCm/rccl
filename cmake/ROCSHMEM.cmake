@@ -81,16 +81,14 @@ function(add_rocshmem_targets)
         )
 
          # After build, define the variables RCCL expects
-        set(ROCSHMEM_INCLUDE_DIRS "${ROCSHMEM_INSTALL_DIR}/include" PARENT_SCOPE)
-        set(ROCSHMEM_INCLUDE_DIR  "${ROCSHMEM_INSTALL_DIR}/include" PARENT_SCOPE)
+        set(ROCSHMEM_INCLUDE_DIR "${ROCSHMEM_INSTALL_DIR}/include" PARENT_SCOPE)
         set(ROCSHMEM_LIBRARY      "${ROCSHMEM_INSTALL_DIR}/lib/librocshmem.a" PARENT_SCOPE)
 
         # Provide a dummy target other code can depend on
         add_custom_target(rocshmem_static ALL DEPENDS rocshmem_ext)
     else()
     # We found a prebuilt rocSHMEM; export variables upward as-is
-    set(ROCSHMEM_INCLUDE_DIRS "${ROCSHMEM_INCLUDE_DIRS}" PARENT_SCOPE)
-    set(ROCSHMEM_INCLUDE_DIR  "${ROCSHMEM_INCLUDE_DIRS}" PARENT_SCOPE)
+    set(ROCSHMEM_INCLUDE_DIR  "${ROCSHMEM_INCLUDE_DIR}" PARENT_SCOPE)
     set(ROCSHMEM_LIBRARY      "${ROCSHMEM_LIBRARY}"      PARENT_SCOPE)
      endif()
 
