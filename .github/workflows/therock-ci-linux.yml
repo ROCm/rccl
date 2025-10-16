@@ -46,6 +46,11 @@ jobs:
           repository: "ROCm/rccl-tests"
           path: rccl-tests
 
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+          pip freeze
+
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
@@ -66,11 +71,6 @@ jobs:
       - name: Fetch sources
         run: |
           ./build_tools/fetch_sources.py --jobs 12
-
-      - name: Install python deps
-        run: |
-          pip install -r requirements.txt
-          pip freeze
 
       - name: Configure Projects
         env:
