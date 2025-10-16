@@ -61,7 +61,7 @@ namespace {
     // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
-    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata, Pipeline> prims
+    Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata, Pipeline, USE_ACC> prims
       (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
 
 #if defined(ENABLE_NPKIT)
@@ -252,7 +252,7 @@ namespace {
 #endif
 
     { // Reduce : max number of recv is 3, max number of send is 1 (binary tree + local)
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0, false, 0, Pipeline> prims
+      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0, false, 0, Pipeline, USE_ACC> prims
         (tid, nthreads, tree->down, &tree->up, work->sendbuff, work->recvbuff, work->redOpArg, 0, 0, 0, work);
 
 #if defined(ENABLE_NPKIT)
@@ -301,7 +301,7 @@ namespace {
     }
 
     { // Broadcast : max number of recv is 1, max number of send is 3 (binary tree + local)
-      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0, false, 0, Pipeline> prims
+      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0, false, 0, Pipeline, USE_ACC> prims
         (tid, nthreads, &tree->up, tree->down, work->sendbuff, work->recvbuff, work->redOpArg, 0, 0, 0, work);
 
 #if defined(ENABLE_NPKIT)
@@ -463,7 +463,7 @@ namespace {
       // Coverity reports that the callee treats &tree->up as an array.  However, due to the use of
       // FanAsymmetric<n, 1>, only the first element is ever accessed, so it's fine.
       // coverity[callee_ptr_arith:FALSE]
-      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0, false, 0, Pipeline>
+      Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0, false, 0, Pipeline, USE_ACC>
         prims(tid, nthreadsSplit, tree->down, &tree->up, work->sendbuff, work->recvbuff, work->redOpArg, 0*Proto::MaxGroupWidth, 0, 0, work);
 
 #if defined(ENABLE_NPKIT)
@@ -508,7 +508,7 @@ namespace {
       // Coverity reports that the callee treats &tree->up as an array.  However, due to the use of
       // FanAsymmetric<1, n>, only the first element is ever accessed, so it's fine.
       // coverity[callee_ptr_arith:FALSE]
-      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0, false, 0, Pipeline>
+      Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/0, Proto, 0, false, 0, Pipeline, USE_ACC>
         prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &tree->up, tree->down, work->sendbuff, work->recvbuff,
             work->redOpArg, 1*Proto::MaxGroupWidth, 0, 0, work);
 

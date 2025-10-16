@@ -68,8 +68,6 @@ inline ncclResult_t getRandomData(void* buffer, size_t bytes) {
   return ret;
 }
 
-bool rcclNeedEnableContextTrack(int cuDeviceId);
-
 ////////////////////////////////////////////////////////////////////////////////
 
 template<typename Int>
