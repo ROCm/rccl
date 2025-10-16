@@ -21,67 +21,69 @@ namespace {
   __device__ MAYBE_XINLINE void runRing(int tid, int nthreads, struct ncclDevWorkColl TLOCAL* work) {
 #endif
     auto *ring = (ncclRing SLOCAL *)&ncclShmem.channel.ring;
-    ssize_t gridOffset;
-    uint32_t channelCount, chunkCount;
-    {
-    ssize_t size64, channelCount64, chunkCount64;
-    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size64, 
-          &gridOffset, &channelCount64, &chunkCount64);
-    channelCount = channelCount64, chunkCount = chunkCount64;
-    }
+    
+    ssize_t elemOffset; 
+    ssize_t channelCount;
+    ssize_t chunkCount;
+    // elemOffset == gridOffset
+    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), 
+        (ssize_t *)nullptr, &elemOffset, &channelCount, &chunkCount);
+
     // Coverity reports that the callee treats &ring->next as an array.  However, due to the use of
     // FanSymmetric<1>, only the first element is ever accessed, so it's fine.
     // coverity[callee_ptr_arith:FALSE]
     Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0, false, RCCLMetadata> prims
-      (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, 
-        work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
+      (tid, nthreads, &ring->prev, &ring->next, work->sendbuff, work->recvbuff, work->redOpArg, 0, work->connIndex, work->connIndex, work);
 
-    // elemOffset = ncclShmem.comm.nRanks * chunkCount * i;
-    for (ssize_t elemOffset = 0; elemOffset < channelCount; elemOffset += 
-        ncclShmem.comm.nRanks * chunkCount) {
+    channelCount += elemOffset;
+    for (; elemOffset < channelCount; elemOffset += ncclShmem.comm.nRanks * chunkCount) {
+      {
+        const int nranks = ncclShmem.comm.nRanks;
+        ssize_t remCount = channelCount - elemOffset;
+        ssize_t loopCount = ncclShmem.comm.nRanks * chunkCount;
+        if (remCount < loopCount) chunkCount = alignUp(divUp(remCount, nranks), 16/sizeof(T));
+      }
 
       auto getOfsNelem = [&]__device__(int r) {
         const int nranks = ncclShmem.comm.nRanks;
-        int chunk = r - (r >= nranks ? nranks : 0);
         ssize_t remCount = channelCount - elemOffset;
-        ssize_t tmpChunkCount = chunkCount;
-        if (remCount < ncclShmem.comm.nRanks * chunkCount) {
-          tmpChunkCount = alignUp(divUp(remCount, nranks), 16/sizeof(T));
-        }
-        ssize_t chunkOffset = chunk * tmpChunkCount;
-        ssize_t offset = gridOffset + elemOffset + chunkOffset;
-        int nelem = (int)min(tmpChunkCount, remCount - chunkOffset);
+        int ridx = ring->index + r;
+        int chunk = ridx - (ridx >= nranks ? nranks : 0);
+        ssize_t chunkOffset = chunk * chunkCount;
+        ssize_t offset = elemOffset + chunkOffset;
+        int nelem = (int)min(chunkCount, remCount - chunkOffset);
         return std::make_tuple(offset, nelem);
       };
 
       // step 0: push data to next GPU
       {
-      auto[offset,nelem] = getOfsNelem(ring->index + ncclShmem.comm.nRanks - 1);
-      prims.directSend(offset, offset, nelem);
+        const int nranks = ncclShmem.comm.nRanks;
+        auto[offset,nelem] = getOfsNelem(nranks - 1);
+        prims.directSend(offset, offset, nelem);
       }
-
       // k-2 steps: reduce and copy to next GPU
-      for (int j = 2; j < ncclShmem.comm.nRanks; ++j) {
-        auto[offset,nelem] = getOfsNelem(ring->index + ncclShmem.comm.nRanks - j);
+      // nranks-j goues [nranks-2 .. nranks-(nranks-1)]--> nranks-2 downto 1
+      for (int j = ncclShmem.comm.nRanks - 2; j >= 1; j--) {
+        auto[offset,nelem] = getOfsNelem(j);
         prims.directRecvReduceDirectSend(offset, offset, nelem);
       }
       // step k-1: reduce this buffer and data, which will produce the final
       // result that we store in this data and push to the next GPU
       {
-      auto[offset,nelem] = getOfsNelem(ring->index + 0);
-      prims.directRecvReduceCopyDirectSend(offset, offset, nelem, /*postOp=*/true);
+        auto[offset,nelem] = getOfsNelem(0);
+        prims.directRecvReduceCopyDirectSend(offset, offset, nelem, /*postOp=*/true);
       }
       // k-2 steps: copy to next GPU
-      for (int j = 1; j < ncclShmem.comm.nRanks - 1; ++j) {
-        auto[offset,nelem] = getOfsNelem(ring->index + ncclShmem.comm.nRanks - j);
-        prims.directRecvCopyDirectSend(offset, offset, nelem);
+      {
+        for (int j = ncclShmem.comm.nRanks - 1; j >= 2; j--) {
+          auto[offset,nelem] = getOfsNelem(j);
+          prims.directRecvCopyDirectSend(offset, offset, nelem);
+        }
       }
 
       // Make final copy from buffer to dest.
-      {
-      auto[offset,nelem] = getOfsNelem(ring->index + 1);
+      auto[offset,nelem] = getOfsNelem(1);
       prims.directRecv(offset, nelem);
-      }
     }
   }
 
