@@ -194,7 +194,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 
   RedOp redFn(mscclShmem.work.redOpArg);
-  Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
+  Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0, 0, RCCL_METADATA_MSCCL> prims
     (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, mscclShmem.work.redOpArg);
 
 #if defined(ENABLE_NPKIT)
@@ -278,7 +278,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
             }
 
 #endif
-          prims.mscclSend(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
+          prims.send(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
             if (tid == 0) {
