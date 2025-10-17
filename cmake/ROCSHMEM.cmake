@@ -62,7 +62,7 @@ function(add_rocshmem_targets)
             LOG_BUILD           FALSE
             LOG_INSTALL         FALSE
             BUILD_IN_SOURCE     TRUE
-            PATCH_COMMAND       git apply "${EXT_SOURCE}/rocshmem-no-mpi.patch"
+            PATCH_COMMAND       git apply "${EXT_SOURCE}/no-mpi-rocshmem.patch"
             DOWNLOAD_COMMAND    ""   # using the submodule checkout above
             TEST_COMMAND        ""
             DEPENDS             rocshmem_checkout_submodule   
@@ -71,7 +71,7 @@ function(add_rocshmem_targets)
             CONFIGURE_COMMAND   ""
             BUILD_COMMAND
                 ${CMAKE_COMMAND} -E make_directory build
-                && ${CMAKE_COMMAND} -E chdir build bash -lc "../scripts/build_configs/gda_bnxt"
+                && ${CMAKE_COMMAND} -E chdir build bash -lc "../scripts/build_configs/gda_bnxt -DUSE_EXTERNAL_MPI=OFF"
                 && ${CMAKE_COMMAND} -E chdir build ${CMAKE_COMMAND}
                     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                     -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> ..
