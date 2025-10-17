@@ -49,7 +49,6 @@ jobs:
       - name: Install python deps
         run: |
           pip install -r requirements.txt
-          pip freeze
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
