@@ -158,6 +158,7 @@ static __device__ void bcast(
 }
 
 __device__ __forceinline__ void ncclSymRun_AllGather_ST(ncclSymDevArgs const* args) {
+  // printf("args: %p rank: %d nRanks: %d, input: %p output: %p\n", args, args->comm.rank, args->comm.nRanks, &args->input, args->output);
   ncclSymPrims prim(args->comm, ncclSymPrims_UseBarrier);
   int const& rank = prim.rank;
 

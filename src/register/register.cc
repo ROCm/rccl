@@ -219,6 +219,7 @@ ncclResult_t ncclCommSymmetricRegisterInternal(struct ncclComm* comm, void* buff
   ncclResult_t ret = ncclSuccess;
   void* regSymAddr = NULL;
   ALIGN_SIZE(comm->symAllocHead, alignment);
+  INFO(NCCL_SYM, "ncclCommSymmetricRegisterInternal -> symAllocHead: %p baseSize: %lu memHandle: %p", comm->symAllocHead, baseSize, memHandle);
   NCCLCHECKGOTO(ncclIpcSymmetricMap(comm, comm->symAllocHead, baseSize, memHandle, &regSymAddr), ret, fail);
   NCCLCHECKGOTO(ncclNvlsSymmetricMap(comm, comm->symAllocHead, baseSize, regSymAddr), ret, fail);
   NCCLCHECKGOTO(bootstrapIntraNodeBarrier(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, comm->localRankToRank[0]), ret, fail);

@@ -81,6 +81,7 @@ ncclResult_t  ncclMemAlloc_impl(void **ptr, size_t size) {
       }
       if (0 == p2p && i != cudaDev) INFO(NCCL_ALLOC, "P2P not supported between GPU%d and GPU%d", cudaDev, i);
     }
+    INFO(NCCL_SYM, "ncclMemAlloc -> ptr: %p handle: %p handleSize: %lu", (CUdeviceptr)*ptr, handle, handleSize);
     goto exit;
   }
 
@@ -162,6 +163,7 @@ ncclResult_t ncclCommSymmetricAllocInternal(struct ncclComm* comm, size_t size, 
 
   CUCHECKGOTO(cuMemCreate(&memHandle, allocSize, &memprop, 0), ret, fail);
   ALIGN_SIZE(comm->symAllocHead, alignment);
+  INFO(NCCL_SYM, "ncclCommSymmetricAllocInternal -> symAllocHead: %p allocSize: %lu memHandle: %p", comm->symAllocHead, allocSize, memHandle);
   NCCLCHECKGOTO(ncclIpcSymmetricMap(comm, comm->symAllocHead, allocSize, memHandle, &regSymAddr), ret, fail);
   NCCLCHECKGOTO(ncclNvlsSymmetricMap(comm, comm->symAllocHead, allocSize, regSymAddr), ret, fail);
   NCCLCHECKGOTO(bootstrapIntraNodeBarrier(comm->bootstrap, comm->localRankToRank, comm->localRank, comm->localRanks, comm->localRankToRank[0]), ret, fail);

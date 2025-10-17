@@ -1755,15 +1755,12 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     return ncclSuccess;
   }
 
-  // CUfunction fn;
-  // CUDACHECK(cudaGetFuncBySymbol(&fn, sym));
+  CUfunction fn;
+  CUDACHECK(cudaGetFuncBySymbol(&fn, sym));
 
 #if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
   int driverVersion;
   NCCLCHECKGOTO(ncclCudaDriverVersion(&driverVersion), ret, do_return);
-
-  CUfunction fn;
-  CUDACHECKGOTO(cudaGetFuncBySymbol(&fn, sym), ret, do_return);
 
   if (CUDART_VERSION >= 11080 && driverVersion >= 11080) {
   #if CUDART_VERSION >= 11080
@@ -1844,8 +1841,8 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   }
 #endif
   // Standard kernel launch
-  //cuLaunchKernel(sym, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra);
   latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
+  // CUCHECKGOTO(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra), ret, do_return);
   CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
   latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
 

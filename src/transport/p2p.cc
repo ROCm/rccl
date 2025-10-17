@@ -292,7 +292,7 @@ ncclResult_t ncclP2pImportShareableBuffer(struct ncclComm *comm, int peer, size_
       // Send cuMem handle to remote for conversion to an fd
       NCCLCHECK(ncclProxyClientGetFdBlocking(comm, peer, &cuDesc->data, &fd));
       INFO(NCCL_P2P, "UDS converted handle 0x%lx to fd %d on remote peer %d", *(uint64_t*)&cuDesc->data, fd, peer);
-      CUCHECK(cuMemImportFromShareableHandle(&handle, (void*)fd, type));
+      CUCHECK(cuMemImportFromShareableHandle(&handle, (void*)(uintptr_t)fd, type));
       SYSCHECK(close(fd), "close");
     } else {
       CUCHECK(cuMemImportFromShareableHandle(&handle, cuDesc, type));
@@ -1102,7 +1102,7 @@ static ncclResult_t p2pProxyRegister(struct ncclProxyConnection* connection, str
       memcpy(&handle, &ipcExpInfo->ipcDesc.memHandle, sizeof(CUmemGenericAllocationHandle));
     } else {
       if (ncclCuMemHandleType == CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR) {
-        CUCHECKGOTO(cuMemImportFromShareableHandle(&handle, &ipcExpInfo->impFd, ncclCuMemHandleType), ret, fail);
+        CUCHECKGOTO(cuMemImportFromShareableHandle(&handle, (void*)(uintptr_t)ipcExpInfo->impFd, ncclCuMemHandleType), ret, fail);
         SYSCHECKGOTO(close(ipcExpInfo->impFd), "close", ret, fail);
       } else {
         CUCHECKGOTO(cuMemImportFromShareableHandle(&handle, (void*)&ipcExpInfo->ipcDesc.cuDesc, ncclCuMemHandleType), ret, fail);
@@ -1202,7 +1202,7 @@ ncclResult_t ncclIpcSymmetricMap(struct ncclComm* comm, size_t offset, size_t si
       if (ncclCuMemHandleType == CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR) {
         impFd = -1;
         NCCLCHECKGOTO(ncclProxyClientGetFdBlocking(comm, comm->localRankToRank[r], &desc[r].data, &impFd), ret, fail);
-        CUCHECKGOTO(cuMemImportFromShareableHandle(&impHandle, (void*)impFd, ncclCuMemHandleType), ret, fail);
+        CUCHECKGOTO(cuMemImportFromShareableHandle(&impHandle, (void*)(uintptr_t)impFd, ncclCuMemHandleType), ret, fail);
         SYSCHECKGOTO(close(impFd), "close", ret, fail);
       } else {
         CUCHECKGOTO(cuMemImportFromShareableHandle(&impHandle, (void*)&desc[r].handle, ncclCuMemHandleType), ret, fail);
@@ -1210,6 +1210,7 @@ ncclResult_t ncclIpcSymmetricMap(struct ncclComm* comm, size_t offset, size_t si
     }
     maddr = (CUdeviceptr)(comm->baseUCSymPtr + (size_t)r * comm->baseStride + offset);
     CUCHECKGOTO(cuMemMap(maddr, size, 0, impHandle, 0), ret, fail);
+    INFO(NCCL_SYM, "DeviceId: %d LR: %d baseUCSymPtr: %p r: %d baseStride: %lu offset: %lu maddr: %p size: %lu impHandle: %p", comm->cudaDev, (r==comm->localRank), comm->baseUCSymPtr, r, comm->baseStride, offset, maddr, size, impHandle);
     CUCHECKGOTO(cuMemSetAccess(maddr, size, &accessDesc, 1), ret, fail);
 
     if (r == comm->localRank) {
