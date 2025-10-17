@@ -62,11 +62,11 @@ function(add_rocshmem_targets)
             LOG_BUILD           FALSE
             LOG_INSTALL         FALSE
             BUILD_IN_SOURCE     TRUE
-            PATCH_COMMAND       git apply "${EXT_SOURCE}/no-mpi-rocshmem.patch"
             DOWNLOAD_COMMAND    ""   # using the submodule checkout above
             TEST_COMMAND        ""
             DEPENDS             rocshmem_checkout_submodule   
 
+            # Rocshmem submodule commit hash -> commit ed957302d4700f041e2a5ddae7d4d15b819cf820
             # The project has its own scripts; we replicate the README sequence:
             CONFIGURE_COMMAND   ""
             BUILD_COMMAND
