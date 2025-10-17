@@ -501,9 +501,18 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
 
       NCCLCHECK(getAlgoInfo(comm, &agg, collNetSupport, nvlsSupport, nTasksPerChannel, simInfo));
       if(agg.func==ncclFuncAllReduce && agg.acc != nullptr)
-        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 1, agg.pipeline);
+      {
+        #if   __HIP_DEVICE_COMPILE__ && (defined(__gfx90a__) )          
+          WARN("%s: AllReduceWithBias is not supported on gfx90a.", __func__);
+          return ncclInvalidUsage;
+        #else
+          agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 1, agg.pipeline);
+        #endif
+      }
       else
+      {
         agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 0, agg.pipeline);
+      }
       if (agg.devFuncId < 0) {
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;

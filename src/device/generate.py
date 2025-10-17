@@ -349,13 +349,20 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   for fn in primary_funcs:
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      if fn[5] == "0":
+        out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      else:
+        out("#if (defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
       out("%s %s();\n#else\n" % (func_declaration, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
       out("%s %s();\n#endif\n" % (func_declaration, sym_ll))
     else:
-      out("%s %s();\n" % (func_declaration, sym))
+      if fn[5] == "1":
+        out("#if (defined(__gfx942__) || defined(__gfx950__))\n")
+        out("%s %s();\n#endif\n" % (func_declaration, sym))
+      else:
+        out("%s %s();\n" % (func_declaration, sym))
   out("\n")
 
   out("typedef void(*ncclDevFuncPtr_t)();\n\n")
@@ -366,13 +373,20 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     if unroll != "1": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      if fn[5] == "0":
+        out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      else:
+        out("#if (defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
       out("/*%4d*/ %s,\n#else\n" % (index1, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
       out("/*%4d*/ %s,\n#endif\n" % (index1, sym_ll))
     else:
-      out("/*%4d*/ %s,\n" % (index1, sym))
+      if fn[5] == "1":
+        out("#if (defined(__gfx942__) || defined(__gfx950__))\n")
+        out("/*%4d*/ %s,\n#endif\n" % (index1, sym))
+      else:
+        out("/*%4d*/ %s,\n" % (index1, sym))
     index1 += 1
   out("nullptr};\n")
   out("\n")
@@ -383,13 +397,20 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     if unroll != "2": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      if fn[5] == "0":
+        out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      else:
+        out("#if (defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
       out("/*%4d*/ %s,\n#else\n" % (index2, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
       out("/*%4d*/ %s,\n#endif\n" % (index2, sym_ll))
     else:
-      out("/*%4d*/ %s,\n" % (index2, sym))
+      if fn[5] == "1":
+        out("#if (defined(__gfx942__) || defined(__gfx950__))\n")
+        out("/*%4d*/ %s,\n#endif\n" % (index2, sym))
+      else:
+        out("/*%4d*/ %s,\n" % (index2, sym))
     index2 += 1
   out("nullptr};\n")
   out("\n")
@@ -400,13 +421,20 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     if unroll != "4": continue
     sym = paste("_", "ncclDevFunc", *fn)
     if fn[2] == "LL128":
-      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      if fn[5] == "0":
+        out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      else:
+        out("#if (defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
       out("/*%4d*/ %s,\n#else\n" % (index4, sym))
       fn_ll = fn[:2] + ("LL",) + fn[3:]
       sym_ll = paste("_", "ncclDevFunc", *fn_ll)
       out("/*%4d*/ %s,\n#endif\n" % (index4, sym_ll))
     else:
-      out("/*%4d*/ %s,\n" % (index4, sym))
+      if fn[5] == "1":
+        out("#if (defined(__gfx942__) || defined(__gfx950__))\n")
+        out("/*%4d*/ %s,\n#endif\n" % (index4, sym))
+      else:
+        out("/*%4d*/ %s,\n" % (index4, sym))
     index4 += 1
   out("nullptr};\n")
   out("\n")
@@ -612,13 +640,21 @@ for name in name_to_funcs.keys():
       (coll, algo, proto, redop, ty, acc, pipeline, unroll) = fn
       sym = paste("_", coll, algo, proto, redop, ty, acc, pipeline, unroll)
       if proto == "LL128":
-        out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+        if acc == "0":
+          out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+        else:
+          out("#if (defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      else:
+        if acc == "1":
+          out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__))\n")
       out(
         "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {acc}, {pipeline}, {unroll})\n"
         .format(sym=sym, coll=coll, redop_cxx=redop_to_cxx[redop], ty_cxx=ty_to_cxx[ty],
                 algo=(algo or "RING"), proto=(proto or "SIMPLE"), acc=acc, pipeline=pipeline, unroll=unroll)
       )
       if proto == "LL128":
+        out("#endif\n")
+      if acc == "1" and proto != "LL128":
         out("#endif\n")
 
 # Generate each <gensrc>/<msccl_impl>.cpp
