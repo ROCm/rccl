@@ -25,7 +25,7 @@ THE SOFTWARE.
 #include "graph/topo.h"
 #include "enqueue.h"
 #include "rocm_smi/rocm_smi.h"
-
+#include <algorithm>
 // Use this param to experiment pipelining new data types besides bfloat16
 // Make sure you generate the device code with the new data type (i.e. in generate.py)
 RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
@@ -33,7 +33,7 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 // Use this to assess impact of pipelining on performance.
 // Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
-RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 4194304);
+RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -42,8 +42,11 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     const char *protoStr = getenv("NCCL_PROTO");
     userProtocolInput = !protoStr ? 0 : 1;
   }
+  if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllGather) && nBytes <= 524288) {
+    // Change LL protocol threshold
+    info->protocol = NCCL_PROTO_LL;
 
-  if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
+  } else if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
     auto llMax = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MAX_IDX];
@@ -103,6 +106,56 @@ ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoStri
     }
   }
   return ncclInvalidUsage;
+}
+
+extern int64_t ncclParamMinNchannels();
+extern int64_t ncclParamMaxNchannels();
+RCCL_PARAM(ChannelTuningEnable, "CHANNEL_TUNING_ENABLE", 1);
+
+ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc){
+  if(comm->nNodes < 2 || !rcclParamChannelTuningEnable()){
+    INFO(NCCL_TUNING, "RCCL Channel Tuning not applied");
+    return ncclSuccess;
+  }
+
+  auto tunableIndex = rcclGetTunableIndex(coll);
+  if(tunableIndex == RCCL_UNSUPPORTED_TUNABLE){
+    INFO(NCCL_TUNING, "tunableIndex:%i not supported", tunableIndex);
+    return ncclSuccess;
+  }
+
+  int minCTAs = comm->config.minCTAs;
+  int maxCTAs = comm->config.maxCTAs;
+  int minNChannels = ncclParamMinNchannels();
+  int maxNChannels = std::max(comm->nChannels, static_cast<int>(ncclParamMaxNchannels()));
+  size_t bytesPerRank = divUp(nBytes, comm->nRanks);
+
+  for(int channelCountIndex = 0; channelCountIndex < RCCL_CHANNELS_TUNABLE_ENTRIES; ++channelCountIndex){    
+    size_t minByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][0];
+    size_t maxByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][1];
+    INFO(NCCL_TUNING, "nBytes:%lu bytesPerRank:%lu minByteThreshold:%lu maxByteThreshold:%lu  NCCL_MIN_NCHANNELS:%i or NCCL_MAX_NCHANNELS:%i minCTAs:%i maxCTAs:%i", nBytes, bytesPerRank, minByteThreshold, maxByteThreshold, minNChannels, maxNChannels, minCTAs, maxCTAs);
+    if(minByteThreshold == CHAN_THRESHOLDS_UNDEFINED || maxByteThreshold == CHAN_THRESHOLDS_UNDEFINED) {
+      INFO(NCCL_TUNING, "RCCL tuning model does not define threshold for coll:%i and nbytes:%lu", coll, nBytes);
+      break; // Skip undefined thresholds
+    }
+    
+    if(bytesPerRank > minByteThreshold && bytesPerRank <= maxByteThreshold){
+      int channelCount = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][2];
+
+      //honor user's min/max channels defined through NCCL_MIN_NCHANNELS and NCCL_MAX_NCHANNELS
+      if(channelCount >= minNChannels && channelCount <= maxNChannels && channelCount >= minCTAs && channelCount <= maxCTAs){
+        nc = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][2];
+        INFO(NCCL_TUNING, "RCCL tuning model overrides nchannels to %i, channels may be decreased further due to MinTrafficPerchannel thresholds", channelCount);
+      }
+      else{
+        INFO(NCCL_TUNING, "RCCL tuning model cannot override nchannels to %i due to conflicting NCCL_MIN_NCHANNELS:%i or NCCL_MAX_NCHANNELS:%i minCTAs:%i maxCTAs:%i", channelCount, minNChannels, maxNChannels, minCTAs, maxCTAs);
+      }
+
+      break;
+    }
+
+  }
+  return ncclSuccess;
 }
 
 ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info) {
@@ -291,8 +344,25 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 }
 
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
-  return (comm->enableCustColl && (comm->nNodes > 1 && comm->nNodes <= 16) && (msgSize <= rcclParamDirectAllGatherThreshold() &&
-	        rcclParamDirectAllGatherThreshold() > -1));
+  size_t threshold = rcclParamDirectAllGatherThreshold();
+
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
+     if (comm->nNodes == 1 && threshold != -1) {
+        threshold = 8388608;
+     } else if (comm->nNodes < 64 && threshold != -1) {
+        threshold = comm->nNodes * 2097152;
+     }
+  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
+	threshold = 4194304;	
+  }
+
+  comm->enableCustColl = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
+
+  int rankMultiple = comm->nRanks % 8;
+  
+  //return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
+  return (comm->enableCustColl && (msgSize <= threshold) && (threshold != -1) && !rankMultiple)
+    ;
 }
 
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
@@ -358,7 +428,7 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   else
     comm->unroll = NCCL_UNROLL_4;
 
-  INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", comm->unroll+1);
+  INFO(NCCL_INIT, "RCCL Unroll Factor (pre-set): %d", (int) (pow(2.0, (double)comm->unroll)));
   return ncclSuccess;
 }
 

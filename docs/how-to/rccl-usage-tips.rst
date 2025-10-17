@@ -269,11 +269,13 @@ The default allreduce PyTorch benchmark peak bus bandwidth performance is
 ~170 GB/s on a single OAM with ROCm 6.2.4, while the optimized run for CPX on a
 single OAM peaks at ~315 GB/s.
 
-Context tracking on Radeon GPUs
+Context tracking on GPUs
 ----------------------------------------
-Context tracking is disabled on the AMD Instinct™ series of GPUs for better performance but is enabled for Radeon GPUs.
-To disable context tracking for Radeon GPUs, set the following environment variable:
+Context tracking is disabled by default for optimal performance. However, enabling of context tracking can significantly improve performance
+in certain scenarios. To enable context tracking, set the following environment variable:
 
 .. code-block:: shell
 
-   export RCCL_DISABLE_CONTEXT_TRACKING=1
+
+   export RCCL_ENABLE_CONTEXT_TRACKING=1
+
