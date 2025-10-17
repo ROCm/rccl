@@ -30,11 +30,6 @@
 static_assert(sizeof(ncclNetHandle_t) <= CONNECT_SIZE, "NET Connect info is too large");
 
 #define RCCL_ANP_PLUGIN_STR  "RCCL-ANP"
-// Default weak implementation - no-op if no plugin provides strong symbol
-__attribute__((weak))
-int ncclNetEncodeP2pPolicy(void* handle, int isP2p) {
-  return 0;  // Not handled
-}
 
 #define NCCL_NET_MAP_HOSTMEM 0
 #define NCCL_NET_MAP_DEVMEM 1
@@ -779,11 +774,12 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   commConfig.trafficClass = req->trafficClass == NCCL_CONFIG_UNDEF_INT ? NCCL_NET_TRAFFIC_CLASS_UNDEF : req->trafficClass;
   NCCLCHECK(ncclNetGetDeviceHandle(resources->netDeviceType, resources->netDeviceVersion, false /*isRecv*/, &resources->netDeviceHandle));
   bool rccl_anp = !(strcmp(proxyState->ncclNet->name, RCCL_ANP_PLUGIN_STR));
-  // Call plugin-specific hook to encode P2P policy into handle
+  // Call plugin-specific hook to encode P2P policy into handle before connect
   if (ncclNetEncodeP2pPolicy) {
-    // IB plugin provides strong symbol implementation
     ncclNetEncodeP2pPolicy(req->handle, resources->isP2p);
+    //printf("NET: sendProxyConnect called ncclNetEncodeP2pPolicy isP2p=%d\n", resources->isP2p);
   }
+  
   if (resources->shared) {
     // Shared buffers
     struct ncclProxyProgressState* progressState = &proxyState->progressState;

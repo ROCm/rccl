@@ -971,25 +971,6 @@ static_assert(MAX_REQUESTS <= 256, "request id are encoded in wr_id and we need 
 #define NCCL_IB_MAX_QPS 128
 #define P2P_MAX_QPS 1
 
-// P2P Signature Helpers for IB transport
-#define NCCL_IB_ISP2P_SIGNATURE_BASE  0x49420000u    // 'IB' in hex
-#define NCCL_IB_ISP2P_SIGNATURE_MASK  0xFFFFFFFEu  // Upper 31 bits for signature
-#define NCCL_IB_ISP2P_FLAG_MASK       0x00000001u  // LSB for P2P flag
-
-static inline uint32_t ncclIbPackP2pFlags(int isP2p) {
-  return (NCCL_IB_ISP2P_SIGNATURE_BASE & NCCL_IB_ISP2P_SIGNATURE_MASK) |
-         (isP2p & NCCL_IB_ISP2P_FLAG_MASK);
-}
-
-static inline int ncclIbExtractP2pFlag(uint32_t flags) {
-  return (int)(flags & NCCL_IB_ISP2P_FLAG_MASK);
-}
-
-static inline int ncclIbValidateP2pSignature(uint32_t flags) {
-  return ((flags & NCCL_IB_ISP2P_SIGNATURE_MASK) ==
-          (NCCL_IB_ISP2P_SIGNATURE_BASE & NCCL_IB_ISP2P_SIGNATURE_MASK));
-}
-
 // Per-QP connection metatdata
 struct ncclIbQpInfo {
   uint32_t qpn;
@@ -1054,7 +1035,7 @@ struct ncclIbCommStage {
 struct ncclIbHandle {
   union ncclSocketAddress connectAddr; // Filled by the target
   uint64_t magic; // random number to help debugging
-  uint32_t isP2pFlags; // Upper 31 bits: signature (0x50325032), bit 0: isP2p flag
+  int isP2p; // P2P flag
   struct ncclIbCommStage stage; // Used by the other side when connecting
 };
 
@@ -1446,13 +1427,9 @@ ib_recv_dev_list:
   comm->base.vProps = mergedDev->vProps;
   int localNqps, remoteNqps;
 
-  // Validate isP2p signature and extract flag from single uint32_t field
-  // Upper 31 bits contain signature, LSB contains P2P flag
-  INFO(NCCL_NET, "NET/IB: ncclIbConnect reading isP2pFlags=0x%x", handle->isP2pFlags);
-  if (ncclIbValidateP2pSignature(handle->isP2pFlags)) {
-    // Signature valid by extracting P2P flag from LSB
-    isP2p = ncclIbExtractP2pFlag(handle->isP2pFlags);
-  }
+  // Read isP2p from handle
+  isP2p = handle->isP2p;
+  INFO(NCCL_NET, "NET/IB: ncclIbConnect isP2p=%d", isP2p);
   
   if(isP2p) {
     localNqps  = P2P_MAX_QPS * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
@@ -1790,8 +1767,8 @@ ib_recv:
     localNqps  = ncclParamIbQpsPerConn() * rComm->base.vProps.ndevs;
     remoteNqps = ncclParamIbQpsPerConn() * remMeta.ndevs;
   }
-  rComm->base.nqps = remoteNqps > localNqps ? remoteNqps : localNqps;
-  INFO(NCCL_NET, "NET/IB: ibAccept Max Nqps=%d, localNqps=%d, remoteNqps=%d", rComm->base.nqps, localNqps, remoteNqps);
+  rComm->base.nqps = remoteNqps > localNqps ? remoteNqps : localNqps;  
+  INFO(NCCL_NET, "NET/IB: IbAccept Max Nqps=%d, localNqps=%d, remoteNqps=%d",rComm->base.nqps, localNqps, remoteNqps);
   if (rComm->base.nRemDevs != rComm->base.vProps.ndevs) {
     INFO(NCCL_NET, "NET/IB : Local mergedDev %s has a different number of devices=%d as remote %s %d",
       mergedDev->devName, rComm->base.vProps.ndevs, remMeta.devName, rComm->base.nRemDevs);
@@ -2765,9 +2742,9 @@ ncclResult_t ncclIbCloseListen(void* listenComm) {
 
 // Strong symbol implementation of P2P policy encoding hook
 int ncclNetEncodeP2pPolicy(void* handle, int isP2p) {
-  // Encode P2P policy: isP2pFlags at offset after connectAddr and magic
-  uint32_t* flagsPtr = (uint32_t*)((char*)handle + sizeof(union ncclSocketAddress) + sizeof(uint64_t));
-  *flagsPtr = ncclIbPackP2pFlags(isP2p);
+  // Encode P2P policy: isP2p at offset after connectAddr and magic
+  struct ncclIbHandle* ibHandle = (struct ncclIbHandle*)handle;
+  ibHandle->isP2p = isP2p;
   return 1;  // Handled
 }
 
