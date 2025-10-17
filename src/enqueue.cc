@@ -319,7 +319,7 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   }
 }
 
-NCCL_PARAM(GraphRegister, "GRAPH_REGISTER", 1);
+NCCL_PARAM(GraphRegister, "GRAPH_REGISTER", 0); // LWPCOMMLIBS-632: off by default for RCCL as unsupported feature.
 
 static ncclResult_t getCollNetSupport(struct ncclComm* comm, struct ncclTaskColl* task, int* collNetSupport);
 rccl_static ncclResult_t getAlgoInfo(
