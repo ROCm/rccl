@@ -2,6 +2,94 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## Unreleased - RCCL 2.27.7 for ROCm 7.1.0
+
+### Added
+* Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
+* Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
+* added `RCCL_CHANNEL_TUNING_ENABLE` to enable channel tuning that overrides RCCL's internal adjustments based on threadThreshold.
+
+### Changed
+
+* The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
+* Compatibility with NCCL 2.27.7
+
+### Resolved issues
+* Improve small message performance for alltoall by enabling and optimizing batched P2P operations. 
+
+### Known issues
+* Symmetric memory kernels are currently disabled due to ongoing CUMEM enablement work.
+
+## RCCL 2.26.6 for ROCm 7.0.0
+
+### Resolved issues
+
+* Resolved an issue when using more than 64 channels when multiple collectives are used in the same `ncclGroup()` call.
+* Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
+* Suboptimal algorithmic switching point for AllReduce on MI300x.
+* Fixed the known issue "When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault." with a design change to use `comm` instead of `rank` for `mscclStatus`. The Global map for `comm` to `mscclStatus` is still not thread safe but should be explicitly handled by mutexes for read writes. This is tested for correctness, but there is a plan to use a thread-safe map data structure in upcoming changes.
+
+### Added
+
+* Added new GPU target `gfx950`.
+* Added support for `unroll=1` in device-code generation to improve performance,
+* Set a default of 112 channels for a single node with `8 * gfx950`,
+* Enabled LL128 protocol on `gfx950`.
+* Added MSCCL support for AllGather multinode gfx942/gfx950 (i.e., 16 and 32 GPUs). To enable, set the environment variable `RCCL_MSCCL_FORCE_ENABLE=1`. Max message size for MSCCL AllGather usage is `12292 * sizeof(datatype) * nGPUs`.
+* Thread thresholds for LL/LL128 are selected in Tuning Models for the MI300X. This impacts the number of channels used for AG and RS. Channel tuning model is bypassed if `NCCL_THREAD_THRESHOLDS`, `NCCL_MIN_NCHANNELS', or 'NCCL_MAX_NCHANNELS` are set.
+* Multi-node tuning for AllGather, AllReduce, and ReduceScatter that leverages LL/LL64/LL128 protocol to use nontemporal vector load/store for tunable message size ranges.
+* LL/LL128 usage ranges for AR, AG, and RS are part of the tuning models, which enable architecture-specific tuning in conjunction with the existing Rome Models scheme in RCCL.
+* Two new APIs are exposed as part of an initiative to separate RCCL code. These APIs are `rcclGetAlgoInfo` and `rcclFuncMaxSendRecvCount`. However, user-level invocation requires that RCCL be built with `RCCL_EXPOSE_STATIC` enabled.
+* Enabled double-buffering in `reduceCopyPacks` to trigger pipelining, especially to overlap `bf16` arithmetic and bridge the gap between `fp32` performance and `bf16` for both `gfx942` and `gfx950`. Pipelining has been made tunable via `rcclSetPipelining`, similar to algorithms/protocols so that regression is avoided in certain message sizes.
+* Added a direct allgather algorithm. This is enabled by default for multi-node if there are 16 nodes or fewer. The message size threshold is 4MB.
+* Added `RCCL_OVERRIDE_PROTO` and `RCCL_OVERRIDE_ALGO` to allow direct replacement of protocol and algorithm choices. Unlike `NCCL_PROTO` and `NCCL_ALGO`, which re-run the model across enabled combinations and may not guarantee the intended override, these new options enforce the specified selections explicitly.
+
+### Changed
+
+* Compatibility with NCCL 2.23.4
+* Compatibility with NCCL 2.24.3
+* Compatibility with NCCL 2.25.1
+* Compatibility with NCCL 2.26.6
+
+## RCCL 2.22.3 for ROCm 6.4.2
+
+### Added
+
+* Added support for the LL128 protocol on gfx942.
+
+## RCCL 2.22.3 for ROCm 6.4.1
+
+### Resolved issues
+
+* Fixed the accuracy issue for MSCCLPP `allreduce7` kernel in graph mode.
+* Fixed IntraNet performance.
+* Fixed an issue where, in rare circumstances, the application could stop responding due to a proxy thread synchronization issue.
+
+### Known issues
+
+* When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault.
+  The recommended workaround is to disable MSCCL with `export RCCL_MSCCL_ENABLE=0`.
+* Within the RCCL-UnitTests test suite, failures occur in tests ending with the `ManagedMem` and `ManagedMemGraph` suffixes. These failures only affect the test results and do not affect the RCCL component itself. This issue will be resolved in the next major release.
+
+## RCCL 2.22.3 for ROCm 6.4.0
+
+### Added
+
+* `RCCL_SOCKET_REUSEADDR` and `RCCL_SOCKET_LINGER` environment parameters.
+* Setting `NCCL_DEBUG=TRACE NCCL_DEBUG_SUBSYS=VERBS` will generate traces for fifo and data `ibv_post_sends`.
+* Added `--log-trace` flag to enable traces through the install.sh script (e.g. `./install.sh --log-trace`).
+
+### Changed
+
+* Compatibility with NCCL 2.22.3
+* Added support for the rail-optimized tree algorithm for the MI300 series. This feature requires the use of all eight GPUs within
+  each node. It limits NIC traffic to use only GPUs of the same index across nodes and should not impact performance
+  on non-rail-optimized network topologies. The original method of building trees can be enabled by setting the
+  environment variable `RCCL_DISABLE_RAIL_TREES=1`.
+* Additional debug information about how the trees are built can be logged to the GRAPH logging subsys by setting
+  `RCCL_OUTPUT_TREES=1`.
+* Added documentation about the NPS4 and CPX partition modes performance benefits on the MI300X.
+
 ## RCCL 2.21.5 for ROCm 6.3.1
 
 ### Added

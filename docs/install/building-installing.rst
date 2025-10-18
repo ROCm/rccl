@@ -45,11 +45,12 @@ to ``CMAKE_INSTALL_PREFIX``, for example:
 
 .. code-block:: shell
 
-    cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+    cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install -DCMAKE_BUILD_TYPE=Release ..
 
 .. note::
 
-    Ensure ROCm CMake is installed using the command ``apt install rocm-cmake``.
+    Ensure ROCm CMake is installed using the command ``apt install rocm-cmake``. By default,
+    CMake builds the component in debug mode unless ``DCMAKE_BUILD_TYPE`` is specified.
 
 
 Building the RCCL package and install package:

@@ -120,6 +120,19 @@ namespace RcclUnitTesting
       }
     }
 
+    // If debugging is enabled, pause here to allow users to attach debugger
+    if (ev.debugPause) {
+      INFO("============================================================\n");
+      INFO(" Pausing for debug attach: (e.g. sudo rocgdb -p <PID>)\n");
+      INFO("============================================================\n");
+      for (int childId = 0; childId < this->numActiveChildren; ++childId) {
+        INFO(" Child %02d: processID: %d\n", childId, childList[childId]->pid);
+      }
+      INFO("============================================================\n");
+      INFO("<Press enter to continue>\n");
+      scanf("%*c");
+    }
+
     // Determine number of unique GPUs being used.
     std::set<int> unique_devices;
     for (auto a:  this->rankToDeviceMap)
@@ -129,11 +142,11 @@ namespace RcclUnitTesting
     // Tell first rank to get ncclUniqueId
     int getIdCmd = TestBedChild::CHILD_GET_UNIQUE_ID;
     PIPE_WRITE(0, getIdCmd);
+    PIPE_CHECK(0);
 
     // Receive back unique ID from first rank
     ncclUniqueId id;
     PIPE_READ(0, id);
-    PIPE_CHECK(0);
 
     // Send InitComms command to each active child process
     int const cmd = TestBedChild::CHILD_INIT_COMMS;
@@ -252,7 +265,7 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
-    
+
     // Build list of groups this applies to (-1 for groupId means to set for all)
     std::vector<int> groupList;
     for (int i = 0; i < this->numGroupCalls; ++i)
@@ -287,7 +300,7 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
-    
+
     // Build list of groups this applies to (-1 for groupId means to set for all)
     std::vector<int> groupList;
     for (int i = 0; i < this->numGroupCalls; ++i)
@@ -311,7 +324,7 @@ namespace RcclUnitTesting
     InteractiveWait("Finishing PrepareData");
   }
 
-  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks, int const groupId, 
+  void TestBed::ExecuteCollectives(std::vector<int> const &currentRanks, int const groupId,
                                    bool const useHipGraph)
   {
     InteractiveWait("Starting ExecuteCollectives");
@@ -367,7 +380,7 @@ namespace RcclUnitTesting
     std::vector<int> rankList;
     for (int i = 0; i < this->numActiveRanks; ++i)
       if (rank == -1 || rank == i) rankList.push_back(i);
-    
+
     // Build list of groups this applies to (-1 for groupId means to set for all)
     std::vector<int> groupList;
     for (int i = 0; i < this->numGroupCalls; ++i)
@@ -408,7 +421,7 @@ namespace RcclUnitTesting
       if (groupId == -1 || groupId == i) groupList.push_back(i);
 
     int const cmd = TestBedChild::CHILD_LAUNCH_GRAPHS;
-    for (auto currGroup : groupList) 
+    for (auto currGroup : groupList)
     {
       for (int childId = 0; childId < this->numActiveChildren; ++childId)
       {
@@ -524,6 +537,7 @@ namespace RcclUnitTesting
       {
         ERROR("Child process %d exited with code %d\n", childId, returnVal);
       }
+      delete(childList[childId]);
     }
 
     childList.clear();
@@ -550,7 +564,7 @@ namespace RcclUnitTesting
     return ev.GetAllSupportedDataTypes();
   }
 
-  std::vector<int> const TestBed::GetNumCollsPerGroup(int numCollectivesInGroup, 
+  std::vector<int> const TestBed::GetNumCollsPerGroup(int numCollectivesInGroup,
                                                        int numGroupCalls)
   {
     return std::vector<int>(numGroupCalls, numCollectivesInGroup);
@@ -608,7 +622,7 @@ namespace RcclUnitTesting
     ss << "(" << (inPlace ? "IP" : "OP") << ","
        << (managedMem ? "MM" : "GM") << ","
        << (useHipGraph ? "GL" : "NL") <<") ";
-    ss << std::setfill(' ') << std::setw(12) << ncclDataTypeNames[dataType] << " ";
+    ss << std::setfill(' ') << std::setw(15) << ncclDataTypeNames[dataType] << " ";
     if (CollectiveArgs::UsesReduce(funcType)) ss << std::setfill(' ') << std::setw(7) << ncclRedOpNames[redOp] << " ";
     if (CollectiveArgs::UsesRoot(funcType)) ss << "Root " << root << " ";
     return ss.str();
@@ -681,6 +695,14 @@ namespace RcclUnitTesting
 
       for (int ftIdx = 0; ftIdx < funcTypes.size()      && isCorrect; ++ftIdx)
       for (int dtIdx = 0; dtIdx < dataTypes.size()      && isCorrect; ++dtIdx)
+      {
+      //Skipping AllReduce FP8 test on 9 to 16 ranks (gfx90a).
+      if(ev.isGfx90 && numRanks > 8 && funcTypes[ftIdx] == ncclCollAllReduce
+                    && (dataTypes[dtIdx] == ncclFloat8e4m3
+                    || dataTypes[dtIdx] == ncclFloat8e5m2))
+      {
+            continue;
+      }
       for (int rdIdx = 0; rdIdx < redOps.size()         && isCorrect; ++rdIdx)
       for (int rtIdx = 0; rtIdx < roots.size()          && isCorrect; ++rtIdx)
       for (int ipIdx = 0; ipIdx < inPlaceList.size()    && isCorrect; ++ipIdx)
@@ -695,7 +717,7 @@ namespace RcclUnitTesting
                                                     &numInputElements,
                                                     &numOutputElements);
           optionalArgs.redOp = redOps[rdIdx];
-          optionalArgs.root = roots[rtIdx];
+          optionalArgs.root = roots[rtIdx] % this->numActiveRanks;
           this->SetCollectiveArgs(funcTypes[ftIdx],
                                   dataTypes[dtIdx],
                                   numInputElements,
@@ -764,6 +786,7 @@ namespace RcclUnitTesting
         }
         this->DeallocateMem();
       }
+    }
       this->DestroyComms();
     }
   }

@@ -1,4 +1,4 @@
-<algo name="allreduce_pairs" proto="Simple" nchannels="8" nchunksperloop="512" ngpus="8" coll="allreduce" inplace="0" outofplace="1" minBytes="524288" maxBytes="16777216">
+<algo name="allreduce_pairs" proto="Simple" nchannels="8" nchunksperloop="512" ngpus="8" coll="allreduce" inplace="0" outofplace="1" minBytes="524288" maxBytes="20971520">
   <gpu id="0" i_chunks="512" o_chunks="512" s_chunks="448">
     <tb id="0" send="-1" recv="-1" chan="0">
       <step s="0" type="cpy" srcbuf="i" srcoff="0" dstbuf="o" dstoff="0" cnt="8" depid="-1" deps="-1" hasdep="1"/>

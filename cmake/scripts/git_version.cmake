@@ -19,7 +19,16 @@
 # SOFTWARE.
 
 # Attempt to collect the latest git hash
+# Use RCCL_SOURCE_DIR if passed, otherwise fallback to CMAKE_CURRENT_SOURCE_DIR
+if(NOT DEFINED RCCL_SOURCE_DIR)
+  set(RCCL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+if(NOT DEFINED RCCL_BINARY_DIR)
+  set(RCCL_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
 execute_process(COMMAND git log --pretty=format:'%h' -n 1
+                WORKING_DIRECTORY ${RCCL_SOURCE_DIR}
                 OUTPUT_VARIABLE GIT_REV
                 ERROR_QUIET)
 
@@ -30,10 +39,12 @@ else()
   # Check for changes (denote with a '+') after hash
   execute_process(
     COMMAND bash -c "git diff --quiet --exit-code || echo +"
+    WORKING_DIRECTORY ${RCCL_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_DIFF)
   # Collect branch information
   execute_process(
     COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${RCCL_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_BRANCH)
 
   string(STRIP "${GIT_REV}" GIT_REV)
@@ -45,18 +56,18 @@ else()
 endif()
 
 # Compare file with older git version file (git_version.cpp)
-if (EXISTS ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
-  #MESSAGE(STATUS "Found ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp")
-  file(READ ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp PREV_GIT_VERSION)
+if (EXISTS ${RCCL_BINARY_DIR}/git_version.cpp)
+  #MESSAGE(STATUS "Found ${RCCL_BINARY_DIR}/git_version.cpp")
+  file(READ ${RCCL_BINARY_DIR}/git_version.cpp PREV_GIT_VERSION)
   #message(STATUS "CURR GIT version: ${CURR_GIT_VERSION}")
   #message(STATUS "PREV GIT version: ${PREV_GIT_VERSION}")
   if (NOT "${CURR_GIT_VERSION}" STREQUAL "${PREV_GIT_VERSION}")
     message(STATUS "Updating git_version.cpp")
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "${CURR_GIT_VERSION}")
+    file(WRITE ${RCCL_BINARY_DIR}/git_version.cpp "${CURR_GIT_VERSION}")
   else()
     message(STATUS "No changes to git_version.cpp required")
   endif()
 else()
   # Create git_version.cpp if it doesn't exist yet
-  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "${CURR_GIT_VERSION}")
+  file(WRITE ${RCCL_BINARY_DIR}/git_version.cpp "${CURR_GIT_VERSION}")
 endif()

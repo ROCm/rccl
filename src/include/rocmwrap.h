@@ -15,26 +15,35 @@ typedef hsa_status_t (*PFN_hsa_system_get_info)(hsa_system_info_t attribute, voi
 typedef hsa_status_t (*PFN_hsa_status_string)(hsa_status_t status, const char ** status_string);
 typedef hsa_status_t (*PFN_hsa_amd_portable_export_dmabuf)(const void* ptr, size_t size, int* dmabuf, uint64_t* offset);
 
-
+#ifdef __HIP_PLATFORM_AMD__
+#define CUPFN(symbol) symbol
+#else
 #define CUPFN(symbol) pfn_##symbol
+#endif
 
-// Check CUDA PFN driver calls
-#define CUCHECK(cmd) do {				      \
+#define HSACHECK(cmd) do {				      \
     hsa_status_t err = pfn_##cmd;				      \
     if( err != HSA_STATUS_SUCCESS ) {				      \
       const char *errStr;				      \
       pfn_hsa_status_string(err, &errStr);	      \
-      WARN("ROCr failure '%s'", errStr);		      \
+      WARN("HIP failure '%s'", errStr);		      \
+      return ncclUnhandledCudaError;			      \
+    }							      \
+} while(false)
+
+// Check CUDA PFN driver calls
+#define CUCHECK(cmd) do {				      \
+    hipError_t err = cmd;				      \
+    if( err != hipSuccess ) {				      \
+      WARN("HIP failure '%s' at %s:%d", hipGetErrorString(err), __FILE__, __LINE__);		      \
       return ncclUnhandledCudaError;			      \
     }							      \
 } while(false)
 
 #define CUCHECKGOTO(cmd, res, label) do {		      \
-    hsa_status_t err = pfn_##cmd;				      \
-    if( err != HSA_STATUS_SUCCESS ) {				      \
-      const char *errStr;				      \
-      pfn_hsa_status_string(err, &errStr);	      \
-      WARN("ROCr failure '%s'", errStr);		      \
+    hipError_t err = cmd;				      \
+    if( err != hipSuccess ) {				      \
+      WARN("HIP failure '%s' at %s:%d", hipGetErrorString(err), __FILE__, __LINE__);		      \
       res = ncclUnhandledCudaError;			      \
       goto label;					      \
     }							      \
@@ -46,7 +55,7 @@ typedef hsa_status_t (*PFN_hsa_amd_portable_export_dmabuf)(const void* ptr, size
     if( err != HSA_STATUS_SUCCESS ) {						\
       const char *errStr;						\
       pfn_hsa_status_string(err, &errStr);			\
-      INFO(NCCL_ALL,"%s:%d ROCr failure '%s'", __FILE__, __LINE__, errStr);	\
+      INFO(NCCL_ALL,"%s:%d HIP failure '%s'", __FILE__, __LINE__, errStr);	\
     }									\
 } while(false)
 
@@ -67,6 +76,12 @@ DECLARE_ROCM_PFN_EXTERN(hsa_amd_portable_export_dmabuf); // DMA-BUF support
 DECLARE_ROCM_PFN_EXTERN(hsa_init);
 DECLARE_ROCM_PFN_EXTERN(hsa_system_get_info);
 DECLARE_ROCM_PFN_EXTERN(hsa_status_string);
+
+extern int ncclCuMemEnable();
+extern int ncclCuMemHostEnable();
+
+// Handle type used for cuMemCreate()
+extern CUmemAllocationHandleType ncclCuMemHandleType;
 
 ncclResult_t rocmLibraryInit(void);
 

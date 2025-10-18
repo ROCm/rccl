@@ -33,12 +33,11 @@
 #include "rocm_smi/rocm_smi.h"
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "AllToAllPivot" };
-const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNetDirect", "CollNetChain" };
+const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNetDirect", "CollNetChain", "NVLS", "NVLSTree", "PAT" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
 extern NodeModel *node_model;
 
-RCCL_PARAM(CliqueIgnoreTopo, "CLIQUE_IGNORE_TOPO", 0);
 RCCL_PARAM(P2pNetDisable, "P2P_NET_DISABLE", 0);
 RCCL_PARAM(PivotAlltoallEnable, "PIVOT_ALLTOALL_ENABLE", 1);
 RCCL_PARAM(LL128ForceEnable, "LL128_FORCE_ENABLE", 0);
@@ -224,9 +223,9 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
 
 ncclResult_t ncclTopoGetSystem(const char* xmlTopoFile, struct ncclTopoSystem** system) {
   struct ncclXml* xml;
-  NCCLCHECK(ncclCalloc(&xml, 1));
+  NCCLCHECK(xmlAlloc(&xml, NCCL_GRAPH_XML_MAX_NODES));
   NCCLCHECK(ncclTopoGetXmlFromFile(xmlTopoFile, xml, 0));
-  NCCLCHECK(ncclTopoGetSystemFromXml(xml, system));
+  NCCLCHECK(ncclTopoGetSystemFromXml(xml, system, 0));
   free(xml);
   return ncclSuccess;
 }
@@ -245,7 +244,7 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelId) {
   int nRanks = comm->nRanks;
   int nPeers = nRanks + 1 /* Collnet */ + comm->localRanks /* NVLS */;
   channel->id = channelId;
-  channel->workFifoSent = 0;
+  channel->workFifoProduced = 0;
 
   struct ncclSharedResources* sharedRes = comm->sharedRes;
 
@@ -354,7 +353,7 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     struct ncclTransport *transport = ncclTransports[t];
     struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
     int ret = 0;
-    NCCLCHECK(transport->canConnect(&ret, comm->topo, graph, myInfo, peerInfo));
+    NCCLCHECK(transport->canConnect(&ret, comm, graph, myInfo, peerInfo));
     if (ret) {
       connector->transportComm = transportComm;
       NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, connIndex));
@@ -722,7 +721,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
   //struct ncclTopoGraph treeGraph;
   //struct ncclTopoGraph collNetGraph;
   //struct ncclTopoGraph nvlsGraph;
-  struct ncclTopoGraph* graphs[] = { &treeGraph, &ringGraph, &collNetGraph, &collNetGraph, &nvlsGraph, &nvlsGraph };
+  struct ncclTopoGraph* graphs[] = { &treeGraph, &ringGraph, &collNetGraph, &collNetGraph, &nvlsGraph, &nvlsGraph, &nvlsGraph};
 
   int nChannelsOrig;
   struct ncclTopoRanks** allTopoRanks = NULL;
@@ -825,7 +824,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
     if (collNetEnable != NULL) {
       INFO(NCCL_ALL, "NCCL_COLLNET_ENABLE set by environment to %s.", collNetEnable);
       if (strcmp(collNetEnable, "1") == 0) {
-        comm->collNetSupport = 1;
+        comm->config.collnetEnable = 1;
       }
     }
   }
@@ -876,7 +875,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
   collNetGraph.pattern = NCCL_TOPO_PATTERN_TREE;
   collNetGraph.collNet = 1;
   collNetGraph.minChannels = collNetGraph.maxChannels = ringGraph.nChannels;
-  if (comm->collNetSupport) {
+  if (comm->config.collnetEnable) {
     NCCLCHECKGOTO(ncclTopoCompute(comm->topo, &collNetGraph), ret, fail);
     NCCLCHECKGOTO(ncclTopoPrintGraph(comm->topo, &collNetGraph), ret, fail);
   }
@@ -964,6 +963,7 @@ ncclResult_t initTransportsRank_1(struct ncclComm* comm, struct allGatherInfo *a
   }
 
   comm->nChannels = std::min(treeGraph.nChannels, ringGraph.nChannels);
+  TRACE(NCCL_INIT,"treeGraph.nChannels: %d , ringGraph.nChannels: %d", treeGraph.nChannels, ringGraph.nChannels);
   NCCLCHECKGOTO(ncclTopoPreset(comm, graphs, &allGather3Data[rank].topoRanks), ret, fail);
 fail:
   return ret;
@@ -976,7 +976,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
   int nranks = comm->nRanks;
   cpu_set_t affinitySave;
 
-  struct ncclTopoGraph* graphs[] = { &treeGraph, &ringGraph, &collNetGraph, &collNetGraph, &nvlsGraph, &nvlsGraph };
+  struct ncclTopoGraph* graphs[] = { &treeGraph, &ringGraph, &collNetGraph, &collNetGraph, &nvlsGraph, &nvlsGraph, &nvlsGraph};
 
   int nChannelsOrig;
   struct ncclTopoRanks** allTopoRanks = NULL;
@@ -1061,7 +1061,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
       graphs[a]->typeIntra = std::max(allGather3Data[i].graphInfo[a].typeIntra, graphs[a]->typeIntra);
       graphs[a]->typeInter = std::max(allGather3Data[i].graphInfo[a].typeInter, graphs[a]->typeInter);
     }
-    if (graphs[NCCL_ALGO_COLLNET_CHAIN]->nChannels == 0) comm->collNetSupport = 0;
+    if (graphs[NCCL_ALGO_COLLNET_CHAIN]->nChannels == 0) comm->config.collnetEnable = 0;
     if (graphs[NCCL_ALGO_NVLS]->nChannels == 0) comm->nvlsSupport = 0;
   }
 
@@ -1075,24 +1075,25 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
   }
 
   // Determine CollNet support after all-gather now that we know nNodes and each node localRanks
-  if (comm->collNetSupport == 1) {
+  if (comm->config.collnetEnable == 1) {
     int collNetNodeThreshold = ncclParamCollNetNodeThreshold();
     if (comm->nNodes < collNetNodeThreshold) {
       INFO(NCCL_INIT, "Communicator has %d nodes which is less than CollNet node threshold %d, disabling CollNet", comm->nNodes, collNetNodeThreshold);
-      comm->collNetSupport = 0;
+      comm->config.collnetEnable = 0;
     }
     for (int n=0; n<comm->nNodes; n++) {
       if (comm->nodeRanks[n].localRanks > NCCL_MAX_DIRECT_ARITY+1) {
         WARN("CollNet currently only supports up to %d GPUs per node, disabling CollNet", NCCL_MAX_DIRECT_ARITY+1);
-        comm->collNetSupport = 0;
+        comm->config.collnetEnable = 0;
         break;
       }
     }
   }
 
   NCCLCHECKGOTO(ncclCalloc(&rings, nranks*MAXCHANNELS), ret, fail);
+  TRACE(NCCL_INIT, "rank %d nranks %d nchannels %d", rank, nranks, comm->nChannels);
 
-  NCCLCHECKGOTO(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, graphs, nc), ret, fail);
+  NCCLCHECKGOTO(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, graphs, NULL, nc), ret, fail);
   if (comm->topo->treeDefined) NCCLCHECK(ncclTreeBasePostset(comm, &treeGraph));
 
   // AllGather3 - end
@@ -1182,7 +1183,7 @@ ncclResult_t initTransportsRank_3(struct ncclComm* comm, struct allGatherInfo *a
 #endif
 #if CUDART_VERSION >= 12010
   // Check if we can setup CollNet
-  if (comm->collNetSupport > 0) collNetTrySetup(comm, parent, &collNetGraph);
+  if (comm->config.collnetEnable > 0) collNetTrySetup(comm, parent, &collNetGraph);
 #endif
 
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
@@ -1356,5 +1357,13 @@ bool mscclForceEnabled() {
 }
 
 ncclResult_t mscclSchedulerInit(ncclComm_t comm, int* numChannelsRequired) {
+  return ncclSuccess;
+}
+
+uint64_t getHostHash(void) {
+  return 0xdeadbeef;
+}
+
+ncclResult_t bootstrapIntraNodeAllGather(void* commState, int *ranks, int rank, int nranks, void* allData, int size) {
   return ncclSuccess;
 }

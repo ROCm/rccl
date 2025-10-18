@@ -52,12 +52,12 @@ ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXm
 
 /* Auto-detect functions */
 ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct ncclXmlNode** gpuNode);
-ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const char* netName, struct ncclXmlNode** netNode);
+ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const char* netName, struct ncclXmlNode** netNode, struct ncclXmlNode* forceParent=NULL);
 
 /* Remove unneeded parts */
 ncclResult_t ncclTopoTrimXml(struct ncclXml* xml);
 
-/* Fuse multiple system XMLs into one, skipping duplicate CPUs */
+/* Fuse multiple system XMLs into one, skipping duplicate entries */
 ncclResult_t ncclTopoFuseXml(struct ncclXml* dst, struct ncclXml* src);
 /* Relocate pointers in XML to (de-)serialize the structure */
 ncclResult_t ncclTopoConvertXml(struct ncclXml* xml, uintptr_t base, int exp);
@@ -121,6 +121,13 @@ static ncclResult_t xmlGetAttrIntDefault(struct ncclXmlNode* node, const char* a
   return ncclSuccess;
 }
 
+static ncclResult_t xmlGetAttrUint64(struct ncclXmlNode* node, const char* attrName, uint64_t* value) {
+  const char* str;
+  NCCLCHECK(xmlGetAttrStr(node, attrName, &str));
+  *value = strtoull(str, NULL, 0);
+  return ncclSuccess;
+}
+
 static ncclResult_t xmlGetAttrLong(struct ncclXmlNode* node, const char* attrName, int64_t* value) {
   const char* str;
   NCCLCHECK(xmlGetAttrStr(node, attrName, &str));
@@ -128,11 +135,17 @@ static ncclResult_t xmlGetAttrLong(struct ncclXmlNode* node, const char* attrNam
   return ncclSuccess;
 }
 
-
 static ncclResult_t xmlGetAttrFloat(struct ncclXmlNode* node, const char* attrName, float* value) {
   const char* str;
   NCCLCHECK(xmlGetAttrStr(node, attrName, &str));
   *value = strtof(str, NULL);
+  return ncclSuccess;
+}
+
+static ncclResult_t xmlGetAttrFloatDefault(struct ncclXmlNode* node, const char* attrName, float* value, float defaultValue) {
+  const char* str;
+  NCCLCHECK(xmlGetAttr(node, attrName, &str));
+  *value = str ? strtof(str, NULL) : defaultValue;
   return ncclSuccess;
 }
 
@@ -176,6 +189,29 @@ static ncclResult_t xmlFindTagKv(struct ncclXml* xml, const char* tagName, struc
   return ncclSuccess;
 }
 
+static ncclResult_t xmlFindNode(struct ncclXmlNode* parentNode, struct ncclXmlNode* searchNode, struct ncclXmlNode** node) {
+  *node = NULL;
+  // Search for the node at the current level only.
+  for (int i=0; i<parentNode->nSubs; i++) {
+    struct ncclXmlNode* n = parentNode->subs[i];
+    if (strcmp(n->name, searchNode->name) == 0 && n->type == searchNode->type && n->nAttrs == searchNode->nAttrs) {
+      int a;
+      // Ensure that all the attributes are the same.
+      for (a=0; a<searchNode->nAttrs; a++) {
+        const char* val;
+        NCCLCHECK(xmlGetAttr(n, searchNode->attrs[a].key, &val));
+        if (!val || strcmp(val, searchNode->attrs[a].value))
+          break;
+      }
+      if (a == searchNode->nAttrs) {
+        *node = n;
+        return ncclSuccess;
+      }
+    }
+  }
+  return ncclSuccess;
+}
+
 static ncclResult_t xmlSetAttr(struct ncclXmlNode* node, const char* attrName, const char* value) {
   int index;
   NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));
@@ -188,6 +224,24 @@ static ncclResult_t xmlSetAttr(struct ncclXmlNode* node, const char* attrName, c
   node->attrs[index].value[MAX_STR_LEN] = '\0';
   return ncclSuccess;
 }
+
+static ncclResult_t xmlPrintNodeRecursive(struct ncclXmlNode* node, const char* name) {
+  while (node) {
+    char line[1024*8];
+    int cursor = 0;
+    snprintf(line, sizeof(line), "<name=%s", node->name);
+    for (int i = 0; i < node->nAttrs; i++) {
+      cursor = strlen(line);
+      snprintf(line + cursor, sizeof(line) - cursor, " %s=%s", node->attrs[i].key, node->attrs[i].value);
+    }
+    cursor = strlen(line);
+    snprintf(line + cursor, sizeof(line) - cursor, ">");
+    INFO(NCCL_GRAPH, "%s", line);
+    node = node->parent;
+  }
+  return ncclSuccess;
+}
+
 
 static ncclResult_t xmlSetAttrIfUnset(struct ncclXmlNode* node, const char* attrName, const char* value) {
   int index;
@@ -210,7 +264,6 @@ static ncclResult_t xmlSetAttrInt(struct ncclXmlNode* node, const char* attrName
     node->attrs[index].key[MAX_STR_LEN] = '\0';
   }
   snprintf(node->attrs[index].value, MAX_STR_LEN, "%d", value);
-  node->attrs[index].value[MAX_STR_LEN] = '\0';
   return ncclSuccess;
 }
 
@@ -223,7 +276,6 @@ static ncclResult_t xmlSetAttrFloat(struct ncclXmlNode* node, const char* attrNa
     node->attrs[index].key[MAX_STR_LEN] = '\0';
   }
   snprintf(node->attrs[index].value, MAX_STR_LEN, "%g", value);
-  node->attrs[index].value[MAX_STR_LEN] = '\0';
   return ncclSuccess;
 }
 
@@ -236,7 +288,6 @@ static ncclResult_t xmlSetAttrLong(struct ncclXmlNode* node, const char* attrNam
     node->attrs[index].key[MAX_STR_LEN] = '\0';
   }
   snprintf(node->attrs[index].value, MAX_STR_LEN, "%#lx", value);
-  node->attrs[index].value[MAX_STR_LEN] = '\0';
   return ncclSuccess;
 }
 

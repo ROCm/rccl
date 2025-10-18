@@ -24,8 +24,10 @@
 #define ROCBLAS_FLOAT8_H
 
 #include <stdint.h>
+#include <hip/hip_version.h>
 
-#if __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
+typedef uint16_t fp8x2_storage_t;
+#if __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
 /*! \brief Struct to represent a 8 bit floating-point number. */
 
 typedef struct
@@ -38,7 +40,162 @@ typedef struct
     uint8_t data;
 } rccl_bfloat8;
 
-#else // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
+// __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
+#elif HIP_VERSION >= 60300000 && !(defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1030__))
+
+#include <hip/hip_fp8.h>
+
+#if __HIP_DEVICE_COMPILE__ && (defined(__gfx942__))
+typedef __hip_fp8_e4m3_fnuz rccl_float8;
+typedef __hip_fp8_e5m2_fnuz rccl_bfloat8;
+#else
+typedef __hip_fp8_e4m3 rccl_float8;
+typedef __hip_fp8_e5m2 rccl_bfloat8;
+#endif
+
+typedef _Float16 half_t;
+typedef _Float16 half2_t __attribute__((ext_vector_type(2)));
+
+typedef short shortx2_t __attribute__((ext_vector_type(2)));
+typedef short __attribute__((ext_vector_type(2))) __amd_shortx2_storage_t;
+typedef float float2_t __attribute__((ext_vector_type(2)));
+
+
+inline __device__  rccl_float8 hadd(rccl_float8 x, rccl_float8 y)
+{
+#if   __HIP_DEVICE_COMPILE__ && defined(__gfx950__)
+    half2_t v1;
+    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v1) : "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(x.__x, 1.f, 0)), "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(y.__x, 1.f, 0)));
+    union {
+      shortx2_t i16_vec;
+      rccl_float8 fp8[4];
+    } u{0};
+    u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(v1, v1, /* scale */ 1.f, 0);
+    return u.fp8[0];
+#elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
+
+    float2_t v;
+    uint32_t ival = 0;
+    asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_fp8(x.__x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_fp8(y.__x, 0)));
+    return __builtin_amdgcn_cvt_pk_fp8_f32(v[0], v[0], ival, false);
+#else
+    return rccl_float8(float(x) + float(y));
+#endif
+}
+
+inline __device__  rccl_bfloat8 hadd_b(rccl_bfloat8 x, rccl_bfloat8 y)
+{
+#if   __HIP_DEVICE_COMPILE__ && defined(__gfx950__)
+    half2_t v1;
+    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v1) : "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_bf8(x.__x, 1.f, 0)), "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_bf8(y.__x, 1.f, 0)));
+    union {
+      shortx2_t i16_vec;
+      rccl_bfloat8 fp8[4];
+    } u1{0};
+    u1.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_bf8_f16(v1, v1, /* scale */ 1.f, 0);
+    return u1.fp8[0];
+#elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
+
+    float2_t v;
+    uint32_t ival       = 0;
+    asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_bf8(x.__x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_bf8(y.__x, 0)));
+    return __builtin_amdgcn_cvt_pk_bf8_f32(v[0], v[0], ival, false);
+#else
+    return rccl_bfloat8(float(x) + float(y));
+#endif
+}
+
+inline __device__  fp8x2_storage_t hadd2(fp8x2_storage_t x, fp8x2_storage_t y)
+{
+#if   __HIP_DEVICE_COMPILE__ && defined(__gfx950__)
+    half2_t v1;
+    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v1) : "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(x, 1.f, 0)), "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_fp8(y, 1.f, 0)));
+    union {
+      shortx2_t i16_vec;
+      fp8x2_storage_t fp8;
+    } u{0};
+    u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(v1, v1, /* scale */ 1.f, 0);
+    return u.fp8;
+#elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
+    float2_t v;
+    uint32_t ival = 0;
+    asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_fp8(x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_fp8(y, 0)));
+    return __builtin_amdgcn_cvt_pk_fp8_f32(v[0], v[1], ival, false);
+#else
+    union {
+      rccl_float8 fp8[2];
+      fp8x2_storage_t fp8x2;
+    } u, v, w;
+    u.fp8x2 = x;
+    v.fp8x2 = y;
+    w.fp8[0] = hadd(u.fp8[0], v.fp8[0]);
+    w.fp8[1] = hadd(u.fp8[1], v.fp8[1]);
+    return w.fp8x2;
+#endif
+}
+
+inline __device__  fp8x2_storage_t hadd2_b(fp8x2_storage_t x, fp8x2_storage_t y)
+{
+#if   __HIP_DEVICE_COMPILE__ && defined(__gfx950__)
+    half2_t v1;
+    asm volatile("v_pk_add_f16 %0, %1, %2" : "=v"(v1) : "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_bf8(x, 1.f, 0)), "v"(__builtin_amdgcn_cvt_scalef32_pk_f16_bf8(y, 1.f, 0)));
+    union {
+      shortx2_t i16_vec;
+      fp8x2_storage_t fp8;
+    } u{0};
+    u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_bf8_f16(v1, v1, /* scale */ 1.f, 0);
+    return u.fp8;
+#elif __HIP_DEVICE_COMPILE__ && defined(__gfx942__)
+    float2_t v;
+    uint32_t ival = 0;
+    asm volatile("v_pk_add_f32 %0, %1, %2" : "=v"(v) : "v"(__builtin_amdgcn_cvt_pk_f32_bf8(x, 0)), "v"(__builtin_amdgcn_cvt_pk_f32_bf8(y, 0)));
+    return __builtin_amdgcn_cvt_pk_bf8_f32(v[0], v[1], ival, false);
+#else
+    union {
+      rccl_bfloat8 bfp8[2];
+      fp8x2_storage_t bfp8x2;
+    } u, v, w;
+    u.bfp8x2 = x;
+    v.bfp8x2 = y;
+    w.bfp8[0] = hadd_b(u.bfp8[0], v.bfp8[0]);
+    w.bfp8[1] = hadd_b(u.bfp8[1], v.bfp8[1]);
+    return w.bfp8x2;
+#endif
+}
+
+inline std::ostream& operator<<(std::ostream& os, const rccl_float8& f8)
+{
+    return os << float(f8);
+}
+
+inline std::ostream& operator<<(std::ostream& os, const rccl_bfloat8& bf8)
+{
+    return os << float(bf8);
+}
+
+inline __host__ __device__ float operator*(rccl_float8 a, rccl_float8 b)
+{
+    return float(a) * float(b);
+}
+
+inline __host__ __device__ float operator*(rccl_bfloat8 a, rccl_bfloat8 b)
+{
+    return float(a) * float(b);
+}
+
+inline __host__ __device__ float operator*(rccl_float8 a, float b)
+{
+    return float(a) * float(b);
+}
+
+inline __host__ __device__ float operator*(rccl_bfloat8 a, float b)
+{
+    return float(a) * float(b);
+}
+
+// For older versions of ROCm that do not include hip_fp8.h,
+// we provide a local version of the header file as a fallback.
+#else
 
 #define HIP_HOST_DEVICE __host__ __device__
 #define HIP_HOST __host__
@@ -73,7 +230,7 @@ namespace rocblas_hip_f8_impl
         else
             x = reinterpret_cast<uint16_t&>(_x);
 
-        uint32_t y, head, mantissa;
+        uint32_t head, mantissa;
         int      exponent, bias;
         uint32_t sign;
 
@@ -344,7 +501,9 @@ struct rccl_float8
     // default constructor
     HIP_HOST_DEVICE rccl_float8() = default;
 
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+    constexpr inline HIP_HOST_DEVICE rccl_float8(const rccl_float8& a) : data(a.data) {}
+
+#if defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
 
     template <bool stochastic_rounding = false>
@@ -381,10 +540,10 @@ struct rccl_float8
         return i8data;
     }
 
-#endif // __gfx940__
+#endif // __gfx942__
 
     // constructor from float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx942__) || defined(__gfx950__)
 
     // NOTE: ON-DEVICE... always optimal bias
     explicit HIP_DEVICE rccl_float8(float                        v,
@@ -402,7 +561,7 @@ struct rccl_float8
     // Host only implementation using s/w simulation
     explicit HIP_HOST
 #else
-    // both Host and DEVICE for non-gfx940 using s/w simulation
+    // both Host and DEVICE for non-gfx942 using s/w simulation
     explicit HIP_HOST_DEVICE
 #endif
         rccl_float8(float                        v,
@@ -446,7 +605,7 @@ struct rccl_float8
     }
 
     // convert to float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx942__) || defined(__gfx950__)
     // upcast using device specific intrinsic
     explicit inline HIP_DEVICE operator float() const
     {
@@ -460,7 +619,7 @@ struct rccl_float8
     }
 
     explicit inline HIP_HOST operator float() const
-#else // non gfx940
+#else // non gfx942
     explicit inline HIP_HOST_DEVICE operator float() const
 #endif
     {
@@ -492,7 +651,7 @@ struct rccl_float8
     }
 
     // assignment overloading only from the same F8 types
-    inline __host__ __device__ rccl_float8& operator=(const rccl_float8& a)
+    inline HIP_HOST_DEVICE rccl_float8& operator=(const rccl_float8& a)
     {
         data = a.data;
         return *this;
@@ -511,7 +670,9 @@ struct rccl_bfloat8
     // default constructor
     HIP_HOST_DEVICE rccl_bfloat8() = default;
 
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+    constexpr inline HIP_HOST_DEVICE rccl_bfloat8(const rccl_bfloat8& a) : data(a.data) {}
+
+#if defined(__gfx942__) || defined(__gfx950__)
     // device specific optimized F8 down-conversion code
 
     template <bool stochastic_rounding = false>
@@ -548,10 +709,10 @@ struct rccl_bfloat8
         return i8data;
     }
 
-#endif // __gfx940__
+#endif // __gfx942__
 
     // constructor from float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx942__) || defined(__gfx950__)
 
     // NOTE: ON-DEVICE... always optimal bias
     explicit HIP_DEVICE rccl_bfloat8(float                        v,
@@ -569,7 +730,7 @@ struct rccl_bfloat8
     // Host only implementation using s/w simulation
     explicit HIP_HOST
 #else
-    // both Host and DEVICE for non-gfx940 using s/w simulation
+    // both Host and DEVICE for non-gfx942 using s/w simulation
     explicit HIP_HOST_DEVICE
 #endif
         rccl_bfloat8(float                        v,
@@ -613,7 +774,7 @@ struct rccl_bfloat8
     }
 
     // convert to float
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx942__) || defined(__gfx950__)
     // upcast using device specific intrinsic
     explicit inline HIP_DEVICE operator float() const
     {
@@ -627,7 +788,7 @@ struct rccl_bfloat8
     }
 
     explicit inline HIP_HOST operator float() const
-#else // non gfx940
+#else // non gfx942
     explicit inline HIP_HOST_DEVICE operator float() const
 #endif
     {
@@ -659,7 +820,7 @@ struct rccl_bfloat8
     }
 
     // assignment overloading only from the same F8 types
-    inline __host__ __device__ rccl_bfloat8& operator=(const rccl_bfloat8& a)
+    inline HIP_HOST_DEVICE rccl_bfloat8& operator=(const rccl_bfloat8& a)
     {
         data = a.data;
         return *this;
@@ -684,14 +845,51 @@ namespace std
     {
         return rccl_bfloat8(cosf(float(a)));
     }
-    __device__ __host__ constexpr rccl_float8 real(const rccl_float8& a)
+    HIP_HOST_DEVICE constexpr rccl_float8 real(const rccl_float8& a)
     {
         return a;
     }
-    __device__ __host__ constexpr rccl_bfloat8 real(const rccl_bfloat8& a)
+    HIP_HOST_DEVICE constexpr rccl_bfloat8 real(const rccl_bfloat8& a)
     {
         return a;
     }
+}
+
+inline __device__  rccl_float8 hadd(rccl_float8 x, rccl_float8 y)
+{
+	return rccl_float8(float(x) + float(y));
+}
+
+inline __device__  fp8x2_storage_t hadd2(fp8x2_storage_t x, fp8x2_storage_t y)
+{
+    union {
+      rccl_float8 fp8[2];
+      fp8x2_storage_t fp8x2;
+    } u, v, w;
+    u.fp8x2 = x;
+    v.fp8x2 = y;
+    w.fp8[0] = hadd(u.fp8[0], v.fp8[0]);
+    w.fp8[1] = hadd(u.fp8[1], v.fp8[1]);
+
+	return w.fp8x2;
+}
+
+inline __device__  rccl_bfloat8 hadd_b(rccl_bfloat8 x, rccl_bfloat8 y)
+{
+    return rccl_bfloat8(float(x) + float(y));
+}
+
+inline __device__  fp8x2_storage_t hadd2_b(fp8x2_storage_t x, fp8x2_storage_t y)                                            {
+    union {
+      rccl_bfloat8 fp8[2];
+      fp8x2_storage_t fp8x2;
+    } u, v, w;
+    u.fp8x2 = x;
+    v.fp8x2 = y;
+    w.fp8[0] = hadd_b(u.fp8[0], v.fp8[0]);
+    w.fp8[1] = hadd_b(u.fp8[1], v.fp8[1]);
+
+	return w.fp8x2;
 }
 
 // Special operator overloading
@@ -969,7 +1167,7 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng = 0)
     return a;
 }
 
-// Use h/w intrinsic and optimized version when __gfx940__
+// Use h/w intrinsic and optimized version when __gfx942__
 template <
     typename T,
     typename Ta,
@@ -980,7 +1178,7 @@ template <
     = 0>
 inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 {
-#if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#if defined(__gfx942__) || defined(__gfx950__)
     // NOTE: we are directly calling cast_to_f8_from_f32 instead of constructor to optimize away one runtime branch
     T val;
     if(std::is_same<T, rccl_float8>::value)
@@ -988,12 +1186,12 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
     else
         val.data = rccl_bfloat8::cast_to_bf8_from_f32<stochastic_rounding>(float(a), rng);
     return val;
-#else // non gfx940
+#else // non gfx942
     return T(float(a),
              stochastic_rounding ? T::rocblas_hip_f8_rounding_mode::stochastic
                                  : T::rocblas_hip_f8_rounding_mode::standard,
              rng);
-#endif // __gfx940__
+#endif // __gfx942__
 }
 
 // NOTE NOTE: The above code is good if we don't consider HIP-GEMM code and only consider the quantization
@@ -1016,6 +1214,6 @@ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng)
 
 // =================================================================================================
 
-#endif // __cplusplus < 201103L || (!defined(__HCC__) && !defined(__HIPCC__))
+#endif
 
 #endif // ROCBLAS_FLOAT8_H

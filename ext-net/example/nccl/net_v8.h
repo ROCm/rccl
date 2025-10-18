@@ -2,10 +2,8 @@
  * Copyright (c) 2017-2022, NVIDIA CORPORATION. All rights reserved.
  */
 
-#ifndef NCCL_NET_V8_H_
-#define NCCL_NET_V8_H_
-
-#include "net_device.h"
+#ifndef NET_V8_H_
+#define NET_V8_H_
 
 typedef struct {
   char* name;                      // Used mostly for logging.
@@ -22,8 +20,6 @@ typedef struct {
   ncclNetDeviceType netDeviceType; // Network offload type
   int netDeviceVersion;            // Version number for network offload
 } ncclNetProperties_v8_t;
-
-typedef ncclNetProperties_v8_t ncclNetProperties_t;
 
 typedef struct {
   // Name of the network (mainly for logs)

@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "TestBed.hpp"
+#include "CallCollectiveForked.hpp"
 
 namespace RcclUnitTesting
 {
@@ -13,7 +14,7 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat32};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat32, ncclFloat8e4m3, ncclFloat8e5m2};
     std::vector<ncclRedOp_t>    const redOps          = {ncclSum};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {393216, 384};
@@ -32,7 +33,7 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat64, ncclFp8E4M3, ncclFp8E5M2};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclFloat16, ncclFloat64, ncclFloat8e4m3, ncclFloat8e5m2};
     std::vector<ncclRedOp_t>    const redOps          = {ncclMin};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {12888};
@@ -70,7 +71,7 @@ namespace RcclUnitTesting
 
     // Configuration
     std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = {ncclInt32, ncclFp8E4M3, ncclFp8E5M2};
+    std::vector<ncclDataType_t> const dataTypes       = {ncclInt32, ncclFloat8e4m3, ncclFloat8e5m2};
     std::vector<ncclRedOp_t>    const redOps          = {ncclMax};
     std::vector<int>            const roots           = {0};
     std::vector<int>            const numElements     = {393216, 12888, 384};
@@ -117,7 +118,7 @@ namespace RcclUnitTesting
         std::vector<bool>           const managedMemList  = {false};
         std::vector<bool>           const useHipGraphList = {false, true};
         std::vector<const char *>   const channelList     = {"84", "112"};
-        bool                        const enableSweep     = false; 
+        bool                        const enableSweep     = false;
         for (auto channel : channelList) {
           setenv("NCCL_MIN_NCHANNELS", channel, 1);
           testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
@@ -146,30 +147,6 @@ namespace RcclUnitTesting
     testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
                            inPlaceList, managedMemList, useHipGraphList);
     testBed.Finalize();
-  }
-
-  TEST(AllReduce, DISABLED_Clique)
-  {
-    // Set clique env var prior to TestBed
-    setenv("RCCL_ENABLE_CLIQUE", "1", 1);
-
-    TestBed testBed;
-
-    // Configuration
-    std::vector<ncclFunc_t>     const funcTypes       = {ncclCollAllReduce};
-    std::vector<ncclDataType_t> const dataTypes       = testBed.GetAllSupportedDataTypes();
-    std::vector<ncclRedOp_t>    const redOps          = testBed.GetAllSupportedRedOps();
-    std::vector<int>            const roots           = {0};
-    std::vector<int>            const numElements     = {1048576, 1024};
-    std::vector<bool>           const inPlaceList     = {false, true};
-    std::vector<bool>           const managedMemList  = {false};
-    std::vector<bool>           const useHipGraphList = {false, true};
-
-    testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
-                           inPlaceList, managedMemList, useHipGraphList);
-    testBed.Finalize();
-
-    unsetenv("RCCL_ENABLE_CLIQUE");
   }
 
   // This tests using custom pre-mult scalars reductions
@@ -241,5 +218,35 @@ namespace RcclUnitTesting
       testBed.DestroyComms();
     }
     testBed.Finalize();
+  }
+
+  TEST(AllReduce, UserBufferRegistration)
+  {
+    const int nranks = 8;
+    size_t count = 2048;
+    std::vector<int> sendBuff(count, 0);
+    std::vector<int> recvBuff(count, 0);
+    std::vector<int> expected(count, 0);
+
+    for (int i = 0; i < count; ++i){
+        sendBuff[i] = i;
+        expected[i] = i * nranks;
+    }
+    callCollectiveForked(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected);
+  }
+
+  TEST(AllReduce, ManagedMemUserBufferRegistration)
+  {
+    const int nranks = 8;
+    size_t count = 2048;
+    std::vector<int> sendBuff(count, 0);
+    std::vector<int> recvBuff(count, 0);
+    std::vector<int> expected(count, 0);
+    const bool use_managed_mem = true;
+    for (int i = 0; i < count; ++i){
+        sendBuff[i] = i;
+        expected[i] = i * nranks;
+    }
+    callCollectiveForked(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected, use_managed_mem);
   }
 }

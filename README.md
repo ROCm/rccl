@@ -2,6 +2,9 @@
 
 ROCm Communication Collectives Library
 
+[![RCCL](https://dev.azure.com/ROCm-CI/ROCm-CI/_apis/build/status%2Frccl?repoName=ROCm%2Frccl&branchName=develop)](https://dev.azure.com/ROCm-CI/ROCm-CI/_build/latest?definitionId=107&repoName=ROCm%2Frccl&branchName=develop)
+[![TheRock CI](https://github.com/ROCm/rccl/actions/workflows/therock-ci.yml/badge.svg?branch=develop&event=push)](https://github.com/ROCm/rccl/actions/workflows/therock-ci.yml)
+
 > **Note:** The published documentation is available at [RCCL](https://rocm.docs.amd.com/projects/rccl/en/latest/index.html) in an organized easy-to-read format that includes a table of contents and search functionality. The documentation source files reside in the [rccl/docs](https://github.com/ROCm/rccl/tree/develop/docs) folder in this repository. As with all ROCm projects, the documentation is open source. For more information, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
 
 ## Introduction
@@ -34,25 +37,27 @@ For more info on build options/flags when using the install script, use `./insta
 RCCL build & installation helper script
  Options:
        --address-sanitizer     Build with address sanitizer enabled
-    -d|--dependencies          Install RCCL depdencencies
+    -c|--enable-code-coverage  Enable code coverage
+    -d|--dependencies          Install RCCL dependencies
        --debug                 Build debug library
        --enable_backtrace      Build with custom backtrace support
        --disable-colltrace     Build without collective trace
        --disable-msccl-kernel  Build without MSCCL kernels
-       --disable-mscclpp       Build without MSCCL++ support
+       --enable-mscclpp        Build with MSCCL++ support
+       --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines
+       --disable-roctx         Build without ROCTX logging
     -f|--fast                  Quick-build RCCL (local gpu arch only, no backtrace, and collective trace support)
     -h|--help                  Prints this help message
     -i|--install               Install RCCL library (see --prefix argument below)
     -j|--jobs                  Specify how many parallel compilation jobs to run ($nproc by default)
     -l|--local_gpu_only        Only compile for local GPU architecture
-       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, seperate by ';' (builds for all supported GPU architectures by default)
+       --amdgpu_targets        Only compile for specified GPU architecture(s). For multiple targets, separate by ';' (builds for all supported GPU architectures by default)
        --no_clean              Don't delete files if they already exist
        --npkit-enable          Compile with npkit enabled
+       --log-trace             Build with log trace enabled (i.e. NCCL_DEBUG=TRACE)
        --openmp-test-enable    Enable OpenMP in rccl unit tests
-       --roctx-enable          Compile with roctx enabled (example usage: rocprof --roctx-trace ./rccl-program)
     -p|--package_build         Build RCCL package
        --prefix                Specify custom directory to install RCCL to (default: `/opt/rocm`)
-       --rm-legacy-include-dir Remove legacy include dir Packaging added for file/folder reorg backward compatibility
        --run_tests_all         Run all rccl unit tests (must be built already)
     -r|--run_tests_quick       Run small subset of rccl unit tests (must be built already)
        --static                Build RCCL as a static library instead of shared library
@@ -81,7 +86,7 @@ $ git submodule update --init --recursive --depth=1
 ```
 You may substitute an installation path of your own choosing by passing `CMAKE_INSTALL_PREFIX`. For example:
 ```shell
-$ cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install ..
+$ cmake -DCMAKE_INSTALL_PREFIX=$PWD/rccl-install -DCMAKE_BUILD_TYPE=Release ..
 ```
 Note: ensure rocm-cmake is installed, `apt install rocm-cmake`.
 
@@ -99,33 +104,7 @@ RCCL package install requires sudo/root access because it installs under `/opt/r
 
 ## Docker build
 
-Assuming you have docker installed on your system:
-
-#### To build the docker image :
-
-By default, the given Dockerfile uses `docker.io/rocm/dev-ubuntu-22.04:latest` as the base docker image, and then installs RCCL (develop branch) and RCCL-Tests (develop branch).
-```shell
-$ docker build -t rccl-tests -f Dockerfile.ubuntu --pull .
-```
-
-The base docker image, rccl repo, and rccl-tests repo can be modified using `--build-args` in the `docker build` command above. E.g., to use a different base docker image:
-```shell
-$ docker build -t rccl-tests -f Dockerfile.ubuntu --build-arg="ROCM_IMAGE_NAME=rocm/dev-ubuntu-20.04" --build-arg="ROCM_IMAGE_TAG=6.2" --pull .
-```
-
-#### To start an interactive docker container on a system with AMD GPUs :
-
-```shell
-$ docker run -it --rm --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --network=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined rccl-tests /bin/bash
-```
-
-#### To run rccl-tests (all_reduce_perf) on 8 AMD GPUs (inside the docker container) :
-
-```shell
-$ mpirun --allow-run-as-root -np 8 --mca pml ucx --mca btl ^openib -x NCCL_DEBUG=VERSION /workspace/rccl-tests/build/all_reduce_perf -b 1 -e 16G -f 2 -g 1
-```
-
-For more information on rccl-tests options, refer to the [Usage](https://github.com/ROCm/rccl-tests#usage) section of rccl-tests.
+Refer to [docker/README.md](docker/README.md "docker/README.md")
 
 ## Tests
 
@@ -163,6 +142,6 @@ python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 
 ## Copyright
 
-All source code and accompanying documentation is copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
+All source code and accompanying documentation is copyright (c) 2015-2025, NVIDIA CORPORATION. All rights reserved.
 
-All modifications are copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+All modifications are copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
