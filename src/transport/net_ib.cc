@@ -1758,8 +1758,6 @@ ib_recv:
   mergedDev = ncclIbMergedDevs + lComm->dev;
   rComm->base.nRemDevs = remMeta.ndevs;
   
-  // NOW we can safely use remMeta.isP2p and remMeta.ndevs (they've been received!)
-  // Recalculate nqps based on isP2p from remote metadata
   if(remMeta.isP2p) {
     localNqps  = P2P_MAX_QPS * rComm->base.vProps.ndevs;
     remoteNqps = P2P_MAX_QPS * remMeta.ndevs;
@@ -2740,9 +2738,7 @@ ncclResult_t ncclIbCloseListen(void* listenComm) {
   return ncclSuccess;
 }
 
-// Strong symbol implementation of P2P policy encoding hook
-int ncclNetEncodeP2pPolicy(void* handle, int isP2p) {
-  // Encode P2P policy: isP2p at offset after connectAddr and magic
+int rcclNetP2pPolicy(void* handle, int isP2p) {
   struct ncclIbHandle* ibHandle = (struct ncclIbHandle*)handle;
   ibHandle->isP2p = isP2p;
   return 1;  // Handled

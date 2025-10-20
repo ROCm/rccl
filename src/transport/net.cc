@@ -774,10 +774,9 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   commConfig.trafficClass = req->trafficClass == NCCL_CONFIG_UNDEF_INT ? NCCL_NET_TRAFFIC_CLASS_UNDEF : req->trafficClass;
   NCCLCHECK(ncclNetGetDeviceHandle(resources->netDeviceType, resources->netDeviceVersion, false /*isRecv*/, &resources->netDeviceHandle));
   bool rccl_anp = !(strcmp(proxyState->ncclNet->name, RCCL_ANP_PLUGIN_STR));
-  // Call plugin-specific hook to encode P2P policy into handle before connect
-  if (ncclNetEncodeP2pPolicy) {
-    ncclNetEncodeP2pPolicy(req->handle, resources->isP2p);
-    //printf("NET: sendProxyConnect called ncclNetEncodeP2pPolicy isP2p=%d\n", resources->isP2p);
+  
+  if (rcclNetP2pPolicy) {
+    rcclNetP2pPolicy(req->handle, resources->isP2p);
   }
   
   if (resources->shared) {
