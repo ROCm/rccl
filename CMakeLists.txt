@@ -310,7 +310,7 @@ if(BUILD_BFD)
   endif()
 endif()
 
-check_cxx_compiler_flag("-mllvm -amdgpu-kernarg-preload-count" HAVE_KERNARG_PRELOAD)
+check_cxx_compiler_flag("-mllvm=-amdgpu-kernarg-preload-count=16" HAVE_KERNARG_PRELOAD)
 if (HAVE_KERNARG_PRELOAD)
   message(STATUS "Kernarg preloading to SGPR enabled")
 else()
@@ -1096,17 +1096,20 @@ else()  # Enable hidden visibility for library without tests/code coverage enabl
 endif()
 
 if (HAVE_KERNARG_PRELOAD)
-  #target_compile_options(rccl PRIVATE -g3 -ggdb -Og -mllvm --amdgpu-kernarg-preload-count=16)
-  target_compile_options(rccl PRIVATE -mllvm -amdgpu-kernarg-preload-count=16)
+  #target_compile_options(rccl PRIVATE -g3 -ggdb -Og -mllvm=--amdgpu-kernarg-preload-count=16)
+  target_compile_options(rccl PRIVATE -mllvm=-amdgpu-kernarg-preload-count=16)
 endif()
 
-# target_compile_options(rccl PRIVATE -g3 -ggdb -Og)
+                                            # amdgpu-promote-alloca-to-vector
+# target_compile_options(rccl PRIVATE -mllvm=-amdgpu-promote-alloca-to-vector=1)
+# target_compile_options(rccl PRIVATE -mllvm=-amdgpu-enable-vgpr-live-range-splitting=1)
+# target_compile_options(rccl PRIVATE -mllvm=-amdgpu-spill-vgpr-to-agpr=1)
+# target_compile_options(rccl PRIVATE -mllvm=-amdgpu-promote-alloca-to-vector-limit=1)
+# target_compile_options(rccl PRIVATE -mllvm=-amdgpu-waves-per-eu=1)
 
-#target_compile_options(rccl PRIVATE -mllvm -amdgpu-promote-alloca-to-vector=1)
-# target_compile_options(rccl PRIVATE -mllvm -amdgpu-enable-vgpr-live-range-splitting=1)
-# target_compile_options(rccl PRIVATE -mllvm -amdgpu-spill-vgpr-to-agpr=1)
-# target_compile_options(rccl PRIVATE -mllvm -amdgpu-promote-alloca-to-vector-limit=1)
-# target_compile_options(rccl PRIVATE -mllvm -amdgpu-waves-per-eu=1)
+# target_compile_options(rccl PRIVATE -mllvm=-amdgpu-num-vgpr=256)
+# Force more aggressive register allocation
+#target_compile_options(rccl PRIVATE -mllvm=-amdgpu-enable-flat-scratch=false)
 
 # target_compile_options(rccl PRIVATE 
 #   -mllvm -amdgpu-enable-pre-ra-optimizations=false
@@ -1215,7 +1218,7 @@ else()
 endif()
 if (HAVE_KERNARG_PRELOAD)
   target_link_options(rccl PRIVATE "SHELL:-Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
-  #target_link_options(rccl PRIVATE "SHELL:-g3 -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
+  # target_link_options(rccl PRIVATE "SHELL:-g3 -Xoffload-linker -mllvm=-amdgpu-kernarg-preload-count=16")
 endif()
 
 # target_link_options(rccl PRIVATE "SHELL:-g3")
