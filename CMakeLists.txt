@@ -918,7 +918,7 @@ if (ENABLE_ROCSHMEM)
 
   # Moved to where MSCCL target_links
   ## target_link_libraries(rccl PRIVATE ${ROCSHMEM_LIBRARY})
-  ##target_link_libraries(rccl PRIVATE ${IBVERBS})
+  target_link_libraries(rccl PRIVATE ${IBVERBS})
 
 endif()
 

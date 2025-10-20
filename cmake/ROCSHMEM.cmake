@@ -89,6 +89,11 @@ function(add_rocshmem_targets)
          # After build, define the variables RCCL expects
         set(ROCSHMEM_INCLUDE_DIR "${ROCSHMEM_INSTALL_DIR}/include" PARENT_SCOPE)
         set(ROCSHMEM_LIBRARY      "${ROCSHMEM_INSTALL_DIR}/lib/librocshmem.a" PARENT_SCOPE)
+        find_library(_IBVERBS ibverbs)
+        if(NOT _IBVERBS)
+            message(FATAL_ERROR "libibverbs not found (install rdma-core/libibverbs-dev)")
+        endif()
+        set(IBVERBS ${_IBVERBS} PARENT_SCOPE)
 
         # Provide a dummy target other code can depend on
         add_custom_target(rocshmem_static ALL DEPENDS rocshmem_ext)
