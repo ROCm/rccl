@@ -349,6 +349,7 @@ def test_singlenode_config(paths):
 
 @pytest.mark.ext_tuner
 @pytest.mark.broadcast
+@pytest.mark.multinode
 def test_multinode_config(paths):
     """Test CSV plugin with multi-node configuration"""
 
@@ -359,7 +360,7 @@ def test_multinode_config(paths):
     if len(nodelist) == 0:
         pytest.skip("No nodes available")
     elif len(nodelist) < 2:
-        pytest.skip(f"Multinode test requires at least 2 nodes, but only {len(nodelist)} available: {nodelist}")
+        pytest.skip(f"Multinode broadcast test requires at least 2 nodes, but only {len(nodelist)} available: {nodelist}")
 
     # Check for common network interface across all nodes
     common_interface = paths.find_common_interface(nodelist)
