@@ -28,6 +28,12 @@ function(add_rocshmem_targets)
     if(ROCSHMEM_INSTALL_DIR)
         list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
         find_package(rocshmem_static)
+        if(NOT IBVERBS)
+            find_library(IBVERBS ibverbs)
+            if(IBVERBS)
+                set(IBVERBS ${IBVERBS} PARENT_SCOPE)
+            endif()
+        endif()
     endif()
 
     # If no pre-existing installation, build from submodule into ext/rocshmem
@@ -90,6 +96,12 @@ function(add_rocshmem_targets)
     # We found a prebuilt rocSHMEM; export variables upward as-is
     set(ROCSHMEM_INCLUDE_DIR  "${ROCSHMEM_INCLUDE_DIR}" PARENT_SCOPE)
     set(ROCSHMEM_LIBRARY      "${ROCSHMEM_LIBRARY}"      PARENT_SCOPE)
-     endif()
+
+    find_library(_IBVERBS ibverbs)
+    if(NOT _IBVERBS)
+        message(FATAL_ERROR "libibverbs not found")
+    endif()
+    set(IBVERBS ${_IBVERBS} PARENT_SCOPE)
+    endif()
 
 endfunction()
