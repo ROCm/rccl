@@ -5,6 +5,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.0
 
 ### Added
+* `RCCL_FORCE_ENABLE_DMABUF` added as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
 * Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
 * Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
 * added `RCCL_CHANNEL_TUNING_ENABLE` to enable channel tuning that overrides RCCL's internal adjustments based on threadThreshold.

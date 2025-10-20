@@ -159,7 +159,8 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define RCCL_PROTO_SHIFT 8
 #define RCCL_REDOP_SHIFT 12
 #define RCCL_DTYPE_SHIFT 16
-#define RCCL_PIPELINE_SHIFT 20
+#define RCCL_ACC_SHIFT 20
+#define RCCL_PIPELINE_SHIFT 24
 
 struct ncclConnInfo {
   // Regular comm mechanism
@@ -717,11 +718,11 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId;
 
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
-inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int pipeline = 0) {
+inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int acc = 0, int pipeline = 0) {
   int row = -1;
   uint64_t key;
   // Pack 4-bit fields from right (LSB) to left in order:
-  // coll, algo, proto, devRedOp, type
+  // coll, algo, proto, devRedOp, type, acc, pipeline
   // This logic must be in sync with the key generation logic in generate.py
   if (coll == ncclFuncBroadcast) {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
@@ -734,6 +735,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, 
           ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT) |
           ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << RCCL_REDOP_SHIFT) |
           ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << RCCL_DTYPE_SHIFT) |
+          ((uint64_t)(acc      & RCCL_FUNC_ID_MASK) << RCCL_ACC_SHIFT)   |
           ((uint64_t)(pipeline & RCCL_FUNC_ID_MASK) << RCCL_PIPELINE_SHIFT);
   }
   auto it = ncclDevFuncNameToId.find(key);
@@ -741,7 +743,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, 
     row = it->second;
   }
   if(row < 0) {
-    WARN("Fatal error: ncclDevFuncId: %lu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d", key, coll, algo, proto, devRedOp, type);
+    WARN("Fatal error: ncclDevFuncId: %lu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d, acc: %d, pipeline: %d", key, coll, algo, proto, devRedOp, type, acc, pipeline);
     return -1;
   }
   return row;

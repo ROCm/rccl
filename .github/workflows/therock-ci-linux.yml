@@ -24,12 +24,15 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      # The ccache.conf will be written by setup_ccache.py before this gets used.
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
     steps:
       - name: Checkout TheRock repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          ref: 16ee54fb580a4dde62dc4133f978e73370a545af
+          ref: aa315ec2801ff6772a6c9ca6799669395630c45c
 
       - name: Checkout rccl repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -43,25 +46,30 @@ jobs:
           repository: "ROCm/rccl-tests"
           path: rccl-tests
 
-      - name: Runner Health Settings
+      - name: Install python deps
         run: |
-          df -h
-          echo cmake --version
-          echo "Installed Python versions:"
-          ls -d /opt/python
-          echo "python: $(which python), python3: $(which python3)"
-          echo "Git version: $(git --version)"
+          pip install -r requirements.txt
+
+      # safe.directory must be set before Runner Health Status
+      - name: Adjust git config
+        run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
 
       - name: Fetch sources
         run: |
           ./build_tools/fetch_sources.py --jobs 12
-
-      - name: Install python deps
-        run: |
-          pip install -r requirements.txt
-          pip freeze
 
       - name: Configure Projects
         env:
@@ -90,6 +98,10 @@ jobs:
           echo "Artifacts:"
           echo "----------"
           du -h -d 1 build/artifacts
+          echo "CCache Stats:"
+          echo "-------------"
+          ccache -s -v
+          tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
