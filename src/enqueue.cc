@@ -2037,6 +2037,9 @@ static ncclResult_t topoGetAlgoInfo(
   info->protocol = protocol;
   float time = minTime;
 
+  // Tuner plugin sets cost to 0.0 if it finds a match
+  bool isTunerMatchFound = (comm->tuner != NULL && minTime == 0.0);
+
   // Yes, we are first assigning and then testing if protocol is sane, but that's OK in this case.
   // coverity[check_after_sink]
   if (info->algorithm == NCCL_ALGO_UNDEF || info->protocol == NCCL_PROTO_UNDEF) {
@@ -2053,7 +2056,10 @@ static ncclResult_t topoGetAlgoInfo(
     WARN("Error : no algorithm/protocol available for function %s with datatype %s.%s%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), ncclAlgoEnvStr, ncclProtoEnvStr);
     return (algoEnv || protoEnv) ? ncclInvalidUsage : ncclInternalError;
   }
-  rcclUpdateCollectiveProtocol(comm, nBytes, info);
+  // Honor Tuner config if available
+  if (!isTunerMatchFound) {
+    rcclUpdateCollectiveProtocol(comm, nBytes, info);
+  }
   rcclSetPipelining(comm, nBytes, info);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);

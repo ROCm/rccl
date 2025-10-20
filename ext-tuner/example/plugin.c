@@ -331,7 +331,7 @@ __hidden ncclResult_t pluginGetCollInfo(void* context, ncclFunc_t collType, size
   if (!ctx) return ncclInternalError;
 
   // Default channels
-  *nChannels = 1;
+  *nChannels = 0;
 
   if (ctx->logFunction) {
     ctx->logFunction(NCCL_LOG_TRACE, NCCL_TUNING, __FILE__, __LINE__,
