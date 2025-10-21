@@ -2,7 +2,14 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.27.7 for ROCm 7.1.0
+
+## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
+
+### Resolved Issues
+
+* Fixed crash when using the librccl-profiler plugin with the all-to-all collective after the 2.27 update.
+
+## RCCL 2.27.7 for ROCm 7.1.0
 
 ### Added
 * Added `RCCL_FORCE_ENABLE_DMABUF` as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
@@ -13,10 +20,10 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Changed
 
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
-* Compatibility with NCCL 2.27.7
+* Compatibility with NCCL 2.27.7.
 
 ### Optimized
-* Improve small message performance for alltoall by enabling and optimizing batched P2P operations. 
+* Improve small message performance for alltoall by enabling and optimizing batched P2P operations.
 
 ### Known issues
 * Symmetric memory kernels are currently disabled due to ongoing CUMEM enablement work.
