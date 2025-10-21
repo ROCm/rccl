@@ -18,10 +18,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "rccl_vars.h"
-#include <unordered_map>
-#include <mutex>
-
-#define RCCL_HP_MIN_SIZE 2097152
 
 #if CUDART_VERSION >= 11030
 #include <cuda.h>
@@ -34,9 +30,6 @@ template<typename T>
 constexpr size_t ncclSizeOfT() { return sizeof(T); }
 template<>
 constexpr size_t ncclSizeOfT<void>() { return 1; }
-
-extern std::unordered_map<void*, size_t> hugepageAllocs;
-extern std::mutex hugepageAllocsMutex;
 
 #if CUDART_VERSION >= 12020
 
@@ -112,100 +105,43 @@ static inline ncclResult_t ncclCuMemHostFree(void* ptr) {
 }
 
 #endif  /* CUDART_VERSION >= 12020 */
+
 template <typename T>
-ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line, int hp_request=0 ) {
+ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
-  size_t size = nelem * ncclSizeOfT<T>();
-
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   int managed = 0;
-  int huge=0;
   CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
-
   if (nelem > 0) {
     if (managed) {
 #if defined(HIP_UNCACHED_MEMORY)
-      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, size, hipDeviceMallocUncached), result, finish);
+      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), hipDeviceMallocUncached), result, finish);
 #else
-      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, size, hipDeviceMallocFinegrained), result, finish);
+      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), hipDeviceMallocFinegrained), result, finish);
 #endif
-    } else {
-      if (hp_request) {
-	      if (size < RCCL_HP_MIN_SIZE) {
-		WARN("small size : forcing back to hipHostMalloc");
+    } else
 #if defined(HIP_HOST_UNCACHED_MEMORY)
-		CUDACHECKGOTO(hipHostMalloc(ptr, size, cudaHostAllocMapped | hipHostMallocUncached), result, finish);
+      CUDACHECKGOTO(hipHostMalloc(ptr, nelem*ncclSizeOfT<T>(), cudaHostAllocMapped | hipHostMallocUncached), result, finish);
 #else
-		CUDACHECKGOTO(hipHostMalloc(ptr, size, cudaHostAllocMapped), result, finish);
+      CUDACHECKGOTO(hipHostMalloc(ptr, nelem*ncclSizeOfT<T>(), cudaHostAllocMapped), result, finish);
 #endif
-		memset(*ptr, 0, size);
-	      } else {
-		      // Hugepage allocation via mmap
-		      void* hostPtr = mmap(NULL, size, PROT_READ | PROT_WRITE,
-					   MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
-		      if (hostPtr == MAP_FAILED) {
-			      WARN("Hugepage allocation failed. Falling back to hipHostMalloc");
-#if defined(HIP_HOST_UNCACHED_MEMORY)
-				CUDACHECKGOTO(hipHostMalloc(ptr, size, cudaHostAllocMapped | hipHostMallocUncached), result, finish);
-#else
-				CUDACHECKGOTO(hipHostMalloc(ptr, size, cudaHostAllocMapped), result, finish);
-#endif
-				memset(*ptr, 0, size);
-		      } else {
-			      memset(hostPtr, 0, size);
-			      CUDACHECKGOTO(hipHostRegister(hostPtr, size, hipHostRegisterMapped), result, finish);
-			      void* devPtr = nullptr;
-			      CUDACHECKGOTO(hipHostGetDevicePointer(&devPtr, hostPtr, 0), result, finish);
-			      *ptr = reinterpret_cast<T*>(hostPtr);
-			      INFO(NCCL_ALLOC, "Cuda Host Alloc Size done using hugepages");
-			      huge=1;
-			      std::lock_guard<std::mutex> lock(hugepageAllocsMutex);
-			      hugepageAllocs[hostPtr] = size;
-    			     for (auto &kv : hugepageAllocs) INFO(NCCL_ALLOC, "updated Hugepage alloc ptr %p size %zu", kv.first, kv.second);
-		      }
-	      }
-    } else {
-#if defined(HIP_HOST_UNCACHED_MEMORY)
-    	CUDACHECKGOTO(hipHostMalloc(ptr, size, cudaHostAllocMapped | hipHostMallocUncached), result, finish);
-#else
-	CUDACHECKGOTO(hipHostMalloc(ptr, size, cudaHostAllocMapped), result, finish);
-#endif
-	memset(*ptr, 0, size);
-    }
-    }
+    memset(*ptr, 0, nelem*ncclSizeOfT<T>());
   }
-
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  if (*ptr == nullptr && nelem > 0) WARN("Failed to CUDA host alloc %ld bytes", size);
-  INFO(NCCL_ALLOC, "%s:%d Cuda Host Alloc Size %ld pointer %p hp_request %d managed %d hugepage_alloc %d", filefunc, line, size, *ptr, hp_request, managed, huge);
+  if (*ptr == nullptr && nelem > 0) WARN("Failed to CUDA host alloc %ld bytes", nelem*ncclSizeOfT<T>());
+  INFO(NCCL_ALLOC, "%s:%d Cuda Host Alloc Size %ld pointer %p", filefunc, line, nelem*ncclSizeOfT<T>(), *ptr);
   return result;
 }
 
-
-static inline ncclResult_t ncclCudaHostFree(void* ptr, size_t alloc_size=0, int hp_request=0) {
-  if (hp_request) {
-    if (alloc_size > 0) { 
-      std::lock_guard<std::mutex> lock(hugepageAllocsMutex);
-      // for (auto &kv : hugepageAllocs) INFO(NCCL_ALLOC, "Hugepage alloc ptr %p size %zu", kv.first, kv.second);
-      auto it = hugepageAllocs.find(ptr);
-      if (it != hugepageAllocs.end()) {
-        // INFO(NCCL_ALLOC, "%s:%d Cuda Host HugePage unmap size %ld pointer %p app_tracked_size %ld", __FILE__, __LINE__, it->second, ptr, alloc_size);
-        hipHostUnregister(ptr);
-        munmap(ptr, it->second);
-        hugepageAllocs.erase(it);
-        return ncclSuccess;
-      }
-    }
-    INFO(NCCL_ALLOC, "Cudafree being done to  %p, size=%ld", ptr,alloc_size);
-  } 
+static inline ncclResult_t ncclCudaHostFree(void* ptr) {
   CUDACHECK(cudaFreeHost(ptr));
   return ncclSuccess;
 }
 
-#define ncclCudaHostCalloc(...) ncclCudaHostCallocDebug(__VA_ARGS__, __FILE__, __LINE__, 0)
+#define ncclCudaHostCalloc(...) ncclCudaHostCallocDebug(__VA_ARGS__, __FILE__, __LINE__)
 
 template <typename T>
 ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {

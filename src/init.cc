@@ -95,8 +95,6 @@ NCCL_PARAM(NvlsChannels, "NVLS_NCHANNELS", NCCL_CONFIG_UNDEF_INT);
 
 struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
 static ncclResult_t commReclaim(ncclComm_t comm);
-std::unordered_map<void*, size_t> hugepageAllocs;
-std::mutex hugepageAllocsMutex;
 
 #ifdef ENABLE_MSCCLPP
 size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
@@ -113,8 +111,8 @@ RCCL_PARAM(MscclppThreshold, "MSCCLPP_THRESHOLD", (size_t)(16*1024*1024));
 static constexpr int64_t defaultEnableMscclpp = 0;
 RCCL_PARAM(MscclppEnabled, "MSCCLPP_ENABLE", defaultEnableMscclpp);
 RCCL_PARAM(MscclppForceEnabled, "MSCCLPP_FORCE_ENABLE", 0);
-// Turn off cheap fence for gfx942
-RCCL_PARAM(Gfx942CheapFenceOff, "GFX942_CHEAP_FENCE_OFF", 0);
+// Turn off cheap fence for gfx942/gfx950
+RCCL_PARAM(Gfx9CheapFenceOff, "GFX9_CHEAP_FENCE_OFF", 0);
 
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
@@ -150,7 +148,8 @@ ncclResult_t checkHsaEnvSetting() {
 
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
-    WARN("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid RCCL perf hit, rocm ver:%d", hipRuntimeVersion);
+    // Always print out this warning message
+    printf("Fatal Error: HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with HIP Runtime version:%d, GPU Firmware version:%d\n", hipRuntimeVersion, firmwareVersion);
     return ncclSystemError;
   }
   return ncclSuccess;
@@ -247,6 +246,7 @@ RCCL_PARAM(EnableProxyTrace, "ENABLE_PROXY_TRACE", 0);
 
 RCCL_PARAM(KernelCollTraceEnable, "KERNEL_COLL_TRACE_ENABLE", 0);
 RCCL_PARAM(KernelCollTraceThreadEnable, "KERNEL_COLL_TRACE_THREAD_ENABLE", 0);
+RCCL_PARAM(EnableContextTracking, "ENABLE_CONTEXT_TRACKING", 0);
 
 #ifdef ENABLE_COLLTRACE
 // Should be in sync with 'ALL_COLLS' in Generator.cmake
@@ -533,8 +533,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclProfilerPluginFinalize(comm));
   NCCLCHECK(ncclNetFinalize(comm));
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  // but enable for Radeon due to big impact on performance
-  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
+  // but can be enabled via environment variable
+  if (rcclParamEnableContextTracking() == 1) {
     ncclCudaContextDrop(comm->context);
     INFO(NCCL_INIT, "cudaDev %d context tracking destroyed", comm->cudaDev);
   }
@@ -634,8 +634,8 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
 
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
-  // but enable for Radeon due to big impact on performance
-  if (rcclNeedEnableContextTrack(comm->cudaDev)) {
+  // but can be enabled via environment variable
+  if (rcclParamEnableContextTracking() == 1) {
     NCCLCHECK(ncclCudaContextTrack(&comm->context));
     INFO(NCCL_INIT, "cudaDev %d context tracking created", comm->cudaDev);
   }
@@ -1397,16 +1397,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     allGather3Data[rank].nc = std::max(allGather3Data[rank].nc, 4/ringGraph->nChannels);
   if (ringGraph->nChannels > MAXCHANNELS/2)
     allGather3Data[rank].nc = 1;
-  comm -> gfx942CheapFenceOff = 1;
+  comm -> gfx9CheapFenceOff = 1;
   #ifdef HIP_UNCACHED_MEMORY
-  if(!rcclParamGfx942CheapFenceOff()){
+  if(!rcclParamGfx9CheapFenceOff()){
     if(IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")){
-      comm -> gfx942CheapFenceOff = 0;
+      comm -> gfx9CheapFenceOff = 0;
     }
     else if(IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")){
-      comm -> gfx942CheapFenceOff = nNodes > 1;
+      comm -> gfx9CheapFenceOff = ROCM_VERSION < 70200 && nNodes > 1; // Enable for single node only prior to ROCm 7.0.2
     }
   }
+  INFO(NCCL_INIT, "GFX9 cheap fence is %s", comm -> gfx9CheapFenceOff ? "OFF" : "ON");
   #endif
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
     // Multi-node MI300A
@@ -2043,10 +2044,10 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
       comm->mscclppCompatible = true;
       comm->mscclpp_threshold = job->parent->mscclpp_threshold;
       comm->mscclpp_comm = job->parent->mscclpp_comm;
-      auto& mscclppUniqueId = mscclpp_uniqueIdMap[*job->commId];
-      mscclpp_uniqueIdMap[*job->commId] = mscclppUniqueId;
-      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(*job->commId);
-      ncclCommToUniqueIdMap[comm] = *job->commId;
+      const ncclUniqueId& parentUniqueId = ncclCommToUniqueIdMap[job->parent];
+      auto& mscclppUniqueId = mscclpp_uniqueIdMap[parentUniqueId];
+      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(parentUniqueId);
+      ncclCommToUniqueIdMap[comm] = parentUniqueId;
     }
   }
   else
@@ -2155,7 +2156,7 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
   int minCTAsEnv;
   int maxCTAsEnv;
   int splitShareEnv;
-  int collnetEnableEnv;
+  const char* collnetEnableEnv;
   int ctaPolicyEnv;
   int shrinkShareEnv;
   int nvlsCTAsEnv;
@@ -2209,9 +2210,15 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
     comm->config.shrinkShare = shrinkShareEnv;
   }
 
-  collnetEnableEnv = ncclParamCollnetEnable();
-  if (collnetEnableEnv != NCCL_CONFIG_UNDEF_INT) {
-    comm->config.collnetEnable = collnetEnableEnv;
+  // NCCL_COLLNET_ENABLE needs to be reloaded each time for comm init
+  // since users might change the env on the fly to enable/disable collnet
+  collnetEnableEnv = ncclGetEnv("NCCL_COLLNET_ENABLE");
+  if (collnetEnableEnv != NULL) {
+    int collnetEnableInt = (int)strtol(collnetEnableEnv, NULL, 0);
+    if (collnetEnableInt != NCCL_CONFIG_UNDEF_INT) {
+      comm->config.collnetEnable = collnetEnableInt;
+      INFO(NCCL_ENV, "NCCL_COLLNET_ENABLE set by environment to %d.", collnetEnableInt);
+    }
   }
 
   ctaPolicyEnv = ncclParamCtaPolicy();
@@ -2868,6 +2875,7 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
     NVTX3_PAYLOAD(comm->commHash, nranks, rank, cudaDev));
 
   TRACE(NCCL_INIT, "comm %p rank %d nRanks %d cudaDev %d busId %lx", comm, rank, nranks, cudaDev, comm->busId);
+  NCCLCHECK(ncclGroupStartInternal());
   // Try and prevent a double free of the comm struct (user error)
   if (comm->rank == -1 || comm->nRanks == -1 || comm->cudaDev == -1 || comm->busId == -1) {
     WARN("comm %p has already been destroyed", comm);
@@ -2882,6 +2890,8 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, commReclaim, NULL, free, comm), res, fail);
 
 exit:
+  ncclGroupErrCheck(res);
+  NCCLCHECK(ncclGroupEndInternal());
   return res;
 fail:
   goto exit;
@@ -2906,6 +2916,7 @@ ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
   if (comm == NULL) {
     return ncclSuccess;
   }
+  NCCLCHECK(ncclGroupStartInternal());
   // Ask anything that might still be running on the device to quit
   NCCLCHECK(setCommAbortFlags(comm,1));
   comm->destroyFlag = 1;
@@ -2928,7 +2939,9 @@ ncclResult_t ncclCommAbort_impl(ncclComm_t comm) {
   NCCLCHECKGOTO(ncclAsyncLaunch((struct ncclAsyncJob*)job, commReclaim, NULL, free, comm), res, fail);
 
 exit:
-  return ncclSuccess;
+  ncclGroupErrCheck(res);
+  NCCLCHECK(ncclGroupEndInternal());
+  return res;
 fail:
   goto exit;
 }

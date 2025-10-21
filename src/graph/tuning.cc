@@ -151,6 +151,7 @@ struct tuningModel {
   float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   uint64_t llProtoRanges[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
+  uint64_t channelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 2,4,8,16,32,40,48,56,64, {min,max,nchannels}
 };
 
 static struct tuningModel tuning_model_0 {
@@ -183,6 +184,7 @@ static struct tuningModel tuning_model_0 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_1 {
@@ -215,6 +217,7 @@ static struct tuningModel tuning_model_1 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_2 {
@@ -247,6 +250,7 @@ static struct tuningModel tuning_model_2 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_3 {
@@ -279,6 +283,7 @@ static struct tuningModel tuning_model_3 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_4 {
@@ -311,6 +316,7 @@ static struct tuningModel tuning_model_4 {
   },
 
   .llProtoRanges = {{{RCCL_LL_LIMITS_UNDEFINED}}},
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
 };
 
 static struct tuningModel tuning_model_5 {
@@ -354,6 +360,9 @@ static struct tuningModel tuning_model_5 {
     /*Broadcast*/
     {/*LL (min/max/factor/thread_threshold)*/ {0, 8192, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {8192, 33554432, 1, 0}},
   },
+
+  .channelThresholds  = {{{CHAN_THRESHOLDS_UNDEFINED}}},
+
 };
 
 static struct tuningModel tuning_model_6 {
@@ -397,6 +406,13 @@ static struct tuningModel tuning_model_6 {
     /*Broadcast*/
     {/*LL (min/max/factor/thread_threshold)*/ {0, 2048, 1, 0},/*LL64/128 (min/max/factor/thread_threshold)*/ {2048, 16777216, 1, 0}},
   },
+
+    .channelThresholds  = {
+    // For each collective, define minMax per-rank size threshold for 32,40,48,56,64 channels
+    /*ReduceScatter*/ {{512, 1024, 2},{1024, 2048, 4},{2048, 4096, 8},{4096, 65536, 16}, {65536, 262144, 32}, {262144, 524288, 40}, {1,1, 48}, {524288, 1048576, 56}, {1048576, 268435457, 64}},
+    /*AllGather*/     {{2048, 4096, 2},{4096, 8192, 4},{8192, 16384, 8},{16384, 262144, 16},{262144, 524288, 32}, {524288, 1048576, 40}, {1,1, 48}, {1048576, 4194304, 56}, {4194304, 268435457, 64}},
+    /*AllReduce*/     {{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}},
+  },
 };
 
 static struct tuningModel rcclTuningModel[] = {
@@ -407,7 +423,6 @@ static struct tuningModel rcclTuningModel[] = {
   tuning_model_4,
   tuning_model_5,
   tuning_model_6,
-
 };
 
 /* Array indexes used below */
@@ -518,6 +533,10 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   memcpy(comm->minMaxLLRange,
         rcclTuningModel[comm->topo->tuning].llProtoRanges,
         sizeof(rcclTuningModel[comm->topo->tuning].llProtoRanges));
+
+  memcpy(comm->minMaxChannelThresholds,
+        rcclTuningModel[comm->topo->tuning].channelThresholds,
+        sizeof(rcclTuningModel[comm->topo->tuning].channelThresholds));
 
   for (int coll=0; coll<NCCL_NUM_FUNCTIONS; coll++) {
     int nsteps = coll == ncclFuncAllReduce ? 2*(nRanks-1) :
@@ -736,7 +755,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     // Disable LL protocol on gfx12xx
     int pEnable = (p == NCCL_PROTO_LL && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx12")) ? 0 : protoEnable[c*NCCL_NUM_PROTOCOLS+p];
-    if (p == NCCL_PROTO_LL128) {
+    if (pEnable != 0 && p == NCCL_PROTO_LL128) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #if defined(ENABLE_LL128)
       // Enable LL128 by default only on gfx90a with available tuning table
@@ -748,9 +767,16 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       pEnable = 0;
 #endif
 #else
-      // Enable LL128 by default only on Volta/Ampere/Hopper+NVLink. Other cases are not tested and may cause silent data corruption.
       pEnable = 1;
-      pEnable &= (graphs[a]->typeInter <= PATH_PXB || (minCompCap >= 90 && graphs[a]->typeInter <= (ncclParamLl128C2c() ? PATH_P2C : PATH_PXN)));
+      if (ncclParamLl128C2c() && minCompCap >= 90) {
+        // Enable LL128 by default only on Hopper/Blackwell for all connections up to P2C and PXN.
+        pEnable &= (graphs[a]->typeInter <= PATH_PXN);
+      } else {
+        // Enable LL128 only up to PXB. Don't enable LL128 over PxN because PxN can encapsulate PxB or P2C links.
+        pEnable &= (graphs[a]->typeInter <= PATH_PXB);
+        if (!ncclParamLl128C2c() && minCompCap >= 90)
+          INFO(NCCL_GRAPH, "Disabling LL128 over all PxN connections (PXB and C2C). This ensures that no C2C link will be used by LL128.");
+      }
       pEnable &= (graphs[a]->typeIntra <= PATH_NVB);
       pEnable &= (minCompCap == maxCompCap);
       pEnable &= !(minCompCap < 70 || (minCompCap == 90 && CUDART_VERSION == 11080 && c == ncclFuncAllReduce && a == NCCL_ALGO_RING && comm->nRanks == 2));

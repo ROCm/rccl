@@ -82,7 +82,7 @@ namespace RcclUnitTesting
         CHECK_CALL(this->inputGpu.AllocateGpuMem(this->numInputBytesAllocated, useManagedMem, userRegistered));
         this->outputGpu.Attach(this->inputGpu.U1 + (this->globalRank  * this->numOutputBytesAllocated));
       }
-      else if (this->funcType == ncclCollGather)
+      else if (this->funcType == ncclCollGather || this->funcType == ncclCollAllGather)
       {
         CHECK_CALL(this->outputGpu.AllocateGpuMem(this->numOutputBytesAllocated, useManagedMem, userRegistered));
         this->inputGpu.Attach(this->outputGpu.U1 + (this->globalRank * this->numInputBytesAllocated));

@@ -20,9 +20,9 @@
 #endif
 #endif
 
-template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload, int useAcc>
-class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, useAcc>:
-  public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, useAcc>> {
+template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload, int Metadata, int Pipeline, int useAcc>
+class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, Metadata, Pipeline, useAcc>:
+  public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, Metadata, Pipeline, useAcc>> {
 
   static constexpr int MaxRecv = Fan::MaxRecv, MaxSend = Fan::MaxSend;
   static constexpr int Input=0, Output=1, Acc=2;;
@@ -752,8 +752,5 @@ public:
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
-  }
-  __device__ void mscclSend(intptr_t inpIx, int eltN) {
-    return GenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
 };

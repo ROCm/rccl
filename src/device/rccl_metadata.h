@@ -24,3 +24,12 @@ THE SOFTWARE.
 /* This file implements methods to extract metadata from an integer Metadata field passed in as a template parameter. Feel free to add additional fields below.*/
 
 #define RCCL_METADATA_EMPTY 0
+#define RCCL_METADATA_MSCCL 1
+
+constexpr bool isMsccl(int metadata){
+    return (metadata & RCCL_METADATA_MSCCL) > 0;
+}
+
+static_assert(isMsccl(RCCL_METADATA_MSCCL), "RCCL metadata value error");
+static_assert(!isMsccl(RCCL_METADATA_EMPTY), "RCCL metadata value error");
+
