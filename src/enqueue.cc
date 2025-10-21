@@ -240,9 +240,11 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclKernelPlanner::WipPlan::Channel* wipChannels = comm->planner.wipPlan.channels;
   size_t workBytes = plan->workBytes;
   size_t batchBytes = plan->nWorkBatches*sizeof(struct ncclDevWorkBatch);
-
+#if defined(__gfx950__)
   plan->threadPerBlock = std::min(plan->threadPerBlock, NCCL_MAX_NTHREADS);
-
+#else
+  plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*NCCL_MIN_NTHREADS*/);
+#endif
   // If we can fit everything into the kernel args we do so.
   if (sizeof(ncclDevKernelArgs) + batchBytes + workBytes <= comm->workArgsBytes) {
     plan->workStorageType = ncclDevWorkStorageTypeArgs;
@@ -866,8 +868,11 @@ static ncclResult_t scheduleCollTasksToPlan(
       plan->channelMask.masks[maskIdx] |= (1ull<<relativeIdx);
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
-    // plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
+#if defined(__gfx950__)
     plan->threadPerBlock = task->nWarps*comm->WarpSize;
+#else
+    plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
+#endif
     if (!plan->kernelSpecialized) {
       plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
       plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
@@ -1201,8 +1206,11 @@ static ncclResult_t scheduleP2pTasksToPlan(
   ) {
   int nRanks = comm->nRanks;
   struct ncclKernelPlanner::Peer* peers = comm->planner.peers;
-
-  plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*NCCL_MAX_NTHREADS / 2 */);
+#if defined(__gfx950__)
+  plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*4*WARP_SIZE */);
+#else
+  plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
+#endif
   if (!plan->kernelSpecialized) {
     plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
     plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
@@ -2136,9 +2144,13 @@ static ncclResult_t topoGetAlgoInfo(
   }
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT)  nt = NCCL_MAX_NTHREADS;
+#if defined(__gfx950__)
   if (comm->nNodes == 1) nt = NCCL_MAX_NTHREADS / 2; // For single node, we use half the number of threads for perf reasons.
+  // The following should be already set correctly by getNthreads
+  // but need to override the changes for TREE and PAT in the previous lines
   if (info->protocol == NCCL_PROTO_LL) nt = NCCL_LL_MAX_NTHREADS;
   if (info->func == ncclFuncReduceScatter && divUp(nBytes, comm->nRanks) <= 524288) nt = NCCL_LL_MAX_NTHREADS; // ReduceScatter small count optimization
+#endif
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
