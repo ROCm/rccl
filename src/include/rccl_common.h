@@ -35,6 +35,9 @@ typedef enum RcclTunableColls {
   RCCL_TUNABLE_COLLS = 5  // LL/LL64/LL128 tunable collectives count
 } rcclTunableIndex_t;
 
+#define CHAN_THRESHOLDS_UNDEFINED 0
+#define RCCL_CHANNELS_TUNABLE_ENTRIES 9 // 2,4,8,16,32,40,48,56,64 channels
+
 #define RCCL_LL_LIMITS_UNDEFINED 0
 #define RCCL_PROTOCOL_ENTRY_SIZE 4
 #define RCCL_PROTOCOL_MIN_IDX 0
@@ -88,6 +91,7 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
   // For AR, this is the send/recv size per rank
   return (func == ncclFuncReduceScatter || func == ncclFuncAllGather || func == ncclFuncBroadcast || func == ncclFuncReduce) ? nBytes / nRanks : nBytes;
 }
+ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc);
 ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoString[], int nEntries, int& result);
 ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info);
 ncclResult_t rcclOverrideAlgorithm(const char* ncclAlgoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info);
