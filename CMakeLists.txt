@@ -889,16 +889,19 @@ endforeach()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
+# Create initial empty file at configure time
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "")
-list(APPEND HIP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 
-# Create a custom target that updates git_version.cpp and executes whenever rccl is built
-add_custom_target(git_version_check
-  COMMENT "Updating git_version.cpp if necessary"
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/git_version.cmake
+# Add a custom target that always runs at build time to update git version
+add_custom_target(update_git_version
+  ALL
+  COMMAND ${CMAKE_COMMAND} -DRCCL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DRCCL_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/git_version.cmake
+  BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp
+  COMMENT "Updating git version information"
   VERBATIM
 )
 
+list(APPEND HIP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 
 # Set up RCCL library
 #==================================================================================================
@@ -906,7 +909,8 @@ add_custom_target(git_version_check
 add_library(rccl ${HIP_SOURCES})
 
 ## Set RCCL dependencies
-add_dependencies(rccl git_version_check)                                      # Execute git_version_check during build
+## Ensure git version is updated before building rccl
+add_dependencies(rccl update_git_version)
 
 if (BUILD_TESTS AND ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
   ## Set static replacement dependency for fixture unit tests
