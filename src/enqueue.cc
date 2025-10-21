@@ -867,13 +867,7 @@ static ncclResult_t scheduleCollTasksToPlan(
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     // plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
-    if(task->protocol == NCCL_PROTO_LL) {
-      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_LL_MAX_NTHREADS);
-    } else if(comm->nNodes == 1) {
-      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS / 2);
-    } else {
-      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
-    }
+    plan->threadPerBlock = task->nWarps*comm->WarpSize;
     if (!plan->kernelSpecialized) {
       plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
       plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
@@ -2144,6 +2138,7 @@ static ncclResult_t topoGetAlgoInfo(
   if (info->algorithm == NCCL_ALGO_PAT)  nt = NCCL_MAX_NTHREADS;
   if (comm->nNodes == 1) nt = NCCL_MAX_NTHREADS / 2; // For single node, we use half the number of threads for perf reasons.
   if (info->protocol == NCCL_PROTO_LL) nt = NCCL_LL_MAX_NTHREADS;
+  if (info->func == ncclFuncReduceScatter && divUp(nBytes, comm->nRanks) <= 524288) nt = NCCL_LL_MAX_NTHREADS; // ReduceScatter small count optimization
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
