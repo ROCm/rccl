@@ -24,7 +24,7 @@ THE SOFTWARE.
 #include "nccl_common.h"
 #include "nccl.h"
 #include "param.h"
-
+#include "core.h"
 typedef enum RcclTunableColls {
   RCCL_UNSUPPORTED_TUNABLE = -1,
   RCCL_RS_TUNABLE = 0,    // reduce_scatter index
@@ -34,6 +34,9 @@ typedef enum RcclTunableColls {
   RCCL_BR_TUNABLE = 4,    // broadcast index
   RCCL_TUNABLE_COLLS = 5  // LL/LL64/LL128 tunable collectives count
 } rcclTunableIndex_t;
+
+#define CHAN_THRESHOLDS_UNDEFINED 0
+#define RCCL_CHANNELS_TUNABLE_ENTRIES 9 // 2,4,8,16,32,40,48,56,64 channels
 
 #define RCCL_LL_LIMITS_UNDEFINED 0
 #define RCCL_PROTOCOL_ENTRY_SIZE 4
@@ -46,6 +49,13 @@ typedef enum {
   RCCL_VALUE_UNSET = -2,
   RCCL_VALUE_INVALID = -1
 } rcclValueState_t;
+
+typedef enum {
+  RCCL_DIRECT_ALLGATHER = NCCL_NUM_ALGORITHMS, // Direct AllGather
+  RCCL_MSCCL,
+  RCCL_MSCCLPP,
+  RCCL_ALGO_COUNT
+} rcclAddonAlgos_t;
 
 #ifdef RCCL_EXPOSE_STATIC
 #define RCCL_STATIC_EXPOSE_CHECK()
@@ -81,15 +91,17 @@ inline size_t rcclGetSizePerRank(ncclFunc_t const& func, size_t const& nBytes, i
   // For AR, this is the send/recv size per rank
   return (func == ncclFuncReduceScatter || func == ncclFuncAllGather || func == ncclFuncBroadcast || func == ncclFuncReduce) ? nBytes / nRanks : nBytes;
 }
+ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc);
 ncclResult_t rcclGetAlgoProtoIndex(const char *envStr, const char* algoProtoString[], int nEntries, int& result);
 ncclResult_t rcclOverrideProtocol(const char* ncclProtoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info);
 ncclResult_t rcclOverrideAlgorithm(const char* ncclAlgoStr[], float table[][NCCL_NUM_PROTOCOLS], struct ncclTaskColl* info);
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
 void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info, int& threadThreshold);
 void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info);
-ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType,
-                             int collNetSupport, int nvlsSupport, int numPipeOps,
-                             int* algo, int* protocol, int* maxChannels);
+NCCL_API(ncclResult_t, rcclGetAlgoInfo, struct ncclComm* comm, ncclFunc_t coll, uint64_t count, ncclDataType_t dataType, int collNetSupport, int nvlsSupport, int numPipeOps, int* algo, int* protocol, int* maxChannels);
+NCCL_API(ncclResult_t, rcclGetAlgoName, int algo, const char** algoName);
+NCCL_API(ncclResult_t, rcclGetProtocolName, int protocol, const char** algoName);
+bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize);
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable);
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize);
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount);
