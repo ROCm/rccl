@@ -865,11 +865,12 @@ static ncclResult_t scheduleCollTasksToPlan(
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
     // plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
-
-    if(comm->nNodes == 1) {
-      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS / 2 /* 3*WARP_SIZE */);
+    if(task->protocol == NCCL_PROTO_LL) {
+      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_LL_MAX_NTHREADS);
+    } else if(comm->nNodes == 1) {
+      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS / 2);
     } else {
-      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS /* 3*WARP_SIZE */);
+      plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
     }
     if (!plan->kernelSpecialized) {
       plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
@@ -2062,7 +2063,6 @@ static ncclResult_t topoGetAlgoInfo(
 
   int nc = comm->nChannels;
   int nt = comm->maxThreads[info->algorithm][info->protocol];
-
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   if (info->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
     // CollNet channel tuning
@@ -2131,7 +2131,7 @@ static ncclResult_t topoGetAlgoInfo(
     info->nMaxChannels = nc;
   }
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
-  if (info->algorithm == NCCL_ALGO_PAT) nt = NCCL_MAX_NTHREADS;
+  if (info->algorithm == NCCL_ALGO_PAT)  nt = NCCL_MAX_NTHREADS;
   if(comm->nNodes == 1) nt = NCCL_MAX_NTHREADS / 2; // For single node, we use half the number of threads for perf reasons.
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
