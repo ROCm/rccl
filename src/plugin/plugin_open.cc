@@ -10,20 +10,16 @@
 #include <dlfcn.h>
 
 #include "debug.h"
+#include "plugin.h"
 
 #define MAX_STR_LEN 255
 
-enum ncclPluginType {
-  ncclPluginTypeNet,
-  ncclPluginTypeTuner,
-  ncclPluginTypeProfiler,
-};
-
 #define NUM_LIBS 3
+static char* libNames[NUM_LIBS];
 static void *libHandles[NUM_LIBS];
 static const char *pluginNames[NUM_LIBS] = { "NET", "TUNER", "PROFILER" };
-static const char *pluginPrefix[NUM_LIBS] = { "librccl-net", "librccl-tuner", "librccl-profiler" };
-static const char *pluginFallback[NUM_LIBS] = { "Using internal net plugin.", "Using internal tuner plugin.", "" };
+static const char *pluginPrefix[NUM_LIBS] = { "librccl-net", "libnccl-tuner", "librccl-profiler" };
+static const char *pluginFallback[NUM_LIBS] = { "", "Using internal tuner plugin.", "" };
 static unsigned long subsys[NUM_LIBS] = { NCCL_INIT|NCCL_NET, NCCL_INIT|NCCL_TUNING, NCCL_INIT };
 
 static void* tryOpenLib(char* name, int* err, char* errStr) {
@@ -49,10 +45,9 @@ static void* tryOpenLib(char* name, int* err, char* errStr) {
   return handle;
 }
 
-static void appendNameToList(char* nameList, int *nameListLen, char* name) {
-  snprintf(nameList, *nameListLen, " %s", name);
-  nameList += strlen(name) + 1;
-  *nameListLen -= strlen(name) + 1;
+static void appendNameToList(char* nameList, int *leftChars, char* name) {
+  snprintf(nameList + PATH_MAX - *leftChars, *leftChars, " %s", name);
+  *leftChars -= strlen(name) + 1;
 }
 
 static void* openPluginLib(enum ncclPluginType type, const char* libName) {
@@ -66,6 +61,7 @@ static void* openPluginLib(enum ncclPluginType type, const char* libName) {
     libHandles[type] = tryOpenLib(libName_, &openErr, openErrStr);
     if (libHandles[type]) {
       INFO(subsys[type], "%s/Plugin: Plugin name set by env to %s", pluginNames[type], libName_);
+      libNames[type] = strdup(libName_);
       return libHandles[type];
     }
     if (openErr == ENOENT) {
@@ -74,21 +70,26 @@ static void* openPluginLib(enum ncclPluginType type, const char* libName) {
       INFO(subsys[type], "%s/Plugin: %s", pluginNames[type], openErrStr);
     }
 
-    snprintf(libName_, MAX_STR_LEN, "%s-%s.so", pluginPrefix[type], libName);
-    libHandles[type] = tryOpenLib(libName_, &openErr, openErrStr);
-    if (libHandles[type]) {
-      INFO(subsys[type], "%s/Plugin: Plugin name set by env to %s", pluginNames[type], libName_);
-      return libHandles[type];
-    }
-    if (openErr == ENOENT) {
-      appendNameToList(eNoEntNameList, &len, libName_);
-    } else {
-      INFO(subsys[type], "%s/Plugin: %s", pluginNames[type], openErrStr);
+    // libName can't be a relative or absolute path (start with '.' or contain any '/'). It can't be a library name either (start with 'lib' or end with '.so')
+    if (strchr(libName, '/') == nullptr && (strncmp(libName, "lib", strlen("lib")) || strlen(libName) < strlen(".so") || strncmp(libName + strlen(libName) - strlen(".so"), ".so", strlen(".so")))) {
+      snprintf(libName_, MAX_STR_LEN, "%s-%s.so", pluginPrefix[type], libName);
+      libHandles[type] = tryOpenLib(libName_, &openErr, openErrStr);
+      if (libHandles[type]) {
+        INFO(subsys[type], "%s/Plugin: Plugin name set by env to %s", pluginNames[type], libName_);
+        libNames[type] = strdup(libName_);
+        return libHandles[type];
+      }
+      if (openErr == ENOENT) {
+        appendNameToList(eNoEntNameList, &len, libName_);
+      } else {
+        INFO(subsys[type], "%s/Plugin: %s", pluginNames[type], openErrStr);
+      }
     }
   } else {
     snprintf(libName_, MAX_STR_LEN, "%s.so", pluginPrefix[type]);
     libHandles[type] = tryOpenLib(libName_, &openErr, openErrStr);
     if (libHandles[type]) {
+      libNames[type] = strdup(libName_);
       return libHandles[type];
     }
     if (openErr == ENOENT) {
@@ -118,17 +119,21 @@ void* ncclOpenProfilerPluginLib(const char* name) {
   return openPluginLib(ncclPluginTypeProfiler, name);
 }
 
-void* ncclGetNetPluginLib(void) {
-  return libHandles[ncclPluginTypeNet];
+void* ncclGetNetPluginLib(enum ncclPluginType type) {
+  if (libNames[ncclPluginTypeNet]) {
+    // increment the reference counter of the net library
+    libNames[type] = strdup(libNames[ncclPluginTypeNet]);
+    libHandles[type] = dlopen(libNames[ncclPluginTypeNet], RTLD_NOW | RTLD_LOCAL);
+  }
+  return libHandles[type];
 }
 
-ncclResult_t ncclClosePluginLib(void* handle) {
-  for (int l=0; l<NUM_LIBS; l++) {
-    if (libHandles[l] == handle) {
-      libHandles[l] = nullptr;
-      dlclose(handle);
-      return ncclSuccess;
-    }
+ncclResult_t ncclClosePluginLib(void* handle, enum ncclPluginType type) {
+  if (handle && libHandles[type] == handle) {
+    dlclose(handle);
+    libHandles[type] = nullptr;
+    free(libNames[type]);
+    libNames[type] = nullptr;
   }
-  return ncclInternalError;
+  return ncclSuccess;
 }

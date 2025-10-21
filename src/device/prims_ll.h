@@ -10,15 +10,15 @@
 #include "npkit/npkit.h"
 #endif
 
-template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload>
-class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
-  public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>> {
+template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload, int Metadata, int Pipeline, int useAcc>
+class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, Metadata, Pipeline, useAcc>:
+    public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, Metadata, Pipeline, useAcc>> {
 
   // In the case of Fan::MaxRecv == 0, we need to force MaxRecv to 1 for this to compile
   // This is because of a recv buffer which is allocated to MaxRecv length in send-only cases
   static constexpr int MaxRecv = Fan::MaxRecv > 1 ? Fan::MaxRecv : 1;
   static constexpr int MaxSend = Fan::MaxSend;
-  static constexpr int Input=0, Output=1;
+  static constexpr int Input=0, Output=1, Acc=2;
   RedOp redOp;
   const int tid;
   const int nthreads;
@@ -26,7 +26,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload>:
   const int group;
   const int stepLines;
   Fan fan;
-  T *userBufs[2];
+  T *userBufs[3];
   struct ncclConnInfo* recvConn = NULL;
   volatile uint64_t* recvConnHeadPtr = NULL;
   uint64_t recvConnHead;
@@ -148,7 +148,8 @@ private:
   __device__ uint64_t readLL(int offset, int i) {
     union ncclLLFifoLine* src = recvPtr(i) + offset;
     uint32_t flag = recvFlag(i);
-    uint32_t data1, flag1, data2, flag2;
+    uint32_t data1, flag1, data2, flag2; 
+    (void)data1; (void)flag1; (void)data2; (void)flag2; // unused variable - compiler warning
     int spins = 0;
 
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
@@ -260,15 +261,6 @@ private:
 
   __device__ void storeLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-#if (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY))
-    using Vec = uint32_t __attribute__((ext_vector_type(4)));
-    Vec i4;
-    i4[0] = val & 0xffffffff;
-    i4[1] = flag;
-    i4[2] = (val >> 32);
-    i4[3] = flag;
-    asm volatile ("flat_store_dwordx4 %0, %1 sc0 sc1 nt" :: "v"(dst), "v"(i4));
-#else
     union ncclLLFifoLine i4;
     i4.data1 = val & 0xffffffff;
     i4.flag1 = flag;
@@ -276,6 +268,8 @@ private:
     i4.flag2 = flag;
     __builtin_nontemporal_store(i4.v[0], dst->v);
     __builtin_nontemporal_store(i4.v[1], dst->v+1);
+#if defined(__gfx950__) && ROCM_VERSION < 70200
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
 #endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
@@ -350,6 +344,9 @@ private:
       __builtin_nontemporal_store(u4, (uint32_t*)dst);
     else
       __builtin_nontemporal_store(u8, (uint64_t*)dst);
+#if defined(__gfx950__) && ROCM_VERSION < 70200
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
+#endif
 #else
     if(sizeof(U) == 1)
       asm volatile("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4) : "memory");
@@ -416,26 +413,13 @@ private:
     }
   }
 
-  __device__ void mscclStoreData(T *dst, uint64_t val, int eltN) {
-    union {
-      uint64_t u8;
-      T elt[EltPerLine];
-    };
-    u8 = val;
-    #pragma unroll
-    for(int i=0; i < EltPerLine; i++) {
-      if (i==0 || i < eltN)
-        store(dst+i, elt[i]);
-        // dst[i] = elt[i];
-    }
-  }
-
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
-  __device__ __attribute__((noinline)) void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+  __device__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
     T *dstElts = DstBuf == -1 ? nullptr : userBufs[DstBuf] + dstIx;
+    T *accElts = (DstBuf == -1 || !useAcc) ? nullptr : userBufs[Acc] + dstIx;
 
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
@@ -460,14 +444,15 @@ private:
     nelem -= tid*EltPerLine;
     srcElts += tid*EltPerLine;
     dstElts += tid*EltPerLine;
+    if (accElts != nullptr) accElts += tid*EltPerLine;
     int offset = tid;
     int eltPerTrip = nthreads*EltPerLine;
     while (nelem > 0) {
       int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
 
-      DataLoader dl;
+      DataLoader dl, accdl;
       ncclLLFifoLine line[MaxRecv];
-      uint64_t data, peerData;
+      uint64_t data, peerData, accData;
       if (SRC) {
         dl.loadBegin(srcElts, eltInLine);
         srcElts += eltPerTrip;
@@ -502,12 +487,25 @@ private:
         storeLL(sendPtr(0)+offset, data, sendFlag(0));
       }
       if (DST) {
-        storeData(dstElts, data, eltInLine);
+        if (accElts != nullptr) {
+          accdl.loadBegin(accElts, eltInLine);
+          accElts += eltPerTrip;
+          accData = accdl.loadFinish();
+          storeData(dstElts, applyReduce(redOp, accData, data), eltInLine);
+        } else {
+          storeData(dstElts, data, eltInLine);
+        }
         dstElts += eltPerTrip;
       }
       nelem -= eltPerTrip;
       offset += nthreads;
     }
+    #ifdef __gfx950__ 
+    if constexpr (isMsccl(Metadata) && DST){
+      // Wait for pending vector loads and stores
+      __builtin_amdgcn_s_waitcnt((15 << 8) | (7 << 4)); // s_waitcnt vmcnt(0)
+    }
+    #endif
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
     if (tid == 0) {
@@ -584,18 +582,18 @@ private:
             dataD = applyReduce(redOp, dataD, data);
           }
         }
-        mscclStoreData(dstElts, dataD, eltInLine);
+        storeData(dstElts, dataD, eltInLine);
         dstElts += eltPerTrip;
       }
       if (COPY){
-        mscclStoreData(dstElts, data, eltInLine);
+        storeData(dstElts, data, eltInLine);
         dstElts += eltPerTrip;
         if (MULTIDSTS){
           for (int i = 1; i < ndsts; i++){
             dl.loadBegin(srcs[i], eltInLine);
             srcs[i] += eltPerTrip;
             data = dl.loadFinish();
-            mscclStoreData(dsts[i], data, eltInLine);
+            storeData(dsts[i], data, eltInLine);
             dsts[i] += eltPerTrip;
           }
         }
@@ -672,7 +670,7 @@ public:
     loadRecvSync();
     // coverity[var_deref_model:FALSE]
     loadSendSync();
-    setDataPtrs(inputBuf, outputBuf);
+    setDataPtrs(inputBuf, outputBuf, e != nullptr ? e->acc : nullptr);
   }
 
   __device__ ~Primitives() {
@@ -685,9 +683,10 @@ public:
     barrier();
   }
 
-  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
+  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf, void const *acc = nullptr) {
     userBufs[Input] = (T*)inputBuf;
     userBufs[Output] = (T*)outputBuf;
+    userBufs[Acc] = (T*)acc;
   }
 
   __device__ void moveDataPtrs(intptr_t delta) {
@@ -827,52 +826,5 @@ public:
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
-  }
-
-  __device__ void mscclStoreLL(union ncclLLFifoLine* dst, uint64_t val, uint32_t flag) {
-    union ncclLLFifoLine i4;
-    i4.data1 = val & 0xffffffff;
-    i4.flag1 = flag;
-    i4.data2 = (val >> 32);
-    i4.flag2 = flag;
-    __builtin_nontemporal_store(i4.v[0], dst->v);
-    __builtin_nontemporal_store(i4.v[1], dst->v+1);
-  }
-
-  __device__ void mscclSend(intptr_t srcIx, int nelem) {
-#if defined(__gfx950__)
-    T *srcElts = userBufs[0] + srcIx;
-
-    // Always waitSend in case of cleanup
-    nelem = nelem < 0 ? 0 : nelem;
-    waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
-
-    nelem -= tid*EltPerLine;
-    srcElts += tid*EltPerLine;
-    int offset = tid;
-    int eltPerTrip = nthreads*EltPerLine;
-    while (nelem > 0) {
-      int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
-
-      DataLoader dl;
-      ncclLLFifoLine line[MaxRecv];
-      uint64_t data, peerData;
-      dl.loadBegin(srcElts, eltInLine);
-      srcElts += eltPerTrip;
-      data = dl.loadFinish();
-
-      for (int i=1; i < MaxSend && i < fan.nsend(); i++)
-        mscclStoreLL(sendPtr(i)+offset, data, sendFlag(i));
-      mscclStoreLL(sendPtr(0)+offset, data, sendFlag(0));
-      nelem -= eltPerTrip;
-      offset += nthreads;
-    }
-
-    for (int i=1; i < MaxSend && i < fan.nsend(); i++)
-      incSend(i, offset);
-    incSend(0, offset);
-#else
-    LLGenericOp<0, 1, Input, -1>(srcIx, -1, nelem, false);
-#endif
   }
 };

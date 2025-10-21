@@ -10,6 +10,7 @@
 #include "rocmwrap.h"
 #include "hsa/hsa.h"
 #include "param.h"
+#include "bootstrap.h"
 
 #include <dlfcn.h>
 #include <sys/utsname.h>
@@ -19,13 +20,11 @@
 
 DECLARE_ROCM_PFN(hsa_amd_portable_export_dmabuf); // DMA-BUF support
 NCCL_PARAM(DmaBufEnable, "DMABUF_ENABLE", 0);
+RCCL_PARAM(ForceEnableDMABUF, "FORCE_ENABLE_DMABUF", 0);
 /* ROCr Driver functions loaded with dlsym() */
 DECLARE_ROCM_PFN(hsa_init);
 DECLARE_ROCM_PFN(hsa_system_get_info);
 DECLARE_ROCM_PFN(hsa_status_string);
-
-// Handle type used for cuMemCreate()
-CUmemAllocationHandleType ncclCuMemHandleType = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
 
 static void *hsaLib;
 static uint16_t version_major, version_minor;
@@ -33,6 +32,52 @@ bool ncclCudaLaunchBlocking = false;
 
 static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;
 static ncclResult_t initResult;
+
+// This env var (NCCL_CUMEM_ENABLE) toggles cuMem API usage
+NCCL_PARAM(CuMemEnable, "CUMEM_ENABLE", 0);
+NCCL_PARAM(CuMemHostEnable, "CUMEM_HOST_ENABLE", -1);
+// Handle type used for cuMemCreate()
+CUmemAllocationHandleType ncclCuMemHandleType = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+
+static int ncclCuMemSupported = 0;
+
+// Determine whether CUMEM & VMM RDMA is supported on this platform
+int ncclIsCuMemSupported() {
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  return 0;
+#else
+  CUdevice currentDev;
+  int cudaDev;
+  int cudaDriverVersion;
+  int flag = 0;
+  ncclResult_t ret = ncclSuccess;
+  CUDACHECKGOTO(cudaDriverGetVersion(&cudaDriverVersion), ret, error);
+  if (cudaDriverVersion < 12000) return 0;  // Need CUDA_VISIBLE_DEVICES support
+  CUDACHECKGOTO(cudaGetDevice(&cudaDev), ret, error);
+  if (CUPFN(cuMemCreate) == NULL) return 0;
+  CUCHECKGOTO(cuDeviceGet(&currentDev, cudaDev), ret, error);
+  // Query device to see if CUMEM VMM support is available
+  CUCHECKGOTO(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, currentDev), ret, error);
+  if (!flag) return 0;
+
+error:
+  return (ret == ncclSuccess);
+#endif
+}
+
+int ncclCuMemEnable() {
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  return 0;
+#else
+  // NCCL_CUMEM_ENABLE=-2 means auto-detect CUMEM support
+  int param = ncclParamCuMemEnable();
+  return  param >= 0 ? param : (param == -2 && ncclCuMemSupported);
+#endif
+}
+
+int ncclCuMemHostEnable() {
+  return 0;
+}
 
 static void initOnceFunc() {
   do {
@@ -100,14 +145,24 @@ static void initOnceFunc() {
     //goto error;
   //}
 
+  // Determine whether we support the cuMem APIs or not
+  ncclCuMemSupported = ncclIsCuMemSupported();
   /* DMA-BUF support */
   //ROCm support
-  if (ncclParamDmaBufEnable() == 0 ) {
+  if(rcclParamForceEnableDMABUF())
+  {
+      dmaBufSupport = 1;
+      WARN("DMA_BUF Support is force enabled, so explicitly setting RCCL_FORCE_ENABLE_DMABUF=1");
+  }
+  else if (ncclParamDmaBufEnable() == 0)
+  {
     INFO(NCCL_INIT, "Dmabuf feature disabled without NCCL_DMABUF_ENABLE=1");
     goto error;
   }
+
+  // ROCr checks
   res = pfn_hsa_system_get_info((hsa_system_info_t) 0x204, &dmaBufSupport);
-  if (res != HSA_STATUS_SUCCESS || !dmaBufSupport) {
+  if (res != HSA_STATUS_SUCCESS || !dmaBufSupport){
     INFO(NCCL_INIT, "Current version of ROCm does not support dmabuf feature.");
     goto error;
   }
@@ -117,45 +172,64 @@ static void initOnceFunc() {
       WARN("Failed to load ROCr missing symbol hsa_amd_portable_export_dmabuf");
       goto error;
     }
-    else {
-      //check OS kernel support
-      struct utsname utsname;
-      FILE *fp = NULL;
-      char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
-      char kernel_opt2[20] = "CONFIG_PCI_P2PDMA=y";
-      char kernel_conf_file[128];
-      char buf[256];
-      int found_opt1 = 0;
-      int found_opt2 = 0;
-
-      //check for kernel name exists
-      if (uname(&utsname) == -1) INFO(NCCL_INIT,"Could not get kernel name");
-      //format and store the kernel conf file location
-      snprintf(kernel_conf_file, sizeof(kernel_conf_file), "/boot/config-%s", utsname.release);
-      fp = fopen(kernel_conf_file, "r");
-      if (fp == NULL) INFO(NCCL_INIT,"Could not open kernel conf file");
-      //look for kernel_opt1 and kernel_opt2 in the conf file and check
-      while (fgets(buf, sizeof(buf), fp) != NULL) {
-        if (strstr(buf, kernel_opt1) != NULL) {
-          found_opt1 = 1;
-          INFO(NCCL_INIT,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
-        }
-        if (strstr(buf, kernel_opt2) != NULL) {
-          found_opt2 = 1;
-          INFO(NCCL_INIT,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
-        }
-      }
-      if (!found_opt1 || !found_opt2) {
-        dmaBufSupport = 0;
-        INFO(NCCL_INIT, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
-        INFO(NCCL_INIT, "DMA_BUF_SUPPORT Failed due to OS kernel support");
-      }
-
-      if(dmaBufSupport) INFO(NCCL_INIT, "DMA_BUF Support Enabled");
-      else goto error;
-    }
   }
 
+  //check OS kernel support
+  if(!rcclParamForceEnableDMABUF()) {
+    struct utsname utsname;
+    FILE *fp = NULL;
+    char kernel_opt1[28] = "CONFIG_DMABUF_MOVE_NOTIFY=y";
+    char kernel_opt2[20] = "CONFIG_PCI_P2PDMA=y";
+    char kernel_conf_file[128];
+    char buf[256];
+    int found_opt1 = 0;
+    int found_opt2 = 0;
+
+    //check for kernel name exists
+    if (uname(&utsname) == -1) INFO(NCCL_INIT,"Could not get kernel name");
+    //format and store the kernel conf file location
+    const char* possiblePaths[] = {
+      "/proc/config.gz",
+      "/boot/config-%s",
+      "/usr/src/linux-%s/.config",
+      "/usr/src/linux/.config",
+      "/usr/lib/modules/%s/config",
+      "/usr/lib/ostree-boot/config-%s",
+      "/usr/lib/kernel/config-%s",
+      "/usr/src/linux-headers-%s/.config",
+      "/lib/modules/%s/build/.config",
+    };
+    for (const auto& path : possiblePaths) {
+      snprintf(kernel_conf_file, sizeof(kernel_conf_file), path, utsname.release);
+      fp = fopen(kernel_conf_file, "r");
+      if (fp != NULL){
+        //look for kernel_opt1 and kernel_opt2 in the conf file and check
+        while (fgets(buf, sizeof(buf), fp) != NULL) {
+          if (strstr(buf, kernel_opt1) != NULL) {
+            found_opt1 = 1;
+            INFO(NCCL_INIT,"CONFIG_DMABUF_MOVE_NOTIFY=y in /boot/config-%s", utsname.release);
+          }
+          if (strstr(buf, kernel_opt2) != NULL) {
+            found_opt2 = 1;
+            INFO(NCCL_INIT,"CONFIG_PCI_P2PDMA=y in /boot/config-%s", utsname.release);
+          }
+        }
+        if (!found_opt1 || !found_opt2) {
+          dmaBufSupport = 0;
+          INFO(NCCL_INIT, "CONFIG_DMABUF_MOVE_NOTIFY and CONFIG_PCI_P2PDMA should be set for DMA_BUF in /boot/config-%s", utsname.release);
+          INFO(NCCL_INIT, "DMA_BUF_SUPPORT Failed due to OS kernel support");
+        }
+
+        if(dmaBufSupport) INFO(NCCL_INIT, "DMA_BUF Support Enabled");
+        else goto error;
+        break;
+      }
+    }
+    if(fp == NULL) {
+      dmaBufSupport = 0;
+      INFO(NCCL_INIT,"Could not open kernel conf file");
+    }
+  }
   /*
    * Required to initialize the ROCr Driver.
    * Multiple calls of hsa_init() will return immediately
@@ -168,14 +242,6 @@ static void initOnceFunc() {
 
 error:
   initResult = ncclSystemError;
-}
-
-int ncclCuMemEnable() {
-  return 0;
-}
-
-int ncclCuMemHostEnable() {
-  return 0;
 }
 
 ncclResult_t rocmLibraryInit() {

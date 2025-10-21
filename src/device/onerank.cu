@@ -49,7 +49,7 @@ namespace {
         redOpArg = *reinterpret_cast<uint64_t*>(redOpArg);
       }
     }
-    reduceCopy<COLL_UNROLL, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/1>
+    reduceCopy<COLL_UNROLL,0, RedOp, T, 0,1,1, 0,1,1, /*PreOpSrcs=*/1>
       (tid, tn, redOpArg, &redOpArg, true, 1, &src, 1, &dst, i1-i0);
   }
 }

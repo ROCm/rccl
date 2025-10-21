@@ -169,7 +169,8 @@ static gdr_t ncclGdrInit() {
     return NULL;
   }
   GcnArchNameFormat(devProp.gcnArchName, gcnArchNameSubstr);
-  if (IsArchMatch(gcnArchNameSubstr, "gfx942")) {
+  if (IsArchMatch(gcnArchNameSubstr, "gfx942") ||
+      IsArchMatch(gcnArchNameSubstr, "gfx950")) {
     INFO(NCCL_INIT, "Enabled GDRCopy equivalent memory allocation on %s", gcnArchNameSubstr);
     return (gdr_t)0x12345678L;
   } else {
@@ -180,11 +181,11 @@ static gdr_t ncclGdrInit() {
 
 template <typename T>
 static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** gdrHandle, hipStream_t stream) {
-  gdr_info_t info;
+  // gdr_info_t info; // unused variable - compiler warning
   size_t mapSize;
-  gdr_mh_t mh;
+  // gdr_mh_t mh;     // unused variable - compiler warning
   char *devMem;
-  void *gdrMap;
+  // void *gdrMap;    // unused variable - compiler warning
 
   mapSize = ncclSizeOfT<T>()*nelem;
 
@@ -216,7 +217,7 @@ static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** 
 
 template <typename T>
 static ncclResult_t ncclGdrCudaCopy(void *gdrHandle, T* dst, T* src, size_t nelem) {
-  gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle;
+  //gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle; // unused variable - compiler warning
   memcpy(dst, src, nelem*sizeof(T));
   return ncclSuccess;
 }

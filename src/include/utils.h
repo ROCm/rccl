@@ -12,6 +12,7 @@
 #include "bitops.h"
 #include "checks.h"
 #include <stdint.h>
+#include <string.h>
 #include <time.h>
 #include <sched.h>
 #include <algorithm>
@@ -41,6 +42,12 @@ bool matchIfList(const char* string, int port, struct netIf* ifList, int listSiz
 
 static long log2i(long n) {
   return log2Down(n);
+}
+
+// Comparator function for qsort/bsearch to compare integers
+static int compareInts(const void *a, const void *b) {
+    int ia = *(const int*)a, ib = *(const int*)b;
+    return (ia > ib) - (ia < ib);
 }
 
 inline uint64_t clockNano() {
