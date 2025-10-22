@@ -2145,7 +2145,7 @@ static ncclResult_t topoGetAlgoInfo(
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT)  nt = NCCL_MAX_NTHREADS;
 #if defined(__gfx950__)
-  if (comm->nNodes == 1) nt = NCCL_MAX_NTHREADS / 2; // For single node, we use half the number of threads for perf reasons.
+  if (comm->nNodes == 1) nt = NCCL_SINGLE_NODE_MAX_NTHREADS; // For single node, we use half the number of threads for perf reasons.
   // The following should be already set correctly by getNthreads
   // but need to override the changes for TREE and PAT in the previous lines
   if (info->protocol == NCCL_PROTO_LL) nt = NCCL_LL_MAX_NTHREADS;

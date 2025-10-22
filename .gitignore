@@ -3,6 +3,7 @@
 /coverage/
 build/
 ext/
-
+logs
+sweep_rccl.sh
 # Visual Studio Code
 .vscode

@@ -115,6 +115,7 @@ union ncclLLFifoLine {
 #define NCCL_MAX_LOCAL_RANKS 72
 #if defined(__gfx950__)
 #define NCCL_MAX_NTHREADS 512
+#define NCCL_SINGLE_NODE_MAX_NTHREADS 256
 #else
 #define NCCL_MAX_NTHREADS 256
 #endif
