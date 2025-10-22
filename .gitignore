@@ -3,8 +3,6 @@
 /coverage/
 build/
 ext/
-logs
-sweep_rccl.sh
-barrier_generic_test.cu
+
 # Visual Studio Code
 .vscode
