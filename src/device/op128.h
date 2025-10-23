@@ -299,7 +299,18 @@ DEFINE_ld_st__size(8, uint64_t, b64, l)
 #undef DEFINE_ld_st__size_space
 #undef DEFINE_ld_st__size
 
-using u64_gptr = __attribute__((address_space(1))) uint64_t*;
+#ifdef __gfx950__
+__device__ __forceinline__ void store16global(uintptr_t addr, BytePack<16> value){
+  *(u64_gptr) addr = *(u64_gptr) value.u64; 
+  *((u64_gptr) addr+1) = *((u64_gptr) value.u64+1); 
+}
+#else
+__device__ __forceinline__ void store16global(uintptr_t addr, BytePack<16> value){
+  __builtin_nontemporal_store(value.u64[0], (u64_gptr) addr);
+  __builtin_nontemporal_store(value.u64[1], (u64_gptr) addr + 1);
+}
+#endif
+
 #define DEFINE_ld_st_16__space(space, addr_cxx_ty, addr_reg_ty) \
   template<> \
   __device__ __forceinline__ BytePack<16> ld_##space<16>(addr_cxx_ty addr) { \
@@ -317,8 +328,7 @@ using u64_gptr = __attribute__((address_space(1))) uint64_t*;
   } \
   template<> \
   __device__ __forceinline__ void st_##space<16>(addr_cxx_ty addr, BytePack<16> value) { \
-    *(u64_gptr) addr = *(u64_gptr) value.u64; \
-    *((u64_gptr) addr+1) = *((u64_gptr) value.u64+1); \
+    store16##space(addr, value); \
   }
 
 DEFINE_ld_st_16__space(global, uintptr_t, l)
