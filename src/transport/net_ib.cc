@@ -969,7 +969,6 @@ ncclResult_t ncclIbGetProperties(int dev, ncclNetProperties_t* props) {
 static_assert(MAX_REQUESTS <= 256, "request id are encoded in wr_id and we need up to 8 requests ids per completion");
 
 #define NCCL_IB_MAX_QPS 128
-#define P2P_MAX_QPS 1
 
 // Per-QP connection metatdata
 struct ncclIbQpInfo {
@@ -1211,6 +1210,7 @@ struct ncclIbRecvComm {
 static_assert((offsetof(struct ncclIbRecvComm, remFifo) % 32) == 0, "ncclIbRecvComm fifo must be 32-byte aligned");
 
 NCCL_PARAM(IbQpsPerConn, "IB_QPS_PER_CONNECTION", 1);
+RCCL_PARAM(IbQpsPerP2p, "IB_QPS_PER_P2P", 1);
 
 static void ncclIbAddEvent(struct ncclIbRequest* req, int devIndex, struct ncclIbNetCommDevBase* base) {
   req->events[devIndex]++;
@@ -1432,8 +1432,8 @@ ib_recv_dev_list:
   INFO(NCCL_NET, "NET/IB: ncclIbConnect isP2p=%d", isP2p);
   
   if(isP2p) {
-    localNqps  = P2P_MAX_QPS * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
-    remoteNqps = P2P_MAX_QPS * remoteVProps.ndevs;
+    localNqps  = rcclParamIbQpsPerP2p() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
+    remoteNqps = rcclParamIbQpsPerP2p() * remoteVProps.ndevs;
   } else {
     localNqps  = ncclParamIbQpsPerConn() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
     remoteNqps = ncclParamIbQpsPerConn() * remoteVProps.ndevs;
@@ -1759,8 +1759,8 @@ ib_recv:
   rComm->base.nRemDevs = remMeta.ndevs;
   
   if(remMeta.isP2p) {
-    localNqps  = P2P_MAX_QPS * rComm->base.vProps.ndevs;
-    remoteNqps = P2P_MAX_QPS * remMeta.ndevs;
+    localNqps  = rcclParamIbQpsPerP2p() * rComm->base.vProps.ndevs;
+    remoteNqps = rcclParamIbQpsPerP2p() * remMeta.ndevs;
   } else {
     localNqps  = ncclParamIbQpsPerConn() * rComm->base.vProps.ndevs;
     remoteNqps = ncclParamIbQpsPerConn() * remMeta.ndevs;
