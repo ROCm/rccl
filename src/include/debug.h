@@ -25,6 +25,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
 extern thread_local int ncclDebugNoWarn;
 extern char ncclLastError[];
 
+#define ERROR(...) ncclDebugLog(NCCL_LOG_ERROR, NCCL_ALL, __FILE__, __LINE__, __VA_ARGS__)
 #define VERSION(...) ncclDebugLog(NCCL_LOG_VERSION, NCCL_ALL, __FILE__, __LINE__, __VA_ARGS__)
 #define WARN(...) ncclDebugLog(NCCL_LOG_WARN, NCCL_ALL, __FILE__, __LINE__, __VA_ARGS__)
 #define INFO(FLAGS, ...) ncclDebugLog(NCCL_LOG_INFO, (FLAGS), __func__, __LINE__, __VA_ARGS__)
@@ -39,5 +40,23 @@ extern char ncclLastError[];
 void ncclSetThreadName(pthread_t thread, const char *fmt, ...);
 
 void ncclResetDebugInit();
+
+// RCCL custom error message handling.
+static inline ncclResult_t rcclCudaErrorHandler(cudaError_t err) {
+
+    // Print the cuda error
+    ERROR("HIP failure: '%s'", cudaGetErrorString(err));
+
+    // Special error message here:
+    switch (err) {
+    case cudaErrorStreamCaptureInvalidated:
+	    ERROR("Application is trying to use an invalidated stream to launch RCCL kernel. "
+	          "This operation is invalid. RCCL is exiting.");
+	    break;
+    default:
+	    break;
+    }
+    return ncclUnhandledCudaError;
+}
 
 #endif

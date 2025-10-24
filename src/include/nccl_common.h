@@ -11,7 +11,7 @@
 #include "nccl.h"
 
 typedef enum {
-  NCCL_LOG_NONE = 0,
+  NCCL_LOG_ERROR = 0,
   NCCL_LOG_VERSION = 1,
   NCCL_LOG_WARN = 2,
   NCCL_LOG_INFO = 3,
