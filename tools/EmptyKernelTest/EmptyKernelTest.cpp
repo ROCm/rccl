@@ -184,6 +184,8 @@ int main(int argc, char **argv)
   HIP_CALL(hipStreamDestroy(stream));
   HIP_CALL(hipEventDestroy(startEvent));
   HIP_CALL(hipEventDestroy(stopEvent));
+  HIP_CALL(hipEventDestroy(startEventOuterLoop));
+  HIP_CALL(hipEventDestroy(stopEventOuterLoop));
 
   return 0;
 }
