@@ -687,11 +687,14 @@ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH)
     ) + 15) & -16; // pad to 16 bytes
 }
 
+// RCCL has its own varient of ncclShmemDynamicSize and ncclShmemScratchWarpSize
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
 // The amount of dynamic shmem per block
 __device__ constexpr int ncclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH) {
-  const int maxNthreads = (cudaArch == 950) ? 512 : 256;
-  return cudaArch < 700 ? 0 : ncclShmemScratchWarpSize(cudaArch)*(maxNthreads/WARP_SIZE);
+  return cudaArch < 700 ? 0 : ncclShmemScratchWarpSize(cudaArch)*(NCCL_MAX_NTHREADS/WARP_SIZE);
 }
+#endif
 
 // Host-side table of kernel function pointers.
 extern int const ncclDevKernelCount;
