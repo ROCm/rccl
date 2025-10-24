@@ -484,18 +484,23 @@ static float getNetOverhead(struct ncclComm* comm) {
 NCCL_PARAM(Ll128C2c, "LL128_C2C", 1);
 
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph** graphs) {
-  int simpleDefaultThreads = (graphs[NCCL_ALGO_RING]->bwIntra*graphs[NCCL_ALGO_RING]->nChannels <= PCI_BW) ? 256 : NCCL_SIMPLE_MAX_NTHREADS;
-  comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] =
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, simpleDefaultThreads, comm->WarpSize);
+  static int rcclMaxThreads[NCCL_NUM_PROTOCOLS] = {0};
+  if (rcclMaxThreads[NCCL_PROTO_SIMPLE] == 0) rcclGetMaxNthreads(comm, rcclMaxThreads);
+  static int maxNthreads      = rcclMaxThreads[NCCL_PROTO_SIMPLE];
+  static int maxLL128Nthreads = rcclMaxThreads[NCCL_PROTO_LL128];
+  static int maxLLThreads     = rcclMaxThreads[NCCL_PROTO_LL];
+  int simpleDefaultThreads = (graphs[NCCL_ALGO_RING]->bwIntra*graphs[NCCL_ALGO_RING]->nChannels <= PCI_BW) ? 256 : maxNthreads;
+    comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, maxNthreads, simpleDefaultThreads, comm->WarpSize);
   comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = comm->maxThreads[NCCL_ALGO_COLLNET_DIRECT][NCCL_PROTO_SIMPLE] =
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_MAX_NTHREADS, comm->WarpSize);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, maxNthreads, maxNthreads, comm->WarpSize);
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_LL] = comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_LL] = comm->maxThreads[NCCL_ALGO_COLLNET_DIRECT][NCCL_PROTO_LL] =
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, NCCL_MAX_NTHREADS, NCCL_LL_MAX_NTHREADS, comm->WarpSize);
+    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 4*comm->WarpSize, maxNthreads, maxLLThreads, comm->WarpSize);
   comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_LL128] = comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_LL128] =
-    getNthreads("NCCL_LL128_NTHREADS", ncclParamLl128Nthreads(), 4*comm->WarpSize, NCCL_LL128_MAX_NTHREADS, NCCL_LL128_MAX_NTHREADS, comm->WarpSize);
+    getNthreads("NCCL_LL128_NTHREADS", ncclParamLl128Nthreads(), 4*comm->WarpSize, maxLL128Nthreads, maxLL128Nthreads, comm->WarpSize);
 #else
-    getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 2*WARP_SIZE, NCCL_SIMPLE_MAX_NTHREADS, simpleDefaultThreads);
+  int simpleDefaultThreads = (graphs[NCCL_ALGO_RING]->bwIntra*graphs[NCCL_ALGO_RING]->nChannels <= PCI_BW) ? 256 : NCCL_MAX_NTHREADS;
+    comm->maxThreads[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 2*WARP_SIZE, NCCL_SIMPLE_MAX_NTHREADS, simpleDefaultThreads);
   comm->maxThreads[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] =
     getNthreads("NCCL_NTHREADS", ncclParamNthreads(), 2*WARP_SIZE, NCCL_SIMPLE_MAX_NTHREADS, NCCL_SIMPLE_MAX_NTHREADS);
   comm->maxThreads[NCCL_ALGO_COLLNET_DIRECT][NCCL_PROTO_SIMPLE] =

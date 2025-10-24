@@ -1007,10 +1007,12 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
   }
   return ncclSuccess;
 }
-
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
 #define DEFAULT_LL_BUFFSIZE (NCCL_LL_LINES_PER_THREAD*NCCL_LL_MAX_NTHREADS*NCCL_STEPS*sizeof(union ncclLLFifoLine))
 #define DEFAULT_LL128_BUFFSIZE (NCCL_LL128_ELEMS_PER_THREAD*NCCL_LL128_MAX_NTHREADS*NCCL_STEPS*sizeof(uint64_t))
 #define DEFAULT_BUFFSIZE (1 << 22) /* 4MiB */
+#endif
 NCCL_PARAM(BuffSize, "BUFFSIZE", -2);
 NCCL_PARAM(LlBuffSize, "LL_BUFFSIZE", -2);
 NCCL_PARAM(Ll128BuffSize, "LL128_BUFFSIZE", -2);
@@ -1021,8 +1023,12 @@ NCCL_PARAM(P2pNvlChunkSize, "P2P_NVL_CHUNKSIZE", (1 << 19)); /* 512 kB */
 
 static ncclResult_t computeBuffSizes(struct ncclComm* comm) {
   int64_t envs[NCCL_NUM_PROTOCOLS] = { ncclParamLlBuffSize(), ncclParamLl128BuffSize(), ncclParamBuffSize() };
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  int defaults[NCCL_NUM_PROTOCOLS];
+  rcclSetDefaultBuffSizes(comm, defaults);
+#else
   int defaults[NCCL_NUM_PROTOCOLS] = { DEFAULT_LL_BUFFSIZE, DEFAULT_LL128_BUFFSIZE, DEFAULT_BUFFSIZE };
-
+#endif
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     comm->buffSizes[p] = envs[p] != -2 ? envs[p] : defaults[p];
   }

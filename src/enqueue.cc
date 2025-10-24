@@ -77,7 +77,8 @@ constexpr int rcclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSi
 
 /* Copy of ncclShmemDynamicSize */
 constexpr int rcclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSize = 32) {
-  return cudaArch < 700 ? 0 : rcclShmemScratchWarpSize(cudaArch, WarpSize)*(NCCL_MAX_NTHREADS/WarpSize);
+  const int maxNthreads = (cudaArch == 950) ? 512 : 256;
+  return cudaArch < 700 ? 0 : rcclShmemScratchWarpSize(cudaArch, WarpSize)*(maxNthreads/WarpSize);
 }
 
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
@@ -240,9 +241,11 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclKernelPlanner::WipPlan::Channel* wipChannels = comm->planner.wipPlan.channels;
   size_t workBytes = plan->workBytes;
   size_t batchBytes = plan->nWorkBatches*sizeof(struct ncclDevWorkBatch);
-  plan->threadPerBlock = std::min(plan->threadPerBlock, NCCL_MAX_NTHREADS);
-  // plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*NCCL_MIN_NTHREADS*/);
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
+  plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*NCCL_MIN_NTHREADS*/);
+#endif
   // If we can fit everything into the kernel args we do so.
   if (sizeof(ncclDevKernelArgs) + batchBytes + workBytes <= comm->workArgsBytes) {
     plan->workStorageType = ncclDevWorkStorageTypeArgs;
@@ -866,8 +869,11 @@ static ncclResult_t scheduleCollTasksToPlan(
       plan->channelMask.masks[maskIdx] |= (1ull<<relativeIdx);
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
-    plan->threadPerBlock = task->nWarps*comm->WarpSize;
-    // plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    plan->threadPerBlock = task->nWarps * comm->WarpSize;
+#else
+    plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
+#endif
     if (!plan->kernelSpecialized) {
       plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
       plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
@@ -1201,8 +1207,11 @@ static ncclResult_t scheduleP2pTasksToPlan(
   ) {
   int nRanks = comm->nRanks;
   struct ncclKernelPlanner::Peer* peers = comm->planner.peers;
-  plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*4*WARP_SIZE */);
-  // plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  plan->threadPerBlock = std::max(plan->threadPerBlock, RCCL_P2P_MAX_NTHREADS);
+#else
+  plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
+#endif
   if (!plan->kernelSpecialized) {
     plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
     plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
@@ -2134,13 +2143,12 @@ static ncclResult_t topoGetAlgoInfo(
   } else {
     info->nMaxChannels = nc;
   }
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT)  nt = NCCL_MAX_NTHREADS;
-  if (comm->nNodes == 1) nt = NCCL_SINGLE_NODE_MAX_NTHREADS; // For single node, we use half the number of threads for perf reasons.
-  // The following should be already set correctly by getNthreads
-  // but need to override the changes for TREE and PAT in the previous lines
-  if (info->protocol == NCCL_PROTO_LL) nt = NCCL_LL_MAX_NTHREADS;
-  if (info->func == ncclFuncReduceScatter && divUp(nBytes, comm->nRanks) <= 524288) nt = NCCL_LL_MAX_NTHREADS; // ReduceScatter small count optimization
+#endif
+  rcclOptThreadBlockSize(comm, info, nBytes, nt);
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
