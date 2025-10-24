@@ -132,7 +132,7 @@ int main(int argc, char **argv)
     // Launch kernel and wait for completion
     EmptyKernel<<<gridSize, blockSize, 0, stream>>>();
     if(gpuTime){HIP_CALL(hipEventRecord(stopEvent, stream));}
-    if(!outerLoop) {HIP_CALL(hipStreamSynchronize(stream));}
+    HIP_CALL(hipStreamSynchronize(stream));
 
     // Collect timing info
     if(cpuTime) {
