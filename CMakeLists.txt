@@ -535,6 +535,7 @@ set(SRC_FILES
   src/include/register.h
   src/include/register_inline.h
   src/include/rccl_float8.h
+  src/include/rccl_hsa_mem.h
   src/include/rocm_smi_wrap.h
   src/include/rocmwrap.h
   src/include/roctx.h
@@ -633,6 +634,7 @@ set(SRC_FILES
 # src/misc/nvmlwrap.cc
   src/misc/nvmlwrap_stub.cc
   src/misc/param.cc
+  src/misc/rccl_hsa_mem.cc
   src/misc/rocm_smi_wrap.cc
   src/misc/rocmwrap.cc
   src/misc/roctx.cc

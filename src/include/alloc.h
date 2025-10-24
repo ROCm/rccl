@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "rccl_vars.h"
+#include "rccl_hsa_mem.h"
 
 #if CUDART_VERSION >= 11030
 #include <cuda.h>
@@ -342,8 +343,15 @@ ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
-  if (nelem > 0) 
+  if (nelem > 0) {
+#if (defined(__gfx1200__) || defined(__gfx1201__)) && ROCM_VERSION > 70100
+    int curDev;
+    CUDACHECK(hipGetDevice(&curDev));
+    CUDACHECKGOTO(rcclExtMallocWithFlagsOnDevice((void**)ptr, nelem*ncclSizeOfT<T>(), HSA_AMD_MEMORY_POOL_UNCACHED_FLAG,curDev),result, finish);
+#else 
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+#endif
+  }
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (*ptr == nullptr && nelem > 0) WARN("Failed to CUDA malloc %ld bytes", nelem*ncclSizeOfT<T>());
