@@ -29,6 +29,7 @@ THE SOFTWARE.
 #include <iostream> //cerr
 #include <unistd.h> //usleep
 #include <cstring>
+#include <chrono>
 #include <hip/hip_runtime_api.h>
 #include <hip/hip_runtime.h>
 #include "copy_kernel.h"
