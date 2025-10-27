@@ -22,40 +22,16 @@ namespace RcclUnitTesting
     bool                        const inPlace         = false;
     bool                        const useManagedMem   = false;
 
-    // Filter out any unsupported datatypes, in case only subset has been compiled for
-    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
     std::vector<ncclDataType_t> dataTypes;
-    for (auto dt : testDataTypes)
-    {
-      for (int i = 0; i < supportedDataTypes.size(); ++i)
-      {
-        if (supportedDataTypes[i] == dt)
-        {
-          dataTypes.push_back(dt);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
     if (dataTypes.empty()) {
       GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
     }
 
-    // Filter out any unsupported reduction ops, in case only subset has been compiled for
-    std::vector<ncclRedOp_t> const& supportedOps = testBed.GetAllSupportedRedOps();
     std::vector<ncclRedOp_t> redOps;
-    for (auto redop : testRedOps)
-    {
-      for (int i = 0; i < supportedOps.size(); ++i)
-      {
-        if (supportedOps[i] == redop)
-        {
-          redOps.push_back(redop);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedRedOps(redOps, testRedOps);
     if (redOps.empty()) {
-      GTEST_SKIP() << "Skipping... test reduction opertions excluded by UT_REDOPS.";
+      GTEST_SKIP() << "Skipping... test reduction operations excluded by UT_REDOPS.";
     }
 
     bool isCorrect = true;
@@ -171,40 +147,16 @@ namespace RcclUnitTesting
     bool                        const inPlace         = false;
     bool                        const useManagedMem   = false;
 
-    // Filter out any unsupported datatypes, in case only subset has been compiled for
-    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
     std::vector<ncclDataType_t> dataTypes;
-    for (auto dt : testDataTypes)
-    {
-      for (int i = 0; i < supportedDataTypes.size(); ++i)
-      {
-        if (supportedDataTypes[i] == dt)
-        {
-          dataTypes.push_back(dt);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
     if (dataTypes.empty()) {
       GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
     }
 
-    // Filter out any unsupported reduction ops, in case only subset has been compiled for
-    std::vector<ncclRedOp_t> const& supportedOps = testBed.GetAllSupportedRedOps();
     std::vector<ncclRedOp_t> redOps;
-    for (auto redop : testRedOps)
-    {
-      for (int i = 0; i < supportedOps.size(); ++i)
-      {
-        if (supportedOps[i] == redop)
-        {
-          redOps.push_back(redop);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedRedOps(redOps, testRedOps);
     if (redOps.empty()) {
-      GTEST_SKIP() << "Skipping... test reduction opertions excluded by UT_REDOPS.";
+      GTEST_SKIP() << "Skipping... test reduction operations excluded by UT_REDOPS.";
     }
 
     bool isCorrect = true;
@@ -313,40 +265,16 @@ namespace RcclUnitTesting
     int                                  const numGroupCalls      = groupCalls.size();
     int                                  const numIterations      = 10;
 
-    // Filter out any unsupported datatypes, in case only subset has been compiled for
-    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
     std::vector<ncclDataType_t> dataTypes;
-    for (auto dt : testDataTypes)
-    {
-      for (int i = 0; i < supportedDataTypes.size(); ++i)
-      {
-        if (supportedDataTypes[i] == dt)
-        {
-          dataTypes.push_back(dt);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
     if (dataTypes.empty()) {
       GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
     }
 
-    // Filter out any unsupported reduction ops, in case only subset has been compiled for
-    std::vector<ncclRedOp_t> const& supportedOps = testBed.GetAllSupportedRedOps();
     std::vector<ncclRedOp_t> redOps;
-    for (auto redop : testRedOps)
-    {
-      for (int i = 0; i < supportedOps.size(); ++i)
-      {
-        if (supportedOps[i] == redop)
-        {
-          redOps.push_back(redop);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedRedOps(redOps, testRedOps);
     if (redOps.empty()) {
-      GTEST_SKIP() << "Skipping... test reduction opertions excluded by UT_REDOPS.";
+      GTEST_SKIP() << "Skipping... test reduction operations excluded by UT_REDOPS.";
     }
 
     bool isCorrect = true;

@@ -19,20 +19,8 @@ namespace RcclUnitTesting
 
     OptionalColArgs options;
 
-    // Filter out any unsupported datatypes, in case only subset has been compiled for
-    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
     std::vector<ncclDataType_t> dataTypes;
-    for (auto dt : testDataTypes)
-    {
-      for (int i = 0; i < supportedDataTypes.size(); ++i)
-      {
-        if (supportedDataTypes[i] == dt)
-        {
-          dataTypes.push_back(dt);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
     if (dataTypes.empty()) {
       GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
     }
@@ -131,20 +119,8 @@ namespace RcclUnitTesting
 
     OptionalColArgs options;
 
-    // Filter out any unsupported datatypes, in case only subset has been compiled for
-    std::vector<ncclDataType_t> const& supportedDataTypes = testBed.GetAllSupportedDataTypes();
     std::vector<ncclDataType_t> dataTypes;
-    for (auto dt : testDataTypes)
-    {
-      for (int i = 0; i < supportedDataTypes.size(); ++i)
-      {
-        if (supportedDataTypes[i] == dt)
-        {
-          dataTypes.push_back(dt);
-          break;
-        }
-      }
-    }
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
     if (dataTypes.empty()) {
       GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
     }

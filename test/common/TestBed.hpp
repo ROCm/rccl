@@ -127,6 +127,12 @@ namespace RcclUnitTesting
     // Return all the supported data types based on build settings
     std::vector<ncclDataType_t> const& GetAllSupportedDataTypes();
 
+    // Returns the intersection of testRedOps with supported reduction operations as redOps.
+    void GetSupportedRedOps(std::vector<ncclRedOp_t>& redOps, const std::vector<ncclRedOp_t>& testRedOps);
+
+    // Returns the intersection of testDataTypes with supported data types as dataTypes.
+    void GetSupportedDataTypes(std::vector<ncclDataType_t>& dataTypes, const std::vector<ncclDataType_t>& testDataTypes);
+
     // Return a list for # of collectives per group
     std::vector<int> const GetNumCollsPerGroup(int const numCollectivesInGroup,
                                                 int const numGroupCalls);
