@@ -339,13 +339,11 @@ def get_arch_guard(fn):
   cond = None
 
   if fn.proto == "LL128" and fn.acc == "1":
-      cond = "#if (defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)"
-
-  if fn.proto == "LL128":
-      cond = "#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)"
-
-  if fn.acc == "1":
-      cond = "#if defined(__gfx942__) || defined(__gfx950__)"
+      cond = "(defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)"
+  elif fn.proto == "LL128":
+      cond = "(defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)"
+  elif fn.acc == "1":
+      cond = "defined(__gfx942__) || defined(__gfx950__)"
 
   return cond
 
@@ -377,7 +375,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     sym = paste("_", "ncclDevFunc", *fn)
     guard = get_arch_guard(fn)
     if guard:
-      out("%s\n%s %s();\n#endif\n" % (guard, func_declaration, sym))
+      out("#if %s\n%s %s();\n#endif\n" % (guard, func_declaration, sym))
     else:
       out("%s %s();\n" % (func_declaration, sym))
   out("\n")
@@ -391,7 +389,7 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       sym = paste("_", "ncclDevFunc", *fn)
       guard = get_arch_guard(fn)
       if guard:
-        out("%s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index[unroll], sym, index[unroll]))
+        out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index[unroll], sym, index[unroll]))
       else:
         out("/*%4d*/ %s,\n" % (index[unroll], sym))
       index[unroll] += 1
@@ -506,7 +504,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
         key = ((coll_idx & 0x3F))
       
       if fn_id != -1 and guard:
-        out(f'{guard}\n  {{{key}, {fn_id}}}, {comment}\n#else\n  {{{key}, -1}}, {comment}\n#endif\n')
+        out(f'#if {guard}\n  {{{key}, {fn_id}}}, {comment}\n#else\n  {{{key}, -1}}, {comment}\n#endif\n')
       else:
         out(f'  {{{key}, {fn_id}}}, {comment}\n')
   out("};\n")
@@ -573,7 +571,7 @@ for name in name_to_funcs.keys():
       sym = paste("_", fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, fn.unroll)
       guard = get_arch_guard(fn)
       if guard:
-        out("%s\n" % guard)
+        out("#if %s\n" % guard)
       out(
         "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {acc}, {pipeline}, {unroll})\n"
         .format(sym=sym, coll=fn.coll, redop_cxx=redop_to_cxx[fn.redop], ty_cxx=ty_to_cxx[fn.ty],
