@@ -349,6 +349,7 @@ def test_singlenode_config(paths):
 
 @pytest.mark.ext_tuner
 @pytest.mark.allgather
+@pytest.mark.multinode
 def test_multinode_config(paths):
     """Test CSV plugin with multi-node configuration"""
 
