@@ -2,6 +2,9 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## Unreleased - NCCL 2.27.7 for ROCm 7.2.0
+
+
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 
 
