@@ -2,24 +2,35 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
-## Unreleased - RCCL 2.27.7 for ROCm 7.1.0
+## Unreleased - RCCL 2.27.7 for ROCm 7.2.0
+
+## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
+
+### Resolved Issues
+
+* Fixed crash when using the librccl-profiler plugin with the all-to-all collective after the 2.27 update.
+
+## RCCL 2.27.7 for ROCm 7.1.0
 
 ### Added
-* `RCCL_FORCE_ENABLE_DMABUF` added as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
+* Added `RCCL_FORCE_ENABLE_DMABUF` as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
 * Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
 * Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
-* added `RCCL_CHANNEL_TUNING_ENABLE` to enable channel tuning that overrides RCCL's internal adjustments based on threadThreshold.
+* Added `RCCL_CHANNEL_TUNING_ENABLE` to enable channel tuning that overrides RCCL's internal adjustments based on `threadThreshold`.
 
 ### Changed
 
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
-* Compatibility with NCCL 2.27.7
+* Compatibility with NCCL 2.27.7.
 
-### Resolved issues
-* Improve small message performance for alltoall by enabling and optimizing batched P2P operations. 
+### Optimized
+* Enabled and optimized batched P2P operations to improve small message performance for AllToAll and AllGather.
+* Optimized channel count selection to improve efficiency for small to medium message sizes in ReduceScatter.
+* Changed code inlining to improve latency for small message sizes for AllReduce, AllGather, and ReduceScatter.
 
 ### Known issues
 * Symmetric memory kernels are currently disabled due to ongoing CUMEM enablement work.
+* When running this version of RCCL using ROCm versions earlier than 6.4.0, the user must set the environment flag `HSA_NO_SCRATCH_RECLAIM=1`.
 
 ## RCCL 2.26.6 for ROCm 7.0.0
 
@@ -29,6 +40,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Fixed unit test failures in tests ending with `ManagedMem` and `ManagedMemGraph` suffixes.
 * Suboptimal algorithmic switching point for AllReduce on MI300x.
 * Fixed the known issue "When splitting a communicator using `ncclCommSplit` in some GPU configurations, MSCCL initialization can cause a segmentation fault." with a design change to use `comm` instead of `rank` for `mscclStatus`. The Global map for `comm` to `mscclStatus` is still not thread safe but should be explicitly handled by mutexes for read writes. This is tested for correctness, but there is a plan to use a thread-safe map data structure in upcoming changes.
+* Fixed broken functionality within the LL protocol on gfx950 by disabling inlining of LLGenericOp kernels.
 
 ### Added
 
@@ -47,10 +59,16 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Changed
 
-* Compatibility with NCCL 2.23.4
-* Compatibility with NCCL 2.24.3
-* Compatibility with NCCL 2.25.1
-* Compatibility with NCCL 2.26.6
+* Compatibility with NCCL 2.23.4.
+* Compatibility with NCCL 2.24.3.
+* Compatibility with NCCL 2.25.1.
+* Compatibility with NCCL 2.26.6.
+
+### Optimized
+* Improved the performance of the `FP8` Sum operation by upcasting to `FP16`.
+
+### Known Issues
+* When running this version of RCCL using ROCm versions earlier than 6.4.0, the user must set the environment flag `HSA_NO_SCRATCH_RECLAIM=1`.
 
 ## RCCL 2.22.3 for ROCm 6.4.2
 

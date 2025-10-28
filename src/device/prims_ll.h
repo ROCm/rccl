@@ -10,6 +10,7 @@
 #include "npkit/npkit.h"
 #endif
 
+#include "device/rccl_ptr.h"
 template<typename T, typename RedOp, typename Fan, int Direct, int P2p, bool isNetOffload, int Metadata, int Pipeline, int useAcc>
 class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, Metadata, Pipeline, useAcc>:
     public PrimitivesWithoutDirect<Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, Metadata, Pipeline, useAcc>> {
@@ -166,8 +167,8 @@ private:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(i4.i4) : "v"(&src->i4));
 #else
-      i4.v[0] = __builtin_nontemporal_load(src->v);
-      i4.v[1] = __builtin_nontemporal_load(src->v+1);
+      *((u64_gptr)i4.v) = __builtin_nontemporal_load((u64_gptr)src->v);
+      *((u64_gptr)i4.v + 1) = __builtin_nontemporal_load((u64_gptr)src->v+1);
 #endif
 #if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
       npkitWaitRecvSpins++;
@@ -236,8 +237,8 @@ private:
       asm volatile ("global_load_b128 %0, %1, off glc slc dlc\n"
         "s_waitcnt vmcnt(0)\n" : "=v"(line[i].i4) : "v"(&src->i4));
 #else
-      line[i].v[0] = __builtin_nontemporal_load(src->v);
-      line[i].v[1] = __builtin_nontemporal_load(src->v+1);
+      line[i].v[0] = __builtin_nontemporal_load((u64_gptr)src->v);
+      line[i].v[1] = __builtin_nontemporal_load((u64_gptr)src->v+1);
 #endif
 #else
       asm volatile("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4) : "memory");
@@ -266,8 +267,8 @@ private:
     i4.flag1 = flag;
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
-    __builtin_nontemporal_store(i4.v[0], dst->v);
-    __builtin_nontemporal_store(i4.v[1], dst->v+1);
+    *((u64_gptr) dst->v) = *((u64_gptr) i4.v);
+    *((u64_gptr) dst->v+1) = *((u64_gptr) i4.v+1); 
 #if defined(__gfx950__) && ROCM_VERSION < 70200
     __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
 #endif
@@ -292,25 +293,25 @@ private:
 #ifdef __GFX11__
       u1 = __atomic_load_n((uint8_t*)src, __ATOMIC_RELAXED);
 #else
-      u1 = __builtin_nontemporal_load((uint8_t*)src);
+      u1 = __builtin_nontemporal_load((u8_gptr)src);
 #endif
     else if(sizeof(U) == 2)
 #ifdef __GFX11__
       u2 = __atomic_load_n((uint16_t*)src, __ATOMIC_RELAXED);
 #else
-      u2 = __builtin_nontemporal_load((uint16_t*)src);
+      u2 = __builtin_nontemporal_load((u16_gptr)src);
 #endif
     else if(sizeof(U) == 4)
 #ifdef __GFX11__
       u4 = __atomic_load_n((uint32_t*)src, __ATOMIC_RELAXED);
 #else
-      u4 = __builtin_nontemporal_load((uint32_t*)src);
+      u4 = __builtin_nontemporal_load((u32_gptr)src);
 #endif
     else
 #ifdef __GFX11__
       u8 = __atomic_load_n((uint64_t*)src, __ATOMIC_RELAXED);
 #else
-      u8 = __builtin_nontemporal_load((uint64_t*)src);
+      u8 = __builtin_nontemporal_load((u64_gptr)src);
 #endif
 #else
     if(sizeof(U) == 1)
@@ -397,7 +398,12 @@ private:
     }
   };
 
+
   __device__ void storeData(T *dst, uint64_t val, int eltN) {
+    if (__all((reinterpret_cast<uintptr_t>(dst) & (sizeof(T) - 1)) == 0 && sizeof(T) * eltN == sizeof(val))){
+      *((u64_gptr) dst) = val;
+      return;
+    }
     union {
       uint64_t u8;
       T elt[EltPerLine];
