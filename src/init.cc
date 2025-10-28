@@ -1416,12 +1416,15 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   }
   INFO(NCCL_INIT, "GFX9 cheap fence is %s", comm -> gfx9CheapFenceOff ? "OFF" : "ON");
   #endif
+  // RCCL: Only use one slice per primitive on some single node gfx9xx systems
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")){
+    comm->rcclUseOneSlice = nNodes = 1;
+  }
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
-    // RCCL: Only use one slice per primitive on some single node gfx9xx systems
-    comm->rcclUseOneSlice = !managed && nNodes == 1;
+    
     if (managed && nNodes > 1) {
       // This forces the minimum channels to 24
       allGather3Data[rank].nc = 6;
