@@ -776,7 +776,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   bool rccl_anp = !(strcmp(proxyState->ncclNet->name, RCCL_ANP_PLUGIN_STR));
   
   if (rcclNetP2pPolicy) {
-    rcclNetP2pPolicy(req->handle, resources->isP2p);
+    NCCLCHECK(rcclNetP2pPolicy(req->handle, resources->isP2p));
   }
   
   if (resources->shared) {

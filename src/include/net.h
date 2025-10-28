@@ -23,6 +23,6 @@ ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport);
 extern ncclNet_t ncclNetIb;
 extern ncclNet_t ncclNetSocket;
 
-extern int rcclNetP2pPolicy(void* handle, int isP2p);
+extern ncclResult_t rcclNetP2pPolicy(void* handle, int isP2p);
 
 #endif
