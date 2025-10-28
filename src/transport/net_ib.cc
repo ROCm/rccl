@@ -1210,7 +1210,7 @@ struct ncclIbRecvComm {
 static_assert((offsetof(struct ncclIbRecvComm, remFifo) % 32) == 0, "ncclIbRecvComm fifo must be 32-byte aligned");
 
 NCCL_PARAM(IbQpsPerConn, "IB_QPS_PER_CONNECTION", 1);
-RCCL_PARAM(IbQpsPerP2p, "IB_QPS_PER_P2P", 1);
+RCCL_PARAM(IbQpsPerP2p, "IB_QPS_PER_P2P", 0);
 
 static void ncclIbAddEvent(struct ncclIbRequest* req, int devIndex, struct ncclIbNetCommDevBase* base) {
   req->events[devIndex]++;
@@ -1430,16 +1430,21 @@ ib_recv_dev_list:
   // Read isP2p from handle
   isP2p = handle->isP2p;
   INFO(NCCL_NET, "NET/IB: ncclIbConnect isP2p=%d", isP2p);
-  
-  if(isP2p) {
-    localNqps  = rcclParamIbQpsPerP2p() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
-    remoteNqps = rcclParamIbQpsPerP2p() * remoteVProps.ndevs;
+  if (rcclParamIbQpsPerP2p() > 0) {
+    if(isP2p) {
+      localNqps  = rcclParamIbQpsPerP2p() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
+      remoteNqps = rcclParamIbQpsPerP2p() * remoteVProps.ndevs;
+    } else {
+      localNqps  = ncclParamIbQpsPerConn() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
+      remoteNqps = ncclParamIbQpsPerConn() * remoteVProps.ndevs;
+    }
   } else {
     localNqps  = ncclParamIbQpsPerConn() * comm->base.vProps.ndevs; // We must have at least 1 qp per-device
     remoteNqps = ncclParamIbQpsPerConn() * remoteVProps.ndevs;
   }
   comm->base.nqps = remoteNqps > localNqps ? remoteNqps : localNqps; // Select max nqps (local or remote)
   INFO(NCCL_NET, "NET/IB: Max Nqps=%d, localNqps=%d, remoteNqps=%d", comm->base.nqps, localNqps, remoteNqps);
+
   // Init PD, Ctx for each IB device
   comm->ar = 1; // Set to 1 for logic
   for (int i = 0; i < comm->base.vProps.ndevs; i++) {
@@ -1757,10 +1762,14 @@ ib_recv:
 
   mergedDev = ncclIbMergedDevs + lComm->dev;
   rComm->base.nRemDevs = remMeta.ndevs;
-  
-  if(remMeta.isP2p) {
-    localNqps  = rcclParamIbQpsPerP2p() * rComm->base.vProps.ndevs;
-    remoteNqps = rcclParamIbQpsPerP2p() * remMeta.ndevs;
+  if (rcclParamIbQpsPerP2p() > 0) {
+    if(remMeta.isP2p) {
+      localNqps  = rcclParamIbQpsPerP2p() * rComm->base.vProps.ndevs;
+      remoteNqps = rcclParamIbQpsPerP2p() * remMeta.ndevs;
+    } else {
+      localNqps  = ncclParamIbQpsPerConn() * rComm->base.vProps.ndevs;
+      remoteNqps = ncclParamIbQpsPerConn() * remMeta.ndevs;
+    }
   } else {
     localNqps  = ncclParamIbQpsPerConn() * rComm->base.vProps.ndevs;
     remoteNqps = ncclParamIbQpsPerConn() * remMeta.ndevs;
