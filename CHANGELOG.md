@@ -23,7 +23,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Compatibility with NCCL 2.27.7.
 
 ### Optimized
-* Improve small message performance for alltoall by enabling and optimizing batched P2P operations.
+* Enabled and optimized batched P2P operations to improve small message performance for AllToAll and AllGather.
+* Optimized channel count selection to improve efficiency for small-to-medium message sizes in ReduceScatter.
+* Changed code inlining to improve latency for small message sizes for AllReduce, AllGather, and ReduceScatter.
 
 ### Known issues
 * Symmetric memory kernels are currently disabled due to ongoing CUMEM enablement work.
