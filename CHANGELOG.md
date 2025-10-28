@@ -2,6 +2,12 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
+
+### Resolved Issues
+
+* Fixed a single-node data corruption issue in MSCCL on the Instinct MI350X and MI355X for the LL protocol.  This previously affected about 2% of the runs for single node AllReduce with inputs smaller than 512 KiB.
+
 ## RCCL 2.27.7 for ROCm 7.1.0
 
 ### Added
