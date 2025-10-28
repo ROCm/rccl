@@ -287,6 +287,15 @@ def parse_cpu_event_file(npkit_dump_dir, npkit_event_def, rank, channel, cpu_clo
 
 
 def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def, gpu_statistics, warmup_runs=0):
+   
+    # check if directory exists, if not create it
+    if not os.path.exists(npkit_dump_dir):
+        #print(f"Directory {npkit_dump_dir} does not exist. Creating it...")
+        os.makedirs(npkit_dump_dir, exist_ok=True)
+    else:
+        #print(f"Directory {npkit_dump_dir} already exists.")
+        pass
+
     files_in_dump_dir = next(os.walk(npkit_dump_dir))[2]
     gpu_event_files = [x for x in files_in_dump_dir if x.startswith('gpu_events_rank_')]
     cpu_event_files = [x for x in files_in_dump_dir if x.startswith('cpu_events_rank_')]
