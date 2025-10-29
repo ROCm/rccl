@@ -333,7 +333,7 @@ inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int chann
     int delta = (channel-base) & (nP2pChannels-1);
     return reverseBits(delta, nChannelsLog2);
   } else {
-    return (channel - base * nParts) & (nParts-1);
+    return (channel - base * nParts) & (nP2pChannels-1);
   }
 }
 
