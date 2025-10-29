@@ -52,7 +52,7 @@ jobs:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: "--rccl"
+          FETCH_ARTIFACT_ARGS: "--rccl --tests"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
@@ -71,7 +71,7 @@ jobs:
               --html=/home/arravikum/cvs/test_reports/ci_test_report.html \
               --capture=tee-sys \
               --self-contained-html"
-              
+
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
