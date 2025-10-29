@@ -129,16 +129,6 @@ Activate the virtual environment using the appropriate command for your shell:
 source venv/bin/activate
 ```
 
-**On Linux/Mac (fish shell):**
-```fish
-source venv/bin/activate.fish
-```
-
-**On Windows:**
-```cmd
-venv\Scripts\activate
-```
-
 Once activated, you should see `(venv)` at the beginning of your command prompt.
 
 ### Step 3: Install Dependencies
