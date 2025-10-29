@@ -11,6 +11,7 @@
 #include <type_traits>
 #include "reduce_kernel.h" // for reduction funcs
 #include "rccl_metadata.h"
+#include "rccl_ptr.h"
 #include "common_kernel.h"
 #include "common.h"
 

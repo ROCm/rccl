@@ -9,14 +9,16 @@
 
 #include <type_traits>
 
+#include "device/rccl_ptr.h"
+
 inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {
-  v0 = __builtin_nontemporal_load(ptr);
-  v1 = __builtin_nontemporal_load(ptr+1);
+  v0 = __builtin_nontemporal_load((u64_gptr) ptr);
+  v1 = __builtin_nontemporal_load((u64_gptr) ptr+1);
 }
 
 inline __device__ void store128(uint64_t* ptr, uint64_t v0, uint64_t v1) {
-  __builtin_nontemporal_store(v0, ptr);
-  __builtin_nontemporal_store(v1, ptr+1);
+  *((u64_gptr) ptr) = v0;
+  *((u64_gptr) ptr + 1) = v1;
 }
 
 inline __device__ uint64_t* shmemCvtPtr(volatile uint64_t* shmemGenericPtr) {
@@ -297,6 +299,18 @@ DEFINE_ld_st__size(8, uint64_t, b64, l)
 #undef DEFINE_ld_st__size_space
 #undef DEFINE_ld_st__size
 
+#ifdef __gfx950__
+__device__ __forceinline__ void store16global(uintptr_t addr, BytePack<16> value){
+  *(u64_gptr) addr = *(u64_gptr) value.u64; 
+  *((u64_gptr) addr+1) = *((u64_gptr) value.u64+1); 
+}
+#else
+__device__ __forceinline__ void store16global(uintptr_t addr, BytePack<16> value){
+  __builtin_nontemporal_store(value.u64[0], (u64_gptr) addr);
+  __builtin_nontemporal_store(value.u64[1], (u64_gptr) addr + 1);
+}
+#endif
+
 #define DEFINE_ld_st_16__space(space, addr_cxx_ty, addr_reg_ty) \
   template<> \
   __device__ __forceinline__ BytePack<16> ld_##space<16>(addr_cxx_ty addr) { \
@@ -308,14 +322,13 @@ DEFINE_ld_st__size(8, uint64_t, b64, l)
   template<> \
   __device__ __forceinline__ BytePack<16> ld_volatile_##space<16>(addr_cxx_ty addr) { \
     BytePack<16> ans; \
-    ans.u64[0] = __builtin_nontemporal_load((uint64_t*)addr); \
-    ans.u64[1] = __builtin_nontemporal_load((uint64_t*)addr+1); \
+    *(u64_gptr) ans.u64 = __builtin_nontemporal_load((u64_gptr)addr); \
+    *((u64_gptr) ans.u64+1) = __builtin_nontemporal_load((u64_gptr)addr+1); \
     return ans; \
   } \
   template<> \
   __device__ __forceinline__ void st_##space<16>(addr_cxx_ty addr, BytePack<16> value) { \
-    __builtin_nontemporal_store(value.u64[0], (uint64_t*)addr); \
-    __builtin_nontemporal_store(value.u64[1], (uint64_t*)addr+1); \
+    store16##space(addr, value); \
   }
 
 DEFINE_ld_st_16__space(global, uintptr_t, l)
