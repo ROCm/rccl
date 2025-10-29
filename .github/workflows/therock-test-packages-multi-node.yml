@@ -68,6 +68,25 @@ jobs:
               --cluster_file ./input/cluster.json \
               --config_file ./input/mi350_config.json \
               --log-file=/tmp/rccl_log.log \
-              --html=/home/arravikum/cvs/ci_test_report.html \
+              --html=/home/arravikum/cvs/test_reports/ci_test_report.html \
               --capture=tee-sys \
               --self-contained-html"
+              
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+
+      - name: Post test report upload
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${{ github.workspace }}/build_tools"
+          python3 build_tools/github_actions/upload_test_report_script.py \
+            --run-id "${{ github.run_id }}" \
+            --amdgpu-family "${{ inputs.amdgpu_families }}" \
+            --report-path "/home/arravikum/cvs/test_reports" \
+            --log-destination "/logs/gfx950-dcgpu" \
+            --index-file-name "index_rccl_test_report.html"
