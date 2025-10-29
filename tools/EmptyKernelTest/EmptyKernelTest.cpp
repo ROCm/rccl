@@ -87,9 +87,12 @@ int main(int argc, char **argv)
   int blockSize     = (argc > 3 ? atoi(argv[3]) : 1);
   bool cpuTime      = (argc > 4 ? atoi(argv[4]) != 0 : true);
   bool gpuTime      = (argc > 5 ? atoi(argv[5]) != 0 : true);
-  bool outerLoop    = (argc > 6 ? atoi(argv[6]) != 0 : false); // only outer loop
+  bool outerLoop    = (argc > 6 ? atoi(argv[6]) != 0 : false);
+  bool innerLoop    = (argc > 7 ? atoi(argv[7]) != 0 : true);
   int numWarmups    = 3;
-  printf("Running %d iterations <<<%d,%d>>> cpuTime:%d gpuTime:%d outerLoop:%d\n", numIterations, gridSize, blockSize, cpuTime , gpuTime, outerLoop);
+  printf("Running %d iterations <<<%d,%d>>> cpuTime:%d gpuTime:%d outerLoop:%d innerLoop:%d\n", numIterations, gridSize, blockSize, cpuTime , gpuTime, outerLoop,innerLoop);
+  if(!innerLoop && !outerLoop) {printf("Warning: Atleast one of inner and outer loops should be enabled\n");return 0;}
+  if(outerLoop && innerLoop && (cpuTime || gpuTime)){printf("Warning: given cpuTime %d, gpuTime %d, outerLoop %d may not be meaningful combination, recommended are 001,100,010,110\n",cpuTime , gpuTime, outerLoop);}
 
   // Create events and stream
   hipEvent_t startEvent, stopEvent, startEventOuterLoop, stopEventOuterLoop;
@@ -122,62 +125,67 @@ int main(int argc, char **argv)
   auto cpuDeltaOuterloop = std::chrono::high_resolution_clock::now() - cpuStartOuterloop;
   double cpuDeltaMsecOuterLoop;
   float gpuDeltaMsecOuterLoop;
-  if(outerLoop) { HIP_CALL(hipEventRecord(startEventOuterLoop, stream));}
+  if(outerLoop && gpuTime) {HIP_CALL(hipEventRecord(startEventOuterLoop, stream));}
   for (int iteration = 0; iteration < numIterations; iteration++)
   {
     // Start timing
-    if(cpuTime){cpuStart = std::chrono::high_resolution_clock::now();}
-    if(gpuTime){HIP_CALL(hipEventRecord(startEvent, stream));}
+    if(innerLoop && cpuTime){cpuStart = std::chrono::high_resolution_clock::now();}
+    if(innerLoop && gpuTime){HIP_CALL(hipEventRecord(startEvent, stream));}
 
     // Launch kernel and wait for completion
     EmptyKernel<<<gridSize, blockSize, 0, stream>>>();
-    if(gpuTime){HIP_CALL(hipEventRecord(stopEvent, stream));}
-    HIP_CALL(hipStreamSynchronize(stream));
+    if(innerLoop && gpuTime){HIP_CALL(hipEventRecord(stopEvent, stream));}
+    if(innerLoop){HIP_CALL(hipStreamSynchronize(stream));}
 
     // Collect timing info
-    if(cpuTime) {
+    if(innerLoop && cpuTime) {
       cpuDelta = std::chrono::high_resolution_clock::now() - cpuStart;
       cpuDeltaMsec = std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count() * 1000.0;
     }
-    if(gpuTime){HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvent, stopEvent));}
+    if(innerLoop && gpuTime){HIP_CALL(hipEventElapsedTime(&gpuDeltaMsec, startEvent, stopEvent));}
 
     // Report timing
-    printf("Iteration %03d Kernel Launch Time (usec) %10.5f (CPU) %10.5f (GPU)\n", iteration, cpuDeltaMsec *1000.0, gpuDeltaMsec * 1000.0);
-    if(gpuTime){
+    if(innerLoop && (cpuTime || gpuTime)) {printf("Iteration %03d Kernel Launch Time (usec) %10.5f (CPU) %10.5f (GPU)\n", iteration, cpuDeltaMsec *1000.0, gpuDeltaMsec * 1000.0);}
+    if(innerLoop && gpuTime){
       allGpuDeltaMsec[iteration] = gpuDeltaMsec * 1000.0;
       gpuSum += gpuDeltaMsec * 1000.0;
     }
-    if(cpuTime){
+    if(innerLoop && cpuTime){
       allCpuDeltaMsec[iteration] = cpuDeltaMsec * 1000.0;
       cpuSum += cpuDeltaMsec * 1000.0;
     }
   }
   if(outerLoop) {
     cpuDeltaOuterloop = std::chrono::high_resolution_clock::now() - cpuStartOuterloop;
-    HIP_CALL(hipEventRecord(stopEventOuterLoop, stream));
-    HIP_CALL(hipStreamSynchronize(stream));
-    HIP_CALL(hipEventElapsedTime(&gpuDeltaMsecOuterLoop, startEventOuterLoop, stopEventOuterLoop));
+    if(gpuTime){
+      HIP_CALL(hipEventRecord(stopEventOuterLoop, stream));
+      HIP_CALL(hipStreamSynchronize(stream));
+      HIP_CALL(hipEventElapsedTime(&gpuDeltaMsecOuterLoop, startEventOuterLoop, stopEventOuterLoop));
+    }
     cpuDeltaMsecOuterLoop = std::chrono::duration_cast<std::chrono::duration<double>>(cpuDeltaOuterloop).count() * 1000.0;
   }
   printf("\n");
 
   // Report averages
-  double avgCpuUsec = cpuSum / numIterations;
-  double avgGpuUsec = gpuSum / numIterations;
-  auto   minCpuUsec = std::min_element(std::begin(allCpuDeltaMsec), std::end(allCpuDeltaMsec));
-  auto   minGpuUsec = std::min_element(std::begin(allGpuDeltaMsec), std::end(allGpuDeltaMsec));
-  auto   maxCpuUsec = std::max_element(std::begin(allCpuDeltaMsec), std::end(allCpuDeltaMsec));
-  auto   maxGpuUsec = std::max_element(std::begin(allGpuDeltaMsec), std::end(allGpuDeltaMsec));
-  auto   varCpuUsec = calStdDev(allCpuDeltaMsec, avgCpuUsec);
-  auto   varGpuUsec = calStdDev(allGpuDeltaMsec, avgGpuUsec);
+  if(innerLoop && (cpuTime || gpuTime)){
+    double avgCpuUsec = cpuSum / numIterations;
+    double avgGpuUsec = gpuSum / numIterations;
+    auto   minCpuUsec = std::min_element(std::begin(allCpuDeltaMsec), std::end(allCpuDeltaMsec));
+    auto   minGpuUsec = std::min_element(std::begin(allGpuDeltaMsec), std::end(allGpuDeltaMsec));
+    auto   maxCpuUsec = std::max_element(std::begin(allCpuDeltaMsec), std::end(allCpuDeltaMsec));
+    auto   maxGpuUsec = std::max_element(std::begin(allGpuDeltaMsec), std::end(allGpuDeltaMsec));
+    auto   varCpuUsec = calStdDev(allCpuDeltaMsec, avgCpuUsec);
+    auto   varGpuUsec = calStdDev(allGpuDeltaMsec, avgGpuUsec);
 
-  printf("Average       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", avgCpuUsec, avgGpuUsec);
-  printf("Minimum       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", *minCpuUsec, *minGpuUsec);
-  printf("Maximum       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", *maxCpuUsec, *maxGpuUsec);
-  printf("Stddev        Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", varCpuUsec, varGpuUsec);
+    printf("Average       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", avgCpuUsec, avgGpuUsec);
+    printf("Minimum       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", *minCpuUsec, *minGpuUsec);
+    printf("Maximum       Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", *maxCpuUsec, *maxGpuUsec);
+    printf("Stddev        Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", varCpuUsec, varGpuUsec);
+  }
   if(outerLoop) {
     double avgCpuUsecOuterLoop = (cpuDeltaMsecOuterLoop* 1000.0)/numIterations;
-    double avgGpuUsecOuterLoop = (gpuDeltaMsecOuterLoop* 1000.0)/numIterations;
+    double avgGpuUsecOuterLoop = 0.0;
+    if(gpuTime){ avgGpuUsecOuterLoop = (gpuDeltaMsecOuterLoop* 1000.0)/numIterations; }
     printf("Average-OL    Kernel Launch time (usec) %10.5f (CPU) %10.5f (GPU)\n", avgCpuUsecOuterLoop, avgGpuUsecOuterLoop);
   }
   // Cleanup events and stream
@@ -186,6 +194,5 @@ int main(int argc, char **argv)
   HIP_CALL(hipEventDestroy(stopEvent));
   HIP_CALL(hipEventDestroy(startEventOuterLoop));
   HIP_CALL(hipEventDestroy(stopEventOuterLoop));
-
   return 0;
 }
