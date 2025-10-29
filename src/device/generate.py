@@ -2,7 +2,7 @@
 import os
 import sys
 import subprocess
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 # Order of colls, redops, tys, protos, algos must match src/include/device.h
 all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
@@ -156,8 +156,8 @@ coll_camel_to_lower = {
 coll_lower_to_camel = {coll_camel_to_lower[x]: x for x in coll_camel_to_lower}
 
 ################################################################################
-@dataclass(eq=True, unsafe_hash=True)
-class Func:
+@dataclass(frozen=True)
+class Fn:
   coll: str
   algo: str
   proto: str
@@ -323,7 +323,7 @@ def enumerate_func_rows():
                     yield (coll, algo, proto, redop, ty, acc, pipeline, unroll)
 
 # Sort the hashmap based on custom key <coll> <algo> <proto> <redop> <ty>
-def custom_sort_key(fn: Func):
+def custom_sort_key(fn: Fn):
     return (
         local_unroll.index(fn.unroll),
         all_colls.index(fn.coll),
@@ -350,16 +350,16 @@ def get_arch_guard(fn):
 ################################################################################
 
 # Corresponds to ncclDevFuncRowToId[]
-func_rows = [Func(*fn) for fn in enumerate_func_rows()]
+func_rows = [Fn(*fn) for fn in enumerate_func_rows()]
 
 # Corresponds to ncclDevFuncTable[]
 primary_funcs = sorted(
-    {Func(*equivalent_primary(*fn)) for fn in parse_input(func_pattern)}, key=custom_sort_key
+    {Fn(*equivalent_primary(*fn)) for fn in parse_input(func_pattern)}, key=custom_sort_key
 )
 
 # primary_to_index[primary_funcs[i]] == i
 primary_to_index = {fn: i for i, fn in enumerate(primary_funcs)}
-primary_to_index = {fn: primary_to_index.get(Func(*fn), -1) for fn in func_rows}
+primary_to_index = {fn: primary_to_index.get(Fn(*fn), -1) for fn in func_rows}
 
 ################################################################################
 
@@ -380,9 +380,10 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       out("%s %s();\n" % (func_declaration, sym))
   out("\n")
 
-  index = {val: 0 for val in all_unrolls}
+  index = {val: None for val in all_unrolls}
   out("typedef void(*ncclDevFuncPtr_t)();\n\n")
   for unroll in all_unrolls:
+    index[unroll] = 0
     out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_%s[] = {\n" % unroll)
     for fn in primary_funcs:
       if fn.unroll != unroll: continue
@@ -469,7 +470,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
     fn_id = -1
     if fn is not None:
       guard = get_arch_guard(fn)
-      fn_id = primary_to_index[Func(*equivalent_primary(*fn))]
+      fn_id = primary_to_index[Fn(*equivalent_primary(*fn))]
       comment = " // " + paste(" ", *fn)
       # Build the function signature string: "<coll> <algo> <proto> <redop> <ty>"
       # get parts indexes in order (coll, algo, proto, redop, ty, acc, pipeline, unroll)
