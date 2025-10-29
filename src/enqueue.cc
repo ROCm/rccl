@@ -681,6 +681,10 @@ static ncclResult_t scheduleCollTasksToPlan(
   size_t trafficPerChannel = 0;
   int channelId = 0;
   size_t currentTraffic = 0;
+
+  size_t channelCounts[MAXCHANNELS];
+  for (int c=0; c<MAXCHANNELS; c++) channelCounts[c] = 0;
+
   while (nPlanColls!=0 && !ncclIntruQueueEmpty(&planner->collTaskQueue)) {
     struct ncclTaskColl* task = ncclIntruQueueHead(&planner->collTaskQueue);
     struct ncclWorkList* workNode = ncclIntruQueueHead(&planner->collWorkQueue);
@@ -911,6 +915,10 @@ static ncclResult_t scheduleCollTasksToPlan(
           int(devWork->cbd.chunkGrainsLo*rcclProtoGrainSize(task->protocol, comm)),
           int(devWork->cbd.chunkGrainsMid*rcclProtoGrainSize(task->protocol, comm)),
           int(devWork->cbd.chunkGrainsHi*rcclProtoGrainSize(task->protocol, comm)));
+          // channel traffic counter
+          channelCounts[devWork->channelLo] += (long)devWork->cbd.countLo;
+          if (devWork->channelLo != devWork->channelHi) channelCounts[devWork->channelHi] += (long)devWork->cbd.countHi;
+          for (int c=devWork->channelLo+1; c<devWork->channelHi; c++) channelCounts[c] += (long)devWork->cbd.countMid;
       }
     }
 
@@ -925,6 +933,15 @@ static ncclResult_t scheduleCollTasksToPlan(
     ncclIntruQueueEnqueue(&plan->workQueue, workNode);
     plan->workBytes += workNode->size;
   }
+
+  char line[1024];
+  int offset = 0;
+  for (int c=0; c<MAXCHANNELS; c++) {
+    sprintf(line+offset, "%ld ", channelCounts[c]);
+    offset = strlen(line);
+  }
+  TRACE(NCCL_COLL, "Channel traffic counts: %s", line);
+
   return ncclSuccess;
 }
 
@@ -2772,7 +2789,7 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   }
   NCCLCHECKGOTO(ArgsCheck(info), ret, fail);
 
-  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p acc %p count %zu datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
+  INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p acc %p count %u datatype %d op %d root %d comm %p [nranks=%d] stream %p task %d globalrank %d",
         info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->acc, info->count,
         info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream,
         info->comm->planner.nTasksP2p + info->comm->planner.nTasksColl,

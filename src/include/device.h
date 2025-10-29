@@ -499,10 +499,10 @@ typedef enum {
 } ncclCollTraceDataType_t;
 
 struct ncclCollTrace {
-  uint8_t type;
-  uint8_t bid;
   int16_t funcIndex;
-  uint16_t data_0;
+  uint8_t xccId:4;
+  uint16_t data_0:12;
+  uint8_t type;
   uint8_t batchIx;
   uint8_t tid;
   uint8_t channelId;
