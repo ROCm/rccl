@@ -82,7 +82,7 @@ python3 -m venv venv
 
 Activate the virtual environment using the appropriate command for your shell:
 
-**On Linux/Mac (bash/zsh):**
+**On Linux:**
 ```bash
 source venv/bin/activate
 ```
