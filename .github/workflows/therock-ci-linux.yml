@@ -124,6 +124,9 @@ jobs:
   therock-test-linux-multi-node:
     name: "Test multi-node"
     if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
+    permissions:
+      contents: read
+      id-token: write
     needs: [therock-build-linux]
     uses: ./.github/workflows/therock-test-packages-multi-node.yml
     with:
