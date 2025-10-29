@@ -6,6 +6,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 
+### Changed
+* `RCCL_P2P_BATCH_ENABLE` is now set to 1, enabling p2p batching by default
+
 ### Resolved Issues
 
 * Fixed crash when using the librccl-profiler plugin with the all-to-all collective after the 2.27 update.
@@ -17,7 +20,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
 * Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
 * added `RCCL_CHANNEL_TUNING_ENABLE` to enable channel tuning that overrides RCCL's internal adjustments based on threadThreshold.
-* `RCCL_P2P_BATCH_ENABLE` is now set to 1, enabling p2p batching by default
+
 
 ### Changed
 
