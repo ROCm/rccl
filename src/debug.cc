@@ -48,6 +48,8 @@ static void ncclDebugInit() {
   }
   if (nccl_debug == NULL) {
     tempNcclDebugLevel = NCCL_LOG_ERROR;
+  } else if (strcasecmp(nccl_debug, "NONE") == 0) {
+    tempNcclDebugLevel = NCCL_LOG_NONE;
   } else if (strcasecmp(nccl_debug, "VERSION") == 0) {
     tempNcclDebugLevel = NCCL_LOG_VERSION;
   } else if (strcasecmp(nccl_debug, "WARN") == 0) {

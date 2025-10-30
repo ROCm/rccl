@@ -2428,7 +2428,7 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, int nId
   // first call ncclInit, this will setup the environment
   NCCLCHECKGOTO(ncclInit(), res, fail);
 
-  if (ncclDebugLevel > NCCL_LOG_WARN || (ncclDebugLevel != NCCL_LOG_ERROR && myrank == 0)) {
+  if (ncclDebugLevel > NCCL_LOG_WARN || (ncclDebugLevel >= NCCL_LOG_VERSION && myrank == 0)) {
     static pthread_once_t once = PTHREAD_ONCE_INIT;
     pthread_once(&once, showVersion);
   }
