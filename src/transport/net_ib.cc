@@ -139,7 +139,8 @@ static void ncclIbStatsFatalError(struct ncclIbStats* stat){
 }
 static ncclResult_t ncclIbStatsCheckFatalCount(struct ncclIbStats* stat, const char* funcName) {
   if (ncclParamIbAsyncEvents() && __atomic_load_n(&stat->fatalErrorCount, __ATOMIC_RELAXED)) {
-    WARN("communicator encountered a fatal error (detected in %s)\n", funcName);
+    ERROR("RCCL encountered a communication fatal error (detected in %s)\n", funcName);
+    ERROR("RCCL cannot recover from this network failure and now exiting. Please check the network health.");
     return ncclSystemError;
   }
   return ncclSuccess;

@@ -149,7 +149,8 @@ ncclResult_t checkHsaEnvSetting() {
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
     // Always print out this warning message
-    printf("Fatal Error: HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with HIP Runtime version:%d, GPU Firmware version:%d\n", hipRuntimeVersion, firmwareVersion);
+    ERROR("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with the current HIP configuration. (Runtime version:%d, GPU Firmware version:%d)", hipRuntimeVersion, firmwareVersion);
+    ERROR("Please set HSA_NO_SCRATCH_RECLAIM=1 and rerun.");
     return ncclSystemError;
   }
   return ncclSuccess;
@@ -2433,7 +2434,7 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, int nId
   // first call ncclInit, this will setup the environment
   NCCLCHECKGOTO(ncclInit(), res, fail);
 
-  if (ncclDebugLevel > NCCL_LOG_WARN || (ncclDebugLevel != NCCL_LOG_NONE && myrank == 0)) {
+  if (ncclDebugLevel > NCCL_LOG_WARN || (ncclDebugLevel >= NCCL_LOG_VERSION && myrank == 0)) {
     static pthread_once_t once = PTHREAD_ONCE_INIT;
     pthread_once(&once, showVersion);
   }
