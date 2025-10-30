@@ -268,8 +268,8 @@ private:
     i4.flag2 = flag;
     __builtin_nontemporal_store(i4.v[0], dst->v);
     __builtin_nontemporal_store(i4.v[1], dst->v+1);
-#if defined(__gfx950__) && ROCM_VERSION < 70200
-    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
+#if defined(__gfx950__) && ROCM_VERSION < 70002
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache on gfx950 if ROCr fix for hipHostMallocUncached is not available (ROCm version < 7.0.2)
 #endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
@@ -344,8 +344,8 @@ private:
       __builtin_nontemporal_store(u4, (uint32_t*)dst);
     else
       __builtin_nontemporal_store(u8, (uint64_t*)dst);
-#if defined(__gfx950__) && ROCM_VERSION < 70200
-    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
+#if defined(__gfx950__) && ROCM_VERSION < 70002
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache on gfx950 if ROCr fix for hipHostMallocUncached is not available (ROCm version < 7.0.2)
 #endif
 #else
     if(sizeof(U) == 1)
