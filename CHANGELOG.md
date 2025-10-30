@@ -7,7 +7,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 
 ### Changed
-* `RCCL_P2P_BATCH_ENABLE` is now set to 1, enabling p2p batching by default
+* Enabling P2P batching with `RCCL_P2P_BATCH_ENABLE=1` is only applicable up to 32 nodes.
 
 ### Resolved Issues
 
