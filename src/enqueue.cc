@@ -191,7 +191,7 @@ static void addWorkBatchToPlan(
     // batch further down.
     newBatch |= NCCL_MAX_DEV_WORK_BATCH_BYTES < chan->wipBatch.workBytes + workSize;
     if (workType == ncclDevWorkTypeP2p) {
-      newBatch |= (comm->nNodes > 2 && batchP2P)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
+      newBatch |= (comm->nNodes > 2 && batchP2P && comm->nNodes <= 32)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
       for (int i=0; i < chan->wipBatch.nP2ps; i++) {
         newBatch |= p2pRound == chan->wipBatch.p2pRounds[i];
       }
@@ -959,7 +959,15 @@ static ncclResult_t addP2pToPlan(
   bool proxySameProcess[2] = {true, true};
   void** handles[2] = {NULL, NULL};
   auto batchP2PEnableEnv = rcclParamP2pBatchEnable();
-  bool batchP2P =  batchP2PEnableEnv && ((sendBytes == -1)? recvBytes <= rcclParamP2pBatchThreshold() : sendBytes <= rcclParamP2pBatchThreshold());
+  auto p2pBatchThreshold = rcclParamP2pBatchThreshold();
+  bool belowThreshold = (recvBytes <= p2pBatchThreshold) && (sendBytes <= p2pBatchThreshold);
+  bool batchP2P =  batchP2PEnableEnv && (sendBytes == recvBytes) && belowThreshold;
+
+  //ncclP2pChannelBaseForRound now computes channel-base based on batching enablement (env. variable RCCL_P2P_BATCH_ENABLE=1)
+  //but batching is only applicable if msg size is below threshold which is not checked below
+  //this causes perf. dips in some cases but also boosts in other cases even when no batching happens because msg size is above threshold
+  //replacing line below with ncclP2pChannelBaseForRound(comm, p2pRound, batchP2P) can cause issues due to ncclP2pChannelBaseForRound calling the same routine
+  //channel base computed in taskAppend and here must be the same, but in taskAppend the call happens once and is cached for later usage, which is why it wouldn't be consistent with the call below
   uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound, batchP2PEnableEnv);
   if (comm->p2pNet) {
     for (int dir = 0; dir <= 1; dir++) {
