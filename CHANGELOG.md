@@ -6,7 +6,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Changed
 
-* RCCL error message has been made more verbose in several cases. RCCL will now start printing out fatal error message at all debug level.
+* RCCL error messages have been made more verbose in several cases. RCCL now prints out fatal error messages at all debug levels.
 
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 
