@@ -72,7 +72,7 @@ function(add_rocshmem_targets)
             TEST_COMMAND        ""
             DEPENDS             rocshmem_checkout_submodule   
 
-            # Rocshmem submodule commit hash -> commit b534423de782fc35393dbd326729c927bb0542a0
+            # Rocshmem submodule commit hash -> commit 6290db319c3e552bb6c532989dc8cae7b299c938
             # The project has its own scripts; we replicate the README sequence:
             CONFIGURE_COMMAND   ""
             BUILD_COMMAND
