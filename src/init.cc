@@ -155,6 +155,22 @@ ncclResult_t checkHsaEnvSetting() {
   }
   return ncclSuccess;
 }
+
+// Fail the job if build flag HIP_HOST_UNCACHED_MEMORY is not set on mi350x
+ncclResult_t checkHostUncacheMemSetting(struct ncclComm* comm) {
+  #if defined(HIP_HOST_UNCACHED_MEMORY)
+    return ncclSuccess;
+  #else
+    if( IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") ){
+      WARN("Build flag HIP_HOST_UNCACHED_MEMORY must be set to avoid memory corruption on mi350x");
+      return ncclSystemError;
+    }
+    else {
+      return ncclSuccess;
+    }
+  #endif   
+}
+
 static void initOnceFunc() {
   NCCLCHECKGOTO(checkHsaEnvSetting(), initResult, exit);
   initEnv();
@@ -2040,7 +2056,10 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   comm->cudaArch = cudaArch;
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent, timers), res, fail);
-
+  
+    // Check if using host uncached mem correctly
+  NCCLCHECK(checkHostUncacheMemSetting(comm));
+  
   // RCCL: determine and set unroll factor for comm
   NCCLCHECK(commSetUnrollFactor(comm));
 
