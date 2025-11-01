@@ -1884,8 +1884,8 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
     NCCLCHECK(hostStreamPlanTask(comm, plan));
   }
   
-  // Increment the opCount when proxyOpQueue is empty as well. Previously if proxyOpQueue was empty 
-  // opCount is not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
+  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty 
+  // opCount was not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
   if (!plan->persistent && ncclIntruQueueHead(&plan->proxyOpQueue) == nullptr) {
     comm->opCount++;
   }
