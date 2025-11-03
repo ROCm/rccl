@@ -12,11 +12,12 @@
 
 typedef enum {
   NCCL_LOG_NONE = 0,
-  NCCL_LOG_VERSION = 1,
-  NCCL_LOG_WARN = 2,
-  NCCL_LOG_INFO = 3,
-  NCCL_LOG_ABORT = 4,
-  NCCL_LOG_TRACE = 5
+  NCCL_LOG_ERROR = 1,
+  NCCL_LOG_VERSION = 2,
+  NCCL_LOG_WARN = 3,
+  NCCL_LOG_INFO = 4,
+  NCCL_LOG_ABORT = 5,
+  NCCL_LOG_TRACE = 6
 } ncclDebugLogLevel;
 
 typedef enum {

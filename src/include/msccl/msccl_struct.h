@@ -36,6 +36,8 @@
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
 
+#define MSCCL_MAX_NTHREADS 256
+
 struct mscclTransmission {
   int16_t dependencePointer; // index to the first dependence
   int16_t numDependencies; // dependencePointer+numDependencies indicate the last dependence
@@ -174,7 +176,7 @@ enum mscclCaptureStatus {
 struct mscclProxyArg {
   struct mscclAlgo* hostAlgo;
   ncclComm_t comm;
-  mscclProxyArg(struct mscclAlgo* hostAlgo, ncclComm_t comm) 
+  mscclProxyArg(struct mscclAlgo* hostAlgo, ncclComm_t comm)
     : hostAlgo(hostAlgo), comm(comm) {}
 };
 
