@@ -1435,8 +1435,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
         allGather3Data[rank].nc = 4;
     }
   }
+  // For single node communicators that do not uses the full xgmi links per gpu, i.e., nranks < 8
+  // Inflate the nChannels a bit to achieve higher b/w. 
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
-    allGather3Data[rank].nc = 4;
+    if (nranks == 2 && nNodes == 1){
+      allGather3Data[rank].nc = 16;
+    } else if (nranks == 4 && nNodes == 1){
+      allGather3Data[rank].nc = 8;
+    } else {
+      allGather3Data[rank].nc = 4;
+    }
   }
 
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
