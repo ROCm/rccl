@@ -162,7 +162,7 @@ ncclResult_t checkHostUncacheMemSetting(struct ncclComm* comm) {
     return ncclSuccess;
   #else
     if( IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") ){
-      WARN("Build flag HIP_HOST_UNCACHED_MEMORY must be set to avoid memory corruption on mi350x");
+      ERROR("Build flag HIP_HOST_UNCACHED_MEMORY must be set to avoid memory corruption on mi350x");
       return ncclSystemError;
     }
     else {
