@@ -504,10 +504,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
       if fn.coll in ["SendRecv", "AllToAllPivot"]:
         key = ((coll_idx & 0x3F))
       
-      if fn_id != -1 and guard:
-        out(f'#if {guard}\n  {{{key}, {fn_id}}}, {comment}\n#else\n  {{{key}, -1}}, {comment}\n#endif\n')
-      else:
-        out(f'  {{{key}, {fn_id}}}, {comment}\n')
+      out(f'  {{{key}, {fn_id}}}, {comment}\n')
   out("};\n")
 
 # Maps to .cu filename which implements this func. The only constraint is that
