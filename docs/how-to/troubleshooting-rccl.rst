@@ -44,6 +44,7 @@ Collect this information about the ROCm version, GPU/accelerator, platform, and 
 
       amd-smi
       amd-smi topology
+      amd-smi static --driver
 
 *  Determine the values of the ``PATH`` and ``LD_LIBRARY_PATH`` environment variables.
 
