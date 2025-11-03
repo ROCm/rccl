@@ -38,13 +38,12 @@ Collect this information about the ROCm version, GPU/accelerator, platform, and 
 
       rocminfo
 
-*  Run these ``rocm-smi`` commands to display the system topology.
+*  Run these ``amd-smi`` commands to display the system topology.
 
    .. code:: shell
 
-      rocm-smi
-      rocm-smi --showtopo
-      rocm-smi --showdriverversion
+      amd-smi
+      amd-smi topology
 
 *  Determine the values of the ``PATH`` and ``LD_LIBRARY_PATH`` environment variables.
 
