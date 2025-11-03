@@ -474,6 +474,7 @@ set(SRC_FILES
   src/device/all_gather.h
   src/device/all_reduce.h
   src/device/alltoall_pivot.h
+  src/device/alltoall_gda.h
   src/device/broadcast.h
   src/device/common.h
   src/device/common_kernel.h

@@ -24,6 +24,10 @@
 #include "rccl_common.h"
 #include "recorder.h"
 
+#ifdef ENABLE_ROCSHMEM
+#include <rocshmem/rocshmem.hpp>
+#endif
+
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
 #else
@@ -724,6 +728,17 @@ struct ncclComm {
   char* archName;
   // multiProcessorCount from hipDeviceProp_t [RCCL]
   int cuCount;
+
+#ifdef ENABLE_ROCSHMEM
+  // rocshmem symmetric heap
+  void* sourceRshmem;
+  void* destRshmem;
+  rocshmem::rocshmem_team_t team_reduce_world_dup;
+  int enableRocshmem;
+  int rocshmemThreshold;
+  size_t a2aSize;
+  int isA2a;
+#endif
 
   uint64_t endMagic;
 };

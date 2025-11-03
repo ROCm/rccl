@@ -29,6 +29,10 @@
 #include <cassert>
 #include "latency_profiler/CollTraceFunc.h"
 
+#ifdef ENABLE_ROCSHMEM
+#include <rocshmem/rocshmem.hpp>
+#endif
+
 using namespace rccl;
 
 struct ncclKernelMatch {
@@ -390,6 +394,15 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     //[Added-comment] opCount is missing for collDevWork, adding here
     devWork.opCount = task->opCount;
+#ifdef ENABLE_ROCSHMEM
+    if (comm->enableRocshmem && (comm->isA2a == 1)) {
+        devWork.enableRocshmem = comm->enableRocshmem;
+        devWork.team = comm->team_reduce_world_dup;
+        devWork.sndbuff = (void*)comm->sourceRshmem;
+        devWork.tempbuff = (void*)comm->destRshmem;
+        devWork.size = comm->a2aSize;
+    }
+#endif
 
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
@@ -1502,8 +1515,10 @@ static ncclResult_t hostStreamPlanTask(struct ncclComm* comm, struct ncclKernelP
   NCCLCHECK(ncclProfilerStartGroupEvent(plan));
   NCCLCHECK(ncclProfilerStartTaskEvents(plan));
   if (ncclIntruQueueHead(&plan->proxyOpQueue)) {
-    NCCLCHECK(uploadProxyOps(comm, plan));
-    NCCLCHECK(ncclProxyStart(comm));
+    if (comm->isA2a == 0) {	  
+    	NCCLCHECK(uploadProxyOps(comm, plan));
+    	NCCLCHECK(ncclProxyStart(comm));
+    }
   }
   NCCLCHECK(ncclProfilerStopTaskEvents(plan));
   NCCLCHECK(ncclProfilerStopGroupEvent(plan));
@@ -2017,7 +2032,7 @@ static ncclResult_t updateCollCostTable(
     float** collCostTable) {
   float (*table)[NCCL_NUM_PROTOCOLS] = (float (*)[NCCL_NUM_PROTOCOLS])collCostTable;
 
-  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot) {
+  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot || info->func == ncclFuncAllToAllGda) {
     table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = 0.0;
     return ncclSuccess;
   }
@@ -2309,6 +2324,9 @@ static ncclResult_t calcCollChunking(
       ncclPatternRing;
     break;
   case ncclFuncAllToAllPivot:
+    pattern = ncclPatternRing;
+    break;
+  case ncclFuncAllToAllGda:
     pattern = ncclPatternRing;
     break;
   case ncclFuncAllReduce:
@@ -2733,7 +2751,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->root = info->root;
       t->datatype = info->datatype;
       size_t elementSize = ncclTypeSize(t->datatype);
-      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot) {
+      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot || t->func == ncclFuncAllToAllGda) {
         t->count *= elementSize;
         t->datatype = ncclInt8;
         elementSize = 1;

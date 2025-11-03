@@ -13,6 +13,10 @@
 #include "nvtx_payload_schemas.h"
 #include "msccl/msccl_lifecycle.h"
 
+#ifdef ENABLE_ROCSHMEM
+#include <rocshmem/rocshmem.hpp>
+#endif
+
 using namespace rccl;
 
 const char* ncclFuncToString(ncclFunc_t fn) {
@@ -210,6 +214,8 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
 
   size_t rankOffset = count * ncclTypeSize(datatype);
   size_t rankAlign = rankOffset & ((~rankOffset) + 1);
+  size_t msgSize = count * ncclTypeSize(datatype) * comm->nRanks;
+
   // Determine Pivot A2A support now that we know number of channels
   if (comm->topo->pivotA2AEnabled && comm->nChannels >= comm->topo->pivotA2ANumBiRings * 2 &&
       rankOffset >= 744 * 1024 && rankAlign != 4 && rcclParamAllToAllPivotEnable()) {
@@ -218,7 +224,20 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
       ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
     return ncclEnqueueCheck(&info);
   } else {
+#ifdef ENABLE_ROCSHMEM
+    if (comm->enableRocshmem && msgSize <= comm->rocshmemThreshold) {	
+	comm->a2aSize = count * ncclTypeSize(datatype);
+	comm->isA2a = 1;
+
+	struct ncclInfo info = { ncclFuncAllToAllGda, "AllToAllGda",
+      	sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream,
+      	ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
+
+    	return ncclEnqueueCheck(&info);
+    }
+#endif	  
     int nRanks;
+    comm->isA2a = 0;
     NCCLCHECK(ncclCommCount(comm, &nRanks));
     if (count == 0) return ncclSuccess;
     if (!mscclIsCaller()) Recorder::instance().skip(true);
