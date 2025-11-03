@@ -797,7 +797,7 @@ exit:
 
 ncclResult_t ncclSocketInit(struct ncclSocket* sock, const union ncclSocketAddress* addr, uint64_t magic, enum ncclSocketType type, volatile uint32_t* abortFlag, int asyncFlag, int customRetry) {
   ncclResult_t ret = ncclSuccess;
-
+  INFO(NCCL_NET,"Socket init called, with args type:%d asyncFlag:%d",type,asyncFlag);
   if (sock == NULL) goto exit;
   sock->errorRetries = 0;
   sock->abortFlag = abortFlag;
