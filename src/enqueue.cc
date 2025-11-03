@@ -1586,7 +1586,7 @@ static ncclResult_t getImplicitOrder(enum ncclImplicitOrder *mode, bool capturin
     if (capturing && driver < 12090) { *mode = ncclImplicitOrderSerial; return ncclSuccess; }
     *mode = 12030 <= std::min<int>(CUDART_VERSION, driver) ? ncclImplicitOrderLaunch : ncclImplicitOrderSerial;
 #else
-    *mode = ncclImplicitOrderNone;
+    *mode = ncclImplicitOrderSerial;
 #endif
     return ncclSuccess;
   }
