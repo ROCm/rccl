@@ -41,12 +41,14 @@ jobs:
         with:
           repository: "ROCm/rccl"
           path: rccl
+          ref: c1e1f2faeb4fad73679603e3c200560d653849a2 # 09-22-2025
 
       - name: Checkout rccl-tests repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rccl-tests"
           path: rccl-tests
+          ref: e1b8a3aefcdf6482f0f5a35224e19eed2acc685d # 09-15-2025
 
       - name: Install python deps
         run: |
