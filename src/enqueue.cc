@@ -1650,6 +1650,63 @@ ncclResult_t ncclLaunchKernelBefore_NoUncapturedCuda(struct ncclComm* comm, stru
 NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 #endif
 
+#if ARECH_COMPLETION_EVENTS
+extern "C" __attribute__ ((visibility("default"))) void arechCallback(void* ud) {}
+#endif
+
+namespace{
+  // alignment is used to ensure the lowest 2 bits of a pointer are always free for other use
+/*struct alignas(8) ArechNcclOpData{ // not needed yet
+  const void* sendbuf{};
+  const void* recvbuf{};
+  uint64_t countRedopDtypeCollt{}; // have always the same value between tasks of a group in my hang
+};
+*/
+
+#if ARECH_COMPLETION_EVENTS
+static constexpr size_t kArechBufSize = 2*4096;
+static std::unique_ptr<uint64_t[]> g_ArechBuf{::new uint64_t[kArechBufSize]};
+static size_t g_ArechBufIdx{0};
+
+static inline size_t getArechBufIdx(size_t count) {
+  // adjusting count to the data layout: there's always countRedopDtypeCollt member, and several buf pointers
+  count = 1 + count*2;
+  size_t idx = __atomic_fetch_add (&g_ArechBufIdx, count, __ATOMIC_ACQ_REL);
+  if (idx >= kArechBufSize) {
+    std::fprintf(stderr, "ARECH: count overflow!\n");
+    std::abort();
+  }
+  return idx;
+}
+#else
+#endif
+} // end of namespace {
+
+#if ARECH_COMPLETION_EVENTS
+// this is a separate function to hook into in bpftrace and catch func_tag
+extern "C" __attribute__ ((visibility("default")))
+#endif
+ncclResult_t arechLaunchKernel(void* kernelFn, const bool is_ext, uint64_t func_tag // ptr | count
+  , const dim3& grid, const dim3& block, void** extra
+  , int smem,  struct ncclKernelPlan* plan, struct ncclComm* comm)
+{
+  ncclResult_t ret = ncclSuccess;
+  cudaStream_t launchStream = comm->planner.streams->stream;
+
+  if (is_ext){
+    CUDACHECKGOTO(hipExtLaunchKernel(kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
+  }else{
+    CUDACHECKGOTO(cudaLaunchKernel(kernelFn, grid, block, extra, smem, launchStream), ret, do_return);
+  }
+
+  #if ARECH_COMPLETION_EVENTS
+  CUDACHECKGOTO(hipLaunchHostFunc(launchStream, arechCallback, reinterpret_cast<void*>(func_tag)) ,ret, do_return);
+  #endif
+
+do_return:
+  return ret;
+}
+
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclResult_t ret = ncclSuccess;
   struct ncclKernelPlanner* planner = &comm->planner;
@@ -1660,90 +1717,65 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
-  cudaStream_t launchStream = planner->streams->stream;
+  //cudaStream_t launchStream = planner->streams->stream;
   void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
 
-  if (planner->numStreams == 1 && !plan->persistent) {
+  uint64_t func_tag{};
+  #if ARECH_COMPLETION_EVENTS
+  struct ncclTaskColl* task = ncclIntruQueueHead(&plan->collTaskQueue);
+  struct ncclTaskColl* first_task = task;
+
+  size_t total_count{};
+  while (task != nullptr) {
+    total_count++;
+    task = task->next;
+  }
+  task = first_task;
+
+  if (total_count == 0 || total_count > 4){
+    std::fprintf(stderr, "ARECH: total_count == %zu!\n", total_count);
+    std::abort();
+  }
+  uint64_t* func_data = g_ArechBuf.get() + getArechBufIdx(total_count);
+  func_tag = reinterpret_cast<uint64_t>(func_data) | static_cast<uint64_t>(total_count-1);
+
+  uint64_t data{};  
+  while (task != nullptr) {
+    uint32_t count1{static_cast<uint32_t>(task->count)};
+    uint8_t coll_type1{static_cast<uint8_t>(task->func)};
+    uint8_t datatype1{static_cast<uint8_t>(task->datatype)};
+    uint8_t red_op1{static_cast<uint8_t>(task->opHost)};
+
+    uint64_t data1 {(static_cast<uint64_t>(count1) << 32) | (static_cast<uint64_t>(red_op1) << 16)
+    | (static_cast<uint64_t>(datatype1) << 8) | (static_cast<uint64_t>(coll_type1) << 0)};
+
+    if (task == first_task) {
+      data = data1;
+      *func_data++ = data1;
+    }else{
+      if (data != data1) {
+        std::fprintf(stderr, "ARECH: data != data1!\n");
+        std::abort();
+      }
+    }
+
+    *func_data = reinterpret_cast<uint64_t>(task->sendbuff);
+    *(func_data+1) = reinterpret_cast<uint64_t>(task->recvbuff);
+    func_data+=2;
+    task = task->next;
+  }  
+ #endif
+
+  const bool is_ext = planner->numStreams == 1 && !plan->persistent;
+  if (is_ext) {
     comm->lastStream = planner->streams->stream;
-    CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
-    return ncclSuccess;
+    //CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
+    // return ncclSuccess;
   }
+  ret = arechLaunchKernel(sym, is_ext, func_tag, grid, block, extra, smem, plan, comm);
 
-  // CUfunction fn;
-  // CUDACHECK(cudaGetFuncBySymbol(&fn, sym));
-
-#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
-  int driverVersion;
-  NCCLCHECKGOTO(ncclCudaDriverVersion(&driverVersion), ret, do_return);
-
-  CUfunction fn;
-  CUDACHECKGOTO(cudaGetFuncBySymbol(&fn, sym), ret, do_return);
-
-  if (CUDART_VERSION >= 11080 && driverVersion >= 11080) {
-  #if CUDART_VERSION >= 11080
-    int compCap = comm->compCap;
-    unsigned int clusterSize = (compCap >= 90) ? comm->config.cgaClusterSize : 0;
-
-    CUlaunchConfig launchConfig = {0};
-    CUlaunchAttribute launchAttrs[4] = {};
-    int attrs = 0;
-    /* Cooperative Group Array (CGA)
-     * On sm90 and later we have an extra level of hierarchy where we
-     * can group together several blocks within the Grid, called
-     * Thread Block Clusters.
-     * Clusters enable multiple thread blocks running concurrently
-     * across multiple SMs to synchronize and collaboratively fetch
-     * and exchange data. A cluster of blocks are guaranteed to be
-     * concurrently scheduled onto a group of SMs.
-     * The maximum value is 8 and it must be divisible into the grid dimensions
-     */
-    if (clusterSize) {
-      // Grid dimension must be divisible by clusterSize
-      if (grid.x % clusterSize) clusterSize = 1;
-      launchAttrs[attrs].id = CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION;
-      launchAttrs[attrs++].value.clusterDim = {clusterSize, 1, 1};
-      launchAttrs[attrs].id = CU_LAUNCH_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE;
-      launchAttrs[attrs++].value.clusterSchedulingPolicyPreference = CU_CLUSTER_SCHEDULING_POLICY_SPREAD;
-    }
-    #if CUDART_VERSION >= 12000
-    if (compCap >= 90 && driverVersion >= 12000) {
-      // Set the NCCL Mem Sync domain on CUDA 12.0 and later (sm90)
-      launchAttrs[attrs].id = CU_LAUNCH_ATTRIBUTE_MEM_SYNC_DOMAIN;
-      launchAttrs[attrs++].value.memSyncDomain = (CUlaunchMemSyncDomain) ncclParamMemSyncDomain();
-    }
-    #endif
-    #if CUDART_VERSION >= 12030
-    bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    enum ncclImplicitOrder implicitOrder;
-    NCCLCHECKGOTO(getImplicitOrder(&implicitOrder, capturing, driverVersion), ret, do_return);
-    if (implicitOrder == ncclImplicitOrderLaunch) {
-      launchAttrs[attrs].id = CU_LAUNCH_ATTRIBUTE_LAUNCH_COMPLETION_EVENT;
-      launchAttrs[attrs].value.launchCompletionEvent.event = comm->sharedRes->launchEvent;
-      launchAttrs[attrs].value.launchCompletionEvent.flags = 0;
-      attrs++;
-    }
-    #endif
-    launchConfig.gridDimX = grid.x;
-    launchConfig.gridDimY = grid.y;
-    launchConfig.gridDimZ = grid.z;
-    launchConfig.blockDimX = block.x;
-    launchConfig.blockDimY = block.y;
-    launchConfig.blockDimZ = block.z;
-    launchConfig.sharedMemBytes = smem;
-    launchConfig.attrs = launchAttrs;
-    launchConfig.numAttrs = attrs;
-    launchConfig.hStream = launchStream;
-
-    CUCHECKGOTO(cuLaunchKernelEx(&launchConfig, fn, nullptr, extra), ret, do_return);
-  #endif
-  } else {
-    // Standard kernel launch
-    CUCHECKGOTO(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra), ret, do_return);
-  }
-#endif
   // Standard kernel launch
-  //cuLaunchKernel(sym, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra);
-  CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
+  //CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
 
 do_return:
   return ret;

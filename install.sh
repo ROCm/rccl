@@ -323,10 +323,12 @@ cmake_common_options="${cmake_common_options} -DCMAKE_EXE_LINKER_FLAGS=\"-Wl,-rp
 # ${ONLY_FUNCS} is a debug-only feature
 #MYFLGS="-O1 -ggdb3" # doesn't reproduce
 
-MYFLGS="-O1 -ggdb3 -DNDEBUG"  # removing -DNDEBUG breaks the hang
-#MYFLGS="-O3 -ggdb3 -DNDEBUG"    # -fno-strict-aliasing
+# ./install.sh --local_gpu_only --install --disable-msccl-kernel --disable-mscclpp --disable-colltrace
+#MYFLGS="-O1 -ggdb3 -DNDEBUG"  # removing -DNDEBUG breaks the hang
+MYFLGS="-O3 -ggdb3 -DNDEBUG"    # -fno-strict-aliasing
 #MYFLGS="-O0 -ggdb3"
 HIPFLGS="-O0 -ggdb3" #essentially ignored
+
 ${cmake_executable} ${cmake_common_options} -DONLY_FUNCS="${ONLY_FUNCS}" ../../. -DFAULT_INJECTION=OFF -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="$MYFLGS" -DCMAKE_C_FLAGS_RELWITHDEBINFO="$MYFLGS" -DCMAKE_HIP_FLAGS_RELWITHDEBINFO="$HIPFLGS"
 # "${cust_args[@]}"
 check_exit_code "$?"

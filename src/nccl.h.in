@@ -13,6 +13,8 @@
 
 #define ARECH_STRICT_MEM 1
 #define ARECH_SHOW_RING 0
+#define ARECH_COMPLETION_EVENTS 1
+extern "C" __attribute__ ((visibility("default"))) void arechCallback(void* ker);
 
 #define NCCL_MAJOR ${NCCL_MAJOR}
 #define NCCL_MINOR ${NCCL_MINOR}
