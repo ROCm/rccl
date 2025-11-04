@@ -1313,7 +1313,7 @@ out:
   return res;
 }
 
-static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIndex, ncclResult_t (*getProperties)(int, ncclNetProperties_t*), const char* netName, int coll, int virtualNics, bool dmaBufSupport) {
+static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIndex, ncclResult_t (*getProperties)(int, ncclNetProperties_t*), const char* netName, int coll, bool virtualNics, bool dmaBufSupport) {
   for (int n = startIndex; n < endIndex; n++) {
     ncclNetProperties_t props;
     NCCLCHECK(getProperties(n, &props));

@@ -546,7 +546,7 @@ failure:
 
 ncclResult_t ncclIbMakeVDeviceInternal(int* d, ncclNetVDeviceProps_t* props) {
   if (ncclParamIbMergeNics() == 0 && props->ndevs > 1) {
-    INFO(NCCL_NET, "NET/IB : Skipping makeVDevice, NCCL_IB_MERGE_NICS=0");
+    WARN("NET/IB : Skipping makeVDevice, Please set NCCL_IB_MERGE_NICS=1");et 
     return ncclInvalidUsage;
   }
 
