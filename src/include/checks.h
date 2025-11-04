@@ -13,16 +13,14 @@
 #define CUDACHECK(cmd) do {                                 \
     cudaError_t err = cmd;                                  \
     if( err != cudaSuccess ) {                              \
-        WARN("Cuda failure '%s'", cudaGetErrorString(err)); \
-        return ncclUnhandledCudaError;                      \
+        return rcclCudaErrorHandler(err);                   \
     }                                                       \
 } while(false)
 
 #define CUDACHECKGOTO(cmd, RES, label) do {                 \
     cudaError_t err = cmd;                                  \
     if( err != cudaSuccess ) {                              \
-        WARN("Cuda failure '%s'", cudaGetErrorString(err)); \
-        RES = ncclUnhandledCudaError;                       \
+        RES = rcclCudaErrorHandler(err);                    \
         goto label;                                         \
     }                                                       \
 } while(false)

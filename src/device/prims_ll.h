@@ -25,6 +25,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, Metadata, Pi
   const int nthreads;
   const int wid;
   const int group;
+  const int threadsPerBlock;
   const int stepLines;
   Fan fan;
   T *userBufs[3];
@@ -149,7 +150,7 @@ private:
   __device__ uint64_t readLL(int offset, int i) {
     union ncclLLFifoLine* src = recvPtr(i) + offset;
     uint32_t flag = recvFlag(i);
-    uint32_t data1, flag1, data2, flag2; 
+    uint32_t data1, flag1, data2, flag2;
     (void)data1; (void)flag1; (void)data2; (void)flag2; // unused variable - compiler warning
     int spins = 0;
 
@@ -269,8 +270,8 @@ private:
     i4.flag2 = flag;
     *((u64_gptr) dst->v) = *((u64_gptr) i4.v);
     *((u64_gptr) dst->v+1) = *((u64_gptr) i4.v+1); 
-#if defined(__gfx950__) && ROCM_VERSION < 70200
-    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
+#if defined(__gfx950__) && ROCM_VERSION < 70002
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache on gfx950 if ROCr fix for hipHostMallocUncached is not available (ROCm version < 7.0.2)
 #endif
 #else
     asm volatile("st.volatile.global.v4.u32 [%0], {%1,%2,%3,%4};" :: "l"(&dst->i4), "r"((uint32_t)val), "r"(flag), "r"((uint32_t)(val >> 32)), "r"(flag) : "memory");
@@ -345,8 +346,8 @@ private:
       __builtin_nontemporal_store(u4, (uint32_t*)dst);
     else
       __builtin_nontemporal_store(u8, (uint64_t*)dst);
-#if defined(__gfx950__) && ROCM_VERSION < 70200
-    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache
+#if defined(__gfx950__) && ROCM_VERSION < 70002
+    __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache on gfx950 if ROCr fix for hipHostMallocUncached is not available (ROCm version < 7.0.2)
 #endif
 #else
     if(sizeof(U) == 1)
@@ -651,7 +652,7 @@ public:
       bool ipcReg = false, bool netReg = false, int stepSize_ = 0
     ):
     redOp(redOpArg),
-    tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group),
+    tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group), threadsPerBlock(blockDim.x),
     stepLines(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
     auto *channel = &ncclShmem.channel;
     barriers = &ncclShmem.groups[group].barrier;
