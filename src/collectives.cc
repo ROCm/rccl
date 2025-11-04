@@ -215,7 +215,7 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
       rankOffset >= 744 * 1024 && rankAlign != 4 && rcclParamAllToAllPivotEnable()) {
     struct ncclInfo info = { ncclFuncAllToAllPivot, "AllToAllPivot",
       sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream, /* Args */
-      ALLTOALL_PIVOT_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLTOALL_PIVOT_SLICESTEPS_SINGLE_NODE : ALLTOALL_PIVOT_SLICESTEPS, nullptr };
+      ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
     return ncclEnqueueCheck(&info);
   } else {
     int nRanks;
