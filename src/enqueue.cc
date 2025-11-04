@@ -918,7 +918,7 @@ static ncclResult_t scheduleCollTasksToPlan(
   return ncclSuccess;
 }
 
-NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 16384);
+NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 8192);
 RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 
