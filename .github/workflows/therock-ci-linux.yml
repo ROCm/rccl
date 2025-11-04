@@ -48,7 +48,7 @@ jobs:
         with:
           repository: "ROCm/rccl-tests"
           path: rccl-tests
-          ref: 690f97c119ff875223166eddcd5f69fd0ca23467 08-18-2025
+          ref: 690f97c119ff875223166eddcd5f69fd0ca23467 # 08-18-2025
 
       - name: Install python deps
         run: |
