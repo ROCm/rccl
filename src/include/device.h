@@ -11,7 +11,9 @@
 
 #include "nccl.h"
 #include "rccl_float8.h"
-#include <hip/hip_bfloat16.h>
+// #include <hip/hip_bfloat16.h>
+#include <hip/hip_bf16.h>
+typedef __hip_bfloat16 hip_bfloat16;
 #include "nccl_common.h"
 #include "bitops.h"
 #include "symmetric.h"
