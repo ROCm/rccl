@@ -7,6 +7,11 @@
 #ifndef NCCL_DEBUG_H_
 #define NCCL_DEBUG_H_
 
+// Workaround for libstdc++ trying to force public visibility of std:: symbols.  We don't want to do that in libnccl.so.
+#include <bits/c++config.h>
+#undef _GLIBCXX_VISIBILITY
+#define _GLIBCXX_VISIBILITY(V)
+
 #include <cstdint>
 #include "nccl.h"
 
@@ -63,8 +68,10 @@ typedef enum {
   ncclFuncSendRecv = 5,
   ncclFuncSend = 6,
   ncclFuncRecv = 7,
-  ncclFuncAllToAllPivot = 8,
-  ncclNumFuncs = 9
+  ncclFuncAlltoAll = 8,
+  ncclFuncScatter = 9,
+  ncclFuncGather = 10,
+  ncclNumFuncs = 11
 } ncclFunc_t;
 
 #define NCCL_NUM_ALGORITHMS 7 // Tree/Ring/CollNet*/PAT

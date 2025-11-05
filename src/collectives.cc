@@ -19,10 +19,13 @@ const char* ncclFuncToString(ncclFunc_t fn) {
   switch (fn) {
   case ncclFuncAllGather: return "AllGather";
   case ncclFuncAllReduce: return "AllReduce";
+  case ncclFuncAlltoAll: return "AlltoAll";
   case ncclFuncBroadcast: return "Broadcast";
+  case ncclFuncGather: return "Gather";
   case ncclFuncRecv: return "Recv";
   case ncclFuncReduce: return "Reduce";
   case ncclFuncReduceScatter: return "ReduceScatter";
+  case ncclFuncScatter: return "Scatter";
   case ncclFuncSendRecv: return "SendRecv";
   case ncclFuncSend: return "Send";
   default: return "Invalid";

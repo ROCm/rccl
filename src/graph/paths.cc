@@ -391,11 +391,15 @@ ncclResult_t ncclTopoCheckMNNVL(struct ncclTopoSystem* system, struct ncclPeerIn
   nvmlGpuFabricInfoV_t *fabricInfo1 = &info1->fabricInfo;
   nvmlGpuFabricInfoV_t *fabricInfo2 = &info2->fabricInfo;
   // A zero UUID means we don't have MNNVL fabric info
-  if ((((long *)&fabricInfo2->clusterUuid)[0]|((long *)fabricInfo2->clusterUuid)[1]) == 0) return ncclSuccess;
+  unsigned long uuid0 = 0;
+  unsigned long uuid1 = 0;
+  memcpy(&uuid0, fabricInfo2->clusterUuid, sizeof(uuid0));
+  memcpy(&uuid1, fabricInfo2->clusterUuid + sizeof(uuid0), sizeof(uuid1));
+  if ((uuid0 | uuid1) == 0) return ncclSuccess;
   if ((memcmp(fabricInfo1->clusterUuid, fabricInfo2->clusterUuid, NVML_GPU_FABRIC_UUID_LEN) == 0) &&
       (fabricInfo1->cliqueId == fabricInfo2->cliqueId)) {
     TRACE(NCCL_NET, "MNNVL matching peer 0x%lx UUID %lx.%lx cliqueId 0x%x",
-         info2->busId, ((long *)fabricInfo2->clusterUuid)[0], ((long *)fabricInfo2->clusterUuid)[1], fabricInfo2->cliqueId);
+         info2->busId, uuid0, uuid1, fabricInfo2->cliqueId);
     *ret = 1;
   }
   return ncclSuccess;
@@ -655,6 +659,7 @@ ncclResult_t ncclTopoGetPxnRanks(struct ncclComm* comm, int** intermediateRanks,
   return ncclSuccess;
 }
 
+<<<<<<< HEAD
 static bool rcclPathOverride(struct ncclTopoSystem* system, uint64_t distance) {
   int i, j;
 
@@ -680,6 +685,9 @@ static bool rcclPathOverride(struct ncclTopoSystem* system, uint64_t distance) {
 }
 
 NCCL_PARAM(PxnC2c, "PXN_C2C", 0);
+=======
+NCCL_PARAM(PxnC2c, "PXN_C2C", 1);
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 ncclResult_t ncclTopoComputePaths(struct ncclTopoSystem* system, struct ncclComm* comm) {
   // Precompute paths between GPUs/NICs.
@@ -936,8 +944,11 @@ void ncclTopoFree(struct ncclTopoSystem* system) {
   free(system);
 }
 
+<<<<<<< HEAD
 NCCL_PARAM(NChannelsPerNetPeer, "NCHANNELS_PER_NET_PEER", -1);
 NCCL_PARAM(NChannelsPerPeer, "NCHANNELS_PER_PEER", -2);
+=======
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 static ncclResult_t ncclTopoGetNchannels(struct ncclComm* comm, int g /*local gpu index*/, int peerRank, int* nChannels) {
   int peer;
@@ -959,10 +970,17 @@ static ncclResult_t ncclTopoGetNchannels(struct ncclComm* comm, int g /*local gp
     }
   } else {
     // Remote rank, use network
+<<<<<<< HEAD
     int nNetChannels = ncclParamNChannelsPerNetPeer();
     if (nNetChannels == -1) {
       //start from 2 channels per NIC and reduce with scale
       nNetChannels = 2;
+=======
+    int nNetChannels = comm->config.nChannelsPerNetPeer;
+    if (nNetChannels == NCCL_CONFIG_UNDEF_INT) {
+       //start from 2 channels per NIC and reduce with scale
+       nNetChannels = 2;
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
       // check if we need to use more than one NIC, hence more than one channel
       int netCountByBw = 1, nChannelsMax = nNetChannels;

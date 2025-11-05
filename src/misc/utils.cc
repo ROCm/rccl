@@ -11,6 +11,7 @@
 
 #include <unistd.h>
 #include <stdlib.h>
+#include <mutex>
 
 // Get current Compute Capability
 int ncclCudaCompCap() {
@@ -108,8 +109,8 @@ static void getHostHashOnce() {
   hostHashValue = getHash(hostHash, strlen(hostHash));
 }
 uint64_t getHostHash(void) {
-  static pthread_once_t once = PTHREAD_ONCE_INIT;
-  pthread_once(&once, getHostHashOnce);
+  static std::once_flag once;
+  std::call_once(once, getHostHashOnce);
   return hostHashValue;
 }
 
@@ -291,6 +292,7 @@ void ncclMemoryStackDestruct(struct ncclMemoryStack* me) {
   }
 }
 
+<<<<<<< HEAD
 size_t get_sc_page_size() {
   static size_t cached_page_size = 0;
   size_t ps = __atomic_load_n(&cached_page_size,__ATOMIC_RELAXED);
@@ -308,4 +310,29 @@ void get_aligned_ptr_and_size(const void *ptr, const size_t bufsize, void **alig
   size_t local_offset = (size_t)((uintptr_t)ptr - aligned_ptr_local);
   *aligned_size = (bufsize + local_offset + page_size - 1) & ~(page_size - 1);
   *aligned_ptr = (void *)aligned_ptr_local;
+=======
+/* return concatenated string representing each set bit */
+ncclResult_t ncclBitsToString(uint32_t bits, uint32_t mask, const char* (*toStr)(int), char *buf, size_t bufLen, const char *wildcard) {
+  if (!buf || !bufLen)
+    return ncclInvalidArgument;
+
+  bits &= mask;
+
+  // print wildcard value if all bits set
+  if (wildcard && bits == mask) {
+    snprintf(buf, bufLen, "%s", wildcard);
+    return ncclSuccess;
+  }
+
+  // Add each set bit to string
+  int pos = 0;
+  for (int i = 0; bits; i++, bits >>= 1) {
+    if (bits & 1) {
+      if (pos > 0) pos += snprintf(buf + pos, bufLen - pos, "|");
+      pos += snprintf(buf + pos, bufLen - pos, "%s", toStr(i));
+    }
+  }
+
+  return ncclSuccess;
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 }

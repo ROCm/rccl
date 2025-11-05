@@ -10,6 +10,8 @@
 #include "nvtx3/nvtx3.hpp"
 #include "roctx.h"
 
+#include "param.h"
+
 #if __cpp_constexpr >= 201304L && !defined(NVTX3_CONSTEXPR_IF_CPP14)
 #define NVTX3_CONSTEXPR_IF_CPP14 constexpr
 #else
@@ -23,7 +25,7 @@
 #define NVTX_SID_CommAbort            3 // same schema as NVTX_SID_CommInitRank
 #define NVTX_SID_AllGather            4
 #define NVTX_SID_AllReduce            5
-#define NVTX_SID_AllToAll             6
+#define NVTX_SID_AlltoAll             6
 #define NVTX_SID_AllToAllv            7
 #define NVTX_SID_Broadcast            8
 #define NVTX_SID_Gather               9
@@ -38,6 +40,7 @@
 #define NVTX_SID_CommSplit            18
 #define NVTX_SID_CommFinalize         19
 #define NVTX_SID_CommShrink           20
+
 // When adding new schema IDs, DO NOT re-use/overlap with the enum schema ID below!
 
 // Define static schema ID for the reduction operation.
@@ -46,6 +49,8 @@
 extern const nvtxDomainHandle_t ncclNvtxDomainHandle;
 
 struct nccl_domain{static constexpr char const* name{"NCCL"};};
+
+extern int64_t ncclParamNvtxDisable();
 
 /// @brief Register an NVTX payload schema for static-size payloads.
 class payload_schema {
@@ -80,6 +85,32 @@ private:
     nullptr, 0, 0, 0, 0, nullptr};
 };
 
+class ncclOptionalNvtxScopedRange
+{
+ public:
+  void push(const nvtx3::event_attributes& attr) noexcept {
+    // pushed must not be true already, but it's too expensive to check
+    pushed = true;
+    nvtxDomainRangePushEx(nvtx3::domain::get<nccl_domain>(), attr.get());
+  }
+
+  ~ncclOptionalNvtxScopedRange() noexcept {
+    if (!pushed) {
+      return;
+    }
+    nvtxDomainRangePop(nvtx3::domain::get<nccl_domain>());
+  }
+
+  ncclOptionalNvtxScopedRange() = default;
+  ncclOptionalNvtxScopedRange(ncclOptionalNvtxScopedRange const&) = delete;
+  ncclOptionalNvtxScopedRange& operator=(ncclOptionalNvtxScopedRange const&) = delete;
+  ncclOptionalNvtxScopedRange(ncclOptionalNvtxScopedRange&&) = delete;
+  ncclOptionalNvtxScopedRange& operator=(ncclOptionalNvtxScopedRange&&) = delete;
+
+ private:
+  bool pushed = false;
+};
+
 // Convenience macro to give the payload parameters a scope.
 #define NVTX3_PAYLOAD(...) __VA_ARGS__
 
@@ -110,13 +141,18 @@ private:
 /// @brief Creates an NVTX range with extended payload using the RAII pattern.
 /// @tparam PayloadType Data type of the payload.
 template <typename PayloadType>
-class ncclNvtxRange {
+class ncclOptionalNvtxPayloadRange {
  public:
-  explicit ncclNvtxRange(const nvtxEventAttributes_t* evtAttr) noexcept {
-    nvtxDomainRangePushEx(nvtx3::domain::get<nccl_domain>(), evtAttr);
+  void push(const nvtx3::event_attributes& attr) noexcept {
+    // pushed must not be true already, but it's too expensive to check
+    pushed = true;
+    nvtxDomainRangePushEx(nvtx3::domain::get<nccl_domain>(), attr.get());
   }
 
-  ~ncclNvtxRange() noexcept {
+  ~ncclOptionalNvtxPayloadRange() noexcept {
+    if (!pushed) {
+      return;
+    }
     if (payloadData.payload) {
       nvtxRangePopPayload(nvtx3::domain::get<nccl_domain>(), &payloadData, 1);
     } else {
@@ -129,41 +165,40 @@ class ncclNvtxRange {
     payloadData = {schemaId, sizeof(PayloadType), &payload};
   }
 
-  ncclNvtxRange() = delete;
-  ncclNvtxRange(ncclNvtxRange const&) = default;
-  ncclNvtxRange& operator=(ncclNvtxRange const&) = default;
-  ncclNvtxRange(ncclNvtxRange&&) = default;
-  ncclNvtxRange& operator=(ncclNvtxRange&&) = default;
+  ncclOptionalNvtxPayloadRange() = default;
+  ncclOptionalNvtxPayloadRange(ncclOptionalNvtxPayloadRange const&) = delete;
+  ncclOptionalNvtxPayloadRange& operator=(ncclOptionalNvtxPayloadRange const&) = delete;
+  ncclOptionalNvtxPayloadRange(ncclOptionalNvtxPayloadRange&&) = delete;
+  ncclOptionalNvtxPayloadRange& operator=(ncclOptionalNvtxPayloadRange&&) = delete;
 
   // Holds the payload data.
   PayloadType payload{};
 
+  bool isPushed() const noexcept {
+    return pushed;
+  }
+
+ private:
+  bool pushed = false;
   nvtxPayloadData_t payloadData = {NVTX_PAYLOAD_ENTRY_TYPE_INVALID, 0, NULL};
 };
 
 // Create an NVTX range with the function name as the range name. Use RAII pattern.
 // @param T Type ID of the NVTX payload (pointer for variable-size payloads).
-#define NVTX3_RANGE(T) \
-  static ::nvtx3::v1::registered_string_in<nccl_domain> const nvtx3_func_name__{__func__}; \
-  ::nvtx3::v1::event_attributes const nvtx3_func_attr__{nvtx3_func_name__}; \
-  ncclNvtxRange<T> nvtx3_range__{nvtx3_func_attr__.get()};
+#define NVTX3_RANGE(T)                                                                       \
+  ncclOptionalNvtxPayloadRange<T> nvtx3_range__;                                             \
+  if (!ncclParamNvtxDisable())                                                               \
+  {                                                                                          \
+    static ::nvtx3::v1::registered_string_in<nccl_domain> const nvtx3_func_name__{__func__}; \
+    ::nvtx3::v1::event_attributes const nvtx3_func_attr__{nvtx3_func_name__};                \
+    nvtx3_range__.push(nvtx3_func_attr__);                                                   \
+  }
 
 // Add static-size payload to the NVTX range created with `NVTX3_RANGE()`,
 // which must be in this or an outer scope.
 // @param N NCCL API name without the `nccl` prefix.
 // @param S name of the used NVTX payload schema.
 // @param P payload parameters/entries
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-#define NVTX3_RANGE_ADD_PAYLOAD(N, S, P) do { \
-  constexpr uint64_t schema_id = NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##N; \
-  static const payload_schema schema{S, std::extent<decltype(S)>::value - 1, schema_id, \
-    sizeof(nvtx3_range__.payload)}; \
-  nvtx3_range__.payload = {P}; \
-  nvtx3_range__.setPayloadData(schema_id); \
-  nvtxPayloadData_t nvtx3_bpl__[] = {{schema_id, sizeof(nvtx3_range__.payloadData), &nvtx3_range__.payloadData}}; \
-  roctx_scoped_range_in const roctx_range__{S, nvtx3_bpl__, std::extent<decltype(S)>::value - 1, "RCCL_" #N}; \
-} while (0)
-#else
 #define NVTX3_RANGE_ADD_PAYLOAD(N, S, P) do { \
   constexpr uint64_t schema_id = NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##N; \
   static const payload_schema schema{S, std::extent<decltype(S)>::value - 1, schema_id, \

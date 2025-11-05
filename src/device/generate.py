@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 import os
 import sys
+<<<<<<< HEAD
 import subprocess
+=======
+import shutil
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 # Order of colls, redops, tys, protos, algos must match src/include/device.h
 all_colls = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
@@ -27,8 +31,11 @@ gensrc = sys.argv[1]
 
 if os.path.exists(gensrc):
   for name in os.listdir(gensrc):
-    os.remove(os.path.join(gensrc, name))
-    #os.truncate(os.path.join(gensrc, name), 0)
+    path = os.path.join(gensrc, name)
+    if os.path.isfile(path):
+      os.remove(path)
+    elif os.path.isdir(path):
+      shutil.rmtree(path)
 else:
   os.makedirs(gensrc)
 
@@ -569,6 +576,46 @@ def partition_by_name(fns):
   return ans
 
 name_to_funcs = partition_by_name(fn for fn in primary_funcs if fn[0]!="Nop")
+<<<<<<< HEAD
+=======
+name_to_kernels = partition_by_name(kfn for kfn in kernel_funcs if kfn[0]!="Generic")
+
+files = ""
+for name in sorted(name_to_funcs.keys()):
+    files += name + ";"
+files += "device_table.cu;"
+files += "host_table.cc"
+
+# Do not print files when running make
+if os.environ.get("NCCL_USE_CMAKE", "0") == "1":
+    print(files)
+
+# Generate <gensrc>/rules.mk
+with open(os.path.join(gensrc, "rules.mk"), "w") as f:
+  out = f.write
+  impl_names = sorted(name_to_funcs.keys())
+  names = impl_names + ["host_table.cc", "device_table.cu"]
+  out("LIB_OBJS_GEN = $(patsubst %,$(OBJDIR)/genobj/%.o,{names})\n"
+      .format(names=" ".join(names)))
+  out("\n")
+
+  # For each <coll>_<op>_<ty>.cu compile to a .cu.o file. Notice the dependencies
+  # come from the suffix-erased file (e.g. 'gensrc/all_reduce.cu')
+  for name in impl_names:
+    coll = name_to_funcs[name][0]
+    out(
+      "$(OBJDIR)/genobj/{name}.o: $(OBJDIR)/gensrc $(OBJDIR)/genobj/{lower_coll}.cu.d\n"
+      "\t" "$(call COMPILE,$@,$(OBJDIR)/gensrc/{name})\n"
+      "\n"
+      .format(name=name, lower_coll=coll_camel_to_lower[coll])
+    )
+
+# Add the suffix-erased .cu's which are used only for dependency scraping.
+for coll in set(coll for (coll,_,_,_,_) in primary_funcs if coll!="Nop"):
+  name = impl_filename(coll, None, None, None, None)
+  if name not in name_to_funcs:
+    name_to_funcs[name] = (coll, [])
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 redop_to_cxx = {
   None: "FuncCopy",

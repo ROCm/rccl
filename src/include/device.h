@@ -12,9 +12,8 @@
 #include "nccl.h"
 #include "rccl_float8.h"
 #include <hip/hip_bfloat16.h>
-#include "nccl_common.h"
+#include "nccl_tuner.h"
 #include "bitops.h"
-#include "symmetric.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit_struct.h"
 #endif
@@ -209,6 +208,7 @@ struct ncclProxyConnector {
 struct ncclConnector {
   int connected;
   int hasSeen;
+  int p2pOnly;
   struct ncclProxyConnector proxyConn;
   struct ncclTransportComm* transportComm;
   void* transportResources;
@@ -279,7 +279,7 @@ struct ncclChannelPeer {
   int refCount;
 };
 
-struct ncclDevComm;
+struct ncclKernelComm;
 
 #pragma pack(push)  /* push current alignment to stack */
 #pragma pack(8)     /* set alignment to 8 bytes boundary */
@@ -558,7 +558,7 @@ struct ncclDevProfiler {
   } data[MAX_PROFILER_EVENTS_PER_CHANNEL];
 };
 
-struct ncclDevComm {
+struct ncclKernelComm {
   int rank;
   int nRanks;
   int node;
@@ -606,8 +606,8 @@ struct ncclDevComm {
 #define RANDOM_DELAY_ON_WARP_START 0x1L
 #endif
 
-struct alignas(16) ncclDevCommAndChannels {
-  struct ncclDevComm comm;
+struct alignas(16) ncclKernelCommAndChannels {
+  struct ncclKernelComm comm;
   struct ncclDevChannel channels[MAXCHANNELS];
 };
 
@@ -622,8 +622,8 @@ struct channelMasks {
 };
 
 struct alignas(16) ncclDevKernelArgs {
-  struct ncclDevComm* comm;
-  struct channelMasks channelMask;
+  struct ncclKernelComm* comm;
+  uint64_t channelMask;
   enum ncclDevWorkStorageType workStorageType;
   uint32_t workMask;
   void* workBuf;

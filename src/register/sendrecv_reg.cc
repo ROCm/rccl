@@ -1,6 +1,10 @@
 /*************************************************************************
+<<<<<<< HEAD
  * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+=======
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
  *
  * See LICENSE.txt for license information
  ************************************************************************/

@@ -20,18 +20,6 @@ using namespace rccl;
 
 NCCL_PARAM(LocalRegister, "LOCAL_REGISTER", 0); // LWPCOMMLIBS-632: off by default for RCCL as unsupported feature.
 
-static ncclResult_t regFindHandleFromSymAddr(struct ncclComm* comm, void* baseSymPtr, struct ncclReg** handle) {
-  struct ncclRegCache* cache = &comm->regCache;
-  *handle = NULL;
-  for (int slot = 0; slot < cache->population; slot++) {
-    if (baseSymPtr == cache->slots[slot]->baseSymPtr) {
-      *handle = cache->slots[slot];
-      break;
-    }
-  }
-  return ncclSuccess;
-}
-
 ncclResult_t ncclRegLocalIsValid(struct ncclReg *reg, bool *isValid) {
   if (reg && isValid) {
     if (reg->localRefs)
@@ -214,6 +202,7 @@ ncclResult_t ncclCommGraphDeregister(const ncclComm_t comm, struct ncclReg *hand
   NCCLCHECK(commDeregister(comm, true, handle));
   return ncclSuccess;
 }
+<<<<<<< HEAD
 
 ncclResult_t ncclCommSymmetricRegisterInternal(struct ncclComm* comm, void* buff, size_t baseSize, size_t alignment, CUmemGenericAllocationHandle memHandle, struct ncclReg* regHandle) {
   ncclResult_t ret = ncclSuccess;
@@ -315,3 +304,5 @@ exit:
 fail:
   goto exit;
 }
+=======
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b

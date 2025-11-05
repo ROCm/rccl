@@ -1,11 +1,18 @@
 /*************************************************************************
+<<<<<<< HEAD
  * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  * Modifications Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+=======
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 #include "register.h"
 #include "transport.h"
 #include "enqueue.h"
@@ -184,7 +191,8 @@ ncclResult_t ncclRegisterCollBuffers(
     // IPC buffer registration
     if (info->func == ncclFuncReduceScatter && info->algorithm != NCCL_ALGO_COLLNET_DIRECT) goto exit;
     if (info->algorithm == NCCL_ALGO_RING && ((info->func == ncclFuncAllReduce && info->sendbuff == info->recvbuff) || info->func == ncclFuncReduce)) goto exit;
-    if ((info->algorithm == NCCL_ALGO_TREE || info->algorithm == NCCL_ALGO_COLLNET_CHAIN) && info->sendbuff == info->recvbuff) goto exit;
+    if (info->algorithm == NCCL_ALGO_TREE && info->sendbuff == info->recvbuff) goto exit;
+    if (info->algorithm == NCCL_ALGO_COLLNET_CHAIN && info->sendbuff == info->recvbuff && comm->maxLocalRanks > 1) goto exit;
     if (info->func == ncclFuncAllGather && info->algorithm == NCCL_ALGO_PAT) goto exit;
 
     int peerRanks[NCCL_MAX_LOCAL_RANKS];

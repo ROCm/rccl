@@ -4,12 +4,17 @@
 #ifndef NCCL_DEVICE_SYMMETRIC_PRIMITIVES_H_
 #define NCCL_DEVICE_SYMMETRIC_PRIMITIVES_H_
 
-#include "symmetric.h"
+#include "sym_kernels.h"
 #include "bitops.h"
 #include "collectives.h"
+<<<<<<< HEAD
 #include "op128.h"
 #include "reduce_kernel.h"
 #include "common.h"
+=======
+#include "../op128.h"
+#include "../reduce_kernel.h"
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 #if __CUDA_ARCH__ >= 700
 // __grid_constant__ appears to break cuda-gdb
@@ -28,139 +33,95 @@ static __device__ Int0 flattenIx(Int0 pos, Int1 size, Ints ...more) {
   return pos + size*flattenIx(more...);
 }
 
-// Precomputed integer reciprocoals for denominator values 1..64 inclusive.
-// Pass these to idivFast64() for fast division on the GPU.
-static __device__ uint64_t idivRcp64_upto64(int x) {
-  static constexpr uint64_t table[65] = {
-    idivRcp64(0x01), idivRcp64(0x01), idivRcp64(0x02), idivRcp64(0x03),
-    idivRcp64(0x04), idivRcp64(0x05), idivRcp64(0x06), idivRcp64(0x07),
-    idivRcp64(0x08), idivRcp64(0x09), idivRcp64(0x0a), idivRcp64(0x0b),
-    idivRcp64(0x0c), idivRcp64(0x0d), idivRcp64(0x0e), idivRcp64(0x0f),
-    idivRcp64(0x10), idivRcp64(0x11), idivRcp64(0x12), idivRcp64(0x13),
-    idivRcp64(0x14), idivRcp64(0x15), idivRcp64(0x16), idivRcp64(0x17),
-    idivRcp64(0x18), idivRcp64(0x19), idivRcp64(0x1a), idivRcp64(0x1b),
-    idivRcp64(0x1c), idivRcp64(0x1d), idivRcp64(0x1e), idivRcp64(0x1f),
-    idivRcp64(0x20), idivRcp64(0x21), idivRcp64(0x22), idivRcp64(0x23),
-    idivRcp64(0x24), idivRcp64(0x25), idivRcp64(0x26), idivRcp64(0x27),
-    idivRcp64(0x28), idivRcp64(0x29), idivRcp64(0x2a), idivRcp64(0x2b),
-    idivRcp64(0x2c), idivRcp64(0x2d), idivRcp64(0x2e), idivRcp64(0x2f),
-    idivRcp64(0x30), idivRcp64(0x31), idivRcp64(0x32), idivRcp64(0x33),
-    idivRcp64(0x34), idivRcp64(0x35), idivRcp64(0x36), idivRcp64(0x37),
-    idivRcp64(0x38), idivRcp64(0x39), idivRcp64(0x3a), idivRcp64(0x3b),
-    idivRcp64(0x3c), idivRcp64(0x3d), idivRcp64(0x3e), idivRcp64(0x3f),
-    idivRcp64(0x40)
-  };
-  return table[x];
-}
-
-static __device__ uint32_t idivRcp32_upto64(int x) {
-  return idivRcp64_upto64(x)>>32;
-}
-
 namespace {
-struct ncclCoopCta {
-  __device__ void sync() { __syncthreads(); }
-  __device__ int self() { return threadIdx.x; }
-  __device__ int count() { return blockDim.x; }
-};
-struct ncclCoopWarps {
-  int log2_nWarps;
-  __device__ void sync() {
-    asm volatile("barrier.sync %0, %1;" :: "r"(1 + (threadIdx.x>>(5+log2_nWarps))), "r"(32<<log2_nWarps) : "memory");
-  }
-  __device__ int self() { return threadIdx.x & ((32<<log2_nWarps)-1); }
-  __device__ int count() { return 32<<log2_nWarps; }
-};
-struct ncclCoopWarp {
-  __device__ void sync() { __syncwarp(); }
-  __device__ int self() { return threadIdx.x%32; }
-  __device__ int count() { return 32; }
-};
-}
+struct ncclSymkArgsHandler {
+  ncclDevComm const& comm;
+  ncclLLA2AHandle const& lsaLLA2A;
+  struct ncclSymkChannelWorkRange* channelWorkRange;
+  struct ncclSymkDevWork* devWork;
+  uint32_t nRanks_rcp32;
 
-namespace {
-static constexpr int ncclSymPrims_UseBarrier = 1;
-static constexpr int ncclSymPrims_UseLL = 2;
-static constexpr int ncclSymPrims_UseMultimem = 4;
-struct ncclSymPrims {
-  int flags;
-  int const &rank;
-  int const &nRanks;
-  uint32_t const &nRanks_rcp32;
-  int block, nBlocks;
-  uint32_t nBlocks_rcp32;
-  uint32_t nBlocks_nWarps_rcp32;
-  uint32_t nRanks_nBlocks_rcp32;
-  uint32_t nWarpPerRank, nWarpPerRank_rcp32;
-  struct ncclSymDevBase* const &base;
-  uintptr_t offsetMc;
+  __device__ ncclSymkArgsHandler(ncclSymkDevWorkArgs const* args):
+    comm(args->kcomm.devComm),
+    lsaLLA2A(args->kcomm.lsaLLA2A) {
+    channelWorkRange = args->getWorkRange();
 
-  uint32_t const &stride4G;
-  uint32_t barEpoch;
-  uint32_t llEpoch;
-
-  __device__ ncclSymPrims(ncclSymDevComm const &comm, int flags):
-    flags(flags),
-    rank(comm.rank),
-    nRanks(comm.nRanks),
-    nRanks_rcp32(comm.nRanks_rcp32),
-    block(blockIdx.x),
-    nBlocks(gridDim.x),
-    nBlocks_rcp32(idivRcp32_upto64(nBlocks)),
-    nBlocks_nWarps_rcp32(imulRcp32(nBlocks, nBlocks_rcp32, blockDim.x/32, idivRcp32_upto64(blockDim.x/32))),
-    nRanks_nBlocks_rcp32(imulRcp32(nRanks, nRanks_rcp32, gridDim.x, nBlocks_rcp32)),
-    nWarpPerRank(idivFast32(nBlocks*blockDim.x/32, nRanks, nRanks_rcp32)),
-    nWarpPerRank_rcp32(idivRcp32_upto64(nWarpPerRank)),
-    base(comm.base),
-    offsetMc((flags & ncclSymPrims_UseMultimem) ? (char*)comm.baseMc - (char*)base : 0x0),
-    stride4G(comm.stride4G) {
-
-    #if CUDART_VERSION >= 12030 && __CUDA_ARCH__ >= 900
-      cudaGridDependencySynchronize();
-    #endif
-
-    if ((flags & ncclSymPrims_UseBarrier) && threadIdx.x < nRanks) {
-      barEpoch = (flags & ncclSymPrims_UseMultimem) ? base->barEpochMc[block] : base->barEpochUc[block];
-    }
-    if (flags & ncclSymPrims_UseLL) llEpoch = base->llEpoch[block] + 2;
-  }
-  __device__  ~ncclSymPrims() {
-    if (threadIdx.x == 0) {
-      if (flags & ncclSymPrims_UseBarrier) {
-        ((flags & ncclSymPrims_UseMultimem) ? base->barEpochMc : base->barEpochUc)[block] = barEpoch;
-      }
-      if (flags & ncclSymPrims_UseLL) base->llEpoch[block] = llEpoch - 2;
-    }
+    devWork = args->getWorks(args->nMaxChannels);
+    nRanks_rcp32 = comm.nRanks_rcp32;
   }
 
   template<typename T>
-  __device__ T* peerPtr(int peer, T* selfPtr) {
-    return add4G(selfPtr, (peer-rank)*stride4G);
+    __device__ void getWorkRange(int block,
+                                 uint16_t& workLo, size_t& indexLo, uint16_t& workHi, size_t& indexHi) {
+    constexpr int EltPerCell = NCCL_SYM_KERNEL_CELL_SIZE / sizeof(T);
+    uint32_t fracLo, fracHi;
+
+    // Where the work begins
+    workLo = (block==0) ? 0 : channelWorkRange[block-1].workHi; // start where predecessor ends
+    fracLo = (block==0) ? 0 : channelWorkRange[block-1].fracHi + 1;
+    // If the predecessor ended on the work boundary, then we step to the beginning of the next work.
+    // This ensures we never have empty parts.
+    if (fracLo == 0x10000) {
+      workLo++;
+      fracLo = 0;
+    }
+    struct ncclSymkDevWork const& dw = devWork[workLo];
+    indexLo = ((fracLo * divUp(dw.nElts, EltPerCell)) >> 16) * EltPerCell;
+
+    // Where the work ends
+    workHi = channelWorkRange[block].workHi;
+    fracHi = channelWorkRange[block].fracHi + 1;
+    indexHi = min(((fracHi * divUp(dw.nElts, EltPerCell)) >> 16) * EltPerCell, dw.nElts);
   }
 
   template<typename T>
-  __device__ T* multimemPtr(T* selfPtr) {
-    return reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(selfPtr) + offsetMc);
+    __device__ void getWorkRangeFused(int blockIdx, int w,
+                                      int& block, int& nBlocks, size_t& indexLo, size_t& indexHi) {
+    constexpr int EltPerCell = NCCL_SYM_KERNEL_CELL_SIZE / sizeof(T);
+    struct ncclSymkDevWork const& dw = devWork[w];
+    uint32_t fracLo, fracHi;
+    int lastBlock;
+
+    block = blockIdx - dw.sChannelId;
+    nBlocks = dw.nChannels;
+    lastBlock = dw.sChannelId+dw.nChannels-1;
+
+    // Where the work begins
+    fracLo = (dw.sChannelId==0) ? 0 : ((channelWorkRange[dw.sChannelId-1].fracHi + 1) & 0xFFFF);
+    indexLo = ((fracLo * divUp(dw.nElts, EltPerCell)) >> 16) * EltPerCell;
+    fracHi = (channelWorkRange[lastBlock].workHi == w) ? channelWorkRange[lastBlock].fracHi + 1 : 0x10000;
+    indexHi = min(((fracHi * divUp(dw.nElts, EltPerCell)) >> 16) * EltPerCell, dw.nElts);
   }
 
-  __device__  void barrierArrive(ncclCoopCta cta, bool release) {
-    cta.sync();
-    #if __CUDA_ARCH__ < 700
-      if (release) {
-        if (cta.self() == 0) __threadfence_system();
-        cta.sync();
-      }
-    #endif
-    if (flags & ncclSymPrims_UseMultimem) {
-    #if __CUDA_ARCH__ >= 900 && CUDART_VERSION >= 12010
-      if (cta.self() == 0) {
-        uint32_t* inbox = &multimemPtr(base)->barInboxMc[block];
-        if (release) {
-          asm volatile("multimem.red.release.sys.add.u32 [%0],1;" :: "l"(inbox));
+  template<typename T, typename Fn>
+    __device__ void forEachWork(Fn const& fn) {
+      uint16_t workLo, workHi;
+      size_t indexLo, indexHi;
+
+      getWorkRange<T>(blockIdx.x, workLo, indexLo, workHi, indexHi);
+
+      size_t currentIndexLo = indexLo;
+      #pragma unroll 1
+      for (int w = workLo; w <= workHi; w++) {
+        struct ncclSymkDevWork const& dw = devWork[w];
+        size_t const& nAllElts = dw.nElts;
+        size_t currentIndexHi;
+        int block, nBlocks;
+        if (blockIdx.x >= dw.sChannelId && blockIdx.x < dw.sChannelId + dw.nChannels) {
+          getWorkRangeFused<T>(blockIdx.x, w, block, nBlocks, currentIndexLo, currentIndexHi);
         } else {
-          asm volatile("multimem.red.relaxed.sys.add.u32 [%0],1;" :: "l"(inbox));
+          currentIndexHi = (w < workHi) ? nAllElts : indexHi;
+          block = 0;
+          nBlocks = 1;
         }
+
+        fn(block, nBlocks, currentIndexHi - currentIndexLo, nAllElts,
+           ncclSymPtr<T>(dw.inputWin, dw.inputOff) + currentIndexLo,
+           ncclSymPtr<T>(dw.outputWin, dw.outputOff) + currentIndexLo);
+
+        currentIndexLo = 0;
       }
+<<<<<<< HEAD
     #endif
     } else {
       int r = cta.self();
@@ -234,21 +195,18 @@ struct ncclSymPrims {
     }
     cta.sync();
   }
-
-  __device__ void endLL(ncclCoopCta cta) {
-    if (__builtin_expect(llEpoch >= -2u, false)) {
-      cta.sync();
-      uint4* buf = ncclSymDevBase_getLLBuf(base, nRanks, block, llEpoch);
-      int epochSize = ncclSymLLEpochSize(nRanks);
-      #pragma unroll 4
-      for (int i=cta.self(); i*16 < epochSize; i += cta.count()) {
-        buf[i] = uint4{0, 0, 0, 0};
-      }
-    }
-    cta.sync();
-    llEpoch += (llEpoch == -1u) ? 3 : 1;
+=======
   }
 
+  template<typename T, typename Fn>
+    __device__ void singleWork(Fn const& fn) {
+      uint16_t w;
+      size_t indexLo, indexHi;
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
+
+      getWorkRange<T>(blockIdx.x, w, indexLo, w, indexHi);
+
+<<<<<<< HEAD
   template<typename T>
   __device__ void sendLL(int peer, int slot, T val) {
     union { T tmp; uint32_t u32[divUp(sizeof(T),8)][2]; };
@@ -459,22 +417,29 @@ struct ncclSymPrims {
       }
       dst[slot0 + me] = val;
     }
+=======
+      struct ncclSymkDevWork const& dw = devWork[w];
+
+      fn(indexHi - indexLo, dw.nElts,
+         ncclSymPtr<T>(dw.inputWin, dw.inputOff) + indexLo,
+         ncclSymPtr<T>(dw.outputWin, dw.outputOff) + indexLo);
+>>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
   }
 };
 }
 
 template<template<typename> typename Red, typename T, bool nvls>
-struct ncclSymAccumType { using Type = T; };
+struct ncclSymkAccumType { using Type = T; };
 
 // Only Red's whose opArg is invariant w.r.t. the datatype can have a different
 // accumulator type. At the moment this excludes integer min/max, sumpostdiv,
 // and premulsum.
-template<> struct ncclSymAccumType<FuncSum, __half, false> { using Type = float; };
+template<> struct ncclSymkAccumType<FuncSum, __half, false> { using Type = float; };
 #if defined(__CUDA_BF16_TYPES_EXIST__)
-template<> struct ncclSymAccumType<FuncSum, __nv_bfloat16, false> { using Type = float; };
+template<> struct ncclSymkAccumType<FuncSum, __nv_bfloat16, false> { using Type = float; };
 #endif
 #if defined(__CUDA_FP8_TYPES_EXIST__)
-template<> struct ncclSymAccumType<FuncSum, __nv_fp8_e4m3, false> { using Type = float; };
-template<> struct ncclSymAccumType<FuncSum, __nv_fp8_e5m2, false> { using Type = float; };
+template<> struct ncclSymkAccumType<FuncSum, __nv_fp8_e4m3, false> { using Type = float; };
+template<> struct ncclSymkAccumType<FuncSum, __nv_fp8_e5m2, false> { using Type = float; };
 #endif
 #endif
