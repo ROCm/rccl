@@ -1686,18 +1686,18 @@ static inline size_t getArechBufIdx(size_t count) {
 // this is a separate function to hook into in bpftrace and catch func_tag
 extern "C" __attribute__ ((visibility("default")))
 #endif
-ncclResult_t arechLaunchKernel(void* kernelFn, const bool is_ext, uint64_t func_tag // ptr | count
-  , struct ncclComm* comm
+ncclResult_t arechLaunchKernel(uint64_t func_tag // ptr | count
+  , struct ncclComm* comm, cudaStream_t launchStream, struct ncclKernelPlan* plan
   , const dim3& grid, const dim3& block, void** extra
-  , int smem,  struct ncclKernelPlan* plan)
+  , int smem,  void* kernelFn)
 {
   ncclResult_t ret = ncclSuccess;
-  cudaStream_t launchStream = comm->planner.streams->stream;
+  // cudaStream_t launchStream = comm->planner.streams->stream;
 
   // std::fprintf(stderr, "cudaDev offset %d bytes\n",reinterpret_cast<const char*>(&comm->cudaDev) - reinterpret_cast<const char*>(comm));
   // vscode is right, it's 872184 bytes
 
-  if (is_ext){
+  if (comm->planner.numStreams == 1 && !plan->persistent){
     CUDACHECKGOTO(hipExtLaunchKernel(kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
   }else{
     CUDACHECKGOTO(cudaLaunchKernel(kernelFn, grid, block, extra, smem, launchStream), ret, do_return);
@@ -1770,13 +1770,12 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   }  
  #endif
 
-  const bool is_ext = planner->numStreams == 1 && !plan->persistent;
-  if (is_ext) {
+  if (planner->numStreams == 1 && !plan->persistent) {
     comm->lastStream = planner->streams->stream;
     //CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
     // return ncclSuccess;
   }
-  ret = arechLaunchKernel(sym, is_ext, func_tag, comm, grid, block, extra, smem, plan);
+  ret = arechLaunchKernel(func_tag, comm, planner->streams->stream, plan, grid, block, extra, smem, sym);
 
   // Standard kernel launch
   //CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
