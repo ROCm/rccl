@@ -1687,11 +1687,15 @@ static inline size_t getArechBufIdx(size_t count) {
 extern "C" __attribute__ ((visibility("default")))
 #endif
 ncclResult_t arechLaunchKernel(void* kernelFn, const bool is_ext, uint64_t func_tag // ptr | count
+  , struct ncclComm* comm
   , const dim3& grid, const dim3& block, void** extra
-  , int smem,  struct ncclKernelPlan* plan, struct ncclComm* comm)
+  , int smem,  struct ncclKernelPlan* plan)
 {
   ncclResult_t ret = ncclSuccess;
   cudaStream_t launchStream = comm->planner.streams->stream;
+
+  // std::fprintf(stderr, "cudaDev offset %d bytes\n",reinterpret_cast<const char*>(&comm->cudaDev) - reinterpret_cast<const char*>(comm));
+  // vscode is right, it's 872184 bytes
 
   if (is_ext){
     CUDACHECKGOTO(hipExtLaunchKernel(kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
@@ -1772,7 +1776,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     //CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
     // return ncclSuccess;
   }
-  ret = arechLaunchKernel(sym, is_ext, func_tag, grid, block, extra, smem, plan, comm);
+  ret = arechLaunchKernel(sym, is_ext, func_tag, comm, grid, block, extra, smem, plan);
 
   // Standard kernel launch
   //CUDACHECKGOTO(cudaLaunchKernel(sym, grid, block, extra, smem, launchStream), ret, do_return);
