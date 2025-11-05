@@ -224,6 +224,7 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   req.connIndex = connIndex;
   req.curr_hdp_reg = 0;
   req.netDev = -1;
+  // Determine if this is a P2P connection or not based on the graph pointer
   if(graph == NULL) {
     req.isP2p = 1;
   } else {
