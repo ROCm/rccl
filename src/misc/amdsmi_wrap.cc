@@ -15,7 +15,7 @@ static int is_wsl2 = -1;
   if( ret != AMDSMI_STATUS_SUCCESS ) {       \
     const char *err;                         \
     amdsmi_status_code_to_string(ret, &err);         \
-    ERROR("AMD SMI init failure %s", err);    \
+    ERROR("AMD SMI failure: %s", err);    \
     return ncclInternalError;                \
   }                                          \
 } while(false)
@@ -23,7 +23,7 @@ static int is_wsl2 = -1;
 #define ARSMICHECK(cmd) do {         \
   int ret = cmd;                     \
   if( ret != 0 ) {		     \
-    ERROR("ARSMI failure %d", ret);   \
+    ERROR("ARSMI failure: %d", ret);   \
     return ncclInternalError;        \
   }                                  \
 } while(false)
@@ -144,7 +144,7 @@ ncclResult_t amd_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId, 
           AMDSMICHECK(amdsmi_get_processor_type(proc, &type));
           if(type == AMDSMI_PROCESSOR_TYPE_AMD_GPU) {
             amdsmi_enumeration_info_t info;
-            amdsmi_get_gpu_enumeration_info(proc, &info);
+            AMDSMICHECK(amdsmi_get_gpu_enumeration_info(proc, &info));
             if(info.hip_id == deviceIndex) {
               amdsmi_get_gpu_bdf_id(proc, &id);
               break;
@@ -184,9 +184,9 @@ ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* de
     // with amd-smi, we can use amdsmi_get_processor_handle_from_bdf,
     // and then query the enumeration info for that processor_handle
     if (rcclParamUseAmdSmiLib()) {
-      amdsmi_processor_handle processor_handle;
+      amdsmi_processor_handle processor_handle = nullptr;
 
-      amdsmi_bdf_t bdf;
+      amdsmi_bdf_t bdf = {};
       bdf.function_number = (busid & 0x7);
       bdf.device_number = (busid & 0xf8) >> 3;
       bdf.bus_number = (busid & 0xff00) >> 8;
@@ -198,7 +198,7 @@ ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* de
       AMDSMICHECK(amdsmi_get_processor_type(processor_handle, &type));
       if(type == AMDSMI_PROCESSOR_TYPE_AMD_GPU) {
         amdsmi_enumeration_info_t info;
-        amdsmi_get_gpu_enumeration_info(processor_handle, &info);
+        AMDSMICHECK(amdsmi_get_gpu_enumeration_info(processor_handle, &info));
         *deviceIndex = info.hip_id;
         return ncclSuccess;
       }
@@ -243,8 +243,8 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
     // and then use these processor handles for amdsmi hardware topology functions
     if (rcclParamUseAmdSmiLib()) {
       uint32_t socket_count = 0;
-      amdsmi_processor_handle src_processor_handle = 0;
-      amdsmi_processor_handle dst_processor_handle = 0;
+      amdsmi_processor_handle src_processor_handle = nullptr;
+      amdsmi_processor_handle dst_processor_handle = nullptr;
 
       AMDSMICHECK(amdsmi_get_socket_handles(&socket_count, nullptr));
       std::vector<amdsmi_socket_handle> sockets(socket_count);
@@ -262,12 +262,11 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
         // workaround
         for (auto& proc : processor_handles) {
           processor_type_t type;
-          uint64_t id;
 
           AMDSMICHECK(amdsmi_get_processor_type(proc, &type));
           if(type == AMDSMI_PROCESSOR_TYPE_AMD_GPU) {
             amdsmi_enumeration_info_t info;
-            amdsmi_get_gpu_enumeration_info(proc, &info);
+            AMDSMICHECK(amdsmi_get_gpu_enumeration_info(proc, &info));
             if(info.hip_id == srcIndex) {
               src_processor_handle = proc;
             }
