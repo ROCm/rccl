@@ -6,7 +6,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Resolved Issues
 
-* Fixed crash when using librccl-profiler plugin with All-to-all collective after the 2.27 update.
+* Fixed an issue where using the ``librccl-profiler`` plugin with the All-to-all collective would cause a crash after the 2.27 update.
 
 ## RCCL 2.27.7 for ROCm 7.1.0
 
