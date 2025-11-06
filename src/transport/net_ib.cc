@@ -781,12 +781,8 @@ ncclResult_t ncclIbInit(void** ctx, uint64_t commId, ncclNetCommConfig_t* config
         }
         if (nPorts == 0 && ncclSuccess != wrap_ibv_close_device(context)) { ret = ncclInternalError; goto fail; }
       }
-<<<<<<< HEAD
-      if (ncclSuccess != wrap_ibv_free_device_list(devices)) { ret = ncclInternalError; goto fail;}
-=======
 
       if (nIbDevs && (ncclSuccess != wrap_ibv_free_device_list(devices))) { ret = ncclInternalError; goto fail; }
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
     }
     if (ncclNIbDevs == 0) {
       INFO(NCCL_INIT|NCCL_NET, "NET/IB : No device found.");
@@ -811,11 +807,7 @@ exit:
   *ctx = &ibContext;
   return ret;
 fail:
-<<<<<<< HEAD
   if(ncclSuccess != wrap_ibv_free_device_list(devices)){WARN("NET/IB : Unable to free device list");}
-  pthread_mutex_unlock(&ncclIbLock);
-=======
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
   goto exit;
 }
 

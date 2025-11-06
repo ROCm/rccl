@@ -1,13 +1,7 @@
-<<<<<<< HEAD
-#include "symmetric.h"
-#include "symmetric/kernel.h"
-#include "symmetric/primitives.h"
-=======
 #include "sym_kernels.h"
 #include "nccl_device.h"
 #include "kernel.cuh"
 #include "primitives.cuh"
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 template<int BytePerPack, int UnrollPacks, int UnrollPeers, typename T, typename Red>
 static __device__ __forceinline__ void allreduceDeep(

@@ -14,7 +14,7 @@ NCCL_EXTERN_C __host__ int ncclLLA2ACalcSlots(int maxElts, int maxEltSize);
 
 NCCL_EXTERN_C __host__ ncclResult_t ncclLLA2ACreateRequirement(int nBlocks, int nSlots, ncclLLA2AHandle_t* outHandle, ncclDevResourceRequirements_t* outReq);
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 template<typename Coop>
 struct ncclLLA2ASession_internal;
 

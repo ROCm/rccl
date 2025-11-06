@@ -132,7 +132,6 @@ fail:
   goto exit;
 }
 
-<<<<<<< HEAD
 // Latencies in us, Bandwidths in GB/s
 // Tree { LL, LL128, Simple } , Ring { LL, LL128, Simple }
 static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = {
@@ -459,7 +458,7 @@ static const double perChMaxTreeBws[][3] = {
   /* Ampere (N1/N2/N4) */ {24.0, 23.6, 17.8},
   /* Hopper (N1/N2/N4) */ {38.7, 41.4, 36.0},
   /* Blackwell (N1/N2/N4) */ {2*38.7, 2*41.4, 2*36.0},
-=======
+};
 // NVLS efficiency factor.
 static const float nvlsEfficiency[NCCL_NUM_COMPCAPS] = {
   0.0f, // Volta
@@ -467,6 +466,7 @@ static const float nvlsEfficiency[NCCL_NUM_COMPCAPS] = {
   0.85f, // Hopper
   0.74f, // Blackwell
 };
+#endif
 
 // Default tuner constants
 static const ncclTunerConstants_t ncclTunerConstantsDefaults = {
@@ -526,9 +526,7 @@ static const ncclTunerConstants_t ncclTunerConstantsDefaults = {
     {0.0, 57.7, 45.5}, /* Hopper (N1/N2/N4) */
     {0.0, 96.0, 43.1} /* Blackwell (N1/N2/N4) */
   }
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 };
-#endif
 
 NCCL_PARAM(PatEnable, "PAT_ENABLE", 0);
 static int ncclPatEnable(struct ncclComm* comm) {
@@ -593,26 +591,12 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   int nNodes = comm->nNodes;
   int nRanks = comm->nRanks;
   if (nRanks <= 1) return ncclSuccess;
-<<<<<<< HEAD
 #if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
   int compCapIndex = minCompCap >= 100 ? BLACKWELL_COMPCAP_IDX : (minCompCap >= 90 ? HOPPER_COMPCAP_IDX : minCompCap >= 80 ? AMPERE_COMPCAP_IDX : VOLTA_COMPCAP_IDX);
-=======
-
-  int compCapIndex = minCompCap >= 100 ? NCCL_BLACKWELL_COMPCAP_IDX : (minCompCap >= 90 ? NCCL_HOPPER_COMPCAP_IDX : minCompCap >= 80 ? NCCL_AMPERE_COMPCAP_IDX : NCCL_VOLTA_COMPCAP_IDX);
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
   int index2 = nNodes <= 2 ? nNodes-1 : 2;
   // LL: for single node, we look at GPU type; for multi-node, we look at CPU type
   int index1 = nNodes == 1 ? compCapIndex :
                (comm->cpuVendor == NCCL_TOPO_CPU_VENDOR_AMD || comm->cpuVendor == NCCL_TOPO_CPU_VENDOR_MIXED) ? 1 : 0;
-<<<<<<< HEAD
-  double llMaxBw = llMaxBws[index1][index2];
-  double perChMaxTreeBw = perChMaxTreeBws[compCapIndex][index2];
-  double perChMaxRingLL128Bw = perChMaxRingLL128Bws[compCapIndex][index2];
-  double perChMaxTreeLL128Bw = perChMaxTreeLL128Bws[compCapIndex][index2];
-#endif
-  // De-penalize Tree/Simple latency on Power systems to favor Tree than Ring
-  //if (comm->cpuArch == NCCL_TOPO_CPU_ARCH_POWER) hwLat[NCCL_HW_PCI][NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = hwLat[NCCL_HW_PCI][NCCL_ALGO_RING][NCCL_PROTO_SIMPLE];
-=======
   double llMaxBw = comm->tunerConstants.llMaxBws[index1][index2];
   double perChMaxTreeBw = comm->tunerConstants.perChMaxTreeBws[compCapIndex][index2];
   double perChMaxRingLL128Bw = comm->tunerConstants.perChMaxRingLL128Bws[compCapIndex][index2];
@@ -620,7 +604,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   double perChMaxNVLSTreeBw = comm->tunerConstants.perChMaxNVLSTreeBws[compCapIndex][index2];
   // De-penalize Tree/Simple latency on Power systems to favor Tree than Ring
   if (comm->cpuArch == NCCL_TOPO_CPU_ARCH_POWER) comm->tunerConstants.hwLatencies[NCCL_HW_PCI][NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE] = comm->tunerConstants.hwLatencies[NCCL_HW_PCI][NCCL_ALGO_RING][NCCL_PROTO_SIMPLE];
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
+#endif
   float ppn = (float)nRanks / nNodes;
 
   int intraHw[NCCL_NUM_ALGORITHMS], hw[NCCL_NUM_ALGORITHMS];
@@ -654,12 +638,9 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
             && a == NCCL_ALGO_PAT && (p != NCCL_PROTO_SIMPLE || ncclPatEnable(comm) == 0)) continue;
         int collnet = (a == NCCL_ALGO_COLLNET_DIRECT || a == NCCL_ALGO_COLLNET_CHAIN) ? 1 : 0;
         float bw = nNodes <= 2 || collnet ? graphs[a]->bwIntra : graphs[a]->bwInter;
-<<<<<<< HEAD
         float busBw = comm->topo->baseBw != 0.0 ? comm->topo->baseBw : graphs[a]->nChannels * bw;
         //INFO(NCCL_INIT, "algo %s proto %s busBw %f baseBw %f bw %f nChannels %d bwIntra %f bwInter %f", ncclAlgoStr[a], ncclProtoStr[p], busBw, comm->topo->baseBw, bw, graphs[a]->nChannels, graphs[a]->bwIntra, graphs[a]->bwInter);
-
-        if (a == NCCL_ALGO_NVLS) {
-=======
+#if !defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__)
         if (a == NCCL_ALGO_NVLS_TREE || a == NCCL_ALGO_NVLS)
         {
           // NVLS/NVLStree needs at least 2 channels
@@ -667,23 +648,16 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
           // Convert to NVLS busBW/channel
           float intraBw = graphs[a]->bwIntra * nvlsEfficiency[compCapIndex] * (graphs[a]->nChannels - 1) / graphs[a]->nChannels;
 	  // AllReduce pipelines two operations.
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
           if (coll == ncclFuncAllReduce) {
             intraBw *= 2.0f;
           } else {
             intraBw *= (ppn - 1) / ppn;
           }
-<<<<<<< HEAD
-        }
-        if (a == NCCL_ALGO_NVLS_TREE) bw = std::min(graphs[a]->bwIntra, nNodes <= 2 ? graphs[a]->bwInter : graphs[a]->bwInter/2);
-=======
           // Handle 2 node case of NVLSTree
           float interBw = graphs[a]->bwInter * ((nNodes <= 2 && a == NCCL_ALGO_NVLS_TREE) ? 2 : 1);
           bw = std::min( {intraBw, interBw, a == NCCL_ALGO_NVLS_TREE ? (float)perChMaxNVLSTreeBw : std::numeric_limits<float>::max()} );
         };
-        float busBw = graphs[a]->nChannels * bw;
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
-
+#endif
         // Various model refinements
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
         if (nNodes <= 2)
@@ -741,35 +715,23 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
           busBw *= ratio;
         }
         comm->bandwidths[coll][a][p] = busBw;
-<<<<<<< HEAD
-        comm->latencies[coll][a][p] = baseLat[a][p];
-        float intraLat = rcclTuningModel[comm->topo->tuning].hwLat[intraHw[a]][a][p];
-        float interLat =  ppn == 1 ? rcclTuningModel[comm->topo->tuning].hwLat[NCCL_HW_NET][NCCL_ALGO_TREE][p] : rcclTuningModel[comm->topo->tuning].hwLat[NCCL_HW_NET][a][p];
-=======
         comm->latencies[coll][a][p] = comm->tunerConstants.baseLatencies[a][p];
         float intraLat = comm->tunerConstants.hwLatencies[intraHw[a]][a][p];
         // With ppn=1 latencies are fully exposed, use the Tree network latency
         float interLat = ppn == 1 ? comm->tunerConstants.hwLatencies[NCCL_HW_NET][NCCL_ALGO_TREE][p] : comm->tunerConstants.hwLatencies[NCCL_HW_NET][a][p];
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
         interLat += graphs[a]->latencyInter;
         // Also add the flush extra latency
         if (p == NCCL_PROTO_SIMPLE) interLat += graphs[a]->latencyInter;
 
         if (a == NCCL_ALGO_RING) {
-<<<<<<< HEAD
           float lat = rcclTuningModel[comm->topo->tuning].hwLat[hw[a]][a][p];
-=======
-          float lat = comm->tunerConstants.hwLatencies[hw[a]][a][p];
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
+          //float lat = comm->tunerConstants.hwLatencies[hw[a]][a][p];
           if ((coll == ncclFuncReduce || coll == ncclFuncBroadcast)) {
             if (graphs[a]->sameChannels) {
               comm->latencies[coll][a][p] += lat;
             } else {
-<<<<<<< HEAD
               if (p == NCCL_PROTO_SIMPLE) lat = rcclTuningModel[comm->topo->tuning].hwLat[hw[a]][NCCL_ALGO_TREE][p]; // Add some chunk latency, waiting for proper chunk modeling
-=======
-              if (p == NCCL_PROTO_SIMPLE) lat = comm->tunerConstants.hwLatencies[hw[a]][NCCL_ALGO_TREE][p]; // Add some chunk latency, waiting for proper chunk modeling
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
+              //if (p == NCCL_PROTO_SIMPLE) lat = comm->tunerConstants.hwLatencies[hw[a]][NCCL_ALGO_TREE][p]; // Add some chunk latency, waiting for proper chunk modeling
               comm->latencies[coll][a][p] += nsteps*lat;
             }
           } else {

@@ -14,7 +14,7 @@ struct ncclLLA2AHandle {
   uint32_t nSlots;
 };
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 template<typename Coop>
 struct ncclLLA2ASession_internal {
   Coop coop;

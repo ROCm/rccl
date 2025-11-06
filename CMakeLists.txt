@@ -437,6 +437,7 @@ set(SRC_FILES
   src/allocator.cc
   src/bootstrap.cc
   src/channel.cc
+  src/ce_coll.cc
   src/collectives.cc
   src/debug.cc
   src/enqueue.cc
@@ -444,14 +445,15 @@ set(SRC_FILES
   src/init.cc
   src/init_nvtx.cc
   src/mnnvl.cc
+  src/include/ce_coll.h
   src/msccl.cc
   src/proxy.cc
   src/rccl_wrap.cc
-  src/symmetric.cc
+  #src/symmetric.cc
   src/transport.cc
   src/device/all_gather.h
   src/device/all_reduce.h
-  src/device/alltoall_pivot.h
+  src/device/alltoall.h
   src/device/broadcast.h
   src/device/common.h
   src/device/common_kernel.h
@@ -486,6 +488,7 @@ set(SRC_FILES
   src/graph/topo.h
   src/graph/trees.cc
   src/graph/tuning.cc
+  src/dev_runtime.cc
   src/graph/xml.cc
   src/graph/xml.h
   src/include/alloc.h
@@ -507,6 +510,7 @@ set(SRC_FILES
 # src/include/cudawrap.h
   src/include/debug.h
   src/include/device.h
+  src/include/dev_runtime.h
   src/include/enqueue.h
   src/include/gdrwrap.h
   src/include/git_version.h
@@ -520,6 +524,25 @@ set(SRC_FILES
   src/include/ipcsocket.h
   src/include/mnnvl.h
   src/include/nccl_common.h
+  src/include/nccl_device.h
+  src/include/nccl_device/impl/comm__funcs.h
+  src/include/nccl_device/impl/comm__types.h
+  src/include/nccl_device/impl/core__funcs.h
+  src/include/nccl_device/impl/core__types.h
+  src/include/nccl_device/impl/ll_a2a__funcs.h
+  src/include/nccl_device/impl/ll_a2a__types.h
+  src/include/nccl_device/impl/mem_barrier__funcs.h
+  src/include/nccl_device/impl/mem_barrier__types.h
+  src/include/nccl_device/impl/ptr__funcs.h
+  src/include/nccl_device/impl/ptr__types.h
+  src/include/nccl_device/mem_barrier.h
+  src/include/nccl_device/comm.h
+  src/include/nccl_device/coop.h
+  src/include/nccl_device/core.h
+  src/include/nccl_device/ptr.h
+  src/include/nccl_device/utility.h
+  src/include/nccl_device/ll_a2a.h
+  src/include/scheduler.h
   src/include/net_device.h
   src/include/net.h
   src/include/nvmlwrap.h
@@ -545,7 +568,8 @@ set(SRC_FILES
   src/include/signals.h
   src/include/socket.h
   src/include/strongstream.h
-  src/include/symmetric.h
+   src/include/sym_kernels.h
+  #src/include/symmetric.h
   src/include/timer.h
   src/include/transport.h
   src/include/trees.h
@@ -607,6 +631,7 @@ set(SRC_FILES
   src/include/plugin/net/net_v8.h
   src/include/plugin/net/net_v9.h
   src/include/plugin/net/net_v10.h
+  src/include/plugin/net/net_v11.h
   src/include/plugin/profiler/net_ib_v1.h
   src/include/plugin/profiler/net_ib.h
   src/include/plugin/profiler/net_socket_v1.h
@@ -615,9 +640,11 @@ set(SRC_FILES
   src/include/plugin/profiler/profiler_v2.h
   src/include/plugin/profiler/profiler_v3.h
   src/include/plugin/profiler/profiler_v4.h
+  src/include/plugin/profiler/profiler_v5.h
   src/include/plugin/tuner/tuner_v2.h
   src/include/plugin/tuner/tuner_v3.h
   src/include/plugin/tuner/tuner_v4.h
+  src/include/plugin/tuner/tuner_v5.h
   src/misc/alt_rsmi.cc
   src/misc/archinfo.cc
   src/misc/argcheck.cc
@@ -657,10 +684,12 @@ set(SRC_FILES
   src/plugin/net/net_v8.cc
   src/plugin/net/net_v9.cc
   src/plugin/net/net_v10.cc
+  src/plugin/net/net_v11.cc
   src/plugin/profiler/profiler_v1.cc
   src/plugin/profiler/profiler_v2.cc
   src/plugin/profiler/profiler_v3.cc
   src/plugin/profiler/profiler_v4.cc
+  src/plugin/profiler/profiler_v5.cc
   src/plugin/tuner/tuner_v2.cc
   src/plugin/tuner/tuner_v3.cc
   src/plugin/tuner/tuner_v4.cc
@@ -928,6 +957,8 @@ target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # 
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/nccl_device)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/symmetric)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/mlx5)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/plugin)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
@@ -1158,6 +1189,8 @@ target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
+target_compile_options(rccl PRIVATE -Wno-invalid-offsetof)
+target_compile_options(rccl PRIVATE -Wno-unused-result)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
 
 ## Set RCCL compile and linker options for unit tests and code coverage

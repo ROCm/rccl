@@ -292,25 +292,6 @@ void ncclMemoryStackDestruct(struct ncclMemoryStack* me) {
   }
 }
 
-<<<<<<< HEAD
-size_t get_sc_page_size() {
-  static size_t cached_page_size = 0;
-  size_t ps = __atomic_load_n(&cached_page_size,__ATOMIC_RELAXED);
-  if (ps == 0) {
-      ps = (size_t)sysconf(_SC_PAGESIZE);
-      __atomic_store_n(&cached_page_size, ps,__ATOMIC_RELAXED);
-  }
-  return ps;
-}
-
-void get_aligned_ptr_and_size(const void *ptr, const size_t bufsize, void **aligned_ptr, size_t *aligned_size) {
-  if (!aligned_ptr || !aligned_size) return;
-  const size_t page_size = get_sc_page_size();
-  uintptr_t aligned_ptr_local = (uintptr_t)ptr & ~(page_size - 1);
-  size_t local_offset = (size_t)((uintptr_t)ptr - aligned_ptr_local);
-  *aligned_size = (bufsize + local_offset + page_size - 1) & ~(page_size - 1);
-  *aligned_ptr = (void *)aligned_ptr_local;
-=======
 /* return concatenated string representing each set bit */
 ncclResult_t ncclBitsToString(uint32_t bits, uint32_t mask, const char* (*toStr)(int), char *buf, size_t bufLen, const char *wildcard) {
   if (!buf || !bufLen)
@@ -334,5 +315,23 @@ ncclResult_t ncclBitsToString(uint32_t bits, uint32_t mask, const char* (*toStr)
   }
 
   return ncclSuccess;
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
+}
+
+size_t get_sc_page_size() {
+  static size_t cached_page_size = 0;
+  size_t ps = __atomic_load_n(&cached_page_size,__ATOMIC_RELAXED);
+  if (ps == 0) {
+      ps = (size_t)sysconf(_SC_PAGESIZE);
+      __atomic_store_n(&cached_page_size, ps,__ATOMIC_RELAXED);
+  }
+  return ps;
+}
+
+void get_aligned_ptr_and_size(const void *ptr, const size_t bufsize, void **aligned_ptr, size_t *aligned_size) {
+  if (!aligned_ptr || !aligned_size) return;
+  const size_t page_size = get_sc_page_size();
+  uintptr_t aligned_ptr_local = (uintptr_t)ptr & ~(page_size - 1);
+  size_t local_offset = (size_t)((uintptr_t)ptr - aligned_ptr_local);
+  *aligned_size = (bufsize + local_offset + page_size - 1) & ~(page_size - 1);
+  *aligned_ptr = (void *)aligned_ptr_local;
 }

@@ -1,9 +1,5 @@
 /*************************************************************************
-<<<<<<< HEAD
- * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved..
-=======
  * Copyright (c) 2015-2025, NVIDIA CORPORATION. All rights reserved.
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
  *
  * See LICENSE.txt for license information
  ************************************************************************/

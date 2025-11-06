@@ -156,18 +156,6 @@ def kernel_conds(k):
   return cudart_cond, arch_cond
 
 def instantiate(k):
-<<<<<<< HEAD
-  form_red_ty = (
-    "__global__ void {cname}(ncclSymDevArgs NCCL_GRID_CONSTANT const *args) {{\n"
-    "  ncclSymRun_{id}<{red}, {ty}>(args);\n"
-    "}}"
-  )
-  form = (
-    "__global__ void {cname}(ncclSymDevArgs NCCL_GRID_CONSTANT const *args) {{\n"
-    "  ncclSymRun_{id}(args);\n"
-    "}}"
-  )
-=======
   cudart_cond, arch_cond = kernel_conds(k)
   if (cudart_cond, arch_cond) == (None, None):
     form_red_ty = (
@@ -199,7 +187,6 @@ def instantiate(k):
       "  }}\n"
       "#endif"
     )
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
   id = k.coll+'_'+k.algo
   cname = kernel_cname(k)
@@ -210,9 +197,6 @@ def instantiate(k):
   return inst
 
 def prototype(k):
-<<<<<<< HEAD
-  return "__global__ void {cname}(ncclSymDevArgs const *args);".format(cname=kernel_cname(k))
-=======
   cudart_cond, arch_cond = kernel_conds(k)
   if cudart_cond is None:
     form = "__global__ void {cname}(ncclSymkDevWorkArgs4K const);"
@@ -225,7 +209,6 @@ def prototype(k):
       "#endif"
     )
   return form.format(cname=kernel_cname(k), cudart_cond=cudart_cond)
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 ################################################################################
 
@@ -252,19 +235,6 @@ files_to_print = ""
 for (fname, coll), ks in kernels_by_file.items():
   files_to_print += fname + ";"
   with open(os.path.join(gensrc, fname), "w") as f:
-<<<<<<< HEAD
-    print("-- Generating %s" % os.path.join(gensrc, fname))
-    emitln(f, '#include "symmetric.h"')
-    emitln(f, '#include "symmetric/kernel.h"')
-    emitln(f, '#include "symmetric/{coll}.h"'.format(coll=coll_to_lower[coll]))
-    for k in ks:
-      emitln(f, instantiate(k))
-
-# Generate <gensrc>/symmetric_host.cc
-with open(os.path.join(gensrc, "symmetric_kernels.cc"), "w") as f:
-  print("-- Generating %s" % os.path.join(gensrc, "symmetric_kernels.cc"))
-  emitln(f, '#include "symmetric.h"')
-=======
     emitln(f, '#include "sym_kernels.h"')
     emitln(f, '#include "symmetric/kernel.cuh"')
     emitln(f, '#include "symmetric/{coll}.cuh"'.format(coll=coll_to_lower[coll]))
@@ -274,7 +244,6 @@ with open(os.path.join(gensrc, "symmetric_kernels.cc"), "w") as f:
 # Generate <gensrc>/sym_kernels_host.cc
 with open(os.path.join(gensrc, "sym_kernels_host.cc"), "w") as f:
   emitln(f, '#include "sym_kernels.h"')
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
   emitln(f, '#include "device.h"')
   emitln(f, '')
 
@@ -315,8 +284,6 @@ with open(os.path.join(gensrc, "sym_kernels_host.cc"), "w") as f:
   emitln(f, '}')
   indents -= 1
   emitln(f, '}')
-<<<<<<< HEAD
-=======
 
 # Generate <gensrc>/rules.mk
 files_to_print += "rules.mk;"
@@ -340,4 +307,3 @@ with open(os.path.join(gensrc, "rules.mk"), "w") as f:
       "\n"
       .format(name=name, coll=coll_to_lower[coll], gencode=gencode)
     )
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b

@@ -14,7 +14,7 @@ struct ncclLsaBarrierHandle {
   int nBarriers;
 };
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 template<typename Coop>
 struct ncclLsaBarrierSession_internal {
   Coop coop;

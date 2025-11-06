@@ -7,7 +7,7 @@
 #ifndef _NCCL_DEVICE_UTILITY_H_
 #define _NCCL_DEVICE_UTILITY_H_
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
   #define NCCL_DEVICE_INLINE __device__ __forceinline__
   #define NCCL_HOST_DEVICE_INLINE __host__ __device__ __forceinline__
 #else
@@ -27,7 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 #include <cuda/atomic>
 #endif
 
@@ -179,7 +179,7 @@ NCCL_HOST_DEVICE_INLINE uint32_t imodFast64(uint64_t x, uint64_t y, uint64_t yrc
   return r;
 }
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 // Precomputed integer reciprocoals for denominator values 1..64 inclusive.
 // Pass these to idivFast64() for fast division on the GPU.
 NCCL_DEVICE_INLINE uint64_t idivRcp64_upto64(int x) {
@@ -206,13 +206,13 @@ NCCL_DEVICE_INLINE uint64_t idivRcp64_upto64(int x) {
 }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 NCCL_DEVICE_INLINE uint32_t idivRcp32_upto64(int x) {
   return idivRcp64_upto64(x)>>32;
 }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 NCCL_DEVICE_INLINE void fenceAcquireGpu() {
   static __device__ int dummy;
   int tmp;
@@ -224,7 +224,7 @@ NCCL_DEVICE_INLINE void fenceReleaseGpu() {
 }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 NCCL_DEVICE_INLINE cuda::memory_order acquireOrderOf(cuda::memory_order ord) {
   return ord == cuda::memory_order_release ? cuda::memory_order_relaxed :
          ord == cuda::memory_order_acq_rel ? cuda::memory_order_acquire :
@@ -237,7 +237,7 @@ NCCL_DEVICE_INLINE cuda::memory_order releaseOrderOf(cuda::memory_order ord) {
 }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 NCCL_DEVICE_INLINE int lane() {
   int ret;
   asm("mov.u32 %0, %%laneid;" : "=r"(ret));
@@ -250,7 +250,7 @@ NCCL_DEVICE_INLINE unsigned int lanemask_lt() {
 }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 // Load anything, but cache like its constant memory.
 template<typename T>
 NCCL_DEVICE_INLINE T loadConst(T const *p) {

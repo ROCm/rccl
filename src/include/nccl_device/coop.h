@@ -15,7 +15,7 @@
 //   int Coop::num_threads(); // same as size()
 //   void Coop::sync();
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 template<int nThreadsPow2>
 struct ncclCoopTile { // An aligned pow2 set of threads within the warp.
   static_assert(nccl::utility::isPow2(nThreadsPow2) && nThreadsPow2 <= 32, "Condition required");
@@ -35,12 +35,12 @@ struct ncclCoopTile { // An aligned pow2 set of threads within the warp.
 };
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 typedef ncclCoopTile<1> ncclCoopThread;
 typedef ncclCoopTile<32> ncclCoopWarp;
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 struct ncclCoopLanes { // Some lanes of this warp.
   uint32_t lmask;
   
@@ -61,7 +61,7 @@ struct ncclCoopLanes { // Some lanes of this warp.
 };
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 // A set of consecutive warps that the user has also supplied with a unique
 // id from [0..15]. It is an error for two different warp spans with the same
 // id to be in a collective concurrently.
@@ -89,7 +89,7 @@ struct ncclCoopWarpSpan {
 };
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 struct ncclCoopCta {
   NCCL_DEVICE_INLINE int thread_rank() const { return threadIdx.x; }
   NCCL_DEVICE_INLINE int size() const { return blockDim.x; }
@@ -98,7 +98,7 @@ struct ncclCoopCta {
 };
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 template<int nThreadsPow2>
 NCCL_DEVICE_INLINE uint32_t ncclCoopLaneMask(ncclCoopTile<nThreadsPow2> coop) {
   return coop.laneMask();
@@ -114,7 +114,7 @@ NCCL_DEVICE_INLINE uint32_t ncclCoopLaneMask(ncclCoopCta coop) {
 }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 // ncclCoopIsThread:
 // At compile time do we know the given coop is a single thread only.
 template<int nThreads>
@@ -126,14 +126,14 @@ NCCL_DEVICE_INLINE constexpr bool ncclCoopIsThread(ncclCoopWarpSpan) { return fa
 NCCL_DEVICE_INLINE constexpr bool ncclCoopIsThread(ncclCoopCta) { return false; }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 // Pick threads of our warp that are safe to use collectively.
 NCCL_DEVICE_INLINE ncclCoopLanes ncclCoopCoalesced() {
   return ncclCoopLanes{__activemask()};
 }
 #endif
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 // Pick threads of our warp that are safe to use collectively given that this
 // is a collective on the provided cooperative group.
 template<typename Coop>

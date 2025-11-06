@@ -7,7 +7,7 @@
 #include "comm.h"
 #include "register_inline.h"
 #include <cuda.h>
-#include "cudawrap.h"
+#include "rocmwrap.h"
 #include "ce_coll.h"
 #include "alloc.h"
 
@@ -81,6 +81,7 @@ fail:
 
 bool ncclCeImplemented(ncclFunc_t coll, int/*ncclDevRedOp_t*/ red, ncclDataType_t ty) {
   int driverVersion;
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
   if (ncclCudaDriverVersion(&driverVersion) != ncclSuccess) return false;
 
   // CE is supported in CUDA 12.5 and later
@@ -95,10 +96,21 @@ bool ncclCeImplemented(ncclFunc_t coll, int/*ncclDevRedOp_t*/ red, ncclDataType_
       return false;
     }
   }
+#else
+  switch (coll) {
+    case ncclFuncAllGather:
+    case ncclFuncAlltoAll:
+    case ncclFuncScatter:
+    case ncclFuncGather:
+      return true;
+    default:
+      return false;
+    }
+#endif
   return false;
 }
 
-ncclResult_t ncclPrepMCSync(struct ncclComm* comm, bool isComplete, CUstreamBatchMemOpParams* batchParams, size_t* opIdx, cudaStream_t stream) {
+ncclResult_t ncclPrepMCSync(struct ncclComm* comm, bool isComplete, hipStreamBatchMemOpParams* batchParams, size_t* opIdx, cudaStream_t stream) {
   ncclResult_t ret = ncclSuccess;
 
   uint32_t* readyPtrs    = (uint32_t*)comm->ceColl.baseUCSymReadyPtr;
@@ -130,7 +142,7 @@ ncclResult_t ncclPrepMCSync(struct ncclComm* comm, bool isComplete, CUstreamBatc
   for (int r = 0; r < comm->nRanks; ++r) {
     if (r == comm->rank) continue;
     batchParams[*opIdx] = {};
-    batchParams[*opIdx].waitValue.operation = CU_STREAM_MEM_OP_WAIT_VALUE_32;
+    //batchParams[*opIdx].waitValue.operation = HIP_STREAM_MEM_OP_WAIT_VALUE_32;
     batchParams[*opIdx].waitValue.address = (CUdeviceptr)(isComplete ? (void*)&completePtrs[r] : (void*)&readyPtrs[r]);
     batchParams[*opIdx].waitValue.value = waitValue;
     batchParams[*opIdx].waitValue.flags = CU_STREAM_WAIT_VALUE_EQ;
@@ -144,7 +156,7 @@ fail:
 }
 
 ncclResult_t ncclPrepUCSync(struct ncclComm* comm, bool isComplete,
-                               CUstreamBatchMemOpParams* batchParams,
+                               hipStreamBatchMemOpParams* batchParams,
                                size_t* opIdx) {
   ncclResult_t ret = ncclSuccess;
 
@@ -163,10 +175,10 @@ ncclResult_t ncclPrepUCSync(struct ncclComm* comm, bool isComplete,
     size_t offset = (uint8_t*)dstPtr - (uint8_t*)comm->ceColl.ceSyncWin->userPtr;
     NCCLCHECKGOTO(ncclDevrGetLsaRankPtr(comm, comm->ceColl.ceSyncWin, offset, r, &peerDstPtr), ret, fail);
     batchParams[*opIdx] = {};
-    batchParams[*opIdx].writeValue.operation = CU_STREAM_MEM_OP_WRITE_VALUE_32;
+    batchParams[*opIdx].writeValue.operation = hipStreamMemOpWriteValue32;
     batchParams[*opIdx].writeValue.address  = (CUdeviceptr)peerDstPtr;
     batchParams[*opIdx].writeValue.value = waitValue;
-    batchParams[*opIdx].writeValue.flags = CU_STREAM_WRITE_VALUE_DEFAULT;
+    //batchParams[*opIdx].writeValue.flags = CU_STREAM_WRITE_VALUE_DEFAULT;
     (*opIdx)++;
   }
 
@@ -174,7 +186,7 @@ ncclResult_t ncclPrepUCSync(struct ncclComm* comm, bool isComplete,
   for (int r = 0; r < comm->nRanks; ++r) {
     if (r == comm->rank) continue;
     batchParams[*opIdx] = {};
-    batchParams[*opIdx].waitValue.operation = CU_STREAM_MEM_OP_WAIT_VALUE_32;
+    //batchParams[*opIdx].waitValue.operation = HIP_STREAM_MEM_OP_WAIT_VALUE_32;
     batchParams[*opIdx].waitValue.address  = (CUdeviceptr)(isComplete ? (void*)&completePtrs[r] : (void*)&readyPtrs[r]);
     batchParams[*opIdx].waitValue.value = waitValue;
     batchParams[*opIdx].waitValue.flags = CU_STREAM_WAIT_VALUE_EQ;
@@ -200,7 +212,7 @@ ncclResult_t ncclMemOpSync(struct ncclComm* comm, cudaStream_t stream) {
   size_t opIdx = 0;
 
   // Prepare batch memory operations for synchronization
-  CUstreamBatchMemOpParams* batchParams = nullptr;
+  hipStreamBatchMemOpParams* batchParams = nullptr;
   NCCLCHECKGOTO(ncclCalloc(&batchParams, batchSize), ret, fail);
 
   if (comm->nvlsSupport) {
@@ -213,16 +225,16 @@ ncclResult_t ncclMemOpSync(struct ncclComm* comm, cudaStream_t stream) {
   if (ncclCudaGraphValid(comm->planner.capturingGraph)) {
     for (int i = 0; i < comm->nRanks; i++) {
       batchParams[opIdx] = {};
-      batchParams[opIdx].writeValue.operation = CU_STREAM_MEM_OP_WRITE_VALUE_32;
+      batchParams[opIdx].writeValue.operation = hipStreamMemOpWriteValue32;
       batchParams[opIdx].writeValue.address = (CUdeviceptr)(comm->ceColl.useCompletePtr ? (void*)&completePtrs[i] : (void*)&readyPtrs[i]);
       batchParams[opIdx].writeValue.value = 0;
-      batchParams[opIdx].writeValue.flags = CU_STREAM_WRITE_VALUE_DEFAULT;
+      //batchParams[opIdx].writeValue.flags = CU_STREAM_WRITE_VALUE_DEFAULT;
       opIdx++;
     }
   }
   
   // Execute all memory operations in a single batch
-  CUCHECKGOTO(cuStreamBatchMemOp(stream, opIdx, batchParams, 0), ret, fail);
+  CUDACHECKGOTO(hipStreamBatchMemOp(stream, opIdx, batchParams, 0), ret, fail);
 
   // Toggle the flag for next call
   comm->ceColl.useCompletePtr = !comm->ceColl.useCompletePtr;
@@ -283,7 +295,11 @@ ncclResult_t ncclCeLaunchBatchOps(struct ncclComm* comm, struct ncclCeBatchOpsPa
   bool capturing = ncclCudaGraphValid(comm->planner.capturingGraph);
 
   int driverVersion;
+  #if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
   NCCLCHECKGOTO(ncclCudaDriverVersion(&driverVersion), ret, fail);
+  #else
+  driverVersion = 12080;
+  #endif
     
   //--------------Graph capture--------------
   // cudaMemcpyBatchAsync is not supported during CUDA graph capture
@@ -303,7 +319,7 @@ ncclResult_t ncclCeLaunchBatchOps(struct ncclComm* comm, struct ncclCeBatchOpsPa
   }
   //--------------No graph capture--------------
   else {
-    if (CUDART_VERSION >= 12080 && driverVersion >= 12080) {
+    if (/*CUDART_VERSION >= 12080 &&*/ driverVersion >= 12080) {
 #if CUDART_VERSION >= 12080
     // For CUDA 12.8+, use batch memory copy for better performance
     params->attrs[0] = {};

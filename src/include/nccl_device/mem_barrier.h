@@ -7,12 +7,13 @@
 #ifndef _NCCL_DEVICE_MEM_BARRIER_H_
 #define _NCCL_DEVICE_MEM_BARRIER_H_
 #include "impl/core__types.h"
+#include "core_tmp.h"
 
 struct ncclLsaBarrierHandle;
 
 NCCL_EXTERN_C __host__ ncclResult_t ncclLsaBarrierCreateRequirement(ncclTeam_t, int nBarriers, ncclLsaBarrierHandle_t* outHandle, ncclDevResourceRequirements_t* outReq);
 
-#if __CUDACC__
+#if !defined(__HIP_PLATFORM_AMD__) || !defined(__HIPCC__)
 template<typename Coop>
 struct ncclLsaBarrierSession_internal;
 

@@ -429,11 +429,7 @@ ncclResult_t ncclTopoAddGpu(struct ncclXmlNode* xmlGpu, struct ncclTopoSystem* s
 
 #define PCI_BRIDGE_DEVICE_CLASS "0x060400"
 
-<<<<<<< HEAD
 struct kvDict kvDictPciClass[] = { { PCI_BRIDGE_DEVICE_CLASS, PCI }, { "0x068000", NVS }, { "0x068001", CPU }, { "0x03", GPU }, { "0x02", NIC }, { "0x120000", GPU }, { NULL, PCI /* Default fallback value */ } };
-=======
-struct kvDict kvDictPciClass[] = { { PCI_BRIDGE_DEVICE_CLASS, PCI }, {"0x080100", /*CX8 data direct*/PCI}, { "0x068000", NVS }, { "0x068001", CPU }, { "0x03", GPU }, { "0x02", NIC }, { NULL, PCI /* Default fallback value */ } };
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 struct kvDict kvDictPciGen[] = {
   { "2.5 GT/s", 15 }, { "5 GT/s", 30 }, { "8 GT/s", 60 }, { "16 GT/s", 120 }, { "32 GT/s", 240 }, /* Kernel 5.6 and earlier */
   { "2.5 GT/s PCIe", 15 }, { "5.0 GT/s PCIe", 30 }, { "8.0 GT/s PCIe", 60 }, { "16.0 GT/s PCIe", 120 }, { "32.0 GT/s PCIe", 240 }, { "64.0 GT/s PCIe", 480 },
@@ -1562,15 +1558,6 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
       NCCLCHECK(ncclTopoGetFusionEnv(&netInfo.mergeLevel, &netInfo.forceMerge));
       NCCLCHECKGOTO(ncclTopoProcessNet(xml, dumpXmlFile, &netInfo), ret, fail);
   }
-<<<<<<< HEAD
-  NCCLCHECKGOTO(ncclTopoGetSharedState(&state, comm->ncclNet->name, netStates), ret, fail);
-  // [RCCL] Disabled virtual devices
-  NCCLCHECKGOTO(ncclTopoProcessNet(xml, 0, dumpXmlFile, state,
-    comm->ncclNet->getProperties, nullptr /*comm->ncclNet->makeVDevice*/, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
-  pthread_mutex_unlock(&netLock);
-  netLockHeld = 0;
-=======
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
   // Remove XML branches which don't have a node with keep="1" (typically when importing a topology)
   NCCLCHECKGOTO(ncclTopoTrimXml(xml), ret, fail);

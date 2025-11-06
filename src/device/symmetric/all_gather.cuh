@@ -1,15 +1,6 @@
-<<<<<<< HEAD
-// Modification Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
-// SPDX-License-Identifier: MIT 
-
-#include "symmetric.h"
-#include "symmetric/kernel.h"
-#include "symmetric/primitives.h"
-=======
 #include "sym_kernels.h"
 #include "kernel.cuh"
 #include "primitives.cuh"
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
 
 template<int BytePerPack, int UnrollPacks, int UnrollPeers>
 static __device__ void bcastDeep(
@@ -123,13 +114,8 @@ static __device__ void bcast(
 
   constexpr int MinWarpPerBlock = 4;
 
-<<<<<<< HEAD
-  if ((inputUptr-outputUptr)%16 == 0) {
-    constexpr int BytePerPack = 16, UnrollPacks = 1, UnrollPeers = 1;
-=======
   if ((input.offset - output.offset)%16 == 0) {
     constexpr int BytePerPack = 16, UnrollPacks = 4, UnrollPeers = 2;
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
     constexpr int BytePerChunk = MinWarpPerBlock*UnrollPacks*WARP_SIZE*BytePerPack;
     uint32_t chunks = (nBytes-cursor)/BytePerChunk;
     chunks -= imodFast32(chunks, nBlocks, nBlocks_rcp32);
@@ -146,13 +132,8 @@ static __device__ void bcast(
     }
   }
 
-<<<<<<< HEAD
-  if (sizeof(T) == 4 || (sizeof(T) < 4 && (inputUptr-outputUptr)%4 == 0)) {
-    constexpr int BytePerPack = 4, UnrollPacks = 1, UnrollPeers = 1;
-=======
   if (sizeof(T) == 4 || (sizeof(T) < 4 && (input.offset - output.offset)%4 == 0)) {
     constexpr int BytePerPack = 4, UnrollPacks = 4, UnrollPeers = 4;
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
     constexpr int BytePerChunk = MinWarpPerBlock*UnrollPacks*WARP_SIZE*BytePerPack;
     uint32_t chunks = (nBytes-cursor)/BytePerChunk;
     chunks -= imodFast32(chunks, nBlocks, nBlocks_rcp32);

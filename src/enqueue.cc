@@ -1270,7 +1270,7 @@ static ncclResult_t scheduleP2pTasksToPlan(
           return ncclSuccess;
         }
         struct ncclTaskP2p* p2pTasks[2] = { recv, send };
-        NCCLCHECK(addP2pToPlan(comm, plan, nChannelsMin, nChannelsMax, round, sendRank, sendBuff, sendBytes, recvRank, recvBuff, recvBytes, send ? send->opCount : 0, recv ? recv->opCount : 0, p2pTasks));
+        NCCLCHECK(addP2pToPlan(comm, plan, nChannelsMin, nChannelsMax, round, sendRank, sendBuff, sendBytes, recvRank, recvBuff, recvBytes, send ? send->opCount : 0, recv ? recv->opCount : 0, planTotalTasks, p2pTasks));
         if (send != nullptr) {
           ncclIntruQueueDequeue(&peers[sendRank].sendQueue);
           // Profiler - We can overwrite groupAPI event handles here since all operations here belong to the same group
@@ -1507,7 +1507,7 @@ static ncclResult_t hostStreamPlanTask(struct ncclComm* comm, struct ncclKernelP
   return ncclSuccess;
 }
 
-static void CUDART_CB hostStreamPlanCallback(void *plan_) {
+static void HIPRT_CB  hostStreamPlanCallback(void *plan_) {
   NCCL_NVTX3_FUNC_RANGE;
   struct ncclKernelPlan* plan = (struct ncclKernelPlan*)plan_;
   ncclResult_t result = hostStreamPlanTask(plan->comm, plan);
@@ -1625,28 +1625,19 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
       // finishPlan() promotes ncclDevWorkStorageType[Fifo|Persistent]->Args if the work can fit.
       plan->workStorageType = persistent ? ncclDevWorkStorageTypePersistent
                                          : ncclDevWorkStorageTypeFifo;
+      if (!ncclIntruQueueEmpty(&planner->collCeTaskQueue)) {
+        struct ncclTaskColl* task = ncclIntruQueueHead(&planner->collCeTaskQueue);
+        plan->isCeColl = true;
+        plan->ceCollArgs = ncclMemoryStackAlloc<struct ncclCeCollArgs>(&comm->memScoped);
+        plan->ceCollArgs->rootRank = task->root;
+        plan->ceCollArgs->nElts = task->count;
+        plan->ceCollArgs->eltSize = ncclTypeSize(task->datatype);
+        plan->ceCollArgs->sendBuff = (uint8_t*)task->sendbuff;
+        plan->ceCollArgs->recvBuff = (uint8_t*)task->recvbuff;
+        plan->ceCollArgs->func = task->func;
+        plan->ceCollArgs->sendWin = task->sendWin;
+        plan->ceCollArgs->recvWin = task->recvWin;
 
-      if (planner->isSymColl) {
-        plan->workStorageType = ncclDevWorkStorageTypeArgs;
-
-        struct ncclTaskColl* task = ncclIntruQueueHead(&planner->collTaskQueue);
-        plan->isSymColl = true;
-        plan->kernelFn = ncclSymGetKernelPtr((ncclSymKernelId)task->devFuncId, task->opDev.op, task->datatype);
-        plan->threadPerBlock = task->nWarps*WARP_SIZE;
-        for (int i = 0; i < MAXCHANNELS/64; i++)
-          plan->channelMask.masks[i] = uint64_t(-1) >> (64-task->nMaxChannels);
-        // plan->channelMask = uint64_t(-1) >> (64-task->nMaxChannels);
-
-        plan->kernelArgsSize = sizeof(struct ncclSymDevArgs);
-        plan->kernelSymArgs = ncclMemoryStackAlloc<struct ncclSymDevArgs>(&comm->memScoped);
-        plan->kernelSymArgs->comm = comm->symDevComm;
-        plan->kernelSymArgs->rootRank = task->root;
-        plan->kernelSymArgs->redOpArg = task->opDev.scalarArg;
-        plan->kernelSymArgs->nElts = task->count;
-        plan->kernelSymArgs->input = (char*)task->sendbuff;
-        plan->kernelSymArgs->output = (char*)task->recvbuff;
-
-        planner->nTasksColl -= 1;
         ncclIntruQueueEnqueue(&planner->planQueue, plan);
         ncclIntruQueueDequeue(&planner->collCeTaskQueue);
         ncclMemoryPoolFree(&comm->memPool_ncclTaskColl, task);
@@ -2018,7 +2009,7 @@ static ncclResult_t updateCollCostTable(
     float** collCostTable) {
   float (*table)[NCCL_NUM_PROTOCOLS] = (float (*)[NCCL_NUM_PROTOCOLS])collCostTable;
 
-  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot) {
+  if (comm->nRanks == 1 || info->func == ncclFuncAlltoAll) {
     table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = 0.0;
     return ncclSuccess;
   }
@@ -2290,7 +2281,7 @@ static ncclResult_t calcCollChunking(
       info->algorithm == NCCL_ALGO_COLLNET_DIRECT ? ncclPatternCollnetDirect :
       ncclPatternRing;
     break;
-  case ncclFuncAllToAllPivot:
+  case ncclFuncAlltoAll:
     pattern = ncclPatternRing;
     break;
   case ncclFuncAllReduce:
@@ -2730,7 +2721,7 @@ static ncclResult_t p2pTaskAppend(
       }
       uint8_t base = ncclP2pChannelBaseForRound(comm, round);
       for (int c=0; c < comm->p2pnChannelsPerPeer; c++) {
-        int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c);
+        int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c, comm->p2pnChannelsPerPeer, comm->nNodes);
         if (isSendNotRecv) {
           if (comm->channels[channelId].peers[peer]->send[1].hasSeen == 0) { // P2P uses only 1 connector
             // the send/recv connector is shared among split shared comms. We need to set hasSeen to
@@ -2738,14 +2729,14 @@ static ncclResult_t p2pTaskAppend(
             // shared comms together.
             comm->channels[channelId].peers[peer]->send[1].hasSeen = 1;
             comm->channels[channelId].peers[peer]->send[1].p2pOnly = 1;
-            comm->connectSend[peer] |= (1UL<<channelId);
+            comm->connectSend[peer].masks[channelId/64] |= (1UL<<(channelId%64));
             ncclGroupCommPreconnect(comm);
           }
         } else {
           if (comm->channels[channelId].peers[peer]->recv[1].hasSeen == 0) { // P2P uses only 1 connector
             comm->channels[channelId].peers[peer]->recv[1].hasSeen = 1;
             comm->channels[channelId].peers[peer]->recv[1].p2pOnly = 1;
-            comm->connectRecv[peer] |= (1UL<<channelId);
+            comm->connectRecv[peer].masks[channelId/64] |= (1UL<<(channelId%64));
             ncclGroupCommPreconnect(comm);
           }
         }

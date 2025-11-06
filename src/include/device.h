@@ -623,7 +623,7 @@ struct channelMasks {
 
 struct alignas(16) ncclDevKernelArgs {
   struct ncclKernelComm* comm;
-  uint64_t channelMask;
+  struct channelMasks channelMask;
   enum ncclDevWorkStorageType workStorageType;
   uint32_t workMask;
   void* workBuf;
@@ -753,7 +753,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, 
   if (coll == ncclFuncBroadcast) {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
           ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT);
-  } else if (coll == ncclFuncSendRecv || coll == ncclFuncAllToAllPivot) {
+  } else if (coll == ncclFuncSendRecv || coll == ncclFuncAlltoAll) {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT );
   } else {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |

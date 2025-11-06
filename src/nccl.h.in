@@ -689,7 +689,7 @@ ncclResult_t  ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /*! @cond       include_hidden */
 ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
-    ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 
 /*
  * All-to-All
@@ -700,9 +700,9 @@ ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
  * recvbuff+i*count.
  */
 ncclResult_t  ncclAlltoAll(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 ncclResult_t pncclAlltoAll(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 
 /*
  * Gather
@@ -715,9 +715,9 @@ ncclResult_t pncclAlltoAll(const void* sendbuff, void* recvbuff, size_t count,
  * In-place operations will happen if sendbuff == recvbuff + root * count.
  */
 ncclResult_t  ncclGather(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int root, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
 ncclResult_t pncclGather(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int root, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
 
 /*
  * Scatter
@@ -730,9 +730,9 @@ ncclResult_t pncclGather(const void* sendbuff, void* recvbuff, size_t count,
  * In-place operations will happen if recvbuff == sendbuff + root * count.
  */
 ncclResult_t  ncclScatter(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int root, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
 ncclResult_t pncclScatter(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int root, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, int root, ncclComm_t comm, hipStream_t stream);
 
 /*
  * Send

@@ -114,14 +114,12 @@ ncclResult_t ncclShmOpen(char* shmPath, size_t shmPathSize, size_t shmSize, void
   }
 
   if (devShmPtr) {
-<<<<<<< HEAD
+    cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
+    CUDACHECKGOTO(cudaThreadExchangeStreamCaptureMode(&mode), ret, fail);
 #if defined(HIP_HOST_UNCACHED_MEMORY)
     CUDACHECKGOTO(cudaHostRegister((void*)hptr, realShmSize, cudaHostRegisterPortable | cudaHostRegisterMapped | hipExtHostRegisterUncached), ret, fail);
 #else
-=======
-    cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
     CUDACHECKGOTO(cudaThreadExchangeStreamCaptureMode(&mode), ret, fail);
->>>>>>> f1308997d0420148b1be1c24d63f19d902ae589b
     CUDACHECKGOTO(cudaHostRegister((void*)hptr, realShmSize, cudaHostRegisterPortable | cudaHostRegisterMapped), ret, fail);
 #endif
     CUDACHECKGOTO(cudaHostGetDevicePointer(&dptr, (void*)hptr, 0), ret, fail);

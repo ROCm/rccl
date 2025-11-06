@@ -138,6 +138,14 @@ class ncclOptionalNvtxScopedRange
   ::nvtx3::v1::scoped_range_in<nccl_domain> const nvtx3_range__{nvtx3_func_attr__};
 #endif
 
+#define NCCL_NVTX3_FUNC_RANGE \
+  ncclOptionalNvtxScopedRange nvtx3_range__; \
+  if (!ncclParamNvtxDisable()) { \
+    static ::nvtx3::v1::registered_string_in<nccl_domain> const nvtx3_func_name__{__func__}; \
+    static ::nvtx3::v1::event_attributes const nvtx3_func_attr__{nvtx3_func_name__}; \
+    nvtx3_range__.push(nvtx3_func_attr__); \
+  }
+
 /// @brief Creates an NVTX range with extended payload using the RAII pattern.
 /// @tparam PayloadType Data type of the payload.
 template <typename PayloadType>
@@ -199,7 +207,22 @@ class ncclOptionalNvtxPayloadRange {
 // @param N NCCL API name without the `nccl` prefix.
 // @param S name of the used NVTX payload schema.
 // @param P payload parameters/entries
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define NVTX3_RANGE_ADD_PAYLOAD(N, S, P) do { \
+  if (!nvtx3_range__.isPushed()) { \
+    break; \
+  } \
+  constexpr uint64_t schema_id = NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##N; \
+  static const payload_schema schema{S, std::extent<decltype(S)>::value - 1, schema_id, \
+    sizeof(nvtx3_range__.payload)}; \
+  nvtx3_range__.payload = {P}; \
+  nvtx3_range__.setPayloadData(schema_id); \
+} while (0)
+#else
+#define NVTX3_RANGE_ADD_PAYLOAD(N, S, P) do { \
+  if (!nvtx3_range__.isPushed()) { \
+    break; \
+  } \
   constexpr uint64_t schema_id = NVTX_PAYLOAD_ENTRY_TYPE_SCHEMA_ID_STATIC_START + NVTX_SID_##N; \
   static const payload_schema schema{S, std::extent<decltype(S)>::value - 1, schema_id, \
     sizeof(nvtx3_range__.payload)}; \

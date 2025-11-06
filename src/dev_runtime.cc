@@ -70,7 +70,7 @@ ncclResult_t ncclDevrInitOnce(struct ncclComm* comm) {
   CUmemAllocationProp memProp = {};
   memProp.type = CU_MEM_ALLOCATION_TYPE_PINNED;
   memProp.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-  memProp.requestedHandleTypes = ncclCuMemHandleType;
+  memProp.requestedHandleType = ncclCuMemHandleType;
   memProp.location.id = comm->cudaDev;
   CUCHECKGOTO(cuMemGetAllocationGranularity(&devr->granularity, &memProp, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED), ret, fail_lsaRankList);
 
@@ -121,8 +121,8 @@ ncclResult_t ncclDevrFinalize(struct ncclComm* comm) {
     }
   }
   CUdeviceptr flatAddr = reinterpret_cast<CUdeviceptr>(devr->lsaFlatBase);
-  CUCHECKIGNORE(cuMemUnmap(flatAddr, devr->lsaSize*devr->bigSize));
-  CUCHECKIGNORE(cuMemAddressFree(flatAddr, devr->lsaSize*devr->bigSize));
+  CUDACHECKIGNORE(cuMemUnmap(flatAddr, devr->lsaSize*devr->bigSize));
+  CUDACHECKIGNORE(cuMemAddressFree(flatAddr, devr->lsaSize*devr->bigSize));
   ncclShadowPoolDestruct(&devr->shadows);
   ncclSpaceDestruct(&devr->bigSpace);
   free(devr->lsaRankList);
@@ -174,7 +174,9 @@ static ncclResult_t symMemoryMapLsaTeam(
         CUCHECKGOTO(cuMemImportFromShareableHandle(&impHandle, (void*)&messages[r].fabricHandle, ncclCuMemHandleType), ret, fail);
       }
     }
-    CUdeviceptr addr = reinterpret_cast<uintptr_t>((char*)devr->lsaFlatBase + r*devr->bigSize + bigOffset);
+    uintptr_t base = reinterpret_cast<uintptr_t>(devr->lsaFlatBase);
+    CUdeviceptr addr = reinterpret_cast<CUdeviceptr>(base + r * devr->bigSize + bigOffset);
+    //CUdeviceptr addr = reinterpret_cast<uintptr_t>((char*)devr->lsaFlatBase + r*devr->bigSize + bigOffset);
     CUCHECKGOTO(cuMemMap(addr, size, 0, impHandle, 0), ret, fail);
     CUCHECKGOTO(cuMemSetAccess(addr, size, &accessDesc, 1), ret, fail);
     if (r != devr->lsaSelf) {
@@ -328,9 +330,9 @@ static void symTeamDestroyAll(struct ncclComm* comm) {
         symUnbindTeamMemory(comm, t, m);
       }
       CUdeviceptr mcAddr = reinterpret_cast<CUdeviceptr>(t->mcBasePtr);
-      CUCHECKIGNORE(cuMemUnmap(mcAddr, devr->bigSize));
-      CUCHECKIGNORE(cuMemAddressFree(mcAddr, devr->bigSize));
-      CUCHECKIGNORE(cuMemRelease(t->mcHandle));
+      CUDACHECKIGNORE(cuMemUnmap(mcAddr, devr->bigSize));
+      CUDACHECKIGNORE(cuMemAddressFree(mcAddr, devr->bigSize));
+      CUDACHECKIGNORE(cuMemRelease(t->mcHandle));
     }
     free(t);
   }
@@ -350,7 +352,7 @@ static ncclResult_t symMemoryObtain(
   struct ncclDevrMemory* mem = devr->memHead;
   while (mem != nullptr) {
     if (mem->memHandle == memHandle) {
-      CUCHECKIGNORE(cuMemRelease(memHandle));
+      CUDACHECKIGNORE(cuMemRelease(memHandle));
       goto leave;
     }
     mem = mem->next;
@@ -402,11 +404,13 @@ static void symMemoryDropRef(
       symUnbindTeamMemory(comm, t, mem);
     }
     for (int r = 0; r < devr->lsaSize; r++) {
-      CUdeviceptr addr = reinterpret_cast<uintptr_t>((char*)devr->lsaFlatBase + r*devr->bigSize + mem->bigOffset);
-      CUCHECKIGNORE(cuMemUnmap(addr, mem->size));
+      uintptr_t base = reinterpret_cast<uintptr_t>(devr->lsaFlatBase);
+      CUdeviceptr addr = reinterpret_cast<CUdeviceptr>(base + r * devr->bigSize + mem->bigOffset);
+      //CUdeviceptr addr = reinterpret_cast<uintptr_t>((char*)devr->lsaFlatBase + r*devr->bigSize + mem->bigOffset);
+      CUDACHECKIGNORE(cuMemUnmap(addr, mem->size));
     }
     ncclSpaceFree(&devr->bigSpace, mem->bigOffset, mem->size);
-    CUCHECKIGNORE(cuMemRelease(mem->memHandle));
+    CUDACHECKIGNORE(cuMemRelease(mem->memHandle));
 
     struct ncclDevrMemory** ptr = &devr->memHead;
     while (*ptr != mem) ptr = &(*ptr)->next;
@@ -567,15 +571,16 @@ ncclResult_t ncclDevrWindowRegisterInGroup(
   }
 
   // Get underlying cumem handle:
-  CUCHECKGOTO(cuMemGetAddressRange(&memAddr, &memSize, reinterpret_cast<CUdeviceptr>(userPtr)), ret, fail_locReg);
-  memOffset = reinterpret_cast<CUdeviceptr>(userPtr) - memAddr;
+  CUDACHECKGOTO(cuMemGetAddressRange(&memAddr, &memSize, reinterpret_cast<CUdeviceptr>(userPtr)), ret, fail_locReg);
+  //memOffset = reinterpret_cast<CUdeviceptr>(userPtr) - memAddr;
+  memOffset = reinterpret_cast<uintptr_t>(userPtr) - reinterpret_cast<uintptr_t>(memAddr);
   if (memOffset%NCCL_WIN_REQUIRED_ALIGNMENT != 0) {
     WARN("Window address must be suitably aligned.");
     ret = ncclInvalidArgument;
     goto fail;
   }
 
-  CUCHECKGOTO(cuMemRetainAllocationHandle(&memHandle, reinterpret_cast<void*>(memAddr)), ret, fail_locReg);
+  CUDACHECKGOTO(cuMemRetainAllocationHandle(&memHandle, reinterpret_cast<void*>(memAddr)), ret, fail_locReg);
 
   // Trade cumem handle for ncclDevrMemory*
   NCCLCHECKGOTO(symMemoryObtain(comm, memHandle, memSize, &mem), ret, fail_locReg_memHandle);
@@ -604,7 +609,7 @@ fail_locReg_memHandle_mem_stream:
   cudaStreamDestroy(stream);
   symMemoryDropRef(comm, mem);
 fail_locReg_memHandle:
-  if (memHandle != 0x0) { CUCHECKIGNORE(cuMemRelease(memHandle)); }
+  if (memHandle != 0x0) { CUDACHECKIGNORE(cuMemRelease(memHandle)); }
 fail_locReg:
   ncclCommDeregister(comm, localRegHandle);
 fail:
@@ -740,7 +745,7 @@ ncclResult_t ncclDevrCommCreateInternal(
     CUmemAllocationProp memProp = {};
     memProp.type = CU_MEM_ALLOCATION_TYPE_PINNED;
     memProp.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-    memProp.requestedHandleTypes = ncclCuMemHandleType;
+    memProp.requestedHandleType = ncclCuMemHandleType;
     memProp.location.id = comm->cudaDev;
 
     CUCHECKGOTO(cuMemCreate(&memHandle, bufSizeTotal, &memProp, 0), ret, fail);
@@ -775,7 +780,7 @@ fail:
     symMemoryDropRef(comm, mem);
   }
   if (memHandle != 0x0) {
-    CUCHECKIGNORE(cuMemRelease(memHandle));
+    CUDACHECKIGNORE(cuMemRelease(memHandle));
   }
   if (stream != nullptr) {
     cudaStreamDestroy(stream);
@@ -786,9 +791,9 @@ fail:
 ////////////////////////////////////////////////////////////////////////////////
 
 NCCL_API(ncclResult_t, ncclCommWindowRegister, ncclComm_t comm, void* ptr, size_t size, ncclWindow_t* win, int winFlags);
-ncclResult_t ncclCommWindowRegister(
-    struct ncclComm* comm, void* userPtr, size_t userSize,
-    struct ncclWindow_vidmem** outWinDev, int winFlags
+ncclResult_t ncclCommWindowRegister_impl(
+    ncclComm_t comm, void* userPtr, size_t userSize,
+    ncclWindow_t* outWinDev, int winFlags
   ) {
   ncclResult_t ret = ncclSuccess;
   int saveDev;
@@ -822,7 +827,7 @@ fail:
 }
 
 NCCL_API(ncclResult_t, ncclCommWindowDeregister, ncclComm_t comm, ncclWindow_t win);
-ncclResult_t ncclCommWindowDeregister(struct ncclComm* comm, struct ncclWindow_vidmem* winDev) {
+ncclResult_t ncclCommWindowDeregister_impl(struct ncclComm* comm, struct ncclWindow_vidmem* winDev) {
   ncclResult_t ret = ncclSuccess;
   int saveDev;
   cudaStream_t stream;
