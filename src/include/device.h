@@ -120,8 +120,8 @@ union ncclLLFifoLine {
   #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 #endif
 
-#define MAXCHANNELS 128
-#define CHANNEL_LIMIT 16
+#define MAXCHANNELS 256
+#define CHANNEL_LIMIT 16 // this is use to limit channels for pre MI3xx GPUs
 #define NCCL_MAX_LOCAL_RANKS 72
 #define NCCL_MIN_NTHREADS (4*WARP_SIZE)
 #define NCCL_SIMPLE_MAX_NTHREADS NCCL_MAX_NTHREADS
