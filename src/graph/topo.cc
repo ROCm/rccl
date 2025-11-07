@@ -563,7 +563,7 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
   }
   for (int s=0; s<xmlCpu->nSubs; s++) {
     struct ncclXmlNode* node = xmlCpu->subs[s];
-    if (strcmp(node->name, "pci") == 0) NCCLCHECK(ncclTopoAddPci(node, system, cpu, systemId, numaId));
+    if (strcmp(node->name, "pci") == 0) NCCLCHECK(ncclTopoAddPci(node, system, cpu, systemId, numaId)); /* Adds pci in system.nodes[Net]*/
     if (strcmp(node->name, "nic") == 0) {
       struct ncclTopoNode* nic = NULL;
       int64_t localNicId = NCCL_TOPO_LOCAL_NIC_ID(numaId, 0);
@@ -1328,6 +1328,8 @@ static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIn
       // In the event of multithreaded use case, we need to re-discover the shared parent of the given devices for this vNIC
       // Only run this if the net doesn't exist locally - this may alter the XML state
       if (net == NULL) NCCLCHECK(ncclTopoGetVNicParent(xml, getProperties, &props.vProps, &parent));
+      INFO(NCCL_GRAPH, "vNIC populate: props.name=%s pciPath=%s", props.name, props.pciPath);
+      if (parent == NULL) WARN("vNIC parent discovery failed for %s (check pciPath + ordering)", props.name);
     }
 
     NCCLCHECK(ncclTopoFillNet(xml, props.pciPath, props.name, &netNode, parent));          /*parent->name is 'cpu'*/
@@ -1366,6 +1368,7 @@ ncclResult_t ncclTopoProcessNet(ncclXml* xml, int coll, const char* dumpXmlFile,
   int usePhysicalDevices = (dumpXmlFile || makeVDevice == NULL);
   if (state->nPhysicalNics == -1) NCCLCHECK(devices(&state->nPhysicalNics));
   // Enumerate physical devices
+  ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoProcessNet_1371.xml", xml);
   NCCLCHECK(ncclTopoPopulateNics(xml, 0, state->nPhysicalNics, getProperties, netName, coll, false, dmaBufSupport));
   if (!usePhysicalDevices) {
     if (state->nVirtualNics == -1) {
@@ -1376,7 +1379,9 @@ ncclResult_t ncclTopoProcessNet(ncclXml* xml, int coll, const char* dumpXmlFile,
     }
     if (state->nVirtualNics > 0) {
       // Populate new devices
+      ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoProcessNet_1382.xml", xml);
       NCCLCHECK(ncclTopoPopulateNics(xml, state->nPhysicalNics, state->nPhysicalNics+state->nVirtualNics, getProperties, netName, coll, true, dmaBufSupport));
+      ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoProcessNet_1384.xml", xml);
     }
   }
 
@@ -1445,7 +1450,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   // Detect only the GPU managed by this process.  We'll get any others through XML fusion.
   char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
   NCCLCHECKGOTO(int64ToBusId(comm->peerInfo[comm->rank].busId, busId), ret, fail);
-  NCCLCHECKGOTO(ncclTopoFillGpu(xml, busId, &node), ret, fail);
+  NCCLCHECKGOTO(ncclTopoFillGpu(xml, busId, &node), ret, fail);  // writes xml.nodes[0].nSub <- 1
   if (node) {
     NCCLCHECKGOTO(xmlSetAttrInt(node, "keep", 1), ret, fail);
     NCCLCHECKGOTO(xmlSetAttrInt(node, "rank", comm->rank), ret, fail);
@@ -1470,10 +1475,10 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
     comm->ncclNet->getProperties, /*nullptr*/ comm->ncclNet->makeVDevice, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
   pthread_mutex_unlock(&netLock);
   netLockHeld = 0;
-
+  if(comm->rank == 0){ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoGetSystem_1475.xml", xml);}
   // Remove XML branches which don't have a node with keep="1" (typically when importing a topology)
   NCCLCHECKGOTO(ncclTopoTrimXml(xml), ret, fail);
-
+  if(comm->rank == 0){ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoGetSystem_1478.xml", xml);}
   // XML topo fusion.
   if (comm->MNNVL) {
     // MNNVL clique support
@@ -1517,7 +1522,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
     INFO(NCCL_ENV, "NCCL_TOPO_DUMP_FILE set by environment to %s", dumpXmlFile);
     NCCLCHECKGOTO(ncclTopoDumpXmlToFile(dumpXmlFile, xml), ret, fail);
   }
-
+  if(comm->rank == 0){ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoGetSystem_1525.xml", xml);}
   // Only update our topo tracking structure if we aren't dumping (separate steps)
   if (dumpXmlFile == NULL) NCCLCHECKGOTO(ncclTopoGetSystemFromXml(xml, system, getHostHash()), ret, fail);
 
