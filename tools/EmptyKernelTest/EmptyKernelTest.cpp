@@ -55,6 +55,7 @@ THE SOFTWARE.
 #include <algorithm>
 #include <vector>
 #include <numeric>
+#include <stdatomic.h>
 
 // Helper macro for catching HIP errors
 #define HIP_CALL(cmd)                                                                   \
@@ -129,7 +130,7 @@ int main(int argc, char **argv)
   for (int iteration = 0; iteration < numIterations; iteration++)
   {
     // Start timing
-    if(innerLoop && cpuTime){cpuStart = std::chrono::high_resolution_clock::now();}
+    if(innerLoop && cpuTime){ atomic_signal_fence(memory_order_seq_cst); cpuStart = std::chrono::high_resolution_clock::now();}
     if(innerLoop && gpuTime){HIP_CALL(hipEventRecord(startEvent, stream));}
 
     // Launch kernel and wait for completion
@@ -139,6 +140,7 @@ int main(int argc, char **argv)
 
     // Collect timing info
     if(innerLoop && cpuTime) {
+      atomic_signal_fence(memory_order_seq_cst);
       cpuDelta = std::chrono::high_resolution_clock::now() - cpuStart;
       cpuDeltaMsec = std::chrono::duration_cast<std::chrono::duration<double>>(cpuDelta).count() * 1000.0;
     }
@@ -156,6 +158,7 @@ int main(int argc, char **argv)
     }
   }
   if(outerLoop) {
+    atomic_signal_fence(memory_order_seq_cst);
     cpuDeltaOuterloop = std::chrono::high_resolution_clock::now() - cpuStartOuterloop;
     if(gpuTime){
       HIP_CALL(hipEventRecord(stopEventOuterLoop, stream));
