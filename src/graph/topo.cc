@@ -523,6 +523,9 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
   int systemId;
   NCCLCHECK(ncclGetSystemId(system, xmlCpu, &systemId));
   struct ncclTopoNode* cpu;
+  /*
+  system->nodes[NET] and other fields are initialized in the below function
+  */
   NCCLCHECK(ncclTopoCreateNode(system, &cpu, CPU, NCCL_TOPO_ID(systemId, numaId)));
   const char* str;
   NCCLCHECK(xmlGetAttr(xmlCpu, "affinity", &str));
@@ -1327,7 +1330,7 @@ static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIn
       if (net == NULL) NCCLCHECK(ncclTopoGetVNicParent(xml, getProperties, &props.vProps, &parent));
     }
 
-    NCCLCHECK(ncclTopoFillNet(xml, props.pciPath, props.name, &netNode, parent));
+    NCCLCHECK(ncclTopoFillNet(xml, props.pciPath, props.name, &netNode, parent));          /*parent->name is 'cpu'*/
 
     const char* colAttr;
     NCCLCHECK(xmlGetAttr(netNode, "coll", &colAttr));
@@ -1579,6 +1582,9 @@ ncclResult_t getLocalNetCountByBw(struct ncclTopoSystem* system, int gpu, int *c
   return ncclSuccess;
 }
 
+/*
+** the following function modifies system->nodes[NET]
+*/
 ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int channelId, int64_t* id, int* dev) {
   int gpu;
   NCCLCHECK(ncclTopoRankToIndex(system, rank, &gpu, /*showWarn=*/true));
