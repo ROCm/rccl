@@ -72,7 +72,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
       // When LL128 is performant, the next condition overrides the previous LL choice
       if (comm->topo->ll128Enabled) {
         if (info->func == ncclFuncAllReduce) {
-          if(comm->nNodes >= 2) {
+          if(comm->nNodes > 2) {
             ll128Max *= 3.8; // Scale max message size for n > 2 since Tree has special behavior at 2 nodes
           }
           // ll128Max += (log2i(comm->nNodes) - 1) * comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_FACTOR_IDX];
