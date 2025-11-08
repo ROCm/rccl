@@ -72,7 +72,7 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
       // When LL128 is performant, the next condition overrides the previous LL choice
       if (comm->topo->ll128Enabled) {
         if (info->func == ncclFuncAllReduce) {
-          if(comm->nNodes > 2) {
+          if(comm->nNodes >= 2) {
             ll128Max *= 3.8; // Scale max message size for n > 2 since Tree has special behavior at 2 nodes
           }
           // ll128Max += (log2i(comm->nNodes) - 1) * comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL128][RCCL_PROTOCOL_FACTOR_IDX];
@@ -352,13 +352,13 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
   size_t threshold = rcclParamDirectAllGatherThreshold();
 
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
-     if (comm->nNodes == 1 && threshold != -1) {
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && threshold != -1) {
+     if (comm->nNodes == 1) {
         threshold = 8388608;
-     } else if (comm->nNodes < 64 && threshold != -1) {
+     } else if (comm->nNodes < 64) {
         threshold = comm->nNodes * 2097152;
      }
-  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
+  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && threshold != -1) {
 	threshold = 4194304;
   }
 
