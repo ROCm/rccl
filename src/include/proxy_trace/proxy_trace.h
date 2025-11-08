@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
- 
+
 #pragma once
 
 #include <chrono>
@@ -13,9 +13,9 @@
 #ifndef FMT_HEADER_ONLY
 #define FMT_HEADER_ONLY 1
 #endif
-#include <fmt/format.h>
 #include <memory>
 #include <unordered_map>
+#include <fmt/format.h>
 namespace facebook_rccl {
 
 enum class ProxyOpStepStatus {
@@ -58,13 +58,13 @@ enum class ProxyOpType { SEND, RECV };
 // proxy thread (see ncclProxyOp and ncclProxySubArgs in proxy.h)
 struct ProxyTraceRecordKey {
   uint64_t commHash{0};
-  int64_t opCount{-1};   // opCount is a unique id for a given collective/p2p
+  int64_t opCount{-1}; // opCount is a unique id for a given collective/p2p
   int64_t proxyOpId{-1}; // id of a proxyOp in an given comm and grouped
                          // collective/p2p (identified as commHash:opCount),
                          // assigned when creating ProxyTraceOp entry
   inline std::string str() const {
     return "<" + std::to_string(commHash) + ":" + std::to_string(opCount) +
-           ":" + std::to_string(proxyOpId) + ">";
+        ":" + std::to_string(proxyOpId) + ">";
   }
 };
 
@@ -75,8 +75,13 @@ struct ProxyTraceExtraInfo {
   uint32_t totalBytes{0};
   uint32_t chunkSize{0};
   inline std::string str() const {
-    return fmt::format("[fu,pr,pa,tb,ck]:{},{},{},{},{}", funcIdx, protocol,
-                       pattern, totalBytes, chunkSize);
+    return fmt::format(
+        "[fu,pr,pa,tb,ck]:{},{},{},{},{}",
+        funcIdx,
+        protocol,
+        pattern,
+        totalBytes,
+        chunkSize);
   }
 };
 
@@ -114,26 +119,31 @@ struct ProxyTraceOp {
 
 using ProxyActiveOpMap = std::unordered_map<
     uint64_t /* commHash*/,
-    std::unordered_map<int64_t /* opCount*/,
-                       /* proxyOpId : op */
-                       std::unordered_map<int64_t, ProxyTraceOp>>>;
+    std::unordered_map<
+        int64_t /* opCount*/,
+        /* proxyOpId : op */
+        std::unordered_map<int64_t, ProxyTraceOp>>>;
 
-using ProxyActiveOpIdTracker =
-    std::unordered_map<uint64_t /* commHash*/,
-                       std::unordered_map<int64_t /* opCount*/, int64_t>>;
+using ProxyActiveOpIdTracker = std::unordered_map<
+    uint64_t /* commHash*/,
+    std::unordered_map<int64_t /* opCount*/, int64_t>>;
 
 class ProxyTrace {
-public:
+ public:
   ProxyTrace(int32_t rank) : myRank(rank) {}
-  ProxyTrace(const ProxyTrace &) = delete;
-  ProxyTrace &operator=(const ProxyTrace &) = delete;
+  ProxyTrace(const ProxyTrace&) = delete;
+  ProxyTrace& operator=(const ProxyTrace&) = delete;
   bool initialized{false};
-  void checkOpCompleted(const ProxyTraceRecordKey &key);
+  void checkOpCompleted(const ProxyTraceRecordKey& key);
 
-  void addNewProxyTraceOpImpl(const ProxyTraceRecordKey &key,
-                              const ProxyTraceExtraInfo &extraInfo,
-                              ProxyOpType opType, int channelId, int nSteps,
-                              uint32_t nbytes, int peerRank);
+  void addNewProxyTraceOpImpl(
+      const ProxyTraceRecordKey& key,
+      const ProxyTraceExtraInfo& extraInfo,
+      ProxyOpType opType,
+      int channelId,
+      int nSteps,
+      uint32_t nbytes,
+      int peerRank);
 
   // Get a unique proxyOpId for a given commHash:opCount
   // If the opCount is not found, create a new entry for it and return 0
@@ -146,14 +156,14 @@ public:
   std::string dump();
 
   // check if an active send/recv operation exists for a given commHash:opCount
-  bool checkActiveOpExist(uint64_t commHash, uint64_t opCount,
-                          uint32_t proxyOpId) const;
+  bool checkActiveOpExist(
+      uint64_t commHash, uint64_t opCount, uint32_t proxyOpId) const;
 
-  ProxyTraceOp *getProxyTraceOpPtr(const ProxyTraceRecordKey &traceKey);
+  ProxyTraceOp* getProxyTraceOpPtr(const ProxyTraceRecordKey& traceKey);
   float getMapSizeMB() const;
   void resetAll();
 
-private:
+ private:
   int myRank{-1};
 
   // Current active send/recv operations.
@@ -170,15 +180,22 @@ private:
   std::deque<std::pair<std::string, std::string>> finishedOps;
 };
 struct ncclProxySubArgs;
-void proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace,
-                            int32_t rank, uint64_t commHash);
+void proxyTraceInit(
+    std::unique_ptr<ProxyTrace>& proxyTrace, int32_t rank, uint64_t commHash);
 
-void updateProxyOpCounter(std::unique_ptr<ProxyTrace> &proxyTraceObj,
-                                  const ProxyTraceRecordKey &traceKey,
-                                  ProxyCounterTypes counter, int64_t val);
+void updateProxyOpCounter(
+    std::unique_ptr<ProxyTrace>& proxyTraceObj,
+    const ProxyTraceRecordKey& traceKey,
+    ProxyCounterTypes counter,
+    int64_t val);
 
 void addNewProxyOp(
-    std::unique_ptr<ProxyTrace> &proxyTraceObj, ProxyTraceRecordKey &key,
-    const ProxyTraceExtraInfo &extraInfo, ProxyOpType opType, int channelId,
-    int nSteps, uint32_t nbytes, int peerRank);
+    std::unique_ptr<ProxyTrace>& proxyTraceObj,
+    ProxyTraceRecordKey& key,
+    const ProxyTraceExtraInfo& extraInfo,
+    ProxyOpType opType,
+    int channelId,
+    int nSteps,
+    uint32_t nbytes,
+    int peerRank);
 } // namespace facebook_rccl
