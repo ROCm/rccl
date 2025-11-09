@@ -20,8 +20,10 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    ncclRing *ring = &ncclShmem.channel.ring;
+    int warp = tid / WARP_SIZE;
+    ncclRing *ring = &ncclShmem.warpChannel[warp].ring;
     int ringIx = ring->index;
+
     const int nranks = ncclShmem.comm.nRanks;
 #if defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
@@ -31,7 +33,7 @@ namespace {
     ssize_t gridOffset;
     ssize_t channelCount;
     ssize_t chunkCount;
-    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
+    ncclCollCbdPart(work, ncclShmem.warpChannelId[warp], Proto::Id, sizeof(T), &size, &gridOffset, &channelCount, &chunkCount);
     const ssize_t loopCount = nranks * chunkCount;
     ssize_t offset;
     int nelem;

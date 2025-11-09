@@ -269,7 +269,7 @@ private:
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
     *((u64_gptr) dst->v) = *((u64_gptr) i4.v);
-    *((u64_gptr) dst->v+1) = *((u64_gptr) i4.v+1); 
+    *((u64_gptr) dst->v+1) = *((u64_gptr) i4.v+1);
 #if defined(__gfx950__) && ROCM_VERSION < 70002
     __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache on gfx950 if ROCr fix for hipHostMallocUncached is not available (ROCm version < 7.0.2)
 #endif
@@ -507,7 +507,7 @@ private:
       nelem -= eltPerTrip;
       offset += nthreads;
     }
-    #ifdef __gfx950__ 
+    #ifdef __gfx950__
     if constexpr (isMsccl(Metadata) && DST){
       // Wait for pending vector loads and stores
       __builtin_amdgcn_s_waitcnt((15 << 8) | (7 << 4)); // s_waitcnt vmcnt(0)
@@ -654,7 +654,8 @@ public:
     redOp(redOpArg),
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group), threadsPerBlock(blockDim.x),
     stepLines(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
-    auto *channel = &ncclShmem.channel;
+    int warp = tid / WARP_SIZE;
+    auto *channel = &ncclShmem.warpChannel[warp];
     barriers = &ncclShmem.groups[group].barrier;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
     int nrecv=0, nsend=0;

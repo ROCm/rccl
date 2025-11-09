@@ -135,9 +135,12 @@ struct ncclShmemGroup {
 struct ncclShmemData {
   struct ncclDevKernelArgs args;
   int channelId;
+  int warpChannelId[8];
+
   int aborted;
   alignas(16) struct ncclDevComm comm;
   alignas(16) struct ncclDevChannel channel;
+  alignas(16) struct ncclDevChannel warpChannel[8];
 
   int batchIx, nextBatchIx;
   enum ncclDevWorkType workType;
@@ -445,7 +448,20 @@ struct RunWorkBatch {
       // Coverity reports a possible thread divergence due to not all threads participating in the collective.
       // However, the code ensures that the participation is on a per-warp basis.
       // coverity[device_thread_diverged:FALSE]
-      if (tid < subtn) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+      //if (tid < subtn) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, WARP_SIZE, work);
+      // int warp = tid / WARP_SIZE;
+      // int lane = tid % WARP_SIZE;
+      // if (lane < WARP_SIZE) {  // All threads in the warp participate
+      //   RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(lane, WARP_SIZE, work);  // Pass lane ID (0-63) and WARP_SIZE
+      // }
+           // Pass global tid, but limit nthreads to WARP_SIZE per warp
+      if (tid < subtn) {
+        int warp = tid / WARP_SIZE;
+        int warpThreads = min(WARP_SIZE, subtn - warp * WARP_SIZE);
+        if (tid % WARP_SIZE < warpThreads) {
+          RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, warpThreads, work);
+        }
+      }
     }
   }
 };
@@ -490,12 +506,42 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   int total = 0, y;
   int num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
 
+  int blockIndex = blockIdx.x;
+  int warpCount  = (tn + WARP_SIZE - 1) / WARP_SIZE;
+  int warp = (warpCount * blockIndex) +  tid / WARP_SIZE;
+  int warpId = tid / WARP_SIZE;
+
   // Copy kernel args to shmem and then only read those. Otherwise the compiler
   // will end up putting the args into thread local stack which is very wasteful.
   if (tid < sizeof(ncclDevKernelArgs)/sizeof(uint32_t)) {
     ((uint32_t*)&ncclShmem.args)[tid] = ((uint32_t*)args)[tid];
   }
 
+  // for (int i = 0; i < num; i++) {
+  //   if (args->channelMask.masks[i] & (1ull<<x)) {
+  //     y = __popcll(args->channelMask.masks[i] & ((1ull<<x)-1));
+  //     y = total + y;
+  //     if (warp == y) {
+  //       ncclShmem.warpChannelId[warpId] = x + total;
+  //       break;
+  //     }
+  //   }
+  //   total = total + __popcll(args->channelMask.masks[i]);
+  // }
+  //total = 0;
+  ncclShmem.warpChannelId[warpId] = warp;
+  __syncthreads();
+  void* dst = &ncclShmem.warpChannel[warpId];
+  void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[warpId]];
+  int bytes = sizeof(ncclDevChannel);
+  static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
+
+  // if ((tid & (WARP_SIZE-1)) == 0) {
+  //   printf("block %d warp %d warpId %d index %d first-thread tid %d channel id: %d\n", blockIndex, warp, warpId, tid-warpId*WARP_SIZE ,tid, ncclShmem.warpChannelId[warpId]);
+  // }
+  assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
+  copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
+  __syncthreads();
   // To map blockId to channelId, we need the n'th set bit of channelMask which
   // is the inverse of counting the number of set bits among the the first n.
   // PTX has the fns instruction which does this but is extremely slow. We can
@@ -510,17 +556,6 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
         if (blockIdx.x == y) {
           ncclShmem.channelId = x + total;
           break;
-        }
-      }
-      if (WARP_SIZE < 64) {
-        x = WARP_SIZE + tid;
-        if (args->channelMask.masks[i] & (1ull<<x)) {
-          y = __popcll(args->channelMask.masks[i] & ((1ull<<x)-1));
-          y = y + total;
-          if (blockIdx.x == y) {
-            ncclShmem.channelId = x + total;
-            break;
-          }
         }
       }
       total = total + __popcll(args->channelMask.masks[i]);

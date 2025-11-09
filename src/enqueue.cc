@@ -1754,6 +1754,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   for (int i = 0; i < MAXCHANNELS/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
+
+  nChannels = std::min(nChannels, 32);
+
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
@@ -2100,18 +2103,18 @@ static ncclResult_t topoGetAlgoInfo(
     // NVLS should not need more than 16 channels to get peak BW.
     nc = comm->nvlsChannels;
   } else {
-    rcclUpdateThreadThreshold(comm, nBytes, info, threadThreshold);
-    INFO(NCCL_INIT, "pre-adjustment threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
+    // rcclUpdateThreadThreshold(comm, nBytes, info, threadThreshold);
+    // INFO(NCCL_INIT, "pre-adjustment threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
 
-    int minNChannels = ncclParamMinNchannels();
-    // Ring/Tree channel tuning
-    INFO(NCCL_INIT, "minNChannels:%i", minNChannels);
-    while (nBytes < nc * nt * threadThreshold && nc > minNChannels) {
-      if (nc >= 2) nc--;
-      else break;
-    }
-    INFO(NCCL_INIT, "post-adjustment based on threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
-    rcclOverrideChannels(comm, info->func, nBytes, nc);
+    // int minNChannels = ncclParamMinNchannels();
+    // // Ring/Tree channel tuning
+    // INFO(NCCL_INIT, "minNChannels:%i", minNChannels);
+    // while (nBytes < nc * nt * threadThreshold && nc > minNChannels) {
+    //   if (nc >= 2) nc--;
+    //   else break;
+    // }
+    // INFO(NCCL_INIT, "post-adjustment based on threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
+    // rcclOverrideChannels(comm, info->func, nBytes, nc);
   }
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #else
