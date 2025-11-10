@@ -330,8 +330,8 @@ __hidden ncclResult_t pluginGetCollInfo(void* context, ncclFunc_t collType, size
   TunerContext* ctx = (TunerContext*)context;
   if (!ctx) return ncclInternalError;
 
-  // Default channels
-  *nChannels = 1;
+  // Set default channels to 0 to ensure RCCL uses its default channel selection logic in case no match is found or wildcard is used in config.
+  *nChannels = 0;
 
   if (ctx->logFunction) {
     ctx->logFunction(NCCL_LOG_TRACE, NCCL_TUNING, __FILE__, __LINE__,

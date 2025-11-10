@@ -117,4 +117,5 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm);
 bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, const char* archName);
 int parseFirmwareVersion();
+bool rcclIsArchSupportedForFunc(struct ncclTaskColl* info, char const* archName);
 #endif
