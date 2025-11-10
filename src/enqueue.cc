@@ -388,7 +388,9 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
-
+    //[Added-comment] opCount is missing for collDevWork, adding here
+    devWork.opCount = task->opCount;
+	  
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     devWork.gfx9CheapFenceOff = gfx9CheapFenceOff(devWork, comm->gfx9CheapFenceOff);
@@ -1880,6 +1882,12 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
     // we are not using the host stream for proxy ops and reclaimation submission, call
     // hostStreamPlanTask directly
     NCCLCHECK(hostStreamPlanTask(comm, plan));
+  }
+  
+  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty 
+  // opCount was not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
+  if (!plan->persistent && ncclIntruQueueHead(&plan->proxyOpQueue) == nullptr) {
+    comm->opCount++;
   }
   return ncclSuccess;
 }
