@@ -78,6 +78,9 @@ private:
       #else
         barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
       #endif
+    else if (nthreads == WARP_SIZE) {
+      __syncwarp();
+    }
 #else
     if (nthreads == WARP_SIZE) {
       __syncwarp();
@@ -652,9 +655,9 @@ public:
       bool ipcReg = false, bool netReg = false, int stepSize_ = 0
     ):
     redOp(redOpArg),
-    tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), group(group), threadsPerBlock(blockDim.x),
+    tid(tid), nthreads(nthreads), wid(threadIdx.x%WARP_SIZE), group(group), threadsPerBlock(blockDim.x),
     stepLines(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
-    int warp = tid / WARP_SIZE;
+    int warp = threadIdx.x / WARP_SIZE;
     auto *channel = &ncclShmem.warpChannel[warp];
     barriers = &ncclShmem.groups[group].barrier;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here

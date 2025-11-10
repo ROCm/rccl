@@ -20,7 +20,7 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    int warp = tid / WARP_SIZE;
+    int warp = threadIdx.x / WARP_SIZE;
     ncclRing *ring = &ncclShmem.warpChannel[warp].ring;
     int ringIx = ring->index;
 

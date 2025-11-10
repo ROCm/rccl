@@ -459,7 +459,7 @@ struct RunWorkBatch {
         int warp = tid / WARP_SIZE;
         int warpThreads = min(WARP_SIZE, subtn - warp * WARP_SIZE);
         if (tid % WARP_SIZE < warpThreads) {
-          RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, warpThreads, work);
+          RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
         }
       }
     }

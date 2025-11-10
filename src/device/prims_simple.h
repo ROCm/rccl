@@ -490,14 +490,14 @@ private:
 
 public:
   static inline __device__ void sendPeerNotify(int peer, int connIndex, int steps) {
-    ncclDevChannelPeer* peerPtr = ncclShmem.channel.peers[peer];
+    ncclDevChannelPeer* peerPtr = ncclShmem.warpChannel[threadIdx.x/WARP_SIZE].peers[peer];
     peerPtr->send[connIndex].step += steps;
     st_relaxed_sys_global(peerPtr->send[connIndex].tail, peerPtr->send[connIndex].step);
   }
 
   static inline __device__ void recvPeerNotify(int peer, int connIndex, int steps) {
     int spins = 0;
-    ncclDevChannelPeer* peerPtr = ncclShmem.channel.peers[peer];
+    ncclDevChannelPeer* peerPtr = ncclShmem.warpChannel[threadIdx.x/WARP_SIZE].peers[peer];
     peerPtr->recv[connIndex].step += steps;
     st_relaxed_sys_global(peerPtr->recv[connIndex].head, peerPtr->recv[connIndex].step);
     while (ld_volatile_global(peerPtr->recv[connIndex].tail) < peerPtr->recv[connIndex].step) {
@@ -758,7 +758,7 @@ public:
       struct ncclDevWorkP2p* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
     ):
     tid(tid), tidInBlock(threadIdx.x), nthreads(nthreads), /*compiler warnings*/
-    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_), group(group), threadsPerBlock(blockDim.x){
+    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_), group(threadIdx.x/WARP_SIZE), threadsPerBlock(blockDim.x){
 
     barriers = &ncclShmem.groups[group].barrier;
     // PAT uses the same barrier for each group
@@ -819,9 +819,9 @@ public:
       }
 
       // coverity[overrun-call] => Coverity think prims.index can be greater than 1
-      if (flags & (RoleWaitRecv|RolePostRecv)) loadRecvConn(ncclShmem.channel.peers[peer], connIndexRecv, collWork ? collWork->direct : 0, recvIpcReg, recvNetReg);
+      if (flags & (RoleWaitRecv|RolePostRecv)) loadRecvConn(ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[peer], connIndexRecv, collWork ? collWork->direct : 0, recvIpcReg, recvNetReg);
       // coverity[overrun-call] => Coverity think prims.index can be greater than 1
-      if (flags & (RoleWaitSend|RolePostSend)) loadSendConn(ncclShmem.channel.peers[peer], connIndexSend, collWork ? collWork->direct : 0, sendIpcReg, sendNetReg);
+      if (flags & (RoleWaitSend|RolePostSend)) loadSendConn(ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[peer], connIndexSend, collWork ? collWork->direct : 0, sendIpcReg, sendNetReg);
 
       // if (barrierAny(flags & NetDeviceUnpack)) {
       //   flags |= AnyNetDeviceUnpack;
@@ -849,7 +849,7 @@ public:
         // Load recv peer
         int recvPeer = mode == primsModePatRs ? (rank - delta + nranks) % nranks : (rank + delta) % nranks;
         struct ncclPatPeer* peer = ((struct ncclPatPeer*)recvPeers)+tid;
-        struct ncclConnInfo* conn = peer->conn = ncclShmem.channel.peers[recvPeer]->recv+connIndexRecv;
+        struct ncclConnInfo* conn = peer->conn = ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[recvPeer]->recv+connIndexRecv;
         peer->step = conn->step;
         peer->buff = conn->buffs[NCCL_PROTO_SIMPLE];
         peer->stepCache = loadStepValue(peer->tailPtr = conn->tail);
@@ -859,7 +859,7 @@ public:
         // Load send peer
         int sendPeer = mode == primsModePatAg ? (rank - delta + nranks) % nranks : (rank + delta) % nranks;
         peer = ((struct ncclPatPeer*)sendPeers)+tid;
-        conn = peer->conn = ncclShmem.channel.peers[sendPeer]->send+connIndexSend;
+        conn = peer->conn = ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[sendPeer]->send+connIndexSend;
         peer->step = conn->step;
         peer->connFifo = conn->connFifo;
         peer->buff = conn->buffs[NCCL_PROTO_SIMPLE];
