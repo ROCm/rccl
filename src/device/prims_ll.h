@@ -84,6 +84,7 @@ private:
 #else
     if (nthreads == WARP_SIZE) {
       __syncwarp();
+      __threadfence_system();
     } else {
       barrier_sync(15-group, nthreads);
     }

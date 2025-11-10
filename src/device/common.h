@@ -517,6 +517,9 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     ((uint32_t*)&ncclShmem.args)[tid] = ((uint32_t*)args)[tid];
   }
 
+
+
+  /// TODO: fix channel assignment for multi-warp kernels
   // for (int i = 0; i < num; i++) {
   //   if (args->channelMask.masks[i] & (1ull<<x)) {
   //     y = __popcll(args->channelMask.masks[i] & ((1ull<<x)-1));
@@ -529,19 +532,16 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   //   total = total + __popcll(args->channelMask.masks[i]);
   // }
   //total = 0;
+
   ncclShmem.warpChannelId[warpId] = warp;
-  __syncthreads();
   void* dst = &ncclShmem.warpChannel[warpId];
-  void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[warpId]];
+  void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[warp];
   int bytes = sizeof(ncclDevChannel);
   static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
-
-  // if ((tid & (WARP_SIZE-1)) == 0) {
-  //   printf("block %d warp %d warpId %d index %d first-thread tid %d channel id: %d\n", blockIndex, warp, warpId, tid-warpId*WARP_SIZE ,tid, ncclShmem.warpChannelId[warpId]);
-  // }
   assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
   copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
   __syncthreads();
+  // __threadfence_system();
   // To map blockId to channelId, we need the n'th set bit of channelMask which
   // is the inverse of counting the number of set bits among the the first n.
   // PTX has the fns instruction which does this but is extremely slow. We can
