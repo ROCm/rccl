@@ -511,6 +511,14 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
       }
+      
+      if (!rcclIsArchSupportedForFunc(&agg, comm->archName)) {
+        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).", 
+          __func__, comm->archName, 
+          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol), 
+          ncclDevRedOpToString(task->opDev.op), ncclDatatypeToString(task->datatype), (agg.acc != nullptr), agg.pipeline);
+        return ncclInvalidUsage;
+      }
 
       int isCollnet=0, isNvls=0;
       switch (agg.algorithm) {
@@ -1586,7 +1594,7 @@ static ncclResult_t getImplicitOrder(enum ncclImplicitOrder *mode, bool capturin
     if (capturing && driver < 12090) { *mode = ncclImplicitOrderSerial; return ncclSuccess; }
     *mode = 12030 <= std::min<int>(CUDART_VERSION, driver) ? ncclImplicitOrderLaunch : ncclImplicitOrderSerial;
 #else
-    *mode = ncclImplicitOrderNone;
+    *mode = ncclImplicitOrderSerial;
 #endif
     return ncclSuccess;
   }
@@ -1900,10 +1908,10 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     ncclIntruQueueConstruct(&planner->planQueue);
 
     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler warning
+    cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch
     cudaStream_t deviceStream, launchOrder;
-
     cudaEvent_t finishedEvent = comm->sharedRes->scratchEvent;
+    CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
 
     if (comm->workFifoProduced - comm->workFifoProducedLastRecorded > comm->workFifoBytes/8) {
       comm->workFifoProducedLastRecorded = comm->workFifoProduced;
@@ -1918,8 +1926,6 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     }
 
     if (capturing || planner->numStreams != 1) {
-      // CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
-
       // deviceStream waits on userStream[0]
       NCCLCHECK(ncclStrongStreamAcquiredWorkStream(planner->capturingGraph, &comm->sharedRes->deviceStream, /*concurrent=*/false, &deviceStream));
 
@@ -2055,6 +2061,9 @@ static ncclResult_t topoGetAlgoInfo(
   info->protocol = protocol;
   float time = minTime;
 
+  // Tuner plugin sets cost to 0.0 if it finds a match
+  bool isTunerMatchFound = (comm->tuner != NULL && minTime == 0.0);
+
   // Yes, we are first assigning and then testing if protocol is sane, but that's OK in this case.
   // coverity[check_after_sink]
   if (info->algorithm == NCCL_ALGO_UNDEF || info->protocol == NCCL_PROTO_UNDEF) {
@@ -2071,7 +2080,10 @@ static ncclResult_t topoGetAlgoInfo(
     WARN("Error : no algorithm/protocol available for function %s with datatype %s.%s%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), ncclAlgoEnvStr, ncclProtoEnvStr);
     return (algoEnv || protoEnv) ? ncclInvalidUsage : ncclInternalError;
   }
-  rcclUpdateCollectiveProtocol(comm, nBytes, info);
+  // Honor Tuner config if available
+  if (!isTunerMatchFound) {
+    rcclUpdateCollectiveProtocol(comm, nBytes, info);
+  }
   rcclSetPipelining(comm, nBytes, info);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);

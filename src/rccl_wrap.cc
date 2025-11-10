@@ -451,15 +451,13 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
 }
 
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
-  hipDeviceProp_t devProp;
-  CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx950")) {
+  if(IsArchMatch(comm->archName, "gfx950")) {
     if(comm->nNodes == 1)
       comm->unroll = NCCL_UNROLL_1;
     else
       comm->unroll = NCCL_UNROLL_2;
   }
-  else if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80)))
+  else if(IsArchMatch(comm->archName, "gfx908") || ((IsArchMatch(comm->archName, "gfx942") && comm->cuCount > 80)))
     comm->unroll = NCCL_UNROLL_2;
   else
     comm->unroll = NCCL_UNROLL_4;
@@ -534,4 +532,24 @@ bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, 
     return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 177);
   }
   return true;
+}
+
+// Should match get_arch_guard() in generate.py
+bool rcclIsArchSupportedForFunc(struct ncclTaskColl* info, const char* archName) {
+  bool supported = true;
+
+  if (info->protocol == NCCL_PROTO_LL128) {
+#if defined(ENABLE_LL128)
+    if (info->acc)
+      supported = (IsArchMatch(archName, "gfx942") || IsArchMatch(archName, "gfx950"));
+    else
+      supported = (IsArchMatch(archName, "gfx942") || IsArchMatch(archName, "gfx950") || IsArchMatch(archName, "gfx90a"));
+#else
+    supported = false;
+#endif
+  } else if (info->acc) {
+    supported = (IsArchMatch(archName, "gfx942") || IsArchMatch(archName, "gfx950"));
+  }
+
+  return supported;
 }
