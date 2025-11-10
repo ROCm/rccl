@@ -533,7 +533,8 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   // }
   //total = 0;
 
-  ncclShmem.warpChannelId[warpId] = warp;
+  if(tid % WARP_SIZE == 0) ncclShmem.warpChannelId[warpId] = warp;
+   __syncthreads();
   void* dst = &ncclShmem.warpChannel[warpId];
   void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[warp];
   int bytes = sizeof(ncclDevChannel);

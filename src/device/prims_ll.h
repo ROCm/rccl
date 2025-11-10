@@ -79,12 +79,12 @@ private:
         barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
       #endif
     else if (nthreads == WARP_SIZE) {
-      __syncwarp();
+      __syncthreads();
+      __threadfence_system();
     }
 #else
     if (nthreads == WARP_SIZE) {
       __syncwarp();
-      __threadfence_system();
     } else {
       barrier_sync(15-group, nthreads);
     }
