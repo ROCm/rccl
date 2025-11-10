@@ -128,6 +128,13 @@ using ProxyActiveOpIdTracker = std::unordered_map<
     uint64_t /* commHash*/,
     std::unordered_map<int64_t /* opCount*/, int64_t>>;
 
+using ProxyActiveCollFinishedOpMap = std::unordered_map<
+    uint64_t /* commHash*/,
+    std::unordered_map<
+        uint64_t /* opCount*/,
+        /* list of past ops of current active collective in completion order */
+        std::deque<ProxyTraceOp>>>;
+
 class ProxyTrace {
  public:
   ProxyTrace(int32_t rank) : myRank(rank) {}
@@ -175,9 +182,12 @@ class ProxyTrace {
   ProxyActiveOpMap activeOps;
   ProxyActiveOpIdTracker activeOpIdTracker;
 
-  // keep track of the recent completed ops;
-  // A record is a pair of traceKey.str() and ProxyTraceOp.str()
+  // Keep track of the recent completed ops, across all collectives.
+  // A record is a pair of traceKey.str() and ProxyTraceOp.str().
   std::deque<std::pair<std::string, std::string>> finishedOps;
+
+  // Keep more detailed records for the finished ops of active collectives.
+  ProxyActiveCollFinishedOpMap activeCollFinishedOps;
 };
 struct ncclProxySubArgs;
 void proxyTraceInit(

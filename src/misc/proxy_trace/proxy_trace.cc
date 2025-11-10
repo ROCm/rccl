@@ -67,10 +67,14 @@ void facebook_rccl::ProxyTrace::checkOpCompleted(
         finishedOps.pop_front();
       }
       finishedOps.push_back({key.str(), traceOp.str()});
+      activeCollFinishedOps[key.commHash][key.opCount].push_back(
+          std::move(traceOp));
       activeOps[key.commHash][key.opCount].erase(key.proxyOpId);
       if (activeOps[key.commHash][key.opCount].empty()) {
         activeOps[key.commHash].erase(key.opCount);
         activeOpIdTracker[key.commHash].erase(key.opCount);
+        activeCollFinishedOps[key.commHash][key.opCount]
+            .clear(); // coll is no longer active
       }
     }
   } else {
