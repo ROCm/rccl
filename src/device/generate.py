@@ -214,6 +214,41 @@ def calc_unroll_for_local_arch():
 # except for gfx950
 local_unroll = calc_unroll_for_local_arch()
 
+def calc_pipeline_for_local_arch():
+  # Default: pipelining enabled
+  default_pipeline = ["0", "1"]
+  
+  if not is_local_arch_only:
+    return default_pipeline
+
+  rocminfo_path = os.environ.get('ROCM_PATH') + "/bin/rocminfo"
+
+  res = subprocess.run([rocminfo_path], stdout=subprocess.PIPE, universal_newlines=True)
+  rocminfo_output = res.stdout
+
+  # Parse rocminfo binary output to detect GPU architecture
+  gfx_targets = set()
+  curr_name = None
+  for line in rocminfo_output.splitlines():
+    line = line.strip()
+
+    if line.startswith("Name:"):
+      name = line.split(':')[-1].strip()
+      if "gfx" in name:
+        curr_name = name
+    if line.startswith("Compute Unit:") and curr_name:
+      gfx_targets.add(curr_name)
+      curr_name = None
+
+  # Disable pipelining for MI350 (gfx950)
+  if "gfx950" in gfx_targets:
+    return ["0"]  # Disable pipelining
+  
+  return default_pipeline
+
+# if building for gfx950, we need to disable pipelining
+local_pipeline = calc_pipeline_for_local_arch()
+
 # Helper function to check if the conditions for the collective is being met
 def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
@@ -226,6 +261,7 @@ def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
       ty not in tys_of_coll[coll] or
       acc not in acc_of_coll[coll] or
       pipeline not in pipelines_of_coll[coll] or (pipeline in ["1"] and ty not in pipelined_types) or
+      pipeline not in local_pipeline or
       unroll not in local_unroll):
     return False
   return True
@@ -318,7 +354,7 @@ def enumerate_func_rows():
           for redop in all_redops:
             for ty in all_tys:
               for acc in all_accs:
-                for pipeline in all_pipelines:
+                for pipeline in local_pipeline:
                   if func_validate(coll, algo, proto, redop, ty, acc, pipeline, unroll):
                     yield (coll, algo, proto, redop, ty, acc, pipeline, unroll)
 
@@ -332,7 +368,7 @@ def custom_sort_key(fn: Fn):
         all_redops.index(fn.redop),
         all_tys.index(fn.ty),
         all_accs.index(fn.acc),
-        all_pipelines.index(fn.pipeline)
+        local_pipeline.index(fn.pipeline)
     )
 
 def get_arch_guard(fn):
