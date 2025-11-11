@@ -646,7 +646,9 @@ static ncclResult_t scheduleCollTasksToPlan(
   int nChannels[2*2] = {0, 0, 0, 0}; // [collnet][nvls]
   int const nMaxChannels[2*2] = {comm->nChannels, comm->nvlsChannels, // [collnet][nvls]
                                  comm->nChannels, comm->nvlsChannels};
-  constexpr size_t MinTrafficPerChannel = 16 << 10; // 16K traffic as minimal
+
+ // Reduced to be more generous with channels than before
+  constexpr size_t MinTrafficPerChannel = 512; // 2K traffic as minimal
   do {
     size_t workBytes = 0;
     struct ncclTaskColl* task = ncclIntruQueueHead(&planner->collTaskQueue);
@@ -1746,7 +1748,6 @@ NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 #endif
 
 NCCL_PARAM(NvlinkUtilCentricSchedEnable, "NVLINK_UTIL_CENTRIC_SCHED_ENABLE", 0);
-RCCL_PARAM(CuCount, "CU_COUNT", 32);
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclResult_t ret = ncclSuccess;
   struct ncclKernelPlanner* planner = &comm->planner;
@@ -1754,11 +1755,20 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   for (int i = 0; i < MAXCHANNELS/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
-  printf("Before grid dim x: %d\n", nChannels);
-  int rcclCuCount = rcclParamCuCount();
-  nChannels = std::min(nChannels, rcclCuCount);
-  printf("after grid dim x: %d, threadsPerBlock: %d\n", nChannels, plan->threadPerBlock);
-  dim3 grid = {(unsigned)nChannels, 1, 1};
+
+  int rcclCuCount = nChannels;
+  plan->kernelArgs->comm->warpLevelComm = 0;
+  if(nChannels % 7 == 0) {
+    plan->kernelArgs->comm->warpLevelComm = 1;
+    rcclCuCount = nChannels / 7;
+  } else {
+    printf("RCCL: Not using warp-level collectives as nChannels % 7 != 0 (nChannels=%d)\n", nChannels);
+  }
+
+
+  // nChannels = std::min(nChannels, rcclCuCount);
+  // printf("nChannels: %d, threadsPerBlock:%d cuCount: %d\n", nChannels, plan->threadPerBlock, rcclCuCount);
+  dim3 grid = {(unsigned)rcclCuCount, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
   cudaStream_t launchStream = planner->streams->stream;

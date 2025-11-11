@@ -567,7 +567,7 @@ struct ncclDevComm {
   int p2pChunkSize;
   int isAllNvlink;
   int p2pnChannelsPerPeer;
-
+  int warpLevelComm;
   int* collNetDenseToUserRank;
 
   // Flag to ask NCCL kernels to abort

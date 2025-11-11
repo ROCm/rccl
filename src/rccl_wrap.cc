@@ -455,7 +455,7 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
   if(IsArchMatch(devProp.gcnArchName, "gfx950")) {
     if(comm->nNodes == 1)
-      comm->unroll = NCCL_UNROLL_4;
+      comm->unroll = NCCL_UNROLL_2;
     else
       comm->unroll = NCCL_UNROLL_2;
   }

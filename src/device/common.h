@@ -136,7 +136,7 @@ struct ncclShmemData {
   struct ncclDevKernelArgs args;
   int channelId;
   int warpChannelId[8];
-
+  int warpComm;
   int aborted;
   alignas(16) struct ncclDevComm comm;
   alignas(16) struct ncclDevChannel channel;
@@ -448,19 +448,9 @@ struct RunWorkBatch {
       // Coverity reports a possible thread divergence due to not all threads participating in the collective.
       // However, the code ensures that the participation is on a per-warp basis.
       // coverity[device_thread_diverged:FALSE]
-      //if (tid < subtn) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, WARP_SIZE, work);
-      // int warp = tid / WARP_SIZE;
-      // int lane = tid % WARP_SIZE;
-      // if (lane < WARP_SIZE) {  // All threads in the warp participate
-      //   RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(lane, WARP_SIZE, work);  // Pass lane ID (0-63) and WARP_SIZE
-      // }
-           // Pass global tid, but limit nthreads to WARP_SIZE per warp
       if (tid < subtn) {
-        int warp = tid / WARP_SIZE;
-        int warpThreads = min(WARP_SIZE, subtn - warp * WARP_SIZE);
-        if (tid % WARP_SIZE < warpThreads) {
-          RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
-        }
+        if(ncclShmem.warpComm == 0) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+        else RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
       }
     }
   }
@@ -510,45 +500,13 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   int warpCount  = (tn + WARP_SIZE - 1) / WARP_SIZE;
   int warp = (warpCount * blockIndex) +  tid / WARP_SIZE;
   int warpId = tid / WARP_SIZE;
+  int laneId = tid % WARP_SIZE;
 
   // Copy kernel args to shmem and then only read those. Otherwise the compiler
   // will end up putting the args into thread local stack which is very wasteful.
   if (tid < sizeof(ncclDevKernelArgs)/sizeof(uint32_t)) {
     ((uint32_t*)&ncclShmem.args)[tid] = ((uint32_t*)args)[tid];
   }
-
-
-
-  /// TODO: fix channel assignment for multi-warp kernels
-  // for (int i = 0; i < num; i++) {
-  //   if (args->channelMask.masks[i] & (1ull<<x)) {
-  //     y = __popcll(args->channelMask.masks[i] & ((1ull<<x)-1));
-  //     y = total + y;
-  //     if (warp == y) {
-  //       ncclShmem.warpChannelId[warpId] = x + total;
-  //       break;
-  //     }
-  //   }
-  //   total = total + __popcll(args->channelMask.masks[i]);
-  // }
-  //total = 0;
-
-  if(tid % WARP_SIZE == 0) {
-    ncclShmem.warpChannelId[warpId] = warp;
-  }
-    __syncthreads();
-  void* dst = &ncclShmem.warpChannel[warpId];
-  void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[warp];
-  int bytes = sizeof(ncclDevChannel);
-  static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
-  assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
-  copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
-  __syncthreads();
-  // __threadfence_system();
-  // if ((tid % WARP_SIZE) == 0) {
-  //   printf("gridDim.x %d blockIdx.x %d blokcDim.x %d warpId(local)=%d warp(global)=%d mappedChannel=%d tid=%d\n",
-  //                 gridDim.x , blockIdx.x, blockDim.x, warpId, warp, ncclShmem.warpChannelId[warpId], threadIdx.x);
-  // }
 
   // __threadfence_system();
   // To map blockId to channelId, we need the n'th set bit of channelMask which
@@ -595,6 +553,30 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     ncclShmem.aborted = 0;
     ncclShmem.channel.workCounter = ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter;
   }
+  // total = 0;
+  // if(laneId == 0) ncclShmem.warpChannelId[warpId] = ncclShmem.channelId;
+  // __syncthreads(); // publish ncclShmem.warpChannelId[warpId]
+
+  // for (int i = 0; i < num; i++) {
+  //   if (args->channelMask.masks[i] & (1ull<<laneId)) {
+  //     y = __popcll(args->channelMask.masks[i] & ((1ull<<laneId)-1));
+  //     y = total + y;
+  //     if (warp == y) {
+  //       ncclShmem.warpChannelId[warpId] = laneId + total;
+  //       break;
+  //     }
+  //   }
+  //   total = total + __popcll(args->channelMask.masks[i]);
+  // }
+
+  // __syncthreads();
+  // void* dst = &ncclShmem.warpChannel[warpId];
+  // void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[warpId]];
+  // int bytes = sizeof(ncclDevChannel);
+  // static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
+  // // assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
+  // copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
+  // __syncthreads();
 
   // Use first 2 warps to load comm and channel, and remaining load work batch.
   switch (tid/WARP_SIZE) {
@@ -628,7 +610,39 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     ncclShmem.collTraceTail = args->comm->collTraceTail + ncclShmem.channelId;
   }
 #endif
+  if(tid == 0) {
+    ncclShmem.warpComm = args->comm->warpLevelComm;
+  }
   __syncthreads(); // publish shmem
+
+  total = 0;
+  if(laneId == 0) ncclShmem.warpChannelId[warpId] = ncclShmem.channelId;
+  __syncthreads(); // publish ncclShmem.warpChannelId[warpId]
+
+  if(ncclShmem.warpComm == 1) {
+    for (int i = 0; i < num; i++) {
+      if (args->channelMask.masks[i] & (1ull<<laneId)) {
+        y = __popcll(args->channelMask.masks[i] & ((1ull<<laneId)-1));
+        y = total + y;
+        if (warp == y) {
+          ncclShmem.warpChannelId[warpId] = laneId + total;
+          break;
+        }
+      }
+      total = total + __popcll(args->channelMask.masks[i]);
+    }
+    __syncthreads();
+    void* dst = &ncclShmem.warpChannel[warpId];
+    void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[warpId]];
+    int bytes = sizeof(ncclDevChannel);
+    static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
+    // assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
+    copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
+
+  } else {
+    ncclShmem.warpChannel[warpId] = ncclShmem.channel;
+  }
+  __syncthreads();
 
 #ifdef ENABLE_PROFILING
   if (tid == 0) {
