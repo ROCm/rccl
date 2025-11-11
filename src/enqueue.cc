@@ -756,11 +756,6 @@ static ncclResult_t scheduleCollTasksToPlan(
       (countHi != 0 ? countHi : countLo) -= cells*elementsPerCell - task->count;
 
       nChannels = (countLo!=0 ? 1 : 0) + nMidChannels + (cellsHi!=0 ? 1 : 0);
-      // Adjust nChannels to be a multiple of 7 for warp-level collectives
-      nChannels = ((nChannels + 6) / 7) * 7;
-      if (nChannels > nMaxChannels[kind] - channelId) {
-        nChannels = (nMaxChannels[kind] - channelId) / 7 * 7;
-      }
 
       // Update number of channels propagated to the profiler
       task->nChannels = (uint8_t)nChannels;
@@ -1763,9 +1758,10 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
 
   int rcclCuCount = nChannels;
   plan->kernelArgs->comm->warpLevelComm = 0;
-  if(nChannels % 7 == 0) {
+  if(nChannels >= 7) {
     plan->kernelArgs->comm->warpLevelComm = 1;
-    rcclCuCount = nChannels / 7;
+    rcclCuCount =  nChannels / 7;
+    if(nChannels % 7 != 0) rcclCuCount += 1; // add extra CU for remaining warps
   } else {
     printf("RCCL: Not using warp-level collectives as nChannels % 7 != 0 (nChannels=%d)\n", nChannels);
   }
