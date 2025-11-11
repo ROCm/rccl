@@ -12,11 +12,7 @@
 #include "device.h"
 #include "op128.h"
 #include "reduce_kernel.h"
-// In self-contained mode (NCCL_DEFINE_SHMEM), device_table.h is not needed
-// because all device functions and tables are defined inline in each kernel file
-#ifndef NCCL_DEFINE_SHMEM
 #include "device_table.h"
-#endif
 #include "network/unpack/unpack_defs.h"
 
 // Forward declarations for type-specific function tables
@@ -24,9 +20,7 @@
 typedef void (*ncclDevFuncPtr_t)();
 
 // Type-specific function tables (defined in generated code)
-// Skip these extern declarations in self-contained mode (NCCL_DEFINE_SHMEM)
-// because each kernel file only defines its own type's tables
-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx950__) && !defined(NCCL_DEFINE_SHMEM)
+#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx950__)
 extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_1[];
 extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_2[];
 extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_4[];
@@ -71,12 +65,9 @@ extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_4[];
 // Unroll-specific dispatch functions that extract type from funcId
 // and call the appropriate NCCL_CALL_FUNCTIONS_<type>_<unroll>(funcId)
 // Each function is specialized for a specific unroll factor (no runtime branching)
-// Skip in self-contained mode (NCCL_DEFINE_SHMEM) - not needed when each kernel has its own dispatcher
-#ifndef NCCL_DEFINE_SHMEM
 extern __device__ void callTypeSpecificFunction_1(int funcId);
 extern __device__ void callTypeSpecificFunction_2(int funcId);
 extern __device__ void callTypeSpecificFunction_4(int funcId);
-#endif
 
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
@@ -250,25 +241,11 @@ struct ncclShmemData {
   uint64_t barrier_pat;
 };
 
-// Shared memory declarations/definitions
-// When NCCL_DEFINE_SHMEM is defined before including this header, we provide
-// definitions (for self-contained kernels without -fgpu-rdc).
-// Otherwise, we provide extern declarations (for RDC builds where common.cu
-// provides the definitions).
-#ifdef NCCL_DEFINE_SHMEM
-  __shared__ ncclShmemData ncclShmem;
-  #if __CUDA_ARCH__ >= 700
-    __shared__ ulong2 ncclShmemPerWarp[/*ncclShmemDynamicSize()/sizeof(ulong2)*/];
-  #else
-    __shared__ ulong2 ncclShmemPerWarp[ncclShmemScratchWarpSize()*(NCCL_MAX_NTHREADS/WARP_SIZE)/sizeof(ulong2)];
-  #endif
+extern __shared__ ncclShmemData ncclShmem;
+#if __CUDA_ARCH__ >= 700
+  extern __shared__ ulong2 ncclShmemPerWarp[/*ncclShmemDynamicSize()/sizeof(ulong2)*/];
 #else
-  extern __shared__ ncclShmemData ncclShmem;
-  #if __CUDA_ARCH__ >= 700
-    extern __shared__ ulong2 ncclShmemPerWarp[/*ncclShmemDynamicSize()/sizeof(ulong2)*/];
-  #else
-    extern __shared__ ulong2 ncclShmemPerWarp[ncclShmemScratchWarpSize()*(NCCL_MAX_NTHREADS/WARP_SIZE)/sizeof(ulong2)];
-  #endif
+  extern __shared__ ulong2 ncclShmemPerWarp[ncclShmemScratchWarpSize()*(NCCL_MAX_NTHREADS/WARP_SIZE)/sizeof(ulong2)];
 #endif
 
 #ifdef ENABLE_FAULT_INJECTION
@@ -787,8 +764,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #endif
 }
 
-#ifdef BUILD_GENERIC_KERNELS
-// Generic kernels - dispatch to type-specific functions at runtime
+// Generic kernels - re-enabled, dispatch to type-specific functions at runtime
 __global__ void ncclDevKernel_Generic_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
 __global__ void ncclDevKernel_Generic_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
 __global__ void ncclDevKernel_Generic_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
@@ -796,8 +772,7 @@ __global__ void ncclDevKernel_Generic_4(ncclDevKernelArgsDefaultStorage NCCL_GRI
 __global__ void ncclDevKernelDebug_Generic_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
 __global__ void ncclDevKernelDebug_Generic_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
 __global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
-#endif // ENABLE_COLLTRACE
-#endif // BUILD_GENERIC_KERNELS
+#endif
 
 // Type-specific kernel declarations
 __global__ void ncclDevKernel_i8_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);

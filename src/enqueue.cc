@@ -11,7 +11,6 @@
 #include "coll_net.h"
 #include "graph/topo.h"
 #include <hip/hip_runtime.h>
-#include <hip/hip_cooperative_groups.h>
 #include <hip/hip_ext.h>
 #include "gdrwrap.h"
 #include "bootstrap.h"
@@ -29,10 +28,6 @@
 #include <cinttypes> // PRIx64
 #include <cassert>
 #include "latency_profiler/CollTraceFunc.h"
-
-#ifdef ENABLE_ROCSHMEM
-#include <rocshmem/rocshmem.hpp>
-#endif
 
 using namespace rccl;
 
@@ -150,15 +145,9 @@ static const ncclKernelMatch* ncclGetKernelTableForType(ncclDataType_t type)
 #ifdef ENABLE_COLLTRACE
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
 static ncclKernelMatch const ncclKerns[6] = {
-#ifdef BUILD_GENERIC_KERNELS
     {(void*)ncclDevKernel_Generic_1, true},
     {(void*)ncclDevKernel_Generic_2, true},
     {(void*)ncclDevKernel_Generic_4, true},
-#else
-    {nullptr, false}, // Generic kernels disabled - must use type-specific kernels
-    {nullptr, false},
-    {nullptr, false},
-#endif
     {     (void*)ncclDevKernel_i8_1, true}, // Debug fallback to i8
     {     (void*)ncclDevKernel_i8_2, true},
     {     (void*)ncclDevKernel_i8_4, true}
@@ -166,15 +155,9 @@ static ncclKernelMatch const ncclKerns[6] = {
 #else
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
 static ncclKernelMatch const ncclKerns[3] = {
-#ifdef BUILD_GENERIC_KERNELS
   {(void*)ncclDevKernel_Generic_1, true},
   {(void*)ncclDevKernel_Generic_2, true},
   {(void*)ncclDevKernel_Generic_4, true}
-#else
-  {nullptr, false}, // Generic kernels disabled - must use type-specific kernels
-  {nullptr, false},
-  {nullptr, false}
-#endif
 };
 #endif
 
@@ -513,19 +496,6 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     //[Added-comment] opCount is missing for collDevWork, adding here
     devWork.opCount = task->opCount;
-#ifdef ENABLE_ROCSHMEM
-    if (comm->enableRocshmem && task->func == ncclFuncAllToAllGda) {
-        devWork.enableRocshmem = comm->enableRocshmem;
-        devWork.team = comm->team_reduce_world_dup;
-
-        devWork.sndbuff = (void*)comm->sourceRshmem[comm->symId];
-        devWork.tempbuff = (void*)comm->destRshmem[comm->symId];
-
-        comm->symId = (comm->symId + 1) % comm->numSymBuf;
-
-        devWork.size = task->count;
-    }
-#endif
 
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
@@ -866,10 +836,8 @@ static ncclResult_t scheduleCollTasksToPlan(
         proxyOp.incWorkCounter = true;
         addWorkBatchToPlan(comm, plan, c, workNode->workType, task->devFuncId, plan->workBytes);
         // Set pattern to profiler to add a proxy profiler for kernel events
-        if (task->func != ncclFuncAllToAllGda) {
-            NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
-            NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
-	}
+        NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
+        NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
       }
     } else { // not task->isCollnet
       int trafficPerByte = ncclFuncTrafficPerByte(task->func, comm->nRanks);
@@ -1015,10 +983,8 @@ static ncclResult_t scheduleCollTasksToPlan(
         // Coverity reports "proxyOp->connection" as being possibly uninitialized.  It's hard to
         // determine if that's actually true but it's also not clear if that would be an issue.
         // coverity[uninit_use_in_call:FALSE]
-        if (task->func != ncclFuncAllToAllGda) {
-            NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
-            NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, proxyOp));
-        }
+        NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
+        NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, proxyOp));
       }
     }
 
@@ -1049,12 +1015,6 @@ static ncclResult_t scheduleCollTasksToPlan(
             // Debug mode or fallback
             plan->kernelFn          = ncclKerns[kernelIdx].kernelFn;
             plan->kernelSpecialized = ncclKerns[kernelIdx].specialized;
-#ifndef BUILD_GENERIC_KERNELS
-            if (plan->kernelFn == nullptr) {
-                WARN("Generic kernels are disabled but required for this code path. Please rebuild RCCL with -DBUILD_GENERIC_KERNELS=ON");
-                return ncclInvalidUsage;
-            }
-#endif
         }
     }
 
@@ -1403,12 +1363,6 @@ static ncclResult_t scheduleP2pTasksToPlan(
   if (!plan->kernelSpecialized) {
     plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
     plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
-#ifndef BUILD_GENERIC_KERNELS
-    if (plan->kernelFn == nullptr) {
-      WARN("Generic kernels are disabled but required for this code path. Please rebuild RCCL with -DBUILD_GENERIC_KERNELS=ON");
-      return ncclInvalidUsage;
-    }
-#endif
   }
 
   // Compute how much to split operations
@@ -1674,8 +1628,8 @@ static ncclResult_t hostStreamPlanTask(struct ncclComm* comm, struct ncclKernelP
   NCCLCHECK(ncclProfilerStartGroupEvent(plan));
   NCCLCHECK(ncclProfilerStartTaskEvents(plan));
   if (ncclIntruQueueHead(&plan->proxyOpQueue)) {
-    	NCCLCHECK(uploadProxyOps(comm, plan));
-    	NCCLCHECK(ncclProxyStart(comm));
+    NCCLCHECK(uploadProxyOps(comm, plan));
+    NCCLCHECK(ncclProxyStart(comm));
   }
   NCCLCHECK(ncclProfilerStopTaskEvents(plan));
   NCCLCHECK(ncclProfilerStopGroupEvent(plan));
@@ -1954,7 +1908,6 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     comm->lastStream = planner->streams->stream;
     CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
-
     latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
     return ncclSuccess;
   }
@@ -2190,7 +2143,7 @@ static ncclResult_t updateCollCostTable(
     float** collCostTable) {
   float (*table)[NCCL_NUM_PROTOCOLS] = (float (*)[NCCL_NUM_PROTOCOLS])collCostTable;
 
-  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot || info->func == ncclFuncAllToAllGda) {
+  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot) {
     table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = 0.0;
     return ncclSuccess;
   }
@@ -2492,9 +2445,6 @@ static ncclResult_t calcCollChunking(
       ncclPatternRing;
     break;
   case ncclFuncAllToAllPivot:
-    pattern = ncclPatternRing;
-    break;
-  case ncclFuncAllToAllGda:
     pattern = ncclPatternRing;
     break;
   case ncclFuncAllReduce:
@@ -2919,7 +2869,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->root = info->root;
       t->datatype = info->datatype;
       size_t elementSize = ncclTypeSize(t->datatype);
-      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot || t->func == ncclFuncAllToAllGda) {
+      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot) {
         t->count *= elementSize;
         t->datatype = ncclInt8;
         elementSize = 1;

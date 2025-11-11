@@ -8,15 +8,7 @@
 #include "collectives.h"
 #include "primitives.h"
 
-// Use named namespace in self-contained mode to avoid conflicts with other headers
-// Use anonymous namespace in RDC mode for internal linkage (faster linking)
-#ifdef NCCL_DEFINE_SHMEM
-namespace broadcast_impl {
-#define BROADCAST_IMPL broadcast_impl::
-#else
 namespace {
-#define BROADCAST_IMPL
-#endif
   template<typename T, typename RedOp, typename Proto>
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #if defined(ENABLE_NPKIT)
@@ -123,20 +115,20 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
     using Proto = ProtoSimple<BROADCAST_CHUNKSTEPS/BROADCAST_SLICESTEPS, BROADCAST_SLICESTEPS>;
-    BROADCAST_IMPL runRing<T, RedOp, Proto>(tid, nthreads, work);
+    runRing<T, RedOp, Proto>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    BROADCAST_IMPL runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    BROADCAST_IMPL runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };

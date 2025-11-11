@@ -62,7 +62,6 @@ extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_4[];
 
 // Type-specific caller functions are defined inline in device_table.h
 
-#ifdef BUILD_GENERIC_KERNELS
 // Generic kernel that dispatches to type-specific device functions
 // This avoids the need for a 1000+ entry generic function table
 // by dispatching to smaller type-specific tables at runtime
@@ -192,7 +191,6 @@ __launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernelDebug_Gener
 __launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage) {
   ncclKernelMain<-1, RunWorkNop, GenericDispatcher_4, /*COLLTRACE*/ true, /*Unroll*/ 4>(&argsStorage.args);
 }
-#endif // ENABLE_COLLTRACE
-#endif // BUILD_GENERIC_KERNELS
+#endif
 
 __device__ void ncclDevFunc_Nop();

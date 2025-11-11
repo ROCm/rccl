@@ -8,15 +8,7 @@
 #include "collectives.h"
 #include "primitives.h"
 
-// Use named namespace in self-contained mode to avoid conflicts with other headers
-// Use anonymous namespace in RDC mode for internal linkage (faster linking)
-#ifdef NCCL_DEFINE_SHMEM
-namespace alltoall_impl {
-#define ALLTOALL_IMPL alltoall_impl::
-#else
 namespace {
-#define ALLTOALL_IMPL
-#endif
   template<typename T, typename RedOp, typename Proto>
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
     const int bid = ncclShmem.channelId - work->channelLo;
@@ -82,6 +74,6 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllToAllPivot, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nThreads, struct ncclDevWorkColl* work) {
     using Proto = ProtoSimple<ALLTOALL_PIVOT_CHUNKSTEPS/ALLTOALL_PIVOT_SLICESTEPS, ALLTOALL_PIVOT_SLICESTEPS>;
-    ALLTOALL_IMPL runRing<T, RedOp, Proto>(tid, nThreads, work);
+    runRing<T, RedOp, Proto>(tid, nThreads, work);
   }
 };

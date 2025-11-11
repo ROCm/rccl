@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass
 
 # Order of colls, redops, tys, protos, algos must match src/include/device.h
-all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot", "AllToAllGda"]
+all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
 all_redops    = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys       = ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos    = ["LL","LL128","SIMPLE"]
@@ -74,13 +74,12 @@ is_ifc             = 1 if sys.argv[2] == "ON" else 0
 is_colltrace       = 1 if sys.argv[3] == "ON" else 0
 is_msccl_kernels   = 1 if sys.argv[4] == "ON" else 0
 is_local_arch_only = 1 if sys.argv[5] == "ON" else 0
-is_generic_kernels = 1 if sys.argv[6] == "ON" else 0
 
-func_pattern = sys.argv[7:8]
+func_pattern = sys.argv[6:7]
 if func_pattern and func_pattern[0]:
   func_pattern = func_pattern[0]
 else:
-  func_pattern = "AllGather|AllReduce|AllToAllPivot|AllToAllGda|Broadcast|Reduce|ReduceScatter|SendRecv"
+  func_pattern = "AllGather|AllReduce|AllToAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
 
 ################################################################################
 
@@ -88,7 +87,6 @@ algos_of_coll = {
   "AllGather":             ["RING", "PAT"],
   "AllReduce":             ["RING", "TREE"],
   "AllToAllPivot":         ["RING"],
-  "AllToAllGda":           ["RING"],
   "Broadcast":             ["RING"],
   "Reduce":                ["RING"],
   "ReduceScatter":         ["RING", "PAT"],
@@ -99,7 +97,6 @@ protos_of_coll = {
   "AllGather":              all_protos,
   "AllReduce":              all_protos,
   "AllToAllPivot":          ["SIMPLE"],
-  "AllToAllGda":            ["SIMPLE"],
   "Broadcast":              all_protos,
   "Reduce":                 all_protos,
   "ReduceScatter":          all_protos,
@@ -110,7 +107,6 @@ redops_of_coll = {
   "AllGather":            ["Sum"],
   "AllReduce":            all_redops,
   "AllToAllPivot":        ["Sum"],
-  "AllToAllGda":          ["Sum"],
   "Broadcast":            ["Sum"],
   "Reduce":               all_redops,
   "ReduceScatter":        all_redops,
@@ -121,7 +117,6 @@ tys_of_coll = {
   "AllGather":             ["i8"],
   "AllReduce":             all_tys,
   "AllToAllPivot":         ["i8"],
-  "AllToAllGda":           ["i8"],
   "Broadcast":             ["i8"],
   "Reduce":                all_tys,
   "ReduceScatter":         all_tys,
@@ -132,7 +127,6 @@ acc_of_coll = {
   "AllGather":             ["0"],
   "AllReduce":             all_accs,
   "AllToAllPivot":         ["0"],
-  "AllToAllGda":           ["0"],
   "Broadcast":             ["0"],
   "Reduce":                ["0"],
   "ReduceScatter":         ["0"],
@@ -143,7 +137,6 @@ pipelines_of_coll = {
   "AllGather":             ["0"],
   "AllReduce":             all_pipelines,
   "AllToAllPivot":         ["0"],
-  "AllToAllGda":           ["0"],
   "Broadcast":             ["0"],
   "Reduce":                all_pipelines,
   "ReduceScatter":         all_pipelines,
@@ -155,7 +148,6 @@ coll_camel_to_lower = {
   "AllGather":             "all_gather",
   "AllReduce":             "all_reduce",
   "AllToAllPivot":         "alltoall_pivot",
-  "AllToAllGda":           "alltoall_gda",
   "Broadcast":             "broadcast",
   "Reduce":                "reduce",
   "ReduceScatter":         "reduce_scatter",
@@ -601,7 +593,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
       )
       if fn.coll == "Broadcast":
         key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 8))
-      if fn.coll in ["SendRecv", "AllToAllPivot", "AllToAllGda"]:
+      if fn.coll in ["SendRecv", "AllToAllPivot"]:
         key = ((coll_idx & 0x3F))
       
       out(f'  {{{key}, {fn_id}}}, {comment}\n')
@@ -653,37 +645,30 @@ ty_to_cxx = {
 }
 
 # Generate each <gensrc>/<impl>.cpp:
-# NOTE: Device functions for types in all_tys are now generated INLINE in kernels_<type>.cu.cpp
-# to enable self-contained compilation units without -fgpu-rdc.
-# We still generate these files for backward compatibility with generic kernels,
-# but they are NOT needed when using type-specific self-contained kernels.
-if is_generic_kernels:
-  for name in name_to_funcs.keys():
-    (coll, fns) = name_to_funcs[name]
-    with open(os.path.join(gensrc, name), "w") as f:
-      print("-- Generating %s (for generic kernel support)" % os.path.join(gensrc, name))
+for name in name_to_funcs.keys():
+  (coll, fns) = name_to_funcs[name]
+  with open(os.path.join(gensrc, name), "w") as f:
+    print("-- Generating %s" % os.path.join(gensrc, name))
 
-      out = f.write
+    out = f.write
+    out(
+      '#include "common.h"\n'
+      '#include "{lower_coll}.h"\n'
+      .format(lower_coll=coll_camel_to_lower[coll])
+    )
+
+    for fn in fns:
+      sym = paste("_", fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, fn.unroll)
+      guard = get_arch_guard(fn)
+      if guard:
+        out("#if %s\n" % guard)
       out(
-        '#include "common.h"\n'
-        '#include "{lower_coll}.h"\n'
-        .format(lower_coll=coll_camel_to_lower[coll])
+        "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {acc}, {pipeline}, {unroll})\n"
+        .format(sym=sym, coll=fn.coll, redop_cxx=redop_to_cxx[fn.redop], ty_cxx=ty_to_cxx[fn.ty],
+                algo=(fn.algo or "RING"), proto=(fn.proto or "SIMPLE"), acc=fn.acc, pipeline=fn.pipeline, unroll=fn.unroll)
       )
-
-      for fn in fns:
-        sym = paste("_", fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, fn.unroll)
-        guard = get_arch_guard(fn)
-        if guard:
-          out("#if %s\n" % guard)
-        out(
-          "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {acc}, {pipeline}, {unroll})\n"
-          .format(sym=sym, coll=fn.coll, redop_cxx=redop_to_cxx[fn.redop], ty_cxx=ty_to_cxx[fn.ty],
-                  algo=(fn.algo or "RING"), proto=(fn.proto or "SIMPLE"), acc=fn.acc, pipeline=fn.pipeline, unroll=fn.unroll)
-        )
-        if guard: 
-          out("#endif\n")
-else:
-  print("-- Skipping separate collectives files (device functions are bundled in type-specific kernels)")
+      if guard: 
+        out("#endif\n")
 
 # Generate each <gensrc>/<msccl_impl>.cpp
 if is_msccl_kernels:
@@ -700,253 +685,71 @@ if is_msccl_kernels:
             .format(redop=redop, ty_cxx=ty_to_cxx[ty])
           )
 
-# Map collective names to their header files
-coll_to_header = {
-  "AllGather": "all_gather.h",
-  "AllReduce": "all_reduce.h",
-  "AllToAllPivot": "alltoall_pivot.h",
-  "Broadcast": "broadcast.h",
-  "Reduce": "reduce.h",
-  "ReduceScatter": "reduce_scatter.h",
-  "SendRecv": "sendrecv.h"
-}
-
 # Generate type-specific kernel compilation units
-# When generic kernels are DISABLED (is_generic_kernels=0):
-#   - Generate SELF-CONTAINED kernels with inline device functions
-#   - Enables compilation WITHOUT -fgpu-rdc for parallel device linking
-# When generic kernels are ENABLED (is_generic_kernels=1):
-#   - Generate minimal kernel files that reference external device functions
-#   - Requires -fgpu-rdc for cross-module device function calls
-if is_generic_kernels:
-  print("-- Generating type-specific kernel files (with RDC, references external functions)")
-else:
-  print("-- Generating type-specific kernel files (SELF-CONTAINED, no RDC)")
-
+print("-- Generating type-specific kernel files")
 for ty in all_tys:
   with open(os.path.join(gensrc, f"kernels_{ty}.cu.cpp"), "w") as f:
     print(f"-- Generating {os.path.join(gensrc, f'kernels_{ty}.cu.cpp')}")
     out = f.write
     
-    # Determine which collectives this type actually uses
-    ty_funcs = funcs_by_type.get(ty, [])
-    used_colls = set(fn.coll for fn in ty_funcs)
-    
-    # When generic kernels are DISABLED, generate self-contained kernels
-    # that don't need -fgpu-rdc for cross-module linking
-    if not is_generic_kernels:
-      # Define NCCL_DEFINE_SHMEM before including common.h to get definitions
-      # instead of extern declarations (required for self-contained compilation without -fgpu-rdc)
-      out('#define NCCL_DEFINE_SHMEM 1\n\n')
-      
-      out('#include "device.h"\n')
-      out('#include "collectives.h"\n')
-      out('#include "common.h"\n')
-      
-      # Only include headers for collectives that this type actually uses
-      # This avoids conflicts between headers that have functions with the same name
-      out(f'// Headers for collectives used by type {ty}: {", ".join(sorted(used_colls))}\n')
-      for coll in sorted(used_colls):
-        if coll in coll_to_header:
-          out(f'#include "{coll_to_header[coll]}"\n')
-      out('\n')
-    else:
-      # RDC mode: same structure as before optional generic kernels
-      out('#include "device.h"\n')
-      out('#include "collectives.h"\n')
-      out('#include "common.h"\n\n')
-      out('extern __shared__ ncclShmemData ncclShmem;\n')
-      out('\n')
-    
+    out('#include "device.h"\n')
+    out('#include "collectives.h"\n')
+    out('#include "common.h"\n\n')
+    out('extern __shared__ ncclShmemData ncclShmem;\n')
+    out('\n')
     out('// Nop work batch for type-specific kernels\n')
     out('struct RunWorkNop {\n')
     out('  __device__ void run() {}\n')
     out('};\n')
     out('\n')
     
-    # When generic kernels are DISABLED, generate SELF-CONTAINED kernels
-    # with inline device function definitions for parallel device linking without -fgpu-rdc
-    if not is_generic_kernels:
-      out(f'// ============================================================================\n')
-      out(f'// SELF-CONTAINED type-specific compilation unit for {ty}\n')
-      out(f'// Contains: all device functions, function tables, dispatcher, and kernels\n')
-      out(f'// This enables compilation without -fgpu-rdc for parallel device linking\n')
-      out(f'// ============================================================================\n\n')
-      
-      # Define macro to redirect function table calls
-      out(f'#define ncclDevFuncTable_1 ncclDevFuncTable_{ty}_1\n')
-      out(f'#define ncclDevFuncTable_2 ncclDevFuncTable_{ty}_2\n')
-      out(f'#define ncclDevFuncTable_4 ncclDevFuncTable_{ty}_4\n')
-      out(f'#define NCCL_CALL_FUNCTIONS_1 NCCL_CALL_FUNCTIONS_{ty}_1\n')
-      out(f'#define NCCL_CALL_FUNCTIONS_2 NCCL_CALL_FUNCTIONS_{ty}_2\n')
-      out(f'#define NCCL_CALL_FUNCTIONS_4 NCCL_CALL_FUNCTIONS_{ty}_4\n\n')
-      
-      # =========================================================================
-      # SECTION 1: Define ALL device functions for this type INLINE
-      # This is the key change - functions are now defined HERE, not in separate files
-      # =========================================================================
-      out(f'// ----------------------------------------------------------------------------\n')
-      out(f'// Device function definitions for type {ty}\n')
-      out(f'// ----------------------------------------------------------------------------\n\n')
-      
-      # ty_funcs was already calculated above for header selection
+    out(f'// Type-specific kernels for {ty}\n')
+    out(f'// These use ncclDevFuncTable_{ty}_1/2/4 instead of generic tables\n\n')
+    
+    # Define macro to redirect function table calls
+    out(f'#define ncclDevFuncTable_1 ncclDevFuncTable_{ty}_1\n')
+    out(f'#define ncclDevFuncTable_2 ncclDevFuncTable_{ty}_2\n')
+    out(f'#define ncclDevFuncTable_4 ncclDevFuncTable_{ty}_4\n')
+    out(f'#define NCCL_CALL_FUNCTIONS_1 NCCL_CALL_FUNCTIONS_{ty}_1\n')
+    out(f'#define NCCL_CALL_FUNCTIONS_2 NCCL_CALL_FUNCTIONS_{ty}_2\n')
+    out(f'#define NCCL_CALL_FUNCTIONS_4 NCCL_CALL_FUNCTIONS_{ty}_4\n\n')
+    
+    # Define the type-specific function tables
+    ty_funcs = funcs_by_type.get(ty, [])
+    for unroll in all_unrolls:
+      index_ty = 0
+      out(f'__device__ ncclDevFuncPtr_t const ncclDevFuncTable_{ty}_{unroll}[] = {{\n')
       for fn in ty_funcs:
-        sym = paste("_", fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, fn.unroll)
+        if fn.unroll != unroll: continue
+        sym = paste("_", "ncclDevFunc", *fn)
         guard = get_arch_guard(fn)
         if guard:
-          out("#if %s\n" % guard)
-        out(
-          "DEFINE_ncclDevFunc({sym}, ncclFunc{coll}, {redop_cxx}, {ty_cxx}, NCCL_ALGO_{algo}, NCCL_PROTO_{proto}, {acc}, {pipeline}, {unroll})\n"
-          .format(sym=sym, coll=fn.coll, redop_cxx=redop_to_cxx[fn.redop], ty_cxx=ty_to_cxx[fn.ty],
-                  algo=(fn.algo or "RING"), proto=(fn.proto or "SIMPLE"), acc=fn.acc, pipeline=fn.pipeline, unroll=fn.unroll)
-        )
-        if guard: 
-          out("#endif\n")
-      out('\n')
-      
-      # =========================================================================
-      # SECTION 2: Define the type-specific function tables
-      # =========================================================================
-      out(f'// ----------------------------------------------------------------------------\n')
-      out(f'// Function tables for type {ty}\n')
-      out(f'// ----------------------------------------------------------------------------\n\n')
-      
-      for unroll in all_unrolls:
-        index_ty = 0
-        out(f'__device__ ncclDevFuncPtr_t const ncclDevFuncTable_{ty}_{unroll}[] = {{\n')
-        for fn in ty_funcs:
-          if fn.unroll != unroll: continue
-          sym = paste("_", "ncclDevFunc", *fn)
-          guard = get_arch_guard(fn)
-          if guard:
-            out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index_ty, sym, index_ty))
-          else:
-            out("/*%4d*/ %s,\n" % (index_ty, sym))
-          index_ty += 1
-        out("nullptr};\n")
-        out("\n")
-      
-      # =========================================================================
-      # SECTION 3: Generate type-specific NCCL_CALL_FUNCTIONS
-      # These are generated inline instead of from device_table.h for self-contained mode
-      # =========================================================================
-      out(f'// ----------------------------------------------------------------------------\n')
-      out(f'// NCCL_CALL_FUNCTIONS for type {ty} (inline for self-contained mode)\n')
-      out(f'// ----------------------------------------------------------------------------\n\n')
-      
-      for unroll in all_unrolls:
-        # Count functions for this type and unroll
-        ty_count = sum(1 for fn in ty_funcs if fn.unroll == unroll)
-        if ty_count == 0:
-          # Generate empty stub for types with no functions
-          out(f"static __forceinline__ __device__ void NCCL_CALL_FUNCTIONS_{ty}_{unroll}(unsigned short globalFuncId) noexcept {{\n")
-          out("  // No functions for this type+unroll combination\n")
-          out("}\n\n")
-          continue
-        
-        # Generate inline function that maps global funcId to local index
-        out(f"static __forceinline__ __device__ void NCCL_CALL_FUNCTIONS_{ty}_{unroll}(unsigned short globalFuncId) noexcept {{\n")
-        out("  unsigned short localIndex = 0;\n")
-        out("  switch(globalFuncId) {\n")
-        
-        # Build the mapping for this type+unroll
-        local_idx = 0
-        for fn in ty_funcs:
-          if fn.unroll != unroll:
-            continue
-          # Calculate the global funcId for this function
-          global_id = primary_to_index[Fn(*equivalent_primary(*fn))]
-          out(f"    case {global_id}: localIndex = {local_idx}; break;\n")
-          local_idx += 1
-        
-        out("    default: localIndex = 0; break;\n")
-        out("  }\n")
-        # Call the function from the table
-        out(f"  if (localIndex < {ty_count}) {{\n")
-        out(f"    ncclDevFuncTable_{ty}_{unroll}[localIndex]();\n")
-        out("  }\n")
-        out("}\n\n")
-      
-      # =========================================================================
-      # SECTION 4: Generate type-specific dispatcher
-      # =========================================================================
-      out(f'// ----------------------------------------------------------------------------\n')
-      out(f'// Dispatcher for type {ty}\n')
-      out(f'// ----------------------------------------------------------------------------\n\n')
-      
-      out(f'struct Dispatcher_{ty} {{\n')
-      out('    static __device__ __forceinline__ void dispatch(int funcId, int unroll) {\n')
-      out('        // NCCL_CALL_FUNCTIONS handles both direct and indirect paths internally\n')
-      out('        if (unroll == 1)\n')
-      out(f'            NCCL_CALL_FUNCTIONS_{ty}_1(funcId);\n')
-      out('        else if (unroll == 2)\n')
-      out(f'            NCCL_CALL_FUNCTIONS_{ty}_2(funcId);\n')
-      out('        else\n')
-      out(f'            NCCL_CALL_FUNCTIONS_{ty}_4(funcId);\n')
-      out('    }\n')
-      out('};\n\n')
-      
-      # =========================================================================
-      # SECTION 5: Generate kernel entry points (self-contained mode)
-      # =========================================================================
-      out(f'// ----------------------------------------------------------------------------\n')
-      out(f'// Kernel entry points for type {ty}\n')
-      out(f'// ----------------------------------------------------------------------------\n\n')
-      
-      for unroll in all_unrolls:
-        out(f'__launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernel_{ty}_{unroll}(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {{\n')
-        out(f'  ncclKernelMain<-1, RunWorkNop, Dispatcher_{ty}, /*COLLTRACE*/false, /*Unroll*/{unroll}>(&args4K.args);\n')
-        out('}\n\n')
+          out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index_ty, sym, index_ty))
+        else:
+          out("/*%4d*/ %s,\n" % (index_ty, sym))
+        index_ty += 1
+      out("nullptr};\n")
+      out("\n")
     
-    else:
-      # When generic kernels are ENABLED, generate kernel files same as before
-      # we made generic kernels optional (original RDC mode behavior)
-      out(f'// Type-specific kernels for {ty}\n')
-      out(f'// These use ncclDevFuncTable_{ty}_1/2/4 instead of generic tables\n\n')
-      
-      # Define macro to redirect function table calls (original behavior)
-      out(f'#define ncclDevFuncTable_1 ncclDevFuncTable_{ty}_1\n')
-      out(f'#define ncclDevFuncTable_2 ncclDevFuncTable_{ty}_2\n')
-      out(f'#define ncclDevFuncTable_4 ncclDevFuncTable_{ty}_4\n')
-      out(f'#define NCCL_CALL_FUNCTIONS_1 NCCL_CALL_FUNCTIONS_{ty}_1\n')
-      out(f'#define NCCL_CALL_FUNCTIONS_2 NCCL_CALL_FUNCTIONS_{ty}_2\n')
-      out(f'#define NCCL_CALL_FUNCTIONS_4 NCCL_CALL_FUNCTIONS_{ty}_4\n\n')
-      
-      # Define the type-specific function tables
-      for unroll in all_unrolls:
-        index_ty = 0
-        out(f'__device__ ncclDevFuncPtr_t const ncclDevFuncTable_{ty}_{unroll}[] = {{\n')
-        for fn in ty_funcs:
-          if fn.unroll != unroll: continue
-          sym = paste("_", "ncclDevFunc", *fn)
-          guard = get_arch_guard(fn)
-          if guard:
-            out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index_ty, sym, index_ty))
-          else:
-            out("/*%4d*/ %s,\n" % (index_ty, sym))
-          index_ty += 1
-        out("nullptr};\n")
-        out("\n")
-      
-      # Caller templates and NCCL_CALL_FUNCTIONS are now defined inline in the header
-      
-      # Generate type-specific dispatcher for this type
-      out(f'// Type-specific dispatcher for {ty} - calls only {ty} functions\n')
-      out(f'struct Dispatcher_{ty} {{\n')
-      out('    static __device__ __forceinline__ void dispatch(int funcId, int unroll) {\n')
-      out('        // NCCL_CALL_FUNCTIONS handles both direct and indirect paths internally\n')
-      out('        if (unroll == 1)\n')
-      out(f'            NCCL_CALL_FUNCTIONS_{ty}_1(funcId);\n')
-      out('        else if (unroll == 2)\n')
-      out(f'            NCCL_CALL_FUNCTIONS_{ty}_2(funcId);\n')
-      out('        else\n')
-      out(f'            NCCL_CALL_FUNCTIONS_{ty}_4(funcId);\n')
-      out('    }\n')
-      out('};\n\n')
-      
-      # Generate kernel definitions for this type
-      # The macros NCCL_CALL_FUNCTIONS_1/2/4 are already defined above to point to type-specific versions
-      for unroll in all_unrolls:
-        out(f'__launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernel_{ty}_{unroll}(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {{\n')
-        out(f'  ncclKernelMain<-1, RunWorkNop, Dispatcher_{ty}, /*COLLTRACE*/false, /*Unroll*/{unroll}>(&args4K.args);\n')
-        out('}\n\n')
+    # Caller templates and NCCL_CALL_FUNCTIONS are now defined inline in the header
+    
+    # Generate type-specific dispatcher for this type
+    out(f'// Type-specific dispatcher for {ty} - calls only {ty} functions\n')
+    out(f'struct Dispatcher_{ty} {{\n')
+    out('    static __device__ __forceinline__ void dispatch(int funcId, int unroll) {\n')
+    out('        // NCCL_CALL_FUNCTIONS handles both direct and indirect paths internally\n')
+    out('        if (unroll == 1)\n')
+    out(f'            NCCL_CALL_FUNCTIONS_{ty}_1(funcId);\n')
+    out('        else if (unroll == 2)\n')
+    out(f'            NCCL_CALL_FUNCTIONS_{ty}_2(funcId);\n')
+    out('        else\n')
+    out(f'            NCCL_CALL_FUNCTIONS_{ty}_4(funcId);\n')
+    out('    }\n')
+    out('};\n\n')
+    
+    # Generate kernel definitions for this type
+    # The macros NCCL_CALL_FUNCTIONS_1/2/4 are already defined above to point to type-specific versions
+    for unroll in all_unrolls:
+      out(f'__launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernel_{ty}_{unroll}(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {{\n')
+      out(f'  ncclKernelMain<-1, RunWorkNop, Dispatcher_{ty}, /*COLLTRACE*/false, /*Unroll*/{unroll}>(&args4K.args);\n')
+      out('}\n\n')

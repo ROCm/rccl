@@ -9,15 +9,7 @@
 #include "collectives.h"
 #include "primitives.h"
 
-// Use named namespace in self-contained mode to avoid conflicts with other headers
-// Use anonymous namespace in RDC mode for internal linkage (faster linking)
-#ifdef NCCL_DEFINE_SHMEM
-namespace allgather_impl {
-#define ALLGATHER_IMPL allgather_impl::
-#else
 namespace {
-#define ALLGATHER_IMPL
-#endif
   template<typename T, typename RedOp, typename Proto, bool isNetOffload = false>
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #if defined(ENABLE_NPKIT)
@@ -191,13 +183,13 @@ namespace {
 #if defined(__gfx942__) || defined(__gfx950__) // Use a single slice per simple primitive for a single node on some GFX9 devices.
 #define rcclAllGatherRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
-    ALLGATHER_IMPL runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS_SINGLE_NODE, ALLGATHER_SLICESTEPS_SINGLE_NODE>, false>(tid, nthreads, work); \
+    runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS_SINGLE_NODE, ALLGATHER_SLICESTEPS_SINGLE_NODE>, false>(tid, nthreads, work); \
   } else{ \
-    ALLGATHER_IMPL runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS>, false>(tid, nthreads, work); \
+    runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS>, false>(tid, nthreads, work); \
   }
 #else
 #define rcclAllGatherRunRingSimpleProtoImpl(tid, nthreads, work) \
-  ALLGATHER_IMPL runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS>, false>(tid, nthreads, work);
+  runRing<T, RedOp, ProtoSimple<ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS>, false>(tid, nthreads, work);
 #endif
 
 template<typename T, typename RedOp>
@@ -209,7 +201,7 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
     bool isNetOffload = work->isOneRPN && work->netRegUsed;
 #endif
     if (isNetOffload)
-      ALLGATHER_IMPL runRing<T, RedOp, ProtoSimple<1, 1>, true>(tid, nthreads, work);
+      runRing<T, RedOp, ProtoSimple<1, 1>, true>(tid, nthreads, work);
     else{
       rcclAllGatherRunRingSimpleProtoImpl(tid, nthreads, work);
     }
@@ -219,14 +211,14 @@ struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    ALLGATHER_IMPL runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllGather, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    ALLGATHER_IMPL runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };
 

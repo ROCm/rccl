@@ -9,15 +9,7 @@
 #include "collectives.h"
 #include "primitives.h"
 
-// Use named namespace in self-contained mode to avoid conflicts with other headers
-// Use anonymous namespace in RDC mode for internal linkage (faster linking)
-#ifdef NCCL_DEFINE_SHMEM
-namespace reducescatter_impl {
-#define REDUCESCATTER_IMPL reducescatter_impl::
-#else
 namespace {
-#define REDUCESCATTER_IMPL
-#endif
   template<typename T, typename RedOp, typename Proto>
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #ifdef ENABLE_WARP_SPEED
@@ -148,15 +140,15 @@ namespace {
 #define rcclReduceScatterRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<REDUCESCATTER_CHUNKSTEPS/REDUCESCATTER_SLICESTEPS_SINGLE_NODE, REDUCESCATTER_SLICESTEPS_SINGLE_NODE>; \
-    REDUCESCATTER_IMPL runRing<T, RedOp, Proto>(tid, nthreads, work); \
+    runRing<T, RedOp, Proto>(tid, nthreads, work); \
   } else{ \
     using Proto = ProtoSimple<REDUCESCATTER_CHUNKSTEPS/REDUCESCATTER_SLICESTEPS, REDUCESCATTER_SLICESTEPS>; \
-    REDUCESCATTER_IMPL runRing<T, RedOp, Proto>(tid, nthreads, work); \
+    runRing<T, RedOp, Proto>(tid, nthreads, work); \
   }
 #else
 #define rcclReduceScatterRunRingSimpleProtoImpl(tid, nthreads, work) \
   using Proto = ProtoSimple<REDUCESCATTER_CHUNKSTEPS/REDUCESCATTER_SLICESTEPS, REDUCESCATTER_SLICESTEPS>; \
-  REDUCESCATTER_IMPL runRing<T, RedOp, Proto>(tid, nthreads, work);
+  runRing<T, RedOp, Proto>(tid, nthreads, work);
 #endif
 
 template<typename T, typename RedOp>
@@ -169,14 +161,14 @@ struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_S
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    REDUCESCATTER_IMPL runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    REDUCESCATTER_IMPL runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };
 

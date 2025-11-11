@@ -13,15 +13,7 @@
 #include "npkit/npkit.h"
 #endif
 
-// Use named namespace in self-contained mode to avoid conflicts with other headers
-// Use anonymous namespace in RDC mode for internal linkage (faster linking)
-#ifdef NCCL_DEFINE_SHMEM
-namespace allreduce_impl {
-#define ALLREDUCE_IMPL allreduce_impl::
-#else
 namespace {
-#define ALLREDUCE_IMPL
-#endif
   template<typename T, typename RedOp, typename Proto, int RCCLMetadata>
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #ifdef ENABLE_WARP_SPEED
@@ -570,16 +562,16 @@ namespace {
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   if(work->rcclUseOneSlice){ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS_SINGLE_NODE, ALLREDUCE_SLICESTEPS_SINGLE_NODE>; \
-    ALLREDUCE_IMPL runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
+    runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
   } \
   else{ \
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>; \
-    ALLREDUCE_IMPL runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
+    runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work); \
   }
 #else
 #define rcclAllReduceRunRingSimpleProtoImpl(tid, nthreads, work) \
   using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS>; \
-  ALLREDUCE_IMPL runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work);
+  runRing<T, RedOp, Proto, RCCL_METADATA_EMPTY>(tid, nthreads, work);
 #endif
 
 template<typename T, typename RedOp>
@@ -594,15 +586,15 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_SIMPL
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
     using Proto = ProtoSimple<1, 1>;
     if (work->acc != nullptr) {
-      ALLREDUCE_IMPL runTreeSplit<T, RedOp, Proto>(tid, nthreads, work);
+      runTreeSplit<T, RedOp, Proto>(tid, nthreads, work);
     } else {
-      ALLREDUCE_IMPL runTreeUpDown<T, RedOp, Proto>(tid, nthreads, work);
+      runTreeUpDown<T, RedOp, Proto>(tid, nthreads, work);
     }
     // Check-here
     // #if CUDART_VERSION >= 11020 && CUDART_VERSION < 11040 && __CUDA_ARCH__ >= 800
-    //   ALLREDUCE_IMPL runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
+    //   runTreeUpDown<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
     // #else
-    //   ALLREDUCE_IMPL runTreeSplit<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
+    //   runTreeSplit<T, RedOp, ProtoSimple<1, 1>>(tid, nthreads, work);
     // #endif
   }
 };
@@ -1113,27 +1105,27 @@ struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_COLLNET_CHAIN, NCCL_PR
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    ALLREDUCE_IMPL runRing<T, RedOp, ProtoLL, RCCL_METADATA_EMPTY>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL, RCCL_METADATA_EMPTY>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    ALLREDUCE_IMPL runTreeSplit<T, RedOp, ProtoLL>(tid, nthreads, work);
+    runTreeSplit<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    ALLREDUCE_IMPL runRing<T, RedOp, ProtoLL128, RCCL_METADATA_EMPTY>(tid, nthreads, work);
+    runRing<T, RedOp, ProtoLL128, RCCL_METADATA_EMPTY>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_TREE, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    ALLREDUCE_IMPL runTreeSplit<T, RedOp, ProtoLL128>(tid, nthreads, work);
+    runTreeSplit<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };
