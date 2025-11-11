@@ -51,6 +51,7 @@ class Primitives<
   int index; // Peer index I'm responsible for
   int flags;
   const int group;
+  const int threadsPerBlock;
   uint64_t step;
   struct ncclConnInfo* conn = NULL;
   struct ncclConnFifo* connFifo = NULL;
@@ -757,7 +758,7 @@ public:
       struct ncclDevWorkP2p* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
     ):
     tid(tid), tidInBlock(threadIdx.x), nthreads(nthreads), /*compiler warnings*/
-    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_), group(group) {
+    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_), group(group), threadsPerBlock(blockDim.x){
 
     barriers = &ncclShmem.groups[group].barrier;
     // PAT uses the same barrier for each group
@@ -875,7 +876,7 @@ public:
       patBarrier();
     }
     if(collWork){
-      skip_fence = !collWork -> gfx942CheapFenceOff;
+      skip_fence = !collWork -> gfx9CheapFenceOff;
     }
   }
 
@@ -1336,8 +1337,5 @@ public:
   }
   __device__ __forceinline__ void localCopy(T* srcs, T* dsts, int eltN) {
     return mscclGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
-  }
-  __device__ __forceinline__ void mscclSend(intptr_t inpIx, int eltN) {
-    genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
 };

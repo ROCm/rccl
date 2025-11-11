@@ -57,6 +57,7 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_family }}
+      artifact_group: ${{ matrix.amdgpu_family }}
       extra_cmake_options: >
         -DTHEROCK_ENABLE_ALL=OFF 
         -DTHEROCK_BUILD_TESTING=ON 

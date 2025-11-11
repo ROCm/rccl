@@ -77,7 +77,8 @@ constexpr int rcclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSi
 
 /* Copy of ncclShmemDynamicSize */
 constexpr int rcclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH, int WarpSize = 32) {
-  return cudaArch < 700 ? 0 : rcclShmemScratchWarpSize(cudaArch, WarpSize)*(NCCL_MAX_NTHREADS/WarpSize);
+  const int maxNthreads = (cudaArch == 950) ? RCCL_GFX950_MAX_NTHREADS : RCCL_DEFAULT_MAX_NTHREADS;
+  return cudaArch < 700 ? 0 : rcclShmemScratchWarpSize(cudaArch, WarpSize)*(maxNthreads/WarpSize);
 }
 
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
@@ -190,7 +191,7 @@ static void addWorkBatchToPlan(
     // batch further down.
     newBatch |= NCCL_MAX_DEV_WORK_BATCH_BYTES < chan->wipBatch.workBytes + workSize;
     if (workType == ncclDevWorkTypeP2p) {
-      newBatch |= (comm->nNodes > 2 && batchP2P)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
+      newBatch |= (comm->nNodes > 2 && batchP2P && comm->nNodes <= 32)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
       for (int i=0; i < chan->wipBatch.nP2ps; i++) {
         newBatch |= p2pRound == chan->wipBatch.p2pRounds[i];
       }
@@ -241,8 +242,10 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   size_t workBytes = plan->workBytes;
   size_t batchBytes = plan->nWorkBatches*sizeof(struct ncclDevWorkBatch);
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
   plan->threadPerBlock = std::max(plan->threadPerBlock, 256 /*NCCL_MIN_NTHREADS*/);
-
+#endif
   // If we can fit everything into the kernel args we do so.
   if (sizeof(ncclDevKernelArgs) + batchBytes + workBytes <= comm->workArgsBytes) {
     plan->workStorageType = ncclDevWorkStorageTypeArgs;
@@ -319,7 +322,7 @@ static void finishPlan(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   }
 }
 
-NCCL_PARAM(GraphRegister, "GRAPH_REGISTER", 1);
+NCCL_PARAM(GraphRegister, "GRAPH_REGISTER", 0); // LWPCOMMLIBS-632: off by default for RCCL as unsupported feature.
 
 static ncclResult_t getCollNetSupport(struct ncclComm* comm, struct ncclTaskColl* task, int* collNetSupport);
 rccl_static ncclResult_t getAlgoInfo(
@@ -348,7 +351,7 @@ static bool testBudget(
 
 // Returns whether this should be disabled at the device level.  Should be called after devWork fields have been set for what
 // it depends on.
-bool gfx942CheapFenceOff(const ncclDevWorkColl& devWork, bool disabledByPrecheck){
+bool gfx9CheapFenceOff(const ncclDevWorkColl& devWork, bool disabledByPrecheck){
     bool fenceOk = devWork.regUsed == 0 && devWork.netRegUsed == 0 && !disabledByPrecheck;
     return !fenceOk;
 }
@@ -385,10 +388,12 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
-
+    //[Added-comment] opCount is missing for collDevWork, adding here
+    devWork.opCount = task->opCount;
+	  
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
-    devWork.gfx942CheapFenceOff = gfx942CheapFenceOff(devWork, comm->gfx942CheapFenceOff);
+    devWork.gfx9CheapFenceOff = gfx9CheapFenceOff(devWork, comm->gfx9CheapFenceOff);
     devWork.profilerEnabled = ncclProfilerPluginLoaded() && (task->eActivationMask & ncclProfileKernelCh);
     if (task->regBufType & NCCL_NET_REG_BUFFER)
       devWork.netRegUsed = 1;
@@ -501,15 +506,19 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
 
       NCCLCHECK(getAlgoInfo(comm, &agg, collNetSupport, nvlsSupport, nTasksPerChannel, simInfo));
       if(agg.func==ncclFuncAllReduce && agg.acc != nullptr)
-      {
-        agg.devFuncId = ncclDevFuncId(ncclFuncAllReduceWithBias, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, agg.pipeline);
-      }
+        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 1, agg.pipeline);
       else
-      {
-        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, agg.pipeline);
-      }
+        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 0, agg.pipeline);
       if (agg.devFuncId < 0) {
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
+        return ncclInvalidUsage;
+      }
+      
+      if (!rcclIsArchSupportedForFunc(&agg, comm->archName)) {
+        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).", 
+          __func__, comm->archName, 
+          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol), 
+          ncclDevRedOpToString(task->opDev.op), ncclDatatypeToString(task->datatype), (agg.acc != nullptr), agg.pipeline);
         return ncclInvalidUsage;
       }
 
@@ -870,7 +879,11 @@ static ncclResult_t scheduleCollTasksToPlan(
       plan->channelMask.masks[maskIdx] |= (1ull<<relativeIdx);
     }
     //plan->channelMask.masks[channelId/64] |= (2ull<<devWork->channelHi) - (1ull<<devWork->channelLo);
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    plan->threadPerBlock = task->nWarps * comm->WarpSize;
+#else
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
+#endif
     if (!plan->kernelSpecialized) {
       plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
       plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
@@ -915,7 +928,7 @@ static ncclResult_t scheduleCollTasksToPlan(
   return ncclSuccess;
 }
 
-NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 16384);
+NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 8192);
 RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 
@@ -956,7 +969,15 @@ static ncclResult_t addP2pToPlan(
   bool proxySameProcess[2] = {true, true};
   void** handles[2] = {NULL, NULL};
   auto batchP2PEnableEnv = rcclParamP2pBatchEnable();
-  bool batchP2P =  batchP2PEnableEnv && ((sendBytes == -1)? recvBytes <= rcclParamP2pBatchThreshold() : sendBytes <= rcclParamP2pBatchThreshold());
+  auto p2pBatchThreshold = rcclParamP2pBatchThreshold();
+  bool belowThreshold = (recvBytes <= p2pBatchThreshold) && (sendBytes <= p2pBatchThreshold);
+  bool batchP2P =  batchP2PEnableEnv && (sendBytes == recvBytes) && belowThreshold;
+
+  //ncclP2pChannelBaseForRound now computes channel-base based on batching enablement (env. variable RCCL_P2P_BATCH_ENABLE=1)
+  //but batching is only applicable if msg size is below threshold which is not checked below
+  //this causes perf. dips in some cases but also boosts in other cases even when no batching happens because msg size is above threshold
+  //replacing line below with ncclP2pChannelBaseForRound(comm, p2pRound, batchP2P) can cause issues due to ncclP2pChannelBaseForRound calling the same routine
+  //channel base computed in taskAppend and here must be the same, but in taskAppend the call happens once and is cached for later usage, which is why it wouldn't be consistent with the call below
   uint8_t base = ncclP2pChannelBaseForRound(comm, p2pRound, batchP2PEnableEnv);
   if (comm->p2pNet) {
     for (int dir = 0; dir <= 1; dir++) {
@@ -1204,8 +1225,11 @@ static ncclResult_t scheduleP2pTasksToPlan(
   ) {
   int nRanks = comm->nRanks;
   struct ncclKernelPlanner::Peer* peers = comm->planner.peers;
-
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  plan->threadPerBlock = std::max(plan->threadPerBlock, RCCL_P2P_MAX_NTHREADS);
+#else
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
+#endif
   if (!plan->kernelSpecialized) {
     plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
     plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
@@ -1572,7 +1596,7 @@ static ncclResult_t getImplicitOrder(enum ncclImplicitOrder *mode, bool capturin
     if (capturing && driver < 12090) { *mode = ncclImplicitOrderSerial; return ncclSuccess; }
     *mode = 12030 <= std::min<int>(CUDART_VERSION, driver) ? ncclImplicitOrderLaunch : ncclImplicitOrderSerial;
 #else
-    *mode = ncclImplicitOrderNone;
+    *mode = ncclImplicitOrderSerial;
 #endif
     return ncclSuccess;
   }
@@ -1859,6 +1883,12 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
     // hostStreamPlanTask directly
     NCCLCHECK(hostStreamPlanTask(comm, plan));
   }
+  
+  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty 
+  // opCount was not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
+  if (!plan->persistent && ncclIntruQueueHead(&plan->proxyOpQueue) == nullptr) {
+    comm->opCount++;
+  }
   return ncclSuccess;
 }
 
@@ -1886,10 +1916,10 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     ncclIntruQueueConstruct(&planner->planQueue);
 
     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler warning
+    cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch
     cudaStream_t deviceStream, launchOrder;
-
     cudaEvent_t finishedEvent = comm->sharedRes->scratchEvent;
+    CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
 
     if (comm->workFifoProduced - comm->workFifoProducedLastRecorded > comm->workFifoBytes/8) {
       comm->workFifoProducedLastRecorded = comm->workFifoProduced;
@@ -1904,8 +1934,6 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     }
 
     if (capturing || planner->numStreams != 1) {
-      // CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
-
       // deviceStream waits on userStream[0]
       NCCLCHECK(ncclStrongStreamAcquiredWorkStream(planner->capturingGraph, &comm->sharedRes->deviceStream, /*concurrent=*/false, &deviceStream));
 
@@ -2041,6 +2069,9 @@ static ncclResult_t topoGetAlgoInfo(
   info->protocol = protocol;
   float time = minTime;
 
+  // Tuner plugin sets cost to 0.0 if it finds a match
+  bool isTunerMatchFound = (comm->tuner != NULL && minTime == 0.0);
+
   // Yes, we are first assigning and then testing if protocol is sane, but that's OK in this case.
   // coverity[check_after_sink]
   if (info->algorithm == NCCL_ALGO_UNDEF || info->protocol == NCCL_PROTO_UNDEF) {
@@ -2057,7 +2088,10 @@ static ncclResult_t topoGetAlgoInfo(
     WARN("Error : no algorithm/protocol available for function %s with datatype %s.%s%s", ncclFuncToString(info->func), ncclDatatypeToString(info->datatype), ncclAlgoEnvStr, ncclProtoEnvStr);
     return (algoEnv || protoEnv) ? ncclInvalidUsage : ncclInternalError;
   }
-  rcclUpdateCollectiveProtocol(comm, nBytes, info);
+  // Honor Tuner config if available
+  if (!isTunerMatchFound) {
+    rcclUpdateCollectiveProtocol(comm, nBytes, info);
+  }
   rcclSetPipelining(comm, nBytes, info);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
@@ -2137,8 +2171,12 @@ static ncclResult_t topoGetAlgoInfo(
   } else {
     info->nMaxChannels = nc;
   }
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
   if (info->algorithm == NCCL_ALGO_TREE) nt = NCCL_MAX_NTHREADS; // Tree now uses all threads always.
-  if (info->algorithm == NCCL_ALGO_PAT) nt = NCCL_MAX_NTHREADS;
+  if (info->algorithm == NCCL_ALGO_PAT)  nt = NCCL_MAX_NTHREADS;
+#endif
+  rcclOptThreadBlockSize(comm, info, nBytes, nt);
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
@@ -2574,6 +2612,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
     // Must be in thread local group before tasks can be alloc'd in `comm->memScoped`.
     ncclGroupCommJoin(info->comm, ncclGroupTaskTypeCollective);
     struct ncclTaskP2p* p2p = ncclMemoryPoolAlloc<struct ncclTaskP2p>(&comm->memPool_ncclTaskP2p, &comm->memPermanent);
+    p2p->func = info->coll;
     p2p->buff = (void*)info->recvbuff;
     p2p->count = info->count;
     p2p->datatype = info->datatype;

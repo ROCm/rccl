@@ -1,7 +1,9 @@
-* @wenkaidu @gilbertlee-amd @PedramAlizadeh @nusislam @nileshnegi @KawtharShafie @AtlantaPepsi @mberenjk @corey-derochie-amd @mustafabar @thananon @JhaShweta1 @BertanDogancay @rahulvaidya20 @isaki001 @PJAvinash @AbandiGa @Nikhil-Nunna @haripriya-amd @atulkulk @ddebonis-amd @amd-mengshwu @Kapil-Shyam-Pawar @weilewei @nawrinsu @speriaswamy-amd# Documentation files
+* @ROCm/rccl-reviewers
+
+# Documentation files
 docs/ @ROCm/rocm-documentation
 *.md @ROCm/rocm-documentation
 *.rst @ROCm/rocm-documentation
 .readthedocs.yaml @ROCm/rocm-documentation
 
-src/include/api_trace.h @mythreyak
+src/include/api_trace.h @ROCm/ROCM-DevTools-Team

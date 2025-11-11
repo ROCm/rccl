@@ -101,19 +101,28 @@ union ncclLLFifoLine {
   #else
   #define WARP_SIZE 32
   #endif
+  #if defined (__gfx950__)
+  #define NCCL_MAX_NTHREADS 512
+  #else
+  #define NCCL_MAX_NTHREADS 256
+  #endif
+  // Number of named barriers supported by CUDA
+  #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 #else
- /* IMPORTANT:
-  * WARP_SIZE should NEVER be referenced by host code in RCCL. It is defined here
+ /* IMPORTANT Note ragarding WARP_SIZE, NCCL_MAX_NTHREADS and NCCL_MAX_GROUPS:
+  * These should NEVER be referenced by host code in RCCL. It is defined here
   * solely as a workaround to allow RCCL to compile, since the host still compiles __device__ functions,
-  * and WARP_SIZE needs to be defined. These __device__ functions will not be called from the host.
+  * and they need to be defined. These __device__ functions will not be called from the host.
   * The host warp size is handled in src/enqueue.cc by calling hipDeviceGetAttributes(). */
   #define WARP_SIZE 32
+  #define NCCL_MAX_NTHREADS 256
+  // Number of named barriers supported by CUDA
+  #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 #endif
 
 #define MAXCHANNELS 128
 #define CHANNEL_LIMIT 16
 #define NCCL_MAX_LOCAL_RANKS 72
-#define NCCL_MAX_NTHREADS 256
 #define NCCL_MIN_NTHREADS (4*WARP_SIZE)
 #define NCCL_SIMPLE_MAX_NTHREADS NCCL_MAX_NTHREADS
 #define NCCL_SIMPLE_EXTRA_GROUP_IF_NTHREADS_GE (3*WARP_SIZE)
@@ -145,8 +154,7 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_DIRECT_NIC   0x04
 #define NCCL_NVLS_MIN_POLL 0x80
 
-// Number of named barriers supported by CUDA
-#define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
+
 
 #define NCCL_REGULAR_BUFFER 0x00
 #define NCCL_IPC_REG_BUFFER 0x01
@@ -159,7 +167,8 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define RCCL_PROTO_SHIFT 8
 #define RCCL_REDOP_SHIFT 12
 #define RCCL_DTYPE_SHIFT 16
-#define RCCL_PIPELINE_SHIFT 20
+#define RCCL_ACC_SHIFT 20
+#define RCCL_PIPELINE_SHIFT 24
 
 struct ncclConnInfo {
   // Regular comm mechanism
@@ -316,10 +325,24 @@ inline __host__ uint8_t ncclP2pChannelBaseForRound(struct ncclComm* comm, int p2
 // ncclP2pChannelToPart and ncclP2pChannelForPart are inverses. The device code
 // uses ncclP2pChannelToPart to determine which part "this" channel is responsible for.
 inline __host__ int ncclP2pChannelForPart(int nP2pChannels, int base, int part, int nParts, int nNodes) {
+  if (nNodes > 2) {
+    // Only works because nP2pChannels is pow2
+    int nChannelsLog2 = countOneBits(nP2pChannels-1);
+    int delta = reverseBits(part, nChannelsLog2);
+    return (base + delta) & (nP2pChannels-1);
+  } else {
     return (base * nParts + part) & (nP2pChannels-1);
+  }
 }
 inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int channel, int nParts, int nNodes) {
+  if (nNodes > 2) {
+    // Only works because nP2pChannels is pow2
+    int nChannelsLog2 = countOneBits(nP2pChannels-1);
+    int delta = (channel-base) & (nP2pChannels-1);
+    return reverseBits(delta, nChannelsLog2);
+  } else {
     return (channel - base * nParts) & (nP2pChannels-1);
+  }
 }
 
 struct alignas(16) ncclDevWorkColl {
@@ -327,7 +350,7 @@ struct alignas(16) ncclDevWorkColl {
   //   nChannels == (channelHi - channelLo) + 1
   uint32_t channelLo:8, channelHi:8;
   uint32_t nWarps:8;
-  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx942CheapFenceOff:1;
+  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx9CheapFenceOff:1;
   uint32_t root:30, connIndex:2;
   uint16_t pivotA2ANumBiRings:15, profilerEnabled:1;
   void* recvbuff;
@@ -678,10 +701,14 @@ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH)
     ) + 15) & -16; // pad to 16 bytes
 }
 
+// RCCL has its own varient of ncclShmemDynamicSize and ncclShmemScratchWarpSize
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
 // The amount of dynamic shmem per block
 __device__ constexpr int ncclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH) {
   return cudaArch < 700 ? 0 : ncclShmemScratchWarpSize(cudaArch)*(NCCL_MAX_NTHREADS/WARP_SIZE);
 }
+#endif
 
 // Host-side table of kernel function pointers.
 extern int const ncclDevKernelCount;
@@ -717,11 +744,11 @@ inline bool ncclNvlsSupported(int devRedOp, int type) {
 extern std::unordered_map<uint64_t, int> ncclDevFuncNameToId;
 
 // `ncclDevFuncId()` needs to be in sync with 'all_colls' in generate.py
-inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int pipeline = 0) {
+inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, int acc = 0, int pipeline = 0) {
   int row = -1;
   uint64_t key;
   // Pack 4-bit fields from right (LSB) to left in order:
-  // coll, algo, proto, devRedOp, type
+  // coll, algo, proto, devRedOp, type, acc, pipeline
   // This logic must be in sync with the key generation logic in generate.py
   if (coll == ncclFuncBroadcast) {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
@@ -734,6 +761,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, 
           ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT) |
           ((uint64_t)(devRedOp & RCCL_FUNC_ID_MASK) << RCCL_REDOP_SHIFT) |
           ((uint64_t)(type     & RCCL_FUNC_ID_MASK) << RCCL_DTYPE_SHIFT) |
+          ((uint64_t)(acc      & RCCL_FUNC_ID_MASK) << RCCL_ACC_SHIFT)   |
           ((uint64_t)(pipeline & RCCL_FUNC_ID_MASK) << RCCL_PIPELINE_SHIFT);
   }
   auto it = ncclDevFuncNameToId.find(key);
@@ -741,7 +769,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, 
     row = it->second;
   }
   if(row < 0) {
-    WARN("Fatal error: ncclDevFuncId: %lu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d", key, coll, algo, proto, devRedOp, type);
+    WARN("Fatal error: ncclDevFuncId: %lu not found for coll: %d, algo: %d, proto: %d, devRedOp: %d, type: %d, acc: %d, pipeline: %d", key, coll, algo, proto, devRedOp, type, acc, pipeline);
     return -1;
   }
   return row;
