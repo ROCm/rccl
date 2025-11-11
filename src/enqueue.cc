@@ -1746,7 +1746,7 @@ NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 #endif
 
 NCCL_PARAM(NvlinkUtilCentricSchedEnable, "NVLINK_UTIL_CENTRIC_SCHED_ENABLE", 0);
-
+RCCL_PARAM(CuCount, "CU_COUNT", 32);
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclResult_t ret = ncclSuccess;
   struct ncclKernelPlanner* planner = &comm->planner;
@@ -1754,9 +1754,10 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   for (int i = 0; i < MAXCHANNELS/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
-
-  nChannels = std::min(nChannels, 32);
-
+  printf("Before grid dim x: %d\n", nChannels);
+  int rcclCuCount = rcclParamCuCount();
+  nChannels = std::min(nChannels, rcclCuCount);
+  printf("after grid dim x: %d, threadsPerBlock: %d\n", nChannels, plan->threadPerBlock);
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);

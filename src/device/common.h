@@ -533,8 +533,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   // }
   //total = 0;
 
-  if(tid % WARP_SIZE == 0) ncclShmem.warpChannelId[warpId] = warp;
-   __syncthreads();
+  if(tid % WARP_SIZE == 0) {
+    ncclShmem.warpChannelId[warpId] = warp;
+  }
+    __syncthreads();
   void* dst = &ncclShmem.warpChannel[warpId];
   void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[warp];
   int bytes = sizeof(ncclDevChannel);
@@ -542,6 +544,12 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
   copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
   __syncthreads();
+  // __threadfence_system();
+  // if ((tid % WARP_SIZE) == 0) {
+  //   printf("gridDim.x %d blockIdx.x %d blokcDim.x %d warpId(local)=%d warp(global)=%d mappedChannel=%d tid=%d\n",
+  //                 gridDim.x , blockIdx.x, blockDim.x, warpId, warp, ncclShmem.warpChannelId[warpId], threadIdx.x);
+  // }
+
   // __threadfence_system();
   // To map blockId to channelId, we need the n'th set bit of channelMask which
   // is the inverse of counting the number of set bits among the the first n.
