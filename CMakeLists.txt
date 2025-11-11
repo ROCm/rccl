@@ -32,7 +32,7 @@ option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++ CLIP"            
 option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"                       OFF)
 option(ENABLE_MSCCLPP_FORMAT_CHECKS            "Enable formatting checks in MSCCL++"           OFF)
 option(ENABLE_NPKIT                            "Enable NPKit"                                  OFF)
-option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
+option(ENABLE_IFC                              "Enable indirect function call"                 ON)
 option(GENERATE_SYM_KERNELS                    "Generate symmetric memory kernels"             OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(REPORT_KERNEL_RESOURCE_USE              "Append -Rpass-analysis=kernel to CXX flags"    OFF)
@@ -843,10 +843,74 @@ endif()
 # Find the generated files in the output directory
 file(GLOB_RECURSE GENERATED_FILES "${GEN_DIR}/*")
 
-# Append all found generated files to the list
+# Separate type-specific kernel files for independent device linking
+set(TYPE_KERNEL_FILES)
+set(NON_KERNEL_FILES)
 foreach(file ${GENERATED_FILES})
+  get_filename_component(filename ${file} NAME)
+  if(filename MATCHES "^kernels_.*\\.cu\\.cpp$")
+    list(APPEND TYPE_KERNEL_FILES ${file})
+  else()
+    list(APPEND NON_KERNEL_FILES ${file})
+  endif()
+endforeach()
+
+# Add non-kernel files to HIP_SOURCES
+foreach(file ${NON_KERNEL_FILES})
   list(APPEND HIP_SOURCES ${file})
 endforeach()
+
+# Create separate object libraries for each type kernel file
+# Each type is self-contained: f32 functions only call f32 functions, etc.
+# This enables independent device code linking for each type in parallel
+set(TYPE_LIBRARIES)
+foreach(kernel_file ${TYPE_KERNEL_FILES})
+  get_filename_component(kernel_name ${kernel_file} NAME_WE)
+
+  # Create object library for this type (compiled with hipcc via rocm-cmake)
+  add_library(rccl_${kernel_name} OBJECT ${kernel_file})
+
+  # Apply essential compile options (same as main rccl target)
+  target_compile_options(rccl_${kernel_name} PRIVATE
+    -x hip
+    -fgpu-rdc
+    -fPIC
+    -Wall
+    -Wno-format-nonliteral
+    -Wno-unused-function
+  )
+
+  # Apply essential include directories
+  target_include_directories(rccl_${kernel_name} PRIVATE
+    ${PROJECT_BINARY_DIR}/include
+    ${HIPIFY_DIR}/src
+    ${HIPIFY_DIR}/src/device
+    ${HIPIFY_DIR}/src/include
+    ${HIPIFY_DIR}/gensrc
+    ${HSA_INCLUDE_PATH}
+  )
+
+  # Apply essential compile definitions (same as main rccl target)
+  target_compile_definitions(rccl_${kernel_name} PRIVATE __HIP_PLATFORM_AMD__=1)
+  target_compile_definitions(rccl_${kernel_name} PRIVATE ROCM_VERSION=${ROCM_VERSION})
+  if(COLLTRACE)
+    target_compile_definitions(rccl_${kernel_name} PRIVATE ENABLE_COLLTRACE)
+  endif()
+  if(FAULT_INJECTION)
+    target_compile_definitions(rccl_${kernel_name} PRIVATE ENABLE_FAULT_INJECTION)
+  endif()
+  if(IFC_ENABLED)
+    target_compile_definitions(rccl_${kernel_name} PRIVATE USE_INDIRECT_FUNCTION_CALL)
+  endif()
+
+  # Set GPU architecture targets (critical for device compilation)
+  foreach(target ${GPU_TARGETS})
+    target_compile_options(rccl_${kernel_name} PRIVATE --offload-arch=${target})
+  endforeach()
+
+  list(APPEND TYPE_LIBRARIES rccl_${kernel_name})
+endforeach()
+
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
@@ -866,12 +930,23 @@ list(APPEND HIP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 
 # Set up RCCL library
 #==================================================================================================
-## Set RCCL source files
+## Set RCCL source files (without type-specific kernels)
 add_library(rccl ${HIP_SOURCES})
+
+## Link type-specific object libraries
+# Each type library compiles and device-links independently in parallel
+foreach(ty_lib ${TYPE_LIBRARIES})
+  target_sources(rccl PRIVATE $<TARGET_OBJECTS:${ty_lib}>)
+endforeach()
 
 ## Set RCCL dependencies
 ## Ensure git version is updated before building rccl
 add_dependencies(rccl update_git_version)
+
+if (BUILD_TESTS AND ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+  ## Set static replacement dependency for fixture unit tests
+  add_dependencies(rccl replace_static_in_hipify)
+endif()
 
 ## Set RCCL include directories
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header

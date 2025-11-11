@@ -177,11 +177,7 @@ class Fn:
   def __iter__(self):
     return iter((self.coll, self.algo, self.proto, self.redop, self.ty, self.acc, self.pipeline, self.unroll))
 
-def calc_unroll_and_pipeline_for_local_arch():
-
-  if not is_local_arch_only:
-    return (all_unrolls, all_pipelines)
-
+def get_gfx_targets():
   rocminfo_path = os.environ.get('ROCM_PATH') + "/bin/rocminfo"
 
   res = subprocess.run([rocminfo_path], stdout=subprocess.PIPE, universal_newlines=True)
@@ -201,10 +197,22 @@ def calc_unroll_and_pipeline_for_local_arch():
       cu_count = int(line.split(':')[-1].strip())
       gfx_targets[(curr_name, cu_count)] = None
       curr_name = None
+  return list(gfx_targets.keys())
+
+def compiling_for_arch(arch):
+  gfx_targets = get_gfx_targets()
+  for gfx_name, cu_count in gfx_targets:
+    if gfx_name == arch:
+      return True
+  return False
+
+def calc_unroll_and_pipeline_for_local_arch():
+  if not is_local_arch_only:
+    return (all_unrolls, all_pipelines)
 
   # We want to remove duplicates but cannot use a dictionary since same gfx name can have different cu counts
   # Use (gfx_name, cu_count) as key for dictionary and convert it to list here
-  gfx_targets = list(gfx_targets.keys())
+  gfx_targets = get_gfx_targets()
   
   # Homogeneous system is required to build for only 1 variant of unroll factor (except for gfx950)
   if len(gfx_targets) == 1:
@@ -370,6 +378,14 @@ primary_funcs = sorted(
 primary_to_index = {fn: i for i, fn in enumerate(primary_funcs)}
 primary_to_index = {fn: primary_to_index.get(Fn(*fn), -1) for fn in func_rows}
 
+# Group functions by data type for type-specific kernels
+funcs_by_type = {}
+for fn in primary_funcs:
+  ty = fn.ty
+  if ty not in funcs_by_type:
+    funcs_by_type[ty] = []
+  funcs_by_type[ty].append(fn)
+
 ################################################################################
 
 # Generate <gensrc>/device_table.h
@@ -377,8 +393,10 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   print("-- Generating %s" % os.path.join(gensrc, "device_table.h"))
   out = f.write
 
-  if is_ifc: func_declaration = "__device__ void"
-  else: func_declaration = "__device__ __attribute__((noinline)) void"
+  out("#ifndef NCCL_DEVICE_TABLE_H_\n")
+  out("#define NCCL_DEVICE_TABLE_H_\n\n")
+
+  func_declaration = "__device__ void"
 
   for fn in primary_funcs:
     sym = paste("_", "ncclDevFunc", *fn)
@@ -391,46 +409,110 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
 
   index = {val: None for val in all_unrolls}
   out("typedef void(*ncclDevFuncPtr_t)();\n\n")
-  for unroll in all_unrolls:
-    index[unroll] = 0
-    out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_%s[] = {\n" % unroll)
-    for fn in primary_funcs:
-      if fn.unroll != unroll: continue
-      sym = paste("_", "ncclDevFunc", *fn)
-      guard = get_arch_guard(fn)
-      if guard:
-        out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index[unroll], sym, index[unroll]))
-      else:
-        out("/*%4d*/ %s,\n" % (index[unroll], sym))
-      index[unroll] += 1
-    out("nullptr};\n")
+  
+  # Skip generating large generic tables - generic kernels will dispatch
+  # to type-specific tables at runtime, avoiding the 1000+ entry tables
+  # Uncomment below if you need the legacy generic tables for some reason
+  # 
+  # # Generate legacy combined tables (for backward compatibility)
+  # for unroll in all_unrolls:
+  #   index[unroll] = 0
+  #   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_%s[] = {\n" % unroll)
+  #   for fn in primary_funcs:
+  #     if fn.unroll != unroll: continue
+  #     sym = paste("_", "ncclDevFunc", *fn)
+  #     guard = get_arch_guard(fn)
+  #     if guard:
+  #       out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index[unroll], sym, index[unroll]))
+  #     else:
+  #       out("/*%4d*/ %s,\n" % (index[unroll], sym))
+  #     index[unroll] += 1
+  #   out("nullptr};\n")
+  #   out("\n")
+  
+  # Generate type-specific function tables
+  out("// Type-specific function tables\n")
+  
+  # Generate a type index map
+  out("// Map from ncclDataType_t to type string for kernel selection\n")
+  out("#ifndef NCCL_TYPE_TO_INDEX_H\n")
+  out("#define NCCL_TYPE_TO_INDEX_H\n")
+  out("enum ncclDevTypeIndex {\n")
+  for i, ty in enumerate(sorted(funcs_by_type.keys())):
+    out(f"  ncclDevType_{ty} = {i},\n")
+  out(f"  ncclDevTypeCount = {len(funcs_by_type)}\n")
+  out("};\n")
+  out("#endif\n\n")
+  
+  # Only declare the tables as extern in the header (definitions will be in kernels_<type>.cu.cpp)
+  for ty in sorted(funcs_by_type.keys()):
+    out(f"// Functions for type: {ty}\n")
+    for unroll in all_unrolls:
+      out(f"extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_{ty}_{unroll}[];\n")
     out("\n")
 
-  if not is_ifc:
+  # Generate type-specific callers inline in the header
+  out("// Type-specific function callers (inline to work with LTO)\n")
+  for ty in all_tys:  # Use all_tys to ensure all types get functions
+    ty_funcs = funcs_by_type.get(ty, [])
     for unroll in all_unrolls:
+      # Count functions for this type and unroll
+      ty_count = sum(1 for fn in ty_funcs if fn.unroll == unroll)
+      if ty_count == 0:
+        # Generate empty stub for types with no functions
+        out(f"static __forceinline__ __device__ void NCCL_CALL_FUNCTIONS_{ty}_{unroll}(unsigned short globalFuncId) noexcept {{\n")
+        out("  // No functions for this type+unroll combination\n")
+        out("}\n\n")
+        continue
+        
       out(f"template<unsigned short f, unsigned short l>\n"
-          f"struct Caller{unroll} {{\n"
+          f"struct Caller_{ty}_{unroll} {{\n"
           "  static __forceinline__ __device__ __host__\n"
-          f"  void call{unroll}(unsigned short funcIndex) noexcept {{\n"
+          f"  void call(unsigned short funcIndex) noexcept {{\n"
           "    constexpr unsigned short m = f + (l - f) / 2;\n"
           f"    return (funcIndex < m)\n"
-          f"      ? Caller{unroll}<f, m>::call{unroll}(funcIndex)\n"
-          f"      : Caller{unroll}<m, l>::call{unroll}(funcIndex);\n"
+          f"      ? Caller_{ty}_{unroll}<f, m>::call(funcIndex)\n"
+          f"      : Caller_{ty}_{unroll}<m, l>::call(funcIndex);\n"
           "  }\n"
           "};\n\n")
 
       out(f"template<unsigned short f>\n"
-          f"struct Caller{unroll}<f, f + 1> {{\n"
+          f"struct Caller_{ty}_{unroll}<f, f + 1> {{\n"
           "  static __forceinline__ __device__ __host__\n"
-          f"  void call{unroll}(unsigned short funcIndex) noexcept {{\n"
-          f"    ncclDevFuncTable_{unroll}[f]();\n"
+          f"  void call(unsigned short funcIndex) noexcept {{\n"
+          f"    ncclDevFuncTable_{ty}_{unroll}[f]();\n"
           "  }\n"
           "};\n\n")
 
-      # emit NCCL_CALL_FUNCTIONS_<unroll> wrapper using last index value
-      out(f"__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_{unroll}(unsigned short funcIndex) noexcept {{\n")
-      out(f"  Caller{unroll}<0, {index[unroll]}>::call{unroll}(funcIndex);\n")
+      # Generate inline function that maps global funcId to local index
+      out(f"static __forceinline__ __device__ void NCCL_CALL_FUNCTIONS_{ty}_{unroll}(unsigned short globalFuncId) noexcept {{\n")
+      out("  unsigned short localIndex = 0;\n")
+      out("  switch(globalFuncId) {\n")
+      
+      # Build the mapping for this type+unroll
+      local_idx = 0
+      for fn in ty_funcs:
+        if fn.unroll != unroll:
+          continue
+        # Calculate the global funcId for this function
+        global_id = primary_to_index[Fn(*equivalent_primary(*fn))]
+        out(f"    case {global_id}: localIndex = {local_idx}; break;\n")
+        local_idx += 1
+      
+      out("    default: localIndex = 0; break;\n")
+      out("  }\n")
+      # Call the function from the table
+      out(f"  if (localIndex < {ty_count}) {{\n")
+      out(f"    ncclDevFuncTable_{ty}_{unroll}[localIndex]();\n")
+      out("  }\n")
       out("}\n\n")
+  out("\n")
+
+  # Declare the mapping array (definition will be in device_table.cpp)
+  out("// Mapping from global funcId to type index for runtime dispatch\n")
+  out("extern __device__ __constant__ unsigned char ncclDevFuncIdToType[];\n\n")
+  
+  out("#endif // NCCL_DEVICE_TABLE_H_\n")
 
 # Generate <gensrc>/device_table.cpp
 if is_colltrace:
@@ -440,6 +522,14 @@ if is_colltrace:
     out = f.write
     out('#include "nccl_common.h"\n#include "device.h"\n')
     out("\n")
+    
+    # Generate the funcId to type mapping array
+    out("// Mapping from global funcId to type index for runtime dispatch\n")
+    out("__device__ __constant__ unsigned char ncclDevFuncIdToType[] = {\n")
+    for i, fn in enumerate(primary_funcs):
+      ty_idx = all_tys.index(fn.ty)
+      out(f"  {ty_idx}, // {i}: {fn.ty}\n")
+    out("};\n\n")
 
     seen_fns = set()
     out("const char* funcNames[] = {\n")
@@ -601,3 +691,72 @@ if is_msccl_kernels:
             "MSCCL_IMPL_KERNEL_ENTRY_FUNC_DEVREDOP_TYPE({redop}, {ty_cxx}, false);\n"
             .format(redop=redop, ty_cxx=ty_to_cxx[ty])
           )
+
+# Generate type-specific kernel compilation units
+print("-- Generating type-specific kernel files")
+for ty in all_tys:
+  with open(os.path.join(gensrc, f"kernels_{ty}.cu.cpp"), "w") as f:
+    print(f"-- Generating {os.path.join(gensrc, f'kernels_{ty}.cu.cpp')}")
+    out = f.write
+    
+    out('#include "device.h"\n')
+    out('#include "collectives.h"\n')
+    out('#include "common.h"\n\n')
+    out('extern __shared__ ncclShmemData ncclShmem;\n')
+    out('\n')
+    out('// Nop work batch for type-specific kernels\n')
+    out('struct RunWorkNop {\n')
+    out('  __device__ void run() {}\n')
+    out('};\n')
+    out('\n')
+    
+    out(f'// Type-specific kernels for {ty}\n')
+    out(f'// These use ncclDevFuncTable_{ty}_1/2/4 instead of generic tables\n\n')
+    
+    # Define macro to redirect function table calls
+    out(f'#define ncclDevFuncTable_1 ncclDevFuncTable_{ty}_1\n')
+    out(f'#define ncclDevFuncTable_2 ncclDevFuncTable_{ty}_2\n')
+    out(f'#define ncclDevFuncTable_4 ncclDevFuncTable_{ty}_4\n')
+    out(f'#define NCCL_CALL_FUNCTIONS_1 NCCL_CALL_FUNCTIONS_{ty}_1\n')
+    out(f'#define NCCL_CALL_FUNCTIONS_2 NCCL_CALL_FUNCTIONS_{ty}_2\n')
+    out(f'#define NCCL_CALL_FUNCTIONS_4 NCCL_CALL_FUNCTIONS_{ty}_4\n\n')
+    
+    # Define the type-specific function tables
+    ty_funcs = funcs_by_type.get(ty, [])
+    for unroll in all_unrolls:
+      index_ty = 0
+      out(f'__device__ ncclDevFuncPtr_t const ncclDevFuncTable_{ty}_{unroll}[] = {{\n')
+      for fn in ty_funcs:
+        if fn.unroll != unroll: continue
+        sym = paste("_", "ncclDevFunc", *fn)
+        guard = get_arch_guard(fn)
+        if guard:
+          out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index_ty, sym, index_ty))
+        else:
+          out("/*%4d*/ %s,\n" % (index_ty, sym))
+        index_ty += 1
+      out("nullptr};\n")
+      out("\n")
+    
+    # Caller templates and NCCL_CALL_FUNCTIONS are now defined inline in the header
+    
+    # Generate type-specific dispatcher for this type
+    out(f'// Type-specific dispatcher for {ty} - calls only {ty} functions\n')
+    out(f'struct Dispatcher_{ty} {{\n')
+    out('    static __device__ __forceinline__ void dispatch(int funcId, int unroll) {\n')
+    out('        // NCCL_CALL_FUNCTIONS handles both direct and indirect paths internally\n')
+    out('        if (unroll == 1)\n')
+    out(f'            NCCL_CALL_FUNCTIONS_{ty}_1(funcId);\n')
+    out('        else if (unroll == 2)\n')
+    out(f'            NCCL_CALL_FUNCTIONS_{ty}_2(funcId);\n')
+    out('        else\n')
+    out(f'            NCCL_CALL_FUNCTIONS_{ty}_4(funcId);\n')
+    out('    }\n')
+    out('};\n\n')
+    
+    # Generate kernel definitions for this type
+    # The macros NCCL_CALL_FUNCTIONS_1/2/4 are already defined above to point to type-specific versions
+    for unroll in all_unrolls:
+      out(f'__launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernel_{ty}_{unroll}(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {{\n')
+      out(f'  ncclKernelMain<-1, RunWorkNop, Dispatcher_{ty}, /*COLLTRACE*/false, /*Unroll*/{unroll}>(&args4K.args);\n')
+      out('}\n\n')
