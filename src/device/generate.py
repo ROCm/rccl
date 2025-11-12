@@ -170,9 +170,9 @@ class Fn:
   def __iter__(self):
     return iter((self.coll, self.algo, self.proto, self.redop, self.ty, self.acc, self.pipeline, self.unroll))
 
-def calc_unroll_for_local_arch():
+def calc_unroll_and_pipeline_for_local_arch():
   if not is_local_arch_only:
-    return all_unrolls
+    return (all_unrolls, all_pipelines)
 
   rocminfo_path = os.environ.get('ROCM_PATH') + "/bin/rocminfo"
 
@@ -202,52 +202,17 @@ def calc_unroll_for_local_arch():
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
     if "gfx950" == gfx_name:
-      return ["1", "2"]
+      return (["1", "2"], ["0"])  # Disable pipelining for gfx950
     elif "gfx908" == gfx_name or ("gfx942" == gfx_name and cu_count > 80):
-      return ["2"]
+      return (["2"], all_pipelines)
     else:
-      return ["4"]
+      return (["4"], all_pipelines)
   else:
-    return all_unrolls
+    return (all_unrolls, all_pipelines)
 
 # if building for local arch only, we only need to build for 1 variant of unroll for most gfx targets,
-# except for gfx950
-local_unroll = calc_unroll_for_local_arch()
-
-def calc_pipeline_for_local_arch():
-  # Default: pipelining enabled
-  default_pipeline = ["0", "1"]
-  
-  if not is_local_arch_only:
-    return default_pipeline
-
-  rocminfo_path = os.environ.get('ROCM_PATH') + "/bin/rocminfo"
-
-  res = subprocess.run([rocminfo_path], stdout=subprocess.PIPE, universal_newlines=True)
-  rocminfo_output = res.stdout
-
-  # Parse rocminfo binary output to detect GPU architecture
-  gfx_targets = set()
-  curr_name = None
-  for line in rocminfo_output.splitlines():
-    line = line.strip()
-
-    if line.startswith("Name:"):
-      name = line.split(':')[-1].strip()
-      if "gfx" in name:
-        curr_name = name
-    if line.startswith("Compute Unit:") and curr_name:
-      gfx_targets.add(curr_name)
-      curr_name = None
-
-  # Disable pipelining for MI350 (gfx950)
-  if "gfx950" in gfx_targets:
-    return ["0"]  # Disable pipelining
-  
-  return default_pipeline
-
-# if building for gfx950, we need to disable pipelining
-local_pipeline = calc_pipeline_for_local_arch()
+# except for gfx950. For gfx950, we also disable pipelining.
+local_unroll, local_pipeline = calc_unroll_and_pipeline_for_local_arch()
 
 # Helper function to check if the conditions for the collective is being met
 def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
