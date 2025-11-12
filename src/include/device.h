@@ -120,7 +120,7 @@ union ncclLLFifoLine {
   #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 #endif
 
-#define MAXCHANNELS 256
+#define MAXCHANNELS 512
 #define CHANNEL_LIMIT 16 // this is used to limit channels for pre MI3xx GPUs
 #define NCCL_MAX_LOCAL_RANKS 72
 #define NCCL_MIN_NTHREADS (4*WARP_SIZE)
@@ -348,7 +348,7 @@ inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int chann
 struct alignas(16) ncclDevWorkColl {
   // Running on channels [channelLo..channelHi], hi is inclusive.
   //   nChannels == (channelHi - channelLo) + 1
-  uint32_t channelLo:8, channelHi:8;
+  uint32_t channelLo:16, channelHi:16;
   uint32_t nWarps:8;
   uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx9CheapFenceOff:1;
   uint32_t root:30, connIndex:2;
@@ -633,7 +633,7 @@ struct alignas(16) ncclDevKernelArgs {
 
 __host__ __device__ constexpr int ncclMaxKernelArgsSize(/*int cudaDriver, */int cudaArch=NCCL_CUDA_ARCH) {
   //return (cudaArch < 700 || cudaDriver < 12010) ? 4<<10 : (32<<10)-4;
-  return 4<<10;
+  return (10<<10);
 }
 
 template<size_t capacity>
@@ -644,7 +644,7 @@ struct alignas(16) ncclDevKernelArgsStorage {
   };
 };
 
-typedef ncclDevKernelArgsStorage<(4<<10)> ncclDevKernelArgs4K;
+typedef ncclDevKernelArgsStorage<(10<<10)> ncclDevKernelArgs4K;
 //typedef ncclDevKernelArgsStorage<(32<<10)-4> ncclDevKernelArgs31K;
 
 template<typename T>

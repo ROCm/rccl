@@ -758,7 +758,7 @@ static ncclResult_t scheduleCollTasksToPlan(
       nChannels = (countLo!=0 ? 1 : 0) + nMidChannels + (cellsHi!=0 ? 1 : 0);
 
       // Update number of channels propagated to the profiler
-      task->nChannels = (uint8_t)nChannels;
+      task->nChannels = nChannels;
 
       // Ensure room for worst case of one new batch per channel
       if (!testBudget(budget, plan->nWorkBatches + nChannels, plan->workBytes + workNode->size)) {
@@ -1765,8 +1765,6 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   } else {
     printf("RCCL: Not using warp-level collectives as nChannels % 7 != 0 (nChannels=%d)\n", nChannels);
   }
-
-
   // nChannels = std::min(nChannels, rcclCuCount);
   // printf("nChannels: %d, threadsPerBlock:%d cuCount: %d\n", nChannels, plan->threadPerBlock, rcclCuCount);
   dim3 grid = {(unsigned)rcclCuCount, 1, 1};

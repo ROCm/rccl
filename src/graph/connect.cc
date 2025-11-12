@@ -808,7 +808,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   // Only use full MAXCHANNELS for gfx942 (MI300X) and gfx950
   maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
                  IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950"))
-                 ? std::min(comm->topo->nodes[GPU].nodes[0].gpu.cu, MAXCHANNELS) : 2*CHANNEL_LIMIT;
+                 ? MAXCHANNELS : 2*CHANNEL_LIMIT;
 
 
   // Duplicate ringPrev/ringNext for ncclBuildRing
