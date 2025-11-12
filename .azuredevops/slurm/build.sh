@@ -41,7 +41,7 @@ cmake --build . --target install
 
 # Building RCCL Replayer
 cd ../tools/RcclReplayer 2>/dev/null || cd ../RcclReplayer
-MPI_DIR="$MPI_HOME" make
+ROCM_DIR="$ROCM_PATH" MPI_DIR="$MPI_HOME/install" make
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 ## Building RCCL-Tests
