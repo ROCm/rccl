@@ -1756,15 +1756,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
 
-  int rcclCuCount = nChannels;
-  plan->kernelArgs->comm->warpLevelComm = 0;
-  if(nChannels >= 7) {
-    plan->kernelArgs->comm->warpLevelComm = 1;
-    rcclCuCount =  nChannels / 7;
-    if(nChannels % 7 != 0) rcclCuCount += 1; // add extra CU for remaining warps
-  } else {
-    printf("RCCL: Not using warp-level collectives as nChannels % 7 != 0 (nChannels=%d)\n", nChannels);
-  }
+  int warpsPerBlock = plan->threadPerBlock / comm->WarpSize;
+  plan->kernelArgs->comm->warpLevelComm = 1;
+  int rcclCuCount =  nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
   // nChannels = std::min(nChannels, rcclCuCount);
   // printf("nChannels: %d, threadsPerBlock:%d cuCount: %d\n", nChannels, plan->threadPerBlock, rcclCuCount);
   dim3 grid = {(unsigned)rcclCuCount, 1, 1};
