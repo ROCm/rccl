@@ -2209,7 +2209,7 @@ rccl_static ncclResult_t getAlgoInfo(
     const char *algoStr = getenv("NCCL_ALGO");
     userAlgoInput = !algoStr ? 0 : 1;
     size_t sizePerRank = rcclGetSizePerRank(info->func, nBytes, comm->nRanks);
-    if (!userAlgoInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllReduce) && sizePerRank >= 64 && sizePerRank <= 524288){
+    if (!userAlgoInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllReduce) && sizePerRank >= 64 && sizePerRank <= 262144){
       info->algorithm = NCCL_ALGO_TREE;
       info->protocol = NCCL_PROTO_LL;
     }
