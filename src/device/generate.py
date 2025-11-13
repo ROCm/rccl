@@ -9,7 +9,7 @@ all_redops = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys =    ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos = ["LL","LL128","SIMPLE"]
 all_algos =  ["TREE","RING", "", "", "", "", "PAT"]
-all_unroll = ["1", "2", "4"]
+all_unroll = ["1", "2", "3", "4"]
 use_acc    = ["0", "1"]
 
 # Pipelining is not supported for LL/LL64 prims, so "1" is not a valid value for low latency protocols.
@@ -191,7 +191,7 @@ def calc_unroll_for_local_arch():
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
     if "gfx950" == gfx_name:
-      return ["1", "2", "4"]
+      return ["1", "2", "3", "4"]
     elif "gfx908" == gfx_name or ("gfx942" == gfx_name and cu_count > 80):
       return ["2"]
     else:
@@ -393,6 +393,24 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     index2 += 1
   out("nullptr};\n")
   out("\n")
+  out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_3[] = {\n")
+  index3 = 0
+  for fn in primary_funcs:
+    coll, algo, proto, redop, ty, acc, pipeline, unroll = fn
+    if unroll != "3": continue
+    sym = paste("_", "ncclDevFunc", *fn)
+    if fn[2] == "LL128":
+      out("#if (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)\n")
+      out("/*%4d*/ %s,\n#else\n" % (index3, sym))
+      fn_ll = fn[:2] + ("LL",) + fn[3:]
+      sym_ll = paste("_", "ncclDevFunc", *fn_ll)
+      out("/*%4d*/ %s,\n#endif\n" % (index3, sym_ll))
+    else:
+      out("/*%4d*/ %s,\n" % (index3, sym))
+    index3 += 1
+  out("nullptr};\n")
+  out("\n")
+  out("\n")
   out("__device__ ncclDevFuncPtr_t const ncclDevFuncTable_4[] = {\n")
   index4 = 0
   for fn in primary_funcs:
@@ -447,6 +465,24 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       "};\n")
     out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_2(unsigned short funcIndex) noexcept {\n")
     out(f"  Caller2<0, {index2}>::call2(funcIndex);\n")
+    out("}\n\n")
+    out("template<unsigned short f, unsigned short l>\n"
+      "struct Caller3 {\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call3(unsigned short funcIndex) noexcept\n"
+      "  {\n"
+      "    constexpr unsigned short m = f + (l - f) / 2;\n"
+      "    return (funcIndex < m) ? Caller3<f, m>::call3(funcIndex) : Caller3<m, l>::call3(funcIndex);\n"
+      "  }\n"
+      "};\n"
+      "\n"
+      "template<unsigned short f>\n"
+      "struct Caller3<f, f + 1>{\n"
+      "  static __forceinline__ __device__ __host__\n"
+      "  void call3(unsigned short funcIndex) noexcept { ncclDevFuncTable_4[f](); }\n"
+      "};\n")
+    out("__forceinline__ __device__ void NCCL_CALL_FUNCTIONS_3(unsigned short funcIndex) noexcept {\n")
+    out(f"  Caller3<0, {index4}>::call3(funcIndex);\n")
     out("}\n\n")
     out("template<unsigned short f, unsigned short l>\n"
       "struct Caller4 {\n"

@@ -35,6 +35,7 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
 RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
 RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
+RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -456,6 +457,15 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
 }
 
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
+  if( rcclParamUnrollFactor() != -1 ) {
+    comm->unroll = rcclParamUnrollFactor();
+    if(comm->unroll < NCCL_UNROLL_1 || comm->unroll > NCCL_NUM_UNROLLS) {
+      WARN("Invalid RCCL_UNROLL_FACTOR %d specified. Valid values are 0 to 3 corresponding to unroll factors of 1,2,3 and 4 respectively.", comm->unroll);
+      return ncclInvalidArgument;
+    }
+    INFO(NCCL_INIT, "RCCL Unroll Factor (user set): %d", (int) (pow(2.0, (double)comm->unroll)));
+    return ncclSuccess;
+  }
   hipDeviceProp_t devProp;
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
   if(IsArchMatch(devProp.gcnArchName, "gfx950")) {
