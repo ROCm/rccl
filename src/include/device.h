@@ -11,9 +11,13 @@
 
 #include "nccl.h"
 #include "rccl_float8.h"
-// #include <hip/hip_bfloat16.h>
-#include <hip/hip_bf16.h>
-typedef __hip_bfloat16 hip_bfloat16;
+#if ROCM_VERSION >= 60000
+   // hip_bf16.h should be used from ROCm 6.0
+  #include <hip/hip_bf16.h>
+  typedef __hip_bfloat16 hip_bfloat16;
+#else
+  #include <hip/hip_bfloat16.h>
+#endif
 #include "nccl_common.h"
 #include "bitops.h"
 #include "symmetric.h"
