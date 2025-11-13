@@ -41,6 +41,7 @@ option(PROFILE                                 "Enable profiling"               
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(QUIET_WARNINGS                          "Supress compiler warnings"                     OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -1159,6 +1160,17 @@ target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-c
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
+
+if(QUIET_WARNINGS)
+  target_compile_options(rccl PRIVATE -Wno-invalid-offsetof)
+  target_compile_options(rccl PRIVATE -Wno-unused-result)
+  target_compile_options(rccl PRIVATE -Wno-macro-redefined)
+  target_compile_options(rccl PRIVATE -Wno-unused-label)
+  target_compile_options(rccl PRIVATE -Wno-unused-variable)
+  target_compile_options(rccl PRIVATE -Wno-unused-private-field)
+  target_compile_options(rccl PRIVATE -Wno-null-conversion)
+  target_compile_options(rccl PRIVATE -Wno-missing-braces)
+endif()
 
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)
