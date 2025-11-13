@@ -239,7 +239,7 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
 
 void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   info->pipeline = 0; // Default to no pipelining
-  if (rcclParamdisableReduceCopyPipelining()) {
+  if (rcclParamdisableReduceCopyPipelining() || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
     return;
   }
   const bool dtypeOK = (info->datatype == ncclBfloat16) || rcclParamPipelineAllDTypes();
