@@ -24,7 +24,7 @@ extern "C" {
 
 #include <limits.h>
 
-/*! \mainpage RCCL Documentation
+/*! 
 
 \section intro_sec Introduction
 
