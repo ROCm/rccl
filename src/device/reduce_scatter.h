@@ -16,14 +16,16 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-    ncclRing *ring = &ncclShmem.channel.ring;
+    int warp = threadIdx.x / WARP_SIZE;
+    ncclRing *ring = &ncclShmem.warpChannel[warp].ring;
+    int ringIx = ring->index;
     int const *ringRanks = ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
     size_t count;
     size_t gridOffset;
     size_t channelCount;
     size_t chunkCount;
-    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &count, &gridOffset, &channelCount, &chunkCount);
+    ncclCollCbdPart(work, ncclShmem.warpChannelId[warp], Proto::Id, sizeof(T), &count, &gridOffset, &channelCount, &chunkCount);
     size_t offset;
     size_t dataOffset;
     uint32_t nelem;
