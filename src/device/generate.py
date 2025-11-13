@@ -171,8 +171,6 @@ class Fn:
     return iter((self.coll, self.algo, self.proto, self.redop, self.ty, self.acc, self.pipeline, self.unroll))
 
 def calc_unroll_and_pipeline_for_local_arch():
-  if not is_local_arch_only:
-    return (all_unrolls, all_pipelines)
 
   rocminfo_path = os.environ.get('ROCM_PATH') + "/bin/rocminfo"
 
@@ -197,6 +195,12 @@ def calc_unroll_and_pipeline_for_local_arch():
   # We want to remove duplicates but cannot use a dictionary since same gfx name can have different cu counts
   # Use (gfx_name, cu_count) as key for dictionary and convert it to list here
   gfx_targets = list(gfx_targets.keys())
+  
+  has_gfx950 = any(gfx_name == "gfx950" for gfx_name, _ in gfx_targets)
+  pipeline = ["0"] if has_gfx950 else all_pipelines
+ 
+  if not is_local_arch_only:
+    return (all_unrolls, pipeline)
 
   # Homogeneous system is required to build for only 1 variant of unroll factor (except for gfx950)
   if len(gfx_targets) == 1:
