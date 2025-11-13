@@ -21,7 +21,7 @@ API RCCL API Contents
 - @ref rccl_group_api
 - @ref msccl_api
 
- Full RCCL API File
+\section Full RCCL API File
 - nccl.h.in
 
-
+*/
