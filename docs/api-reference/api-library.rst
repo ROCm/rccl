@@ -33,6 +33,6 @@ RCCL API Contents
 RCCL API File
 =============
 
-:ref:`nccl.h.in`
+:ref:`RCCL API File`
 
 .. doxygenindex::
