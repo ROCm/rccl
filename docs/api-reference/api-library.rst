@@ -30,9 +30,11 @@ RCCL API Contents
 - :ref:`rccl_group_api`
 - :ref:`msccl_api`
 
+- `RCCL API File`_
+
+.. _RCCL API File:
+
 RCCL API File
 =============
-
-:ref:`RCCL API File`
 
 .. doxygenindex::
