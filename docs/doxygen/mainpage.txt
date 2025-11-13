@@ -21,6 +21,8 @@ The collective operations are implemented using ring and tree algorithms and hav
 
 */
 
+/*!
+
 #ifndef NCCL_H_
 #define NCCL_H_
 
@@ -965,3 +967,5 @@ ncclResult_t pncclGroupSimulateEnd(ncclSimInfo_t* simInfo);
 #endif
 
 #endif // end include guard
+
+*/
