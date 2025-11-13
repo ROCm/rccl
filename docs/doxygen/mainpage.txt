@@ -47,6 +47,8 @@ The collective operations are implemented using ring and tree algorithms and hav
 
 \section RCCL API File
 
+*/
+
 /*! @brief      Opaque handle to communicator
     @details    A communicator contains information required to facilitate collective communications calls */
 typedef struct ncclComm* ncclComm_t;
