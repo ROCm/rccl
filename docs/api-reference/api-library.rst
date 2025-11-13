@@ -15,26 +15,5 @@ RCCL supports an arbitrary number of GPUs installed in a single node or multiple
 
 The collective operations are implemented using ring and tree algorithms and have been optimized for throughput and latency. For best performance, small operations can be either batched into larger operations or aggregated through the API.
 
-RCCL API Contents
-=================
-
-- :ref:`rccl_api_version`
-- :ref:`rccl_result_code`
-- :ref:`rccl_config_type`
-- :ref:`rccl_api_communicator`
-- :ref:`rccl_api_errcheck`
-- :ref:`rccl_api_comminfo`
-- :ref:`rccl_api_enumerations`
-- :ref:`rccl_api_custom_redop`
-- :ref:`rccl_collective_api`
-- :ref:`rccl_group_api`
-- :ref:`msccl_api`
-
-- `RCCL API File`_
-
-.. _RCCL API File:
-
-RCCL API File
-=============
 
 .. doxygenindex::

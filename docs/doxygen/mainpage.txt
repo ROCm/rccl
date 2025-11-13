@@ -21,18 +21,8 @@ The collective operations are implemented using ring and tree algorithms and hav
 - @ref rccl_group_api
 - @ref msccl_api
 
-\section Full RCCL API File
-- nccl.h.in
-
 */
 
-/*************************************************************************
- * Copyright (c) 2015-2021, NVIDIA CORPORATION. All rights reserved.
- * Modifications Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
- * Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
- *
- * See LICENSE.txt for license information
- ************************************************************************/
 #ifndef NCCL_H_
 #define NCCL_H_
 
