@@ -1660,10 +1660,8 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
     comm->ncclNet->getProperties, /*nullptr*/ comm->ncclNet->makeVDevice, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
   pthread_mutex_unlock(&netLock);
   netLockHeld = 0;
-  if(comm->rank == 0){ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoGetSystem_1475.xml", xml);}
   // Remove XML branches which don't have a node with keep="1" (typically when importing a topology)
   NCCLCHECKGOTO(ncclTopoTrimXml(xml), ret, fail);
-  if(comm->rank == 0){ncclTopoDumpXmlToFile("/home/apotnuru/LWPCOMMLIBS-706/ncclTopoGetSystem_1478.xml", xml);}
   // XML topo fusion.
   if (comm->MNNVL) {
     // MNNVL clique support
