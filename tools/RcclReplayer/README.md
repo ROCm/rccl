@@ -85,3 +85,21 @@ Replayer is a separate tool which aims to re-run the same set of RCCL calls as r
 Each rank will print out its progress as it goes through every line of calls, including its rank, line number, RCCL API name, status (INFO/WARNING/ERROR). 
 It will also report time and bandwidth (if the line is a communication call) for that call. In the end, it will report the total time taken by all communication calls.
 Replayer is still under development and experimentations, so the formats of logging or contents of replayer output will be subject to changes.
+
+## Log Converter
+`replay_log_converter.py` is a utility to convert between binary and JSON log formats, and to standardize JSON logs for easier parsing.
+
+**Usage:**
+* **Binary to JSON:** `python3 replay_log_converter.py <basename> tojson`
+* **JSON to Binary:** `python3 replay_log_converter.py <basename> tobin`
+* **Standardize JSON:** `python3 replay_log_converter.py <basename> --standardize`
+
+An optional output basename can be provided after the mode (tojson/tobin) to customize the output filename: 
+* `python3 replay_log_converter.py <basename> <mode> <output_basename>`
+
+The converter automatically finds all matching log files with pattern `basename.PID.hostname` and processes them. Standardized JSON output is saved with `.standard.json` extension and can be parsed with standard JSON libraries.
+
+**Example:** 
+* `python3 replay_log_converter.py replayer_log tojson` produces `replayer_log.{1270-1278}.quanta-cx77-11.json`
+* `python3 replay_log_converter.py replayer_log tojson converted_log` produces `converted_log.{1270-1278}.quanta-cx77-11.json`
+
