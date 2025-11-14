@@ -434,7 +434,10 @@ void rcclOptThreadBlockSize(struct ncclComm* comm, struct ncclTaskColl* info, si
     }
     if(nThreads > maxNthreads[NCCL_PROTO_SIMPLE]) {
       nThreads = maxNthreads[NCCL_PROTO_SIMPLE];
-      INFO(NCCL_INIT, "RCCL Threads per block reduced to %d to match max threads for protocol %s", nThreads, ncclProtoToString(info->protocol));
+      INFO(NCCL_INIT, "RCCL Threads per block reduced to %d to match max threads", nThreads);
+    } else if (nThreads < 3 * comm->WarpSize) {
+      nThreads = 3 * comm->WarpSize; // min requirement for tree
+      INFO(NCCL_INIT, "RCCL Threads per block increased to %d to be at least one warp", nThreads);
     }
     return;
   }
