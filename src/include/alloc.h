@@ -152,7 +152,7 @@ ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc, int li
       return ncclSystemError;
     }
     //INFO(NCCL_ALLOC, "%s:%d malloc Size %ld pointer %p", filefunc, line, nelem*ncclSizeOfT<T>(), p);
-    memset(p, 0, nelem*ncclSizeOfT<T>());
+    memset((void*)p, 0, nelem*ncclSizeOfT<T>());
     *ptr = p;
   } else {
     *ptr = NULL;
