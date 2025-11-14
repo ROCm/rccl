@@ -979,6 +979,7 @@ static ncclResult_t addP2pToPlan(
   if (!selfSend) {
     for (int part=0; part < nChannelsMax; part++) {
       int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes);
+      // printf("p2pnChannels: %d, nChannelsMax: %d, channelId: %d\n", comm->p2pnChannels, nChannelsMax, channelId);
       struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
       for (int dir=0; dir <= 1; dir++) {
         int peerRank = dir ? sendRank : recvRank;
@@ -1754,11 +1755,21 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
 
+  // Warp speed support if any work batch in the plan contains P2P work
+  bool hasP2p = !ncclIntruQueueEmpty(&plan->p2pTaskQueue);
+  bool hasNonRing = false;
+  struct ncclTaskColl* task = ncclIntruQueueHead(&plan->collTaskQueue);
+  while (task != nullptr) {
+    if (task->algorithm != NCCL_ALGO_RING) {
+      hasNonRing = true;
+      break;
+    }
+    task = task->next;
+  }
   int warpsPerBlock = plan->threadPerBlock / comm->WarpSize;
-  plan->kernelArgs->comm->warpLevelComm = 1;
-  int rcclCuCount =  nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
-  // nChannels = std::min(nChannels, rcclCuCount);
-  // printf("nChannels: %d, threadsPerBlock:%d cuCount: %d\n", nChannels, plan->threadPerBlock, rcclCuCount);
+  plan->kernelArgs->comm->warpLevelComm = (hasP2p || hasNonRing) ? 0 : 1;
+  int rcclCuCount = !(plan->kernelArgs->comm->warpLevelComm)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
+
   dim3 grid = {(unsigned)rcclCuCount, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);

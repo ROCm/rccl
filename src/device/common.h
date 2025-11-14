@@ -449,7 +449,7 @@ struct RunWorkBatch {
       // However, the code ensures that the participation is on a per-warp basis.
       // coverity[device_thread_diverged:FALSE]
       if (tid < subtn) {
-        if(ncclShmem.warpComm == 0) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+        if(ncclShmem.warpComm == 0 || Algo != NCCL_ALGO_RING) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
         else if (ncclShmem.warpChannelId[tid / WARP_SIZE] >= 0) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
       }
     }
@@ -615,7 +615,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       // assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
       copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
     }
-  } else if(laneId == 0){
+  } else if(laneId == 0) {
     ncclShmem.warpChannelId[warpId] = ncclShmem.channelId;
     ncclShmem.warpChannel[warpId] = ncclShmem.channel;
   }
