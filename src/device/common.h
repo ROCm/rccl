@@ -496,10 +496,9 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   int total = 0, y;
   int num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
 
-  int blockIndex = blockIdx.x;
-  int warpCount  = (tn + WARP_SIZE - 1) / WARP_SIZE;
-  int warp = (warpCount * blockIndex) +  tid / WARP_SIZE;
-  int warpId = tid / WARP_SIZE;
+  int warpCount    = tn / WARP_SIZE;
+  int localWarpId  = tid / WARP_SIZE;
+  int globalWarpId = (warpCount * blockIdx.x) + localWarpId;
   int laneId = tid % WARP_SIZE;
 
   // Copy kernel args to shmem and then only read those. Otherwise the compiler
@@ -593,31 +592,31 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   total = 0;
 
   if(ncclShmem.warpComm == 1) {
-    ncclShmem.warpChannelId[warpId] = -1;
+    ncclShmem.warpChannelId[localWarpId] = -1;
      __syncthreads();
     for (int i = 0; i < num; i++) {
       if (args->channelMask.masks[i] & (1ull<<laneId)) {
         y = __popcll(args->channelMask.masks[i] & ((1ull<<laneId)-1));
         y = total + y;
-        if (warp == y) {
-          ncclShmem.warpChannelId[warpId] = laneId + total;
+        if (globalWarpId == y) {
+          ncclShmem.warpChannelId[localWarpId] = laneId + total;
           break;
         }
       }
       total = total + __popcll(args->channelMask.masks[i]);
     }
     __syncthreads();
-    if(ncclShmem.warpChannelId[warpId] >= 0) {
-      void* dst = &ncclShmem.warpChannel[warpId];
-      void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[warpId]];
+    if(ncclShmem.warpChannelId[localWarpId] >= 0) {
+      void* dst = &ncclShmem.warpChannel[localWarpId];
+      void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[localWarpId]];
       int bytes = sizeof(ncclDevChannel);
       static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
-      // assert((tid-warpId*WARP_SIZE) >= 0 && (tid-warpId*WARP_SIZE) < WARP_SIZE);
-      copyToShmem16(tid-warpId*WARP_SIZE, dst, src, bytes);
+      // assert((tid-localWarpId*WARP_SIZE) >= 0 && (tid-localWarpId*WARP_SIZE) < WARP_SIZE);
+      copyToShmem16(tid-localWarpId*WARP_SIZE, dst, src, bytes);
     }
   } else if(laneId == 0) {
-    ncclShmem.warpChannelId[warpId] = ncclShmem.channelId;
-    ncclShmem.warpChannel[warpId] = ncclShmem.channel;
+    ncclShmem.warpChannelId[localWarpId] = ncclShmem.channelId;
+    ncclShmem.warpChannel[localWarpId] = ncclShmem.channel;
   }
   __syncthreads();
 
