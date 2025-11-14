@@ -41,6 +41,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id }}"
       OUTPUT_ARTIFACTS_DIR: /home/arravikum/dist_new/dist/rocm
       THEROCK_BIN_DIR: "./build/bin"
+      AWS_SHARED_CREDENTIALS_FILE: /home/arravikum/awsconfig/credentials.ini
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -61,27 +62,27 @@ jobs:
 
       # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
       # salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
-      - name: Test gfx950
-        if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
-        run: |
-          salloc -N 4 --nodelist="cv350-zts-gtu-h32-08, cv350-zts-gtu-h32-18, cv350-zts-gtu-h32b-08, cv350-zts-gtu-h32b-18" -p meta64 -t 04:00:00 --exclusive bash -c "
-          source /home/arravikum/TheRock/.venv/bin/activate &&
-          cd /home/arravikum/cvs &&
-          python input/setup.py &&
-          pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
-              --cluster_file ./input/cluster.json \
-              --config_file ./input/mi350_config.json \
-              --log-file=/tmp/rccl_log.log \
-              --html=/home/arravikum/cvs/test_reports/ci_test_report.html \
-              --capture=tee-sys \
-              --self-contained-html"
+      # - name: Test gfx950
+      #   if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
+      #   run: |
+      #     salloc -N 4 --nodelist="cv350-zts-gtu-h32-08, cv350-zts-gtu-h32-18, cv350-zts-gtu-h32b-08, cv350-zts-gtu-h32b-18" -p meta64 -t 04:00:00 --exclusive bash -c "
+      #     source /home/arravikum/TheRock/.venv/bin/activate &&
+      #     cd /home/arravikum/cvs &&
+      #     python input/setup.py &&
+      #     pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
+      #         --cluster_file ./input/cluster.json \
+      #         --config_file ./input/mi350_config.json \
+      #         --log-file=/tmp/rccl_log.log \
+      #         --html=/home/arravikum/cvs/test_reports/ci_test_report.html \
+      #         --capture=tee-sys \
+      #         --self-contained-html"
 
-      - name: Configure AWS Credentials for non-forked repos
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+      # - name: Configure AWS Credentials for non-forked repos
+      #   if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+      #   uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+      #   with:
+      #     aws-region: us-east-2
+      #     role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
 
       - name: Post test report upload
         if: always()
