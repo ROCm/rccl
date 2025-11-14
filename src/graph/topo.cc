@@ -113,7 +113,9 @@ ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode*
   }
   return ncclSuccess;
 }
-
+/**
+ * system->nodes[NET] and other fields are initialized in the below function
+ */
 ncclResult_t ncclTopoCreateNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id) {
   if (system->nodes[type].count == NCCL_TOPO_MAX_NODES) {
     WARN("Error : tried to create too many nodes of type %d", type);
@@ -523,9 +525,6 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
   int systemId;
   NCCLCHECK(ncclGetSystemId(system, xmlCpu, &systemId));
   struct ncclTopoNode* cpu;
-  /*
-  system->nodes[NET] and other fields are initialized in the below function
-  */
   NCCLCHECK(ncclTopoCreateNode(system, &cpu, CPU, NCCL_TOPO_ID(systemId, numaId)));
   const char* str;
   NCCLCHECK(xmlGetAttr(xmlCpu, "affinity", &str));
@@ -1491,6 +1490,7 @@ static ncclResult_t ncclTopoPrepareLocalGpu(struct ncclXml* xml, const struct nc
   ncclResult_t ret = ncclSuccess;
   struct ncclXmlNode* node = NULL;
   char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
+  NCCLCHECKGOTO(int64ToBusId(comm->peerInfo[comm->rank].busId, busId), ret, exit);
   NCCLCHECKGOTO(ncclTopoFillGpu(xml, busId, &node), ret, exit);
   // Detect only the GPU managed by this process.  We'll get any others through XML fusion
   if (node) {
@@ -1635,7 +1635,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   // Detect only the GPU managed by this process.  We'll get any others through XML fusion.
   char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
   NCCLCHECKGOTO(int64ToBusId(comm->peerInfo[comm->rank].busId, busId), ret, fail);
-  NCCLCHECKGOTO(ncclTopoFillGpu(xml, busId, &node), ret, fail);  // writes xml.nodes[0].nSub <- 1
+  NCCLCHECKGOTO(ncclTopoFillGpu(xml, busId, &node), ret, fail);
   if (node) {
     NCCLCHECKGOTO(xmlSetAttrInt(node, "keep", 1), ret, fail);
     NCCLCHECKGOTO(xmlSetAttrInt(node, "rank", comm->rank), ret, fail);
@@ -1770,9 +1770,9 @@ ncclResult_t getLocalNetCountByBw(struct ncclTopoSystem* system, int gpu, int *c
   return ncclSuccess;
 }
 
-/*
-** the following function modifies system->nodes[NET]
-*/
+/**
+ * the following function modifies system->nodes[NET]
+ */
 ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int channelId, int64_t* id, int* dev) {
   int gpu;
   NCCLCHECK(ncclTopoRankToIndex(system, rank, &gpu, /*showWarn=*/true));
