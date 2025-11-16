@@ -36,6 +36,9 @@ RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
 RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
 RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
 RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
+RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
+RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
+
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -416,6 +419,67 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
   rcclP2pNetChunkSize = p2pNetChunkSize;
 }
 
+void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, int& rcclWarpSpeedChannels) {
+  static int userChannelControlInput = RCCL_VALUE_UNSET;
+  static int rcclWarpSpeedChannelsCache = RCCL_VALUE_UNSET;
+  // only adjust channels for RING algorithm
+  if(algo != NCCL_ALGO_RING) {
+    return;
+  }
+  if(rcclWarpSpeedChannelsCache != RCCL_VALUE_UNSET) {
+    rcclWarpSpeedChannels = rcclWarpSpeedChannelsCache;
+    return;
+  }
+  if (userChannelControlInput == RCCL_VALUE_UNSET) {
+    const char *inputStr = getenv("NCCL_THREAD_THRESHOLDS");
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MAX_NCHANNELS");
+    }
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MIN_NCHANNELS");
+    }
+    userChannelControlInput = !inputStr ? 0 : 1;
+  }
+
+  if(!userChannelControlInput && rcclParamWarpSpeedEnable()) {
+    if(rcclParamWarpSpeedCuCount() != 0) {
+      rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * (threadsPerBlock / comm->WarpSize);
+      INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
+      return;
+    }
+    if (comm->nNodes == 1) {
+      rcclWarpSpeedChannels = 224;
+    } else {
+      rcclWarpSpeedChannels = 256;
+    }
+    INFO(NCCL_INIT, "RCCL Warp Speed Channels set to %d", rcclWarpSpeedChannels);
+  }
+}
+
+void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclKernelPlan* plan, int warpSize, int nChannels, int& support, int &cuCount) {
+  if(!rcclParamWarpSpeedEnable()) {
+    support = 0;
+    cuCount = nChannels;
+    return;
+  }
+  // Warp speed is not supported currently for the following cases:
+  // 1. if any work batch in the plan contains P2P work
+  // 2. or any collective task is not using RING algorithm
+  bool hasP2p = !ncclIntruQueueEmpty(&plan->p2pTaskQueue);
+  bool hasNonRing = false;
+  struct ncclTaskColl* task = ncclIntruQueueHead(&plan->collTaskQueue);
+  while (task != nullptr) {
+    if (task->algorithm != NCCL_ALGO_RING) {
+      hasNonRing = true;
+      break;
+    }
+    task = task->next;
+  }
+  int warpsPerBlock = plan->threadPerBlock / warpSize;
+  support = (hasP2p || hasNonRing) ? 0 : 1;
+  cuCount = (support == 0)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
+}
+
 void rcclGetMaxNthreads(struct ncclComm* comm, int maxNthreads[]) {
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
     maxNthreads[NCCL_PROTO_SIMPLE] = maxNthreads[NCCL_PROTO_LL128] = RCCL_GFX950_MAX_NTHREADS;
@@ -428,8 +492,19 @@ void rcclGetMaxNthreads(struct ncclComm* comm, int maxNthreads[]) {
 void rcclOptThreadBlockSize(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes, int& nThreads) {
   static int maxNthreads[NCCL_NUM_PROTOCOLS] = {0};
   if (maxNthreads[NCCL_PROTO_SIMPLE] == 0) rcclGetMaxNthreads(comm, maxNthreads);
-  if( rcclParamThreadsPerBlock() != -1 ) {
+  if(rcclParamThreadsPerBlock() != -1) {
     nThreads = rcclParamThreadsPerBlock();
+    if(nThreads % comm->WarpSize != 0) {
+      nThreads = ((nThreads / comm->WarpSize) + 1) * comm->WarpSize;
+      INFO(NCCL_INIT, "RCCL Threads per block adjusted to %d to be multiple of warp size %d", nThreads, comm->WarpSize);
+    }
+    if(nThreads > maxNthreads[NCCL_PROTO_SIMPLE]) {
+      nThreads = maxNthreads[NCCL_PROTO_SIMPLE];
+      INFO(NCCL_INIT, "RCCL Threads per block reduced to %d to match max threads", nThreads);
+    } else if (nThreads < 3 * comm->WarpSize) {
+      nThreads = 3 * comm->WarpSize; // min requirement for tree
+      INFO(NCCL_INIT, "RCCL Threads per block increased to %d to be at least one warp", nThreads);
+    }
     return;
   }
   if (info->algorithm == NCCL_ALGO_TREE) nThreads = maxNthreads[NCCL_PROTO_SIMPLE]; // Tree now uses all threads always.
@@ -458,9 +533,9 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
 
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   if( rcclParamUnrollFactor() != -1 ) {
-    comm->unroll = rcclParamUnrollFactor();
-    if(comm->unroll < NCCL_UNROLL_1 || comm->unroll > NCCL_NUM_UNROLLS) {
-      WARN("Invalid RCCL_UNROLL_FACTOR %d specified. Valid values are 0 to 3 corresponding to unroll factors of 1,2,3 and 4 respectively.", comm->unroll);
+    comm->unroll = rcclParamUnrollFactor() - 1; //-1 to map to 0 based indexing
+    if(comm->unroll < NCCL_UNROLL_1 || comm->unroll >= NCCL_NUM_UNROLLS) {
+      WARN("Invalid RCCL_UNROLL_FACTOR %d specified. Valid values are 1 to 4 corresponding to unroll factors of 1, 2, 3 and 4 respectively.", comm->unroll);
       return ncclInvalidArgument;
     }
     INFO(NCCL_INIT, "RCCL Unroll Factor (user set): %d", (int) (pow(2.0, (double)comm->unroll)));
@@ -470,7 +545,7 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
   if(IsArchMatch(devProp.gcnArchName, "gfx950")) {
     if(comm->nNodes == 1)
-      comm->unroll = NCCL_UNROLL_2;
+      comm->unroll = NCCL_UNROLL_1;
     else
       comm->unroll = NCCL_UNROLL_2;
   }

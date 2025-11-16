@@ -1754,23 +1754,8 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   for (int i = 0; i < MAXCHANNELS/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
-
-  // Warp speed support if any work batch in the plan contains P2P work
-  bool hasP2p = !ncclIntruQueueEmpty(&plan->p2pTaskQueue);
-  bool hasNonRing = false;
-  struct ncclTaskColl* task = ncclIntruQueueHead(&plan->collTaskQueue);
-  while (task != nullptr) {
-    if (task->algorithm != NCCL_ALGO_RING) {
-      hasNonRing = true;
-      break;
-    }
-    task = task->next;
-  }
-  int warpsPerBlock = plan->threadPerBlock / comm->WarpSize;
-  plan->kernelArgs->comm->warpLevelComm = (hasP2p || hasNonRing) ? 0 : 1;
-  int rcclCuCount = !(plan->kernelArgs->comm->warpLevelComm)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
-
-  dim3 grid = {(unsigned)rcclCuCount, 1, 1};
+  rcclSetWarpSpeedSupportAndFinalCuCount(plan, comm->WarpSize, nChannels, plan->kernelArgs->comm->warpLevelComm, nChannels);
+  dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
   cudaStream_t launchStream = planner->streams->stream;
@@ -2116,7 +2101,6 @@ static ncclResult_t topoGetAlgoInfo(
     // NVLS should not need more than 16 channels to get peak BW.
     nc = comm->nvlsChannels;
   } else {
-#if 0
     rcclUpdateThreadThreshold(comm, nBytes, info, threadThreshold);
     INFO(NCCL_INIT, "pre-adjustment threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
 
@@ -2129,7 +2113,6 @@ static ncclResult_t topoGetAlgoInfo(
     }
     INFO(NCCL_INIT, "post-adjustment based on threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
     rcclOverrideChannels(comm, info->func, nBytes, nc);
-#endif
   }
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #else
@@ -2184,6 +2167,8 @@ static ncclResult_t topoGetAlgoInfo(
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
+  rcclSetWarpSpeedCUs(comm, info->algorithm, nt, nc);
+  info->nMaxChannels = nc;
   return ncclSuccess;
 }
 
