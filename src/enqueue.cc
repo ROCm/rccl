@@ -2154,7 +2154,9 @@ static ncclResult_t topoGetAlgoInfo(
     }
   } else if (info->func == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
     info->algorithm = NCCL_ALGO_TREE;
-    info->nMaxChannels = nc;
+    info->nMaxChannels = std::min(nc, 64);
+  } else if (info->algorithm == NCCL_ALGO_TREE) {
+    info->nMaxChannels = std::min(nc, 64);
   } else {
     info->nMaxChannels = nc;
   }
