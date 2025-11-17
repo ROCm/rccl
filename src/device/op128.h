@@ -154,7 +154,6 @@ union alignas(16) BytePack<16> {
   uint32_t u32[4];
   uint64_t u64[2];
   ulong2 ul2[1], native;
-#if !defined(USE_INDIRECT_FUNCTION_CALL) || defined(__gfx942__) || defined(__gfx950__)
   inline __device__ BytePack<16>() = default;
   inline __device__ BytePack<16>(const BytePack<16>& other) {
     *this = other;
@@ -164,7 +163,6 @@ union alignas(16) BytePack<16> {
     u64[1] = other.u64[1];
     return *this;
   }
-#endif
 };
 template<int Size>
 union BytePack {

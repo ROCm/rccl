@@ -388,7 +388,9 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.redOpArgIsPtr = task->opDev.scalarArgIsPtr;
     devWork.oneNode = (comm->nNodes == 1);
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
-
+    //[Added-comment] opCount is missing for collDevWork, adding here
+    devWork.opCount = task->opCount;
+	  
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     devWork.gfx9CheapFenceOff = gfx9CheapFenceOff(devWork, comm->gfx9CheapFenceOff);
@@ -509,6 +511,14 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 0, agg.pipeline);
       if (agg.devFuncId < 0) {
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
+        return ncclInvalidUsage;
+      }
+      
+      if (!rcclIsArchSupportedForFunc(&agg, comm->archName)) {
+        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).", 
+          __func__, comm->archName, 
+          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol), 
+          ncclDevRedOpToString(task->opDev.op), ncclDatatypeToString(task->datatype), (agg.acc != nullptr), agg.pipeline);
         return ncclInvalidUsage;
       }
 
@@ -918,7 +928,7 @@ static ncclResult_t scheduleCollTasksToPlan(
   return ncclSuccess;
 }
 
-NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 16384);
+NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 8192);
 RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 
@@ -1587,7 +1597,7 @@ static ncclResult_t getImplicitOrder(enum ncclImplicitOrder *mode, bool capturin
     if (capturing && driver < 12090) { *mode = ncclImplicitOrderSerial; return ncclSuccess; }
     *mode = 12030 <= std::min<int>(CUDART_VERSION, driver) ? ncclImplicitOrderLaunch : ncclImplicitOrderSerial;
 #else
-    *mode = ncclImplicitOrderNone;
+    *mode = ncclImplicitOrderSerial;
 #endif
     return ncclSuccess;
   }
@@ -1874,6 +1884,12 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
     // hostStreamPlanTask directly
     NCCLCHECK(hostStreamPlanTask(comm, plan));
   }
+  
+  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty 
+  // opCount was not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
+  if (!plan->persistent && ncclIntruQueueHead(&plan->proxyOpQueue) == nullptr) {
+    comm->opCount++;
+  }
   return ncclSuccess;
 }
 
@@ -1901,9 +1917,8 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     ncclIntruQueueConstruct(&planner->planQueue);
 
     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
-    //cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch // unused variable - compiler warning
+    cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch
     cudaStream_t deviceStream, launchOrder;
-
     cudaEvent_t finishedEvent = comm->sharedRes->scratchEvent;
 
     if (comm->workFifoProduced - comm->workFifoProducedLastRecorded > comm->workFifoBytes/8) {
@@ -1918,9 +1933,8 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
       CUDACHECK(cudaEventCreateWithFlags(&comm->sharedRes->scratchEvent, cudaEventDisableTiming));
     }
 
-    if (capturing || planner->numStreams != 1) {
-      // CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
-
+    if (capturing || planner->numStreams != 1 || ncclParamLaunchOrderImplicit()) {
+      CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
       // deviceStream waits on userStream[0]
       NCCLCHECK(ncclStrongStreamAcquiredWorkStream(planner->capturingGraph, &comm->sharedRes->deviceStream, /*concurrent=*/false, &deviceStream));
 
@@ -2209,6 +2223,15 @@ rccl_static ncclResult_t getAlgoInfo(
     NCCLCHECK(topoGetAlgoInfo(comm, info, nBytes, (float **)collCostTable, simInfo));
   } else {
     NCCLCHECK(topoGetAlgoInfo(comm, info, nBytes, (float **)collCostTable, simInfo));
+    //override algo, tree doesn't work with fewer than 64 bytes
+    static int userAlgoInput = -2;
+    const char *algoStr = getenv("NCCL_ALGO");
+    userAlgoInput = !algoStr ? 0 : 1;
+    size_t sizePerRank = rcclGetSizePerRank(info->func, nBytes, comm->nRanks);
+    if (!userAlgoInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllReduce) && sizePerRank >= 64 && sizePerRank <= 262144){
+      info->algorithm = NCCL_ALGO_TREE;
+      info->protocol = NCCL_PROTO_LL;
+    }
     // NCCL_CTA_POLICY_EFFICIENCY requires user (non-symmetric) buffer registration (currently unsupported with MNNVL)
     if (comm->config.CTAPolicy == NCCL_CTA_POLICY_EFFICIENCY && ncclGetEnv("NCCL_ALGO") == NULL && ncclGetEnv("NCCL_PROTO") == NULL && !comm->MNNVL) {
       // make algorithm selection based on buffer registration

@@ -119,4 +119,5 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm);
 bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, const char* archName);
 int parseFirmwareVersion();
+bool rcclIsArchSupportedForFunc(struct ncclTaskColl* info, char const* archName);
 #endif
