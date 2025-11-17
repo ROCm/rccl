@@ -1919,7 +1919,6 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
     cudaStream_t launchStream = planner->streams->stream; // First user stream gets launch
     cudaStream_t deviceStream, launchOrder;
     cudaEvent_t finishedEvent = comm->sharedRes->scratchEvent;
-    CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
 
     if (comm->workFifoProduced - comm->workFifoProducedLastRecorded > comm->workFifoBytes/8) {
       comm->workFifoProducedLastRecorded = comm->workFifoProduced;
@@ -1933,7 +1932,8 @@ ncclResult_t ncclLaunchFinish(struct ncclComm* comm) {
       CUDACHECK(cudaEventCreateWithFlags(&comm->sharedRes->scratchEvent, cudaEventDisableTiming));
     }
 
-    if (capturing || planner->numStreams != 1) {
+    if (capturing || planner->numStreams != 1 || ncclParamLaunchOrderImplicit()) {
+      CUDACHECK(cudaEventRecord(finishedEvent, launchStream));
       // deviceStream waits on userStream[0]
       NCCLCHECK(ncclStrongStreamAcquiredWorkStream(planner->capturingGraph, &comm->sharedRes->deviceStream, /*concurrent=*/false, &deviceStream));
 
@@ -2218,6 +2218,15 @@ rccl_static ncclResult_t getAlgoInfo(
     NCCLCHECK(topoGetAlgoInfo(comm, info, nBytes, (float **)collCostTable, simInfo));
   } else {
     NCCLCHECK(topoGetAlgoInfo(comm, info, nBytes, (float **)collCostTable, simInfo));
+    //override algo, tree doesn't work with fewer than 64 bytes
+    static int userAlgoInput = -2;
+    const char *algoStr = getenv("NCCL_ALGO");
+    userAlgoInput = !algoStr ? 0 : 1;
+    size_t sizePerRank = rcclGetSizePerRank(info->func, nBytes, comm->nRanks);
+    if (!userAlgoInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllReduce) && sizePerRank >= 64 && sizePerRank <= 262144){
+      info->algorithm = NCCL_ALGO_TREE;
+      info->protocol = NCCL_PROTO_LL;
+    }
     // NCCL_CTA_POLICY_EFFICIENCY requires user (non-symmetric) buffer registration (currently unsupported with MNNVL)
     if (comm->config.CTAPolicy == NCCL_CTA_POLICY_EFFICIENCY && ncclGetEnv("NCCL_ALGO") == NULL && ncclGetEnv("NCCL_PROTO") == NULL && !comm->MNNVL) {
       // make algorithm selection based on buffer registration
