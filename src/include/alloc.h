@@ -31,6 +31,37 @@ constexpr size_t ncclSizeOfT() { return sizeof(T); }
 template<>
 constexpr size_t ncclSizeOfT<void>() { return 1; }
 
+extern cudaStream_t sideStream;
+extern pthread_mutex_t sideStreamLock;
+extern uint64_t sideStreamRefCount;
+extern pthread_once_t sideStream_initonce;
+
+static inline void init_sideStreamLock(void) {
+  if (pthread_mutex_init(&sideStreamLock, NULL) != 0) {
+    perror("pthread_mutex_init sideStreamLock failed");
+    exit(EXIT_FAILURE);
+  }
+}
+
+static inline ncclResult_t ncclCreateSideStream() {
+  pthread_once(&sideStream_initonce, init_sideStreamLock);
+  pthread_mutex_lock(&sideStreamLock);
+  if (sideStream == nullptr)
+    CUDACHECK(cudaStreamCreateWithFlags(&sideStream, cudaStreamNonBlocking));
+  sideStreamRefCount++;
+  pthread_mutex_unlock(&sideStreamLock);
+  return ncclSuccess;
+};
+
+static inline ncclResult_t ncclDestroySideStream() {
+  pthread_mutex_lock(&sideStreamLock);
+  sideStreamRefCount--;
+  if (sideStreamRefCount== 0 && sideStream)
+    CUDACHECK(cudaStreamDestroy(sideStream));
+  pthread_mutex_unlock(&sideStreamLock);
+  return ncclSuccess;
+};
+
 #if CUDART_VERSION >= 12020
 
 static inline ncclResult_t ncclCuMemHostAlloc(void** ptr, CUmemGenericAllocationHandle *handlep, size_t size) {
@@ -362,7 +393,7 @@ finish:
 #define ncclCudaMalloc(...) ncclCudaMallocDebug( __FILE__, __LINE__, __VA_ARGS__)
 
 template <typename T>
-ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, cudaStream_t sideStream = nullptr, unsigned int flags = hipDeviceMallocDefault) {
+ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, unsigned int flags = hipDeviceMallocDefault) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
@@ -428,11 +459,13 @@ ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   // Need a side stream so as not to interfere with graph capture.
-  cudaStream_t stream;
-  CUDACHECKGOTO(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), result, finish);
+  cudaStream_t stream = sideStream;
+  if (sideStream == nullptr)
+    CUDACHECKGOTO(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), result, finish);
   NCCLCHECKGOTO(ncclCudaMemcpyAsync(dst, src, nelem, stream), result, finish);
   CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
-  CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
+  if (sideStream == nullptr)
+    CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return result;
