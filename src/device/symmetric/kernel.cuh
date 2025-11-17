@@ -1,3 +1,6 @@
+// Modification Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier: MIT 
+
 #ifndef NCCL_DEVICE_SYMMETRIC_KERNEL_H_
 #define NCCL_DEVICE_SYMMETRIC_KERNEL_H_
 

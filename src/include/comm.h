@@ -713,10 +713,14 @@ struct ncclComm {
   CUmemGenericAllocationHandle symMCHandle;
   struct ncclIntruQueue<struct ncclSymRegTask, &ncclSymRegTask::next> symRegTaskQueue;
 
-  // Unroll factor for comm [RCCL]
+  // unroll factor for comm [RCCL]
   int unroll;
   // custom collective [RCCL]
   bool enableCustColl;
+  // gfx name from hipDeviceProp_t [RCCL]
+  char* archName;
+  // multiProcessorCount from hipDeviceProp_t [RCCL]
+  int cuCount;
   
   uint64_t endMagic;
 };

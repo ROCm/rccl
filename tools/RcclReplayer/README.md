@@ -73,7 +73,7 @@ Replayer is a separate tool which aims to re-run the same set of RCCL calls as r
 ## Installation
 * Replayer relies on MPI for out of band communication.
 * Under `rccl/tools/RcclReplayer`, run `MPI_DIR=${MPI_PATH} make`
-*  Replayer has to be built from RCCL source. Furthermore, it requires RCCL library to be built from the same source in `../../build/release`. For compatibility reason, it is recommended that the logs are collected using same RCCL library as well.
+*  Replayer can be built from RCCL source using internal headers directly. It links against a RCCL library specified by `RCCL_DIR` (defaults to `../../build/release`). For compatibility, it is recommended that logs are collected using the same RCCL library version.
 ## Running
 * Replayer requires the exact same number of processes and processes per node as the recorded job. And all log files must be accessible by all processes in Replayer, either through shared filesystem or copies.
 * To run Replayer, simply call `mpirun -np ${np} ./rcclReplayer ${filename}.${extension}` 

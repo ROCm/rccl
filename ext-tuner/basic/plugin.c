@@ -18,7 +18,7 @@ __hidden ncclResult_t pluginGetCollInfo(void* context, ncclFunc_t collType, size
   if (table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] != NCCL_ALGO_PROTO_IGNORE) {
     table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = 0.0;
   }
-  *nChannels = 1;
+  *nChannels = 0;
   return ncclSuccess;
 }
 
