@@ -67,8 +67,8 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--rccl --tests"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
-      salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
+      ## The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
+      ## salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
