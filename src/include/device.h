@@ -639,7 +639,7 @@ struct alignas(16) ncclDevKernelArgs {
 
 __host__ __device__ constexpr int ncclMaxKernelArgsSize(/*int cudaDriver, */int cudaArch=NCCL_CUDA_ARCH) {
   //return (cudaArch < 700 || cudaDriver < 12010) ? 4<<10 : (32<<10)-4;
-  return (10<<10);
+  return (5<<10);
 }
 
 template<size_t capacity>
@@ -650,7 +650,7 @@ struct alignas(16) ncclDevKernelArgsStorage {
   };
 };
 
-typedef ncclDevKernelArgsStorage<(10<<10)> ncclDevKernelArgs4K;
+typedef ncclDevKernelArgsStorage<(5<<10)> ncclDevKernelArgs4K;
 //typedef ncclDevKernelArgsStorage<(32<<10)-4> ncclDevKernelArgs31K;
 
 template<typename T>

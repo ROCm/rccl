@@ -2875,4 +2875,3 @@ ncclResult_t ncclRedOpDestroy_impl(ncclRedOp_t op, ncclComm_t comm) {
   TRACE_CALL("ncclRedOpDestroy(%d,%p)", op, comm);
   return ncclSuccess;
 }
-                                                                                       
