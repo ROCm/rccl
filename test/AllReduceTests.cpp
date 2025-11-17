@@ -40,7 +40,6 @@ namespace RcclUnitTesting
     std::vector<bool>           const inPlaceList     = {false};
     std::vector<bool>           const managedMemList  = {false};
     std::vector<bool>           const useHipGraphList = {true};
-
     testBed.RunSimpleSweep(funcTypes, dataTypes, redOps, roots, numElements,
                            inPlaceList, managedMemList, useHipGraphList);
     testBed.Finalize();

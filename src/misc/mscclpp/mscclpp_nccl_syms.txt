@@ -4,7 +4,7 @@
 # done
 ncclAllGather mscclpp_ncclAllGather
 ncclAllReduce mscclpp_ncclAllReduce
-ncclAllToAll mscclpp_ncclAllToAll
+ncclAlltoAll mscclpp_ncclAllToAll
 ncclBcast mscclpp_ncclBcast
 ncclBroadcast mscclpp_ncclBroadcast
 ncclCommAbort mscclpp_ncclCommAbort

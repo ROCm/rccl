@@ -19,9 +19,11 @@
 #include <string.h>
 #include "rccl_vars.h"
 
-#if CUDART_VERSION >= 11030
+#if !defined(__HIP_PLATFORM_AMD__) && CUDART_VERSION >= 11030
 #include <cuda.h>
 #include "cudawrap.h"
+#else
+#include "rocmwrap.h"
 #endif
 
 uint64_t clockNano(); // from utils.h with which we have a circular dependency

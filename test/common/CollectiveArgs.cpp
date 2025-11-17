@@ -172,7 +172,7 @@ namespace RcclUnitTesting
     case ncclCollAllReduce:     ss << "ncclAllReduce";     break;
     case ncclCollGather:        ss << "ncclGather";        break;
     case ncclCollScatter:       ss << "ncclScatter";       break;
-    case ncclCollAllToAll:      ss << "ncclAllToAll";      break;
+    case ncclCollAllToAll:      ss << "ncclAlltoAll";      break;
     case ncclCollAllToAllv:     ss << "ncclAllToAllv";     break;
     case ncclCollSend:          ss << "ncclSend";          break;
     case ncclCollRecv:          ss << "ncclRecv";          break;

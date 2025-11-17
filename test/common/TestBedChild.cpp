@@ -631,14 +631,14 @@ namespace RcclUnitTesting
                           "ncclScatter");
           break;
         case ncclCollAllToAll:
-          CHILD_NCCL_CALL_RANK(errCode, ncclAllToAll(
+          CHILD_NCCL_CALL_RANK(errCode, ncclAlltoAll(
                                        collArg.inputGpu.ptr,
                                        collArg.outputGpu.ptr,
                                        collArg.numInputElements / collArg.totalRanks,
                                        collArg.dataType,
                                        this->comms[localRank],
                                        this->streams[groupId][localRank][collArg.streamIdx]),
-                          "ncclAllToAll");
+                          "ncclAlltoAll");
           break;
         case ncclCollAllToAllv:
           CHILD_NCCL_CALL_RANK(errCode, ncclAllToAllv(

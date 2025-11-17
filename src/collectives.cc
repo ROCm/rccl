@@ -19,10 +19,13 @@ const char* ncclFuncToString(ncclFunc_t fn) {
   switch (fn) {
   case ncclFuncAllGather: return "AllGather";
   case ncclFuncAllReduce: return "AllReduce";
+  case ncclFuncAlltoAll: return "AlltoAll";
   case ncclFuncBroadcast: return "Broadcast";
+  case ncclFuncGather: return "Gather";
   case ncclFuncRecv: return "Recv";
   case ncclFuncReduce: return "Reduce";
   case ncclFuncReduceScatter: return "ReduceScatter";
+  case ncclFuncScatter: return "Scatter";
   case ncclFuncSendRecv: return "SendRecv";
   case ncclFuncSend: return "Send";
   default: return "Invalid";
@@ -186,16 +189,14 @@ ncclResult_t ncclAllReduceWithBias_impl(const void* sendbuff, void* recvbuff, si
   return ncclEnqueueCheck(&info);
 }
 
-RCCL_PARAM(AllToAllPivotEnable, "ALL_TO_ALL_PIVOT_ENABLE", 0);
-
-NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
+NCCL_API(ncclResult_t, ncclAlltoAll, const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream);
 
 
-ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
+ncclResult_t ncclAlltoAll_impl(const void* sendbuff, void* recvbuff, size_t count, ncclDataType_t datatype,
   ncclComm_t comm, hipStream_t stream) {
-  NVTX3_FUNC_WITH_PARAMS(AllToAll, NcclNvtxParamsAllToAll,
-    NVTX3_PAYLOAD(comm ? comm->commHash : 0, count * ncclTypeSize(datatype), datatype));
+    NVTX3_FUNC_WITH_PARAMS(AlltoAll, NcclNvtxParamsAlltoAll,
+      NVTX3_PAYLOAD(comm ? comm->commHash : 0, count * ncclTypeSize(datatype)));
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
@@ -212,8 +213,8 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
   size_t rankAlign = rankOffset & ((~rankOffset) + 1);
   // Determine Pivot A2A support now that we know number of channels
   if (comm->topo->pivotA2AEnabled && comm->nChannels >= comm->topo->pivotA2ANumBiRings * 2 &&
-      rankOffset >= 744 * 1024 && rankAlign != 4 && rcclParamAllToAllPivotEnable()) {
-    struct ncclInfo info = { ncclFuncAllToAllPivot, "AllToAllPivot",
+      rankOffset >= 744 * 1024 && rankAlign != 4 /*&& rcclParamAllToAllPivotEnable()*/) {
+    struct ncclInfo info = { ncclFuncAlltoAll, "AlltoAll",
       sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream, /* Args */
       ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
     return ncclEnqueueCheck(&info);

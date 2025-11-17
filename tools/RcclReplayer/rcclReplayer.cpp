@@ -430,7 +430,7 @@ void Replayer::replay()
     // no op or root
     case rrAllToAll:
     {
-      NCCL_CALL(ncclAllToAll(sbuffer, rbuffer, call.count, call.datatype, commMap[call.comm], streams[call.stream].first));
+      NCCL_CALL(ncclAlltoAll(sbuffer, rbuffer, call.count, call.datatype, commMap[call.comm], streams[call.stream].first));
       break;
     }
     case rrAllGather:

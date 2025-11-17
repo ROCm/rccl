@@ -94,19 +94,18 @@ NCCL_NVTX_DEFINE_STRUCT_WITH_SCHEMA_ENTRIES(NcclNvtxParamsAllGather, static cons
   )
 )
 
+NCCL_NVTX_DEFINE_STRUCT_WITH_SCHEMA_ENTRIES(NcclNvtxParamsAlltoAll, static constexpr,
+  NCCL_NVTX_PAYLOAD_ENTRIES(
+    (uint64_t, comm, TYPE_UINT64, nccl_nvtxCommStr),
+    (size_t, bytes, TYPE_SIZE, nccl_nvtxMsgSizeStr)
+  )
+)
+
 NCCL_NVTX_DEFINE_STRUCT_WITH_SCHEMA_ENTRIES(NcclNvtxParamsAllReduce, static constexpr,
   NCCL_NVTX_PAYLOAD_ENTRIES(
     (uint64_t, comm, TYPE_UINT64, nccl_nvtxCommStr),
     (size_t, bytes, TYPE_SIZE, nccl_nvtxMsgSizeStr),
     (ncclRedOp_t, op, NCCL_REDOP, nccl_nvtxReductionOpStrpStr),
-    (ncclDataType_t, datatype, TYPE_DATATYPE, nccl_nvtxDataTypeStr)
-  )
-)
-
-NCCL_NVTX_DEFINE_STRUCT_WITH_SCHEMA_ENTRIES(NcclNvtxParamsAllToAll, static constexpr,
-  NCCL_NVTX_PAYLOAD_ENTRIES(
-    (uint64_t, comm, TYPE_UINT64, nccl_nvtxCommStr),
-    (size_t, bytes, TYPE_SIZE, nccl_nvtxMsgSizeStr),
     (ncclDataType_t, datatype, TYPE_DATATYPE, nccl_nvtxDataTypeStr)
   )
 )

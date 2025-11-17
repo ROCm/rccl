@@ -143,7 +143,11 @@ private:
 
 protected:
   void SetUp() override {
-    ncclResult_t result = ncclNetSocket.init(nullptr, nullptr);
+    void* ctx = nullptr;
+    ncclNetCommConfig_v11_t config = {};
+    ncclDebugLogger_t logFunction = nullptr;
+    ncclProfilerCallback_t profFunction = nullptr;
+    ncclResult_t result = ncclNetSocket.init(&ctx, 0, &config, logFunction, profFunction);
     ASSERT_EQ(result, ncclSuccess) << "Failed to initialize ncclNetSocket. "
                                    << "Error code: " << result
                                    << ". Ensure RCCL networking is properly configured.";
@@ -250,6 +254,7 @@ protected:
         ncclNetCommConfig_t config = {};
         ncclNetDeviceHandle_t *sendDevComm = nullptr;
         void *tempSendComm = nullptr;
+        void* ctx = nullptr;
 
         // Give accept thread more time to start listening
         std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
@@ -257,7 +262,7 @@ protected:
         // Increased attempts and longer total timeout for reliability
         for (int attempt = 0; attempt < 100 && !shouldStop.load(); attempt++) {
           ncclResult_t connectResult = ncclNetSocket.connect(
-              0, &config, handle, &tempSendComm, &sendDevComm);
+              ctx, 0, handle, &tempSendComm, &sendDevComm);
           if (connectResult == ncclSuccess && tempSendComm != nullptr) {
             sendGuard.reset(tempSendComm);
             connectCompleted = true;
@@ -627,8 +632,8 @@ TEST_F(NetSocketTests, TestConcurrentOperationsTaskCreationDefault) {
 
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  void* ctx = nullptr;
+  ncclResult_t result = ncclNetSocket.listen(ctx, 0, handle, &listenComm);
   ASSERT_EQ(result, ncclSuccess) << "Failed to establish listening socket for test execution. "
                                 << "ncclNetSocket.listen() returned error code: " << result
                                 << ". Verify network device availability and port accessibility.";
@@ -797,8 +802,8 @@ TEST_F(NetSocketTests, TestConcurrentOperationsTaskCreation) {
 
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  void* ctx = nullptr;
+  ncclResult_t result = ncclNetSocket.listen(ctx, 0, handle, &listenComm);
   ASSERT_EQ(result, ncclSuccess) << "Failed to establish listening socket for test execution. "
                                 << "ncclNetSocket.listen() returned error code: " << result
                                 << ". Verify network device availability and port accessibility.";
@@ -877,9 +882,9 @@ TEST_F(NetSocketTests, TestInvalidDeviceIndexListen) {
 
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-
+  void* ctx = nullptr;
   // Test with negative device index
-  ncclResult_t result = ncclNetSocket.listen(-1, handle, &listenComm);
+  ncclResult_t result = ncclNetSocket.listen(ctx, -1, handle, &listenComm);
   INFO(NCCL_LOG_INFO, "Listen with dev=-1 returned: %d", result);
   EXPECT_EQ(result, ncclInternalError)
       << "Listen should fail with negative device index. "
@@ -888,7 +893,7 @@ TEST_F(NetSocketTests, TestInvalidDeviceIndexListen) {
 
   // Test with device index greater than available devices
   int invalidDev = ndev + 10;
-  result = ncclNetSocket.listen(invalidDev, handle, &listenComm);
+  result = ncclNetSocket.listen(ctx, invalidDev, handle, &listenComm);
   INFO(NCCL_LOG_INFO, "Listen with dev=%d (> ndev=%d) returned: %d", invalidDev,
        ndev, result);
   EXPECT_EQ(result, ncclInternalError)
@@ -906,12 +911,13 @@ TEST_F(NetSocketTests, TestInvalidDeviceIndexConnect) {
 
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *sendComm = nullptr;
+  void* ctx = nullptr;
   ncclNetCommConfig_t config = {};
   ncclNetDeviceHandle_t *sendDevComm = nullptr;
 
   // Test with negative device index
   ncclResult_t result =
-      ncclNetSocket.connect(-1, &config, handle, &sendComm, &sendDevComm);
+      ncclNetSocket.connect(ctx, -1, handle, &sendComm, &sendDevComm); 
   INFO(NCCL_LOG_INFO, "Connect with dev=-1 returned: %d", result);
   EXPECT_EQ(result, ncclInternalError)
       << "Connect should fail with negative device index. "
@@ -920,7 +926,7 @@ TEST_F(NetSocketTests, TestInvalidDeviceIndexConnect) {
 
   // Test with device index greater than available devices
   int invalidDev = ndev + 10;
-  result = ncclNetSocket.connect(invalidDev, &config, handle, &sendComm,
+  result = ncclNetSocket.connect(ctx, invalidDev, handle, &sendComm,
                                  &sendDevComm);
   INFO(NCCL_LOG_INFO, "Connect with dev=%d (> ndev=%d) returned: %d",
        invalidDev, ndev, result);
@@ -957,7 +963,8 @@ TEST_F(NetSocketTests, TestInvalidArraySizeIrecv) {
   // Setup a dummy communicator first
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  void* ctx = nullptr;
+  ncclResult_t result = ncclNetSocket.listen(ctx, 0, handle, &listenComm);
 
   if (result == ncclSuccess && listenComm) {
     void *sendComm = nullptr;
@@ -1023,7 +1030,7 @@ TEST_F(NetSocketTests, TestNonHostMemoryRegMr) {
   // Setup a dummy communicator first
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  ncclResult_t result = ncclNetSocket.listen(NULL, 0, handle, &listenComm);
 
   if (result == ncclSuccess && listenComm) {
     void *sendComm = nullptr;
@@ -1138,7 +1145,8 @@ TEST_F(NetSocketTests, TestExcessiveThreadConfig) {
   // Initialize to trigger the warning logic
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  void * ctx = nullptr;
+  ncclResult_t result = ncclNetSocket.listen(ctx, 0, handle, &listenComm);
 
   if (result == ncclSuccess && listenComm) {
     // The implementation should have limited the threads to NCCL_NET_MAX_REQUESTS
@@ -1218,7 +1226,8 @@ TEST_F(NetSocketTests, TestExcessiveSocketConfig) {
   // Initialize to trigger the warning logic
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  void* ctx = nullptr;
+  ncclResult_t result = ncclNetSocket.listen(ctx, 0, handle, &listenComm);
 
   if (result == ncclSuccess && listenComm) {
     // The implementation should have limited the sockets to MAX_SOCKETS
@@ -1240,7 +1249,8 @@ TEST_F(NetSocketTests, TestRequestAllocationFailure) {
   // Setup communication
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  void* ctx = nullptr;
+  ncclResult_t result = ncclNetSocket.listen(ctx, 0, handle, &listenComm);
 
   if (result == ncclSuccess && listenComm) {
     void *sendComm = nullptr;
@@ -1344,7 +1354,8 @@ TEST_F(NetSocketTests, TestMessageSizeMismatch) {
 
   char handle[NCCL_NET_HANDLE_MAXSIZE];
   void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+  void* ctx = nullptr;
+  ncclResult_t result = ncclNetSocket.listen(ctx, 0, handle, &listenComm);
 
   if (result == ncclSuccess && listenComm) {
     void *sendComm = nullptr;

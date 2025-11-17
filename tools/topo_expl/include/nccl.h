@@ -348,10 +348,10 @@ const char* pncclGetLastError(ncclComm_t comm);
 /*! @endcond */
 
 /* Reload environment variables that determine logging. */
-void  ncclResetDebugInit();
-/*! @cond       include_hidden */
-void pncclResetDebugInit();
-/*! @endcond */
+// void  ncclResetDebugInit();
+// /*! @cond       include_hidden */
+// void pncclResetDebugInit();
+// /*! @endcond */
 
 /*! @brief      Checks whether the comm has encountered any asynchronous errors
     @details    Query whether the provided communicator has encountered any asynchronous errors
@@ -787,10 +787,10 @@ ncclResult_t pncclScatter(const void* sendbuff, void* recvbuff,
     @param[in]  datatype      Data buffer element datatype
     @param[in]  comm          Communicator group object to execute on
     @param[in]  stream        HIP stream to execute collective on */
-ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
+ncclResult_t  ncclAlltoAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /*! @cond       include_hidden */
-ncclResult_t pncclAllToAll(const void* sendbuff, void* recvbuff, size_t count,
+ncclResult_t pncclAlltoAll(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclComm_t comm, hipStream_t stream);
 /*! @endcond */
 
