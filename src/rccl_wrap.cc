@@ -166,6 +166,7 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
     }
 
   }
+  nc = std::min(nc, 64);
   return ncclSuccess;
 }
 
@@ -405,14 +406,9 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
 
 void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, int& rcclWarpSpeedChannels) {
   static int userChannelControlInput = RCCL_VALUE_UNSET;
-  static int rcclWarpSpeedChannelsCache = RCCL_VALUE_UNSET;
   int warpsPerBlock = threadsPerBlock / comm->WarpSize;
   // only adjust channels for RING algorithm
   if(algo != NCCL_ALGO_RING) {
-    return;
-  }
-  if(rcclWarpSpeedChannelsCache != RCCL_VALUE_UNSET) {
-    rcclWarpSpeedChannels = rcclWarpSpeedChannelsCache;
     return;
   }
   if (userChannelControlInput == RCCL_VALUE_UNSET) {
