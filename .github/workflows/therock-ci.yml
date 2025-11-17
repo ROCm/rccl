@@ -67,7 +67,8 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.amdgpu_family }}
       artifact_group: ${{ matrix.amdgpu_family }}
-      enabled_nics: ${{ github.event.inputs.enabled_nics }}
+      # Pass enabled_nics *only* for workflow_dispatch runs
+      enabled_nics: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enabled_nics || '' }}
       extra_cmake_options: >
         -DTHEROCK_ENABLE_ALL=OFF 
         -DTHEROCK_BUILD_TESTING=ON 
