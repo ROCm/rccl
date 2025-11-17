@@ -10,6 +10,15 @@ on:
       - opened
       - synchronize
   workflow_dispatch:
+    inputs:
+      enabled_nics:
+        description: "Select NIC configuration to run tests"
+        required: true
+        default: "8nic"
+        type: choice
+        options:
+          - "4nic"
+          - "8nic"
 
 permissions:
   contents: read
@@ -58,6 +67,7 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.amdgpu_family }}
       artifact_group: ${{ matrix.amdgpu_family }}
+      enabled_nics: ${{ github.event.inputs.enabled_nics }}
       extra_cmake_options: >
         -DTHEROCK_ENABLE_ALL=OFF 
         -DTHEROCK_BUILD_TESTING=ON 

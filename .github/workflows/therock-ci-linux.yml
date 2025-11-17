@@ -9,6 +9,9 @@ on:
         type: string
       extra_cmake_options:
         type: string
+      enabled_nics:
+        type: string
+        default: "8nic"
 
 permissions:
   contents: read
@@ -132,6 +135,7 @@ jobs:
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       artifact_group: ${{ inputs.artifact_group }}
+      enabled_nics: ${{ inputs.enabled_nics }}
       test_runs_on: nova-linux-slurm-scale-runner
       artifact_run_id: ${{ github.run_id }}
 
