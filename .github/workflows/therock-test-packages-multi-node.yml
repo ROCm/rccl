@@ -104,6 +104,6 @@ jobs:
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id "${{ github.run_id }}" \
             --amdgpu-family "${{ inputs.amdgpu_families }}" \
-            --report-path "/apps/cvs/test_reports/test_reports" \
+            --report-path "/apps/cvs/test_reports/" \
             --log-destination "/logs/gfx950-dcgpu" \
             --index-file-name "index_rccl_test_report.html"
