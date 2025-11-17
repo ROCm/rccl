@@ -47,7 +47,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id }}"
       OUTPUT_ARTIFACTS_DIR: /home/arravikum/dist_new/dist/rocm
       THEROCK_BIN_DIR: "./build/bin"
-      AWS_SHARED_CREDENTIALS_FILE: /home/arravikum/awsconfig/credentials.ini
+      AWS_SHARED_CREDENTIALS_FILE: /apps/cvs/awsconfig/credentials.ini
       ENABLED_NICS: ${{ inputs.enabled_nics }}
     steps:
       - name: Checkout Repository
