@@ -36,7 +36,6 @@ RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
 RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
 RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
 RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
-RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
 
 
@@ -422,6 +421,7 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
 void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, int& rcclWarpSpeedChannels) {
   static int userChannelControlInput = RCCL_VALUE_UNSET;
   static int rcclWarpSpeedChannelsCache = RCCL_VALUE_UNSET;
+  int warpsPerBlock = threadsPerBlock / comm->WarpSize;
   // only adjust channels for RING algorithm
   if(algo != NCCL_ALGO_RING) {
     return;
@@ -441,23 +441,24 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     userChannelControlInput = !inputStr ? 0 : 1;
   }
 
-  if(!userChannelControlInput && rcclParamWarpSpeedEnable()) {
+  if(!userChannelControlInput && comm->topo->warpSpeedEnabled) {
     if(rcclParamWarpSpeedCuCount() != 0) {
-      rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * (threadsPerBlock / comm->WarpSize);
+      rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * warpsPerBlock;
       INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
       return;
     }
+    // reuse the existing channel tuning logic if possible
     if (comm->nNodes == 1) {
-      rcclWarpSpeedChannels = 224;
+      rcclWarpSpeedChannels = std::min(224, rcclWarpSpeedChannels * warpsPerBlock);
     } else {
-      rcclWarpSpeedChannels = 256;
+      rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
     }
     INFO(NCCL_INIT, "RCCL Warp Speed Channels set to %d", rcclWarpSpeedChannels);
   }
 }
 
-void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclKernelPlan* plan, int warpSize, int nChannels, int& support, int &cuCount) {
-  if(!rcclParamWarpSpeedEnable()) {
+void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKernelPlan* plan, int nChannels, int& support, int &cuCount) {
+  if(!comm->topo->warpSpeedEnabled) {
     support = 0;
     cuCount = nChannels;
     return;
@@ -475,7 +476,7 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclKernelPlan* plan, int war
     }
     task = task->next;
   }
-  int warpsPerBlock = plan->threadPerBlock / warpSize;
+  int warpsPerBlock = plan->threadPerBlock / comm->WarpSize;
   support = (hasP2p || hasNonRing) ? 0 : 1;
   cuCount = (support == 0)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
 }

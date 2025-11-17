@@ -1059,7 +1059,7 @@ NCCL_PARAM(GraphDumpFileRank, "GRAPH_DUMP_FILE_RANK", 0);
 NCCL_PARAM(CollNetNodeThreshold, "COLLNET_NODE_THRESHOLD", 2);
 NCCL_PARAM(NvbPreconnect, "NVB_PRECONNECT", 0);
 NCCL_PARAM(AllocP2pNetLLBuffers, "ALLOC_P2P_NET_LL_BUFFERS", 0);
-
+RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 // MNNVL: Flag to indicate whether to enable Multi-Node NVLink
 NCCL_PARAM(MNNVLEnable, "MNNVL_ENABLE", 2);
 
@@ -1435,8 +1435,12 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
         allGather3Data[rank].nc = 4;
     }
   }
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
-    allGather3Data[rank].nc = 8;
+  comm->topo->warpSpeedEnabled = comm->topo->warpSpeedEnabled && rcclParamWarpSpeedEnable(); // only use for MI3xx GPUs if enabled by user
+  if (comm->topo->warpSpeedEnabled) {
+    allGather3Data[rank].nc = 8; // Use more channels for WarpSpeed
+  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
+    allGather3Data[rank].nc = 4;
+
   }
 
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();

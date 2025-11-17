@@ -1754,7 +1754,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   for (int i = 0; i < MAXCHANNELS/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
-  rcclSetWarpSpeedSupportAndFinalCuCount(plan, comm->WarpSize, nChannels, plan->kernelArgs->comm->warpLevelComm, nChannels);
+  rcclSetWarpSpeedSupportAndFinalCuCount(comm, plan, nChannels, plan->kernelArgs->comm->warpLevelComm, nChannels);
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);

@@ -207,6 +207,7 @@ struct ncclTopoSystem {
   int pivotA2ANumBiRings;
   bool treeDefined;
   bool ll128Enabled;
+  bool warpSpeedEnabled;
   float baseBw;
   bool mscclEnabled;
 
