@@ -8,6 +8,8 @@
 API library
 =============
 
-.. intro_sec::
+.. doxygenfile:: <../doxygen/mainpage.txt>
+
+   :sections: intro_sec
 
 .. doxygenindex::
