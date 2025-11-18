@@ -170,9 +170,10 @@ class Fn:
   def __iter__(self):
     return iter((self.coll, self.algo, self.proto, self.redop, self.ty, self.acc, self.pipeline, self.unroll))
 
-def calc_unroll_for_local_arch():
+def calc_unroll_and_pipeline_for_local_arch():
+
   if not is_local_arch_only:
-    return all_unrolls
+    return (all_unrolls, all_pipelines)
 
   rocminfo_path = os.environ.get('ROCM_PATH') + "/bin/rocminfo"
 
@@ -197,22 +198,22 @@ def calc_unroll_for_local_arch():
   # We want to remove duplicates but cannot use a dictionary since same gfx name can have different cu counts
   # Use (gfx_name, cu_count) as key for dictionary and convert it to list here
   gfx_targets = list(gfx_targets.keys())
-
+  
   # Homogeneous system is required to build for only 1 variant of unroll factor (except for gfx950)
   if len(gfx_targets) == 1:
     gfx_name, cu_count = gfx_targets[0]
     if "gfx950" == gfx_name:
-      return ["1", "2"]
+      return (["1", "2"], ["0"])  # Disable pipelining for gfx950
     elif "gfx908" == gfx_name or ("gfx942" == gfx_name and cu_count > 80):
-      return ["2"]
+      return (["2"], all_pipelines)
     else:
-      return ["4"]
+      return (["4"], all_pipelines)
   else:
-    return all_unrolls
+    return (all_unrolls, all_pipelines)
 
 # if building for local arch only, we only need to build for 1 variant of unroll for most gfx targets,
-# except for gfx950
-local_unroll = calc_unroll_for_local_arch()
+# except for gfx950. For gfx950, we also disable pipelining.
+local_unroll, local_pipeline = calc_unroll_and_pipeline_for_local_arch()
 
 # Helper function to check if the conditions for the collective is being met
 def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
@@ -226,6 +227,7 @@ def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
       ty not in tys_of_coll[coll] or
       acc not in acc_of_coll[coll] or
       pipeline not in pipelines_of_coll[coll] or (pipeline in ["1"] and ty not in pipelined_types) or
+      pipeline not in local_pipeline or
       unroll not in local_unroll):
     return False
   return True
@@ -318,7 +320,7 @@ def enumerate_func_rows():
           for redop in all_redops:
             for ty in all_tys:
               for acc in all_accs:
-                for pipeline in all_pipelines:
+                for pipeline in local_pipeline:
                   if func_validate(coll, algo, proto, redop, ty, acc, pipeline, unroll):
                     yield (coll, algo, proto, redop, ty, acc, pipeline, unroll)
 
@@ -332,7 +334,7 @@ def custom_sort_key(fn: Fn):
         all_redops.index(fn.redop),
         all_tys.index(fn.ty),
         all_accs.index(fn.acc),
-        all_pipelines.index(fn.pipeline)
+        local_pipeline.index(fn.pipeline)
     )
 
 def get_arch_guard(fn):

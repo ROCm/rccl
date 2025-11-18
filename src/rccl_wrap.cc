@@ -43,10 +43,11 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     const char *protoStr = getenv("NCCL_PROTO");
     userProtocolInput = !protoStr ? 0 : 1;
   }
+
   if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllGather) && sizePerRank <= 88448) {
     // Change LL protocol threshold
     info->protocol = NCCL_PROTO_LL;
-  } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncReduceScatter) && sizePerRank <= 175488) {
+  } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncReduceScatter) && sizePerRank <= 1048576) {
     // Change LL protocol threshold
     info->protocol = NCCL_PROTO_LL;
   } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && comm->nNodes == 1 && (info->func == ncclFuncReduceScatter) && sizePerRank <= 352128) {
@@ -239,26 +240,10 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
 
 void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   info->pipeline = 0; // Default to no pipelining
-  if (rcclParamdisableReduceCopyPipelining()) {
+  if (rcclParamdisableReduceCopyPipelining() || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
     return;
   }
   const bool dtypeOK = (info->datatype == ncclBfloat16) || rcclParamPipelineAllDTypes();
-
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && dtypeOK) {
-    if (comm->nNodes > 1) {
-      switch (info->func) {
-        case ncclFuncAllReduce:
-        case ncclFuncReduceScatter:
-        case ncclFuncReduce:
-          // Enable for multi-node
-          info->pipeline = 1;
-          break;
-        default:
-          break;
-      }
-    }
-    return;
-  }
 
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && dtypeOK) {
     switch (info->func) {
@@ -352,13 +337,13 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
   size_t threshold = rcclParamDirectAllGatherThreshold();
 
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
-     if (comm->nNodes == 1 && threshold != -1) {
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && threshold != -1) {
+     if (comm->nNodes == 1) {
         threshold = 8388608;
-     } else if (comm->nNodes < 64 && threshold != -1) {
+     } else if (comm->nNodes < 64) {
         threshold = comm->nNodes * 2097152;
      }
-  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
+  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && threshold != -1) {
 	threshold = 4194304;
   }
 
