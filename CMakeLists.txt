@@ -25,7 +25,7 @@ option(BUILD_SHARED_LIBS                       "Build as shared library"        
 option(BUILD_TESTS                             "Build unit test programs"                      OFF)
 option(COLLTRACE                               "Collective Trace Option"                       ON)
 option(DUMP_ASM                                "Disassemble and dump"                          OFF)
-option(ENABLE_CODE_COVERAGE                    "Enable code coverage"                          OFF)
+option(ENABLE_CODE_COVERAGE                    "Enable code coverage"                          ON)
 option(ENABLE_MSCCL_KERNEL                     "Enable MSCCL while compiling"                  ON)
 option(ENABLE_MSCCLPP                          "Enable MSCCL++"                                OFF)
 option(ENABLE_MSCCLPP_CLIP                     "Enable MSCCL++ CLIP"                           OFF)
