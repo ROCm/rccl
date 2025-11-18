@@ -186,8 +186,9 @@ ncclResult_t ncclCommSymmetricFreeInternal(struct ncclComm* comm, void* symPtr) 
   if (ncclCuMemEnable()) {
     CUDACHECKGOTO(cudaSetDevice(comm->cudaDev), ret, fail);
     CUCHECKGOTO(cuMemRetainAllocationHandle(&handle, symPtr), ret, fail);
-    CUCHECKGOTO(cuMemRelease(handle), ret, fail);
-    CUCHECKGOTO(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)symPtr), ret, fail);
+    // CUCHECKGOTO(cuMemRelease(handle), ret, fail);
+    void* base = nullptr;
+    CUCHECKGOTO(cuMemGetAddressRange(&base, &size, (CUdeviceptr)symPtr), ret, fail);
     NCCLCHECKGOTO(ncclNvlsSymmetricFree(comm, size, symPtr), ret, fail);
     NCCLCHECKGOTO(ncclIpcSymmetricFree(comm, size, symPtr), ret, fail);
     CUCHECKGOTO(cuMemRelease(handle), ret, fail);

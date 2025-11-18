@@ -1507,6 +1507,11 @@ static ncclResult_t reclaimPlan(struct ncclComm* comm, struct ncclCommCallback* 
       CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
     }
   }
+  // Free kernelArgs
+  cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+  CUDACHECK(hipFree(plan->kernelArgs));
+  CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   // Free coll tasks
   struct ncclTaskColl* ct = ncclIntruQueueHead(&plan->collTaskQueue);
   while (ct != nullptr) {
@@ -1611,7 +1616,11 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
         // plan->channelMask = uint64_t(-1) >> (64-task->nMaxChannels);
 
         plan->kernelArgsSize = sizeof(struct ncclSymDevArgs);
-        plan->kernelSymArgs = ncclMemoryStackAlloc<struct ncclSymDevArgs>(&comm->memScoped);
+        // plan->kernelSymArgs = ncclMemoryStackAlloc<struct ncclSymDevArgs>(&comm->memScoped);
+        cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
+        CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
+        CUDACHECKGOTO(hipMalloc(&plan->kernelSymArgs, sizeof(struct ncclSymDevArgs)), result, failure);
+        CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
         plan->kernelSymArgs->comm = comm->symDevComm;
         plan->kernelSymArgs->rootRank = task->root;
         plan->kernelSymArgs->redOpArg = task->opDev.scalarArg;
@@ -1744,7 +1753,7 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
   cudaStream_t launchStream = planner->streams->stream;
-  void* extra[] = {plan->kernelArgs, &plan->kernelArgsSize};
+  void* extra[] = {&plan->kernelArgs, &plan->kernelArgsSize};
 
   auto event = latency_profiler::collTraceAquireEventBaseline(plan, launchStream);
   if (planner->numStreams == 1 && !plan->persistent) {
