@@ -28,7 +28,7 @@ extern __shared__ struct mscclShmemData mscclShmem;
 
 inline __device__ static void barrier(int nthreads) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  assert(nthreads == NCCL_MAX_NTHREADS);
+  assert(nthreads == MSCCL_MAX_NTHREADS);
   #ifdef __GFX12__
     __asm__ __volatile__("s_waitcnt vmcnt(0) lgkmcnt(0)\ns_barrier_signal -1\ns_barrier_wait -1");
   #else
@@ -96,7 +96,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   struct ncclDevComm* comm, struct mscclAlgo* algo, struct mscclWork* work) {
   const int tid = threadIdx.x;
   const int bid = blockIdx.x;
-  const int nthreads = NCCL_MAX_NTHREADS;
+  const int nthreads = MSCCL_MAX_NTHREADS;
 
 #if defined(ENABLE_NPKIT)
   uint64_t timestamp_entry = 0;
@@ -194,7 +194,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
   }
 
   RedOp redFn(mscclShmem.work.redOpArg);
-  Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
+  Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0, 0, RCCL_METADATA_MSCCL> prims
     (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, mscclShmem.work.redOpArg);
 
 #if defined(ENABLE_NPKIT)
@@ -278,7 +278,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
             }
 
 #endif
-          prims.mscclSend(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
+          prims.send(srcOffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_SEND_EXIT)
             if (tid == 0) {

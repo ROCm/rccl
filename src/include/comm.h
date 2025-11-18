@@ -504,7 +504,7 @@ struct ncclComm {
   int node;
   int nNodes;
   int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
-  int gfx942CheapFenceOff; // RCCL: true if gfx942 cheap fence is disabled
+  int gfx9CheapFenceOff; // RCCL: true if gfx9 cheap fence is disabled
   int localRank;
   int localRanks;
   int maxLocalRanks;
@@ -713,10 +713,14 @@ struct ncclComm {
   CUmemGenericAllocationHandle symMCHandle;
   struct ncclIntruQueue<struct ncclSymRegTask, &ncclSymRegTask::next> symRegTaskQueue;
 
-  // Unroll factor for comm [RCCL]
+  // unroll factor for comm [RCCL]
   int unroll;
   // custom collective [RCCL]
   bool enableCustColl;
+  // gfx name from hipDeviceProp_t [RCCL]
+  char* archName;
+  // multiProcessorCount from hipDeviceProp_t [RCCL]
+  int cuCount;
   
   uint64_t endMagic;
 };

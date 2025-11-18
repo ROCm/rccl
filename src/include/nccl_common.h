@@ -12,11 +12,12 @@
 
 typedef enum {
   NCCL_LOG_NONE = 0,
-  NCCL_LOG_VERSION = 1,
-  NCCL_LOG_WARN = 2,
-  NCCL_LOG_INFO = 3,
-  NCCL_LOG_ABORT = 4,
-  NCCL_LOG_TRACE = 5
+  NCCL_LOG_ERROR = 1,
+  NCCL_LOG_VERSION = 2,
+  NCCL_LOG_WARN = 3,
+  NCCL_LOG_INFO = 4,
+  NCCL_LOG_ABORT = 5,
+  NCCL_LOG_TRACE = 6
 } ncclDebugLogLevel;
 
 typedef enum {
@@ -60,12 +61,11 @@ typedef enum {
   ncclFuncAllGather = 2,
   ncclFuncReduceScatter = 3,
   ncclFuncAllReduce = 4,
-  ncclFuncAllReduceWithBias = 5,
-  ncclFuncSendRecv = 6,
-  ncclFuncSend = 7,
-  ncclFuncRecv = 8,
-  ncclFuncAllToAllPivot = 9,
-  ncclNumFuncs = 10
+  ncclFuncSendRecv = 5,
+  ncclFuncSend = 6,
+  ncclFuncRecv = 7,
+  ncclFuncAllToAllPivot = 8,
+  ncclNumFuncs = 9
 } ncclFunc_t;
 
 #define NCCL_NUM_ALGORITHMS 7 // Tree/Ring/CollNet*/PAT

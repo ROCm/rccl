@@ -18,7 +18,7 @@
 
 using namespace rccl;
 
-NCCL_PARAM(LocalRegister, "LOCAL_REGISTER", 1);
+NCCL_PARAM(LocalRegister, "LOCAL_REGISTER", 0); // LWPCOMMLIBS-632: off by default for RCCL as unsupported feature.
 
 static ncclResult_t regFindHandleFromSymAddr(struct ncclComm* comm, void* baseSymPtr, struct ncclReg** handle) {
   struct ncclRegCache* cache = &comm->regCache;
