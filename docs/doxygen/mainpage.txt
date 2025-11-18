@@ -20,6 +20,11 @@ The collective operations are implemented using ring and tree algorithms and hav
 - @ref rccl_group_api
 - @ref msccl_api
 
+\section Full RCCL API File
+- nccl.h.in
+
+*/
+
 #ifndef NCCL_H_
 #define NCCL_H_
 
