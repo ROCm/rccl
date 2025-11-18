@@ -64,7 +64,7 @@ jobs:
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          salloc -N 4 --nodelist="cv350-zts-gtu-g40d-18, cv350-zts-gtu-g40b-08, cv350-zts-gtu-g40d-08, cv350-zts-gtu-g40b-08" -p meta64 -t 04:00:00 --exclusive bash -c "
+          salloc -N 4 --ntasks-per-node=8 -w cv350-zts-gtu-h27-08,cv350-zts-gtu-h28a-08,cv350-zts-gtu-h28a-18,cv350-zts-gtu-h28-18,cv350-zts-gtu-h31-08,cv350-zts-gtu-g40a-08 -p 17nodexgmi38 --reservation=rccl --exclusive bash -c "
           source /home/arravikum/TheRock/.venv/bin/activate &&
           cd /home/arravikum/cvs &&
           python input/setup.py &&
