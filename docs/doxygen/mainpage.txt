@@ -1,4 +1,4 @@
-/*! \mainpage RCCL Documentation
+\mainpage RCCL Documentation
 
 \tableofcontents
 
@@ -22,8 +22,6 @@ The collective operations are implemented using ring and tree algorithms and hav
 
 \section Full RCCL API File
 - nccl.h.in
-
-*/
 
 #ifndef NCCL_H_
 #define NCCL_H_
