@@ -745,6 +745,15 @@ struct ncclComm {
   struct ncclDevrState devrState; // The symmetric runtime state
   struct ncclSymkState symkState; // The symmetric kernels state (built on previous)
 
+  // unroll factor for comm [RCCL]
+  int unroll;
+  // custom collective [RCCL]
+  bool enableCustColl;
+  // gfx name from hipDeviceProp_t [RCCL]
+  char* archName;
+  // multiProcessorCount from hipDeviceProp_t [RCCL]
+  int cuCount;
+  
   uint64_t endMagic;
 };
 

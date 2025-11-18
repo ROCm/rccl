@@ -7,6 +7,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Changed
 
 * RCCL error messages have been made more verbose in several cases. RCCL now prints out fatal error messages by default. Fatal error messages can be suppressed by setting `NCCL_DEBUG=NONE`.
+* Disabled `reduceCopyPacks` pipelining for `gfx950`.
 
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 
@@ -20,6 +21,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ## RCCL 2.27.7 for ROCm 7.1.0
 
 ### Added
+* Added `RCCL_IB_QPS_PER_P2P` to set the number of QPs per connection for P2P operations. When set (≥1), P2P operations (Send/Recv) use `RCCL_IB_QPS_PER_P2P`, while other collective operations continue to use `NCCL_IB_QPS_PER_CONNECTION`. When not set, `NCCL_IB_QPS_PER_CONNECTION` applies to all operations.
 * Added `RCCL_FORCE_ENABLE_DMABUF` as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
 * Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
 * Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
