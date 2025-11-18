@@ -8,6 +8,6 @@
 API library
 =============
 
-.. Introduction::
+.. intro_sec::
 
 .. doxygenindex::
