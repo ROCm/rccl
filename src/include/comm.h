@@ -535,6 +535,7 @@ struct ncclComm {
   // Channels (per peer) for p2p
   int p2pnChannels;
   int p2pnChannelsPerPeer;
+  int p2pChannelShiftSize; // [RCCL] Modifies how parts are mapped to p2p channels
 
   // Should this comm allocate LL buffers for network P2P connections?
   bool allocP2pNetLLBuffers;
@@ -550,7 +551,7 @@ struct ncclComm {
   float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   int maxThreads[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   uint64_t minMaxLLRange[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
-  uint64_t minMaxChannelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 32,40,48,56,64, the two values for min/max size-threshold 
+  uint64_t minMaxChannelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 32,40,48,56,64, the two values for min/max size-threshold
 
   /* This attribute can indicate the states of communicators and return code of
   * asynchronous NCCL operations. */
@@ -721,7 +722,7 @@ struct ncclComm {
   char* archName;
   // multiProcessorCount from hipDeviceProp_t [RCCL]
   int cuCount;
-  
+
   uint64_t endMagic;
 };
 

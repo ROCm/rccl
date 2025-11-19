@@ -451,6 +451,21 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   return ncclSuccess;
 }
 
+RCCL_PARAM(P2pChannelShiftSize, "P2P_SHIFT_SIZE", -1);
+ncclResult_t rcclCommSetP2pShiftSize(struct ncclComm* comm) {
+  int nP2pChannels = comm->p2pnChannels;
+  int nChannelsLog2 = countOneBits(nP2pChannels-1);
+  int shiftSize = rcclParamP2pChannelShiftSize();
+
+  // Use 'bit-reversal' equivalent for default/invalid shiftSize
+  if (shiftSize < 0 || shiftSize >= nChannelsLog2) {
+    comm->p2pChannelShiftSize = nChannelsLog2 - 1;
+  } else {
+    comm->p2pChannelShiftSize = shiftSize;
+  }
+  return ncclSuccess;
+}
+
 std::string trimString(const std::string& s) {
   int sz = s.size();
   int b = 0;

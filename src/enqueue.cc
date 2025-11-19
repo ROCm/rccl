@@ -390,7 +390,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     //[Added-comment] opCount is missing for collDevWork, adding here
     devWork.opCount = task->opCount;
-	  
+
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     devWork.gfx9CheapFenceOff = gfx9CheapFenceOff(devWork, comm->gfx9CheapFenceOff);
@@ -513,11 +513,11 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
       }
-      
+
       if (!rcclIsArchSupportedForFunc(&agg, comm->archName)) {
-        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).", 
-          __func__, comm->archName, 
-          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol), 
+        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).",
+          __func__, comm->archName,
+          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol),
           ncclDevRedOpToString(task->opDev.op), ncclDatatypeToString(task->datatype), (agg.acc != nullptr), agg.pipeline);
         return ncclInvalidUsage;
       }
@@ -988,7 +988,7 @@ static ncclResult_t addP2pToPlan(
 
   if (!selfSend) {
     for (int part=0; part < nChannelsMax; part++) {
-      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes);
+      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes, comm->p2pChannelShiftSize);
       struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
       for (int dir=0; dir <= 1; dir++) {
         int peerRank = dir ? sendRank : recvRank;
@@ -1041,7 +1041,7 @@ static ncclResult_t addP2pToPlan(
         int regFlag = 0;
         NCCLCHECK(ncclCalloc(&handles[dir], nChannelsMax));
         for (int part = 0; part < nChannelsMax; part++) {
-          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes);
+          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes, comm->p2pChannelShiftSize);
           struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
           int peerRank = dir ? sendRank : recvRank;
           struct ncclConnector* conn = dir ? &channelPeers[peerRank]->send[connIndex[dir]]
@@ -1055,7 +1055,7 @@ static ncclResult_t addP2pToPlan(
     } else if (bytes[dir] > 0 && addrs[dir] && protocol[dir] == NCCL_PROTO_SIMPLE && !selfSend) {
       int peerRank = dir ? sendRank : recvRank;
       int regFlag = 0;
-      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, 0, nChannelsMax, comm->nNodes);
+      int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, 0, nChannelsMax, comm->nNodes, comm->p2pChannelShiftSize);
       struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
       struct ncclConnector* conn = dir ? &channelPeers[peerRank]->send[connIndex[dir]]
         : &channelPeers[peerRank]->recv[connIndex[dir]];
@@ -1147,7 +1147,7 @@ static ncclResult_t addP2pToPlan(
   nChannelsMax = std::max(nChannels[0], nChannels[1]);
   for (int part=0; part < nChannelsMax; part++) {
     int incWorkCounter = -1;
-    int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, comm->p2pnChannelsPerPeer, comm->nNodes);
+    int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, comm->p2pnChannelsPerPeer, comm->nNodes, comm->p2pChannelShiftSize);
     plan->channelMask.masks[channelId/64] |= uint64_t(1)<<(channelId%64);
     // Add batch first.
     int funcIdx = ncclDevFuncId_P2p();
@@ -1883,8 +1883,8 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
     // hostStreamPlanTask directly
     NCCLCHECK(hostStreamPlanTask(comm, plan));
   }
-  
-  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty 
+
+  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty
   // opCount was not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
   if (!plan->persistent && ncclIntruQueueHead(&plan->proxyOpQueue) == nullptr) {
     comm->opCount++;
@@ -2646,7 +2646,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
         }
         uint8_t base = ncclP2pChannelBaseForRound(comm, round, rcclParamP2pBatchEnable());
         for (int c=0; c < comm->p2pnChannelsPerPeer; c++) {
-          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c, comm->p2pnChannelsPerPeer, comm->nNodes);
+          int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, c, comm->p2pnChannelsPerPeer, comm->nNodes, comm->p2pChannelShiftSize);
           if (isSendNotRecv) {
             if (comm->channels[channelId].peers[peer]->send[1].hasSeen == 0) { // P2P uses only 1 connector
               // the send/recv connector is shared among split shared comms. We need to set hasSeen to
