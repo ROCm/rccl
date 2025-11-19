@@ -8,6 +8,4 @@
 API library
 =============
 
-.. doxygenpage:: mainpage.txt
-
 .. doxygenindex::
