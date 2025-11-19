@@ -439,6 +439,7 @@ set(SRC_FILES
   src/bootstrap.cc
   src/channel.cc
   src/collectives.cc
+  src/commDump.cc
   src/debug.cc
   src/enqueue.cc
   src/group.cc
