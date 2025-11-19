@@ -113,7 +113,9 @@ ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode*
   }
   return ncclSuccess;
 }
-
+/**
+ * system->nodes[NET] and other fields are initialized in the below function
+ */
 ncclResult_t ncclTopoCreateNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id) {
   if (system->nodes[type].count == NCCL_TOPO_MAX_NODES) {
     WARN("Error : tried to create too many nodes of type %d", type);
@@ -560,7 +562,7 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
   }
   for (int s=0; s<xmlCpu->nSubs; s++) {
     struct ncclXmlNode* node = xmlCpu->subs[s];
-    if (strcmp(node->name, "pci") == 0) NCCLCHECK(ncclTopoAddPci(node, system, cpu, systemId, numaId));
+    if (strcmp(node->name, "pci") == 0) NCCLCHECK(ncclTopoAddPci(node, system, cpu, systemId, numaId)); /* Adds pci in system.nodes[Net]*/
     if (strcmp(node->name, "nic") == 0) {
       struct ncclTopoNode* nic = NULL;
       int64_t localNicId = NCCL_TOPO_LOCAL_NIC_ID(numaId, 0);
@@ -1313,7 +1315,7 @@ out:
   return res;
 }
 
-static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIndex, ncclResult_t (*getProperties)(int, ncclNetProperties_t*), const char* netName, int coll, int virtualNics, bool dmaBufSupport) {
+static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIndex, ncclResult_t (*getProperties)(int, ncclNetProperties_t*), const char* netName, int coll, bool virtualNics, bool dmaBufSupport) {
   for (int n = startIndex; n < endIndex; n++) {
     ncclNetProperties_t props;
     NCCLCHECK(getProperties(n, &props));
@@ -1325,9 +1327,11 @@ static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIn
       // In the event of multithreaded use case, we need to re-discover the shared parent of the given devices for this vNIC
       // Only run this if the net doesn't exist locally - this may alter the XML state
       if (net == NULL) NCCLCHECK(ncclTopoGetVNicParent(xml, getProperties, &props.vProps, &parent));
+      INFO(NCCL_GRAPH, "vNIC populate: props.name=%s pciPath=%s", props.name, props.pciPath);
+      if (parent == NULL) WARN("vNIC parent discovery failed for %s (check pciPath + ordering)", props.name);
     }
 
-    NCCLCHECK(ncclTopoFillNet(xml, props.pciPath, props.name, &netNode, parent));
+    NCCLCHECK(ncclTopoFillNet(xml, props.pciPath, props.name, &netNode, parent));          /*parent->name is 'cpu'*/
 
     const char* colAttr;
     NCCLCHECK(xmlGetAttr(netNode, "coll", &colAttr));
@@ -1360,7 +1364,7 @@ static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIn
 
 // Calls to network plugin APIs should be protected. This function should be called inside a per-process lock.
 ncclResult_t ncclTopoProcessNet(ncclXml* xml, int coll, const char* dumpXmlFile, ncclTopoNetState* state, ncclResult_t (*getProperties)(int, ncclNetProperties_t*), ncclResult_t (*makeVDevice)(int*, ncclNetVDeviceProps_t*), ncclResult_t (*devices)(int*), const char* netName, bool dmaBufSupport) {
-  int usePhysicalDevices = (dumpXmlFile || makeVDevice == NULL);
+  int usePhysicalDevices = (makeVDevice == NULL); /*(dumpXmlFile || makeVDevice == NULL);*/
   if (state->nPhysicalNics == -1) NCCLCHECK(devices(&state->nPhysicalNics));
   // Enumerate physical devices
   NCCLCHECK(ncclTopoPopulateNics(xml, 0, state->nPhysicalNics, getProperties, netName, coll, false, dmaBufSupport));
@@ -1402,6 +1406,195 @@ ncclResult_t ncclTopoGetSharedState(ncclTopoNetState** state, const char* name, 
   }
   WARN("NET/TOPO : Couldn't find net with name %s", name);
   return ncclInternalError;
+}
+
+/** 
+ * @brief Import network plugins into an existing NCCL topology XML.
+ * @param xml [in,out]
+ *   Pointer to an allocated NCCL XML topology object that will be modified.
+ * @param comm [in]
+ *   NCCL communicator whose network plugins and DMA-BUF support info will be used during network discovery.   
+ * @return ncclResult_t
+ *   Returns ncclSuccess on success, or the first NCCL error code encountered.
+ * @note 
+ * The caller is responsible for:
+ *  - XML object's memory ownership
+ *  - Calling this function before XML trimming and XML fusion steps
+*/
+ncclResult_t ncclTopoImportNetPlugins(ncclXml* xml,const struct ncclComm* comm){
+  // Auto-detect NICs if needed. net/collnet share the same xml/graph nodes,
+  // so we start with collnet so that it has precedence.
+  ncclResult_t ret = ncclSuccess;
+  int netLockHeld = 0;
+  pthread_mutex_lock(&netLock);
+  netLockHeld = 1;
+  INFO(NCCL_GRAPH, "TOPO/NET : Importing network plugins to topology");
+  ncclTopoNetState* state;
+  state = NULL;
+  if (collNetSupport(comm)) {
+    NCCLCHECKGOTO(ncclTopoGetSharedState(&state, comm->ncclCollNet->name, collNetStates), ret, fail);
+    NCCLCHECKGOTO(ncclTopoProcessNet(xml, 1, NULL, state,
+      comm->ncclCollNet->getProperties, comm->ncclCollNet->makeVDevice, comm->ncclCollNet->devices, comm->ncclCollNet->name, comm->dmaBufSupport), ret, fail);
+  }
+  NCCLCHECKGOTO(ncclTopoGetSharedState(&state, comm->ncclNet->name, netStates), ret, fail);
+  // [RCCL] Disabled virtual devices
+  NCCLCHECKGOTO(ncclTopoProcessNet(xml, 0, NULL, state,
+    comm->ncclNet->getProperties, /*nullptr*/ comm->ncclNet->makeVDevice, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
+  pthread_mutex_unlock(&netLock);
+  netLockHeld = 0;
+exit:
+  return ret;
+fail:
+  if (netLockHeld) pthread_mutex_unlock(&netLock);
+  goto exit;
+}
+
+/**
+ * @brief For every <cpu> node in xml, set host_hash attribute to getHostHash().
+ * @param xml [in,out]
+ */
+static ncclResult_t ncclTopoSetCpuHostHashes(struct ncclXml* xml) {
+  ncclResult_t ret = ncclSuccess;
+  struct ncclXmlNode* node = NULL;
+  uint64_t hosthash = getHostHash();
+  NCCLCHECKGOTO(xmlFindTag(xml, "cpu", &node), ret, exit);
+  while (node != NULL) {
+    NCCLCHECKGOTO(xmlSetAttrLong(node, "host_hash", hosthash), ret, exit);
+    NCCLCHECKGOTO(xmlFindNextTag(xml, "cpu", node, &node), ret, exit);
+  }
+exit:
+  return ret;
+}
+
+/**
+ * @brief  If xml is empty (maxIndex == 0), create a <system> root node and set version.
+ * @param xml [in,out]
+ */
+static ncclResult_t ncclTopoEnsureSystemRoot(struct ncclXml* xml) {
+  ncclResult_t ret = ncclSuccess;
+  if (xml->maxIndex == 0) {
+    struct ncclXmlNode* top;
+    NCCLCHECKGOTO(xmlAddNode(xml, NULL, "system", &top), ret, exit);
+    NCCLCHECKGOTO(xmlSetAttrInt(top, "version", NCCL_TOPO_XML_VERSION), ret, exit);
+  }
+exit:
+  return ret;
+}
+
+/**
+ * @brief  Fill the XML entry for the local GPU only (the GPU managed by this process),
+ * @param xml [in,out]
+ * @param comm [in]
+ */
+static ncclResult_t ncclTopoPrepareLocalGpu(struct ncclXml* xml, const struct ncclComm* comm) {
+  ncclResult_t ret = ncclSuccess;
+  struct ncclXmlNode* node = NULL;
+  char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
+  NCCLCHECKGOTO(int64ToBusId(comm->peerInfo[comm->rank].busId, busId), ret, exit);
+  NCCLCHECKGOTO(ncclTopoFillGpu(xml, busId, &node), ret, exit);
+  // Detect only the GPU managed by this process.  We'll get any others through XML fusion
+  if (node) {
+    NCCLCHECKGOTO(xmlSetAttrInt(node, "keep", 1), ret, exit);
+    NCCLCHECKGOTO(xmlSetAttrInt(node, "rank", comm->rank), ret, exit);
+    NCCLCHECKGOTO(xmlInitAttrInt(node, "gdr", comm->peerInfo[comm->rank].gdrSupport), ret, exit);
+  }
+exit:
+  return ret;
+}
+
+
+
+/**
+ * @brief Build rccl topology XML for current communicator
+ * @param xml [in,out]
+ *  Pointer to caller-allocated ncclXml structure
+ * @param comm [in]
+ *  Communicator providing GPU identity, hostHash, NIC plugins, bootstrap channel and clique information.
+ * @return 
+ *  ncclSuccess on success or an appropriate NCCL error code.ncclResult_t
+ */
+ncclResult_t ncclTopoGetXml(ncclXml* xml,const struct ncclComm* comm){
+  ncclResult_t ret = ncclSuccess;
+  int localRank = -1, nLocalRanks = 0;
+  int* localRanks = NULL;
+  struct ncclXml* rankXml;
+  char* mem = NULL;
+
+  // NCCLCHECK(xmlAlloc(xmlptr, NCCL_TOPO_XML_MAX_NODES));
+  const char* xmlTopoFile = ncclGetEnv("NCCL_TOPO_FILE");
+  if (xmlTopoFile) {
+    INFO(NCCL_ENV, "NCCL_TOPO_FILE set by environment to %s", xmlTopoFile);
+    NCCLCHECKGOTO(ncclTopoGetXmlFromFile(xmlTopoFile,xml, 1), ret, fail);
+  } else {
+    // Try default XML topology location
+    NCCLCHECKGOTO(ncclTopoGetXmlFromFile("/var/run/nvidia-topologyd/virtualTopology.xml", xml, 0), ret, fail);
+  }
+  NCCLCHECKGOTO(ncclTopoSetCpuHostHashes(xml), ret, fail);
+  NCCLCHECKGOTO(ncclTopoEnsureSystemRoot(xml), ret, fail);
+  NCCLCHECKGOTO(ncclTopoRefreshBcmP2pLinks(), ret, fail);
+   // Detect only the GPU managed by this process.  We'll get any others through XML fusion.
+  NCCLCHECKGOTO(ncclTopoPrepareLocalGpu(xml, comm), ret, fail);
+  NCCLCHECKGOTO(ncclTopoImportNetPlugins(xml,comm),ret,fail);
+  NCCLCHECKGOTO(ncclTopoTrimXml(xml), ret, fail);
+  // XML topo fusion.
+  if (comm->MNNVL) {
+    // MNNVL clique support
+    nLocalRanks = comm->clique.size;
+    localRank = comm->cliqueRank;
+    localRanks = comm->clique.ranks;
+  } else {
+    // Intra-node fusion.  Much of the comm is not initialized yet at this point so we need to do our own calculations.
+    NCCLCHECKGOTO(ncclCalloc(&localRanks, comm->nRanks), ret, fail);
+    for (int i = 0; i < comm->nRanks; i++) {
+      if (comm->peerInfo[i].hostHash == comm->peerInfo[comm->rank].hostHash) {
+        if (i == comm->rank)
+          localRank = nLocalRanks;
+        localRanks[nLocalRanks++] = i;
+      }
+    }
+  }
+  NCCLCHECKGOTO(ncclCalloc(&mem, nLocalRanks * xmlMemSize(NCCL_TOPO_XML_MAX_NODES)), ret, fail);
+  rankXml = (struct ncclXml*)(mem+xmlMemSize(NCCL_TOPO_XML_MAX_NODES)*localRank);
+  memcpy(rankXml, xml, xmlMemSize(NCCL_TOPO_XML_MAX_NODES));
+  NCCLCHECKGOTO(ncclTopoConvertXml(rankXml, (uintptr_t)xml->nodes, 1), ret, fail);
+  // nLocalRanks can't actually be 0, or we wouldn't be running at all...
+  // coverity[divide_by_zero]
+  NCCLCHECKGOTO(bootstrapIntraNodeAllGather(comm->bootstrap, localRanks, localRank, nLocalRanks, mem, xmlMemSize(NCCL_TOPO_XML_MAX_NODES)), ret, fail);
+  if (comm->MNNVL) {
+    // Ensure that we have enough room when fusing topos from multiple nodes.
+    free(xml);
+    xml = NULL;
+    NCCLCHECKGOTO(xmlAlloc(&xml, nLocalRanks*NCCL_TOPO_XML_MAX_NODES), ret, fail);
+  } else {
+    // In the intra-node case there's no need to enlarge the topo xml.
+    xml->maxIndex = 0;
+  }
+  for (int i = 0; i < nLocalRanks; i++) {
+    struct ncclXml* peerXml = (struct ncclXml*)(mem+xmlMemSize(NCCL_TOPO_XML_MAX_NODES)*i);
+    NCCLCHECKGOTO(ncclTopoConvertXml(peerXml, (uintptr_t)peerXml->nodes, 0), ret, fail);
+    NCCLCHECKGOTO(ncclTopoFuseXml(xml, peerXml), ret, fail);
+  }
+exit:
+  return ret;
+fail:
+  goto exit;
+}
+
+ncclResult_t ncclTopoGetSystemNew(const struct ncclComm* comm, struct ncclTopoSystem** system, const char* dumpXmlFile){
+  ncclResult_t ret = ncclSuccess;
+  struct ncclXml* xml;
+  NCCLCHECK(xmlAlloc(&xml, NCCL_TOPO_XML_MAX_NODES));
+  NCCLCHECKGOTO(ncclTopoGetXml(xml,comm), ret, fail);
+  if (dumpXmlFile && comm->rank == ncclParamTopoDumpFileRank()) {
+    INFO(NCCL_ENV, "NCCL_TOPO_DUMP_FILE set by environment to %s", dumpXmlFile);
+    NCCLCHECKGOTO(ncclTopoDumpXmlToFile(dumpXmlFile, xml), ret, fail);
+  }
+  NCCLCHECKGOTO(ncclTopoGetSystemFromXml(xml, system, getHostHash()), ret, fail);
+exit:
+  free(xml);
+  return ret;
+fail:
+  goto exit;
 }
 
 ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** system, const char* dumpXmlFile) {
@@ -1464,13 +1657,11 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   NCCLCHECKGOTO(ncclTopoGetSharedState(&state, comm->ncclNet->name, netStates), ret, fail);
   // [RCCL] Disabled virtual devices
   NCCLCHECKGOTO(ncclTopoProcessNet(xml, 0, dumpXmlFile, state,
-    comm->ncclNet->getProperties, nullptr /*comm->ncclNet->makeVDevice*/, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
+    comm->ncclNet->getProperties, /*nullptr*/ comm->ncclNet->makeVDevice, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
   pthread_mutex_unlock(&netLock);
   netLockHeld = 0;
-
   // Remove XML branches which don't have a node with keep="1" (typically when importing a topology)
   NCCLCHECKGOTO(ncclTopoTrimXml(xml), ret, fail);
-
   // XML topo fusion.
   if (comm->MNNVL) {
     // MNNVL clique support
@@ -1514,10 +1705,8 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
     INFO(NCCL_ENV, "NCCL_TOPO_DUMP_FILE set by environment to %s", dumpXmlFile);
     NCCLCHECKGOTO(ncclTopoDumpXmlToFile(dumpXmlFile, xml), ret, fail);
   }
-
   // Only update our topo tracking structure if we aren't dumping (separate steps)
   if (dumpXmlFile == NULL) NCCLCHECKGOTO(ncclTopoGetSystemFromXml(xml, system, getHostHash()), ret, fail);
-
 exit:
   if (!comm->MNNVL && localRanks) free(localRanks);
   if (mem) free(mem);
@@ -1579,6 +1768,9 @@ ncclResult_t getLocalNetCountByBw(struct ncclTopoSystem* system, int gpu, int *c
   return ncclSuccess;
 }
 
+/**
+ * the following function modifies system->nodes[NET]
+ */
 ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int channelId, int64_t* id, int* dev) {
   int gpu;
   NCCLCHECK(ncclTopoRankToIndex(system, rank, &gpu, /*showWarn=*/true));

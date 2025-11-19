@@ -21,6 +21,7 @@ ncclResult_t ncclTopoCudaPath(int cudaDev, char** path);
 struct ncclTopoSystem;
 // Build the topology
 ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** system, const char* dumpXmlFile=NULL);
+ncclResult_t ncclTopoGetSystemNew(const struct ncclComm* comm, struct ncclTopoSystem** system, const char* dumpXmlFile=NULL);
 ncclResult_t ncclTopoSortSystem(struct ncclTopoSystem* system);
 ncclResult_t ncclTopoPrint(struct ncclTopoSystem* system);
 
