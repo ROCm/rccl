@@ -25,8 +25,13 @@ on:
       artifact_run_id:
         type: string
       nic_config:
-        type: string
+        description: "Select NIC configuration to run tests"
+        required: true
         default: "8nic"
+        type: choice
+        options:
+          - "4nic"
+          - "8nic"
         
 permissions:
   contents: read
