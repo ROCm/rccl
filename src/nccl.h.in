@@ -6,7 +6,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
- /*! \mainpage RCCL Documentation
+/*! \mainpage RCCL Documentation
 
 \tableofcontents
 
@@ -34,7 +34,7 @@ The collective operations are implemented using ring and tree algorithms and hav
 
 */
 
- #ifndef NCCL_H_
+#ifndef NCCL_H_
 #define NCCL_H_
 
 #include <hip/hip_runtime.h>
