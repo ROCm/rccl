@@ -66,6 +66,7 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_family }}
+      nic_config: ${{ github.event.inputs.nic_config != '' && github.event.inputs.nic_config || '8nic' }}
       artifact_group: ${{ matrix.amdgpu_family }}
       extra_cmake_options: >
         -DTHEROCK_ENABLE_ALL=OFF 
