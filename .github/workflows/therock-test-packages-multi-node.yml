@@ -74,7 +74,7 @@ jobs:
         run: |
           # Determine config file based on NIC_CONFIG,
           # the NIC_CONFIG signifies the number of NICs used in the node to run Bandwidth tests for rccl_multinode_cvs.py
-          CONFIG_FILE = "./input/mi350_${NIC_CONFIG}_config.json"
+          CONFIG_FILE="./input/mi350_${NIC_CONFIG}_config.json"
           echo "Using config file: $CONFIG_FILE"
 
           salloc -N 4 -p meta64 -t 04:00:00 --exclusive bash -c "
