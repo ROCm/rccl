@@ -7,6 +7,7 @@ Usage:
     python3 replay_log_converter.py <base_logname> tojson [new_basename]
     python3 replay_log_converter.py <base_logname> tojson [new_basename] --standardize
     python3 replay_log_converter.py <base_logname> --standardize
+    python3 replay_log_converter.py <base_logname> --sanitize
 """
 
 import sys
@@ -95,8 +96,83 @@ STRUCT_FORMAT = (
 # Calculate the size of the struct in bytes
 STRUCT_SIZE = struct.calcsize(STRUCT_FORMAT) 
 
+class Sanitizer:
+    # Tracks and remaps pointer values to human-readable identifiers.
+    
+    # Regex patterns for sanitization (compiled once at class level)
+    HEX_PATTERN = re.compile(r'0x[0-9a-fA-F]+')
+    UNIQUEID_PATTERN = re.compile(r'uniqueID\s*:\s*(\d+)')
+    TIME_PATTERN = re.compile(r'time\s*:\s*([\d.]+)')
+    CONTEXT_LOOKBACK = 20  # Characters to look back for context detection
+    
+    def __init__(self):
+        self.comm_map = {}
+        self.uniqueid_map = {}
+        self.stream_map = {}
+        self.buffer_map = {}
+        self.handle_map = {}
+    
+    def _sanitize_value(self, value, mapping, prefix):
+        if value is None or value == 0 or value == -1:
+            return value
+        if value not in mapping:
+            mapping[value] = f"{prefix}_{len(mapping) + 1:03d}"
+        return mapping[value]
+    
+    def sanitize_comm(self, value):
+        # Sanitize communicator pointer.
+        return self._sanitize_value(value, self.comm_map, "comm")
+    
+    def sanitize_uniqueid(self, value):
+        # Sanitize unique ID / commId.
+        return self._sanitize_value(value, self.uniqueid_map, "uniqueid")
+    
+    def sanitize_stream(self, value):
+        # Sanitize stream pointer.
+        return self._sanitize_value(value, self.stream_map, "stream")
+    
+    def sanitize_buffer(self, value):
+        # Sanitize buffer pointer (sendbuff, recvbuff, acc, base addresses).
+        return self._sanitize_value(value, self.buffer_map, "buf")
+    
+    def sanitize_handle(self, value):
+        # Sanitize handle (CommRegister/Deregister).
+        return self._sanitize_value(value, self.handle_map, "handle")
+    
+    
+    def sanitize_by_type(self, value, value_type):
+        # Sanitize a value based on its type.
+        if value_type == 'comm':
+            return self.sanitize_comm(value)
+        elif value_type == 'uniqueid':
+            return self.sanitize_uniqueid(value)
+        elif value_type == 'stream':
+            return self.sanitize_stream(value)
+        elif value_type == 'buffer':
+            return self.sanitize_buffer(value)
+        elif value_type == 'handle':
+            return self.sanitize_handle(value)
+        return value
+    
+    def determine_hex_type(self, line, match_start):
+        # Determine the type of hex value based on context.
+        start = max(0, match_start - self.CONTEXT_LOOKBACK)
+        context = line[start:match_start]
+        
+        if 'comm :' in context or 'newcomm :' in context:
+            return 'comm'
+        elif 'uniqueID :' in context:
+            return 'uniqueid'
+        elif 'stream :' in context:
+            return 'stream'
+        elif any(kw in context for kw in ['addr :', 'base :', 'ptr :', 'acc :']):
+            return 'buffer'
+        elif 'handle :' in context:
+            return 'handle'
+        return None
+
 def parse_hex_or_int(value_str):
-    # Parse hex (0x...) or decimal integer, handle (nil)
+    # Parse hex (0x...) or decimal integer, handle (nil), or keep sanitized strings
     value_str = value_str.strip()
     if value_str == "(nil)" or value_str == "":
         return 0
@@ -106,7 +182,16 @@ def parse_hex_or_int(value_str):
         else:
             return int(value_str)
     except ValueError:
-        return 0
+        # If it's not a valid number, return the string as-is (e.g., "comm_001", "uniqueid_001")
+        return value_str
+
+def format_hex_or_string(value):
+    # Format value as hex if it's an integer, or return as-is if it's a string (sanitized)
+    if isinstance(value, str):
+        return value  # Already a sanitized string like "comm_001"
+    elif isinstance(value, int):
+        return hex(value) if value != 0 else "0x0"
+    return "0x0"
 
 def parse_buffer_field(line, field_name):
     # Matches "field : [... addr : XXX ... base : YYY ... size : ZZZ]" pattern
@@ -133,9 +218,11 @@ def parse_array_field(line, field_name):
     return None
 
 def format_pointer(val, none_str='(nil)'):
-    # Format pointer value: 0/None -> none_str, else hex.
+    # Format pointer value: 0/None -> none_str, string as-is, else hex.
     if val is None or val == 0:
         return none_str
+    if isinstance(val, str):
+        return val  # Already a sanitized string like "comm_001"
     return hex(val)
 
 def format_context(call_data):
@@ -678,6 +765,87 @@ def find_log_files(base_name, extension=None):
     
     return sorted(files)
 
+def sanitize_json_file(input_file, output_file):
+    # Sanitize JSON log file for easier comparison.
+    print(f"Sanitizing {input_file} to {output_file}")
+    
+    try:
+        with open(input_file, 'r') as f:
+            lines = f.readlines()
+    except IOError as e:
+        print(f"Error reading {input_file}: {e}")
+        return
+    
+    sanitizer = Sanitizer()
+    min_timestamp = float('inf')
+    
+    # First pass: collect all unique values to build mappings
+    for line in lines:
+        # Collect hex values
+        for match in Sanitizer.HEX_PATTERN.finditer(line):
+            hex_val = int(match.group(), 16)
+            if hex_val > 0:
+                value_type = sanitizer.determine_hex_type(line, match.start())
+                if value_type:
+                    sanitizer.sanitize_by_type(hex_val, value_type)
+        
+        # Collect decimal uniqueID values
+        for match in Sanitizer.UNIQUEID_PATTERN.finditer(line):
+            uniqueid_val = int(match.group(1))
+            if uniqueid_val > 0:
+                sanitizer.sanitize_uniqueid(uniqueid_val)
+        
+        # Find minimum timestamp
+        time_match = Sanitizer.TIME_PATTERN.search(line)
+        if time_match:
+            timestamp = float(time_match.group(1))
+            if timestamp > 0:
+                min_timestamp = min(min_timestamp, timestamp)
+    
+    if min_timestamp == float('inf'):
+        min_timestamp = 0.0
+    
+    # Second pass: replace values in-place
+    try:
+        with open(output_file, 'w') as f:
+            for line in lines:
+                new_line = line
+                
+                # Replace hex values
+                for match in reversed(list(Sanitizer.HEX_PATTERN.finditer(line))):
+                    hex_val = int(match.group(), 16)
+                    if hex_val == 0:
+                        replacement = '(nil)'
+                    else:
+                        value_type = sanitizer.determine_hex_type(line, match.start())
+                        if value_type:
+                            replacement = sanitizer.sanitize_by_type(hex_val, value_type)
+                        else:
+                            replacement = match.group()
+                    
+                    # Replace from end to start to preserve match positions
+                    new_line = new_line[:match.start()] + replacement + new_line[match.end():]
+                
+                # Replace decimal uniqueID values
+                for match in reversed(list(Sanitizer.UNIQUEID_PATTERN.finditer(new_line))):
+                    uniqueid_val = int(match.group(1))
+                    if uniqueid_val > 0:
+                        sanitized = sanitizer.sanitize_uniqueid(uniqueid_val)
+                        replacement = f"uniqueID : {sanitized}"
+                        new_line = new_line[:match.start()] + replacement + new_line[match.end():]
+                
+                # Replace timestamps
+                for match in reversed(list(Sanitizer.TIME_PATTERN.finditer(new_line))):
+                    timestamp = float(match.group(1))
+                    normalized = timestamp - min_timestamp
+                    replacement = f"time : {normalized:.6f}"
+                    new_line = new_line[:match.start()] + replacement + new_line[match.end():]
+                
+                f.write(new_line)
+    except IOError as e:
+        print(f"Error writing to {output_file}: {e}")
+        return
+
 def standardize_json_file(input_file, output_file):
     # Convert non-standard JSON to standard parseable JSON
     print(f"Standardizing {input_file} to {output_file}...")
@@ -734,7 +902,7 @@ def standardize_json_file(input_file, output_file):
     with open(output_file, 'w') as f:
         json.dump(result, f, indent=2)
     
-    print(f"Standardized to {output_file}")
+    # print(f"Standardized to {output_file}")
 
 def transform_struct_to_standard_json(struct_data, call_type_str):
     # Transform struct-format dict (from parse_json_line) to standard JSON format dict.
@@ -743,18 +911,21 @@ def transform_struct_to_standard_json(struct_data, call_type_str):
     
     call_dict = {"type": call_type_str}
     
-    # Transform context (excluding pid and groupDepth which recorder omits from JSON)
-    # Build context dict with all available fields
+    # Transform context - include all available fields
     context = {}
-    if struct_data.get('timestamp') != -1:
+    if struct_data.get('pid') is not None:
+        context["pid"] = struct_data['pid']
+    if struct_data.get('timestamp') is not None:
         context["time"] = struct_data['timestamp']
-    if struct_data.get('tid') != -1:
+    if struct_data.get('tid') is not None:
         context["thread"] = struct_data['tid']
-    if struct_data.get('hipDev') != -1:
+    if struct_data.get('hipDev') is not None:
         context["device"] = struct_data['hipDev']
-    if struct_data.get('graphCaptured') != -1:
+    if struct_data.get('groupDepth') is not None:
+        context["groupDepth"] = struct_data['groupDepth']
+    if struct_data.get('graphCaptured') is not None:
         context["captured"] = struct_data['graphCaptured']
-    if struct_data.get('graphID') != 0:
+    if struct_data.get('graphID') is not None:
         context["graphID"] = struct_data['graphID']
     
     # Only add context if we have fields
@@ -792,7 +963,7 @@ def transform_struct_to_standard_json(struct_data, call_type_str):
     
     elif call_type_str == "CommSplit":
         if struct_data.get('commId'):
-            call_dict["comm"] = hex(struct_data['commId'])
+            call_dict["comm"] = format_hex_or_string(struct_data['commId'])
         if struct_data.get('nRanks') != -1:
             call_dict["color"] = struct_data['nRanks']
         if struct_data.get('globalRank') != -1:
@@ -806,17 +977,17 @@ def transform_struct_to_standard_json(struct_data, call_type_str):
     
     elif call_type_str == "MemAlloc":
         if struct_data.get('recvbuff'):
-            call_dict["returned_ptr"] = hex(struct_data['recvbuff'])
+            call_dict["returned_ptr"] = format_hex_or_string(struct_data['recvbuff'])
         if struct_data.get('count'):
             call_dict["size"] = struct_data['count']
     
     elif call_type_str == "MemFree":
         if struct_data.get('recvbuff'):
-            call_dict["ptr"] = hex(struct_data['recvbuff'])
+            call_dict["ptr"] = format_hex_or_string(struct_data['recvbuff'])
     
     elif call_type_str == "CommRegister":
         if struct_data.get('comm'):
-            call_dict["comm"] = hex(struct_data['comm'])
+            call_dict["comm"] = format_hex_or_string(struct_data['comm'])
         if struct_data.get('sendbuff') or struct_data.get('sendPtrBase') or struct_data.get('sendPtrExtent'):
             call_dict["buffer"] = {
                 "addr": format_pointer(struct_data.get('sendbuff'), "0x0"),
@@ -824,13 +995,13 @@ def transform_struct_to_standard_json(struct_data, call_type_str):
                 "size": struct_data.get('sendPtrExtent', 0)
             }
         if struct_data.get('recvbuff'):
-            call_dict["returned_handle"] = hex(struct_data['recvbuff'])
+            call_dict["returned_handle"] = format_hex_or_string(struct_data['recvbuff'])
     
     elif call_type_str == "CommDeregister":
         if struct_data.get('comm'):
-            call_dict["comm"] = hex(struct_data['comm'])
+            call_dict["comm"] = format_hex_or_string(struct_data['comm'])
         if struct_data.get('recvbuff'):
-            call_dict["handle"] = hex(struct_data['recvbuff'])
+            call_dict["handle"] = format_hex_or_string(struct_data['recvbuff'])
     
     # Collective operations
     elif call_type_str in COLLECTIVE_CALLS:
@@ -840,16 +1011,16 @@ def transform_struct_to_standard_json(struct_data, call_type_str):
         # sendbuff
         if struct_data.get('sendbuff') or struct_data.get('sendPtrBase') or struct_data.get('sendPtrExtent'):
             call_dict["sendbuff"] = {
-                "addr": hex(struct_data.get('sendbuff', 0)),
-                "base": hex(struct_data.get('sendPtrBase', 0)),
+                "addr": format_hex_or_string(struct_data.get('sendbuff', 0)),
+                "base": format_hex_or_string(struct_data.get('sendPtrBase', 0)),
                 "size": struct_data.get('sendPtrExtent', 0)
             }
         
         # recvbuff
         if struct_data.get('recvbuff') or struct_data.get('recvPtrBase') or struct_data.get('recvPtrExtent'):
             call_dict["recvbuff"] = {
-                "addr": hex(struct_data.get('recvbuff', 0)),
-                "base": hex(struct_data.get('recvPtrBase', 0)),
+                "addr": format_hex_or_string(struct_data.get('recvbuff', 0)),
+                "base": format_hex_or_string(struct_data.get('recvPtrBase', 0)),
                 "size": struct_data.get('recvPtrExtent', 0)
             }
         
@@ -864,11 +1035,11 @@ def transform_struct_to_standard_json(struct_data, call_type_str):
         if struct_data.get('root') != -1:
             call_dict["root"] = struct_data['root']
         if struct_data.get('comm'):
-            call_dict["comm"] = hex(struct_data['comm'])
+            call_dict["comm"] = format_hex_or_string(struct_data['comm'])
         if struct_data.get('nRanks') != -1:
             call_dict["nranks"] = struct_data['nRanks']
         if struct_data.get('stream'):
-            call_dict["stream"] = hex(struct_data['stream'])
+            call_dict["stream"] = format_hex_or_string(struct_data['stream'])
         if struct_data.get('nTasks') != -1:
             call_dict["task"] = struct_data['nTasks']
         if struct_data.get('globalRank') != -1:
@@ -905,10 +1076,12 @@ def main():
     
     parser.add_argument('base_name', help='Base log name (e.g., std-logs-8ranks)')
     parser.add_argument('mode', nargs='?', choices=['tobin', 'tojson'], 
-                       help='Conversion mode (optional if using --standardize)')
+                       help='Conversion mode (optional if using --standardize or --sanitize)')
     parser.add_argument('new_base_name', nargs='?', help='New base name for output files (optional)')
     parser.add_argument('--standardize', action='store_true',
                        help='Generate standard JSON format (parseable by standard JSON parsers)')
+    parser.add_argument('--sanitize', action='store_true',
+                       help='Sanitize JSON logs in-place (normalize pointers and timestamps)')
     
     args = parser.parse_args()
     
@@ -916,6 +1089,41 @@ def main():
     mode = args.mode.lower() if args.mode else None
     new_base_name = args.new_base_name
     standardize = args.standardize
+    sanitize = args.sanitize
+    
+    # Handle --sanitize without mode (sanitize existing JSON files)
+    if sanitize and not mode:
+        files = find_log_files(base_name, extension=".json")
+        
+        if not files:
+            print(f"Error: No JSON files found matching pattern '{base_name}.*.*.json'")
+            sys.exit(1)
+        
+        # Filter out files that are already sanitized or standardized
+        files = [f for f in files if '.sanitized.' not in f and '.standard.' not in f]
+        
+        if not files:
+            print(f"Error: No non-sanitized JSON files found matching pattern '{base_name}.*.*.json'")
+            sys.exit(1)
+        
+        print(f"Found {len(files)} JSON file(s) to sanitize:")
+        for f in files:
+            print(f"  - {f}")
+        print()
+        
+        success_count = 0
+        for json_file in files:
+            # Sanitize JSON file
+            try:
+                sanitize_json_file(json_file, json_file)
+                success_count += 1
+            except Exception as e:
+                print(f"Error sanitizing {json_file}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        print(f"\nSuccessfully sanitized {success_count}/{len(files)} file(s)")
+        return
     
     # Handle --standardize without mode (standardize existing JSON files)
     if standardize and not mode:
@@ -968,11 +1176,11 @@ def main():
             print(f"Error: No JSON files found matching pattern '{base_name}.*.*.json'")
             sys.exit(1)
         
-        # Filter out files that are already standardized (contain .standard. in filename)
-        files = [f for f in files if '.standard.' not in f]
+        # Filter out files that are already processed (standardized or sanitized)
+        files = [f for f in files if '.standard.' not in f and '.sanitized.' not in f]
         
         if not files:
-            print(f"Error: No non-standard JSON files found matching pattern '{base_name}.*.*.json'")
+            print(f"Error: No non-converted JSON files found matching pattern '{base_name}.*.*.json'")
             sys.exit(1)
         
         print(f"Found {len(files)} JSON file(s) to convert:")
@@ -1023,6 +1231,13 @@ def main():
                 bin_to_json(bin_file, json_file)
                 success_count += 1
                 
+                # If --sanitize, sanitize the JSON file in-place
+                if sanitize:
+                    try:
+                        sanitize_json_file(json_file, json_file)
+                    except Exception as e:
+                        print(f"Error sanitizing {json_file}: {e}")
+                
                 # If --standardize, also generate standard JSON
                 if standardize:
                     standard_file = json_file.replace('.json', '.standard.json')
@@ -1035,6 +1250,8 @@ def main():
                 print(f"Error converting {bin_file}: {e}")
         
         print(f"\nSuccessfully converted {success_count}/{len(files)} file(s)")
+        if sanitize:
+            print("Sanitized JSON files")
         if standardize:
             print("Generated standard JSON files with '.standard.json' extension")
     
