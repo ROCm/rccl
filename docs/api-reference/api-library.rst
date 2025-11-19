@@ -8,6 +8,6 @@
 API library
 =============
 
-.. doxygenpage:: intro
+.. doxygenpage:: intro.txt
 
 .. doxygenindex::
