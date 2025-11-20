@@ -97,6 +97,7 @@ static inline ncclResult_t getSideStream(cudaStream_t *stream) {
     INFO(NCCL_ALLOC, "Found side stream %p of dev %d busid %lx count %ld",
       it->second.stream, cudaDev, busId, it->second.refCount);
   } else {
+    *stream = 0;
     WARN("Side stream of dev %d busid %lx was not found", cudaDev, busId);
   }
   pthread_mutex_unlock(&sideStreamLock);
