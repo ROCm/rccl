@@ -182,7 +182,7 @@ std::string facebook_rccl::ProxyTrace::dump() {
 std::string facebook_rccl::ProxyTraceOp::str() {
   computeStatus();
   std::string ret = fmt::format(
-      "createT:{}, lastT:{}, cntNm:{}, {}, {}, {}->{}({}), "
+      "createT:{}, lastT:{}, postT:{}, sendT:{}, cntNm:{}, {}, {}, {}->{}({}), "
       "chan:{}, status:{}, ns:{}, nb:{}, po:{}, ke:{}, tail/h:{}, recvT:{}, "
       "connSz/h:{}, trans:{}, flushed:{}, recvd:{}, done:{}\n",
       std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -191,6 +191,12 @@ std::string facebook_rccl::ProxyTraceOp::str() {
       std::chrono::duration_cast<std::chrono::milliseconds>(
           lastUpdateTs.time_since_epoch())
           .count(),
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          timestamps[facebook_rccl::ProxyCounterTypes::POSTED].time_since_epoch())
+          .count(),
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          timestamps[facebook_rccl::ProxyCounterTypes::KERNEL_COPY_READY].time_since_epoch())
+          .count(),  
       static_cast<int>(lastUpdatingCounter), traceKey.str(), extraInfo.str(),
       myRank, peerRank, opType == ProxyOpType::SEND ? "S" : "R", channelId,
       proxyStepStatusStrMap[status], nSteps, nbytes,
@@ -247,6 +253,22 @@ void facebook_rccl::updateProxyOpCounter(
       proxyTraceObj->checkOpCompleted(traceKey);
     }
   }
+}
+
+void facebook_rccl::setProxyOpTimestamp(
+    std::unique_ptr<ProxyTrace>& proxyTraceObj,
+    const ProxyTraceRecordKey& traceKey,
+    ProxyCounterTypes counter) {
+  if (!proxyTraceObj) {
+    return;
+  }
+
+  auto traceOpPtr = proxyTraceObj->getProxyTraceOpPtr(traceKey);
+  if (!traceOpPtr || traceOpPtr->timestamps.find(counter) == traceOpPtr->timestamps.end()) {
+    return;
+  }
+
+  traceOpPtr->timestamps[counter] = std::chrono::high_resolution_clock::now();
 }
 
 void facebook_rccl::addNewProxyOp(std::unique_ptr<ProxyTrace> &proxyTraceObj,
