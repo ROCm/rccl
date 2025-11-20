@@ -2,22 +2,36 @@
 
 Full documentation for RCCL is available at [https://rccl.readthedocs.io](https://rccl.readthedocs.io)
 
+## Unreleased - RCCL 2.27.7 for ROCm 7.2.0
+
+### Changed
+
+* RCCL error messages have been made more verbose in several cases. RCCL now prints out fatal error messages by default. Fatal error messages can be suppressed by setting `NCCL_DEBUG=NONE`.
+* Disabled `reduceCopyPacks` pipelining for `gfx950`.
+
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
+
+### Changed
+* Enabling P2P batching with `RCCL_P2P_BATCH_ENABLE=1` is only applicable up to 32 nodes.
 
 ### Resolved Issues
 
-* Fixed a single node data corruption issue in MSCCL on the Instinct MI350X and MI355X for the LL protocol. This previously affected about 2% of the runs for single node AllReduce with inputs smaller than 512 KiB.
+* Fixed crash when using the librccl-profiler plugin with the all-to-all collective after the 2.27 update.
 
 ## RCCL 2.27.7 for ROCm 7.1.0
 
 ### Added
+* Added `RCCL_IB_QPS_PER_P2P` to set the number of QPs per connection for P2P operations. When set (≥1), P2P operations (Send/Recv) use `RCCL_IB_QPS_PER_P2P`, while other collective operations continue to use `NCCL_IB_QPS_PER_CONNECTION`. When not set, `NCCL_IB_QPS_PER_CONNECTION` applies to all operations.
+* Added `RCCL_FORCE_ENABLE_DMABUF` as a debugging feature if the user wants to explicitly enable DMABUF and forego system/kernel checks.
 * Added `RCCL_P2P_BATCH_THRESHOLD` to set the message size limit for batching P2P operations. This mainly affects small message performance for alltoall at a large scale but also applies to alltoallv.
 * Added `RCCL_P2P_BATCH_ENABLE` to enable batching P2P operations to receive performance gains for smaller messages up to 4MB for alltoall when the workload requires it. This is to avoid performance dips for larger messages.
+* Added `RCCL_CHANNEL_TUNING_ENABLE` to enable channel tuning that overrides RCCL's internal adjustments based on threadThreshold.
+
 
 ### Changed
 
 * The MSCCL++ feature is now disabled by default. The `--disable-mscclpp` build flag is replaced with `--enable-mscclpp` in the `rccl/install.sh` script.
-* Compatibility with NCCL 2.27.7
+* Compatibility with NCCL 2.27.7.
 
 ### Optimized
 * Enabled and optimized batched P2P operations to improve small message performance for AllToAll and AllGather.
@@ -55,10 +69,16 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 ### Changed
 
-* Compatibility with NCCL 2.23.4
-* Compatibility with NCCL 2.24.3
-* Compatibility with NCCL 2.25.1
-* Compatibility with NCCL 2.26.6
+* Compatibility with NCCL 2.23.4.
+* Compatibility with NCCL 2.24.3.
+* Compatibility with NCCL 2.25.1.
+* Compatibility with NCCL 2.26.6.
+
+### Optimized
+* Improved the performance of the `FP8` Sum operation by upcasting to `FP16`.
+
+### Known Issues
+* When running this version of RCCL using ROCm versions earlier than 6.4.0, the user must set the environment flag `HSA_NO_SCRATCH_RECLAIM=1`.
 
 ### Optimized
 * Improved the performance of the `FP8` Sum operation by upcasting to `FP16`.

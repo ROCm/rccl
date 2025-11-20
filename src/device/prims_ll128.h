@@ -35,6 +35,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, Metadata,
   const int warpInBlock; // warp index in thread block
   const bool flagThread;
   const int group;
+  const int threadsPerBlock;
   Fan fan;
   T *userBufs[3];
   struct ncclConnInfo* recvConn = NULL;
@@ -138,8 +139,8 @@ private:
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    __atomic_signal_fence(__ATOMIC_SEQ_CST);	  
-    asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)"); 	  
+    __atomic_signal_fence(__ATOMIC_SEQ_CST);
+    asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)");
     __atomic_signal_fence(__ATOMIC_SEQ_CST);
 
     if (sendConnTailPtr) {
@@ -576,8 +577,8 @@ public:
     ):
     redOp(redOpArg),
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE),                                /*compiler warnings*/
-    stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)), 
-    warp(tid/WARP_SIZE), warpInBlock(threadIdx.x/WARP_SIZE), flagThread((tid%4)==3), group(group){
+    stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)),
+    warp(tid/WARP_SIZE), warpInBlock(threadIdx.x/WARP_SIZE), flagThread((tid%4)==3), group(group), threadsPerBlock(blockDim.x){
     auto *channel = &ncclShmem.channel;
     barriers = &ncclShmem.groups[group].barrier;
     int nrecv=0, nsend=0;

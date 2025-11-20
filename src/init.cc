@@ -149,11 +149,28 @@ ncclResult_t checkHsaEnvSetting() {
   INFO(NCCL_INIT, "Hipruntime version: %d, firmware version: %d", hipRuntimeVersion, firmwareVersion);
   if (!validHsaScratchEnvSetting(hsaScratchEnv, hipRuntimeVersion, firmwareVersion, devProp.gcnArchName)) {
     // Always print out this warning message
-    printf("Fatal Error: HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with HIP Runtime version:%d, GPU Firmware version:%d\n", hipRuntimeVersion, firmwareVersion);
+    ERROR("HSA_NO_SCRATCH_RECLAIM=1 must be set to avoid performance degradation with the current HIP configuration. (Runtime version:%d, GPU Firmware version:%d)", hipRuntimeVersion, firmwareVersion);
+    ERROR("Please set HSA_NO_SCRATCH_RECLAIM=1 and rerun.");
     return ncclSystemError;
   }
   return ncclSuccess;
 }
+
+// Fail the job if build flag HIP_HOST_UNCACHED_MEMORY is not set on mi350x
+ncclResult_t checkHostUncacheMemSetting(struct ncclComm* comm) {
+  #if defined(HIP_HOST_UNCACHED_MEMORY)
+    return ncclSuccess;
+  #else
+    if( IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") ){
+      ERROR("Build flag HIP_HOST_UNCACHED_MEMORY must be set to avoid memory corruption on mi350x");
+      return ncclSystemError;
+    }
+    else {
+      return ncclSuccess;
+    }
+  #endif   
+}
+
 static void initOnceFunc() {
   NCCLCHECKGOTO(checkHsaEnvSetting(), initResult, exit);
   initEnv();
@@ -1007,10 +1024,12 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
   }
   return ncclSuccess;
 }
-
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
 #define DEFAULT_LL_BUFFSIZE (NCCL_LL_LINES_PER_THREAD*NCCL_LL_MAX_NTHREADS*NCCL_STEPS*sizeof(union ncclLLFifoLine))
 #define DEFAULT_LL128_BUFFSIZE (NCCL_LL128_ELEMS_PER_THREAD*NCCL_LL128_MAX_NTHREADS*NCCL_STEPS*sizeof(uint64_t))
 #define DEFAULT_BUFFSIZE (1 << 22) /* 4MiB */
+#endif
 NCCL_PARAM(BuffSize, "BUFFSIZE", -2);
 NCCL_PARAM(LlBuffSize, "LL_BUFFSIZE", -2);
 NCCL_PARAM(Ll128BuffSize, "LL128_BUFFSIZE", -2);
@@ -1021,8 +1040,12 @@ NCCL_PARAM(P2pNvlChunkSize, "P2P_NVL_CHUNKSIZE", (1 << 19)); /* 512 kB */
 
 static ncclResult_t computeBuffSizes(struct ncclComm* comm) {
   int64_t envs[NCCL_NUM_PROTOCOLS] = { ncclParamLlBuffSize(), ncclParamLl128BuffSize(), ncclParamBuffSize() };
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  int defaults[NCCL_NUM_PROTOCOLS];
+  rcclSetDefaultBuffSizes(comm, defaults);
+#else
   int defaults[NCCL_NUM_PROTOCOLS] = { DEFAULT_LL_BUFFSIZE, DEFAULT_LL128_BUFFSIZE, DEFAULT_BUFFSIZE };
-
+#endif
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     comm->buffSizes[p] = envs[p] != -2 ? envs[p] : defaults[p];
   }
@@ -1409,12 +1432,14 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   }
   INFO(NCCL_INIT, "GFX9 cheap fence is %s", comm -> gfx9CheapFenceOff ? "OFF" : "ON");
   #endif
+  // RCCL: Only use one slice per primitive on some single node gfx9xx systems, only currently enabled for AllReduce, ReduceScatter, and AllGather
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942") || IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")){
+    comm->rcclUseOneSlice = nNodes == 1;
+  }
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx942")) {
     // Multi-node MI300A
     int managed = 0;
     CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
-    // RCCL: Only use one slice per primitive on some single node gfx9xx systems
-    comm->rcclUseOneSlice = !managed && nNodes == 1;
     if (managed && nNodes > 1) {
       // This forces the minimum channels to 24
       allGather3Data[rank].nc = 6;
@@ -1428,8 +1453,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
         allGather3Data[rank].nc = 4;
     }
   }
+  // For single node communicators that do not uses the full xgmi links per gpu, i.e., nranks < 8
+  // Inflate the nChannels a bit to achieve higher b/w. 
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
-    allGather3Data[rank].nc = 4;
+    if (nranks == 2 && nNodes == 1){
+      allGather3Data[rank].nc = 16;
+    } else if (nranks == 4 && nNodes == 1){
+      allGather3Data[rank].nc = 8;
+    } else {
+      allGather3Data[rank].nc = 4;
+    }
   }
 
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
@@ -1784,8 +1817,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   // Compute time models for algorithm and protocol combinations
   NCCLCHECKGOTO(ncclTopoTuneModel(comm, comm->minCompCap, comm->maxCompCap, graphs), ret, fail);
 
-  INFO(NCCL_INIT, "%d coll channels, %d collnet channels, %d nvls channels, %d p2p channels, %d p2p channels per peer", comm->nChannels, comm->nChannels, comm->nvlsChannels, comm->p2pnChannels, comm->p2pnChannelsPerPeer);
-
+  INFO(NCCL_INIT, "comm:%p, nRanks:%d, nNodes:%d, coll channels:%d collnet channels:%d, nvls channels:%d, p2p channels:%d, p2p channels per peer:%d", comm, comm->nRanks, comm->nNodes, comm->nChannels, comm->nChannels, comm->nvlsChannels, comm->p2pnChannels, comm->p2pnChannelsPerPeer);  
+  
   if (comm->intraRank == 0) { // Load ncclParamLaunchMode
     const char* str = ncclGetEnv("NCCL_LAUNCH_MODE");
     enum ncclLaunchMode mode, modeOld;
@@ -1957,9 +1990,12 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   double sum_timers = 0;
   uint64_t timers[TIMERS_INIT_COUNT] = {0};
   unsigned long long commIdHash;
+  char* archName;
+  int cuCount;
+  hipDeviceProp_t devProp;
+
   #ifdef USE_INDIRECT_FUNCTION_CALL
   int64_t stackSize;
-  hipDeviceProp_t devProp;
   #endif
 
   timers[TIMER_INIT_TOTAL] = clockNano();
@@ -1969,16 +2005,20 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   CUDACHECKGOTO(cudaDeviceGetAttribute(&archMinor, cudaDevAttrComputeCapabilityMinor, cudaDev), res, fail);
   cudaArch = 100*archMajor + 10*archMinor;
 
+  CUDACHECKGOTO(hipGetDeviceProperties(&devProp, cudaDev), res, fail);
+  cuCount = devProp.multiProcessorCount;
+  archName = (char*)malloc(strlen(devProp.gcnArchName) + 1);
+  strcpy(archName, devProp.gcnArchName);
+
   timers[TIMER_INIT_KERNELS] = clockNano();
   NCCLCHECK(ncclInitKernelsForDevice(cudaArch, maxSharedMem, &maxLocalSizeBytes));
   // Set the maximum kernel stack size of all kernels to avoid
   // a CUDA memory reconfig on load (c.f. NVSHMEM issue)
 #ifdef USE_INDIRECT_FUNCTION_CALL
-  CUDACHECK(hipGetDeviceProperties(&devProp, 0));
-  if (ncclParamSetStackSize() == 1 && !IsArchMatch(devProp.gcnArchName,"gfx942") && !IsArchMatch(devProp.gcnArchName,"gfx950")) {
+  if (ncclParamSetStackSize() == 1 && !IsArchMatch(archName,"gfx942") && !IsArchMatch(archName,"gfx950")) {
     stackSize = rcclParamStackSizeOverride() ? rcclParamStackSizeOverride() : maxLocalSizeBytes;
     if (stackSize == 0) {
-      if (IsArchMatch(devProp.gcnArchName,"gfx906"))
+      if (IsArchMatch(archName,"gfx906"))
         stackSize = 1024;
       else
         stackSize = 512;
@@ -2031,9 +2071,14 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     timers[TIMER_INIT_BOOTSTRAP] = clockNano() - timers[TIMER_INIT_BOOTSTRAP];
   }
   comm->cudaArch = cudaArch;
+  comm->archName = archName;
+  comm->cuCount = cuCount;
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent, timers), res, fail);
-
+  
+    // Check if using host uncached mem correctly
+  NCCLCHECK(checkHostUncacheMemSetting(comm));
+  
   // RCCL: determine and set unroll factor for comm
   NCCLCHECK(commSetUnrollFactor(comm));
 
@@ -2044,10 +2089,10 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
       comm->mscclppCompatible = true;
       comm->mscclpp_threshold = job->parent->mscclpp_threshold;
       comm->mscclpp_comm = job->parent->mscclpp_comm;
-      auto& mscclppUniqueId = mscclpp_uniqueIdMap[*job->commId];
-      mscclpp_uniqueIdMap[*job->commId] = mscclppUniqueId;
-      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(*job->commId);
-      ncclCommToUniqueIdMap[comm] = *job->commId;
+      const ncclUniqueId& parentUniqueId = ncclCommToUniqueIdMap[job->parent];
+      auto& mscclppUniqueId = mscclpp_uniqueIdMap[parentUniqueId];
+      mscclpp_uniqueIdReverseMap[mscclppUniqueId].insert(parentUniqueId);
+      ncclCommToUniqueIdMap[comm] = parentUniqueId;
     }
   }
   else
@@ -2055,9 +2100,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   if (rcclParamMscclppEnabled()) {
 #ifdef ENABLE_MSCCLPP
     if (mscclEnabled() && (comm->topo->mscclEnabled || mscclForceEnabled()) && mscclppCommCompatible(comm)) {
-      hipDeviceProp_t devProp;
-      CUDACHECK(hipGetDeviceProperties(&devProp, cudaDev));
-      comm->mscclppCompatible = IsArchMatch(devProp.gcnArchName, "gfx942") || IsArchMatch(devProp.gcnArchName, "gfx950");
+      comm->mscclppCompatible = IsArchMatch(archName, "gfx942") || IsArchMatch(archName, "gfx950");
       if (comm->mscclppCompatible) {
         bool mapContainsId = (mscclpp_uniqueIdMap.count(*job->commId) > 0);
         auto& mscclppUniqueId = mscclpp_uniqueIdMap[*job->commId];
@@ -2427,7 +2470,7 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, int nId
   // first call ncclInit, this will setup the environment
   NCCLCHECKGOTO(ncclInit(), res, fail);
 
-  if (ncclDebugLevel > NCCL_LOG_WARN || (ncclDebugLevel != NCCL_LOG_NONE && myrank == 0)) {
+  if (ncclDebugLevel > NCCL_LOG_WARN || (ncclDebugLevel >= NCCL_LOG_VERSION && myrank == 0)) {
     static pthread_once_t once = PTHREAD_ONCE_INIT;
     pthread_once(&once, showVersion);
   }

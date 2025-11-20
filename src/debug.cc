@@ -47,6 +47,8 @@ static void ncclDebugInit() {
     ncclDebugFile = stdout;
   }
   if (nccl_debug == NULL) {
+    tempNcclDebugLevel = NCCL_LOG_ERROR;
+  } else if (strcasecmp(nccl_debug, "NONE") == 0) {
     tempNcclDebugLevel = NCCL_LOG_NONE;
   } else if (strcasecmp(nccl_debug, "VERSION") == 0) {
     tempNcclDebugLevel = NCCL_LOG_VERSION;
@@ -372,6 +374,8 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
     auto delta = std::chrono::steady_clock::now() - ncclEpoch;
     double timestamp = std::chrono::duration_cast<std::chrono::duration<double>>(delta).count()*1000;
     len += snprintf(buffer+len, sizeof(buffer)-len, "[%d] %f %s:%d NCCL TRACE ", cudaDev, timestamp, filefunc, line);
+  } else if (level == NCCL_LOG_ERROR) {
+    len += snprintf(buffer+len, sizeof(buffer)-len, "[%d] [FATAL ERROR]: ", cudaDev);
   }
   len = std::min(len, sizeof(buffer)-1);  // prevent overflows
 
