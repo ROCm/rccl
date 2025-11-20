@@ -5,6 +5,7 @@
  *
  * See LICENSE.txt for license information
  ************************************************************************/
+
 #ifndef NCCL_H_
 #define NCCL_H_
 

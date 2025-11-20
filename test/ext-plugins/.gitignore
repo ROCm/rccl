@@ -18,3 +18,6 @@ venv/
 
 # Ignore build artifacts
 build/
+
+# Ignore profiler dump folders
+profiler_dumps/
