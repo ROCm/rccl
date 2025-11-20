@@ -41,6 +41,7 @@ option(PROFILE                                 "Enable profiling"               
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(QUIET_WARNINGS                          "Supress compiler warnings"                     OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -184,11 +185,15 @@ message(STATUS "${COMPILER_EXE_NAME} HIP version:    ${hip_version_string}")
 
 ## Check for ROCm version
 set(EXPLICIT_ROCM_VERSION "" CACHE STRING "Explicit ROCM version to compile to (auto detect if empty)")
+if(NOT DEFINED ROCMCORE_PATH)
+  set(ROCMCORE_PATH "${ROCM_PATH}" CACHE PATH "Path to ROCm core")
+endif()
+
 if(EXPLICIT_ROCM_VERSION)
   set(rocm_version_string "${EXPLICIT_ROCM_VERSION}")
-elseif(ROCM_PATH)
-  message(STATUS "Reading ROCM version from ${ROCM_PATH}/.info/version")
-  file(READ "${ROCM_PATH}/.info/version" rocm_version_string)
+elseif(ROCMCORE_PATH)
+  message(STATUS "Reading ROCM version from ${ROCMCORE_PATH}/.info/version")
+  file(READ "${ROCMCORE_PATH}/.info/version" rocm_version_string)
 else()
   message(FATAL_ERROR "Could not determine ROCM version (set EXPLICIT_ROCM_VERSION or set ROCM_PATH to a valid installation)")
 endif()
@@ -371,8 +376,10 @@ endif()
 # Check for ROCTX
 if(ROCTX)
   find_library(ROCTX_LIB NAMES roctx64)
-  if(ROCTX_LIB)
+  find_path(ROCTRACER_INCLUDE_DIR "roctracer/roctx.h")
+  if(ROCTX_LIB AND ROCTRACER_INCLUDE_DIR)
     set(ROCTX_ENABLE ON)
+    message(STATUS "ROCTX include directory found: ${ROCTRACER_INCLUDE_DIR}")
     message(STATUS "ROCTX library found: ${ROCTX_LIB}")
   else()
     message(WARNING "ROCTX library not found. Skipping ROCTX linking.")
@@ -458,6 +465,7 @@ set(SRC_FILES
   src/device/reduce_kernel.h
   src/device/reduce_scatter.h
   src/device/rccl_metadata.h
+  src/device/rccl_ptr.h
   src/device/sendrecv.h
   src/device/common.cu
   src/device/onerank.cu
@@ -760,8 +768,6 @@ add_custom_target(hipify_all DEPENDS ${HIP_SOURCES})
 
 if (BUILD_TESTS)
   if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
-    ## Set definition for exposing rccl static function
-    add_definitions(-DRCCL_EXPOSE_STATIC)
 
     set(HIPIFY_SRC_DIR "${PROJECT_BINARY_DIR}/hipify/src")
     set(REPLACE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/scripts/replace_static.sh")
@@ -928,8 +934,12 @@ target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/plugin)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
 target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
+target_include_directories(rccl PRIVATE ${ROCMCORE_PATH}/include)
 if(DEMANGLE_DIR)
   target_include_directories(rccl PRIVATE ${DEMANGLE_DIR})
+endif()
+if(ROCTX_ENABLE)
+  target_include_directories(rccl PRIVATE ${ROCTRACER_INCLUDE_DIR})
 endif()
 
 ## Set RCCL compile definitions
@@ -1151,6 +1161,17 @@ target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
 
+if(QUIET_WARNINGS)
+  target_compile_options(rccl PRIVATE -Wno-invalid-offsetof)
+  target_compile_options(rccl PRIVATE -Wno-unused-result)
+  target_compile_options(rccl PRIVATE -Wno-macro-redefined)
+  target_compile_options(rccl PRIVATE -Wno-unused-label)
+  target_compile_options(rccl PRIVATE -Wno-unused-variable)
+  target_compile_options(rccl PRIVATE -Wno-unused-private-field)
+  target_compile_options(rccl PRIVATE -Wno-null-conversion)
+  target_compile_options(rccl PRIVATE -Wno-missing-braces)
+endif()
+
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)
   if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
@@ -1257,7 +1278,7 @@ if (HAVE_BFD)
   endif()
 endif()
 if (ROCTX_ENABLE)
-  target_link_libraries(rccl PRIVATE -lroctx64)
+  target_link_libraries(rccl PRIVATE ${ROCTX_LIB})
 endif()
 target_link_libraries(rccl PRIVATE   -fgpu-rdc)             # Required when linking relocatable device code
 target_link_libraries(rccl PRIVATE   Threads::Threads)

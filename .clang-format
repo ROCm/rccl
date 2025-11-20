@@ -95,7 +95,6 @@ IndentPPDirectives: BeforeHash
 IndentWrappedFunctionNames: true
 KeepEmptyLinesAtTheStartOfBlocks: true
 LambdaBodyIndentation: Signature
-MaxEmptyLinesToKeep: 1
 MacroBlockBegin: ''
 MacroBlockEnd: ''
 MaxEmptyLinesToKeep: 1

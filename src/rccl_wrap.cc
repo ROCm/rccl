@@ -38,14 +38,21 @@ RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
+  size_t sizePerRank = rcclGetSizePerRank(info->func, nBytes, comm->nRanks);
   if (userProtocolInput == -2) {
     const char *protoStr = getenv("NCCL_PROTO");
     userProtocolInput = !protoStr ? 0 : 1;
   }
-  if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllGather) && nBytes <= 524288) {
+
+  if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncAllGather) && sizePerRank <= 88448) {
     // Change LL protocol threshold
     info->protocol = NCCL_PROTO_LL;
-
+  } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && (info->func == ncclFuncReduceScatter) && sizePerRank <= 1048576) {
+    // Change LL protocol threshold
+    info->protocol = NCCL_PROTO_LL;
+  } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && comm->nNodes == 1 && (info->func == ncclFuncReduceScatter) && sizePerRank <= 352128) {
+    // Change LL protocol threshold
+    info->protocol = NCCL_PROTO_LL;
   } else if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
@@ -130,7 +137,7 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
   int maxNChannels = std::max(comm->nChannels, static_cast<int>(ncclParamMaxNchannels()));
   size_t bytesPerRank = divUp(nBytes, comm->nRanks);
 
-  for(int channelCountIndex = 0; channelCountIndex < RCCL_CHANNELS_TUNABLE_ENTRIES; ++channelCountIndex){    
+  for(int channelCountIndex = 0; channelCountIndex < RCCL_CHANNELS_TUNABLE_ENTRIES; ++channelCountIndex){
     size_t minByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][0];
     size_t maxByteThreshold = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][1];
     INFO(NCCL_TUNING, "nBytes:%lu bytesPerRank:%lu minByteThreshold:%lu maxByteThreshold:%lu  NCCL_MIN_NCHANNELS:%i or NCCL_MAX_NCHANNELS:%i minCTAs:%i maxCTAs:%i", nBytes, bytesPerRank, minByteThreshold, maxByteThreshold, minNChannels, maxNChannels, minCTAs, maxCTAs);
@@ -138,7 +145,7 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
       INFO(NCCL_TUNING, "RCCL tuning model does not define threshold for coll:%i and nbytes:%lu", coll, nBytes);
       break; // Skip undefined thresholds
     }
-    
+
     if(bytesPerRank > minByteThreshold && bytesPerRank <= maxByteThreshold){
       int channelCount = comm->minMaxChannelThresholds[tunableIndex][channelCountIndex][2];
 
@@ -233,26 +240,10 @@ void rcclUpdateThreadThreshold(struct ncclComm* comm, size_t const& nBytes, stru
 
 void rcclSetPipelining(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   info->pipeline = 0; // Default to no pipelining
-  if (rcclParamdisableReduceCopyPipelining()) {
+  if (rcclParamdisableReduceCopyPipelining() || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
     return;
   }
   const bool dtypeOK = (info->datatype == ncclBfloat16) || rcclParamPipelineAllDTypes();
-
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && dtypeOK) {
-    if (comm->nNodes > 1) {
-      switch (info->func) {
-        case ncclFuncAllReduce:
-        case ncclFuncReduceScatter:
-        case ncclFuncReduce:
-          // Enable for multi-node
-          info->pipeline = 1;
-          break;
-        default:
-          break;
-      }
-    }
-    return;
-  }
 
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && dtypeOK) {
     switch (info->func) {
@@ -346,20 +337,20 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
   size_t threshold = rcclParamDirectAllGatherThreshold();
 
-  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
-     if (comm->nNodes == 1 && threshold != -1) {
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && threshold != -1) {
+     if (comm->nNodes == 1) {
         threshold = 8388608;
-     } else if (comm->nNodes < 64 && threshold != -1) {
+     } else if (comm->nNodes < 64) {
         threshold = comm->nNodes * 2097152;
      }
-  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942")) {
-	threshold = 4194304;	
+  } else if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && threshold != -1) {
+	threshold = 4194304;
   }
 
   comm->enableCustColl = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") || IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942");
 
   int rankMultiple = comm->nRanks % 8;
-  
+
   //return (comm->enableCustColl && (comm->nNodes > 1) && (msgSize <= threshold) && (threshold != -1))
   return (comm->enableCustColl && (msgSize <= threshold) && (threshold != -1) && !rankMultiple)
     ;
@@ -408,6 +399,36 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
   rcclP2pNetChunkSize = p2pNetChunkSize;
 }
 
+void rcclGetMaxNthreads(struct ncclComm* comm, int maxNthreads[]) {
+  if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
+    maxNthreads[NCCL_PROTO_SIMPLE] = maxNthreads[NCCL_PROTO_LL128] = RCCL_GFX950_MAX_NTHREADS;
+  } else {
+    maxNthreads[NCCL_PROTO_SIMPLE] = maxNthreads[NCCL_PROTO_LL128] = RCCL_DEFAULT_MAX_NTHREADS;
+  }
+  maxNthreads[NCCL_PROTO_LL] = RCCL_LL_MAX_NTHREADS;
+}
+
+void rcclOptThreadBlockSize(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes, int& nThreads) {
+  static int maxNthreads[NCCL_NUM_PROTOCOLS] = {0};
+  if (maxNthreads[NCCL_PROTO_SIMPLE] == 0) rcclGetMaxNthreads(comm, maxNthreads);
+  if (info->algorithm == NCCL_ALGO_TREE) nThreads = maxNthreads[NCCL_PROTO_SIMPLE]; // Tree now uses all threads always.
+  if (info->algorithm == NCCL_ALGO_PAT)  nThreads = maxNthreads[NCCL_PROTO_SIMPLE];
+  if (comm->nNodes == 1) nThreads = RCCL_SINGLE_NODE_MAX_NTHREADS; // For single node, we use half the number of threads for perf reasons.
+  // The following should be already set correctly by getNthreads
+  // but need to override the changes for TREE and PAT in the previous lines
+  if (info->protocol == NCCL_PROTO_LL) nThreads =  maxNthreads[NCCL_PROTO_LL];
+  // ReduceScatter small count optimization
+  if (info->func == ncclFuncReduceScatter && divUp(nBytes, comm->nRanks) <= 524288) nThreads = maxNthreads[NCCL_PROTO_LL];
+}
+
+void rcclSetDefaultBuffSizes(struct ncclComm* comm, int defaultBuffSizes[]) {
+  static int maxNthreads[NCCL_NUM_PROTOCOLS] = {0};
+  if (maxNthreads[NCCL_PROTO_SIMPLE] == 0) rcclGetMaxNthreads(comm, maxNthreads);
+  defaultBuffSizes[NCCL_PROTO_LL]     = NCCL_LL_LINES_PER_THREAD*maxNthreads[NCCL_PROTO_LL]*NCCL_STEPS*sizeof(union ncclLLFifoLine);
+  defaultBuffSizes[NCCL_PROTO_LL128]  = NCCL_LL128_ELEMS_PER_THREAD*maxNthreads[NCCL_PROTO_LL128]*NCCL_STEPS*sizeof(uint64_t);
+  defaultBuffSizes[NCCL_PROTO_SIMPLE] = (1 << 22); /* 4MiB */
+}
+
 ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count, size_t& maxCount) {
   RCCL_STATIC_EXPOSE_CHECK();
   maxCount = ncclFuncMaxSendRecvCount(func, nRanks, count);
@@ -415,15 +436,13 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
 }
 
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
-  hipDeviceProp_t devProp;
-  CUDACHECK(hipGetDeviceProperties(&devProp, comm->cudaDev));
-  if(IsArchMatch(devProp.gcnArchName, "gfx950")) {
+  if(IsArchMatch(comm->archName, "gfx950")) {
     if(comm->nNodes == 1)
       comm->unroll = NCCL_UNROLL_1;
     else
       comm->unroll = NCCL_UNROLL_2;
   }
-  else if(IsArchMatch(devProp.gcnArchName, "gfx908") || ((IsArchMatch(devProp.gcnArchName, "gfx942") && devProp.multiProcessorCount > 80)))
+  else if(IsArchMatch(comm->archName, "gfx908") || ((IsArchMatch(comm->archName, "gfx942") && comm->cuCount > 80)))
     comm->unroll = NCCL_UNROLL_2;
   else
     comm->unroll = NCCL_UNROLL_4;
@@ -498,4 +517,24 @@ bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, 
     return (hipRuntimeVersion >= 60443484 && firmwareVersion >= 177);
   }
   return true;
+}
+
+// Should match get_arch_guard() in generate.py
+bool rcclIsArchSupportedForFunc(struct ncclTaskColl* info, const char* archName) {
+  bool supported = true;
+
+  if (info->protocol == NCCL_PROTO_LL128) {
+#if defined(ENABLE_LL128)
+    if (info->acc)
+      supported = (IsArchMatch(archName, "gfx942") || IsArchMatch(archName, "gfx950"));
+    else
+      supported = (IsArchMatch(archName, "gfx942") || IsArchMatch(archName, "gfx950") || IsArchMatch(archName, "gfx90a"));
+#else
+    supported = false;
+#endif
+  } else if (info->acc) {
+    supported = (IsArchMatch(archName, "gfx942") || IsArchMatch(archName, "gfx950"));
+  }
+
+  return supported;
 }
