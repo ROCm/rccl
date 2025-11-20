@@ -70,7 +70,7 @@ jobs:
           python input/setup.py &&
           pytest -vvv -s ./tests/rccl/rccl_multinode_cvs.py \
               --cluster_file ./input/cluster.json \
-              --config_file ./input/mi350_8nic_config.json \
+              --config_file ./input/mi350_4nic_config.json \
               --log-file=/tmp/rccl_log.log \
               --html=/home/arravikum/cvs/test_reports/ci_test_report.html \
               --capture=tee-sys \
