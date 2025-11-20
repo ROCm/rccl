@@ -117,7 +117,6 @@ ncclResult_t amd_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId, 
      **/
     if (rcclParamUseAmdSmiLib()) {
       // rsmi_dev_pci_id_get is deprecated
-      // also, bus ID format has changed with amd-smi
 
       /// with amd-smi, first get list of socket handles,
       // then get number of processor handles in said sockets,
@@ -155,7 +154,12 @@ ncclResult_t amd_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId, 
     } else {
       ARSMICHECK(ARSMI_dev_pci_id_get(deviceIndex, &id));
     }
-    snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id & 0xffffffff) >> 32, (id & 0xff00) >> 8, (id & 0xf8) >> 3, (id & 0x7));
+
+    // rocm-smi/amd-smi format
+    //snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id & 0xffffffff) >> 32, (id & 0xff00) >> 8, (id & 0xf8) >> 3, (id & 0x7));
+
+    // borrowing NCCL's format from utils.cc:int64ToBusId
+    snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id) >> 20, (id & 0xff000) >> 12, (id & 0xff0) >> 4, (id & 0xf));
   }
   return ncclSuccess;
 }
@@ -166,7 +170,6 @@ ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* de
     CUDACHECK(hipDeviceGetByPCIBusId((int *)deviceIndex, pciBusId));
     return ncclSuccess;
   } else {
-    uint32_t i, num_devs = 0;
     int64_t busid;
 
     busIdToInt64(pciBusId, &busid);
@@ -184,13 +187,19 @@ ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* de
     // with amd-smi, we can use amdsmi_get_processor_handle_from_bdf,
     // and then query the enumeration info for that processor_handle
     if (rcclParamUseAmdSmiLib()) {
-      amdsmi_processor_handle processor_handle = nullptr;
+      amdsmi_processor_handle processor_handle = 0;
 
       amdsmi_bdf_t bdf = {};
-      bdf.function_number = (busid & 0x7);
-      bdf.device_number = (busid & 0xf8) >> 3;
-      bdf.bus_number = (busid & 0xff00) >> 8;
-      bdf.domain_number = (busid & 0xffffffff) >> 32;
+      // This is the format that matches amd-smi BDF
+      // bdf.function_number = (busid & 0x7);
+      // bdf.device_number = (busid & 0xf8) >> 3;
+      // bdf.bus_number = (busid & 0xff00) >> 8;
+      // bdf.domain_number = (busid & 0xffffffffffff0000) >> 16;
+      // However, it is incompatible with the format enforced by NCCL in utils.cc:int64ToBusId
+      bdf.function_number = (busid & 0xf);
+      bdf.device_number = (busid & 0xff) >> 4;
+      bdf.bus_number = (busid & 0xff000) >> 12;
+      bdf.domain_number = busid >> 20;
 
       AMDSMICHECK(amdsmi_get_processor_handle_from_bdf(bdf, &processor_handle));
       
@@ -203,9 +212,11 @@ ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* de
         return ncclSuccess;
       }
       
-      WARN("amdsmi_lib: %s device index not found", pciBusId);
+      ERROR("amdsmi_lib: %s device index not found", pciBusId);
     } else {
+      uint32_t i, num_devs = 0;
       busid = ((busid&0xffff00000L)<<12)+((busid&0xff000L)>>4)+((busid&0xff0L)>>1)+(busid&0x7L);
+
       ARSMICHECK(ARSMI_get_num_devices(&num_devs));
       for (i = 0; i < num_devs; i++) {
         uint64_t bdfid;
@@ -243,8 +254,8 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
     // and then use these processor handles for amdsmi hardware topology functions
     if (rcclParamUseAmdSmiLib()) {
       uint32_t socket_count = 0;
-      amdsmi_processor_handle src_processor_handle = nullptr;
-      amdsmi_processor_handle dst_processor_handle = nullptr;
+      amdsmi_processor_handle src_processor_handle = 0;
+      amdsmi_processor_handle dst_processor_handle = 0;
 
       AMDSMICHECK(amdsmi_get_socket_handles(&socket_count, nullptr));
       std::vector<amdsmi_socket_handle> sockets(socket_count);
