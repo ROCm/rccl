@@ -5,13 +5,17 @@
 #include <unordered_map>
 #include <chrono>
 #include <cstring>
+#include <iostream>
 
 #include <rccl/rccl.h>
 #include <hip/hip_bfloat16.h>
 #include "hip/hip_fp16.h"
-#include "rccl_float8.h"
 
-#include "info.h"
+// Forward declaration for ncclInfo
+// - recorder.h declares functions that take 'const ncclInfo&' as parameter
+// - These functions are only used during recording (by recorder.cc), not during replay
+// - RcclReplayer only uses rcclApiCall struct
+struct ncclInfo;
 #include "recorder.h"
 
 // NOTE: Parsing is based on this line logging collective information in enqueue.cc
@@ -62,6 +66,31 @@ struct DeviceGraphInfo
                         events;
   int                   counter = 0;
 };
+
+// ncclTypeSize() - extracted from collectives.h to avoid deep dependencies
+// This is the only function we need from info.h/collectives.h
+static inline int ncclTypeSize(ncclDataType_t type) {
+  switch (type) {
+  case ncclInt8:
+  case ncclUint8:
+  case ncclFloat8e4m3:
+  case ncclFloat8e5m2:
+    return 1;
+  case ncclFloat16:
+  case ncclBfloat16:
+    return 2;
+  case ncclInt32:
+  case ncclUint32:
+  case ncclFloat32:
+    return 4;
+  case ncclInt64:
+  case ncclUint64:
+  case ncclFloat64:
+    return 8;
+  default:
+    return -1;
+  }
+}
 
 class Replayer
 {

@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include "profiler.h"
 
-#define MAX_CHANNELS                     32
+#define MAX_CHANNELS                     128 // Match RCCL's MAXCHANNELS
 #define MAX_STEPS                        16
 #define MAX_OPS                          16 // Up to 64K ranks for PAT
 #define MAX_EVENTS_PER_REQ               (8)
