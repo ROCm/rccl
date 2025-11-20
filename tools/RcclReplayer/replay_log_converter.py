@@ -8,6 +8,7 @@ Usage:
     python3 replay_log_converter.py <base_logname> tojson [new_basename] --standardize
     python3 replay_log_converter.py <base_logname> --standardize
     python3 replay_log_converter.py <base_logname> --sanitize
+    python3 replay_log_converter.py <base_logname> --sanitize --nts
 """
 
 import sys
@@ -103,6 +104,8 @@ class Sanitizer:
     HEX_PATTERN = re.compile(r'0x[0-9a-fA-F]+')
     UNIQUEID_PATTERN = re.compile(r'uniqueID\s*:\s*(\d+)')
     TIME_PATTERN = re.compile(r'time\s*:\s*([\d.]+)')
+    THREAD_PATTERN = re.compile(r'thread\s*:\s*(\d+)')
+    PID_PATTERN = re.compile(r'pid\s*:\s*(\d+)')
     CONTEXT_LOOKBACK = 20  # Characters to look back for context detection
     
     def __init__(self):
@@ -111,6 +114,8 @@ class Sanitizer:
         self.stream_map = {}
         self.buffer_map = {}
         self.handle_map = {}
+        self.thread_map = {}
+        self.pid_map = {}
     
     def _sanitize_value(self, value, mapping, prefix):
         if value is None or value == 0 or value == -1:
@@ -139,6 +144,13 @@ class Sanitizer:
         # Sanitize handle (CommRegister/Deregister).
         return self._sanitize_value(value, self.handle_map, "handle")
     
+    def sanitize_thread(self, value):
+        # Sanitize thread ID.
+        return self._sanitize_value(value, self.thread_map, "thread")
+    
+    def sanitize_pid(self, value):
+        # Sanitize process ID.
+        return self._sanitize_value(value, self.pid_map, "pid")
     
     def sanitize_by_type(self, value, value_type):
         # Sanitize a value based on its type.
@@ -765,7 +777,7 @@ def find_log_files(base_name, extension=None):
     
     return sorted(files)
 
-def sanitize_json_file(input_file, output_file):
+def sanitize_json_file(input_file, output_file, zero_timestamps=False):
     # Sanitize JSON log file for easier comparison.
     print(f"Sanitizing {input_file} to {output_file}")
     
@@ -795,12 +807,25 @@ def sanitize_json_file(input_file, output_file):
             if uniqueid_val > 0:
                 sanitizer.sanitize_uniqueid(uniqueid_val)
         
-        # Find minimum timestamp
-        time_match = Sanitizer.TIME_PATTERN.search(line)
-        if time_match:
-            timestamp = float(time_match.group(1))
-            if timestamp > 0:
-                min_timestamp = min(min_timestamp, timestamp)
+        # Collect thread IDs
+        for match in Sanitizer.THREAD_PATTERN.finditer(line):
+            thread_val = int(match.group(1))
+            if thread_val > 0:
+                sanitizer.sanitize_thread(thread_val)
+        
+        # Collect PIDs
+        for match in Sanitizer.PID_PATTERN.finditer(line):
+            pid_val = int(match.group(1))
+            if pid_val > 0:
+                sanitizer.sanitize_pid(pid_val)
+        
+        # Find minimum timestamp (only if not zero_timestamps mode)
+        if not zero_timestamps:
+            time_match = Sanitizer.TIME_PATTERN.search(line)
+            if time_match:
+                timestamp = float(time_match.group(1))
+                if timestamp > 0:
+                    min_timestamp = min(min_timestamp, timestamp)
     
     if min_timestamp == float('inf'):
         min_timestamp = 0.0
@@ -834,10 +859,29 @@ def sanitize_json_file(input_file, output_file):
                         replacement = f"uniqueID : {sanitized}"
                         new_line = new_line[:match.start()] + replacement + new_line[match.end():]
                 
+                # Replace thread IDs
+                for match in reversed(list(Sanitizer.THREAD_PATTERN.finditer(new_line))):
+                    thread_val = int(match.group(1))
+                    if thread_val > 0:
+                        sanitized = sanitizer.sanitize_thread(thread_val)
+                        replacement = f"thread : {sanitized}"
+                        new_line = new_line[:match.start()] + replacement + new_line[match.end():]
+                
+                # Replace PIDs
+                for match in reversed(list(Sanitizer.PID_PATTERN.finditer(new_line))):
+                    pid_val = int(match.group(1))
+                    if pid_val > 0:
+                        sanitized = sanitizer.sanitize_pid(pid_val)
+                        replacement = f"pid : {sanitized}"
+                        new_line = new_line[:match.start()] + replacement + new_line[match.end():]
+                
                 # Replace timestamps
                 for match in reversed(list(Sanitizer.TIME_PATTERN.finditer(new_line))):
                     timestamp = float(match.group(1))
-                    normalized = timestamp - min_timestamp
+                    if zero_timestamps:
+                        normalized = 0.0
+                    else:
+                        normalized = timestamp - min_timestamp
                     replacement = f"time : {normalized:.6f}"
                     new_line = new_line[:match.start()] + replacement + new_line[match.end():]
                 
@@ -1082,6 +1126,8 @@ def main():
                        help='Generate standard JSON format (parseable by standard JSON parsers)')
     parser.add_argument('--sanitize', action='store_true',
                        help='Sanitize JSON logs in-place (normalize pointers and timestamps)')
+    parser.add_argument('--no-timestamp', '--nts', action='store_true',
+                       help='Set all timestamps to 0.0 (use with --sanitize)')
     
     args = parser.parse_args()
     
@@ -1090,6 +1136,12 @@ def main():
     new_base_name = args.new_base_name
     standardize = args.standardize
     sanitize = args.sanitize
+    no_timestamp = args.no_timestamp
+    
+    # Validate that --no-timestamp is only used with --sanitize
+    if no_timestamp and not sanitize:
+        print("Error: --no-timestamp can only be used with --sanitize")
+        sys.exit(1)
     
     # Handle --sanitize without mode (sanitize existing JSON files)
     if sanitize and not mode:
@@ -1115,7 +1167,7 @@ def main():
         for json_file in files:
             # Sanitize JSON file
             try:
-                sanitize_json_file(json_file, json_file)
+                sanitize_json_file(json_file, json_file, no_timestamp)
                 success_count += 1
             except Exception as e:
                 print(f"Error sanitizing {json_file}: {e}")
@@ -1234,7 +1286,7 @@ def main():
                 # If --sanitize, sanitize the JSON file in-place
                 if sanitize:
                     try:
-                        sanitize_json_file(json_file, json_file)
+                        sanitize_json_file(json_file, json_file, no_timestamp)
                     except Exception as e:
                         print(f"Error sanitizing {json_file}: {e}")
                 

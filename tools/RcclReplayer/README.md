@@ -109,11 +109,13 @@ The converter automatically finds all matching log files with pattern `basename.
 * `python3 replay_log_converter.py replayer_log tojson converted_log` produces `converted_log.{1270-1278}.quanta-cx77-11.json`
 * `python3 replay_log_converter.py replayer_log --sanitize` sanitizes existing JSON files in-place
 * `python3 replay_log_converter.py replayer_log tojson --sanitize` converts to JSON and sanitizes in one step
+* `python3 replay_log_converter.py replayer_log --sanitize --no-timestamp` (or `--nts`) sets all timestamps to 0.0
 
 **Sanitization:**
 The `--sanitize` option normalizes logs for easier comparison by:
 * Remapping pointers to readable identifiers (e.g., `comm : 0x7fb680328010` → `comm : comm_001`)
 * Normalizing timestamps relative to the first call (e.g., `time : 1762969171532.248535` → `time : 0.000000`)
+  * Use `--no-timestamp` (or `--nts`) to set all timestamps to 0.0 instead
 * Preserving relationships: same pointer values get the same sanitized identifier
-* Sanitized fields: communicators (`comm`), unique IDs (`uniqueID`), streams (`stream`), buffer addresses (`addr`/`base`/`ptr`/`acc`), handles (`handle`)
+* Sanitized fields: communicators (`comm`), unique IDs (`uniqueID`), streams (`stream`), buffer addresses (`addr`/`base`/`ptr`/`acc`), handles (`handle`), thread IDs (`thread`), and process IDs (`pid`)
 
