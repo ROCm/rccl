@@ -97,7 +97,7 @@ struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
 ncclResult_t commReclaim(ncclComm_t comm);
 
 // Global data for side stream
-cudaStream_t sideStream = 0;
+std::map<int64_t, ncclSideStream> sideStream;
 pthread_mutex_t sideStreamLock = PTHREAD_MUTEX_INITIALIZER;
 uint64_t sideStreamRefCount = 0;
 pthread_once_t sideStream_initonce = PTHREAD_ONCE_INIT;
@@ -527,7 +527,6 @@ static ncclResult_t commFree(ncclComm_t comm) {
     NCCLCHECK(dtor->fn(dtor));
     dtor = dtor->next;
   }
-  NCCLCHECK(ncclDestroySideStream());
 
   ncclMemoryStackDestruct(&comm->memScoped);
   ncclMemoryStackDestruct(&comm->memPermanent);
@@ -550,6 +549,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
     NCCLCHECK(ncclNvlsSymmetricFinalize(comm));
     NCCLCHECK(ncclIpcSymmetricFinalize(comm));
   }
+  NCCLCHECK(ncclDestroySideStream(comm->cudaDev));
   INFO(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx - %s COMPLETE", comm, comm->rank, comm->nRanks, comm->cudaDev, comm->busId, abort ? "Abort" : "Destroy");
 
   commPoison(comm); // poison comm before free to avoid comm reuse.
@@ -656,6 +656,9 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   comm->lastStream = nullptr;
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
 
+  // RCCL: create persistent stream for calloc
+  NCCLCHECK(ncclCreateSideStream(comm->cudaDev));
+
   // Disable until we validate NCCL_LAUNCH_IMPLICIT_ORDER support.
   // but can be enabled via environment variable
   if (rcclParamEnableContextTracking() == 1) {
@@ -671,9 +674,6 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
 
   comm->compCap = ncclCudaCompCap();
   TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d busId %lx compCap %d", comm, rank, ndev, comm->cudaDev, comm->busId, comm->compCap);
-
-  // RCCL: create persistent stream for calloc
-  NCCLCHECK(ncclCreateSideStream());
 
   comm->checkPointers = ncclParamCheckPointers() == 1 ? true : false;
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
