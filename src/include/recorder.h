@@ -5,7 +5,6 @@
 #include <vector>
 #include <mutex>
 #include <chrono>
-#include "debug.h"
 
 namespace rccl
 {

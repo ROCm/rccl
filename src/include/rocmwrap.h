@@ -9,6 +9,7 @@
 #define NCCL_ROCMWRAP_H_
 
 #include <hsa/hsa.h>
+#include "checks.h"
 
 typedef hsa_status_t (*PFN_hsa_init)();
 typedef hsa_status_t (*PFN_hsa_system_get_info)(hsa_system_info_t attribute, void* value);
@@ -85,6 +86,17 @@ extern CUmemAllocationHandleType ncclCuMemHandleType;
 
 ncclResult_t rocmLibraryInit(void);
 
+extern int ncclCudaDriverVersionCache;
 extern bool ncclCudaLaunchBlocking; // initialized by ncclCudaLibraryInit()
+
+inline ncclResult_t ncclCudaDriverVersion(int* driver) {
+  int version = __atomic_load_n(&ncclCudaDriverVersionCache, __ATOMIC_RELAXED);
+  if (version == -1) {
+    CUDACHECK(cudaDriverGetVersion(&version));
+    __atomic_store_n(&ncclCudaDriverVersionCache, version, __ATOMIC_RELAXED);
+  }
+  *driver = version;
+  return ncclSuccess;
+}
 
 #endif

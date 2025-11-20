@@ -36,11 +36,13 @@ option(ENABLE_NPKIT                            "Enable NPKit"                   
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(GENERATE_SYM_KERNELS                    "Generate symmetric memory kernels"             OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
+option(REPORT_KERNEL_RESOURCE_USE              "Append -Rpass-analysis=kernel to CXX flags"    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  ON)
 option(PROFILE                                 "Enable profiling"                              OFF)
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(QUIET_WARNINGS                          "Supress compiler warnings"                     OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -185,11 +187,15 @@ message(STATUS "${COMPILER_EXE_NAME} HIP version:    ${hip_version_string}")
 
 ## Check for ROCm version
 set(EXPLICIT_ROCM_VERSION "" CACHE STRING "Explicit ROCM version to compile to (auto detect if empty)")
+if(NOT DEFINED ROCMCORE_PATH)
+  set(ROCMCORE_PATH "${ROCM_PATH}" CACHE PATH "Path to ROCm core")
+endif()
+
 if(EXPLICIT_ROCM_VERSION)
   set(rocm_version_string "${EXPLICIT_ROCM_VERSION}")
-elseif(ROCM_PATH)
-  message(STATUS "Reading ROCM version from ${ROCM_PATH}/.info/version")
-  file(READ "${ROCM_PATH}/.info/version" rocm_version_string)
+elseif(ROCMCORE_PATH)
+  message(STATUS "Reading ROCM version from ${ROCMCORE_PATH}/.info/version")
+  file(READ "${ROCMCORE_PATH}/.info/version" rocm_version_string)
 else()
   message(FATAL_ERROR "Could not determine ROCM version (set EXPLICIT_ROCM_VERSION or set ROCM_PATH to a valid installation)")
 endif()
@@ -372,8 +378,10 @@ endif()
 # Check for ROCTX
 if(ROCTX)
   find_library(ROCTX_LIB NAMES roctx64)
-  if(ROCTX_LIB)
+  find_path(ROCTRACER_INCLUDE_DIR "roctracer/roctx.h")
+  if(ROCTX_LIB AND ROCTRACER_INCLUDE_DIR)
     set(ROCTX_ENABLE ON)
+    message(STATUS "ROCTX include directory found: ${ROCTRACER_INCLUDE_DIR}")
     message(STATUS "ROCTX library found: ${ROCTX_LIB}")
   else()
     message(WARNING "ROCTX library not found. Skipping ROCTX linking.")
@@ -459,6 +467,7 @@ set(SRC_FILES
   src/device/reduce_kernel.h
   src/device/reduce_scatter.h
   src/device/rccl_metadata.h
+  src/device/rccl_ptr.h
   src/device/sendrecv.h
   src/device/common.cu
   src/device/onerank.cu
@@ -761,8 +770,6 @@ add_custom_target(hipify_all DEPENDS ${HIP_SOURCES})
 
 if (BUILD_TESTS)
   if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
-    ## Set definition for exposing rccl static function
-    add_definitions(-DRCCL_EXPOSE_STATIC)
 
     set(HIPIFY_SRC_DIR "${PROJECT_BINARY_DIR}/hipify/src")
     set(REPLACE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/scripts/replace_static.sh")
@@ -890,16 +897,19 @@ endforeach()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
+# Create initial empty file at configure time
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp "")
-list(APPEND HIP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 
-# Create a custom target that updates git_version.cpp and executes whenever rccl is built
-add_custom_target(git_version_check
-  COMMENT "Updating git_version.cpp if necessary"
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/git_version.cmake
+# Add a custom target that always runs at build time to update git version
+add_custom_target(update_git_version
+  ALL
+  COMMAND ${CMAKE_COMMAND} -DRCCL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DRCCL_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/git_version.cmake
+  BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp
+  COMMENT "Updating git version information"
   VERBATIM
 )
 
+list(APPEND HIP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/git_version.cpp)
 
 # Set up RCCL library
 #==================================================================================================
@@ -907,7 +917,8 @@ add_custom_target(git_version_check
 add_library(rccl ${HIP_SOURCES})
 
 ## Set RCCL dependencies
-add_dependencies(rccl git_version_check)                                      # Execute git_version_check during build
+## Ensure git version is updated before building rccl
+add_dependencies(rccl update_git_version)
 
 if (BUILD_TESTS AND ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
   ## Set static replacement dependency for fixture unit tests
@@ -925,8 +936,12 @@ target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/plugin)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
 target_include_directories(rccl PRIVATE ${ROCM_SMI_INCLUDE_DIR})
+target_include_directories(rccl PRIVATE ${ROCMCORE_PATH}/include)
 if(DEMANGLE_DIR)
   target_include_directories(rccl PRIVATE ${DEMANGLE_DIR})
+endif()
+if(ROCTX_ENABLE)
+  target_include_directories(rccl PRIVATE ${ROCTRACER_INCLUDE_DIR})
 endif()
 
 ## Set RCCL compile definitions
@@ -1148,6 +1163,17 @@ target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
 
+if(QUIET_WARNINGS)
+  target_compile_options(rccl PRIVATE -Wno-invalid-offsetof)
+  target_compile_options(rccl PRIVATE -Wno-unused-result)
+  target_compile_options(rccl PRIVATE -Wno-macro-redefined)
+  target_compile_options(rccl PRIVATE -Wno-unused-label)
+  target_compile_options(rccl PRIVATE -Wno-unused-variable)
+  target_compile_options(rccl PRIVATE -Wno-unused-private-field)
+  target_compile_options(rccl PRIVATE -Wno-null-conversion)
+  target_compile_options(rccl PRIVATE -Wno-missing-braces)
+endif()
+
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)
   if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
@@ -1186,6 +1212,10 @@ endif()
 
 if (HAVE_KERNARG_PRELOAD)
   target_compile_options(rccl PRIVATE -mllvm --amdgpu-kernarg-preload-count=16)
+endif()
+
+if (REPORT_KERNEL_RESOURCE_USE)
+  target_link_options(rccl PRIVATE -Rpass-analysis=kernel-resource-usage)
 endif()
 
 if (DUMP_ASM) # Save temporary files from kernel compilation
@@ -1250,7 +1280,7 @@ if (HAVE_BFD)
   endif()
 endif()
 if (ROCTX_ENABLE)
-  target_link_libraries(rccl PRIVATE -lroctx64)
+  target_link_libraries(rccl PRIVATE ${ROCTX_LIB})
 endif()
 target_link_libraries(rccl PRIVATE   -fgpu-rdc)             # Required when linking relocatable device code
 target_link_libraries(rccl PRIVATE   Threads::Threads)

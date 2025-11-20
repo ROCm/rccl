@@ -11,13 +11,13 @@
 #include <type_traits>
 #include "reduce_kernel.h" // for reduction funcs
 #include "rccl_metadata.h"
+#include "rccl_ptr.h"
 #include "common_kernel.h"
 #include "common.h"
 
 #define NCCL_SPINS_BEFORE_CHECK_ABORT 10000
-
 #define barrier_generic(__THREAD_FENCE, NWORKERS, BARRIER_NEXT, BARRIERS_PTR) do { \
-  if (nthreads == NCCL_MAX_NTHREADS) { \
+  if (nthreads == threadsPerBlock) { \
     __THREAD_FENCE; __builtin_amdgcn_s_barrier(); \
   } else { \
     /**const int w = threadIdx.x/WARP_SIZE //unused variable - compiler warning**/;\

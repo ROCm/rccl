@@ -504,7 +504,7 @@ struct ncclComm {
   int node;
   int nNodes;
   int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
-  int gfx942CheapFenceOff; // RCCL: true if gfx942 cheap fence is disabled
+  int gfx9CheapFenceOff; // RCCL: true if gfx9 cheap fence is disabled
   int localRank;
   int localRanks;
   int maxLocalRanks;
@@ -550,6 +550,7 @@ struct ncclComm {
   float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   int maxThreads[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   uint64_t minMaxLLRange[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
+  uint64_t minMaxChannelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 32,40,48,56,64, the two values for min/max size-threshold 
 
   /* This attribute can indicate the states of communicators and return code of
   * asynchronous NCCL operations. */
@@ -712,10 +713,14 @@ struct ncclComm {
   CUmemGenericAllocationHandle symMCHandle;
   struct ncclIntruQueue<struct ncclSymRegTask, &ncclSymRegTask::next> symRegTaskQueue;
 
-  // Unroll factor for comm [RCCL]
+  // unroll factor for comm [RCCL]
   int unroll;
   // custom collective [RCCL]
   bool enableCustColl;
+  // gfx name from hipDeviceProp_t [RCCL]
+  char* archName;
+  // multiProcessorCount from hipDeviceProp_t [RCCL]
+  int cuCount;
   
   uint64_t endMagic;
 };

@@ -259,7 +259,7 @@ ncclResult_t ncclStrongStreamRelease(
           CUDACHECK(cudaEventRecord(ss->serialEvent, ss->liveStream));
         }
         if (ss->liveAcquiredBy != localThreadId() && ncclParamLaunchRaceFatal()) {
-          WARN("%s", launchRaceFatalMsg);
+          ERROR("%s", launchRaceFatalMsg);
           return ncclInvalidUsage;
         }
       } else {
@@ -321,7 +321,7 @@ ncclResult_t ncclStrongStreamRelease(
         #endif
 
         if (cap->acquiredBy != localThreadId() && ncclParamLaunchRaceFatal()) {
-          WARN("%s", launchRaceFatalMsg);
+          ERROR("%s", launchRaceFatalMsg);
           return ncclInvalidUsage;
         }
       }
