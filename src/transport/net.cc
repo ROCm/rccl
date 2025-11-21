@@ -1316,8 +1316,8 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
         ncclProfilerRecordProxyStepEventState(s, args, postedStepId, ncclProfilerProxyStepSendGPUWait);
         if (proxyState->proxyTrace) {
           proxyState->proxyTrace->updateProxyOpCounter(sub->traceKey, facebook_rccl::ProxyCounterTypes::POSTED, sub->posted);
+          proxyState->proxyTrace->setProxyOpTimestamp(sub->traceKey, facebook_rccl::ProxyCounterTypes::POSTED);
         }
-        setProxyOpTimestamp(proxyState->proxyTrace, sub->traceKey, facebook_rccl::ProxyCounterTypes::POSTED);
         args->idle = 0;
         continue;
       }
@@ -1399,7 +1399,9 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
             if (ignoreCompletion) *requestPtr = (void *)NCCL_NET_OPTIONAL_RECV_COMPLETION;
             NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, sub->sendMhandle, phandle, requestPtr));
             if (*requestPtr != NULL) {
-              facebook_rccl::setProxyOpTimestamp(proxyState->proxyTrace, sub->traceKey, facebook_rccl::ProxyCounterTypes::KERNEL_COPY_READY);
+              if (proxyState->proxyTrace) {
+                proxyState->proxyTrace->setProxyOpTimestamp(sub->traceKey, facebook_rccl::ProxyCounterTypes::KERNEL_COPY_READY);
+              }              
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
               NpKit::CollectCpuEvent(
                   NPKIT_EVENT_NET_SEND_ENTRY,

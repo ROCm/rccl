@@ -238,15 +238,11 @@ void facebook_rccl::ProxyTrace::updateProxyOpCounter(
   }
 }
 
-void facebook_rccl::setProxyOpTimestamp(
-    std::unique_ptr<ProxyTrace>& proxyTraceObj,
+void facebook_rccl::ProxyTrace::setProxyOpTimestamp(
     const ProxyTraceRecordKey& traceKey,
     ProxyCounterTypes counter) {
-  if (!proxyTraceObj) {
-    return;
-  }
 
-  auto traceOpPtr = proxyTraceObj->getProxyTraceOpPtr(traceKey);
+  auto traceOpPtr = getProxyTraceOpPtr(traceKey);
   if (!traceOpPtr || traceOpPtr->timestamps.find(counter) == traceOpPtr->timestamps.end()) {
     return;
   }

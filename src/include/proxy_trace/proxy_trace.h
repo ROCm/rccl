@@ -139,6 +139,10 @@ class ProxyTrace {
       ProxyCounterTypes counter,
       int64_t val);
 
+  void setProxyOpTimestamp(
+      const ProxyTraceRecordKey& traceKey,
+      ProxyCounterTypes counter);
+
   void checkOpCompleted(const ProxyTraceRecordKey &key);
 
   void addNewProxyTraceOpImpl(const ProxyTraceRecordKey &key,
@@ -181,11 +185,6 @@ private:
   std::deque<std::pair<std::string, std::string>> finishedOps;
 };
 struct ncclProxySubArgs;
-
-void setProxyOpTimestamp(
-    std::unique_ptr<ProxyTrace>& proxyTraceObj,
-    const ProxyTraceRecordKey& traceKey,
-    ProxyCounterTypes counter);
 
 void addNewProxyOp(
     std::unique_ptr<ProxyTrace> &proxyTraceObj, ProxyTraceRecordKey &key,
