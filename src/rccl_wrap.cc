@@ -444,7 +444,7 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
     cuCount = nChannels;
     return;
   }
-  // Warp speed is not supported currently for the following cases:
+  // WarpSpeed is not supported currently for the following cases:
   // 1. if any work batch in the plan contains P2P work
   // 2. or any collective task is not using RING algorithm
   bool hasP2p = !ncclIntruQueueEmpty(&plan->p2pTaskQueue);

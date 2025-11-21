@@ -754,7 +754,7 @@ public:
       struct ncclDevWorkP2p* p2pWork = nullptr, int stepSize_ = 0, int mode = primsModeDefault
     ):
     tid(tid), tidInBlock(threadIdx.x), nthreads(nthreads), /*compiler warnings*/
-    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_), group(ncclShmem.warpComm? threadIdx.x / WARP_SIZE : group), threadsPerBlock(blockDim.x){
+    stepSize(stepSize_ == 0 ? ncclShmem.comm.buffSizes[NCCL_PROTO_SIMPLE]/NCCL_STEPS/sizeof(T) : stepSize_), group(ncclShmem.warpComm? tidInBlock / WARP_SIZE : group), threadsPerBlock(blockDim.x){
 
     barriers = &ncclShmem.groups[group].barrier;
     // PAT uses the same barrier for each group
