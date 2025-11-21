@@ -15,6 +15,7 @@
 #endif
 #include <fmt/format.h>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 namespace facebook_rccl {
 
@@ -178,6 +179,7 @@ private:
   float getMapSizeMB() const;
   void resetAll();
 
+  mutable std::mutex mutex_;
   int myRank{-1};
 
   // Current active send/recv operations.

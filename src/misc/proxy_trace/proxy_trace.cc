@@ -136,6 +136,7 @@ void facebook_rccl::ProxyTraceOp::computeStatus() {
 }
 
 std::string facebook_rccl::ProxyTrace::dump(uint64_t commHash) {
+  std::lock_guard<std::mutex> lock(mutex_);
   std::string result = fmt::format("commDump for commHash:{}\n", commHash);
   std::map<std::string, std::string> sortedDumpStrMap;
   for (auto &opCountMap : activeOps.at(commHash)) {
@@ -153,6 +154,7 @@ std::string facebook_rccl::ProxyTrace::dump(uint64_t commHash) {
 }
 
 std::string facebook_rccl::ProxyTrace::dump() {
+  std::lock_guard<std::mutex> lock(mutex_);
   std::string result = "commDump for all active ops ";
   result += fmt::format("mapSizeMB:{:.2f}\n", getMapSizeMB());
 
@@ -229,6 +231,7 @@ void facebook_rccl::ProxyTrace::updateProxyOpCounter(
     const ProxyTraceRecordKey& traceKey,
     ProxyCounterTypes counter,
     int64_t val) {
+  std::lock_guard<std::mutex> lock(mutex_);
   auto traceOpPtr = getProxyTraceOpPtr(traceKey);
   if (traceOpPtr) {
     traceOpPtr->counters[counter] = val;
@@ -241,7 +244,7 @@ void facebook_rccl::ProxyTrace::updateProxyOpCounter(
 void facebook_rccl::ProxyTrace::setProxyOpTimestamp(
     const ProxyTraceRecordKey& traceKey,
     ProxyCounterTypes counter) {
-
+  std::lock_guard<std::mutex> lock(mutex_);
   auto traceOpPtr = getProxyTraceOpPtr(traceKey);
   if (!traceOpPtr || traceOpPtr->timestamps.find(counter) == traceOpPtr->timestamps.end()) {
     return;
@@ -258,6 +261,7 @@ void facebook_rccl::ProxyTrace::addNewProxyOp(
     int nSteps,
     uint32_t nbytes,
     int peerRank) {
+  std::lock_guard<std::mutex> lock(mutex_);
   auto opId = getOrCreateProxyOpId(key.commHash, key.opCount);
   key.proxyOpId = opId;
   addNewProxyTraceOpImpl(
