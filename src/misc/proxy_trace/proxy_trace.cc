@@ -225,18 +225,16 @@ float facebook_rccl::ProxyTrace::getMapSizeMB() const {
   return size / 1024.0 / 1024.0;
 }
 
-void facebook_rccl::updateProxyOpCounter(
-    std::unique_ptr<ProxyTrace> &proxyTraceObj,
-    const ProxyTraceRecordKey &traceKey, ProxyCounterTypes counter,
+void facebook_rccl::ProxyTrace::updateProxyOpCounter(
+    const ProxyTraceRecordKey& traceKey,
+    ProxyCounterTypes counter,
     int64_t val) {
-  if (proxyTraceObj) {
-    auto traceOpPtr = proxyTraceObj->getProxyTraceOpPtr(traceKey);
-    if (traceOpPtr) {
-      traceOpPtr->counters[counter] = val;
-      traceOpPtr->lastUpdateTs = std::chrono::high_resolution_clock::now();
-      traceOpPtr->lastUpdatingCounter = counter;
-      proxyTraceObj->checkOpCompleted(traceKey);
-    }
+  auto traceOpPtr = getProxyTraceOpPtr(traceKey);
+  if (traceOpPtr) {
+    traceOpPtr->counters[counter] = val;
+    traceOpPtr->lastUpdateTs = std::chrono::high_resolution_clock::now();
+    traceOpPtr->lastUpdatingCounter = counter;
+    checkOpCompleted(traceKey);
   }
 }
 
