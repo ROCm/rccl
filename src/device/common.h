@@ -523,6 +523,17 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
           break;
         }
       }
+      if (WARP_SIZE < 64) {
+        x = WARP_SIZE + tid;
+        if (args->channelMask.masks[i] & (1ull<<x)) {
+          y = __popcll(args->channelMask.masks[i] & ((1ull<<x)-1));
+          y = y + total;
+          if (blockIdx.x == y) {
+            ncclShmem.channelId = x + total;
+            break;
+          }
+        }
+      }
       total = total + __popcll(args->channelMask.masks[i]);
     }
     break;
