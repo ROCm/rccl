@@ -28,7 +28,6 @@ void facebook_rccl::ProxyTrace::resetAll() {
   activeOps.clear();
   activeOpIdTracker.clear();
   myRank = -1;
-  initialized = false;
 }
 
 bool facebook_rccl::ProxyTrace::checkActiveOpExist(uint64_t commHash,
@@ -224,20 +223,6 @@ float facebook_rccl::ProxyTrace::getMapSizeMB() const {
     size += keyStr_proxyOpStr.first.size() + keyStr_proxyOpStr.second.size();
   }
   return size / 1024.0 / 1024.0;
-}
-
-void facebook_rccl::proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace,
-                                   int32_t rank, uint64_t commHash) {
-  if (proxyTrace) {
-    WARN("[proxyTrace] Initializing non-empty proxyTrace! rank: %d, commHash: "
-         "%lu",
-         rank, commHash);
-    return;
-  }
-  INFO(NCCL_PROXY, "Initializing ProxyTrace, rank: %d, commHash: %lu", rank,
-       commHash);
-  proxyTrace = std::make_unique<facebook_rccl::ProxyTrace>(rank);
-  proxyTrace->initialized = true;
 }
 
 void facebook_rccl::updateProxyOpCounter(

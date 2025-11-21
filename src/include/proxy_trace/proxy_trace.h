@@ -127,11 +127,12 @@ using ProxyActiveOpIdTracker =
                        std::unordered_map<int64_t /* opCount*/, int64_t>>;
 
 class ProxyTrace {
-public:
-  ProxyTrace(int32_t rank) : myRank(rank) {}
+ public:
+  ProxyTrace(int32_t rank) : myRank(rank) {}; 
+  
+  ProxyTrace() = delete;
   ProxyTrace(const ProxyTrace &) = delete;
   ProxyTrace &operator=(const ProxyTrace &) = delete;
-  bool initialized{false};
   void checkOpCompleted(const ProxyTraceRecordKey &key);
 
   void addNewProxyTraceOpImpl(const ProxyTraceRecordKey &key,
@@ -174,8 +175,6 @@ private:
   std::deque<std::pair<std::string, std::string>> finishedOps;
 };
 struct ncclProxySubArgs;
-void proxyTraceInit(std::unique_ptr<ProxyTrace> &proxyTrace,
-                            int32_t rank, uint64_t commHash);
 
 void updateProxyOpCounter(std::unique_ptr<ProxyTrace> &proxyTraceObj,
                                   const ProxyTraceRecordKey &traceKey,
