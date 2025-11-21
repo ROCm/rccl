@@ -12,6 +12,6 @@ ncclResult_t amd_smi_shutdown();
 ncclResult_t amd_smi_getNumDevice(uint32_t* num_devs);
 ncclResult_t amd_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* pciBusId, size_t len);
 ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* deviceIndex);
-ncclResult_t amd_smi_getLinkInfo(int srcDev, int dstDev, amdsmi_link_type_t* amdsmi_type, int *hops, int *count);
+ncclResult_t amd_smi_getLinkInfo(int srcDev, int dstDev, amdsmi_link_type_t* type, int *hops, int *count);
 
 #endif

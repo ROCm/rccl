@@ -15,7 +15,7 @@ static int is_wsl2 = -1;
   if( ret != AMDSMI_STATUS_SUCCESS ) {       \
     const char *err;                         \
     amdsmi_status_code_to_string(ret, &err);         \
-    ERROR("AMD SMI failure: %s", err);    \
+    ERROR("AMD SMI failure: %s at line: %d in file: %s", err, __LINE__, __FILE__);    \
     return ncclInternalError;                \
   }                                          \
 } while(false)
@@ -145,7 +145,7 @@ ncclResult_t amd_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId, 
             amdsmi_enumeration_info_t info;
             AMDSMICHECK(amdsmi_get_gpu_enumeration_info(proc, &info));
             if(info.hip_id == deviceIndex) {
-              amdsmi_get_gpu_bdf_id(proc, &id);
+              AMDSMICHECK(amdsmi_get_gpu_bdf_id(proc, &id));
               break;
             }
           }
@@ -159,6 +159,7 @@ ncclResult_t amd_smi_getDevicePciBusIdString(uint32_t deviceIndex, char* busId, 
     //snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id & 0xffffffff) >> 32, (id & 0xff00) >> 8, (id & 0xf8) >> 3, (id & 0x7));
 
     // borrowing NCCL's format from utils.cc:int64ToBusId
+    // !! To be reconciled after discussion with amdsmi team !!
     snprintf(busId, len, "%04lx:%02lx:%02lx.%01lx", (id) >> 20, (id & 0xff000) >> 12, (id & 0xff0) >> 4, (id & 0xf));
   }
   return ncclSuccess;
@@ -195,7 +196,9 @@ ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* de
       // bdf.device_number = (busid & 0xf8) >> 3;
       // bdf.bus_number = (busid & 0xff00) >> 8;
       // bdf.domain_number = (busid & 0xffffffffffff0000) >> 16;
+
       // However, it is incompatible with the format enforced by NCCL in utils.cc:int64ToBusId
+      // !! To be reconciled after discussion with amdsmi team !!
       bdf.function_number = (busid & 0xf);
       bdf.device_number = (busid & 0xff) >> 4;
       bdf.bus_number = (busid & 0xff000) >> 12;
@@ -235,14 +238,14 @@ ncclResult_t amd_smi_getDeviceIndexByPciBusId(const char* pciBusId, uint32_t* de
   }
 }
 
-ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t* amdsmi_type, int *hops, int *count) {
+ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t* type, int *hops, int *count) {
   if (__atomic_load_n(&is_wsl2, __ATOMIC_ACQUIRE)) {
-    *amdsmi_type = AMDSMI_LINK_TYPE_PCIE;
+    *type = AMDSMI_LINK_TYPE_PCIE;
     *hops = 1;
     *count = 1;
   } else {
-    uint64_t amdsmi_hops, amdsmi_weight;
-    *hops = 2;
+    amdsmi_link_type_t smi_type;
+    uint64_t amdsmi_hops = 1, amdsmi_weight ;
     *count = 1;
 
     // rsmi_minmax_bandwidth_get is replaced by amdsmi_get_minmax_bandwidth_between_processors
@@ -272,10 +275,9 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
 
         // workaround
         for (auto& proc : processor_handles) {
-          processor_type_t type;
-
-          AMDSMICHECK(amdsmi_get_processor_type(proc, &type));
-          if(type == AMDSMI_PROCESSOR_TYPE_AMD_GPU) {
+          processor_type_t proc_type;
+          AMDSMICHECK(amdsmi_get_processor_type(proc, &proc_type));
+          if(proc_type == AMDSMI_PROCESSOR_TYPE_AMD_GPU) {
             amdsmi_enumeration_info_t info;
             AMDSMICHECK(amdsmi_get_gpu_enumeration_info(proc, &info));
             if(info.hip_id == srcIndex) {
@@ -287,21 +289,24 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
           }
         }
       }
-      AMDSMICHECK(amdsmi_topo_get_link_type(src_processor_handle, dst_processor_handle, &amdsmi_hops, amdsmi_type));
+      AMDSMICHECK(amdsmi_topo_get_link_type(src_processor_handle, dst_processor_handle, &amdsmi_hops, &smi_type));
       AMDSMICHECK(amdsmi_topo_get_link_weight(src_processor_handle, dst_processor_handle, &amdsmi_weight));
-      if (*amdsmi_type == AMDSMI_LINK_TYPE_XGMI && (amdsmi_weight == 15 ||
-        amdsmi_weight == 41 || amdsmi_weight == 13)) {
+
+      // amd-smi reports weight=0 for XGMI ??
+      if (smi_type == AMDSMI_LINK_TYPE_XGMI) {
         uint64_t min_bw = 0, max_bw = 0;
-        *hops = 1;
         AMDSMICHECK(amdsmi_get_minmax_bandwidth_between_processors(src_processor_handle, dst_processor_handle, &min_bw, &max_bw));
         if (max_bw && min_bw) *count = max_bw/min_bw;
       }
+
+      *type = smi_type;
+      *hops = amdsmi_hops;
     } else {
       ARSMI_linkInfo tinfo;
       ARSMICHECK(ARSMI_topo_get_link_info(srcIndex, dstIndex, &tinfo));
 
-      *amdsmi_type  = (amdsmi_link_type_t) tinfo.type;
-      if (*amdsmi_type == AMDSMI_LINK_TYPE_XGMI && (tinfo.weight == 15 ||
+      *type  = (amdsmi_link_type_t) tinfo.type;
+      if (*type == AMDSMI_LINK_TYPE_XGMI && (tinfo.weight == 15 ||
         tinfo.weight == 41 || tinfo.weight == 13)) {
         *hops = 1;
         if (tinfo.max_bandwidth && tinfo.min_bandwidth)
