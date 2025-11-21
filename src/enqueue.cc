@@ -989,7 +989,6 @@ static ncclResult_t addP2pToPlan(
   if (!selfSend) {
     for (int part=0; part < nChannelsMax; part++) {
       int channelId = ncclP2pChannelForPart(comm->p2pnChannels, base, part, nChannelsMax, comm->nNodes);
-      // printf("p2pnChannels: %d, nChannelsMax: %d, channelId: %d\n", comm->p2pnChannels, nChannelsMax, channelId);
       struct ncclChannelPeer** channelPeers = comm->channels[channelId].peers;
       for (int dir=0; dir <= 1; dir++) {
         int peerRank = dir ? sendRank : recvRank;
