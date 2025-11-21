@@ -135,12 +135,12 @@ struct ncclShmemGroup {
 struct ncclShmemData {
   struct ncclDevKernelArgs args;
   int channelId;
-  int warpChannelId[8];
+  int warpChannelId[NCCL_MAX_GROUPS];
   int warpComm;
   int aborted;
   alignas(16) struct ncclDevComm comm;
   alignas(16) struct ncclDevChannel channel;
-  alignas(16) struct ncclDevChannel warpChannel[8];
+  alignas(16) struct ncclDevChannel warpChannel[NCCL_MAX_GROUPS];
 
   int batchIx, nextBatchIx;
   enum ncclDevWorkType workType;
