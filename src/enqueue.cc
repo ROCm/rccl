@@ -2167,9 +2167,9 @@ static ncclResult_t topoGetAlgoInfo(
     }
   } else if (info->func == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
     info->algorithm = NCCL_ALGO_TREE;
-    nc = std::min(nc, 64);
+    nc = std::min(nc, 64); // Tree uses at most 64 channels as we don't support WarpSpeed Tree.
   } else if (info->algorithm == NCCL_ALGO_TREE) {
-    nc = std::min(nc, 64);
+    nc = std::min(nc, 64); // Tree uses at most 64 channels as we don't support WarpSpeed Tree.
   } else {
     info->nMaxChannels = nc;
   }

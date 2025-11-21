@@ -812,9 +812,8 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 
 
   // Duplicate ringPrev/ringNext for ncclBuildRing
-  duplicateCount = maxChannels / nChannels;          // How many full blocks can fit
+  duplicateCount = maxChannels / nChannels;
   if (duplicateCount > 1) {
-    // Preserve prior intent of up to 4 total copies (original code made 4 blocks when possible).
     int limit = duplicateCount;
     for (int dup = 1; dup < limit; ++dup) {
       memcpy(ringPrev + dup * nChannels * nranks, ringPrev, nChannels * nranks * sizeof(int));
