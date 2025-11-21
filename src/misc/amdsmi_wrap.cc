@@ -80,18 +80,6 @@ ncclResult_t amd_smi_getNumDevice(uint32_t* num_devs) {
         AMDSMICHECK(amdsmi_get_processor_handles(socket, &num_gpus_per_socket, nullptr));
         std::vector<amdsmi_processor_handle> processor_handles(num_gpus_per_socket);
         AMDSMICHECK(amdsmi_get_processor_handles(socket, &num_gpus_per_socket, processor_handles.data()));
-
-        // this does not work?
-        // AMDSMICHECK(amdsmi_get_processor_handles_by_type(socket, AMDSMI_PROCESSOR_TYPE_AMD_GPU, nullptr, &num_gpus_per_socket));
-
-        // workaround
-        for (auto& proc : processor_handles) {
-          processor_type_t type;
-          AMDSMICHECK(amdsmi_get_processor_type(proc, &type));
-          if(type == AMDSMI_PROCESSOR_TYPE_AMD_GPU) {
-            num_gpus_per_socket += 1;
-          }
-        }
         total_gpus += num_gpus_per_socket;
       }
       *num_devs = total_gpus;
@@ -244,7 +232,7 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
     *hops = 1;
     *count = 1;
   } else {
-    amdsmi_link_type_t smi_type;
+    amdsmi_link_type_t amdsmi_type;
     uint64_t amdsmi_hops = 1, amdsmi_weight ;
     *count = 1;
 
@@ -259,6 +247,7 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
       uint32_t socket_count = 0;
       amdsmi_processor_handle src_processor_handle = 0;
       amdsmi_processor_handle dst_processor_handle = 0;
+      bool found_src = false, found_dst = false;
 
       AMDSMICHECK(amdsmi_get_socket_handles(&socket_count, nullptr));
       std::vector<amdsmi_socket_handle> sockets(socket_count);
@@ -282,24 +271,28 @@ ncclResult_t amd_smi_getLinkInfo(int srcIndex, int dstIndex, amdsmi_link_type_t*
             AMDSMICHECK(amdsmi_get_gpu_enumeration_info(proc, &info));
             if(info.hip_id == srcIndex) {
               src_processor_handle = proc;
+              found_src = true;
             }
             if(info.hip_id == dstIndex) {
               dst_processor_handle = proc;
+              found_dst = true;
             }
           }
         }
       }
-      AMDSMICHECK(amdsmi_topo_get_link_type(src_processor_handle, dst_processor_handle, &amdsmi_hops, &smi_type));
+      if (!found_src) ERROR("amd-smi could not find processor handle for srcIndex: %d", srcIndex);
+      if (!found_dst) ERROR("amd-smi could not find processor handle for dstIndex: %d", dstIndex);
+      AMDSMICHECK(amdsmi_topo_get_link_type(src_processor_handle, dst_processor_handle, &amdsmi_hops, &amdsmi_type));
       AMDSMICHECK(amdsmi_topo_get_link_weight(src_processor_handle, dst_processor_handle, &amdsmi_weight));
 
       // amd-smi reports weight=0 for XGMI ??
-      if (smi_type == AMDSMI_LINK_TYPE_XGMI) {
+      if (amdsmi_type == AMDSMI_LINK_TYPE_XGMI) {
         uint64_t min_bw = 0, max_bw = 0;
         AMDSMICHECK(amdsmi_get_minmax_bandwidth_between_processors(src_processor_handle, dst_processor_handle, &min_bw, &max_bw));
         if (max_bw && min_bw) *count = max_bw/min_bw;
       }
 
-      *type = smi_type;
+      *type = amdsmi_type;
       *hops = amdsmi_hops;
     } else {
       ARSMI_linkInfo tinfo;
