@@ -85,11 +85,10 @@ typedef enum {
 
 #define NCCL_ALGO_PROTO_IGNORE -1.0
 
-#define NCCL_NUM_UNROLLS 4 // 1/2/4
+#define NCCL_NUM_UNROLLS 3 // 1/2/4
 #define NCCL_UNROLL_1 0
 #define NCCL_UNROLL_2 1
-#define NCCL_UNROLL_3 2
-#define NCCL_UNROLL_4 3
+#define NCCL_UNROLL_4 2
 
 #define NCCL_NUM_FLOATS 6 // half/float/double/rccl_bfloat16/rccl_float8/rccl_bfloat8
 
