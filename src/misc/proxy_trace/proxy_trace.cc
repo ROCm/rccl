@@ -250,15 +250,16 @@ void facebook_rccl::ProxyTrace::setProxyOpTimestamp(
   traceOpPtr->timestamps[counter] = std::chrono::high_resolution_clock::now();
 }
 
-void facebook_rccl::addNewProxyOp(std::unique_ptr<ProxyTrace> &proxyTraceObj,
-                                  ProxyTraceRecordKey &key,
-                                  const ProxyTraceExtraInfo &extraInfo,
-                                  ProxyOpType opType, int channelId, int nSteps,
-                                  uint32_t nbytes, int peerRank) {
-  if (proxyTraceObj) {
-    auto opId = proxyTraceObj->getOrCreateProxyOpId(key.commHash, key.opCount);
-    key.proxyOpId = opId;
-    proxyTraceObj->addNewProxyTraceOpImpl(key, extraInfo, opType, channelId,
-                                          nSteps, nbytes, peerRank);
-  }
+void facebook_rccl::ProxyTrace::addNewProxyOp(
+    ProxyTraceRecordKey& key,
+    const ProxyTraceExtraInfo& extraInfo,
+    ProxyOpType opType,
+    int channelId,
+    int nSteps,
+    uint32_t nbytes,
+    int peerRank) {
+  auto opId = getOrCreateProxyOpId(key.commHash, key.opCount);
+  key.proxyOpId = opId;
+  addNewProxyTraceOpImpl(
+      key, extraInfo, opType, channelId, nSteps, nbytes, peerRank);
 }

@@ -143,6 +143,15 @@ class ProxyTrace {
       const ProxyTraceRecordKey& traceKey,
       ProxyCounterTypes counter);
 
+  void addNewProxyOp(
+      ProxyTraceRecordKey& key,
+      const ProxyTraceExtraInfo& extraInfo,
+      ProxyOpType opType,
+      int channelId,
+      int nSteps,
+      uint32_t nbytes,
+      int peerRank);
+
   void checkOpCompleted(const ProxyTraceRecordKey &key);
 
   void addNewProxyTraceOpImpl(const ProxyTraceRecordKey &key,
@@ -185,9 +194,4 @@ private:
   std::deque<std::pair<std::string, std::string>> finishedOps;
 };
 struct ncclProxySubArgs;
-
-void addNewProxyOp(
-    std::unique_ptr<ProxyTrace> &proxyTraceObj, ProxyTraceRecordKey &key,
-    const ProxyTraceExtraInfo &extraInfo, ProxyOpType opType, int channelId,
-    int nSteps, uint32_t nbytes, int peerRank);
 } // namespace facebook_rccl

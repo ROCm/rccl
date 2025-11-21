@@ -1271,9 +1271,16 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
       resources->step = sub->base + sub->nsteps;
       sub->posted = sub->transmitted = sub->done = 0;
       ncclProfilerRecordProxyOpEventState(s, args, ncclProfilerProxyOpInProgress_v4);
-      facebook_rccl::addNewProxyOp(proxyState->proxyTrace, sub->traceKey, 
-        sub->traceInfo,  facebook_rccl::ProxyOpType::SEND,
-        sub->channelId, sub->nsteps, sub->nbytes, sub->peer);
+      if (proxyState->proxyTrace) {
+        proxyState->proxyTrace->addNewProxyOp(
+            sub->traceKey, 
+            sub->traceInfo,  
+            facebook_rccl::ProxyOpType::SEND,
+            sub->channelId, 
+            sub->nsteps, 
+            sub->nbytes, 
+            sub->peer);
+      }
       if (!sub->reg)
         sub->sendMhandle = resources->mhandles[args->protocol];
     }
@@ -1558,8 +1565,16 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
       sub->regBufferReady = 0;
       for (int i=0; i<groupSize; i++) sub[-i].groupSize = groupSize;
       ncclProfilerRecordProxyOpEventState(s, args, ncclProfilerProxyOpInProgress_v4);
-      facebook_rccl::addNewProxyOp(proxyState->proxyTrace, sub->traceKey, sub->traceInfo,  
-        facebook_rccl::ProxyOpType::RECV, sub->channelId, sub->nsteps, sub->nbytes, sub->peer);
+      if (proxyState->proxyTrace) {
+        proxyState->proxyTrace->addNewProxyOp(
+            sub->traceKey, 
+            sub->traceInfo,  
+            facebook_rccl::ProxyOpType::RECV,
+            sub->channelId, 
+            sub->nsteps, 
+            sub->nbytes, 
+            sub->peer);
+      }
       if (!sub->reg)
         sub->recvMhandle = resources->mhandles[args->protocol];
     }
