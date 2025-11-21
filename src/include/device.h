@@ -637,11 +637,6 @@ struct alignas(16) ncclDevKernelArgs {
   // struct ncclDevWorkBatch batches[];
 };
 
-__host__ __device__ constexpr int ncclMaxKernelArgsSize(/*int cudaDriver, */int cudaArch=NCCL_CUDA_ARCH) {
-  //return (cudaArch < 700 || cudaDriver < 12010) ? 4<<10 : (32<<10)-4;
-  return (5<<10);
-}
-
 template<size_t capacity>
 struct alignas(16) ncclDevKernelArgsStorage {
   union {
@@ -650,8 +645,21 @@ struct alignas(16) ncclDevKernelArgsStorage {
   };
 };
 
-typedef ncclDevKernelArgsStorage<(5<<10)> ncclDevKernelArgs4K;
+// needed extra storage for accomodating more channels than 128 for WarpSpeed support
+// 256 channels (i.e. 256 warps) would hang without this extra storage
+// 5KB should be sufficient for now
+typedef ncclDevKernelArgsStorage<(5<<10)> ncclDevKernelArgs5K;
+typedef ncclDevKernelArgsStorage<(4<<10)> ncclDevKernelArgs4K;
+
 //typedef ncclDevKernelArgsStorage<(32<<10)-4> ncclDevKernelArgs31K;
+
+typedef ncclDevKernelArgs5K ncclDevKernelArgsDefaultStorage;
+
+
+__host__ __device__ constexpr int ncclMaxKernelArgsSize(/*int cudaDriver, */int cudaArch=NCCL_CUDA_ARCH) {
+  //return (cudaArch < 700 || cudaDriver < 12010) ? 4<<10 : (32<<10)-4;
+  return sizeof(ncclDevKernelArgsDefaultStorage);
+}
 
 template<typename T>
 __host__ __device__ constexpr T min_constexpr(T a) { return a; }
