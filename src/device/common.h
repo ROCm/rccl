@@ -589,9 +589,10 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   }
   __syncthreads(); // publish shmem
 
-  total = 0;
 
-  if(ncclShmem.warpComm == 1) {
+  // Determine per-warp channel assignment for WarpSpeed enablement
+  total = 0;
+  if(ncclShmem.warpComm == 1) {  // If warpComm is enabled, assing warps to channels that have the corresponding channel mask enabled
     ncclShmem.warpChannelId[localWarpId] = -1;
      __syncthreads();
     for (int i = 0; i < num; i++) {
@@ -614,7 +615,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
       // assert((tid-localWarpId*WARP_SIZE) >= 0 && (tid-localWarpId*WARP_SIZE) < WARP_SIZE);
       copyToShmem16(tid-localWarpId*WARP_SIZE, dst, src, bytes);
     }
-  } else if(laneId == 0) {
+  } else if(laneId == 0) {  // If warpComm is disabled, all warps use the same channel as the block
     ncclShmem.warpChannelId[localWarpId] = ncclShmem.channelId;
     ncclShmem.warpChannel[localWarpId] = ncclShmem.channel;
   }
