@@ -80,12 +80,6 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 ### Known Issues
 * When running this version of RCCL using ROCm versions earlier than 6.4.0, the user must set the environment flag `HSA_NO_SCRATCH_RECLAIM=1`.
 
-### Optimized
-* Improved the performance of the `FP8` Sum operation by upcasting to `FP16`.
-
-### Known Issues
-* When running this version of RCCL using ROCm versions earlier than 6.4.0, the user must set the environment flag `HSA_NO_SCRATCH_RECLAIM=1`.
-
 ## RCCL 2.22.3 for ROCm 6.4.2
 
 ### Added
