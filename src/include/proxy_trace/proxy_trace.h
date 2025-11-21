@@ -152,6 +152,13 @@ class ProxyTrace {
       uint32_t nbytes,
       int peerRank);
 
+  // Dump all trace for a given communicator
+  std::string dump(uint64_t commHash);
+
+  // Dump all active ops
+  std::string dump();
+
+private:
   void checkOpCompleted(const ProxyTraceRecordKey &key);
 
   void addNewProxyTraceOpImpl(const ProxyTraceRecordKey &key,
@@ -163,12 +170,6 @@ class ProxyTrace {
   // If the opCount is not found, create a new entry for it and return 0
   int64_t getOrCreateProxyOpId(uint64_t commHash, uint64_t opCount);
 
-  // Dump all trace for a given communicator
-  std::string dump(uint64_t commHash);
-
-  // Dump all active ops
-  std::string dump();
-
   // check if an active send/recv operation exists for a given commHash:opCount
   bool checkActiveOpExist(uint64_t commHash, uint64_t opCount,
                           uint32_t proxyOpId) const;
@@ -177,7 +178,6 @@ class ProxyTrace {
   float getMapSizeMB() const;
   void resetAll();
 
-private:
   int myRank{-1};
 
   // Current active send/recv operations.
