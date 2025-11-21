@@ -135,6 +135,11 @@ class ProxyTrace {
   ProxyTrace(const ProxyTrace &) = delete;
   ProxyTrace &operator=(const ProxyTrace &) = delete;
 
+  //
+  // Public APIs called by the proxy thread and ncclCommDump().
+  // All these APIs lock the same shared mutex before executing.
+  //
+
   void updateProxyOpCounter(
       const ProxyTraceRecordKey& traceKey,
       ProxyCounterTypes counter,
@@ -159,6 +164,14 @@ class ProxyTrace {
   // Dump all active ops
   std::string dump();
 
+  //
+  // Getters called by public APIs as well as unit tests.
+  // These are not thread-safe unless called by the public APIs above.
+  // 
+
+  ProxyTraceOp *getProxyTraceOpPtr(const ProxyTraceRecordKey &traceKey);
+  float getMapSizeMB() const;
+
 private:
   void checkOpCompleted(const ProxyTraceRecordKey &key);
 
@@ -174,10 +187,6 @@ private:
   // check if an active send/recv operation exists for a given commHash:opCount
   bool checkActiveOpExist(uint64_t commHash, uint64_t opCount,
                           uint32_t proxyOpId) const;
-
-  ProxyTraceOp *getProxyTraceOpPtr(const ProxyTraceRecordKey &traceKey);
-  float getMapSizeMB() const;
-  void resetAll();
 
   mutable std::mutex mutex_;
   int myRank{-1};

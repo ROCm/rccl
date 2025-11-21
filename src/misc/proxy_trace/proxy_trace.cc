@@ -24,12 +24,6 @@ static std::unordered_map<facebook_rccl::ProxyOpStepStatus, std::string>
         {facebook_rccl::ProxyOpStepStatus::UNINITIALIZED, "ILLEGAL"},
 };
 
-void facebook_rccl::ProxyTrace::resetAll() {
-  activeOps.clear();
-  activeOpIdTracker.clear();
-  myRank = -1;
-}
-
 bool facebook_rccl::ProxyTrace::checkActiveOpExist(uint64_t commHash,
                                                    uint64_t opCount,
                                                    uint32_t proxyOpId) const {
