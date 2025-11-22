@@ -18,7 +18,6 @@ namespace {
 #endif
     int warp = threadIdx.x / WARP_SIZE;
     ncclRing *ring = &ncclShmem.warpChannel[warp].ring;
-    int ringIx = ring->index;
     int const *ringRanks = ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
     size_t count;
