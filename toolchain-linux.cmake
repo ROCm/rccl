@@ -24,6 +24,6 @@ else()
 endif()
 
 if (NOT DEFINED ENV{CFLAGS})
-  set(CMAKE_C_FLAGS_DEBUG "-g -O1")
+  set(CMAKE_C_FLAGS_DEBUG "-g -O0")
   set(CMAKE_C_FLAGS_RELEASE "-O3")
 endif()
