@@ -775,7 +775,8 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   commConfig.trafficClass = req->trafficClass == NCCL_CONFIG_UNDEF_INT ? NCCL_NET_TRAFFIC_CLASS_UNDEF : req->trafficClass;
   NCCLCHECK(ncclNetGetDeviceHandle(resources->netDeviceType, resources->netDeviceVersion, false /*isRecv*/, &resources->netDeviceHandle));
   
-  if (rcclNetP2pPolicy) {
+  // Only call rcclNetP2pPolicy for ncclNetIb
+  if (proxyState->ncclNet == &ncclNetIb) {
     NCCLCHECK(rcclNetP2pPolicy(req->handle, resources->isP2p));
   }
   
