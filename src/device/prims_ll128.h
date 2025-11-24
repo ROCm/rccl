@@ -579,7 +579,7 @@ public:
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE),                                /*compiler warnings*/
     stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)),
     warp(tid/WARP_SIZE), warpInBlock(threadIdx.x/WARP_SIZE), flagThread((tid%4)==3), group(group), threadsPerBlock(blockDim.x){
-    auto *channel = &ncclShmem.warpChannel[warpInBlock];
+    auto *channel = isMsccl(Metadata) ? &ncclShmem.channel : &ncclShmem.warpChannel[warpInBlock];
     barriers = &ncclShmem.groups[group].barrier;
     int nrecv=0, nsend=0;
     while (nrecv < MaxRecv && recvPeers[nrecv] >= 0) {

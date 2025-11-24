@@ -655,7 +655,7 @@ public:
     tid(tid), nthreads(nthreads), wid(threadIdx.x%WARP_SIZE), group(group), threadsPerBlock(blockDim.x),
     stepLines(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine)) {
     int warp = threadIdx.x / WARP_SIZE;
-    auto *channel = &ncclShmem.warpChannel[warp];
+    auto *channel = isMsccl(Metadata) ? &ncclShmem.channel : &ncclShmem.warpChannel[warp];
     barriers = &ncclShmem.groups[group].barrier;
     // If we are going to support oneshot collNet + LL, then we would need to add connector index here
     int nrecv=0, nsend=0;

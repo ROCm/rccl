@@ -146,6 +146,7 @@ __device__ __forceinline__ void mscclRunInterpreter(
     }
     if (bytes) copyToShmem8(tid%WARP_SIZE, dst, src, bytes);
   }
+   ncclShmem.warpComm = 0;
   __syncthreads(); // publish shmem
 
 #if defined(ENABLE_NPKIT)

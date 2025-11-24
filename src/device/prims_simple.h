@@ -760,7 +760,7 @@ public:
     // PAT uses the same barrier for each group
     barriers_pat = &ncclShmem.barrier_pat;
     this->nworkers = nthreads;
-
+    auto *channel = isMsccl(Metadata) ? &ncclShmem.channel : &ncclShmem.warpChannel[tidInBlock/WARP_SIZE];
     int peer = -1;
     flags = 0;
     index = -1;
@@ -815,9 +815,9 @@ public:
       }
 
       // coverity[overrun-call] => Coverity think prims.index can be greater than 1
-      if (flags & (RoleWaitRecv|RolePostRecv)) loadRecvConn(ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[peer], connIndexRecv, collWork ? collWork->direct : 0, recvIpcReg, recvNetReg);
+      if (flags & (RoleWaitRecv|RolePostRecv)) loadRecvConn(channel->peers[peer], connIndexRecv, collWork ? collWork->direct : 0, recvIpcReg, recvNetReg);
       // coverity[overrun-call] => Coverity think prims.index can be greater than 1
-      if (flags & (RoleWaitSend|RolePostSend)) loadSendConn(ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[peer], connIndexSend, collWork ? collWork->direct : 0, sendIpcReg, sendNetReg);
+      if (flags & (RoleWaitSend|RolePostSend)) loadSendConn(channel->peers[peer], connIndexSend, collWork ? collWork->direct : 0, sendIpcReg, sendNetReg);
 
       // if (barrierAny(flags & NetDeviceUnpack)) {
       //   flags |= AnyNetDeviceUnpack;
@@ -845,7 +845,7 @@ public:
         // Load recv peer
         int recvPeer = mode == primsModePatRs ? (rank - delta + nranks) % nranks : (rank + delta) % nranks;
         struct ncclPatPeer* peer = ((struct ncclPatPeer*)recvPeers)+tid;
-        struct ncclConnInfo* conn = peer->conn = ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[recvPeer]->recv+connIndexRecv;
+        struct ncclConnInfo* conn = peer->conn = channel->peers[recvPeer]->recv+connIndexRecv;
         peer->step = conn->step;
         peer->buff = conn->buffs[NCCL_PROTO_SIMPLE];
         peer->stepCache = loadStepValue(peer->tailPtr = conn->tail);
@@ -855,7 +855,7 @@ public:
         // Load send peer
         int sendPeer = mode == primsModePatAg ? (rank - delta + nranks) % nranks : (rank + delta) % nranks;
         peer = ((struct ncclPatPeer*)sendPeers)+tid;
-        conn = peer->conn = ncclShmem.warpChannel[tidInBlock/WARP_SIZE].peers[sendPeer]->send+connIndexSend;
+        conn = peer->conn = channel->peers[sendPeer]->send+connIndexSend;
         peer->step = conn->step;
         peer->connFifo = conn->connFifo;
         peer->buff = conn->buffs[NCCL_PROTO_SIMPLE];
