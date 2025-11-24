@@ -28,6 +28,8 @@ DECLARE_ROCM_PFN(hsa_status_string);
 
 static void *hsaLib;
 static uint16_t version_major, version_minor;
+
+int ncclCudaDriverVersionCache = -1;
 bool ncclCudaLaunchBlocking = false;
 
 static pthread_once_t initOnceControl = PTHREAD_ONCE_INIT;

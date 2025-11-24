@@ -11,7 +11,13 @@
 
 #include "nccl.h"
 #include "rccl_float8.h"
-#include <hip/hip_bfloat16.h>
+#if ROCM_VERSION >= 60000
+   // hip_bf16.h should be used from ROCm 6.0
+  #include <hip/hip_bf16.h>
+  typedef __hip_bfloat16 hip_bfloat16;
+#else
+  #include <hip/hip_bfloat16.h>
+#endif
 #include "nccl_common.h"
 #include "bitops.h"
 #include "symmetric.h"
@@ -101,19 +107,28 @@ union ncclLLFifoLine {
   #else
   #define WARP_SIZE 32
   #endif
+  #if defined (__gfx950__)
+  #define NCCL_MAX_NTHREADS 512
+  #else
+  #define NCCL_MAX_NTHREADS 256
+  #endif
+  // Number of named barriers supported by CUDA
+  #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 #else
- /* IMPORTANT:
-  * WARP_SIZE should NEVER be referenced by host code in RCCL. It is defined here
+ /* IMPORTANT Note ragarding WARP_SIZE, NCCL_MAX_NTHREADS and NCCL_MAX_GROUPS:
+  * These should NEVER be referenced by host code in RCCL. It is defined here
   * solely as a workaround to allow RCCL to compile, since the host still compiles __device__ functions,
-  * and WARP_SIZE needs to be defined. These __device__ functions will not be called from the host.
+  * and they need to be defined. These __device__ functions will not be called from the host.
   * The host warp size is handled in src/enqueue.cc by calling hipDeviceGetAttributes(). */
   #define WARP_SIZE 32
+  #define NCCL_MAX_NTHREADS 256
+  // Number of named barriers supported by CUDA
+  #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 #endif
 
 #define MAXCHANNELS 128
 #define CHANNEL_LIMIT 16
 #define NCCL_MAX_LOCAL_RANKS 72
-#define NCCL_MAX_NTHREADS 256
 #define NCCL_MIN_NTHREADS (4*WARP_SIZE)
 #define NCCL_SIMPLE_MAX_NTHREADS NCCL_MAX_NTHREADS
 #define NCCL_SIMPLE_EXTRA_GROUP_IF_NTHREADS_GE (3*WARP_SIZE)
@@ -145,8 +160,7 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_DIRECT_NIC   0x04
 #define NCCL_NVLS_MIN_POLL 0x80
 
-// Number of named barriers supported by CUDA
-#define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
+
 
 #define NCCL_REGULAR_BUFFER 0x00
 #define NCCL_IPC_REG_BUFFER 0x01
@@ -317,10 +331,24 @@ inline __host__ uint8_t ncclP2pChannelBaseForRound(struct ncclComm* comm, int p2
 // ncclP2pChannelToPart and ncclP2pChannelForPart are inverses. The device code
 // uses ncclP2pChannelToPart to determine which part "this" channel is responsible for.
 inline __host__ int ncclP2pChannelForPart(int nP2pChannels, int base, int part, int nParts, int nNodes) {
+  if (nNodes > 2) {
+    // Only works because nP2pChannels is pow2
+    int nChannelsLog2 = countOneBits(nP2pChannels-1);
+    int delta = reverseBits(part, nChannelsLog2);
+    return (base + delta) & (nP2pChannels-1);
+  } else {
     return (base * nParts + part) & (nP2pChannels-1);
+  }
 }
 inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int channel, int nParts, int nNodes) {
+  if (nNodes > 2) {
+    // Only works because nP2pChannels is pow2
+    int nChannelsLog2 = countOneBits(nP2pChannels-1);
+    int delta = (channel-base) & (nP2pChannels-1);
+    return reverseBits(delta, nChannelsLog2);
+  } else {
     return (channel - base * nParts) & (nP2pChannels-1);
+  }
 }
 
 struct alignas(16) ncclDevWorkColl {
@@ -679,10 +707,14 @@ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH)
     ) + 15) & -16; // pad to 16 bytes
 }
 
+// RCCL has its own varient of ncclShmemDynamicSize and ncclShmemScratchWarpSize
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#else
 // The amount of dynamic shmem per block
 __device__ constexpr int ncclShmemDynamicSize(int cudaArch = NCCL_CUDA_ARCH) {
   return cudaArch < 700 ? 0 : ncclShmemScratchWarpSize(cudaArch)*(NCCL_MAX_NTHREADS/WARP_SIZE);
 }
+#endif
 
 // Host-side table of kernel function pointers.
 extern int const ncclDevKernelCount;

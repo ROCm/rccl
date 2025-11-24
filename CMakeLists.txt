@@ -41,6 +41,7 @@ option(PROFILE                                 "Enable profiling"               
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(QUIET_WARNINGS                          "Supress compiler warnings"                     OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -464,6 +465,7 @@ set(SRC_FILES
   src/device/reduce_kernel.h
   src/device/reduce_scatter.h
   src/device/rccl_metadata.h
+  src/device/rccl_ptr.h
   src/device/sendrecv.h
   src/device/common.cu
   src/device/onerank.cu
@@ -768,8 +770,6 @@ add_custom_target(hipify_all DEPENDS ${HIP_SOURCES})
 
 if (BUILD_TESTS)
   if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
-    ## Set definition for exposing rccl static function
-    add_definitions(-DRCCL_EXPOSE_STATIC)
 
     set(HIPIFY_SRC_DIR "${PROJECT_BINARY_DIR}/hipify/src")
     set(REPLACE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/scripts/replace_static.sh")
@@ -1162,6 +1162,17 @@ target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-c
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
+
+if(QUIET_WARNINGS)
+  target_compile_options(rccl PRIVATE -Wno-invalid-offsetof)
+  target_compile_options(rccl PRIVATE -Wno-unused-result)
+  target_compile_options(rccl PRIVATE -Wno-macro-redefined)
+  target_compile_options(rccl PRIVATE -Wno-unused-label)
+  target_compile_options(rccl PRIVATE -Wno-unused-variable)
+  target_compile_options(rccl PRIVATE -Wno-unused-private-field)
+  target_compile_options(rccl PRIVATE -Wno-null-conversion)
+  target_compile_options(rccl PRIVATE -Wno-missing-braces)
+endif()
 
 ## Set RCCL compile and linker options for unit tests and code coverage
 if(ENABLE_CODE_COVERAGE)
