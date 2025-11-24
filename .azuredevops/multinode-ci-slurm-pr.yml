@@ -33,7 +33,7 @@ stages:
     displayName: "CI Run Requires Approval"
     environment: rccl
   - job: rccl
-    timeoutInMinutes: 180
+    timeoutInMinutes: 240
     pool: rocm-ci_rccl_slurm_pool
     workspace:
       clean: all
