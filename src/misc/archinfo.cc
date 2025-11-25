@@ -65,6 +65,8 @@ double GetDeviceWallClockRateInKhz(int deviceId) {
     return 1.0E5;
   else if(strncmp("gfx950", gcn, 6) == 0)
     return 1.0E5;
+  else if(strncmp("gfx1151", gcn, 7) == 0)
+    return 2.9E5; // Acturally not sure if I want to add this or not
   else
     return 2.5E4;
 }
