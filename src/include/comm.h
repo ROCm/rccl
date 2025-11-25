@@ -205,7 +205,11 @@ struct ncclTaskColl {
   int chunkSteps, sliceSteps;
   // Computed later:
   size_t trafficBytes;
+#ifdef ENABLE_WARP_SPEED
   int32_t nMaxChannels:16;
+#else
+  int32_t nMaxChannels:8;
+#endif
   int32_t nWarps:8;
   int32_t algorithm:8, protocol:8, pipeline:8;
   uint32_t isCollnet:1, isNvls:1;

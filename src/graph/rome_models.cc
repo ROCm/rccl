@@ -1527,9 +1527,12 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
         system->mscclEnabled = (bool)atol(tokens[i*2+1]);
       } else if (strcmp(tokens[i*2], "treeDefined") == 0) {
         system->treeDefined = (bool)atol(tokens[i*2+1]);
-      } else if (strcmp(tokens[i*2], "warpSpeedEnabled") == 0) {
+      }
+#ifdef ENABLE_WARP_SPEED
+      else if (strcmp(tokens[i*2], "warpSpeedEnabled") == 0) {
         system->warpSpeedEnabled = (bool)atol(tokens[i*2+1]);
       }
+#endif
     }
     free(str_temp);
   }

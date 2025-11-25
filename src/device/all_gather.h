@@ -16,16 +16,24 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-#if defined(ENABLE_NPKIT)
+#ifdef defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
     int npKitCtxIdx = bid; // unused variable - compiler warning
 #endif
+#ifdef ENABLE_WARP_SPEED
     int warp = threadIdx.x / WARP_SIZE;
     ncclRing *ring = &ncclShmem.warpChannel[warp].ring;
+#else
+    ncclRing *ring = &ncclShmem.channel.ring;
+#endif
     const int *ringRanks = ring->userRanks;
     const int nranks = ncclShmem.comm.nRanks;
     ssize_t count, partOffset, partCount, chunkCount;
+#ifdef ENABLE_WARP_SPEED
     ncclCollCbdPart(work, ncclShmem.warpChannelId[warp], Proto::Id, sizeof(T), &count, &partOffset, &partCount, &chunkCount);
+#else
+    ncclCollCbdPart(work, ncclShmem.channelId, Proto::Id, sizeof(T), &count, &partOffset, &partCount, &chunkCount);
+#endif
     ssize_t offset;
     ssize_t dataOffset;
     int nelem;

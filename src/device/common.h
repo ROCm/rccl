@@ -135,13 +135,14 @@ struct ncclShmemGroup {
 struct ncclShmemData {
   struct ncclDevKernelArgs args;
   int channelId;
-  int warpChannelId[NCCL_MAX_GROUPS];
-  int warpComm;
   int aborted;
   alignas(16) struct ncclDevComm comm;
   alignas(16) struct ncclDevChannel channel;
+#ifdef ENABLE_WARP_SPEED
+  int warpComm;
   alignas(16) struct ncclDevChannel warpChannel[NCCL_MAX_GROUPS];
-
+  int warpChannelId[NCCL_MAX_GROUPS];
+#endif
   int batchIx, nextBatchIx;
   enum ncclDevWorkType workType;
   uint8_t directMode;
@@ -449,8 +450,12 @@ struct RunWorkBatch {
       // However, the code ensures that the participation is on a per-warp basis.
       // coverity[device_thread_diverged:FALSE]
       if (tid < subtn) {
+#ifdef ENABLE_WARP_SPEED
         if(ncclShmem.warpComm == 0 || Algo != NCCL_ALGO_RING) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
         else if (ncclShmem.warpChannelId[tid / WARP_SIZE] >= 0) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
+#else
+        RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+#endif
       }
     }
   }
@@ -495,12 +500,12 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   int x = tid;
   int total = 0, y;
   int num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
-
+#ifdef ENABLE_WARP_SPEED
   int warpCount    = tn / WARP_SIZE;
   int localWarpId  = tid / WARP_SIZE;
   int globalWarpId = (warpCount * blockIdx.x) + localWarpId;
   int laneId = tid % WARP_SIZE;
-
+#endif
   // Copy kernel args to shmem and then only read those. Otherwise the compiler
   // will end up putting the args into thread local stack which is very wasteful.
   if (tid < sizeof(ncclDevKernelArgs)/sizeof(uint32_t)) {
@@ -595,12 +600,14 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     ncclShmem.collTraceTail = args->comm->collTraceTail + ncclShmem.channelId;
   }
 #endif
+#ifdef ENABLE_WARP_SPEED
   if(tid == 0) {
     ncclShmem.warpComm = args->comm->warpLevelComm;
   }
+#endif
   __syncthreads(); // publish shmem
 
-
+#ifdef ENABLE_WARP_SPEED
   // Determine per-warp channel assignment for WarpSpeed enablement
   total = 0;
   if(ncclShmem.warpComm == 1) {  // If warpComm is enabled, assing warps to channels that have the corresponding channel mask enabled
@@ -631,7 +638,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     ncclShmem.warpChannel[localWarpId] = ncclShmem.channel;
   }
   __syncthreads();
-
+#endif
 #ifdef ENABLE_PROFILING
   if (tid == 0) {
     ncclShmem.prof.count = 0;

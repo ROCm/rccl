@@ -126,7 +126,11 @@ union ncclLLFifoLine {
   #define NCCL_MAX_GROUPS (NCCL_MAX_NTHREADS/WARP_SIZE)
 #endif
 
+#ifdef ENABLE_WARP_SPEED
 #define MAXCHANNELS 512
+#else
+#define MAXCHANNELS 128
+#endif
 #define CHANNEL_LIMIT 16 // this is used to limit channels for pre MI3xx GPUs
 #define NCCL_MAX_LOCAL_RANKS 72
 #define NCCL_MIN_NTHREADS (4*WARP_SIZE)
@@ -354,7 +358,11 @@ inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int chann
 struct alignas(16) ncclDevWorkColl {
   // Running on channels [channelLo..channelHi], hi is inclusive.
   //   nChannels == (channelHi - channelLo) + 1
+#ifdef ENABLE_WARP_SPEED
   uint32_t channelLo:16, channelHi:16;
+#else
+  uint32_t channelLo:8, channelHi:8;
+#endif
   uint32_t nWarps:8;
   uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx9CheapFenceOff:1;
   uint32_t root:30, connIndex:2;
@@ -645,17 +653,19 @@ struct alignas(16) ncclDevKernelArgsStorage {
   };
 };
 
+
+typedef ncclDevKernelArgsStorage<(5<<10)> ncclDevKernelArgs5K;
+typedef ncclDevKernelArgsStorage<(4<<10)> ncclDevKernelArgs4K;
+//typedef ncclDevKernelArgsStorage<(32<<10)-4> ncclDevKernelArgs31K;
+
+#ifdef ENABLE_WARP_SPEED
 // needed extra storage for accomodating more channels than 128 for WarpSpeed support
 // 256 channels (i.e. 256 warps) would hang without this extra storage
 // 5KB should be sufficient for now
-typedef ncclDevKernelArgsStorage<(5<<10)> ncclDevKernelArgs5K;
-typedef ncclDevKernelArgsStorage<(4<<10)> ncclDevKernelArgs4K;
-
-//typedef ncclDevKernelArgsStorage<(32<<10)-4> ncclDevKernelArgs31K;
-
 typedef ncclDevKernelArgs5K ncclDevKernelArgsDefaultStorage;
-
-
+#else
+typedef ncclDevKernelArgs4K ncclDevKernelArgsDefaultStorage;
+#endif
 __host__ __device__ constexpr int ncclMaxKernelArgsSize(/*int cudaDriver, */int cudaArch=NCCL_CUDA_ARCH) {
   //return (cudaArch < 700 || cudaDriver < 12010) ? 4<<10 : (32<<10)-4;
   return sizeof(ncclDevKernelArgsDefaultStorage);

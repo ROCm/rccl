@@ -1075,7 +1075,9 @@ NCCL_PARAM(GraphDumpFileRank, "GRAPH_DUMP_FILE_RANK", 0);
 NCCL_PARAM(CollNetNodeThreshold, "COLLNET_NODE_THRESHOLD", 2);
 NCCL_PARAM(NvbPreconnect, "NVB_PRECONNECT", 0);
 NCCL_PARAM(AllocP2pNetLLBuffers, "ALLOC_P2P_NET_LL_BUFFERS", 0);
+#ifdef ENABLE_WARP_SPEED
 RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
+#endif
 // MNNVL: Flag to indicate whether to enable Multi-Node NVLink
 NCCL_PARAM(MNNVLEnable, "MNNVL_ENABLE", 2);
 
@@ -1453,8 +1455,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
         allGather3Data[rank].nc = 4;
     }
   }
+#ifdef ENABLE_WARP_SPEED
   comm->topo->warpSpeedEnabled = comm->topo->warpSpeedEnabled && rcclParamWarpSpeedEnable(); // only use for MI3xx GPUs if enabled by user
-
+#endif
 
   // For single node communicators that do not uses the full xgmi links per gpu, i.e., nranks < 8
   // Inflate the nChannels a bit to achieve higher b/w.
@@ -1467,10 +1470,12 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       allGather3Data[rank].nc = 4;
     }
   }
+#ifdef ENABLE_WARP_SPEED
   // Use more channels for WarpSpeed
   if (comm->topo->warpSpeedEnabled) {
     allGather3Data[rank].nc = 8;
   }
+#endif
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
   comm->topo->ll128Enabled =  comm->topo->ll128Enabled || rcclParamLL128ForceEnable();
   allGather3Data[rank].ll128Enabled = comm->topo->ll128Enabled;

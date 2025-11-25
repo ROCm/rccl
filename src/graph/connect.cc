@@ -805,12 +805,21 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     }
   }
 
+#ifdef ENABLE_WARP_SPEED
   // Only use full MAXCHANNELS for gfx942 (MI300X) and gfx950
   maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
                  IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950"))
                  ? MAXCHANNELS : 2*CHANNEL_LIMIT;
 
-
+#else
+  // Only use full MAXCHANNELS for gfx942 (MI300X) and gfx950
+  maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
+                 IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950"))
+                 ? std::min(comm->topo->nodes[GPU].nodes[0].gpu.cu, MAXCHANNELS) : 2*CHANNEL_LIMIT;
+  if (graphs[NCCL_ALGO_RING]->nIntraChannels > 0 || comm->nNodes > 1) {
+    maxChannels = std::min(64, maxChannels);
+  }
+#endif
   // Duplicate ringPrev/ringNext for ncclBuildRing
   duplicateCount = maxChannels / nChannels;
   if (duplicateCount > 1) {

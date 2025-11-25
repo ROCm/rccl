@@ -36,8 +36,9 @@ RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
 RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
 RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
 RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
+#ifdef ENABLE_WARP_SPEED
 RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
-
+#endif
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -166,7 +167,10 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
     }
 
   }
+#ifdef ENABLE_WARP_SPEED
+  // fallback to max 64 channels and tune warp speed channels later
   nc = std::min(nc, 64);
+#endif
   return ncclSuccess;
 }
 
@@ -403,7 +407,7 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
   }
   rcclP2pNetChunkSize = p2pNetChunkSize;
 }
-
+#ifdef ENABLE_WARP_SPEED
 void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, int& rcclWarpSpeedChannels) {
   static int userChannelControlInput = RCCL_VALUE_UNSET;
   int warpsPerBlock = threadsPerBlock / comm->WarpSize;
@@ -421,7 +425,7 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     }
     userChannelControlInput = !inputStr ? 0 : 1;
   }
-
+#ifdef ENABLE_WARP_SPEED
   if(!userChannelControlInput && comm->topo->warpSpeedEnabled) {
     if(rcclParamWarpSpeedCuCount() != 0) {
       rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * warpsPerBlock;
@@ -436,6 +440,7 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     }
     INFO(NCCL_INIT, "RCCL Warp Speed Channels set to %d", rcclWarpSpeedChannels);
   }
+#endif
 }
 
 void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKernelPlan* plan, int nChannels, int& support, int &cuCount) {
@@ -461,6 +466,7 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
   support = (hasP2p || hasNonRing) ? 0 : 1;
   cuCount = (support == 0)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
 }
+#endif
 
 void rcclGetMaxNthreads(struct ncclComm* comm, int maxNthreads[]) {
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
