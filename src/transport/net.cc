@@ -776,7 +776,8 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   NCCLCHECK(ncclNetGetDeviceHandle(resources->netDeviceType, resources->netDeviceVersion, false /*isRecv*/, &resources->netDeviceHandle));
   bool rccl_anp = !(strcmp(proxyState->ncclNet->name, RCCL_ANP_PLUGIN_STR));
   
-  if (rcclNetP2pPolicy) {
+  // Only call rcclNetP2pPolicy for ncclNetIb
+  if (proxyState->ncclNet == &ncclNetIb) {
     NCCLCHECK(rcclNetP2pPolicy(req->handle, resources->isP2p));
   }
   
@@ -1480,6 +1481,8 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
           TRACE(NCCL_NET, "sendProxy [%ld/%d/%d] request %p done", sub->done, buffSlot, sub->nsteps, sub->requests[buffSlot]);
           sub->done += args->sliceSteps;
           ncclProfilerStopProxyStepEvent(s, args, doneStepId);
+          facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey, 
+            facebook_rccl::ProxyCounterTypes::DONE, sub->done);
           if (resources->shared == 0) {
             volatile uint64_t* sendHead = resources->gdcSync ? resources->gdcSync : &resources->sendMem->head;
             *sendHead = sub->base + sub->done;
@@ -1822,6 +1825,7 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
             int doneStepId = sub->done;
             sub->done += args->sliceSteps;
             ncclProfilerStopProxyStepEvent(s+i, args, doneStepId);
+            facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey, facebook_rccl::ProxyCounterTypes::DONE, sub->done);
             args->idle = 0;
             if (sub->done == sub->nsteps) {
               args->done++;
