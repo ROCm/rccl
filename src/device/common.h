@@ -446,17 +446,17 @@ struct RunWorkBatch {
         if (work->nWarps != workPrev->nWarps) __syncthreads();
       }
       int subtn = work->nWarps*WARP_SIZE;
+#ifdef ENABLE_WARP_SPEED
+      if (tid < subtn) {
+        if(ncclShmem.warpComm == 0 || Algo != NCCL_ALGO_RING) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+        else if (ncclShmem.warpChannelId[tid / WARP_SIZE] >= 0) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
+      }
+#else
       // Coverity reports a possible thread divergence due to not all threads participating in the collective.
       // However, the code ensures that the participation is on a per-warp basis.
       // coverity[device_thread_diverged:FALSE]
-      if (tid < subtn) {
-#ifdef ENABLE_WARP_SPEED
-        if(ncclShmem.warpComm == 0 || Algo != NCCL_ALGO_RING) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
-        else if (ncclShmem.warpChannelId[tid / WARP_SIZE] >= 0) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
-#else
-        RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+      if (tid < subtn) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
 #endif
-      }
     }
   }
 };
