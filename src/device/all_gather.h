@@ -16,7 +16,7 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
-#ifdef defined(ENABLE_NPKIT)
+#if defined(ENABLE_NPKIT)
     const int bid = ncclShmem.channelId - work->channelLo;
     int npKitCtxIdx = bid; // unused variable - compiler warning
 #endif
