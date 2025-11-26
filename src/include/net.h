@@ -24,5 +24,6 @@ extern ncclNet_t ncclNetIb;
 extern ncclNet_t ncclNetSocket;
 
 extern ncclResult_t rcclNetP2pPolicy(void* handle, int isP2p);
+extern int64_t ncclParamDmaBufEnable();
 
 #endif
