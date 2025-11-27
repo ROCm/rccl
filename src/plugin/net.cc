@@ -30,13 +30,19 @@ extern getNcclCollNet_t getNcclCollNet_v8;
 extern getNcclCollNet_t getNcclCollNet_v9;
 extern getNcclCollNet_t getNcclCollNet_v10;
 
+extern int64_t rcclParamAinicRoce();
+
 NCCL_PARAM(NetPluginRefCount, "NET_PLUGIN_REF_COUNT", 1);
 #define NCCL_NET_VERSION_COUNT 5
 int ncclNetVersion[NCCL_NET_VERSION_COUNT] = {10, 9, 8, 7, 6};
 getNcclNet_t* getNcclNet[NCCL_NET_VERSION_COUNT] = {getNcclNet_v10, getNcclNet_v9, getNcclNet_v8, getNcclNet_v7, getNcclNet_v6};
 getNcclCollNet_t* getNcclCollNet[NCCL_NET_VERSION_COUNT] = {getNcclCollNet_v10, getNcclCollNet_v9, getNcclCollNet_v8, getNcclCollNet_v7,  getNcclCollNet_v6};
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#define NCCL_NET_NUM_INTERNAL_PLUGINS 3
+#else
 #define NCCL_NET_NUM_INTERNAL_PLUGINS 2
+#endif
 
 typedef enum ncclNetPluginState {
   ncclNetPluginStateDisabled        = -2,       // Plugin library failed to initialize
@@ -243,6 +249,13 @@ static void initPluginLibsOnceFunc() {
     strcpy(netPluginLibs[pluginCounter++].name, defaultNetPlugin);
   }
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  // Add rocm internal ib and internal socket plugins
+  if ((rcclParamAinicRoce() == 1)) {
+    netPluginLibs[pluginCounter].ncclNet = &rocmNetIb;
+    netPluginLibs[pluginCounter++].ncclNetPluginState = ncclNetPluginStateInitReady;
+  }
+#endif
   // Add 2 internal ib and socket plugins
   netPluginLibs[pluginCounter].ncclNet = &ncclNetIb;
   netPluginLibs[pluginCounter++].ncclNetPluginState = ncclNetPluginStateInitReady;
