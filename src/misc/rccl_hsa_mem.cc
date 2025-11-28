@@ -132,33 +132,39 @@ static hsa_status_t hsa_init_once() {
 
 hipError_t rcclExtMallocWithFlagsOnDevice(void** ptr,
                                          size_t size,
-                                         uint32_t flags,
-                                         int device_id) {
+                                         uint32_t flags) {
     if (!ptr || size == 0)
         return hipErrorInvalidValue;
+    if (flags == hipDeviceMallocUncached){
+        int device_id;
+        hipError_t hip_status  = hipGetDevice(&device_id);
+        hsa_status_t status = hsa_init_once();
+        if (status != HSA_STATUS_SUCCESS) {
+            return hipErrorInitializationError;
+        }
 
-    hsa_status_t status = hsa_init_once();
-    if (status != HSA_STATUS_SUCCESS)
-        return hipErrorInitializationError;
-
-    const std::unordered_map<uint32_t, hsa_agent_t>& device_id_to_agent = get_hip_device_to_hsa_agent_map_by_bdfid();
-    auto it = device_id_to_agent.find(device_id);
-    if (it == device_id_to_agent.end()) {
-        fprintf(stderr, "[rcclExtMalloc] Invalid device_id: %d\n", device_id);
-        return hipErrorInvalidDevice;
+        const std::unordered_map<uint32_t, hsa_agent_t>& device_id_to_agent = get_hip_device_to_hsa_agent_map_by_bdfid();
+        auto it = device_id_to_agent.find(device_id);
+        if (it == device_id_to_agent.end()) {
+            fprintf(stderr, "[rcclExtMalloc] Invalid device_id: %d\n", device_id);
+            return hipErrorInvalidDevice;
+        }
+        hsa_agent_t target_agent = it->second;
+        hsa_amd_memory_pool_t pool = get_gpu_pool(target_agent);
+        if (pool.handle == 0) {
+            return hipErrorMemoryAllocation;
+        }
+        void* mem = nullptr;
+        status = hsa_amd_memory_pool_allocate(pool, size, flags, &mem);
+        CHECK_HSA("hsa_amd_memory_pool_allocate", status);
+        status = hsa_amd_agents_allow_access(1, &target_agent, NULL, mem);
+        CHECK_HSA("hsa_amd_agents_allow_access", status);
+        *ptr = mem;
+        return hipSuccess;
     }
-    hsa_agent_t target_agent = it->second;
-    hsa_amd_memory_pool_t pool = get_gpu_pool(target_agent);
-    if (pool.handle == 0) {
-        return hipErrorMemoryAllocation;
-    }
-    void* mem = nullptr;
-    status = hsa_amd_memory_pool_allocate(pool, size, flags, &mem);
-    CHECK_HSA("hsa_amd_memory_pool_allocate", status);
-    status = hsa_amd_agents_allow_access(1, &target_agent, NULL, mem);
-    CHECK_HSA("hsa_amd_agents_allow_access", status);
-    *ptr = mem;
-    return hipSuccess;
+    // ------- NORMAL HIP PATH -------
+    hipError_t hip_status  =  hipExtMallocWithFlags(ptr, size, flags);
+    return hip_status;
 }
 
 

@@ -117,8 +117,14 @@ ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc
   CUDACHECK(hipDeviceGetAttribute(&managed, hipDeviceAttributeDirectManagedMemAccessFromHost, 0));
   if (nelem > 0) {
     if (managed) {
-#if defined(HIP_UNCACHED_MEMORY)
-      CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), hipDeviceMallocUncached), result, finish);
+#if defined(HIP_UNCACHED_MEMORY) 
+#if (defined(__gfx1200__) || defined(__gfx1201__)) && ROCM_VERSION >= 70200
+    CUDACHECKGOTO(rcclExtMallocWithFlagsOnDevice((void**)ptr, nelem*ncclSizeOfT<T>(), hipDeviceMallocUncached),result, finish);
+    INFO(NCCL_ALLOC, "rcclExtMallocWithFlagsOnDevice size: %d", nelem*ncclSizeOfT<T>());
+#else 
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), hipDeviceMallocUncached), result, finish);
+    INFO(NCCL_ALLOC, "hipExtMallocWithFlags size: %d", nelem*ncclSizeOfT<T>());
+#endif
 #else
       CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), hipDeviceMallocFinegrained), result, finish);
 #endif
@@ -344,12 +350,12 @@ ncclResult_t ncclCudaMallocDebug(const char *filefunc, int line, T** ptr, size_t
   *ptr = nullptr;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (nelem > 0) {
-#if (defined(__gfx1200__) || defined(__gfx1201__)) && ROCM_VERSION > 70100
-    int curDev;
-    CUDACHECK(hipGetDevice(&curDev));
-    CUDACHECKGOTO(rcclExtMallocWithFlagsOnDevice((void**)ptr, nelem*ncclSizeOfT<T>(), HSA_AMD_MEMORY_POOL_UNCACHED_FLAG,curDev),result, finish);
+#if (defined(__gfx1200__) || defined(__gfx1201__)) && ROCM_VERSION >= 70200
+    CUDACHECKGOTO(rcclExtMallocWithFlagsOnDevice((void**)ptr, nelem*ncclSizeOfT<T>(), flags),result, finish);
+    INFO(NCCL_ALLOC, "rcclExtMallocWithFlagsOnDevice size: %d", nelem*ncclSizeOfT<T>());
 #else 
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+    INFO(NCCL_ALLOC, "hipExtMallocWithFlags size: %d", nelem*ncclSizeOfT<T>());
 #endif
   }
 finish:
@@ -381,7 +387,13 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
   cudaStream_t stream = sideStream;
   if (stream == nullptr)
     CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
-  CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+#if (defined(__gfx1200__) || defined(__gfx1201__)) && ROCM_VERSION >= 70200
+    CUDACHECKGOTO(rcclExtMallocWithFlagsOnDevice((void**)ptr, nelem*ncclSizeOfT<T>(), flags),result, finish);
+    INFO(NCCL_ALLOC, "rcclExtMallocWithFlagsOnDevice size: %d", nelem*ncclSizeOfT<T>());
+#else 
+    CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+    INFO(NCCL_ALLOC, "hipExtMallocWithFlags size: %d", nelem*ncclSizeOfT<T>());
+#endif
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish);
   CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
   if (sideStream == nullptr)
@@ -411,7 +423,13 @@ ncclResult_t ncclCudaCallocAsyncDebug(const char *filefunc, int line, T** ptr, s
 
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   if (nelem > 0) {
+#if (defined(__gfx1200__) || defined(__gfx1201__)) && ROCM_VERSION >= 70200
+    CUDACHECKGOTO(rcclExtMallocWithFlagsOnDevice((void**)ptr, nelem*ncclSizeOfT<T>(), flags),result, finish);
+    INFO(NCCL_ALLOC, "rcclExtMallocWithFlagsOnDevice size: %d", nelem*ncclSizeOfT<T>());
+#else 
     CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
+    INFO(NCCL_ALLOC, "hipExtMallocWithFlags size: %d", nelem*ncclSizeOfT<T>());
+#endif
     CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish); 
   }
 finish:

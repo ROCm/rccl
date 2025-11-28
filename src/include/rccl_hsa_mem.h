@@ -30,7 +30,6 @@
  * @param[out] ptr          Pointer to the allocated memory.
  * @param[in]  size         Size of memory to allocate in bytes.
  * @param[in]  flags        HIP allocation flags (e.g., `hipDeviceMallocUncached`).
- * @param[in]  device       Target HIP device ID to allocate on.
  *
  * @return
  *   - `hipSuccess` on success.
@@ -40,7 +39,7 @@
  *   - The underlying allocation uses `hsa_amd_memory_pool_allocate()`.
  *   - Querying pointer attributes through hip api doesnt show device ID as allocation code path is bypassing hip layer
  */
-hipError_t rcclExtMallocWithFlagsOnDevice(void** ptr, size_t size, uint32_t flags, int device);
+hipError_t rcclExtMallocWithFlagsOnDevice(void** ptr, size_t size, uint32_t flags);
 
 /**
  * @brief Free memory allocated by RCCL or via rcclExtMallocWithFlagsOnDevice.
