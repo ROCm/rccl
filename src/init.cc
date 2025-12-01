@@ -96,12 +96,6 @@ NCCL_PARAM(NvlsChannels, "NVLS_NCHANNELS", NCCL_CONFIG_UNDEF_INT);
 struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
 ncclResult_t commReclaim(ncclComm_t comm);
 
-// Global data for side stream
-std::map<int64_t, ncclSideStream> sideStream;
-pthread_mutex_t sideStreamLock = PTHREAD_MUTEX_INITIALIZER;
-uint64_t sideStreamRefCount = 0;
-pthread_once_t sideStream_initonce = PTHREAD_ONCE_INIT;
-
 #ifdef ENABLE_MSCCLPP
 size_t std::hash<ncclUniqueId>::operator ()(const ncclUniqueId& uniqueId) const noexcept {
   return (size_t)getHash(uniqueId.internal, NCCL_UNIQUE_ID_BYTES);

@@ -37,8 +37,8 @@ struct ncclSideStream {
   uint64_t refCount;
 };
 
-extern std::map<int64_t, ncclSideStream> sideStream;
-extern pthread_mutex_t sideStreamLock;
+inline std::unordered_map<int64_t, ncclSideStream> sideStream;
+inline pthread_mutex_t sideStreamLock;
 extern ncclResult_t getBusId(int cudaDev, int64_t *busId);
 
 static inline ncclResult_t ncclCreateSideStream(int cudaDev) {
