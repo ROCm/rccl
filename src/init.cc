@@ -1473,7 +1473,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 #ifdef ENABLE_WARP_SPEED
   // Use more channels for WarpSpeed
   if (comm->topo->warpSpeedEnabled) {
-    allGather3Data[rank].nc = 8;
+    allGather3Data[rank].nc *= 2;
   }
 #endif
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
