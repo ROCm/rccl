@@ -81,7 +81,9 @@ private:
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
-    if(nthreads != WARP_SIZE)
+    if (nthreads == WARP_SIZE)
+      __syncwarp();
+    else
       #if defined(__gfx942__) || defined(__gfx950__)
         barrier_generic(__threadfence_block(), nworkers, barrier_next, barriers);
       #else
@@ -89,6 +91,8 @@ private:
       #endif
   }
   inline __device__ void subBarrier() {
+    if (nworkers == WARP_SIZE) __syncwarp();
+    else
       barrier();
   }
 
