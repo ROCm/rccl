@@ -38,7 +38,7 @@ struct ncclSideStream {
 };
 
 inline std::unordered_map<int64_t, ncclSideStream> sideStream;
-inline pthread_mutex_t sideStreamLock;
+inline pthread_mutex_t sideStreamLock = PTHREAD_MUTEX_INITIALIZER;
 extern ncclResult_t getBusId(int cudaDev, int64_t *busId);
 
 static inline ncclResult_t ncclCreateSideStream(int cudaDev) {
