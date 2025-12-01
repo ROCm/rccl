@@ -1471,7 +1471,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     }
   }
 #ifdef ENABLE_WARP_SPEED
-  // Use more channels for WarpSpeed
+  // Double default channels for WarpSpeed enabled communicators
   if (comm->topo->warpSpeedEnabled) {
     allGather3Data[rank].nc *= 2;
   }
