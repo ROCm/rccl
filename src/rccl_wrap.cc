@@ -425,7 +425,6 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     }
     userChannelControlInput = !inputStr ? 0 : 1;
   }
-#ifdef ENABLE_WARP_SPEED
   if(!userChannelControlInput && comm->topo->warpSpeedEnabled) {
     if(rcclParamWarpSpeedCuCount() != 0) {
       rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * warpsPerBlock;
@@ -440,7 +439,6 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     }
     INFO(NCCL_INIT, "RCCL Warp Speed Channels set to %d", rcclWarpSpeedChannels);
   }
-#endif
 }
 
 void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKernelPlan* plan, int nChannels, int& support, int &cuCount) {
