@@ -610,7 +610,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #ifdef ENABLE_WARP_SPEED
   // Determine per-warp channel assignment for WarpSpeed enablement
   total = 0;
-  if(ncclShmem.warpComm == 1) {  // If warpComm is enabled, assing warps to channels that have the corresponding channel mask enabled
+  if(ncclShmem.warpComm == 1) {  // If warpComm is enabled, assign warps to channels that have the corresponding channel mask enabled
     ncclShmem.warpChannelId[localWarpId] = -1;
      __syncthreads();
     for (int i = 0; i < num; i++) {
