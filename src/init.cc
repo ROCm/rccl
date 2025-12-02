@@ -1456,7 +1456,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     }
   }
 #ifdef ENABLE_WARP_SPEED
-  comm->topo->warpSpeedEnabled = comm->topo->warpSpeedEnabled && rcclParamWarpSpeedEnable(); // only use for MI3xx GPUs if enabled by user
+  comm->topo->warpSpeedEnabled = rcclParamWarpSpeedEnable(); // only use for MI3xx GPUs if enabled by user
 #endif
 
   // For single node communicators that do not uses the full xgmi links per gpu, i.e., nranks < 8
