@@ -2,7 +2,7 @@
 #SBATCH --job-name=rccl-UnitTests
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.out
-#SBATCH --time=120
+#SBATCH --time=180
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --partition=gt

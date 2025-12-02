@@ -597,14 +597,14 @@ static ncclResult_t sharedNetBuffersInit(struct ncclProxyState* proxyState, int 
     } else {
 #if defined(HIP_UNCACHED_MEMORY)
 #if defined(HIP_CONTIGUOUS_MEMORY)
-      NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size, nullptr,
+      NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size,
         cuda ? (rcclParamNetContiguousMem() ? hipDeviceMallocContiguous : hipDeviceMallocUncached) : hipDeviceMallocDefault));
 #else
-      NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size, nullptr,
+      NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size,
         cuda ? hipDeviceMallocUncached : hipDeviceMallocDefault));
 #endif
 #else
-      NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size, nullptr,
+      NCCLCHECK(ncclCudaCalloc(&state->cudaBuff, state->size,
         cuda ? hipDeviceMallocFinegrained : hipDeviceMallocDefault));
 #endif
     }
@@ -776,7 +776,8 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   NCCLCHECK(ncclNetGetDeviceHandle(resources->netDeviceType, resources->netDeviceVersion, false /*isRecv*/, &resources->netDeviceHandle));
   bool rccl_anp = !(strcmp(proxyState->ncclNet->name, RCCL_ANP_PLUGIN_STR));
   
-  if (rcclNetP2pPolicy) {
+  // Only call rcclNetP2pPolicy for ncclNetIb
+  if (proxyState->ncclNet == &ncclNetIb) {
     NCCLCHECK(rcclNetP2pPolicy(req->handle, resources->isP2p));
   }
   
@@ -887,14 +888,14 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
       } else {
 #if defined(HIP_UNCACHED_MEMORY)
 #if defined(HIP_CONTIGUOUS_MEMORY)
-        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, nullptr,
+        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size,
           resources->useGdr ? (rcclParamNetContiguousMem() ? hipDeviceMallocContiguous : hipDeviceMallocUncached) : hipDeviceMallocDefault));
 #else
-        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, nullptr,
+        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size,
           resources->useGdr ? hipDeviceMallocUncached : hipDeviceMallocDefault));
 #endif
 #else
-        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, nullptr,
+        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size,
           resources->useGdr ? hipDeviceMallocFinegrained : hipDeviceMallocDefault));
 #endif
       }
@@ -913,7 +914,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   }
   if (ncclGdrCopy && map->sameProcess && ncclParamGdrCopySyncEnable()) {
     uint64_t *cpuPtr, *gpuPtr;
-    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 1, &resources->gdrDesc, nullptr));
+    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 1, &resources->gdrDesc));
 
     resources->gdcSync = cpuPtr;
     struct connectMapMem* gdcMem = map->mems+NCCL_NET_MAP_GDCMEM;
@@ -1090,14 +1091,14 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
       } else {
 #if defined(HIP_UNCACHED_MEMORY)
 #if defined(HIP_CONTIGUOUS_MEMORY)
-        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, nullptr,
+        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size,
           resources->useGdr ? (rcclParamNetContiguousMem() ? hipDeviceMallocContiguous : hipDeviceMallocUncached) : hipDeviceMallocDefault));
 #else
-        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, nullptr,
+        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size,
           resources->useGdr ? hipDeviceMallocUncached : hipDeviceMallocDefault));
 #endif
 #else
-        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size, nullptr,
+        NCCLCHECK(ncclCudaCalloc(&map->mems[NCCL_NET_MAP_DEVMEM].gpuPtr, map->mems[NCCL_NET_MAP_DEVMEM].size,
           resources->useGdr ? hipDeviceMallocFinegrained : hipDeviceMallocDefault));
 #endif
       }
@@ -1108,7 +1109,7 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
   map->mems[NCCL_NET_MAP_HOSTMEM].gpuPtr = map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr;
   if (ncclGdrCopy && map->sameProcess) {
     uint64_t *cpuPtr, *gpuPtr;
-    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 2, &resources->gdrDesc, nullptr));
+    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 2, &resources->gdrDesc));
 
     if (ncclParamGdrCopySyncEnable()) {
       resources->gdcSync = cpuPtr;
@@ -1480,6 +1481,8 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
           TRACE(NCCL_NET, "sendProxy [%ld/%d/%d] request %p done", sub->done, buffSlot, sub->nsteps, sub->requests[buffSlot]);
           sub->done += args->sliceSteps;
           ncclProfilerStopProxyStepEvent(s, args, doneStepId);
+          facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey, 
+            facebook_rccl::ProxyCounterTypes::DONE, sub->done);
           if (resources->shared == 0) {
             volatile uint64_t* sendHead = resources->gdcSync ? resources->gdcSync : &resources->sendMem->head;
             *sendHead = sub->base + sub->done;
@@ -1822,6 +1825,7 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
             int doneStepId = sub->done;
             sub->done += args->sliceSteps;
             ncclProfilerStopProxyStepEvent(s+i, args, doneStepId);
+            facebook_rccl::updateProxyOpCounter(proxyState->proxyTrace, sub->traceKey, facebook_rccl::ProxyCounterTypes::DONE, sub->done);
             args->idle = 0;
             if (sub->done == sub->nsteps) {
               args->done++;

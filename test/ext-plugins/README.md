@@ -1,8 +1,12 @@
-# RCCL CSV Tuner Plugin Tests
+# RCCL Plugin Tests
 
 ## Description
 
-This directory contains automated tests for the RCCL (ROCm Communication Collectives Library) CSV Tuner Plugin. The test suite validates the functionality of the CSV-based tuning plugin across different collective operations (AllReduce, Broadcast, Reduce, AllGather, and ReduceScatter) and various configuration scenarios.
+This directory contains automated tests for RCCL (ROCm Communication Collectives Library) plugins:
+
+1. **CSV Tuner Plugin**: Validates the functionality of the CSV-based tuning plugin across different collective operations (AllReduce, Broadcast, Reduce, AllGather, and ReduceScatter) and various configuration scenarios.
+
+2. **Profiler Plugin**: Validates the profiler plugin that captures detailed runtime events for collective and P2P operations, including Group, Collective, P2P, ProxyOp, ProxyStep, and GPU kernel events.
 
 The tests are written in Python using the pytest framework, making it easy to run, maintain, and extend the test coverage.
 
@@ -16,6 +20,7 @@ ext-plugins/
 ├── .gitignore                   # Git ignore rules for Python/pytest artifacts
 ├── venv/                        # Python virtual environment (created after setup)
 ├── logs/                        # Test execution logs and output files
+├── profiler_dumps/              # Profiler plugin output (JSON trace files)
 ├── assets/                      # Test configuration files and assets
 │   └── csv_confs/               # CSV configuration files for testing
 │       ├── incorrect_values_config.conf
@@ -27,12 +32,20 @@ ext-plugins/
 │       └── valid_config_without_wildcards.conf
 └── tests/                       # Test suite directory
     ├── conftest.py              # Pytest fixtures and shared test configuration
-    └── ext-tuner/               # CSV Tuner Plugin specific tests
+    ├── ext-tuner/               # CSV Tuner Plugin specific tests
+    │   ├── test_allreduce.py
+    │   ├── test_broadcast.py
+    │   ├── test_reduce.py
+    │   ├── test_allgather.py
+    │   └── test_reducescatter.py
+    └── ext-profiler/            # Profiler Plugin specific tests
         ├── test_allreduce.py
         ├── test_broadcast.py
         ├── test_reduce.py
         ├── test_allgather.py
-        └── test_reducescatter.py
+        ├── test_alltoall.py
+        ├── test_reducescatter.py
+        └── test_sendrecv.py
 ```
 
 ## Installation & Setup
@@ -52,23 +65,52 @@ RCCL_TESTS_DIR = "path/to/rccl-tests"
 
 Replace these placeholder paths with your actual installation directories before running the tests.
 
-### Building the RCCL CSV Tuner Plugin
+### Building the RCCL Plugins
 
-Before running the tests, you need to build the RCCL CSV tuner plugin library. The plugin is located in the `ext-tuner/example` directory.
+Before running the tests, you need to build the RCCL plugin libraries.
 
-#### Step 1: Navigate to the plugin directory
+#### Building the CSV Tuner Plugin
+
+The CSV tuner plugin is located in the `ext-tuner/example` directory.
+
+**Step 1: Navigate to the plugin directory**
 
 ```bash
 cd rccl/ext-tuner/example
 ```
 
-#### Step 2: Build the plugin
+**Step 2: Build the plugin**
 
 ```bash
 make
 ```
 
 This will compile the plugin and create `libnccl-tuner-example.so` in the same directory.
+
+#### Building the Profiler Plugin
+
+The profiler plugin is located in the `ext-plugins/example` directory.
+
+**Step 1: Navigate to the plugin directory**
+
+```bash
+cd rccl/test/ext-plugins/example
+```
+
+**Step 2: Build the plugin**
+
+```bash
+make
+```
+
+This will compile the plugin and create `libnccl-profiler.so` in the same directory. The profiler plugin captures detailed runtime events including:
+- **Group events**: High-level operation grouping
+- **Collective events**: AllReduce, Broadcast, Reduce, ReduceScatter operations
+- **P2P events**: Send, Recv, AllGather, AllToAll operations
+- **ProxyOp events**: Network proxy operations (ScheduleSend, ScheduleRecv, ProgressSend, ProgressRecv)
+- **ProxyStep events**: Detailed network steps (SendWait, RecvWait, GPU waits)
+- **ProxyCtrl events**: Proxy thread control (Append, Sleep)
+- **GPU events**: Kernel channel execution
 
 ### Step 1: Create Virtual Environment
 
@@ -82,7 +124,7 @@ python3 -m venv venv
 
 Activate the virtual environment using the appropriate command for your shell:
 
-**On Linux:**
+**On Linux/Mac (bash/zsh):**
 ```bash
 source venv/bin/activate
 ```
@@ -119,18 +161,27 @@ pytest -v --cache-clear
 
 Tests are organized using pytest markers. You can run specific groups of tests:
 
-**Run CSV Plugin tests:**
+**Run plugin-specific tests:**
 ```bash
-pytest -m mark.ext_tuner --cache-clear
+pytest -m ext_tuner --cache-clear      # CSV Tuner Plugin tests only
+pytest -m ext_profiler --cache-clear   # Profiler Plugin tests only
 ```
 
-**Run tests for specific collective operations:**
+**Run tests for specific collective operations (across all plugins):**
 ```bash
 pytest -m allreduce --cache-clear      # AllReduce tests
 pytest -m broadcast --cache-clear      # Broadcast tests
 pytest -m reduce --cache-clear         # Reduce tests
 pytest -m allgather --cache-clear      # AllGather tests
 pytest -m reducescatter --cache-clear  # ReduceScatter tests
+pytest -m alltoall --cache-clear       # AllToAll tests (profiler only)
+pytest -m sendrecv --cache-clear       # SendRecv tests (profiler only)
+```
+
+**Combine markers to run specific tests:**
+```bash
+pytest -m "ext_profiler and allreduce" --cache-clear   # Profiler AllReduce tests only
+pytest -m "ext_tuner and broadcast" --cache-clear      # Tuner Broadcast tests only
 ```
 
 ### Run Tests with Log Output
@@ -157,3 +208,5 @@ pytest --verbose --tb=short
   ```
 
 - **Log Files**: Test execution logs are stored in the `logs/` directory for later review and debugging.
+
+- **Profiler Output**: Profiler plugin tests generate JSON trace files in the `profiler_dumps/` directory. These files contain detailed event traces that can be analyzed for debugging or performance analysis. The directory is automatically cleaned before each test session by the pytest fixture.
