@@ -269,7 +269,7 @@ private:
     i4.data2 = (val >> 32);
     i4.flag2 = flag;
     *((u64_gptr) dst->v) = *((u64_gptr) i4.v);
-    *((u64_gptr) dst->v+1) = *((u64_gptr) i4.v+1);
+    *((u64_gptr) dst->v+1) = *((u64_gptr) i4.v+1); 
 #if defined(__gfx950__) && ROCM_VERSION < 70002
     __builtin_amdgcn_fence(__ATOMIC_RELEASE, ""); // flush cache on gfx950 if ROCr fix for hipHostMallocUncached is not available (ROCm version < 7.0.2)
 #endif
@@ -507,7 +507,7 @@ private:
       nelem -= eltPerTrip;
       offset += nthreads;
     }
-    #ifdef __gfx950__
+    #ifdef __gfx950__ 
     if constexpr (isMsccl(Metadata) && DST){
       // Wait for pending vector loads and stores
       __builtin_amdgcn_s_waitcnt((15 << 8) | (7 << 4)); // s_waitcnt vmcnt(0)
