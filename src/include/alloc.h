@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <map>
 #include "rccl_vars.h"
 
 #if CUDART_VERSION >= 11030
@@ -30,6 +31,78 @@ template<typename T>
 constexpr size_t ncclSizeOfT() { return sizeof(T); }
 template<>
 constexpr size_t ncclSizeOfT<void>() { return 1; }
+
+struct ncclSideStream {
+  cudaStream_t stream;
+  uint64_t refCount;
+};
+
+inline std::unordered_map<int64_t, ncclSideStream> sideStream;
+inline pthread_mutex_t sideStreamLock = PTHREAD_MUTEX_INITIALIZER;
+extern ncclResult_t getBusId(int cudaDev, int64_t *busId);
+
+static inline ncclResult_t ncclCreateSideStream(int cudaDev) {
+  ncclResult_t res = ncclSuccess;
+  int64_t busId;
+  NCCLCHECK(getBusId(cudaDev, &busId));
+  pthread_mutex_lock(&sideStreamLock);
+  if (auto it = sideStream.find(busId); it != sideStream.end()) {
+    it->second.refCount++;
+    INFO(NCCL_ALLOC, "Side stream %p of dev %d busid %lx inc count to %ld",
+      it->second.stream, cudaDev, busId, it->second.refCount);
+  } else {
+    cudaStream_t stream;
+    CUDACHECKGOTO(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), res, fail);
+    sideStream.emplace(busId, ncclSideStream{stream, 1});
+    INFO(NCCL_ALLOC, "Created side stream %p of dev %d busid %lx",
+      stream, cudaDev, busId);
+  }
+fail:
+  pthread_mutex_unlock(&sideStreamLock);
+  return res;
+};
+
+static inline ncclResult_t ncclDestroySideStream(int cudaDev) {
+  ncclResult_t res = ncclSuccess;
+  int64_t busId;
+  NCCLCHECK(getBusId(cudaDev, &busId));
+  pthread_mutex_lock(&sideStreamLock);
+  if (auto it = sideStream.find(busId); it != sideStream.end()) {
+    it->second.refCount--;
+    if (it->second.refCount== 0) {
+      INFO(NCCL_ALLOC, "Destroyed side stream %p of dev %d busid %lx",
+        it->second.stream, cudaDev, busId);
+      CUDACHECKGOTO(cudaStreamDestroy(it->second.stream), res, fail);
+      sideStream.erase(it);
+    } else {
+      INFO(NCCL_ALLOC, "Side stream %p of dev %d busid %lx dec count to %ld",
+        it->second.stream, cudaDev, busId, it->second.refCount);
+    }
+  } else {
+    WARN("Side stream of dev %d busid %lx was not found for destroy", cudaDev, busId);
+  }
+fail:
+  pthread_mutex_unlock(&sideStreamLock);
+  return res;
+};
+
+static inline ncclResult_t getSideStream(cudaStream_t *stream) {
+  int cudaDev;
+  int64_t busId;
+  CUDACHECK(cudaGetDevice(&cudaDev));
+  NCCLCHECK(getBusId(cudaDev, &busId));
+  pthread_mutex_lock(&sideStreamLock);
+  if (auto it = sideStream.find(busId); it != sideStream.end()) {
+    *stream = it->second.stream;
+    INFO(NCCL_ALLOC, "Found side stream %p of dev %d busid %lx count %ld",
+      it->second.stream, cudaDev, busId, it->second.refCount);
+  } else {
+    *stream = 0;
+    WARN("Side stream of dev %d busid %lx was not found", cudaDev, busId);
+  }
+  pthread_mutex_unlock(&sideStreamLock);
+  return ncclSuccess;
+}
 
 #if CUDART_VERSION >= 12020
 
@@ -362,7 +435,7 @@ finish:
 #define ncclCudaMalloc(...) ncclCudaMallocDebug( __FILE__, __LINE__, __VA_ARGS__)
 
 template <typename T>
-ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, cudaStream_t sideStream = nullptr, unsigned int flags = hipDeviceMallocDefault) {
+ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t nelem, unsigned int flags = hipDeviceMallocDefault) {
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
@@ -370,13 +443,15 @@ ncclResult_t ncclCudaCallocDebug(const char *filefunc, int line, T** ptr, size_t
 
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   // Need a side stream so as not to interfere with graph capture.
-  cudaStream_t stream = sideStream;
-  if (stream == nullptr)
+  cudaStream_t stream, sidestream;
+  NCCLCHECK(getSideStream(&sidestream));
+  stream = sidestream;
+  if (sidestream == nullptr)
     CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
   CUDACHECKGOTO(hipExtMallocWithFlags((void**)ptr, nelem*ncclSizeOfT<T>(), flags), result, finish);
   CUDACHECKGOTO(cudaMemsetAsync(*ptr, 0, nelem*ncclSizeOfT<T>(), stream), result, finish);
   CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
-  if (sideStream == nullptr)
+  if (sidestream == nullptr)
     CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
@@ -428,11 +503,15 @@ ncclResult_t ncclCudaMemcpy(T* dst, T* src, size_t nelem) {
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   // Need a side stream so as not to interfere with graph capture.
-  cudaStream_t stream;
-  CUDACHECKGOTO(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), result, finish);
+  cudaStream_t stream, sidestream;
+  NCCLCHECK(getSideStream(&sidestream));
+  stream = sidestream;
+  if (sidestream == nullptr)
+    CUDACHECKGOTO(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), result, finish);
   NCCLCHECKGOTO(ncclCudaMemcpyAsync(dst, src, nelem, stream), result, finish);
   CUDACHECKGOTO(cudaStreamSynchronize(stream), result, finish);
-  CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
+  if (sidestream == nullptr)
+    CUDACHECKGOTO(cudaStreamDestroy(stream), result, finish);
 finish:
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
   return result;
