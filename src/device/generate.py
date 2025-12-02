@@ -505,7 +505,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
         key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 8))
       if fn.coll in ["SendRecv", "AllToAllPivot"]:
         key = ((coll_idx & 0x3F))
-  
+      
       out(f'  {{{key}, {fn_id}}}, {comment}\n')
   out("};\n")
 
