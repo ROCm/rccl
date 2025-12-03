@@ -1225,11 +1225,14 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   const char* dumpXmlFile;
   dumpXmlFile = ncclGetEnv("NCCL_TOPO_DUMP_FILE");
   if (dumpXmlFile) {
-    NCCLCHECKGOTO(ncclTopoGetSystem(comm, NULL, dumpXmlFile), ret, fail);
+    //NCCLCHECKGOTO(ncclTopoGetSystem(comm, NULL, dumpXmlFile), ret, fail);
+    NCCLCHECKGOTO(ncclTopoGetSystemNew(comm, &comm->topo, dumpXmlFile), ret, fail);
+  }else{
+    NCCLCHECKGOTO(ncclTopoGetSystemNew(comm, &comm->topo, NULL), ret, fail);
   }
 
   // Topo detection / System graph creation
-  NCCLCHECKGOTO(ncclTopoGetSystem(comm, &comm->topo), ret, fail);
+  //NCCLCHECKGOTO(ncclTopoGetSystem(comm, &comm->topo), ret, fail);
   // save nRanks to ncclTopoSystem as indicator of multi-node
   comm->topo->nRanks = comm->nRanks;
   // init netGdrLevel
