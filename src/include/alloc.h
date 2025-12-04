@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <map>
+#include <unordered_map>
 #include "rccl_vars.h"
 
 #if CUDART_VERSION >= 11030
