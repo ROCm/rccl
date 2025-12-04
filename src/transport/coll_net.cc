@@ -409,9 +409,9 @@ static ncclResult_t sharedBuffersInit(struct ncclCollNetSharedRes* collNet, int 
 
   if (cuda && collNet->cudaBuff == NULL) {
 #if defined(HIP_UNCACHED_MEMORY)
-    NCCLCHECK(ncclCudaCalloc(&collNet->cudaBuff, *size, nullptr, cuda ? hipDeviceMallocUncached : hipDeviceMallocDefault));
+    NCCLCHECK(ncclCudaCalloc(&collNet->cudaBuff, *size, cuda ? hipDeviceMallocUncached : hipDeviceMallocDefault));
 #else
-    NCCLCHECK(ncclCudaCalloc(&collNet->cudaBuff, *size, nullptr, cuda ? hipDeviceMallocFinegrained : hipDeviceMallocDefault));
+    NCCLCHECK(ncclCudaCalloc(&collNet->cudaBuff, *size, cuda ? hipDeviceMallocFinegrained : hipDeviceMallocDefault));
 #endif
   }
   if (!cuda && collNet->hostBuff == NULL) {
@@ -504,7 +504,7 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   map->mems[NCCL_NET_MAP_HOSTMEM].gpuPtr = map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr;
   if (ncclGdrCopy && ncclParamGdrCopySyncEnable()) {
     uint64_t *cpuPtr, *gpuPtr;
-    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 1, &resources->gdrDesc, nullptr));
+    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 1, &resources->gdrDesc));
 
     resources->gdcSync = cpuPtr;
     struct connectMapMem* gdcMem = map->mems+NCCL_NET_MAP_GDCMEM;
@@ -582,7 +582,7 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
   map->mems[NCCL_NET_MAP_HOSTMEM].gpuPtr = map->mems[NCCL_NET_MAP_HOSTMEM].cpuPtr;
   if (ncclGdrCopy) {
     uint64_t *cpuPtr, *gpuPtr;
-    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 2, &resources->gdrDesc, nullptr));
+    NCCLCHECK(ncclGdrCudaCalloc(&cpuPtr, &gpuPtr, 2, &resources->gdrDesc));
 
     if (ncclParamGdrCopySyncEnable()) {
       resources->gdcSync = cpuPtr;
