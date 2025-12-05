@@ -180,7 +180,7 @@ static gdr_t ncclGdrInit() {
 }
 
 template <typename T>
-static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** gdrHandle, hipStream_t stream) {
+static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** gdrHandle) {
   // gdr_info_t info; // unused variable - compiler warning
   size_t mapSize;
   // gdr_mh_t mh;     // unused variable - compiler warning
@@ -193,9 +193,9 @@ static ncclResult_t ncclGdrCudaCalloc(T** ptr, T** devPtr, size_t nelem, void** 
   ALIGN_SIZE(mapSize, GPU_PAGE_SIZE);
   // GDRCOPY Pinned buffer has to be GPU_PAGE_SIZE aligned too
 #if defined(HIP_UNCACHED_MEMORY)
-  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, stream, hipDeviceMallocUncached));
+  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, hipDeviceMallocUncached));
 #else
-  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, stream, hipDeviceMallocFinegrained));
+  NCCLCHECK(ncclCudaCalloc(&devMem, mapSize+GPU_PAGE_SIZE-1, hipDeviceMallocFinegrained));
 #endif
   gdr_mem_desc_t* md;
   NCCLCHECK(ncclCalloc(&md, 1));

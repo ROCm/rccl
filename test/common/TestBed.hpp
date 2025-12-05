@@ -41,7 +41,7 @@ namespace RcclUnitTesting
                    std::vector<int>              const& numStreamsPerGroup,
                    int                           const  numGroupCalls = 1,
                    bool                          const  useBlocking   = true);
- 
+
     // Prepare TestBed for use with GPUs across multiple child processes
     void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild,
                    int  const numCollectivesInGroup = 1,
@@ -96,7 +96,7 @@ namespace RcclUnitTesting
     // Execute all collectives on all test children
     // Blocks until collective is completed
     void ExecuteCollectives(std::vector<int> const &currentRanks = {},
-                            int              const groupId       = -1, 
+                            int              const groupId       = -1,
                             bool             const useHipGraph   = false);
 
     // Perform results validation - compare output to expected
@@ -140,7 +140,7 @@ namespace RcclUnitTesting
                                                           int const numGpus,
                                                           int const ranksPerGpu,
                                                           const std::vector<int>& gpuPriorityOrder);
-                                                          
+
     static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
                                                           int const numGpus,
                                                           const std::vector<int>& gpuPriorityOrder);

@@ -133,8 +133,6 @@ if(BUILD_TESTS)
   # Create rccl-UnitTestsFixtures binary if ROCm version is 4.6.0 or greater
   # and build type is Debug
   if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
-    add_dependencies(rccl-UnitTests replace_static_in_hipify)
-    
     # Add rccl-UnitTestsFixtures binary
     list(APPEND RCCL_TEST_EXECUTABLES rccl-UnitTestsFixtures)
 
@@ -144,7 +142,6 @@ if(BUILD_TESTS)
       ParamTests.cpp
       ArgCheckTests.cpp
       BitOpsTests.cpp
-      CollRegTests.cpp
       CommTests.cpp
       EnqueueTests.cpp
       IpcsocketTests.cpp
@@ -160,7 +157,6 @@ if(BUILD_TESTS)
     )
 
     add_executable(rccl-UnitTestsFixtures ${TEST_FIXTURE_SOURCE_FILES})
-    add_dependencies(rccl-UnitTestsFixtures replace_static_in_hipify)
   endif()
 
   foreach(test_executable IN LISTS RCCL_TEST_EXECUTABLES)
