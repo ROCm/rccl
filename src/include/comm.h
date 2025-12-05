@@ -207,6 +207,7 @@ struct ncclTaskColl {
   size_t trafficBytes;
 #ifdef ENABLE_WARP_SPEED
   int32_t nMaxChannels:16;
+  bool useWarpSpeed;
 #else
   int32_t nMaxChannels:8;
 #endif

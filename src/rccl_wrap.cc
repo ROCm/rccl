@@ -38,6 +38,8 @@ RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
 RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
 #ifdef ENABLE_WARP_SPEED
 RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
+RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO_MODE", 0);
+RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 #endif
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
@@ -304,7 +306,7 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   NCCLCHECK(getAlgoInfo(comm, &task, collNetSupport, nvlsSupport, numPipeOps));
   *algo = task.algorithm;
   *protocol = task.protocol;
-  *maxChannels = task.nMaxChannels;
+  *maxChannels = task.useWarpSpeed? task.nMaxChannels / task.nWarps : task.nMaxChannels;
   return ncclSuccess;
 }
 
@@ -433,7 +435,7 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     }
     // reuse the existing channel tuning logic if possible
     if (comm->nNodes == 1) {
-      rcclWarpSpeedChannels = std::min(224, rcclWarpSpeedChannels * warpsPerBlock);
+      rcclWarpSpeedChannels = std::min(224, rcclWarpSpeedChannels * warpsPerBlock * 2);
     } else {
       rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
     }
@@ -454,7 +456,7 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
   bool hasNonRing = false;
   struct ncclTaskColl* task = ncclIntruQueueHead(&plan->collTaskQueue);
   while (task != nullptr) {
-    if (task->algorithm != NCCL_ALGO_RING) {
+    if (task->algorithm != NCCL_ALGO_RING || !(task->useWarpSpeed)) {
       hasNonRing = true;
       break;
     }
@@ -463,6 +465,25 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
   int warpsPerBlock = plan->threadPerBlock / comm->WarpSize;
   support = (hasP2p || hasNonRing) ? 0 : 1;
   cuCount = (support == 0)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
+}
+
+void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
+  info->useWarpSpeed = false;
+  if(!comm->topo->warpSpeedEnabled) {
+    return;
+  }
+  info->useWarpSpeed = true;
+  if(rcclParamWarpSpeedAutoMode() != 0) {
+    if(comm->nNodes == 1 && info->algorithm == NCCL_ALGO_RING && nBytes >= 128*1024*1024) {
+      comm->unroll = NCCL_UNROLL_2;
+      info->nWarps = 4;
+    } else {
+      // TODO: set unroll factor per task rather than per comm
+      commSetUnrollFactor(comm);
+      info->useWarpSpeed = false;
+    }
+  }
+
 }
 #endif
 

@@ -1076,7 +1076,8 @@ NCCL_PARAM(CollNetNodeThreshold, "COLLNET_NODE_THRESHOLD", 2);
 NCCL_PARAM(NvbPreconnect, "NVB_PRECONNECT", 0);
 NCCL_PARAM(AllocP2pNetLLBuffers, "ALLOC_P2P_NET_LL_BUFFERS", 0);
 #ifdef ENABLE_WARP_SPEED
-RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
+extern int64_t rcclParamWarpSpeedEnable();
+extern int64_t rcclParamWarpSpeedAutoMode();
 #endif
 // MNNVL: Flag to indicate whether to enable Multi-Node NVLink
 NCCL_PARAM(MNNVLEnable, "MNNVL_ENABLE", 2);
@@ -1456,7 +1457,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     }
   }
 #ifdef ENABLE_WARP_SPEED
-  comm->topo->warpSpeedEnabled = rcclParamWarpSpeedEnable(); // only use for MI3xx GPUs if enabled by user
+  comm->topo->warpSpeedEnabled = (rcclParamWarpSpeedEnable() != 0 || rcclParamWarpSpeedAutoMode() != 0);
 #endif
 
   // For single node communicators that do not uses the full xgmi links per gpu, i.e., nranks < 8
