@@ -2064,6 +2064,14 @@ static ncclResult_t topoGetAlgoInfo(
       }
     }
   }
+  if(algorithm == NCCL_ALGO_UNDEF){
+    INFO(NCCL_INIT,"Optimal algorithm is not found in collCostTable, Setting it a default value NCCL_ALGO_RING");
+    algorithm = NCCL_ALGO_RING;
+  }
+  if(protocol == NCCL_PROTO_UNDEF){
+    INFO(NCCL_INIT,"Optimal protocol is not found in collCostTable, Setting it a default value NCCL_PROTO_SIMPLE");
+    protocol = NCCL_PROTO_SIMPLE;
+  }
 
   info->algorithm = algorithm;
   info->protocol = protocol;
