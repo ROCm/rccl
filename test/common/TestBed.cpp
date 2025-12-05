@@ -718,6 +718,11 @@ namespace RcclUnitTesting
                                                     &numOutputElements);
           optionalArgs.redOp = redOps[rdIdx];
           optionalArgs.root = roots[rtIdx] % this->numActiveRanks;
+          // Set biasNumElements if bias is enabled
+          if (optionalArgs.useBias)
+          {
+            optionalArgs.biasNumElements = numOutputElements;
+          }
           this->SetCollectiveArgs(funcTypes[ftIdx],
                                   dataTypes[dtIdx],
                                   numInputElements,

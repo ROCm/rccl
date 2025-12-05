@@ -82,6 +82,15 @@ namespace RcclUnitTesting
     ScalarTransport scalarTransport;        // Used for custom reduction operators
     int             scalarMode = -1;        // -1 if scalar not used
 
+    // Bias support for fused AllReduce+Bias operations
+    bool            useBias = false;        // Enable bias addition
+    void*           biasPtr = nullptr;      // Pointer to bias buffer (GPU memory)
+    size_t          biasNumElements = 0;    // Number of elements in bias buffer
+    int             biasConstantValue = -1; // If >= 0, use constant value for all bias elements (instead of incremental pattern)
+
+    // Input data pattern control (useful for ncclProd to avoid overflow at high rank counts)
+    int             inputConstantValue = -1; // If >= 0, use constant value for all input elements (instead of rank-based pattern)
+
     // allToAllv args
     size_t          sendcounts[MAX_RANKS*MAX_RANKS];
     size_t          sdispls[MAX_RANKS*MAX_RANKS];
@@ -121,6 +130,13 @@ namespace RcclUnitTesting
     size_t         numOutputBytesAllocated;
     size_t         numInputElementsAllocated;
     size_t         numOutputElementsAllocated;
+
+    // Bias data for fused AllReduce+Bias operations
+    PtrUnion       biasGpu;           // Bias buffer on GPU
+    PtrUnion       biasCpu;           // Bias buffer on CPU (for initialization/validation)
+    void*          biasRegHandle;     // Handle for registered bias buffer
+    size_t         numBiasElements;   // Number of elements in bias buffer
+    size_t         numBiasBytesAllocated;  // Number of bytes allocated for bias
 
     // Set collective arguments
     ErrCode SetArgs(int             const globalRank,

@@ -200,6 +200,8 @@ namespace RcclUnitTesting
     numDetectedGpus = min(numDetectedGpus, 16);
     isGfx94 = false;
     getArchInfo(&isGfx94, "gfx94");
+    isGfx95 = false;
+    getArchInfo(&isGfx95, "gfx95");
     isGfx12 = false;
     getArchInfo(&isGfx12, "gfx12");
     isGfx90 = false;
