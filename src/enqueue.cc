@@ -541,7 +541,9 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         aggBeg->protocol = agg.protocol;
         aggBeg->acc = agg.acc;
         aggBeg->pipeline = agg.pipeline;
+#ifdef ENABLE_WARP_SPEED
         aggBeg->useWarpSpeed = agg.useWarpSpeed;
+#endif
         if (aggBeg->protocol == NCCL_PROTO_LL) aggBeg->trafficBytes *= 4;
         aggBeg->nMaxChannels = agg.nMaxChannels;
         aggBeg->nWarps = agg.nWarps;
