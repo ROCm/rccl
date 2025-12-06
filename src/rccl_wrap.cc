@@ -306,7 +306,11 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   NCCLCHECK(getAlgoInfo(comm, &task, collNetSupport, nvlsSupport, numPipeOps));
   *algo = task.algorithm;
   *protocol = task.protocol;
+#ifdef ENABLE_WARP_SPEED
   *maxChannels = task.useWarpSpeed? task.nMaxChannels / task.nWarps : task.nMaxChannels;
+#else
+  *maxChannels = task.nMaxChannels;
+#endif
   return ncclSuccess;
 }
 
