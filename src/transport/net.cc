@@ -779,7 +779,13 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   if (proxyState->ncclNet == &ncclNetIb) {
     NCCLCHECK(rcclNetP2pPolicy(req->handle, resources->isP2p));
   }
-  
+
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  if (proxyState->ncclNet == &ncclNetIbROCM) {
+    NCCLCHECK(rcclNetIbROCMP2pPolicy(req->handle, resources->isP2p));
+  }
+#endif
+
   if (resources->shared) {
     // Shared buffers
     struct ncclProxyProgressState* progressState = &proxyState->progressState;

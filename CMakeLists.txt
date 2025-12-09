@@ -684,6 +684,7 @@ set(SRC_FILES
   src/transport/generic.cc
   src/transport/net.cc
   src/transport/net_ib.cc
+  src/transport/net_ib_rocm.cc
   src/transport/net_socket.cc
   src/transport/nvls.cc
   src/transport/p2p.cc
