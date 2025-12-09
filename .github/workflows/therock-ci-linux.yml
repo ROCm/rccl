@@ -117,7 +117,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --artifact-group ${{ env.AMDGPU_FAMILIES }} \
             --build-dir build \
             --upload
 
@@ -142,5 +142,6 @@ jobs:
     uses: ./.github/workflows/therock-test-packages-single-node.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      artifact_group: ${{ inputs.artifact_group }}
       test_runs_on: linux-mi325-1gpu-ossci-rocm
       artifact_run_id: ${{ github.run_id }}

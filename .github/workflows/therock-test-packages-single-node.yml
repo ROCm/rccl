@@ -5,6 +5,8 @@ on:
     inputs:
       amdgpu_families:
         type: string
+      artifact_group:
+        type: string
       test_runs_on:
         type: string
       artifact_run_id:
@@ -12,6 +14,8 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_families:
+        type: string
+      artifact_group:
         type: string
       test_runs_on:
         type: string
@@ -53,6 +57,7 @@ jobs:
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--rccl --tests"
