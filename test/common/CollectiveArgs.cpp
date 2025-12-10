@@ -102,6 +102,17 @@ namespace RcclUnitTesting
       CHECK_CALL(this->expected.AllocateCpuMem(this->numOutputBytesAllocated));
     }
     CHECK_CALL(this->outputCpu.AllocateCpuMem(this->numOutputBytesAllocated));
+
+    // Allocate bias buffers if bias is enabled
+    if (this->options.useBias)
+    {
+      this->numBiasElements = this->options.biasNumElements;
+      this->numBiasBytesAllocated = this->numBiasElements * DataTypeToBytes(this->dataType);
+      CHECK_CALL(this->biasGpu.AllocateGpuMem(this->numBiasBytesAllocated, useManagedMem, userRegistered));
+      CHECK_CALL(this->biasCpu.AllocateCpuMem(this->numBiasBytesAllocated));
+      this->biasRegHandle = nullptr;
+    }
+
     return TEST_SUCCESS;
   }
 
@@ -155,6 +166,15 @@ namespace RcclUnitTesting
       if (this->options.scalarMode == 1) CHECK_HIP(hipHostFree(this->localScalar.ptr));
       this->localScalar.Attach(nullptr);
     }
+
+    // Deallocate bias buffers if they were allocated
+    if (this->options.useBias && this->numBiasBytesAllocated > 0)
+    {
+      this->biasGpu.FreeGpuMem(this->userRegistered);
+      this->biasCpu.FreeCpuMem();
+      this->biasRegHandle = nullptr;
+    }
+
     return TEST_SUCCESS;
   }
 
@@ -205,7 +225,7 @@ namespace RcclUnitTesting
         case ncclFloat32:    ss << scalarsPerRank.F4[this->globalRank]; break;
         case ncclFloat64:    ss << scalarsPerRank.F8[this->globalRank]; break;
         case ncclFloat8e5m2: ss << (float)scalarsPerRank.B1[this->globalRank]; break;
-        case ncclBfloat16:   ss << scalarsPerRank.B2[this->globalRank]; break;
+        case ncclBfloat16:   ss << (float)scalarsPerRank.B2[this->globalRank]; break;
         default:             ss << "(UNKNOWN)";
         }
         ss << " ";

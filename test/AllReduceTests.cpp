@@ -249,4 +249,448 @@ namespace RcclUnitTesting
     }
     callCollectiveForked(nranks, ncclCollAllReduce, sendBuff, recvBuff, expected, use_managed_mem);
   }
+
+#ifdef RCCL_ALLREDUCE_WITH_BIAS
+  // Note: All bias tests require:
+  // nRanks >= 2 (bias NOT supported for single rank)
+
+  // Named constants for bias test configuration
+  namespace BiasTestConstants
+  {
+  // Element counts for different operations
+  constexpr std::initializer_list<int> STANDARD_ELEM_COUNTS    = {2048, 384}; // For Sum/Max/Min
+  constexpr std::initializer_list<int> PROD_ELEM_COUNTS_MEDIUM = {32}; // For Int32/Uint32 Prod
+  constexpr std::initializer_list<int> PROD_ELEM_COUNTS_LARGE  = {64}; // For Int8/Uint8/Int64/Uint64/Float Prod
+
+  // Bias and input pattern constants
+  constexpr int BIAS_CONSTANT_ONE = 1; // Use constant bias value of 1 (prevents overflow)
+  constexpr int BIAS_INCREMENTAL_PATTERN
+      = -1; // Use incremental pattern: bias[i] = i (more thorough testing)
+  constexpr int INPUT_RANK_BASED_PATTERN
+      = -1; // Use rank-based pattern: input[rank][i] = (rank+i)%256
+  constexpr int INPUT_CONSTANT_ONE = 1; // Use constant input value of 1 (prevents overflow)
+  } // namespace BiasTestConstants
+
+  /*
+   * @brief Helper function for running bias tests with specific datatype and redOp
+   * @param dataType Data type
+   * @param redOp Reduction operation
+   * @param numElements Number of elements
+   * @param biasConstVal Bias constant value, -1 for incremental bias
+   * @param inputConstVal Input constant value, -1 for rank-based input
+   */
+  void RunBiasTest(ncclDataType_t   dataType,
+                   ncclRedOp_t      redOp,
+                   std::vector<int> numElements,
+                   int              biasConstVal  = BiasTestConstants::BIAS_INCREMENTAL_PATTERN,
+                   int              inputConstVal = BiasTestConstants::INPUT_RANK_BASED_PATTERN)
+  {
+      // Create TestBed first (doesn't create child processes yet)
+      TestBed testBed;
+
+      // Check if architecture is gfx94 (covers gfx942) or gfx95 (covers gfx950)
+      if (!testBed.ev.isGfx94 && !testBed.ev.isGfx95)
+      {
+          INFO("SKIPPED: AllReduce with Bias is only supported on gfx942 or gfx950 architectures.\n");
+          return;
+      }
+
+      bool const inPlace       = false;
+      bool const useManagedMem = false;
+      bool const useHipGraph   = false;
+
+      OptionalColArgs options;
+      options.useBias            = true;
+      options.redOp              = redOp;
+      options.biasConstantValue  = biasConstVal;
+      options.inputConstantValue = inputConstVal;
+
+      bool isCorrect = true;
+
+      for(int totalRanks : testBed.ev.GetNumGpusList())
+      {
+          if(totalRanks < 2)
+              continue;
+
+          int const               numProcesses     = totalRanks;
+          bool const              isMultiProcess   = true;
+          const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
+          testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
+
+          for(auto numElem : numElements)
+          {
+              if(!isCorrect)
+                  break;
+
+              if(testBed.ev.showNames)
+              {
+                  std::string name = testBed.GetTestCaseName(totalRanks,
+                                                             isMultiProcess,
+                                                             ncclCollAllReduce,
+                                                             dataType,
+                                                             redOp,
+                                                             -1,
+                                                             inPlace,
+                                                             useManagedMem,
+                                                             useHipGraph);
+                  INFO("  %s (with bias, count=%d)\n", name.c_str(), numElem);
+              }
+
+              options.biasNumElements = numElem;
+
+              testBed.SetCollectiveArgs(ncclCollAllReduce,
+                                        dataType,
+                                        numElem,
+                                        numElem,
+                                        options,
+                                        -1,
+                                        0,
+                                        -1);
+              testBed.AllocateMem(inPlace, useManagedMem);
+              testBed.PrepareData();
+              testBed.ExecuteCollectives({}, useHipGraph);
+              testBed.ValidateResults(isCorrect);
+              testBed.DeallocateMem();
+          }
+          testBed.DestroyComms();
+      }
+      testBed.Finalize();
+  }
+
+  // Int8 Tests
+  TEST(AllReduce, BiasInt8_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt8,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt8_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt8,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt8_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt8,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt8_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt8,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_LARGE,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_CONSTANT_ONE);
+  }
+
+  // Uint8 Tests
+  TEST(AllReduce, BiasUint8_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint8,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint8_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint8,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint8_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint8,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint8_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint8,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_LARGE,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_CONSTANT_ONE);
+  }
+
+  // Int32 Tests
+  TEST(AllReduce, BiasInt32_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt32,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt32_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt32,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt32_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt32,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt32_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt32,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_MEDIUM,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_CONSTANT_ONE);
+  }
+
+  // Uint32 Tests
+  TEST(AllReduce, BiasUint32_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint32,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint32_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint32,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint32_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint32,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint32_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint32,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_MEDIUM,
+                  BIAS_CONSTANT_ONE,
+                  INPUT_CONSTANT_ONE);
+  }
+
+  // Int64 Tests
+  TEST(AllReduce, BiasInt64_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt64,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt64_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt64,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt64_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt64,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasInt64_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclInt64,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_LARGE,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_CONSTANT_ONE);
+  }
+
+  // Uint64 Tests
+  TEST(AllReduce, BiasUint64_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint64,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint64_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint64,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint64_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint64,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasUint64_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclUint64,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_LARGE,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_CONSTANT_ONE);
+  }
+
+  // Float32 Tests
+  TEST(AllReduce, BiasFloat32_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat32,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasFloat32_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat32,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasFloat32_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat32,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasFloat32_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat32,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_LARGE,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_CONSTANT_ONE);
+  }
+
+  // Float64 Tests
+  TEST(AllReduce, BiasFloat64_Sum)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat64,
+                  ncclSum,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasFloat64_Max)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat64,
+                  ncclMax,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasFloat64_Min)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat64,
+                  ncclMin,
+                  STANDARD_ELEM_COUNTS,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_RANK_BASED_PATTERN);
+  }
+
+  TEST(AllReduce, BiasFloat64_Prod)
+  {
+      using namespace BiasTestConstants;
+      RunBiasTest(ncclFloat64,
+                  ncclProd,
+                  PROD_ELEM_COUNTS_LARGE,
+                  BIAS_INCREMENTAL_PATTERN,
+                  INPUT_CONSTANT_ONE);
+  }
+
+#else
+  // If RCCL_ALLREDUCE_WITH_BIAS is not defined, skip all bias tests
+  TEST(AllReduce, BiasNotAvailable)
+  {
+      INFO("SKIPPED: RCCL_ALLREDUCE_WITH_BIAS not defined - bias tests skipped\n");
+      return;
+  }
+#endif
 }

@@ -47,6 +47,22 @@ namespace RcclUnitTesting
             collArgs.numOutputElements, collArgs.numOutputElementsAllocated);
       return TEST_FAIL;
     }
+
+    // Check bias allocation if bias is enabled
+    if (collArgs.options.useBias)
+    {
+      if (collArgs.numBiasElements == 0 || collArgs.numBiasBytesAllocated == 0)
+      {
+        ERROR("Bias is enabled but bias buffers are not allocated\n");
+        return TEST_FAIL;
+      }
+      if (collArgs.numBiasElements != collArgs.numOutputElements)
+      {
+        ERROR("Number of bias elements (%lu) must match number of output elements (%lu)\n",
+              collArgs.numBiasElements, collArgs.numOutputElements);
+        return TEST_FAIL;
+      }
+    }
     return TEST_SUCCESS;
   }
 
@@ -108,7 +124,22 @@ namespace RcclUnitTesting
     for (int rank = 0; rank < collArgs.totalRanks; ++rank)
     {
       // Generate temporary input for this rank
-      CHECK_CALL(tempInputCpu.FillPattern(collArgs.dataType, collArgs.numInputElements, rank, false));
+      if (collArgs.options.inputConstantValue >= 0)
+      {
+        // Use constant value for all input elements across all ranks
+        // This is useful for ncclProd at high rank counts to avoid factorial overflow
+        for (size_t i = 0; i < collArgs.numInputElements; i++)
+        {
+          CHECK_CALL(tempInputCpu.Set(collArgs.dataType, i,
+                                      collArgs.options.inputConstantValue,
+                                      (double)collArgs.options.inputConstantValue));
+        }
+      }
+      else
+      {
+        // Use rank-based pattern: value[rank][i] = (rank + i) % 256 (default behavior)
+        CHECK_CALL(tempInputCpu.FillPattern(collArgs.dataType, collArgs.numInputElements, rank, false));
+      }
 
       // Copy the pre-scaled input into GPU memory for the correct rank
       if (rank == collArgs.globalRank)
@@ -144,6 +175,38 @@ namespace RcclUnitTesting
     {
       CHECK_CALL(result.DivideByInt(collArgs.dataType, collArgs.numInputElements, collArgs.totalRanks));
     }
+
+    // Add bias to expected output if bias is enabled
+    if (collArgs.options.useBias && (isAllReduce || collArgs.options.root == collArgs.globalRank))
+    {
+      // Initialize bias data on CPU
+      if (collArgs.options.biasConstantValue >= 0)
+      {
+        // Use constant value for all bias elements (useful for ncclProd to avoid overflow)
+        for (size_t i = 0; i < collArgs.numBiasElements; i++)
+        {
+          CHECK_CALL(collArgs.biasCpu.Set(collArgs.dataType, i,
+                                          collArgs.options.biasConstantValue,
+                                          (double)collArgs.options.biasConstantValue));
+        }
+      }
+      else
+      {
+        // Use incremental pattern: bias[i] = i (default behavior)
+        CHECK_CALL(collArgs.biasCpu.FillPattern(collArgs.dataType, collArgs.numBiasElements, 0, false));
+      }
+
+      // Copy bias data to GPU
+      size_t const biasBytes = collArgs.numBiasBytesAllocated;
+      CHECK_HIP(hipMemcpy(collArgs.biasGpu.ptr, collArgs.biasCpu.ptr, biasBytes, hipMemcpyHostToDevice));
+
+      // Apply bias to expected output using the SAME reduction operation as AllReduce
+      CHECK_CALL(result.Reduce(collArgs.dataType, collArgs.numInputElements, collArgs.biasCpu, tempOp));
+
+      // Update the biasPtr in options to point to the GPU buffer
+      collArgs.options.biasPtr = collArgs.biasGpu.ptr;
+    }
+
     return TEST_SUCCESS;
   }
 
