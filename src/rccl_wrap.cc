@@ -38,9 +38,10 @@ RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
 RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
 #ifdef ENABLE_WARP_SPEED
 RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
-RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO_MODE", 0);
+RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO", 0);
 RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 #endif
+#define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -437,9 +438,10 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
       INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
       return;
     }
+    // printf("RCCL Warp Speed Channels before adjustment: %d, warpsPerBlock: %d\n", rcclWarpSpeedChannels, warpsPerBlock);
     // reuse the existing channel tuning logic if possible
     if (comm->nNodes == 1) {
-      rcclWarpSpeedChannels = std::min(224, rcclWarpSpeedChannels * warpsPerBlock * 2);
+      rcclWarpSpeedChannels = std::min(224 * comm->localRanks / 8, rcclWarpSpeedChannels * warpsPerBlock * 2);
     } else {
       rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
     }
@@ -476,11 +478,16 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
   if(!comm->topo->warpSpeedEnabled) {
     return;
   }
-  info->useWarpSpeed = true;
+ info->useWarpSpeed = (info->algorithm == NCCL_ALGO_RING); // enable by default for any RING algorithm when platform supports it
   if(rcclParamWarpSpeedAutoMode() != 0) {
-    if(comm->nNodes == 1 && info->algorithm == NCCL_ALGO_RING && nBytes >= 128*1024*1024) {
-      comm->unroll = NCCL_UNROLL_2;
-      info->nWarps = 4;
+    size_t minBytes = 0;
+    if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
+    else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
+    if(comm->nNodes == 1) {
+      if(nBytes >= minBytes && minBytes > 0) {
+        comm->unroll = NCCL_UNROLL_2;
+        info->nWarps = 4;
+      }
     } else {
       // TODO: set unroll factor per task rather than per comm
       commSetUnrollFactor(comm);
