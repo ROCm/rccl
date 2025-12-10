@@ -228,12 +228,19 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
     if (comm->enableRocshmem && msgSize <= comm->rocshmemThreshold) {	
 	comm->a2aSize = count * ncclTypeSize(datatype);
 	comm->isA2a = 1;
+	//struct ncclInfo info;
 
-	struct ncclInfo info = { ncclFuncAllToAllGda, "AllToAllGda",
-      	sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream,
-      	ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
+	if (msgSize < 1048576) {
+	    struct ncclInfo info = { ncclFuncAllToAllGda, "AllToAllGda",
+      	    sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream,
+      	    ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
+    	    return ncclEnqueueCheck(&info);
 
-    	return ncclEnqueueCheck(&info);
+	} else {
+	    struct ncclInfo info = { ncclFuncAllToAllGda1, "AllToAllGda1",
+            sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream,
+            ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };
+	}
     }
 #endif	  
     int nRanks;

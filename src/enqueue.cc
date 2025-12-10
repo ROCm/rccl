@@ -11,6 +11,7 @@
 #include "coll_net.h"
 #include "graph/topo.h"
 #include <hip/hip_runtime.h>
+#include <hip/hip_cooperative_groups.h>
 #include <hip/hip_ext.h>
 #include "gdrwrap.h"
 #include "bootstrap.h"
@@ -1796,7 +1797,11 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   if (planner->numStreams == 1 && !plan->persistent) {
     latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     comm->lastStream = planner->streams->stream;
-    CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
+    if (comm->isA2a == 0 || comm->a2aSize < 1048576) {
+        CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
+    } else {
+	CUDACHECKGOTO(hipLaunchCooperativeKernel(plan->kernelFn, grid, block, extra, 0, launchStream), ret, do_return);
+    }
     latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
     return ncclSuccess;
   }
@@ -2032,7 +2037,7 @@ static ncclResult_t updateCollCostTable(
     float** collCostTable) {
   float (*table)[NCCL_NUM_PROTOCOLS] = (float (*)[NCCL_NUM_PROTOCOLS])collCostTable;
 
-  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot || info->func == ncclFuncAllToAllGda) {
+  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot || info->func == ncclFuncAllToAllGda || info->func == ncclFuncAllToAllGda1) {
     table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = 0.0;
     return ncclSuccess;
   }
@@ -2327,6 +2332,9 @@ static ncclResult_t calcCollChunking(
     pattern = ncclPatternRing;
     break;
   case ncclFuncAllToAllGda:
+    pattern = ncclPatternRing;
+    break;
+  case ncclFuncAllToAllGda1:
     pattern = ncclPatternRing;
     break;
   case ncclFuncAllReduce:
@@ -2751,7 +2759,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->root = info->root;
       t->datatype = info->datatype;
       size_t elementSize = ncclTypeSize(t->datatype);
-      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot || t->func == ncclFuncAllToAllGda) {
+      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot || t->func == ncclFuncAllToAllGda || t->func == ncclFuncAllToAllGda1) {
         t->count *= elementSize;
         t->datatype = ncclInt8;
         elementSize = 1;

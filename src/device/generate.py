@@ -14,6 +14,11 @@ all_accs      = ["0", "1"]
 all_pipelines = ["0", "1"]
 all_unrolls   = ["1", "2", "4"]
 
+# Pipelining is not supported for LL/LL64 prims, so "1" is not a valid value for low latency protocols.
+# However, if it needs to be supported, equivalent_primary() can be modified to avoid the "non-zero"->"0" mapping.
+all_pipeline = ["0", "1"]
+pipelined_types = ["bf16"]
+
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_accs, all_pipelines, all_unrolls]
 
 ################################################################################
@@ -79,7 +84,7 @@ func_pattern = sys.argv[6:7]
 if func_pattern and func_pattern[0]:
   func_pattern = func_pattern[0]
 else:
-  func_pattern = "AllGather|AllReduce|AllToAllPivot|AllToAllGda|AllToAllGda1|AllToAllGda|Broadcast|Reduce|ReduceScatter|SendRecv"
+  func_pattern = "AllGather|AllReduce|AllToAllPivot|AllToAllGda|AllToAllGda1|Broadcast|Reduce|ReduceScatter|SendRecv"
 
 ################################################################################
 
@@ -148,7 +153,7 @@ pipelines_of_coll = {
   "AllReduce":             all_pipelines,
   "AllToAllPivot":         ["0"],
   "AllToAllGda":           ["0"],
-  "AllToAllGda1":           ["0"],
+  "AllToAllGda1":          ["0"],
   "Broadcast":             ["0"],
   "Reduce":                all_pipelines,
   "ReduceScatter":         all_pipelines,
@@ -517,7 +522,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
       )
       if fn.coll == "Broadcast":
         key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 8))
-      if fn.coll in ["SendRecv", "AllToAllPivot", "AllToAllGda"]
+      if fn.coll in ["SendRecv", "AllToAllPivot", "AllToAllGda", "AllToAllGda1"]:
         key = ((coll_idx & 0x3F))
       
       out(f'  {{{key}, {fn_id}}}, {comment}\n')
