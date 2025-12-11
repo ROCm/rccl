@@ -438,10 +438,9 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
       INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
       return;
     }
-    // printf("RCCL Warp Speed Channels before adjustment: %d, warpsPerBlock: %d\n", rcclWarpSpeedChannels, warpsPerBlock);
     // reuse the existing channel tuning logic if possible
     if (comm->nNodes == 1) {
-      rcclWarpSpeedChannels = std::min(224 * comm->localRanks / 8, rcclWarpSpeedChannels * warpsPerBlock * 2);
+      rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock / 2; // use 50% CUs for single node case
     } else {
       rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
     }
@@ -478,8 +477,8 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
   if(!comm->topo->warpSpeedEnabled) {
     return;
   }
- info->useWarpSpeed = (info->algorithm == NCCL_ALGO_RING); // enable by default for any RING algorithm when platform supports it
-  if(rcclParamWarpSpeedAutoMode() != 0) {
+ info->useWarpSpeed = (info->algorithm == NCCL_ALGO_RING); // Enabled by default for any RING algorithm when platform supports it
+  if(rcclParamWarpSpeedAutoMode() != 0 && IsArchMatch(comm->archName, "gfx950")) { // Auto mode only available for gfx950 currently
     size_t minBytes = 0;
     if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
