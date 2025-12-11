@@ -79,12 +79,18 @@ namespace RcclUnitTesting
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat64, ncclFloat16};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclInt32, ncclFloat64, ncclFloat16};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  useHipGraph     = false;
 
     OptionalColArgs options;
+
+    std::vector<ncclDataType_t> dataTypes;
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -137,12 +143,18 @@ namespace RcclUnitTesting
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclFloat32, ncclInt8};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclFloat32, ncclInt8};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  useHipGraph     = false;
 
     OptionalColArgs options;
+
+    std::vector<ncclDataType_t> dataTypes;
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())

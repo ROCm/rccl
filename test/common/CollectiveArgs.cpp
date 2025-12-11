@@ -225,7 +225,7 @@ namespace RcclUnitTesting
         case ncclFloat32:    ss << scalarsPerRank.F4[this->globalRank]; break;
         case ncclFloat64:    ss << scalarsPerRank.F8[this->globalRank]; break;
         case ncclFloat8e5m2: ss << (float)scalarsPerRank.B1[this->globalRank]; break;
-        case ncclBfloat16:   ss << scalarsPerRank.B2[this->globalRank]; break;
+        case ncclBfloat16:   ss << (float)scalarsPerRank.B2[this->globalRank]; break;
         default:             ss << "(UNKNOWN)";
         }
         ss << " ";

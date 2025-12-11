@@ -564,6 +564,40 @@ namespace RcclUnitTesting
     return ev.GetAllSupportedDataTypes();
   }
 
+  void TestBed::GetSupportedRedOps(std::vector<ncclRedOp_t>& redOps, const std::vector<ncclRedOp_t>& testRedOps)
+  {
+    // Filter out any unsupported reduction ops, in case only subset has been compiled for
+    auto& supportedOps = ev.GetAllSupportedRedOps();
+    for (auto redop : testRedOps)
+    {
+      for (int i = 0; i < supportedOps.size(); ++i)
+      {
+        if (supportedOps[i] == redop)
+        {
+          redOps.push_back(redop);
+          break;
+        }
+      }
+    }
+  }
+
+  void TestBed::GetSupportedDataTypes(std::vector<ncclDataType_t>& dataTypes, const std::vector<ncclDataType_t>& testDataTypes)
+  {
+    // Filter out any unsupported datatypes, in case only subset has been compiled for
+    auto& supportedDataTypes = ev.GetAllSupportedDataTypes();
+    for (auto dt : testDataTypes)
+    {
+      for (int i = 0; i < supportedDataTypes.size(); ++i)
+      {
+        if (supportedDataTypes[i] == dt)
+        {
+          dataTypes.push_back(dt);
+          break;
+        }
+      }
+    }
+  }
+
   std::vector<int> const TestBed::GetNumCollsPerGroup(int numCollectivesInGroup,
                                                        int numGroupCalls)
   {
@@ -642,34 +676,16 @@ namespace RcclUnitTesting
     std::vector<int> sortedN = numElements;
     std::sort(sortedN.rbegin(), sortedN.rend());
     OptionalColArgs optionalArgs;
-    // Filter out any unsupported datatypes, in case only subset has been compiled for
-    std::vector<ncclDataType_t> const& supportedDataTypes = this->GetAllSupportedDataTypes();
     std::vector<ncclDataType_t> dataTypes;
-    for (auto dt : tmpDataTypes)
-    {
-      for (int i = 0; i < supportedDataTypes.size(); ++i)
-      {
-        if (supportedDataTypes[i] == dt)
-        {
-          dataTypes.push_back(dt);
-          break;
-        }
-      }
+    this->GetSupportedDataTypes(dataTypes, tmpDataTypes);
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
     }
 
-    // Filter out any unsupported reduction ops, in case only subset has been compiled for
-    std::vector<ncclRedOp_t> const& supportedOps = this->GetAllSupportedRedOps();
     std::vector<ncclRedOp_t> redOps;
-    for (auto redop : tmpRedOps)
-    {
-      for (int i = 0; i < supportedOps.size(); ++i)
-      {
-        if (supportedOps[i] == redop)
-        {
-          redOps.push_back(redop);
-          break;
-        }
-      }
+    this->GetSupportedRedOps(redOps, tmpRedOps);
+    if (redOps.empty()) {
+      GTEST_SKIP() << "Skipping... test reduction operations excluded by UT_REDOPS.";
     }
 
     bool isCorrect = true;
