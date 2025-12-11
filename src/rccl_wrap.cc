@@ -450,6 +450,10 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   }
   rcclPxnDisable = pxnDisable;
   comm->enableCustColl = !pxnDisable;
+
+  // Enable Direct Reduce Scatter
+  // TODO: Add condition and threshold for when direct RS will be used
+  comm->enableDirectReduceScatter = 0;
 }
 
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {

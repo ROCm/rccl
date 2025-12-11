@@ -82,6 +82,8 @@
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
+#define TEMP_BUFF_SIZE (32 * 1024 * 1024) // Define Size for Temporary Buffer for Direct RS
+
 using namespace rccl;
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3] = { "AllGather", "AllReduce", "AllToAllPivot", "AllToAllGda", "Broadcast", "Reduce", "ReduceScatter", "SendRecv"};
@@ -2171,6 +2173,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   }
 #endif
 
+  // Allocate Temp Buffer for Direct Reduce Scatter
+  NCCLCHECK(ncclCudaMalloc(&(comm->tempBuff), TEMP_BUFF_SIZE));
 
 #ifdef ENABLE_MSCCLPP
   if (job->parent) {

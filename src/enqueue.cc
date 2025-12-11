@@ -409,6 +409,13 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
         devWork.size = task->count;
     }
 #endif
+    // Direct Reduce Scatter
+    if (comm->enableDirectReduceScatter) {
+      devWork.enableDirectReduceScatter = comm->enableDirectReduceScatter;
+      devWork.tempBuff = (void*)comm->tempBuff;
+      devWork.currentRank = comm->rank;
+      devWork.count = task->count;
+    }
 
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
@@ -752,7 +759,7 @@ static ncclResult_t scheduleCollTasksToPlan(
         if (task->func != ncclFuncAllToAllGda) {
             NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
             NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
-	}
+        }
       }
     } else { // not task->isCollnet
       int trafficPerByte = ncclFuncTrafficPerByte(task->func, comm->nRanks);

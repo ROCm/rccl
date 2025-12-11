@@ -740,6 +740,12 @@ struct ncclComm {
   int symId;
 #endif
 
+  // Direct Reduce Scatter [RCCL]
+  bool enableDirectReduceScatter;
+  // Temporary Buffer [RCCL]
+  // TODO: Limit tempbuff creation to Direct RS alg
+  void* tempBuff;
+
   uint64_t endMagic;
 };
 

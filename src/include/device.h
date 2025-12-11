@@ -385,6 +385,12 @@ struct alignas(16) ncclDevWorkColl {
   uintptr_t recvbuffOffset;
   uintptr_t* sendbuffRmtAddrs;
   uintptr_t* recvbuffRmtAddrs;
+
+  bool enableDirectReduceScatter;
+  void* tempBuff;
+  int currentRank;
+  size_t count;
+
   union {
     // Continuous-byte-distribution scheduling. The lo and hi channels are of
     // different size than the channels in the middle.

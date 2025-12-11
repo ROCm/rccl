@@ -406,6 +406,9 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
   return ncclEnqueueCheck(&info);
 }
 
+// Direct Reduce Scatter Threshold
+RCCL_PARAM(DirectReduceScatterThreshold, "DIRECT_REDUCE_SCATTER_THRESHOLD", 16777216);
+
 NCCL_API(ncclResult_t, ncclReduceScatter, const void* sendbuff, void* recvbuff, size_t recvcount,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
 
@@ -419,6 +422,14 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
     sendbuff, recvbuff, recvcount, datatype, op, 0, comm, stream, /* Args */
     REDUCESCATTER_CHUNKSTEPS, comm -> rcclUseOneSlice ? REDUCESCATTER_SLICESTEPS_SINGLE_NODE : REDUCESCATTER_SLICESTEPS, nullptr };
 
+  int nRanks;
+  int in_place = 0;
+  NCCLCHECK(ncclCommCount(comm, &nRanks));
+  size_t msgSize = recvcount * ncclTypeSize(datatype) * nRanks;
+
+  // Temporary Buffer to store data from each rank
+  void* tempbuff = comm->tempBuff;
+
   if (!mscclIsCaller()) // when msccl falls back to
   {
     NCCLCHECK(Recorder::instance().record(rrReduceScatter, info));
@@ -429,7 +440,32 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
       sendbuff, nullptr, nullptr, recvbuff, nullptr, nullptr,
       recvcount, datatype, 0, 0, op, mscclFuncReduceScatter, comm, stream);
   }
+  
+  if (msgSize <= rcclParamDirectReduceScatterThreshold() && rcclParamDirectReduceScatterThreshold() > -1) {
+    comm->enableDirectReduceScatter = 1;
+    // Use Direct Reduce Scatter Algorithm
+    if (recvcount == 0) return ncclSuccess;
+    size_t offset = recvcount * ncclTypeSize(datatype);
+    if (((void *) recvbuff) == ((void *)(((char*)sendbuff) + comm->rank * offset))) {
+      in_place = 1;
+    }
 
+    //Copy Currents ranks data to tempbuff
+    //NCCLCHECK(ncclCudaMemcpy((char*)tempbuff + comm->rank * offset, (char*)sendbuff + comm->rank * offset, recvcount));
+    hipMemcpy((char*)tempbuff + comm->rank * offset, (char*)sendbuff + comm->rank * offset, recvcount * ncclTypeSize(datatype), hipMemcpyDeviceToDevice);
+
+    NCCLCHECK(ncclGroupStart());
+    for (int i = 0; i < nRanks; i++) {
+      int peer = (comm->rank + i) % nRanks;
+      if (in_place == 1 && peer == comm->rank || peer == comm->rank) {
+        continue;
+      }
+      NCCLCHECK(ncclSend((void*)((char*)sendbuff + peer * offset), recvcount, datatype, peer, comm, stream));
+      NCCLCHECK(ncclRecv((void*)((char*)tempbuff + peer * offset), recvcount, datatype, peer, comm, stream));
+    }
+    NCCLCHECK(ncclGroupEnd());
+  }
+  
   return ncclEnqueueCheck(&info);
 }
 

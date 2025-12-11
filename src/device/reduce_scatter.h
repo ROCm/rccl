@@ -16,6 +16,31 @@ namespace {
 #else
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
+    // Direct Reduce Scatter
+    // TODO: Move Direct RS out of rungRinginto separate kernel 
+    if (work->enableDirectReduceScatter) {
+      int nranks = ncclShmem.comm.nRanks;
+      const ssize_t numElements = work->count;
+
+      // Array of src pointers pointing to rank offsets in tempBuff
+      void* srcPtrs[32];  // TODO: Adjust value to nRanks or maxRanks
+      for (int i = 0; i < nranks; i++) {
+        // Define offset into tempbuff for each rank's data
+        const ssize_t src_offset = i * numElements;
+        srcPtrs[i] = (void*)((T*)work->tempBuff + src_offset);
+      }
+
+      T* recvbuff = (T*)work->recvbuff;
+      // Array for destination pointer to recvbuff
+      void* dstPtrs[1];
+      dstPtrs[0] = (void*)recvbuff;
+
+      // Call reduction across all rank offsets in tempbuff and store in recvbuff
+      // TODO: Adjust maxSrcs to nRanks
+      reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 32, 0, 1, 1, 0>
+        (tid, nthreads, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nranks, srcPtrs, 1, dstPtrs, numElements);
+
+    } else{
 #ifdef ENABLE_WARP_SPEED
     int warp = threadIdx.x / WARP_SIZE;
     ncclRing *ring = &ncclShmem.warpChannel[warp].ring;
@@ -137,6 +162,7 @@ namespace {
           ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
     }
 #endif
+  }
   }
 }
 
