@@ -484,7 +484,7 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
     if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
     if(comm->nNodes == 1) {
-      if(nBytes >= minBytes) {
+      if(nBytes >= minBytes && minBytes > 0) {
         comm->unroll = NCCL_UNROLL_2;
         info->nWarps = 4;
         info->useWarpSpeed = true;
