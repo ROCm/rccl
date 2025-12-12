@@ -474,16 +474,13 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
 
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
   info->useWarpSpeed = false;
-  if(!comm->topo->warpSpeedEnabled || info->algorithm != NCCL_ALGO_RING) {
-    return;
-  }
-  if(rcclParamWarpSpeedAutoMode() != 0) {
+  if(rcclParamWarpSpeedAutoMode() != 0) { // auto mode
     if(!IsArchMatch(comm->archName, "gfx950")) {
-      // Auto mode only available for gfx950 currently, reset to false
+      // Auto mode only available for gfx950 currently, keep it to false
       return;
     }
     size_t minBytes = 0;
-    commSetUnrollFactor(comm);  // TODO: set unroll factor per task rather than per comm
+    commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
     if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
     if(comm->nNodes == 1) {
@@ -493,6 +490,8 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
         info->useWarpSpeed = true;
       }
     }
+  } else if (comm->topo->warpSpeedEnabled && info->algorithm == NCCL_ALGO_RING) {
+    info->useWarpSpeed = true;
   }
 }
 #endif
