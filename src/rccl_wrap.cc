@@ -477,23 +477,26 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
   if(!comm->topo->warpSpeedEnabled) {
     return;
   }
- info->useWarpSpeed = (info->algorithm == NCCL_ALGO_RING); // Enabled by default for any RING algorithm when platform supports it
-  if(rcclParamWarpSpeedAutoMode() != 0 && IsArchMatch(comm->archName, "gfx950")) { // Auto mode only available for gfx950 currently
+  info->useWarpSpeed = (info->algorithm == NCCL_ALGO_RING); // Enabled by default for any RING algorithm when platform supports it
+  if(rcclParamWarpSpeedAutoMode() != 0) {
+    if(!IsArchMatch(comm->archName, "gfx950")) {
+      // Auto mode only available for gfx950 currently, reset to false
+      info->useWarpSpeed = false;
+      return;
+    }
     size_t minBytes = 0;
+    commSetUnrollFactor(comm);  // TODO: set unroll factor per task rather than per comm
+    info->useWarpSpeed = false;
     if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
     if(comm->nNodes == 1) {
       if(nBytes >= minBytes && minBytes > 0) {
         comm->unroll = NCCL_UNROLL_2;
         info->nWarps = 4;
+        info->useWarpSpeed = true;
       }
-    } else {
-      // TODO: set unroll factor per task rather than per comm
-      commSetUnrollFactor(comm);
-      info->useWarpSpeed = false;
     }
   }
-
 }
 #endif
 
