@@ -6,6 +6,9 @@
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <vector>
+#include <thread>
+#include <mutex>
 
 #include <rccl/rccl.h>
 #include <hip/hip_bfloat16.h>
@@ -116,8 +119,14 @@ class Replayer
   std::unordered_map<uint64_t, ncclUniqueId>            idMap; // replayer uniqueID mapped to logged ones, for ID creator rank only
   std::unordered_map<ncclComm_t, ncclComm_t>            commMap; // replayer communicator mapped to the logged ones
 
-  std::unordered_map<hipStream_t, std::pair<hipStream_t,int>>
-                                                        streams; // replayer streams mapped to the logged ones // use using later?
+  // StreamInfo: (new stream, last line used, device it was created on)
+  struct StreamInfo {
+    hipStream_t stream = nullptr;
+    int lastLine = -1;
+    int device = 0;
+  };
+  std::unordered_map<hipStream_t, StreamInfo>           streams; // replayer streams mapped to the logged ones
+  std::unordered_map<hipEvent_t, hipEvent_t>            eventMap; // replayer events mapped to logged ones
   std::unordered_map<void*, void*>                      handleMap; // UBR handle
   std::unordered_map<unsigned long long, DeviceGraphInfo>
                                                         graphLife; // when does a graph (graphID) end and how many node it contains
@@ -125,6 +134,25 @@ class Replayer
   // auxiliary variables for replayer
   ncclUniqueId uniqueID;
   rccl::rcclCall_t lastCall;
+
+  // Multi-threaded replay support
+  struct ThreadOp {
+    rccl::rcclApiCall call;
+    int lineNum;
+    // AllToAllv extra data (variable-length, pre-parsed during parse())
+    std::vector<size_t> sendcounts;
+    std::vector<size_t> sdispls;
+    std::vector<size_t> recvcounts;
+    std::vector<size_t> rdispls;
+  };
+  std::map<int, std::vector<ThreadOp>>  threadOps;     // tid -> operations
+  std::vector<int>                      uniqueThreads; // ordered thread IDs
+  std::mutex                            resourceMtx;   // protects shared resources
+  std::mutex                            graphMtx;      // protects graph operations
+
+  void threadWorker(int tid, const std::vector<ThreadOp>& ops);
+  void replayMultiThreaded();
+  void executeOp(const ThreadOp& op, bool useLock);
 
  public:
   Replayer(const std::string& logname, int json_format, int rank, int size);

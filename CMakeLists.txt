@@ -655,6 +655,7 @@ set(SRC_FILES
   src/misc/rocmwrap.cc
   src/misc/roctx.cc
   src/misc/recorder.cc
+  src/misc/hip_recorder.cc
   src/misc/shmutils.cc
   src/misc/signals.cc
   src/misc/socket.cc

@@ -71,6 +71,7 @@ std::string alloc_fmt = "%s : [returned ptr : %p, size : %zu, context : [";
 std::string free_fmt = "%s : [ptr : %p, context : [";
 std::string redop_fmt = "%s : [scalar : %p, datatype : %d, op : %d, residence : %d, comm : %p, context : [";
 std::string redopdestroy_fmt = "%s : [op : %d, comm : %p, context : [";
+std::string hip_sync_fmt = "%s : [stream : %p, event : %p, context : [";
 std::string coll_fmt = "%s : [opCount : %lx, sendbuff : [addr : %p, base : %p, size : %zu], recvbuff : [addr : %p, base : %p, size : %zu], acc : %p, count : %zu, datatype : %d, op : %d, root : %d, comm : %p, nranks : %d, stream : %p, task : %d, globalrank : %d, context : [";
 
 Recorder::Recorder()
@@ -255,6 +256,18 @@ void Recorder::write(const rcclApiCall &call)
                      rcclCallStr[call.type], call.op, call.comm);
       break;
     }
+    case rrHipStreamSynchronize:
+    case rrHipDeviceSynchronize:
+    case rrHipEventSynchronize:
+    case rrHipEventRecord:
+    case rrHipStreamWaitEvent:
+    case rrHipEventCreate:
+    case rrHipEventDestroy:
+    {
+      len = snprintf(buffer, 4096, hip_sync_fmt.c_str(),
+                     rcclCallStr[call.type], call.stream, call.event);
+      break;
+    }
     default: // collectives
       len = snprintf(buffer, 4096, coll_fmt.c_str(),
                      rcclCallStr[call.type], call.opCount, call.sendbuff, call.sendPtrBase, call.sendPtrExtent,
@@ -323,6 +336,13 @@ ncclResult_t Recorder::record(rcclApiCall& call)
   case rrMemFree:
   case rrRedOpCreatePreMulSum:
   case rrRedOpDestroy:
+  case rrHipStreamSynchronize:
+  case rrHipDeviceSynchronize:
+  case rrHipEventSynchronize:
+  case rrHipEventRecord:
+  case rrHipStreamWaitEvent:
+  case rrHipEventCreate:
+  case rrHipEventDestroy:
     break;
 
   // collectives, which may be registered with graph
@@ -581,6 +601,19 @@ void Recorder::record(ncclComm_t* comms, int ndev, const int* devlist)
   }
 }
 
+// Record HIP synchronization calls
+ncclResult_t Recorder::record(rcclCall_t type, hipStream_t stream, hipEvent_t event)
+{
+  if (!filename.size())
+  {
+    return ncclSuccess;
+  }
+  rcclApiCall call(type);
+  call.stream = stream;
+  call.event = event;
+  return record(call);
+}
+
 Recorder::~Recorder()
 {
   if (outputFile.is_open())
@@ -683,6 +716,18 @@ void parseJsonEntry(const char* entry, std::vector<rcclApiCall>& calls)
   {
     assert(sscanf(str.c_str() + end + 3, (redopdestroy_fmt.substr(5) + ctxt_fmt).c_str(),
            &call.op, &call.comm) == 2);
+    break;
+  }
+  case rrHipStreamSynchronize:
+  case rrHipDeviceSynchronize:
+  case rrHipEventSynchronize:
+  case rrHipEventRecord:
+  case rrHipStreamWaitEvent:
+  case rrHipEventCreate:
+  case rrHipEventDestroy:
+  {
+    assert(sscanf(str.c_str() + end + 3, (hip_sync_fmt.substr(5) + ctxt_fmt).c_str(),
+           &call.stream, &call.event) == 2);
     break;
   }
   default:

@@ -41,6 +41,13 @@ typedef enum {
   rrMemFree,
   rrRedOpCreatePreMulSum,
   rrRedOpDestroy,
+  rrHipStreamSynchronize,
+  rrHipDeviceSynchronize,
+  rrHipEventSynchronize,
+  rrHipEventRecord,
+  rrHipStreamWaitEvent,
+  rrHipEventCreate,
+  rrHipEventDestroy,
   rrOtherCall
 } rcclCall_t;
 
@@ -77,6 +84,13 @@ constexpr const char* rcclCallStr[]
   "MemFree",
   "RedOpCreatePreMulSum",
   "RedOpDestroy",
+  "HipStreamSynchronize",
+  "HipDeviceSynchronize",
+  "HipEventSynchronize",
+  "HipEventRecord",
+  "HipStreamWaitEvent",
+  "HipEventCreate",
+  "HipEventDestroy",
   "OtherCall"
 };
 
@@ -107,6 +121,7 @@ struct rcclApiCall {
   int                   nRanks = -1;
   ncclComm_t            comm = NULL;
   hipStream_t           stream = NULL;
+  hipEvent_t            event = NULL;  // For HIP event operations
   int                   nTasks = -1;
   int                   globalRank = -1;
   uint64_t              commId = 0;
@@ -164,6 +179,7 @@ class Recorder {
   ncclResult_t          record(rcclCall_t type, void* ptr, size_t size = 0); // mem alloc
   ncclResult_t          record(rcclCall_t type, ncclComm_t comm, void* handle,
                                void* userBuffer = NULL, size_t size = 0); // UBR
+  ncclResult_t          record(rcclCall_t type, hipStream_t stream, hipEvent_t event = NULL); // HIP sync ops
   void                  record(int groupDepth, ncclSimInfo_t* siminfo); // SimulatedGroupEnd
 };
 
