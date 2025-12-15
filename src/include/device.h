@@ -12,9 +12,13 @@
 #include "nccl.h"
 #include "rccl_float8.h"
 #if ROCM_VERSION >= 60000
-   // hip_bf16.h should be used from ROCm 6.0
+  // hip_bf16.h should be used from ROCm 6.0
   #include <hip/hip_bf16.h>
-  typedef __hip_bfloat16 hip_bfloat16;
+  #ifndef _HIP_INCLUDE_HIP_AMD_DETAIL_HIP_BFLOAT16_H_
+    #define _HIP_INCLUDE_HIP_AMD_DETAIL_HIP_BFLOAT16_H_
+    #define _HIP_BFLOAT16_H_
+    typedef __hip_bfloat16 hip_bfloat16;
+  #endif
 #else
   #include <hip/hip_bfloat16.h>
 #endif
