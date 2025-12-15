@@ -1873,7 +1873,8 @@ ncclResult_t ncclProxyInit(struct ncclComm* comm, struct ncclSocket* sock, union
   comm->proxyState->peerAddresses = peerAddresses;
   comm->proxyState->peerAddressesUDS = peerAddressesUDS;
   if (rcclParamEnableProxyTrace()) {
-    facebook_rccl::proxyTraceInit(comm->proxyState->proxyTrace, comm->rank, comm->commHash);
+    INFO(NCCL_PROXY, "Initializing ProxyTrace, rank: %d, commHash: %lu", comm->rank, comm->commHash);
+    comm->proxyState->proxyTrace = std::make_unique<facebook_rccl::ProxyTrace>(comm->rank);
   }
 
   // UDS support

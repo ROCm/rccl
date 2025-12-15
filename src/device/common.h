@@ -138,7 +138,11 @@ struct ncclShmemData {
   int aborted;
   alignas(16) struct ncclDevComm comm;
   alignas(16) struct ncclDevChannel channel;
-
+#ifdef ENABLE_WARP_SPEED
+  int warpComm;
+  alignas(16) struct ncclDevChannel warpChannel[NCCL_MAX_GROUPS];
+  int warpChannelId[NCCL_MAX_GROUPS];
+#endif
   int batchIx, nextBatchIx;
   enum ncclDevWorkType workType;
   uint8_t directMode;
@@ -442,10 +446,17 @@ struct RunWorkBatch {
         if (work->nWarps != workPrev->nWarps) __syncthreads();
       }
       int subtn = work->nWarps*WARP_SIZE;
+#ifdef ENABLE_WARP_SPEED
+      if (tid < subtn) {
+        if(ncclShmem.warpComm == 0 || Algo != NCCL_ALGO_RING) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+        else if (ncclShmem.warpChannelId[tid / WARP_SIZE] >= 0) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid % WARP_SIZE, WARP_SIZE, work);
+      }
+#else
       // Coverity reports a possible thread divergence due to not all threads participating in the collective.
       // However, the code ensures that the participation is on a per-warp basis.
       // coverity[device_thread_diverged:FALSE]
       if (tid < subtn) RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(tid, subtn, work);
+#endif
     }
   }
 };
@@ -489,7 +500,12 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   int x = tid;
   int total = 0, y;
   int num = MAXCHANNELS/64 > 0 ? MAXCHANNELS/64 : 1;
-
+#ifdef ENABLE_WARP_SPEED
+  int warpCount    = tn / WARP_SIZE;
+  int localWarpId  = tid / WARP_SIZE;
+  int globalWarpId = (warpCount * blockIdx.x) + localWarpId;
+  int laneId = tid % WARP_SIZE;
+#endif
   // Copy kernel args to shmem and then only read those. Otherwise the compiler
   // will end up putting the args into thread local stack which is very wasteful.
   if (tid < sizeof(ncclDevKernelArgs)/sizeof(uint32_t)) {
@@ -584,8 +600,51 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     ncclShmem.collTraceTail = args->comm->collTraceTail + ncclShmem.channelId;
   }
 #endif
+#ifdef ENABLE_WARP_SPEED
+  if(tid == 0) {
+    ncclShmem.warpComm = args->comm->warpLevelComm;
+  }
+#endif
   __syncthreads(); // publish shmem
 
+#ifdef ENABLE_WARP_SPEED
+  // Determine per-warp channel assignment for WarpSpeed enablement
+  total = 0;
+  if(ncclShmem.warpComm == 1) {  // If warpComm is enabled, assign warps to channels that have the corresponding channel mask enabled
+    ncclShmem.warpChannelId[localWarpId] = -1;
+     __syncthreads();
+    for (int i = 0; i < num; i++) {
+      if (args->channelMask.masks[i] & (1ull<<laneId)) {
+        y = __popcll(args->channelMask.masks[i] & ((1ull<<laneId)-1));
+        y = total + y;
+        if (globalWarpId == y) {
+          ncclShmem.warpChannelId[localWarpId] = laneId + total;
+          break;
+        }
+      }
+      total = total + __popcll(args->channelMask.masks[i]);
+    }
+    __syncthreads();
+    if(ncclShmem.warpChannelId[localWarpId] >= 0) {
+      void* dst = &ncclShmem.warpChannel[localWarpId];
+      void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[localWarpId]];
+      int bytes = sizeof(ncclDevChannel);
+      static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
+      // assert((tid-localWarpId*WARP_SIZE) >= 0 && (tid-localWarpId*WARP_SIZE) < WARP_SIZE);
+      copyToShmem16(tid-localWarpId*WARP_SIZE, dst, src, bytes);
+    }
+  } else {  // If warpComm is disabled, all warps use the same channel as the block
+    if(laneId == 0) {
+      ncclShmem.warpChannelId[localWarpId] = ncclShmem.channelId;
+    }
+    // Use all threads in the warp to copy the channel data in parallel
+    void* dst = &ncclShmem.warpChannel[localWarpId];
+    void* src = &ncclShmem.channel;
+    int bytes = sizeof(ncclDevChannel);
+    copyToShmem16(laneId, dst, src, bytes);
+  }
+  __syncthreads();
+#endif
 #ifdef ENABLE_PROFILING
   if (tid == 0) {
     ncclShmem.prof.count = 0;
@@ -648,17 +707,17 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 #endif
 }
 
-__global__ void ncclDevKernel_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernel_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernel_Generic_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
+__global__ void ncclDevKernel_Generic_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
+__global__ void ncclDevKernel_Generic_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
 #ifdef ENABLE_COLLTRACE
-__global__ void ncclDevKernelDebug_Generic_1(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernelDebug_Generic_2(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
-__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K);
+__global__ void ncclDevKernelDebug_Generic_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
+__global__ void ncclDevKernelDebug_Generic_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
+__global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
 #endif
 
 #define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, specializedFnId) \
-  __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}
+  __global__ void ncclDevKernel_##suffix(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage) {}
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
 #define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, pipeline, unroll) \

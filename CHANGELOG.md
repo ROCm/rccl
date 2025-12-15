@@ -8,6 +8,9 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 
 * RCCL error messages have been made more verbose in several cases. RCCL now prints out fatal error messages by default. Fatal error messages can be suppressed by setting `NCCL_DEBUG=NONE`.
 * Disabled `reduceCopyPacks` pipelining for `gfx950`.
+* Experimental support for traffic shaping using warp specialization (also known as WarpSpeed) is now available for the Ring algorithm.
+* Enabling WarpSpeed in auto mode using RCCL_WARP_SPEED_AUTO optimizes performance and reduces the CU count by 50% on a single node for AllReduce, AllGather from 64MB, and ReduceScatter from 256MB.
+* The following configuration knobs control WarpSpeed behavior for debugging purposes: `RCCL_WARP_SPEED_ENABLE`, `RCCL_UNROLL_FACTOR`, `RCCL_WARP_SPEED_CU_COUNT`, and `RCCL_THREADS_PER_BLOCK`. Note that the effective unroll factor is calculated as 2 raised to the value of `RCCL_UNROLL_FACTOR`.
 
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 

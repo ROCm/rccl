@@ -6,8 +6,12 @@ cmake_minimum_required(VERSION 3.16)
 if(BUILD_TESTS)
 
   option(OPENMP_TESTS_ENABLED "Enable OpenMP for unit tests" OFF)
+  option(ENABLE_MPI_TESTS "Enable MPI-based tests" OFF)
 
   message("Building rccl unit tests (Installed in /test/rccl-UnitTests)")
+  if(ENABLE_MPI_TESTS)
+    message("MPI-based tests are enabled")
+  endif()
 
   if (ENABLE_CODE_COVERAGE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
@@ -34,6 +38,48 @@ if(BUILD_TESTS)
     find_package(OpenMP REQUIRED)
   endif()
 
+  # MPI configuration
+  if(ENABLE_MPI_TESTS)
+    # Set default MPI path, allow user to override
+    if(NOT DEFINED MPI_PATH)
+        set(MPI_PATH "/opt/ompi" CACHE PATH "Path to MPI installation")
+    endif()
+
+    # Verify MPI path exists
+    if(NOT EXISTS ${MPI_PATH})
+        message(WARNING "MPI_PATH does not exist: ${MPI_PATH}")
+        message(WARNING "Please set MPI_PATH to your MPI installation directory")
+        message(FATAL_ERROR "MPI installation not found")
+    endif()
+
+    message(STATUS "Using MPI installation at: ${MPI_PATH}")
+
+    # Find required MPI library
+    find_library(MPI_LIBRARY
+        NAMES mpi
+        PATHS ${MPI_PATH}/lib ${MPI_PATH}/lib64
+        NO_DEFAULT_PATH
+        REQUIRED
+    )
+
+    if(NOT MPI_LIBRARY)
+        message(FATAL_ERROR "Could not find MPI library (libmpi.so) in ${MPI_PATH}/lib or ${MPI_PATH}/lib64")
+    endif()
+
+    # Set up MPI variables
+    set(MPI_CXX_LIBRARIES ${MPI_LIBRARY})
+    set(MPI_CXX_INCLUDE_DIRS ${MPI_PATH}/include)
+    set(MPI_CXX_LINK_FLAGS "-L${MPI_PATH}/lib -Wl,-rpath,${MPI_PATH}/lib")
+    set(MPIEXEC_EXECUTABLE ${MPI_PATH}/bin/mpirun CACHE FILEPATH "MPI executable")
+
+    # Add link directories for MPI
+    link_directories(${MPI_PATH}/lib)
+
+    message(STATUS "MPI library: ${MPI_CXX_LIBRARIES}")
+    message(STATUS "MPI include: ${MPI_CXX_INCLUDE_DIRS}")
+    message(STATUS "MPI executable: ${MPIEXEC_EXECUTABLE}")
+  endif()
+
   include_directories(${GTEST_INCLUDE_DIRS} ./common)
 
     # Common include directories
@@ -48,6 +94,11 @@ if(BUILD_TESTS)
     ${ROCM_PATH}
   )
 
+  # Add MPI include directories if MPI tests are enabled
+  if(ENABLE_MPI_TESTS AND MPI_CXX_INCLUDE_DIRS)
+    list(APPEND RCCL_COMMON_INCLUDE_DIRS ${MPI_CXX_INCLUDE_DIRS})
+  endif()
+
   # Common compile definitions
   set(RCCL_COMMON_COMPILE_DEFS ROCM_PATH="${ROCM_PATH}")
   if(LL128_ENABLED)
@@ -55,6 +106,9 @@ if(BUILD_TESTS)
   endif()
   if(OPENMP_TESTS_ENABLED)
     list(APPEND RCCL_COMMON_COMPILE_DEFS ENABLE_OPENMP)
+  endif()
+  if(ENABLE_MPI_TESTS)
+    list(APPEND RCCL_COMMON_COMPILE_DEFS MPI_TESTS_ENABLED)
   endif()
   list(APPEND RCCL_COMMON_COMPILE_DEFS __HIP_PLATFORM_AMD__)
 
@@ -68,6 +122,9 @@ if(BUILD_TESTS)
   )
   if(OPENMP_TESTS_ENABLED)
     list(APPEND RCCL_COMMON_LINK_LIBS "${OpenMP_CXX_FLAGS}")
+  endif()
+  if(ENABLE_MPI_TESTS AND MPI_CXX_LIBRARIES)
+    list(APPEND RCCL_COMMON_LINK_LIBS ${MPI_CXX_LIBRARIES})
   endif()
 
   # Get the compile definitions from the main rccl target
@@ -129,44 +186,72 @@ if(BUILD_TESTS)
 
   # Create rccl-UnitTests binary
   add_executable(rccl-UnitTests ${TEST_SOURCE_FILES})
-  
+
   # Create rccl-UnitTestsFixtures binary if ROCm version is 4.6.0 or greater
   # and build type is Debug
   if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
-    add_dependencies(rccl-UnitTests replace_static_in_hipify)
-    
     # Add rccl-UnitTestsFixtures binary
     list(APPEND RCCL_TEST_EXECUTABLES rccl-UnitTestsFixtures)
 
     set(TEST_FIXTURE_SOURCE_FILES
-      AltRsmiTests.cpp
       AllocTests.cpp
       ParamTests.cpp
       ArgCheckTests.cpp
       BitOpsTests.cpp
-      CollRegTests.cpp
       CommTests.cpp
       EnqueueTests.cpp
       IpcsocketTests.cpp
       NetSocketTests.cpp
-      P2pTests.cpp
       ProxyTests.cpp
       RcclWrapTests.cpp
-      ShmTests.cpp
       TransportTests.cpp
       common/main_fixtures.cpp
       common/EnvVars.cpp
+      common/ProcessIsolatedTestRunner.cpp
       graph/XmlTests.cpp
     )
 
     add_executable(rccl-UnitTestsFixtures ${TEST_FIXTURE_SOURCE_FILES})
-    add_dependencies(rccl-UnitTestsFixtures replace_static_in_hipify)
+
+    # Create separate MPI test binary if MPI tests are enabled
+    if(ENABLE_MPI_TESTS)
+      # Define MPI test source files
+      set(MPI_TEST_SOURCE_FILES
+        common/main_mpi.cpp
+        common/MPIHelpers.cpp
+        common/MPITestCore.cpp
+        common/MPIEnvironment.cpp
+        common/TestChecks.cpp
+        transport/TransportMPIBase.cpp
+        transport/P2pMPITests.cpp
+        transport/NetMPITests.cpp
+        transport/ShmMPITests.cpp
+        transport/NetIbMPITests.cpp
+      )
+
+      # Create the MPI test executable
+      add_executable(rccl-UnitTestsMPI ${MPI_TEST_SOURCE_FILES})
+
+      # Add to test executables list for proper linking
+      list(APPEND RCCL_TEST_EXECUTABLES rccl-UnitTestsMPI)
+
+    endif()
   endif()
 
   foreach(test_executable IN LISTS RCCL_TEST_EXECUTABLES)
     target_include_directories(${test_executable} PRIVATE ${RCCL_COMMON_INCLUDE_DIRS})
     target_compile_definitions(${test_executable} PRIVATE ${RCCL_COMMON_COMPILE_DEFS})
     target_link_libraries(${test_executable} PRIVATE ${RCCL_COMMON_LINK_LIBS})
+
+    # Add MPI-specific configuration if MPI tests are enabled
+    if(ENABLE_MPI_TESTS)
+      if(MPI_CXX_COMPILE_FLAGS)
+        target_compile_options(${test_executable} PRIVATE ${MPI_CXX_COMPILE_FLAGS})
+      endif()
+      if(MPI_CXX_LINK_FLAGS)
+        set_target_properties(${test_executable} PROPERTIES LINK_FLAGS "${MPI_CXX_LINK_FLAGS}")
+      endif()
+    endif()
     if(BUILD_SHARED_LIBS)
       target_link_libraries(${test_executable} PRIVATE rccl)
       if(${HOST_OS_ID} STREQUAL "debian")
@@ -183,4 +268,3 @@ if(BUILD_TESTS)
   endforeach()
 
 endif()
-

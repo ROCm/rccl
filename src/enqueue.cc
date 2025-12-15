@@ -390,7 +390,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     //[Added-comment] opCount is missing for collDevWork, adding here
     devWork.opCount = task->opCount;
-	  
+
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     devWork.gfx9CheapFenceOff = gfx9CheapFenceOff(devWork, comm->gfx9CheapFenceOff);
@@ -513,11 +513,11 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
       }
-      
+
       if (!rcclIsArchSupportedForFunc(&agg, comm->archName)) {
-        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).", 
-          __func__, comm->archName, 
-          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol), 
+        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).",
+          __func__, comm->archName,
+          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol),
           ncclDevRedOpToString(task->opDev.op), ncclDatatypeToString(task->datatype), (agg.acc != nullptr), agg.pipeline);
         return ncclInvalidUsage;
       }
@@ -541,6 +541,9 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         aggBeg->protocol = agg.protocol;
         aggBeg->acc = agg.acc;
         aggBeg->pipeline = agg.pipeline;
+#ifdef ENABLE_WARP_SPEED
+        aggBeg->useWarpSpeed = agg.useWarpSpeed;
+#endif
         if (aggBeg->protocol == NCCL_PROTO_LL) aggBeg->trafficBytes *= 4;
         aggBeg->nMaxChannels = agg.nMaxChannels;
         aggBeg->nWarps = agg.nWarps;
@@ -764,10 +767,12 @@ static ncclResult_t scheduleCollTasksToPlan(
       (countHi != 0 ? countHi : countLo) -= cells*elementsPerCell - task->count;
 
       nChannels = (countLo!=0 ? 1 : 0) + nMidChannels + (cellsHi!=0 ? 1 : 0);
-
       // Update number of channels propagated to the profiler
-      task->nChannels = (uint8_t)nChannels;
-
+#ifdef ENABLE_WARP_SPEED
+      task->nChannels = nChannels;
+#else
+      task->nChannels = (uint8_t) nChannels;
+#endif
       // Ensure room for worst case of one new batch per channel
       if (!testBudget(budget, plan->nWorkBatches + nChannels, plan->workBytes + workNode->size)) {
         return ncclSuccess;
@@ -1744,7 +1749,6 @@ NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 #endif
 
 NCCL_PARAM(NvlinkUtilCentricSchedEnable, "NVLINK_UTIL_CENTRIC_SCHED_ENABLE", 0);
-
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclResult_t ret = ncclSuccess;
   struct ncclKernelPlanner* planner = &comm->planner;
@@ -1752,6 +1756,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   for (int i = 0; i < MAXCHANNELS/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
+#ifdef ENABLE_WARP_SPEED
+  rcclSetWarpSpeedSupportAndFinalCuCount(comm, plan, nChannels, plan->kernelArgs->comm->warpLevelComm, nChannels);
+#endif
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
@@ -1871,8 +1878,8 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
     // hostStreamPlanTask directly
     NCCLCHECK(hostStreamPlanTask(comm, plan));
   }
-  
-  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty 
+
+  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty
   // opCount was not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
   if (!plan->persistent && ncclIntruQueueHead(&plan->proxyOpQueue) == nullptr) {
     comm->opCount++;
@@ -2083,8 +2090,11 @@ static ncclResult_t topoGetAlgoInfo(
   rcclSetPipelining(comm, nBytes, info);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
-
+#ifdef ENABLE_WARP_SPEED
+  int nc = comm->topo->warpSpeedEnabled? comm->nChannels / 2 : comm->nChannels;
+#else
   int nc = comm->nChannels;
+#endif
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   if (info->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
@@ -2155,7 +2165,13 @@ static ncclResult_t topoGetAlgoInfo(
     }
   } else if (info->func == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
     info->algorithm = NCCL_ALGO_TREE;
+#ifdef ENABLE_WARP_SPEED
+    nc = std::min(nc, 64); // Tree uses at most 64 channels as we don't support WarpSpeed Tree.
+  } else if (info->algorithm == NCCL_ALGO_TREE) {
+    nc = std::min(nc, 64); // Tree uses at most 64 channels as we don't support WarpSpeed Tree.
+#else
     info->nMaxChannels = nc;
+#endif
   } else {
     info->nMaxChannels = nc;
   }
@@ -2168,6 +2184,13 @@ static ncclResult_t topoGetAlgoInfo(
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
+#ifdef ENABLE_WARP_SPEED
+  rcclSetWarpSpeedAuto(comm, info, nBytes);
+  if(info->useWarpSpeed) {
+    rcclSetWarpSpeedCUs(comm, info->algorithm, info->nWarps * comm->WarpSize, nc);
+  }
+  info->nMaxChannels = nc;
+#endif
   return ncclSuccess;
 }
 

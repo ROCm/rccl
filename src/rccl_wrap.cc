@@ -34,6 +34,14 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 // Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
 RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
+RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
+RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
+#ifdef ENABLE_WARP_SPEED
+RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
+RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO", 0);
+RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
+#endif
+#define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -162,6 +170,10 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
     }
 
   }
+#ifdef ENABLE_WARP_SPEED
+  // fallback to max 64 channels and tune warp speed channels later
+  nc = std::min(nc, 64);
+#endif
   return ncclSuccess;
 }
 
@@ -295,7 +307,11 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   NCCLCHECK(getAlgoInfo(comm, &task, collNetSupport, nvlsSupport, numPipeOps));
   *algo = task.algorithm;
   *protocol = task.protocol;
+#ifdef ENABLE_WARP_SPEED
+  *maxChannels = task.useWarpSpeed? task.nMaxChannels / task.nWarps : task.nMaxChannels;
+#else
   *maxChannels = task.nMaxChannels;
+#endif
   return ncclSuccess;
 }
 
@@ -398,6 +414,87 @@ void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
   }
   rcclP2pNetChunkSize = p2pNetChunkSize;
 }
+#ifdef ENABLE_WARP_SPEED
+void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, int& rcclWarpSpeedChannels) {
+  static int userChannelControlInput = RCCL_VALUE_UNSET;
+  int warpsPerBlock = threadsPerBlock / comm->WarpSize;
+  // only adjust channels for RING algorithm
+  if(algo != NCCL_ALGO_RING) {
+    return;
+  }
+  if (userChannelControlInput == RCCL_VALUE_UNSET) {
+    const char *inputStr = getenv("NCCL_THREAD_THRESHOLDS");
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MAX_NCHANNELS");
+    }
+    if (!inputStr) {
+      inputStr = getenv("NCCL_MIN_NCHANNELS");
+    }
+    userChannelControlInput = !inputStr ? 0 : 1;
+  }
+  if(!userChannelControlInput && comm->topo->warpSpeedEnabled) {
+    if(rcclParamWarpSpeedCuCount() != 0) {
+      rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * warpsPerBlock;
+      INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
+      return;
+    }
+    // reuse the existing channel tuning logic if possible
+    if (comm->nNodes == 1) {
+      rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock / 2; // use 50% CUs for single node case
+    } else {
+      rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
+    }
+    INFO(NCCL_INIT, "RCCL Warp Speed Channels set to %d", rcclWarpSpeedChannels);
+  }
+}
+
+void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKernelPlan* plan, int nChannels, int& support, int &cuCount) {
+  if(!comm->topo->warpSpeedEnabled) {
+    support = 0;
+    cuCount = nChannels;
+    return;
+  }
+  // WarpSpeed is not supported currently for the following cases:
+  // 1. if any work batch in the plan contains P2P work
+  // 2. or any collective task is not using RING algorithm
+  bool hasP2p = !ncclIntruQueueEmpty(&plan->p2pTaskQueue);
+  bool hasNonRing = false;
+  struct ncclTaskColl* task = ncclIntruQueueHead(&plan->collTaskQueue);
+  while (task != nullptr) {
+    if (task->algorithm != NCCL_ALGO_RING || !(task->useWarpSpeed)) {
+      hasNonRing = true;
+      break;
+    }
+    task = task->next;
+  }
+  int warpsPerBlock = plan->threadPerBlock / comm->WarpSize;
+  support = (hasP2p || hasNonRing) ? 0 : 1;
+  cuCount = (support == 0)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
+}
+
+void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
+  info->useWarpSpeed = false;
+  if(rcclParamWarpSpeedAutoMode() != 0) { // auto mode
+    if(!IsArchMatch(comm->archName, "gfx950")) {
+      // Auto mode only available for gfx950 currently, keep it to false
+      return;
+    }
+    size_t minBytes = 0;
+    commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
+    if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
+    else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
+    if(comm->nNodes == 1) {
+      if(nBytes >= minBytes && minBytes > 0) {
+        comm->unroll = NCCL_UNROLL_2;
+        info->nWarps = 4;
+        info->useWarpSpeed = true;
+      }
+    }
+  } else if (comm->topo->warpSpeedEnabled && info->algorithm == NCCL_ALGO_RING) {
+    info->useWarpSpeed = true;
+  }
+}
+#endif
 
 void rcclGetMaxNthreads(struct ncclComm* comm, int maxNthreads[]) {
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
@@ -411,12 +508,27 @@ void rcclGetMaxNthreads(struct ncclComm* comm, int maxNthreads[]) {
 void rcclOptThreadBlockSize(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes, int& nThreads) {
   static int maxNthreads[NCCL_NUM_PROTOCOLS] = {0};
   if (maxNthreads[NCCL_PROTO_SIMPLE] == 0) rcclGetMaxNthreads(comm, maxNthreads);
+  if(rcclParamThreadsPerBlock() != -1) {
+    nThreads = rcclParamThreadsPerBlock();
+    if(nThreads % comm->WarpSize != 0) {
+      nThreads = ((nThreads / comm->WarpSize) + 1) * comm->WarpSize;
+      INFO(NCCL_INIT, "RCCL Threads per block adjusted to %d to be multiple of warp size %d", nThreads, comm->WarpSize);
+    }
+    if(nThreads > maxNthreads[NCCL_PROTO_SIMPLE]) {
+      nThreads = maxNthreads[NCCL_PROTO_SIMPLE];
+      INFO(NCCL_INIT, "RCCL Threads per block reduced to %d to match max threads", nThreads);
+    } else if (nThreads < 3 * comm->WarpSize) {
+      nThreads = 3 * comm->WarpSize; // min requirement for tree
+      INFO(NCCL_INIT, "RCCL Threads per block increased to %d to be at least one warp", nThreads);
+    }
+    return;
+  }
   if (info->algorithm == NCCL_ALGO_TREE) nThreads = maxNthreads[NCCL_PROTO_SIMPLE]; // Tree now uses all threads always.
   if (info->algorithm == NCCL_ALGO_PAT)  nThreads = maxNthreads[NCCL_PROTO_SIMPLE];
   if (comm->nNodes == 1) nThreads = RCCL_SINGLE_NODE_MAX_NTHREADS; // For single node, we use half the number of threads for perf reasons.
   // The following should be already set correctly by getNthreads
   // but need to override the changes for TREE and PAT in the previous lines
-  if (info->protocol == NCCL_PROTO_LL) nThreads =  maxNthreads[NCCL_PROTO_LL];
+  else if (info->protocol == NCCL_PROTO_LL) nThreads =  maxNthreads[NCCL_PROTO_LL];
   // ReduceScatter small count optimization
   if (info->func == ncclFuncReduceScatter && divUp(nBytes, comm->nRanks) <= 524288) nThreads = maxNthreads[NCCL_PROTO_LL];
 }
@@ -436,6 +548,15 @@ ncclResult_t rcclFuncMaxSendRecvCount(ncclFunc_t func, int nRanks, size_t count,
 }
 
 ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
+  if( rcclParamUnrollFactor() != -1 ) {
+    comm->unroll = rcclParamUnrollFactor(); //-1 to map to 0 based indexing
+    if(comm->unroll < NCCL_UNROLL_1 || comm->unroll >= NCCL_NUM_UNROLLS) {
+      WARN("Invalid RCCL_UNROLL_FACTOR %d specified. Valid values are 0 to 2 corresponding to unroll factors of 1, 2, and 4 respectively.", comm->unroll);
+      return ncclInvalidArgument;
+    }
+    INFO(NCCL_INIT, "RCCL Unroll Factor (user set): %d", (int) (pow(2.0, (double)comm->unroll)));
+    return ncclSuccess;
+  }
   if(IsArchMatch(comm->archName, "gfx950")) {
     if(comm->nNodes == 1)
       comm->unroll = NCCL_UNROLL_1;
