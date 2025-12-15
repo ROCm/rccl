@@ -640,7 +640,7 @@ void Replayer::replayMultiThreaded()
     }
   }
   
-  // Sort by line number to preserve original execution order
+  // Sort commDestroyOps by line number (commInitOps will be re-sorted by commId later)
   std::sort(commInitOps.begin(), commInitOps.end(), 
             [](const ThreadOp& a, const ThreadOp& b) { return a.lineNum < b.lineNum; });
   std::sort(commDestroyOps.begin(), commDestroyOps.end(),
@@ -848,7 +848,7 @@ void Replayer::executeOp(const ThreadOp& op, bool useLock)
   };
   
   switch (call.type) {
-  // NCCL collectives - executed sequentially in Phase 2a with MPI synchronization
+  // NCCL collectives - executed by worker threads (NCCL handles cross-rank sync)
   case rrAllReduce:
   {
     NCCL_CALL(ncclAllReduce(sbuffer, rbuffer, call.count, call.datatype, call.op, getComm(), stream));
