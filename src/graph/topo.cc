@@ -562,7 +562,7 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
   }
   for (int s=0; s<xmlCpu->nSubs; s++) {
     struct ncclXmlNode* node = xmlCpu->subs[s];
-    if (strcmp(node->name, "pci") == 0) NCCLCHECK(ncclTopoAddPci(node, system, cpu, systemId, numaId)); /* Adds pci in system.nodes[Net]*/
+    if (strcmp(node->name, "pci") == 0) NCCLCHECK(ncclTopoAddPci(node, system, cpu, systemId, numaId));
     if (strcmp(node->name, "nic") == 0) {
       struct ncclTopoNode* nic = NULL;
       int64_t localNicId = NCCL_TOPO_LOCAL_NIC_ID(numaId, 0);
@@ -1331,7 +1331,7 @@ static ncclResult_t ncclTopoPopulateNics(ncclXml* xml, int startIndex, int endIn
       if (parent == NULL) WARN("vNIC parent discovery failed for %s (check pciPath + ordering)", props.name);
     }
 
-    NCCLCHECK(ncclTopoFillNet(xml, props.pciPath, props.name, &netNode, parent));          /*parent->name is 'cpu'*/
+    NCCLCHECK(ncclTopoFillNet(xml, props.pciPath, props.name, &netNode, parent));
 
     const char* colAttr;
     NCCLCHECK(xmlGetAttr(netNode, "coll", &colAttr));
@@ -1467,11 +1467,16 @@ exit:
 }
 
 /**
- * @brief  If xml is empty (maxIndex == 0), create a <system> root node and set version.
+ * @brief  If xml is empty (maxIndex == 0), create a <system> root node and set version. The caller owns memory for xml 
  * @param xml [in,out]
  */
 static ncclResult_t ncclTopoEnsureSystemRoot(struct ncclXml* xml) {
   ncclResult_t ret = ncclSuccess;
+  if (xml == NULL) {
+    WARN("ncclTopoEnsureSystemRoot: xml is NULL");
+    ret = ncclInternalError;
+    goto exit;
+  }
   if (xml->maxIndex == 0) {
     struct ncclXmlNode* top;
     NCCLCHECKGOTO(xmlAddNode(xml, NULL, "system", &top), ret, exit);
@@ -1547,8 +1552,9 @@ ncclResult_t ncclTopoGetXml(ncclXml* xml,const struct ncclComm* comm){
     NCCLCHECKGOTO(ncclCalloc(&localRanks, comm->nRanks), ret, fail);
     for (int i = 0; i < comm->nRanks; i++) {
       if (comm->peerInfo[i].hostHash == comm->peerInfo[comm->rank].hostHash) {
-        if (i == comm->rank)
+        if (i == comm->rank){
           localRank = nLocalRanks;
+        }
         localRanks[nLocalRanks++] = i;
       }
     }
@@ -1657,11 +1663,13 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   NCCLCHECKGOTO(ncclTopoGetSharedState(&state, comm->ncclNet->name, netStates), ret, fail);
   // [RCCL] Disabled virtual devices
   NCCLCHECKGOTO(ncclTopoProcessNet(xml, 0, dumpXmlFile, state,
-    comm->ncclNet->getProperties, /*nullptr*/ comm->ncclNet->makeVDevice, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
+    comm->ncclNet->getProperties,comm->ncclNet->makeVDevice, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
   pthread_mutex_unlock(&netLock);
   netLockHeld = 0;
+
   // Remove XML branches which don't have a node with keep="1" (typically when importing a topology)
   NCCLCHECKGOTO(ncclTopoTrimXml(xml), ret, fail);
+
   // XML topo fusion.
   if (comm->MNNVL) {
     // MNNVL clique support
@@ -1705,6 +1713,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
     INFO(NCCL_ENV, "NCCL_TOPO_DUMP_FILE set by environment to %s", dumpXmlFile);
     NCCLCHECKGOTO(ncclTopoDumpXmlToFile(dumpXmlFile, xml), ret, fail);
   }
+
   // Only update our topo tracking structure if we aren't dumping (separate steps)
   if (dumpXmlFile == NULL) NCCLCHECKGOTO(ncclTopoGetSystemFromXml(xml, system, getHostHash()), ret, fail);
 exit:

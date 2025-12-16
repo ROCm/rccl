@@ -80,7 +80,7 @@ static ncclResult_t xmlAlloc(struct ncclXml** xml, int maxNodes) {
   return ncclSuccess;
 }
 
-static ncclResult_t xmlGetAttrIndex(const struct ncclXmlNode* node, const char* attrName, int* index) {
+static ncclResult_t xmlGetAttrIndex(struct ncclXmlNode* node, const char* attrName, int* index) {
   *index = -1;
   const int nAttrs = node->nAttrs;
   for (int a=0; a<nAttrs; a++) {
@@ -92,14 +92,14 @@ static ncclResult_t xmlGetAttrIndex(const struct ncclXmlNode* node, const char* 
   return ncclSuccess;
 }
 
-static ncclResult_t xmlGetAttr(const struct ncclXmlNode* node, const char* attrName, const char** value) {
+static ncclResult_t xmlGetAttr(struct ncclXmlNode* node, const char* attrName, const char** value) {
   int index;
   NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));
   *value = index == -1 ? NULL : node->attrs[index].value;
   return ncclSuccess;
 }
 
-static ncclResult_t xmlGetAttrStr(const struct ncclXmlNode* node, const char* attrName, const char** value) {
+static ncclResult_t xmlGetAttrStr(struct ncclXmlNode* node, const char* attrName, const char** value) {
   NCCLCHECK(xmlGetAttr(node, attrName, value));
   if (*value == NULL) {
     WARN("Attribute %s of node %s not found", attrName, node->name);
@@ -173,15 +173,15 @@ static ncclResult_t xmlFindNextTag(struct ncclXml* xml, const char* tagName, str
   return ncclSuccess;
 }
 
-static ncclResult_t xmlFindTagKv(const struct ncclXml* xml, const char* tagName, struct ncclXmlNode** node, const char* attrName, const char* attrValue) {
+static ncclResult_t xmlFindTagKv( struct ncclXml* xml, const char* tagName, struct ncclXmlNode** node, const char* attrName, const char* attrValue) {
   *node = NULL;
   for (int i=0; i<xml->maxIndex; i++) {
-    const struct ncclXmlNode* n = xml->nodes+i;
+    struct ncclXmlNode* n = xml->nodes+i;
     if (strcmp(n->name, tagName) == 0) {
       const char* value;
       NCCLCHECK(xmlGetAttr(n, attrName, &value));
       if (value && strcmp(value, attrValue) == 0) {
-        *node = (struct ncclXmlNode*)n;
+        *node = n;
         return ncclSuccess;
       }
     }
