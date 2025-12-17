@@ -22,7 +22,7 @@ in the following table.
     :widths: 70,30
 
     * - **Environment variable**
-      - **Value**
+      - **Values**
 
     * - | ``NCCL_CONF_FILE``
         | Specifies the path to the RCCL configuration file.
@@ -45,12 +45,19 @@ in the following table.
     :widths: 70,30
 
     * - **Environment variable**
-      - **Value**
+      - **Values**
 
     * - | ``RCCL_LOG_LEVEL``
         | Controls RCCL logging verbosity.
       - | Integer value (default: ``1``)
         | Higher values increase logging detail
+
+    * - | ``NCCL_DEBUG``
+        | Controls debug logging in RCCL for troubleshooting and monitoring collective communication operations.
+      - | ``NCCL_DEBUG=VERSION``: Displays RCCL version information
+        | ``NCCL_DEBUG=INFO``: Enables detailed logging for troubleshooting
+        | ``NCCL_DEBUG=TRACE``: Provides a verbose logging output
+        | ``NCCL_DEBUG=NONE``: Set this value to suppress fatal error messages
 
     * - | ``NCCL_DEBUG_SUBSYS``
         | Controls which subsystems generate debug output.
@@ -68,7 +75,7 @@ collected in the following table.
     :widths: 70,30
 
     * - **Environment variable**
-      - **Value**
+      - **Values**
 
     * - | ``NCCL_ALGO``
         | Forces specific algorithm selection for collectives.
@@ -91,7 +98,7 @@ in the following table.
     :widths: 70,30
 
     * - **Environment variable**
-      - **Value**
+      - **Values**
 
     * - | ``NCCL_IB_HCA``
         | Specifies InfiniBand device:port to use.
@@ -152,7 +159,7 @@ intended for debugging and development purposes.
     :widths: 70,30
 
     * - **Environment variable**
-      - **Value**
+      - **Values**
 
     * - | ``CUDA_LAUNCH_BLOCKING``
         | Controls CUDA kernel launch blocking behavior.
