@@ -288,10 +288,10 @@ __device__ __forceinline__ void loadWorkBatchToShmem(
 
     if (WARP_SIZE == 64) {
       if (uint64_t(batch.offsetBitset) & (1ull<<lane)) {
-        int nWorksBelow = __popc(uint64_t(batch.offsetBitset) & ((1ull<<lane)-1));
+        int nWorksBelow = __popcll(uint64_t(batch.offsetBitset) & ((1ull<<lane)-1));
         fnsOfBitset[nWorksBelow] = lane;
       }
-      nWorks = __popc(uint64_t(batch.offsetBitset));
+      nWorks = __popcll(uint64_t(batch.offsetBitset));
     } else {
       // WARP_SIZE == 32
       if (uint32_t(batch.offsetBitset) & (1u<<lane)) {
