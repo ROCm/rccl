@@ -42,7 +42,7 @@ in the following table.
 
 .. list-table::
     :header-rows: 1
-    :widths: 70,30
+    :widths: 40,60
 
     * - **Environment variable**
       - **Values**
@@ -54,7 +54,7 @@ in the following table.
 
     * - | ``NCCL_DEBUG``
         | Controls debug logging in RCCL for troubleshooting and monitoring collective communication operations.
-      - | ``NCCL_DEBUG=VERSION``: Displays RCCL version information
+      - | ``NCCL_DEBUG=VERSION``: Displays RCCL version information 
         | ``NCCL_DEBUG=INFO``: Enables detailed logging for troubleshooting
         | ``NCCL_DEBUG=TRACE``: Provides a verbose logging output
         | ``NCCL_DEBUG=NONE``: Set this value to suppress fatal error messages
