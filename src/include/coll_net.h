@@ -30,6 +30,6 @@ static ncclResult_t collNetTest(struct ncclComm* comm, void* request, int* done,
 static ncclResult_t collNetCloseColl(struct ncclComm* comm, void* collComm) { NCCLCHECK(comm->ncclCollNet->closeColl(collComm)); return ncclSuccess; }
 static ncclResult_t collNetCloseListen(struct ncclComm* comm, void* listenComm) { NCCLCHECK(comm->ncclCollNet->closeListen(listenComm)); return ncclSuccess; }
 
-static int collNetSupport(const struct ncclComm* comm) { return comm->ncclCollNet != nullptr ? 1 : 0; }
+static int collNetSupport(struct ncclComm* comm) { return comm->ncclCollNet != nullptr ? 1 : 0; }
 
 #endif
