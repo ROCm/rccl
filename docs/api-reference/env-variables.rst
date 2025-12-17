@@ -19,7 +19,7 @@ in the following table.
 
 .. list-table::
     :header-rows: 1
-    :widths: 70,30
+    :widths: 40,60
 
     * - **Environment variable**
       - **Values**
@@ -72,7 +72,7 @@ collected in the following table.
 
 .. list-table::
     :header-rows: 1
-    :widths: 70,30
+    :widths: 40,60
 
     * - **Environment variable**
       - **Values**
@@ -95,7 +95,7 @@ in the following table.
 
 .. list-table::
     :header-rows: 1
-    :widths: 70,30
+    :widths: 40,60
 
     * - **Environment variable**
       - **Values**
@@ -156,7 +156,7 @@ intended for debugging and development purposes.
 
 .. list-table::
     :header-rows: 1
-    :widths: 70,30
+    :widths: 40,60
 
     * - **Environment variable**
       - **Values**
