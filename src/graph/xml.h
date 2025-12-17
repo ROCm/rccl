@@ -173,7 +173,7 @@ static ncclResult_t xmlFindNextTag(struct ncclXml* xml, const char* tagName, str
   return ncclSuccess;
 }
 
-static ncclResult_t xmlFindTagKv( struct ncclXml* xml, const char* tagName, struct ncclXmlNode** node, const char* attrName, const char* attrValue) {
+static ncclResult_t xmlFindTagKv(struct ncclXml* xml, const char* tagName, struct ncclXmlNode** node, const char* attrName, const char* attrValue) {
   *node = NULL;
   for (int i=0; i<xml->maxIndex; i++) {
     struct ncclXmlNode* n = xml->nodes+i;
