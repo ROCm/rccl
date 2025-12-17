@@ -4,9 +4,9 @@
 
 .. _troubleshooting-rccl:
 
-*********************
-Troubleshooting RCCL
-*********************
+*****************
+Troubleshoot RCCL
+*****************
 
 This topic explains the steps to troubleshoot functional and performance issues with RCCL.
 While debugging, collect the output from the commands in this guide. This data
