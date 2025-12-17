@@ -733,11 +733,11 @@ struct ncclComm {
   // rocshmem symmetric heap
   void* sourceRshmem;
   void* destRshmem;
+  void* sourceRshmem1;
+  void* destRshmem1;
   rocshmem::rocshmem_team_t team_reduce_world_dup;
   int enableRocshmem;
   int rocshmemThreshold;
-  size_t a2aSize;
-  int isA2a;
 #endif
 
   uint64_t endMagic;

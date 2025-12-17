@@ -41,6 +41,8 @@ struct ncclKernelMatch {
   bool specialized;
 };
 
+static int symId = 0;
+
 #ifdef ENABLE_COLLTRACE
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
 static ncclKernelMatch const ncclKerns[6] = {
@@ -396,12 +398,19 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     //[Added-comment] opCount is missing for collDevWork, adding here
     devWork.opCount = task->opCount;
 #ifdef ENABLE_ROCSHMEM
-    if (comm->enableRocshmem && (comm->isA2a == 1)) {
+    if (comm->enableRocshmem && task->func == ncclFuncAllToAllGda) {
         devWork.enableRocshmem = comm->enableRocshmem;
         devWork.team = comm->team_reduce_world_dup;
-        devWork.sndbuff = (void*)comm->sourceRshmem;
-        devWork.tempbuff = (void*)comm->destRshmem;
-        devWork.size = comm->a2aSize;
+	if (symId == 0) {
+        	devWork.sndbuff = (void*)comm->sourceRshmem;
+        	devWork.tempbuff = (void*)comm->destRshmem;
+	} else {
+		devWork.sndbuff = (void*)comm->sourceRshmem1;
+                devWork.tempbuff = (void*)comm->destRshmem1;
+	}
+	symId = (symId + 1) % 2;
+
+        devWork.size = task->count;
     }
 #endif
 
@@ -1516,10 +1525,8 @@ static ncclResult_t hostStreamPlanTask(struct ncclComm* comm, struct ncclKernelP
   NCCLCHECK(ncclProfilerStartGroupEvent(plan));
   NCCLCHECK(ncclProfilerStartTaskEvents(plan));
   if (ncclIntruQueueHead(&plan->proxyOpQueue)) {
-    if (comm->isA2a == 0) {	  
     	NCCLCHECK(uploadProxyOps(comm, plan));
     	NCCLCHECK(ncclProxyStart(comm));
-    }
   }
   NCCLCHECK(ncclProfilerStopTaskEvents(plan));
   NCCLCHECK(ncclProfilerStopGroupEvent(plan));
@@ -1797,11 +1804,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   if (planner->numStreams == 1 && !plan->persistent) {
     latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
     comm->lastStream = planner->streams->stream;
-    if (comm->isA2a == 0 || comm->a2aSize < 1048576) {
-        CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
-    } else {
-	CUDACHECKGOTO(hipLaunchCooperativeKernel(plan->kernelFn, grid, block, extra, 0, launchStream), ret, do_return);
-    }
+
+    CUDACHECKGOTO(hipExtLaunchKernel(plan->kernelFn, grid, block, extra, 0, launchStream, NULL, comm->doneEvent, 0), ret, do_return);
+
     latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
     return ncclSuccess;
   }

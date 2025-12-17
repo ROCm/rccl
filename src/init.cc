@@ -103,7 +103,7 @@ ncclResult_t commReclaim(ncclComm_t comm);
 
 
 #ifdef ENABLE_ROCSHMEM
-RCCL_PARAM(RocshmemThreshold, "ROCSHMEM_THRESHOLD", (size_t)(4194304));
+RCCL_PARAM(RocshmemThreshold, "ROCSHMEM_THRESHOLD", (size_t)(262144));
 RCCL_PARAM(RocshmemEnabled, "ROCSHMEM_ENABLE", 1); // @TODO - unable to disable this at runtime
 #endif
 
@@ -2104,7 +2104,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   // RCCL: determine and set unroll factor for comm
   NCCLCHECK(commSetUnrollFactor(comm));
-  comm->isA2a = 0;
+  //comm->isA2a = 0;
 
 #ifdef ENABLE_ROCSHMEM
   /* --- sanity-check print statement for development purposes --- */
@@ -2136,8 +2136,12 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
       abort();
     }
     
-    comm->sourceRshmem = (void *)rocshmem::rocshmem_malloc((size_t)(16*1024*1024));
-    comm->destRshmem = (void *)rocshmem::rocshmem_malloc((size_t)(16*1024*1024));
+    comm->sourceRshmem = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
+    comm->destRshmem = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
+
+    comm->sourceRshmem1 = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
+    comm->destRshmem1 = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
+
     comm->enableRocshmem = rcclParamRocshmemEnabled();
     comm->rocshmemThreshold = rcclParamRocshmemThreshold();
 
