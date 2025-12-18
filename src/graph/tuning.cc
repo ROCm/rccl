@@ -809,7 +809,6 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   }
 
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-    // Re-enable LL protocol on gfx12xx
     int pEnable = protoEnable[c*NCCL_NUM_PROTOCOLS+p];
     if (pEnable != 0 && p == NCCL_PROTO_LL128) {
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
@@ -964,17 +963,19 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclComm* comm, int coll, int algorithm,
  * takes gfx arch name as C-style string and returns a tuning index to
  */
 int rcclGetTuningIndexForArch(const char* gfxarch) {
-    static const std::unordered_map<std::string, int> tuningIndexMap = {
-        {"gfx906", 0}, {"gfx908", 0}, {"gfx90a", 0}, {"gfx942", 5}, 
-        {"gfx950", 6}, {"gfx1030", 0}, {"gfx1100", 0}, {"gfx1102", 0}, 
-        {"gfx1200", 7}, {"gfx1201", 7}
-    };
-    // Lookup requires converting the const char* to a std::string 
-    // (potentially creating a temporary object and allocating memory)
-    std::unordered_map<std::string,int>::const_iterator it = tuningIndexMap.find(std::string(gfxarch)); 
-    int tuningIndex = 0;
-    if (it != tuningIndexMap.end()) {
-        tuningIndex = it->second;
+  static const std::vector<std::pair<std::string, int>> tuningIndexMap = {
+    {"gfx906", 0}, {"gfx908", 0}, {"gfx90a", 0}, {"gfx942", 5},
+    {"gfx950", 6}, {"gfx1030", 0}, {"gfx1100", 0}, {"gfx1102", 0},
+    {"gfx1200", 7}, {"gfx1201", 7}
+  };
+  if (gfxarch == nullptr) return 0;
+  std::string arch(gfxarch);
+  for (const auto& p : tuningIndexMap) {
+    const std::string& prefix = p.first;
+    if (arch.size() >= prefix.size() &&
+        arch.compare(0, prefix.size(), prefix) == 0) {
+      return p.second;
     }
-    return tuningIndex;
+  }
+  return 0;
 }
