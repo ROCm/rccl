@@ -174,51 +174,51 @@ All tests support the same set of arguments:
 
 - Number of GPUs:
   
-  - ``-t,--nthreads <num threads>`` number of threads per process. Default : 1.
-  - ``-g,--ngpus <GPUs per thread>`` number of gpus per thread. Default : 1.
+  - ``-t,--nthreads <num threads>`` number of threads per process. Default: ``1``
+  - ``-g,--ngpus <GPUs per thread>`` number of gpus per thread. Default: ``1``
 - Sizes to scan:
   
-  - ``-b,--minbytes <min size in bytes>`` minimum size to start with. Default : 32M.
-  - ``-e,--maxbytes <max size in bytes`>` maximum size to end at. Default : 32M.
-  - Increments can be either fixed or a multiplication factor. Only one of those should be used
+  - ``-b,--minbytes <min size in bytes>`` minimum size to start with. Default: ``32M``
+  - ``-e,--maxbytes <max size in bytes>`` maximum size to end at. Default: ``32M``
+  - Increments can be either fixed or a multiplication factor. Only one of those should be used:
 
-    - ``-i,--stepbytes <increment size>`` fixed increment between sizes. Default : 1M.
-    - ``-f,--stepfactor <increment factor>`` multiplication factor between sizes. Default : disabled.
+    - ``-i,--stepbytes <increment size>`` fixed increment between sizes. Default: ``1M``
+    - ``-f,--stepfactor <increment factor>`` multiplication factor between sizes. Default: ``disabled``
 
 - RCCL operations arguments:
 
-  - ``-o,--op <sum/prod/min/max/avg/all>`` Specify which reduction operation to perform. Only relevant for reduction operations like Allreduce, Reduce or ReduceScatter. Default: Sum
-  - ``-d,--datatype <nccltype/all>`` Specify which datatype to use. Default: Float
-  - ``-r,--root <root/all>`` Specify which root to use. Only for operations with a root like broadcast or reduce. Default: 0
-  - ``-y,--memory_type <coarse/fine/host/managed>`` Default: Coarse
-  - ``-u,--cumask <d0,d1,d2,d3>`` Default: None
+  - ``-o,--op <sum/prod/min/max/avg/all>`` Specify which reduction operation to perform. Only relevant for reduction operations like Allreduce, Reduce or ReduceScatter. Default: ``Sum``
+  - ``-d,--datatype <nccltype/all>`` Specify which datatype to use. Default: ``Float``
+  - ``-r,--root <root/all>`` Specify which root to use. Only for operations with a root like broadcast or reduce. Default: ``0``
+  - ``-y,--memory_type <coarse/fine/host/managed>`` Default: ``Coarse``
+  - ``-u,--cumask <d0,d1,d2,d3>`` Default: ``None``
 
 - Performance:
 
-  - ``-n,--iters <iteration count>`` number of iterations. Default: 20
-  - ``-w,--warmup_iters <warmup iteration count>`` number of warmup iterations (not timed). Default: 5
-  - ``-m,--agg_iters <aggregation count>`` number of operations to aggregate together in each iteration. Default: 1
-  - ``-N,--run_cycles <cycle count>`` run & print each cycle. Default: 1; 0=infinite
-  - ``-a,--average <0/1/2/3>`` Report performance as an average across all ranks (MPI=1 only). <0=Rank0,1=Avg,2=Min,3=Max>. Default: 1
+  - ``-n,--iters <iteration count>`` number of iterations. Default: ``20``
+  - ``-w,--warmup_iters <warmup iteration count>`` number of warmup iterations (not timed). Default: ``5``
+  - ``-m,--agg_iters <aggregation count>`` number of operations to aggregate together in each iteration. Default: ``1``
+  - ``-N,--run_cycles <cycle count>`` run & print each cycle. Default: ``1; 0=infinite``
+  - ``-a,--average <0/1/2/3>`` Report performance as an average across all ranks (MPI=1 only). <0=Rank0,1=Avg,2=Min,3=Max>. Default: ``1``
 
 - Test operation:
 
-  - ``-p,--parallel_init <0/1>`` use threads to initialize NCCL in parallel. Default: 0
-  - ``-c,--check <check iteration count>`` perform count iterations, checking correctness of results on each iteration. This can be quite slow on large numbers of GPUs. Default: 1
-  - ``-z,--blocking <0/1>`` Make RCCL collective blocking, i.e. have CPUs wait and sync after each collective. Default: 0
-  - ``-G,--hipgraph <num graph launches>`` Capture iterations as a HIP graph and then replay specified number of times. Default: 0
-  - ``-C,--report_cputime <0/1>]`` Report CPU time instead of latency. Default: 0
-  - ``-R,--local_register <0/1/2>`` enable local (1) or symmetric (2) buffer registration on send/recv buffers. Default: 0
-  - ``-T,--timeout <time in seconds>`` timeout each test after specified number of seconds. Default: disabled
-  - ``-F,--cache_flush <cache flush after every -F iteration>`` Enable cache flush after every -F iteration. Default: 0 (No cache flush)
-  - ``-O,--out_of_place <0=in-place only, 1=out-of-place only>``. Default: both
-  - ``-q,--delay <delay>`` Delay between out-of-place and in-place runs (in microseconds). Default: 10
+  - ``-p,--parallel_init <0/1>`` use threads to initialize NCCL in parallel. Default: ``0``
+  - ``-c,--check <check iteration count>`` perform count iterations, checking correctness of results on each iteration. This can be quite slow on large numbers of GPUs. Default: ``1``
+  - ``-z,--blocking <0/1>`` Make RCCL collective blocking, i.e. have CPUs wait and sync after each collective. Default: ``0``
+  - ``-G,--hipgraph <num graph launches>`` Capture iterations as a HIP graph and then replay specified number of times. Default: ``0``
+  - ``-C,--report_cputime <0/1>]`` Report CPU time instead of latency. Default: ``0``
+  - ``-R,--local_register <0/1/2>`` enable local (1) or symmetric (2) buffer registration on send/recv buffers. Default: ``0``
+  - ``-T,--timeout <time in seconds>`` timeout each test after specified number of seconds. Default: ``disabled``
+  - ``-F,--cache_flush <cache flush after every -F iteration>`` Enable cache flush after every -F iteration. Default: ``0`` (No cache flush)
+  - ``-O,--out_of_place <0=in-place only, 1=out-of-place only>``. Default: ``both``
+  - ``-q,--delay <delay>`` Delay between out-of-place and in-place runs (in microseconds). Default: ``10``
   
 - Parsing RCCL-Tests output:
 
-  - ``-Z,--output_format <csv|json>`` Parse RCCL-Tests output as a CSV or JSON. Default: disabled
-  - ``-x,--output_file <output file name>`` RCCL-Tests output file name. Default: disabled
-  - ``-M,--output_algo_proto_channels <0/1>`` Report Algorithm/Protocol/Channels for each message size. Default: 0
+  - ``-Z,--output_format <csv|json>`` Parse RCCL-Tests output as a CSV or JSON. Default: ``disabled``
+  - ``-x,--output_file <output file name>`` RCCL-Tests output file name. Default: ``disabled``
+  - ``-M,--output_algo_proto_channels <0/1>`` Report Algorithm/Protocol/Channels for each message size. Default: ``0``
 
 Run multiple operations in parallel
 -----------------------------------

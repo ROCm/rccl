@@ -32,7 +32,7 @@ subtrees:
   - file: concepts/operations
     title: Collective operations
   - file: concepts/xgmi
-    title: xGMI RCCL integration
+    title: xGMI integration
   - file: concepts/primitive-tests
     title: Primitive tests
 
