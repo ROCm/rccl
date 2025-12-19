@@ -15,15 +15,15 @@ subtrees:
   - file: how-to/integrate-rccl
     title: Integrate RCCL into your GPU applications
   - file: how-to/perform-testing
-    title: Perform RCCL unit testing
+    title: Perform unit testing
   - file: how-to/optimize
-    title: Optimize RCCL performance
+    title: Optimize performance
   - file: how-to/using-rccl-tuner-plugin-api
     title: Use the RCCL Tuner plugin
   - file: how-to/replayer
     title: Use the RCCL Replayer
   - file: how-to/troubleshooting-rccl
-    title: Troubleshoot RCCL
+    title: Troubleshoot
 
 - caption: Concepts
   entries:
