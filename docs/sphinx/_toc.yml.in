@@ -20,10 +20,10 @@ subtrees:
     title: Optimize RCCL performance
   - file: how-to/using-rccl-tuner-plugin-api
     title: Use the RCCL Tuner plugin
-  - file: how-to/troubleshooting-rccl
-    title: Troubleshoot RCCL
   - file: how-to/replayer
     title: Use the RCCL Replayer
+  - file: how-to/troubleshooting-rccl
+    title: Troubleshoot RCCL
 
 - caption: Concepts
   entries:
