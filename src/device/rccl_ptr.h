@@ -44,5 +44,6 @@ using u8_gptr = __attribute__((address_space(1))) uint8_t*;
 typedef __attribute__((__vector_size__(4 * sizeof(unsigned int)))) unsigned int v4u;
 typedef __attribute__((address_space(1))) v4u* v4u_gptr;
 
-#define rccl_sys_scope_store_b128(addr, value) __builtin_amdgcn_global_store_b128((v4u_gptr) (addr), (value), "")
-#define rccl_sys_scope_load_b128(addr) __builtin_amdgcn_global_load_b128((v4u_gptr) (addr), "")
+// "" means system scope, "agent" means device.  Adding this here because I don't think it's obvious otherwise that
+// "" means system scope.
+#define RCCL_SYSTEM_SYNCSCOPE ""
