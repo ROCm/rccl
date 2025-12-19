@@ -19,7 +19,8 @@ make
 # Setup environment
 export PATH=$MPI_DIR/bin:$PATH
 export LD_LIBRARY_PATH=$RCCL_DIR:$MPI_DIR/lib:$ROCM_DIR/lib:$LD_LIBRARY_PATH
-export RCCL_REPLAY_FILE=$SCRIPT_DIR/test_log
+export RCCL_REPLAY_FILE=$SCRIPT_DIR/test_log.json
+export RCCL_HIP_TRACER_PLUGIN=$SCRIPT_DIR/../hip-tracer/librccl-hip-tracer.so
 
 # Configuration
 MPI_RANKS=${1:-2}

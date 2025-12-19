@@ -7,7 +7,11 @@
 #include <string>
 #include <iomanip>
 #include <sys/syscall.h>
+#include <dlfcn.h>
 #include "debug.h"
+
+// HIP Tracer Plugin handle (static, loaded once per process)
+static void* hipTracerPluginHandle = nullptr;
  
 using namespace std::chrono;
 
@@ -74,6 +78,40 @@ std::string redopdestroy_fmt = "%s : [op : %d, comm : %p, context : [";
 std::string hip_sync_fmt = "%s : [stream : %p, event : %p, context : [";
 std::string coll_fmt = "%s : [opCount : %lx, sendbuff : [addr : %p, base : %p, size : %zu], recvbuff : [addr : %p, base : %p, size : %zu], acc : %p, count : %zu, datatype : %d, op : %d, root : %d, comm : %p, nranks : %d, stream : %p, task : %d, globalrank : %d, context : [";
 
+// Load the HIP Tracer Plugin via RCCL_HIP_TRACER_PLUGIN environment variable
+// The plugin uses roctracer to intercept HIP synchronization calls
+static void loadHipTracerPlugin() {
+  if (hipTracerPluginHandle != nullptr) {
+    return;  // Already loaded
+  }
+
+  const char* pluginPath = getenv("RCCL_HIP_TRACER_PLUGIN");
+  if (pluginPath == nullptr || strlen(pluginPath) == 0) {
+    return;  // No plugin specified
+  }
+
+  // Load the plugin - its constructor will auto-register roctracer callbacks
+  hipTracerPluginHandle = dlopen(pluginPath, RTLD_NOW | RTLD_GLOBAL);
+  if (hipTracerPluginHandle == nullptr) {
+    fprintf(stderr, "[RCCL Recorder] Warning: Failed to load HIP tracer plugin '%s': %s\n",
+            pluginPath, dlerror());
+    return;
+  }
+
+  fprintf(stderr, "[RCCL Recorder] Loaded HIP tracer plugin: %s\n", pluginPath);
+}
+
+// Unload the HIP Tracer Plugin (called from destructor)
+// Note: We intentionally don't dlclose() the plugin here because:
+// 1. roctracer_disable_domain_callback() can hang if there are in-flight callbacks
+// 2. The OS will clean up when the process exits anyway
+// 3. This avoids potential deadlocks during library unload
+static void unloadHipTracerPlugin() {
+  // Just mark the handle as unused - don't dlclose
+  // The plugin's destructor will still run at process exit
+  hipTracerPluginHandle = nullptr;
+}
+
 Recorder::Recorder()
 {
   filename = getenv("RCCL_REPLAY_FILE") ? getenv("RCCL_REPLAY_FILE") : "";
@@ -112,6 +150,10 @@ Recorder::Recorder()
     indent(2, outputFile);
     outputFile << "version : 1,";
   }
+
+  // Load HIP Tracer Plugin if specified via RCCL_HIP_TRACER_PLUGIN env var
+  // The plugin uses roctracer to intercept HIP sync calls and records them via our C API
+  loadHipTracerPlugin();
 }
 
 Recorder& Recorder::instance()
@@ -616,6 +658,9 @@ ncclResult_t Recorder::record(rcclCall_t type, hipStream_t stream, hipEvent_t ev
 
 Recorder::~Recorder()
 {
+  // Unload HIP tracer plugin first (so it can finish recording)
+  unloadHipTracerPlugin();
+
   if (outputFile.is_open())
   {
     if (output_json) outputFile << std::endl << "}" << std::endl;
@@ -745,3 +790,68 @@ void parseBinLog()
   // TODO: need to handle trailing data such as simInfo, devList, a2av data, etc.
 }
 };
+
+// These functions can be called by external plugins (like ext-hip-tracer)
+// to record HIP synchronization calls into the RCCL trace.
+
+// HIP call type IDs for plugin use (matches rcclCall_t enum values)
+#define RCCL_HIP_STREAM_SYNCHRONIZE  0
+#define RCCL_HIP_DEVICE_SYNCHRONIZE  1
+#define RCCL_HIP_EVENT_SYNCHRONIZE   2
+#define RCCL_HIP_EVENT_RECORD        3
+#define RCCL_HIP_STREAM_WAIT_EVENT   4
+#define RCCL_HIP_EVENT_CREATE        5
+#define RCCL_HIP_EVENT_DESTROY       6
+
+extern "C" {
+
+// Check if HIP recording is enabled
+__attribute__((visibility("default")))
+int rccl_hip_recording_enabled(void) {
+    return (getenv("RCCL_REPLAY_FILE") != nullptr) ? 1 : 0;
+}
+
+// Record a HIP synchronization call
+// type: One of RCCL_HIP_* constants (0-6)
+// stream: HIP stream pointer (can be NULL)
+// event: HIP event pointer (can be NULL)
+__attribute__((visibility("default")))
+void rccl_record_hip_call(int type, void* stream, void* event) {
+    if (!rccl_hip_recording_enabled()) return;
+    
+    rccl::rcclCall_t recordType;
+    
+    switch (type) {
+        case RCCL_HIP_STREAM_SYNCHRONIZE:
+            recordType = rccl::rrHipStreamSynchronize;
+            break;
+        case RCCL_HIP_DEVICE_SYNCHRONIZE:
+            recordType = rccl::rrHipDeviceSynchronize;
+            break;
+        case RCCL_HIP_EVENT_SYNCHRONIZE:
+            recordType = rccl::rrHipEventSynchronize;
+            break;
+        case RCCL_HIP_EVENT_RECORD:
+            recordType = rccl::rrHipEventRecord;
+            break;
+        case RCCL_HIP_STREAM_WAIT_EVENT:
+            recordType = rccl::rrHipStreamWaitEvent;
+            break;
+        case RCCL_HIP_EVENT_CREATE:
+            recordType = rccl::rrHipEventCreate;
+            break;
+        case RCCL_HIP_EVENT_DESTROY:
+            recordType = rccl::rrHipEventDestroy;
+            break;
+        default:
+            return;  // Unknown type, ignore
+    }
+    
+    rccl::Recorder::instance().record(
+        recordType, 
+        static_cast<hipStream_t>(stream), 
+        static_cast<hipEvent_t>(event)
+    );
+}
+
+}  // extern "C"
