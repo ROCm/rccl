@@ -58,6 +58,7 @@
 
 #ifdef ENABLE_ROCSHMEM
 #include <rocshmem/rocshmem.hpp>
+#define NUM_SYM_BUF 8
 #endif
 
 
@@ -2135,15 +2136,19 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
       WARN("Error in rocshmem_init_attr, Aborting.");
       abort();
     }
-    
-    comm->sourceRshmem = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
-    comm->destRshmem = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
-
-    comm->sourceRshmem1 = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
-    comm->destRshmem1 = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
+   
+   
+    comm->sourceRshmem = (void**) malloc(NUM_SYM_BUF * sizeof(void *));
+    comm->destRshmem = (void**) malloc(NUM_SYM_BUF * sizeof(void *));
+ 
+    for (int i = 0; i < NUM_SYM_BUF; i++) { 
+    	comm->sourceRshmem[i] = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
+    	comm->destRshmem[i] = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
+    }
 
     comm->enableRocshmem = rcclParamRocshmemEnabled();
     comm->rocshmemThreshold = rcclParamRocshmemThreshold();
+    comm->numSymBuf = NUM_SYM_BUF;
 
     //rocshmem::rocshmem_team_t team_reduce_world_dup;
     comm->team_reduce_world_dup = rocshmem::ROCSHMEM_TEAM_INVALID;
@@ -2985,9 +2990,13 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
 
 #ifdef ENABLE_ROCSHMEM
   if (comm->enableRocshmem) {
-     rocshmem::rocshmem_free(comm->sourceRshmem);
-     rocshmem::rocshmem_free(comm->destRshmem);	  
+     for (int i = 0; i < NUM_SYM_BUF; i++) {	  
+     	rocshmem::rocshmem_free(comm->sourceRshmem[i]);
+     	rocshmem::rocshmem_free(comm->destRshmem[i]);	  
+     }
      rocshmem::rocshmem_finalize();
+     free(comm->sourceRshmem);
+     free(comm->destRshmem);
   }
 #endif
 

@@ -401,14 +401,11 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     if (comm->enableRocshmem && task->func == ncclFuncAllToAllGda) {
         devWork.enableRocshmem = comm->enableRocshmem;
         devWork.team = comm->team_reduce_world_dup;
-	if (symId == 0) {
-        	devWork.sndbuff = (void*)comm->sourceRshmem;
-        	devWork.tempbuff = (void*)comm->destRshmem;
-	} else {
-		devWork.sndbuff = (void*)comm->sourceRshmem1;
-                devWork.tempbuff = (void*)comm->destRshmem1;
-	}
-	symId = (symId + 1) % 2;
+
+        devWork.sndbuff = (void*)comm->sourceRshmem[symId];
+        devWork.tempbuff = (void*)comm->destRshmem[symId];
+
+	symId = (symId + 1) % comm->numSymBuf;
 
         devWork.size = task->count;
     }

@@ -11,7 +11,6 @@
 
 #ifdef ENABLE_ROCSHMEM
 #include <rocshmem/rocshmem.hpp>
-#endif
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncAllToAllGda1, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
@@ -46,3 +45,5 @@ struct RunWorkColl<ncclFuncAllToAllGda1, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SI
 
   }
 };
+#endif
+

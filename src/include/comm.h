@@ -730,14 +730,13 @@ struct ncclComm {
   int cuCount;
 
 #ifdef ENABLE_ROCSHMEM
-  // rocshmem symmetric heap
-  void* sourceRshmem;
-  void* destRshmem;
-  void* sourceRshmem1;
-  void* destRshmem1;
+  // circular ring buffer in rocshmem symmetric heap
+  void** sourceRshmem;
+  void** destRshmem;
   rocshmem::rocshmem_team_t team_reduce_world_dup;
   int enableRocshmem;
   int rocshmemThreshold;
+  int numSymBuf;
 #endif
 
   uint64_t endMagic;
