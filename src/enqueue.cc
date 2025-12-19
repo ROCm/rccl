@@ -1257,8 +1257,9 @@ static ncclResult_t scheduleP2pTasksToPlan(
       ssize_t recvBytes = recv ? recv->bytes : -1;
       void* sendBuff = send ? send->buff : nullptr;
       void* recvBuff = recv ? recv->buff : nullptr;
-
-      if (sendRank == comm->rank && send->buff == recv->buff) {
+      // Add check to keep in-place send to self when P2P batching is enabled
+      // Such case is not supported currently and is causing hangs
+      if (sendRank == comm->rank && send->buff == recv->buff && rcclParamP2pBatchEnable() == 0) {
         // Skip send to self in-place (we don't need to support this).
         ncclIntruQueueDequeue(&peers[sendRank].sendQueue);
         ncclIntruQueueDequeue(&peers[recvRank].recvQueue);
