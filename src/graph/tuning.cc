@@ -143,16 +143,24 @@ static const float baseLat  [NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS] = {
 #define NCCL_HW_PCI 1
 #define NCCL_HW_NET 2
 
-
-
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#define RCCL_FACTOR_TABLE_SIZE 27
+#define RCCL_FACTOR_TABLE_MAX_INDEX (RCCL_FACTOR_TABLE_SIZE - 1)
+#endif
 struct tuningModel {
   float hwLat [3][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   float bwRatio [2][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][RCCL_FACTOR_TABLE_SIZE];
+  float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][RCCL_FACTOR_TABLE_SIZE];
+#else
   float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
   float ringCorrectionFactor[NCCL_NUM_PROTOCOLS][27];
+#endif
   uint64_t llProtoRanges[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
   uint64_t channelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 2,4,8,16,32,40,48,56,64, {min,max,nchannels}
 };
+
 
 static struct tuningModel tuning_model_0 {
   .hwLat = {
@@ -887,15 +895,14 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclComm* comm, int coll, int algorithm,
   }
   int logSize = log2i(nBytes>>6);
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-
+  logSize = std::max(0, std::min(RCCL_FACTOR_TABLE_MAX_INDEX, logSize));
   if (algorithm == NCCL_ALGO_TREE) {
-    if (logSize < 27) bw *= rcclTuningModel[comm->topo->tuning].treeCorrectionFactor[protocol][logSize];
-    else bw *= rcclTuningModel[comm->topo->tuning].treeCorrectionFactor[protocol][26];
+    bw *= rcclTuningModel[comm->topo->tuning].treeCorrectionFactor[protocol][logSize];
   }
   else if (algorithm == NCCL_ALGO_RING && comm->nNodes > 1) {
-    if(logSize < 27) bw *= rcclTuningModel[comm->topo->tuning].ringCorrectionFactor[protocol][logSize];
-    else bw *= rcclTuningModel[comm->topo->tuning].ringCorrectionFactor[protocol][26];
+    bw *= rcclTuningModel[comm->topo->tuning].ringCorrectionFactor[protocol][logSize];
   }
+
 #else
   if (algorithm == NCCL_ALGO_TREE && coll == ncclFuncAllReduce && logSize >= 0 && logSize < 23) bw *= treeCorrectionFactor[protocol][logSize];
   if (algorithm == NCCL_ALGO_RING && protocol == NCCL_PROTO_SIMPLE && comm->nNodes > 1
