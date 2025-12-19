@@ -35,7 +35,7 @@ using u32_gptr = __attribute__((address_space(1))) uint32_t*;
 using u16_gptr = __attribute__((address_space(1))) uint16_t*;
 using u8_gptr = __attribute__((address_space(1))) uint8_t*;
 
-#if (defined(__gfx942__) || defined(__gfx950__)) && __has_builtin(__builtin_amdgcn_global_load_b128) && __has_builtin(__builtin_amdgcn_global_store_b128)
+#if (defined(__gfx942__) || defined(__gfx950__)) && __has_builtin(__builtin_amdgcn_global_load_b128) && __has_builtin(__builtin_amdgcn_global_store_b128) && !defined(DWORDX4_INTRINSICS_FORCE_OFF)
 #define RCCL_HAVE_GLOBAL_DWORDX4_BUILTINS 1
 #else
 #define RCCL_HAVE_GLOBAL_DWORDX4_BUILTINS 0
@@ -43,3 +43,6 @@ using u8_gptr = __attribute__((address_space(1))) uint8_t*;
 
 typedef __attribute__((__vector_size__(4 * sizeof(unsigned int)))) unsigned int v4u;
 typedef __attribute__((address_space(1))) v4u* v4u_gptr;
+
+#define rccl_sys_scope_store_b128(addr, value) __builtin_amdgcn_global_store_b128((v4u_gptr) (addr), (value), "")
+#define rccl_sys_scope_load_b128(addr) __builtin_amdgcn_global_load_b128((v4u_gptr) (addr), "")
