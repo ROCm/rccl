@@ -145,9 +145,15 @@ static const ncclKernelMatch* ncclGetKernelTableForType(ncclDataType_t type)
 #ifdef ENABLE_COLLTRACE
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
 static ncclKernelMatch const ncclKerns[6] = {
+#ifdef BUILD_GENERIC_KERNELS
     {(void*)ncclDevKernel_Generic_1, true},
     {(void*)ncclDevKernel_Generic_2, true},
     {(void*)ncclDevKernel_Generic_4, true},
+#else
+    {nullptr, false}, // Generic kernels disabled - must use type-specific kernels
+    {nullptr, false},
+    {nullptr, false},
+#endif
     {     (void*)ncclDevKernel_i8_1, true}, // Debug fallback to i8
     {     (void*)ncclDevKernel_i8_2, true},
     {     (void*)ncclDevKernel_i8_4, true}
@@ -155,9 +161,15 @@ static ncclKernelMatch const ncclKerns[6] = {
 #else
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
 static ncclKernelMatch const ncclKerns[3] = {
+#ifdef BUILD_GENERIC_KERNELS
   {(void*)ncclDevKernel_Generic_1, true},
   {(void*)ncclDevKernel_Generic_2, true},
   {(void*)ncclDevKernel_Generic_4, true}
+#else
+  {nullptr, false}, // Generic kernels disabled - must use type-specific kernels
+  {nullptr, false},
+  {nullptr, false}
+#endif
 };
 #endif
 
@@ -1015,6 +1027,12 @@ static ncclResult_t scheduleCollTasksToPlan(
             // Debug mode or fallback
             plan->kernelFn          = ncclKerns[kernelIdx].kernelFn;
             plan->kernelSpecialized = ncclKerns[kernelIdx].specialized;
+#ifndef BUILD_GENERIC_KERNELS
+            if (plan->kernelFn == nullptr) {
+                WARN("Generic kernels are disabled but required for this code path. Please rebuild RCCL with -DBUILD_GENERIC_KERNELS=ON");
+                return ncclInvalidUsage;
+            }
+#endif
         }
     }
 
@@ -1363,6 +1381,12 @@ static ncclResult_t scheduleP2pTasksToPlan(
   if (!plan->kernelSpecialized) {
     plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
     plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
+#ifndef BUILD_GENERIC_KERNELS
+    if (plan->kernelFn == nullptr) {
+      WARN("Generic kernels are disabled but required for this code path. Please rebuild RCCL with -DBUILD_GENERIC_KERNELS=ON");
+      return ncclInvalidUsage;
+    }
+#endif
   }
 
   // Compute how much to split operations

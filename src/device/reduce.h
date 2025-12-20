@@ -9,7 +9,15 @@
 #include "collectives.h"
 #include "primitives.h"
 
+// Use named namespace in self-contained mode to avoid conflicts with other headers
+// Use anonymous namespace in RDC mode for internal linkage (faster linking)
+#ifdef NCCL_DEFINE_SHMEM
+namespace reduce_impl {
+#define REDUCE_IMPL reduce_impl::
+#else
 namespace {
+#define REDUCE_IMPL
+#endif
   template<typename T, typename RedOp, typename Proto>
   __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #ifdef ENABLE_WARP_SPEED
@@ -67,20 +75,20 @@ template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
     using Proto = ProtoSimple<REDUCE_CHUNKSTEPS/REDUCE_SLICESTEPS, REDUCE_SLICESTEPS>;
-    runRing<T, RedOp, Proto>(tid, nthreads, work);
+    REDUCE_IMPL runRing<T, RedOp, Proto>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
+    REDUCE_IMPL runRing<T, RedOp, ProtoLL>(tid, nthreads, work);
   }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkColl<ncclFuncReduce, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL128> {
   __device__ __forceinline__ void run(int tid, int nthreads, struct ncclDevWorkColl* work) {
-    runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
+    REDUCE_IMPL runRing<T, RedOp, ProtoLL128>(tid, nthreads, work);
   }
 };
