@@ -55,6 +55,6 @@ teardown:
   ionicdvSymbols->ionicdv_internal_qp_set_gda = NULL;
   ionicdvSymbols->ionicdv_internal_pd_set_udma_mask = NULL;
 
-  if (ionicdvSymbols != NULL) dlclose(ionicdvSymbols);
+  if (ionicdvhandle != NULL) dlclose(ionicdvhandle);
   return ncclSystemError;
 }
