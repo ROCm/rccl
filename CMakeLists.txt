@@ -1095,7 +1095,6 @@ target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-c
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
 target_compile_options(rccl PRIVATE -fgpu-rdc)
-target_compile_options(rccl PRIVATE -fvisibility=hidden)
 
 if(QUIET_WARNINGS)
   target_compile_options(rccl PRIVATE -Wno-invalid-offsetof)
@@ -1119,7 +1118,7 @@ if(ENABLE_CODE_COVERAGE)
   message(STATUS "Code coverage is enabled with build type '${CMAKE_BUILD_TYPE}'.")
 
   target_compile_options(rccl PRIVATE
-    -Xarch_host -fprofile-instr-generate -Xarch_host -fcoverage-mapping)
+    -fvisibility=default -Xarch_host -fprofile-instr-generate -Xarch_host -fcoverage-mapping)
 
   set(COVERAGE_SHARED_LINKER_FLAGS
     -fprofile-generate
@@ -1133,6 +1132,14 @@ if(ENABLE_CODE_COVERAGE)
 
   target_link_options(rccl PRIVATE ${COVERAGE_SHARED_LINKER_FLAGS})
   target_link_options(rccl PRIVATE ${COVERAGE_EXE_LINKER_FLAGS})
+elseif(BUILD_TESTS) # Enable default/hidden visibility based on build type and ROCM_VERSION
+  if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+    target_compile_options(rccl PRIVATE -fvisibility=default)
+  else()
+    target_compile_options(rccl PRIVATE -fvisibility=hidden)
+  endif()
+else()  # Enable hidden visibility for library without tests/code coverage enabled
+  target_compile_options(rccl PRIVATE -fvisibility=hidden)
 endif()
 
 if (HAVE_KERNARG_PRELOAD)

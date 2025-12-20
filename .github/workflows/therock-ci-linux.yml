@@ -9,8 +9,6 @@ on:
         type: string
       extra_cmake_options:
         type: string
-      test_runs_on:
-        type: string
 
 permissions:
   contents: read
@@ -36,7 +34,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          ref: bfcaf6e0bcd4bfe3c21990f49bbccb7d2a087d5d # 2025-12-15 commit
+          ref: d76278526218def9fb1b016bc9e421738cb4f8f6 # 2025-12-09 commit
 
       - name: Checkout rccl repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -145,5 +143,5 @@ jobs:
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       artifact_group: ${{ inputs.artifact_group }}
-      test_runs_on: ${{ inputs.test_runs_on }}
+      test_runs_on: linux-mi325-1gpu-ossci-rocm-frac
       artifact_run_id: ${{ github.run_id }}
