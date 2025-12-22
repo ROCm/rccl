@@ -43,6 +43,14 @@ RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 #endif
 #define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
 
+RCCL_PARAM(EnableReducedCu, "ENABLE_REDUCED_CU", 0);
+
+void rcclRestrictMaxChannels(struct ncclComm* comm, int& nc ) {
+    if (comm->nNodes > 1 && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && rcclParamEnableReducedCu() == 1)    {
+        nc = comm->nChannels = std::min(nc, 48);
+    }
+}
+
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
