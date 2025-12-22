@@ -481,6 +481,12 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
     }
     size_t minBytes = 0;
     commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
+    // No early return based on the algorithm at the start of the function
+    // to allow unroll factor to be reverted to default.
+    // This can be changed once per-task unroll factor setting is implemented.
+    if(info->algorithm != NCCL_ALGO_RING) {
+      return;
+    }
     if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
     if(comm->nNodes == 1) {
