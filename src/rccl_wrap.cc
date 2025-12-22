@@ -43,10 +43,10 @@ RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 #endif
 #define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
 
-RCCL_PARAM(EnableReducedCu, "ENABLE_REDUCED_CU", 0);
+RCCL_PARAM(ReducedCuEnable, "REDUCED_CU_ENABLE", 0);
 
 void rcclRestrictMaxChannels(struct ncclComm* comm, int& nc ) {
-    if (comm->nNodes > 1 && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && rcclParamEnableReducedCu() == 1)    {
+    if (comm->nNodes > 1 && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && rcclParamReducedCuEnable() == 1)    {
         nc = comm->nChannels = std::min(nc, 48);
     }
 }
