@@ -38,7 +38,7 @@ Collect this information about the ROCm version, GPU/accelerator, platform, and 
 
       rocminfo
 
-*  Run these ``rocm-smi`` commands to display the system topology.
+*  Run these ``amd-smi`` commands to display the system topology.
 
    .. code:: shell
 
