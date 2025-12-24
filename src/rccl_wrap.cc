@@ -474,7 +474,7 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
 
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
   info->useWarpSpeed = false;
-  if(rcclParamWarpSpeedAutoMode() != 0) { // auto mode
+  if(rcclParamWarpSpeedAutoMode() != 0) { // Auto performance mode
     if(!IsArchMatch(comm->archName, "gfx950")) {
       // Auto mode only available for gfx950 currently, keep it to false
       return;
@@ -496,8 +496,10 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
         info->useWarpSpeed = true;
       }
     }
-  } else if (comm->topo->warpSpeedEnabled && info->algorithm == NCCL_ALGO_RING) {
-    info->useWarpSpeed = true;
+  } else if (comm->topo->warpSpeedEnabled) {
+    if (info->func == ncclFuncAllReduce) info->algorithm = NCCL_ALGO_RING; // Force RING for AllReduce to use WarpSpeed when requested
+    if (info->algorithm == NCCL_ALGO_RING) // Otherwise, only enable WarpSpeed for RING algorithm
+      info->useWarpSpeed = true;
   }
 }
 #endif
