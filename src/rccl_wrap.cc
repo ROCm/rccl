@@ -351,6 +351,17 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 }
 
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
+  // Check if user explicitly disabled direct AllGather
+  static int userDirectAllGatherInput = -2;
+  if (userDirectAllGatherInput == -2) {
+    const char *inputStr = getenv("RCCL_DIRECT_ALLGATHER_DISABLE");
+    userDirectAllGatherInput = !inputStr ? 0 : 1;
+  }
+  if (userDirectAllGatherInput == 1) {
+    INFO(NCCL_INIT, "RCCL DIRECT ALLGATHER has been disabled.");
+    return false;
+  }
+
   size_t threshold = rcclParamDirectAllGatherThreshold();
 
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && threshold != -1) {
