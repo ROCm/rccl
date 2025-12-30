@@ -336,6 +336,8 @@ fi
 if [[ "${build_rocshmem_support}" == true ]]; then
     cmake_common_options="${cmake_common_options} -DENABLE_ROCSHMEM=ON"
     cmake_common_options="${cmake_common_options} -DROCSHMEM_INSTALL_DIR=${ROCSHMEM_INSTALL_DIR}"
+else
+    cmake_common_options="${cmake_common_options} -DENABLE_ROCSHMEM=OFF"
 fi
 
 check_exit_code "$?"

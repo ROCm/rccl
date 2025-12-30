@@ -42,7 +42,7 @@ option(TIMETRACE                               "Enable time-trace during compila
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
 option(QUIET_WARNINGS                          "Supress compiler warnings"                     OFF)
-option(ENABLE_ROCSHMEM                         "Enable rocSHMEM support in RCCL"               ON)
+option(ENABLE_ROCSHMEM                         "Enable rocSHMEM support in RCCL"               OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -65,8 +65,11 @@ include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
 include(cmake/CheckSymbolExistsNoWarn.cmake)
-# -- TODO -- do we wish to guard this include with if ENABLE_ROCSHMEM? -- #
-include(cmake/ROCSHMEM.cmake)
+
+# Include rocSHMEM build module only if enabled
+if(ENABLE_ROCSHMEM)
+  include(cmake/ROCSHMEM.cmake)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -1305,10 +1308,6 @@ endif()
 
 if(ENABLE_MSCCLPP)
   include(cmake/MSCCLPP.cmake)
-endif()
-
-if(ENABLE_ROCSHMEM)
-  include(cmake/ROCSHMEM.cmake)
 endif()
 
 ## Track linking time
