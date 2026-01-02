@@ -915,3 +915,24 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclComm* comm, int coll, int algorithm,
   *time = lat * latCount + nBytes / (1000 * bw);
   return ncclSuccess;
 }
+
+/**
+ * takes gfx arch name as C-style string and returns a tuning index to
+ */
+int rcclGetTuningIndexForArch(const char* gfxarch) {
+  static const std::vector<std::pair<std::string, int>> tuningIndexMap = {
+    {"gfx906", 0}, {"gfx908", 0}, {"gfx90a", 0}, {"gfx942", 5},
+    {"gfx950", 6}, {"gfx1030", 0}, {"gfx1100", 0}, {"gfx1102", 0},
+    {"gfx1200", 7}, {"gfx1201", 7}
+  };
+  if (gfxarch == nullptr) return 0;
+  std::string arch(gfxarch);
+  for (const auto& p : tuningIndexMap) {
+    const std::string& prefix = p.first;
+    if (arch.size() >= prefix.size() &&
+        arch.compare(0, prefix.size(), prefix) == 0) {
+      return p.second;
+    }
+  }
+  return 0;
+}

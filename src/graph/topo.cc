@@ -1462,9 +1462,8 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
       comm->ncclCollNet->getProperties, comm->ncclCollNet->makeVDevice, comm->ncclCollNet->devices, comm->ncclCollNet->name, comm->dmaBufSupport), ret, fail);
   }
   NCCLCHECKGOTO(ncclTopoGetSharedState(&state, comm->ncclNet->name, netStates), ret, fail);
-  // [RCCL] Disabled virtual devices
   NCCLCHECKGOTO(ncclTopoProcessNet(xml, 0, dumpXmlFile, state,
-    comm->ncclNet->getProperties, nullptr /*comm->ncclNet->makeVDevice*/, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
+    comm->ncclNet->getProperties, comm->ncclNet->makeVDevice, comm->ncclNet->devices, comm->ncclNet->name, comm->dmaBufSupport), ret, fail);
   pthread_mutex_unlock(&netLock);
   netLockHeld = 0;
 
