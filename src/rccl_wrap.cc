@@ -497,9 +497,17 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
       }
     }
   } else if (comm->topo->warpSpeedEnabled) {
-    if (info->func == ncclFuncAllReduce) info->algorithm = NCCL_ALGO_RING; // Force RING for AllReduce to use WarpSpeed when requested
-    if (info->algorithm == NCCL_ALGO_RING) // Otherwise, only enable WarpSpeed for RING algorithm
-      info->useWarpSpeed = true;
+    if(info->func != ncclFuncAllReduce &&
+       info->func != ncclFuncAllGather &&
+       info->func != ncclFuncReduceScatter &&
+       info->func != ncclFuncBroadcast &&
+       info->func != ncclFuncReduce) {
+      return;
+    }
+    if(info->algorithm != NCCL_ALGO_RING) {
+      info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in non-auto mode
+    }
+    info->useWarpSpeed = true;
   }
 }
 #endif
