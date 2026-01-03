@@ -452,7 +452,7 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   comm->enableCustColl = !pxnDisable;
 
   // Enable Direct Reduce Scatter
-  // TODO: Add condition and threshold for when direct RS will be used
+  // TODO: Add condition and Limit for when direct RS will be used
   comm->enableDirectReduceScatter = 0;
 }
 

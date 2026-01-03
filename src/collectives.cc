@@ -17,6 +17,8 @@
 #include <rocshmem/rocshmem.hpp>
 #endif
 
+#define TEMP_BUFF_SIZE (4 * 1024 * 1024) // Define Size for Temporary Buffer for Direct RS
+
 using namespace rccl;
 
 const char* ncclFuncToString(ncclFunc_t fn) {
@@ -406,8 +408,8 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
   return ncclEnqueueCheck(&info);
 }
 
-// Direct Reduce Scatter Threshold
-RCCL_PARAM(DirectReduceScatterThreshold, "DIRECT_REDUCE_SCATTER_THRESHOLD", 16777216);
+// Direct Reduce Scatter Limit
+RCCL_PARAM(DirectReduceScatterLimit, "DIRECT_REDUCE_SCATTER_LIMIT", 2097152);
 
 NCCL_API(ncclResult_t, ncclReduceScatter, const void* sendbuff, void* recvbuff, size_t recvcount,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
@@ -423,12 +425,8 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
     REDUCESCATTER_CHUNKSTEPS, comm -> rcclUseOneSlice ? REDUCESCATTER_SLICESTEPS_SINGLE_NODE : REDUCESCATTER_SLICESTEPS, nullptr };
 
   int nRanks;
-  int in_place = 0;
   NCCLCHECK(ncclCommCount(comm, &nRanks));
   size_t msgSize = recvcount * ncclTypeSize(datatype) * nRanks;
-
-  // Temporary Buffer to store data from each rank
-  void* tempbuff = comm->tempBuff;
 
   if (!mscclIsCaller()) // when msccl falls back to
   {
@@ -441,23 +439,28 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
       recvcount, datatype, 0, 0, op, mscclFuncReduceScatter, comm, stream);
   }
   
-  if (msgSize <= rcclParamDirectReduceScatterThreshold() && rcclParamDirectReduceScatterThreshold() > -1) {
-    comm->enableDirectReduceScatter = 1;
-    // Use Direct Reduce Scatter Algorithm
-    if (recvcount == 0) return ncclSuccess;
-    size_t offset = recvcount * ncclTypeSize(datatype);
-    if (((void *) recvbuff) == ((void *)(((char*)sendbuff) + comm->rank * offset))) {
-      in_place = 1;
-    }
+  // Reset value forcing direct reduce scatter algorithm 
+  comm->enableDirectReduceScatter = 0; 
 
-    //Copy Currents ranks data to tempbuff
-    //NCCLCHECK(ncclCudaMemcpy((char*)tempbuff + comm->rank * offset, (char*)sendbuff + comm->rank * offset, recvcount));
-    hipMemcpy((char*)tempbuff + comm->rank * offset, (char*)sendbuff + comm->rank * offset, recvcount * ncclTypeSize(datatype), hipMemcpyDeviceToDevice);
+  if (msgSize <= rcclParamDirectReduceScatterLimit() && rcclParamDirectReduceScatterLimit() > -1) {
+    // Temporary Buffer to store data from each rank
+    void* tempbuff = comm->tempBuff;
+
+    // Use Direct Reduce Scatter Algorithm
+    comm->enableDirectReduceScatter = 1;
+    
+    if (recvcount == 0) return ncclSuccess;
+    
+    // Calculate offset into buffers
+    size_t offset = recvcount * ncclTypeSize(datatype);
+    
+    // Copy Current ranks data to tempbuff
+    NCCLCHECK(ncclCudaMemcpy((char*)tempbuff + comm->rank * offset, (char*)sendbuff + comm->rank * offset, recvcount * ncclTypeSize(datatype)));
 
     NCCLCHECK(ncclGroupStart());
     for (int i = 0; i < nRanks; i++) {
       int peer = (comm->rank + i) % nRanks;
-      if (in_place == 1 && peer == comm->rank || peer == comm->rank) {
+      if (peer == comm->rank) {
         continue;
       }
       NCCLCHECK(ncclSend((void*)((char*)sendbuff + peer * offset), recvcount, datatype, peer, comm, stream));
