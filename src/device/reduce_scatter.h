@@ -22,9 +22,27 @@ namespace {
       int nRanks = ncclShmem.comm.nRanks;
       const ssize_t numElements = work->count;
 
-      // Update Offset to utilize multiple channels
+      // Calculate Offset to utilize multiple channels
+      ssize_t channelOffset;
       ssize_t numElementsPerBlock = numElements / gridDim.x;
-      ssize_t channelOffset = blockIdx.x * numElementsPerBlock;
+      ssize_t remainderElements = numElements % gridDim.x;
+
+      // If numElements is not evenly divisible by griDim.x then account for remaining elements
+      if (remainderElements != 0) {
+        // Distribute remainder elements to the first 'remainder' blocks
+        if (blockIdx.x < remainderElements) {
+          // First 'remainder' blocks get one extra element
+          numElementsPerBlock++;
+          channelOffset = blockIdx.x * numElementsPerBlock;
+        } else {
+          // Remaining blocks get the original number of elements
+          channelOffset = remainderElements * (numElementsPerBlock + 1) +
+            (blockIdx.x - remainderElements) * numElementsPerBlock;
+        }
+      } else {
+        // If there are no remaining elements to account for
+        channelOffset = blockIdx.x * numElementsPerBlock;
+      }
 
       // Array of src pointers pointing to rank offsets in tempBuff
       void** srcPtrs = new void*[nRanks];
@@ -38,7 +56,6 @@ namespace {
       // Array for destination pointer to recvbuff
       void* dstPtrs[1];
       dstPtrs[0] = (void*)(recvbuff + channelOffset);
-
       if (tid < nthreads) {
         // Call reduction across all rank offsets in tempbuff and store in recvbuff
         // TODO: Adjust maxSrcs to nRanks
