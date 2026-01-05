@@ -41,7 +41,6 @@ struct ncclKernelMatch {
   bool specialized;
 };
 
-//static int symId = 0;
 
 #ifdef ENABLE_COLLTRACE
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
@@ -405,7 +404,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
         devWork.sndbuff = (void*)comm->sourceRshmem[comm->symId];
         devWork.tempbuff = (void*)comm->destRshmem[comm->symId];
 
-	comm->symId = (comm->symId + 1) % comm->numSymBuf;
+        comm->symId = (comm->symId + 1) % comm->numSymBuf;
 
         devWork.size = task->count;
     }
@@ -746,7 +745,7 @@ static ncclResult_t scheduleCollTasksToPlan(
         proxyOp.incWorkCounter = true;
         addWorkBatchToPlan(comm, plan, c, workNode->workType, task->devFuncId, plan->workBytes);
         // Set pattern to profiler to add a proxy profiler for kernel events
-	if (task->func != ncclFuncAllToAllGda) {
+        if (task->func != ncclFuncAllToAllGda) {
             NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
             NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
 	}
@@ -895,10 +894,10 @@ static ncclResult_t scheduleCollTasksToPlan(
         // Coverity reports "proxyOp->connection" as being possibly uninitialized.  It's hard to
         // determine if that's actually true but it's also not clear if that would be an issue.
         // coverity[uninit_use_in_call:FALSE]
-	if (task->func != ncclFuncAllToAllGda) {
+        if (task->func != ncclFuncAllToAllGda) {
             NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
             NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, proxyOp));
-	}
+        }
       }
     }
 

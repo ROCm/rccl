@@ -105,7 +105,8 @@ ncclResult_t commReclaim(ncclComm_t comm);
 
 #ifdef ENABLE_ROCSHMEM
 RCCL_PARAM(RocshmemThreshold, "ROCSHMEM_THRESHOLD", (size_t)(262144));
-RCCL_PARAM(RocshmemEnabled, "ROCSHMEM_ENABLE", 1); // @TODO - unable to disable this at runtime
+RCCL_PARAM(RocshmemEnabled, "ROCSHMEM_ENABLE", 1);
+std::unordered_map<ncclComm_t, rocshmem::rocshmem_team_t> ncclCommToRshmemTeam;
 #endif
 
 #ifdef ENABLE_MSCCLPP
@@ -2156,6 +2157,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     rocshmem::rocshmem_team_split_strided(rocshmem::ROCSHMEM_TEAM_WORLD, 0, 1, job->nranks, nullptr, 0,
                                &(comm->team_reduce_world_dup));
 
+    ncclCommToRshmemTeam[comm] = comm->team_reduce_world_dup;
     CUDACHECK(hipDeviceSynchronize());
   }
 #endif
@@ -2995,9 +2997,19 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
      	rocshmem::rocshmem_free(comm->sourceRshmem[i]);
      	rocshmem::rocshmem_free(comm->destRshmem[i]);	  
      }
-     rocshmem::rocshmem_finalize();
      free(comm->sourceRshmem);
      free(comm->destRshmem);
+
+    //TODO: subcomm check
+    rocshmem::rocshmem_team_t  team;
+    if (!ncclCommToRshmemTeam.empty()) {
+        team = ncclCommToRshmemTeam[comm];
+        rocshmem::rocshmem_team_destroy(team);
+        ncclCommToRshmemTeam.erase(comm);
+    }
+    if (ncclCommToRshmemTeam.empty()) {
+        rocshmem::rocshmem_finalize();
+    }
   }
 #endif
 

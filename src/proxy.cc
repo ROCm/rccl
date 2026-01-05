@@ -1032,9 +1032,6 @@ ncclResult_t ncclProxyProgressDestroy(struct ncclProxyState* proxyState) {
   if (state->opsPool) {
     pthread_mutex_lock(&state->opsPool->mutex);
     state->stop = 1;
-    /*if (state->active) {
-        state->active = 0;
-    }*/
     pthread_cond_signal(&state->opsPool->cond);
     pthread_mutex_unlock(&state->opsPool->mutex);
     PTHREADCHECK(pthread_join(state->thread, NULL), "pthread_join");
