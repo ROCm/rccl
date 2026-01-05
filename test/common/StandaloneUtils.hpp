@@ -25,7 +25,16 @@
     }                                                           \
 } while(0)
 
+// Stack size limits for generic kernels (BUILD_GENERIC_KERNELS=ON)
 #define MAX_STACK_SIZE 640
+
+// Self-contained kernels (BUILD_GENERIC_KERNELS=OFF) have higher stack usage
+// because they inline all device functions. This is a trade-off for faster compilation.
+#ifdef BUILD_GENERIC_KERNELS
+#define MAX_STACK_SIZE_SELF_CONTAINED MAX_STACK_SIZE
+#else
+#define MAX_STACK_SIZE_SELF_CONTAINED 1100
+#endif
 
 #ifdef ENABLE_LL128
 #define MAX_STACK_SIZE_gfx90a 360

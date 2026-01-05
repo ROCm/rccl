@@ -42,7 +42,7 @@ option(TIMETRACE                               "Enable time-trace during compila
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
 option(QUIET_WARNINGS                          "Supress compiler warnings"                     OFF)
-option(BUILD_GENERIC_KERNELS                   "Build generic kernels for all data types"      OFF)
+option(BUILD_GENERIC_KERNELS                   "Build generic kernels for all data types"      ON)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -844,7 +844,9 @@ endif()
 # Find the generated files in the output directory
 file(GLOB_RECURSE GENERATED_FILES "${GEN_DIR}/*")
 
-# Separate type-specific kernel files for independent device linking
+# Separate type+algorithm-specific kernel files for independent device linking
+# Generated files are named: kernels_{type}_{algorithm}.cu.cpp
+# e.g., kernels_f32_ring.cu.cpp, kernels_f32_tree.cu.cpp
 set(TYPE_KERNEL_FILES)
 set(NON_KERNEL_FILES)
 foreach(file ${GENERATED_FILES})
@@ -861,17 +863,17 @@ foreach(file ${NON_KERNEL_FILES})
   list(APPEND HIP_SOURCES ${file})
 endforeach()
 
-# Create separate object libraries for each type kernel file
-# Each type is self-contained: f32 functions only call f32 functions, etc.
-# This enables independent device code linking for each type in parallel
+# Create separate object libraries for each type+algorithm kernel file
+# Split by both data type AND algorithm category (ring vs tree/pat)
+# This enables maximum build parallelism with ~24 independent compilation units
 #
 # When GENERIC_KERNELS_ENABLED is OFF:
-#   - Each type kernel is FULLY self-contained (all device functions are defined inline)
+#   - Each type+algo kernel is FULLY self-contained (all device functions are defined inline)
 #   - NO -fgpu-rdc is needed, enabling parallel device linking
 #   - Each kernel compiles and device-links INDEPENDENTLY
 #
 # When GENERIC_KERNELS_ENABLED is ON:
-#   - Type kernels may reference functions from separate collectives files
+#   - Type+algo kernels may reference functions from separate collectives files
 #   - -fgpu-rdc is required for cross-module device function calls
 #   - Device linking happens as a single final step
 set(TYPE_LIBRARIES)

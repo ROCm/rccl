@@ -57,88 +57,222 @@ static const char* ncclDataTypeToKernelSuffix(ncclDataType_t type)
     }
 }
 
-// Type-specific kernel tables - one per data type
-static ncclKernelMatch const ncclKerns_i8[3] = {
-    {(void*)ncclDevKernel_i8_1, true},
-    {(void*)ncclDevKernel_i8_2, true},
-    {(void*)ncclDevKernel_i8_4, true}
+// Type+Algorithm-specific kernel tables
+// Each type has two tables: ring (index 0) and tree (index 1)
+
+// Ring algorithm kernels
+static ncclKernelMatch const ncclKerns_i8_ring[3] = {
+    {(void*)ncclDevKernel_i8_ring_1, true},
+    {(void*)ncclDevKernel_i8_ring_2, true},
+    {(void*)ncclDevKernel_i8_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_u8[3] = {
-    {(void*)ncclDevKernel_u8_1, true},
-    {(void*)ncclDevKernel_u8_2, true},
-    {(void*)ncclDevKernel_u8_4, true}
+static ncclKernelMatch const ncclKerns_u8_ring[3] = {
+    {(void*)ncclDevKernel_u8_ring_1, true},
+    {(void*)ncclDevKernel_u8_ring_2, true},
+    {(void*)ncclDevKernel_u8_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_i32[3] = {
-    {(void*)ncclDevKernel_i32_1, true},
-    {(void*)ncclDevKernel_i32_2, true},
-    {(void*)ncclDevKernel_i32_4, true}
+static ncclKernelMatch const ncclKerns_i32_ring[3] = {
+    {(void*)ncclDevKernel_i32_ring_1, true},
+    {(void*)ncclDevKernel_i32_ring_2, true},
+    {(void*)ncclDevKernel_i32_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_u32[3] = {
-    {(void*)ncclDevKernel_u32_1, true},
-    {(void*)ncclDevKernel_u32_2, true},
-    {(void*)ncclDevKernel_u32_4, true}
+static ncclKernelMatch const ncclKerns_u32_ring[3] = {
+    {(void*)ncclDevKernel_u32_ring_1, true},
+    {(void*)ncclDevKernel_u32_ring_2, true},
+    {(void*)ncclDevKernel_u32_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_i64[3] = {
-    {(void*)ncclDevKernel_i64_1, true},
-    {(void*)ncclDevKernel_i64_2, true},
-    {(void*)ncclDevKernel_i64_4, true}
+static ncclKernelMatch const ncclKerns_i64_ring[3] = {
+    {(void*)ncclDevKernel_i64_ring_1, true},
+    {(void*)ncclDevKernel_i64_ring_2, true},
+    {(void*)ncclDevKernel_i64_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_u64[3] = {
-    {(void*)ncclDevKernel_u64_1, true},
-    {(void*)ncclDevKernel_u64_2, true},
-    {(void*)ncclDevKernel_u64_4, true}
+static ncclKernelMatch const ncclKerns_u64_ring[3] = {
+    {(void*)ncclDevKernel_u64_ring_1, true},
+    {(void*)ncclDevKernel_u64_ring_2, true},
+    {(void*)ncclDevKernel_u64_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_f16[3] = {
-    {(void*)ncclDevKernel_f16_1, true},
-    {(void*)ncclDevKernel_f16_2, true},
-    {(void*)ncclDevKernel_f16_4, true}
+static ncclKernelMatch const ncclKerns_f16_ring[3] = {
+    {(void*)ncclDevKernel_f16_ring_1, true},
+    {(void*)ncclDevKernel_f16_ring_2, true},
+    {(void*)ncclDevKernel_f16_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_f32[3] = {
-    {(void*)ncclDevKernel_f32_1, true},
-    {(void*)ncclDevKernel_f32_2, true},
-    {(void*)ncclDevKernel_f32_4, true}
+static ncclKernelMatch const ncclKerns_f32_ring[3] = {
+    {(void*)ncclDevKernel_f32_ring_1, true},
+    {(void*)ncclDevKernel_f32_ring_2, true},
+    {(void*)ncclDevKernel_f32_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_f64[3] = {
-    {(void*)ncclDevKernel_f64_1, true},
-    {(void*)ncclDevKernel_f64_2, true},
-    {(void*)ncclDevKernel_f64_4, true}
+static ncclKernelMatch const ncclKerns_f64_ring[3] = {
+    {(void*)ncclDevKernel_f64_ring_1, true},
+    {(void*)ncclDevKernel_f64_ring_2, true},
+    {(void*)ncclDevKernel_f64_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_bf16[3] = {
-    {(void*)ncclDevKernel_bf16_1, true},
-    {(void*)ncclDevKernel_bf16_2, true},
-    {(void*)ncclDevKernel_bf16_4, true}
+static ncclKernelMatch const ncclKerns_bf16_ring[3] = {
+    {(void*)ncclDevKernel_bf16_ring_1, true},
+    {(void*)ncclDevKernel_bf16_ring_2, true},
+    {(void*)ncclDevKernel_bf16_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_f8e4m3[3] = {
-    {(void*)ncclDevKernel_f8e4m3_1, true},
-    {(void*)ncclDevKernel_f8e4m3_2, true},
-    {(void*)ncclDevKernel_f8e4m3_4, true}
+static ncclKernelMatch const ncclKerns_f8e4m3_ring[3] = {
+    {(void*)ncclDevKernel_f8e4m3_ring_1, true},
+    {(void*)ncclDevKernel_f8e4m3_ring_2, true},
+    {(void*)ncclDevKernel_f8e4m3_ring_4, true}
 };
-static ncclKernelMatch const ncclKerns_f8e5m2[3] = {
-    {(void*)ncclDevKernel_f8e5m2_1, true},
-    {(void*)ncclDevKernel_f8e5m2_2, true},
-    {(void*)ncclDevKernel_f8e5m2_4, true}
+static ncclKernelMatch const ncclKerns_f8e5m2_ring[3] = {
+    {(void*)ncclDevKernel_f8e5m2_ring_1, true},
+    {(void*)ncclDevKernel_f8e5m2_ring_2, true},
+    {(void*)ncclDevKernel_f8e5m2_ring_4, true}
 };
 
-// Get type-specific kernel table for a given data type
-static const ncclKernelMatch* ncclGetKernelTableForType(ncclDataType_t type)
-{
-    switch(type)
-    {
-        case ncclInt8:
-        case ncclUint8: return ncclKerns_i8;
-        case ncclInt32: return ncclKerns_i32;
-        case ncclUint32: return ncclKerns_u32;
-        case ncclInt64: return ncclKerns_i64;
-        case ncclUint64: return ncclKerns_u64;
-        case ncclFloat16: return ncclKerns_f16;
-        case ncclFloat32: return ncclKerns_f32;
-        case ncclFloat64: return ncclKerns_f64;
-        case ncclBfloat16: return ncclKerns_bf16;
-        case ncclFloat8e4m3: return ncclKerns_f8e4m3;
-        case ncclFloat8e5m2: return ncclKerns_f8e5m2;
-        default: return ncclKerns_i8; // fallback to generic
+// Tree algorithm kernels (TREE and PAT)
+static ncclKernelMatch const ncclKerns_i8_tree[3] = {
+    {(void*)ncclDevKernel_i8_tree_1, true},
+    {(void*)ncclDevKernel_i8_tree_2, true},
+    {(void*)ncclDevKernel_i8_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_u8_tree[3] = {
+    {(void*)ncclDevKernel_u8_tree_1, true},
+    {(void*)ncclDevKernel_u8_tree_2, true},
+    {(void*)ncclDevKernel_u8_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_i32_tree[3] = {
+    {(void*)ncclDevKernel_i32_tree_1, true},
+    {(void*)ncclDevKernel_i32_tree_2, true},
+    {(void*)ncclDevKernel_i32_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_u32_tree[3] = {
+    {(void*)ncclDevKernel_u32_tree_1, true},
+    {(void*)ncclDevKernel_u32_tree_2, true},
+    {(void*)ncclDevKernel_u32_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_i64_tree[3] = {
+    {(void*)ncclDevKernel_i64_tree_1, true},
+    {(void*)ncclDevKernel_i64_tree_2, true},
+    {(void*)ncclDevKernel_i64_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_u64_tree[3] = {
+    {(void*)ncclDevKernel_u64_tree_1, true},
+    {(void*)ncclDevKernel_u64_tree_2, true},
+    {(void*)ncclDevKernel_u64_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_f16_tree[3] = {
+    {(void*)ncclDevKernel_f16_tree_1, true},
+    {(void*)ncclDevKernel_f16_tree_2, true},
+    {(void*)ncclDevKernel_f16_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_f32_tree[3] = {
+    {(void*)ncclDevKernel_f32_tree_1, true},
+    {(void*)ncclDevKernel_f32_tree_2, true},
+    {(void*)ncclDevKernel_f32_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_f64_tree[3] = {
+    {(void*)ncclDevKernel_f64_tree_1, true},
+    {(void*)ncclDevKernel_f64_tree_2, true},
+    {(void*)ncclDevKernel_f64_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_bf16_tree[3] = {
+    {(void*)ncclDevKernel_bf16_tree_1, true},
+    {(void*)ncclDevKernel_bf16_tree_2, true},
+    {(void*)ncclDevKernel_bf16_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_f8e4m3_tree[3] = {
+    {(void*)ncclDevKernel_f8e4m3_tree_1, true},
+    {(void*)ncclDevKernel_f8e4m3_tree_2, true},
+    {(void*)ncclDevKernel_f8e4m3_tree_4, true}
+};
+static ncclKernelMatch const ncclKerns_f8e5m2_tree[3] = {
+    {(void*)ncclDevKernel_f8e5m2_tree_1, true},
+    {(void*)ncclDevKernel_f8e5m2_tree_2, true},
+    {(void*)ncclDevKernel_f8e5m2_tree_4, true}
+};
+
+// Check if algorithm uses tree/PAT (non-ring) implementation
+static inline bool ncclAlgoIsTree(int algo) {
+    return algo == NCCL_ALGO_TREE || algo == NCCL_ALGO_PAT;
+}
+
+// Check if collective only has i8 device implementation
+// These collectives use byte-level operations and don't depend on data type
+static inline bool ncclCollUsesI8Kernel(ncclFunc_t func) {
+    switch(func) {
+        case ncclFuncBroadcast:
+        case ncclFuncAllGather:
+        case ncclFuncSendRecv:
+        case ncclFuncSend:
+        case ncclFuncRecv:
+        case ncclFuncAllToAllPivot:
+            return true;
+        default:
+            return false;
     }
 }
+
+// Get type+algorithm-specific kernel table
+// For collectives that only have i8 implementations (Broadcast, AllGather, etc.),
+// always use the i8 kernel regardless of user's data type
+static const ncclKernelMatch* ncclGetKernelTableForTypeAndAlgo(ncclDataType_t type, int algo, ncclFunc_t func = ncclFuncAllReduce)
+{
+    bool isTree = ncclAlgoIsTree(algo);
+    
+    // Collectives like Broadcast, AllGather only have i8 device functions
+    if (ncclCollUsesI8Kernel(func)) {
+        return isTree ? ncclKerns_i8_tree : ncclKerns_i8_ring;
+    }
+    
+    switch(type)
+    {
+        case ncclInt8: return isTree ? ncclKerns_i8_tree : ncclKerns_i8_ring;
+        case ncclUint8: return isTree ? ncclKerns_u8_tree : ncclKerns_u8_ring;
+        case ncclInt32: return isTree ? ncclKerns_i32_tree : ncclKerns_i32_ring;
+        case ncclUint32: return isTree ? ncclKerns_u32_tree : ncclKerns_u32_ring;
+        case ncclInt64: return isTree ? ncclKerns_i64_tree : ncclKerns_i64_ring;
+        case ncclUint64: return isTree ? ncclKerns_u64_tree : ncclKerns_u64_ring;
+        case ncclFloat16: return isTree ? ncclKerns_f16_tree : ncclKerns_f16_ring;
+        case ncclFloat32: return isTree ? ncclKerns_f32_tree : ncclKerns_f32_ring;
+        case ncclFloat64: return isTree ? ncclKerns_f64_tree : ncclKerns_f64_ring;
+        case ncclBfloat16: return isTree ? ncclKerns_bf16_tree : ncclKerns_bf16_ring;
+        case ncclFloat8e4m3: return isTree ? ncclKerns_f8e4m3_tree : ncclKerns_f8e4m3_ring;
+        case ncclFloat8e5m2: return isTree ? ncclKerns_f8e5m2_tree : ncclKerns_f8e5m2_ring;
+        default: return ncclKerns_i8_ring; // fallback to ring
+    }
+}
+
+// Legacy function for backward compatibility - defaults to ring algorithm
+static const ncclKernelMatch* ncclGetKernelTableForType(ncclDataType_t type)
+{
+    return ncclGetKernelTableForTypeAndAlgo(type, NCCL_ALGO_RING);
+}
+
+#ifndef BUILD_GENERIC_KERNELS
+// Map signed integer types to unsigned for operations that use equivalent_primary
+// This matches the mapping in generate.py's equivalent_primary function
+static ncclDataType_t ncclGetPrimaryDataType(ncclDataType_t type, int devRedOp) {
+    // SumPostDiv and PreMulSum with signed integers map to unsigned equivalents
+    // This is because the device code uses unsigned implementations for these ops
+    if (devRedOp == ncclDevSumPostDiv || devRedOp == ncclDevPreMulSum) {
+        switch (type) {
+            case ncclInt8:  return ncclUint8;
+            case ncclInt32: return ncclUint32;
+            case ncclInt64: return ncclUint64;
+            default: break;
+        }
+    }
+    return type;
+}
+
+// Get kernel function pointer and specialization status for a specific task
+// Returns the kernel match for the given task's type, algorithm, and function
+static ncclKernelMatch ncclGetKernelForTask(ncclComm* comm, ncclTaskColl* task) {
+    // Use primary type for kernel selection to match devFuncId calculation
+    // For SumPostDiv/PreMulSum with signed integers, this maps to unsigned
+    ncclDataType_t kernelType = ncclGetPrimaryDataType(task->datatype, task->opDev.op);
+    const ncclKernelMatch* typeKernels = ncclGetKernelTableForTypeAndAlgo(kernelType, task->algorithm, task->func);
+    int unrollIdx = comm->unroll;
+    if (unrollIdx >= 0 && unrollIdx < 3) {
+        return typeKernels[unrollIdx];
+    }
+    // Fallback to first entry if invalid unroll
+    return typeKernels[0];
+}
+#endif  // !BUILD_GENERIC_KERNELS
 
 // Generic kernels now dispatch to type-specific tables at runtime
 // This provides flexibility while avoiding large generic function tables
@@ -149,14 +283,17 @@ static ncclKernelMatch const ncclKerns[6] = {
     {(void*)ncclDevKernel_Generic_1, true},
     {(void*)ncclDevKernel_Generic_2, true},
     {(void*)ncclDevKernel_Generic_4, true},
+    {(void*)ncclDevKernelDebug_Generic_1, true}, // Debug versions for collTrace
+    {(void*)ncclDevKernelDebug_Generic_2, true},
+    {(void*)ncclDevKernelDebug_Generic_4, true}
 #else
     {nullptr, false}, // Generic kernels disabled - must use type-specific kernels
     {nullptr, false},
     {nullptr, false},
+    {(void*)ncclDevKernel_i8_ring_1, true}, // Debug fallback to i8 ring (self-contained mode)
+    {(void*)ncclDevKernel_i8_ring_2, true},
+    {(void*)ncclDevKernel_i8_ring_4, true}
 #endif
-    {     (void*)ncclDevKernel_i8_1, true}, // Debug fallback to i8
-    {     (void*)ncclDevKernel_i8_2, true},
-    {     (void*)ncclDevKernel_i8_4, true}
 };
 #else
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
@@ -623,10 +760,12 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
       }
 
       NCCLCHECK(getAlgoInfo(comm, &agg, collNetSupport, nvlsSupport, nTasksPerChannel, simInfo));
+      // For collectives that only have i8 implementations, use ncclInt8 for funcId calculation
+      ncclDataType_t funcIdDataType = ncclCollUsesI8Kernel(agg.func) ? ncclInt8 : agg.datatype;
       if(agg.func==ncclFuncAllReduce && agg.acc != nullptr)
-        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 1, agg.pipeline);
+        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, funcIdDataType, agg.algorithm, agg.protocol, 1, agg.pipeline);
       else
-        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol, 0, agg.pipeline);
+        agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, funcIdDataType, agg.algorithm, agg.protocol, 0, agg.pipeline);
       if (agg.devFuncId < 0) {
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
@@ -811,6 +950,28 @@ static ncclResult_t scheduleCollTasksToPlan(
     struct ncclWorkList* workNode = ncclIntruQueueHead(&planner->collWorkQueue);
     struct ncclDevWorkColl* devWork = (struct ncclDevWorkColl*)(workNode+1);
     size_t elementSize = ncclTypeSize(task->datatype);
+
+#ifndef BUILD_GENERIC_KERNELS
+    // Self-contained mode: check if this task requires a different kernel
+    // If so, stop this plan and let the outer loop create a new plan for this task
+    {
+        ncclKernelMatch taskKernel = ncclGetKernelForTask(comm, task);
+        
+        if (plan->kernelSpecialized && plan->kernelFn != taskKernel.kernelFn) {
+            // Kernel type changed - finalize this plan and return
+            // The task stays in the queue and will be handled by a new plan
+            INFO(NCCL_COLL, "Kernel type change detected: plan uses %p, task needs %p. Splitting plan.",
+                 plan->kernelFn, taskKernel.kernelFn);
+            return ncclSuccess;
+        }
+        
+        if (!plan->kernelSpecialized) {
+            // First task in this plan - set the kernel
+            plan->kernelFn          = taskKernel.kernelFn;
+            plan->kernelSpecialized = taskKernel.specialized;
+        }
+    }
+#endif
 
     int kind = 2*task->isCollnet + task->isNvls;
     if (kind != kindPrev) {
@@ -1011,30 +1172,16 @@ static ncclResult_t scheduleCollTasksToPlan(
 #else
     plan->threadPerBlock = std::max(plan->threadPerBlock, 192 /* 3*WARP_SIZE */);
 #endif
+#ifdef BUILD_GENERIC_KERNELS
+    // Generic kernel mode: set kernel once (first task sets it)
     if (!plan->kernelSpecialized) {
-        // Prefer type-specific kernels for better performance
-        const ncclKernelMatch* typeKernels = ncclGetKernelTableForType(task->datatype);
-        int                    kernelIdx   = ncclGetKernelIndex(comm);
-
-        // Use type-specific kernel if available, fall back to generic
-        if(kernelIdx < 3)
-        {
-            plan->kernelFn          = typeKernels[kernelIdx].kernelFn;
-            plan->kernelSpecialized = typeKernels[kernelIdx].specialized;
-        }
-        else
-        {
-            // Debug mode or fallback
-            plan->kernelFn          = ncclKerns[kernelIdx].kernelFn;
-            plan->kernelSpecialized = ncclKerns[kernelIdx].specialized;
-#ifndef BUILD_GENERIC_KERNELS
-            if (plan->kernelFn == nullptr) {
-                WARN("Generic kernels are disabled but required for this code path. Please rebuild RCCL with -DBUILD_GENERIC_KERNELS=ON");
-                return ncclInvalidUsage;
-            }
-#endif
-        }
+        int kernelIdx = ncclGetKernelIndex(comm);
+        plan->kernelFn          = ncclKerns[kernelIdx].kernelFn;
+        plan->kernelSpecialized = ncclKerns[kernelIdx].specialized;
     }
+#endif
+    // Note: In self-contained mode (!BUILD_GENERIC_KERNELS), kernel is set
+    // at the start of the while loop, before any work processing
 
     if (comm->rank == 0) {
       INFO(NCCL_TUNING, "%s: %ld Bytes -> Algo %s proto %s channel{Lo..Hi}={%d..%d}",
@@ -1379,11 +1526,19 @@ static ncclResult_t scheduleP2pTasksToPlan(
   plan->threadPerBlock = std::max(plan->threadPerBlock, NCCL_MAX_NTHREADS);
 #endif
   if (!plan->kernelSpecialized) {
+#ifdef BUILD_GENERIC_KERNELS
     plan->kernelFn = ncclKerns[ncclGetKernelIndex(comm)].kernelFn;
     plan->kernelSpecialized = ncclKerns[ncclGetKernelIndex(comm)].specialized;
-#ifndef BUILD_GENERIC_KERNELS
-    if (plan->kernelFn == nullptr) {
-      WARN("Generic kernels are disabled but required for this code path. Please rebuild RCCL with -DBUILD_GENERIC_KERNELS=ON");
+#else
+    // P2P (SendRecv) only has i8 implementations, use the i8 ring kernel
+    int unrollIdx = comm->unroll;
+    bool isTree = false; // P2P uses ring algorithm
+    const ncclKernelMatch* typeKernels = isTree ? ncclKerns_i8_tree : ncclKerns_i8_ring;
+    if (unrollIdx >= 0 && unrollIdx < 3) {
+      plan->kernelFn = typeKernels[unrollIdx].kernelFn;
+      plan->kernelSpecialized = typeKernels[unrollIdx].specialized;
+    } else {
+      WARN("Invalid unroll index %d for P2P kernel.", unrollIdx);
       return ncclInvalidUsage;
     }
 #endif
@@ -1817,9 +1972,17 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
           NCCLCHECKGOTO(scheduleCollTasksToPlan(comm, plan, &budget), result, failure);
         }
         // And only drain p2p tasks once colls are depleted.
+#ifndef BUILD_GENERIC_KERNELS
+        // In self-contained mode, P2P uses i8 kernel while colls may use different types.
+        // Don't mix them in the same plan - let P2P get its own plan.
+        if (planner->nTasksColl == 0 && planner->nTasksP2p != 0 && plan->workBytes == 0) {
+          NCCLCHECKGOTO(scheduleP2pTasksToPlan(comm, plan, &budget), result, failure);
+        }
+#else
         if (planner->nTasksColl == 0 && planner->nTasksP2p != 0) {
           NCCLCHECKGOTO(scheduleP2pTasksToPlan(comm, plan, &budget), result, failure);
         }
+#endif
         finishPlan(comm, plan);
         if (plan->workBytes != 0) {
           ncclIntruQueueEnqueue(&planner->planQueue, plan);

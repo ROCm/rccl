@@ -294,7 +294,10 @@ namespace RcclUnitTesting
         if (kernel.name.find(mainKernel) != std::string::npos) {
           // Kernel stack size should be less than or equal to the maxStackSize value
           printf("[ INFO     ] Arch: %s Kernel: %s Size: %d\n", archInfo.archName.c_str(), kernel.name.c_str(), kernel.privateSegmentFixedSize);
-          EXPECT_LE(kernel.privateSegmentFixedSize, archInfo.archName == "gfx90a" ? MAX_STACK_SIZE_gfx90a : MAX_STACK_SIZE);
+          // Use higher threshold for self-contained kernels (BUILD_GENERIC_KERNELS=OFF)
+          // which inline all device functions for faster compilation
+          int maxSize = archInfo.archName == "gfx90a" ? MAX_STACK_SIZE_gfx90a : MAX_STACK_SIZE_SELF_CONTAINED;
+          EXPECT_LE(kernel.privateSegmentFixedSize, maxSize);
         }
       }
     }

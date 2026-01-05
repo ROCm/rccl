@@ -286,6 +286,15 @@ struct ncclKernelPlan {
   struct ncclIntruQueue<struct ncclCommCallback, &ncclCommCallback::next> cleanupQueue;
   void* workBufPersistent;
 
+#ifndef BUILD_GENERIC_KERNELS
+  // Multi-kernel segment support for self-contained mode
+  // When different collective types require different kernels, we store
+  // segments to launch them in order
+  struct ncclKernelSegment* kernelSegments;
+  struct ncclKernelSegment* kernelSegmentsTail;
+  int numKernelSegments;
+#endif
+
   struct ncclIntruQueue<struct ncclTaskP2p, &ncclTaskP2p::next> p2pTaskQueue;
   struct ncclIntruQueue<struct ncclTaskColl, &ncclTaskColl::next> collTaskQueue;
   struct ncclIntruQueue<struct ncclProxyOp, &ncclProxyOp::enqNext> proxyOpQueue;
