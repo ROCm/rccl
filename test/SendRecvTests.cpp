@@ -12,12 +12,19 @@ namespace RcclUnitTesting
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat16, ncclFloat64};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclInt32, ncclFloat16, ncclFloat64};
     std::vector<int>            const  numElements     = {1048576, 53327, 1024, 0};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
 
     OptionalColArgs options;
+
+    std::vector<ncclDataType_t> dataTypes;
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
+
     bool isCorrect = true;
     int numGpus = testBed.ev.maxGpus;
     for (int rpg=0; rpg < 2 && isCorrect; ++rpg)
@@ -104,13 +111,20 @@ namespace RcclUnitTesting
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat16, ncclFloat64};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclInt32, ncclFloat16, ncclFloat64};
     std::vector<int>            const  numElements     = {1048576, 53327, 1024};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  userRegistered  = true;
 
     OptionalColArgs options;
+
+    std::vector<ncclDataType_t> dataTypes;
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
+
     bool isCorrect = true;
     int numGpus = testBed.ev.maxGpus;
     for (int rpg=0; rpg < 2 && isCorrect; ++rpg)

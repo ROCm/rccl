@@ -168,7 +168,7 @@ ncclResult_t checkHostUncacheMemSetting(struct ncclComm* comm) {
     else {
       return ncclSuccess;
     }
-  #endif   
+  #endif
 }
 
 static void initOnceFunc() {
@@ -439,7 +439,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(comm->connectRecv);
 
   if (rcclParamEnableProxyTrace()) {
-    WARN("ProxyTrace:");
+    WARN("commFree() ProxyTrace:");
     if (comm->proxyState && comm->proxyState->proxyTrace){
       WARN("%s", comm->proxyState->proxyTrace->dump().c_str());
     }
@@ -1075,7 +1075,10 @@ NCCL_PARAM(GraphDumpFileRank, "GRAPH_DUMP_FILE_RANK", 0);
 NCCL_PARAM(CollNetNodeThreshold, "COLLNET_NODE_THRESHOLD", 2);
 NCCL_PARAM(NvbPreconnect, "NVB_PRECONNECT", 0);
 NCCL_PARAM(AllocP2pNetLLBuffers, "ALLOC_P2P_NET_LL_BUFFERS", 0);
-
+#ifdef ENABLE_WARP_SPEED
+extern int64_t rcclParamWarpSpeedEnable();
+extern int64_t rcclParamWarpSpeedAutoMode();
+#endif
 // MNNVL: Flag to indicate whether to enable Multi-Node NVLink
 NCCL_PARAM(MNNVLEnable, "MNNVL_ENABLE", 2);
 
@@ -1243,7 +1246,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   if (dumpXmlFile) {
     NCCLCHECKGOTO(ncclTopoGetSystem(comm, NULL, dumpXmlFile), ret, fail);
   }
-
   // Topo detection / System graph creation
   NCCLCHECKGOTO(ncclTopoGetSystem(comm, &comm->topo), ret, fail);
   comm->topo->tuning = rcclGetTuningIndexForArch(comm->archName);
@@ -1455,8 +1457,12 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
         allGather3Data[rank].nc = 4;
     }
   }
+#ifdef ENABLE_WARP_SPEED
+  comm->topo->warpSpeedEnabled = (rcclParamWarpSpeedEnable() != 0 || rcclParamWarpSpeedAutoMode() != 0);
+#endif
+
   // For single node communicators that do not uses the full xgmi links per gpu, i.e., nranks < 8
-  // Inflate the nChannels a bit to achieve higher b/w. 
+  // Inflate the nChannels a bit to achieve higher b/w.
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[idx].gpu.gcn, "gfx950")) {
     if (nranks == 2 && nNodes == 1){
       allGather3Data[rank].nc = 16;
@@ -1466,7 +1472,12 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       allGather3Data[rank].nc = 4;
     }
   }
-
+#ifdef ENABLE_WARP_SPEED
+  // Double default channels for WarpSpeed enabled communicators
+  if (comm->topo->warpSpeedEnabled) {
+    allGather3Data[rank].nc *= 2;
+  }
+#endif
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
   comm->topo->ll128Enabled =  comm->topo->ll128Enabled || rcclParamLL128ForceEnable();
   allGather3Data[rank].ll128Enabled = comm->topo->ll128Enabled;
@@ -1819,8 +1830,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   // Compute time models for algorithm and protocol combinations
   NCCLCHECKGOTO(ncclTopoTuneModel(comm, comm->minCompCap, comm->maxCompCap, graphs), ret, fail);
 
-  INFO(NCCL_INIT, "comm:%p, nRanks:%d, nNodes:%d, coll channels:%d collnet channels:%d, nvls channels:%d, p2p channels:%d, p2p channels per peer:%d", comm, comm->nRanks, comm->nNodes, comm->nChannels, comm->nChannels, comm->nvlsChannels, comm->p2pnChannels, comm->p2pnChannelsPerPeer);  
-  
+  INFO(NCCL_INIT, "comm:%p, nRanks:%d, nNodes:%d, coll channels:%d collnet channels:%d, nvls channels:%d, p2p channels:%d, p2p channels per peer:%d", comm, comm->nRanks, comm->nNodes, comm->nChannels, comm->nChannels, comm->nvlsChannels, comm->p2pnChannels, comm->p2pnChannelsPerPeer);
+
   if (comm->intraRank == 0) { // Load ncclParamLaunchMode
     const char* str = ncclGetEnv("NCCL_LAUNCH_MODE");
     enum ncclLaunchMode mode, modeOld;
@@ -2077,10 +2088,10 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   comm->cuCount = cuCount;
 
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent, timers), res, fail);
-  
+
     // Check if using host uncached mem correctly
   NCCLCHECK(checkHostUncacheMemSetting(comm));
-  
+
   // RCCL: determine and set unroll factor for comm
   NCCLCHECK(commSetUnrollFactor(comm));
 
