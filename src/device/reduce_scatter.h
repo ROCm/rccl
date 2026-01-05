@@ -17,29 +17,34 @@ namespace {
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
     // Direct Reduce Scatter
-    // TODO: Move Direct RS out of rungRinginto separate kernel 
+    // TODO: Move Direct RS out of rungRing into separate kernel 
     if (work->enableDirectReduceScatter) {
-      int nranks = ncclShmem.comm.nRanks;
+      int nRanks = ncclShmem.comm.nRanks;
       const ssize_t numElements = work->count;
 
+      // Update Offset to utilize multiple channels
+      ssize_t numElementsPerBlock = numElements / gridDim.x;
+      ssize_t channelOffset = blockIdx.x * numElementsPerBlock;
+
       // Array of src pointers pointing to rank offsets in tempBuff
-      void* srcPtrs[32];  // TODO: Adjust value to nRanks or maxRanks
-      for (int i = 0; i < nranks; i++) {
+      void** srcPtrs = new void*[nRanks];
+      for (int i = 0; i < nRanks; i++) {
         // Define offset into tempbuff for each rank's data
-        const ssize_t src_offset = i * numElements;
-        srcPtrs[i] = (void*)((T*)work->tempBuff + src_offset);
+        const ssize_t srcOffset = i * numElements + channelOffset;
+        srcPtrs[i] = (void*)((T*)work->tempBuff + srcOffset);
       }
 
       T* recvbuff = (T*)work->recvbuff;
       // Array for destination pointer to recvbuff
       void* dstPtrs[1];
-      dstPtrs[0] = (void*)recvbuff;
+      dstPtrs[0] = (void*)(recvbuff + channelOffset);
 
-      // Call reduction across all rank offsets in tempbuff and store in recvbuff
-      // TODO: Adjust maxSrcs to nRanks
-      reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 32, 0, 1, 1, 0>
-        (tid, nthreads, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nranks, srcPtrs, 1, dstPtrs, numElements);
-
+      if (tid < nthreads) {
+        // Call reduction across all rank offsets in tempbuff and store in recvbuff
+        // TODO: Adjust maxSrcs to nRanks
+        reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 32, 0, 1, 1, 0>
+          (tid, nthreads, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nRanks, srcPtrs, 1, dstPtrs, numElementsPerBlock);
+      }
     } else{
 #ifdef ENABLE_WARP_SPEED
     int warp = threadIdx.x / WARP_SIZE;
