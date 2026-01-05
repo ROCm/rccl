@@ -42,13 +42,6 @@ RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO", 0);
 RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 #endif
 #define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
-RCCL_PARAM(ReducedCuEnable, "REDUCED_CU_ENABLE", 0);
-
-void rcclRestrictMaxChannels(struct ncclComm* comm, int& nc ) {
-    if (comm->nNodes > 1 && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && rcclParamReducedCuEnable() == 1)    {
-        nc = comm->nChannels = std::min(nc, 48);
-    }
-}
 
 static inline bool rcclCollSupportsRing(ncclFunc_t coll) {
   return (coll == ncclFuncAllReduce ||
@@ -57,7 +50,6 @@ static inline bool rcclCollSupportsRing(ncclFunc_t coll) {
           coll == ncclFuncBroadcast ||
           coll == ncclFuncReduce);
 }
-
 
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
@@ -367,17 +359,6 @@ ncclResult_t rcclGetProtocolName(int protocol, const char** protocolName) {
 }
 
 bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
-  // Check if user explicitly disabled direct AllGather
-  static int userDirectAllGatherInput = -2;
-  if (userDirectAllGatherInput == -2) {
-    const char *inputStr = getenv("RCCL_DIRECT_ALLGATHER_DISABLE");
-    userDirectAllGatherInput = !inputStr ? 0 : 1;
-  }
-  if (userDirectAllGatherInput == 1) {
-    INFO(NCCL_INIT, "RCCL DIRECT ALLGATHER has been disabled.");
-    return false;
-  }
-
   size_t threshold = rcclParamDirectAllGatherThreshold();
 
   if (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && threshold != -1) {
