@@ -83,7 +83,7 @@
 
 using namespace rccl;
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+4] = { "AllGather", "AllReduce", "AllToAllPivot", "AllToAllGda", "AllToAllGda1", "Broadcast", "Reduce", "ReduceScatter", "SendRecv"};
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3] = { "AllGather", "AllReduce", "AllToAllPivot", "AllToAllGda", "Broadcast", "Reduce", "ReduceScatter", "SendRecv"};
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNetDirect", "CollNetChain", "NVLS", "NVLSTree", "PAT" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 const char* ncclDevRedOpStr[ncclNumDevRedOps] = { "Sum", "Prod", "MinMax", "PreMulSum", "SumPostDiv" };
@@ -2111,7 +2111,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 #ifdef ENABLE_ROCSHMEM
   /* --- sanity-check print statement for development purposes --- */
   if (rcclParamRocshmemEnabled()) { // @TODO - This doesn't seem to disable when I set ROCSHMEM_ENABLE=0 on command line
-    printf("Initializing rocSHMEM inside of RCCL\n");
+    INFO(NCCL_INIT,"Initializing rocSHMEM inside of RCCL");
     int ret;
     rocshmem::rocshmem_uniqueid_t rocshmemUniqueId;
     rocshmem::rocshmem_init_attr_t rocshmemAttr;
@@ -2150,7 +2150,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     comm->enableRocshmem = rcclParamRocshmemEnabled();
     comm->rocshmemThreshold = rcclParamRocshmemThreshold();
     comm->numSymBuf = NUM_SYM_BUF;
-
+    comm->symId = 0;
     //rocshmem::rocshmem_team_t team_reduce_world_dup;
     comm->team_reduce_world_dup = rocshmem::ROCSHMEM_TEAM_INVALID;
     rocshmem::rocshmem_team_split_strided(rocshmem::ROCSHMEM_TEAM_WORLD, 0, 1, job->nranks, nullptr, 0,

@@ -737,6 +737,7 @@ struct ncclComm {
   int enableRocshmem;
   int rocshmemThreshold;
   int numSymBuf;
+  int symId;
 #endif
 
   uint64_t endMagic;

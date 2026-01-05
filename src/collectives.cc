@@ -225,7 +225,7 @@ ncclResult_t ncclAllToAll_impl(const void* sendbuff, void* recvbuff, size_t coun
     return ncclEnqueueCheck(&info);
   } else {
 #ifdef ENABLE_ROCSHMEM
-    if (comm->enableRocshmem && msgSize <= comm->rocshmemThreshold) {	
+    if (comm->enableRocshmem && msgSize <= comm->rocshmemThreshold && comm->rocshmemThreshold <= 1048576) {	
 	    struct ncclInfo info = { ncclFuncAllToAllGda, "AllToAllGda",
       	    sendbuff, recvbuff, count, datatype, ncclSum, 0, comm, stream,
       	    ALLTOALL_PIVOT_CHUNKSTEPS, ALLTOALL_PIVOT_SLICESTEPS, nullptr };

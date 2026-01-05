@@ -41,7 +41,7 @@ struct ncclKernelMatch {
   bool specialized;
 };
 
-static int symId = 0;
+//static int symId = 0;
 
 #ifdef ENABLE_COLLTRACE
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
@@ -402,10 +402,10 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
         devWork.enableRocshmem = comm->enableRocshmem;
         devWork.team = comm->team_reduce_world_dup;
 
-        devWork.sndbuff = (void*)comm->sourceRshmem[symId];
-        devWork.tempbuff = (void*)comm->destRshmem[symId];
+        devWork.sndbuff = (void*)comm->sourceRshmem[comm->symId];
+        devWork.tempbuff = (void*)comm->destRshmem[comm->symId];
 
-	symId = (symId + 1) % comm->numSymBuf;
+	comm->symId = (comm->symId + 1) % comm->numSymBuf;
 
         devWork.size = task->count;
     }
@@ -746,8 +746,10 @@ static ncclResult_t scheduleCollTasksToPlan(
         proxyOp.incWorkCounter = true;
         addWorkBatchToPlan(comm, plan, c, workNode->workType, task->devFuncId, plan->workBytes);
         // Set pattern to profiler to add a proxy profiler for kernel events
-        NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
-        NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
+	if (task->func != ncclFuncAllToAllGda) {
+            NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
+            NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
+	}
       }
     } else { // not task->isCollnet
       int trafficPerByte = ncclFuncTrafficPerByte(task->func, comm->nRanks);
@@ -893,8 +895,10 @@ static ncclResult_t scheduleCollTasksToPlan(
         // Coverity reports "proxyOp->connection" as being possibly uninitialized.  It's hard to
         // determine if that's actually true but it's also not clear if that would be an issue.
         // coverity[uninit_use_in_call:FALSE]
-        NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
-        NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, proxyOp));
+	if (task->func != ncclFuncAllToAllGda) {
+            NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
+            NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, proxyOp));
+	}
       }
     }
 
@@ -2028,7 +2032,7 @@ static ncclResult_t updateCollCostTable(
     float** collCostTable) {
   float (*table)[NCCL_NUM_PROTOCOLS] = (float (*)[NCCL_NUM_PROTOCOLS])collCostTable;
 
-  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot || info->func == ncclFuncAllToAllGda || info->func == ncclFuncAllToAllGda1) {
+  if (comm->nRanks == 1 || info->func == ncclFuncAllToAllPivot || info->func == ncclFuncAllToAllGda) {
     table[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE] = 0.0;
     return ncclSuccess;
   }
@@ -2333,9 +2337,6 @@ static ncclResult_t calcCollChunking(
     pattern = ncclPatternRing;
     break;
   case ncclFuncAllToAllGda:
-    pattern = ncclPatternRing;
-    break;
-  case ncclFuncAllToAllGda1:
     pattern = ncclPatternRing;
     break;
   case ncclFuncAllReduce:
@@ -2760,7 +2761,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
       t->root = info->root;
       t->datatype = info->datatype;
       size_t elementSize = ncclTypeSize(t->datatype);
-      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot || t->func == ncclFuncAllToAllGda || t->func == ncclFuncAllToAllGda1) {
+      if (t->func == ncclFuncAllGather || t->func == ncclFuncBroadcast || t->func == ncclFuncAllToAllPivot || t->func == ncclFuncAllToAllGda) {
         t->count *= elementSize;
         t->datatype = ncclInt8;
         elementSize = 1;
