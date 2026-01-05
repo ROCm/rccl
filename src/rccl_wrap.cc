@@ -533,7 +533,7 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
     // to allow unroll factor to be reverted to default.
     // This can be changed once per-task unroll factor setting is implemented.
     if(info->algorithm != NCCL_ALGO_RING) {
-      return;
+      return; // If Ring is not selected, assume it is suboptimal and return
     }
     if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
@@ -546,7 +546,7 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
     }
   } else if (comm->topo->warpSpeedEnabled) {
     if(info->algorithm != NCCL_ALGO_RING) {
-      info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in non-auto mode
+      info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in manual mode as it only supports Ring
     }
     info->useWarpSpeed = true;
   }
