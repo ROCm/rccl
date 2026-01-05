@@ -51,11 +51,19 @@ void rcclRestrictMaxChannels(struct ncclComm* comm, int& nc ) {
     }
 }
 
+static inline bool rcclCollSupportsRing(ncclFunc_t func) {
+  return (func == ncclFuncAllReduce ||
+          func == ncclFuncAllGather ||
+          func == ncclFuncReduceScatter ||
+          func == ncclFuncBroadcast ||
+          func == ncclFuncReduce);
+}
+
 int32_t rcclGetProtoForGfx12(ncclFunc_t collectiveFunc, size_t sizePerRank){
   int returnVal = NCCL_PROTO_SIMPLE;
-  int SingleNodeLLCutoffs[] = { 
+  int SingleNodeLLCutoffs[] = {
     /*ncclFuncBroadcast*/     1536,
-    /*ncclFuncReduce*/        8192, 
+    /*ncclFuncReduce*/        8192,
     /*ncclFuncAllGather*/     98304,
     /*ncclFuncReduceScatter*/ 98304,
     /*ncclFuncAllReduce*/     913532,
@@ -513,13 +521,20 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
 
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
   info->useWarpSpeed = false;
-  if(rcclParamWarpSpeedAutoMode() != 0) { // auto mode
+  if(!rcclCollSupportsRing(info->func)) return;
+  if(rcclParamWarpSpeedAutoMode() != 0) { // Auto performance mode
     if(!IsArchMatch(comm->archName, "gfx950")) {
       // Auto mode only available for gfx950 currently, keep it to false
       return;
     }
     size_t minBytes = 0;
     commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
+    // No early return based on the algorithm at the start of the function
+    // to allow unroll factor to be reverted to default.
+    // This can be changed once per-task unroll factor setting is implemented.
+    if(info->algorithm != NCCL_ALGO_RING) {
+      return;
+    }
     if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
     if(comm->nNodes == 1) {
@@ -529,7 +544,10 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
         info->useWarpSpeed = true;
       }
     }
-  } else if (comm->topo->warpSpeedEnabled && info->algorithm == NCCL_ALGO_RING) {
+  } else if (comm->topo->warpSpeedEnabled) {
+    if(info->algorithm != NCCL_ALGO_RING) {
+      info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in non-auto mode
+    }
     info->useWarpSpeed = true;
   }
 }
