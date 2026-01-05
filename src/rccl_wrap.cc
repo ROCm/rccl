@@ -51,6 +51,24 @@ void rcclRestrictMaxChannels(struct ncclComm* comm, int& nc ) {
     }
 }
 
+int32_t rcclGetProtoForGfx12(ncclFunc_t collectiveFunc, size_t sizePerRank){
+  int returnVal = NCCL_PROTO_SIMPLE;
+  int SingleNodeLLCutoffs[] = { 
+    /*ncclFuncBroadcast*/     1536,
+    /*ncclFuncReduce*/        8192, 
+    /*ncclFuncAllGather*/     98304,
+    /*ncclFuncReduceScatter*/ 98304,
+    /*ncclFuncAllReduce*/     913532,
+    /*ncclFuncSendRecv*/      0,
+    /*ncclFuncSend*/          0,
+    /*ncclFuncRecv*/          0
+  };
+  if(collectiveFunc < sizeof(SingleNodeLLCutoffs)/sizeof(int)) {
+    returnVal = (sizePerRank <= SingleNodeLLCutoffs[collectiveFunc]) ? NCCL_PROTO_LL : NCCL_PROTO_SIMPLE;
+  }
+  return returnVal;
+}
+
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
@@ -69,6 +87,8 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
   } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") && comm->nNodes == 1 && (info->func == ncclFuncReduceScatter) && sizePerRank <= 352128) {
     // Change LL protocol threshold
     info->protocol = NCCL_PROTO_LL;
+  } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx12") && comm->nNodes == 1){
+    info->protocol = rcclGetProtoForGfx12( info->func,sizePerRank);
   } else if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
