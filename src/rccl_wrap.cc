@@ -43,6 +43,14 @@ RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 #endif
 #define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
 
+static inline bool rcclCollSupportsRing(ncclFunc_t coll) {
+  return (coll == ncclFuncAllReduce ||
+          coll == ncclFuncAllGather ||
+          coll == ncclFuncReduceScatter ||
+          coll == ncclFuncBroadcast ||
+          coll == ncclFuncReduce);
+}
+
 void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, struct ncclTaskColl* info) {
   // Honor user input for protocol choice
   static int userProtocolInput = -2;
@@ -474,6 +482,7 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
 
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
   info->useWarpSpeed = false;
+  if(!rcclCollSupportsRing(info->func)) return;
   if(rcclParamWarpSpeedAutoMode() != 0) { // Auto performance mode
     if(!IsArchMatch(comm->archName, "gfx950")) {
       // Auto mode only available for gfx950 currently, keep it to false
@@ -497,13 +506,6 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
       }
     }
   } else if (comm->topo->warpSpeedEnabled) {
-    if(info->func != ncclFuncAllReduce &&
-       info->func != ncclFuncAllGather &&
-       info->func != ncclFuncReduceScatter &&
-       info->func != ncclFuncBroadcast &&
-       info->func != ncclFuncReduce) {
-      return;
-    }
     if(info->algorithm != NCCL_ALGO_RING) {
       info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in non-auto mode
     }
