@@ -393,13 +393,17 @@ __device__ __forceinline__ void loadWorkBatchToShmem(
       *(ulong2*)dst = tmp;
 #else
       // this version seems to generate lots of scratch load/stores elsewhere
-      char* src = ncclShmem.args.workStorageType == ncclDevWorkStorageTypeArgs ?  
-            (char*)args + (batch.offsetBase + srcWork*workSize + packInWork*16) :
+      char* src1 = 
+            (char*)args + (batch.offsetBase + srcWork*workSize + packInWork*16);
+      char* src2 = 
             (char*)ncclShmem.args.workBuf + ((batch.offsetBase + srcWork*workSize + packInWork*16) & ncclShmem.args.workMask);
-#pragma unroll
-      for (int i = 0; i < 4; i++) {
-        llvm_amdgcn_global_load_to_lds((const uint8_t SGLOBAL *)src, (uint8_t SLOCAL *)src, 4, i*4, 0);
-      }
+      tmp = ncclShmem.args.workStorageType == ncclDevWorkStorageTypeArgs ? 
+          *(ulong2*)(src1) : *(ulong2*)(src2);
+      *(ulong2*)dst = tmp;
+// #pragma unroll
+//       for (int i = 0; i < 4; i++) {
+//         llvm_amdgcn_global_load_to_lds((const uint8_t SGLOBAL *)src, (uint8_t SLOCAL *)src, 4, i*4, 0);
+//       }
 #endif
     }
     workCursor += nWorks;
@@ -709,7 +713,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 
 #define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
   __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
-  __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) { \
+  __global__ void nccl_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) { \
     ncclKernelMain< RunWorkBatch<coll, ty, redop<ty>, algo, proto, unroll>, \
           /*COLLTRACE*/false, unroll >(&args4K.args); \
   }
@@ -718,8 +722,9 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 //  __attribute__((amdgpu_waves_per_eu(1,1))) 
 
 #define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
+  __attribute__((amdgpu_waves_per_eu(1,1))) \
   __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
-  __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) { \
+  __global__ void nccl_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) { \
     constexpr auto fixed_proto = (proto == NCCL_PROTO_LL128 ? NCCL_PROTO_LL : proto); \
     ncclKernelMain< RunWorkBatch<coll, ty, redop<ty>, algo, fixed_proto, unroll>, \
           /*COLLTRACE*/false, unroll >(&args4K.args); \
@@ -728,7 +733,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
 
 #define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, unroll, specializedFnId) \
   __launch_bounds__(NCCL_MAX_NTHREADS, 1) \
-  __global__ void ncclDevKernel_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}
+  __global__ void nccl_##suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) {}
 
 #ifdef USE_INDIRECT_FUNCTION_CALL
 #define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, unroll) \

@@ -461,7 +461,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out("};\n\n")
   
   for fn in primary_funcs:
-    sym = paste("_", "ncclDevKernel", *fn)
+    sym = paste("_", "nccl", *fn)
     out("__global__ void %s(ncclDevKernelArgs4K const);\n" % sym)
   out("\n\n")
   
@@ -470,7 +470,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out("extern void* const ncclDevKernelList[] = {\n")
   index = 0
   for fn in primary_funcs:
-    sym = paste("_", "ncclDevKernel", *fn)
+    sym = paste("_", "nccl", *fn)
     out("/* %4d */ (void *)%s,\n" % (index, sym))
     index += 1
   out("};\n")
