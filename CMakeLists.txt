@@ -1385,6 +1385,43 @@ endif()
 ## Building RCCL RAS
 include(cmake/rcclRAS.cmake)
 
+## Building RCCL Tuner Plugin
+#==================================================================================================
+option(BUILD_TUNER_PLUGIN "Build the NCCL tuner plugin" ON)
+
+if(BUILD_TUNER_PLUGIN)
+  set(TUNER_PLUGIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ext-tuner/example")
+  set(TUNER_PLUGIN_SO "libnccl-tuner-example.so")
+  set(TUNER_PLUGIN_OUTPUT "${TUNER_PLUGIN_DIR}/${TUNER_PLUGIN_SO}")
+  set(TUNER_PLUGIN_INSTALL_DIR "${CMAKE_BINARY_DIR}")
+
+  # Add custom target to build the tuner plugin
+  add_custom_target(tuner_plugin ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${TUNER_PLUGIN_INSTALL_DIR}
+    COMMAND ${CMAKE_COMMAND} -E env make -C ${TUNER_PLUGIN_DIR} build
+    COMMAND ${CMAKE_COMMAND} -E copy ${TUNER_PLUGIN_OUTPUT} ${TUNER_PLUGIN_INSTALL_DIR}/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TUNER_PLUGIN_DIR}/rccl_tuner_gfx950.conf ${TUNER_PLUGIN_INSTALL_DIR}/
+    COMMENT "Building RCCL tuner plugin and copying to ${TUNER_PLUGIN_INSTALL_DIR}"
+    VERBATIM
+  )
+
+  # Make sure the tuner plugin is built after rccl
+  add_dependencies(tuner_plugin rccl)
+
+  # Install the tuner plugin
+  install(FILES ${TUNER_PLUGIN_INSTALL_DIR}/${TUNER_PLUGIN_SO}
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          COMPONENT runtime)
+  
+  install(FILES ${TUNER_PLUGIN_DIR}/rccl_tuner_gfx950.conf
+          DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl
+          COMPONENT runtime)
+
+  message(STATUS "RCCL tuner plugin will be built and installed")
+else()
+  message(STATUS "RCCL tuner plugin build disabled (set BUILD_TUNER_PLUGIN=ON to enable)")
+endif()
+
 if(BUILD_TESTS)
   rocm_package_setup_component(clients)
   rocm_package_setup_client_component(tests PACKAGE_NAME unittests)
