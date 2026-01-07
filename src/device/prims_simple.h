@@ -130,12 +130,7 @@ private:
   }
 
   template <int DirectRecv, int DirectSend, int Recv, int Send, int Src, int Dst>
-#if defined(NDEBUG) && (defined(__gfx1101__) || defined(__gfx942__))
-  // Prevent compiler from doing faulty optimizations with NDEBUG by preventing inlining of waitPeer
-  __device__ __noinline__ void waitPeer(intptr_t srcIx, intptr_t dstIx, int offset, int nelts) {
-#else
   __device__ __forceinline__ void waitPeer(intptr_t srcIx, intptr_t dstIx, int offset, int nelts) {
-#endif
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_WAIT_PEER_ENTRY)
     if (threadIdx.x == 0) {
       NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_WAIT_PEER_ENTRY, nelts*sizeof(T), 0, NPKIT_GET_GPU_TIMESTAMP(),
