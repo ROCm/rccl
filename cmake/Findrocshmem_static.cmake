@@ -33,8 +33,3 @@ find_library(IBVERBS ibverbs)
 
 find_package_handle_standard_args(rocshmem_static DEFAULT_MSG ROCSHMEM_INCLUDE_DIR ROCSHMEM_LIBRARY)
 ## mark_as_advanced(MSCCLPP_INCLUDE_DIRS MSCCLPP_NCCL_STATIC_LIB) add this for Rocshmem?
-
-## --- TODO --- Remove this, just use for testing purposes -- ###
-if (NOT ROCSHMEM_INCLUDE_DIR OR NOT ROCSHMEM_LIBRARY)
-  message(FATAL_ERROR "rocSHMEM not found; pass -DROCSHMEM_ROOT=/path/to/rocshmem")
-endif()
