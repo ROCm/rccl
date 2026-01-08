@@ -2108,7 +2108,6 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   // RCCL: determine and set unroll factor for comm
   NCCLCHECK(commSetUnrollFactor(comm));
-  //comm->isA2a = 0;
 
 #ifdef ENABLE_ROCSHMEM
   if (rcclParamRocshmemEnabled()) { // @TODO - This doesn't seem to disable when I set ROCSHMEM_ENABLE=0 on command line
@@ -2120,8 +2119,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
     if(comm->rank == 0 ) {
       ret = rocshmem::rocshmem_get_uniqueid (&rocshmemUniqueId);
       if (ret != rocshmem::ROCSHMEM_SUCCESS) {
-        WARN("Error in rocshmem_get_uniqueid, Aborting.");
-        abort();
+        WARN("Error in rocshmem_get_uniqueid, Rocshmem cannot be initialized.");
+        return ncclSystemError;
       }
     }
   
@@ -2129,16 +2128,15 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 			    sizeof(rocshmemUniqueId)), res, fail);
     ret = rocshmem::rocshmem_set_attr_uniqueid_args(job->myrank, job->nranks, &rocshmemUniqueId, &rocshmemAttr);
     if (ret != rocshmem::ROCSHMEM_SUCCESS) {
-      WARN("Error in rocshmem_set_attr_uniqueid_args, Aborting.");
-      abort();
+      WARN("Error in rocshmem_set_attr_uniqueid_args, Rocshmem cannot be initialized.");
+      return ncclSystemError;
     }
 
     ret = rocshmem::rocshmem_init_attr(rocshmem::ROCSHMEM_INIT_WITH_UNIQUEID, &rocshmemAttr);
     if (ret != rocshmem::ROCSHMEM_SUCCESS) {
-      WARN("Error in rocshmem_init_attr, Aborting.");
-      abort();
+      WARN("Error in rocshmem_init_attr, Rocshmem cannot be initialized.");
+      return ncclSystemError;
     }
-   
    
     comm->sourceRshmem = (void**) malloc(NUM_SYM_BUF * sizeof(void *));
     comm->destRshmem = (void**) malloc(NUM_SYM_BUF * sizeof(void *));
