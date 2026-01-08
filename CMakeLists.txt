@@ -1405,9 +1405,6 @@ if(BUILD_TUNER_PLUGIN)
     VERBATIM
   )
 
-  # Make sure the tuner plugin is built after rccl
-  add_dependencies(tuner_plugin rccl)
-
   # Install the tuner plugin
   install(FILES ${TUNER_PLUGIN_INSTALL_DIR}/${TUNER_PLUGIN_SO}
           DESTINATION ${CMAKE_INSTALL_LIBDIR}
