@@ -2111,7 +2111,6 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   //comm->isA2a = 0;
 
 #ifdef ENABLE_ROCSHMEM
-  /* --- sanity-check print statement for development purposes --- */
   if (rcclParamRocshmemEnabled()) { // @TODO - This doesn't seem to disable when I set ROCSHMEM_ENABLE=0 on command line
     INFO(NCCL_INIT,"Initializing rocSHMEM inside of RCCL");
     int ret;
