@@ -1,0 +1,140 @@
+name: TheRock mi325 Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: "AMDGPU families to build/test (e.g. gfx94X-dcgpu)"
+        type: string
+        required: true
+        default: gfx94X-dcgpu
+      artifact_group:
+        description: "Artifact group name used for upload and downstream tests"
+        type: string
+        required: true
+        default: gfx94X-dcgpu
+      extra_cmake_options:
+        description: "Extra CMake options passed to the configure step"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  therock-build-linux:
+    name: Build Linux Packages
+    runs-on: azure-linux-scale-rocm
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:1f1ce0ab151146c7f86ee4345be74c42d8ca83200d9d26843e8a71df01ecad4e
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEATIME_FORCE_INTERACTIVE: 0
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+
+    steps:
+      - name: Checkout TheRock repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ROCm/TheRock
+          ref: bfcaf6e0bcd4bfe3c21990f49bbccb7d2a087d5d
+
+      - name: Checkout rccl repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ROCm/rccl
+          path: rccl
+
+      - name: Checkout rccl-tests repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ROCm/rccl-tests
+          path: rccl-tests
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Fetch sources
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12
+
+      - name: Configure Projects
+        env:
+          amdgpu_families: ${{ env.AMDGPU_FAMILIES }}
+          package_version: ADHOCBUILD
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          BUILD_DIR: build
+        run: |
+          python3 build_tools/github_actions/build_configure.py
+
+      - name: Build therock-dist
+        run: cmake --build build
+
+      - name: Build therock-archives
+        run: cmake --build build --target therock-archives
+
+      - name: Report
+        run: |
+          echo "Full SDK du:"
+          du -h -d 1 build/dist/rocm
+          echo "Artifact Archives:"
+          ls -lh build/artifacts/*.tar.xz
+          echo "Artifacts:"
+          du -h -d 1 build/artifacts
+          echo "CCache Stats:"
+          ccache -s -v
+          tail -v -n +1 .ccache/compiler_check_cache/* \
+            > build/logs/ccache_compiler_check_cache.log
+
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+
+      - name: Post Build Upload
+        if: always()
+        run: |
+          python3 build_tools/github_actions/post_build_upload.py \
+            --run-id ${{ github.run_id }} \
+            --artifact-group ${{ inputs.artifact_group }} \
+            --build-dir build \
+            --upload
+
+  therock-test-linux-multi-node:
+    name: Test heatmap multi-node
+    if: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' }}
+    permissions:
+      contents: read
+      id-token: write
+    needs: [therock-build-linux]
+    uses: ./.github/workflows/therock-4nic-heatmap-tests.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      artifact_group: ${{ inputs.artifact_group }}
+      test_runs_on: linux-vultr-mi325-scale-runner
+      artifact_run_id: ${{ github.run_id }}
