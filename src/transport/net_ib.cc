@@ -559,9 +559,113 @@ failure:
   return false;
 }
 
+/**
+ * Extract the PCIe root complex (domain:bus) from a Linux sysfs PCI device path.
+ *
+ * This function scans a sysfs PCI device path (e.g.
+ *   "/sys/devices/pci0000:80/0000:80:03.1/0000:81:00.0")
+ * and extracts the first occurrence of the PCI root host bridge identifier
+ * of the form "pciDDDD:BB", where:
+ *   - DDDD is the PCI domain (hex)
+ *   - BB   is the PCI bus number (hex)
+ *
+ * The extracted root is returned as a string formatted as "DDDD:BB".
+ *
+ * This helper is typically used to determine whether multiple NICs or devices
+ * reside under the same PCIe root complex, which is important for validating
+ * NIC merging and avoiding cross-root PCIe traffic.
+ *
+ * @param pciPath  NUL-terminated sysfs PCI device path
+ * @param root     Output buffer receiving the "DDDD:BB" PCI root identifier
+ * @param rootLen  Size of the output buffer; must be >= 8
+ *
+ * @return ncclSuccess on success
+ * @return ncclInvalidUsage if inputs are invalid or no PCI root is found
+ *
+ * Notes:
+ * - The function scans for the first valid "pciDDDD:BB" pattern in the path.
+ * - The loop is bounded by the length of the string and cannot hang.
+ * - This function does not allocate memory.
+ */
+static ncclResult_t ncclIbGetPciRootFromPath(
+    const char* pciPath,
+    char* root,
+    size_t rootLen
+) {
+    if (pciPath == NULL || root == NULL || rootLen < 8){
+        return ncclInvalidUsage;
+    }
+    const char* p = strstr(pciPath, "pci");
+    while (p != NULL) {
+        int domain, bus;
+        int chars_read = 0;
+        if (sscanf(p, "pci%4x:%2x%n", &domain, &bus, &chars_read) == 2 &&
+            chars_read == 10) {
+            snprintf(root, rootLen, "%04x:%02x", domain, bus);
+            return ncclSuccess;
+        }
+        p = strstr(p + 1, "pci");
+    }
+    return ncclInvalidUsage;
+}
+
+/**
+ * Determine the NUMA node associated with a PCI device from its sysfs path.
+ *
+ * This function reads the "numa_node" attribute from a PCI device's sysfs
+ * directory (e.g. "<pciPath>/numa_node") and returns the NUMA node ID.
+ *
+ * Linux sysfs convention:
+ *   - A non-negative integer indicates the NUMA node the device is local to
+ *   - "-1" indicates that the device has no specific NUMA affinity
+ *
+ * This helper is used to validate NUMA locality when merging NICs, ensuring
+ * that merged devices do not silently span NUMA nodes, which could negatively
+ * impact performance.
+ *
+ * @param pciPath  NUL-terminated sysfs PCI device path
+ *
+ * @return NUMA node ID (>= 0) on success
+ * @return -1 if the NUMA node cannot be determined, the file is missing,
+ *         unreadable, or contains invalid data
+ *
+ * Notes:
+ * - Uses open/read instead of stdio to avoid buffering and locale issues.
+ * - Uses strtol for robust numeric parsing and overflow detection.
+ * - A return value of -1 may indicate either "no NUMA affinity" or an error;
+ *   callers should treat it as "unknown or unspecified".
+ */
+static int ncclIbGetNumaNodeFromPath(const char* pciPath) {
+    if (pciPath == NULL) {
+        return -1;
+    }
+    char numaPath[PATH_MAX];
+    if (snprintf(numaPath, sizeof(numaPath), "%s/numa_node", pciPath) >= PATH_MAX) {
+        return -1; 
+    }
+
+    int fd = open(numaPath, O_RDONLY);
+    if (fd < 0) return -1;
+
+    char buf[32];
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    
+    char* endptr;
+    errno = 0;
+    long numa = strtol(buf, &endptr, 10);
+    if (endptr == buf || errno == ERANGE) {
+        return -1;
+    }
+    return (int)numa;
+}
+
 ncclResult_t ncclIbMakeVDeviceInternal(int* d, ncclNetVDeviceProps_t* props) {
   if (ncclParamIbMergeNics() == 0 && props->ndevs > 1) {
-    INFO(NCCL_NET, "NET/IB : Skipping makeVDevice, NCCL_IB_MERGE_NICS=0");
+    WARN("NET/IB : Skipping makeVDevice, Please set NCCL_IB_MERGE_NICS=1");
     return ncclInvalidUsage;
   }
 
@@ -606,6 +710,31 @@ ncclResult_t ncclIbMakeVDeviceInternal(int* d, ncclNetVDeviceProps_t* props) {
       WARN("NET/IB : Attempted to merge incompatible devices: [%d]%s:%d/%s and [%d]%s:%d/%s. Try selecting NICs of only one link type using NCCL_IB_HCA",
         props->devs[0], dev0->devName, dev0->portNum, NCCL_IB_LLSTR(dev0->link), props->devs[i], dev->devName, dev->portNum, NCCL_IB_LLSTR(dev->link));
       return ncclInvalidUsage;
+    }
+  }
+
+  int numa0 = ncclIbGetNumaNodeFromPath(dev0->pciPath);
+  //format -> 0000:00 
+  char root0[8]; 
+  ncclIbGetPciRootFromPath(dev0->pciPath, root0, sizeof(root0));
+  for (int i = 1; i < props->ndevs; i++) {
+    ncclIbDev* dev = ncclIbDevs + props->devs[i];
+    int numa_i = ncclIbGetNumaNodeFromPath(dev->pciPath);
+    if (numa0 >= 0 && numa_i >= 0 && numa_i != numa0) {
+      WARN("NET/IB : Merging NICs across NUMA nodes (%s numa=%d, %s numa=%d). "
+           "This may significantly reduce performance.",
+           dev0->devName, numa0, dev->devName, numa_i);
+      break;
+    }
+
+    char root_i[8];
+    ncclIbGetPciRootFromPath(dev->pciPath, root_i, sizeof(root_i));
+    if (strcmp(root_i, root0) != 0) {
+      WARN("NET/IB : Merging NICs across PCIe Root Complexes "
+           "(%s root=%s, %s root=%s). "
+           "GPUDirect RDMA and bandwidth aggregation may be impacted.",
+           dev0->devName, root0, dev->devName, root_i);
+      break;
     }
   }
 

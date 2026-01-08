@@ -191,7 +191,7 @@ static void addWorkBatchToPlan(
     // batch further down.
     newBatch |= NCCL_MAX_DEV_WORK_BATCH_BYTES < chan->wipBatch.workBytes + workSize;
     if (workType == ncclDevWorkTypeP2p) {
-      newBatch |= (comm->nNodes > 2 && batchP2P && comm->nNodes <= 32)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
+      newBatch |= (comm->nNodes > 2 && batchP2P)? (chan->wipBatch.nP2ps == NCCL_MAX_DEV_WORK_P2P_PER_BATCH) : (chan->wipBatch.nP2ps == 1);
       for (int i=0; i < chan->wipBatch.nP2ps; i++) {
         newBatch |= p2pRound == chan->wipBatch.p2pRounds[i];
       }
@@ -390,7 +390,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     devWork.rcclUseOneSlice = comm->rcclUseOneSlice;
     //[Added-comment] opCount is missing for collDevWork, adding here
     devWork.opCount = task->opCount;
-	  
+
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
     devWork.gfx9CheapFenceOff = gfx9CheapFenceOff(devWork, comm->gfx9CheapFenceOff);
@@ -513,11 +513,11 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
       }
-      
+
       if (!rcclIsArchSupportedForFunc(&agg, comm->archName)) {
-        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).", 
-          __func__, comm->archName, 
-          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol), 
+        WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).",
+          __func__, comm->archName,
+          ncclFuncToString(task->func), ncclAlgoToString(task->algorithm), ncclProtoToString(task->protocol),
           ncclDevRedOpToString(task->opDev.op), ncclDatatypeToString(task->datatype), (agg.acc != nullptr), agg.pipeline);
         return ncclInvalidUsage;
       }
@@ -541,6 +541,9 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         aggBeg->protocol = agg.protocol;
         aggBeg->acc = agg.acc;
         aggBeg->pipeline = agg.pipeline;
+#ifdef ENABLE_WARP_SPEED
+        aggBeg->useWarpSpeed = agg.useWarpSpeed;
+#endif
         if (aggBeg->protocol == NCCL_PROTO_LL) aggBeg->trafficBytes *= 4;
         aggBeg->nMaxChannels = agg.nMaxChannels;
         aggBeg->nWarps = agg.nWarps;
@@ -764,10 +767,12 @@ static ncclResult_t scheduleCollTasksToPlan(
       (countHi != 0 ? countHi : countLo) -= cells*elementsPerCell - task->count;
 
       nChannels = (countLo!=0 ? 1 : 0) + nMidChannels + (cellsHi!=0 ? 1 : 0);
-
       // Update number of channels propagated to the profiler
-      task->nChannels = (uint8_t)nChannels;
-
+#ifdef ENABLE_WARP_SPEED
+      task->nChannels = nChannels;
+#else
+      task->nChannels = (uint8_t) nChannels;
+#endif
       // Ensure room for worst case of one new batch per channel
       if (!testBudget(budget, plan->nWorkBatches + nChannels, plan->workBytes + workNode->size)) {
         return ncclSuccess;
@@ -932,15 +937,6 @@ NCCL_PARAM(P2pLLThreshold, "P2P_LL_THRESHOLD", 8192);
 RCCL_PARAM(P2pNetThreshold, "P2P_NET_THRESHOLD", 131072);
 NCCL_PARAM(ChunkSize, "CHUNK_SIZE", 0);
 
-// This is the maximum P2P message size that can be batched with others
-// Below this message size, NCCL_MAX_DEV_WORK_P2P_PER_BATCH will be applicable
-// For alltoall, this can be mutiplied by number of ranks to match Size (B) in rccl-tests
-// Without a threshold, RCCL will suffer large message regression due to limitation at a larger scale
-// when more batches are needed to saturate the NIC BW in RCCL.
-// The threshold can be set to a higher value to experiment on other platforms.
-// This value has been tested on MI300.
-RCCL_PARAM(P2pBatchThreshold, "P2P_BATCH_THRESHOLD", 1 << 16); // 64k
-
 
 // Need this temporary parameter to disable p2p batching to avoid some dips at 4MB - 32 MB message size at large scale
 // This parameter must be removed after further investigation,
@@ -969,9 +965,6 @@ static ncclResult_t addP2pToPlan(
   bool proxySameProcess[2] = {true, true};
   void** handles[2] = {NULL, NULL};
   auto batchP2PEnableEnv = rcclParamP2pBatchEnable();
-  auto p2pBatchThreshold = rcclParamP2pBatchThreshold();
-  bool belowThreshold = (recvBytes <= p2pBatchThreshold) && (sendBytes <= p2pBatchThreshold);
-  bool batchP2P =  batchP2PEnableEnv && (sendBytes == recvBytes) && belowThreshold;
 
   //ncclP2pChannelBaseForRound now computes channel-base based on batching enablement (env. variable RCCL_P2P_BATCH_ENABLE=1)
   //but batching is only applicable if msg size is below threshold which is not checked below
@@ -1151,7 +1144,7 @@ static ncclResult_t addP2pToPlan(
     plan->channelMask.masks[channelId/64] |= uint64_t(1)<<(channelId%64);
     // Add batch first.
     int funcIdx = ncclDevFuncId_P2p();
-    addWorkBatchToPlan(comm, plan, channelId, ncclDevWorkTypeP2p, funcIdx, workOffset, p2pRound, batchP2P);
+    addWorkBatchToPlan(comm, plan, channelId, ncclDevWorkTypeP2p, funcIdx, workOffset, p2pRound, batchP2PEnableEnv);
     if (funcIdx < 0) {
       WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
       return ncclInvalidUsage;
@@ -1264,8 +1257,9 @@ static ncclResult_t scheduleP2pTasksToPlan(
       ssize_t recvBytes = recv ? recv->bytes : -1;
       void* sendBuff = send ? send->buff : nullptr;
       void* recvBuff = recv ? recv->buff : nullptr;
-
-      if (sendRank == comm->rank && send->buff == recv->buff) {
+      // Add check to keep in-place send to self when P2P batching is enabled
+      // Such case is not supported currently and is causing hangs
+      if (sendRank == comm->rank && send->buff == recv->buff && rcclParamP2pBatchEnable() == 0) {
         // Skip send to self in-place (we don't need to support this).
         ncclIntruQueueDequeue(&peers[sendRank].sendQueue);
         ncclIntruQueueDequeue(&peers[recvRank].recvQueue);
@@ -1756,7 +1750,6 @@ NCCL_PARAM(MemSyncDomain, "MEM_SYNC_DOMAIN", cudaLaunchMemSyncDomainRemote);
 #endif
 
 NCCL_PARAM(NvlinkUtilCentricSchedEnable, "NVLINK_UTIL_CENTRIC_SCHED_ENABLE", 0);
-
 ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   ncclResult_t ret = ncclSuccess;
   struct ncclKernelPlanner* planner = &comm->planner;
@@ -1764,6 +1757,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   for (int i = 0; i < MAXCHANNELS/64; i++)
     nChannels += countOneBits(plan->channelMask.masks[i]);
   void* sym = plan->kernelFn;
+#ifdef ENABLE_WARP_SPEED
+  rcclSetWarpSpeedSupportAndFinalCuCount(comm, plan, nChannels, plan->kernelArgs->comm->warpLevelComm, nChannels);
+#endif
   dim3 grid = {(unsigned)nChannels, 1, 1};
   dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
   int smem = rcclShmemDynamicSize(comm->cudaArch, comm->WarpSize);
@@ -1883,8 +1879,8 @@ ncclResult_t ncclLaunchKernelAfter_NoCuda(struct ncclComm* comm, struct ncclKern
     // hostStreamPlanTask directly
     NCCLCHECK(hostStreamPlanTask(comm, plan));
   }
-  
-  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty 
+
+  // Increment the opCount for intranode comms as well. Previously if proxyOpQueue was empty
   // opCount was not incremented because ncclProxyStart wasn't called in hostStreamPlanTask
   if (!plan->persistent && ncclIntruQueueHead(&plan->proxyOpQueue) == nullptr) {
     comm->opCount++;
@@ -2064,6 +2060,14 @@ static ncclResult_t topoGetAlgoInfo(
       }
     }
   }
+  if(algorithm == NCCL_ALGO_UNDEF){
+    INFO(NCCL_INIT,"Optimal algorithm is not found in collCostTable, Setting it a default value NCCL_ALGO_RING");
+    algorithm = NCCL_ALGO_RING;
+  }
+  if(protocol == NCCL_PROTO_UNDEF){
+    INFO(NCCL_INIT,"Optimal protocol is not found in collCostTable, Setting it a default value NCCL_PROTO_SIMPLE");
+    protocol = NCCL_PROTO_SIMPLE;
+  }
 
   info->algorithm = algorithm;
   info->protocol = protocol;
@@ -2095,8 +2099,11 @@ static ncclResult_t topoGetAlgoInfo(
   rcclSetPipelining(comm, nBytes, info);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
-
+#ifdef ENABLE_WARP_SPEED
+  int nc = comm->topo->warpSpeedEnabled? comm->nChannels / 2 : comm->nChannels;
+#else
   int nc = comm->nChannels;
+#endif
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   if (info->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
@@ -2120,13 +2127,15 @@ static ncclResult_t topoGetAlgoInfo(
     int minNChannels = ncclParamMinNchannels();
     // Ring/Tree channel tuning
     INFO(NCCL_INIT, "minNChannels:%i", minNChannels);
-    while (nBytes < nc * nt * threadThreshold && nc > minNChannels) {
-      if (nc >= 2) nc--;
-      else break;
+    if(nBytes < nc * nt * threadThreshold && nc > minNChannels){
+      nc = std::max(1,std::max(minNChannels,(int)(nBytes/std::max(1,nt * threadThreshold))));
     }
     INFO(NCCL_INIT, "post-adjustment based on threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
     rcclOverrideChannels(comm, info->func, nBytes, nc);
   }
+  
+  rcclRestrictMaxChannels(comm, nc);
+
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #else
   if (info->algorithm != NCCL_ALGO_NVLS && info->algorithm != NCCL_ALGO_NVLS_TREE &&
@@ -2167,7 +2176,13 @@ static ncclResult_t topoGetAlgoInfo(
     }
   } else if (info->func == ncclFuncAllReduce && comm->topo->treeDefined == 1) {
     info->algorithm = NCCL_ALGO_TREE;
+#ifdef ENABLE_WARP_SPEED
+    nc = std::min(nc, 64); // Tree uses at most 64 channels as we don't support WarpSpeed Tree.
+  } else if (info->algorithm == NCCL_ALGO_TREE) {
+    nc = std::min(nc, 64); // Tree uses at most 64 channels as we don't support WarpSpeed Tree.
+#else
     info->nMaxChannels = nc;
+#endif
   } else {
     info->nMaxChannels = nc;
   }
@@ -2180,6 +2195,13 @@ static ncclResult_t topoGetAlgoInfo(
   info->nWarps = nt/comm->WarpSize;
   rcclOverrideAlgorithm(ncclAlgoStr, table, info);
   rcclOverrideProtocol(ncclProtoStr, table, info);
+#ifdef ENABLE_WARP_SPEED
+  rcclSetWarpSpeedAuto(comm, info, nBytes);
+  if(info->useWarpSpeed) {
+    rcclSetWarpSpeedCUs(comm, info->algorithm, info->nWarps * comm->WarpSize, nc);
+  }
+  info->nMaxChannels = nc;
+#endif
   return ncclSuccess;
 }
 

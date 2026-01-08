@@ -91,9 +91,12 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
     sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
     ALLGATHER_CHUNKSTEPS, comm -> rcclUseOneSlice ? ALLGATHER_SLICESTEPS_SINGLE_NODE : ALLGATHER_SLICESTEPS, nullptr };
 
-  int nRanks;
+  int nRanks, rank;
   int in_place = 0;
+  const void* srcBuf;
+  void* dstBuf;
   NCCLCHECK(ncclCommCount(comm, &nRanks));
+  NCCLCHECK(ncclCommUserRank(comm, &rank));
   size_t msgSize = sendcount * ncclTypeSize(datatype) * nRanks;
 
   if (!mscclIsCaller())
@@ -108,21 +111,30 @@ ncclResult_t ncclAllGather_impl(const void* sendbuff, void* recvbuff, size_t sen
   }
 
   if (rcclUseAllGatherDirect(comm, msgSize)) {
+     INFO(NCCL_INIT, "RCCL DIRECT ALLGATHER count = %zu, msgSize = %zu, comm = %p, stream = %p, rank = %d, sendbuff = %p, recvbuff = %p", 
+		     sendcount, msgSize, comm, stream, rank, sendbuff, recvbuff);	  
      // use direct allgather
      if (sendcount == 0) return ncclSuccess;
      size_t rankOffset = sendcount * ncclTypeSize(datatype);
-     if (((char*)sendbuff) == (((char*)recvbuff) + comm->rank * rankOffset)) {
+     if (sendbuff == (((char*)recvbuff) + rank * rankOffset)) {
+        srcBuf = ((char*)recvbuff) + rank * rankOffset;
+        dstBuf = recvbuff;
         in_place = 1;
-     } 
+     } else {
+        srcBuf = sendbuff;
+        dstBuf = recvbuff;
+     }
 
+     if (!in_place)
+         CUDACHECK(cudaMemcpyAsync((char*)dstBuf + rank * rankOffset, srcBuf, rankOffset, cudaMemcpyDeviceToDevice, stream));
+     
      NCCLCHECK(ncclGroupStart());
+
      for (int r = 0; r < nRanks; r++) {
-         int peer = (comm->rank + r) % nRanks;
-         if (in_place && (peer == comm->rank)) {
-            continue;
+         if (r != rank) {
+             NCCLCHECK(ncclSend(((char*)dstBuf) + rank * rankOffset, sendcount, datatype, r, comm, stream));
+             NCCLCHECK(ncclRecv(((char*)dstBuf) + r * rankOffset, sendcount, datatype, r, comm, stream));
          }
-         NCCLCHECK(ncclSend(sendbuff, sendcount, datatype, peer, comm, stream));
-         NCCLCHECK(ncclRecv(((char*)recvbuff) + peer * rankOffset, sendcount, datatype, peer, comm, stream));
      }
      NCCLCHECK(ncclGroupEnd());
      return ncclSuccess;

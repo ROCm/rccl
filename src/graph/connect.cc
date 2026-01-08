@@ -721,6 +721,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   int shared = parent && parent->nvlsSupport  && parent->shareResources;
   int maxChannels;
   int minNchannels, maxNchannels;
+  int duplicateCount = 1;
   NCCLCHECK(ncclCalloc(&ringRecv, nNodes*MAXCHANNELS));
   NCCLCHECKGOTO(ncclCalloc(&ringSend, nNodes*MAXCHANNELS), ret, fail);
   NCCLCHECKGOTO(ncclCalloc(&ringPrev, nranks*MAXCHANNELS), ret, fail);
@@ -804,19 +805,30 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     }
   }
 
+#ifdef ENABLE_WARP_SPEED
+  // Only use full MAXCHANNELS for gfx942 (MI300X) and gfx950
+  maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
+                 IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950"))
+                 ? MAXCHANNELS : 2*CHANNEL_LIMIT;
+
+#else
   // Only use full MAXCHANNELS for gfx942 (MI300X) and gfx950
   maxChannels = (IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx942") ||
                  IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950"))
                  ? std::min(comm->topo->nodes[GPU].nodes[0].gpu.cu, MAXCHANNELS) : 2*CHANNEL_LIMIT;
-
   if (graphs[NCCL_ALGO_RING]->nIntraChannels > 0 || comm->nNodes > 1) {
     maxChannels = std::min(64, maxChannels);
   }
-
+#endif
   // Duplicate ringPrev/ringNext for ncclBuildRing
-  if (nChannels <= maxChannels/2) memcpy(ringPrev+nChannels*nranks, ringPrev, nChannels*nranks*sizeof(int));
-  if (nChannels <= maxChannels/2) memcpy(ringNext+nChannels*nranks, ringNext, nChannels*nranks*sizeof(int));
-
+  duplicateCount = maxChannels / nChannels;
+  if (duplicateCount > 1) {
+    int limit = duplicateCount;
+    for (int dup = 1; dup < limit; ++dup) {
+      memcpy(ringPrev + dup * nChannels * nranks, ringPrev, nChannels * nranks * sizeof(int));
+      memcpy(ringNext + dup * nChannels * nranks, ringNext, nChannels * nranks * sizeof(int));
+    }
+  }
   // Get number of channels after duplication
   maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
   nc = std::min(maxNchannels/comm->nChannels, nc);
