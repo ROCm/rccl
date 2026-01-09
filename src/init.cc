@@ -2075,7 +2075,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   comm->cudaArch = cudaArch;
   comm->archName = archName;
   comm->cuCount = cuCount;
-
+  // RCCL: Determine and set P2P channel shift size for comm
+  NCCLCHECK(rcclCommSetP2pShiftSize(comm));
   NCCLCHECKGOTO(initTransportsRank(comm, job->parent, timers), res, fail);
 
     // Check if using host uncached mem correctly
@@ -2084,8 +2085,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   // RCCL: determine and set unroll factor for comm
   NCCLCHECK(commSetUnrollFactor(comm));
 
-  // RCCL: Determine and set P2P channel shift size for comm
-  NCCLCHECK(rcclCommSetP2pShiftSize(comm));
+
 
 #ifdef ENABLE_MSCCLPP
   if (job->parent) {
