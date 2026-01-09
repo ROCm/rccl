@@ -517,6 +517,11 @@ static ncclResult_t commFree(ncclComm_t comm) {
 #ifdef ENABLE_PROFILING
   struct ncclProf *prof, *prof_seq;
   prof = (struct ncclProf*)malloc(sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES);
+  if (prof == NULL) {
+    WARN("Failed to allocate profiling buffer");
+    // Skip profiling but continue with destruction
+    goto skip_profiling;
+  }
   CUDACHECK(hipMemcpy(prof, comm->devComm->devProf, sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES, hipMemcpyDeviceToHost));
   #define VEGA_GPU_RTC_FREQUENCY 2.5E7
   for (int i=0; i<comm->nChannels; i++) {
@@ -529,6 +534,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   }
   free(prof);
   CUDACHECK(hipFree(comm->devComm->devProf));
+skip_profiling:
 #endif
 
 #ifdef ENABLE_COLLTRACE
@@ -2137,6 +2143,10 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   CUDACHECKGOTO(hipGetDeviceProperties(&devProp, cudaDev), res, fail);
   cuCount = devProp.multiProcessorCount;
   archName = (char*)malloc(strlen(devProp.gcnArchName) + 1);
+  if (archName == NULL) {
+    WARN("Failed to allocate memory for architecture name");
+    goto fail;
+  }
   strcpy(archName, devProp.gcnArchName);
 
   timers[TIMER_INIT_KERNELS] = clockNano();
@@ -2434,6 +2444,10 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
   if (tmpNetName != NULL) {
     int netNameLen = strlen(tmpNetName) + 1;
     comm->config.netName = (char*)malloc(netNameLen);
+    if (comm->config.netName == NULL) {
+      WARN("Failed to allocate memory for network name");
+      return ncclSystemError;      
+    }
     memcpy((void*)comm->config.netName, tmpNetName, netNameLen);
   } else {
     comm->config.netName = NULL;
