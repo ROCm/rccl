@@ -1,6 +1,9 @@
 name: TheRock mi325 Linux
 
 on:
+  push:
+    branches:
+      - users/arravikum/mi325_test
   workflow_dispatch:
     inputs:
       amdgpu_families:
