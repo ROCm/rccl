@@ -31,6 +31,21 @@ on:
           -DTHEROCK_RCCL_SOURCE_DIR=./rccl
           -DTHEROCK_RCCL_TESTS_SOURCE_DIR=./rccl-tests
           -DTHEROCK_ENABLE_MPI=ON
+# Defaults used for push
+env:
+  DEFAULT_AMDGPU_FAMILIES: gfx94X-dcgpu
+  DEFAULT_ARTIFACT_GROUP: gfx94X-dcgpu
+  DEFAULT_EXTRA_CMAKE_OPTIONS: >-
+    -DTHEROCK_ENABLE_ALL=OFF
+    -DTHEROCK_BUILD_TESTING=ON
+    -DTHEROCK_BUNDLE_SYSDEPS=ON
+    -DTHEROCK_ENABLE_COMM_LIBS=ON
+    -DTHEROCK_ENABLE_ROCPROFV3=ON
+    -DTHEROCK_USE_EXTERNAL_RCCL=ON
+    -DTHEROCK_USE_EXTERNAL_RCCL_TESTS=ON
+    -DTHEROCK_RCCL_SOURCE_DIR=./rccl
+    -DTHEROCK_RCCL_TESTS_SOURCE_DIR=./rccl-tests
+    -DTHEROCK_ENABLE_MPI=ON
 
 permissions:
   contents: read
@@ -45,7 +60,9 @@ jobs:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:1f1ce0ab151146c7f86ee4345be74c42d8ca83200d9d26843e8a71df01ecad4e
       options: -v /runner/config:/home/awsconfig/
     env:
-      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || env.DEFAULT_AMDGPU_FAMILIES }}
+      EXTRA_CMAKE_OPTIONS: ${{ inputs.extra_cmake_options || env.DEFAULT_EXTRA_CMAKE_OPTIONS }}
+      ARTIFACT_GROUP: ${{ inputs.artifact_group || env.DEFAULT_ARTIFACT_GROUP }}
       TEATIME_FORCE_INTERACTIVE: 0
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       CACHE_DIR: ${{ github.workspace }}/.container-cache
@@ -98,7 +115,7 @@ jobs:
         env:
           amdgpu_families: ${{ env.AMDGPU_FAMILIES }}
           package_version: ADHOCBUILD
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ env.EXTRA_CMAKE_OPTIONS }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
@@ -147,7 +164,7 @@ jobs:
     needs: [therock-build-linux]
     uses: ./.github/workflows/therock-4nic-heatmap-tests.yml
     with:
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.amdgpu_families || env.DEFAULT_AMDGPU_FAMILIES }}
+      artifact_group: ${{ inputs.artifact_group || env.DEFAULT_ARTIFACT_GROUP }}
       test_runs_on: linux-vultr-mi325-scale-runner
       artifact_run_id: ${{ github.run_id }}
