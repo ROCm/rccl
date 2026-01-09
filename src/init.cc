@@ -310,21 +310,21 @@ void *ncclCommThreadMain(void *arg) {
       }
       for (int i = 0; i < count; i++) {
         volatile struct ncclCollTrace *td = comm->collTrace+COLLTRACE_NUM_ITEMS*channel+head[channel]%COLLTRACE_NUM_ITEMS;
-        head[channel] ++;
         const uint8_t type = td->type;
         if (type == ncclCollTraceNotReady)
-          continue;
+          break;
+        head[channel] ++;
         char line[1024];
         int offset = 0;
         const uint16_t fIdx = td->funcIndex;
         if (type == ncclCollTraceDataType) {
           sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] L:%04d DT %08x %016lx %016lx",
-            (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid,             fIdx, td->data_0, td->opCount, td->data_1);
+            (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, channel, td->channelId, td->tid, fIdx, td->data_0, td->opCount, td->data_1);
         } else {
           if (type & ncclCollTraceP2pElemType)
-            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid, td->p2pOpCount[0], td->p2pOpCount[1]);
+            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06x-%06x", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, channel, td->channelId, td->tid, td->p2pOpCount[0], td->p2pOpCount[1]);
           else
-            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, td->bid, td->channelId, td->tid, td->opCount);
+            sprintf(line, "## [%012.6f] [%02d:%02d-%02d:%02x] %06lx", (double)(td->timeStamp)/vega_gpu_rtc_freq, comm->rank, channel, td->channelId, td->tid, td->opCount);
           offset = strlen(line);
           if (type == ncclCollTraceCollElemType) {
             sprintf(line+offset, " CE %s nw %d bi %d nc %d root %d busId %lx nRanks %d", funcNames[fIdx], td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
@@ -337,9 +337,9 @@ void *ncclCommThreadMain(void *arg) {
               case ncclCollTraceKernelLaunchType:
               case ncclCollTraceCollLaunchType:
                 if ((type&0xf) == ncclCollTraceKernelLaunchType)
-                  sprintf(line+offset, " KL %s [%02d:%02d-%02d:%02x] HWID %8x ", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, td->data_0);
+                  sprintf(line+offset, " KL %s [%02d:%02d-%02d:%02x] HWID %d:%x ", funcNames[fIdx], comm->rank, channel, td->channelId, td->tid, td->xccId, td->data_0);
                 else if ((type&0xf) == ncclCollTraceCollLaunchType)
-                  sprintf(line+offset, " CL %s [%02d:%02d-%02d:%02x] %d ", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, td->batchIx);
+                  sprintf(line+offset, " CL %s [%02d:%02d-%02d:%02x] %d ", funcNames[fIdx], comm->rank, channel, td->channelId, td->tid, td->batchIx);
                 offset = strlen(line);
                 if ((type&0xf0) == ncclCollTraceCollElemType)
                   sprintf(line+offset, " nw %d bi %d nc %d root %d busId %lx nRanks %d", td->coll.nWarps, td->coll.bid, td->coll.nChannels, td->coll.root, comm->busId, comm->nRanks);
@@ -349,10 +349,10 @@ void *ncclCommThreadMain(void *arg) {
                     comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceKernelEndType:
-                sprintf(line+offset, " KE %s [%02d:%02d-%02d:%02x] busId %lx nRanks %d", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid, comm->busId, comm->nRanks);
+                sprintf(line+offset, " KE %s [%02d:%02d-%02d:%02x] busId %lx nRanks %d", funcNames[fIdx], comm->rank, channel, td->channelId, td->tid, comm->busId, comm->nRanks);
                 break;
               case ncclCollTraceAbortType:
-                sprintf(line+offset, " KA %s [%02d:%02d-%02d:%02x]", funcNames[fIdx], comm->rank, td->bid, td->channelId, td->tid);
+                sprintf(line+offset, " KA %s [%02d:%02d-%02d:%02x]", funcNames[fIdx], comm->rank, channel, td->channelId, td->tid);
                 break;
               default:
                 sprintf(line+offset, " unknown collective trace data type");
@@ -361,7 +361,9 @@ void *ncclCommThreadMain(void *arg) {
           }
         }
         INFO(NCCL_COLL, "%s td->type:%d", line, type);
-        td->type = ncclCollTraceNotReady;
+        volatile uint8_t *tdtype = &td->type;
+        *tdtype = ncclCollTraceNotReady;
+        (*tdtype); // read back for flushing
       }
     }
     if (comm->collTraceExit && numActiveChans == 0)
@@ -490,7 +492,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
       ncclCommThreadMain((void *)comm);
   }
   NCCLCHECK(ncclCudaFree((void *)comm->collTrace));
-  NCCLCHECK(ncclCudaFree((void *)comm->collTraceTail));
+  NCCLCHECK(ncclCudaHostFree((void *)comm->collTraceTail));
 #endif
 
   free(comm->peerInfo);
@@ -691,8 +693,12 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
   comm->dmaBufSupport = (dmaBufSupported(comm) == ncclSuccess) ? true : false;
 
 #ifdef ENABLE_COLLTRACE
-  NCCLCHECK(ncclCudaCalloc(&comm->collTraceTail, MAXCHANNELS));
+  NCCLCHECK(ncclCudaHostCalloc(&comm->collTraceTail, MAXCHANNELS));
+#if defined(HIP_UNCACHED_MEMORY)
+  NCCLCHECK(ncclCudaCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS, nullptr, hipDeviceMallocUncached));
+#else
   NCCLCHECK(ncclCudaCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
+#endif
   comm->collTraceExit = 0;
   comm->collTraceEnabled = false; // we can enable colltrace without starting a thread
   if ((ncclDebugLevel >= NCCL_LOG_INFO) && rcclParamKernelCollTraceEnable()) {
