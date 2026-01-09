@@ -410,11 +410,14 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
     }
 #endif
     // Direct Reduce Scatter
-    if (comm->enableDirectReduceScatter) {
-      devWork.enableDirectReduceScatter = comm->enableDirectReduceScatter;
-      devWork.tempBuff = (void*)comm->tempBuff;
-      devWork.currentRank = comm->rank;
-      devWork.count = task->count;
+    {
+      size_t msgSize = task->count * ncclTypeSize(task->datatype) * comm->nRanks;  // Total size across all ranks
+      if (comm->enableDirectReduceScatter && msgSize <= 2097152) { // 2MB is the Direct reduce scatter limit
+        devWork.enableDirectReduceScatter = comm->enableDirectReduceScatter;
+        devWork.tempBuff = (void*)comm->tempBuff;
+        devWork.currentRank = comm->rank;
+        devWork.count = task->count;
+      }
     }
 
     devWork.isOneRPN = comm->isOneRPN;
@@ -756,7 +759,10 @@ static ncclResult_t scheduleCollTasksToPlan(
         proxyOp.incWorkCounter = true;
         addWorkBatchToPlan(comm, plan, c, workNode->workType, task->devFuncId, plan->workBytes);
         // Set pattern to profiler to add a proxy profiler for kernel events
-        if (task->func != ncclFuncAllToAllGda) {
+        // for Direct Reduce Scatter (DRS), we don't need to add proxy op (2097152 = 2MB the Direct reduce scatter limit)
+        size_t msgSize = task->count * ncclTypeSize(task->datatype) * comm->nRanks;
+        bool isDRS = (task->func == ncclFuncReduceScatter && comm->enableDirectReduceScatter && msgSize <= 2097152);
+        if (!isDRS && task->func != ncclFuncAllToAllGda) {
             NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
             NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
         }
@@ -905,7 +911,10 @@ static ncclResult_t scheduleCollTasksToPlan(
         // Coverity reports "proxyOp->connection" as being possibly uninitialized.  It's hard to
         // determine if that's actually true but it's also not clear if that would be an issue.
         // coverity[uninit_use_in_call:FALSE]
-        if (task->func != ncclFuncAllToAllGda) {
+        // for Direct Reduce Scatter (DRS), we don't need to add proxy op (2097152 = 2MB the Direct reduce scatter limit)
+        size_t msgSize = task->count * ncclTypeSize(task->datatype) * comm->nRanks;
+        bool isDRS = (task->func == ncclFuncReduceScatter && comm->enableDirectReduceScatter && msgSize <= 2097152);
+        if (!isDRS && task->func != ncclFuncAllToAllGda) {
             NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
             NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, proxyOp));
         }

@@ -18,7 +18,8 @@ namespace {
 #endif
     // Direct Reduce Scatter
     // TODO: Move Direct RS out of rungRing into separate kernel 
-    if (work->enableDirectReduceScatter) {
+    // 2097152 = 2MB the Direct reduce scatter limit
+    if (work->enableDirectReduceScatter && (work->count * sizeof(T) * ncclShmem.comm.nRanks) <= 2097152) { 
       int nRanks = ncclShmem.comm.nRanks;
       const ssize_t numElements = work->count;
 
