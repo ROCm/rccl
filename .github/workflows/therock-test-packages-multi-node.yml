@@ -41,7 +41,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id }}"
       OUTPUT_ARTIFACTS_DIR: /apps/cvs_tests/dist_new/dist/rocm
       THEROCK_BIN_DIR: "./build/bin"
-      AWS_SHARED_CREDENTIALS_FILE: /home/arravikum/awsconfig/credentials.ini
+      AWS_SHARED_CREDENTIALS_FILE: /apps/cvs_tests/awsconfig/credentials.ini
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -62,6 +62,7 @@ jobs:
 
       # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
       # salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
+      # sbatch script runs rccl_heatmap_cvs script which validates and generates a bandwidth heatmap file for different rccl collectives
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
