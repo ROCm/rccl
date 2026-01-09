@@ -14,11 +14,6 @@ all_accs      = ["0", "1"]
 all_pipelines = ["0", "1"]
 all_unrolls   = ["1", "2", "4"]
 
-# Pipelining is not supported for LL/LL64 prims, so "1" is not a valid value for low latency protocols.
-# However, if it needs to be supported, equivalent_primary() can be modified to avoid the "non-zero"->"0" mapping.
-all_pipeline = ["0", "1"]
-pipelined_types = ["bf16"]
-
 all_params = [all_colls, all_algos, all_protos, all_redops, all_tys, all_accs, all_pipelines, all_unrolls]
 
 ################################################################################
