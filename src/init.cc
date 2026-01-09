@@ -682,7 +682,7 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
 #ifdef ENABLE_COLLTRACE
   NCCLCHECK(ncclCudaHostCalloc(&comm->collTraceTail, MAXCHANNELS));
 #if defined(HIP_UNCACHED_MEMORY)
-  NCCLCHECK(ncclCudaCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS, nullptr, hipDeviceMallocUncached));
+  NCCLCHECK(ncclCudaCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS, hipDeviceMallocUncached));
 #else
   NCCLCHECK(ncclCudaCalloc(&comm->collTrace, COLLTRACE_NUM_ITEMS*MAXCHANNELS));
 #endif
