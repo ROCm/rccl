@@ -485,12 +485,10 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
     out("\n")
 
   # Generate type-specific callers inline in the header
-  # Use funcs_by_original_type to include all functions that can be called for each data type
-  # (e.g., i32 includes Prod even though equivalent_primary maps it to u32)
-  # The function table entries use PRIMARY function symbols
+  # Use funcs_by_type (PRIMARY functions) to match the function table ordering
   out("// Type-specific function callers (inline to work with LTO)\n")
   for ty in all_tys:  # Use all_tys to ensure all types get functions
-    ty_funcs = funcs_by_original_type.get(ty, [])
+    ty_funcs = funcs_by_type.get(ty, [])
     for unroll in all_unrolls:
       # Check if there are any functions for this type and unroll
       has_funcs = any(fn.unroll == unroll for fn in ty_funcs)
@@ -501,26 +499,49 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
         out("}\n\n")
         continue
 
-      # Generate inline function that directly calls the function for each funcId
+      # Count functions for this type and unroll
+      ty_count = sum(1 for fn in ty_funcs if fn.unroll == unroll)
+      
+      # Generate Caller templates for binary search (matching baseline)
+      out(f"template<unsigned short f, unsigned short l>\n"
+          f"struct Caller_{ty}_{unroll} {{\n"
+          "  static __forceinline__ __device__ __host__\n"
+          f"  void call(unsigned short funcIndex) noexcept {{\n"
+          "    constexpr unsigned short m = f + (l - f) / 2;\n"
+          f"    return (funcIndex < m)\n"
+          f"      ? Caller_{ty}_{unroll}<f, m>::call(funcIndex)\n"
+          f"      : Caller_{ty}_{unroll}<m, l>::call(funcIndex);\n"
+          "  }\n"
+          "};\n\n")
+
+      out(f"template<unsigned short f>\n"
+          f"struct Caller_{ty}_{unroll}<f, f + 1> {{\n"
+          "  static __forceinline__ __device__ __host__\n"
+          f"  void call(unsigned short funcIndex) noexcept {{\n"
+          f"    ncclDevFuncTable_{ty}_{unroll}[f]();\n"
+          "  }\n"
+          "};\n\n")
+      
+      # Generate inline function that maps global funcId to local index
       out(f"static __forceinline__ __device__ void NCCL_CALL_FUNCTIONS_{ty}_{unroll}(unsigned short globalFuncId) noexcept {{\n")
+      out("  unsigned short localIndex = 0;\n")
       out("  switch(globalFuncId) {\n")
       
       # Build the mapping for this type+unroll
-      # Deduplicate by global_id to handle pipeline mappings (multiple fns -> same primary)
-      # When duplicates exist, the first occurrence wins (both point to same device function)
-      seen_global_ids = set()
       local_idx = 0
       for fn in ty_funcs:
         if fn.unroll != unroll:
           continue
-        # Calculate global_id using equivalent_primary (matches what host sends)
+        # Calculate the global funcId for this function (matching baseline)
         global_id = primary_to_index[Fn(*equivalent_primary(*fn))]
-        if global_id not in seen_global_ids:
-          seen_global_ids.add(global_id)
-          out(f"    case {global_id}: ncclDevFuncTable_{ty}_{unroll}[{local_idx}](); return;\n")
+        out(f"    case {global_id}: localIndex = {local_idx}; break;\n")
         local_idx += 1
       
-      out("    default: return; // funcId not handled by this type\n")
+      out("    default: localIndex = 0; break;\n")
+      out("  }\n")
+      # Call the function from the table
+      out(f"  if (localIndex < {ty_count}) {{\n")
+      out(f"    ncclDevFuncTable_{ty}_{unroll}[localIndex]();\n")
       out("  }\n")
       out("}\n\n")
   out("\n")
@@ -951,20 +972,17 @@ for ty, algo_category, unroll in type_algo_unroll_tuples:
       # In RDC mode, the function tables are shared across ring/tree kernels
       # Define the table for this unroll only in the "ring" file to avoid duplicate definitions
       if algo_category == "ring":
-        # Get ALL functions for this type (both ring and tree) at this unroll level
-        # Use funcs_by_original_type to include functions like Prod even if equivalent_primary maps to u32
-        all_ty_funcs = funcs_by_original_type.get(ty, [])
-        unroll_funcs = [fn for fn in all_ty_funcs if fn.unroll == unroll]
+        # Get PRIMARY functions for this type at this unroll level
+        # Use funcs_by_type (primary functions only) to match baseline behavior
+        ty_funcs_for_table = funcs_by_type.get(ty, [])
         
         out(f'// Function table definition for type {ty} unroll {unroll} (shared by ring and tree kernels)\n')
         out(f'// Defined only in the ring file to avoid duplicate definitions\n')
-        out(f'// Function entries use PRIMARY symbols (e.g., Prod_i32 -> Prod_u32)\n')
         index_ty = 0
         out(f'__device__ ncclDevFuncPtr_t const ncclDevFuncTable_{ty}_{unroll}[] = {{\n')
-        for fn in unroll_funcs:
-          # Use PRIMARY function symbol (device functions are defined for primary types/pipeline)
-          primary_fn = Fn(*equivalent_primary(*fn))
-          sym = paste("_", "ncclDevFunc", *primary_fn)
+        for fn in ty_funcs_for_table:
+          if fn.unroll != unroll: continue
+          sym = paste("_", "ncclDevFunc", *fn)
           guard = get_arch_guard(fn)
           if guard:
             out("#if %s\n/*%4d*/ %s,\n#else\n/*%4d*/ nullptr,\n#endif\n" % (guard, index_ty, sym, index_ty))

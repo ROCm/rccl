@@ -18,10 +18,9 @@ struct RunWorkNop {
   __device__ void run() {}
 };
 
-// Forward declarations for type-specific function tables and callers
-// These are defined in the generated kernels_<type>.cu files
+// Forward declarations for type-specific function tables
+// These are defined in the generated kernels_<type>_<algo>_<unroll>.cu files
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx950__)
-// Declare type-specific function tables
 extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_1[];
 extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_2[];
 extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_4[];
@@ -60,22 +59,16 @@ extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_2[];
 extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_4[];
 #endif
 
-// Type-specific caller functions are defined inline in device_table.h
-
 #ifdef BUILD_GENERIC_KERNELS
 // Generic kernel that dispatches to type-specific device functions
-// This avoids the need for a 1000+ entry generic function table
-// by dispatching to smaller type-specific tables at runtime
+// Uses type-specific tables for efficient dispatch
 
 // Helper to call type-specific function tables based on funcId
-// The funcId encodes the type information that we decode here
-// Unroll-specific dispatch functions - no runtime branching on unroll factor
-// Each function only calls the specific unroll variant for each type
-
+// Unroll-specific dispatch - no runtime branching on unroll factor
 __device__ __forceinline__ void callTypeSpecificFunction_1(int funcId)
 {
     extern __device__ __constant__ unsigned char ncclDevFuncIdToType[];
-    int                                          typeIdx = ncclDevFuncIdToType[funcId];
+    int typeIdx = ncclDevFuncIdToType[funcId];
 
     switch(typeIdx)
     {
@@ -98,7 +91,7 @@ __device__ __forceinline__ void callTypeSpecificFunction_1(int funcId)
 __device__ __forceinline__ void callTypeSpecificFunction_2(int funcId)
 {
     extern __device__ __constant__ unsigned char ncclDevFuncIdToType[];
-    int                                          typeIdx = ncclDevFuncIdToType[funcId];
+    int typeIdx = ncclDevFuncIdToType[funcId];
 
     switch(typeIdx)
     {
@@ -121,7 +114,7 @@ __device__ __forceinline__ void callTypeSpecificFunction_2(int funcId)
 __device__ __forceinline__ void callTypeSpecificFunction_4(int funcId)
 {
     extern __device__ __constant__ unsigned char ncclDevFuncIdToType[];
-    int                                          typeIdx = ncclDevFuncIdToType[funcId];
+    int typeIdx = ncclDevFuncIdToType[funcId];
 
     switch(typeIdx)
     {
@@ -141,14 +134,11 @@ __device__ __forceinline__ void callTypeSpecificFunction_4(int funcId)
     }
 }
 
-// Generic dispatchers - one per unroll factor for compile-time optimization
-// Each dispatcher calls its specific unroll-specialized function with zero runtime branching
-
+// Generic dispatchers - dispatch to type-specific tables
 struct GenericDispatcher_1
 {
     static __device__ __forceinline__ void dispatch(int funcId, int unroll)
     {
-        // callTypeSpecificFunction handles both direct and indirect paths internally via NCCL_CALL_FUNCTIONS
         callTypeSpecificFunction_1(funcId);
     }
 };
@@ -157,7 +147,6 @@ struct GenericDispatcher_2
 {
     static __device__ __forceinline__ void dispatch(int funcId, int unroll)
     {
-        // callTypeSpecificFunction handles both direct and indirect paths internally via NCCL_CALL_FUNCTIONS
         callTypeSpecificFunction_2(funcId);
     }
 };
@@ -166,7 +155,6 @@ struct GenericDispatcher_4
 {
     static __device__ __forceinline__ void dispatch(int funcId, int unroll)
     {
-        // callTypeSpecificFunction handles both direct and indirect paths internally via NCCL_CALL_FUNCTIONS
         callTypeSpecificFunction_4(funcId);
     }
 };
