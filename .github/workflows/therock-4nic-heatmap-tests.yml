@@ -65,9 +65,9 @@ jobs:
       - name: Test mi325
         if: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' }}
         run: |
-          source /home/arravikum/cvs/test_venv/bin/activate
-          cd /home/arravikum/cvs/cvs
-          cvs run -vvv -s rccl_heatmap_cvs   --cluster_file ./input/cluster_file/cluster.json   --config_file ./input/config_file/rccl/rccl_config.json   --log-file=/tmp/rccl_log.log   --html=/home/arravikum/cvs/test_reports/ci_test_report.html   --capture=tee-sys   --self-contained-html
+          source /home/arravikum/TheRock/.venv/bin/activate
+          cd /home/arravikum/cvs/
+          pytest -vvv -s ./tests/rccl/rccl_heatmap_cvs.py   --cluster_file ./input/cluster_file/cluster.json   --config_file ./input/config_file/rccl/rccl_config.json   --log-file=/tmp/rccl_log.log   --html=/home/arravikum/cvs/test_reports/ci_test_report.html   --capture=tee-sys   --self-contained-html
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
