@@ -2134,8 +2134,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
         return ncclSystemError;
       }
     }
-  
-    NCCLCHECKGOTO(bootstrapBroadcast(comm->bootstrap, comm->rank, comm->nRanks, 0, &rocshmemUniqueId, 
+
+    NCCLCHECKGOTO(bootstrapBroadcast(comm->bootstrap, comm->rank, comm->nRanks, 0, &rocshmemUniqueId,
 			    sizeof(rocshmemUniqueId)), res, fail);
     ret = rocshmem::rocshmem_set_attr_uniqueid_args(job->myrank, job->nranks, &rocshmemUniqueId, &rocshmemAttr);
     if (ret != rocshmem::ROCSHMEM_SUCCESS) {
@@ -2148,11 +2148,11 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
       ERROR("Error in rocshmem_init_attr, Rocshmem cannot be initialized.");
       return ncclSystemError;
     }
-   
+
     comm->sourceRshmem = (void**) malloc(NUM_SYM_BUF * sizeof(void *));
     comm->destRshmem = (void**) malloc(NUM_SYM_BUF * sizeof(void *));
- 
-    for (int i = 0; i < NUM_SYM_BUF; i++) { 
+
+    for (int i = 0; i < NUM_SYM_BUF; i++) {
     	comm->sourceRshmem[i] = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
     	comm->destRshmem[i] = (void *)rocshmem::rocshmem_malloc((size_t)(1*1024*1024));
     }
@@ -3002,9 +3002,9 @@ ncclResult_t ncclCommDestroy_impl(ncclComm_t comm) {
 
 #ifdef ENABLE_ROCSHMEM
   if (comm->enableRocshmem) {
-     for (int i = 0; i < NUM_SYM_BUF; i++) {	  
+     for (int i = 0; i < NUM_SYM_BUF; i++) {
      	rocshmem::rocshmem_free(comm->sourceRshmem[i]);
-     	rocshmem::rocshmem_free(comm->destRshmem[i]);	  
+     	rocshmem::rocshmem_free(comm->destRshmem[i]);
      }
      free(comm->sourceRshmem);
      free(comm->destRshmem);
