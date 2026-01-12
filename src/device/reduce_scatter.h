@@ -19,7 +19,8 @@ namespace {
     // Direct Reduce Scatter
     // TODO: Move Direct RS out of rungRing into separate kernel 
     // 2097152 = 2MB the Direct reduce scatter limit
-    if (work->enableDirectReduceScatter && (work->count * sizeof(T) * ncclShmem.comm.nRanks) <= 2097152) { 
+    size_t msgSize = work->count * sizeof(T) * ncclShmem.comm.nRanks;
+    if (work->enableDirectReduceScatter && msgSize <= 2097152) { 
       int nRanks = ncclShmem.comm.nRanks;
       const ssize_t numElements = work->count;
 
@@ -60,7 +61,7 @@ namespace {
       if (tid < nthreads) {
         // Call reduction across all rank offsets in tempbuff and store in recvbuff
         // TODO: Adjust maxSrcs to nRanks
-        reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 32, 0, 1, 1, 0>
+        reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 64, 0, 1, 1, 0>
           (tid, nthreads, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nRanks, srcPtrs, 1, dstPtrs, numElementsPerBlock);
       }
     } else{
