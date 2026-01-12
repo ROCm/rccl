@@ -41,6 +41,7 @@ jobs:
         with:
           repository: "ROCm/rccl"
           path: rccl
+          ref: de931f4c53158184b2d7f4fe6165a5dad761649c
 
       - name: Checkout rccl-tests repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
