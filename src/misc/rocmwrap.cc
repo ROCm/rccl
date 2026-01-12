@@ -45,9 +45,6 @@ static int ncclCuMemSupported = 0;
 
 // Determine whether CUMEM & VMM RDMA is supported on this platform
 int ncclIsCuMemSupported() {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  return 0;
-#else
   CUdevice currentDev;
   int cudaDev;
   int cudaDriverVersion;
@@ -64,17 +61,12 @@ int ncclIsCuMemSupported() {
 
 error:
   return (ret == ncclSuccess);
-#endif
 }
 
 int ncclCuMemEnable() {
-#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
-  return 0;
-#else
   // NCCL_CUMEM_ENABLE=-2 means auto-detect CUMEM support
   int param = ncclParamCuMemEnable();
   return  param >= 0 ? param : (param == -2 && ncclCuMemSupported);
-#endif
 }
 
 int ncclCuMemHostEnable() {
@@ -149,6 +141,7 @@ static void initOnceFunc() {
 
   // Determine whether we support the cuMem APIs or not
   ncclCuMemSupported = ncclIsCuMemSupported();
+
   /* DMA-BUF support */
   //ROCm support
   if(rcclParamForceEnableDMABUF())
