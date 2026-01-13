@@ -164,13 +164,17 @@ extern int64_t ncclParamMaxNchannels();
 RCCL_PARAM(ChannelTuningEnable, "CHANNEL_TUNING_ENABLE", 1);
 
 ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc){
+#ifdef ENABLE_WARP_SPEED
   if(ncclParamMaxNchannels() > 0) {
     nc = std::min(nc, static_cast<int>(ncclParamMaxNchannels()));
   }
+#endif
   if(comm->nNodes < 2) {
+#ifdef ENABLE_WARP_SPEED
     if(IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
       nc = std::min(nc, 56); // limit to 56 channels for single node on MI350X
     }
+#endif
     if(!rcclParamChannelTuningEnable()) {
       INFO(NCCL_TUNING, "RCCL Channel Tuning not applied");
       return ncclSuccess;
@@ -215,8 +219,8 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
 
   }
 #ifdef ENABLE_WARP_SPEED
-  // fallback to max 64 channels and tune warp speed channels later
-  nc = std::min(nc, 64);
+  // Fall back to max 56/64 channels and tune warp speed channels later
+  nc = std::min(nc, (comm->nNodes == 1)? 56 : 64);
 #endif
   return ncclSuccess;
 }
