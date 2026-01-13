@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          ref: ff46daa79b4c826c4f4676893d0d6586de567dfa # 2026-01-12 commit
+          ref: bfcaf6e0bcd4bfe3c21990f49bbccb7d2a087d5d # 2025-12-15 commit
 
       - name: Run setup test environment workflow
         uses: './.github/actions/setup_test_environment'
@@ -61,12 +61,12 @@ jobs:
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
-      # salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
+      # salloc will hold 2 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
       # sbatch script runs rccl_heatmap_cvs script which validates and generates a bandwidth heatmap file for different rccl collectives
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          salloc -N 4 --ntasks-per-node 8 -p 17nodexgmi38 --reservation=rccl --exclusive -t 04:00:00 bash -c "
+          salloc -N 2 --ntasks-per-node 8 -p 17nodexgmi38 --reservation=rccl --exclusive -t 04:00:00 bash -c "
           source /apps/cvs_tests/TheRock/.venv/bin/activate &&
           cd /apps/cvs_tests/cvs_heatmap/cvs-sbatch &&
           python ./setup_nodes.py &&
