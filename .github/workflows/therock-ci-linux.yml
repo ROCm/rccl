@@ -20,7 +20,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:1f1ce0ab151146c7f86ee4345be74c42d8ca83200d9d26843e8a71df01ecad4e
       options: -v /runner/config:/home/awsconfig/
     env:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
