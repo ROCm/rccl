@@ -159,7 +159,7 @@ ncclResult_t ncclAllReduce_impl(const void* sendbuff, void* recvbuff, size_t cou
 
   // RCCL update slice steps for AllReduce if single node
   const bool isGfx950 = IsArchMatch(comm->archName, "gfx950");
-  int chunkSteps = isGfx950 ? 1 : ALLREDUCE_CHUNKSTEPS;
+  int chunkSteps = (isGfx950 && comm->rcclUseOneSlice)? 1 : ALLREDUCE_CHUNKSTEPS;
   int sliceSteps = comm->rcclUseOneSlice
       ? (isGfx950 ? 1 : ALLREDUCE_SLICESTEPS_SINGLE_NODE)
       : ALLREDUCE_SLICESTEPS;

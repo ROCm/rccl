@@ -38,7 +38,7 @@ RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
 RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
 #ifdef ENABLE_WARP_SPEED
 RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
-RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO", 0);
+RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO", 1);
 RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
 #endif
 #define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
@@ -164,9 +164,17 @@ extern int64_t ncclParamMaxNchannels();
 RCCL_PARAM(ChannelTuningEnable, "CHANNEL_TUNING_ENABLE", 1);
 
 ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc){
-  if(comm->nNodes < 2 || !rcclParamChannelTuningEnable()){
-    INFO(NCCL_TUNING, "RCCL Channel Tuning not applied");
-    return ncclSuccess;
+  if(ncclParamMaxNchannels() > 0) {
+    nc = std::min(nc, static_cast<int>(ncclParamMaxNchannels()));
+  }
+  if(comm->nNodes < 2) {
+    if(IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
+      nc = std::min(nc, 56); // limit to 56 channels for single node on MI350X
+    }
+    if(!rcclParamChannelTuningEnable()) {
+      INFO(NCCL_TUNING, "RCCL Channel Tuning not applied");
+      return ncclSuccess;
+    }
   }
 
   auto tunableIndex = rcclGetTunableIndex(coll);
@@ -491,19 +499,24 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     }
     userChannelControlInput = !inputStr ? 0 : 1;
   }
-  if(!userChannelControlInput && comm->topo->warpSpeedEnabled) {
-    if(rcclParamWarpSpeedCuCount() != 0) {
-      rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * warpsPerBlock;
-      INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
-      return;
-    }
-    // reuse the existing channel tuning logic if possible
-    if (comm->nNodes == 1) {
-      rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock / 2; // use 50% CUs for single node case
+  if(comm->topo->warpSpeedEnabled) {
+    if(!userChannelControlInput) {
+      if(rcclParamWarpSpeedCuCount() != 0) {
+        rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * warpsPerBlock;
+        INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
+        return;
+      }
+      rcclWarpSpeedChannels *= 2;
+      // reuse the existing channel tuning logic if possible
+      if (comm->nNodes == 1) {
+        rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock / 2; // use 50% CUs for single node case
+      } else {
+        rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
+      }
     } else {
-      rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
+      rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock;
     }
-    INFO(NCCL_INIT, "RCCL Warp Speed Channels set to %d", rcclWarpSpeedChannels);
+    INFO(NCCL_INIT, "RCCL Warp Speed Channels set to %d. Warps per block is set to %d", rcclWarpSpeedChannels, warpsPerBlock);
   }
 }
 

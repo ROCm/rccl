@@ -830,10 +830,13 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     }
   }
   // Get number of channels after duplication
+#ifdef ENABLE_WARP_SPEED
+  maxNchannels = (!comm->topo->warpSpeedEnabled)? std::min((int)ncclMaxNchannels(), maxChannels) : maxChannels;
+#else
   maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
+#endif
   nc = std::min(maxNchannels/comm->nChannels, nc);
   nc *= comm->nChannels;
-
   // Set ring prev/next for my rank
   for (int c=0; c<nChannels; c++) {
     struct ncclChannel* channel0 = comm->channels+c;

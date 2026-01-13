@@ -2140,11 +2140,7 @@ static ncclResult_t topoGetAlgoInfo(
   rcclSetPipelining(comm, nBytes, info);
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
-#ifdef ENABLE_WARP_SPEED
-  int nc = comm->topo->warpSpeedEnabled? comm->nChannels / 2 : comm->nChannels;
-#else
   int nc = comm->nChannels;
-#endif
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   if (info->algorithm == NCCL_ALGO_COLLNET_DIRECT) {
@@ -2174,7 +2170,7 @@ static ncclResult_t topoGetAlgoInfo(
     INFO(NCCL_INIT, "post-adjustment based on threadThreshold:%i nBytes:%lu nc:%i", threadThreshold, nBytes, nc);
     rcclOverrideChannels(comm, info->func, nBytes, nc);
   }
-  
+
   rcclRestrictMaxChannels(comm, nc);
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
