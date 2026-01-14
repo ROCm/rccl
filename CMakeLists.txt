@@ -910,6 +910,7 @@ foreach(kernel_file ${TYPE_KERNEL_FILES})
     ${HSA_INCLUDE_PATH}
   )
 
+
   # Note: Common compile definitions (ENABLE_COLLTRACE, ENABLE_FAULT_INJECTION, etc.)
   # are applied later via ALL_RCCL_TARGETS to avoid duplication with main rccl target
 
