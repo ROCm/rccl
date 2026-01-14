@@ -535,13 +535,20 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       out("  switch(globalFuncId) {\n")
       
       # Build the mapping for this type+unroll
+      # IMPORTANT: Use funcIds from the FIRST unroll factor for ALL unroll variants
+      # The host_table only has entries for the first unroll, so all dispatchers
+      # must accept those funcIds regardless of which unroll kernel is running
+      first_unroll = local_unroll[0]
       local_idx = 0
       for fn in ty_funcs:
         if fn.unroll != unroll:
           continue
-        # Calculate the global funcId for this function (matching baseline)
-        global_id = primary_to_index[Fn(*equivalent_primary(*fn))]
-        out(f"    case {global_id}: localIndex = {local_idx}; break;\n")
+        # Calculate the global funcId using the FIRST unroll factor
+        # This ensures all unroll variants accept the same funcIds from host_table
+        fn_first_unroll = Fn(fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, first_unroll)
+        global_id = primary_to_index.get(Fn(*equivalent_primary(*fn_first_unroll)), -1)
+        if global_id >= 0:
+          out(f"    case {global_id}: localIndex = {local_idx}; break;\n")
         local_idx += 1
       
       out("    default: localIndex = 0; break;\n")
@@ -921,13 +928,17 @@ for ty, algo_category, unroll in type_algo_unroll_tuples:
         out("  switch(globalFuncId) {\n")
         
         # Build the mapping for this type+algo+unroll - call directly in switch cases
-        # Deduplicate by global_id since multiple functions can map to the same primary
+        # IMPORTANT: Use funcIds from the FIRST unroll factor for ALL unroll variants
+        # The host_table only has entries for the first unroll, so all dispatchers
+        # must accept those funcIds regardless of which unroll kernel is running
+        first_unroll = local_unroll[0]
         seen_global_ids = set()
         local_idx = 0
         for fn in ty_funcs:
-          # Calculate the global funcId for this function
-          global_id = primary_to_index[Fn(*equivalent_primary(*fn))]
-          if global_id not in seen_global_ids:
+          # Calculate the global funcId using the FIRST unroll factor
+          fn_first_unroll = Fn(fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, first_unroll)
+          global_id = primary_to_index.get(Fn(*equivalent_primary(*fn_first_unroll)), -1)
+          if global_id >= 0 and global_id not in seen_global_ids:
             seen_global_ids.add(global_id)
             out(f"    case {global_id}: ncclDevFuncTable_{ty}_{algo_category}_{unroll}[{local_idx}](); break;\n")
           local_idx += 1
