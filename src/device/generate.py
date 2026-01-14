@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass
 
 # Order of colls, redops, tys, protos, algos must match src/include/device.h
-all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot", "AllToAllGda"]
+all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
 all_redops    = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys       = ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos    = ["LL","LL128","SIMPLE"]
@@ -88,7 +88,6 @@ algos_of_coll = {
   "AllGather":             ["RING", "PAT"],
   "AllReduce":             ["RING", "TREE"],
   "AllToAllPivot":         ["RING"],
-  "AllToAllGda":           [],  # Empty - only generated when ROCSHMEM is enabled
   "Broadcast":             ["RING"],
   "Reduce":                ["RING"],
   "ReduceScatter":         ["RING", "PAT"],
@@ -99,7 +98,6 @@ protos_of_coll = {
   "AllGather":              all_protos,
   "AllReduce":              all_protos,
   "AllToAllPivot":          ["SIMPLE"],
-  "AllToAllGda":            [],  # Empty - only generated when ROCSHMEM is enabled
   "Broadcast":              all_protos,
   "Reduce":                 all_protos,
   "ReduceScatter":          all_protos,
@@ -110,7 +108,6 @@ redops_of_coll = {
   "AllGather":            ["Sum"],
   "AllReduce":            all_redops,
   "AllToAllPivot":        ["Sum"],
-  "AllToAllGda":          [],  # Empty - only generated when ROCSHMEM is enabled
   "Broadcast":            ["Sum"],
   "Reduce":               all_redops,
   "ReduceScatter":        all_redops,
@@ -121,7 +118,6 @@ tys_of_coll = {
   "AllGather":             ["i8"],
   "AllReduce":             all_tys,
   "AllToAllPivot":         ["i8"],
-  "AllToAllGda":           [],  # Empty - only generated when ROCSHMEM is enabled
   "Broadcast":             ["i8"],
   "Reduce":                all_tys,
   "ReduceScatter":         all_tys,
@@ -132,7 +128,6 @@ acc_of_coll = {
   "AllGather":             ["0"],
   "AllReduce":             all_accs,
   "AllToAllPivot":         ["0"],
-  "AllToAllGda":           [],  # Empty - only generated when ROCSHMEM is enabled
   "Broadcast":             ["0"],
   "Reduce":                ["0"],
   "ReduceScatter":         ["0"],
@@ -143,7 +138,6 @@ pipelines_of_coll = {
   "AllGather":             ["0"],
   "AllReduce":             all_pipelines,
   "AllToAllPivot":         ["0"],
-  "AllToAllGda":           [],  # Empty - only generated when ROCSHMEM is enabled
   "Broadcast":             ["0"],
   "Reduce":                all_pipelines,
   "ReduceScatter":         all_pipelines,
@@ -233,7 +227,10 @@ local_unroll, local_pipeline = calc_unroll_and_pipeline_for_local_arch()
 # Helper function to check if the conditions for the collective is being met
 # This is used for DEVICE function generation - SumPostDiv only for unsigned types
 def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
-  if redop == "SumPostDiv" and ty[0] not in ("i","u"):
+  # SumPostDiv is only valid for unsigned integer types (u8, u32, u64) for device code
+  # The FuncSumPostDiv template has a static_assert that T(0) < T(-1), which only passes for unsigned types
+  # Signed integer ncclAvg uses equivalent_primary() to map to unsigned implementation
+  if redop == "SumPostDiv" and ty[0] != "u":
     return False
   if coll == "" or algo == "":
     return False
@@ -480,7 +477,8 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
   out("#endif\n\n")
   
   # Only declare the tables as extern in the header (definitions will be in kernels_<type>.cu.cpp)
-  for ty in sorted(funcs_by_type.keys()):
+  # Use all_tys to ensure all types get declarations (even if some functions map to other primary types)
+  for ty in all_tys:
     out(f"// Functions for type: {ty}\n")
     for unroll in all_unrolls:
       out(f"extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_{ty}_{unroll}[];\n")
